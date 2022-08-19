@@ -2,7 +2,13 @@
 name = "roto"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["The NLnet Labs RPKI team <rpki-team@nlnetlabs.nl>"]
+description = "A modular analytical BGP Engine"
+documentation = "https://docs.rs/roto/"
+homepage = "https://nlnetlabs.nl/projects/routing/roto/"
+repository = "https://github.com/NLnetLabs/roto/"
+keywords = ["routing", "bgp"]
+categories = ["network-programming"]
+license = "BSD-3-Clause"
 
 [dependencies]
