@@ -2,13 +2,13 @@ use std::{borrow, cmp, fmt, hash, ops, str};
 
 use nom::branch::alt;
 use nom::bytes::complete::{take_while, take_while1};
-use nom::character::complete::{multispace0, multispace1};
+use nom::character::complete::{char, multispace0, multispace1};
 use nom::combinator::{all_consuming, cut, opt, recognize};
 use nom::error::{
     context, convert_error, ContextError, ParseError, VerboseError, VerboseErrorKind,
 };
 use nom::multi::{fold_many0, many0, many1, separated_list0};
-use nom::sequence::{delimited, pair, preceded, terminated, tuple};
+use nom::sequence::{delimited, pair, preceded, separated_pair, terminated, tuple};
 use nom::{
     bytes::complete::{tag, take_until},
     character::complete::char as tag_char,
@@ -21,7 +21,7 @@ use smallvec::SmallVec;
 
 use nom::error::{Error as NomError, ErrorKind};
 
-type Span<'a> = nom_locate::LocatedSpan<&'a str>;
+type Span<'a> = &'a str;
 
 /// ======== Root ===========================================================
 
@@ -38,21 +38,21 @@ type Span<'a> = nom_locate::LocatedSpan<&'a str>;
 #[derive(Clone, Debug)]
 pub struct Root {
     pub expressions: Vec<RootExpr>,
-    pub pos: Pos,
+    // pub pos: Pos,
 }
 
 impl Root {
     pub fn parse_str<'a>(input: &'a str) -> Result<(Span, Self), VerboseError<Span<'a>>> {
-        Self::parse_root(Span::new(input)).finish()
+        Self::parse_root(input).finish()
     }
 
     fn parse_root(input: Span) -> IResult<Span, Self, VerboseError<Span<'_>>> {
-        let pos = Pos::capture(&input);
-        let (input, (_, expressions, _)) = context(
-            "root",
-            tuple((skip_opt_ws, many1(RootExpr::parse), skip_opt_ws)),
-        )(input)?;
-        Ok((input, Self { expressions, pos }))
+        // let pos = Pos::capture(&input);
+        let (input, expressions) = cut(many1(preceded(
+            opt(comment),
+            terminated(RootExpr::parse, opt(comment)),
+        )))(input)?;
+        Ok((input, Self { expressions }))
     }
 }
 
@@ -67,13 +67,10 @@ pub enum RootExpr {
 
 impl RootExpr {
     pub fn parse(input: Span) -> IResult<Span, Self, VerboseError<Span<'_>>> {
-        let (input, expressions) = context(
-            "root expression",
-            alt((
-                map(Module::parse, RootExpr::Module),
-                map(Rib::parse, RootExpr::Rib),
-            )),
-        )(input)?;
+        let (input, expressions) = alt((
+            map(Rib::parse, RootExpr::Rib),
+            map(Module::parse, RootExpr::Module),
+        ))(input)?;
         Ok((input, expressions))
     }
 }
@@ -83,19 +80,33 @@ impl RootExpr {
 #[derive(Clone, Debug)]
 pub struct Module {
     pub ident: Identifier,
-    pub pos: Pos, // pub for_statement: Option<ForStatement>,
-                  // pub with_statements: Vec<WithStatement>,
-                  // pub body: ModuleBody
+    // pub pos: Pos, // pub for_statement: Option<ForStatement>,
+    // pub with_statements: Vec<WithStatement>,
+    pub body: RibBody,
 }
 
 impl Module {
     pub fn parse(input: Span) -> IResult<Span, Self, VerboseError<Span<'_>>> {
-        let pos = Pos::capture(&input);
-        let (input, _) = opt_ws(tag("module"))(input)?;
-        let (input, ident) = opt_ws(Identifier::parse)(input)?;
-        // let (input, body) = opt_ws(ModuleBody::parse)(input)?;
+        let (input, (_, ident, body)) = context(
+            "module definition",
+            tuple((
+                tag("module"),
+                context(
+                    "module name",
+                    delimited(multispace1, Identifier::parse, multispace1),
+                ),
+                context(
+                    "module block",
+                    delimited(
+                        opt_ws(char('{')),
+                        RibBody::parse,
+                        tuple((opt(char(',')), multispace0, opt_ws(char('}')))),
+                    ),
+                ),
+            )),
+        )(input)?;
 
-        Ok((input, Module { ident, pos }))
+        Ok((input, Module { ident, body }))
     }
 }
 
@@ -105,12 +116,12 @@ impl Module {
 pub struct Rib {
     pub ident: Identifier,
     pub body: RibBody,
-    pub pos: Pos,
+    // pub pos: Pos,
 }
 
 impl Rib {
     pub fn parse(input: Span) -> IResult<Span, Self, VerboseError<Span<'_>>> {
-        let pos = Pos::capture(&input);
+        // let pos = Pos::capture(&input);
 
         let (input, (_, ident, body)) = context(
             "rib definition",
@@ -122,23 +133,23 @@ impl Rib {
                 ),
                 context(
                     "rib block",
-                    delimited(
-                        opt_ws(tag("{")),
+                    cut(delimited(
+                        opt_ws(char('{')),
                         RibBody::parse,
-                        tuple((opt(tag(",")), multispace0, opt_ws(tag("}")))),
-                    ),
+                        tuple((opt_ws(char('}')), opt(opt_ws(char('\n'))))),
+                    )),
                 ),
             )),
         )(input)?;
 
-        Ok((input, Rib { ident, body, pos }))
+        Ok((input, Rib { ident, body }))
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct RibBody {
     pub key_values: Vec<TypeIdentField>,
-    pub pos: Pos,
+    // pub pos: Pos,
 }
 
 //------------ RibBody -------------------------------------------------------
@@ -151,18 +162,15 @@ pub struct RibBody {
 
 impl RibBody {
     pub fn parse(input: Span) -> IResult<Span, Self, VerboseError<Span<'_>>> {
-        let pos = Pos::capture(&input);
+        // let pos = Pos::capture(&input);
 
-        let (input, key_values) = context(
-            "rib body",
-            opt(separated_list0(tag(","), opt_ws(TypeIdentField::parse))),
-        )(input)?;
+        let (input, key_values) =
+            cut(separated_list0(char(','), opt_ws(TypeIdentField::parse)))(input)?;
 
         Ok((
             input,
             RibBody {
-                key_values: key_values.unwrap_or_default(),
-                pos,
+                key_values, // pos,
             },
         ))
     }
@@ -223,28 +231,25 @@ fn comment(input: Span) -> IResult<Span, (), VerboseError<Span<'_>>> {
 pub struct Identifier {
     /// The actual identifier.
     pub ident: ShortString,
-
-    /// The start of the identifier in the source.
-    pub pos: Pos,
 }
 
 impl Identifier {
     fn parse(input: Span) -> IResult<Span, Self, VerboseError<Span<'_>>> {
-        let pos = Pos::capture(&input);
+        // let pos = Pos::capture(&input);
 
         let (input, ident) = context(
             "identifier",
-            recognize(preceded(
+            cut(recognize(preceded(
                 take_while1(|ch: char| ch.is_alphabetic() || ch == '_'),
                 take_while(|ch: char| ch.is_alphanumeric() || ch == '_' || ch == '.'),
-            )),
+            ))),
         )(input)?;
 
         Ok((
             input,
             Identifier {
-                ident: (*ident.fragment()).into(),
-                pos,
+                ident: ident.into(),
+                // pos,
             },
         ))
     }
@@ -293,14 +298,11 @@ impl fmt::Display for Identifier {
 pub struct TypeIdentifier {
     /// The actual identifier.
     pub ident: ShortString,
-
-    /// The start of the identifier in the source.
-    pub pos: Pos,
 }
 
 impl TypeIdentifier {
     fn parse(input: Span) -> IResult<Span, Self, VerboseError<Span<'_>>> {
-        let pos = Pos::capture(&input);
+        // let pos = Pos::capture(&input);
 
         let (input, ident) = recognize(pair(
             take_while1(|ch: char| ch.is_alphabetic() && ch.is_uppercase()),
@@ -309,8 +311,8 @@ impl TypeIdentifier {
         Ok((
             input,
             TypeIdentifier {
-                ident: (*ident.fragment()).into(),
-                pos,
+                ident: ident.into(),
+                // pos,
             },
         ))
     }
@@ -358,20 +360,18 @@ pub struct TypeIdentField {
     pub field_name: Identifier,
     /// The type of the field.
     pub ty: TypeIdentifier,
-    /// The start of the field in the source.
-    pub pos: Pos,
 }
 
 impl TypeIdentField {
     pub fn parse(input: Span) -> IResult<Span, Self, VerboseError<Span<'_>>> {
-        let pos = Pos::capture(&input);
+        // let pos = Pos::capture(&input);
 
         let (input, (field_name, ty)) = context(
-            "type",
-            tuple((
+            "key-value pair",
+            cut(tuple((
                 opt_ws(Identifier::parse),
-                preceded(opt_ws(tag(":")), opt_ws(TypeIdentifier::parse)),
-            )),
+                preceded(opt_ws(char(':')), opt_ws(TypeIdentifier::parse)),
+            ))),
         )(input)?;
 
         Ok((
@@ -379,10 +379,24 @@ impl TypeIdentField {
             Self {
                 field_name,
                 ty,
-                pos,
+                // pos,
             },
         ))
+        // let (input, (field_name, ty)) = context(
+        //     "key-value pair",
+        //     separated_pair(
+        //         preceded(multispace0, Identifier::parse),
+        //         cut(preceded(multispace0, char(':'))),
+        //         TypeIdentifier::parse,
+        //     ),
+        // )(input)?;
+
+        // Ok((input, Self { field_name, ty }))
     }
+
+    // fn key_value<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, (&'a str, JsonValue), E> {
+    //     separated_pair(preceded(sp, string), cut(preceded(sp, char(':'))), value)(i)
+    //     }
 }
 
 //------------ ShortString ---------------------------------------------------
@@ -483,34 +497,34 @@ impl fmt::Debug for ShortString {
 //------------ Pos -----------------------------------------------------------
 
 /// The position of an item within input.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct Pos {
-    pub offset: usize,
-    pub line: u32,
-    pub col: usize,
-}
+// #[derive(Clone, Copy, Debug, Default)]
+// pub struct Pos {
+//     pub offset: usize,
+//     pub line: u32,
+//     pub col: usize,
+// }
 
-impl Pos {
-    fn capture(span: &Span) -> Self {
-        Pos {
-            offset: span.location_offset(),
-            line: span.location_line(),
-            col: span.get_utf8_column(),
-        }
-    }
-}
+// impl Pos {
+//     fn capture(span: &Span) -> Self {
+//         Pos {
+//             offset: span.location_offset(),
+//             line: span.location_line(),
+//             col: span.get_utf8_column(),
+//         }
+//     }
+// }
 
-impl fmt::Display for Pos {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}:{}", self.line, self.col)
-    }
-}
+// impl fmt::Display for Pos {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         write!(f, "{}:{}", self.line, self.col)
+//     }
+// }
 
 //============ Error ====================================================
 
 #[derive(Clone, Debug)]
 pub struct Error {
-    pub pos: Pos,
+    // pub pos: Pos,
     pub kind: VerboseErrorKind,
     pub fragment: String,
 }
@@ -519,15 +533,15 @@ impl<'a> From<VerboseError<Span<'a>>> for Error {
     fn from(err: VerboseError<Span>) -> Self {
         let last_error = err.errors.last().unwrap();
         Error {
-            pos: Pos::capture(&last_error.0),
+            // pos: Pos::capture(&last_error.0),
             kind: last_error.1.clone(),
-            fragment: last_error.0.fragment().to_string(),
+            fragment: last_error.0.to_string(),
         }
     }
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}: {:?}", self.pos, self.kind)
+        write!(f, "{}: {:?}", self.fragment, self.kind)
     }
 }
