@@ -100,7 +100,7 @@ impl Module {
                     delimited(
                         opt_ws(char('{')),
                         RibBody::parse,
-                        tuple((opt(char(',')), multispace0, opt_ws(char('}')))),
+                        tuple((opt(char(',')), opt_ws(char('}')))),
                     ),
                 ),
             )),
@@ -136,7 +136,7 @@ impl Rib {
                     cut(delimited(
                         opt_ws(char('{')),
                         RibBody::parse,
-                        tuple((opt_ws(char('}')), opt(opt_ws(char('\n'))))),
+                        opt_ws(tag("}\n"))
                     )),
                 ),
             )),

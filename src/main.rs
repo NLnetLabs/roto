@@ -31,5 +31,5 @@ fn main() {
 
     test_data("comments-only", "// some comment\n// bl alba  bcomment\n", false);
 
-    test_data("interspersed-comments", "rib my_rib { bla: Bla, bloo: Bloo }\n// comment\nrib unrib { blaffer: 100 }\n", true);
+    test_data("interspersed-comments", "rib my_rib { bla: Bla, bloo: Bloo }\n// comment\nrib unrib { blaffer: Blaf }\n", true);
 }
