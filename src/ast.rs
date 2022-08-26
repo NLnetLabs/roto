@@ -2,12 +2,12 @@ use std::{borrow, cmp, fmt, hash, ops, str};
 
 use nom::branch::alt;
 use nom::bytes::complete::{take_while, take_while1};
-use nom::character::complete::{char, multispace0, multispace1};
+use nom::character::complete::{char, multispace0, multispace1, alphanumeric1};
 use nom::combinator::{all_consuming, cut, opt, recognize};
 use nom::error::{
     context, convert_error, ContextError, ParseError, VerboseError, VerboseErrorKind,
 };
-use nom::multi::{fold_many0, many0, many1, separated_list0};
+use nom::multi::{fold_many0, many0, many1, separated_list0, separated_list1};
 use nom::sequence::{delimited, pair, preceded, separated_pair, terminated, tuple};
 use nom::{
     bytes::complete::{tag, take_until},
@@ -16,12 +16,9 @@ use nom::{
     IResult,
 };
 use nom::{ErrorConvert, Finish};
-use nom_locate::LocatedSpan;
 use smallvec::SmallVec;
 
 use nom::error::{Error as NomError, ErrorKind};
-
-type Span<'a> = &'a str;
 
 /// ======== Root ===========================================================
 
@@ -38,16 +35,14 @@ type Span<'a> = &'a str;
 #[derive(Clone, Debug)]
 pub struct Root {
     pub expressions: Vec<RootExpr>,
-    // pub pos: Pos,
 }
 
 impl Root {
-    pub fn parse_str<'a>(input: &'a str) -> Result<(Span, Self), VerboseError<Span<'a>>> {
+    pub fn parse_str(input: &str) -> Result<(&str, Self), VerboseError<&str>> {
         Self::parse_root(input).finish()
     }
 
-    fn parse_root(input: Span) -> IResult<Span, Self, VerboseError<Span<'_>>> {
-        // let pos = Pos::capture(&input);
+    fn parse_root(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, expressions) = cut(many1(preceded(
             opt(comment),
             terminated(RootExpr::parse, opt(comment)),
@@ -62,11 +57,10 @@ pub enum RootExpr {
     Rib(Rib),
     // PrefixList(PrefixListExpr),
     // Table(TableExpr),
-    // Comment(CommentExpr),
 }
 
 impl RootExpr {
-    pub fn parse(input: Span) -> IResult<Span, Self, VerboseError<Span<'_>>> {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, expressions) = alt((
             map(Rib::parse, RootExpr::Rib),
             map(Module::parse, RootExpr::Module),
@@ -80,14 +74,14 @@ impl RootExpr {
 #[derive(Clone, Debug)]
 pub struct Module {
     pub ident: Identifier,
-    // pub pos: Pos, // pub for_statement: Option<ForStatement>,
-    // pub with_statements: Vec<WithStatement>,
-    pub body: RibBody,
+    pub for_kv: Option<TypeIdentField>,
+    pub with_kv: Vec<TypeIdentField>,
+    pub body: ModuleBody,
 }
 
 impl Module {
-    pub fn parse(input: Span) -> IResult<Span, Self, VerboseError<Span<'_>>> {
-        let (input, (_, ident, body)) = context(
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (_, ident, for_kv, with_kv, body)) = context(
             "module definition",
             tuple((
                 tag("module"),
@@ -95,18 +89,161 @@ impl Module {
                     "module name",
                     delimited(multispace1, Identifier::parse, multispace1),
                 ),
+                for_statement,
+                with_statement,
                 context(
                     "module block",
                     delimited(
                         opt_ws(char('{')),
-                        RibBody::parse,
+                        ModuleBody::parse,
                         tuple((opt(char(',')), opt_ws(char('}')))),
                     ),
                 ),
             )),
         )(input)?;
 
-        Ok((input, Module { ident, body }))
+        Ok((
+            input,
+            Module {
+                ident,
+                body,
+                for_kv,
+                with_kv,
+            },
+        ))
+    }
+}
+
+//------------ ModuleBody ---------------------------------------------------
+
+// ModuleBody ::= (
+//     'define' (ForStatement)?  (WithStatement)* '{' DefineBody '}' |
+//     ('term' TermIdentifier '{' TermBody '}')* (ForStatement)?  (WithStatement)* '{' DefineBody '}' |
+//     ('action' ActionIndentifier '{' ActionBody '}')* (ForStatement)?  (WithStatement)* '{' DefineBody '}' |
+//     ('import' '{' ImportBody '}')* (ForStatement)? |
+//     'apply' '{' ApplyBody '}' (ForStatement)?  (WithStatement)* '{' DefineBody '}'
+// )+
+
+#[derive(Clone, Debug)]
+pub enum ModuleBody {
+    Define(DefineBody),
+    Term(TermBody),
+    Action(ActionBody),
+    // Import(ImportBody),
+    Apply(ApplyBody),
+}
+
+impl ModuleBody {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, ((ident, for_kv, with_kv, define), expressions)) = tuple((
+            context(
+                "define definition",
+                preceded(
+                    opt_ws(tag("define")),
+                    tuple((
+                        context(
+                            "module name",
+                            delimited(multispace1, Identifier::parse, multispace1),
+                        ),
+                        opt(for_statement),
+                        opt(with_statement),
+                        context(
+                            "define block",
+                            delimited(opt_ws(char('{')), DefineBody::parse, opt_ws(char('}'))),
+                        ),
+                    )),
+                ),
+            ),
+            many0(alt((
+                map(TermBody::parse, ModuleBody::Term),
+                map(ActionBody::parse, ModuleBody::Action),
+                // map(ImportBody::parse, ModuleBody::Import),
+                map(ApplyBody::parse, ModuleBody::Apply),
+            ))),
+        ))(input)?;
+        Ok((input, expressions.into_iter().next().unwrap()))
+    }
+}
+//------------ DefineBody ---------------------------------------------------
+
+// DefineBody ::=
+//  ('use' RibIdentifier ';')? ( VariableIdentifier '=' TypeIdentifier ';')+
+
+#[derive(Clone, Debug)]
+pub struct DefineBody {}
+
+impl DefineBody {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, _) = tuple((
+            opt(delimited(
+                opt_ws(tag("use")),
+                opt_ws(Identifier::parse),
+                opt_ws(char(';')),
+            )),
+            many0(context(
+                "assigments",
+                separated_pair(
+                    opt_ws(Identifier::parse),
+                    preceded(multispace0, char('=')),
+                    opt_ws(Identifier::parse),
+                ),
+            )),
+        ))(input)?;
+        Ok((input, Self {}))
+    }
+}
+
+//------------ TermBody -----------------------------------------------------
+
+// TermBody ::=
+//  ('with' VariableIdentifier ';')? ('some' | 'match')
+//     '{' (MatchExpr ';')+ '}' ';'
+
+#[derive(Clone, Debug)]
+pub struct TermBody {}
+
+impl TermBody {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        unimplemented!()
+    }
+}
+//------------ ActionBody -----------------------------------------------------
+
+// ActionBody ::= (ActionExpr ';')+
+
+#[derive(Clone, Debug)]
+pub struct ActionBody {}
+
+impl ActionBody {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        unimplemented!()
+    }
+}
+
+//------------ ImportBody -----------------------------------------------------
+
+// #[derive(Clone, Debug)]
+// pub struct ImportBody {}
+
+//------------ ApplyBody -----------------------------------------------------
+
+// ApplyBody ::=
+//     (
+//        'filter' FilterIdentifier? MatchOperator?
+//            TermIdentifier('(' VariableIdentifier ')')?
+//        (
+//            ('matching' '{' MatchBody '}') |
+//            ('not matching' '{' MatchBody '}')
+//        )+
+//     )
+//     AcceptReject
+
+#[derive(Clone, Debug)]
+pub struct ApplyBody {}
+
+impl ApplyBody {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        unimplemented!()
     }
 }
 
@@ -116,14 +253,12 @@ impl Module {
 pub struct Rib {
     pub ident: Identifier,
     pub body: RibBody,
-    // pub pos: Pos,
 }
 
 impl Rib {
-    pub fn parse(input: Span) -> IResult<Span, Self, VerboseError<Span<'_>>> {
-        // let pos = Pos::capture(&input);
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
 
-        let (input, (_, ident, body)) = context(
+        let (input, (_, ident, body, _)) = context(
             "rib definition",
             tuple((
                 tag("rib"),
@@ -136,9 +271,10 @@ impl Rib {
                     cut(delimited(
                         opt_ws(char('{')),
                         RibBody::parse,
-                        opt_ws(tag("}\n"))
+                        opt_ws(char('}')),
                     )),
                 ),
+                map(char('\n'), |_| ()),
             )),
         )(input)?;
 
@@ -149,7 +285,6 @@ impl Rib {
 #[derive(Clone, Debug)]
 pub struct RibBody {
     pub key_values: Vec<TypeIdentField>,
-    // pub pos: Pos,
 }
 
 //------------ RibBody -------------------------------------------------------
@@ -158,11 +293,10 @@ pub struct RibBody {
 // The body of a Rib consists of an (optional) enumeration of
 // (field_name, type) pairs.
 
-// RibBody  ::= VariableIdentifier ':' TypeIdentifier ','?
+// RibBody  ::= (VariableIdentifier ':' TypeIdentifier ',')+
 
 impl RibBody {
-    pub fn parse(input: Span) -> IResult<Span, Self, VerboseError<Span<'_>>> {
-        // let pos = Pos::capture(&input);
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
 
         let (input, key_values) =
             cut(separated_list0(char(','), opt_ws(TypeIdentField::parse)))(input)?;
@@ -170,7 +304,7 @@ impl RibBody {
         Ok((
             input,
             RibBody {
-                key_values, // pos,
+                key_values,
             },
         ))
     }
@@ -183,9 +317,9 @@ impl RibBody {
 
 /// Parses something preceded by mandatory white space.
 
-fn ws<'a, O, F>(parse: F) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, O, VerboseError<Span<'_>>>
+fn ws<'a, O, F>(parse: F) -> impl FnMut(&'a str) -> IResult<&'a str, O, VerboseError<&str>>
 where
-    F: FnMut(Span<'a>) -> IResult<Span, O, VerboseError<Span<'_>>>,
+    F: FnMut(&'a str) -> IResult<&str, O, VerboseError<&str>>,
 {
     preceded(skip_ws, parse)
 }
@@ -193,9 +327,9 @@ where
 /// Parses something preceded by optional white space.
 fn opt_ws<'a, O, F>(
     parse: F,
-) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, O, VerboseError<Span<'_>>>
+) -> impl FnMut(&'a str) -> IResult<&'a str, O, VerboseError<&str>>
 where
-    F: FnMut(Span<'a>) -> IResult<Span, O, VerboseError<Span<'_>>>,
+    F: FnMut(&'a str) -> IResult<&str, O, VerboseError<&str>>,
 {
     preceded(skip_opt_ws, parse)
 }
@@ -203,19 +337,19 @@ where
 /// Mandatory white space.
 ///
 /// White space is all actual white space characters plus comments.
-fn skip_ws(input: Span) -> IResult<Span, (), VerboseError<Span<'_>>> {
+fn skip_ws(input: &str) -> IResult<&str, (), VerboseError<&str>> {
     fold_many0(alt((map(multispace1, |_| ()), comment)), || (), |_, _| ())(input)
 }
 
 /// Optional white space.
 ///
 /// White space is all actual white space characters plus comments.
-fn skip_opt_ws(input: Span) -> IResult<Span, (), VerboseError<Span<'_>>> {
+fn skip_opt_ws(input: &str) -> IResult<&str, (), VerboseError<&str>> {
     fold_many0(alt((map(multispace1, |_| ()), comment)), || (), |_, _| ())(input)
 }
 
 /// Comments start with a hash and run to the end of a line.
-fn comment(input: Span) -> IResult<Span, (), VerboseError<Span<'_>>> {
+fn comment(input: &str) -> IResult<&str, (), VerboseError<&str>> {
     let (input, _) = tuple((tag("//"), take_until("\n")))(input)?;
     map(tag_char('\n'), |_| ())(input)
 }
@@ -234,22 +368,20 @@ pub struct Identifier {
 }
 
 impl Identifier {
-    fn parse(input: Span) -> IResult<Span, Self, VerboseError<Span<'_>>> {
-        // let pos = Pos::capture(&input);
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
 
         let (input, ident) = context(
             "identifier",
-            cut(recognize(preceded(
+            recognize(preceded(
                 take_while1(|ch: char| ch.is_alphabetic() || ch == '_'),
                 take_while(|ch: char| ch.is_alphanumeric() || ch == '_' || ch == '.'),
-            ))),
+            )),
         )(input)?;
 
         Ok((
             input,
             Identifier {
                 ident: ident.into(),
-                // pos,
             },
         ))
     }
@@ -287,7 +419,7 @@ impl fmt::Display for Identifier {
     }
 }
 
-//------------ Identifier ----------------------------------------------------
+//------------ TypeIdentifier -----------------------------------------------
 
 /// An identifier is the name of variables or other things.
 ///
@@ -301,8 +433,7 @@ pub struct TypeIdentifier {
 }
 
 impl TypeIdentifier {
-    fn parse(input: Span) -> IResult<Span, Self, VerboseError<Span<'_>>> {
-        // let pos = Pos::capture(&input);
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
 
         let (input, ident) = recognize(pair(
             take_while1(|ch: char| ch.is_alphabetic() && ch.is_uppercase()),
@@ -312,7 +443,6 @@ impl TypeIdentifier {
             input,
             TypeIdentifier {
                 ident: ident.into(),
-                // pos,
             },
         ))
     }
@@ -363,41 +493,62 @@ pub struct TypeIdentField {
 }
 
 impl TypeIdentField {
-    pub fn parse(input: Span) -> IResult<Span, Self, VerboseError<Span<'_>>> {
-        // let pos = Pos::capture(&input);
-
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, (field_name, ty)) = context(
             "key-value pair",
-            cut(tuple((
-                opt_ws(Identifier::parse),
-                preceded(opt_ws(char(':')), opt_ws(TypeIdentifier::parse)),
-            ))),
-        )(input)?;
+            cut(separated_pair(
+                preceded(multispace0, Identifier::parse),
+                preceded(multispace0, char(':')),
+                preceded(multispace0, TypeIdentifier::parse),
+            ),
+        ))(input)?;
 
-        Ok((
-            input,
-            Self {
-                field_name,
-                ty,
-                // pos,
-            },
-        ))
-        // let (input, (field_name, ty)) = context(
-        //     "key-value pair",
-        //     separated_pair(
-        //         preceded(multispace0, Identifier::parse),
-        //         cut(preceded(multispace0, char(':'))),
-        //         TypeIdentifier::parse,
-        //     ),
-        // )(input)?;
-
-        // Ok((input, Self { field_name, ty }))
+        Ok((input, Self { field_name, ty }))
     }
 
     // fn key_value<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, (&'a str, JsonValue), E> {
     //     separated_pair(preceded(sp, string), cut(preceded(sp, char(':'))), value)(i)
     //     }
 }
+
+//------------ ArgumentList -------------------------------------------------
+
+// ArgumentList ::= 
+//      ((VariableIdentifier|StringLiteral|EnumVariantIdentifier)','?)+
+
+//------------ for & with statements ----------------------------------------
+
+// ForStatement ::= 'for' VariableIdentifier':' TypeIdentifier
+
+fn for_statement(input: &str) -> IResult<&str, Option<TypeIdentField>, VerboseError<&str>> {
+    opt(preceded(opt_ws(tag("for")), TypeIdentField::parse))(input)
+}
+
+// WithStatement ::= 'with' VariableIdentifier':' TypeIdentifier
+
+fn with_statement(input: &str) -> IResult<&str, Vec<TypeIdentField>, VerboseError<&str>> {
+    preceded(
+        opt_ws(tag("with")),
+        separated_list0(char(','), TypeIdentField::parse),
+    )(input)
+}
+
+// ------------ MethodCall --------------------------------------------------
+// MethodCall ::= 
+//      VariableIdentifier(('.'FieldIdentifier)+('.'MethodCallIdentifier)?)?
+// MethodCallIdentifier ::= 
+//      ([a-z] ([0-9a-z_])*)'('ArgumentList?')'
+
+//------------ MatchExpr -----------------------------------------------------
+// MatchExpr ::= 
+//      VariableIdentifier(
+//          ('.'VariableIdentifier)+("." MethodCallIdentifier)
+//      ?)?
+// MatchBody ::= 
+//      (ActionExpr ';')+ AcceptReject?
+// MatchOperator ::= 
+//      'match' | 'some' | 'exactly-one' | 'all
+
 
 //------------ ShortString ---------------------------------------------------
 
@@ -491,57 +642,5 @@ impl fmt::Display for ShortString {
 impl fmt::Debug for ShortString {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self.as_str(), f)
-    }
-}
-
-//------------ Pos -----------------------------------------------------------
-
-/// The position of an item within input.
-// #[derive(Clone, Copy, Debug, Default)]
-// pub struct Pos {
-//     pub offset: usize,
-//     pub line: u32,
-//     pub col: usize,
-// }
-
-// impl Pos {
-//     fn capture(span: &Span) -> Self {
-//         Pos {
-//             offset: span.location_offset(),
-//             line: span.location_line(),
-//             col: span.get_utf8_column(),
-//         }
-//     }
-// }
-
-// impl fmt::Display for Pos {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         write!(f, "{}:{}", self.line, self.col)
-//     }
-// }
-
-//============ Error ====================================================
-
-#[derive(Clone, Debug)]
-pub struct Error {
-    // pub pos: Pos,
-    pub kind: VerboseErrorKind,
-    pub fragment: String,
-}
-
-impl<'a> From<VerboseError<Span<'a>>> for Error {
-    fn from(err: VerboseError<Span>) -> Self {
-        let last_error = err.errors.last().unwrap();
-        Error {
-            // pos: Pos::capture(&last_error.0),
-            kind: last_error.1.clone(),
-            fragment: last_error.0.to_string(),
-        }
-    }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}: {:?}", self.fragment, self.kind)
     }
 }
