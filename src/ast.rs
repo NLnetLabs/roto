@@ -496,12 +496,12 @@ impl TypeIdentField {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, (field_name, ty)) = context(
             "key-value pair",
-            cut(separated_pair(
+            separated_pair(
                 preceded(multispace0, Identifier::parse),
-                preceded(multispace0, char(':')),
+                cut(preceded(multispace0, char(':'))),
                 preceded(multispace0, TypeIdentifier::parse),
             ),
-        ))(input)?;
+        )(input)?;
 
         Ok((input, Self { field_name, ty }))
     }
