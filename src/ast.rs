@@ -2,13 +2,17 @@ use std::{borrow, cmp, fmt, hash, ops, str};
 
 use nom::branch::alt;
 use nom::bytes::complete::{take_while, take_while1};
-use nom::character::complete::{char, multispace0, multispace1, alphanumeric1};
-use nom::combinator::{all_consuming, cut, opt, recognize};
-use nom::error::{
-    context, convert_error, ContextError, ParseError, VerboseError, VerboseErrorKind,
+use nom::character::complete::{
+    alphanumeric1, char, multispace0, multispace1,
 };
-use nom::multi::{fold_many0, many0, many1, separated_list0, separated_list1};
-use nom::sequence::{delimited, pair, preceded, separated_pair, terminated, tuple};
+use nom::combinator::{all_consuming, cut, opt, recognize};
+use nom::error::{context, convert_error, VerboseError, VerboseErrorKind};
+use nom::multi::{
+    fold_many0, many0, many1, separated_list0, separated_list1,
+};
+use nom::sequence::{
+    delimited, pair, preceded, separated_pair, terminated, tuple,
+};
 use nom::{
     bytes::complete::{tag, take_until},
     character::complete::char as tag_char,
@@ -38,7 +42,9 @@ pub struct Root {
 }
 
 impl Root {
-    pub fn parse_str(input: &str) -> Result<(&str, Self), VerboseError<&str>> {
+    pub fn parse_str(
+        input: &str,
+    ) -> Result<(&str, Self), VerboseError<&str>> {
         Self::parse_root(input).finish()
     }
 
@@ -62,8 +68,8 @@ pub enum RootExpr {
 impl RootExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, expressions) = alt((
-            map(Rib::parse, RootExpr::Rib),
-            map(Module::parse, RootExpr::Module),
+            map(Rib::parse, Self::Rib),
+            map(Module::parse, Self::Module),
         ))(input)?;
         Ok((input, expressions))
     }
@@ -81,10 +87,10 @@ pub struct Module {
 
 impl Module {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (_, ident, for_kv, with_kv, body)) = context(
+        let (input, (_, ident, for_kv, with_kv, body, _)) = context(
             "module definition",
             tuple((
-                tag("module"),
+                opt_ws(tag("module")),
                 context(
                     "module name",
                     delimited(multispace1, Identifier::parse, multispace1),
@@ -96,9 +102,10 @@ impl Module {
                     delimited(
                         opt_ws(char('{')),
                         ModuleBody::parse,
-                        tuple((opt(char(',')), opt_ws(char('}')))),
+                        opt_ws(char('}')),
                     ),
                 ),
+                map(char('\n'), |_| ()),
             )),
         )(input)?;
 
@@ -108,7 +115,7 @@ impl Module {
                 ident,
                 body,
                 for_kv,
-                with_kv,
+                with_kv: with_kv.unwrap_or_default(),
             },
         ))
     }
@@ -125,45 +132,129 @@ impl Module {
 // )+
 
 #[derive(Clone, Debug)]
-pub enum ModuleBody {
-    Define(DefineBody),
-    Term(TermBody),
-    Action(ActionBody),
-    // Import(ImportBody),
-    Apply(ApplyBody),
+pub struct ModuleBody {
+    pub define: Define,
+    pub expressions: Vec<ModuleExpr>,
+    pub apply: Option<Apply>,
 }
 
 impl ModuleBody {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, ((ident, for_kv, with_kv, define), expressions)) = tuple((
+        let (
+            input,
+            (
+                define, //(define_ident, define_for_kv, define_with_kv, define),
+                expressions,
+                apply, //(apply_for_kv, apply_with_kv, apply),
+            ),
+        ) = tuple((
             context(
                 "define definition",
                 preceded(
                     opt_ws(tag("define")),
                     tuple((
                         context(
-                            "module name",
-                            delimited(multispace1, Identifier::parse, multispace1),
+                            "define name",
+                            opt(delimited(
+                                multispace1,
+                                Identifier::parse,
+                                multispace1,
+                            )),
                         ),
-                        opt(for_statement),
-                        opt(with_statement),
+                        for_statement,
+                        with_statement,
                         context(
                             "define block",
-                            delimited(opt_ws(char('{')), DefineBody::parse, opt_ws(char('}'))),
+                            delimited(
+                                opt_ws(char('{')),
+                                DefineBody::parse,
+                                opt_ws(char('}')),
+                            ),
                         ),
                     )),
                 ),
             ),
-            many0(alt((
-                map(TermBody::parse, ModuleBody::Term),
-                map(ActionBody::parse, ModuleBody::Action),
-                // map(ImportBody::parse, ModuleBody::Import),
-                map(ApplyBody::parse, ModuleBody::Apply),
-            ))),
+            context(
+                "module expressions",
+                many0(preceded(
+                    opt(comment),
+                    terminated(ModuleExpr::parse, opt(comment)),
+                )),
+            ),
+            context(
+                "apply definition",
+                opt(preceded(
+                    opt_ws(tag("apply")),
+                    tuple((
+                        for_statement,
+                        with_statement,
+                        context(
+                            "apply block",
+                            delimited(
+                                opt_ws(char('{')),
+                                ApplyBody::parse,
+                                opt_ws(char('}')),
+                            ),
+                        ),
+                    )),
+                )),
+            ),
         ))(input)?;
-        Ok((input, expressions.into_iter().next().unwrap()))
+
+        Ok((
+            input,
+            Self {
+                define: Define {
+                    ident: define.0,
+                    for_kv: define.1,
+                    with_kv: define.2.unwrap_or_default(),
+                    body: define.3,
+                },
+                // define: {
+                //     ident: define_ident,
+                //     for_kv: define_for_kv,
+                //     with_kv: define_with_kv.unwrap_or_default(),
+                //     body: define,
+                // },
+                expressions,
+                apply: apply.map(|a| Apply {
+                    for_kv: a.0,
+                    with_kv: a.1.unwrap_or_default(),
+                    body: a.2,
+                }),
+            },
+        ))
     }
 }
+
+#[derive(Debug, Clone)]
+pub enum ModuleExpr {
+    Term(Term),
+    Action(Action),
+    // Import(ImportBody),
+}
+
+impl ModuleExpr {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, expressions) = alt((
+            map(Term::parse, Self::Term),
+            map(Action::parse, Self::Action),
+            // map(ImportBody::parse, ModuleBody::Import),
+            // map(ApplyBody::parse, |apply| { Self::Apply(apply) }),
+        ))(input)?;
+        Ok((input, expressions))
+    }
+}
+
+//------------ Define -------------------------------------------------------
+#[derive(Clone, Debug)]
+pub struct Define {
+    pub ident: Option<Identifier>,
+    pub for_kv: Option<TypeIdentField>,
+    pub with_kv: Vec<TypeIdentField>,
+    pub body: DefineBody,
+}
+
 //------------ DefineBody ---------------------------------------------------
 
 // DefineBody ::=
@@ -193,6 +284,51 @@ impl DefineBody {
     }
 }
 
+//------------ Term ---------------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct Term {
+    pub ident: Identifier,
+    pub for_kv: Option<TypeIdentField>,
+    pub with_kv: Vec<TypeIdentField>,
+    pub body: TermBody,
+}
+
+impl Term {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (_, ident, for_kv, with_kv, body)) = context(
+            "term definition",
+            tuple((
+                tag("term"),
+                context(
+                    "term name",
+                    delimited(multispace1, Identifier::parse, multispace1),
+                ),
+                for_statement,
+                with_statement,
+                context(
+                    "term block",
+                    delimited(
+                        opt_ws(char('{')),
+                        TermBody::parse,
+                        tuple((opt(char(',')), opt_ws(char('}')))),
+                    ),
+                ),
+            )),
+        )(input)?;
+
+        Ok((
+            input,
+            Term {
+                ident,
+                body,
+                for_kv,
+                with_kv: with_kv.unwrap_or_default(),
+            },
+        ))
+    }
+}
+
 //------------ TermBody -----------------------------------------------------
 
 // TermBody ::=
@@ -207,6 +343,52 @@ impl TermBody {
         unimplemented!()
     }
 }
+
+//------------ Action -------------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct Action {
+    pub ident: Identifier,
+    pub for_kv: Option<TypeIdentField>,
+    pub with_kv: Vec<TypeIdentField>,
+    pub body: ActionBody,
+}
+
+impl Action {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (_, ident, for_kv, with_kv, body)) = context(
+            "action definition",
+            tuple((
+                tag("action"),
+                context(
+                    "action name",
+                    delimited(multispace1, Identifier::parse, multispace1),
+                ),
+                for_statement,
+                with_statement,
+                context(
+                    "action block",
+                    delimited(
+                        opt_ws(char('{')),
+                        ActionBody::parse,
+                        tuple((opt(char(',')), opt_ws(char('}')))),
+                    ),
+                ),
+            )),
+        )(input)?;
+
+        Ok((
+            input,
+            Action {
+                ident,
+                body,
+                for_kv,
+                with_kv: with_kv.unwrap_or_default(),
+            },
+        ))
+    }
+}
+
 //------------ ActionBody -----------------------------------------------------
 
 // ActionBody ::= (ActionExpr ';')+
@@ -224,6 +406,17 @@ impl ActionBody {
 
 // #[derive(Clone, Debug)]
 // pub struct ImportBody {}
+
+//------------ Apply ---------------------------------------------------------
+
+// Apply ::= 'apply' '{' ApplyBody '}'
+
+#[derive(Clone, Debug)]
+pub struct Apply {
+    pub body: ApplyBody,
+    pub for_kv: Option<TypeIdentField>,
+    pub with_kv: Vec<TypeIdentField>,
+}
 
 //------------ ApplyBody -----------------------------------------------------
 
@@ -257,14 +450,17 @@ pub struct Rib {
 
 impl Rib {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-
         let (input, (_, ident, body, _)) = context(
             "rib definition",
             tuple((
-                tag("rib"),
+                opt_ws(tag("rib")),
                 context(
                     "rib name",
-                    cut(delimited(multispace1, Identifier::parse, multispace1)),
+                    cut(delimited(
+                        multispace1,
+                        Identifier::parse,
+                        multispace1,
+                    )),
                 ),
                 context(
                     "rib block",
@@ -297,16 +493,12 @@ pub struct RibBody {
 
 impl RibBody {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, key_values) = cut(separated_list0(
+            char(','),
+            opt_ws(TypeIdentField::parse),
+        ))(input)?;
 
-        let (input, key_values) =
-            cut(separated_list0(char(','), opt_ws(TypeIdentField::parse)))(input)?;
-
-        Ok((
-            input,
-            RibBody {
-                key_values,
-            },
-        ))
+        Ok((input, RibBody { key_values }))
     }
 }
 
@@ -317,7 +509,9 @@ impl RibBody {
 
 /// Parses something preceded by mandatory white space.
 
-fn ws<'a, O, F>(parse: F) -> impl FnMut(&'a str) -> IResult<&'a str, O, VerboseError<&str>>
+fn ws<'a, O, F>(
+    parse: F,
+) -> impl FnMut(&'a str) -> IResult<&'a str, O, VerboseError<&str>>
 where
     F: FnMut(&'a str) -> IResult<&str, O, VerboseError<&str>>,
 {
@@ -338,14 +532,18 @@ where
 ///
 /// White space is all actual white space characters plus comments.
 fn skip_ws(input: &str) -> IResult<&str, (), VerboseError<&str>> {
-    fold_many0(alt((map(multispace1, |_| ()), comment)), || (), |_, _| ())(input)
+    fold_many0(alt((map(multispace1, |_| ()), comment)), || (), |_, _| ())(
+        input,
+    )
 }
 
 /// Optional white space.
 ///
 /// White space is all actual white space characters plus comments.
 fn skip_opt_ws(input: &str) -> IResult<&str, (), VerboseError<&str>> {
-    fold_many0(alt((map(multispace1, |_| ()), comment)), || (), |_, _| ())(input)
+    fold_many0(alt((map(multispace1, |_| ()), comment)), || (), |_, _| ())(
+        input,
+    )
 }
 
 /// Comments start with a hash and run to the end of a line.
@@ -369,12 +567,13 @@ pub struct Identifier {
 
 impl Identifier {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-
         let (input, ident) = context(
             "identifier",
             recognize(preceded(
                 take_while1(|ch: char| ch.is_alphabetic() || ch == '_'),
-                take_while(|ch: char| ch.is_alphanumeric() || ch == '_' || ch == '.'),
+                take_while(|ch: char| {
+                    ch.is_alphanumeric() || ch == '_' || ch == '.'
+                }),
             )),
         )(input)?;
 
@@ -434,7 +633,6 @@ pub struct TypeIdentifier {
 
 impl TypeIdentifier {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-
         let (input, ident) = recognize(pair(
             take_while1(|ch: char| ch.is_alphabetic() && ch.is_uppercase()),
             take_while(|ch: char| ch.is_alphanumeric()),
@@ -505,50 +703,113 @@ impl TypeIdentField {
 
         Ok((input, Self { field_name, ty }))
     }
+}
 
-    // fn key_value<'a, E: ParseError<&'a str>>(i: &'a str) -> IResult<&'a str, (&'a str, JsonValue), E> {
-    //     separated_pair(preceded(sp, string), cut(preceded(sp, char(':'))), value)(i)
-    //     }
+//------------ StringLiteral -----------------------------------------------
+
+// Our take on a literal string is just a Identifier wrapped in two double
+// quotes. We don't do any escaping or anything like that.
+#[derive(Clone, Debug)]
+pub struct StringLiteral(ShortString);
+
+impl StringLiteral {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, ident) =
+            delimited(char('"'), Identifier::parse, char('"'))(input)?;
+
+        Ok((input, Self(ident.ident)))
+    }
+}
+
+//------------ AcceptReject -------------------------------------------------
+
+// Every filter needs to return either a 'accept' or 'reject' statement.
+// failing to set it properly ends in the whole thing being cancelled.
+
+// AcceptReject ::= 'return'? ( 'accept' | 'reject' ) ';'
+
+#[derive(Clone, Debug)]
+pub enum AcceptReject {
+    Accept,
+    Reject,
+}
+
+fn accept_reject(
+    input: &str,
+) -> IResult<&str, AcceptReject, VerboseError<&str>> {
+    context(
+        "accept or reject",
+        cut(preceded(
+            opt(opt_ws(tag("return"))),
+            alt((
+                map(tag("accept"), |_| AcceptReject::Accept),
+                map(tag("reject"), |_| AcceptReject::Reject),
+            )),
+        )),
+    )(input)
 }
 
 //------------ ArgumentList -------------------------------------------------
 
-// ArgumentList ::= 
-//      ((VariableIdentifier|StringLiteral|EnumVariantIdentifier)','?)+
+// ArgumentList ::=
+//      ((Identifier|StringLiteral|TypeIdentifier)','?)+
+pub enum ArgumentList {
+    Identifiers(Vec<Identifier>),
+    StringLiterals(Vec<StringLiteral>),
+    TypeIdentifiers(Vec<TypeIdentifier>),
+}
 
 //------------ for & with statements ----------------------------------------
 
-// ForStatement ::= 'for' VariableIdentifier':' TypeIdentifier
+// ForStatement ::= 'for' Identifier':' TypeIdentifier
 
-fn for_statement(input: &str) -> IResult<&str, Option<TypeIdentField>, VerboseError<&str>> {
-    opt(preceded(opt_ws(tag("for")), TypeIdentField::parse))(input)
+fn for_statement(
+    input: &str,
+) -> IResult<&str, Option<TypeIdentField>, VerboseError<&str>> {
+    context(
+        "for",
+        opt(preceded(opt_ws(tag("for")), TypeIdentField::parse)),
+    )(input)
 }
 
-// WithStatement ::= 'with' VariableIdentifier':' TypeIdentifier
+// WithStatement ::= 'with' Identifier':' TypeIdentifier
 
-fn with_statement(input: &str) -> IResult<&str, Vec<TypeIdentField>, VerboseError<&str>> {
-    preceded(
-        opt_ws(tag("with")),
-        separated_list0(char(','), TypeIdentField::parse),
+fn with_statement(
+    input: &str,
+) -> IResult<&str, Option<Vec<TypeIdentField>>, VerboseError<&str>> {
+    context(
+        "with",
+        opt(preceded(
+            opt_ws(tag("with")),
+            separated_list1(char(','), TypeIdentField::parse),
+        )),
     )(input)
 }
 
 // ------------ MethodCall --------------------------------------------------
-// MethodCall ::= 
-//      VariableIdentifier(('.'FieldIdentifier)+('.'MethodCallIdentifier)?)?
-// MethodCallIdentifier ::= 
+// MethodCall ::=
+//      Identifier(('.'Identifier)+('.'MethodCallIdentifier)?)?
+// MethodCallIdentifier ::=
 //      ([a-z] ([0-9a-z_])*)'('ArgumentList?')'
 
 //------------ MatchExpr -----------------------------------------------------
-// MatchExpr ::= 
-//      VariableIdentifier(
-//          ('.'VariableIdentifier)+("." MethodCallIdentifier)
+// MatchExpr ::=
+//      Identifier(
+//          ('.' Identifier)+("." MethodCallIdentifier)
 //      ?)?
-// MatchBody ::= 
+// MatchBody ::=
 //      (ActionExpr ';')+ AcceptReject?
-// MatchOperator ::= 
+
+// MatchOperator ::=
 //      'match' | 'some' | 'exactly-one' | 'all
 
+#[derive(Clone, Debug)]
+pub enum MatchOperator {
+    Match,
+    Some,
+    ExactlyOne,
+    All,
+}
 
 //------------ ShortString ---------------------------------------------------
 
