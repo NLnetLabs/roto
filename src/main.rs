@@ -18,7 +18,7 @@ fn test_data(name: &str, data: &str, expect_success: bool) {
 fn main() {
     test_data("random-crap", "##@#@#kdflfk!  abc  \n  ", false);
 
-    test_data("empty-rib", "rib my_rib {}\n// comment\n", false);
+    test_data("empty-rib", "rib my_rib {}\n// comment\n", true);
 
     test_data("crab-rib", "rib [] ribribribmodule\n", false);
 
