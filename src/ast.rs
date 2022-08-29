@@ -3,10 +3,10 @@ use std::{borrow, cmp, fmt, hash, ops, str};
 use nom::branch::alt;
 use nom::bytes::complete::{take_while, take_while1};
 use nom::character::complete::{
-    alphanumeric1, char, multispace0, multispace1,
+    char, multispace0, multispace1,
 };
-use nom::combinator::{all_consuming, cut, opt, recognize};
-use nom::error::{context, convert_error, VerboseError, VerboseErrorKind};
+use nom::combinator::{cut, opt, recognize};
+use nom::error::{context, VerboseError};
 use nom::multi::{
     fold_many0, many0, many1, separated_list0, separated_list1,
 };
@@ -19,10 +19,8 @@ use nom::{
     combinator::map,
     IResult,
 };
-use nom::{ErrorConvert, Finish};
+use nom::Finish;
 use smallvec::SmallVec;
-
-use nom::error::{Error as NomError, ErrorKind};
 
 /// ======== Root ===========================================================
 
@@ -98,14 +96,14 @@ impl Module {
                 for_statement,
                 with_statement,
                 context(
-                    "module block",
+                    "module body",
                     delimited(
                         opt_ws(char('{')),
                         ModuleBody::parse,
                         opt_ws(char('}')),
                     ),
                 ),
-                map(char('\n'), |_| ()),
+                map(many0(char('\n')), |_| ()),
             )),
         )(input)?;
 
@@ -171,15 +169,13 @@ impl ModuleBody {
                                 opt_ws(char('}')),
                             ),
                         ),
+                        map(many0(char('\n')), |_| ()),
                     )),
                 ),
             ),
             context(
                 "module expressions",
-                many0(preceded(
-                    opt(comment),
-                    terminated(ModuleExpr::parse, opt(comment)),
-                )),
+                cut(many0(opt_ws(ModuleExpr::parse))),
             ),
             context(
                 "apply definition",
@@ -261,11 +257,14 @@ pub struct Define {
 //  ('use' RibIdentifier ';')? ( VariableIdentifier '=' TypeIdentifier ';')+
 
 #[derive(Clone, Debug)]
-pub struct DefineBody {}
+pub struct DefineBody {
+    pub use_rib: Option<Identifier>,
+    pub assignments: Vec<(Identifier, ArgExpr)>,
+}
 
 impl DefineBody {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, _) = tuple((
+        let (input, (use_rib, assignments)) = tuple((
             opt(delimited(
                 opt_ws(tag("use")),
                 opt_ws(Identifier::parse),
@@ -276,11 +275,17 @@ impl DefineBody {
                 separated_pair(
                     opt_ws(Identifier::parse),
                     preceded(multispace0, char('=')),
-                    opt_ws(Identifier::parse),
+                    terminated(opt_ws(ArgExpr::parse), opt_ws(char(';'))),
                 ),
             )),
         ))(input)?;
-        Ok((input, Self {}))
+        Ok((
+            input,
+            Self {
+                use_rib,
+                assignments,
+            },
+        ))
     }
 }
 
@@ -289,43 +294,31 @@ impl DefineBody {
 #[derive(Clone, Debug)]
 pub struct Term {
     pub ident: Identifier,
-    pub for_kv: Option<TypeIdentField>,
-    pub with_kv: Vec<TypeIdentField>,
     pub body: TermBody,
 }
 
 impl Term {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (_, ident, for_kv, with_kv, body)) = context(
+        let (input, (_, ident, body)) = context(
             "term definition",
             tuple((
-                tag("term"),
+                opt_ws(tag("term")),
                 context(
                     "term name",
                     delimited(multispace1, Identifier::parse, multispace1),
                 ),
-                for_statement,
-                with_statement,
                 context(
                     "term block",
                     delimited(
                         opt_ws(char('{')),
                         TermBody::parse,
-                        tuple((opt(char(',')), opt_ws(char('}')))),
+                        opt_ws(char('}')),
                     ),
                 ),
             )),
         )(input)?;
 
-        Ok((
-            input,
-            Term {
-                ident,
-                body,
-                for_kv,
-                with_kv: with_kv.unwrap_or_default(),
-            },
-        ))
+        Ok((input, Term { ident, body }))
     }
 }
 
@@ -333,14 +326,53 @@ impl Term {
 
 // TermBody ::=
 //  ('with' VariableIdentifier ';')? ('some' | 'match')
-//     '{' (MatchExpr ';')+ '}' ';'
+//  (MatchExpr ';')+
 
 #[derive(Clone, Debug)]
-pub struct TermBody {}
+pub struct TermBody {
+    pub with: Option<Identifier>,
+    pub operator: MatchOperator,
+    pub match_exprs: Vec<CallExpr>,
+}
 
 impl TermBody {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        unimplemented!()
+        let (input, (with, (operator, match_exprs), _)) = context(
+            "term body",
+            tuple((
+                opt(opt_ws(context(
+                    "with",
+                    preceded(
+                        opt_ws(tag("with")),
+                        delimited(
+                            multispace1,
+                            Identifier::parse,
+                            opt_ws(char(';')),
+                        ),
+                    ),
+                ))),
+                tuple((
+                    opt_ws(MatchOperator::parse),
+                    delimited(
+                        opt_ws(char('{')),
+                        many1(opt_ws(terminated(
+                            CallExpr::parse,
+                            opt_ws(char(';')),
+                        ))),
+                        opt_ws(char('}')),
+                    ),
+                )),
+                map(char('\n'), |_| ()),
+            )),
+        )(input)?;
+        Ok((
+            input,
+            Self {
+                with,
+                operator,
+                match_exprs,
+            },
+        ))
     }
 }
 
@@ -749,19 +781,54 @@ fn accept_reject(
     )(input)
 }
 
-//------------ ArgumentList -------------------------------------------------
+//------------ ArgExpr --------------------------------------------------
+#[derive(Clone, Debug)]
+pub enum ArgExpr {
+    Identifier(Identifier),
+    TypeIdentifier(TypeIdentifier),
+    StringLiteral(StringLiteral),
+    Bool(bool),
+    CallExpr(CallExpr),
+    FieldExpr(FieldExpr),
+}
 
-// ArgumentList ::=
+impl ArgExpr {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        alt((
+            map(Identifier::parse, ArgExpr::Identifier),
+            map(TypeIdentifier::parse, ArgExpr::TypeIdentifier),
+            map(StringLiteral::parse, ArgExpr::StringLiteral),
+            map(tag("true"), |_| ArgExpr::Bool(true)),
+            map(tag("false"), |_| ArgExpr::Bool(false)),
+            map(CallExpr::parse, ArgExpr::CallExpr),
+            map(FieldExpr::parse, ArgExpr::FieldExpr),
+        ))(input)
+    }
+}
+
+//------------ ExprList -------------------------------------------------
+
+// ArgExprList ::=
 //      ((Identifier|StringLiteral|TypeIdentifier)','?)+
-pub enum ArgumentList {
-    Identifiers(Vec<Identifier>),
-    StringLiterals(Vec<StringLiteral>),
-    TypeIdentifiers(Vec<TypeIdentifier>),
+
+#[derive(Clone, Debug)]
+pub struct ArgExprList {
+    pub args: Vec<ArgExpr>,
+}
+
+impl ArgExprList {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, args) = context(
+            "argument expressions",
+            separated_list1(preceded(multispace0, char(',')), ArgExpr::parse),
+        )(input)?;
+        Ok((input, Self { args }))
+    }
 }
 
 //------------ for & with statements ----------------------------------------
 
-// ForStatement ::= 'for' Identifier':' TypeIdentifier
+// ForStatement ::= ('for' Identifier':' TypeIdentifier)?
 
 fn for_statement(
     input: &str,
@@ -772,7 +839,7 @@ fn for_statement(
     )(input)
 }
 
-// WithStatement ::= 'with' Identifier':' TypeIdentifier
+// WithStatement ::= ('with' (Identifier':' TypeIdentifier)+)?
 
 fn with_statement(
     input: &str,
@@ -786,13 +853,75 @@ fn with_statement(
     )(input)
 }
 
-// ------------ MethodCall --------------------------------------------------
-// MethodCall ::=
-//      Identifier(('.'Identifier)+('.'MethodCallIdentifier)?)?
-// MethodCallIdentifier ::=
-//      ([a-z] ([0-9a-z_])*)'('ArgumentList?')'
+//------------- FieldExpr --------------------------------------------------
 
-//------------ MatchExpr -----------------------------------------------------
+// FieldExpr ::= Identifier'.'Identifier
+
+#[derive(Clone, Debug)]
+pub struct FieldExpr {
+    pub ident: Identifier,
+    pub field_name: Identifier,
+}
+
+impl FieldExpr {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (ident, field_name)) = tuple((
+            Identifier::parse,
+            preceded(char('.'), Identifier::parse),
+        ))(input)?;
+        Ok((input, Self { ident, field_name }))
+    }
+}
+
+//------------- CallReceiver ------------------------------------------------
+
+// CallReceiver ::= Identifier | FieldExpr
+
+#[derive(Clone, Debug)]
+pub enum CallReceiver {
+    Identifier(Identifier),
+    FieldExpr(FieldExpr),
+}
+
+impl CallReceiver {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        alt((
+            map(Identifier::parse, |ident| CallReceiver::Identifier(ident)),
+            map(FieldExpr::parse, |field| CallReceiver::FieldExpr(field)),
+        ))(input)
+    }
+}
+
+//------------- CallExpr ----------------------------------------------------
+
+// CallExpr ::= CallReceiver'('ExprList?')'
+#[derive(Clone, Debug)]
+pub struct CallExpr {
+    /// The name of the function.
+    pub receiver: CallReceiver,
+    /// The arguments to the function.
+    pub expr_list: ArgExprList,
+}
+
+impl CallExpr {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (receiver, expr_list)) = tuple((
+            CallReceiver::parse,
+            delimited(char('('), ArgExprList::parse, char(')')),
+        ))(input)?;
+
+        Ok((
+            input,
+            Self {
+                receiver,
+                expr_list,
+            },
+        ))
+    }
+}
+
+//------------ MatchExpr ----------------------------------------------------
+
 // MatchExpr ::=
 //      Identifier(
 //          ('.' Identifier)+("." MethodCallIdentifier)
@@ -801,7 +930,7 @@ fn with_statement(
 //      (ActionExpr ';')+ AcceptReject?
 
 // MatchOperator ::=
-//      'match' | 'some' | 'exactly-one' | 'all
+//      'match' | 'some' | 'exactly-one' | 'all'
 
 #[derive(Clone, Debug)]
 pub enum MatchOperator {
@@ -809,6 +938,17 @@ pub enum MatchOperator {
     Some,
     ExactlyOne,
     All,
+}
+
+impl MatchOperator {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        alt((
+            map(tag("match"), |_| MatchOperator::Match),
+            map(tag("some"), |_| MatchOperator::Some),
+            map(tag("exactly-one"), |_| MatchOperator::ExactlyOne),
+            map(tag("all"), |_| MatchOperator::All),
+        ))(input)
+    }
 }
 
 //------------ ShortString ---------------------------------------------------

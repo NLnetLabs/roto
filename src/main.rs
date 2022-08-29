@@ -82,4 +82,44 @@ fn main() {
         ),
         true,
     );
+
+    test_data(
+        "module_with_assignments",
+        concat!(
+            "module my_module for route: Route with bla: Blaffer {\n",
+            "   define { \n",
+            "       use bla;\n",
+            "       bla = Bla;\n",
+            "   }\n",
+            "\n",
+            "   term blaffer_filter {\n",
+            "       with bla;\n",
+            "       match { blaffer.blaf.contains(something); }\n",
+            "   }\n",
+            "}\n",
+            "// comment\n",
+            "rib unrib { blaffer: Blaf }\n"
+        ),
+        true,
+    );
+
+    test_data(
+        "module_with_assignments",
+        concat!(
+            "module my_module for route: Route with bla: Blaffer {\n",
+            "   define { \n",
+            "       use bla;\n",
+            "       bla = Bla;\n",
+            "   }\n",
+            "\n",
+            "   term blaffer_filter {\n",
+            "       with bla;\n",
+            "       match { blaffer.blaf.contains(something,\"somewhat\"); }\n",
+            "   }\n",
+            "}\n",
+            "// comment\n",
+            "rib unrib { blaffer: Blaf }\n"
+        ),
+        true,
+    );
 }
