@@ -76,14 +76,14 @@ impl RootExpr {
 #[derive(Clone, Debug)]
 pub struct Module {
     pub ident: Identifier,
-    pub for_kv: Option<TypeIdentField>,
+    pub for_ident: Option<Identifier>,
     pub with_kv: Vec<TypeIdentField>,
     pub body: ModuleBody,
 }
 
 impl Module {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (_, ident, for_kv, with_kv, body, _)) = context(
+        let (input, (_, ident, for_ident, with_kv, body, _)) = context(
             "module definition",
             tuple((
                 opt_ws(tag("module")),
@@ -91,7 +91,7 @@ impl Module {
                     "module name",
                     delimited(multispace1, Identifier::parse, multispace1),
                 ),
-                for_statement,
+                opt(preceded(opt_ws(tag("for")), opt_ws(Identifier::parse))),
                 with_statement,
                 context(
                     "module body",
@@ -103,14 +103,16 @@ impl Module {
                 ),
                 map(many0(char('\n')), |_| ()),
             )),
-        )(input)?;
+        )(
+            input
+        )?;
 
         Ok((
             input,
             Module {
                 ident,
                 body,
-                for_kv,
+                for_ident,
                 with_kv: with_kv.unwrap_or_default(),
             },
         ))
