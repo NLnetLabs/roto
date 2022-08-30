@@ -361,20 +361,23 @@ impl TermBody {
                         ),
                     ),
                 ))),
-                context("match expressions", tuple((
-                    opt_ws(MatchOperator::parse),
-                    delimited(
-                        opt_ws(char('{')),
-                        many1(context(
-                            "call",
-                            opt_ws(terminated(
-                                CallExpr::parse,
-                                opt_ws(char(';')),
+                context(
+                    "match expressions",
+                    tuple((
+                        opt_ws(MatchOperator::parse),
+                        delimited(
+                            opt_ws(char('{')),
+                            many1(context(
+                                "call",
+                                opt_ws(terminated(
+                                    CallExpr::parse,
+                                    opt_ws(char(';')),
+                                )),
                             )),
-                        )),
-                        opt_ws(char('}')),
-                    ),
-                ))),
+                            opt_ws(char('}')),
+                        ),
+                    )),
+                ),
                 map(char('\n'), |_| ()),
             )),
         )(input)?;
