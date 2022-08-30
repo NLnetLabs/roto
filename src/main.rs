@@ -54,7 +54,7 @@ fn main() {
     test_data(
         "module",
         r###"
-        module my_module for route: Route with bla: Blaffer { define my_def { use bla; } }
+        module my_module for rib-loc with bla: Blaffer { define my_def { use bla; } }
             // comment
             rib unrib { blaffer: Blaf }
         "###,
@@ -64,7 +64,7 @@ fn main() {
     test_data(
         "module-more-with",
         r###"
-        module my_module for route: Route with bla: Blaffer {
+        module my_module for rib-in with bla: Blaffer {
             define { use bla; }
         }
             
@@ -77,7 +77,7 @@ fn main() {
     test_data(
         "module",
         r###"
-            module my_module for route: Route with bla: Blaffer {
+            module my_module for rib-in with bla: Blaffer {
                define { use bla; }
             }
             // comment
@@ -89,7 +89,7 @@ fn main() {
     test_data(
         "module_with_assignments",
         r###"
-            module my_module for route: Route with bla: Blaffer {
+            module my_module for rib-in with bla: Blaffer {
                define {
                    use bla;
                    bla = Bla;
@@ -109,7 +109,7 @@ fn main() {
     test_data(
         "module_with_assignments_2",
             r###"
-            module my_module for route: Route with bla: Blaffer {
+            module my_module for rib-in with bla: Blaffer {
                define {
                    use bla;
                    bla = Bla;
