@@ -624,8 +624,12 @@ impl Identifier {
         let (input, ident) = context(
             "identifier",
             recognize(preceded(
-                take_while1(|ch: char| ch.is_alphabetic() || ch == '_'),
-                take_while(|ch: char| ch.is_alphanumeric() || ch == '_'),
+                take_while1(|ch: char| {
+                    ch.is_alphabetic() || ch == '_' || ch == '-'
+                }),
+                take_while(|ch: char| {
+                    ch.is_alphanumeric() || ch == '_' || ch == '-'
+                }),
             )),
         )(input)?;
 
