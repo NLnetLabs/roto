@@ -795,13 +795,19 @@ fn accept_reject(
 ) -> IResult<&str, AcceptReject, VerboseError<&str>> {
     context(
         "accept or reject",
-        cut(preceded(
+        preceded(
             opt(opt_ws(tag("return"))),
             alt((
-                map(tag("accept"), |_| AcceptReject::Accept),
-                map(tag("reject"), |_| AcceptReject::Reject),
+                map(
+                    terminated(opt_ws(tag("accept")), opt_ws(char(';'))),
+                    |_| AcceptReject::Accept,
+                ),
+                map(
+                    terminated(opt_ws(tag("reject")), opt_ws(char(';'))),
+                    |_| AcceptReject::Reject,
+                ),
             )),
-        )),
+        ),
     )(input)
 }
 
