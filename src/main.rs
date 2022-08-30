@@ -44,62 +44,65 @@ fn main() {
 
     test_data(
         "interspersed-comments",
-        "rib my_rib { bla: Bla, bloo: Bloo }\n// comment\nrib unrib { blaffer: Blaf }\n",
+        r###"
+        rib my_rib { bla: Bla, bloo: Bloo }
+        // comment\nrib unrib { blaffer: Blaf }
+        "###,
         true,
     );
 
     test_data(
         "module",
-        concat!(
-            "module my_module for route: Route with bla: Blaffer { define my_def { use bla; } }\n",
-            "// comment\n",
-            "rib unrib { blaffer: Blaf }\n"
-        ),
+        r###"
+        module my_module for route: Route with bla: Blaffer { define my_def { use bla; } }
+            // comment
+            rib unrib { blaffer: Blaf }
+        "###,
         true,
     );
 
     test_data(
         "module-more-with",
-        concat!(
-            "module my_module for route: Route with bla: Blaffer {\n",
-            "   define { use bla; }\n",
-            "}\n",
-            "\n",
-            "// comment\n",
-            "rib unrib { blaffer: Blaf }\n"
-        ),
+        r###"
+        module my_module for route: Route with bla: Blaffer {
+            define { use bla; }
+        }
+            
+        // comment
+        rib unrib { blaffer: Blaf }
+        "###,
         true,
     );
 
     test_data(
         "module",
-        concat!(
-            "module my_module for route: Route with bla: Blaffer {\n",
-            "   define { use bla; }\n",
-            "}\n",
-            "// comment\n",
-            "rib unrib { blaffer: Blaf }\n"
-        ),
+        r###"
+            module my_module for route: Route with bla: Blaffer {
+               define { use bla; }
+            }
+            // comment
+            rib unrib { blaffer: Blaf }
+        "###,
         true,
     );
 
     test_data(
         "module_with_assignments",
-        concat!(
-            "module my_module for route: Route with bla: Blaffer {\n",
-            "   define { \n",
-            "       use bla;\n",
-            "       bla = Bla;\n",
-            "   }\n",
-            "\n",
-            "   term blaffer_filter {\n",
-            "       with bla;\n",
-            "       match { blaffer.blaf.contains(something); }\n",
-            "   }\n",
-            "}\n",
-            "// comment\n",
-            "rib unrib { blaffer: Blaf }\n"
-        ),
+        r###"
+            module my_module for route: Route with bla: Blaffer {
+               define {
+                   use bla;
+                   bla = Bla;
+               }
+            
+               term blaffer_filter {
+                   with bla;
+                   match { blaffer.blaf.contains(something); }
+               }
+            }
+            // comment
+            rib unrib { blaffer: Blaf }
+        "###,
         true,
     );
 
