@@ -2,9 +2,7 @@ use std::{borrow, cmp, fmt, hash, ops, str};
 
 use nom::branch::alt;
 use nom::bytes::complete::{take_while, take_while1};
-use nom::character::complete::{
-    char, multispace0, multispace1,
-};
+use nom::character::complete::{char, multispace0, multispace1};
 use nom::combinator::{cut, opt, recognize};
 use nom::error::{context, VerboseError};
 use nom::multi::{
@@ -13,13 +11,13 @@ use nom::multi::{
 use nom::sequence::{
     delimited, pair, preceded, separated_pair, terminated, tuple,
 };
+use nom::Finish;
 use nom::{
     bytes::complete::{tag, take_until},
     character::complete::char as tag_char,
     combinator::map,
     IResult,
 };
-use nom::Finish;
 use smallvec::SmallVec;
 
 /// ======== Root ===========================================================
@@ -441,11 +439,17 @@ impl Action {
 // ActionBody ::= (ActionExpr ';')+
 
 #[derive(Clone, Debug)]
-pub struct ActionBody {}
+pub struct ActionBody {
+    pub expressions: Vec<CallExpr>,
+}
 
 impl ActionBody {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        unimplemented!()
+        let (input, expressions) = context(
+            "action body",
+            many1(opt_ws(terminated(CallExpr::parse, opt_ws(char(';'))))),
+        )(input)?;
+        Ok((input, Self { expressions }))
     }
 }
 

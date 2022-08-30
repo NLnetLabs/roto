@@ -104,22 +104,48 @@ fn main() {
     );
 
     test_data(
-        "module_with_assignments",
-        concat!(
-            "module my_module for route: Route with bla: Blaffer {\n",
-            "   define { \n",
-            "       use bla;\n",
-            "       bla = Bla;\n",
-            "   }\n",
-            "\n",
-            "   term blaffer_filter {\n",
-            "       with bla;\n",
-            "       match { blaffer.blaf.contains(something,\"somewhat\"); }\n",
-            "   }\n",
-            "}\n",
-            "// comment\n",
-            "rib unrib { blaffer: Blaf }\n"
-        ),
+        "module_with_assignments_2",
+            r###"
+            module my_module for route: Route with bla: Blaffer {
+               define {
+                   use bla;
+                   bla = Bla;
+               }
+            
+               term blaffer_filter {
+                   match { blaffer.blaf.contains(something,\"somewhat"); }
+               }
+               
+               action blaffer {
+                   blaffer.blaf(bla);
+               }
+            }
+            // comment
+            rib unrib { blaffer: Blaf }
+        "###,
+        false,
+    );
+
+    test_data(
+        "module_with_assignments_2",
+            r###"
+            module my_module for route: Route with bla: Blaffer {
+               define {
+                   use bla;
+                   bla = Bla;
+               }
+            
+               term blaffer_filter {
+                   match { blaffer.blaf.contains(something,"somewhat"); }
+               }
+               
+               action blaffer {
+                   blaffer.blaf(bla);
+               }
+            }
+            // comment
+            rib unrib { blaffer: Blaf }
+        "###,
         true,
     );
 }
