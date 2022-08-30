@@ -55,7 +55,7 @@ impl Root {
 
 #[derive(Debug, Clone)]
 pub enum RootExpr {
-    Module(Module),
+    Module(Box<Module>),
     Rib(Rib),
     // PrefixList(PrefixListExpr),
     // Table(TableExpr),
@@ -65,7 +65,7 @@ impl RootExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, expressions) = alt((
             map(Rib::parse, Self::Rib),
-            map(Module::parse, Self::Module),
+            map(Module::parse, |m| Self::Module(Box::new(m))),
         ))(input)?;
         Ok((input, expressions))
     }
