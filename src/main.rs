@@ -152,6 +152,10 @@ fn main() {
         true,
     );
 
+    test_data(
+        "module_with_apply_2",
+            r###"
+            module my_module for my-rib with bla: Blaffer {
                define {
                    use bla;
                    bla = Bla;
@@ -163,6 +167,11 @@ fn main() {
                
                action blaffer {
                    blaffer.blaf(bla);
+               }
+
+               apply {
+                    with best-path;
+                    filter exactly-one exists(found_prefix) matching { set-best(route); return accept; };
                }
             }
             // comment
