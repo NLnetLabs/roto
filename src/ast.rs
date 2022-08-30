@@ -294,31 +294,43 @@ impl DefineBody {
 #[derive(Clone, Debug)]
 pub struct Term {
     pub ident: Identifier,
+    pub for_kv: Option<TypeIdentField>,
+    pub with_kv: Vec<TypeIdentField>,
     pub body: TermBody,
 }
 
 impl Term {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (_, ident, body)) = context(
+        let (input, (_, ident, for_kv, with_kv, body)) = context(
             "term definition",
             tuple((
                 opt_ws(tag("term")),
-                context(
+                cut(context(
                     "term name",
                     delimited(multispace1, Identifier::parse, multispace1),
-                ),
-                context(
+                )),
+                for_statement,
+                with_statement,
+                cut(context(
                     "term block",
                     delimited(
                         opt_ws(char('{')),
                         TermBody::parse,
                         opt_ws(char('}')),
                     ),
-                ),
+                )),
             )),
         )(input)?;
 
-        Ok((input, Term { ident, body }))
+        Ok((
+            input,
+            Term {
+                ident,
+                for_kv,
+                with_kv: with_kv.unwrap_or_default(),
+                body,
+            },
+        ))
     }
 }
 
@@ -351,17 +363,20 @@ impl TermBody {
                         ),
                     ),
                 ))),
-                tuple((
+                context("match expressions", tuple((
                     opt_ws(MatchOperator::parse),
                     delimited(
                         opt_ws(char('{')),
-                        many1(opt_ws(terminated(
-                            CallExpr::parse,
-                            opt_ws(char(';')),
-                        ))),
+                        many1(context(
+                            "call",
+                            opt_ws(terminated(
+                                CallExpr::parse,
+                                opt_ws(char(';')),
+                            )),
+                        )),
                         opt_ws(char('}')),
                     ),
-                )),
+                ))),
                 map(char('\n'), |_| ()),
             )),
         )(input)?;
@@ -391,7 +406,7 @@ impl Action {
         let (input, (_, ident, for_kv, with_kv, body)) = context(
             "action definition",
             tuple((
-                tag("action"),
+                opt_ws(tag("action")),
                 context(
                     "action name",
                     delimited(multispace1, Identifier::parse, multispace1),
@@ -403,7 +418,7 @@ impl Action {
                     delimited(
                         opt_ws(char('{')),
                         ActionBody::parse,
-                        tuple((opt(char(',')), opt_ws(char('}')))),
+                        opt_ws(char('}')),
                     ),
                 ),
             )),
@@ -413,9 +428,9 @@ impl Action {
             input,
             Action {
                 ident,
-                body,
                 for_kv,
                 with_kv: with_kv.unwrap_or_default(),
+                body,
             },
         ))
     }
@@ -603,9 +618,7 @@ impl Identifier {
             "identifier",
             recognize(preceded(
                 take_while1(|ch: char| ch.is_alphabetic() || ch == '_'),
-                take_while(|ch: char| {
-                    ch.is_alphanumeric() || ch == '_' || ch == '.'
-                }),
+                take_while(|ch: char| ch.is_alphanumeric() || ch == '_'),
             )),
         )(input)?;
 
@@ -820,7 +833,10 @@ impl ArgExprList {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, args) = context(
             "argument expressions",
-            separated_list1(preceded(multispace0, char(',')), ArgExpr::parse),
+            cut(separated_list1(
+                preceded(multispace0, char(',')),
+                ArgExpr::parse,
+            )),
         )(input)?;
         Ok((input, Self { args }))
     }
@@ -860,16 +876,19 @@ fn with_statement(
 #[derive(Clone, Debug)]
 pub struct FieldExpr {
     pub ident: Identifier,
-    pub field_name: Identifier,
+    pub field_names: Vec<Identifier>,
 }
 
 impl FieldExpr {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (ident, field_name)) = tuple((
-            Identifier::parse,
-            preceded(char('.'), Identifier::parse),
-        ))(input)?;
-        Ok((input, Self { ident, field_name }))
+        let (input, (ident, field_names)) = context(
+            "field expression",
+            tuple((
+                Identifier::parse,
+                many1(preceded(char('.'), Identifier::parse)),
+            )),
+        )(input)?;
+        Ok((input, Self { ident, field_names }))
     }
 }
 
@@ -886,8 +905,8 @@ pub enum CallReceiver {
 impl CallReceiver {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         alt((
-            map(Identifier::parse, |ident| CallReceiver::Identifier(ident)),
             map(FieldExpr::parse, |field| CallReceiver::FieldExpr(field)),
+            map(Identifier::parse, |ident| CallReceiver::Identifier(ident)),
         ))(input)
     }
 }
