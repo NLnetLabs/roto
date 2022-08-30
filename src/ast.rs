@@ -474,12 +474,46 @@ pub struct Apply {
     pub with_kv: Vec<TypeIdentField>,
 }
 
+impl Apply {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (_, for_kv, with_kv, body)) = context(
+            "apply definition",
+            tuple((
+                opt_ws(tag("apply")),
+                for_statement,
+                with_statement,
+                context(
+                    "apply body",
+                    delimited(
+                        opt_ws(char('{')),
+                        ApplyBody::parse,
+                        context(
+                            "closing thing",
+                            terminated(opt_ws(char('}')), many0(char('\n'))),
+                        ),
+                    ),
+                ),
+            )),
+        )(input)?;
+
+        Ok((
+            input,
+            Self {
+                for_kv,
+                with_kv: with_kv.unwrap_or_default(),
+                body,
+            },
+        ))
+    }
+}
+
 //------------ ApplyBody -----------------------------------------------------
 
 // ApplyBody ::=
 //     (
-//        'filter' FilterIdentifier? MatchOperator?
-//            TermIdentifier('(' VariableIdentifier ')')?
+//        ('with' Identifier ';')?
+//        'filter' Identifier? MatchOperator?
+//            Identifier('(' Identifier ')')?
 //        (
 //            ('matching' '{' MatchBody '}') |
 //            ('not matching' '{' MatchBody '}')
@@ -488,11 +522,94 @@ pub struct Apply {
 //     AcceptReject
 
 #[derive(Clone, Debug)]
-pub struct ApplyBody {}
+pub struct ApplyBody {
+    pub scopes: Vec<ApplyScope>,
+    pub accept_reject: Option<AcceptReject>,
+}
 
 impl ApplyBody {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        unimplemented!()
+        let (input, (scopes, accept_reject)) = context(
+            "apply body",
+            tuple((
+                many1(ApplyScope::parse),
+                context("final accept reject", opt(opt_ws(accept_reject))),
+                // many0(map(char('\n'), |_| ())),
+            )),
+        )(input)?;
+        Ok((
+            input,
+            Self {
+                scopes,
+                accept_reject,
+            },
+        ))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ApplyScope {
+    pub with: Identifier,
+    pub operator: MatchOperator,
+    pub filter_ident: FilterIdentifier,
+    pub negate: bool,
+    pub actions: Vec<(CallExpr, Option<AcceptReject>)>,
+}
+
+impl ApplyScope {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (with, operator, (filter_ident, negate, action_exprs))) =
+            tuple((
+                opt_ws(context(
+                    "with",
+                    preceded(
+                        opt_ws(tag("with")),
+                        delimited(
+                            multispace1,
+                            Identifier::parse,
+                            opt_ws(char(';')),
+                        ),
+                    ),
+                )),
+                preceded(opt_ws(tag("filter")), opt_ws(MatchOperator::parse)),
+                context(
+                    "action expressions",
+                    opt_ws(tuple((
+                        alt((
+                            map(CallExpr::parse, FilterIdentifier::CallExpr),
+                            map(Identifier::parse, FilterIdentifier::Ident),
+                        )),
+                        opt(terminated(
+                            opt(opt_ws(tag("not"))),
+                            opt_ws(tag("matching")),
+                        )),
+                        delimited(
+                            opt_ws(char('{')),
+                            many1(context(
+                                "call",
+                                tuple((
+                                    opt_ws(terminated(
+                                        CallExpr::parse,
+                                        opt_ws(char(';')),
+                                    )),
+                                    opt(opt_ws(accept_reject)),
+                                )),
+                            )),
+                            terminated(opt_ws(char('}')), opt_ws(char(';'))),
+                        ),
+                    ))),
+                ),
+            ))(input)?;
+        Ok((
+            input,
+            Self {
+                with,
+                operator,
+                negate: negate.is_none(),
+                actions: action_exprs,
+                filter_ident,
+            },
+        ))
     }
 }
 
@@ -811,6 +928,14 @@ fn accept_reject(
             )),
         ),
     )(input)
+}
+
+//------------ FilterIdentifier -----------------------------------------
+
+#[derive(Clone, Debug)]
+pub enum FilterIdentifier {
+    Ident(Identifier),
+    CallExpr(CallExpr),
 }
 
 //------------ ArgExpr --------------------------------------------------
