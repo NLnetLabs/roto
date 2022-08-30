@@ -132,7 +132,26 @@ fn main() {
     test_data(
         "module_with_assignments_2",
             r###"
-            module my_module for route: Route with bla: Blaffer {
+            module my_module with bla: Blaffer {
+               define {
+                   use bla;
+                   bla = Bla;
+               }
+            
+               term blaffer_filter {
+                   match { blaffer.blaf.contains(something,"somewhat"); }
+               }
+               
+               action blaffer {
+                   blaffer.blaf(bla);
+               }
+            }
+            // comment
+            rib unrib { blaffer: Blaf }
+        "###,
+        true,
+    );
+
                define {
                    use bla;
                    bla = Bla;
