@@ -173,10 +173,7 @@ impl ModuleBody {
                     )),
                 ),
             ),
-            context(
-                "module expressions",
-                cut(many0(opt_ws(ModuleExpr::parse))),
-            ),
+            context("module expressions", many0(opt_ws(ModuleExpr::parse))),
             context(
                 "apply definition",
                 opt(preceded(
@@ -236,7 +233,6 @@ impl ModuleExpr {
             map(Term::parse, Self::Term),
             map(Action::parse, Self::Action),
             // map(ImportBody::parse, ModuleBody::Import),
-            // map(ApplyBody::parse, |apply| { Self::Apply(apply) }),
         ))(input)?;
         Ok((input, expressions))
     }
@@ -342,51 +338,61 @@ impl Term {
 
 #[derive(Clone, Debug)]
 pub struct TermBody {
-    pub with: Option<Identifier>,
-    pub operator: MatchOperator,
-    pub match_exprs: Vec<CallExpr>,
+    pub scopes: Vec<TermScope>,
 }
 
 impl TermBody {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (with, (operator, match_exprs), _)) = context(
-            "term body",
-            tuple((
-                opt(opt_ws(context(
-                    "with",
-                    preceded(
-                        opt_ws(tag("with")),
-                        delimited(
-                            multispace1,
-                            Identifier::parse,
-                            opt_ws(char(';')),
-                        ),
+        let (input, scopes) =
+            context("term body", many1(TermScope::parse))(input)?;
+
+        Ok((input, Self { scopes }))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TermScope {
+    pub scope: Option<Identifier>,
+    pub operator: MatchOperator,
+    pub match_exprs: Vec<CallExpr>,
+}
+
+impl TermScope {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (scope, (operator, match_exprs))) = tuple((
+            opt(opt_ws(context(
+                "use scope",
+                preceded(
+                    opt_ws(tag("use")),
+                    delimited(
+                        multispace1,
+                        Identifier::parse,
+                        opt_ws(char(';')),
                     ),
-                ))),
-                context(
-                    "match expressions",
-                    tuple((
-                        opt_ws(MatchOperator::parse),
-                        delimited(
-                            opt_ws(char('{')),
-                            many1(context(
-                                "call",
-                                opt_ws(terminated(
-                                    CallExpr::parse,
-                                    opt_ws(char(';')),
-                                )),
-                            )),
-                            opt_ws(char('}')),
-                        ),
-                    )),
                 ),
-                map(char('\n'), |_| ()),
-            )),
-        )(input)?;
+            ))),
+            context(
+                "match expressions",
+                tuple((
+                    opt_ws(MatchOperator::parse),
+                    delimited(
+                        opt_ws(char('{')),
+                        many1(context(
+                            "call",
+                            opt_ws(terminated(
+                                CallExpr::parse,
+                                opt_ws(char(';')),
+                            )),
+                        )),
+                        opt_ws(char('}')),
+                    ),
+                )),
+            ),
+        ))(input)?;
         Ok((
             input,
             Self {
-                with,
+                scope,
                 operator,
                 match_exprs,
             },
@@ -534,7 +540,6 @@ impl ApplyBody {
             tuple((
                 many1(ApplyScope::parse),
                 context("final accept reject", opt(opt_ws(accept_reject))),
-                // many0(map(char('\n'), |_| ())),
             )),
         )(input)?;
         Ok((
@@ -549,21 +554,21 @@ impl ApplyBody {
 
 #[derive(Clone, Debug)]
 pub struct ApplyScope {
-    pub with: Identifier,
+    pub scope: Identifier,
     pub operator: MatchOperator,
-    pub filter_ident: FilterIdentifier,
+    pub filter_ident: FilterExpr,
     pub negate: bool,
-    pub actions: Vec<(CallExpr, Option<AcceptReject>)>,
+    pub actions: Vec<(FilterExpr, Option<AcceptReject>)>,
 }
 
 impl ApplyScope {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (with, operator, (filter_ident, negate, action_exprs))) =
+        let (input, (scope, operator, (filter_ident, negate, action_exprs))) =
             tuple((
                 opt_ws(context(
-                    "with",
+                    "use scope",
                     preceded(
-                        opt_ws(tag("with")),
+                        opt_ws(tag("use")),
                         delimited(
                             multispace1,
                             Identifier::parse,
@@ -576,8 +581,8 @@ impl ApplyScope {
                     "action expressions",
                     opt_ws(tuple((
                         alt((
-                            map(CallExpr::parse, FilterIdentifier::CallExpr),
-                            map(Identifier::parse, FilterIdentifier::Ident),
+                            map(CallExpr::parse, FilterExpr::CallExpr),
+                            map(Identifier::parse, FilterExpr::Ident),
                         )),
                         opt(terminated(
                             opt(opt_ws(tag("not"))),
@@ -589,7 +594,16 @@ impl ApplyScope {
                                 "call",
                                 tuple((
                                     opt_ws(terminated(
-                                        CallExpr::parse,
+                                        alt((
+                                            map(
+                                                CallExpr::parse,
+                                                FilterExpr::CallExpr,
+                                            ),
+                                            map(
+                                                Identifier::parse,
+                                                FilterExpr::Ident,
+                                            ),
+                                        )),
                                         opt_ws(char(';')),
                                     )),
                                     opt(opt_ws(accept_reject)),
@@ -603,7 +617,7 @@ impl ApplyScope {
         Ok((
             input,
             Self {
-                with,
+                scope,
                 operator,
                 negate: negate.is_none(),
                 actions: action_exprs,
@@ -871,7 +885,7 @@ impl TypeIdentField {
             "key-value pair",
             separated_pair(
                 preceded(multispace0, Identifier::parse),
-                cut(preceded(multispace0, char(':'))),
+                preceded(multispace0, char(':')),
                 preceded(multispace0, TypeIdentifier::parse),
             ),
         )(input)?;
@@ -930,10 +944,10 @@ fn accept_reject(
     )(input)
 }
 
-//------------ FilterIdentifier -----------------------------------------
+//------------ FilterExpr -----------------------------------------
 
 #[derive(Clone, Debug)]
-pub enum FilterIdentifier {
+pub enum FilterExpr {
     Ident(Identifier),
     CallExpr(CallExpr),
 }
@@ -977,10 +991,7 @@ impl ArgExprList {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, args) = context(
             "argument expressions",
-            cut(separated_list1(
-                preceded(multispace0, char(',')),
-                ArgExpr::parse,
-            )),
+            separated_list1(preceded(multispace0, char(',')), ArgExpr::parse),
         )(input)?;
         Ok((input, Self { args }))
     }
@@ -1049,8 +1060,8 @@ pub enum CallReceiver {
 impl CallReceiver {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         alt((
-            map(FieldExpr::parse, |field| CallReceiver::FieldExpr(field)),
-            map(Identifier::parse, |ident| CallReceiver::Identifier(ident)),
+            map(FieldExpr::parse, CallReceiver::FieldExpr),
+            map(Identifier::parse, CallReceiver::Identifier),
         ))(input)
     }
 }

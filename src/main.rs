@@ -96,7 +96,7 @@ fn main() {
                }
             
                term blaffer_filter {
-                   with bla;
+                   use bla;
                    match { blaffer.blaf.contains(something); }
                }
             }
@@ -153,6 +153,34 @@ fn main() {
     );
 
     test_data(
+        "module_with_apply_1",
+            r###"
+            module my_module for my-rib with bla: Blaffer {
+               define {
+                   use bla;
+                   bla = Bla;
+               }
+            
+               term blaffer_filter {
+                   match { blaffer.blaf.contains(something,"somewhat"); }
+               }
+               
+               action blaffer {
+                   blaffer.blaf(bla);
+               }
+
+               apply {
+                    use best-path;
+                    filter exactly-one exists(found_prefix) matching { set-best(route); return accept; };
+               }
+            }
+            // comment
+            rib unrib { blaffer: Blaf }
+        "###,
+        true,
+    );
+
+    test_data(
         "module_with_apply_2",
             r###"
             module my_module for my-rib with bla: Blaffer {
@@ -170,8 +198,10 @@ fn main() {
                }
 
                apply {
-                    with best-path;
+                    use best-path;
                     filter exactly-one exists(found_prefix) matching { set-best(route); return accept; };
+                    use backup-path;
+                    filter match rov-invalid-asn matching { set-rov-invalid-asn-community; return reject; };
                }
             }
             // comment
