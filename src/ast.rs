@@ -790,7 +790,8 @@ impl fmt::Display for Identifier {
 
 //------------ TypeIdentifier -----------------------------------------------
 
-/// An identifier is the name of variables or other things.
+/// An identifier is the uniqur name of all expressions that we allow to be 
+/// named.
 ///
 /// It is a word composed of a leading alphabetic Unicode character or an
 /// underscore, followed by alphanumeric Unicode characters or underscore or
@@ -800,6 +801,8 @@ pub struct TypeIdentifier {
     /// The actual identifier.
     pub ident: ShortString,
 }
+
+/// A TypeIdentifier is the unique name of a type.
 
 /// TypeIdentifier ::= [A-Z] ([0-9a-zA-Z])*
 
