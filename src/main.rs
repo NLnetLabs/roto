@@ -46,7 +46,8 @@ fn main() {
         "interspersed-comments",
         r###"
         rib my_rib contains SomeCrap { bla: Bla, bloo: Bloo }
-        // comment\nrib unrib { blaffer: Blaf }
+        // comment
+        rib unrib contains Blaffer { blaffer: Blaf }
         "###,
         true,
     );
