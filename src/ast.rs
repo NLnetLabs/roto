@@ -202,12 +202,6 @@ impl ModuleBody {
                     with_kv: define.2.unwrap_or_default(),
                     body: define.3,
                 },
-                // define: {
-                //     ident: define_ident,
-                //     for_kv: define_for_kv,
-                //     with_kv: define_with_kv.unwrap_or_default(),
-                //     body: define,
-                // },
                 expressions,
                 apply: apply.map(|a| Apply {
                     for_kv: a.0,
