@@ -92,7 +92,7 @@ fn main() {
             module my_module for rib-in with bla: Blaffer {
                define {
                    use bla;
-                   bla = Bla;
+                   bla = blaf(Bla);
                }
             
                term blaffer_filter {
@@ -112,7 +112,7 @@ fn main() {
             module my_module for rib-in with bla: Blaffer {
                define {
                    use bla;
-                   bla = Bla;
+                   bla = bla2(Bla);
                }
             
                term blaffer_filter {
@@ -135,7 +135,7 @@ fn main() {
             module my_module with bla: Blaffer {
                define {
                    use bla;
-                   bla = Bla;
+                   bla = bla3(Bla);
                }
             
                term blaffer_filter {
@@ -158,7 +158,7 @@ fn main() {
             module my_module for my-rib with bla: Blaffer {
                define {
                    use bla;
-                   bla = Bla;
+                   bla = bla4(Bla);
                }
             
                term blaffer_filter {
@@ -186,7 +186,7 @@ fn main() {
             module my_module for my-rib with bla: Blaffer {
                define {
                    use bla;
-                   bla = Bla;
+                   bla = bla();
                }
             
                term blaffer_filter {
