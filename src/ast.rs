@@ -3,7 +3,7 @@ use std::{borrow, cmp, fmt, hash, ops, str};
 use nom::branch::alt;
 use nom::bytes::complete::{take_while, take_while1};
 use nom::character::complete::{char, multispace0, multispace1};
-use nom::combinator::{cut, opt, recognize};
+use nom::combinator::{all_consuming, cut, opt, recognize};
 use nom::error::{context, VerboseError};
 use nom::multi::{
     fold_many0, many0, many1, separated_list0, separated_list1,
@@ -45,9 +45,8 @@ impl Root {
     }
 
     fn parse_root(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, expressions) = cut(many1(preceded(
-            opt(comment),
-            terminated(RootExpr::parse, opt(comment)),
+        let (input, expressions) = cut(all_consuming(many1(
+            preceded(skip_opt_ws, terminated(RootExpr::parse, skip_opt_ws)),
         )))(input)?;
         Ok((input, Self { expressions }))
     }
@@ -691,20 +690,6 @@ impl RibBody {
 
 //============ Separators ====================================================
 
-//
-// This is everything that doesn’t end up as actual output.
-
-/// Parses something preceded by mandatory white space.
-
-fn ws<'a, O, F>(
-    parse: F,
-) -> impl FnMut(&'a str) -> IResult<&'a str, O, VerboseError<&str>>
-where
-    F: FnMut(&'a str) -> IResult<&str, O, VerboseError<&str>>,
-{
-    preceded(skip_ws, parse)
-}
-
 /// Parses something preceded by optional white space.
 fn opt_ws<'a, O, F>(
     parse: F,
@@ -713,15 +698,6 @@ where
     F: FnMut(&'a str) -> IResult<&str, O, VerboseError<&str>>,
 {
     preceded(skip_opt_ws, parse)
-}
-
-/// Mandatory white space.
-///
-/// White space is all actual white space characters plus comments.
-fn skip_ws(input: &str) -> IResult<&str, (), VerboseError<&str>> {
-    fold_many0(alt((map(multispace1, |_| ()), comment)), || (), |_, _| ())(
-        input,
-    )
 }
 
 /// Optional white space.
