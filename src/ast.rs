@@ -630,7 +630,7 @@ pub struct Rib {
 
 impl Rib {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (_, ident, body, _)) = context(
+        let (input, (_, ident, body)) = context(
             "rib definition",
             tuple((
                 opt_ws(tag("rib")),
@@ -650,7 +650,6 @@ impl Rib {
                         opt_ws(char('}')),
                     )),
                 ),
-                map(char('\n'), |_| ()),
             )),
         )(input)?;
 
