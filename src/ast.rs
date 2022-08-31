@@ -322,10 +322,7 @@ impl Term {
 
 //------------ TermBody -----------------------------------------------------
 
-// TermBody ::= (
-//     ('use' Identifier ';')?
-//     ( MatchOperator '{' (CallExpr ';')+ '}' )+
-// )+
+// TermBody ::= TermScope+
 
 #[derive(Clone, Debug)]
 pub struct TermBody {
@@ -340,6 +337,13 @@ impl TermBody {
         Ok((input, Self { scopes }))
     }
 }
+
+
+//------------ TermScope -----------------------------------------------------
+
+// TermScope ::=
+//      ('use' Identifier ';')?
+//     ( MatchOperator '{' (CallExpr ';')+ '}' )+
 
 #[derive(Clone, Debug)]
 pub struct TermScope {
