@@ -76,7 +76,7 @@ impl RootExpr {
 
 //------------ Module --------------------------------------------------------
 
-// Module :== "module" Identifier (ForStatement)?  (WithStatement)*  '{' ModuleBody '}'
+// Module ::= "module" Identifier "for" Identifier WithStatement  '{' ModuleBody '}'
 
 #[derive(Clone, Debug)]
 pub struct Module {
