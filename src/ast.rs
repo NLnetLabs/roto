@@ -245,7 +245,7 @@ impl Define {
 #[derive(Clone, Debug)]
 pub struct DefineBody {
     pub use_rib: Option<Identifier>,
-    pub assignments: Vec<(Identifier, ArgExpr)>,
+    pub assignments: Vec<(Identifier, CallExpr)>,
 }
 
 impl DefineBody {
@@ -261,7 +261,7 @@ impl DefineBody {
                 separated_pair(
                     opt_ws(Identifier::parse),
                     preceded(multispace0, char('=')),
-                    terminated(opt_ws(ArgExpr::parse), opt_ws(char(';'))),
+                    terminated(opt_ws(CallExpr::parse), opt_ws(char(';'))),
                 ),
             )),
         ))(input)?;
