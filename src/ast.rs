@@ -3,7 +3,7 @@ use std::{borrow, cmp, fmt, hash, ops, str};
 use nom::branch::alt;
 use nom::bytes::complete::{take_while, take_while1};
 use nom::character::complete::{char, multispace0, multispace1};
-use nom::combinator::{all_consuming, cut, opt, recognize};
+use nom::combinator::{all_consuming, opt, recognize};
 use nom::error::{context, VerboseError};
 use nom::multi::{
     fold_many0, many0, many1, separated_list0, separated_list1,
@@ -45,8 +45,9 @@ impl Root {
     }
 
     fn parse_root(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, expressions) = cut(all_consuming(many1(
-            preceded(skip_opt_ws, terminated(RootExpr::parse, skip_opt_ws)),
+        let (input, expressions) = all_consuming(many1(preceded(
+            skip_opt_ws,
+            terminated(RootExpr::parse, skip_opt_ws),
         )))(input)?;
         Ok((input, Self { expressions }))
     }
@@ -294,20 +295,20 @@ impl Term {
             "term definition",
             tuple((
                 opt_ws(tag("term")),
-                cut(context(
+                context(
                     "term name",
                     delimited(multispace1, Identifier::parse, multispace1),
-                )),
+                ),
                 for_statement,
                 with_statement,
-                cut(context(
+                context(
                     "term block",
                     delimited(
                         opt_ws(char('{')),
                         TermBody::parse,
                         opt_ws(char('}')),
                     ),
-                )),
+                ),
             )),
         )(input)?;
 
@@ -625,35 +626,56 @@ impl ApplyScope {
 #[derive(Clone, Debug)]
 pub struct Rib {
     pub ident: Identifier,
+    pub contain_ty: TypeIdentifier,
     pub body: RibBody,
 }
 
 impl Rib {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (_, ident, body)) = context(
+        let (input, (ident, contain_ty, body)) = context(
             "rib definition",
             tuple((
-                opt_ws(tag("rib")),
+                preceded(
+                    opt_ws(tag("rib")),
+                    context(
+                        "rib name",
+                        delimited(
+                            multispace1,
+                            Identifier::parse,
+                            multispace1,
+                        ),
+                    ),
+                ),
                 context(
-                    "rib name",
-                    cut(delimited(
-                        multispace1,
-                        Identifier::parse,
-                        multispace1,
-                    )),
+                    "contains",
+                    preceded(
+                        opt_ws(tag("contains")),
+                        delimited(
+                            multispace1,
+                            TypeIdentifier::parse,
+                            multispace1,
+                        ),
+                    ),
                 ),
                 context(
                     "rib block",
-                    cut(delimited(
+                    delimited(
                         opt_ws(char('{')),
                         RibBody::parse,
                         opt_ws(char('}')),
-                    )),
+                    ),
                 ),
             )),
         )(input)?;
 
-        Ok((input, Rib { ident, body }))
+        Ok((
+            input,
+            Rib {
+                ident,
+                contain_ty,
+                body,
+            },
+        ))
     }
 }
 
@@ -672,10 +694,10 @@ pub struct RibBody {
 
 impl RibBody {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, key_values) = cut(separated_list0(
+        let (input, key_values) = separated_list0(
             char(','),
             opt_ws(TypeIdentField::parse),
-        ))(input)?;
+        )(input)?;
 
         Ok((input, RibBody { key_values }))
     }

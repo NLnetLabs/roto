@@ -18,19 +18,19 @@ fn test_data(name: &str, data: &str, expect_success: bool) {
 fn main() {
     test_data("random-crap", "##@#@#kdflfk!  abc  \n  ", false);
 
-    test_data("empty-rib", "rib my_rib {}\n// comment\n", true);
+    test_data("empty-rib", "rib my_rib {}\n// comment\n", false);
 
     test_data("crab-rib", "rib [] ribribribmodule\n", false);
 
     test_data(
         "valid-rib-with-comment",
-        "rib my_rib3 { bla: Bla, bloo: Bloo }\n// comment\n",
+        "rib my_rib3 contains Bla { bla: Bla, bloo: Bloo }\n// comment\n",
         true,
     );
 
     test_data(
         "invalid-rib-with-comment",
-        "rib my_rib { bla: Bla, blow_up }\n// comment\n",
+        "rib my_rib contains Blaffer { bla: Bla, blow_up }\n// comment\n",
         false,
     );
 
@@ -45,18 +45,18 @@ fn main() {
     test_data(
         "interspersed-comments",
         r###"
-        rib my_rib { bla: Bla, bloo: Bloo }
+        rib my_rib contains SomeCrap { bla: Bla, bloo: Bloo }
         // comment\nrib unrib { blaffer: Blaf }
         "###,
         true,
     );
 
     test_data(
-        "module",
+        "module_1",
         r###"
         module my_module for rib-loc with bla: Blaffer { define my_def { use bla; } }
             // comment
-            rib unrib { blaffer: Blaf }
+            rib unrib contains Blaffer { blaffer: Blaf }
         "###,
         true,
     );
@@ -69,19 +69,19 @@ fn main() {
         }
             
         // comment
-        rib unrib { blaffer: Blaf }
+        rib unrib contains Blaffer { blaffer: Blaf }
         "###,
         true,
     );
 
     test_data(
-        "module",
+        "module_2",
         r###"
             module my_module for rib-in with bla: Blaffer {
                define { use bla; }
             }
             // comment
-            rib unrib { blaffer: Blaf }
+            rib unrib contains Blaffer { blaffer: Blaf }
         "###,
         true,
     );
@@ -101,7 +101,7 @@ fn main() {
                }
             }
             // comment
-            rib unrib { blaffer: Blaf }
+            rib unrib contains Blaffer { blaffer: Blaf }
         "###,
         true,
     );
@@ -124,7 +124,7 @@ fn main() {
                }
             }
             // comment
-            rib unrib { blaffer: Blaf }
+            rib unrib contains Blaffer { blaffer: Blaf }
         "###,
         false,
     );
@@ -147,7 +147,7 @@ fn main() {
                }
             }
             // comment
-            rib unrib { blaffer: Blaf }
+            rib unrib contains Blaffer { blaffer: Blaf }
         "###,
         true,
     );
@@ -175,7 +175,7 @@ fn main() {
                }
             }
             // comment
-            rib unrib { blaffer: Blaf }
+            rib unrib contains Blaffer { blaffer: Blaf }
         "###,
         true,
     );
@@ -205,7 +205,7 @@ fn main() {
                }
             }
             // comment
-            rib unrib { blaffer: Blaf }
+            rib unrib contains Blaffer { blaffer: Blaf }
         "###,
         true,
     );
