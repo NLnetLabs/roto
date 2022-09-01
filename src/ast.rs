@@ -11,13 +11,13 @@ use nom::multi::{
 use nom::sequence::{
     delimited, pair, preceded, separated_pair, terminated, tuple,
 };
-use nom::Finish;
 use nom::{
     bytes::complete::{tag, take_until},
     character::complete::char as tag_char,
     combinator::map,
     IResult,
 };
+use nom::Finish;
 use smallvec::SmallVec;
 
 /// ======== Root ===========================================================
@@ -349,7 +349,7 @@ impl TermBody {
 pub struct TermScope {
     pub scope: Option<Identifier>,
     pub operator: MatchOperator,
-    pub match_exprs: Vec<CallExpr>,
+    pub match_exprs: Vec<MatchExpr>,
 }
 
 impl TermScope {
@@ -374,11 +374,11 @@ impl TermScope {
                         opt_ws(char('{')),
                         many1(context(
                             "call",
-                            opt_ws(terminated(
-                                CallExpr::parse,
+                            terminated(
+                                opt_ws(MatchExpr::parse),
                                 opt_ws(char(';')),
                             )),
-                        )),
+                        ),
                         opt_ws(char('}')),
                     ),
                 )),
@@ -582,7 +582,7 @@ impl ApplyScope {
                         delimited(
                             opt_ws(char('{')),
                             many1(context(
-                                "call",
+                                "Call Expression",
                                 tuple((
                                     opt_ws(terminated(
                                         ArgExpr::parse,
@@ -1080,6 +1080,203 @@ impl CallExpr {
                 expr_list,
             },
         ))
+    }
+}
+
+//------------ MatchExpr ----------------------------------------------------
+
+// MatchExpr ::= ArgExpr | GroupedExpr | CompareExpr | AndExpr | OrExpr | SetCompareExpr
+
+#[derive(Clone, Debug)]
+pub enum MatchExpr {
+    ArgExpr(ArgExpr),
+    GroupedExpr(GroupedExpr),
+    CompareExpr(CompareExpr),
+    AndExpr(AndExpr),
+    OrExpr(OrExpr),
+    SetCompareExpr(SetCompareExpr),
+}
+
+impl MatchExpr {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        opt_ws(alt((
+            map(CompareExpr::parse, MatchExpr::CompareExpr),
+            map(ArgExpr::parse, MatchExpr::ArgExpr),
+            map(AndExpr::parse, MatchExpr::AndExpr),
+            map(OrExpr::parse, MatchExpr::OrExpr),
+            map(SetCompareExpr::parse, MatchExpr::SetCompareExpr),
+            map(GroupedExpr::parse, MatchExpr::GroupedExpr),
+        )))(input)
+    }
+}
+
+//------------ CompareExpr --------------------------------------------------
+
+// CompareExpr ::= ArgExpr CompareOp ArgExpr
+
+#[derive(Clone, Debug)]
+pub struct CompareExpr {
+    pub left: ArgExpr,
+    pub op: CompareOp,
+    pub right: ArgExpr,
+}
+
+impl CompareExpr {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (left, op, right)) = context(
+            "Compare Expression",
+            tuple((
+                opt_ws(ArgExpr::parse),
+                opt_ws(alt((
+                    map(tag("=="), |_| CompareOp::Eq),
+                    map(tag("!="), |_| CompareOp::Ne),
+                    map(tag("<"), |_| CompareOp::Lt),
+                    map(tag("<="), |_| CompareOp::Le),
+                    map(char('>'), |_| CompareOp::Gt),
+                    map(tag(">="), |_| CompareOp::Ge),
+                ))),
+                opt_ws(ArgExpr::parse),
+            )),
+        )(input)?;
+
+        Ok((input, Self { left, op, right }))
+    }
+}
+
+//------------ CompareOp ----------------------------------------------------
+
+// CompareOp ::= '==' | '!=' | '<' | '<=' | '>' | '>='
+
+#[derive(Clone, Debug)]
+pub enum CompareOp {
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+}
+
+//------------ AndExpr ------------------------------------------------------
+
+// AndExpr ::= MatchExpr '&&' MatchExpr
+
+#[derive(Clone, Debug)]
+pub struct AndExpr {
+    pub left: Box<GroupedMatchExpr>,
+    pub right: Box<GroupedMatchExpr>,
+}
+
+impl AndExpr {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (left, right)) = tuple((
+            opt_ws(GroupedMatchExpr::parse),
+            preceded(opt_ws(tag("&&")), opt_ws(GroupedMatchExpr::parse)),
+        ))(input)?;
+
+        Ok((
+            input,
+            Self {
+                left: Box::new(left),
+                right: Box::new(right),
+            },
+        ))
+    }
+}
+
+//------------ OrExpr -------------------------------------------------------
+
+// OrExpr ::= MatchExpr '||' MatchExpr
+
+#[derive(Clone, Debug)]
+pub struct OrExpr {
+    pub left: Box<GroupedMatchExpr>,
+    pub right: Box<GroupedMatchExpr>,
+}
+
+impl OrExpr {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (left, right)) = tuple((
+            opt_ws(GroupedMatchExpr::parse),
+            preceded(opt_ws(tag("||")), opt_ws(GroupedMatchExpr::parse)),
+        ))(input)?;
+
+        Ok((
+            input,
+            Self {
+                left: Box::new(left),
+                right: Box::new(right),
+            },
+        ))
+    }
+}
+
+//------------ SetCompareExpr -----------------------------------------------
+
+// SetCompareExpr ::= ( ArgExpr ( 'in' | 'not in' ) ArgExpr )+
+
+#[derive(Clone, Debug)]
+pub struct SetCompareExpr {
+    pub left: ArgExpr,
+    pub op: SetCompareOp,
+    pub right: ArgExpr,
+}
+
+impl SetCompareExpr {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (left, op, right)) = tuple((
+            ArgExpr::parse,
+            alt((
+                map(tag("in"), |_| SetCompareOp::In),
+                map(tag("not in"), |_| SetCompareOp::NotIn),
+            )),
+            ArgExpr::parse,
+        ))(input)?;
+
+        Ok((input, Self { left, op, right }))
+    }
+}
+
+//------------ SetCompareOp -------------------------------------------------
+
+// SetCompareOp ::= 'in' | 'not in'
+
+#[derive(Clone, Debug)]
+pub enum SetCompareOp {
+    In,
+    NotIn,
+}
+
+//------------- GroupedMatchExpr -------------------------------------------------
+
+// GroupedMatchExpr ::= '(' MatchExpr ')'
+
+#[derive(Clone, Debug)]
+pub struct GroupedMatchExpr {
+    pub expr: MatchExpr,
+}
+
+impl GroupedMatchExpr {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, expr) = delimited(
+            opt_ws(char('(')),
+            MatchExpr::parse,
+            opt_ws(char(')')),
+        )(input)?;
+        Ok((input, Self { expr }))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct GroupedExpr {
+    pub expr: ArgExpr,
+}
+
+impl GroupedExpr {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, expr) =
+            delimited(char('('), ArgExpr::parse, char(')'))(input)?;
+        Ok((input, Self { expr }))
     }
 }
 

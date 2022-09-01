@@ -16,6 +16,9 @@ fn test_data(name: &str, data: &str, expect_success: bool) {
 }
 
 fn main() {
+    let r = MatchExpr::parse("blaffer.waf() > blaffer.blaf()");
+    println!("{:#?}", r);
+
     test_data("random-crap", "##@#@#kdflfk!  abc  \n  ", false);
 
     test_data("empty-rib", "rib my_rib {}\n// comment\n", false);
@@ -163,7 +166,7 @@ fn main() {
                }
             
                term blaffer_filter {
-                   match { blaffer.blaf.contains(something,"somewhat"); }
+                   match { blaffer.waf() > gruf; }
                }
                
                action blaffer {
@@ -191,7 +194,7 @@ fn main() {
                }
             
                term blaffer_filter {
-                   match { blaffer.blaf.contains(something,"somewhat"); }
+                   match { blaffer.blaf.contains(something,"somewhat") > blaf(); }
                }
                
                action blaffer {
