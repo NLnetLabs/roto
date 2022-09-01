@@ -13,5 +13,4 @@ license = "BSD-3-Clause"
 
 [dependencies]
 nom = "7.1"
-nom_locate = "4.0.0"
 smallvec = { version = "1.8", features = [ "const_generics" ] }
