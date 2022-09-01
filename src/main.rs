@@ -88,7 +88,7 @@ fn main() {
     );
 
     test_data(
-        "module_with_assignments",
+        "module_with_assignments_1",
         r###"
             module my_module for rib-in with bla: Blaffer {
                define {
@@ -131,7 +131,7 @@ fn main() {
     );
 
     test_data(
-        "module_with_assignments_2",
+        "module_with_assignments_3",
             r###"
             module my_module with bla: Blaffer {
                define {
