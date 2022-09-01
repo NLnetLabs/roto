@@ -397,7 +397,7 @@ impl TermScope {
 
 //------------ Action -------------------------------------------------------
 
-// 'action' Indentifier '{' ActionBody '}')* (ForStatement)?  (WithStatement)* '{' ActionBody '}'
+// 'action' Identifier '{' ActionBody '}')* ForStatement WithStatement '{' ActionBody '}'
 
 #[derive(Clone, Debug)]
 pub struct Action {
@@ -468,7 +468,7 @@ impl ActionBody {
 
 //------------ Apply ---------------------------------------------------------
 
-// Apply ::= 'apply' forStatement? withStatement+ '{' ApplyBody '}'
+// Apply ::= 'apply' ForStatement WithStatement '{' ApplyBody '}'
 
 #[derive(Clone, Debug)]
 pub struct Apply {
@@ -1013,7 +1013,8 @@ fn with_statement(
 
 //------------- FieldExpr --------------------------------------------------
 
-// FieldExpr ::= Identifier'.'Identifier
+// FieldExpr ::= Identifier ( '.' Identifier )+
+
 
 #[derive(Clone, Debug)]
 pub struct FieldExpr {
