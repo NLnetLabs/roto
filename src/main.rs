@@ -16,8 +16,15 @@ fn test_data(name: &str, data: &str, expect_success: bool) {
 }
 
 fn main() {
-    let r = MatchExpr::parse("blaffer.waf() > blaffer.blaf()");
+    let mut r = MatchExpr::parse("( blaffer.waf() in my_set ) || ( blaffer.blaf() < bop() )");
+    assert!(r.is_ok());
+
+    r = MatchExpr::parse(r###"
+        // blaffer.blaf.contains(something,"somewhat") > blaf();
+        ( bla.bla() in my_set ) || ( bla.bla() in my_other_set );
+    "###);
     println!("{:#?}", r);
+    assert!(r.is_ok());
 
     test_data("random-crap", "##@#@#kdflfk!  abc  \n  ", false);
 
@@ -194,7 +201,43 @@ fn main() {
                }
             
                term blaffer_filter {
-                   match { blaffer.blaf.contains(something,"somewhat") > blaf(); }
+                   match { 
+                        blaffer.blaf.contains(something,"somewhat") > blaf();
+                        bla.bla() > some_external_set;
+                   }
+               }
+               
+               action blaffer {
+                   blaffer.blaf(bla);
+               }
+
+               apply {
+                    use best-path;
+                    filter exactly-one exists(found_prefix) matching { set-best(route); return accept; };
+                    use backup-path;
+                    filter match rov-invalid-asn matching { set-rov-invalid-asn-community; return reject; };
+               }
+            }
+            // comment
+            rib unrib contains Blaffer { blaffer: Blaf }
+        "###,
+        true,
+    );
+
+    test_data(
+        "module_with_nested_match_expressions",
+            r###"
+            module my_module for my-rib with bla: Blaffer {
+               define {
+                   use bla;
+                   bla = bla();
+               }
+            
+               term blaffer_filter {
+                   match { 
+                        // blaffer.blaf.contains(something,"somewhat") > blaf();
+                        ( bla.bla() in my_set ) || ( bla.bla() in my_other_set );
+                   }
                }
                
                action blaffer {
