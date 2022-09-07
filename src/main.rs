@@ -20,11 +20,41 @@ fn main() {
     assert!(r.is_ok());
 
     r = MatchExpr::parse(r###"
+        route.prefix in 0.0.0.0/0 prefix-length-range /12-/16;
+    "###);
+    println!("{:#?}", r);
+    assert!(r.is_ok());
+
+    r = MatchExpr::parse(r###"
         // blaffer.blaf.contains(something,"somewhat") > blaf();
         ( bla.bla() in my_set ) || ( bla.bla() in my_other_set );
     "###);
     println!("{:#?}", r);
     assert!(r.is_ok());
+
+    let s = PrefixMatchExpr::parse(
+        r###"
+        129.23.0.0/16 upto /18;
+    "###,
+    );
+    println!("{:#?}", s);
+    assert!(s.is_ok());
+
+    let s = PrefixMatchExpr::parse(
+        r###"
+        2001::1/48 orlonger;
+    "###,
+    );
+    println!("{:#?}", s);
+    assert!(s.is_ok());
+
+    let s = PrefixMatchExpr::parse(
+        r###"
+        0.0.0.0/0 prefix-length-range /24-/32;
+    "###,
+    );
+    println!("{:#?}", s);
+    assert!(s.is_ok());
 
     test_data("random-crap", "##@#@#kdflfk!  abc  \n  ", false);
 
@@ -119,7 +149,7 @@ fn main() {
 
     test_data(
         "module_with_assignments_2",
-            r###"
+        r###"
             module my_module for rib-in with bla: Blaffer {
                define {
                    use bla;
@@ -142,7 +172,7 @@ fn main() {
 
     test_data(
         "module_with_assignments_3",
-            r###"
+        r###"
             module my_module with bla: Blaffer {
                define {
                    use bla;
@@ -165,7 +195,7 @@ fn main() {
 
     test_data(
         "module_with_apply_1",
-            r###"
+        r###"
             module my_module for my-rib with bla: Blaffer {
                define {
                    use bla;
@@ -173,7 +203,10 @@ fn main() {
                }
             
                term blaffer_filter {
-                   match { blaffer.waf() > gruf; }
+                   match {
+                        blaffer.waf() > gruf;
+                        route.prefix in 0.0.0.0/0 prefix-length-range /12-/16;
+                    }
                }
                
                action blaffer {
@@ -193,7 +226,7 @@ fn main() {
 
     test_data(
         "module_with_apply_2",
-            r###"
+        r###"
             module my_module for my-rib with bla: Blaffer {
                define {
                    use bla;
@@ -203,7 +236,7 @@ fn main() {
                term blaffer_filter {
                    match { 
                         blaffer.blaf.contains(something,"somewhat") > blaf();
-                        bla.bla() > some_external_set;
+                        ( bla.bla() > some_external_set );
                    }
                }
                
@@ -226,7 +259,7 @@ fn main() {
 
     test_data(
         "module_with_nested_match_expressions",
-            r###"
+        r###"
             module my_module for my-rib with bla: Blaffer {
                define {
                    use bla;

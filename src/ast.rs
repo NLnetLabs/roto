@@ -1,10 +1,10 @@
 use std::{borrow, cmp, fmt, hash, ops, str};
 
 use nom::branch::alt;
-use nom::bytes::complete::{take_while, take_while1};
-use nom::character::complete::{char, multispace0, multispace1};
-use nom::combinator::{all_consuming, opt, recognize};
-use nom::error::{context, VerboseError};
+use nom::bytes::complete::{is_not, take_while, take_while1};
+use nom::character::complete::{char, digit1, multispace0, multispace1};
+use nom::combinator::{all_consuming, map_res, opt, recognize};
+use nom::error::{context, ErrorKind, ParseError, VerboseError};
 use nom::multi::{
     fold_many0, many0, many1, separated_list0, separated_list1,
 };
@@ -948,6 +948,7 @@ pub enum ArgExpr {
     Bool(bool),
     CallExpr(CallExpr),
     FieldExpr(FieldExpr),
+    PrefixMatchExpr(PrefixMatchExpr),
 }
 
 impl ArgExpr {
@@ -960,6 +961,7 @@ impl ArgExpr {
             map(StringLiteral::parse, ArgExpr::StringLiteral),
             map(tag("true"), |_| ArgExpr::Bool(true)),
             map(tag("false"), |_| ArgExpr::Bool(false)),
+            map(PrefixMatchExpr::parse, ArgExpr::PrefixMatchExpr),
         ))(input)
     }
 }
@@ -1091,18 +1093,19 @@ pub enum MatchExpr {
     CompareExpr(CompareExpr),
     AndExpr(AndExpr),
     SetCompareExpr(SetCompareExpr),
+    PrefixMatchExpr(PrefixMatchExpr),
     GroupedMatchExpr(GroupedMatchExpr),
     ArgExpr(ArgExpr),
 }
 
 impl MatchExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        eprintln!("match expression");
         opt_ws(alt((
             map(CompareExpr::parse, MatchExpr::CompareExpr),
             map(AndExpr::parse, MatchExpr::AndExpr),
             map(OrExpr::parse, MatchExpr::OrExpr),
             map(SetCompareExpr::parse, MatchExpr::SetCompareExpr),
+            map(PrefixMatchExpr::parse, MatchExpr::PrefixMatchExpr),
             map(GroupedMatchExpr::parse, MatchExpr::GroupedMatchExpr),
             map(ArgExpr::parse, MatchExpr::ArgExpr),
         )))(input)
@@ -1117,8 +1120,6 @@ pub enum NestedMatchExpr {
 
 impl NestedMatchExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        println!("nested match expr");
-
         alt((
             map(GroupedMatchExpr::parse, NestedMatchExpr::NGroupedMatchExpr),
             map(ArgExpr::parse, NestedMatchExpr::NArgExpr),
@@ -1295,6 +1296,200 @@ impl MatchOperator {
             map(tag("exactly-one"), |_| MatchOperator::ExactlyOne),
             map(tag("all"), |_| MatchOperator::All),
         ))(input)
+    }
+}
+
+//------------ PrefixMatchType ------------------------------------------
+
+// PrefixMatchType ::= ( 'exact' | 'longer' | 'orlonger' | 
+//      'prefix-length-range' | 'upto' | 'through' | 'netmask' ) 
+//      ( PrefixLength | PrefixLengthRange | IpAddress )
+
+#[derive(Clone, Debug)]
+pub enum PrefixMatchType {
+    Exact,
+    Longer,
+    OrLonger,
+    PrefixLengthRange(PrefixLengthRange),
+    UpTo(PrefixLength),
+    Through(PrefixLength),
+    NetMask(IpAddress),
+}
+
+impl PrefixMatchType {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, res) = alt((
+            map(tag("exact"), |_| PrefixMatchType::Exact),
+            map(tag("longer"), |_| PrefixMatchType::Longer),
+            map(tag("orlonger"), |_| PrefixMatchType::OrLonger),
+            map(
+                preceded(
+                    tag("prefix-length-range"),
+                    opt_ws(PrefixLengthRange::parse),
+                ),
+                PrefixMatchType::PrefixLengthRange,
+            ),
+            map(
+                preceded(tag("upto"), opt_ws(PrefixLength::parse)),
+                PrefixMatchType::UpTo,
+            ),
+            map(
+                preceded(tag("through"), opt_ws(PrefixLength::parse)),
+                PrefixMatchType::Through,
+            ),
+            map(
+                preceded(tag("netmask"), opt_ws(IpAddress::parse)),
+                PrefixMatchType::NetMask,
+            ),
+        ))(input)?;
+
+        Ok((input, res))
+    }
+}
+
+//------------ PrefixMatchExpr ----------------------------------------------
+
+// PrefixMatchExpr ::= Prefix PrefixMatchType
+#[derive(Clone, Debug)]
+pub struct PrefixMatchExpr {
+    pub prefix: Prefix,
+    pub ty: PrefixMatchType,
+}
+
+impl PrefixMatchExpr {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (prefix, ty)) = tuple((
+            opt_ws(Prefix::parse),
+            opt_ws(PrefixMatchType::parse),
+        ))(input)?;
+
+        Ok((input, Self { prefix, ty }))
+    }
+}
+
+//------------ IpAddress ----------------------------------------------------
+
+// IpAddress ::= IpV4Address | IpV6Address
+
+#[derive(Clone, Debug)]
+pub enum IpAddress {
+    Ipv4(Ipv4Addr),
+    Ipv6(Ipv6Addr),
+}
+
+impl IpAddress {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, res) = alt((
+            map(Ipv4Addr::parse, IpAddress::Ipv4),
+            map(Ipv6Addr::parse, IpAddress::Ipv6),
+        ))(input)?;
+
+        Ok((input, res))
+    }
+}
+
+//------------ Ipv4Addr -----------------------------------------------------
+
+// Ipv4Addr ::= <ipv4 address>
+#[derive(Clone, Debug)]
+pub struct Ipv4Addr(std::net::Ipv4Addr);
+
+impl Ipv4Addr {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        input
+            .parse::<std::net::Ipv4Addr>()
+            .map(|addr| (input, Self(addr)))
+            .map_err(|_| {
+                nom::Err::Error(VerboseError::from_error_kind(
+                    input,
+                    ErrorKind::Digit,
+                ))
+            })
+    }
+}
+
+//------------ Ipv6Addr -----------------------------------------------------
+
+// Ipv6Addr ::= <ipv6 address>
+
+#[derive(Clone, Debug)]
+pub struct Ipv6Addr(std::net::Ipv6Addr);
+
+impl Ipv6Addr {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        input
+            .parse::<std::net::Ipv6Addr>()
+            .map(|addr| (input, Self(addr)))
+            .map_err(|_| {
+                nom::Err::Error(VerboseError::from_error_kind(
+                    input,
+                    ErrorKind::Digit,
+                ))
+            })
+    }
+}
+
+//------------ Prefix -------------------------------------------------------
+
+// Prefix ::= IpAddress '/' PrefixLength
+
+#[derive(Clone, Debug)]
+pub struct Prefix {
+    pub addr: IpAddress,
+    pub len: PrefixLength,
+}
+
+impl Prefix {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, ((_, addr), len)) = tuple((
+            map_res(opt_ws(is_not("/")), IpAddress::parse),
+            opt_ws(PrefixLength::parse),
+        ))(input)?;
+
+        Ok((input, Prefix { addr, len }))
+    }
+}
+
+//------------ PrefixLength -------------------------------------------------
+
+// PrefixLength ::= '/' <u8>
+
+#[derive(Clone, Debug)]
+pub struct PrefixLength(u8);
+
+impl PrefixLength {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, length) = preceded(char('/'), opt_ws(digit1))(input)?;
+
+        let length = length.parse::<u8>().map_err(|_| {
+            nom::Err::Error(VerboseError::from_error_kind(
+                input,
+                ErrorKind::Digit,
+            ))
+        })?;
+
+        Ok((input, Self(length)))
+    }
+}
+
+//------------ PrefixLengthRange --------------------------------------------
+
+// PrefixLengthRange ::= PrefixLength '-' PrefixLength
+
+#[derive(Clone, Debug)]
+pub struct PrefixLengthRange {
+    pub start: PrefixLength,
+    pub end: PrefixLength,
+}
+
+impl PrefixLengthRange {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (start, end)) = tuple((
+            opt_ws(PrefixLength::parse),
+            preceded(char('-'), opt_ws(PrefixLength::parse)),
+        ))(input)?;
+
+        Ok((input, Self { start, end }))
     }
 }
 
