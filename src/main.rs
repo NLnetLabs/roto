@@ -32,6 +32,18 @@ fn main() {
     println!("{:#?}", r);
     assert!(r.is_ok());
 
+    // let r = Module::parse(r###"
+    //     module my_module for rib-in with bla: Blaffer {
+    //         define { use bla; }
+    //         term filter2 {
+    //             use bla;
+    //             match { blaffer.blaf.contains(something); }
+    //         }
+    //     }
+    // "###);
+    // println!("{:#?}", r);
+    // assert!(r.is_ok());
+
     let s = PrefixMatchExpr::parse(
         r###"
         129.23.0.0/16 upto /18;
@@ -64,13 +76,35 @@ fn main() {
 
     test_data(
         "valid-rib-with-comment",
-        "rib my_rib3 contains Bla { bla: Bla, bloo: Bloo }\n// comment\n",
+        r###"
+            rib my_rib3 contains Bla { 
+                bla: Bla, 
+                bloo: Bloo 
+            }
+            // comment
+            "###,
         true,
     );
 
     test_data(
-        "invalid-rib-with-comment",
-        "rib my_rib contains Blaffer { bla: Bla, blow_up }\n// comment\n",
+        "invalid-rib-with-comment-1",
+        r###"
+            rib my_rib contains Blaffer { 
+                bla: Bla, blow_up 
+            }
+            // comment
+            "###,
+        false,
+    );
+
+    test_data(
+        "invalid-rib-with-comment-2",
+        r###"
+            rib my_rib contains Blaffer { 
+                bla: Bla; blow: up
+            }
+            // comment
+            "###,
         false,
     );
 
@@ -95,9 +129,17 @@ fn main() {
     test_data(
         "module_1",
         r###"
-        module my_module for rib-loc with bla: Blaffer { define my_def { use bla; } }
-            // comment
-            rib unrib contains Blaffer { blaffer: Blaf }
+        module my_module for rib-loc with bla: Blaffer { 
+            define my_def { 
+                use bla;
+            }
+            term my_term {
+                match { bazooka; }
+            }
+        }
+
+        // comment
+        rib unrib contains Blaffer { blaffer: Blaf }
         "###,
         true,
     );
@@ -107,6 +149,10 @@ fn main() {
         r###"
         module my_module for rib-in with bla: Blaffer {
             define { use bla; }
+            term filter2 {
+                use bla;
+                match { blaffer.blaf.contains(something); }
+            }
         }
             
         // comment
@@ -120,6 +166,7 @@ fn main() {
         r###"
             module my_module for rib-in with bla: Blaffer {
                define { use bla; }
+               term filter3 {}
             }
             // comment
             rib unrib contains Blaffer { blaffer: Blaf }
@@ -141,6 +188,7 @@ fn main() {
                    match { blaffer.blaf.contains(something); }
                }
             }
+
             // comment
             rib unrib contains Blaffer { blaffer: Blaf }
         "###,
@@ -156,8 +204,8 @@ fn main() {
                    bla = bla2(Bla);
                }
             
-               term blaffer_filter {
-                   match { blaffer.blaf.contains(something,\"somewhat"); }
+               term filter_te#$%^$$%st_1 {
+                   match { blaffer.blaf.contains(something,"somewhat"); }
                }
                
                action blaffer {

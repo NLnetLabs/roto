@@ -1,9 +1,9 @@
 use std::{borrow, cmp, fmt, hash, ops, str};
 
-use nom::branch::alt;
+use nom::branch::{alt, permutation};
 use nom::bytes::complete::{is_not, take_while, take_while1};
 use nom::character::complete::{char, digit1, multispace0, multispace1};
-use nom::combinator::{all_consuming, map_res, opt, recognize};
+use nom::combinator::{all_consuming, cut, map_res, opt, recognize};
 use nom::error::{context, ErrorKind, ParseError, VerboseError};
 use nom::multi::{
     fold_many0, many0, many1, separated_list0, separated_list1,
@@ -66,10 +66,10 @@ pub enum RootExpr {
 
 impl RootExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, expressions) = alt((
+        let (input, expressions) = context("root", alt((
             map(Rib::parse, Self::Rib),
             map(Module::parse, |m| Self::Module(Box::new(m))),
-        ))(input)?;
+        )))(input)?;
         Ok((input, expressions))
     }
 }
@@ -88,13 +88,15 @@ pub struct Module {
 
 impl Module {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (_, ident, for_ident, with_kv, body, _)) = context(
+        let (input, (ident, for_ident, with_kv, body)) = context(
             "module definition",
             tuple((
-                opt_ws(tag("module")),
                 context(
                     "module name",
-                    delimited(multispace1, Identifier::parse, multispace1),
+                    preceded(
+                        opt_ws(tag("module")),
+                        opt_ws(Identifier::parse),
+                    ),
                 ),
                 opt(preceded(opt_ws(tag("for")), opt_ws(Identifier::parse))),
                 with_statement,
@@ -102,15 +104,13 @@ impl Module {
                     "module body",
                     delimited(
                         opt_ws(char('{')),
-                        ModuleBody::parse,
+                        cut(ModuleBody::parse),
                         opt_ws(char('}')),
                     ),
                 ),
-                map(many0(char('\n')), |_| ()),
+                // map(many0(char('\n')), |_| ()),
             )),
-        )(
-            input
-        )?;
+        )(input)?;
 
         Ok((
             input,
@@ -137,16 +137,9 @@ pub struct ModuleBody {
 
 impl ModuleBody {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (
-            input,
-            (
-                define, //(define_ident, define_for_kv, define_with_kv, define),
-                expressions,
-                apply, //(apply_for_kv, apply_with_kv, apply),
-            ),
-        ) = tuple((
+        let (input, (define, expressions, apply)) = permutation((
             Define::parse,
-            context("module expressions", many0(opt_ws(ModuleExpr::parse))),
+            context("module expressions", many1(ModuleExpr::parse)),
             opt(Apply::parse),
         ))(input)?;
 
@@ -165,7 +158,7 @@ impl ModuleBody {
 pub enum ModuleExpr {
     Term(Term),
     Action(Action),
-    // Import(ImportBody),
+    // Empty, // Import(ImportBody),
 }
 
 //------------ ModuleExpr ----------------------------------------------------
@@ -177,11 +170,15 @@ pub enum ModuleExpr {
 
 impl ModuleExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, expressions) = alt((
-            map(Term::parse, Self::Term),
-            map(Action::parse, Self::Action),
-            // map(ImportBody::parse, ModuleBody::Import),
-        ))(input)?;
+        let (input, expressions) = context(
+            "module expression",
+            alt((
+                map(Term::parse, Self::Term),
+                map(Action::parse, Self::Action),
+                // map(multispace1, |_| Self::Empty),
+                // map(ImportBody::parse, ModuleBody::Import),
+            )),
+        )(input)?;
         Ok((input, expressions))
     }
 }
@@ -287,23 +284,29 @@ pub struct Term {
 
 impl Term {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (_, ident, for_kv, with_kv, body)) = context(
+        let (input, (ident, for_kv, with_kv, body)) = context(
             "term definition",
             tuple((
-                opt_ws(tag("term")),
-                context(
-                    "term name",
-                    delimited(multispace1, Identifier::parse, multispace1),
+                preceded(
+                    opt_ws(tag("term")),
+                    cut(context(
+                        "term name",
+                        delimited(
+                            multispace1,
+                            Identifier::parse,
+                            multispace1,
+                        ),
+                    )),
                 ),
                 for_statement,
                 with_statement,
                 context(
                     "term block",
-                    delimited(
+                    cut(delimited(
                         opt_ws(char('{')),
                         TermBody::parse,
                         opt_ws(char('}')),
-                    ),
+                    )),
                 ),
             )),
         )(input)?;
@@ -330,10 +333,9 @@ pub struct TermBody {
 }
 
 impl TermBody {
-    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, scopes) =
-            context("term body", many1(TermScope::parse))(input)?;
-
+            context("term body", many0(TermScope::parse))(input)?;
         Ok((input, Self { scopes }))
     }
 }
@@ -371,7 +373,7 @@ impl TermScope {
                     opt_ws(MatchOperator::parse),
                     delimited(
                         opt_ws(char('{')),
-                        many1(context(
+                        many0(context(
                             "match expression",
                             terminated(
                                 opt_ws(MatchExpr::parse),
@@ -621,7 +623,7 @@ pub struct Rib {
 
 impl Rib {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (ident, contain_ty, body)) = context(
+        let (input, (ident, contain_ty, body,_)) = context(
             "rib definition",
             tuple((
                 preceded(
@@ -648,12 +650,13 @@ impl Rib {
                 ),
                 context(
                     "rib block",
-                    delimited(
+                    cut(delimited(
                         opt_ws(char('{')),
                         RibBody::parse,
                         opt_ws(char('}')),
-                    ),
+                    )),
                 ),
+                map(skip_opt_ws, |_| ()),
             )),
         )(input)?;
 
@@ -684,8 +687,7 @@ pub struct RibBody {
 impl RibBody {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, key_values) =
-            separated_list0(char(','), opt_ws(TypeIdentField::parse))(input)?;
-
+            context("items list", separated_list1(char(','), opt_ws(cut(TypeIdentField::parse))))(input)?;
         Ok((input, RibBody { key_values }))
     }
 }
@@ -1301,8 +1303,8 @@ impl MatchOperator {
 
 //------------ PrefixMatchType ------------------------------------------
 
-// PrefixMatchType ::= ( 'exact' | 'longer' | 'orlonger' | 
-//      'prefix-length-range' | 'upto' | 'through' | 'netmask' ) 
+// PrefixMatchType ::= ( 'exact' | 'longer' | 'orlonger' |
+//      'prefix-length-range' | 'upto' | 'through' | 'netmask' )
 //      ( PrefixLength | PrefixLengthRange | IpAddress )
 
 #[derive(Clone, Debug)]
