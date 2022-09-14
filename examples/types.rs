@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 use roto::types::{Record, RotoType, TypeName};
 
 fn main() {

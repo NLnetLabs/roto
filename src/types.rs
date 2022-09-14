@@ -1,3 +1,19 @@
+
+pub enum TypeName<'a> {
+    Primitive,
+    List(Box<TypeName<'a>>),
+    Record(Vec<(&'a str, Box<TypeName<'a>>)>),
+    U32,
+    U8,
+    Prefix,
+    IpAddress,
+    Asn,
+    AsPath,
+    Community,
+    None,
+}
+
+
 /// Roto Types
 ///
 /// This module contains the types offered by the Roto languages.
@@ -52,30 +68,6 @@ impl<'a, const T: usize> RotoType<'a, T> {
             .collect();
         Record::new(def_)
     }
-
-    // pub fn define_from_types(
-    //     type_ident_pairs: Vec<(&'a str, &'a TypeName)>,
-    // ) -> Result<Record<'a, T>, Box<dyn std::error::Error>> {
-    //     let _res = type_ident_pairs
-    //         .into_iter()
-    //         .map(|(ident, ty)| (ident, ty))
-    //         .collect::<Vec<_>>();
-    //     RotoType::define(_res)
-    // }
-}
-
-pub enum TypeName<'a> {
-    Primitive,
-    List(Box<TypeName<'a>>),
-    Record(Vec<(&'a str, Box<TypeName<'a>>)>),
-    U32,
-    U8,
-    Prefix,
-    IpAddress,
-    Asn,
-    AsPath,
-    Community,
-    None,
 }
 
 impl<'a, const T: usize> From<&'a TypeName<'_>> for Box<RotoType<'a, T>> {
@@ -117,29 +109,11 @@ impl<'a, const T: usize> From<&'a TypeName<'_>> for Box<RotoType<'a, T>> {
     }
 }
 
-
-// impl<'a, const T: usize> From<(&'a str, &'a TypeName<'_>)>
-//     for Record<'a, T>
-// {
-//     fn from(t: (&'a str, &'a TypeName)) -> Self {
-//         match t {
-//             (name, TypeName::Record(ty)) => {
-//                 let ty = ty
-//                     .iter()
-//                     .map(|(ident, ty)| (*ident, ty.as_ref().into()))
-//                     .collect::<Vec<(&str, Box<RotoType<'a, T>>)>>();
-//                 Record::new(ty).unwrap()
-//             }
-//             _ => panic!("Unknown type"),
-//         }
-//     }
-// }
-
 /// primitive types
 ///
 ///
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum RotoPrimitiveType {
     U32(U32),
     U8(U8),
@@ -176,7 +150,7 @@ impl RotoPrimitiveType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct U32(Option<u32>);
 
 impl U32 {
@@ -185,7 +159,7 @@ impl U32 {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct U8(Option<u8>);
 
 impl U8 {
@@ -194,7 +168,7 @@ impl U8 {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Prefix(Option<routecore::addr::Prefix>);
 
 impl Prefix {
@@ -203,17 +177,17 @@ impl Prefix {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum CommunityType {
     Normal,
     Extended,
     Large,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Community(Option<CommunityType>);
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct IpAddress(Option<std::net::IpAddr>);
 
 impl IpAddress {
@@ -222,7 +196,7 @@ impl IpAddress {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Asn(Option<routecore::asn::Asn>);
 
 impl Asn {
@@ -231,7 +205,7 @@ impl Asn {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct AsPath(Option<Vec<Asn>>);
 
 impl AsPath {
@@ -255,14 +229,61 @@ pub struct BgpRecord {
 }
 
 #[derive(Debug)]
-pub struct List<'a, const T: usize>(Vec<Box<RotoType<'a, T>>>);
+pub enum ElementType<'a, const T: usize> {
+    Primitive(RotoPrimitiveType),
+    Nested(Box<RotoType<'a, T>>),
+}
+
+impl<'a, const T: usize> From<&'a TypeName<'_>> for ElementType<'a, T> {
+    fn from(t: &'a TypeName<'_>) -> Self {
+        match t {
+            TypeName::U32 => {
+                ElementType::Primitive(RotoPrimitiveType::U32(U32(None)))
+            }
+            TypeName::U8 => {
+                ElementType::Primitive(RotoPrimitiveType::U8(U8(None)))
+            }
+            TypeName::Prefix => ElementType::Primitive(
+                RotoPrimitiveType::Prefix(Prefix(None)),
+            ),
+            TypeName::IpAddress => ElementType::Primitive(
+                RotoPrimitiveType::IpAddress(IpAddress(None)),
+            ),
+            TypeName::Asn => {
+                ElementType::Primitive(RotoPrimitiveType::Asn(Asn(None)))
+            }
+            TypeName::AsPath => ElementType::Primitive(
+                RotoPrimitiveType::AsPath(AsPath(None)),
+            ),
+            TypeName::Community => ElementType::Primitive(
+                RotoPrimitiveType::Community(Community(None)),
+            ),
+            TypeName::List(ty) => ElementType::Nested(Box::new(
+                RotoType::List(ty.as_ref().into()),
+            )),
+            TypeName::Record(kv_list) => {
+                let def_ = kv_list
+                    .iter()
+                    .map(|(ident, ty)| (*ident, ty.as_ref().into()))
+                    .collect::<Vec<_>>();
+                ElementType::Nested(Box::new(RotoType::Record(
+                    Record::new(def_).unwrap(),
+                )))
+            }
+            _ => panic!("Unknown type"),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct List<'a, const T: usize>(Vec<ElementType<'a, T>>);
 
 impl<'a, const T: usize> List<'a, T> {
-    pub fn new(elem_type: Vec<Box<RotoType<'a, T>>>) -> Self {
+    pub fn new(elem_type: Vec<ElementType<'a, T>>) -> Self {
         List(elem_type)
     }
 
-    pub fn iter(&self) -> std::slice::Iter<Box<RotoType<T>>> {
+    pub fn iter(&self) -> std::slice::Iter<ElementType<'a, T>> {
         self.0.iter()
     }
 }
@@ -274,11 +295,11 @@ impl<'a, const T: usize> From<&'a TypeName<'a>> for List<'a, T> {
 }
 
 #[derive(Debug)]
-pub struct Record<'a, const T: usize>([(&'a str, Box<RotoType<'a, T>>); T]);
+pub struct Record<'a, const T: usize>([(&'a str, ElementType<'a, T>); T]);
 
 impl<'a, const T: usize> Record<'a, T> {
     pub fn new(
-        elems: Vec<(&'a str, Box<RotoType<'a, T>>)>,
+        elems: Vec<(&'a str, ElementType<'a, T>)>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         if elems.len() != T {
             return Err(Box::new(std::io::Error::new(
@@ -294,17 +315,10 @@ impl<'a, const T: usize> Record<'a, T> {
         Ok(Self(elems.try_into().unwrap()))
     }
 
-    pub fn get_value_for_field(&self, field: &'a str) -> Option<&RotoType<T>> {
-        self.0
-            .iter()
-            .find(|(f, _)| f == &field)
-            .map(|(_, v)| v.as_ref())
+    pub fn get_value_for_field(
+        &self,
+        field: &'a str,
+    ) -> Option<&ElementType<T>> {
+        self.0.iter().find(|(f, _)| f == &field).map(|(_, v)| v)
     }
 }
-
-// impl<'a, const T: usize> From<Vec<(&'a str, Box<&'a TypeName<'a>>)>> for Record<'a, T> {
-//     fn from(t: Vec<(&'a str, Box<&'a TypeName>)>) -> Self {
-//         let elems = vec![(t.0, t.1.into())];
-//         Record::new(elems)
-//     }
-// }
