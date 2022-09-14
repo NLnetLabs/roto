@@ -1,9 +1,9 @@
 use std::{borrow, cmp, fmt, hash, ops, str};
 
 use nom::branch::{alt, permutation};
-use nom::bytes::complete::{is_not, take_while, take_while1};
+use nom::bytes::complete::{is_not, take, take_while, take_while1};
 use nom::character::complete::{char, digit1, multispace0, multispace1};
-use nom::combinator::{all_consuming, cut, map_res, opt, recognize};
+use nom::combinator::{all_consuming, cond, cut, map_res, opt, recognize};
 use nom::error::{context, ErrorKind, ParseError, VerboseError};
 use nom::multi::{
     fold_many0, many0, many1, separated_list0, separated_list1,
@@ -66,10 +66,13 @@ pub enum RootExpr {
 
 impl RootExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, expressions) = context("root", alt((
-            map(Rib::parse, Self::Rib),
-            map(Module::parse, |m| Self::Module(Box::new(m))),
-        )))(input)?;
+        let (input, expressions) = context(
+            "root",
+            alt((
+                map(Rib::parse, Self::Rib),
+                map(Module::parse, |m| Self::Module(Box::new(m))),
+            )),
+        )(input)?;
         Ok((input, expressions))
     }
 }
@@ -623,7 +626,7 @@ pub struct Rib {
 
 impl Rib {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (ident, contain_ty, body,_)) = context(
+        let (input, (ident, contain_ty, body, _)) = context(
             "rib definition",
             tuple((
                 preceded(
@@ -686,8 +689,10 @@ pub struct RibBody {
 
 impl RibBody {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, key_values) =
-            context("items list", separated_list1(char(','), opt_ws(cut(TypeIdentField::parse))))(input)?;
+        let (input, key_values) = context(
+            "items list",
+            separated_list1(char(','), opt_ws(cut(TypeIdentField::parse))),
+        )(input)?;
         Ok((input, RibBody { key_values }))
     }
 }
@@ -896,6 +901,106 @@ impl StringLiteral {
             delimited(char('"'), Identifier::parse, char('"'))(input)?;
 
         Ok((input, Self(ident.ident)))
+    }
+}
+
+//------------ IntegerLiteral -----------------------------------------------
+
+/// An integer literal is a sequence of digits.
+/// IntegerLiteral ::= [0-9]+
+///
+/// We parse it as a string and then convert it to an integer.
+#[derive(Clone, Debug)]
+pub struct IntegerLiteral(pub u64);
+
+impl IntegerLiteral {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, digits) = context(
+            "integer literal",
+            recognize(pair(
+                opt(char('-')),
+                take_while1(|ch: char| ch.is_digit(10)),
+            )),
+        )(input)?;
+
+        let value = digits.parse().unwrap();
+        Ok((input, Self(value)))
+    }
+}
+
+//------------ FloatLiteral -------------------------------------------------
+
+/// A float literal is a sequence of digits with a decimal point.
+/// FloatLiteral ::= [0-9]+ '.' [0-9]+
+///
+#[derive(Clone, Debug)]
+pub struct FloatLiteral(pub f64);
+
+impl FloatLiteral {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, digits) = context(
+            "float literal",
+            recognize(tuple((
+                opt(char('-')),
+                take_while1(|ch: char| ch.is_digit(10)),
+                char('.'),
+                take_while1(|ch: char| ch.is_digit(10)),
+            ))),
+        )(input)?;
+
+        let value = digits.parse().unwrap();
+        Ok((input, Self(value)))
+    }
+}
+
+//------------ BooleanLiteral -----------------------------------------------
+/// A boolean literal is either `true` or `false`.
+/// BooleanLiteral ::= 'true' | 'false'
+#[derive(Clone, Debug)]
+
+pub struct BooleanLiteral(pub bool);
+
+impl BooleanLiteral {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, value) = alt((
+            map(tag("true"), |_| Self(true)),
+            map(tag("false"), |_| Self(false)),
+        ))(input)?;
+
+        Ok((input, value))
+    }
+}
+
+//------------ ByteStringLiteral --------------------------------------------
+/// A byte string literal is a sequence of bytes, preceded by '0x'
+/// ByteStringLiteral ::= 0x[0-9a-fA-F]+
+
+#[derive(Clone, Debug)]
+pub struct ByteStringLiteral(pub SmallVec<[u8; 24]>);
+
+impl<'a> ByteStringLiteral {
+    pub fn parse(input: &'a str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, value) = (preceded(
+            tag("0x"),
+            many1(terminated(take(2_usize), opt(char('_')))),
+        ))(input)?;
+
+        let mut result_value: SmallVec<[u8; 24]> = SmallVec::new();
+
+        for v in &value {
+            let v = u8::from_str_radix(v, 16);
+
+            if let Ok(v) = v {
+                result_value.push(v);
+            } else {
+                return Err(nom::Err::Error(VerboseError::from_error_kind(
+                    input,
+                    ErrorKind::Digit,
+                )));
+            }
+        }
+
+        Ok((input, Self(result_value)))
     }
 }
 

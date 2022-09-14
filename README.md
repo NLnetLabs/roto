@@ -4,7 +4,7 @@
 | Stage | State | Artifacts |
 |:----:|:----:|:--------:|
 | Proposal | ✅ | this document |
-| Experimental | ✅ | |
+| Experimental | ✅ | this repo |
 | Development | 💤 |  |
 | Feature complete | 💤 | |
 | Stabilized | 💤 | |

@@ -1,11 +1,10 @@
-use roto::types::{
-    AsPath, Asn, Community, IpAddress, List, Prefix, RotoPrimitiveType,
-    Record, RotoType, U32, U8,
-};
+use std::ops::Deref;
+
+use roto::types::{Record, RotoType, TypeName};
 
 fn main() {
     // let count = RotoType::Primitive(RotoPrimitiveType::U32(U32::new(1)));
-    // let count2 = RotoType::Primitive(RotoPrimitiveType::Prefix(Prefix::new(
+    // let count2 = RotoType::Primiti&ve(RotoPrimitiveType::Prefix(Prefix::new(
     //     routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)
     //         .unwrap(),
     // )));
@@ -40,16 +39,20 @@ fn main() {
     //     RotoPrimitiveType::Community(Community::Normal),
     // )]));
 
-    let my_rec: Result<Record<6>, std::boxed::Box<_>> =
-        RotoType::define(vec![
-            ("count", "u32"),
-            ("count2", "u8"),
-            ("comms", "community"),
-            ("ip_address", "ip_address"),
-            ("asn", "asn"),
-            ("as_path", "as_path"),
-        ]);
+    let my_comms = TypeName::List(Box::new(TypeName::Community));
+
+    let my_record_kvs = vec![
+        ("count", &TypeName::U32),
+        ("count2", &TypeName::Prefix),
+        ("ip_address", &TypeName::IpAddress),
+        ("asn", &TypeName::Asn),
+        ("as_path", &TypeName::AsPath),
+        ("communities", &my_comms),
+    ];
+
+    let my_rec: Record<'_, 6> =
+        RotoType::define(my_record_kvs).unwrap();
 
     println!("{:?}", my_rec);
-    println!("{:?}", my_rec.unwrap().get_value_by_field("as_path"));
+    println!("{:?}", my_rec.get_value_for_field("as_path"));
 }

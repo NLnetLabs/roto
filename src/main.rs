@@ -16,19 +16,33 @@ fn test_data(name: &str, data: &str, expect_success: bool) {
 }
 
 fn main() {
-    let mut r = MatchExpr::parse("( blaffer.waf() in my_set ) || ( blaffer.blaf() < bop() )");
-    assert!(r.is_ok());
-
-    r = MatchExpr::parse(r###"
-        route.prefix in 0.0.0.0/0 prefix-length-range /12-/16;
-    "###);
+    let r = ByteStringLiteral::parse(
+ "0xZZZZ_AE9",
+    );
     println!("{:#?}", r);
     assert!(r.is_ok());
 
-    r = MatchExpr::parse(r###"
+    let mut r = MatchExpr::parse(
+        "( blaffer.waf() in my_set ) || ( blaffer.blaf() < bop() )",
+    );
+    assert!(r.is_ok());
+
+    panic!("STOP!");
+
+    r = MatchExpr::parse(
+        r###"
+        route.prefix in 0.0.0.0/0 prefix-length-range /12-/16;
+    "###,
+    );
+    println!("{:#?}", r);
+    assert!(r.is_ok());
+
+    r = MatchExpr::parse(
+        r###"
         // blaffer.blaf.contains(something,"somewhat") > blaf();
         ( bla.bla() in my_set ) || ( bla.bla() in my_other_set );
-    "###);
+    "###,
+    );
     println!("{:#?}", r);
     assert!(r.is_ok());
 

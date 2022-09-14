@@ -7,34 +7,34 @@ pub enum RotoType<'a, const T: usize> {
     Primitive(RotoPrimitiveType),
     List(List<'a, T>),
     Record(Record<'a, T>),
-    Empty,
+    None,
 }
 
 impl<'a, const T: usize> RotoType<'a, T> {
     pub fn is_empty(&self) -> bool {
-        matches!(self, RotoType::Empty)
+        matches!(self, RotoType::None)
     }
 
     pub fn from_literal(s: &str) -> Result<Self, Box<dyn std::error::Error>> {
         match s {
-            "u32" => {
+            "U32" => {
                 Ok(RotoType::Primitive(RotoPrimitiveType::U32(U32(None))))
             }
-            "u8" => Ok(RotoType::Primitive(RotoPrimitiveType::U8(U8(None)))),
+            "U8" => Ok(RotoType::Primitive(RotoPrimitiveType::U8(U8(None)))),
             "prefix" => Ok(RotoType::Primitive(RotoPrimitiveType::Prefix(
                 Prefix(None),
             ))),
-            "ip_address" => Ok(RotoType::Primitive(
+            "IpAddress" => Ok(RotoType::Primitive(
                 RotoPrimitiveType::IpAddress(IpAddress(None)),
             )),
-            "asn" => {
+            "Asn" => {
                 Ok(RotoType::Primitive(RotoPrimitiveType::Asn(Asn(None))))
             }
-            "as_path" => Ok(RotoType::Primitive(RotoPrimitiveType::AsPath(
+            "AsPath" => Ok(RotoType::Primitive(RotoPrimitiveType::AsPath(
                 AsPath(None),
             ))),
-            "community" => Ok(RotoType::Primitive(
-                RotoPrimitiveType::Community(Community::Normal),
+            "Community" => Ok(RotoType::Primitive(
+                RotoPrimitiveType::Community(Community(None)),
             )),
             _ => Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -44,17 +44,96 @@ impl<'a, const T: usize> RotoType<'a, T> {
     }
 
     pub fn define(
-        type_ident_pairs: Vec<(&'static str, &'a str)>,
+        type_ident_pairs: Vec<(&'a str, &'a TypeName)>,
     ) -> Result<Record<'a, T>, Box<dyn std::error::Error>> {
         let def_ = type_ident_pairs
             .into_iter()
-            .map(|(ident, ty)| {
-                (ident, Box::new(RotoType::from_literal(ty).unwrap()))
-            })
+            .map(|(ident, ty)| (ident, ty.into()))
             .collect();
         Record::new(def_)
     }
+
+    // pub fn define_from_types(
+    //     type_ident_pairs: Vec<(&'a str, &'a TypeName)>,
+    // ) -> Result<Record<'a, T>, Box<dyn std::error::Error>> {
+    //     let _res = type_ident_pairs
+    //         .into_iter()
+    //         .map(|(ident, ty)| (ident, ty))
+    //         .collect::<Vec<_>>();
+    //     RotoType::define(_res)
+    // }
 }
+
+pub enum TypeName<'a> {
+    Primitive,
+    List(Box<TypeName<'a>>),
+    Record(Vec<(&'a str, Box<TypeName<'a>>)>),
+    U32,
+    U8,
+    Prefix,
+    IpAddress,
+    Asn,
+    AsPath,
+    Community,
+    None,
+}
+
+impl<'a, const T: usize> From<&'a TypeName<'_>> for Box<RotoType<'a, T>> {
+    fn from(t: &'a TypeName<'_>) -> Self {
+        match t {
+            TypeName::U32 => Box::new(RotoType::Primitive(
+                RotoPrimitiveType::U32(U32(None)),
+            )),
+            TypeName::U8 => {
+                Box::new(RotoType::Primitive(RotoPrimitiveType::U8(U8(None))))
+            }
+            TypeName::Prefix => Box::new(RotoType::Primitive(
+                RotoPrimitiveType::Prefix(Prefix(None)),
+            )),
+            TypeName::IpAddress => Box::new(RotoType::Primitive(
+                RotoPrimitiveType::IpAddress(IpAddress(None)),
+            )),
+            TypeName::Asn => Box::new(RotoType::Primitive(
+                RotoPrimitiveType::Asn(Asn(None)),
+            )),
+            TypeName::AsPath => Box::new(RotoType::Primitive(
+                RotoPrimitiveType::AsPath(AsPath(None)),
+            )),
+            TypeName::Community => Box::new(RotoType::Primitive(
+                RotoPrimitiveType::Community(Community(None)),
+            )),
+            TypeName::List(ty) => {
+                Box::new(RotoType::List(ty.as_ref().into()))
+            }
+            TypeName::Record(kv_list) => {
+                let def_ = kv_list
+                    .iter()
+                    .map(|(ident, ty)| (*ident, ty.as_ref().into()))
+                    .collect::<Vec<_>>();
+                Box::new(RotoType::Record(Record::new(def_).unwrap()))
+            }
+            _ => panic!("Unknown type"),
+        }
+    }
+}
+
+
+// impl<'a, const T: usize> From<(&'a str, &'a TypeName<'_>)>
+//     for Record<'a, T>
+// {
+//     fn from(t: (&'a str, &'a TypeName)) -> Self {
+//         match t {
+//             (name, TypeName::Record(ty)) => {
+//                 let ty = ty
+//                     .iter()
+//                     .map(|(ident, ty)| (*ident, ty.as_ref().into()))
+//                     .collect::<Vec<(&str, Box<RotoType<'a, T>>)>>();
+//                 Record::new(ty).unwrap()
+//             }
+//             _ => panic!("Unknown type"),
+//         }
+//     }
+// }
 
 /// primitive types
 ///
@@ -125,11 +204,14 @@ impl Prefix {
 }
 
 #[derive(Debug, Clone)]
-pub enum Community {
+pub enum CommunityType {
     Normal,
     Extended,
     Large,
 }
+
+#[derive(Debug, Clone)]
+pub struct Community(Option<CommunityType>);
 
 #[derive(Debug, Clone)]
 pub struct IpAddress(Option<std::net::IpAddr>);
@@ -173,15 +255,21 @@ pub struct BgpRecord {
 }
 
 #[derive(Debug)]
-pub struct List<'a, const T: usize>(Vec<RotoType<'a, T>>);
+pub struct List<'a, const T: usize>(Vec<Box<RotoType<'a, T>>>);
 
 impl<'a, const T: usize> List<'a, T> {
-    pub fn new(list: Vec<RotoType<'a, T>>) -> Self {
-        List(list)
+    pub fn new(elem_type: Vec<Box<RotoType<'a, T>>>) -> Self {
+        List(elem_type)
     }
 
-    pub fn iter(&self) -> std::slice::Iter<RotoType<T>> {
+    pub fn iter(&self) -> std::slice::Iter<Box<RotoType<T>>> {
         self.0.iter()
+    }
+}
+
+impl<'a, const T: usize> From<&'a TypeName<'a>> for List<'a, T> {
+    fn from(t: &'a TypeName) -> Self {
+        List::new(vec![t.into()])
     }
 }
 
@@ -189,7 +277,7 @@ impl<'a, const T: usize> List<'a, T> {
 pub struct Record<'a, const T: usize>([(&'a str, Box<RotoType<'a, T>>); T]);
 
 impl<'a, const T: usize> Record<'a, T> {
-    fn new(
+    pub fn new(
         elems: Vec<(&'a str, Box<RotoType<'a, T>>)>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         if elems.len() != T {
@@ -206,7 +294,17 @@ impl<'a, const T: usize> Record<'a, T> {
         Ok(Self(elems.try_into().unwrap()))
     }
 
-    pub fn get_value_by_field(&self, field: &'a str) -> Option<&Box<RotoType<T>>> {
-        self.0.iter().find(|(f, _)| f == &field).map(|(_, v)| v)
+    pub fn get_value_for_field(&self, field: &'a str) -> Option<&RotoType<T>> {
+        self.0
+            .iter()
+            .find(|(f, _)| f == &field)
+            .map(|(_, v)| v.as_ref())
     }
 }
+
+// impl<'a, const T: usize> From<Vec<(&'a str, Box<&'a TypeName<'a>>)>> for Record<'a, T> {
+//     fn from(t: Vec<(&'a str, Box<&'a TypeName>)>) -> Self {
+//         let elems = vec![(t.0, t.1.into())];
+//         Record::new(elems)
+//     }
+// }
