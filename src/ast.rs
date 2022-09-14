@@ -3,7 +3,7 @@ use std::{borrow, cmp, fmt, hash, ops, str};
 use nom::branch::{alt, permutation};
 use nom::bytes::complete::{is_not, take, take_while, take_while1};
 use nom::character::complete::{char, digit1, multispace0, multispace1};
-use nom::combinator::{all_consuming, cond, cut, map_res, opt, recognize};
+use nom::combinator::{all_consuming, cut, map_res, opt, recognize};
 use nom::error::{context, ErrorKind, ParseError, VerboseError};
 use nom::multi::{
     fold_many0, many0, many1, separated_list0, separated_list1,
@@ -914,7 +914,7 @@ impl StringLiteral {
 pub struct IntegerLiteral(pub u64);
 
 impl IntegerLiteral {
-    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, digits) = context(
             "integer literal",
             recognize(pair(
@@ -937,7 +937,7 @@ impl IntegerLiteral {
 pub struct FloatLiteral(pub f64);
 
 impl FloatLiteral {
-    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, digits) = context(
             "float literal",
             recognize(tuple((
@@ -961,7 +961,7 @@ impl FloatLiteral {
 pub struct BooleanLiteral(pub bool);
 
 impl BooleanLiteral {
-    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, value) = alt((
             map(tag("true"), |_| Self(true)),
             map(tag("false"), |_| Self(false)),

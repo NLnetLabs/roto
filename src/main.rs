@@ -20,14 +20,12 @@ fn main() {
  "0xZZZZ_AE9",
     );
     println!("{:#?}", r);
-    assert!(r.is_ok());
+    assert!(r.is_err());
 
     let mut r = MatchExpr::parse(
         "( blaffer.waf() in my_set ) || ( blaffer.blaf() < bop() )",
     );
     assert!(r.is_ok());
-
-    panic!("STOP!");
 
     r = MatchExpr::parse(
         r###"
