@@ -1,4 +1,3 @@
-
 pub enum TypeName<'a> {
     Primitive,
     List(Box<TypeName<'a>>),
@@ -13,20 +12,35 @@ pub enum TypeName<'a> {
     None,
 }
 
+impl<'a> TypeName<'a> {
+    pub fn new_record(
+        self,
+        kvs: Vec<(&'a str, RotoType<'a>)>,
+    ) -> Result<Record<'a>, Box<dyn std::error::Error>> {
+
+        // TODO: Actually check whether the value fits the
+        // record type.
+        if let TypeName::Record(_) = self {
+            RotoType::define_record(kvs)
+        } else {
+            Err("Not a record type".into())
+        }
+    }
+}
 
 /// Roto Types
 ///
 /// This module contains the types offered by the Roto languages.
 
 #[derive(Debug)]
-pub enum RotoType<'a, const T: usize> {
+pub enum RotoType<'a> {
     Primitive(RotoPrimitiveType),
-    List(List<'a, T>),
-    Record(Record<'a, T>),
+    List(List<'a>),
+    Record(Record<'a>),
     None,
 }
 
-impl<'a, const T: usize> RotoType<'a, T> {
+impl<'a> RotoType<'a> {
     pub fn is_empty(&self) -> bool {
         matches!(self, RotoType::None)
     }
@@ -59,18 +73,28 @@ impl<'a, const T: usize> RotoType<'a, T> {
         }
     }
 
-    pub fn define(
-        type_ident_pairs: Vec<(&'a str, &'a TypeName)>,
-    ) -> Result<Record<'a, T>, Box<dyn std::error::Error>> {
+    pub fn define_record(
+        type_ident_pairs: Vec<(&'a str, RotoType<'a>)>,
+    ) -> Result<Record<'a>, Box<dyn std::error::Error>> {
         let def_ = type_ident_pairs
             .into_iter()
             .map(|(ident, ty)| (ident, ty.into()))
             .collect();
         Record::new(def_)
     }
+
+    pub fn new_record_type(
+        type_ident_pairs: Vec<(&'a str, TypeName<'a>)>,
+    ) -> Result<TypeName<'a>, Box<dyn std::error::Error>> {
+        let def_ = type_ident_pairs
+            .into_iter()
+            .map(|(ident, ty)| (ident, Box::new(ty)))
+            .collect();
+        Ok(TypeName::Record(def_))
+    }
 }
 
-impl<'a, const T: usize> From<&'a TypeName<'_>> for Box<RotoType<'a, T>> {
+impl<'a> From<&'a TypeName<'_>> for Box<RotoType<'a>> {
     fn from(t: &'a TypeName<'_>) -> Self {
         match t {
             TypeName::U32 => Box::new(RotoType::Primitive(
@@ -187,6 +211,12 @@ pub enum CommunityType {
 #[derive(Debug)]
 pub struct Community(Option<CommunityType>);
 
+impl Community {
+    pub fn new(community_type: CommunityType) -> Self {
+        Self(Some(community_type))
+    }
+}
+
 #[derive(Debug)]
 pub struct IpAddress(Option<std::net::IpAddr>);
 
@@ -229,12 +259,12 @@ pub struct BgpRecord {
 }
 
 #[derive(Debug)]
-pub enum ElementType<'a, const T: usize> {
+pub enum ElementType<'a> {
     Primitive(RotoPrimitiveType),
-    Nested(Box<RotoType<'a, T>>),
+    Nested(Box<RotoType<'a>>),
 }
 
-impl<'a, const T: usize> From<&'a TypeName<'_>> for ElementType<'a, T> {
+impl<'a> From<&'a TypeName<'_>> for ElementType<'a> {
     fn from(t: &'a TypeName<'_>) -> Self {
         match t {
             TypeName::U32 => {
@@ -275,50 +305,56 @@ impl<'a, const T: usize> From<&'a TypeName<'_>> for ElementType<'a, T> {
     }
 }
 
-#[derive(Debug)]
-pub struct List<'a, const T: usize>(Vec<ElementType<'a, T>>);
+impl<'a> From<RotoType<'a>> for ElementType<'a> {
+    fn from(t: RotoType<'a>) -> Self {
+        match t {
+            RotoType::Primitive(v) => {
+                ElementType::Primitive(v)
+            }
+            RotoType::List(ty) => ElementType::Nested(Box::new(
+                RotoType::List(ty),
+            )),
+            RotoType::Record(kv_list) => {
+                ElementType::Nested(Box::new(RotoType::Record(kv_list)))
+            }
+            _ => panic!("Unknown type"),
+        }
+    }
+}
 
-impl<'a, const T: usize> List<'a, T> {
-    pub fn new(elem_type: Vec<ElementType<'a, T>>) -> Self {
+#[derive(Debug)]
+pub struct List<'a>(Vec<ElementType<'a>>);
+
+impl<'a> List<'a> {
+    pub fn new(elem_type: Vec<ElementType<'a>>) -> Self {
         List(elem_type)
     }
 
-    pub fn iter(&self) -> std::slice::Iter<ElementType<'a, T>> {
+    pub fn iter(&self) -> std::slice::Iter<ElementType<'a>> {
         self.0.iter()
     }
 }
 
-impl<'a, const T: usize> From<&'a TypeName<'a>> for List<'a, T> {
+impl<'a> From<&'a TypeName<'a>> for List<'a> {
     fn from(t: &'a TypeName) -> Self {
         List::new(vec![t.into()])
     }
 }
 
 #[derive(Debug)]
-pub struct Record<'a, const T: usize>([(&'a str, ElementType<'a, T>); T]);
+pub struct Record<'a>(Vec<(&'a str, ElementType<'a>)>);
 
-impl<'a, const T: usize> Record<'a, T> {
+impl<'a> Record<'a> {
     pub fn new(
-        elems: Vec<(&'a str, ElementType<'a, T>)>,
+        elems: Vec<(&'a str, ElementType<'a>)>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        if elems.len() != T {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!(
-                    "wrong number of elements, got {} expected {}",
-                    elems.len(),
-                    T
-                ),
-            )));
-        }
-
-        Ok(Self(elems.try_into().unwrap()))
+        Ok(Self(elems))
     }
 
     pub fn get_value_for_field(
         &self,
         field: &'a str,
-    ) -> Option<&ElementType<T>> {
+    ) -> Option<&ElementType> {
         self.0.iter().find(|(f, _)| f == &field).map(|(_, v)| v)
     }
 }
