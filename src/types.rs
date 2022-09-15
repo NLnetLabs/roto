@@ -1,7 +1,7 @@
-pub enum TypeName<'a> {
-    Primitive,
-    List(Box<TypeName<'a>>),
-    Record(Vec<(&'a str, Box<TypeName<'a>>)>),
+#[derive(Debug)]
+pub enum RotoType<'a> {
+    List(Box<RotoType<'a>>),
+    Record(Vec<(&'a str, Box<RotoType<'a>>)>),
     U32,
     U8,
     Prefix,
@@ -12,18 +12,152 @@ pub enum TypeName<'a> {
     None,
 }
 
-impl<'a> TypeName<'a> {
-    pub fn new_record(
-        self,
-        kvs: Vec<(&'a str, RotoType<'a>)>,
+impl<'a> RotoType<'a> {
+    pub fn create_record_instance(
+        &self,
+        kvs: Vec<(&'a str, RotoTypeValue<'a>)>,
     ) -> Result<Record<'a>, Box<dyn std::error::Error>> {
-
-        // TODO: Actually check whether the value fits the
-        // record type.
-        if let TypeName::Record(_) = self {
-            RotoType::define_record(kvs)
+        if let RotoType::Record(_rec) = &self {
+            if self.check_fields(kvs.as_slice()) {
+                RotoTypeValue::create_record(kvs)
+            } else {
+                Err("Record fields do not match record type".into())
+            }
         } else {
             Err("Not a record type".into())
+        }
+    }
+
+    fn check_fields(&self, fields: &[(&str, RotoTypeValue)]) -> bool {
+        if let RotoType::Record(rec) = self {
+            for (name, ty) in fields {
+                if !rec.iter().any(|(k, v)| {
+                    k == name && v.as_ref() == ty
+                }) {
+                    return false;
+                }
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn create_primitive_var(
+        self,
+        value: impl Into<RotoPrimitiveType>,
+    ) -> Result<RotoTypeValue<'a>, Box<dyn std::error::Error>> {
+        let var = match self {
+            RotoType::U32 => {
+                if let RotoPrimitiveType::U32(v) = value.into() {
+                    RotoPrimitiveType::U32(v)
+                } else {
+                    return Err("Not a u32".into());
+                }
+            }
+            RotoType::U8 => {
+                if let RotoPrimitiveType::U8(v) = value.into() {
+                    RotoPrimitiveType::U8(v)
+                } else {
+                    return Err("Not a u8".into());
+                }
+            }
+            RotoType::Prefix => {
+                if let RotoPrimitiveType::Prefix(v) = value.into() {
+                    RotoPrimitiveType::Prefix(v)
+                } else {
+                    return Err("Not a prefix".into());
+                }
+            }
+            RotoType::IpAddress => {
+                if let RotoPrimitiveType::IpAddress(v) = value.into() {
+                    RotoPrimitiveType::IpAddress(v)
+                } else {
+                    return Err("Not an IP address".into());
+                }
+            }
+            RotoType::Asn => {
+                if let RotoPrimitiveType::Asn(v) = value.into() {
+                    RotoPrimitiveType::Asn(v)
+                } else {
+                    return Err("Not an ASN".into());
+                }
+            }
+            RotoType::AsPath => {
+                if let RotoPrimitiveType::AsPath(v) = value.into() {
+                    RotoPrimitiveType::AsPath(v)
+                } else {
+                    return Err("Not an AS Path".into());
+                }
+            }
+            RotoType::Community => {
+                if let RotoPrimitiveType::Community(v) = value.into() {
+                    RotoPrimitiveType::Community(v)
+                } else {
+                    return Err("Not a community".into());
+                }
+            }
+            _ => return Err("Not a primitive type".into()),
+        };
+        Ok(RotoTypeValue::Primitive(var))
+    }
+}
+
+impl std::cmp::PartialEq<RotoPrimitiveType> for RotoType<'_> {
+    fn eq(&self, other: &RotoPrimitiveType) -> bool {
+        match self {
+            RotoType::U32 => {
+                matches!(other, RotoPrimitiveType::U32(_))
+            }
+            RotoType::U8 => {
+                matches!(other, RotoPrimitiveType::U8(_))
+            }
+            RotoType::Prefix => {
+                matches!(other, RotoPrimitiveType::Prefix(_))
+            }
+            RotoType::IpAddress => {
+                matches!(other, RotoPrimitiveType::IpAddress(_))
+            }
+            RotoType::Asn => {
+                matches!(other, RotoPrimitiveType::Asn(_))
+            }
+            RotoType::AsPath => {
+                matches!(other, RotoPrimitiveType::AsPath(_))
+            }
+            RotoType::Community => {
+                matches!(other, RotoPrimitiveType::Community(_))
+            }
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq<RotoTypeValue<'_>> for RotoType<'_> {
+    fn eq(&self, other: &RotoTypeValue) -> bool {
+        match (self, other) {
+            (a, RotoTypeValue::Primitive(b)) => a == b,
+            (RotoType::List(a), RotoTypeValue::List(b)) => {
+                match (a.as_ref(), b) {
+                    (RotoType::List(aa), List(bb)) => match &bb[0] {
+                        ElementType::Nested(bb) => {
+                            return aa.as_ref() == bb.as_ref()
+                        }
+                        ElementType::Primitive(bb) => {
+                            return aa.as_ref() == bb
+                        }
+                    },
+                    _ => false,
+                }
+            }
+            (RotoType::Record(a), RotoTypeValue::Record(_b)) => {
+                self.check_fields(
+                    a.iter()
+                        .map(|ty| (ty.0, ty.1.as_ref().into()))
+                        .collect::<Vec<_>>()
+                        .as_slice(),
+                )
+            }
+            _ => false,
         }
     }
 }
@@ -32,38 +166,40 @@ impl<'a> TypeName<'a> {
 ///
 /// This module contains the types offered by the Roto languages.
 
-#[derive(Debug)]
-pub enum RotoType<'a> {
+#[derive(Debug, PartialEq)]
+pub enum RotoTypeValue<'a> {
     Primitive(RotoPrimitiveType),
     List(List<'a>),
     Record(Record<'a>),
     None,
 }
 
-impl<'a> RotoType<'a> {
+impl<'a> RotoTypeValue<'a> {
     pub fn is_empty(&self) -> bool {
-        matches!(self, RotoType::None)
+        matches!(self, RotoTypeValue::None)
     }
 
     pub fn from_literal(s: &str) -> Result<Self, Box<dyn std::error::Error>> {
         match s {
-            "U32" => {
-                Ok(RotoType::Primitive(RotoPrimitiveType::U32(U32(None))))
-            }
-            "U8" => Ok(RotoType::Primitive(RotoPrimitiveType::U8(U8(None)))),
-            "prefix" => Ok(RotoType::Primitive(RotoPrimitiveType::Prefix(
-                Prefix(None),
+            "U32" => Ok(RotoTypeValue::Primitive(RotoPrimitiveType::U32(
+                U32(None),
             ))),
-            "IpAddress" => Ok(RotoType::Primitive(
+            "U8" => {
+                Ok(RotoTypeValue::Primitive(RotoPrimitiveType::U8(U8(None))))
+            }
+            "prefix" => Ok(RotoTypeValue::Primitive(
+                RotoPrimitiveType::Prefix(Prefix(None)),
+            )),
+            "IpAddress" => Ok(RotoTypeValue::Primitive(
                 RotoPrimitiveType::IpAddress(IpAddress(None)),
             )),
-            "Asn" => {
-                Ok(RotoType::Primitive(RotoPrimitiveType::Asn(Asn(None))))
-            }
-            "AsPath" => Ok(RotoType::Primitive(RotoPrimitiveType::AsPath(
-                AsPath(None),
+            "Asn" => Ok(RotoTypeValue::Primitive(RotoPrimitiveType::Asn(
+                Asn(None),
             ))),
-            "Community" => Ok(RotoType::Primitive(
+            "AsPath" => Ok(RotoTypeValue::Primitive(
+                RotoPrimitiveType::AsPath(AsPath(None)),
+            )),
+            "Community" => Ok(RotoTypeValue::Primitive(
                 RotoPrimitiveType::Community(Community(None)),
             )),
             _ => Err(Box::new(std::io::Error::new(
@@ -73,8 +209,8 @@ impl<'a> RotoType<'a> {
         }
     }
 
-    pub fn define_record(
-        type_ident_pairs: Vec<(&'a str, RotoType<'a>)>,
+    fn create_record(
+        type_ident_pairs: Vec<(&'a str, RotoTypeValue<'a>)>,
     ) -> Result<Record<'a>, Box<dyn std::error::Error>> {
         let def_ = type_ident_pairs
             .into_iter()
@@ -84,49 +220,86 @@ impl<'a> RotoType<'a> {
     }
 
     pub fn new_record_type(
-        type_ident_pairs: Vec<(&'a str, TypeName<'a>)>,
-    ) -> Result<TypeName<'a>, Box<dyn std::error::Error>> {
+        type_ident_pairs: Vec<(&'a str, RotoType<'a>)>,
+    ) -> Result<RotoType<'a>, Box<dyn std::error::Error>> {
         let def_ = type_ident_pairs
             .into_iter()
             .map(|(ident, ty)| (ident, Box::new(ty)))
             .collect();
-        Ok(TypeName::Record(def_))
+        Ok(RotoType::Record(def_))
     }
 }
 
-impl<'a> From<&'a TypeName<'_>> for Box<RotoType<'a>> {
-    fn from(t: &'a TypeName<'_>) -> Self {
+impl<'a> From<&'a RotoType<'_>> for Box<RotoTypeValue<'a>> {
+    fn from(t: &'a RotoType<'_>) -> Self {
         match t {
-            TypeName::U32 => Box::new(RotoType::Primitive(
+            RotoType::U32 => Box::new(RotoTypeValue::Primitive(
                 RotoPrimitiveType::U32(U32(None)),
             )),
-            TypeName::U8 => {
-                Box::new(RotoType::Primitive(RotoPrimitiveType::U8(U8(None))))
-            }
-            TypeName::Prefix => Box::new(RotoType::Primitive(
+            RotoType::U8 => Box::new(RotoTypeValue::Primitive(
+                RotoPrimitiveType::U8(U8(None)),
+            )),
+            RotoType::Prefix => Box::new(RotoTypeValue::Primitive(
                 RotoPrimitiveType::Prefix(Prefix(None)),
             )),
-            TypeName::IpAddress => Box::new(RotoType::Primitive(
+            RotoType::IpAddress => Box::new(RotoTypeValue::Primitive(
                 RotoPrimitiveType::IpAddress(IpAddress(None)),
             )),
-            TypeName::Asn => Box::new(RotoType::Primitive(
+            RotoType::Asn => Box::new(RotoTypeValue::Primitive(
                 RotoPrimitiveType::Asn(Asn(None)),
             )),
-            TypeName::AsPath => Box::new(RotoType::Primitive(
+            RotoType::AsPath => Box::new(RotoTypeValue::Primitive(
                 RotoPrimitiveType::AsPath(AsPath(None)),
             )),
-            TypeName::Community => Box::new(RotoType::Primitive(
+            RotoType::Community => Box::new(RotoTypeValue::Primitive(
                 RotoPrimitiveType::Community(Community(None)),
             )),
-            TypeName::List(ty) => {
-                Box::new(RotoType::List(ty.as_ref().into()))
+            RotoType::List(ty) => {
+                Box::new(RotoTypeValue::List(ty.as_ref().into()))
             }
-            TypeName::Record(kv_list) => {
+            RotoType::Record(kv_list) => {
                 let def_ = kv_list
                     .iter()
                     .map(|(ident, ty)| (*ident, ty.as_ref().into()))
                     .collect::<Vec<_>>();
-                Box::new(RotoType::Record(Record::new(def_).unwrap()))
+                Box::new(RotoTypeValue::Record(Record::new(def_).unwrap()))
+            }
+            _ => panic!("Unknown type"),
+        }
+    }
+}
+
+impl<'a> From<&'a RotoType<'_>> for RotoTypeValue<'a> {
+    fn from(t: &'a RotoType<'_>) -> Self {
+        match t {
+            RotoType::U32 => {
+                RotoTypeValue::Primitive(RotoPrimitiveType::U32(U32(None)))
+            }
+            RotoType::U8 => {
+                RotoTypeValue::Primitive(RotoPrimitiveType::U8(U8(None)))
+            }
+            RotoType::Prefix => RotoTypeValue::Primitive(
+                RotoPrimitiveType::Prefix(Prefix(None)),
+            ),
+            RotoType::IpAddress => RotoTypeValue::Primitive(
+                RotoPrimitiveType::IpAddress(IpAddress(None)),
+            ),
+            RotoType::Asn => {
+                RotoTypeValue::Primitive(RotoPrimitiveType::Asn(Asn(None)))
+            }
+            RotoType::AsPath => RotoTypeValue::Primitive(
+                RotoPrimitiveType::AsPath(AsPath(None)),
+            ),
+            RotoType::Community => RotoTypeValue::Primitive(
+                RotoPrimitiveType::Community(Community(None)),
+            ),
+            RotoType::List(ty) => RotoTypeValue::List(ty.as_ref().into()),
+            RotoType::Record(kv_list) => {
+                let def_ = kv_list
+                    .iter()
+                    .map(|(ident, ty)| (*ident, ty.as_ref().into()))
+                    .collect::<Vec<_>>();
+                RotoTypeValue::Record(Record::new(def_).unwrap())
             }
             _ => panic!("Unknown type"),
         }
@@ -137,7 +310,7 @@ impl<'a> From<&'a TypeName<'_>> for Box<RotoType<'a>> {
 ///
 ///
 ///
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum RotoPrimitiveType {
     U32(U32),
     U8(U8),
@@ -174,7 +347,19 @@ impl RotoPrimitiveType {
     }
 }
 
-#[derive(Debug)]
+impl From<Asn> for RotoPrimitiveType {
+    fn from(val: Asn) -> Self {
+        RotoPrimitiveType::Asn(val)
+    }
+}
+
+impl From<u32> for RotoPrimitiveType {
+    fn from(val: u32) -> Self {
+        RotoPrimitiveType::U32(U32(Some(val)))
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub struct U32(Option<u32>);
 
 impl U32 {
@@ -183,7 +368,7 @@ impl U32 {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct U8(Option<u8>);
 
 impl U8 {
@@ -192,7 +377,7 @@ impl U8 {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Prefix(Option<routecore::addr::Prefix>);
 
 impl Prefix {
@@ -201,14 +386,14 @@ impl Prefix {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum CommunityType {
     Normal,
     Extended,
     Large,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Community(Option<CommunityType>);
 
 impl Community {
@@ -217,7 +402,7 @@ impl Community {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct IpAddress(Option<std::net::IpAddr>);
 
 impl IpAddress {
@@ -226,21 +411,37 @@ impl IpAddress {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Asn(Option<routecore::asn::Asn>);
 
 impl Asn {
     pub fn new(asn: routecore::asn::Asn) -> Self {
         Asn(Some(asn))
     }
+
+    pub fn from_u32(asn: u32) -> Self {
+        Asn(Some(routecore::asn::Asn::from(asn)))
+    }
+
+    pub fn get_asn(&self) -> routecore::asn::Asn {
+        self.0.unwrap()
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct AsPath(Option<Vec<Asn>>);
 
 impl AsPath {
     pub fn new(as_path: Vec<Asn>) -> Self {
         AsPath(Some(as_path))
+    }
+
+    pub fn from_vec_u32(as_path: Vec<u32>) -> Self {
+        let as_path = as_path
+            .into_iter()
+            .map(|asn| Asn::new(routecore::asn::Asn::from(asn)))
+            .collect();
+        AsPath::new(as_path)
     }
 }
 
@@ -258,45 +459,45 @@ pub struct BgpRecord {
     pub communities: Vec<Community>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ElementType<'a> {
     Primitive(RotoPrimitiveType),
-    Nested(Box<RotoType<'a>>),
+    Nested(Box<RotoTypeValue<'a>>),
 }
 
-impl<'a> From<&'a TypeName<'_>> for ElementType<'a> {
-    fn from(t: &'a TypeName<'_>) -> Self {
+impl<'a> From<&'a RotoType<'_>> for ElementType<'a> {
+    fn from(t: &'a RotoType<'_>) -> Self {
         match t {
-            TypeName::U32 => {
+            RotoType::U32 => {
                 ElementType::Primitive(RotoPrimitiveType::U32(U32(None)))
             }
-            TypeName::U8 => {
+            RotoType::U8 => {
                 ElementType::Primitive(RotoPrimitiveType::U8(U8(None)))
             }
-            TypeName::Prefix => ElementType::Primitive(
+            RotoType::Prefix => ElementType::Primitive(
                 RotoPrimitiveType::Prefix(Prefix(None)),
             ),
-            TypeName::IpAddress => ElementType::Primitive(
+            RotoType::IpAddress => ElementType::Primitive(
                 RotoPrimitiveType::IpAddress(IpAddress(None)),
             ),
-            TypeName::Asn => {
+            RotoType::Asn => {
                 ElementType::Primitive(RotoPrimitiveType::Asn(Asn(None)))
             }
-            TypeName::AsPath => ElementType::Primitive(
+            RotoType::AsPath => ElementType::Primitive(
                 RotoPrimitiveType::AsPath(AsPath(None)),
             ),
-            TypeName::Community => ElementType::Primitive(
+            RotoType::Community => ElementType::Primitive(
                 RotoPrimitiveType::Community(Community(None)),
             ),
-            TypeName::List(ty) => ElementType::Nested(Box::new(
-                RotoType::List(ty.as_ref().into()),
+            RotoType::List(ty) => ElementType::Nested(Box::new(
+                RotoTypeValue::List(ty.as_ref().into()),
             )),
-            TypeName::Record(kv_list) => {
+            RotoType::Record(kv_list) => {
                 let def_ = kv_list
                     .iter()
                     .map(|(ident, ty)| (*ident, ty.as_ref().into()))
                     .collect::<Vec<_>>();
-                ElementType::Nested(Box::new(RotoType::Record(
+                ElementType::Nested(Box::new(RotoTypeValue::Record(
                     Record::new(def_).unwrap(),
                 )))
             }
@@ -305,24 +506,22 @@ impl<'a> From<&'a TypeName<'_>> for ElementType<'a> {
     }
 }
 
-impl<'a> From<RotoType<'a>> for ElementType<'a> {
-    fn from(t: RotoType<'a>) -> Self {
+impl<'a> From<RotoTypeValue<'a>> for ElementType<'a> {
+    fn from(t: RotoTypeValue<'a>) -> Self {
         match t {
-            RotoType::Primitive(v) => {
-                ElementType::Primitive(v)
+            RotoTypeValue::Primitive(v) => ElementType::Primitive(v),
+            RotoTypeValue::List(ty) => {
+                ElementType::Nested(Box::new(RotoTypeValue::List(ty)))
             }
-            RotoType::List(ty) => ElementType::Nested(Box::new(
-                RotoType::List(ty),
-            )),
-            RotoType::Record(kv_list) => {
-                ElementType::Nested(Box::new(RotoType::Record(kv_list)))
+            RotoTypeValue::Record(kv_list) => {
+                ElementType::Nested(Box::new(RotoTypeValue::Record(kv_list)))
             }
             _ => panic!("Unknown type"),
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct List<'a>(Vec<ElementType<'a>>);
 
 impl<'a> List<'a> {
@@ -335,13 +534,13 @@ impl<'a> List<'a> {
     }
 }
 
-impl<'a> From<&'a TypeName<'a>> for List<'a> {
-    fn from(t: &'a TypeName) -> Self {
+impl<'a> From<&'a RotoType<'a>> for List<'a> {
+    fn from(t: &'a RotoType) -> Self {
         List::new(vec![t.into()])
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Record<'a>(Vec<(&'a str, ElementType<'a>)>);
 
 impl<'a> Record<'a> {
