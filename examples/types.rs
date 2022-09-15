@@ -1,6 +1,6 @@
 use roto::types::{
-    AsPath, Asn, Community, CommunityType, ElementType, IpAddress, List,
-    Prefix, RotoPrimitiveType, RotoType, RotoTypeValue, U32,
+    AsPath, Asn, Community, CommunityType, ElementType, List, Prefix, Record,
+    RotoPrimitiveType, RotoType, RotoTypeValue, U32,
 };
 
 fn main() {
@@ -10,27 +10,31 @@ fn main() {
     // )
     // .unwrap();
 
-    let count = RotoType::create_primitive_var(RotoType::U32, 1_u32).unwrap();
+    let count =
+        RotoPrimitiveType::create_instance(RotoType::U32, 1_u32).unwrap();
     let count2 =
         RotoTypeValue::Primitive(RotoPrimitiveType::Prefix(Prefix::new(
             routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)
                 .unwrap(),
         )));
-    let ip_address = RotoTypeValue::Primitive(RotoPrimitiveType::IpAddress(
-        IpAddress::new(std::net::IpAddr::V4(std::net::Ipv4Addr::new(
-            193, 0, 0, 23,
-        ))),
-    ));
 
-    let as_path = RotoType::create_primitive_var(
+    let ip_address = RotoPrimitiveType::create_instance(
+        RotoType::IpAddress,
+        std::net::IpAddr::V4(std::net::Ipv4Addr::new(193, 0, 0, 23)),
+    )
+    .unwrap();
+
+    let as_path = RotoPrimitiveType::create_instance(
         RotoType::AsPath,
         RotoPrimitiveType::AsPath(AsPath::new(vec![Asn::from_u32(1)])),
     )
     .unwrap();
 
-    let asn =
-        RotoType::create_primitive_var(RotoType::Asn, Asn::from_u32(211321))
-            .unwrap();
+    let asn = RotoPrimitiveType::create_instance(
+        RotoType::Asn,
+        Asn::from_u32(211321),
+    )
+    .unwrap();
     println!("{:?}", asn);
 
     let comms = RotoTypeValue::List(List::new(vec![ElementType::Primitive(
@@ -42,10 +46,9 @@ fn main() {
     ))));
 
     let my_nested_rec_type =
-        RotoTypeValue::new_record_type(vec![("counter", RotoType::U32)])
-            .unwrap();
+        RotoType::new_record_type(vec![("counter", RotoType::U32)]).unwrap();
 
-    let my_nested_rec_instance = RotoType::create_record_instance(
+    let my_nested_rec_instance = Record::create_instance(
         &my_nested_rec_type,
         vec![(
             "counter",
@@ -54,7 +57,7 @@ fn main() {
     )
     .unwrap();
 
-    let my_rec_type = RotoTypeValue::new_record_type(vec![
+    let my_rec_type = RotoType::new_record_type(vec![
         ("count", RotoType::U32),
         ("count2", RotoType::Prefix),
         ("ip_address", RotoType::IpAddress),
@@ -65,7 +68,7 @@ fn main() {
     ])
     .unwrap();
 
-    let my_record = RotoType::create_record_instance(
+    let my_record = Record::create_instance(
         &my_rec_type,
         vec![
             ("count", count),
