@@ -49,7 +49,7 @@ fn main() {
         TypeDef::List(Box::new(TypeDef::List(Box::new(TypeDef::Community))));
 
     let my_nested_rec_type =
-        TypeDef::new_record_type(vec![("counter", TypeDef::U32)]).unwrap();
+        TypeDef::new_record_type(vec![("counter", Box::new(TypeDef::U32))]).unwrap();
 
     let my_nested_rec_instance = Record::create_instance(
         &my_nested_rec_type,
@@ -61,13 +61,13 @@ fn main() {
     .unwrap();
 
     let my_rec_type = TypeDef::new_record_type(vec![
-        ("count", TypeDef::U32),
-        ("count2", TypeDef::Prefix),
-        ("ip_address", TypeDef::IpAddress),
-        ("asn", TypeDef::Asn),
-        ("as_path", TypeDef::AsPath),
-        ("communities", my_comms_type),
-        ("record", my_nested_rec_type),
+        ("count", Box::new(TypeDef::U32)),
+        ("count2", Box::new(TypeDef::Prefix)),
+        ("ip_address", Box::new(TypeDef::IpAddress)),
+        ("asn", Box::new(TypeDef::Asn)),
+        ("as_path", Box::new(TypeDef::AsPath)),
+        ("communities", Box::new(my_comms_type)),
+        ("record", Box::new(my_nested_rec_type)),
     ])
     .unwrap();
 

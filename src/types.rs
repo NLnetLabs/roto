@@ -7,7 +7,9 @@
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 
-#[derive(Debug)]
+use std::ops::Deref;
+
+#[derive(Clone, Debug)]
 pub enum TypeDef<'a> {
     List(Box<TypeDef<'a>>),
     Record(Vec<(&'a str, Box<TypeDef<'a>>)>),
@@ -23,13 +25,13 @@ pub enum TypeDef<'a> {
 
 impl<'a> TypeDef<'a> {
     pub fn new_record_type(
-        type_ident_pairs: Vec<(&'a str, TypeDef<'a>)>,
+        type_ident_pairs: Vec<(&'a str, Box<TypeDef<'a>>)>,
     ) -> Result<TypeDef<'a>, Box<dyn std::error::Error>> {
-        let def_ = type_ident_pairs
-            .into_iter()
-            .map(|(ident, ty)| (ident, Box::new(ty)))
-            .collect();
-        Ok(TypeDef::Record(def_))
+        // let def_ = type_ident_pairs
+        //     .iter()
+        //     .map(move |(ident, ty)| (*ident, ty))
+        //     .collect::<Vec<_>>();
+        Ok(TypeDef::Record(type_ident_pairs))
     }
 
     fn _check_record_fields(&self, fields: &[(&str, TypeValue)]) -> bool {
@@ -98,6 +100,23 @@ impl PartialEq<TypeValue<'_>> for TypeDef<'_> {
                         .as_slice(),
                 ),
             _ => false,
+        }
+    }
+}
+
+// This From impl creates the link between the AST and the TypeDef enum.
+impl<'a> TryFrom<crate::ast::TypeIdentifier> for TypeDef<'a> {
+    type Error = Box<dyn std::error::Error>;
+    fn try_from(ty: crate::ast::TypeIdentifier) -> Result<TypeDef<'a>, std::boxed::Box<dyn std::error::Error>> {
+        match ty.ident.as_str() {
+            "U32" => Ok(TypeDef::U32),
+            "U8" => Ok(TypeDef::U8),
+            "Prefix" => Ok(TypeDef::Prefix),
+            "IpAddress" => Ok(TypeDef::IpAddress),
+            "Asn" => Ok(TypeDef::Asn),
+            "AsPath" => Ok(TypeDef::AsPath),
+            "Community" => Ok(TypeDef::Community),
+            _ => Err(format!("Undefined type: {}", ty.ident).into()),
         }
     }
 }

@@ -345,7 +345,7 @@ fn main() {
                }
             }
             // comment
-            rib unrib contains Blaffer { blaffer: Blaf }
+            rib unrib contains Blaffer { blaffer: Blaf, blixer: { bloop: U32, blap: U8 } }
         "###,
         true,
     );

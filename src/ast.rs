@@ -75,6 +75,13 @@ impl RootExpr {
         )(input)?;
         Ok((input, expressions))
     }
+
+    pub fn get_module(&self) -> Result<&Module, &str> {
+        match self {
+            Self::Module(m) => Ok(m),
+            _ => Err("not a module"),
+        }
+    }
 }
 
 //------------ Module --------------------------------------------------------
@@ -676,8 +683,23 @@ impl Rib {
 
 #[derive(Clone, Debug)]
 pub struct RibBody {
-    pub key_values: Vec<TypeIdentField>,
+    pub key_values: Vec<RibField>,
 }
+
+#[derive(Clone, Debug)]
+pub enum RibField {
+    PrimitiveField(TypeIdentField),
+    RecordField(Box<(Identifier, RibBody)>),
+}
+
+// impl RibField {
+//     pub fn get_field(&self) -> &TypeIdentField {
+//         match self {
+//             RibField::PrimitiveField(field) => field,
+//             RibField::RecordField(body) => body.1.get_field(),
+//         }
+//     }
+// }
 
 //------------ RibBody -------------------------------------------------------
 
@@ -685,13 +707,32 @@ pub struct RibBody {
 // The body of a Rib consists of an (optional) enumeration of
 // (field_name, type) pairs.
 
-// RibBody ::= ( Identifier ':' TypeIdentifier ','? )+
+// RibBody ::= ( Identifier ':' ( TypeIdentifier | RibBody ) ','?)+
 
 impl RibBody {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, key_values) = context(
             "items list",
-            separated_list1(char(','), opt_ws(cut(TypeIdentField::parse))),
+            separated_list1(
+                char(','),
+                opt_ws(cut(alt((
+                    map(TypeIdentField::parse, RibField::PrimitiveField),
+                    map(
+                        tuple((
+                            terminated(
+                                opt_ws(Identifier::parse),
+                                opt_ws(char(':')),
+                            ),
+                            delimited(
+                                opt_ws(char('{')),
+                                RibBody::parse,
+                                opt_ws(char('}')),
+                            ),
+                        )),
+                        |r| RibField::RecordField(Box::new(r)),
+                    ),
+                )))),
+            ),
         )(input)?;
         Ok((input, RibBody { key_values }))
     }
