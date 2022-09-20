@@ -19,6 +19,7 @@ pub struct Symbol<'a> {
 pub enum SymbolKind {
     Variable,
     AnonymousType,
+    NamedType,
     Rib
 }
 
