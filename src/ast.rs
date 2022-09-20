@@ -689,17 +689,9 @@ pub struct RibBody {
 #[derive(Clone, Debug)]
 pub enum RibField {
     PrimitiveField(TypeIdentField),
-    RecordField(Box<(Identifier, RibBody)>),
+    RecordField(Box<(Identifier, RecordTypeIdentifier)>),
+    ListField(Box<(Identifier, ListTypeIdentifier)>),
 }
-
-// impl RibField {
-//     pub fn get_field(&self) -> &TypeIdentField {
-//         match self {
-//             RibField::PrimitiveField(field) => field,
-//             RibField::RecordField(body) => body.1.get_field(),
-//         }
-//     }
-// }
 
 //------------ RibBody -------------------------------------------------------
 
@@ -707,7 +699,10 @@ pub enum RibField {
 // The body of a Rib consists of an (optional) enumeration of
 // (field_name, type) pairs.
 
-// RibBody ::= ( Identifier ':' ( TypeIdentifier | RibBody ) ','?)+
+// RibBody ::= ( Identifier ':' (
+//                 TypeIdentifier |
+//                 '{' RecordTypeIdentifier '}' |
+//                 '[' ListTypeIdentifier ']' ) ','? )+
 
 impl RibBody {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
@@ -725,11 +720,25 @@ impl RibBody {
                             ),
                             delimited(
                                 opt_ws(char('{')),
-                                RibBody::parse,
+                                RecordTypeIdentifier::parse,
                                 opt_ws(char('}')),
                             ),
                         )),
                         |r| RibField::RecordField(Box::new(r)),
+                    ),
+                    map(
+                        tuple((
+                            terminated(
+                                opt_ws(Identifier::parse),
+                                opt_ws(char(':')),
+                            ),
+                            delimited(
+                                opt_ws(char('[')),
+                                ListTypeIdentifier::parse,
+                                opt_ws(char(']')),
+                            ),
+                        )),
+                        |l| RibField::ListField(Box::new(l)),
                     ),
                 )))),
             ),
@@ -927,6 +936,23 @@ impl TypeIdentField {
     }
 }
 
+//------------ ListTypeIdentifier -----------------------------------------------------
+
+// ListTypeIdentifier ::= '[' TypeIdentifier  ','? ']'+
+
+#[derive(Clone, Debug)]
+pub struct ListTypeIdentifier {
+    pub inner_type: TypeIdentifier,
+}
+
+impl ListTypeIdentifier {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, inner_type) =
+            context("List Value", TypeIdentifier::parse)(input)?;
+        Ok((input, ListTypeIdentifier { inner_type }))
+    }
+}
+
 //------------ StringLiteral -----------------------------------------------
 
 // Our take on a literal string is just a Identifier wrapped in two double
@@ -942,6 +968,49 @@ impl StringLiteral {
             delimited(char('"'), Identifier::parse, char('"'))(input)?;
 
         Ok((input, Self(ident.ident)))
+    }
+}
+
+//------------ RecordTypeIdentifier ---------------------------------------------------
+
+// The value of a record. It's very similar to a RibBody (in EBNF it's the
+// same), but it simplifies creating the SymbolTable, because they're
+// semantically different.
+
+// RecordIdentifier ::= '{' ( Identifier ':' TypeIdentifier | '{' RecordTypeIdentifier '}'
+//      ','? )+ '}'
+
+#[derive(Clone, Debug)]
+pub struct RecordTypeIdentifier {
+    pub key_values: Vec<RibField>,
+}
+
+impl RecordTypeIdentifier {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, key_values) = context(
+            "Record Value",
+            separated_list1(
+                char(','),
+                opt_ws(cut(alt((
+                    map(TypeIdentField::parse, RibField::PrimitiveField),
+                    map(
+                        tuple((
+                            terminated(
+                                opt_ws(Identifier::parse),
+                                opt_ws(char(':')),
+                            ),
+                            delimited(
+                                opt_ws(char('{')),
+                                RecordTypeIdentifier::parse,
+                                opt_ws(char('}')),
+                            ),
+                        )),
+                        |r| RibField::RecordField(Box::new(r)),
+                    ),
+                )))),
+            ),
+        )(input)?;
+        Ok((input, RecordTypeIdentifier { key_values }))
     }
 }
 

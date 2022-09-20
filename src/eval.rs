@@ -79,22 +79,28 @@ impl<'a> ast::Rib {
         &'a self,
         symbols: &'_ mut symbols::SymbolTable<'a>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // let kvs: Vec<(&str, Box<types::TypeDef>)> = vec![];
+        let child_kvs = self.body.eval(symbols)?;
 
-        self.body.eval(
+        // create a new user-defined type for the record type in the RIB
+        let rec_type = types::TypeDef::new_record_type(child_kvs)?;
+
+        // add a symbol for the user-defined type, the name is derived from
+        // the 'contains' clause
+        symbols.add_symbol(
+            self.contain_ty.ident.clone(),
+            symbols::SymbolKind::NamedType,
+            rec_type.clone(),
+            None,
+        );
+
+        // add a symbol for the RIB itself, using the newly created record
+        // type
+        symbols.add_symbol(
             self.ident.ident.clone(),
             symbols::SymbolKind::Rib,
-            symbols,
-        )?;
-
-        // let record = types::TypeDef::Record(kvs);
-
-        // symbols.add_symbol(
-        //     self.ident.ident.clone(),
-        //     symbols::SymbolKind::Rib,
-        //     record,
-        //     None,
-        // );
+            rec_type,
+            None,
+        );
 
         Ok(())
     }
@@ -103,9 +109,6 @@ impl<'a> ast::Rib {
 impl<'a> ast::RibBody {
     fn eval(
         &'a self,
-        name: ast::ShortString,
-        kind: symbols::SymbolKind,
-        // mut nested_record: Vec<(&'a str, Box<types::TypeDef<'a>>)>,
         symbols: &'_ mut symbols::SymbolTable<'a>,
     ) -> Result<
         Vec<(&'a str, Box<types::TypeDef<'a>>)>,
@@ -122,9 +125,12 @@ impl<'a> ast::RibBody {
                     ));
                 }
                 ast::RibField::RecordField(r) => {
-                    let nested_record = ast::RibBody::eval(
+                    let nested_record = ast::RecordTypeIdentifier::eval(
                         &r.1,
-                        String::from(r.0.ident.as_str()).to_uppercase().as_str().into(),
+                        String::from(r.0.ident.as_str())
+                            .to_uppercase()
+                            .as_str()
+                            .into(),
                         symbols::SymbolKind::AnonymousType,
                         symbols,
                     )?;
@@ -132,6 +138,65 @@ impl<'a> ast::RibBody {
                     kvs.push((
                         r.0.ident.as_str(),
                         Box::new(types::TypeDef::Record(nested_record)),
+                    ));
+                }
+                ast::RibField::ListField(l) => {
+                    kvs.push((
+                        l.0.ident.as_str(),
+                        Box::new(types::TypeDef::List(Box::new(
+                            l.1.inner_type.clone().try_into()?,
+                        ))),
+                    ));
+                }
+            }
+        }
+
+        Ok(kvs)
+    }
+}
+
+impl<'a> ast::RecordTypeIdentifier {
+    fn eval(
+        &'a self,
+        name: ast::ShortString,
+        kind: symbols::SymbolKind,
+        symbols: &'_ mut symbols::SymbolTable<'a>,
+    ) -> Result<
+        Vec<(&'a str, Box<types::TypeDef<'a>>)>,
+        Box<dyn std::error::Error>,
+    > {
+        let mut kvs: Vec<(&str, Box<types::TypeDef>)> = vec![];
+
+        for kv in self.key_values.iter() {
+            match kv {
+                ast::RibField::PrimitiveField(f) => {
+                    kvs.push((
+                        f.field_name.ident.as_str(),
+                        Box::new(f.ty.clone().try_into()?),
+                    ));
+                }
+                ast::RibField::RecordField(r) => {
+                    let nested_record = ast::RecordTypeIdentifier::eval(
+                        &r.1,
+                        String::from(r.0.ident.as_str())
+                            .to_uppercase()
+                            .as_str()
+                            .into(),
+                        symbols::SymbolKind::AnonymousType,
+                        symbols,
+                    )?;
+
+                    kvs.push((
+                        r.0.ident.as_str(),
+                        Box::new(types::TypeDef::Record(nested_record)),
+                    ));
+                }
+                ast::RibField::ListField(l) => {
+                    kvs.push((
+                        l.0.ident.as_str(),
+                        Box::new(types::TypeDef::List(Box::new(
+                            l.1.inner_type.clone().try_into()?,
+                        ))),
                     ));
                 }
             }
