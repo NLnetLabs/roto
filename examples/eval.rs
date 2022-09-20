@@ -67,6 +67,16 @@ fn main() {
                     } 
                 }  
             }
+
+            // yo, rib
+            rib rib-in contains Route {
+                as-path: [Asn],
+                origin: Asn,
+                next-hop: IpAddress,
+                med: U32,
+                local-pref: U32,
+                community: [Community]
+            }
         "###,
         true,
     ).unwrap();
