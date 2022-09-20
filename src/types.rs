@@ -7,7 +7,6 @@
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 
-use std::ops::Deref;
 
 #[derive(Clone, Debug)]
 pub enum TypeDef<'a> {
@@ -566,7 +565,9 @@ impl<'a> From<TypeValue<'a>> for ElementTypeValue<'a> {
     }
 }
 
-//------------ Collections: List type ------------------------------------------------
+//============ Collections ==================================================
+
+//------------ List type ----------------------------------------------------
 
 #[derive(Debug, PartialEq)]
 pub struct List<'a>(Vec<ElementTypeValue<'a>>);
@@ -587,7 +588,7 @@ impl<'a> From<&'a TypeDef<'a>> for List<'a> {
     }
 }
 
-//---------------- Collections: Record type --------------------------------------------
+//---------------- Record type ----------------------------------------------
 
 #[derive(Debug, PartialEq)]
 pub struct Record<'a>(Vec<(&'a str, ElementTypeValue<'a>)>);
