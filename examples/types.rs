@@ -1,6 +1,6 @@
 use roto::types::{
-    AsPath, Asn, Community, CommunityType, ElementTypeValue, List, Prefix,
-    PrimitiveTypeValue, Record, TypeDef, TypeValue, U32,
+    AsPath, Asn, Community, CommunityType, ElementTypeValue, List,
+    BuiltinTypeValue, Record, TypeDef, TypeValue, U32,
 };
 
 fn main() {
@@ -11,27 +11,27 @@ fn main() {
     // .unwrap();
 
     let count =
-        PrimitiveTypeValue::create_instance(TypeDef::U32, 1_u32).unwrap();
+        BuiltinTypeValue::create_instance(TypeDef::U32, 1_u32).unwrap();
 
-    let count2 = PrimitiveTypeValue::create_instance(
+    let count2 = BuiltinTypeValue::create_instance(
         TypeDef::Prefix,
         routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)
             .unwrap(),
     ).unwrap();
 
-    let ip_address = PrimitiveTypeValue::create_instance(
+    let ip_address = BuiltinTypeValue::create_instance(
         TypeDef::IpAddress,
         std::net::IpAddr::V4(std::net::Ipv4Addr::new(193, 0, 0, 23)),
     )
     .unwrap();
 
-    let as_path = PrimitiveTypeValue::create_instance(
+    let as_path = BuiltinTypeValue::create_instance(
         TypeDef::AsPath,
-        PrimitiveTypeValue::AsPath(AsPath::new(vec![Asn::from_u32(1)])),
+        BuiltinTypeValue::AsPath(AsPath::new(vec![Asn::from_u32(1)])),
     )
     .unwrap();
 
-    let asn = PrimitiveTypeValue::create_instance(
+    let asn = BuiltinTypeValue::create_instance(
         TypeDef::Asn,
         Asn::from_u32(211321),
     )
@@ -40,7 +40,7 @@ fn main() {
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            PrimitiveTypeValue::Community(Community::new(
+            BuiltinTypeValue::Community(Community::new(
                 CommunityType::Normal,
             )),
         )]));
@@ -55,7 +55,7 @@ fn main() {
         &my_nested_rec_type,
         vec![(
             "counter",
-            TypeValue::Primitive(PrimitiveTypeValue::U32(U32::new(1))),
+            TypeValue::Primitive(BuiltinTypeValue::U32(U32::new(1))),
         )],
     )
     .unwrap();
