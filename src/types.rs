@@ -7,7 +7,6 @@
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 
-
 #[derive(Clone, Debug)]
 pub enum TypeDef<'a> {
     List(Box<TypeDef<'a>>),
@@ -19,6 +18,7 @@ pub enum TypeDef<'a> {
     Asn,
     AsPath,
     Community,
+    Route,
     None,
 }
 
@@ -47,29 +47,29 @@ impl<'a> TypeDef<'a> {
     }
 }
 
-impl PartialEq<PrimitiveTypeValue> for TypeDef<'_> {
-    fn eq(&self, other: &PrimitiveTypeValue) -> bool {
+impl PartialEq<BuiltinTypeValue> for TypeDef<'_> {
+    fn eq(&self, other: &BuiltinTypeValue) -> bool {
         match self {
             TypeDef::U32 => {
-                matches!(other, PrimitiveTypeValue::U32(_))
+                matches!(other, BuiltinTypeValue::U32(_))
             }
             TypeDef::U8 => {
-                matches!(other, PrimitiveTypeValue::U8(_))
+                matches!(other, BuiltinTypeValue::U8(_))
             }
             TypeDef::Prefix => {
-                matches!(other, PrimitiveTypeValue::Prefix(_))
+                matches!(other, BuiltinTypeValue::Prefix(_))
             }
             TypeDef::IpAddress => {
-                matches!(other, PrimitiveTypeValue::IpAddress(_))
+                matches!(other, BuiltinTypeValue::IpAddress(_))
             }
             TypeDef::Asn => {
-                matches!(other, PrimitiveTypeValue::Asn(_))
+                matches!(other, BuiltinTypeValue::Asn(_))
             }
             TypeDef::AsPath => {
-                matches!(other, PrimitiveTypeValue::AsPath(_))
+                matches!(other, BuiltinTypeValue::AsPath(_))
             }
             TypeDef::Community => {
-                matches!(other, PrimitiveTypeValue::Community(_))
+                matches!(other, BuiltinTypeValue::Community(_))
             }
             _ => false,
         }
@@ -103,10 +103,13 @@ impl PartialEq<TypeValue<'_>> for TypeDef<'_> {
     }
 }
 
-// This From impl creates the link between the AST and the TypeDef enum.
+// This From impl creates the link between the AST and the TypeDef enum
+// for built-in types.
 impl<'a> TryFrom<crate::ast::TypeIdentifier> for TypeDef<'a> {
     type Error = Box<dyn std::error::Error>;
-    fn try_from(ty: crate::ast::TypeIdentifier) -> Result<TypeDef<'a>, std::boxed::Box<dyn std::error::Error>> {
+    fn try_from(
+        ty: crate::ast::TypeIdentifier,
+    ) -> Result<TypeDef<'a>, std::boxed::Box<dyn std::error::Error>> {
         match ty.ident.as_str() {
             "U32" => Ok(TypeDef::U32),
             "U8" => Ok(TypeDef::U8),
@@ -115,6 +118,7 @@ impl<'a> TryFrom<crate::ast::TypeIdentifier> for TypeDef<'a> {
             "Asn" => Ok(TypeDef::Asn),
             "AsPath" => Ok(TypeDef::AsPath),
             "Community" => Ok(TypeDef::Community),
+            "Route" => Ok(TypeDef::Route),
             _ => Err(format!("Undefined type: {}", ty.ident).into()),
         }
     }
@@ -129,7 +133,7 @@ impl<'a> TryFrom<crate::ast::TypeIdentifier> for TypeDef<'a> {
 #[derive(Debug, PartialEq)]
 pub enum TypeValue<'a> {
     // All the built-in scalars
-    Primitive(PrimitiveTypeValue),
+    Primitive(BuiltinTypeValue),
     // An ordered list of one type
     List(List<'a>),
     // A map of (key, value) pairs, where value can be any of the other types
@@ -145,25 +149,23 @@ impl<'a> TypeValue<'a> {
     pub fn from_literal(s: &str) -> Result<Self, Box<dyn std::error::Error>> {
         match s {
             "U32" => {
-                Ok(TypeValue::Primitive(PrimitiveTypeValue::U32(U32(None))))
+                Ok(TypeValue::Primitive(BuiltinTypeValue::U32(U32(None))))
             }
-            "U8" => {
-                Ok(TypeValue::Primitive(PrimitiveTypeValue::U8(U8(None))))
-            }
-            "prefix" => Ok(TypeValue::Primitive(PrimitiveTypeValue::Prefix(
+            "U8" => Ok(TypeValue::Primitive(BuiltinTypeValue::U8(U8(None)))),
+            "prefix" => Ok(TypeValue::Primitive(BuiltinTypeValue::Prefix(
                 Prefix(None),
             ))),
             "IpAddress" => Ok(TypeValue::Primitive(
-                PrimitiveTypeValue::IpAddress(IpAddress(None)),
+                BuiltinTypeValue::IpAddress(IpAddress(None)),
             )),
             "Asn" => {
-                Ok(TypeValue::Primitive(PrimitiveTypeValue::Asn(Asn(None))))
+                Ok(TypeValue::Primitive(BuiltinTypeValue::Asn(Asn(None))))
             }
-            "AsPath" => Ok(TypeValue::Primitive(PrimitiveTypeValue::AsPath(
+            "AsPath" => Ok(TypeValue::Primitive(BuiltinTypeValue::AsPath(
                 AsPath(None),
             ))),
             "Community" => Ok(TypeValue::Primitive(
-                PrimitiveTypeValue::Community(Community(None)),
+                BuiltinTypeValue::Community(Community(None)),
             )),
             _ => Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -187,25 +189,25 @@ impl<'a> From<&'a TypeDef<'_>> for Box<TypeValue<'a>> {
     fn from(t: &'a TypeDef<'_>) -> Self {
         match t {
             TypeDef::U32 => Box::new(TypeValue::Primitive(
-                PrimitiveTypeValue::U32(U32(None)),
+                BuiltinTypeValue::U32(U32(None)),
             )),
-            TypeDef::U8 => Box::new(TypeValue::Primitive(
-                PrimitiveTypeValue::U8(U8(None)),
-            )),
+            TypeDef::U8 => {
+                Box::new(TypeValue::Primitive(BuiltinTypeValue::U8(U8(None))))
+            }
             TypeDef::Prefix => Box::new(TypeValue::Primitive(
-                PrimitiveTypeValue::Prefix(Prefix(None)),
+                BuiltinTypeValue::Prefix(Prefix(None)),
             )),
             TypeDef::IpAddress => Box::new(TypeValue::Primitive(
-                PrimitiveTypeValue::IpAddress(IpAddress(None)),
+                BuiltinTypeValue::IpAddress(IpAddress(None)),
             )),
             TypeDef::Asn => Box::new(TypeValue::Primitive(
-                PrimitiveTypeValue::Asn(Asn(None)),
+                BuiltinTypeValue::Asn(Asn(None)),
             )),
             TypeDef::AsPath => Box::new(TypeValue::Primitive(
-                PrimitiveTypeValue::AsPath(AsPath(None)),
+                BuiltinTypeValue::AsPath(AsPath(None)),
             )),
             TypeDef::Community => Box::new(TypeValue::Primitive(
-                PrimitiveTypeValue::Community(Community(None)),
+                BuiltinTypeValue::Community(Community(None)),
             )),
             TypeDef::List(ty) => {
                 Box::new(TypeValue::List(ty.as_ref().into()))
@@ -226,25 +228,25 @@ impl<'a> From<&'a TypeDef<'_>> for TypeValue<'a> {
     fn from(t: &'a TypeDef<'_>) -> Self {
         match t {
             TypeDef::U32 => {
-                TypeValue::Primitive(PrimitiveTypeValue::U32(U32(None)))
+                TypeValue::Primitive(BuiltinTypeValue::U32(U32(None)))
             }
             TypeDef::U8 => {
-                TypeValue::Primitive(PrimitiveTypeValue::U8(U8(None)))
+                TypeValue::Primitive(BuiltinTypeValue::U8(U8(None)))
             }
             TypeDef::Prefix => {
-                TypeValue::Primitive(PrimitiveTypeValue::Prefix(Prefix(None)))
+                TypeValue::Primitive(BuiltinTypeValue::Prefix(Prefix(None)))
             }
             TypeDef::IpAddress => TypeValue::Primitive(
-                PrimitiveTypeValue::IpAddress(IpAddress(None)),
+                BuiltinTypeValue::IpAddress(IpAddress(None)),
             ),
             TypeDef::Asn => {
-                TypeValue::Primitive(PrimitiveTypeValue::Asn(Asn(None)))
+                TypeValue::Primitive(BuiltinTypeValue::Asn(Asn(None)))
             }
             TypeDef::AsPath => {
-                TypeValue::Primitive(PrimitiveTypeValue::AsPath(AsPath(None)))
+                TypeValue::Primitive(BuiltinTypeValue::AsPath(AsPath(None)))
             }
             TypeDef::Community => TypeValue::Primitive(
-                PrimitiveTypeValue::Community(Community(None)),
+                BuiltinTypeValue::Community(Community(None)),
             ),
             TypeDef::List(ty) => TypeValue::List(ty.as_ref().into()),
             TypeDef::Record(kv_list) => {
@@ -264,7 +266,7 @@ impl<'a> From<&'a TypeDef<'_>> for TypeValue<'a> {
 // The built-in types
 
 #[derive(Debug, PartialEq)]
-pub enum PrimitiveTypeValue {
+pub enum BuiltinTypeValue {
     U32(U32),
     U8(U8),
     Prefix(Prefix),
@@ -272,83 +274,100 @@ pub enum PrimitiveTypeValue {
     IpAddress(IpAddress),
     Asn(Asn),
     AsPath(AsPath),
+    Route(Route),
 }
 
-impl PrimitiveTypeValue {
+impl BuiltinTypeValue {
     pub fn get_type_name(&self) -> &'static str {
         match self {
-            PrimitiveTypeValue::U32(_) => "U32",
-            PrimitiveTypeValue::U8(_) => "U8",
-            PrimitiveTypeValue::Prefix(_) => "Prefix",
-            PrimitiveTypeValue::Community(_) => "Community",
-            PrimitiveTypeValue::IpAddress(_) => "IpAddress",
-            PrimitiveTypeValue::Asn(_) => "Asn",
-            PrimitiveTypeValue::AsPath(_) => "AsPath",
+            BuiltinTypeValue::U32(_) => "U32",
+            BuiltinTypeValue::U8(_) => "U8",
+            BuiltinTypeValue::Prefix(_) => "Prefix",
+            BuiltinTypeValue::Community(_) => "Community",
+            BuiltinTypeValue::IpAddress(_) => "IpAddress",
+            BuiltinTypeValue::Asn(_) => "Asn",
+            BuiltinTypeValue::AsPath(_) => "AsPath",
+            BuiltinTypeValue::Route(_) => "Route",
         }
     }
 
     pub fn get_value(&self) -> &dyn std::any::Any {
         match self {
-            PrimitiveTypeValue::U32(val) => val,
-            PrimitiveTypeValue::U8(val) => val,
-            PrimitiveTypeValue::Prefix(val) => val,
-            PrimitiveTypeValue::Community(val) => val,
-            PrimitiveTypeValue::IpAddress(val) => val,
-            PrimitiveTypeValue::Asn(val) => val,
-            PrimitiveTypeValue::AsPath(val) => val,
+            BuiltinTypeValue::U32(val) => val,
+            BuiltinTypeValue::U8(val) => val,
+            BuiltinTypeValue::Prefix(val) => val,
+            BuiltinTypeValue::Community(val) => val,
+            BuiltinTypeValue::IpAddress(val) => val,
+            BuiltinTypeValue::Asn(val) => val,
+            BuiltinTypeValue::AsPath(val) => val,
+            BuiltinTypeValue::Route(val) => val,
         }
+    }
+
+    pub fn exists(ty: &'_ str) -> bool {
+        matches!(
+            ty,
+            "U32"
+                | "U8"
+                | "Prefix"
+                | "Community"
+                | "IpAddress"
+                | "Asn"
+                | "AsPath"
+                | "Route"
+        )
     }
 
     pub fn create_instance<'a>(
         ty: TypeDef,
-        value: impl Into<PrimitiveTypeValue>,
+        value: impl Into<BuiltinTypeValue>,
     ) -> Result<TypeValue<'a>, Box<dyn std::error::Error>> {
         let var = match ty {
             TypeDef::U32 => {
-                if let PrimitiveTypeValue::U32(v) = value.into() {
-                    PrimitiveTypeValue::U32(v)
+                if let BuiltinTypeValue::U32(v) = value.into() {
+                    BuiltinTypeValue::U32(v)
                 } else {
                     return Err("Not a u32".into());
                 }
             }
             TypeDef::U8 => {
-                if let PrimitiveTypeValue::U8(v) = value.into() {
-                    PrimitiveTypeValue::U8(v)
+                if let BuiltinTypeValue::U8(v) = value.into() {
+                    BuiltinTypeValue::U8(v)
                 } else {
                     return Err("Not a u8".into());
                 }
             }
             TypeDef::Prefix => {
-                if let PrimitiveTypeValue::Prefix(v) = value.into() {
-                    PrimitiveTypeValue::Prefix(v)
+                if let BuiltinTypeValue::Prefix(v) = value.into() {
+                    BuiltinTypeValue::Prefix(v)
                 } else {
                     return Err("Not a prefix".into());
                 }
             }
             TypeDef::IpAddress => {
-                if let PrimitiveTypeValue::IpAddress(v) = value.into() {
-                    PrimitiveTypeValue::IpAddress(v)
+                if let BuiltinTypeValue::IpAddress(v) = value.into() {
+                    BuiltinTypeValue::IpAddress(v)
                 } else {
                     return Err("Not an IP address".into());
                 }
             }
             TypeDef::Asn => {
-                if let PrimitiveTypeValue::Asn(v) = value.into() {
-                    PrimitiveTypeValue::Asn(v)
+                if let BuiltinTypeValue::Asn(v) = value.into() {
+                    BuiltinTypeValue::Asn(v)
                 } else {
                     return Err("Not an ASN".into());
                 }
             }
             TypeDef::AsPath => {
-                if let PrimitiveTypeValue::AsPath(v) = value.into() {
-                    PrimitiveTypeValue::AsPath(v)
+                if let BuiltinTypeValue::AsPath(v) = value.into() {
+                    BuiltinTypeValue::AsPath(v)
                 } else {
                     return Err("Not an AS Path".into());
                 }
             }
             TypeDef::Community => {
-                if let PrimitiveTypeValue::Community(v) = value.into() {
-                    PrimitiveTypeValue::Community(v)
+                if let BuiltinTypeValue::Community(v) = value.into() {
+                    BuiltinTypeValue::Community(v)
                 } else {
                     return Err("Not a community".into());
                 }
@@ -362,27 +381,48 @@ impl PrimitiveTypeValue {
 // These From impls allow the user to use the create_instance function with
 // simple types like u32, u8, etc. (without the nested variants).
 
-impl From<Asn> for PrimitiveTypeValue {
+impl From<Asn> for BuiltinTypeValue {
     fn from(val: Asn) -> Self {
-        PrimitiveTypeValue::Asn(val)
+        BuiltinTypeValue::Asn(val)
     }
 }
 
-impl From<u32> for PrimitiveTypeValue {
+impl From<u32> for BuiltinTypeValue {
     fn from(val: u32) -> Self {
-        PrimitiveTypeValue::U32(U32(Some(val)))
+        BuiltinTypeValue::U32(U32(Some(val)))
     }
 }
 
-impl From<std::net::IpAddr> for PrimitiveTypeValue {
+impl From<std::net::IpAddr> for BuiltinTypeValue {
     fn from(val: std::net::IpAddr) -> Self {
-        PrimitiveTypeValue::IpAddress(IpAddress(Some(val)))
+        BuiltinTypeValue::IpAddress(IpAddress(Some(val)))
     }
 }
 
-impl From<routecore::addr::Prefix> for PrimitiveTypeValue {
+impl From<routecore::addr::Prefix> for BuiltinTypeValue {
     fn from(val: routecore::addr::Prefix) -> Self {
-        PrimitiveTypeValue::Prefix(Prefix(Some(val)))
+        BuiltinTypeValue::Prefix(Prefix(Some(val)))
+    }
+}
+
+impl TryFrom<&'_ str> for BuiltinTypeValue {
+    type Error = Box<dyn std::error::Error>;
+
+    fn try_from(val: &'_ str) -> Result<Self, Self::Error> {
+        match val {
+            "U32" => Ok(BuiltinTypeValue::U32(U32(None))),
+            "U8" => Ok(BuiltinTypeValue::U8(U8(None))),
+            "Prefix" => Ok(BuiltinTypeValue::Prefix(Prefix(None))),
+            "Community" => Ok(BuiltinTypeValue::Community(Community(None))),
+            "IpAddress" => Ok(BuiltinTypeValue::IpAddress(IpAddress(None))),
+            "Asn" => Ok(BuiltinTypeValue::Asn(Asn(None))),
+            "AsPath" => Ok(BuiltinTypeValue::AsPath(AsPath(None))),
+            "Route" => Ok(BuiltinTypeValue::Route(Route {
+                prefix: None,
+                bgp: None,
+            })),
+            _ => Err(format!("Unknown type: {}", val).into()),
+        }
     }
 }
 
@@ -486,12 +526,13 @@ impl AsPath {
 
 //------------ RFC4271 Route type -------------------------------------------
 
-pub struct Route<Meta: routecore::record::Meta> {
-    pub prefix: Prefix,
+#[derive(Debug, PartialEq)]
+pub struct Route {
+    pub prefix: Option<Prefix>,
     pub bgp: Option<BgpRecord>,
-    pub meta: Meta,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct BgpRecord {
     pub as_path: AsPath,
     pub communities: Vec<Community>,
@@ -505,33 +546,33 @@ pub struct BgpRecord {
 
 #[derive(Debug, PartialEq)]
 pub enum ElementTypeValue<'a> {
-    Primitive(PrimitiveTypeValue),
+    Primitive(BuiltinTypeValue),
     Nested(Box<TypeValue<'a>>),
 }
 
 impl<'a> From<&'a TypeDef<'_>> for ElementTypeValue<'a> {
     fn from(t: &'a TypeDef<'_>) -> Self {
         match t {
-            TypeDef::U32 => ElementTypeValue::Primitive(
-                PrimitiveTypeValue::U32(U32(None)),
-            ),
+            TypeDef::U32 => {
+                ElementTypeValue::Primitive(BuiltinTypeValue::U32(U32(None)))
+            }
             TypeDef::U8 => {
-                ElementTypeValue::Primitive(PrimitiveTypeValue::U8(U8(None)))
+                ElementTypeValue::Primitive(BuiltinTypeValue::U8(U8(None)))
             }
             TypeDef::Prefix => ElementTypeValue::Primitive(
-                PrimitiveTypeValue::Prefix(Prefix(None)),
+                BuiltinTypeValue::Prefix(Prefix(None)),
             ),
             TypeDef::IpAddress => ElementTypeValue::Primitive(
-                PrimitiveTypeValue::IpAddress(IpAddress(None)),
+                BuiltinTypeValue::IpAddress(IpAddress(None)),
             ),
-            TypeDef::Asn => ElementTypeValue::Primitive(
-                PrimitiveTypeValue::Asn(Asn(None)),
-            ),
+            TypeDef::Asn => {
+                ElementTypeValue::Primitive(BuiltinTypeValue::Asn(Asn(None)))
+            }
             TypeDef::AsPath => ElementTypeValue::Primitive(
-                PrimitiveTypeValue::AsPath(AsPath(None)),
+                BuiltinTypeValue::AsPath(AsPath(None)),
             ),
             TypeDef::Community => ElementTypeValue::Primitive(
-                PrimitiveTypeValue::Community(Community(None)),
+                BuiltinTypeValue::Community(Community(None)),
             ),
             TypeDef::List(ty) => ElementTypeValue::Nested(Box::new(
                 TypeValue::List(ty.as_ref().into()),

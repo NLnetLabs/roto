@@ -1,7 +1,10 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ops::Deref;
+use std::rc::Rc;
 
-use crate::types::Record;
+use crate::ast::ShortString;
+use crate::ast::TypeIdentField;
+use crate::types::BuiltinTypeValue;
 
 use super::ast;
 use super::symbols;
@@ -10,7 +13,9 @@ use super::types;
 impl<'a> ast::Root {
     pub fn eval(
         &'a self,
-        symbols: &mut HashMap<ast::ShortString, symbols::SymbolTable<'a>>,
+        symbols: Rc<
+            RefCell<HashMap<ast::ShortString, symbols::SymbolTable<'a>>>,
+        >,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let (modules, global): (Vec<_>, Vec<_>) = self
             .expressions
@@ -21,41 +26,49 @@ impl<'a> ast::Root {
         // available to the modules.
 
         // If the global symbol table does not exist, create it.
-        let global_symbols = if symbols.contains_key("global") {
-            symbols.get_mut("global").unwrap()
+        let mut symbols_mut = symbols.borrow_mut();
+
+        let global_symbols = if symbols_mut.contains_key("global") {
+            symbols_mut.get_mut("global").unwrap()
         } else {
-            symbols.insert(
+            symbols_mut.insert(
                 "global".into(),
                 symbols::SymbolTable::new("global".into()),
             );
-            symbols.get_mut("global").unwrap()
+            symbols_mut.get_mut("global").unwrap()
         };
 
         for expr in &global {
             expr.eval(global_symbols)?;
         }
 
-        // Now, evaluate all the modules.
+        // For each module, create a new symbol table if it does not exist.
         for module in &modules {
-            let module_symbols = if symbols
-                .contains_key(&module.get_module()?.ident.ident)
-            {
-                symbols
-                    .get_mut(&module.get_module()?.ident.ident.clone())
+            let module_name = &module.get_module()?.ident.ident;
+
+            if symbols_mut.contains_key(module_name) {
+                symbols_mut
+                    .get_mut(module_name)
                     .unwrap()
             } else {
-                symbols.insert(
-                    module.get_module()?.ident.ident.clone(),
+                symbols_mut.insert(
+                    module_name.clone(),
                     symbols::SymbolTable::new(
-                        module.get_module()?.ident.ident.clone(),
+                        module_name.clone(),
                     ),
                 );
-                symbols.get_mut(&module.get_module()?.ident.ident).unwrap()
+                symbols_mut
+                    .get_mut(&module.get_module()?.ident.ident)
+                    .unwrap()
             };
+        }
+        drop(symbols_mut);
 
-            for module in &modules {
-                module.eval(module_symbols)?;
-            }
+
+        // Now, evaluate all the define sections in modules, so that modules
+        // can use each other's types and variables.        
+        for module in &modules {
+            module.eval_define(symbols.clone())?;
         }
 
         Ok(())
@@ -70,6 +83,24 @@ impl<'a> ast::RootExpr {
         match self {
             ast::RootExpr::Module(m) => m.eval(symbols),
             ast::RootExpr::Rib(t) => t.eval(symbols),
+        }
+    }
+
+    fn eval_define(
+        &'a self,
+        symbols: Rc<
+            RefCell<
+                std::collections::HashMap<
+                    ast::ShortString,
+                    symbols::SymbolTable<'a>,
+                >,
+            >,
+        >,
+    ) -> Result<types::TypeDef<'a>, Box<dyn std::error::Error>> {
+        if let ast::RootExpr::Module(m) = self {
+            m.eval_define(symbols.clone()).0
+        } else {
+            Err("Cannot evaluate a rib. No define section found.".into())
         }
     }
 }
@@ -209,19 +240,287 @@ impl<'a> ast::RecordTypeIdentifier {
     }
 }
 
+struct ModuleProperties<'a> {
+    input_type: symbols::Symbol<'a>,
+    arguments: Vec<symbols::Symbol<'a>>,
+    data_sets: Vec<symbols::Symbol<'a>>,
+    variables: Vec<symbols::Symbol<'a>>,
+}
+
 impl ast::Module {
     fn eval(
-        &self,
-        symbols: &mut symbols::SymbolTable,
+        &'_ self,
+        symbols: &'_ mut symbols::SymbolTable<'_>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // let mut module_symbols = symbols::SymbolTable::new(self.ident.into());
-
-        // for expr in &self.body {
-        //     expr.eval(&mut module_symbols)?;
+        // for expr in self.body.iter() {
+        //     expr.eval(symbols)?;
         // }
 
-        // symbols.add_module(self.name.clone(), module_symbols);
+        // symbols.add_symbol(
+        //     self.ident.ident.clone(),
+        //     symbols::SymbolKind::Module,
+        //     types::TypeDef::Module,
+        //     Some(symbols),
+        // );
 
         Ok(())
     }
+
+    fn eval_define<'a>(
+        &'a self,
+        symbols: Rc<
+            RefCell<
+                std::collections::HashMap<
+                    ast::ShortString,
+                    symbols::SymbolTable<'a>,
+                >,
+            >,
+        >,
+    ) -> (
+        Result<types::TypeDef<'a>, Box<dyn std::error::Error>>,
+        Option<
+            Vec<
+                Result<
+                    (ShortString, types::TypeDef, symbols::SymbolKind),
+                    Box<dyn std::error::Error>,
+                >,
+            >,
+        >,
+    ) {
+        // First, check the `define for` clause to see if we actulally have
+        // the type the user's asking for.
+        let for_ty = if let Some(record_type) = &self.body.define.for_kv {
+            get_scoped_type_identifier(
+                record_type.ty.clone(),
+                symbols.clone(),
+                &symbols::Scope::Module(self.ident.ident.clone()),
+            )
+        } else {
+            return (Err("No type specified in `for` clause".into()), None);
+        };
+
+        // Check the `with` clause for additional arguments.
+        let with_kv: Vec<_> = self.body.define.with_kv.clone();
+
+        let with_ty = with_kv
+            .into_iter()
+            .map(|ty| {
+                get_scoped_variable(
+                    ty.field_name.ident,
+                    symbols.clone(),
+                    symbols::Scope::Module(self.ident.ident.clone()),
+                )
+            })
+            .collect();
+
+        println!("define for type {:#?}", for_ty);
+        println!("define with type {:#?}", with_ty);
+        (for_ty, Some(with_ty))
+    }
+}
+
+impl ast::ModuleBody {
+    fn eval_define(
+        &self,
+        symbols: &mut symbols::SymbolTable,
+    ) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut result = false;
+
+        // for expr in self.body.iter() {
+        //     result = expr.eval_define(symbols)?;
+        // }
+
+        Ok(result)
+    }
+}
+
+fn get_scoped_type_identifier<'a>(
+    ty: ast::TypeIdentifier,
+    symbols: Rc<
+        RefCell<
+            std::collections::HashMap<
+                ast::ShortString,
+                symbols::SymbolTable<'a>,
+            >,
+        >,
+    >,
+    scope: &symbols::Scope,
+) -> Result<types::TypeDef<'a>, Box<dyn std::error::Error>> {
+    let symbols = symbols.borrow();
+    // is it a builtin type?
+    let builtin_ty = types::TypeDef::try_from(ty.clone());
+    if BuiltinTypeValue::try_from(ty.ident.as_str()).is_ok() {
+        return Ok(builtin_ty.unwrap());
+    };
+
+    // is it in the global table?
+    let global_ty = symbols.get("global").and_then(|gt| {
+        gt.get_symbols()
+            .borrow()
+            .get(&ty.ident)
+            .map(|s| (s.get_type(), s.get_kind()))
+    });
+    if let Some(ty) = global_ty {
+        if ty.1 == symbols::SymbolKind::AnonymousType
+            || ty.1 == symbols::SymbolKind::NamedType
+        {
+            return Ok(ty.0);
+        }
+    }
+
+    match &scope {
+        symbols::Scope::Module(module) => {
+            // is it in the symbol table for this scope?
+            let module_ty = symbols
+                .get(module)
+                .and_then(|gt| {
+                    gt.get_symbols()
+                        .borrow()
+                        .get(&ty.ident)
+                        .map(|s| (s.get_type(), s.get_kind()))
+                })
+                .ok_or(format!(
+                    "No type named {} found in module {}",
+                    ty.ident, module
+                ));
+
+            if let Ok(ty) = module_ty {
+                if ty.1 == symbols::SymbolKind::AnonymousType
+                    || ty.1 == symbols::SymbolKind::NamedType
+                {
+                    return Ok(ty.0);
+                }
+            }
+        }
+        symbols::Scope::Global => {
+            return Err(format!(
+                "No type named {} found in global scope.",
+                ty.ident
+            )
+            .into());
+        }
+    }
+
+    // sorry, we don't have the type the user's asking for.
+    return Err(format!(
+        "No type named '{}' found in scope {:?}",
+        ty.ident.as_str(),
+        scope
+    )
+    .into());
+}
+
+fn get_scoped_variable(
+    ident: ast::ShortString,
+    symbols: Rc<
+        RefCell<
+            std::collections::HashMap<ast::ShortString, symbols::SymbolTable>,
+        >,
+    >,
+    scope: symbols::Scope,
+) -> Result<
+    (ShortString, types::TypeDef, symbols::SymbolKind),
+    Box<dyn std::error::Error>,
+> {
+    let symbols = symbols.borrow();
+    // There is NO global scope for variables.  All vars are all local to a
+    // module.
+
+    match &scope {
+        symbols::Scope::Module(module) => {
+            // is it in the symbol table for this scope?
+            let module_var = symbols
+                .get(module)
+                .and_then(|gt| {
+                    gt.get_symbols()
+                        .borrow()
+                        .get(&ident)
+                        .map(|s| (s.get_name(), s.get_type(), s.get_kind()))
+                })
+                // .and_then(|mt| mt.get_symbols().borrow().get(&ident))
+                .ok_or(format!(
+                    "No variable named {} found in module {}",
+                    ident, module
+                ));
+
+            if let Ok(var) = module_var {
+                if var.2 == symbols::SymbolKind::Variable {
+                    return Ok(var);
+                }
+            }
+        }
+        symbols::Scope::Global => {
+            return Err(format!(
+                "No variable named {} found in global scope.",
+                ident
+            )
+            .into());
+        }
+    }
+
+    // sorry, we don't have the type the user's asking for.
+    return Err(format!(
+        "No variable named '{}' found in scope {:?}",
+        ident.as_str(),
+        scope
+    )
+    .into());
+}
+
+fn create_scoped_variable_assignment(
+    type_ident: ast::TypeIdentField,
+    symbols: Rc<
+        RefCell<
+            std::collections::HashMap<
+                ast::ShortString,
+                symbols::SymbolTable,
+            >,
+        >,
+    >,
+    scope: symbols::Scope,
+) -> Result<&symbols::Symbol, Box<dyn std::error::Error>> {
+    let _symbols = symbols.clone();
+
+    // There is NO global scope for variables.  All vars are all local to a
+    // module.
+
+    match &scope {
+        symbols::Scope::Module(module) => {
+            // Does the supplied type exist
+            let ty = get_scoped_type_identifier(
+                type_ident.ty,
+                _symbols.clone(),
+                &scope,
+            )?;
+            drop(_symbols);
+            let mut _symbols = symbols.borrow_mut();
+
+            // Does the supplied scope exist?
+            let module = _symbols
+                .get_mut(module)
+                .ok_or(format!("No module named {} found.", module))?;
+
+            module.add_symbol(
+                type_ident.field_name.ident,
+                symbols::SymbolKind::Variable,
+                ty,
+                None,
+            );
+        }
+        symbols::Scope::Global => {
+            return Err(format!(
+                "Can't create a variable in the global scope (NEVER). Variable {}",
+                type_ident.field_name
+            )
+            .into());
+        }
+    }
+
+    // sorry, we don't have the type the user's asking for.
+    return Err(format!(
+        "Can't create variable named '' in scope",
+        // &type_ident.field_name.ident,
+        // scope
+    )
+    .into());
 }
