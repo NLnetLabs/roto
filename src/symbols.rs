@@ -28,14 +28,15 @@ impl<'a> Symbol<'a> {
         self.name.clone()
     }
 
-//     pub fn get_value(&self) -> Rc<Option<TypeValue<'a>>> {
-//         Rc::new(self.value).clone()
-//     }
+    pub fn get_value(&self) -> Option<&TypeValue<'a>> {
+        self.value.as_ref()
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum SymbolKind {
     Variable,
+    Argument,
     AnonymousType,
     NamedType,
     Rib
@@ -50,7 +51,7 @@ pub enum Scope {
 #[derive(Debug)]
 pub struct SymbolTable<'a> {
     scope: Scope,
-    pub symbols: Rc<RefCell<HashMap<ShortString, Symbol<'a>>>>,
+    pub symbols: HashMap<ShortString, Symbol<'a>>,
     types: HashMap<ShortString, TypeDef<'a>>,
 }
 
@@ -64,26 +65,22 @@ impl<'a> SymbolTable<'a> {
     pub(crate) fn new(module: ShortString) -> Self {
         SymbolTable {
             scope: Scope::Module(module),
-            symbols: Rc::new(RefCell::new(HashMap::new())),
+            symbols: HashMap::new(),
             types: HashMap::new(),
         }
     }
 
     pub fn add_symbol(&mut self, name: ShortString, kind: SymbolKind, ty: TypeDef<'a>, value: Option<TypeValue<'a>>) {
         let _name = name.clone();
-        self.symbols.borrow_mut().insert(_name, Symbol { name, kind, ty, value });
+        self.symbols.insert(_name, Symbol { name, kind, ty, value });
     }
 
     pub fn add_type(&mut self, name: ShortString, ty: TypeDef<'a>) {
         self.types.insert(name, ty);
     }
 
-    // pub fn get_symbol(&self, name: &ShortString) -> Option<&Symbol<'a>> {
-    //     self.symbols.clone().borrow().get(name)
-    // }
-
-    pub fn get_symbols(&self) -> Rc<RefCell<HashMap<ShortString, Symbol<'a>>>> {
-        self.symbols.clone()
+    pub fn get_symbol(&self, name: &ShortString) -> Option<&Symbol<'a>> {
+        self.symbols.get(name)
     }
 
     pub fn get_type(&self, name: &ShortString) -> Option<&TypeDef<'a>> {

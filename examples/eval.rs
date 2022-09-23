@@ -22,10 +22,10 @@ fn test_data(name: &str, data: &'static str, expect_success: bool) -> Result<(),
     let symbols = HashMap::<ShortString, SymbolTable>::new();
     let eval = parsed_data?;
     
-    println!("{:#?}", symbols);
     let symbols = Rc::new(RefCell::new(symbols));
     let ev2 = eval.1.eval(symbols.clone());
 
+    println!("{:#?}", symbols);
     println!("{:?} {:#?}", name, eval);
    
     ev2

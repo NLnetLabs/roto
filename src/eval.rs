@@ -47,15 +47,11 @@ impl<'a> ast::Root {
             let module_name = &module.get_module()?.ident.ident;
 
             if symbols_mut.contains_key(module_name) {
-                symbols_mut
-                    .get_mut(module_name)
-                    .unwrap()
+                symbols_mut.get_mut(module_name).unwrap()
             } else {
                 symbols_mut.insert(
                     module_name.clone(),
-                    symbols::SymbolTable::new(
-                        module_name.clone(),
-                    ),
+                    symbols::SymbolTable::new(module_name.clone()),
                 );
                 symbols_mut
                     .get_mut(&module.get_module()?.ident.ident)
@@ -64,9 +60,8 @@ impl<'a> ast::Root {
         }
         drop(symbols_mut);
 
-
         // Now, evaluate all the define sections in modules, so that modules
-        // can use each other's types and variables.        
+        // can use each other's types and variables.
         for module in &modules {
             module.eval_define(symbols.clone())?;
         }
@@ -98,7 +93,7 @@ impl<'a> ast::RootExpr {
         >,
     ) -> Result<types::TypeDef<'a>, Box<dyn std::error::Error>> {
         if let ast::RootExpr::Module(m) = self {
-            m.eval_define(symbols.clone()).0
+            m.eval_define(symbols.clone())
         } else {
             Err("Cannot evaluate a rib. No define section found.".into())
         }
@@ -276,17 +271,16 @@ impl ast::Module {
                 >,
             >,
         >,
-    ) -> (
-        Result<types::TypeDef<'a>, Box<dyn std::error::Error>>,
-        Option<
-            Vec<
-                Result<
-                    (ShortString, types::TypeDef, symbols::SymbolKind),
-                    Box<dyn std::error::Error>,
-                >,
-            >,
-        >,
-    ) {
+    ) -> Result<types::TypeDef<'a>, Box<dyn std::error::Error>>
+// Option<
+        //     Vec<
+        //         Result<
+        //             &'a symbols::Symbol,
+        //             Box<dyn std::error::Error>,
+        //         >,
+        //     >,
+        // >,
+    {
         // First, check the `define for` clause to see if we actulally have
         // the type the user's asking for.
         let for_ty = if let Some(record_type) = &self.body.define.for_kv {
@@ -296,7 +290,7 @@ impl ast::Module {
                 &symbols::Scope::Module(self.ident.ident.clone()),
             )
         } else {
-            return (Err("No type specified in `for` clause".into()), None);
+            return Err("No type specified in `for` clause".into());
         };
 
         // Check the `with` clause for additional arguments.
@@ -305,17 +299,18 @@ impl ast::Module {
         let with_ty = with_kv
             .into_iter()
             .map(|ty| {
-                get_scoped_variable(
-                    ty.field_name.ident,
+                create_scoped_variable_assignment(
+                    ty,
+                    symbols::SymbolKind::Argument,
                     symbols.clone(),
                     symbols::Scope::Module(self.ident.ident.clone()),
                 )
             })
-            .collect();
+            .collect::<Vec<_>>();
 
         println!("define for type {:#?}", for_ty);
         println!("define with type {:#?}", with_ty);
-        (for_ty, Some(with_ty))
+        for_ty
     }
 }
 
@@ -355,8 +350,7 @@ fn get_scoped_type_identifier<'a>(
 
     // is it in the global table?
     let global_ty = symbols.get("global").and_then(|gt| {
-        gt.get_symbols()
-            .borrow()
+        gt.symbols
             .get(&ty.ident)
             .map(|s| (s.get_type(), s.get_kind()))
     });
@@ -374,8 +368,7 @@ fn get_scoped_type_identifier<'a>(
             let module_ty = symbols
                 .get(module)
                 .and_then(|gt| {
-                    gt.get_symbols()
-                        .borrow()
+                    gt.symbols
                         .get(&ty.ident)
                         .map(|s| (s.get_type(), s.get_kind()))
                 })
@@ -432,12 +425,10 @@ fn get_scoped_variable(
             let module_var = symbols
                 .get(module)
                 .and_then(|gt| {
-                    gt.get_symbols()
-                        .borrow()
+                    gt.symbols
                         .get(&ident)
                         .map(|s| (s.get_name(), s.get_type(), s.get_kind()))
                 })
-                // .and_then(|mt| mt.get_symbols().borrow().get(&ident))
                 .ok_or(format!(
                     "No variable named {} found in module {}",
                     ident, module
@@ -469,16 +460,14 @@ fn get_scoped_variable(
 
 fn create_scoped_variable_assignment(
     type_ident: ast::TypeIdentField,
+    kind: symbols::SymbolKind,
     symbols: Rc<
         RefCell<
-            std::collections::HashMap<
-                ast::ShortString,
-                symbols::SymbolTable,
-            >,
+            std::collections::HashMap<ast::ShortString, symbols::SymbolTable>,
         >,
     >,
     scope: symbols::Scope,
-) -> Result<&symbols::Symbol, Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let _symbols = symbols.clone();
 
     // There is NO global scope for variables.  All vars are all local to a
@@ -486,26 +475,23 @@ fn create_scoped_variable_assignment(
 
     match &scope {
         symbols::Scope::Module(module) => {
-            // Does the supplied type exist
+            // Does the supplied type exist in our scope?
             let ty = get_scoped_type_identifier(
                 type_ident.ty,
                 _symbols.clone(),
                 &scope,
             )?;
-            drop(_symbols);
-            let mut _symbols = symbols.borrow_mut();
 
-            // Does the supplied scope exist?
+            drop(_symbols);
+
+            // Apparently, we have a type.  Let's add it to the symbol table.
+            let mut _symbols = symbols.borrow_mut();
             let module = _symbols
                 .get_mut(module)
                 .ok_or(format!("No module named {} found.", module))?;
 
-            module.add_symbol(
-                type_ident.field_name.ident,
-                symbols::SymbolKind::Variable,
-                ty,
-                None,
-            );
+            module.add_symbol(type_ident.field_name.ident, kind, ty, None);
+            Ok(())
         }
         symbols::Scope::Global => {
             return Err(format!(
@@ -515,12 +501,4 @@ fn create_scoped_variable_assignment(
             .into());
         }
     }
-
-    // sorry, we don't have the type the user's asking for.
-    return Err(format!(
-        "Can't create variable named '' in scope",
-        // &type_ident.field_name.ident,
-        // scope
-    )
-    .into());
 }
