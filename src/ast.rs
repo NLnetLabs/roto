@@ -3,7 +3,7 @@ use std::{borrow, cmp, fmt, hash, ops, str};
 use nom::branch::{alt, permutation};
 use nom::bytes::complete::{is_not, take, take_while, take_while1};
 use nom::character::complete::{char, digit1, multispace0, multispace1};
-use nom::combinator::{all_consuming, cut, map_res, opt, recognize};
+use nom::combinator::{all_consuming, cut, map_res, not, opt, recognize};
 use nom::error::{context, ErrorKind, ParseError, VerboseError};
 use nom::multi::{
     fold_many0, many0, many1, separated_list0, separated_list1,
@@ -196,15 +196,15 @@ impl ModuleExpr {
 //------------ Define -------------------------------------------------------
 #[derive(Clone, Debug)]
 pub struct Define {
-    pub ident: Option<Identifier>,
-    pub for_kv: Option<TypeIdentField>,
-    pub with_kv: Vec<TypeIdentField>,
+    pub ident: Option<Identifier>, // name of the define section
+    pub for_kv: Option<TypeIdentField>, // associated Rib record type
+    pub with_kv: Vec<TypeIdentField>, // arguments
     pub body: DefineBody,
 }
 
 impl Define {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (ident, for_kv, with_kv, body, _)) = context(
+        let (input, (ident, for_kv, with_kv, body)) = context(
             "define definition",
             preceded(
                 opt_ws(tag("define")),
@@ -227,7 +227,6 @@ impl Define {
                             opt_ws(char('}')),
                         ),
                     ),
-                    map(many0(char('\n')), |_| ()),
                 )),
             ),
         )(input)?;
@@ -791,6 +790,29 @@ pub struct Identifier {
 
 impl Identifier {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, _) = context(
+            "no keyword",
+            tuple((
+                not(tag("for ")),
+                not(tag("type ")),
+                not(tag("with ")),
+                not(tag("in ")),
+                not(tag("define ")),
+                not(tag("module ")),
+                not(tag("import ")),
+                not(tag("term ")),
+                not(tag("filter ")),
+                not(tag("match ")),
+                not(tag("route ")),
+                not(tag("matches ")),
+                not(tag("return ")),
+                not(tag("prefix ")),
+                not(tag("true ")),
+                not(tag("false ")),
+                not(tag("apply ")),
+                not(tag("use ")),
+            )),
+        )(input)?;
         let (input, ident) = context(
             "identifier",
             recognize(preceded(
@@ -1013,6 +1035,9 @@ impl RecordTypeIdentifier {
         Ok((input, RecordTypeIdentifier { key_values }))
     }
 }
+
+
+//============= Literals ====================================================
 
 //------------ IntegerLiteral -----------------------------------------------
 
