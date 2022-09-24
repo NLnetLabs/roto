@@ -1,11 +1,15 @@
 `Roto`
 ======
 
+✅ -- phase complete
+🦀 -- phase in progress
+💤 -- phase not started yet
+
 | Stage | State | Artifacts |
 |:----:|:----:|:--------:|
 | Proposal | ✅ | this document |
 | Experimental | ✅ | this repo |
-| Development | 💤 |  |
+| Development | 🦀 | this repo |
 | Feature complete | 💤 | |
 | Stabilized | 💤 | |
 
