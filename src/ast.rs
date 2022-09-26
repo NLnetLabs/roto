@@ -229,6 +229,7 @@ impl Define {
                     ),
                 )),
             ),
+            
         )(input)?;
 
         Ok((
@@ -792,26 +793,29 @@ impl Identifier {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, _) = context(
             "no keyword",
+            not(delimited(multispace1,
             tuple((
-                not(tag("for ")),
-                not(tag("type ")),
-                not(tag("with ")),
-                not(tag("in ")),
-                not(tag("define ")),
-                not(tag("module ")),
-                not(tag("import ")),
-                not(tag("term ")),
-                not(tag("filter ")),
-                not(tag("match ")),
-                not(tag("route ")),
-                not(tag("matches ")),
-                not(tag("return ")),
-                not(tag("prefix ")),
-                not(tag("true ")),
-                not(tag("false ")),
-                not(tag("apply ")),
-                not(tag("use ")),
+                tag("for"),
+                tag("type"),
+                tag("with"),
+                tag("in"),
+                tag("define"),
+                tag("module"),
+                tag("import"),
+                tag("term"),
+                tag("filter"),
+                tag("match"),
+                tag("route"),
+                tag("matches"),
+                tag("return"),
+                tag("prefix"),
+                tag("true"),
+                tag("false"),
+                tag("apply"),
+                tag("use"),
             )),
+            multispace1
+        )),
         )(input)?;
         let (input, ident) = context(
             "identifier",
