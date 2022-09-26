@@ -271,20 +271,11 @@ impl ast::Module {
                 >,
             >,
         >,
-    ) -> Result<types::TypeDef<'a>, Box<dyn std::error::Error>>
-// Option<
-        //     Vec<
-        //         Result<
-        //             &'a symbols::Symbol,
-        //             Box<dyn std::error::Error>,
-        //         >,
-        //     >,
-        // >,
-    {
+    ) -> Result<types::TypeDef<'a>, Box<dyn std::error::Error>> {
         // First, check the `define for` clause to see if we actulally have
         // the type the user's asking for.
         let for_ty = if let Some(record_type) = &self.body.define.for_kv {
-            get_scoped_type_identifier(
+            check_type(
                 record_type.ty.clone(),
                 symbols.clone(),
                 &symbols::Scope::Module(self.ident.ident.clone()),
@@ -299,7 +290,7 @@ impl ast::Module {
         let with_ty = with_kv
             .into_iter()
             .map(|ty| {
-                create_scoped_variable_assignment(
+                declare_variable(
                     ty,
                     symbols::SymbolKind::Argument,
                     symbols.clone(),
@@ -329,7 +320,7 @@ impl ast::ModuleBody {
     }
 }
 
-fn get_scoped_type_identifier<'a>(
+fn check_type<'a>(
     ty: ast::TypeIdentifier,
     symbols: Rc<
         RefCell<
@@ -458,7 +449,7 @@ fn get_scoped_variable(
     .into());
 }
 
-fn create_scoped_variable_assignment(
+fn declare_variable(
     type_ident: ast::TypeIdentField,
     kind: symbols::SymbolKind,
     symbols: Rc<
@@ -476,7 +467,7 @@ fn create_scoped_variable_assignment(
     match &scope {
         symbols::Scope::Module(module) => {
             // Does the supplied type exist in our scope?
-            let ty = get_scoped_type_identifier(
+            let ty = check_type(
                 type_ident.ty,
                 _symbols.clone(),
                 &scope,
