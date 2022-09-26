@@ -1,9 +1,11 @@
 `Roto`
 ======
 
-  ✅ -- phase complete
-  🦀 -- phase in progress
-  💤 -- phase not started yet
+Key:
+
+    ✅ -- phase complete
+    🦀 -- phase in progress
+    💤 -- phase not started yet
 
 
 | Stage | State | Artifacts |
