@@ -1225,7 +1225,7 @@ impl ArgExprList {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, args) = context(
             "argument expressions",
-            separated_list0(preceded(multispace0, char(',')), ArgExpr::parse),
+            separated_list0(preceded(multispace0, char(',')), opt_ws(ArgExpr::parse)),
         )(input)?;
         Ok((input, Self { args }))
     }
