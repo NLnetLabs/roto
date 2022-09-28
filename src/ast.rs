@@ -1393,10 +1393,10 @@ impl CompareExpr {
                 opt_ws(alt((
                     map(tag("=="), |_| CompareOp::Eq),
                     map(tag("!="), |_| CompareOp::Ne),
-                    map(tag("<"), |_| CompareOp::Lt),
                     map(tag("<="), |_| CompareOp::Le),
-                    map(char('>'), |_| CompareOp::Gt),
+                    map(tag("<"), |_| CompareOp::Lt),
                     map(tag(">="), |_| CompareOp::Ge),
+                    map(tag(">"), |_| CompareOp::Gt),
                 ))),
                 opt_ws(NestedMatchExpr::parse),
             )),
