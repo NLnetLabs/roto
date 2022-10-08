@@ -685,12 +685,6 @@ impl ast::MethodCallExpr {
             )
         })?.1;
  
-        // let ty = <types::TypeDef<'_>>::from(ty);
-
-        println!(
-            "yo da method call for {}",
-            self.ident.ident
-        );
         Ok(symbols::Symbol::new_with_value(
             self.ident.clone().ident,
             symbols::SymbolKind::DataSourceMethodCall,
