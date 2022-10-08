@@ -208,7 +208,6 @@ impl Define {
             preceded(
                 opt_ws(tag("define")),
                 tuple((
-                    // context("define name", opt(opt_ws(Identifier::parse))),
                     for_statement,
                     with_statement,
                     context(
