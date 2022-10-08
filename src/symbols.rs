@@ -7,21 +7,21 @@ use crate::{ast::ShortString, types::{TypeValue, TypeDef}};
 // The only symbols we really have are variables & (user-defined) types.
 
 #[derive(Debug)]
-pub struct Symbol<'a> {
+pub struct Symbol {
     name: ShortString,
     kind: SymbolKind,
-    ty: TypeDef<'a>,
-    args: Vec<Symbol<'a>>,
+    ty: TypeDef,
+    args: Vec<Symbol>,
     pub value: Option<TypeValue>,
     // location: Location,
 }
 
-impl<'a> Symbol<'a> {
-    pub fn get_type(&self) -> TypeDef<'a> {
+impl<'a> Symbol {
+    pub fn get_type(&self) -> TypeDef {
         self.ty.clone()
     }
 
-    pub fn set_type(mut self, ty: TypeDef<'a>) -> Symbol {
+    pub fn set_type(mut self, ty: TypeDef) -> Symbol {
         self.ty = ty;
         self
     }
@@ -38,11 +38,11 @@ impl<'a> Symbol<'a> {
         self.value.as_ref()
     }
 
-    pub fn get_args(self) -> Vec<Symbol<'a>> {
+    pub fn get_args(self) -> Vec<Symbol> {
         self.args
     }
 
-    pub fn new(name: ShortString, kind: SymbolKind, ty: TypeDef<'a>, args: Vec<Symbol<'a>>) -> Self {
+    pub fn new(name: ShortString, kind: SymbolKind, ty: TypeDef, args: Vec<Symbol>) -> Self {
         Symbol {
             name,
             kind,
@@ -52,7 +52,7 @@ impl<'a> Symbol<'a> {
         }
     }
 
-    pub fn new_with_value(name: ShortString, kind: SymbolKind, value: TypeValue, args: Vec<Symbol<'a>>) -> Self {
+    pub fn new_with_value(name: ShortString, kind: SymbolKind, value: TypeValue, args: Vec<Symbol>) -> Self {
         Symbol {
             name,
             kind,
@@ -96,10 +96,10 @@ impl Display for Scope {
 }
 
 #[derive(Debug)]
-pub struct SymbolTable<'a> {
+pub struct SymbolTable {
     scope: Scope,
-    pub symbols: HashMap<ShortString, Symbol<'a>>,
-    types: HashMap<ShortString, TypeDef<'a>>,
+    pub symbols: HashMap<ShortString, Symbol>,
+    types: HashMap<ShortString, TypeDef>,
 }
 
 struct Location {
@@ -108,7 +108,7 @@ struct Location {
     line: usize,
 }
 
-impl<'a> SymbolTable<'a> {
+impl<'a> SymbolTable {
     pub(crate) fn new(module: ShortString) -> Self {
         SymbolTable {
             scope: Scope::Module(module),
@@ -117,7 +117,7 @@ impl<'a> SymbolTable<'a> {
         }
     }
 
-    pub fn add_symbol(&mut self, key: ShortString, name: Option<ShortString>, kind: SymbolKind, ty: TypeDef<'a>, args: Vec<Symbol<'a>>, value: Option<TypeValue>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn add_symbol(&mut self, key: ShortString, name: Option<ShortString>, kind: SymbolKind, ty: TypeDef, args: Vec<Symbol>, value: Option<TypeValue>) -> Result<(), Box<dyn std::error::Error>> {
         let name = if let Some(name) = name {
             name
         } else {
@@ -132,17 +132,15 @@ impl<'a> SymbolTable<'a> {
         Ok(())
     }
 
-    pub fn add_type(&mut self, name: ShortString, ty: TypeDef<'a>) {
+    pub fn add_type(&mut self, name: ShortString, ty: TypeDef) {
         self.types.insert(name, ty);
     }
 
-    pub fn get_symbol(&self, name: &ShortString) -> Result<&Symbol<'a>, Box<dyn std::error::Error>> {
+    pub fn get_symbol(&self, name: &ShortString) -> Result<&Symbol, Box<dyn std::error::Error>> {
         self.symbols.get(name).ok_or_else(|| format!("Symbol {} not found", name).into())
     }
 
-    pub fn get_type(&self, name: &ShortString) -> Option<&TypeDef<'a>> {
+    pub fn get_type(&self, name: &ShortString) -> Option<&TypeDef> {
         self.types.get(name)
     }
 }
-
-struct BuiltInTypes<'a>(HashMap<ShortString, TypeDef<'a>>);

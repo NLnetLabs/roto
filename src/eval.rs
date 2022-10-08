@@ -16,7 +16,7 @@ impl<'a> ast::Root {
     pub fn eval(
         &'a self,
         symbols: Rc<
-            RefCell<HashMap<symbols::Scope, symbols::SymbolTable<'a>>>,
+            RefCell<HashMap<symbols::Scope, symbols::SymbolTable>>,
         >,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let (modules, global): (Vec<_>, Vec<_>) = self
@@ -87,12 +87,12 @@ impl<'a> ast::Root {
 impl<'a> ast::Rib {
     fn eval(
         &'a self,
-        symbols: &'_ mut symbols::SymbolTable<'a>,
+        symbols: &'_ mut symbols::SymbolTable,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let child_kvs = self.body.eval(self.ident.clone().ident, symbols)?;
 
         // create a new user-defined type for the record type in the RIB
-        let rec_type = types::TypeDef::new_record_type(child_kvs)?;
+        let rec_type = types::TypeDef::new_record_type_from_short_string(child_kvs)?;
 
         // add a symbol for the user-defined type, the name is derived from
         // the 'contains' clause
@@ -124,18 +124,18 @@ impl<'a> ast::RibBody {
     fn eval(
         &'a self,
         parent_name: ast::ShortString,
-        symbols: &'_ mut symbols::SymbolTable<'a>,
+        symbols: &'_ mut symbols::SymbolTable,
     ) -> Result<
-        Vec<(&'a str, Box<types::TypeDef<'a>>)>,
+        Vec<(ShortString, Box<types::TypeDef>)>,
         Box<dyn std::error::Error>,
     > {
-        let mut kvs: Vec<(&str, Box<types::TypeDef>)> = vec![];
+        let mut kvs: Vec<(ShortString, Box<types::TypeDef>)> = vec![];
 
         for kv in self.key_values.iter() {
             match kv {
                 ast::RibField::PrimitiveField(f) => {
                     kvs.push((
-                        f.field_name.ident.as_str(),
+                        f.field_name.ident.as_str().into(),
                         Box::new(f.ty.clone().try_into()?),
                     ));
                 }
@@ -154,13 +154,13 @@ impl<'a> ast::RibBody {
                     )?;
 
                     kvs.push((
-                        r.0.ident.as_str(),
+                        r.0.ident.as_str().into(),
                         Box::new(types::TypeDef::Record(nested_record)),
                     ));
                 }
                 ast::RibField::ListField(l) => {
                     kvs.push((
-                        l.0.ident.as_str(),
+                        l.0.ident.as_str().into(),
                         Box::new(types::TypeDef::List(Box::new(
                             l.1.inner_type.clone().try_into()?,
                         ))),
@@ -178,18 +178,18 @@ impl<'a> ast::RecordTypeIdentifier {
         &'a self,
         name: ast::ShortString,
         kind: symbols::SymbolKind,
-        symbols: &'_ mut symbols::SymbolTable<'a>,
+        symbols: &'_ mut symbols::SymbolTable,
     ) -> Result<
-        Vec<(&'a str, Box<types::TypeDef<'a>>)>,
+        Vec<(ShortString, Box<types::TypeDef>)>,
         Box<dyn std::error::Error>,
     > {
-        let mut kvs: Vec<(&str, Box<types::TypeDef>)> = vec![];
+        let mut kvs: Vec<(ShortString, Box<types::TypeDef>)> = vec![];
 
         for kv in self.key_values.iter() {
             match kv {
                 ast::RibField::PrimitiveField(f) => {
                     kvs.push((
-                        f.field_name.ident.as_str(),
+                        f.field_name.ident.as_str().into(),
                         Box::new(f.ty.clone().try_into()?),
                     ));
                 }
@@ -208,13 +208,13 @@ impl<'a> ast::RecordTypeIdentifier {
                     )?;
 
                     kvs.push((
-                        r.0.ident.as_str(),
+                        r.0.ident.as_str().into(),
                         Box::new(types::TypeDef::Record(nested_record)),
                     ));
                 }
                 ast::RibField::ListField(l) => {
                     kvs.push((
-                        l.0.ident.as_str(),
+                        l.0.ident.as_str().into(),
                         Box::new(types::TypeDef::List(Box::new(
                             l.1.inner_type.clone().try_into()?,
                         ))),
@@ -476,7 +476,7 @@ impl<'a> ast::CallExpr {
         base_name_ident: ShortString,
         symbols: types::GlobalSymbolTable<'a>,
         scope: symbols::Scope,
-    ) -> Result<(ShortString, symbols::Symbol<'a>), Box<dyn std::error::Error>>
+    ) -> Result<(ShortString, symbols::Symbol), Box<dyn std::error::Error>>
     {
         // assignments are always on these methods calls:
         // 1. built-in method calls, `base_method(arguments)`,
@@ -504,7 +504,7 @@ impl<'a> ast::CallExpr {
                     if let Ok(types::TypeValue::Primitive(prim_ty)) =
                         types::TypeValue::from_literal(&receiver_ident)
                     {
-                        let ty: types::TypeDef<'a> = prim_ty.into();
+                        let ty: types::TypeDef = prim_ty.into();
                         return Ok((
                             receiver_ident.clone(),
                             symbols::Symbol::new(
@@ -514,7 +514,7 @@ impl<'a> ast::CallExpr {
                                 vec![ast::MethodCallExpr::eval(
                                     self.get_method_call(),
                                     ty,
-                                    symbols.clone(),
+                                    symbols,
                                     scope,
                                 )?],
                             ),
@@ -545,8 +545,8 @@ impl<'a> ast::CallExpr {
 
                         let method_call = ast::MethodCallExpr::eval(
                             self.get_method_call(),
-                            field_access.get_type().clone(),
-                            symbols.clone(),
+                            field_access.get_type(),
+                            symbols,
                             scope,
                         )?;
 
@@ -554,7 +554,7 @@ impl<'a> ast::CallExpr {
                         let s = symbols::Symbol::new(
                             method_call.get_name(),
                             method_call.get_kind(),
-                            method_call.get_type().clone(),
+                            method_call.get_type(),
                             vec![field_access],
                         );
                         return Ok((name, s));
@@ -564,7 +564,7 @@ impl<'a> ast::CallExpr {
                         let method_call = ast::MethodCallExpr::eval(
                             self.get_method_call(),
                             data_type.clone(),
-                            symbols.clone(),
+                            symbols,
                             scope,
                         )?;
 
@@ -598,7 +598,7 @@ impl<'a> ast::CallExpr {
                                         vec![ast::MethodCallExpr::eval(
                                             self.get_method_call(),
                                             var_type,
-                                            symbols.clone(),
+                                            symbols,
                                             scope,
                                         )?],
                                     ),
@@ -633,11 +633,11 @@ impl<'a> ast::CallExpr {
                                     symbols::Symbol::new(
                                         receiver_ident,
                                         symbols::SymbolKind::Variable,
-                                        var_type.clone(),
+                                        var_type,
                                         vec![ast::MethodCallExpr::eval(
                                             self.get_method_call(),
                                             field_access.get_type(),
-                                            symbols.clone(),
+                                            symbols,
                                             scope,
                                         )?],
                                     ),
@@ -659,10 +659,10 @@ impl ast::MethodCallExpr {
     pub fn eval<'a>(
         &self,
         // Type of the data source this call should be implemented on.
-        parent_ty: types::TypeDef<'a>,
+        parent_ty: types::TypeDef,
         symbols: types::GlobalSymbolTable<'a>,
         scope: symbols::Scope,
-    ) -> Result<symbols::Symbol<'a>, Box<dyn std::error::Error>> {
+    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         let args = self.args.eval(symbols, scope)?;
         // we need to lookup the type that is the return type
         // of the method that the user wants to call.
@@ -701,7 +701,7 @@ impl ast::AccessReceiver {
         &self,
         symbols: types::GlobalSymbolTable<'a>,
         scope: symbols::Scope,
-    ) -> Result<symbols::Symbol<'a>, Box<dyn std::error::Error>> {
+    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         let _symbols = symbols.clone();
 
         let mut search_var = self.get_ident().to_string();
@@ -733,7 +733,7 @@ impl ast::ArgExprList {
         symbols: types::GlobalSymbolTable<'a>,
         // data_srcs: Vec<(ast::ShortString, symbols::SymbolKind, types::TypeDef<'a>)>,
         scope: symbols::Scope,
-    ) -> Result<Vec<symbols::Symbol<'a>>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<symbols::Symbol>, Box<dyn std::error::Error>> {
         let mut eval_args = vec![];
         for arg in &self.args {
             match arg {
@@ -788,7 +788,7 @@ impl ast::FieldAccessExpr {
         receiver: &ast::Identifier,
         symbols: types::GlobalSymbolTable<'a>,
         scope: symbols::Scope,
-    ) -> Result<symbols::Symbol<'a>, Box<dyn std::error::Error>> {
+    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         let _symbols = symbols.clone();
 
         let mut search_var = receiver.to_string();
@@ -842,11 +842,11 @@ impl ast::FieldAccessExpr {
     }
 }
 
-fn check_type<'a>(
+fn check_type(
     ty: ast::TypeIdentifier,
-    symbols: types::GlobalSymbolTable<'a>,
+    symbols: types::GlobalSymbolTable,
     scope: &symbols::Scope,
-) -> Result<types::TypeDef<'a>, Box<dyn std::error::Error>> {
+) -> Result<types::TypeDef, Box<dyn std::error::Error>> {
     let symbols = symbols.borrow();
     // is it a builtin type?
     let builtin_ty = types::TypeDef::try_from(ty.clone());
@@ -918,11 +918,11 @@ fn check_type<'a>(
 // In the last case the whole form may live in the module scope as an
 // anonymous type (deducted from user-defined record-types), but in the case
 // of a primitive type they live in the user-defined record-type itself.
-fn get_type_for_scoped_variable<'a>(
+fn get_type_for_scoped_variable(
     fields: &[ast::Identifier],
-    symbols: types::GlobalSymbolTable<'a>,
+    symbols: types::GlobalSymbolTable<'_>,
     scope: symbols::Scope,
-) -> Result<types::TypeDef<'a>, Box<dyn std::error::Error>> {
+) -> Result<types::TypeDef, Box<dyn std::error::Error>> {
     let symbols = symbols.borrow();
     let search_str = fields.join(".");
     match &scope {
@@ -1042,10 +1042,10 @@ fn declare_variable(
     }
 }
 
-fn declare_variable_from_symbol<'a>(
+fn declare_variable_from_symbol(
     key: Option<ast::ShortString>,
-    symbol: symbols::Symbol<'a>,
-    symbols: types::GlobalSymbolTable<'a>,
+    symbol: symbols::Symbol,
+    symbols: types::GlobalSymbolTable<'_>,
     scope: &symbols::Scope,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let _symbols = symbols.clone();
@@ -1085,7 +1085,7 @@ fn declare_variable_from_symbol<'a>(
 fn declare_variable_from_typedef<'a>(
     ident: &str,
     name: ast::ShortString,
-    ty: types::TypeDef<'a>,
+    ty: types::TypeDef,
     kind: symbols::SymbolKind,
     _args: Option<ast::ArgExprList>,
     symbols: types::GlobalSymbolTable<'a>,

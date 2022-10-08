@@ -10,7 +10,7 @@ pub type GlobalSymbolTable<'a> = Rc<
     RefCell<
         std::collections::HashMap<
             super::symbols::Scope,
-            super::symbols::SymbolTable<'a>,
+            super::symbols::SymbolTable,
         >,
     >,
 >;
@@ -21,9 +21,9 @@ pub type GlobalSymbolTable<'a> = Rc<
 // `user defined` types.
 
 #[derive(Clone, Debug)]
-pub enum TypeDef<'a> {
-    List(Box<TypeDef<'a>>),
-    Record(Vec<(&'a str, Box<TypeDef<'a>>)>),
+pub enum TypeDef {
+    List(Box<TypeDef>),
+    Record(Vec<(ShortString, Box<TypeDef>)>),
     U32,
     U8,
     Boolean,
@@ -37,10 +37,10 @@ pub enum TypeDef<'a> {
     None,
 }
 
-impl<'a> TypeDef<'a> {
-    pub fn new_record_type(
-        type_ident_pairs: Vec<(&'a str, Box<TypeDef<'a>>)>,
-    ) -> Result<TypeDef<'a>, Box<dyn std::error::Error>> {
+impl<'a> TypeDef {
+    pub(crate) fn new_record_type_from_short_string(
+        type_ident_pairs: Vec<(ShortString, Box<TypeDef>)>,
+    ) -> Result<TypeDef, Box<dyn std::error::Error>> {
         Ok(TypeDef::Record(type_ident_pairs))
     }
 
@@ -53,10 +53,21 @@ impl<'a> TypeDef<'a> {
         }
     }
 
+    pub fn new_record_type(
+        type_ident_pairs: Vec<(&str, Box<TypeDef>)>,
+    ) -> Result<TypeDef, Box<dyn std::error::Error>> {
+        Ok(TypeDef::Record(type_ident_pairs.iter().map(
+            |(k,v)| (ShortString::from(*k), v.clone())
+        
+        ).collect()
+        )
+    )
+    }
+
     pub fn has_fields_chain(
         &self,
         fields: &[super::ast::Identifier],
-    ) -> Option<TypeDef<'a>> {
+    ) -> Option<TypeDef> {
         let mut current_type = self;
         for field in fields {
             if let TypeDef::Record(fields) = current_type {
@@ -75,7 +86,20 @@ impl<'a> TypeDef<'a> {
         Some(current_type.clone())
     }
 
-    fn _check_record_fields(&self, fields: &[(&str, TypeValue)]) -> bool {
+    fn _check_record_fields(&self, fields: &[(ShortString, &TypeValue)]) -> bool {
+        if let TypeDef::Record(rec) = self {
+            for (name, ty) in fields {
+                if !rec.iter().any(|(k, v)| k == name && v.as_ref() == *ty) {
+                    return false;
+                }
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    fn _check_record_fields2(&self, fields: &[(ShortString, TypeValue)]) -> bool {
         if let TypeDef::Record(rec) = self {
             for (name, ty) in fields {
                 if !rec.iter().any(|(k, v)| k == name && v.as_ref() == ty) {
@@ -87,43 +111,44 @@ impl<'a> TypeDef<'a> {
             false
         }
     }
-
-    pub fn get_props_for_method(
-        self,
-        method: super::ast::Identifier,
-    ) -> Result<(Token, TypeValue), Box<dyn std::error::Error>>
-    where
-        TypeDef<'a>: RotoFilter<'a>,
-    {
-        match self {
-            TypeDef::List(list_type) => {
-                <TypeDef<'_> as RotoFilter>::get_props_for_method(
-                    TypeDef::List(list_type),
-                    method,
-                )
-            }
-            TypeDef::Record(rec_type) => {
-                <TypeDef<'_> as RotoFilter>::get_props_for_method(
-                    TypeDef::Record(rec_type),
-                    method,
-                )
-            }
-            TypeDef::AsPath => {
-                <TypeDef<'_> as RotoFilter>::get_props_for_method(
-                    TypeDef::AsPath,
-                    method,
-                )
-            }
-            _ => Err(format!(
-                "Type {:?} does not have method {}",
-                self, method
-            )
-            .into()),
-        }
-    }
 }
 
-impl PartialEq<BuiltinTypeValue> for TypeDef<'_> {
+//     pub fn get_props_for_method(
+//         self,
+//         method: super::ast::Identifier,
+//     ) -> Result<(Token, TypeValue), Box<dyn std::error::Error>>
+//     where
+//         TypeDef: RotoFilter,
+//     {
+//         match self {
+//             TypeDef::List(list_type) => {
+//                 <TypeDef as RotoFilter>::get_props_for_method(
+//                     TypeDef::List(list_type),
+//                     method,
+//                 )
+//             }
+//             TypeDef::Record(rec_type) => {
+//                 <TypeDef as RotoFilter>::get_props_for_method(
+//                     TypeDef::Record(rec_type),
+//                     method,
+//                 )
+//             }
+//             TypeDef::AsPath => {
+//                 <TypeDef as RotoFilter>::get_props_for_method(
+//                     TypeDef::AsPath,
+//                     method,
+//                 )
+//             }
+//             _ => Err(format!(
+//                 "Type {:?} does not have method {}",
+//                 self, method
+//             )
+//             .into()),
+//         }
+//     }
+// }
+
+impl PartialEq<BuiltinTypeValue> for TypeDef {
     fn eq(&self, other: &BuiltinTypeValue) -> bool {
         match self {
             TypeDef::U32 => {
@@ -152,7 +177,7 @@ impl PartialEq<BuiltinTypeValue> for TypeDef<'_> {
     }
 }
 
-impl PartialEq<TypeValue> for TypeDef<'_> {
+impl PartialEq<TypeValue> for TypeDef {
     fn eq(&self, other: &TypeValue) -> bool {
         match (self, other) {
             (a, TypeValue::Primitive(b)) => a == b,
@@ -168,9 +193,9 @@ impl PartialEq<TypeValue> for TypeDef<'_> {
                 _ => false,
             },
             (TypeDef::Record(a), TypeValue::Record(_b)) => self
-                ._check_record_fields(
+                ._check_record_fields2(
                     a.iter()
-                        .map(|ty| (ty.0, ty.1.as_ref().into()))
+                        .map(|ty| (ty.0.clone(), ty.1.as_ref().into()))
                         .collect::<Vec<_>>()
                         .as_slice(),
                 ),
@@ -181,11 +206,11 @@ impl PartialEq<TypeValue> for TypeDef<'_> {
 
 // This From impl creates the link between the AST and the TypeDef enum
 // for built-in types.
-impl<'a> TryFrom<crate::ast::TypeIdentifier> for TypeDef<'a> {
+impl<'a> TryFrom<crate::ast::TypeIdentifier> for TypeDef {
     type Error = Box<dyn std::error::Error>;
     fn try_from(
         ty: crate::ast::TypeIdentifier,
-    ) -> Result<TypeDef<'a>, std::boxed::Box<dyn std::error::Error>> {
+    ) -> Result<TypeDef, std::boxed::Box<dyn std::error::Error>> {
         match ty.ident.as_str() {
             "U32" => Ok(TypeDef::U32),
             "U8" => Ok(TypeDef::U8),
@@ -200,8 +225,8 @@ impl<'a> TryFrom<crate::ast::TypeIdentifier> for TypeDef<'a> {
     }
 }
 
-impl<'a> From<BuiltinTypeValue> for TypeDef<'a> {
-    fn from(ty: BuiltinTypeValue) -> TypeDef<'a> {
+impl<'a> From<BuiltinTypeValue> for TypeDef {
+    fn from(ty: BuiltinTypeValue) -> TypeDef {
         match ty {
             BuiltinTypeValue::U32(_) => TypeDef::U32,
             BuiltinTypeValue::U8(_) => TypeDef::U8,
@@ -233,7 +258,7 @@ pub enum TypeValue {
     None,
 }
 
-impl<'a> TypeValue {
+impl TypeValue {
     pub fn is_empty(&self) -> bool {
         matches!(self, TypeValue::None)
     }
@@ -277,8 +302,8 @@ impl<'a> TypeValue {
     }
 }
 
-impl<'a> From<&'a TypeDef<'_>> for Box<TypeValue> {
-    fn from(t: &'a TypeDef<'_>) -> Self {
+impl<'a> From<&'a TypeDef> for Box<TypeValue> {
+    fn from(t: &'a TypeDef) -> Self {
         match t {
             TypeDef::U32 => Box::new(TypeValue::Primitive(
                 BuiltinTypeValue::U32(U32(None)),
@@ -307,7 +332,7 @@ impl<'a> From<&'a TypeDef<'_>> for Box<TypeValue> {
             TypeDef::Record(kv_list) => {
                 let def_ = kv_list
                     .iter()
-                    .map(|(ident, ty)| (ShortString::from(*ident), ty.as_ref().into()))
+                    .map(|(ident, ty)| (ident.clone(), ty.as_ref().into()))
                     .collect::<Vec<_>>();
                 Box::new(TypeValue::Record(Record::new(def_).unwrap()))
             }
@@ -316,8 +341,8 @@ impl<'a> From<&'a TypeDef<'_>> for Box<TypeValue> {
     }
 }
 
-impl<'a> From<&'a TypeDef<'_>> for TypeValue {
-    fn from(t: &'a TypeDef<'_>) -> Self {
+impl<'a> From<&'a TypeDef> for TypeValue {
+    fn from(t: &'a TypeDef) -> Self {
         match t {
             TypeDef::U32 => {
                 TypeValue::Primitive(BuiltinTypeValue::U32(U32(None)))
@@ -344,7 +369,7 @@ impl<'a> From<&'a TypeDef<'_>> for TypeValue {
             TypeDef::Record(kv_list) => {
                 let def_ = kv_list
                     .iter()
-                    .map(|(ident, ty)| (ShortString::from(*ident), ty.as_ref().into()))
+                    .map(|(ident, ty)| (ident.clone(), ty.as_ref().into()))
                     .collect::<Vec<_>>();
                 TypeValue::Record(Record::new(def_).unwrap())
             }
@@ -424,7 +449,7 @@ impl BuiltinTypeValue {
         )
     }
 
-    pub fn create_instance<'a>(
+    pub fn create_instance(
         ty: TypeDef,
         value: impl Into<BuiltinTypeValue>,
     ) -> Result<TypeValue, Box<dyn std::error::Error>> {
@@ -532,7 +557,7 @@ impl TryFrom<&'_ str> for BuiltinTypeValue {
     }
 }
 
-impl TryFrom<&TypeDef<'_>> for BuiltinTypeValue {
+impl TryFrom<&TypeDef> for BuiltinTypeValue {
     type Error = Box<dyn std::error::Error>;
 
     fn try_from(ty: &TypeDef) -> Result<Self, Self::Error> {
@@ -560,14 +585,14 @@ impl TryFrom<&TypeDef<'_>> for BuiltinTypeValue {
 impl std::fmt::Display for BuiltinTypeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            BuiltinTypeValue::U32(val) => write!(f, "unsigned 32-bits integer"),
-            BuiltinTypeValue::U8(val) => write!(f, "unsigned 8-bits integer"),
-            BuiltinTypeValue::Prefix(val) => write!(f, "prefix"),
-            BuiltinTypeValue::Community(val) => write!(f, "community"),
-            BuiltinTypeValue::IpAddress(val) => write!(f, "ip address"),
-            BuiltinTypeValue::Asn(val) => write!(f, "Autonomous System Number"),
-            BuiltinTypeValue::AsPath(val) => write!(f, "AsPath (BGP AS_PATH attribute)"),
-            BuiltinTypeValue::Route(val) => write!(f, "Route (BGP Route)"),
+            BuiltinTypeValue::U32(_) => write!(f, "unsigned 32-bits integer"),
+            BuiltinTypeValue::U8(_) => write!(f, "unsigned 8-bits integer"),
+            BuiltinTypeValue::Prefix(_) => write!(f, "prefix"),
+            BuiltinTypeValue::Community(_) => write!(f, "community"),
+            BuiltinTypeValue::IpAddress(_) => write!(f, "ip address"),
+            BuiltinTypeValue::Asn(_) => write!(f, "Autonomous System Number"),
+            BuiltinTypeValue::AsPath(_) => write!(f, "AsPath (BGP AS_PATH attribute)"),
+            BuiltinTypeValue::Route(_) => write!(f, "Route (BGP Route)"),
             BuiltinTypeValue::Boolean(_) => write!(f, "Boolean"),
         }
     }
@@ -682,7 +707,7 @@ impl AsPath {
     }
 }
 
-impl<'a> RotoFilter<'a> for AsPath {
+impl RotoFilter for AsPath {
     fn get_props_for_method(
         self,
         method_name: crate::ast::Identifier,
@@ -765,8 +790,8 @@ pub enum ElementTypeValue {
     Nested(Box<TypeValue>),
 }
 
-impl<'a> From<&'a TypeDef<'_>> for ElementTypeValue {
-    fn from(t: &'a TypeDef<'_>) -> Self {
+impl<'a> From<&'a TypeDef> for ElementTypeValue {
+    fn from(t: &'a TypeDef) -> Self {
         match t {
             TypeDef::U32 => {
                 ElementTypeValue::Primitive(BuiltinTypeValue::U32(U32(None)))
@@ -795,7 +820,7 @@ impl<'a> From<&'a TypeDef<'_>> for ElementTypeValue {
             TypeDef::Record(kv_list) => {
                 let def_ = kv_list
                     .iter()
-                    .map(|(ident, ty)| (ShortString::from(*ident), ty.as_ref().into()))
+                    .map(|(ident, ty)| (ident.clone(), ty.as_ref().into()))
                     .collect::<Vec<_>>();
                 ElementTypeValue::Nested(Box::new(TypeValue::Record(
                     Record::new(def_).unwrap(),
@@ -838,7 +863,7 @@ impl<'a> List {
     }
 }
 
-impl<'a> From<&'a TypeDef<'a>> for List {
+impl<'a> From<&'a TypeDef> for List {
     fn from(t: &'a TypeDef) -> Self {
         List::new(vec![t.into()])
     }
@@ -860,7 +885,7 @@ impl std::fmt::Display for List {
     }
 }
 
-impl<'a> RotoFilter<'a> for List{
+impl RotoFilter for List{
     fn get_props_for_method(
         self,
         method_name: crate::ast::Identifier,
@@ -869,7 +894,6 @@ impl<'a> RotoFilter<'a> for List{
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-                "longest_match" => Ok((Token::RecordLongestMatch, TypeValue::List(self))),
                 "get" => Ok((Token::RecordGet, TypeValue::List(self))),
                 "get_all" => Ok((Token::RecordGetAll, TypeValue::List(self))),
                 "contains" => Ok((Token::RecordContains, TypeValue::Primitive(BuiltinTypeValue::Boolean(Boolean(None))))),
@@ -917,8 +941,11 @@ impl<'a> Record {
         ty: &TypeDef,
         kvs: Vec<(&str, TypeValue)>,
     ) -> Result<Record, Box<dyn std::error::Error>> {
+        let shortstring_vec = kvs.iter().map(|(name, ty)| {
+            (ShortString::from(*name), ty)
+        }).collect::<Vec<_>>();
         if let TypeDef::Record(_rec) = ty {
-            if ty._check_record_fields(kvs.as_slice()) {
+            if ty._check_record_fields(shortstring_vec.as_slice()) {
                 TypeValue::create_record(kvs)
             } else {
                 Err("Record fields do not match record type".into())
@@ -953,7 +980,7 @@ impl std::fmt::Display for Record {
     }
 }
 
-impl<'a> RotoFilter<'a> for Record {
+impl<'a> RotoFilter for Record {
     fn get_props_for_method(
         self,
         method_name: crate::ast::Identifier,
@@ -992,7 +1019,7 @@ pub enum Token {
     AsPathContains,
 }
 
-pub trait RotoFilter<'a> {
+pub trait RotoFilter {
     fn get_props_for_method(
         self,
         method_name: super::ast::Identifier,
