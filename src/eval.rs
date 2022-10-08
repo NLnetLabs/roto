@@ -228,9 +228,9 @@ impl<'a> ast::RecordTypeIdentifier {
 }
 
 impl ast::Module {
-    fn eval<'a>(
-        &'a self,
-        symbols: types::GlobalSymbolTable<'a>,
+    fn eval(
+        &self,
+        symbols: types::GlobalSymbolTable<'_>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // let _symbols = symbols.borrow();
 
@@ -691,7 +691,7 @@ impl ast::AccessReceiver {
             let field_access = ast::FieldAccessExpr::eval(
                 fields,
                 self.get_ident(),
-                symbols.clone(),
+                symbols,
                 scope,
             )?;
             search_var = field_access.get_name().to_string();
@@ -708,9 +708,9 @@ impl ast::AccessReceiver {
 }
 
 impl ast::ArgExprList {
-    fn eval<'a>(
+    fn eval(
         &self,
-        symbols: types::GlobalSymbolTable<'a>,
+        symbols: types::GlobalSymbolTable<'_>,
         scope: symbols::Scope,
     ) -> Result<Vec<symbols::Symbol>, Box<dyn std::error::Error>> {
         let mut eval_args = vec![];
@@ -762,10 +762,10 @@ impl ast::ArgExprList {
 }
 
 impl ast::FieldAccessExpr {
-    fn eval<'a>(
+    fn eval(
         &self,
         receiver: &ast::Identifier,
-        symbols: types::GlobalSymbolTable<'a>,
+        symbols: types::GlobalSymbolTable<'_>,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         let _symbols = symbols.clone();
@@ -775,7 +775,7 @@ impl ast::FieldAccessExpr {
         let mut ty = types::TypeDef::None;
 
         let rec_type = get_type_for_scoped_variable(
-            &vec![receiver.clone()],
+            &[receiver.clone()],
             symbols.clone(),
             scope.clone(),
         )?;
