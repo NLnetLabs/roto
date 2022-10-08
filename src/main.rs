@@ -16,6 +16,16 @@ fn test_data(name: &str, data: &str, expect_success: bool) {
 }
 
 fn main() {
+    let cm = CallExpr::parse(r###"source_asns.contains("asn", route.as_path.origin)"###);
+
+    println!("{}, {:#?}", cm.is_ok(), cm);
+    assert!(cm.is_ok());
+
+    let mm = ArgExpr::parse(r###"globlaf(bla)"###);
+    println!("{}, {:#?}", mm.is_ok(), mm);
+    assert!(mm.is_ok());
+    panic!("STROP");
+
     let r = ByteStringLiteral::parse(
  "0xZZZZ_AE9",
     );
@@ -141,9 +151,9 @@ fn main() {
     test_data(
         "module_1",
         r###"
-        module my_module for rib-loc with bla: Blaffer { 
-            define my_def { 
-                use bla;
+        module my_module for blaf: Route with bla: Blaffer { 
+            define { 
+                use rib bla;
             }
             term my_term {
                 match { bazooka; }
@@ -159,8 +169,8 @@ fn main() {
     test_data(
         "module-more-with",
         r###"
-        module my_module for rib-in with bla: Blaffer {
-            define { use bla; }
+        module my_module for route_in: Route with bla: Blaffer {
+            define { use rib bla; }
             term filter2 {
                 use bla;
                 match { blaffer.blaf.contains(something); }
@@ -176,8 +186,8 @@ fn main() {
     test_data(
         "module_2",
         r###"
-            module my_module for rib-in with bla: Blaffer {
-               define { use bla; }
+            module my_module for route_in: Route with bla: Blaffer {
+               define { use rib bla; }
                term filter3 {}
             }
             // comment
@@ -189,9 +199,9 @@ fn main() {
     test_data(
         "module_with_assignments_1",
         r###"
-            module my_module for rib-in with bla: Blaffer {
+            module my_module for route_in: Route with bla: Blaffer {
                define {
-                   use bla;
+                   use rib bla;
                    bla = blaf(Bla);
                }
             
@@ -210,9 +220,9 @@ fn main() {
     test_data(
         "module_with_assignments_2",
         r###"
-            module my_module for rib-in with bla: Blaffer {
+            module my_module for route_in: Route with bla: Blaffer {
                define {
-                   use bla;
+                   use rib bla;
                    bla = bla2(Bla);
                }
             
@@ -233,9 +243,9 @@ fn main() {
     test_data(
         "module_with_assignments_3",
         r###"
-            module my_module with bla: Blaffer {
+            module my_module for route_in: Route with bla: Blaffer {
                define {
-                   use bla;
+                   use rib bla;
                    bla = bla3(Bla);
                }
             
@@ -256,9 +266,9 @@ fn main() {
     test_data(
         "module_with_apply_1",
         r###"
-            module my_module for my-rib with bla: Blaffer {
+            module my_module for route_in: Route with bla: Blaffer {
                define {
-                   use bla;
+                   use rib bla;
                    bla = bla4(Bla);
                }
             
@@ -287,9 +297,9 @@ fn main() {
     test_data(
         "module_with_apply_2",
         r###"
-            module my_module for my-rib with bla: Blaffer {
+            module my_module for route_in: Route with bla: Blaffer {
                define {
-                   use bla;
+                   use rib bla;
                    bla = bla();
                }
             
@@ -320,9 +330,9 @@ fn main() {
     test_data(
         "module_with_nested_match_expressions",
         r###"
-            module my_module for my-rib with bla: Blaffer {
+            module my_module for route_in: Route with bla: Blaffer {
                define {
-                   use bla;
+                   use rib bla;
                    bla = bla();
                }
             

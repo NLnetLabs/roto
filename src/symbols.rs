@@ -1,4 +1,4 @@
-use std::{collections::HashMap, cell::{RefCell, Ref}, rc::Rc};
+use std::{collections::HashMap, fmt::{Formatter, Display}};
 
 use crate::{ast::ShortString, types::{TypeValue, TypeDef}};
 
@@ -11,6 +11,7 @@ pub struct Symbol<'a> {
     name: ShortString,
     kind: SymbolKind,
     ty: TypeDef<'a>,
+    args: Vec<Symbol<'a>>,
     pub value: Option<TypeValue<'a>>,
     // location: Location,
 }
@@ -18,6 +19,11 @@ pub struct Symbol<'a> {
 impl<'a> Symbol<'a> {
     pub fn get_type(&self) -> TypeDef<'a> {
         self.ty.clone()
+    }
+
+    pub fn set_type(mut self, ty: TypeDef<'a>) -> Symbol {
+        self.ty = ty;
+        self
     }
 
     pub fn get_kind(&self) -> SymbolKind {
@@ -31,21 +37,52 @@ impl<'a> Symbol<'a> {
     pub fn get_value(&self) -> Option<&TypeValue<'a>> {
         self.value.as_ref()
     }
+
+    pub fn get_args(self) -> Vec<Symbol<'a>> {
+        self.args
+    }
+
+    pub fn new(name: ShortString, kind: SymbolKind, ty: TypeDef<'a>, args: Vec<Symbol<'a>>) -> Self {
+        Symbol {
+            name,
+            kind,
+            ty,
+            args,
+            value: None,
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum SymbolKind {
     Variable,
+    Constant,
     Argument,
     AnonymousType,
     NamedType,
-    Rib
+    Rib,
+    Table,
+    PrefixList,
+    DataSourceMethodCall,
+    BuiltInTypeMethodCall,
+    GlobalMethodCall,
+    FieldAccess,
+    StringLiteral,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Scope {
     Global,
     Module(ShortString),
+}
+
+impl Display for Scope {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Scope::Global => write!(f, "global"),
+            Scope::Module(name) => write!(f, "module: '{}'", name),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -70,17 +107,27 @@ impl<'a> SymbolTable<'a> {
         }
     }
 
-    pub fn add_symbol(&mut self, name: ShortString, kind: SymbolKind, ty: TypeDef<'a>, value: Option<TypeValue<'a>>) {
-        let _name = name.clone();
-        self.symbols.insert(_name, Symbol { name, kind, ty, value });
+    pub fn add_symbol(&mut self, key: ShortString, name: Option<ShortString>, kind: SymbolKind, ty: TypeDef<'a>, args: Vec<Symbol<'a>>, value: Option<TypeValue<'a>>) -> Result<(), Box<dyn std::error::Error>> {
+        let name = if let Some(name) = name {
+            name
+        } else {
+            key.clone()
+        };
+
+        if self.symbols.contains_key(&name) {
+            return Err(format!("Symbol {} already defined in scope {}", name, self.scope).into());
+        }
+
+        self.symbols.insert(key, Symbol { name, kind, ty, args, value });
+        Ok(())
     }
 
     pub fn add_type(&mut self, name: ShortString, ty: TypeDef<'a>) {
         self.types.insert(name, ty);
     }
 
-    pub fn get_symbol(&self, name: &ShortString) -> Option<&Symbol<'a>> {
-        self.symbols.get(name)
+    pub fn get_symbol(&self, name: &ShortString) -> Result<&Symbol<'a>, Box<dyn std::error::Error>> {
+        self.symbols.get(name).ok_or_else(|| format!("Symbol {} not found", name).into())
     }
 
     pub fn get_type(&self, name: &ShortString) -> Option<&TypeDef<'a>> {

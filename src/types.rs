@@ -1,6 +1,17 @@
+use std::{cell::RefCell, rc::Rc};
+
 /// Roto Types
 ///
 /// This module contains the types offered by the Roto languages.
+
+pub type GlobalSymbolTable<'a> = Rc<
+    RefCell<
+        std::collections::HashMap<
+            super::symbols::Scope,
+            super::symbols::SymbolTable<'a>,
+        >,
+    >,
+>;
 
 //------------ TypeDef -----------------------------------------------------
 
@@ -13,6 +24,8 @@ pub enum TypeDef<'a> {
     Record(Vec<(&'a str, Box<TypeDef<'a>>)>),
     U32,
     U8,
+    Boolean,
+    String, // used for fieldname in method calls
     Prefix,
     IpAddress,
     Asn,
@@ -26,11 +39,38 @@ impl<'a> TypeDef<'a> {
     pub fn new_record_type(
         type_ident_pairs: Vec<(&'a str, Box<TypeDef<'a>>)>,
     ) -> Result<TypeDef<'a>, Box<dyn std::error::Error>> {
-        // let def_ = type_ident_pairs
-        //     .iter()
-        //     .map(move |(ident, ty)| (*ident, ty))
-        //     .collect::<Vec<_>>();
         Ok(TypeDef::Record(type_ident_pairs))
+    }
+
+    pub fn has_field(&self, field: &str) -> bool {
+        match self {
+            TypeDef::Record(fields) => {
+                fields.iter().any(|(ident, _)| ident == &field)
+            }
+            _ => false,
+        }
+    }
+
+    pub fn has_fields_chain(
+        &self,
+        fields: &[super::ast::Identifier],
+    ) -> Option<TypeDef<'a>> {
+        let mut current_type = self;
+        for field in fields {
+            if let TypeDef::Record(fields) = current_type {
+                if let Some((_, ty)) = fields
+                    .iter()
+                    .find(|(ident, _)| ident == &field.ident.as_str())
+                {
+                    current_type = ty;
+                } else {
+                    return None;
+                }
+            } else {
+                return None;
+            }
+        }
+        Some(current_type.clone())
     }
 
     fn _check_record_fields(&self, fields: &[(&str, TypeValue)]) -> bool {
@@ -43,6 +83,40 @@ impl<'a> TypeDef<'a> {
             true
         } else {
             false
+        }
+    }
+
+    pub fn get_props_for_method(
+        self,
+        method: super::ast::Identifier,
+    ) -> Result<(Token, TypeDef<'a>), Box<dyn std::error::Error>>
+    where
+        TypeDef<'a>: RotoFilter<'a>,
+    {
+        match self {
+            TypeDef::List(list_type) => {
+                <TypeDef<'_> as RotoFilter>::get_props_for_method(
+                    TypeDef::List(list_type),
+                    method,
+                )
+            }
+            TypeDef::Record(rec_type) => {
+                <TypeDef<'_> as RotoFilter>::get_props_for_method(
+                    TypeDef::Record(rec_type),
+                    method,
+                )
+            }
+            TypeDef::AsPath => {
+                <TypeDef<'_> as RotoFilter>::get_props_for_method(
+                    TypeDef::AsPath,
+                    method,
+                )
+            }
+            _ => Err(format!(
+                "Type {:?} does not have method {}",
+                self, method
+            )
+            .into()),
         }
     }
 }
@@ -120,6 +194,21 @@ impl<'a> TryFrom<crate::ast::TypeIdentifier> for TypeDef<'a> {
             "Community" => Ok(TypeDef::Community),
             "Route" => Ok(TypeDef::Route),
             _ => Err(format!("Undefined type: {}", ty.ident).into()),
+        }
+    }
+}
+
+impl<'a> From<BuiltinTypeValue> for TypeDef<'a> {
+    fn from(ty: BuiltinTypeValue) -> TypeDef<'a> {
+        match ty {
+            BuiltinTypeValue::U32(_) => TypeDef::U32,
+            BuiltinTypeValue::U8(_) => TypeDef::U8,
+            BuiltinTypeValue::Prefix(_) => TypeDef::Prefix,
+            BuiltinTypeValue::IpAddress(_) => TypeDef::IpAddress,
+            BuiltinTypeValue::Asn(_) => TypeDef::Asn,
+            BuiltinTypeValue::AsPath(_) => TypeDef::AsPath,
+            BuiltinTypeValue::Community(_) => TypeDef::Community,
+            BuiltinTypeValue::Route(_) => TypeDef::Route,
         }
     }
 }
@@ -426,6 +515,31 @@ impl TryFrom<&'_ str> for BuiltinTypeValue {
     }
 }
 
+impl TryFrom<&TypeDef<'_>> for BuiltinTypeValue {
+    type Error = Box<dyn std::error::Error>;
+
+    fn try_from(ty: &TypeDef) -> Result<Self, Self::Error> {
+        match ty {
+            TypeDef::U32 => Ok(BuiltinTypeValue::U32(U32(None))),
+            TypeDef::U8 => Ok(BuiltinTypeValue::U8(U8(None))),
+            TypeDef::Prefix => Ok(BuiltinTypeValue::Prefix(Prefix(None))),
+            TypeDef::Community => {
+                Ok(BuiltinTypeValue::Community(Community(None)))
+            }
+            TypeDef::IpAddress => {
+                Ok(BuiltinTypeValue::IpAddress(IpAddress(None)))
+            }
+            TypeDef::Asn => Ok(BuiltinTypeValue::Asn(Asn(None))),
+            TypeDef::AsPath => Ok(BuiltinTypeValue::AsPath(AsPath(None))),
+            TypeDef::Route => Ok(BuiltinTypeValue::Route(Route {
+                prefix: None,
+                bgp: None,
+            })),
+            _ => Err(format!("Unknown type: {:?}", ty).into()),
+        }
+    }
+}
+
 // ----------- A simple u32 type --------------------------------------------
 
 #[derive(Debug, PartialEq)]
@@ -523,6 +637,35 @@ impl AsPath {
         AsPath::new(as_path)
     }
 }
+
+enum AsPathToken {
+    Origin,
+    Contains,
+}
+
+// impl<'a> RotoFilter<'a> for AsPathToken {
+//     type Token = AsPathToken;
+
+//     fn get_props_for_method(
+//             ty: Vec<(&'a str, Box<TypeDef<'a>>)>,
+//             method_name: crate::ast::Identifier,
+//         ) -> Result<(Self, TypeDef<'a>), Box<dyn std::error::Error>> where Self: std::marker::Sized {
+//         match method_name.ident.as_str() {
+//             "origin" => Ok((AsPathToken::Origin, TypeDef::Asn)),
+//             "contains" => Ok((AsPathToken::Contains, TypeDef::Boolean)),
+//             _ => Err(format!("Unknown method: {}", method_name).into()),
+//         }
+//     }
+
+//     fn exec_method(
+//             &self,
+//             method: Self,
+//             args: Vec<TypeValue>,
+//             res_type: TypeDef,
+//         ) -> TypeDef {
+//         todo!()
+//     }
+// }
 
 //------------ RFC4271 Route type -------------------------------------------
 
@@ -629,6 +772,93 @@ impl<'a> From<&'a TypeDef<'a>> for List<'a> {
     }
 }
 
+// impl<'a> RotoFilter<'a> for List<'a> {
+//     type Token = ListToken;
+
+//     fn get_props_for_method(
+//         ty: Vec<(&'a str, Box<TypeDef<'a>>)>,
+//         method_name: crate::ast::Identifier,
+//     ) -> Result<(Self::Token, TypeDef<'a>), Box<dyn std::error::Error>> {
+
+//         let (ident, ty) = ty.into_iter().next().unwrap();
+//         let ty = ty.as_ref();
+//         let (token, ty) = match method_name.ident.as_str() {
+//             "len" => (Self::Token::Len, TypeDef::U32),
+//             "contains" => {
+//                 let ty = match ty {
+//                     TypeDef::List(ty) => ty,
+//                     _ => ty,
+//                 };
+//                 (Self::Token::Contains, TypeDef::List(Box::new(ty.clone())))
+//             }
+//             "get" => {
+//                 let ty = match ty {
+//                     TypeDef::List(ty) => ty,
+//                     _ => ty,
+//                 };
+//                 (Self::Token::Get, ty.clone())
+//             }
+//             "push" => {
+//                 let ty = match ty {
+//                     TypeDef::List(ty) => ty.as_ref(),
+//                     _ => ty.into(),
+//                 };
+//                 (Self::Token::Push, TypeDef::List(Box::new(ty.clone())))
+//             }
+//             "pop" => {
+//                 let ty = match ty {
+//                     TypeDef::List(ty) => ty.as_ref(),
+//                     _ => ty,
+//                 };
+//                 (Self::Token::Pop, ty.clone())
+//             }
+//             "remove" => {
+//                 let ty = match ty {
+//                     TypeDef::List(ty) => ty.as_ref(),
+//                     _ => ty.into(),
+//                 };
+//                 (Self::Token::Remove, TypeDef::List(Box::new(ty.clone())))
+//             }
+//             "insert" => {
+//                 let ty = match ty {
+//                     TypeDef::List(ty) => ty.as_ref(),
+//                     _ => ty.into(),
+//                 };
+//                 (Self::Token::Insert, TypeDef::List(Box::new(ty.clone())))
+//             }
+//             "clear" => (Self::Token::Clear, TypeDef::List(Box::new(ty.clone()))),
+//             _ => {
+//                 return Err(format!(
+//                     "Unknown method '{}' for type '{}'",
+//                     method_name, ident
+//                 )
+//                 .into())
+//             }
+//         };
+//         Ok((token, ty))
+//     }
+
+//     fn exec_method(
+//         &self,
+//         method: Self::Token,
+//         args: Vec<TypeValue>,
+//         res_type: TypeDef,
+//     ) -> TypeDef {
+//         todo!()
+//     }
+// }
+
+pub enum ListToken {
+    Len,
+    Contains,
+    Get,
+    Push,
+    Pop,
+    Remove,
+    Insert,
+    Clear,
+}
+
 //---------------- Record type ----------------------------------------------
 
 #[derive(Debug, PartialEq)]
@@ -662,4 +892,142 @@ impl<'a> Record<'a> {
     ) -> Option<&ElementTypeValue> {
         self.0.iter().find(|(f, _)| f == &field).map(|(_, v)| v)
     }
+}
+
+// impl<'a> RotoFilter<'a, RecordToken> for TypeDef<'a> {
+//     fn get_props_for_method(
+//         // ty: Vec<(&'a str, Box<TypeDef<'a>>)>,
+//         ty: Self,
+//         method_name: crate::ast::Identifier,
+//     ) -> Result<(RecordToken, Self), Box<dyn std::error::Error>>
+//     where
+//         Self: std::marker::Sized,
+//     {
+//         match method_name.ident.as_str() {
+//             "longest_match" => Ok((RecordToken::LongestMatch, ty)),
+//             "get" => Ok((RecordToken::Get, ty)),
+//             "get_all" => Ok((RecordToken::GetAll, ty)),
+//             "contains" => Ok((RecordToken::Contains, TypeDef::Boolean)),
+//             _ => {
+//                 Err(format!("Unknown method '{}'", method_name.ident).into())
+//             }
+//         }
+//     }
+
+//     fn exec_method(
+//         &self,
+//         method: Token,
+//         args: Vec<TypeValue>,
+//         res_type: TypeDef,
+//     ) -> TypeDef {
+//         todo!()
+//     }
+// }
+
+impl<'a> RotoFilter<'a> for TypeDef<'a> {
+    fn get_props_for_method(
+        ty: Self,
+        method_name: crate::ast::Identifier,
+    ) -> Result<(Token, Self), Box<dyn std::error::Error>>
+    where
+        Self: std::marker::Sized,
+    {
+        match ty {
+            TypeDef::AsPath => match method_name.ident.as_str() {
+                "origin" => Ok((Token::AsPathOrigin, ty)),
+                _ => {
+                    Err(format!("Unknown method '{}'", method_name.ident)
+                        .into())
+                }
+            },
+            TypeDef::Record(_) => match method_name.ident.as_str() {
+                "longest_match" => Ok((Token::RecordLongestMatch, ty)),
+                "get" => Ok((Token::RecordGet, ty)),
+                "get_all" => Ok((Token::RecordGetAll, ty)),
+                "contains" => Ok((Token::RecordContains, TypeDef::Boolean)),
+                _ => {
+                    Err(format!("Unknown method '{}'", method_name.ident)
+                        .into())
+                }
+            },
+            TypeDef::List(_) => todo!(),
+            TypeDef::U32 => todo!(),
+            TypeDef::U8 => todo!(),
+            TypeDef::Boolean => todo!(),
+            TypeDef::String => todo!(),
+            TypeDef::Prefix => todo!(),
+            TypeDef::IpAddress => todo!(),
+            TypeDef::Asn => todo!(),
+            TypeDef::Community => todo!(),
+            TypeDef::Route => todo!(),
+            TypeDef::None => todo!(),
+        }
+    }
+
+    fn exec_method(
+        &self,
+        method: Token,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> TypeDef {
+        todo!()
+    }
+}
+
+// impl<'a> RotoFilter<'a> for Record<'a> {
+//     type Token = RecordToken;
+
+//     fn get_props_for_method(
+//         // ty: Vec<(&'a str, Box<TypeDef<'a>>)>,
+//         ty: TypeDef<'a>,
+//         method_name: super::ast::Identifier,
+//     ) -> Result<(Self::Token, TypeDef<'a>), Box<dyn std::error::Error>> {
+//         match method_name.ident.as_str() {
+//             "longest_match" => {
+//                 Ok((Self::Token::LongestMatch, TypeDef::Record(ty.clone())))
+//             }
+//             "get" => Ok((Self::Token::Get, TypeDef::Record(ty.clone()))),
+//             "get_all" => Ok((
+//                 Self::Token::GetAll,
+//                 TypeDef::List(Box::new(TypeDef::Record(ty.clone()))),
+//             )),
+//             "contains" => Ok((Self::Token::Contains, TypeDef::Boolean)),
+//             _ => {
+//                 Err(format!("Unknown method '{}'", method_name.ident).into())
+//             }
+//         }
+//     }
+//     fn exec_method(
+//         &self,
+//         method: Self::Token,
+//         args: Vec<TypeValue>,
+//         res_type: TypeDef,
+//     ) -> TypeDef {
+//         todo!()
+//     }
+// }
+
+pub enum Token {
+    RecordLongestMatch,
+    RecordGet,
+    RecordGetAll,
+    RecordContains,
+    AsPathOrigin,
+    AsPathContains,
+}
+
+pub trait RotoFilter<'a> {
+    fn get_props_for_method(
+        // ty: Vec<(&'a str, Box<TypeDef<'a>>)>,
+        ty: Self,
+        method_name: super::ast::Identifier,
+    ) -> Result<(Token, Self), Box<dyn std::error::Error>>
+    where
+        Self: std::marker::Sized;
+    fn exec_method(
+        &self,
+        method: Token,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> TypeDef;
 }

@@ -1,15 +1,15 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
+use roto::types::GlobalSymbolTable;
 
 use nom::error::convert_error;
 use roto::ast::*;
-use roto::symbols::SymbolTable;
+use roto::symbols::{Scope, SymbolTable};
 
 fn test_data(name: &str, data: &'static str, expect_success: bool) -> Result<(), Box<dyn std::error::Error>> {
-    println!("test {}", name);
+    println!("eval test {}", name);
     let parsed_data = Root::parse_str(data);
-    println!("{} {:#?}", name, parsed_data);
+    // println!("{} {:#?}", name, parsed_data);
     if let Err(e) = parsed_data.clone() {
         println!("{}", convert_error(data, e));
     }
@@ -19,10 +19,11 @@ fn test_data(name: &str, data: &'static str, expect_success: bool) -> Result<(),
         true => assert!(parsed_data.is_ok()),
     }
 
-    let symbols = HashMap::<ShortString, SymbolTable>::new();
+    let symbols = HashMap::<Scope, SymbolTable>::new();
     let eval = parsed_data?;
     
-    let symbols = Rc::new(RefCell::new(symbols));
+    let symbols = RefCell::new(symbols);
+    let symbols = GlobalSymbolTable::new(symbols);
     let ev2 = eval.1.eval(symbols.clone());
 
     println!("{:#?}", symbols);
@@ -33,20 +34,31 @@ fn test_data(name: &str, data: &'static str, expect_success: bool) -> Result<(),
 
 fn main() {
     test_data(
-        "module_with_apply_2",
+        "module_1",
         r###"
-            module in-module for rib-in with bla: Blaffer {
-               define for route: Blaffer with robber: U32 {
-                   use rib-extra;
-                   bla = bla();
+            module in-module with my_asn: Asn {
+               define for ext_r: ExtRoute with extra_asn: Asn {
+                  // specify the types of that this filter receives
+                  // and sends.
+                  rx route: StreamRoute;
+                  tx ext_route: ExtRoute;
+
+                  // specify additional external data sets that will be consulted.
+                  use table source_asns;
+                  route_in_table = source_asns.contains("asn", route.as-path.origin());
+
+                  // specify another RIB that is used in this filter.
+                  use rib rib-rov;
+                  found_prefix = rib-rov.longest_match(route.prefix);
                }
             
-               term blaffer_filter {
-                   match { 
-                        blaffer.blaf.contains(something,"somewhat") > blaf();
-                        ( bla.bla() > some_external_set );
-                   }
-               }
+               term rov-valid for route: Route {
+                    match {
+                        found_prefix.matches;
+                        route.prefix.len <= found_prefix.max_len;
+                        route.asn.bgp.origin-asn == found_prefix.asn;
+                    }
+                }
                
                action blaffer {
                    blaffer.blaf(bla);
@@ -61,9 +73,9 @@ fn main() {
             }
 
             // comment
-            rib rib-extra contains Blaffer { 
+            rib rib-extra contains ExtRoute { 
                 blaffer: U32, 
-                blooper: Prefix, 
+                blooper: Prefix,
                 blixer: { 
                     bla: U8, 
                     salt: { 
@@ -72,9 +84,14 @@ fn main() {
                 }  
             }
 
+            table source_asns contains Asn { 
+                asn: Asn
+            }
+
             // yo, rib
-            rib rib-in contains Route {
-                as-path: [Asn],
+            rib rib-rov contains StreamRoute {
+                prefix: Prefix, // this is shit: it's the key
+                as-path: AsPath,
                 origin: Asn,
                 next-hop: IpAddress,
                 med: U32,

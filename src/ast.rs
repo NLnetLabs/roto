@@ -91,7 +91,7 @@ impl RootExpr {
 #[derive(Clone, Debug)]
 pub struct Module {
     pub ident: Identifier,
-    pub for_ident: Option<Identifier>,
+    pub for_ident: Option<TypeIdentField>,
     pub with_kv: Vec<TypeIdentField>,
     pub body: ModuleBody,
 }
@@ -108,7 +108,7 @@ impl Module {
                         opt_ws(Identifier::parse),
                     ),
                 ),
-                opt(preceded(opt_ws(tag("for")), opt_ws(Identifier::parse))),
+                for_statement,
                 with_statement,
                 context(
                     "module body",
@@ -196,27 +196,19 @@ impl ModuleExpr {
 //------------ Define -------------------------------------------------------
 #[derive(Clone, Debug)]
 pub struct Define {
-    pub ident: Option<Identifier>, // name of the define section
     pub for_kv: Option<TypeIdentField>, // associated Rib record type
-    pub with_kv: Vec<TypeIdentField>, // arguments
+    pub with_kv: Vec<TypeIdentField>,   // arguments
     pub body: DefineBody,
 }
 
 impl Define {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (ident, for_kv, with_kv, body)) = context(
+        let (input, (for_kv, with_kv, body)) = context(
             "define definition",
             preceded(
                 opt_ws(tag("define")),
                 tuple((
-                    context(
-                        "define name",
-                        opt(delimited(
-                            multispace1,
-                            Identifier::parse,
-                            multispace1,
-                        )),
-                    ),
+                    // context("define name", opt(opt_ws(Identifier::parse))),
                     for_statement,
                     with_statement,
                     context(
@@ -229,13 +221,11 @@ impl Define {
                     ),
                 )),
             ),
-            
         )(input)?;
 
         Ok((
             input,
             Self {
-                ident,
                 for_kv,
                 with_kv: with_kv.unwrap_or_default(),
                 body,
@@ -251,31 +241,58 @@ impl Define {
 
 #[derive(Clone, Debug)]
 pub struct DefineBody {
-    pub use_rib: Option<Identifier>,
+    pub rx_type: TypeIdentField,
+    pub tx_type: TypeIdentField,
+    pub use_ext_data: Vec<Identifier>,
     pub assignments: Vec<(Identifier, CallExpr)>,
 }
 
 impl DefineBody {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (use_rib, assignments)) = tuple((
-            opt(delimited(
-                opt_ws(tag("use")),
-                opt_ws(Identifier::parse),
-                opt_ws(char(';')),
+        let (input, ((rx_type, tx_type), statements)) = tuple((
+            permutation((
+                cut(delimited(
+                    opt_ws(tag("rx")),
+                    opt_ws(TypeIdentField::parse),
+                    opt_ws(char(';')),
+                )),
+                cut(delimited(
+                    opt_ws(tag("tx")),
+                    opt_ws(TypeIdentField::parse),
+                    opt_ws(char(';')),
+                )),
             )),
-            many0(context(
-                "assigments",
-                separated_pair(
-                    opt_ws(Identifier::parse),
-                    preceded(multispace0, char('=')),
-                    terminated(opt_ws(CallExpr::parse), opt_ws(char(';'))),
+            cut(many1(permutation((
+                delimited(
+                    opt_ws(tag("use")),
+                    opt_ws(preceded(
+                        alt((opt_ws(tag("rib")), opt_ws(tag("table")))),
+                        opt_ws(Identifier::parse),
+                    )),
+                    opt_ws(char(';')),
                 ),
-            )),
+                context(
+                    "assignments",
+                    separated_pair(
+                        opt_ws(Identifier::parse),
+                        preceded(multispace0, char('=')),
+                        terminated(
+                            opt_ws(CallExpr::parse),
+                            opt_ws(char(';')),
+                        ),
+                    ),
+                ),
+            )))),
         ))(input)?;
+
+        let (use_ext_data, assignments) = statements.iter().cloned().unzip();
+
         Ok((
             input,
             Self {
-                use_rib,
+                rx_type,
+                tx_type,
+                use_ext_data,
                 assignments,
             },
         ))
@@ -637,7 +654,7 @@ impl Rib {
             "rib definition",
             tuple((
                 preceded(
-                    opt_ws(tag("rib")),
+                    opt_ws(alt((tag("rib"), tag("table")))),
                     context(
                         "rib name",
                         delimited(
@@ -793,29 +810,30 @@ impl Identifier {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, _) = context(
             "no keyword",
-            not(delimited(multispace1,
-            tuple((
-                tag("for"),
-                tag("type"),
-                tag("with"),
-                tag("in"),
-                tag("define"),
-                tag("module"),
-                tag("import"),
-                tag("term"),
-                tag("filter"),
-                tag("match"),
-                tag("route"),
-                tag("matches"),
-                tag("return"),
-                tag("prefix"),
-                tag("true"),
-                tag("false"),
-                tag("apply"),
-                tag("use"),
+            not(delimited(
+                multispace1,
+                tuple((
+                    tag("for"),
+                    tag("type"),
+                    tag("with"),
+                    tag("in"),
+                    tag("define"),
+                    tag("module"),
+                    tag("import"),
+                    tag("term"),
+                    tag("filter"),
+                    tag("match"),
+                    tag("route"),
+                    tag("matches"),
+                    tag("return"),
+                    tag("prefix"),
+                    tag("true"),
+                    tag("false"),
+                    tag("apply"),
+                    tag("use"),
+                )),
+                multispace1,
             )),
-            multispace1
-        )),
         )(input)?;
         let (input, ident) = context(
             "identifier",
@@ -997,6 +1015,12 @@ impl StringLiteral {
     }
 }
 
+impl From<&'_ StringLiteral> for ShortString {
+    fn from(literal: &StringLiteral) -> Self {
+        literal.0.clone()
+    }
+}
+
 //------------ RecordTypeIdentifier ---------------------------------------------------
 
 // The value of a record. It's very similar to a RibBody (in EBNF it's the
@@ -1039,7 +1063,6 @@ impl RecordTypeIdentifier {
         Ok((input, RecordTypeIdentifier { key_values }))
     }
 }
-
 
 //============= Literals ====================================================
 
@@ -1193,15 +1216,15 @@ pub enum ArgExpr {
     StringLiteral(StringLiteral),
     Bool(bool),
     CallExpr(CallExpr),
-    FieldExpr(FieldExpr),
+    AccessReceiver(AccessReceiver),
     PrefixMatchExpr(PrefixMatchExpr),
 }
 
 impl ArgExpr {
-    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         alt((
             map(CallExpr::parse, ArgExpr::CallExpr),
-            map(FieldExpr::parse, ArgExpr::FieldExpr),
+            map(AccessReceiver::parse, ArgExpr::AccessReceiver),
             map(TypeIdentifier::parse, ArgExpr::TypeIdentifier),
             map(Identifier::parse, ArgExpr::Identifier),
             map(StringLiteral::parse, ArgExpr::StringLiteral),
@@ -1225,9 +1248,18 @@ impl ArgExprList {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, args) = context(
             "argument expressions",
-            separated_list0(preceded(multispace0, char(',')), opt_ws(ArgExpr::parse)),
+            separated_list0(
+                preceded(multispace0, char(',')),
+                opt_ws(ArgExpr::parse),
+            ),
         )(input)?;
+
+        println!("args: {:?}", args);
         Ok((input, Self { args }))
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.args.is_empty()
     }
 }
 
@@ -1258,80 +1290,179 @@ fn with_statement(
     )(input)
 }
 
-//------------- FieldExpr --------------------------------------------------
+// ============ Compound Expressions ========================================
 
-// FieldExpr ::= Identifier ( '.' Identifier )+
+// Compound expressions consist of field access of data structures or method
+// calls on data structures.
 
-#[derive(Clone, Debug)]
-pub struct FieldExpr {
-    pub ident: Identifier,
-    pub field_names: Vec<Identifier>,
-}
+// It's complete EBNF would be:
+// CompoundExpr ::= AccessReceiver?(.MethodCallExpr)? | AccessReceiver
 
-impl FieldExpr {
-    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (ident, field_names)) = context(
-            "field expression",
-            tuple((
-                Identifier::parse,
-                many1(preceded(char('.'), Identifier::parse)),
-            )),
-        )(input)?;
-        Ok((input, Self { ident, field_names }))
-    }
-}
-
-//------------- CallReceiver ------------------------------------------------
-
-// CallReceiver ::= Identifier | FieldExpr
-
-#[derive(Clone, Debug)]
-pub enum CallReceiver {
-    Identifier(Identifier),
-    FieldExpr(FieldExpr),
-}
-
-impl CallReceiver {
-    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        alt((
-            map(FieldExpr::parse, CallReceiver::FieldExpr),
-            map(Identifier::parse, CallReceiver::Identifier),
-        ))(input)
-    }
-}
+// The base of a compound expression is either a CallExpr, for an expression
+// that ends in a method call, or a CallReceiver for an expression that ends
+// in a field access.
 
 //------------- CallExpr ----------------------------------------------------
 
-// CallExpr ::= CallReceiver'('ArgExprList?')'
+// A CallExpr is an expression that ends in a method call.
+
+// CallExpr ::= (CallReceiver)?.MethodCallExpr
 
 #[derive(Clone, Debug)]
 pub struct CallExpr {
+    /// The data-structure (or field from a data-structure) or variable on
+    /// // which a method is called. if It's None then it's a built-in
+    /// function (In the global scope).
+    receiver: Option<AccessReceiver>,
     /// The name of the function.
-    pub receiver: CallReceiver,
-    /// The arguments to the function.
-    pub expr_list: ArgExprList,
+    method_call: MethodCallExpr,
 }
 
 impl CallExpr {
-    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (receiver, expr_list)) = tuple((
-            CallReceiver::parse,
-            delimited(char('('), ArgExprList::parse, char(')')),
-        ))(input)?;
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (receiver, method_call)) = context(
+            "call expression",
+            tuple((opt(AccessReceiver::parse), MethodCallExpr::parse)),
+        )(input)?;
 
         Ok((
             input,
             Self {
                 receiver,
-                expr_list,
+                method_call,
+            },
+        ))
+    }
+
+    pub fn get_receiver(&self) -> Option<&AccessReceiver> {
+        self.receiver.as_ref()
+    }
+
+    pub fn get_method_call(&self) -> &MethodCallExpr {
+        &self.method_call
+    }
+
+    pub fn get_ident(&self) -> &Identifier {
+        match &self.receiver {
+            Some(receiver) => receiver.get_ident(),
+            None => &self.method_call.ident,
+        }
+    }
+}
+
+//------------- AccessReceiver ------------------------------------------------
+
+// The AccessReceiver is the data structure that is being called (used as
+// part of a CallExpr) or the field of a data structure that is being
+// accessed (as stand-alone expression).
+
+// CallReceiver ::= Identifier.(FieldExpr)?
+
+#[derive(Clone, Debug)]
+pub struct AccessReceiver {
+    // The identifier of the data structure.
+    pub ident: Identifier,
+    // The field(s) of the data structure that are being accessed.
+    // A Value of None denotes that the data structure itself is being
+    // accessed (through a method call).
+    fields: Option<FieldAccessExpr>,
+}
+
+impl AccessReceiver {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, call_receiver) = context(
+            "call receiver",
+            tuple((
+                terminated(Identifier::parse, not(char('('))),
+                opt(FieldAccessExpr::parse),
+            )),
+        )(input)?;
+
+        Ok((
+            input,
+            Self {
+                ident: call_receiver.0,
+                fields: call_receiver.1,
             },
         ))
     }
 }
 
+impl AccessReceiver {
+    pub fn get_ident(&self) -> &Identifier {
+        &self.ident
+    }
+
+    pub fn has_field_access(&self) -> bool {
+        self.fields.is_some()
+    }
+
+    pub fn get_fields(&self) -> Option<&FieldAccessExpr> {
+        self.fields.as_ref()
+    }
+}
+
+//------------- FieldExpr --------------------------------------------------
+
+// The chain of fields that are being accesed. The last field is the name of
+// the field that is accessed.
+
+// FieldAccessExpr ::= Identifier ( '.' Identifier )+
+
+#[derive(Clone, Debug)]
+pub struct FieldAccessExpr {
+    // The chain of fields that are being accessed. The last field is the
+    // name of the field that is accessed.
+    pub field_names: Vec<Identifier>,
+}
+
+impl FieldAccessExpr {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, field_names) = context(
+            "field expression",
+            many1(delimited(char('.'), Identifier::parse, not(char('(')))),
+        )(input)?;
+        println!("field_names: {:?}", field_names);
+        Ok((input, Self { field_names }))
+    }
+}
+
+//------------- MethodCallExpr  ---------------------------------------------
+
+// The method that is being called on the data structure (directly or on one
+// of its fields).
+
+// MethodCallExpr ::= Identifier '(' ArgExprList ')'
+
+#[derive(Clone, Debug)]
+pub struct MethodCallExpr {
+    // The name of the method.
+    pub ident: Identifier,
+    // The list with arguments
+    pub args: ArgExprList,
+}
+
+impl MethodCallExpr {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (ident, args)) = context(
+            "method call expression",
+            tuple((
+                preceded(opt(char('.')), Identifier::parse),
+                delimited(
+                    opt_ws(char('(')),
+                    ArgExprList::parse,
+                    opt_ws(char(')')),
+                ),
+            )),
+        )(input)?;
+        Ok((input, Self { ident, args }))
+    }
+}
+
 //------------ MatchExpr ----------------------------------------------------
 
-// MatchExpr ::= ArgExpr | GroupedExpr | CompareExpr | AndExpr | OrExpr | SetCompareExpr
+// MatchExpr ::= ArgExpr | GroupedExpr | CompareExpr | AndExpr | OrExpr
+//              | SetCompareExpr
 
 #[derive(Clone, Debug)]
 pub enum MatchExpr {
