@@ -4,7 +4,6 @@ use std::rc::Rc;
 
 use crate::ast::ShortString;
 use crate::types::BuiltinTypeValue;
-use crate::types::RotoFilter;
 
 use super::ast;
 use super::symbols;
@@ -15,9 +14,7 @@ use std::convert::From;
 impl<'a> ast::Root {
     pub fn eval(
         &'a self,
-        symbols: Rc<
-            RefCell<HashMap<symbols::Scope, symbols::SymbolTable>>,
-        >,
+        symbols: Rc<RefCell<HashMap<symbols::Scope, symbols::SymbolTable>>>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let (modules, global): (Vec<_>, Vec<_>) = self
             .expressions
@@ -52,14 +49,13 @@ impl<'a> ast::Root {
             let module_name = &module.get_module()?.ident.ident;
             let module_scope = symbols::Scope::Module(module_name.clone());
 
-            if symbols_mut.contains_key(&module_scope) {
-                symbols_mut.get_mut(&module_scope).unwrap()
-            } else {
-                symbols_mut.insert(
-                    module_scope,
-                    symbols::SymbolTable::new(module_name.clone()),
-                );
+            if let std::collections::hash_map::Entry::Vacant(e) =
+                symbols_mut.entry(module_scope.clone())
+            {
+                e.insert(symbols::SymbolTable::new(module_name.clone()));
                 symbols_mut.get_mut(&global_scope).unwrap()
+            } else {
+                symbols_mut.get_mut(&module_scope).unwrap()
             };
         }
         drop(symbols_mut);
@@ -92,7 +88,8 @@ impl<'a> ast::Rib {
         let child_kvs = self.body.eval(self.ident.clone().ident, symbols)?;
 
         // create a new user-defined type for the record type in the RIB
-        let rec_type = types::TypeDef::new_record_type_from_short_string(child_kvs)?;
+        let rec_type =
+            types::TypeDef::new_record_type_from_short_string(child_kvs)?;
 
         // add a symbol for the user-defined type, the name is derived from
         // the 'contains' clause
@@ -656,39 +653,22 @@ impl<'a> ast::CallExpr {
 }
 
 impl ast::MethodCallExpr {
-    pub fn eval<'a>(
+    pub fn eval(
         &self,
         // Type of the data source this call should be implemented on.
         parent_ty: types::TypeDef,
-        symbols: types::GlobalSymbolTable<'a>,
+        symbols: types::GlobalSymbolTable<'_>,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         let args = self.args.eval(symbols, scope)?;
         // we need to lookup the type that is the return type
         // of the method that the user wants to call.
-        let parent_ty: types::TypeValue = (&parent_ty).into();
-        let ty = match parent_ty {
-            types::TypeValue::Record(rec_type) => {
-                rec_type.get_props_for_method(self.ident.clone())
-            },
-            types::TypeValue::List(list) => {
-                list.get_props_for_method(self.ident.clone())
-            }
-            types::TypeValue::Primitive(BuiltinTypeValue::AsPath(as_path    )) => {
-                as_path.get_props_for_method(self.ident.clone())
-            }
-             _ => { return Err(format!("No method named '{}' found for {}.", self.ident, parent_ty).into()) }
-        }.map_err(|_| {
-            format!(
-                "No method named '{}' found.",
-                self.ident
-            )
-        })?.1;
- 
+        let method_result_ty = parent_ty.get_props_for_method(&self.ident)?.1;
+
         Ok(symbols::Symbol::new_with_value(
             self.ident.clone().ident,
             symbols::SymbolKind::DataSourceMethodCall,
-            ty,
+            method_result_ty,
             args,
         ))
     }
@@ -697,9 +677,9 @@ impl ast::MethodCallExpr {
 // This is a (datasource + field access expression). We need to return one
 // symbol that describes the type and value of the field access.
 impl ast::AccessReceiver {
-    fn eval<'a>(
+    fn eval(
         &self,
-        symbols: types::GlobalSymbolTable<'a>,
+        symbols: types::GlobalSymbolTable<'_>,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         let _symbols = symbols.clone();
@@ -731,7 +711,6 @@ impl ast::ArgExprList {
     fn eval<'a>(
         &self,
         symbols: types::GlobalSymbolTable<'a>,
-        // data_srcs: Vec<(ast::ShortString, symbols::SymbolKind, types::TypeDef<'a>)>,
         scope: symbols::Scope,
     ) -> Result<Vec<symbols::Symbol>, Box<dyn std::error::Error>> {
         let mut eval_args = vec![];

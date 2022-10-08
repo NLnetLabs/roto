@@ -56,12 +56,12 @@ impl<'a> TypeDef {
     pub fn new_record_type(
         type_ident_pairs: Vec<(&str, Box<TypeDef>)>,
     ) -> Result<TypeDef, Box<dyn std::error::Error>> {
-        Ok(TypeDef::Record(type_ident_pairs.iter().map(
-            |(k,v)| (ShortString::from(*k), v.clone())
-        
-        ).collect()
-        )
-    )
+        Ok(TypeDef::Record(
+            type_ident_pairs
+                .iter()
+                .map(|(k, v)| (ShortString::from(*k), v.clone()))
+                .collect(),
+        ))
     }
 
     pub fn has_fields_chain(
@@ -86,7 +86,10 @@ impl<'a> TypeDef {
         Some(current_type.clone())
     }
 
-    fn _check_record_fields(&self, fields: &[(ShortString, &TypeValue)]) -> bool {
+    fn _check_record_fields(
+        &self,
+        fields: &[(ShortString, &TypeValue)],
+    ) -> bool {
         if let TypeDef::Record(rec) = self {
             for (name, ty) in fields {
                 if !rec.iter().any(|(k, v)| k == name && v.as_ref() == *ty) {
@@ -99,7 +102,10 @@ impl<'a> TypeDef {
         }
     }
 
-    fn _check_record_fields2(&self, fields: &[(ShortString, TypeValue)]) -> bool {
+    fn _check_record_fields_for_ref(
+        &self,
+        fields: &[(ShortString, TypeValue)],
+    ) -> bool {
         if let TypeDef::Record(rec) = self {
             for (name, ty) in fields {
                 if !rec.iter().any(|(k, v)| k == name && v.as_ref() == ty) {
@@ -111,42 +117,30 @@ impl<'a> TypeDef {
             false
         }
     }
-}
 
-//     pub fn get_props_for_method(
-//         self,
-//         method: super::ast::Identifier,
-//     ) -> Result<(Token, TypeValue), Box<dyn std::error::Error>>
-//     where
-//         TypeDef: RotoFilter,
-//     {
-//         match self {
-//             TypeDef::List(list_type) => {
-//                 <TypeDef as RotoFilter>::get_props_for_method(
-//                     TypeDef::List(list_type),
-//                     method,
-//                 )
-//             }
-//             TypeDef::Record(rec_type) => {
-//                 <TypeDef as RotoFilter>::get_props_for_method(
-//                     TypeDef::Record(rec_type),
-//                     method,
-//                 )
-//             }
-//             TypeDef::AsPath => {
-//                 <TypeDef as RotoFilter>::get_props_for_method(
-//                     TypeDef::AsPath,
-//                     method,
-//                 )
-//             }
-//             _ => Err(format!(
-//                 "Type {:?} does not have method {}",
-//                 self, method
-//             )
-//             .into()),
-//         }
-//     }
-// }
+    pub fn get_props_for_method(
+        &self,
+        method: &super::ast::Identifier,
+    ) -> Result<(Token, TypeValue), Box<dyn std::error::Error>> {
+        let parent_ty: TypeValue = self.into();
+        match parent_ty {
+            TypeValue::Record(rec_type) => {
+                rec_type.get_props_for_method(method)
+            }
+            TypeValue::List(list) => list.get_props_for_method(method),
+            TypeValue::Primitive(BuiltinTypeValue::AsPath(as_path)) => {
+                as_path.get_props_for_method(method)
+            }
+            _ => {
+                return Err(format!(
+                    "No method named '{}' found for {}.",
+                    method.ident, parent_ty
+                )
+                .into())
+            }
+        }
+    }
+}
 
 impl PartialEq<BuiltinTypeValue> for TypeDef {
     fn eq(&self, other: &BuiltinTypeValue) -> bool {
@@ -193,7 +187,7 @@ impl PartialEq<TypeValue> for TypeDef {
                 _ => false,
             },
             (TypeDef::Record(a), TypeValue::Record(_b)) => self
-                ._check_record_fields2(
+                ._check_record_fields_for_ref(
                     a.iter()
                         .map(|ty| (ty.0.clone(), ty.1.as_ref().into()))
                         .collect::<Vec<_>>()
@@ -383,7 +377,9 @@ impl std::fmt::Display for TypeValue {
         match self {
             TypeValue::Primitive(p) => write!(f, "primitive type {}", p),
             TypeValue::List(l) => write!(f, "list that contains type {}", l),
-            TypeValue::Record(r) => write!(f, "record that contains type {}", r),
+            TypeValue::Record(r) => {
+                write!(f, "record that contains type {}", r)
+            }
             TypeValue::None => write!(f, "None"),
         }
     }
@@ -591,7 +587,9 @@ impl std::fmt::Display for BuiltinTypeValue {
             BuiltinTypeValue::Community(_) => write!(f, "community"),
             BuiltinTypeValue::IpAddress(_) => write!(f, "ip address"),
             BuiltinTypeValue::Asn(_) => write!(f, "Autonomous System Number"),
-            BuiltinTypeValue::AsPath(_) => write!(f, "AsPath (BGP AS_PATH attribute)"),
+            BuiltinTypeValue::AsPath(_) => {
+                write!(f, "AsPath (BGP AS_PATH attribute)")
+            }
             BuiltinTypeValue::Route(_) => write!(f, "Route (BGP Route)"),
             BuiltinTypeValue::Boolean(_) => write!(f, "Boolean"),
         }
@@ -687,7 +685,6 @@ impl Asn {
     }
 }
 
-
 // ----------- AsPath type --------------------------------------------------
 
 #[derive(Debug, PartialEq)]
@@ -710,18 +707,23 @@ impl AsPath {
 impl RotoFilter for AsPath {
     fn get_props_for_method(
         self,
-        method_name: crate::ast::Identifier,
+        method_name: &crate::ast::Identifier,
     ) -> Result<(Token, TypeValue), Box<dyn std::error::Error>>
     where
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-                "origin" => Ok((Token::RecordLongestMatch, TypeValue::Primitive(BuiltinTypeValue::AsPath(AsPath(None))))),
-                "len" => Ok((Token::RecordGet, TypeValue::Primitive(BuiltinTypeValue::U8(U8(None))))),
-                _ => {
-                    Err(format!("Unknown method '{}'", method_name.ident)
-                        .into())
-                }
+            "origin" => Ok((
+                Token::RecordLongestMatch,
+                TypeValue::Primitive(BuiltinTypeValue::AsPath(AsPath(None))),
+            )),
+            "len" => Ok((
+                Token::RecordGet,
+                TypeValue::Primitive(BuiltinTypeValue::U8(U8(None))),
+            )),
+            _ => {
+                Err(format!("Unknown method '{}'", method_name.ident).into())
+            }
         }
     }
 
@@ -885,22 +887,26 @@ impl std::fmt::Display for List {
     }
 }
 
-impl RotoFilter for List{
+impl RotoFilter for List {
     fn get_props_for_method(
         self,
-        method_name: crate::ast::Identifier,
+        method_name: &crate::ast::Identifier,
     ) -> Result<(Token, TypeValue), Box<dyn std::error::Error>>
     where
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-                "get" => Ok((Token::RecordGet, TypeValue::List(self))),
-                "get_all" => Ok((Token::RecordGetAll, TypeValue::List(self))),
-                "contains" => Ok((Token::RecordContains, TypeValue::Primitive(BuiltinTypeValue::Boolean(Boolean(None))))),
-                _ => {
-                    Err(format!("Unknown method '{}'", method_name.ident)
-                        .into())
-                }
+            "get" => Ok((Token::RecordGet, TypeValue::List(self))),
+            "get_all" => Ok((Token::RecordGetAll, TypeValue::List(self))),
+            "contains" => Ok((
+                Token::RecordContains,
+                TypeValue::Primitive(BuiltinTypeValue::Boolean(Boolean(
+                    None,
+                ))),
+            )),
+            _ => {
+                Err(format!("Unknown method '{}'", method_name.ident).into())
+            }
         }
     }
 
@@ -941,9 +947,10 @@ impl<'a> Record {
         ty: &TypeDef,
         kvs: Vec<(&str, TypeValue)>,
     ) -> Result<Record, Box<dyn std::error::Error>> {
-        let shortstring_vec = kvs.iter().map(|(name, ty)| {
-            (ShortString::from(*name), ty)
-        }).collect::<Vec<_>>();
+        let shortstring_vec = kvs
+            .iter()
+            .map(|(name, ty)| (ShortString::from(*name), ty))
+            .collect::<Vec<_>>();
         if let TypeDef::Record(_rec) = ty {
             if ty._check_record_fields(shortstring_vec.as_slice()) {
                 TypeValue::create_record(kvs)
@@ -983,20 +990,26 @@ impl std::fmt::Display for Record {
 impl<'a> RotoFilter for Record {
     fn get_props_for_method(
         self,
-        method_name: crate::ast::Identifier,
+        method_name: &crate::ast::Identifier,
     ) -> Result<(Token, TypeValue), Box<dyn std::error::Error>>
     where
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-                "longest_match" => Ok((Token::RecordLongestMatch, TypeValue::Record(self))),
-                "get" => Ok((Token::RecordGet, TypeValue::Record(self))),
-                "get_all" => Ok((Token::RecordGetAll, TypeValue::Record(self))),
-                "contains" => Ok((Token::RecordContains, TypeValue::Primitive(BuiltinTypeValue::Boolean(Boolean(None))))),
-                _ => {
-                    Err(format!("Unknown method '{}'", method_name.ident)
-                        .into())
-                }
+            "longest_match" => {
+                Ok((Token::RecordLongestMatch, TypeValue::Record(self)))
+            }
+            "get" => Ok((Token::RecordGet, TypeValue::Record(self))),
+            "get_all" => Ok((Token::RecordGetAll, TypeValue::Record(self))),
+            "contains" => Ok((
+                Token::RecordContains,
+                TypeValue::Primitive(BuiltinTypeValue::Boolean(Boolean(
+                    None,
+                ))),
+            )),
+            _ => {
+                Err(format!("Unknown method '{}'", method_name.ident).into())
+            }
         }
     }
 
@@ -1022,7 +1035,7 @@ pub enum Token {
 pub trait RotoFilter {
     fn get_props_for_method(
         self,
-        method_name: super::ast::Identifier,
+        method_name: &super::ast::Identifier,
     ) -> Result<(Token, TypeValue), Box<dyn std::error::Error>>
     where
         Self: std::marker::Sized;
