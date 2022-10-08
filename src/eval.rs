@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use crate::ast::ShortString;
 use crate::types::BuiltinTypeValue;
+use crate::types::RotoFilter;
 
 use super::ast;
 use super::symbols;
@@ -665,26 +666,35 @@ impl ast::MethodCallExpr {
         let args = self.args.eval(symbols, scope)?;
         // we need to lookup the type that is the return type
         // of the method that the user wants to call.
-        let ty =
-            parent_ty.clone().get_props_for_method(
-                // parent_ty.clone(),
-                self.ident.clone(),
+        let parent_ty: types::TypeValue = (&parent_ty).into();
+        let ty = match parent_ty {
+            types::TypeValue::Record(rec_type) => {
+                rec_type.get_props_for_method(self.ident.clone())
+            },
+            types::TypeValue::List(list) => {
+                list.get_props_for_method(self.ident.clone())
+            }
+            types::TypeValue::Primitive(BuiltinTypeValue::AsPath(as_path    )) => {
+                as_path.get_props_for_method(self.ident.clone())
+            }
+             _ => { return Err(format!("No method named '{}' found for {}.", self.ident, parent_ty).into()) }
+        }.map_err(|_| {
+            format!(
+                "No method named '{}' found.",
+                self.ident
             )
-            .map_err(|_| {
-                format!(
-                    "No method named '{}' found on type '{:?}'",
-                    self.ident, parent_ty
-                )
-            })?;
+        })?.1;
+ 
+        // let ty = <types::TypeDef<'_>>::from(ty);
 
         println!(
-            "yo da method call for {} with ty {:?}",
-            self.ident.ident, parent_ty
+            "yo da method call for {}",
+            self.ident.ident
         );
-        Ok(symbols::Symbol::new(
+        Ok(symbols::Symbol::new_with_value(
             self.ident.clone().ident,
             symbols::SymbolKind::DataSourceMethodCall,
-            ty.1,
+            ty,
             args,
         ))
     }

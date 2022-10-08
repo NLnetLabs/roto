@@ -12,7 +12,7 @@ pub struct Symbol<'a> {
     kind: SymbolKind,
     ty: TypeDef<'a>,
     args: Vec<Symbol<'a>>,
-    pub value: Option<TypeValue<'a>>,
+    pub value: Option<TypeValue>,
     // location: Location,
 }
 
@@ -34,7 +34,7 @@ impl<'a> Symbol<'a> {
         self.name.clone()
     }
 
-    pub fn get_value(&self) -> Option<&TypeValue<'a>> {
+    pub fn get_value(&self) -> Option<&TypeValue> {
         self.value.as_ref()
     }
 
@@ -49,6 +49,16 @@ impl<'a> Symbol<'a> {
             ty,
             args,
             value: None,
+        }
+    }
+
+    pub fn new_with_value(name: ShortString, kind: SymbolKind, value: TypeValue, args: Vec<Symbol<'a>>) -> Self {
+        Symbol {
+            name,
+            kind,
+            ty: TypeDef::None,
+            args,
+            value: Some(value),
         }
     }
 }
@@ -107,7 +117,7 @@ impl<'a> SymbolTable<'a> {
         }
     }
 
-    pub fn add_symbol(&mut self, key: ShortString, name: Option<ShortString>, kind: SymbolKind, ty: TypeDef<'a>, args: Vec<Symbol<'a>>, value: Option<TypeValue<'a>>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn add_symbol(&mut self, key: ShortString, name: Option<ShortString>, kind: SymbolKind, ty: TypeDef<'a>, args: Vec<Symbol<'a>>, value: Option<TypeValue>) -> Result<(), Box<dyn std::error::Error>> {
         let name = if let Some(name) = name {
             name
         } else {
