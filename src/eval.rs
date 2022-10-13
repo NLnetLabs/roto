@@ -269,71 +269,6 @@ impl ast::Module {
         &self,
         symbols: symbols::GlobalSymbolTable<'_>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // let _symbols = symbols.borrow();
-
-        // let (input_var_name, for_type) = if let Some(input_type) =
-        //     &self.for_ident
-        // {
-        //     let for_ty = _symbols
-        //         .get("global")
-        //         .ok_or("No type specified in `for` clause")?
-        //         .get_symbol(&input_type.ty.ident)?;
-        //     (input_type.field_name.ident.clone(), for_ty.get_type())
-        // } else {
-        //     return Err("No associated rib specified in `for` clause".into());
-        // };
-
-        // drop(_symbols);
-
-        // let _symbols = symbols.clone();
-
-        // declare_variable_from_typedef(
-        //     &input_var_name,
-        //     for_type,
-        //     symbols::SymbolKind::Argument,
-        //     _symbols,
-        //     symbols::Scope::Module(self.ident.ident.clone()),
-        // )?;
-
-        // collect all `use` statements so that it's available to all other
-        // `eval` functions for sections of this module.
-        // let _symbols = symbols.borrow();
-        // let mut data_srcs = vec![];
-
-        // for src in &self.body.define.body.use_ext_data {
-        //     let src = _symbols
-        //         .get(&symbols::Scope::Global)
-        //         .ok_or("No global symbol table")?
-        //         .get_symbol(&src.ident)
-        //         .map_err(|_| {
-        //             format!(
-        //                 "No data source named '{}' found.",
-        //                 &src.ident
-        //             )
-        //         })?;
-        //     declare_variable_from_symbol(
-        //         None,
-        //         src,
-        //         symbols.clone(),
-        //         &symbols::Scope::Module(self.ident.ident.clone()),
-        //     )?;
-        // }
-
-        //     let src = _symbols
-        //         .get(&symbols::Scope::Global)
-        //         .ok_or("No global symbol table")?
-        //         .get_symbol(&data_src.ident)
-        //         .map_err(|_| {
-        //             format!(
-        //                 "No data source named '{}' found.",
-        //                 &data_src.ident
-        //             )
-        //         })?;
-
-        //     data_srcs.push((src.get_name(), src.get_kind(), src.get_type()));
-        // }
-
-        // drop(_symbols);
 
         // Check the `with` clause for additional arguments.
         let with_kv: Vec<_> = self.with_kv.clone();
@@ -365,18 +300,6 @@ impl ast::Module {
         &'a self,
         symbols: symbols::GlobalSymbolTable<'a>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // First, check the `define for` clause to see if we actulally have
-        // the type the user's asking for.
-        // let for_ty = if let Some(record_type) = &self.body.define.for_kv {
-        //     check_type(
-        //         record_type.ty.clone(),
-        //         symbols.clone(),
-        //         &symbols::Scope::Module(self.ident.ident.clone()),
-        //     )
-        // } else {
-        //     return Err("No type specified in `for` clause".into());
-        // };
-
         // Check the `with` clause for additional arguments.
         let with_kv: Vec<_> = self.body.define.with_kv.clone();
 
