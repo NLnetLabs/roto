@@ -42,7 +42,7 @@ impl TypeValue {
         match s {
             "U32" => Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(None)))),
             "U8" => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(None)))),
-            "prefix" => {
+            "Prefix" => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None))))
             }
             "PrefixRecord" => {
@@ -186,7 +186,7 @@ impl<'a> From<&'a TypeDef> for TypeValue {
 impl std::fmt::Display for TypeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            TypeValue::Builtin(p) => write!(f, "primitive type {}", p),
+            TypeValue::Builtin(p) => write!(f, "built-in type '{}'", p),
             TypeValue::List(l) => write!(f, "list that contains type {}", l),
             TypeValue::Record(r) => {
                 write!(f, "record that contains type {}", r)

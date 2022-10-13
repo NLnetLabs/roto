@@ -79,28 +79,28 @@ impl BuiltinTypeValue {
                 if let BuiltinTypeValue::U32(v) = value.into() {
                     BuiltinTypeValue::U32(v)
                 } else {
-                    return Err("Not a u32".into());
+                    return Err("Not a U32".into());
                 }
             }
             TypeDef::U8 => {
                 if let BuiltinTypeValue::U8(v) = value.into() {
                     BuiltinTypeValue::U8(v)
                 } else {
-                    return Err("Not a u8".into());
+                    return Err("Not a U8".into());
                 }
             }
             TypeDef::Prefix => {
                 if let BuiltinTypeValue::Prefix(v) = value.into() {
                     BuiltinTypeValue::Prefix(v)
                 } else {
-                    return Err("Not a prefix".into());
+                    return Err("Not a Prefix".into());
                 }
             }
             TypeDef::PrefixRecord => {
                 if let BuiltinTypeValue::PrefixRecord(v) = value.into() {
                     BuiltinTypeValue::PrefixRecord(v)
                 } else {
-                    return Err("Not a prefix record".into());
+                    return Err("Not a Prefix Record".into());
                 }
             }
             TypeDef::IpAddress => {
@@ -225,10 +225,10 @@ impl std::fmt::Display for BuiltinTypeValue {
         match self {
             BuiltinTypeValue::U32(_) => write!(f, "unsigned 32-bits integer"),
             BuiltinTypeValue::U8(_) => write!(f, "unsigned 8-bits integer"),
-            BuiltinTypeValue::Prefix(_) => write!(f, "prefix"),
-            BuiltinTypeValue::PrefixRecord(_) => write!(f, "prefix record"),
-            BuiltinTypeValue::Community(_) => write!(f, "community"),
-            BuiltinTypeValue::IpAddress(_) => write!(f, "ip address"),
+            BuiltinTypeValue::Prefix(_) => write!(f, "Prefix"),
+            BuiltinTypeValue::PrefixRecord(_) => write!(f, "Prefix Record"),
+            BuiltinTypeValue::Community(_) => write!(f, "Community"),
+            BuiltinTypeValue::IpAddress(_) => write!(f, "IP Address"),
             BuiltinTypeValue::Asn(_) => write!(f, "Autonomous System Number"),
             BuiltinTypeValue::AsPath(_) => {
                 write!(f, "AsPath (BGP AS_PATH attribute)")
