@@ -8,6 +8,19 @@
 // is to establish what the contact surface between the different parts of
 // Rotonda (including routecore) will (have to) be.
 
+
+// routcore/rotonda-runtime               roto
+//                                        ┌─────────────┐
+//                                        ├─────────────┤
+//                 ┌─────────────┐        ├─────────────┤
+//               ┌─▶   Update    ├─write──▶    Route    │
+// ┌────────────┐│ └─────────────┘        └──────▲──────┘
+// │ BgpMessage ├┤                               │       
+// └────────────┘│ ┌─────────────┐               │       
+//               └─▶ Withdrawal  │──change ──────┘       
+//                 └─────────────┘  status               
+                          
+
 // BGP Message
 // rotonda-runtime -> routecore -> rotonda-runtime
 
@@ -24,6 +37,7 @@ impl Iterator for BgpMessage {
     }
 }
 
+
 // Update
 // routecore -> rotonda-runtime
 
@@ -36,6 +50,7 @@ pub struct Update {
     pub attributes: BgpAttributes,
     pub afi_safi: (u16, u8),
 }
+
 
 // Withdrawal
 // routecore -> rotonda-runtime
@@ -79,6 +94,8 @@ pub struct Route {
     pub status: Status,
 }
 
+
+// Status
 // routecore -> rotonda-runtime -> roto
 
 // Status is piece of metadata that writes some (hopefully) relevant state of
@@ -99,6 +116,8 @@ pub enum Status {
                          // archived routes.
 }
 
+
+// RawRoute
 // rotonda-runtime
 
 // A BGP message that will be stored in a RIB as a array of bytes (whatever
@@ -112,6 +131,8 @@ pub struct RawRoute {
     pub status: Status,
 }
 
+
+// RawBgpMessage
 // rotonda-runtime
 
 // A data-structure that stores the array of bytes. Could be somethin else as
@@ -119,6 +140,7 @@ pub struct RawRoute {
 pub struct RawBgpMessage(Vec<u8>);
 
 
+// Nlri
 // routecore -> rotonda-runtime
 
 // An NLRI is the part of a BGP message that lives in the NLRI section, but
@@ -133,6 +155,8 @@ pub enum Nlri {
 // routecore -> rotonda-runtime -> roto 
 pub struct FlowSpecRule {}
 
+
+// BgpAttributes
 // routecore -> rotonda-runtime -> roto 
 
 // The record that holds all the BGP attributes in a BGP message to be used
