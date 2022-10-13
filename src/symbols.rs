@@ -1,13 +1,13 @@
-use std::{collections::HashMap, fmt::{Formatter, Display}};
+use std::{collections::HashMap, fmt::{Formatter, Display}, rc::Rc, cell::RefCell};
 
-use crate::{ast::ShortString, types::{TypeValue, TypeDef}};
+use crate::{ast::ShortString, types::{typevalue::TypeValue, typedef::TypeDef}};
 
 //------------ Symbols ------------------------------------------------------
 
 // The only symbols we really have are variables & (user-defined) types.
 
 #[derive(Debug)]
-pub struct Symbol {
+pub(crate) struct Symbol {
     name: ShortString,
     kind: SymbolKind,
     ty: TypeDef,
@@ -95,12 +95,25 @@ impl Display for Scope {
     }
 }
 
+
+// A per-module symbol table.
 #[derive(Debug)]
 pub struct SymbolTable {
     scope: Scope,
-    pub symbols: HashMap<ShortString, Symbol>,
+    pub(crate) symbols: HashMap<ShortString, Symbol>,
     types: HashMap<ShortString, TypeDef>,
 }
+
+
+// The global symbol table.
+pub type GlobalSymbolTable<'a> = Rc<
+    RefCell<
+        std::collections::HashMap<
+            super::symbols::Scope,
+            super::symbols::SymbolTable,
+        >,
+    >,
+>;
 
 struct Location {
     name: ShortString,
@@ -117,7 +130,7 @@ impl<'a> SymbolTable {
         }
     }
 
-    pub fn add_symbol(&mut self, key: ShortString, name: Option<ShortString>, kind: SymbolKind, ty: TypeDef, args: Vec<Symbol>, value: Option<TypeValue>) -> Result<(), Box<dyn std::error::Error>> {
+    pub(crate) fn add_symbol(&mut self, key: ShortString, name: Option<ShortString>, kind: SymbolKind, ty: TypeDef, args: Vec<Symbol>, value: Option<TypeValue>) -> Result<(), Box<dyn std::error::Error>> {
         let name = if let Some(name) = name {
             name
         } else {
@@ -136,7 +149,7 @@ impl<'a> SymbolTable {
         self.types.insert(name, ty);
     }
 
-    pub fn get_symbol(&self, name: &ShortString) -> Result<&Symbol, Box<dyn std::error::Error>> {
+    pub(crate) fn get_symbol(&self, name: &ShortString) -> Result<&Symbol, Box<dyn std::error::Error>> {
         self.symbols.get(name).ok_or_else(|| format!("Symbol {} not found", name).into())
     }
 

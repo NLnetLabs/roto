@@ -3,11 +3,13 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::ast::ShortString;
-use crate::types::BuiltinTypeValue;
+use crate::types::builtin::BuiltinTypeValue;
 
 use super::ast;
 use super::symbols;
-use super::types;
+
+use super::types::typedef::TypeDef;
+use super::types::typevalue::TypeValue;
 
 use std::convert::From;
 
@@ -41,6 +43,10 @@ impl<'a> ast::Root {
         for expr in &global {
             if let ast::RootExpr::Rib(rib) = expr {
                 rib.eval(global_symbols)?;
+            }
+
+            if let ast::RootExpr::Table(table) = expr {
+                table.eval(global_symbols)?;
             }
         }
 
@@ -89,7 +95,7 @@ impl<'a> ast::Rib {
 
         // create a new user-defined type for the record type in the RIB
         let rec_type =
-            types::TypeDef::new_record_type_from_short_string(child_kvs)?;
+            TypeDef::new_record_type_from_short_string(child_kvs)?;
 
         // add a symbol for the user-defined type, the name is derived from
         // the 'contains' clause
@@ -117,16 +123,53 @@ impl<'a> ast::Rib {
     }
 }
 
+impl<'a> ast::Table {
+    fn eval(
+        &'a self,
+        symbols: &'_ mut symbols::SymbolTable,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let child_kvs = self.body.eval(self.ident.clone().ident, symbols)?;
+
+        // create a new user-defined type for the record type in the table
+        let rec_type =
+            TypeDef::new_record_type_from_short_string(child_kvs)?;
+
+        // add a symbol for the user-defined type, the name is derived from
+        // the 'contains' clause
+        symbols.add_symbol(
+            self.contain_ty.ident.clone(),
+            None,
+            symbols::SymbolKind::NamedType,
+            rec_type.clone(),
+            vec![],
+            None,
+        )?;
+
+        // add a symbol for the RIB itself, using the newly created record
+        // type
+        symbols.add_symbol(
+            self.ident.ident.clone(),
+            None,
+            symbols::SymbolKind::Table,
+            rec_type,
+            vec![],
+            None,
+        )?;
+
+        Ok(())
+    }
+}
+
 impl<'a> ast::RibBody {
     fn eval(
         &'a self,
         parent_name: ast::ShortString,
         symbols: &'_ mut symbols::SymbolTable,
     ) -> Result<
-        Vec<(ShortString, Box<types::TypeDef>)>,
+        Vec<(ShortString, Box<TypeDef>)>,
         Box<dyn std::error::Error>,
     > {
-        let mut kvs: Vec<(ShortString, Box<types::TypeDef>)> = vec![];
+        let mut kvs: Vec<(ShortString, Box<TypeDef>)> = vec![];
 
         for kv in self.key_values.iter() {
             match kv {
@@ -152,13 +195,13 @@ impl<'a> ast::RibBody {
 
                     kvs.push((
                         r.0.ident.as_str().into(),
-                        Box::new(types::TypeDef::Record(nested_record)),
+                        Box::new(TypeDef::Record(nested_record)),
                     ));
                 }
                 ast::RibField::ListField(l) => {
                     kvs.push((
                         l.0.ident.as_str().into(),
-                        Box::new(types::TypeDef::List(Box::new(
+                        Box::new(TypeDef::List(Box::new(
                             l.1.inner_type.clone().try_into()?,
                         ))),
                     ));
@@ -177,10 +220,10 @@ impl<'a> ast::RecordTypeIdentifier {
         kind: symbols::SymbolKind,
         symbols: &'_ mut symbols::SymbolTable,
     ) -> Result<
-        Vec<(ShortString, Box<types::TypeDef>)>,
+        Vec<(ShortString, Box<TypeDef>)>,
         Box<dyn std::error::Error>,
     > {
-        let mut kvs: Vec<(ShortString, Box<types::TypeDef>)> = vec![];
+        let mut kvs: Vec<(ShortString, Box<TypeDef>)> = vec![];
 
         for kv in self.key_values.iter() {
             match kv {
@@ -206,13 +249,13 @@ impl<'a> ast::RecordTypeIdentifier {
 
                     kvs.push((
                         r.0.ident.as_str().into(),
-                        Box::new(types::TypeDef::Record(nested_record)),
+                        Box::new(TypeDef::Record(nested_record)),
                     ));
                 }
                 ast::RibField::ListField(l) => {
                     kvs.push((
                         l.0.ident.as_str().into(),
-                        Box::new(types::TypeDef::List(Box::new(
+                        Box::new(TypeDef::List(Box::new(
                             l.1.inner_type.clone().try_into()?,
                         ))),
                     ));
@@ -220,7 +263,7 @@ impl<'a> ast::RecordTypeIdentifier {
             }
         }
 
-        let record = types::TypeDef::Record(kvs.clone());
+        let record = TypeDef::Record(kvs.clone());
         symbols.add_symbol(name, None, kind, record, vec![], None)?;
 
         Ok(kvs)
@@ -230,7 +273,7 @@ impl<'a> ast::RecordTypeIdentifier {
 impl ast::Module {
     fn eval(
         &self,
-        symbols: types::GlobalSymbolTable<'_>,
+        symbols: symbols::GlobalSymbolTable<'_>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // let _symbols = symbols.borrow();
 
@@ -326,7 +369,7 @@ impl ast::Module {
 
     fn eval_define_header<'a>(
         &'a self,
-        symbols: types::GlobalSymbolTable<'a>,
+        symbols: symbols::GlobalSymbolTable<'a>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // First, check the `define for` clause to see if we actulally have
         // the type the user's asking for.
@@ -380,7 +423,7 @@ impl ast::ModuleBody {
 impl<'a> ast::Define {
     fn eval(
         &self,
-        symbols: types::GlobalSymbolTable<'a>,
+        symbols: symbols::GlobalSymbolTable<'a>,
         scope: symbols::Scope,
     ) -> Result<(), Box<dyn std::error::Error>> {
         declare_variable(
@@ -468,10 +511,10 @@ impl<'a> ast::Define {
 //     }
 
 impl<'a> ast::CallExpr {
-    pub fn eval(
+    pub(crate) fn eval(
         &self,
         base_name_ident: ShortString,
-        symbols: types::GlobalSymbolTable<'a>,
+        symbols: symbols::GlobalSymbolTable<'a>,
         scope: symbols::Scope,
     ) -> Result<(ShortString, symbols::Symbol), Box<dyn std::error::Error>>
     {
@@ -479,8 +522,8 @@ impl<'a> ast::CallExpr {
         // 1. built-in method calls, `base_method(arguments)`,
         // 2. method calls on Buitin types, `TypeName.method(arguments)`,
         //    or a method call or a field name on a record type, `var_of_record_type.method(arguments)`,
-        // 3. method calls on a field of a record type, `var_of_user_type.field_name.method(arguments)`,
-        // The third form may be arbitrarily nested.
+        // 3. method calls on a data source, e.g. `rib-rov.longest_match(route.prefix)`,
+        // 4. method calls on a variable, `var.method(arguments)`.
 
         match &self.get_receiver() {
             // Case 1. Built-in method calls
@@ -498,10 +541,10 @@ impl<'a> ast::CallExpr {
                 // Case 2a. method calls on Builtin Type itself.
                 // e.g., `AsPathFilter.first()`
                 if !receiver.has_field_access() {
-                    if let Ok(types::TypeValue::Primitive(prim_ty)) =
-                        types::TypeValue::from_literal(&receiver_ident)
+                    if let Ok(TypeValue::Primitive(prim_ty)) =
+                        TypeValue::from_literal(&receiver_ident)
                     {
-                        let ty: types::TypeDef = prim_ty.into();
+                        let ty: TypeDef = prim_ty.into();
                         return Ok((
                             receiver_ident.clone(),
                             symbols::Symbol::new(
@@ -519,14 +562,15 @@ impl<'a> ast::CallExpr {
                     }
                 }
 
-                // Case 2b. Is there a RIB referenced here?
+                // Case 3. Method calls on a data source
                 return match (
-                    get_rib_for_ident(
+                    get_data_source_for_ident(
                         receiver.ident.clone(),
                         symbols.clone(),
                     ),
                     receiver.get_fields(),
                 ) {
+                    // Yes, but fields we're referenced following it.
                     (Ok(_data_type), Some(fields)) => {
                         println!(
                             "[[[ fields: {:#?} receiver {}",
@@ -556,8 +600,11 @@ impl<'a> ast::CallExpr {
                         );
                         return Ok((name, s));
                     }
+                    // Yes, and no fields were referenced following it, so
+                    // this is a method call on a data source, e.g. 
+                    // `rib-rov.longest_match()`
                     (Ok(data_type), None) => {
-                        println!("!!! {:?}", self.get_receiver());
+                        println!("!!! {:?} {:?}", self.get_receiver(), data_type);
                         let method_call = ast::MethodCallExpr::eval(
                             self.get_method_call(),
                             data_type.clone(),
@@ -575,7 +622,9 @@ impl<'a> ast::CallExpr {
                             ),
                         ));
                     }
-                    // Case 3a. Is there a variable referenced here without fields?
+                    // No, there is no data source referenced, so maybe:
+                    // Case 4. Method calls on a variable
+                    // 4a. on a variable without fields
                     (Err(_), None) => {
                         println!(";;; {:?}", receiver);
                         match get_type_for_scoped_variable(
@@ -606,7 +655,7 @@ impl<'a> ast::CallExpr {
                             }
                         }
                     }
-                    // Case 3a. Is there a variable referenced here with fields?
+                    // Case 4a. On a variable with fields
                     (Err(_), Some(fields)) => {
                         println!("||| {:?}", receiver);
 
@@ -653,11 +702,11 @@ impl<'a> ast::CallExpr {
 }
 
 impl ast::MethodCallExpr {
-    pub fn eval(
+    pub(crate) fn eval(
         &self,
         // Type of the data source this call should be implemented on.
-        parent_ty: types::TypeDef,
-        symbols: types::GlobalSymbolTable<'_>,
+        parent_ty: TypeDef,
+        symbols: symbols::GlobalSymbolTable<'_>,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         let args = self.args.eval(symbols, scope)?;
@@ -679,13 +728,13 @@ impl ast::MethodCallExpr {
 impl ast::AccessReceiver {
     fn eval(
         &self,
-        symbols: types::GlobalSymbolTable<'_>,
+        symbols: symbols::GlobalSymbolTable<'_>,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         let _symbols = symbols.clone();
 
         let mut search_var = self.get_ident().to_string();
-        let mut ty = types::TypeDef::None;
+        let mut ty = TypeDef::None;
 
         if let Some(fields) = &self.get_fields() {
             let field_access = ast::FieldAccessExpr::eval(
@@ -710,7 +759,7 @@ impl ast::AccessReceiver {
 impl ast::ArgExprList {
     fn eval(
         &self,
-        symbols: types::GlobalSymbolTable<'_>,
+        symbols: symbols::GlobalSymbolTable<'_>,
         scope: symbols::Scope,
     ) -> Result<Vec<symbols::Symbol>, Box<dyn std::error::Error>> {
         let mut eval_args = vec![];
@@ -737,7 +786,7 @@ impl ast::ArgExprList {
                     eval_args.push(symbols::Symbol::new(
                         str_lit.into(),
                         symbols::SymbolKind::StringLiteral,
-                        types::TypeDef::String,
+                        TypeDef::String,
                         vec![],
                     ));
                 }
@@ -765,14 +814,14 @@ impl ast::FieldAccessExpr {
     fn eval(
         &self,
         receiver: &ast::Identifier,
-        symbols: types::GlobalSymbolTable<'_>,
+        symbols: symbols::GlobalSymbolTable<'_>,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         let _symbols = symbols.clone();
 
         let mut search_var = receiver.to_string();
         let mut search_vec = vec![receiver.clone()];
-        let mut ty = types::TypeDef::None;
+        let mut ty = TypeDef::None;
 
         let rec_type = get_type_for_scoped_variable(
             &[receiver.clone()],
@@ -823,12 +872,12 @@ impl ast::FieldAccessExpr {
 
 fn check_type(
     ty: ast::TypeIdentifier,
-    symbols: types::GlobalSymbolTable,
+    symbols: symbols::GlobalSymbolTable,
     scope: &symbols::Scope,
-) -> Result<types::TypeDef, Box<dyn std::error::Error>> {
+) -> Result<TypeDef, Box<dyn std::error::Error>> {
     let symbols = symbols.borrow();
     // is it a builtin type?
-    let builtin_ty = types::TypeDef::try_from(ty.clone());
+    let builtin_ty = TypeDef::try_from(ty.clone());
     if BuiltinTypeValue::try_from(ty.ident.as_str()).is_ok() {
         return Ok(builtin_ty.unwrap());
     };
@@ -899,9 +948,9 @@ fn check_type(
 // of a primitive type they live in the user-defined record-type itself.
 fn get_type_for_scoped_variable(
     fields: &[ast::Identifier],
-    symbols: types::GlobalSymbolTable<'_>,
+    symbols: symbols::GlobalSymbolTable<'_>,
     scope: symbols::Scope,
-) -> Result<types::TypeDef, Box<dyn std::error::Error>> {
+) -> Result<TypeDef, Box<dyn std::error::Error>> {
     let symbols = symbols.borrow();
     let search_str = fields.join(".");
     match &scope {
@@ -951,10 +1000,10 @@ fn get_type_for_scoped_variable(
     }
 }
 
-fn get_rib_for_ident(
+fn get_data_source_for_ident(
     ident: ast::Identifier,
-    symbols: types::GlobalSymbolTable,
-) -> Result<types::TypeDef, Box<dyn std::error::Error>> {
+    symbols: symbols::GlobalSymbolTable,
+) -> Result<TypeDef, Box<dyn std::error::Error>> {
     let _symbols = symbols.borrow();
 
     let src = _symbols
@@ -962,14 +1011,20 @@ fn get_rib_for_ident(
         .ok_or("No global symbol table")?
         .get_symbol(&ident.ident)
         .map(|r| {
-            if r.get_kind() == symbols::SymbolKind::Rib {
-                Ok(r.get_type())
-            } else {
-                return Err(format!(
-                    "No data source named '{}' found.",
-                    ident.ident
-                )
-                .into());
+            match r.get_kind() {
+                symbols::SymbolKind::Rib => {
+                    Ok(TypeDef::Rib(Box::new(r.get_type())))
+                }
+                symbols::SymbolKind::Table => {
+                    Ok(TypeDef::Table(Box::new(r.get_type())))
+                }
+                _ => {
+                    return Err(format!(
+                        "No data source named '{}' found.",
+                        ident.ident
+                    )
+                    .into());
+                }
             }
         })?;
 
@@ -981,7 +1036,7 @@ fn get_rib_for_ident(
 fn declare_variable(
     type_ident: ast::TypeIdentField,
     kind: symbols::SymbolKind,
-    symbols: types::GlobalSymbolTable,
+    symbols: symbols::GlobalSymbolTable,
     scope: &symbols::Scope,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let _symbols = symbols.clone();
@@ -1024,7 +1079,7 @@ fn declare_variable(
 fn declare_variable_from_symbol(
     key: Option<ast::ShortString>,
     symbol: symbols::Symbol,
-    symbols: types::GlobalSymbolTable<'_>,
+    symbols: symbols::GlobalSymbolTable<'_>,
     scope: &symbols::Scope,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let _symbols = symbols.clone();
@@ -1064,10 +1119,10 @@ fn declare_variable_from_symbol(
 fn declare_variable_from_typedef<'a>(
     ident: &str,
     name: ast::ShortString,
-    ty: types::TypeDef,
+    ty: TypeDef,
     kind: symbols::SymbolKind,
     _args: Option<ast::ArgExprList>,
-    symbols: types::GlobalSymbolTable<'a>,
+    symbols: symbols::GlobalSymbolTable<'a>,
     scope: &symbols::Scope,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // let _symbols = symbols.clone();

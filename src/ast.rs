@@ -61,7 +61,7 @@ pub enum RootExpr {
     Module(Box<Module>),
     Rib(Rib),
     // PrefixList(PrefixListExpr),
-    // Table(TableExpr),
+    Table(Table),
 }
 
 impl RootExpr {
@@ -70,6 +70,7 @@ impl RootExpr {
             "root",
             alt((
                 map(Rib::parse, Self::Rib),
+                map(Table::parse, Self::Table),
                 map(Module::parse, |m| Self::Module(Box::new(m))),
             )),
         )(input)?;
@@ -242,35 +243,36 @@ impl Define {
 pub struct DefineBody {
     pub rx_type: TypeIdentField,
     pub tx_type: TypeIdentField,
-    pub use_ext_data: Vec<Identifier>,
+    pub use_ext_data: Vec<(Identifier, Identifier)>,
     pub assignments: Vec<(Identifier, CallExpr)>,
 }
 
 impl DefineBody {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, ((rx_type, tx_type), statements)) = tuple((
-            permutation((
-                cut(delimited(
-                    opt_ws(tag("rx")),
-                    opt_ws(TypeIdentField::parse),
-                    opt_ws(char(';')),
+        let (input, ((rx_type, tx_type), use_ext_data, assignments)) =
+            tuple((
+                permutation((
+                    cut(delimited(
+                        opt_ws(tag("rx")),
+                        opt_ws(TypeIdentField::parse),
+                        opt_ws(char(';')),
+                    )),
+                    cut(delimited(
+                        opt_ws(tag("tx")),
+                        opt_ws(TypeIdentField::parse),
+                        opt_ws(char(';')),
+                    )),
                 )),
-                cut(delimited(
-                    opt_ws(tag("tx")),
-                    opt_ws(TypeIdentField::parse),
-                    opt_ws(char(';')),
-                )),
-            )),
-            cut(many1(permutation((
-                delimited(
+                many1(
+                    delimited(
                     opt_ws(tag("use")),
-                    opt_ws(preceded(
-                        alt((opt_ws(tag("rib")), opt_ws(tag("table")))),
+                    tuple((
+                        opt_ws(Identifier::parse),
                         opt_ws(Identifier::parse),
                     )),
                     opt_ws(char(';')),
-                ),
-                context(
+                )),
+                many1(context(
                     "assignments",
                     separated_pair(
                         opt_ws(Identifier::parse),
@@ -280,11 +282,10 @@ impl DefineBody {
                             opt_ws(char(';')),
                         ),
                     ),
-                ),
-            )))),
-        ))(input)?;
+                )),
+            ))(input)?;
 
-        let (use_ext_data, assignments) = statements.iter().cloned().unzip();
+        // let (use_ext_data, assignments) = statements.iter().cloned().unzip();
 
         Ok((
             input,
@@ -653,7 +654,7 @@ impl Rib {
             "rib definition",
             tuple((
                 preceded(
-                    opt_ws(alt((tag("rib"), tag("table")))),
+                    tag("rib"),
                     context(
                         "rib name",
                         delimited(
@@ -760,6 +761,67 @@ impl RibBody {
             ),
         )(input)?;
         Ok((input, RibBody { key_values }))
+    }
+}
+
+//------------ Table -----------------------------------------------------
+
+// Table ::= "table" Identifier 'contains' TypeIdentifier '{' TableBody '}'
+
+#[derive(Clone, Debug)]
+pub struct Table {
+    pub ident: Identifier,
+    pub contain_ty: TypeIdentifier,
+    pub body: RibBody,
+}
+
+impl Table {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (ident, contain_ty, body, _)) = context(
+            "table definition",
+            tuple((
+                preceded(
+                    opt_ws(tag("table")),
+                    context(
+                        "table name",
+                        delimited(
+                            multispace1,
+                            Identifier::parse,
+                            multispace1,
+                        ),
+                    ),
+                ),
+                context(
+                    "contains",
+                    preceded(
+                        opt_ws(tag("contains")),
+                        delimited(
+                            multispace1,
+                            TypeIdentifier::parse,
+                            multispace1,
+                        ),
+                    ),
+                ),
+                context(
+                    "table block",
+                    cut(delimited(
+                        opt_ws(char('{')),
+                        RibBody::parse,
+                        opt_ws(char('}')),
+                    )),
+                ),
+                map(skip_opt_ws, |_| ()),
+            )),
+        )(input)?;
+
+        Ok((
+            input,
+            Table {
+                ident,
+                contain_ty,
+                body,
+            },
+        ))
     }
 }
 

@@ -1,7 +1,7 @@
-use roto::types::{
-    AsPath, Asn, Community, CommunityType, ElementTypeValue, List,
-    BuiltinTypeValue, Record, TypeDef, TypeValue, U32,
-};
+use roto::types::typedef::TypeDef;
+use roto::types::collections::{List, Record, ElementTypeValue};
+use roto::types::builtin::{BuiltinTypeValue, U32, AsPath, Asn, Community, CommunityType};
+use roto::types::typevalue::TypeValue;
 
 fn main() {
     // let count = RotoType::create_primitive_var(
@@ -27,7 +27,7 @@ fn main() {
 
     let as_path = BuiltinTypeValue::create_instance(
         TypeDef::AsPath,
-        BuiltinTypeValue::AsPath(AsPath::new(vec![Asn::from_u32(1)])),
+        BuiltinTypeValue::AsPath(AsPath::new(vec![routecore::asn::Asn::from_u32(1)]).unwrap()),
     )
     .unwrap();
 

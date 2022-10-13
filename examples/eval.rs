@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use roto::types::GlobalSymbolTable;
+use roto::symbols::GlobalSymbolTable;
 
 use nom::error::convert_error;
 use roto::ast::*;
@@ -40,15 +40,18 @@ fn main() {
                define for ext_r: ExtRoute with extra_asn: Asn {
                   // specify the types of that this filter receives
                   // and sends.
+                  // rx_tx route: StreamRoute;
                   rx route: StreamRoute;
                   tx ext_route: ExtRoute;
 
                   // specify additional external data sets that will be consulted.
                   use table source_asns;
+                  use rib rib-rov;
+
+                  // assignments
                   route_in_table = source_asns.contains("asn", route.as-path.origin());
 
                   // specify another RIB that is used in this filter.
-                  use rib rib-rov;
                   found_prefix = rib-rov.longest_match(route.prefix);
                }
             
@@ -62,6 +65,8 @@ fn main() {
                
                action blaffer {
                    blaffer.blaf(bla);
+                   ext_route.origin = extra_asn;
+                   route.origin = extra_asn;
                }
 
                apply {
