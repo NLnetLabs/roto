@@ -49,10 +49,11 @@ fn main() {
                   use rib rib-rov;
 
                   // assignments
-                  route_in_table = source_asns.contains("asn", route.as-path.origin());
+                  route_in_table = source_asns.contains(extra_asn, route.as-path.origin());
 
                   // specify another RIB that is used in this filter.
                   found_prefix = rib-rov.longest_match(route.prefix);
+                  pp = Prefix.from(route);
                }
             
                term rov-valid for route: Route {
