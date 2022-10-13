@@ -19,9 +19,10 @@ use super::{
 pub enum TypeValue {
     // All the built-in scalars
     Builtin(BuiltinTypeValue),
-    // An ordered list of one type
+    // An ordered list of one user-defined type
     List(List),
-    // A map of (key, value) pairs, where value can be any of the other types
+    // A map of (key, value) pairs, where value can be any of the other types.
+    // Always user-defined.
     Record(Record),
     // A collection of Records, keyed on Prefix and with special methods for
     // matching prefixes.
