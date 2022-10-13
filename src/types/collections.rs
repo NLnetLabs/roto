@@ -65,7 +65,7 @@ impl<'a> From<&'a TypeDef> for ElementTypeValue {
 impl<'a> From<TypeValue> for ElementTypeValue {
     fn from(t: TypeValue) -> Self {
         match t {
-            TypeValue::Primitive(v) => ElementTypeValue::Primitive(v),
+            TypeValue::Builtin(v) => ElementTypeValue::Primitive(v),
             TypeValue::List(ty) => {
                 ElementTypeValue::Nested(Box::new(TypeValue::List(ty)))
             }
@@ -149,7 +149,7 @@ impl RotoFilter<ListToken> for List {
             )),
             "contains" => Ok((
                 std::mem::size_of_val(&ListToken::Contains) as u8,
-                TypeValue::Primitive(BuiltinTypeValue::Boolean(Boolean(
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
                     None,
                 ))),
             )),
@@ -281,7 +281,7 @@ impl<'a> RotoFilter<RecordToken>
             )),
             "contains" => Ok((
                 std::mem::size_of_val(&RecordToken::Contains) as u8,
-                TypeValue::Primitive(BuiltinTypeValue::Boolean(Boolean(
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
                     None,
                 ))),
             )),

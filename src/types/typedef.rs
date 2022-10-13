@@ -121,7 +121,7 @@ impl<'a> TypeDef {
                 rec_type.get_props_for_method(method)
             }
             TypeValue::List(list) => list.get_props_for_method(method),
-            TypeValue::Primitive(BuiltinTypeValue::AsPath(as_path)) => {
+            TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {
                 as_path.get_props_for_method(method)
             }
             TypeValue::Rib(rib) => rib.get_props_for_method(method),
@@ -169,7 +169,7 @@ impl PartialEq<BuiltinTypeValue> for TypeDef {
 impl PartialEq<TypeValue> for TypeDef {
     fn eq(&self, other: &TypeValue) -> bool {
         match (self, other) {
-            (a, TypeValue::Primitive(b)) => a == b,
+            (a, TypeValue::Builtin(b)) => a == b,
             (TypeDef::List(a), TypeValue::List(b)) => match (a.as_ref(), b) {
                 (TypeDef::List(aa), List(bb)) => match &bb[0] {
                     ElementTypeValue::Nested(bb) => {

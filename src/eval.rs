@@ -541,7 +541,7 @@ impl<'a> ast::CallExpr {
                 // Case 2a. method calls on Builtin Type itself.
                 // e.g., `AsPathFilter.first()`
                 if !receiver.has_field_access() {
-                    if let Ok(TypeValue::Primitive(prim_ty)) =
+                    if let Ok(TypeValue::Builtin(prim_ty)) =
                         TypeValue::from_literal(&receiver_ident)
                     {
                         let ty: TypeDef = prim_ty.into();

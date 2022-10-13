@@ -41,7 +41,7 @@ impl RotoFilter<RibToken> for Rib {
             )),
             "contains" => Ok((
                 std::mem::size_of_val(&RibToken::Contains) as u8,
-                TypeValue::Primitive(BuiltinTypeValue::Boolean(Boolean(
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
                     None,
                 ))),
             )),
@@ -114,7 +114,7 @@ impl RotoFilter<TableToken> for Table {
             )),
             "contains" => Ok((
                 std::mem::size_of_val(&TableToken::Contains) as u8,
-                TypeValue::Primitive(BuiltinTypeValue::Boolean(Boolean(
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
                     None,
                 ))),
             )),

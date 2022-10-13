@@ -133,7 +133,7 @@ impl BuiltinTypeValue {
             }
             _ => return Err("Not a primitive type".into()),
         };
-        Ok(TypeValue::Primitive(var))
+        Ok(TypeValue::Builtin(var))
     }
 }
 
@@ -390,7 +390,7 @@ impl AsPath {
         Self: std::marker::Sized,
     {
         match type_value {
-            TypeValue::Primitive(BuiltinTypeValue::AsPath(as_path)) => {
+            TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {
                 if let Some(as_path) = as_path.0 {
                     Ok(as_path)
                 } else {
@@ -416,15 +416,15 @@ impl<'a>
         match method_name.ident.as_str() {
             "origin" => Ok((
                 std::mem::size_of_val(&AsPathToken::Origin) as u8,
-                TypeValue::Primitive(BuiltinTypeValue::AsPath(AsPath(None))),
+                TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))),
             )),
             "contains" => Ok((
                 std::mem::size_of_val(&AsPathToken::Contains) as u8,
-                TypeValue::Primitive(BuiltinTypeValue::AsPath(AsPath(None))),
+                TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))),
             )),
             "len" => Ok((
                 std::mem::size_of_val(&AsPathToken::Len) as u8,
-                TypeValue::Primitive(BuiltinTypeValue::U8(U8(None))),
+                TypeValue::Builtin(BuiltinTypeValue::U8(U8(None))),
             )),
             _ => {
                 Err(format!("Unknown method '{}'", method_name.ident).into())
@@ -448,13 +448,13 @@ impl<'a>
                         let origin: routecore::asn::Asn =
                             rc_as_path.iter().next().unwrap().elements()[0];
 
-                        TypeValue::Primitive(BuiltinTypeValue::Asn(Asn(
+                        TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(
                             Some(origin),
                         )))
                     }))
                 } else {
                     Ok(Box::new(move |_| {
-                        TypeValue::Primitive(BuiltinTypeValue::Asn(Asn(None)))
+                        TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(None)))
                     }))
                 }
             }
@@ -462,30 +462,30 @@ impl<'a>
                 if let Some(_rc_as_path) = &self.0 {
                     {
                         Ok(Box::new(move |as_path| {
-                            if let TypeValue::Primitive(
+                            if let TypeValue::Builtin(
                                 BuiltinTypeValue::AsPath(x_as_path),
                             ) = as_path
                             {
-                                if let TypeValue::Primitive(
+                                if let TypeValue::Builtin(
                                     BuiltinTypeValue::Asn(Asn(search_asn)),
                                 ) = args[0]
                                 {
                                     let contains = x_as_path
                                         .contains(search_asn.unwrap());
-                                    TypeValue::Primitive(
+                                    TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
                                             Some(contains),
                                         )),
                                     )
                                 } else {
-                                    TypeValue::Primitive(
+                                    TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
                                             None,
                                         )),
                                     )
                                 }
                             } else {
-                                TypeValue::Primitive(
+                                TypeValue::Builtin(
                                     BuiltinTypeValue::Boolean(Boolean(None)),
                                 )
                             }
@@ -493,7 +493,7 @@ impl<'a>
                     }
                 } else {
                     Ok(Box::new(move |_| {
-                        TypeValue::Primitive(BuiltinTypeValue::Asn(Asn(None)))
+                        TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(None)))
                     }))
                 }
             }
@@ -502,13 +502,13 @@ impl<'a>
                 if let Some(rc_as_path) = &self.0 {
                     Ok(Box::new(move |as_path| {
                         let len = rc_as_path.iter().count();
-                        TypeValue::Primitive(BuiltinTypeValue::U8(U8(Some(
+                        TypeValue::Builtin(BuiltinTypeValue::U8(U8(Some(
                             len as u8,
                         ))))
                     }))
                 } else {
                     Ok(Box::new(move |_| {
-                        TypeValue::Primitive(BuiltinTypeValue::U8(U8(None)))
+                        TypeValue::Builtin(BuiltinTypeValue::U8(U8(None)))
                     }))
                 }
             }
