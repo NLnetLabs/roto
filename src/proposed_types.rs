@@ -8,6 +8,7 @@
 // is to establish what the contact surface between the different parts of
 // Rotonda (including routecore) will (have to) be.
 
+// BGP Message
 // rotonda-runtime -> routecore -> rotonda-runtime
 
 // One BGP Message as received by rotonda-runtime, then parsed with routecore
@@ -16,32 +17,49 @@ pub struct BgpMessage {
     withdrawals: Vec<Withdrawal>,
 }
 
+impl Iterator for BgpMessage {
+    type Item = Route;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.updates.pop()
+    }
+}
+
+// Update
 // routecore -> rotonda-runtime
-// An update is a part of a BGP Message that contains an Nlri (most likely
+
+// An update is a part of a BGP Message that contains an NLRI (most likely
 // one or more prefixes). Created by routecore as part of a parsed BGP
-// message.
+// message. Roto doesn't deal with this type directly, since rotonda-runtime
+// will break this into multiple routes and pass them through roto filters.
 pub struct Update {
     pub nlri: Nlri,
     pub attributes: BgpAttributes,
     pub afi_safi: (u16, u8),
 }
 
+// Withdrawal
 // routecore -> rotonda-runtime
+
 // A withdrawal is a BGP message that only has an NLRI, but doesn't have any
 // attributes. Created by routecore as part of parsed BGP message.
-// Roto doesn't have to deal with this.
+// Roto doesn't have to deal with this type directly, since rotonda-runtime
+// will set the status of the corresponding routes to `Withdrawn`.
 pub struct Withdrawal {
     pub nlri: Nlri,
     pub afi_safi: (u16, u8),
 }
 
+
+// Route
 // routecore -> rotonda-runtime -> roto
 
 // A Route according to RFC4271, a record of the form (prefix, bgp_attributes)
 // with some added metadata, that is strictly speaking not part of a RFC4271
-// route.
+// route. This is one of the record types that can be stored in a RIB, and is
+// a builtin type for roto. This is the default type that gets fed into a
+// roto filter.
 
-// The RFC (https://tools.ietf.org/html/rfc4271#section-1.1):
+// The RFC:
 
 // ```
 // Route
@@ -54,7 +72,6 @@ pub struct Withdrawal {
 // UPDATE message.
 // ```
 
-// Message iterator -> Routes
 #[derive(Debug, PartialEq)]
 pub struct Route {
     pub prefix: Option<Prefix>,
@@ -84,11 +101,11 @@ pub enum Status {
 
 // rotonda-runtime
 
-// A BGP message that will be stored as a array of bytes (whatever Rust data-
-// structures that may result in), that can be stored in a RIB, most likely
-// the RIB that lives directy next to an stream-connector. Can be parsed
-// on-the-fly when needed, and thus roto doesn't have to have any knowledge
-// of this type.
+// A BGP message that will be stored in a RIB as a array of bytes (whatever
+// Rust data-structures that may result in), that can be stored in a RIB,
+// most likely the RIB that lives directy next to an stream-connector. Can be
+// parsed on-the-fly when needed, and thus roto doesn't have to have any
+// knowledge of this type.
 pub struct RawRoute {
     pub prefix: Option<Prefix>,
     pub message: RawBgpMessage,
@@ -98,7 +115,7 @@ pub struct RawRoute {
 // rotonda-runtime
 
 // A data-structure that stores the array of bytes. Could be somethin else as
-// well, but it should be usable by `OctSeq`.
+// well, but it should be usable by `octseq`.
 pub struct RawBgpMessage(Vec<u8>);
 
 
@@ -106,7 +123,7 @@ pub struct RawBgpMessage(Vec<u8>);
 
 // An NLRI is the part of a BGP message that lives in the NLRI section, but
 // it can also be the MP_REACH_NLRI and MP_UNREACH_NLRI in RFC4760.
-// In most cases it will be one or more prefixes, but it can also be. for
+// In most cases it will be one or more prefixes, but it can also be, for
 // example, a FlowSpec rule.
 pub enum Nlri {
     Prefix(Vec<Prefix>),
