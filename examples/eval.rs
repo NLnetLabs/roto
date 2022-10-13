@@ -53,7 +53,7 @@ fn main() {
 
                   // specify another RIB that is used in this filter.
                   found_prefix = rib-rov.longest_match(route.prefix);
-                  pp = Prefix.from(route);
+                  fixed_len_prefix = Prefix.from(route.prefix.address(), 24);
                }
             
                term rov-valid for route: Route {
@@ -64,10 +64,10 @@ fn main() {
                     }
                 }
                
-               action blaffer {
-                   blaffer.blaf(bla);
-                   ext_route.origin = extra_asn;
-                   route.origin = extra_asn;
+               action set-best for route: Route {
+                   rib-rov.set-best(route);
+                   route.local_pref.set(200);
+                   route.origin.set(extra_asn);
                }
 
                apply {
