@@ -8,9 +8,6 @@ use crate::ast::ShortString;
 ///
 /// This module contains the types offered by the Roto languages.
 
-
-
-
 //------------ RFC4271 Route type -------------------------------------------
 
 // routecore, no roto
@@ -72,4 +69,3 @@ pub struct BgpAttributes {
     pub as_path: AsPath,
     pub communities: Vec<Community>,
 }
-

@@ -1,7 +1,6 @@
-
 // =========== RotoFilter trait ============================================
 
-use crate::types::{typevalue::TypeValue, typedef::TypeDef};
+use crate::types::{typedef::TypeDef, typevalue::TypeValue};
 
 pub(crate) trait RotoFilter<Token> {
     fn get_props_for_method(

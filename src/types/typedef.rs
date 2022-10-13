@@ -5,7 +5,11 @@
 
 use crate::{ast::ShortString, traits::RotoFilter};
 
-use super::{typevalue::TypeValue, builtin::BuiltinTypeValue, collections::{List, ElementTypeValue}};
+use super::{
+    builtin::BuiltinTypeValue,
+    collections::{ElementTypeValue, List},
+    typevalue::TypeValue,
+};
 
 #[derive(Clone, Debug)]
 pub enum TypeDef {

@@ -350,7 +350,9 @@ impl Asn {
 // ----------- AsPath type --------------------------------------------------
 
 #[derive(Debug, PartialEq)]
-pub struct AsPath(pub(crate) Option<routecore::asn::AsPath<Vec<routecore::asn::Asn>>>);
+pub struct AsPath(
+    pub(crate) Option<routecore::asn::AsPath<Vec<routecore::asn::Asn>>>,
+);
 
 impl AsPath {
     pub fn new(
@@ -402,10 +404,7 @@ impl AsPath {
     }
 }
 
-impl<'a>
-    RotoFilter<AsPathToken>
-    for AsPath
-{
+impl<'a> RotoFilter<AsPathToken> for AsPath {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -448,9 +447,9 @@ impl<'a>
                         let origin: routecore::asn::Asn =
                             rc_as_path.iter().next().unwrap().elements()[0];
 
-                        TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(
-                            Some(origin),
-                        )))
+                        TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(Some(
+                            origin,
+                        ))))
                     }))
                 } else {
                     Ok(Box::new(move |_| {
@@ -485,9 +484,9 @@ impl<'a>
                                     )
                                 }
                             } else {
-                                TypeValue::Builtin(
-                                    BuiltinTypeValue::Boolean(Boolean(None)),
-                                )
+                                TypeValue::Builtin(BuiltinTypeValue::Boolean(
+                                    Boolean(None),
+                                ))
                             }
                         }))
                     }
@@ -536,10 +535,10 @@ pub struct Route {
 pub enum Status {
     InConvergence, // Between start and EOR on a BGP peer-session
     UpToDate, // After EOR for a BGP peer-session, either Graceful Restart or EOR
-    Stale, // After hold-timer expiry
+    Stale,    // After hold-timer expiry
     StartOfRouteRefresh, // After the request for a Route Refresh to a peer and the reception of a new route
-    Withdrawn, // After the reception of a withdrawal
-    Empty // Status not relevant, e.g. a RIB that holds archived routes.
+    Withdrawn,           // After the reception of a withdrawal
+    Empty, // Status not relevant, e.g. a RIB that holds archived routes.
 }
 
 #[derive(Debug, PartialEq)]

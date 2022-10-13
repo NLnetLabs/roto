@@ -4,7 +4,12 @@
 
 use crate::traits::RotoFilter;
 
-use super::{collections::Record, typevalue::TypeValue, builtin::{BuiltinTypeValue, Boolean}, typedef::TypeDef};
+use super::{
+    builtin::{Boolean, BuiltinTypeValue},
+    collections::Record,
+    typedef::TypeDef,
+    typevalue::TypeValue,
+};
 
 #[derive(Debug, PartialEq)]
 pub struct Rib {
@@ -41,9 +46,7 @@ impl RotoFilter<RibToken> for Rib {
             )),
             "contains" => Ok((
                 std::mem::size_of_val(&RibToken::Contains) as u8,
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
-                    None,
-                ))),
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
             )),
             _ => {
                 Err(format!("Unknown method '{}'", method_name.ident).into())
@@ -114,9 +117,7 @@ impl RotoFilter<TableToken> for Table {
             )),
             "contains" => Ok((
                 std::mem::size_of_val(&TableToken::Contains) as u8,
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
-                    None,
-                ))),
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
             )),
             _ => {
                 Err(format!("Unknown method '{}'", method_name.ident).into())
@@ -135,7 +136,6 @@ impl RotoFilter<TableToken> for Table {
     > {
         todo!()
     }
-
 }
 
 pub enum TableToken {

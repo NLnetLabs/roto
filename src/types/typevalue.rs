@@ -2,7 +2,14 @@
 
 use crate::ast::ShortString;
 
-use super::{builtin::{BuiltinTypeValue, U32, U8, Asn, AsPath, Community, Prefix, IpAddress}, collections::{List, Record}, datasources::{Rib, Table}, typedef::TypeDef};
+use super::{
+    builtin::{
+        AsPath, Asn, BuiltinTypeValue, Community, IpAddress, Prefix, U32, U8,
+    },
+    collections::{List, Record},
+    datasources::{Rib, Table},
+    typedef::TypeDef,
+};
 
 /// These are the actual types that are used in the Roto language. This enum
 /// holds both the type-level information and the value. The collection
@@ -32,13 +39,11 @@ impl TypeValue {
 
     pub fn from_literal(s: &str) -> Result<Self, Box<dyn std::error::Error>> {
         match s {
-            "U32" => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(None))))
-            }
+            "U32" => Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(None)))),
             "U8" => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(None)))),
-            "prefix" => Ok(TypeValue::Builtin(BuiltinTypeValue::Prefix(
-                Prefix(None),
-            ))),
+            "prefix" => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None))))
+            }
             "PrefixRecord" => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::PrefixRecord((
                     Prefix(None),
@@ -48,12 +53,10 @@ impl TypeValue {
             "IpAddress" => Ok(TypeValue::Builtin(
                 BuiltinTypeValue::IpAddress(IpAddress(None)),
             )),
-            "Asn" => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(None))))
+            "Asn" => Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(None)))),
+            "AsPath" => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))))
             }
-            "AsPath" => Ok(TypeValue::Builtin(BuiltinTypeValue::AsPath(
-                AsPath(None),
-            ))),
             "Community" => Ok(TypeValue::Builtin(
                 BuiltinTypeValue::Community(Community(None)),
             )),
@@ -78,9 +81,9 @@ impl TypeValue {
 impl<'a> From<&'a TypeDef> for Box<TypeValue> {
     fn from(t: &'a TypeDef) -> Self {
         match t {
-            TypeDef::U32 => Box::new(TypeValue::Builtin(
-                BuiltinTypeValue::U32(U32(None)),
-            )),
+            TypeDef::U32 => {
+                Box::new(TypeValue::Builtin(BuiltinTypeValue::U32(U32(None))))
+            }
             TypeDef::U8 => {
                 Box::new(TypeValue::Builtin(BuiltinTypeValue::U8(U8(None))))
             }
@@ -90,9 +93,9 @@ impl<'a> From<&'a TypeDef> for Box<TypeValue> {
             TypeDef::IpAddress => Box::new(TypeValue::Builtin(
                 BuiltinTypeValue::IpAddress(IpAddress(None)),
             )),
-            TypeDef::Asn => Box::new(TypeValue::Builtin(
-                BuiltinTypeValue::Asn(Asn(None)),
-            )),
+            TypeDef::Asn => {
+                Box::new(TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(None))))
+            }
             TypeDef::AsPath => Box::new(TypeValue::Builtin(
                 BuiltinTypeValue::AsPath(AsPath(None)),
             )),
@@ -120,9 +123,7 @@ impl<'a> From<&'a TypeDef> for TypeValue {
             TypeDef::U32 => {
                 TypeValue::Builtin(BuiltinTypeValue::U32(U32(None)))
             }
-            TypeDef::U8 => {
-                TypeValue::Builtin(BuiltinTypeValue::U8(U8(None)))
-            }
+            TypeDef::U8 => TypeValue::Builtin(BuiltinTypeValue::U8(U8(None))),
             TypeDef::Prefix => {
                 TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None)))
             }

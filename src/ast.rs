@@ -263,8 +263,7 @@ impl DefineBody {
                         opt_ws(char(';')),
                     )),
                 )),
-                many1(
-                    delimited(
+                many1(delimited(
                     opt_ws(tag("use")),
                     tuple((
                         opt_ws(Identifier::parse),

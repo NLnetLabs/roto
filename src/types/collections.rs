@@ -1,13 +1,14 @@
 use crate::ast::ShortString;
 use crate::traits::RotoFilter;
 
-use super::builtin::{BuiltinTypeValue, Asn, AsPath, Community, IpAddress, Prefix, U32, U8, Boolean};
-use super::typevalue::TypeValue;
+use super::builtin::{
+    AsPath, Asn, Boolean, BuiltinTypeValue, Community, IpAddress, Prefix,
+    U32, U8,
+};
 use super::typedef::TypeDef;
-
+use super::typevalue::TypeValue;
 
 //============ Collections ==================================================
-
 
 //------------ ElementType -------------------------------------
 
@@ -111,7 +112,6 @@ impl<'a> From<&'a TypeDef> for List {
     fn from(t: &'a TypeDef) -> Self {
         List::new(vec![t.into()])
     }
-    
 }
 
 impl std::fmt::Display for List {
@@ -149,9 +149,7 @@ impl RotoFilter<ListToken> for List {
             )),
             "contains" => Ok((
                 std::mem::size_of_val(&ListToken::Contains) as u8,
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
-                    None,
-                ))),
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
             )),
             _ => {
                 Err(format!("Unknown method '{}'", method_name.ident).into())
@@ -252,9 +250,7 @@ impl std::fmt::Display for Record {
     }
 }
 
-impl<'a> RotoFilter<RecordToken>
-    for Record
-{
+impl<'a> RotoFilter<RecordToken> for Record {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -267,9 +263,10 @@ impl<'a> RotoFilter<RecordToken>
                 std::mem::size_of_val(&RecordToken::LongestMatch) as u8,
                 TypeValue::Record(Record::new(vec![(
                     ShortString::from("prefix"),
-                    ElementTypeValue::Nested(Box::new(TypeValue::Record(self)))
-            )])?),
-
+                    ElementTypeValue::Nested(Box::new(TypeValue::Record(
+                        self,
+                    ))),
+                )])?),
             )),
             "get" => Ok((
                 std::mem::size_of_val(&RecordToken::Get) as u8,
@@ -281,9 +278,7 @@ impl<'a> RotoFilter<RecordToken>
             )),
             "contains" => Ok((
                 std::mem::size_of_val(&RecordToken::Contains) as u8,
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
-                    None,
-                ))),
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
             )),
             _ => {
                 Err(format!("Unknown method '{}'", method_name.ident).into())

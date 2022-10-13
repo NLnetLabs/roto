@@ -1,5 +1,5 @@
 pub mod ast;
-pub mod types;
+mod eval;
 pub mod symbols;
 pub mod traits;
-mod eval;
+pub mod types;

@@ -16,7 +16,9 @@ fn test_data(name: &str, data: &str, expect_success: bool) {
 }
 
 fn main() {
-    let cm = CallExpr::parse(r###"source_asns.contains("asn", route.as_path.origin)"###);
+    let cm = CallExpr::parse(
+        r###"source_asns.contains("asn", route.as_path.origin)"###,
+    );
 
     println!("{}, {:#?}", cm.is_ok(), cm);
     assert!(cm.is_ok());
@@ -26,9 +28,7 @@ fn main() {
     assert!(mm.is_ok());
     panic!("STROP");
 
-    let r = ByteStringLiteral::parse(
- "0xZZZZ_AE9",
-    );
+    let r = ByteStringLiteral::parse("0xZZZZ_AE9");
     println!("{:#?}", r);
     assert!(r.is_err());
 

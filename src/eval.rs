@@ -94,8 +94,7 @@ impl<'a> ast::Rib {
         let child_kvs = self.body.eval(self.ident.clone().ident, symbols)?;
 
         // create a new user-defined type for the record type in the RIB
-        let rec_type =
-            TypeDef::new_record_type_from_short_string(child_kvs)?;
+        let rec_type = TypeDef::new_record_type_from_short_string(child_kvs)?;
 
         // add a symbol for the user-defined type, the name is derived from
         // the 'contains' clause
@@ -131,8 +130,7 @@ impl<'a> ast::Table {
         let child_kvs = self.body.eval(self.ident.clone().ident, symbols)?;
 
         // create a new user-defined type for the record type in the table
-        let rec_type =
-            TypeDef::new_record_type_from_short_string(child_kvs)?;
+        let rec_type = TypeDef::new_record_type_from_short_string(child_kvs)?;
 
         // add a symbol for the user-defined type, the name is derived from
         // the 'contains' clause
@@ -165,10 +163,8 @@ impl<'a> ast::RibBody {
         &'a self,
         parent_name: ast::ShortString,
         symbols: &'_ mut symbols::SymbolTable,
-    ) -> Result<
-        Vec<(ShortString, Box<TypeDef>)>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Vec<(ShortString, Box<TypeDef>)>, Box<dyn std::error::Error>>
+    {
         let mut kvs: Vec<(ShortString, Box<TypeDef>)> = vec![];
 
         for kv in self.key_values.iter() {
@@ -219,10 +215,8 @@ impl<'a> ast::RecordTypeIdentifier {
         name: ast::ShortString,
         kind: symbols::SymbolKind,
         symbols: &'_ mut symbols::SymbolTable,
-    ) -> Result<
-        Vec<(ShortString, Box<TypeDef>)>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Vec<(ShortString, Box<TypeDef>)>, Box<dyn std::error::Error>>
+    {
         let mut kvs: Vec<(ShortString, Box<TypeDef>)> = vec![];
 
         for kv in self.key_values.iter() {
@@ -601,10 +595,14 @@ impl<'a> ast::CallExpr {
                         return Ok((name, s));
                     }
                     // Yes, and no fields were referenced following it, so
-                    // this is a method call on a data source, e.g. 
+                    // this is a method call on a data source, e.g.
                     // `rib-rov.longest_match()`
                     (Ok(data_type), None) => {
-                        println!("!!! {:?} {:?}", self.get_receiver(), data_type);
+                        println!(
+                            "!!! {:?} {:?}",
+                            self.get_receiver(),
+                            data_type
+                        );
                         let method_call = ast::MethodCallExpr::eval(
                             self.get_method_call(),
                             data_type.clone(),
@@ -1010,21 +1008,19 @@ fn get_data_source_for_ident(
         .get(&symbols::Scope::Global)
         .ok_or("No global symbol table")?
         .get_symbol(&ident.ident)
-        .map(|r| {
-            match r.get_kind() {
-                symbols::SymbolKind::Rib => {
-                    Ok(TypeDef::Rib(Box::new(r.get_type())))
-                }
-                symbols::SymbolKind::Table => {
-                    Ok(TypeDef::Table(Box::new(r.get_type())))
-                }
-                _ => {
-                    return Err(format!(
-                        "No data source named '{}' found.",
-                        ident.ident
-                    )
-                    .into());
-                }
+        .map(|r| match r.get_kind() {
+            symbols::SymbolKind::Rib => {
+                Ok(TypeDef::Rib(Box::new(r.get_type())))
+            }
+            symbols::SymbolKind::Table => {
+                Ok(TypeDef::Table(Box::new(r.get_type())))
+            }
+            _ => {
+                return Err(format!(
+                    "No data source named '{}' found.",
+                    ident.ident
+                )
+                .into());
             }
         })?;
 

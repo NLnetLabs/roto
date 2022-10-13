@@ -1,6 +1,14 @@
-use std::{collections::HashMap, fmt::{Formatter, Display}, rc::Rc, cell::RefCell};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    fmt::{Display, Formatter},
+    rc::Rc,
+};
 
-use crate::{ast::ShortString, types::{typevalue::TypeValue, typedef::TypeDef}};
+use crate::{
+    ast::ShortString,
+    types::{typedef::TypeDef, typevalue::TypeValue},
+};
 
 //------------ Symbols ------------------------------------------------------
 
@@ -42,7 +50,12 @@ impl<'a> Symbol {
         self.args
     }
 
-    pub fn new(name: ShortString, kind: SymbolKind, ty: TypeDef, args: Vec<Symbol>) -> Self {
+    pub fn new(
+        name: ShortString,
+        kind: SymbolKind,
+        ty: TypeDef,
+        args: Vec<Symbol>,
+    ) -> Self {
         Symbol {
             name,
             kind,
@@ -52,7 +65,12 @@ impl<'a> Symbol {
         }
     }
 
-    pub fn new_with_value(name: ShortString, kind: SymbolKind, value: TypeValue, args: Vec<Symbol>) -> Self {
+    pub fn new_with_value(
+        name: ShortString,
+        kind: SymbolKind,
+        value: TypeValue,
+        args: Vec<Symbol>,
+    ) -> Self {
         Symbol {
             name,
             kind,
@@ -95,7 +113,6 @@ impl Display for Scope {
     }
 }
 
-
 // A per-module symbol table.
 #[derive(Debug)]
 pub struct SymbolTable {
@@ -103,7 +120,6 @@ pub struct SymbolTable {
     pub(crate) symbols: HashMap<ShortString, Symbol>,
     types: HashMap<ShortString, TypeDef>,
 }
-
 
 // The global symbol table.
 pub type GlobalSymbolTable<'a> = Rc<
@@ -130,7 +146,15 @@ impl<'a> SymbolTable {
         }
     }
 
-    pub(crate) fn add_symbol(&mut self, key: ShortString, name: Option<ShortString>, kind: SymbolKind, ty: TypeDef, args: Vec<Symbol>, value: Option<TypeValue>) -> Result<(), Box<dyn std::error::Error>> {
+    pub(crate) fn add_symbol(
+        &mut self,
+        key: ShortString,
+        name: Option<ShortString>,
+        kind: SymbolKind,
+        ty: TypeDef,
+        args: Vec<Symbol>,
+        value: Option<TypeValue>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let name = if let Some(name) = name {
             name
         } else {
@@ -138,10 +162,23 @@ impl<'a> SymbolTable {
         };
 
         if self.symbols.contains_key(&name) {
-            return Err(format!("Symbol {} already defined in scope {}", name, self.scope).into());
+            return Err(format!(
+                "Symbol {} already defined in scope {}",
+                name, self.scope
+            )
+            .into());
         }
 
-        self.symbols.insert(key, Symbol { name, kind, ty, args, value });
+        self.symbols.insert(
+            key,
+            Symbol {
+                name,
+                kind,
+                ty,
+                args,
+                value,
+            },
+        );
         Ok(())
     }
 
@@ -149,8 +186,13 @@ impl<'a> SymbolTable {
         self.types.insert(name, ty);
     }
 
-    pub(crate) fn get_symbol(&self, name: &ShortString) -> Result<&Symbol, Box<dyn std::error::Error>> {
-        self.symbols.get(name).ok_or_else(|| format!("Symbol {} not found", name).into())
+    pub(crate) fn get_symbol(
+        &self,
+        name: &ShortString,
+    ) -> Result<&Symbol, Box<dyn std::error::Error>> {
+        self.symbols
+            .get(name)
+            .ok_or_else(|| format!("Symbol {} not found", name).into())
     }
 
     pub fn get_type(&self, name: &ShortString) -> Option<&TypeDef> {
