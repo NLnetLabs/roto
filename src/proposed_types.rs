@@ -8,9 +8,6 @@
 // is to establish what the contact surface between the different parts of
 // Rotonda (including routecore) will (have to) be.
 
-use routecore::asn::LongSegmentError;
-use crate::ast::ShortString;
-
 // rotonda-runtime -> routecore -> rotonda-runtime
 
 // One BGP Message as received by rotonda-runtime, then parsed with routecore
