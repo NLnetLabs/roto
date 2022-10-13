@@ -711,6 +711,14 @@ impl ast::ArgExprList {
                         vec![],
                     ));
                 }
+                ast::ArgExpr::IntegerLiteral(int_lit) => {
+                    eval_args.push(symbols::Symbol::new(
+                        int_lit.into(),
+                        symbols::SymbolKind::Constant,
+                        TypeDef::U32,
+                        vec![],
+                    ));
+                }
                 _ => {
                     return Err(format!(
                         "Invalid argument expression {:?}",

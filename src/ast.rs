@@ -1150,6 +1150,13 @@ impl IntegerLiteral {
     }
 }
 
+impl From<&'_ IntegerLiteral> for ShortString {
+    fn from(literal: &IntegerLiteral) -> Self {
+        ShortString::from(literal.0.to_string().as_str())
+    }
+}
+
+
 //------------ FloatLiteral -------------------------------------------------
 
 /// A float literal is a sequence of digits with a decimal point.
@@ -1274,6 +1281,7 @@ pub enum ArgExpr {
     Identifier(Identifier),
     TypeIdentifier(TypeIdentifier),
     StringLiteral(StringLiteral),
+    IntegerLiteral(IntegerLiteral),
     Bool(bool),
     CallExpr(CallExpr),
     AccessReceiver(AccessReceiver),
@@ -1288,6 +1296,7 @@ impl ArgExpr {
             map(TypeIdentifier::parse, ArgExpr::TypeIdentifier),
             map(Identifier::parse, ArgExpr::Identifier),
             map(StringLiteral::parse, ArgExpr::StringLiteral),
+            map(IntegerLiteral::parse, ArgExpr::IntegerLiteral),
             map(tag("true"), |_| ArgExpr::Bool(true)),
             map(tag("false"), |_| ArgExpr::Bool(false)),
             map(PrefixMatchExpr::parse, ArgExpr::PrefixMatchExpr),
