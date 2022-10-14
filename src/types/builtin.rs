@@ -282,6 +282,47 @@ impl Prefix {
     }
 }
 
+impl RotoFilter<PrefixToken> for Prefix {
+    fn get_props_for_method(
+        self,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<(u8, TypeValue), Box<dyn std::error::Error>>
+    where
+        Self: std::marker::Sized,
+    {
+        match method_name.ident.as_str() {
+            "from" => Ok((
+                std::mem::size_of_val(&PrefixToken::From) as u8,
+                TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None))),
+            )),
+            "address" => Ok((
+                std::mem::size_of_val(&PrefixToken::Address) as u8,
+                TypeValue::Builtin(BuiltinTypeValue::IpAddress(IpAddress(None))),
+            )),
+            _ => Err(format!("Unknown method: {}", method_name.ident).into()),
+        }
+    }
+
+    fn exec_method<'a>(
+        &'a self,
+        method_token: PrefixToken,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<
+        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
+        Box<dyn std::error::Error>,
+    > {
+        todo!()
+    }
+}
+
+pub(crate) enum PrefixToken {
+    From,
+    Address
+}
+
+// ----------- Community ----------------------------------------------------
+
 #[derive(Debug, PartialEq)]
 pub enum CommunityType {
     Normal,
@@ -298,7 +339,7 @@ impl Community {
     }
 }
 
-// ----------- PrefixRecord ------------------------------------------------
+// ----------- PrefixRecord -------------------------------------------------
 
 #[derive(Debug, PartialEq)]
 pub struct PrefixRecord {

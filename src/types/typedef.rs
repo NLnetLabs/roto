@@ -128,6 +128,9 @@ impl<'a> TypeDef {
             TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {
                 as_path.get_props_for_method(method)
             }
+            TypeValue::Builtin(BuiltinTypeValue::Prefix(prefix)) => {
+                prefix.get_props_for_method(method)
+            }
             TypeValue::Rib(rib) => rib.get_props_for_method(method),
             TypeValue::Table(rec) => rec.get_props_for_method(method),
             _ => {
