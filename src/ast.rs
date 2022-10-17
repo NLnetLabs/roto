@@ -1528,23 +1528,53 @@ impl MethodCallExpr {
     }
 }
 
-//------------ LogicalExpr ---------------------------------------------
+//============ First-Order Logic ============================================
 
-// A logical formula in the narrow sense we're using it here is a tuple of
-// of (boolean expression, logical operator, boolean expression), where
-// boolean expressions can be grouped with parentheses.
+// "No, no, you're not thinking. You're just being logical." -- Niels Bohr
+
+// A first-order logical formula is a sequence of (predicate) symbols,
+// logical connectives (a.k.a. logical operators), comparison operators, and
+// quantifiers. Logical formulas can be grouped (for operator precedence) and
+// nested through the contained symbols. Nesting will raise the arity of the
+// formula.
 //
-// we are only supporting binary logical formulas and we're only supporting
-// the connectives listed in this enum, i.e. ∧ (and), ∨ (or), and ¬ (not).
+// We are only using a binary logical formula that consists of a tuple of
+// (boolean expression, logical operator, boolean expression), where boolean 
+// expressions can be grouped with parentheses. Also, we are only the 
+// connectives listed in this enum, i.e. ∧ (and), ∨ (or), and ¬ (not). 
 //
 // This hardly limits the logical expressiveness of our language, because the
-// use can always use the logical connectives in a grouped fashion, e.g.
-// (a ∧ b) ∨ (c ∧ d) is equivalent to a ∧ b ∨ c ∧ d.
+// user can:
+// - Create the missing connectives (material implication ('if-then'), 
+//   bi-directional implication ('if and only if') from the given connectives
+//   (for an arity of 2 at least) or they can be constructed in code in the 
+//   `apply` section.
+// - Use the logical connectives in a grouped fashion to reduce
+//   any number of Boolean expressions down to a binary formula, e.g.
+//   (A ∧ B) ∨ (C ∧ D) is equivalent to A ∧ B ∨ C ∧ D. This limits the number
+//   of boolean functions we have to consider when evaluating the formula,
+//   i.e. a fully complete set of boolean functions has 16 functions for an 
+//   arity of 2.
+//
+// The first point above reduces the cognitive overhead by simplifying the
+// flow of the program and using familar constructs, like 'if..then' and
+// early returns.
+//
+// The second point also reduces (perceicved) ambiguity because we do not
+// allow using implicit logic operator precedence (that probably no one
+// knows anyway).
 
 // https://en.wikipedia.org/wiki/First-order_logic#Formulas
 
-// MatchExpr ::= ArgExpr | GroupedExpr | CompareExpr | AndExpr | OrExpr
-//              | SetCompareExpr
+
+//------------ LogicalExpr --------------------------------------------------
+
+// The Logical expression evaluates to a logic forumula that is a tuple of
+// (optional boolean expression, logical operator, boolean expression).
+// The first boolean expression is optional, only in the case of a negation
+// (not) operator. The second boolean expression is always present.
+
+// LogicalExpr ::= OrExpr | AndExpr | NotExpr | BooleanExpr
 
 #[derive(Clone, Debug)]
 pub enum LogicalExpr {
@@ -1583,15 +1613,14 @@ impl NestedTermExpr {
 //------------ BooleanExpr --------------------------------------------------
 
 // A Boolean expression is an expression that *may* evaluate to one of:
-//   - a Boolean-valued function, which is a fn : X → B, where X is an 
-//     arbitrary set and B is a boolean value. For example, an Integer 
-//     expresssion can never evaluate to a boolean value, but a method 
-//     call expression may evaluate to a method that returns a Boolean
-//     value.
-//   - a Literal Boolean value, "true" or "false"
-//   - a Boolean-typed variable, including boolean-typed record fields
-//   - an Expression containing a boolean-valued operator, such as
-//     '==', '!=', ">=", "<="
+// - a Boolean-valued function, which is a fn : X → B, where X is an 
+//   arbitrary set and B is a boolean value. For example, an Integer 
+//   expresssion can never evaluate to a boolean value, but a method call
+//   expression may evaluate to a method that returns a Boolean value.
+// - a Literal Boolean value, "true" or "false"
+// - a Boolean-typed variable, including boolean-typed record fields
+// - an Expression containing a boolean-valued operator, such as '==', '!=',
+//   ">=", "<="
 
 // BooleanExpr ::= BooleanLiteral | CallExpr | CompareExpr 
 //          | AccessReceiver | SetcompareExpr | PrefixMatchExpr 
