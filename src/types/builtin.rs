@@ -297,7 +297,9 @@ impl RotoFilter<PrefixToken> for Prefix {
             )),
             "address" => Ok((
                 std::mem::size_of_val(&PrefixToken::Address) as u8,
-                TypeValue::Builtin(BuiltinTypeValue::IpAddress(IpAddress(None))),
+                TypeValue::Builtin(BuiltinTypeValue::IpAddress(IpAddress(
+                    None,
+                ))),
             )),
             _ => Err(format!("Unknown method: {}", method_name.ident).into()),
         }
@@ -318,7 +320,7 @@ impl RotoFilter<PrefixToken> for Prefix {
 
 pub(crate) enum PrefixToken {
     From,
-    Address
+    Address,
 }
 
 // ----------- Community ----------------------------------------------------
