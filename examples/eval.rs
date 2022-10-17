@@ -53,12 +53,13 @@ fn main() {
 
                   // specify another RIB that is used in this filter.
                   found_prefix = rib-rov.longest_match(route.prefix);
-                  fixed_len_prefix = Prefix.from(route.prefix.address(), 24);
+                  fixed_len_prefix = Prefix.from(route.prefix.address(), 24); // maybe /24
                }
             
                term rov-valid for route: Route {
                     match {
-                        found_prefix.matches;
+                        (found_prefix.matches && found_prefix.slices) || route_in_table.exists;
+                        found_prefix.len == 24;
                         route.prefix.len <= found_prefix.max_len;
                         route.asn.bgp.origin-asn == found_prefix.asn;
                     }

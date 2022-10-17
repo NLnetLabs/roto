@@ -2,6 +2,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use crate::ast::LogicalExpr;
+use crate::ast::NestedTermExpr;
 use crate::ast::ShortString;
 use crate::types::builtin::BuiltinTypeValue;
 
@@ -269,7 +271,7 @@ impl ast::Module {
         &self,
         symbols: symbols::GlobalSymbolTable<'_>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-
+        let module_scope = symbols::Scope::Module(self.ident.ident.clone());
         // Check the `with` clause for additional arguments.
         let with_kv: Vec<_> = self.with_kv.clone();
 
@@ -285,14 +287,30 @@ impl ast::Module {
             })
             .collect::<Vec<_>>();
 
-        // println!("module for type {:#?}", for_ty);
-        self.body.define.eval(
-            symbols.clone(),
-            // data_srcs.clone(),
-            symbols::Scope::Module(self.ident.ident.clone()),
-        )?;
+        // first, parse the define section, so that other sections in this
+        // module can use the defined variables.
+        self.body
+            .define
+            .eval(symbols.clone(), module_scope.clone())?;
 
-        println!("module with type {:#?}", with_ty);
+        let (terms, actions): (Vec<_>, Vec<_>) = self
+            .body
+            .expressions
+            .iter()
+            .partition(|s| matches!(s, ast::ModuleExpr::Term(_t)));
+
+        for term in terms.into_iter() {
+            if let ast::ModuleExpr::Term(t) = term {
+                t.eval(symbols.clone(), module_scope.clone());
+            }
+        }
+
+        for action in actions.into_iter() {
+            if let ast::ModuleExpr::Action(a) = action {
+                a.eval(symbols.clone(), module_scope.clone());
+            }
+        }
+
         Ok(())
     }
 
@@ -319,21 +337,6 @@ impl ast::Module {
         println!("define with type {:#?}", with_ty);
         // for_ty
         Ok(())
-    }
-}
-
-impl ast::ModuleBody {
-    fn eval(
-        &self,
-        _symbols: &mut symbols::SymbolTable,
-    ) -> Result<bool, Box<dyn std::error::Error>> {
-        let mut result = false;
-
-        // for expr in self.body.iter() {
-        //     result = expr.eval_define(symbols)?;
-        // }
-
-        Ok(result)
     }
 }
 
@@ -377,6 +380,35 @@ impl<'a> ast::Define {
         }
 
         Ok(())
+    }
+}
+
+impl<'a> ast::Term {
+    fn eval(
+        &self,
+        symbols: symbols::GlobalSymbolTable<'a>,
+        scope: symbols::Scope,
+    ) {
+        let term_scopes = &self.body.scopes;
+        println!("term scopes {:#?}", term_scopes);
+        for term in &term_scopes[0].match_exprs {
+            match term {
+                LogicalExpr::BooleanExpr(_) => {}
+                LogicalExpr::OrExpr(ast::OrExpr { left, right }) => {}
+                LogicalExpr::AndExpr(ast::AndExpr { left, right }) => {}
+                LogicalExpr::NotExpr(ast::NotExpr { expr }) => {}
+            }
+        }
+    }
+}
+
+impl<'a> ast::Action {
+    fn eval(
+        &self,
+        symbols: symbols::GlobalSymbolTable<'a>,
+        scope: symbols::Scope,
+    ) {
+        todo!()
     }
 }
 

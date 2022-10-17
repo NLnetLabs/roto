@@ -375,8 +375,8 @@ impl TermBody {
 #[derive(Clone, Debug)]
 pub struct TermScope {
     pub scope: Option<Identifier>,
-    pub operator: MatchOperator,
-    pub match_exprs: Vec<MatchExpr>,
+    pub operator: MatchOperator, // kinda' useless and kinda' incorrect.
+    pub match_exprs: Vec<LogicalExpr>,
 }
 
 impl TermScope {
@@ -402,7 +402,7 @@ impl TermScope {
                         many0(context(
                             "match expression",
                             terminated(
-                                opt_ws(MatchExpr::parse),
+                                opt_ws(LogicalExpr::parse),
                                 opt_ws(char(';')),
                             ),
                         )),
@@ -1528,47 +1528,112 @@ impl MethodCallExpr {
     }
 }
 
-//------------ MatchExpr ----------------------------------------------------
+//------------ LogicalExpr ---------------------------------------------
+
+// A logical formula in the narrow sense we're using it here is a tuple of
+// of (boolean expression, logical operator, boolean expression), where
+// boolean expressions can be grouped with parentheses.
+//
+// we are only supporting binary logical formulas and we're only supporting
+// the connectives listed in this enum, i.e. ∧ (and), ∨ (or), and ¬ (not).
+//
+// This hardly limits the logical expressiveness of our language, because the
+// use can always use the logical connectives in a grouped fashion, e.g.
+// (a ∧ b) ∨ (c ∧ d) is equivalent to a ∧ b ∨ c ∧ d.
+
+// https://en.wikipedia.org/wiki/First-order_logic#Formulas
 
 // MatchExpr ::= ArgExpr | GroupedExpr | CompareExpr | AndExpr | OrExpr
 //              | SetCompareExpr
 
 #[derive(Clone, Debug)]
-pub enum MatchExpr {
+pub enum LogicalExpr {
     OrExpr(OrExpr),
-    CompareExpr(CompareExpr),
     AndExpr(AndExpr),
-    SetCompareExpr(SetCompareExpr),
-    PrefixMatchExpr(PrefixMatchExpr),
-    GroupedMatchExpr(GroupedMatchExpr),
-    ArgExpr(ArgExpr),
+    NotExpr(NotExpr),
+    BooleanExpr(BooleanExpr),
 }
 
-impl MatchExpr {
+impl LogicalExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         opt_ws(alt((
-            map(CompareExpr::parse, MatchExpr::CompareExpr),
-            map(AndExpr::parse, MatchExpr::AndExpr),
-            map(OrExpr::parse, MatchExpr::OrExpr),
-            map(SetCompareExpr::parse, MatchExpr::SetCompareExpr),
-            map(PrefixMatchExpr::parse, MatchExpr::PrefixMatchExpr),
-            map(GroupedMatchExpr::parse, MatchExpr::GroupedMatchExpr),
-            map(ArgExpr::parse, MatchExpr::ArgExpr),
+            map(AndExpr::parse, LogicalExpr::AndExpr),
+            map(OrExpr::parse, LogicalExpr::OrExpr),
+            map(NotExpr::parse, LogicalExpr::NotExpr),
+            map(BooleanExpr::parse, LogicalExpr::BooleanExpr),
         )))(input)
     }
 }
 
 #[derive(Clone, Debug)]
-pub enum NestedMatchExpr {
-    NArgExpr(ArgExpr),
-    NGroupedMatchExpr(GroupedMatchExpr),
+pub enum NestedTermExpr {
+    NTermExpr(ArgExpr),
+    NGroupedTermExpr(GroupedFormulaExpr),
 }
 
-impl NestedMatchExpr {
+impl NestedTermExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         alt((
-            map(GroupedMatchExpr::parse, NestedMatchExpr::NGroupedMatchExpr),
-            map(ArgExpr::parse, NestedMatchExpr::NArgExpr),
+            map(GroupedFormulaExpr::parse, NestedTermExpr::NGroupedTermExpr),
+            map(ArgExpr::parse, NestedTermExpr::NTermExpr),
+        ))(input)
+    }
+}
+
+//------------ BooleanExpr --------------------------------------------------
+
+// A Boolean expression is an expression that *may* evaluate to one of:
+//   - a Boolean-valued function, which is a fn : X → B, where X is an 
+//     arbitrary set and B is a boolean value. For example, an Integer 
+//     expresssion can never evaluate to a boolean value, but a method 
+//     call expression may evaluate to a method that returns a Boolean
+//     value.
+//   - a Literal Boolean value, "true" or "false"
+//   - a Boolean-typed variable, including boolean-typed record fields
+//   - an Expression containing a boolean-valued operator, such as
+//     '==', '!=', ">=", "<="
+
+// BooleanExpr ::= BooleanLiteral | CallExpr | CompareExpr 
+//          | AccessReceiver | SetcompareExpr | PrefixMatchExpr 
+//          | Identifier
+
+
+#[derive(Clone, Debug)]
+pub enum BooleanExpr {
+    // A complete formula that is wrapped in parentheses is a Boolean-Valued
+    // Function, since it will always return a Boolean value.
+    GroupedExpr(GroupedFormulaExpr), 
+    // "true" | "false" literals
+    BooleanLiteral(BooleanLiteral),
+    // A syntactically correct comparison always evaluates to a 
+    // Boolean-Valued Function, since it will always return a Boolean value.
+    CompareExpr(Box<CompareExpr>),
+    // A CallExpression *may* evaluate to a function that returns a boolean
+    CallExpr(CallExpr), 
+    // A field access *may* evaluate to a field that contains a boolean
+    AccessReceiver(AccessReceiver),
+    // Set Compare expression, will *always* result in a boolean-valued
+    // function. Syntactic sugar for a truth-function that performs 
+    // fn : a -> {a} ∩ B
+    SetCompareExpr(Box<SetCompareExpr>), 
+    // syntactic sugar for a method on a prefix function that returns a
+    // boolean.
+    PrefixMatchExpr(PrefixMatchExpr),
+    // A variable that *may* evualate to a boolean
+    Identifier(Identifier), 
+}
+
+impl BooleanExpr {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        alt((
+            map(GroupedFormulaExpr::parse, BooleanExpr::GroupedExpr),
+            map(CompareExpr::parse, |e| BooleanExpr::CompareExpr(Box::new(e))),
+            map(CallExpr::parse, BooleanExpr::CallExpr),
+            map(AccessReceiver::parse, BooleanExpr::AccessReceiver),
+            map(SetCompareExpr::parse, |e| BooleanExpr::SetCompareExpr(Box::new(e))),
+            map(PrefixMatchExpr::parse, BooleanExpr::PrefixMatchExpr),
+            map(BooleanLiteral::parse, BooleanExpr::BooleanLiteral),
+            map(Identifier::parse, BooleanExpr::Identifier),
         ))(input)
     }
 }
@@ -1579,9 +1644,9 @@ impl NestedMatchExpr {
 
 #[derive(Clone, Debug)]
 pub struct CompareExpr {
-    pub left: NestedMatchExpr,
+    pub left: NestedTermExpr,
     pub op: CompareOp,
-    pub right: NestedMatchExpr,
+    pub right: NestedTermExpr,
 }
 
 impl CompareExpr {
@@ -1589,7 +1654,7 @@ impl CompareExpr {
         let (input, (left, op, right)) = context(
             "Compare Expression",
             tuple((
-                opt_ws(NestedMatchExpr::parse),
+                opt_ws(NestedTermExpr::parse),
                 opt_ws(alt((
                     map(tag("=="), |_| CompareOp::Eq),
                     map(tag("!="), |_| CompareOp::Ne),
@@ -1598,7 +1663,7 @@ impl CompareExpr {
                     map(tag(">="), |_| CompareOp::Ge),
                     map(tag(">"), |_| CompareOp::Gt),
                 ))),
-                opt_ws(NestedMatchExpr::parse),
+                opt_ws(NestedTermExpr::parse),
             )),
         )(input)?;
 
@@ -1626,15 +1691,15 @@ pub enum CompareOp {
 
 #[derive(Clone, Debug)]
 pub struct AndExpr {
-    pub left: NestedMatchExpr,
-    pub right: NestedMatchExpr,
+    pub left: BooleanExpr,
+    pub right: BooleanExpr,
 }
 
 impl AndExpr {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, (left, right)) = tuple((
-            opt_ws(NestedMatchExpr::parse),
-            preceded(opt_ws(tag("&&")), opt_ws(NestedMatchExpr::parse)),
+            opt_ws(BooleanExpr::parse),
+            preceded(opt_ws(tag("&&")), opt_ws(BooleanExpr::parse)),
         ))(input)?;
 
         Ok((input, Self { left, right }))
@@ -1647,8 +1712,8 @@ impl AndExpr {
 
 #[derive(Clone, Debug)]
 pub struct OrExpr {
-    pub left: NestedMatchExpr,
-    pub right: NestedMatchExpr,
+    pub left: BooleanExpr,
+    pub right: BooleanExpr,
 }
 
 impl OrExpr {
@@ -1656,12 +1721,24 @@ impl OrExpr {
         let (input, (left, right)) = context(
             "or expr",
             tuple((
-                opt_ws(NestedMatchExpr::parse),
-                preceded(opt_ws(tag("||")), opt_ws(NestedMatchExpr::parse)),
+                opt_ws(BooleanExpr::parse),
+                preceded(opt_ws(tag("||")), opt_ws(BooleanExpr::parse)),
             )),
         )(input)?;
 
         Ok((input, Self { left, right }))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct NotExpr {
+    pub expr: BooleanExpr,
+}
+
+impl NotExpr {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, expr) = preceded(opt_ws(tag("!")), opt_ws(BooleanExpr::parse))(input)?;
+        Ok((input, Self { expr }))
     }
 }
 
@@ -1671,20 +1748,20 @@ impl OrExpr {
 
 #[derive(Clone, Debug)]
 pub struct SetCompareExpr {
-    pub left: NestedMatchExpr,
+    pub left: NestedTermExpr,
     pub op: SetCompareOp,
-    pub right: NestedMatchExpr,
+    pub right: NestedTermExpr,
 }
 
 impl SetCompareExpr {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, (left, op, right)) = tuple((
-            opt_ws(NestedMatchExpr::parse),
+            opt_ws(NestedTermExpr::parse),
             alt((
                 map(opt_ws(tag("in")), |_| SetCompareOp::In),
                 map(opt_ws(tag("not in")), |_| SetCompareOp::NotIn),
             )),
-            opt_ws(NestedMatchExpr::parse),
+            opt_ws(NestedTermExpr::parse),
         ))(input)?;
 
         Ok((input, Self { left, op, right }))
@@ -1701,20 +1778,20 @@ pub enum SetCompareOp {
     NotIn,
 }
 
-//------------- GroupedMatchExpr -------------------------------------------------
+//------------- GroupedFormulaExpr ------------------------------------------
 
-// GroupedMatchExpr ::= '(' MatchExpr ')'
+// GroupedFormulaExpr ::= '(' LogicalExpr ')'
 
 #[derive(Clone, Debug)]
-pub struct GroupedMatchExpr {
-    pub expr: Box<MatchExpr>,
+pub struct GroupedFormulaExpr {
+    pub expr: Box<LogicalExpr>,
 }
 
-impl GroupedMatchExpr {
+impl GroupedFormulaExpr {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, expr) = delimited(
             opt_ws(char('(')),
-            MatchExpr::parse,
+            LogicalExpr::parse,
             opt_ws(char(')')),
         )(input)?;
         Ok((
@@ -1796,6 +1873,7 @@ impl PrefixMatchType {
 //------------ PrefixMatchExpr ----------------------------------------------
 
 // PrefixMatchExpr ::= Prefix PrefixMatchType
+
 #[derive(Clone, Debug)]
 pub struct PrefixMatchExpr {
     pub prefix: Prefix,

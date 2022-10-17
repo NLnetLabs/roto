@@ -32,12 +32,12 @@ fn main() {
     println!("{:#?}", r);
     assert!(r.is_err());
 
-    let mut r = MatchExpr::parse(
+    let mut r = LogicalExpr::parse(
         "( blaffer.waf() in my_set ) || ( blaffer.blaf() < bop() )",
     );
     assert!(r.is_ok());
 
-    r = MatchExpr::parse(
+    r = LogicalExpr::parse(
         r###"
         route.prefix in 0.0.0.0/0 prefix-length-range /12-/16;
     "###,
@@ -45,7 +45,7 @@ fn main() {
     println!("{:#?}", r);
     assert!(r.is_ok());
 
-    r = MatchExpr::parse(
+    r = LogicalExpr::parse(
         r###"
         // blaffer.blaf.contains(something,"somewhat") > blaf();
         ( bla.bla() in my_set ) || ( bla.bla() in my_other_set );
