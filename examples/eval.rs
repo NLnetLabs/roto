@@ -59,9 +59,9 @@ fn main() {
                term rov-valid for route: Route {
                     match {
                         (found_prefix.matches && found_prefix.slices) || route_in_table.exists;
-                        found_prefix.len == 24;
-                        route.prefix.len <= found_prefix.max_len;
-                        route.asn.bgp.origin-asn == found_prefix.asn;
+                        found_prefix.prefix.len() == 24;
+                        route.prefix.len() <= found_prefix.prefix.len();
+                        route.as-path == found_prefix.as-path.origin();
                     }
                 }
                
