@@ -26,7 +26,6 @@ fn main() {
     let mm = ArgExpr::parse(r###"globlaf(bla)"###);
     println!("{}, {:#?}", mm.is_ok(), mm);
     assert!(mm.is_ok());
-    panic!("STROP");
 
     let r = ByteStringLiteral::parse("0xZZZZ_AE9");
     println!("{:#?}", r);
