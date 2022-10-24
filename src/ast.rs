@@ -1566,6 +1566,30 @@ impl MethodCallExpr {
 
 // https://en.wikipedia.org/wiki/First-order_logic#Formulas
 
+// The form in which roto users can express logical formulas, etc. is:
+
+// term {
+//      <logical formula>;
+//      <logical formula>;
+//      ... 
+// }
+//
+// where <logical formula> is one of:
+//
+// <boolean expression> || <boolean expression>;
+// <boolean expression> && <boolean expression>;
+// !<boolean expression>;
+// <boolean expression>;
+
+// Ex.:
+// ┌──────────┐┌──┐┌──────────┐ ┌──┐ ┌──────────┐
+// │(BoolExpr)││&&││(BoolExpr)│ │||│ │(BoolExpr)│
+// └──────────┘└──┘└──────────┘ └──┘ └──────────┘
+// ▲──────────LF::And─────────▲      ▲──LF::BE──▲
+//                                              
+// ▲──────────BoolExpr────────▲      ▲─BoolExpr─▲
+//                                              
+// ▲────────────────────LF::Or──────────────────▲
 
 //------------ LogicalExpr --------------------------------------------------
 
@@ -1596,16 +1620,20 @@ impl LogicalExpr {
 }
 
 #[derive(Clone, Debug)]
-pub enum NestedTermExpr {
-    NTermExpr(ArgExpr),
-    NGroupedTermExpr(GroupedFormulaExpr),
+pub enum CompareArg {
+    // A "stand-alone" left|right-hand side argument of a comparison
+    ArgExpr(ArgExpr),
+    // A nested logical formula, e.g. (A && B) || (C && D) used as a left|
+    // right-hand side argument of a comparison. Note that this can only
+    // have the opposite hand be a boolean expression.
+    GroupedLogicalExpr(GroupedLogicalExpr),
 }
 
-impl NestedTermExpr {
+impl CompareArg {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         alt((
-            map(GroupedFormulaExpr::parse, NestedTermExpr::NGroupedTermExpr),
-            map(ArgExpr::parse, NestedTermExpr::NTermExpr),
+            map(GroupedLogicalExpr::parse, CompareArg::GroupedLogicalExpr),
+            map(ArgExpr::parse, CompareArg::ArgExpr),
         ))(input)
     }
 }
@@ -1631,7 +1659,7 @@ impl NestedTermExpr {
 pub enum BooleanExpr {
     // A complete formula that is wrapped in parentheses is a Boolean-Valued
     // Function, since it will always return a Boolean value.
-    GroupedExpr(GroupedFormulaExpr), 
+    GroupedLogicalExpr(GroupedLogicalExpr), 
     // "true" | "false" literals
     BooleanLiteral(BooleanLiteral),
     // A syntactically correct comparison always evaluates to a 
@@ -1655,7 +1683,7 @@ pub enum BooleanExpr {
 impl BooleanExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         alt((
-            map(GroupedFormulaExpr::parse, BooleanExpr::GroupedExpr),
+            map(GroupedLogicalExpr::parse, BooleanExpr::GroupedLogicalExpr),
             map(CompareExpr::parse, |e| BooleanExpr::CompareExpr(Box::new(e))),
             map(CallExpr::parse, BooleanExpr::CallExpr),
             map(AccessReceiver::parse, BooleanExpr::AccessReceiver),
@@ -1673,9 +1701,9 @@ impl BooleanExpr {
 
 #[derive(Clone, Debug)]
 pub struct CompareExpr {
-    pub left: NestedTermExpr,
+    pub left: CompareArg,
     pub op: CompareOp,
-    pub right: NestedTermExpr,
+    pub right: CompareArg,
 }
 
 impl CompareExpr {
@@ -1683,7 +1711,7 @@ impl CompareExpr {
         let (input, (left, op, right)) = context(
             "Compare Expression",
             tuple((
-                opt_ws(NestedTermExpr::parse),
+                opt_ws(CompareArg::parse),
                 opt_ws(alt((
                     map(tag("=="), |_| CompareOp::Eq),
                     map(tag("!="), |_| CompareOp::Ne),
@@ -1692,7 +1720,7 @@ impl CompareExpr {
                     map(tag(">="), |_| CompareOp::Ge),
                     map(tag(">"), |_| CompareOp::Gt),
                 ))),
-                opt_ws(NestedTermExpr::parse),
+                opt_ws(CompareArg::parse),
             )),
         )(input)?;
 
@@ -1704,7 +1732,7 @@ impl CompareExpr {
 
 // CompareOp ::= '==' | '!=' | '<' | '<=' | '>' | '>='
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CompareOp {
     Eq,
     Ne,
@@ -1777,20 +1805,20 @@ impl NotExpr {
 
 #[derive(Clone, Debug)]
 pub struct SetCompareExpr {
-    pub left: NestedTermExpr,
+    pub left: CompareArg,
     pub op: SetCompareOp,
-    pub right: NestedTermExpr,
+    pub right: CompareArg,
 }
 
 impl SetCompareExpr {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, (left, op, right)) = tuple((
-            opt_ws(NestedTermExpr::parse),
+            opt_ws(CompareArg::parse),
             alt((
                 map(opt_ws(tag("in")), |_| SetCompareOp::In),
                 map(opt_ws(tag("not in")), |_| SetCompareOp::NotIn),
             )),
-            opt_ws(NestedTermExpr::parse),
+            opt_ws(CompareArg::parse),
         ))(input)?;
 
         Ok((input, Self { left, op, right }))
@@ -1812,11 +1840,11 @@ pub enum SetCompareOp {
 // GroupedFormulaExpr ::= '(' LogicalExpr ')'
 
 #[derive(Clone, Debug)]
-pub struct GroupedFormulaExpr {
+pub struct GroupedLogicalExpr {
     pub expr: Box<LogicalExpr>,
 }
 
-impl GroupedFormulaExpr {
+impl GroupedLogicalExpr {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, expr) = delimited(
             opt_ws(char('(')),
