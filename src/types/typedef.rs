@@ -11,7 +11,7 @@ use super::{
     typevalue::TypeValue,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TypeDef {
     // Data Sources
     Rib(Box<TypeDef>),
@@ -34,7 +34,7 @@ pub enum TypeDef {
     None,
 }
 
-impl<'a> TypeDef {
+impl TypeDef {
     pub(crate) fn new_record_type_from_short_string(
         type_ident_pairs: Vec<(ShortString, Box<TypeDef>)>,
     ) -> Result<TypeDef, Box<dyn std::error::Error>> {
@@ -202,7 +202,7 @@ impl PartialEq<TypeValue> for TypeDef {
 
 // This From impl creates the link between the AST and the TypeDef enum
 // for built-in types.
-impl<'a> TryFrom<crate::ast::TypeIdentifier> for TypeDef {
+impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
     type Error = Box<dyn std::error::Error>;
     fn try_from(
         ty: crate::ast::TypeIdentifier,
@@ -222,7 +222,7 @@ impl<'a> TryFrom<crate::ast::TypeIdentifier> for TypeDef {
     }
 }
 
-impl<'a> From<BuiltinTypeValue> for TypeDef {
+impl From<BuiltinTypeValue> for TypeDef {
     fn from(ty: BuiltinTypeValue) -> TypeDef {
         match ty {
             BuiltinTypeValue::U32(_) => TypeDef::U32,
