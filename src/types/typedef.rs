@@ -64,23 +64,34 @@ impl TypeDef {
     pub fn has_fields_chain(
         &self,
         fields: &[crate::ast::Identifier],
-    ) -> Option<TypeDef> {
+    ) -> Result<TypeDef, Box<dyn std::error::Error>> {
+        println!("has_fields_chain: {:?}", fields);
+        println!("self: {:?}", self);
         let mut current_type = self;
         for field in fields {
-            if let TypeDef::Record(fields) = current_type {
-                if let Some((_, ty)) = fields
+            if let TypeDef::Record(_fields) = current_type {
+                if let Some((_, ty)) = _fields
                     .iter()
                     .find(|(ident, _)| ident == &field.ident.as_str())
                 {
                     current_type = ty;
+                    println!("UwU {}", field.ident);
                 } else {
-                    return None;
+                    println!("AA none fields:: {}", field.ident.as_str());
+                    return Err(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!("No field named '{}'", field.ident.as_str()),
+                    )));
                 }
             } else {
-                return None;
+                println!("BB none fields:: {}", field.ident.as_str());
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("No field named '{}'", field.ident.as_str()),
+                )));
             }
         }
-        Some(current_type.clone())
+        Ok(current_type.clone())
     }
 
     pub(crate) fn _check_record_fields(
