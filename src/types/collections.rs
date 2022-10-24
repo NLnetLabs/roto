@@ -63,7 +63,7 @@ impl<'a> From<&'a TypeDef> for ElementTypeValue {
     }
 }
 
-impl<'a> From<TypeValue> for ElementTypeValue {
+impl From<TypeValue> for ElementTypeValue {
     fn from(t: TypeValue) -> Self {
         match t {
             TypeValue::Builtin(v) => ElementTypeValue::Primitive(v),
@@ -83,7 +83,7 @@ impl<'a> From<TypeValue> for ElementTypeValue {
 #[derive(Debug, PartialEq)]
 pub struct List(pub(crate) Vec<ElementTypeValue>);
 
-impl<'a> List {
+impl List {
     pub fn new(elem_type: Vec<ElementTypeValue>) -> Self {
         List(elem_type)
     }
@@ -250,7 +250,7 @@ impl std::fmt::Display for Record {
     }
 }
 
-impl<'a> RotoFilter<RecordToken> for Record {
+impl RotoFilter<RecordToken> for Record {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
