@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    ast::ShortString,
+    ast::{ShortString, CompareOp},
     types::{typedef::TypeDef, typevalue::TypeValue},
 };
 
@@ -34,6 +34,11 @@ impl Symbol {
         self
     }
 
+    pub fn set_kind(mut self, kind: SymbolKind) -> Symbol {
+        self.kind = kind;
+        self
+    }
+
     pub fn get_kind(&self) -> SymbolKind {
         self.kind
     }
@@ -49,7 +54,7 @@ impl Symbol {
     pub fn get_args(self) -> Vec<Symbol> {
         self.args
     }
-
+ 
     pub fn new(
         name: ShortString,
         kind: SymbolKind,
@@ -96,6 +101,12 @@ pub enum SymbolKind {
     GlobalMethodCall,
     FieldAccess,
     StringLiteral,
+    LogicalExpr,
+    BooleanExpr,
+    CompareExpr(CompareOp),
+    AndExpr,
+    OrExpr,
+    NotExpr,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]

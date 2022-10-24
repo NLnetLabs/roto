@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::ast::LogicalExpr;
-use crate::ast::NestedTermExpr;
 use crate::ast::ShortString;
+use crate::types::builtin::Boolean;
 use crate::types::builtin::BuiltinTypeValue;
 
 use super::ast;
@@ -301,15 +301,15 @@ impl ast::Module {
 
         for term in terms.into_iter() {
             if let ast::ModuleExpr::Term(t) = term {
-                t.eval(symbols.clone(), module_scope.clone());
+                t.eval(symbols.clone(), module_scope.clone())?;
             }
         }
 
-        for action in actions.into_iter() {
-            if let ast::ModuleExpr::Action(a) = action {
-                a.eval(symbols.clone(), module_scope.clone());
-            }
-        }
+        // for action in actions.into_iter() {
+        //     if let ast::ModuleExpr::Action(a) = action {
+        //         a.eval(symbols.clone(), module_scope.clone());
+        //     }
+        // }
 
         Ok(())
     }
@@ -388,17 +388,40 @@ impl<'a> ast::Term {
         &self,
         symbols: symbols::GlobalSymbolTable<'a>,
         scope: symbols::Scope,
-    ) {
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let term_scopes = &self.body.scopes;
-        println!("term scopes {:#?}", term_scopes);
-        for term in &term_scopes[0].match_exprs {
-            match term {
-                LogicalExpr::BooleanExpr(_) => {}
-                LogicalExpr::OrExpr(ast::OrExpr { left, right }) => {}
-                LogicalExpr::AndExpr(ast::AndExpr { left, right }) => {}
-                LogicalExpr::NotExpr(ast::NotExpr { expr }) => {}
-            }
+        for term in term_scopes[0].match_exprs.iter().enumerate() {
+            let logical_formula = match &term.1 {
+                LogicalExpr::BooleanExpr(expr) => {
+                    ast::BooleanExpr::eval(expr, symbols.clone(), &scope)?
+                }
+                LogicalExpr::OrExpr(or_expr) => {
+                    ast::OrExpr::eval(or_expr, symbols.clone(), &scope)?
+                }
+                LogicalExpr::AndExpr(and_expr) => {
+                    ast::AndExpr::eval(and_expr, symbols.clone(), &scope)?
+                }
+                LogicalExpr::NotExpr(not_expr) => {
+                    ast::NotExpr::eval(not_expr, symbols.clone(), &scope)?
+                }
+            };
+
+            println!(
+                "logical formula: {} -> {:?}",
+                self.ident.ident, logical_formula
+            );
+            declare_variable_from_symbol(
+                Some(
+                    format!("{}.{}", self.ident.ident.clone(), term.0)
+                        .as_str()
+                        .into(),
+                ),
+                logical_formula,
+                symbols.clone(),
+                &scope,
+            )?;
         }
+        Ok(())
     }
 }
 
@@ -478,11 +501,8 @@ impl<'a> ast::CallExpr {
             // Case 1. Built-in method calls
             // `base_method(arguments)`
             None => {
-                return Err(format!(
-                    "Unknown built-in method {}",
-                    self.get_ident()
-                )
-                .into());
+                Err(format!("Unknown built-in method {}", self.get_ident())
+                    .into())
             }
             // Case 2. Method calls on Builtin type or Record types
             Some(receiver) => {
@@ -519,7 +539,7 @@ impl<'a> ast::CallExpr {
                     ),
                     receiver.get_fields(),
                 ) {
-                    // Yes, but fields we're referenced following it.
+                    // Yes, but fields were referenced following it.
                     (Ok(_data_type), Some(fields)) => {
                         println!(
                             "[[[ fields: {:#?} receiver {}",
@@ -618,7 +638,7 @@ impl<'a> ast::CallExpr {
                             symbols.clone(),
                             scope.clone(),
                         )?;
-
+                        
                         match get_type_for_scoped_variable(
                             &[receiver.ident.clone()],
                             symbols.clone(),
@@ -628,11 +648,11 @@ impl<'a> ast::CallExpr {
                                 println!("+++ variable {:?}", var_type);
 
                                 Ok((
-                                    receiver_ident.clone(),
+                                    receiver_ident,
                                     symbols::Symbol::new(
-                                        receiver_ident,
+                                        field_access.get_name().as_str().into(),
                                         symbols::SymbolKind::Variable,
-                                        var_type,
+                                        field_access.get_type(),
                                         vec![ast::MethodCallExpr::eval(
                                             self.get_method_call(),
                                             field_access.get_type(),
@@ -706,6 +726,59 @@ impl ast::AccessReceiver {
             ty,
             vec![],
         ))
+    }
+}
+
+impl ast::ArgExpr {
+    fn eval(
+        &self,
+        symbols: symbols::GlobalSymbolTable<'_>,
+        scope: symbols::Scope,
+    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+        match self {
+            ast::ArgExpr::CallExpr(call_expr) => {
+                println!("arg base_name_ident {:?}", call_expr);
+
+                Ok(call_expr
+                    .eval(
+                        call_expr.get_ident().clone().ident,
+                        symbols,
+                        scope,
+                    )?
+                    .1)
+            }
+            ast::ArgExpr::AccessReceiver(call_receiver) => {
+                println!(
+                    "access receiver arg base_name_ident {:?}",
+                    call_receiver
+                );
+                Ok(call_receiver.eval(symbols, scope)?)
+            }
+            ast::ArgExpr::StringLiteral(str_lit) => Ok(symbols::Symbol::new(
+                str_lit.into(),
+                symbols::SymbolKind::StringLiteral,
+                TypeDef::String,
+                vec![],
+            )),
+            ast::ArgExpr::IntegerLiteral(int_lit) => {
+                Ok(symbols::Symbol::new(
+                    int_lit.into(),
+                    symbols::SymbolKind::Constant,
+                    TypeDef::U32,
+                    vec![],
+                ))
+            }
+            _ => {
+                Err(format!("Invalid argument expression {:?}", self).into())
+            } // Identifier(Identifier),
+              // TypeIdentifier(TypeIdentifier),
+              // StringLiteral(StringLiteral),
+              // Bool(bool),
+              // CallExpr(CallExpr),
+              // PrefixMatchExpr(PrefixMatchExpr),
+
+              // eval_args.push(arg.eval(symbols.clone(), data_srcs, scope.clone())?);
+        }
     }
 }
 
@@ -792,11 +865,11 @@ impl ast::FieldAccessExpr {
 
         // First, check if the complete field expression is a built-in type,
         // if so we can return it right away.
-        if let Some(field_type) = rec_type.has_fields_chain(&self.field_names)
-        {
+        if let Ok(field_type) = rec_type.has_fields_chain(&self.field_names) {
             if BuiltinTypeValue::try_from(&field_type).is_ok() {
+                let name = self.field_names.join(".");
                 return Ok(symbols::Symbol::new(
-                    search_var.as_str().into(),
+                    format!("{}.{}", search_var, name).as_str().into(),
                     symbols::SymbolKind::FieldAccess,
                     field_type,
                     vec![],
@@ -804,12 +877,11 @@ impl ast::FieldAccessExpr {
             }
         };
 
-        // Second. No, it isn't a built-in type, it has to live in the global
-        // symbol table specified as
-        // `<receiver_name>.<field_name>[.<fieldname>]*`. Even so, we also
-        // need to check if all the intermediate fields exist in the record
-        // type. These intermediates type shouls all have an entry in the
-        // global symobol table as well.
+        // Second. No, it isn't a built-in type, it has to live in a symbol
+        // table specified as `<receiver_name>.<field_name>[.<fieldname>]*`.
+        // Even so, we also need to check if all the intermediate fields
+        // exist in the record type. These intermediates type should all have
+        // an entry in the symbol table as well.
         for field_name in &self.field_names {
             search_var = format!("{}.{}", search_var.clone(), field_name);
             search_vec.push(field_name.clone());
@@ -830,6 +902,291 @@ impl ast::FieldAccessExpr {
         ))
     }
 }
+
+impl ast::LogicalExpr {
+    fn eval(
+        &self,
+        symbols: symbols::GlobalSymbolTable<'_>,
+        scope: symbols::Scope,
+    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+        match self {
+            LogicalExpr::BooleanExpr(expr) => {
+                ast::BooleanExpr::eval(expr, symbols, &scope)
+            }
+            LogicalExpr::OrExpr(or_expr) => {
+                ast::OrExpr::eval(or_expr, symbols, &scope)
+            }
+            LogicalExpr::AndExpr(and_expr) => {
+                ast::AndExpr::eval(and_expr, symbols, &scope)
+            }
+            LogicalExpr::NotExpr(not_expr) => {
+                ast::NotExpr::eval(not_expr, symbols, &scope)
+            }
+        }
+    }
+}
+
+impl ast::BooleanExpr {
+    fn eval(
+        &self,
+        symbols: symbols::GlobalSymbolTable<'_>,
+        scope: &symbols::Scope,
+    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+        let _symbols = symbols.clone();
+
+        match &self {
+            ast::BooleanExpr::GroupedLogicalExpr(grouped_expr) => {
+                return grouped_expr.eval(symbols, scope);
+            }
+            ast::BooleanExpr::BooleanLiteral(bool_lit) => {
+                // Leaf node, needs a TypeValue in this case a boolean
+                // value.
+                return Ok(symbols::Symbol::new_with_value(
+                    "boolean_constant".into(),
+                    symbols::SymbolKind::Constant,
+                    TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
+                        Some(bool_lit.0),
+                    ))),
+                    vec![],
+                ));
+            }
+            ast::BooleanExpr::CompareExpr(compare_expr) => {
+                return ast::CompareExpr::eval(compare_expr, symbols, scope);
+            }
+            ast::BooleanExpr::CallExpr(call_expr) => {
+                let s = call_expr.eval(
+                    call_expr.get_ident().clone().ident,
+                    symbols,
+                    scope.clone(),
+                )?;
+
+                // It evaluates correctly as a call expression, but does it
+                // return an actual Boolean value?
+                if s.1.get_type() == TypeDef::Boolean {
+                    return Ok(s.1);
+                }
+            }
+            ast::BooleanExpr::AccessReceiver(access_r) => {
+                let s = access_r.eval(symbols, scope.clone())?;
+
+                // It evaluates correctly as an access receiver, but does it
+                // return an actual Boolean value?
+                if s.get_type() == TypeDef::Boolean {
+                    return Ok(s);
+                }
+            }
+            ast::BooleanExpr::SetCompareExpr(_) => todo!(),
+            ast::BooleanExpr::PrefixMatchExpr(_) => todo!(),
+            ast::BooleanExpr::Identifier(ident) => {
+                let ty = get_type_for_scoped_variable(
+                    &[ident.clone()],
+                    symbols,
+                    scope.clone(),
+                )?;
+
+                return match ty {
+                    TypeDef::Boolean => Ok(symbols::Symbol::new(
+                        "boolean_variable".into(),
+                        symbols::SymbolKind::Variable,
+                        TypeDef::Boolean,
+                        vec![],
+                    )),
+                    _ => Err(format!(
+                        "Variable {} cannot be interpreted as Boolean",
+                        ident
+                    )
+                    .into()),
+                };
+            }
+        }
+
+        Ok(symbols::Symbol::new(
+            "bool".into(),
+            symbols::SymbolKind::Variable,
+            TypeDef::Boolean,
+            vec![],
+        ))
+    }
+}
+
+impl ast::CompareExpr {
+    fn eval(
+        &self,
+        symbols: symbols::GlobalSymbolTable<'_>,
+        scope: &symbols::Scope,
+    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+        println!("comparison expression: {:?}", self);
+        let _symbols = symbols.clone();
+
+        // For now we're assuming the left hand-side and the right-hand side
+        // return the same type.
+
+        // A non-leaf node must have a type (in the `ty` field in the symbol
+        // itself), but a leaf node can't have one,
+        // instead it has the `value` field filled (with a TypeValue)
+        // somewhere in the `args` field of the symbol.
+        // must evaluate the left and right hand side of the expression to
+        // determine the return type of the expression.
+        let left_args = self.left.eval(_symbols, scope)?.get_args();
+        let mut left_value = None;
+
+        let right: Box<TypeValue> =
+            (&self.right.eval(symbols.clone(), scope)?.get_type()).into();
+        let left: Box<TypeValue> =
+            (&self.left.eval(symbols.clone(), scope)?.get_type()).into();
+        println!("right {:?}", right);
+        if !left_args.is_empty()
+            && left_args[0].get_kind()
+                == symbols::SymbolKind::DataSourceMethodCall
+        {
+            left_value = Some(Box::new(left_args[0].get_value().unwrap()));
+        }
+
+        let right_args = self.right.eval(symbols.clone(), scope)?.get_args();
+        let mut right_value: Option<Box<&TypeValue>> = None;
+
+        if !right_args.is_empty()
+            && right_args[0].get_kind()
+                == symbols::SymbolKind::DataSourceMethodCall
+        {
+            right_value = Some(Box::new(right_args[0].get_value().unwrap()));
+        }
+
+        let (left, right) = match (left_value, right_value) {
+            (None, None) => (left.as_ref(), right.as_ref()),
+            (Some(left), None) => (*left, right.as_ref()),
+            (None, Some(right)) => (left.as_ref(), *right),
+            (Some(left), Some(right)) => (*left, *right),
+        };
+
+        if left != right {
+            return Err(
+                format!("Cannot compare {} with {}", left, right).into()
+            );
+        }
+    
+        Ok(symbols::Symbol::new(
+            "compare_expr".into(),
+            symbols::SymbolKind::CompareExpr(self.op),
+            TypeDef::Boolean,
+            vec![
+                self.left.eval(symbols.clone(), scope)?.set_kind(symbols::SymbolKind::LogicalExpr),
+                self.right.eval(symbols, scope)?,
+            ],
+        ))
+    }
+}
+
+impl ast::CompareArg {
+    fn eval(
+        &self,
+        symbols: symbols::GlobalSymbolTable<'_>,
+        scope: &symbols::Scope,
+    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+        let _symbols = symbols.clone();
+
+        println!("comparison argument: {:?}", self);
+        match self {
+            ast::CompareArg::GroupedLogicalExpr(expr) => {
+                // This is a grouped expression that will return a boolean.
+                let s = expr.eval(symbols, scope)?;
+
+                if s.get_type() == TypeDef::Boolean {
+                    Ok(s)
+                } else {
+                    Err("Cannot return Non-Boolean in ( )".to_string().into())
+                }
+            }
+            ast::CompareArg::ArgExpr(expr) => {
+                // A simple operator.
+                println!("arg expr: {:?}", expr);
+                expr.eval(symbols, scope.clone())
+            }
+        }
+    }
+}
+
+impl ast::AndExpr {
+    fn eval(
+        &self,
+        symbols: symbols::GlobalSymbolTable<'_>,
+        scope: &symbols::Scope,
+    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+        let _symbols = symbols.clone();
+
+        // For now we're assuming the left hand-side and the right-hand side
+        // return the same type.
+        let left = self.left.eval(_symbols, scope)?;
+        let right = self.right.eval(symbols, scope)?;
+
+        if left.get_type() != TypeDef::Boolean {
+            return Err("Left hand expression doesn't evaluate to a Boolean"
+                .to_string()
+                .into());
+        };
+
+        if right.get_type() != TypeDef::Boolean {
+            return Err(
+                "Right hand expression doesn't evaluate to a Boolean"
+                    .to_string()
+                    .into(),
+            );
+        };
+
+        Ok(symbols::Symbol::new(
+            "and_expr".into(),
+            symbols::SymbolKind::Variable,
+            TypeDef::Boolean,
+            vec![],
+        ))
+    }
+}
+
+impl ast::OrExpr {
+    fn eval(
+        &self,
+        symbols: symbols::GlobalSymbolTable<'_>,
+        scope: &symbols::Scope,
+    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+        let _symbols = symbols.clone();
+
+        Ok(symbols::Symbol::new(
+            "bool_true".into(),
+            symbols::SymbolKind::Variable,
+            TypeDef::Boolean,
+            vec![],
+        ))
+    }
+}
+
+impl ast::NotExpr {
+    fn eval(
+        &self,
+        symbols: symbols::GlobalSymbolTable<'_>,
+        scope: &symbols::Scope,
+    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+        let _symbols = symbols.clone();
+
+        Ok(symbols::Symbol::new(
+            "bool_true".into(),
+            symbols::SymbolKind::Variable,
+            TypeDef::Boolean,
+            vec![],
+        ))
+    }
+}
+
+impl ast::GroupedLogicalExpr {
+    fn eval(
+        &self,
+        symbols: symbols::GlobalSymbolTable<'_>,
+        scope: &symbols::Scope,
+    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+        self.expr.eval(symbols, scope.clone())
+    }
+}
+
+//============ Helper functions =============================================
 
 fn check_type(
     ty: ast::TypeIdentifier,
@@ -890,16 +1247,16 @@ fn check_type(
     }
 
     // sorry, we don't have the type the user's asking for.
-    return Err(format!(
+    Err(format!(
         "No type named '{}' found in scope '{}'",
         ty.ident.as_str(),
         scope
     )
-    .into());
+    .into())
 }
 
 // This function checks if a variable exists in the scope of the module, but
-// not in the gloval scope (variables in the global scope are not allowed).
+// not in the global scope (variables in the global scope are not allowed).
 // The variables can be of form:
 // <var_name>
 // <var of type Record>[.<field>]+
@@ -938,9 +1295,11 @@ fn get_type_for_scoped_variable(
                                 fields[0], module, search_str
                             ))?;
 
-                        let field_ty = data_src_type.has_fields_chain(&fields[1..]).ok_or(format!(
-                            "No field named '{}' for data source '{}' found in module '{}'",
-                            fields[1], fields[0].ident, module
+                        println!("data_src_type: {:?}", data_src_type);
+                        println!("field {:?}", fields[1]);
+                        let field_ty = data_src_type.has_fields_chain(&fields[1..]).map_err(|err| format!(
+                            "{} on field '{}' for variable '{}' found in module '{}'",
+                            err, fields[1], fields[0].ident, module
                         ))?;
 
                         Ok(field_ty)
@@ -951,13 +1310,11 @@ fn get_type_for_scoped_variable(
         }
         // There is NO global scope for variables.  All vars are all local to
         // a module.
-        symbols::Scope::Global => {
-            return Err(format!(
-                "No variable named '{}' found in global scope.",
-                fields.join(".").as_str()
-            )
-            .into());
-        }
+        symbols::Scope::Global => Err(format!(
+            "No variable named '{}' found in global scope.",
+            fields.join(".").as_str()
+        )
+        .into()),
     }
 }
 
@@ -972,18 +1329,13 @@ fn get_data_source_for_ident(
         .ok_or("No global symbol table")?
         .get_symbol(&ident.ident)
         .map(|r| match r.get_kind() {
-            symbols::SymbolKind::Rib => {
-                Ok(TypeDef::Rib(Box::new(r.get_type())))
-            }
+            symbols::SymbolKind::Rib => Ok(r.get_type()),
             symbols::SymbolKind::Table => {
                 Ok(TypeDef::Table(Box::new(r.get_type())))
             }
             _ => {
-                return Err(format!(
-                    "No data source named '{}' found.",
-                    ident.ident
-                )
-                .into());
+                Err(format!("No data source named '{}' found.", ident.ident)
+                    .into())
             }
         })?;
 
@@ -1026,11 +1378,11 @@ fn declare_variable(
             )
         }
         symbols::Scope::Global => {
-            return Err(format!(
+            Err(format!(
                 "Can't create a variable in the global scope (NEVER). Variable '{}'",
                 type_ident.field_name
             )
-            .into());
+            .into())
         }
     }
 }
@@ -1066,11 +1418,11 @@ fn declare_variable_from_symbol(
             )
         }
         symbols::Scope::Global => {
-            return Err(format!(
+            Err(format!(
                 "Can't create a variable in the global scope (NEVER). Variable '{}'",
                 symbol.get_name()
             )
-            .into());
+            .into())
         }
     }
 }
@@ -1109,11 +1461,11 @@ fn declare_variable_from_typedef<'a>(
             )
         }
         symbols::Scope::Global => {
-            return Err(format!(
+            Err(format!(
                 "Can't create a variable in the global scope (NEVER). Variable '{}'",
                 ident
             )
-            .into());
+            .into())
         }
     }
 }
