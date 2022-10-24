@@ -133,13 +133,11 @@ impl TypeDef {
             }
             TypeValue::Rib(rib) => rib.get_props_for_method(method),
             TypeValue::Table(rec) => rec.get_props_for_method(method),
-            _ => {
-                return Err(format!(
-                    "No method named '{}' found for {}.",
-                    method.ident, parent_ty
-                )
-                .into())
-            }
+            _ => Err(format!(
+                "No method named '{}' found for {}.",
+                method.ident, parent_ty
+            )
+            .into()),
         }
     }
 }
