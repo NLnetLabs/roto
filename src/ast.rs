@@ -1141,7 +1141,7 @@ impl IntegerLiteral {
             "integer literal",
             recognize(pair(
                 opt(char('-')),
-                take_while1(|ch: char| ch.is_digit(10)),
+                take_while1(|ch: char| ch.is_ascii_digit()),
             )),
         )(input)?;
 
@@ -1171,9 +1171,9 @@ impl FloatLiteral {
             "float literal",
             recognize(tuple((
                 opt(char('-')),
-                take_while1(|ch: char| ch.is_digit(10)),
+                take_while1(|ch: char| ch.is_ascii_digit()),
                 char('.'),
-                take_while1(|ch: char| ch.is_digit(10)),
+                take_while1(|ch: char| ch.is_ascii_digit()),
             ))),
         )(input)?;
 
