@@ -24,9 +24,9 @@ pub(crate) struct Symbol {
     // location: Location,
 }
 
-impl<'a> Symbol {
+impl Symbol {
     pub fn get_type(&self) -> TypeDef {
-        self.ty.clone()
+       self.ty.clone() 
     }
 
     pub fn set_type(mut self, ty: TypeDef) -> Symbol {
@@ -81,7 +81,7 @@ impl<'a> Symbol {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum SymbolKind {
     Variable,
     Constant,
@@ -137,7 +137,7 @@ struct Location {
     line: usize,
 }
 
-impl<'a> SymbolTable {
+impl SymbolTable {
     pub(crate) fn new(module: ShortString) -> Self {
         SymbolTable {
             scope: Scope::Module(module),
