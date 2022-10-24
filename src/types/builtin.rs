@@ -241,7 +241,7 @@ impl std::fmt::Display for BuiltinTypeValue {
 
 // ----------- A simple u32 type --------------------------------------------
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct U32(pub(crate) Option<u32>);
 
 impl U32 {
@@ -252,7 +252,7 @@ impl U32 {
 
 // ----------- A simple u8 type ---------------------------------------------
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct U8(pub(crate) Option<u8>);
 
 impl U8 {
@@ -263,7 +263,7 @@ impl U8 {
 
 // ----------- Boolean type -------------------------------------------------
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Boolean(pub(crate) Option<bool>);
 impl Boolean {
     pub fn new(val: bool) -> Self {
@@ -273,7 +273,7 @@ impl Boolean {
 
 // ----------- Prefix type --------------------------------------------------
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Prefix(pub(crate) Option<routecore::addr::Prefix>);
 
 impl Prefix {
@@ -301,6 +301,10 @@ impl RotoFilter<PrefixToken> for Prefix {
                     None,
                 ))),
             )),
+            "len" => Ok((
+                std::mem::size_of_val(&PrefixToken::Len) as u8,
+                TypeValue::Builtin(BuiltinTypeValue::U32(U32(None))),
+            )),
             _ => Err(format!("Unknown method: {}", method_name.ident).into()),
         }
     }
@@ -321,18 +325,19 @@ impl RotoFilter<PrefixToken> for Prefix {
 pub(crate) enum PrefixToken {
     From,
     Address,
+    Len
 }
 
 // ----------- Community ----------------------------------------------------
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum CommunityType {
     Normal,
     Extended,
     Large,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Community(pub(crate) Option<CommunityType>);
 
 impl Community {
@@ -353,7 +358,7 @@ pub struct PrefixRecord {
 
 //------------ MatchType ----------------------------------------------------
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum MatchType {
     ExactMatch,
     LongestMatch,
@@ -362,7 +367,7 @@ pub enum MatchType {
 
 // ----------- IpAddress type -----------------------------------------------
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct IpAddress(pub(crate) Option<std::net::IpAddr>);
 
 impl IpAddress {
@@ -373,7 +378,7 @@ impl IpAddress {
 
 // ----------- Asn type -----------------------------------------------------
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Asn(pub(crate) Option<routecore::asn::Asn>);
 
 impl Asn {
@@ -392,7 +397,7 @@ impl Asn {
 
 // ----------- AsPath type --------------------------------------------------
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct AsPath(
     pub(crate) Option<routecore::asn::AsPath<Vec<routecore::asn::Asn>>>,
 );
@@ -447,7 +452,7 @@ impl AsPath {
     }
 }
 
-impl<'a> RotoFilter<AsPathToken> for AsPath {
+impl RotoFilter<AsPathToken> for AsPath {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -567,14 +572,14 @@ pub(crate) enum AsPathToken {
 
 // routecore, roto
 // Message iterator -> Routes
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Route {
     pub prefix: Option<Prefix>,
     pub bgp: Option<BgpAttributes>,
     pub status: Status,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Status {
     InConvergence, // Between start and EOR on a BGP peer-session
     UpToDate, // After EOR for a BGP peer-session, either Graceful Restart or EOR
@@ -584,7 +589,7 @@ pub enum Status {
     Empty, // Status not relevant, e.g. a RIB that holds archived routes.
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct BgpAttributes {
     pub as_path: AsPath,
     pub communities: Vec<Community>,
