@@ -77,6 +77,10 @@ impl TypeValue {
             .collect::<Vec<_>>();
         Record::new(def_)
     }
+
+    pub fn is_boolean_type(&self) -> bool {
+        matches!(self, TypeValue::Builtin(BuiltinTypeValue::Boolean(_)))
+    }
 }
 
 impl<'a> From<&'a TypeDef> for Box<TypeValue> {
