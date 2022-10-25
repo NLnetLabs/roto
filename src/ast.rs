@@ -1667,8 +1667,9 @@ pub enum BooleanExpr {
     CompareExpr(Box<CompareExpr>),
     // A CallExpression *may* evaluate to a function that returns a boolean
     CallExpr(CallExpr), 
-    // A field access *may* evaluate to a field that contains a boolean
-    // AccessReceiver(AccessReceiver),
+    // A field access *may* evaluate to a stand-alone variable that *may*
+    // return a boolean value.
+    AccessReceiver(AccessReceiver),
     // Set Compare expression, will *always* result in a boolean-valued
     // function. Syntactic sugar for a truth-function that performs 
     // fn : a -> {a} ∩ B
@@ -1676,8 +1677,6 @@ pub enum BooleanExpr {
     // syntactic sugar for a method on a prefix function that returns a
     // boolean.
     PrefixMatchExpr(PrefixMatchExpr),
-    // A variable that *may* evualate to a boolean
-    Identifier(Identifier), 
 }
 
 impl BooleanExpr {
@@ -1686,8 +1685,7 @@ impl BooleanExpr {
             map(GroupedLogicalExpr::parse, BooleanExpr::GroupedLogicalExpr),
             map(CompareExpr::parse, |e| BooleanExpr::CompareExpr(Box::new(e))),
             map(CallExpr::parse, BooleanExpr::CallExpr),
-            map(Identifier::parse, BooleanExpr::Identifier),
-            // map(AccessReceiver::parse, BooleanExpr::AccessReceiver),
+            map(AccessReceiver::parse, BooleanExpr::AccessReceiver),
             map(SetCompareExpr::parse, |e| BooleanExpr::SetCompareExpr(Box::new(e))),
             map(PrefixMatchExpr::parse, BooleanExpr::PrefixMatchExpr),
             map(BooleanLiteral::parse, BooleanExpr::BooleanLiteral),

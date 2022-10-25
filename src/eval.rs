@@ -971,24 +971,19 @@ impl ast::BooleanExpr {
                 )?;
                 Ok(s.1)
             }
-            // ast::BooleanExpr::AccessReceiver(access_r) => {
-            //     let s = access_r.eval(symbols, scope.clone())?;
-
-            //     Ok(s)
-            // }
             ast::BooleanExpr::SetCompareExpr(_) => todo!(),
             ast::BooleanExpr::PrefixMatchExpr(_) => todo!(),
-            ast::BooleanExpr::Identifier(ident) => {
+            ast::BooleanExpr::AccessReceiver(ident) => {
                 let _symbols = symbols.borrow();
                 let gt = _symbols
                     .get(scope)
                     .ok_or(format!("Could not find scope {:?}", scope))?;
-                let var = gt.get_symbol(&ident.ident)?;
+                let var = gt.get_symbol(&ident.ident.ident)?;
 
                 is_boolean_expression(var)?;
 
                 Ok(symbols::Symbol::new(
-                    ident.ident.clone(),
+                    ident.ident.ident.clone(),
                     symbols::SymbolKind::Variable,
                     var.get_type(),
                     vec![symbols::Symbol::new_with_value(
