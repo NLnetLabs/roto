@@ -305,7 +305,11 @@ impl RotoFilter<PrefixToken> for Prefix {
                 std::mem::size_of_val(&PrefixToken::Len) as u8,
                 TypeValue::Builtin(BuiltinTypeValue::U32(U32(None))),
             )),
-            _ => Err(format!("Unknown method: {}", method_name.ident).into()),
+            "matches" => Ok((
+                std::mem::size_of_val(&PrefixToken::Matches) as u8,
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+            )),
+            _ => Err(format!("Unknown method: {} for type Prefix", method_name.ident).into())
         }
     }
 
@@ -325,7 +329,8 @@ impl RotoFilter<PrefixToken> for Prefix {
 pub(crate) enum PrefixToken {
     From,
     Address,
-    Len
+    Len,
+    Matches
 }
 
 // ----------- Community ----------------------------------------------------
