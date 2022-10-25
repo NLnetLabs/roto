@@ -281,7 +281,7 @@ impl RotoFilter<RecordToken> for Record {
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
             )),
             _ => {
-                Err(format!("Unknown method '{}'", method_name.ident).into())
+                Err(format!("Unknown method '{}' for Record type with fields {:?}", method_name.ident, self).into())
             }
         }
     }
