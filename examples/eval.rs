@@ -58,7 +58,7 @@ fn main() {
             
                term rov-valid for route: Route {
                     match {
-                        (found_prefix.matches && found_prefix.slices) || route_in_table.exists;
+                        (found_prefix.prefix.matches() && found_prefix.prefix.matches()) || route_in_table;
                         found_prefix.prefix.len() == 24;
                         route.prefix.len() <= found_prefix.prefix.len();
                         route.as-path == found_prefix.as-path.origin();
@@ -66,7 +66,11 @@ fn main() {
                 }
                
                action set-best for route: Route {
+                   // This shouldn't be allowed, a filter does not get to
+                   // decide where to write.
                    rib-rov.set-best(route);
+                   // This should work. The filter is allowed to modify the
+                   // route that flows through it.
                    route.local_pref.set(200);
                    route.origin.set(extra_asn);
                }
