@@ -2,7 +2,7 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     fmt::{Display, Formatter},
-    rc::Rc,
+    rc::Rc, hash::Hash,
 };
 
 use crate::{
@@ -51,10 +51,14 @@ impl Symbol {
         self.value.as_ref()
     }
 
-    pub fn get_args(self) -> Vec<Symbol> {
+    pub fn get_args_owned(self) -> Vec<Symbol> {
         self.args
     }
  
+    pub fn get_args(&self) -> &[Symbol] {
+        self.args.as_slice()
+    }
+
     pub fn new(
         name: ShortString,
         kind: SymbolKind,
@@ -130,6 +134,7 @@ pub struct SymbolTable {
     scope: Scope,
     pub(crate) symbols: HashMap<ShortString, Symbol>,
     types: HashMap<ShortString, TypeDef>,
+    pub(crate) terms: HashMap<ShortString, Vec<Symbol>>,
 }
 
 // The global symbol table.
@@ -153,6 +158,7 @@ impl SymbolTable {
         SymbolTable {
             scope: Scope::Module(module),
             symbols: HashMap::new(),
+            terms: HashMap::new(),
             types: HashMap::new(),
         }
     }
@@ -190,6 +196,53 @@ impl SymbolTable {
                 value,
             },
         );
+        Ok(())
+    }
+
+    pub(crate) fn add_subterm(
+        &mut self,
+        key: ShortString,
+        name: Option<ShortString>,
+        kind: SymbolKind,
+        ty: TypeDef,
+        args: Vec<Symbol>,
+        value: Option<TypeValue>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let name = if let Some(name) = name {
+            name
+        } else {
+            key.clone()
+        };
+
+        if self.terms.contains_key(&name) {
+            return Err(format!(
+                "Symbol {} already defined in scope {}",
+                name, self.scope
+            )
+            .into());
+        }
+
+        if let Some(term) = self.terms.get_mut(&key) {
+            term.push(Symbol {
+                name,
+                kind,
+                ty,
+                args,
+                value,
+            });
+        } else {
+            self.terms.insert(
+                key,
+                vec![Symbol {
+                    name,
+                    kind,
+                    ty,
+                    args,
+                    value,
+                }],
+            );
+        };
+
         Ok(())
     }
 

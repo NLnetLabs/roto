@@ -410,12 +410,8 @@ impl<'a> ast::Term {
                 "logical formula: {} -> {:?}",
                 self.ident.ident, logical_formula
             );
-            declare_variable_from_symbol(
-                Some(
-                    format!("{}.{}", self.ident.ident.clone(), term.0)
-                        .as_str()
-                        .into(),
-                ),
+            add_subterm(
+                Some(self.ident.ident.clone()),
                 logical_formula,
                 symbols.clone(),
                 &scope,
@@ -638,7 +634,7 @@ impl<'a> ast::CallExpr {
                             symbols.clone(),
                             scope.clone(),
                         )?;
-                        
+
                         match get_type_for_scoped_variable(
                             &[receiver.ident.clone()],
                             symbols.clone(),
@@ -650,7 +646,10 @@ impl<'a> ast::CallExpr {
                                 Ok((
                                     receiver_ident,
                                     symbols::Symbol::new(
-                                        field_access.get_name().as_str().into(),
+                                        field_access
+                                            .get_name()
+                                            .as_str()
+                                            .into(),
                                         symbols::SymbolKind::Variable,
                                         field_access.get_type(),
                                         vec![ast::MethodCallExpr::eval(
@@ -704,6 +703,7 @@ impl ast::AccessReceiver {
         symbols: symbols::GlobalSymbolTable<'_>,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+        println!("AccessReceiver::eval() {:?}", self);
         let _symbols = symbols.clone();
 
         let mut search_var = self.get_ident().to_string();
@@ -903,6 +903,10 @@ impl ast::FieldAccessExpr {
     }
 }
 
+//============ First-order Logic Evaluation (Terms) =========================
+
+//------------ Logical Expression -------------------------------------------
+
 impl ast::LogicalExpr {
     fn eval(
         &self,
@@ -926,6 +930,8 @@ impl ast::LogicalExpr {
     }
 }
 
+//------------ Boolean Expression -------------------------------------------
+
 impl ast::BooleanExpr {
     fn eval(
         &self,
@@ -936,76 +942,66 @@ impl ast::BooleanExpr {
 
         match &self {
             ast::BooleanExpr::GroupedLogicalExpr(grouped_expr) => {
-                return grouped_expr.eval(symbols, scope);
+                grouped_expr.eval(symbols, scope)
             }
             ast::BooleanExpr::BooleanLiteral(bool_lit) => {
                 // Leaf node, needs a TypeValue in this case a boolean
                 // value.
-                return Ok(symbols::Symbol::new_with_value(
+                Ok(symbols::Symbol::new_with_value(
                     "boolean_constant".into(),
                     symbols::SymbolKind::Constant,
                     TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
                         Some(bool_lit.0),
                     ))),
                     vec![],
-                ));
+                ))
             }
             ast::BooleanExpr::CompareExpr(compare_expr) => {
-                return ast::CompareExpr::eval(compare_expr, symbols, scope);
+                ast::CompareExpr::eval(compare_expr, symbols, scope)
             }
             ast::BooleanExpr::CallExpr(call_expr) => {
+                // A Call Expression does not necessarily return a boolean, as
+                // long as the compare expression it is nested in has left and
+                // right hand-sides that return the same type. Checking this
+                // can therefore not be done by the Call Expression check here.
                 let s = call_expr.eval(
                     call_expr.get_ident().clone().ident,
                     symbols,
                     scope.clone(),
                 )?;
-
-                // It evaluates correctly as a call expression, but does it
-                // return an actual Boolean value?
-                if s.1.get_type() == TypeDef::Boolean {
-                    return Ok(s.1);
-                }
+                Ok(s.1)
             }
-            ast::BooleanExpr::AccessReceiver(access_r) => {
-                let s = access_r.eval(symbols, scope.clone())?;
+            // ast::BooleanExpr::AccessReceiver(access_r) => {
+            //     let s = access_r.eval(symbols, scope.clone())?;
 
-                // It evaluates correctly as an access receiver, but does it
-                // return an actual Boolean value?
-                if s.get_type() == TypeDef::Boolean {
-                    return Ok(s);
-                }
-            }
+            //     Ok(s)
+            // }
             ast::BooleanExpr::SetCompareExpr(_) => todo!(),
             ast::BooleanExpr::PrefixMatchExpr(_) => todo!(),
             ast::BooleanExpr::Identifier(ident) => {
-                let ty = get_type_for_scoped_variable(
-                    &[ident.clone()],
-                    symbols,
-                    scope.clone(),
-                )?;
+                let _symbols = symbols.borrow();
+                let gt = _symbols
+                    .get(scope)
+                    .ok_or(format!("Could not find scope {:?}", scope))?;
+                let var = gt.get_symbol(&ident.ident)?;
 
-                return match ty {
-                    TypeDef::Boolean => Ok(symbols::Symbol::new(
-                        "boolean_variable".into(),
-                        symbols::SymbolKind::Variable,
-                        TypeDef::Boolean,
+                is_boolean_expression(var)?;
+
+                Ok(symbols::Symbol::new(
+                    ident.ident.clone(),
+                    symbols::SymbolKind::Variable,
+                    var.get_type(),
+                    vec![symbols::Symbol::new_with_value(
+                        var.get_args()[0].get_name(),
+                        var.get_args()[0].get_kind(),
+                        TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
+                            None,
+                        ))),
                         vec![],
-                    )),
-                    _ => Err(format!(
-                        "Variable {} cannot be interpreted as Boolean",
-                        ident
-                    )
-                    .into()),
-                };
+                    )],
+                ))
             }
         }
-
-        Ok(symbols::Symbol::new(
-            "bool".into(),
-            symbols::SymbolKind::Variable,
-            TypeDef::Boolean,
-            vec![],
-        ))
     }
 }
 
@@ -1018,16 +1014,12 @@ impl ast::CompareExpr {
         println!("comparison expression: {:?}", self);
         let _symbols = symbols.clone();
 
-        // For now we're assuming the left hand-side and the right-hand side
-        // return the same type.
-
         // A non-leaf node must have a type (in the `ty` field in the symbol
-        // itself), but a leaf node can't have one,
-        // instead it has the `value` field filled (with a TypeValue)
-        // somewhere in the `args` field of the symbol.
-        // must evaluate the left and right hand side of the expression to
-        // determine the return type of the expression.
-        let left_args = self.left.eval(_symbols, scope)?.get_args();
+        // itself), but a leaf node can't have one, instead it has the
+        // `value` field filled (with a TypeValue) somewhere in the `args`
+        // field of the symbol. must evaluate the left and right hand side of
+        // the expression to determine the return type of the expression.
+        let left_args = self.left.eval(_symbols, scope)?.get_args_owned();
         let mut left_value = None;
 
         let right: Box<TypeValue> =
@@ -1042,7 +1034,8 @@ impl ast::CompareExpr {
             left_value = Some(Box::new(left_args[0].get_value().unwrap()));
         }
 
-        let right_args = self.right.eval(symbols.clone(), scope)?.get_args();
+        let right_args =
+            self.right.eval(symbols.clone(), scope)?.get_args_owned();
         let mut right_value: Option<Box<&TypeValue>> = None;
 
         if !right_args.is_empty()
@@ -1059,18 +1052,22 @@ impl ast::CompareExpr {
             (Some(left), Some(right)) => (*left, *right),
         };
 
+        // For now we're assuming the left hand-side and the right-hand side
+        // return the same type.
         if left != right {
             return Err(
                 format!("Cannot compare {} with {}", left, right).into()
             );
         }
-    
+
         Ok(symbols::Symbol::new(
             "compare_expr".into(),
             symbols::SymbolKind::CompareExpr(self.op),
             TypeDef::Boolean,
             vec![
-                self.left.eval(symbols.clone(), scope)?.set_kind(symbols::SymbolKind::LogicalExpr),
+                self.left
+                    .eval(symbols.clone(), scope)?
+                    .set_kind(symbols::SymbolKind::LogicalExpr),
                 self.right.eval(symbols, scope)?,
             ],
         ))
@@ -1112,32 +1109,25 @@ impl ast::AndExpr {
         symbols: symbols::GlobalSymbolTable<'_>,
         scope: &symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+        // An "And Expression" is a Boolean function, meaning it takes a
+        // boolean as input and returns a boolean as output. That way
+        // it can be composed into bigger logical expressions by combining
+        // it with other boolean function, like "Or" or "Not".
+        // The left and right hand in an "And Expression" must be leaf nodes,
+        // meaning they have a value, not a type.
         let _symbols = symbols.clone();
 
-        // For now we're assuming the left hand-side and the right-hand side
-        // return the same type.
+        println!("and expr {:?}", self);
         let left = self.left.eval(_symbols, scope)?;
         let right = self.right.eval(symbols, scope)?;
 
-        if left.get_type() != TypeDef::Boolean {
-            return Err("Left hand expression doesn't evaluate to a Boolean"
-                .to_string()
-                .into());
-        };
-
-        if right.get_type() != TypeDef::Boolean {
-            return Err(
-                "Right hand expression doesn't evaluate to a Boolean"
-                    .to_string()
-                    .into(),
-            );
-        };
+        is_boolean_function(&left, &right)?;
 
         Ok(symbols::Symbol::new(
             "and_expr".into(),
-            symbols::SymbolKind::Variable,
+            symbols::SymbolKind::LogicalExpr,
             TypeDef::Boolean,
-            vec![],
+            vec![left, right],
         ))
     }
 }
@@ -1148,13 +1138,19 @@ impl ast::OrExpr {
         symbols: symbols::GlobalSymbolTable<'_>,
         scope: &symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+        println!("or expr {:?}", self);
         let _symbols = symbols.clone();
 
+        let left = self.left.eval(_symbols, scope)?;
+        let right = self.right.eval(symbols, scope)?;
+
+        is_boolean_function(&left, &right)?;
+
         Ok(symbols::Symbol::new(
-            "bool_true".into(),
-            symbols::SymbolKind::Variable,
+            "or_expr".into(),
+            symbols::SymbolKind::LogicalExpr,
             TypeDef::Boolean,
-            vec![],
+            vec![left, right],
         ))
     }
 }
@@ -1167,11 +1163,19 @@ impl ast::NotExpr {
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         let _symbols = symbols.clone();
 
+        let expr = self.expr.eval(_symbols, scope)?;
+
+        if expr.get_type() != TypeDef::Boolean {
+            return Err("Expression doesn't evaluate to a Boolean"
+                .to_string()
+                .into());
+        };
+
         Ok(symbols::Symbol::new(
-            "bool_true".into(),
+            "not_expr".into(),
             symbols::SymbolKind::Variable,
             TypeDef::Boolean,
-            vec![],
+            vec![expr],
         ))
     }
 }
@@ -1182,6 +1186,7 @@ impl ast::GroupedLogicalExpr {
         symbols: symbols::GlobalSymbolTable<'_>,
         scope: &symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+        println!("grouped logical expr: {:?}", self);
         self.expr.eval(symbols, scope.clone())
     }
 }
@@ -1271,6 +1276,7 @@ fn get_type_for_scoped_variable(
 ) -> Result<TypeDef, Box<dyn std::error::Error>> {
     let symbols = symbols.borrow();
     let search_str = fields.join(".");
+    println!("search_str: {}", search_str);
     match &scope {
         symbols::Scope::Module(module) => {
             // 1. is it in the symbol table for this scope?
@@ -1413,7 +1419,7 @@ fn declare_variable_from_symbol(
                 Some(symbol.get_name()),
                 symbol.get_kind(),
                 symbol.get_type(),
-                symbol.get_args(),
+                symbol.get_args_owned(),
                 None,
             )
         }
@@ -1425,6 +1431,116 @@ fn declare_variable_from_symbol(
             .into())
         }
     }
+}
+
+
+// Terms will be added as a vec of Logical Formulas to the `term` hashmap in
+// a module's symbol table. So, a subterm is one element of the vec.
+fn add_subterm(
+    key: Option<ast::ShortString>,
+    symbol: symbols::Symbol,
+    symbols: symbols::GlobalSymbolTable<'_>,
+    scope: &symbols::Scope,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _symbols = symbols.clone();
+
+    match &scope {
+        symbols::Scope::Module(module) => {
+            drop(_symbols);
+
+            let mut _symbols = symbols.borrow_mut();
+            let module = _symbols
+                .get_mut(scope)
+                .ok_or(format!("No module named '{}' found.", module))?;
+
+            module.add_subterm(
+                key.unwrap_or_else(|| symbol.get_name()),
+                Some(symbol.get_name()),
+                symbol.get_kind(),
+                symbol.get_type(),
+                symbol.get_args_owned(),
+                None,
+            )
+        }
+        symbols::Scope::Global => {
+            Err(format!(
+                "Can't create a (sub-)term in the global scope (NEVER). Term '{}'",
+                symbol.get_name()
+            )
+            .into())
+        }
+    }
+}
+
+trait BooleanExpr
+where
+    Self: std::fmt::Debug,
+{
+    fn get_args(&self) -> &[symbols::Symbol];
+    fn get_type(&self) -> TypeDef;
+}
+
+impl BooleanExpr for symbols::Symbol {
+    fn get_args(&self) -> &[symbols::Symbol] {
+        symbols::Symbol::get_args(self)
+    }
+
+    fn get_type(&self) -> TypeDef {
+        symbols::Symbol::get_type(self)
+    }
+}
+
+// Since we're only accepting binary boolean functions, we only have to test
+// a left and right side to comply.
+fn is_boolean_function(
+    left: &impl BooleanExpr,
+    right: &impl BooleanExpr,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("left: {:?}", left);
+    println!("right: {:?}", right);
+
+    let left = (
+        left.get_type() == TypeDef::Boolean,
+        left.get_args().get(0).and_then(|a| a.get_value()),
+    );
+    let right = (
+        right.get_type() == TypeDef::Boolean,
+        right.get_args().get(0).and_then(|a| a.get_value()),
+    );
+
+
+    println!("left value: {:?}", left);
+    println!("right value: {:?}", right);
+
+    match (left, right) {
+        ((false, None), (false, None)) => Err("Right and Left hand expressions don't evaluate to boolean functions".into()),
+        ((_, _), (false, None)) => Err("Right hand expression doesn't evaluate to a boolean function".into()),
+        ((false, None), (_, _)) => Err("Left hand expression doesn't evaluate to a boolean function".into()),
+        // Only accept leaf-nodes for now. Can't think of a reason to accept these, but who knows.
+        ((_, None), (_, None)) => Err("not accepting non-leaf nodes as boolean function".into()),
+        _ => Ok(()),
+    }
+}
+
+
+// A boolean expression only accepts on expression, that should return a
+// boolean value.
+fn is_boolean_expression(
+    expr: &impl BooleanExpr,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if expr.get_type() == TypeDef::Boolean {
+        return Ok(());
+    };
+
+    if let Some(value) = expr.get_args().get(0).and_then(|a| a.get_value()) {
+        if value.is_boolean_type() {
+            return Ok(());
+        };
+    };
+
+    Err("Expression doesn't evaluate to a Boolean"
+        .to_string()
+        .into())
 }
 
 fn declare_variable_from_typedef<'a>(
