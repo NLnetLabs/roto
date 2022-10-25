@@ -60,6 +60,7 @@ fn main() {
                     match {
                         (found_prefix.prefix.matches() && found_prefix.prefix.matches()) || route_in_table;
                         found_prefix.prefix.len() == 24;
+                        route_in_table;
                         route.prefix.len() <= found_prefix.prefix.len();
                         route.as-path == found_prefix.as-path.origin();
                     }
