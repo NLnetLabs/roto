@@ -429,14 +429,14 @@ impl TermScope {
 #[derive(Clone, Debug)]
 pub struct Action {
     pub ident: Identifier,
-    pub for_kv: Option<TypeIdentField>,
-    pub with_kv: Vec<TypeIdentField>,
+    // pub for_kv: Option<TypeIdentField>,
+    // pub with_kv: Vec<TypeIdentField>,
     pub body: ActionBody,
 }
 
 impl Action {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (_, ident, for_kv, with_kv, body)) = context(
+        let (input, (_, ident, body)) = context(
             "action definition",
             tuple((
                 opt_ws(tag("action")),
@@ -444,8 +444,8 @@ impl Action {
                     "action name",
                     delimited(multispace1, Identifier::parse, multispace1),
                 ),
-                for_statement,
-                with_statement,
+                // for_statement,
+                // with_statement,
                 context(
                     "action block",
                     delimited(
@@ -461,8 +461,8 @@ impl Action {
             input,
             Action {
                 ident,
-                for_kv,
-                with_kv: with_kv.unwrap_or_default(),
+                // for_kv,
+                // with_kv: with_kv.unwrap_or_default(),
                 body,
             },
         ))

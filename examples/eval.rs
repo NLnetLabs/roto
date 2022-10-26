@@ -37,26 +37,26 @@ fn main() {
         "module_1",
         r###"
             module in-module with my_asn: Asn {
-               define for ext_r: ExtRoute with extra_asn: Asn {
-                  // specify the types of that this filter receives
-                  // and sends.
-                  // rx_tx route: StreamRoute;
-                  rx route: StreamRoute;
-                  tx ext_route: ExtRoute;
+                define for ext_r: ExtRoute with extra_asn: Asn {
+                    // specify the types of that this filter receives
+                    // and sends.
+                    // rx_tx route: StreamRoute;
+                    rx route: StreamRoute;
+                    tx ext_route: ExtRoute;
 
-                  // specify additional external data sets that will be consulted.
-                  use table source_asns;
-                  use rib rib-rov;
+                    // specify additional external data sets that will be consulted.
+                    use table source_asns;
+                    use rib rib-rov;
 
-                  // assignments
-                  route_in_table = source_asns.contains(extra_asn, route.as-path.origin());
+                    // assignments
+                    route_in_table = source_asns.contains(extra_asn, route.as-path.origin());
 
-                  // specify another RIB that is used in this filter.
-                  found_prefix = rib-rov.longest_match(route.prefix);
-                  fixed_len_prefix = Prefix.from(route.prefix.address(), 24); // maybe /24
-               }
+                    // specify another RIB that is used in this filter.
+                    found_prefix = rib-rov.longest_match(route.prefix);
+                    fixed_len_prefix = Prefix.from(route.prefix.address(), 24); // maybe /24
+                }
             
-               term rov-valid for route: Route {
+                term rov-valid for route: Route {
                     match {
                         (found_prefix.prefix.matches() && found_prefix.prefix.matches()) || route_in_table;
                         found_prefix.prefix.len() == 24;
@@ -66,22 +66,22 @@ fn main() {
                     }
                 }
                
-               action set-best for route: Route {
+                action set-best {
                    // This shouldn't be allowed, a filter does not get to
                    // decide where to write.
                    rib-rov.set-best(route);
                    // This should work. The filter is allowed to modify the
                    // route that flows through it.
-                   route.local_pref.set(200);
-                   route.origin.set(extra_asn);
-               }
+                   route.set(local-pref, 200);
+                   route.set(origin, extra_asn);
+                }
 
-               apply {
+                apply {
                     use best-path;
                     filter exactly-one exists(found_prefix) matching { set-best(route); return accept; };
                     use backup-path;
                     filter match rov-invalid-asn matching { set-rov-invalid-asn-community; return reject; };
-               }
+                }
             }
 
             // comment

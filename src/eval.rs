@@ -305,11 +305,11 @@ impl ast::Module {
             }
         }
 
-        // for action in actions.into_iter() {
-        //     if let ast::ModuleExpr::Action(a) = action {
-        //         a.eval(symbols.clone(), module_scope.clone());
-        //     }
-        // }
+        for action in actions.into_iter() {
+            if let ast::ModuleExpr::Action(a) = action {
+                a.eval(symbols.clone(), module_scope.clone())?;
+            }
+        }
 
         Ok(())
     }
@@ -421,13 +421,35 @@ impl<'a> ast::Term {
     }
 }
 
+// =========== Actions ======================================================
+
 impl<'a> ast::Action {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable<'a>,
         scope: symbols::Scope,
-    ) {
-        todo!()
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // // let payload = self.for_kv.clone().unwrap();
+        // let payload_type = get_type_for_scoped_variable(
+        //     &[payload.field_name],
+        //     symbols.clone(),
+        //     scope.clone(),
+        // )?;
+
+        for call_expr in &self.body.expressions {
+            let payload_var_name =
+                call_expr.get_receiver().unwrap().clone().ident;
+            let payload_type = get_type_for_scoped_variable(
+                &[payload_var_name],
+                symbols.clone(),
+                scope.clone(),
+            )?;
+
+            let (_, s) =
+                call_expr.eval("".into(), symbols.clone(), scope.clone())?;
+        }
+
+        Ok(())
     }
 }
 
@@ -989,9 +1011,9 @@ impl ast::BooleanExpr {
                     vec![symbols::Symbol::new_with_value(
                         var.get_args()[0].get_name(),
                         var.get_args()[0].get_kind(),
-                        TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
-                            None,
-                        ))),
+                        TypeValue::Builtin(BuiltinTypeValue::Boolean(
+                            Boolean(None),
+                        )),
                         vec![],
                     )],
                 ))
@@ -1156,7 +1178,7 @@ impl ast::NotExpr {
         symbols: symbols::GlobalSymbolTable<'_>,
         scope: &symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
-        let _symbols = symbols.clone();
+        let _symbols = symbols;
 
         let expr = self.expr.eval(_symbols, scope)?;
 
@@ -1428,7 +1450,6 @@ fn declare_variable_from_symbol(
     }
 }
 
-
 // Terms will be added as a vec of Logical Formulas to the `term` hashmap in
 // a module's symbol table. So, a subterm is one element of the vec.
 fn add_subterm(
@@ -1503,7 +1524,6 @@ fn is_boolean_function(
         right.get_args().get(0).and_then(|a| a.get_value()),
     );
 
-
     println!("left value: {:?}", left);
     println!("right value: {:?}", right);
 
@@ -1516,7 +1536,6 @@ fn is_boolean_function(
         _ => Ok(()),
     }
 }
-
 
 // A boolean expression only accepts on expression, that should return a
 // boolean value.
