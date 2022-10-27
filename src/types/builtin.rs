@@ -309,7 +309,11 @@ impl RotoFilter<PrefixToken> for Prefix {
                 std::mem::size_of_val(&PrefixToken::Matches) as u8,
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
             )),
-            _ => Err(format!("Unknown method: {} for type Prefix", method_name.ident).into())
+            _ => Err(format!(
+                "Unknown method: {} for type Prefix",
+                method_name.ident
+            )
+            .into()),
         }
     }
 

@@ -95,8 +95,10 @@ pub enum SymbolKind {
     Variable,
     Constant,
     Argument,
-    AnonymousType,
-    NamedType,
+    AnonymousType, // type of a sub-record
+    NamedType, // User-defined type of a record
+    RxType, // type of the incoming payload
+    TxType, // type of the outgoing payload
     Rib,
     Table,
     PrefixList,
@@ -135,6 +137,7 @@ pub struct SymbolTable {
     pub(crate) symbols: HashMap<ShortString, Symbol>,
     types: HashMap<ShortString, TypeDef>,
     pub(crate) terms: HashMap<ShortString, Vec<Symbol>>,
+    pub(crate) actions: HashMap<ShortString, Vec<Symbol>>,
 }
 
 // The global symbol table.
@@ -159,6 +162,7 @@ impl SymbolTable {
             scope: Scope::Module(module),
             symbols: HashMap::new(),
             terms: HashMap::new(),
+            actions: HashMap::new(),
             types: HashMap::new(),
         }
     }
@@ -216,7 +220,7 @@ impl SymbolTable {
 
         if self.terms.contains_key(&name) {
             return Err(format!(
-                "Symbol {} already defined in scope {}",
+                "Term {} already defined in scope {}",
                 name, self.scope
             )
             .into());
@@ -243,6 +247,52 @@ impl SymbolTable {
             );
         };
 
+        Ok(())
+    }
+
+    pub(crate) fn add_action(
+        &mut self,
+        key: ShortString,
+        name: Option<ShortString>,
+        kind: SymbolKind,
+        ty: TypeDef,
+        args: Vec<Symbol>,
+        value: Option<TypeValue>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let name = if let Some(name) = name {
+            name
+        } else {
+            key.clone()
+        };
+
+        if self.actions.contains_key(&name) {
+            return Err(format!(
+                "Action '{}' already defined in scope {}",
+                name, self.scope
+            )
+            .into());
+        }
+
+        if let Some(action) = self.actions.get_mut(&key) {
+            action.push(Symbol {
+                name,
+                kind,
+                ty,
+                args,
+                value,
+            });
+        } else {
+            self.actions.insert(
+                key,
+                vec![Symbol {
+                    name,
+                    kind,
+                    ty,
+                    args,
+                    value,
+                }],
+            );
+        };
         Ok(())
     }
 

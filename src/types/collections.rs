@@ -280,6 +280,10 @@ impl RotoFilter<RecordToken> for Record {
                 std::mem::size_of_val(&RecordToken::Contains) as u8,
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
             )),
+            "set" => Ok((
+                std::mem::size_of_val(&RecordToken::Set) as u8,
+                TypeValue::Record(self),
+            )),
             _ => {
                 Err(format!("Unknown method '{}' for Record type with fields {:?}", method_name.ident, self).into())
             }
@@ -305,4 +309,5 @@ pub enum RecordToken {
     GetAll = 1,
     Contains = 2,
     LongestMatch = 3,
+    Set
 }

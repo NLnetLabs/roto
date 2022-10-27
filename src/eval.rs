@@ -274,11 +274,11 @@ impl ast::Module {
         let module_scope = symbols::Scope::Module(self.ident.ident.clone());
         // Check the `with` clause for additional arguments.
         let with_kv: Vec<_> = self.with_kv.clone();
-
         let with_ty = with_kv
             .into_iter()
             .map(|ty| {
                 declare_variable(
+                    ty.clone().field_name.ident,
                     ty,
                     symbols::SymbolKind::Constant,
                     symbols.clone(),
@@ -325,6 +325,7 @@ impl ast::Module {
             .into_iter()
             .map(|ty| {
                 declare_variable(
+                    ty.clone().field_name.ident,
                     ty,
                     symbols::SymbolKind::Argument,
                     symbols.clone(),
@@ -347,15 +348,17 @@ impl<'a> ast::Define {
         scope: symbols::Scope,
     ) -> Result<(), Box<dyn std::error::Error>> {
         declare_variable(
+            self.body.rx_type.ty.ident.clone(),
             self.body.rx_type.clone(),
-            symbols::SymbolKind::Argument,
+            symbols::SymbolKind::RxType,
             symbols.clone(),
             &scope,
         )?;
 
         declare_variable(
+            self.body.tx_type.ty.ident.clone(),
             self.body.tx_type.clone(),
-            symbols::SymbolKind::Argument,
+            symbols::SymbolKind::TxType,
             symbols.clone(),
             &scope,
         )?;
@@ -429,25 +432,43 @@ impl<'a> ast::Action {
         symbols: symbols::GlobalSymbolTable<'a>,
         scope: symbols::Scope,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // // let payload = self.for_kv.clone().unwrap();
-        // let payload_type = get_type_for_scoped_variable(
-        //     &[payload.field_name],
-        //     symbols.clone(),
-        //     scope.clone(),
-        // )?;
+        let _symbols = symbols.borrow();
+        let module_symbols = _symbols.get(&scope).ok_or_else(|| {
+            format!(
+                "no symbols found for module {}",
+                scope
+            )
+        })?;
+
+        let mut actions_vec = vec![];
 
         for call_expr in &self.body.expressions {
+            // The incoming payload variable is the only variable that can be
+            // used in the 'action' section. The incoming payload variable has
+            // a SymolKind::RxType.
             let payload_var_name =
                 call_expr.get_receiver().unwrap().clone().ident;
-            let payload_type = get_type_for_scoped_variable(
-                &[payload_var_name],
-                symbols.clone(),
-                scope.clone(),
-            )?;
+            
+            let s = module_symbols.get_symbol(&payload_var_name.ident)?;
+            if !(s.get_kind() == symbols::SymbolKind::RxType) {
+                return Err(format!(
+                    "variable {} is not the rx type",
+                    payload_var_name.ident
+                ).into())
+            };
 
             let (_, s) =
                 call_expr.eval("".into(), symbols.clone(), scope.clone())?;
+
+            actions_vec.push(s);
         }
+
+        drop(_symbols);
+
+        for action in actions_vec {
+            add_action(self.ident.ident.clone(), action, symbols.clone(), &scope)?
+        }
+    
 
         Ok(())
     }
@@ -1368,6 +1389,7 @@ fn get_data_source_for_ident(
 }
 
 fn declare_variable(
+    name: ShortString,
     type_ident: ast::TypeIdentField,
     kind: symbols::SymbolKind,
     symbols: symbols::GlobalSymbolTable,
@@ -1393,7 +1415,7 @@ fn declare_variable(
 
             module.add_symbol(
                 type_ident.field_name.ident,
-                None,
+                Some(name),
                 kind,
                 ty,
                 vec![],
@@ -1488,6 +1510,38 @@ fn add_subterm(
     }
 }
 
+fn add_action(
+    name: ShortString,
+    action: symbols::Symbol, symbols: symbols::GlobalSymbolTable<'_>, scope: &symbols::Scope) -> Result<(), Box<dyn std::error::Error>> {
+    // let _symbols = symbols.clone();
+
+    match &scope {
+        symbols::Scope::Module(module) => {
+            // drop(_symbols);
+
+            let mut _symbols = symbols.borrow_mut();
+            let module = _symbols
+                .get_mut(scope)
+                .ok_or(format!("No module named '{}' found.", module))?;
+
+            module.add_action(
+                name,
+                Some(action.get_name()),
+                action.get_kind(),
+                action.get_type(),
+                action.get_args_owned(),
+                None,
+            )
+        }
+        symbols::Scope::Global => {
+            Err(format!(
+                "Can't create an action in the global scope (NEVER). Action '{}'",
+                action.get_name()
+            )
+            .into())
+        }
+    }
+    }
 trait BooleanExpr
 where
     Self: std::fmt::Debug,

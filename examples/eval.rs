@@ -69,7 +69,7 @@ fn main() {
                 action set-best {
                    // This shouldn't be allowed, a filter does not get to
                    // decide where to write.
-                   rib-rov.set-best(route);
+                   // rib-rov.set-best(route);
                    // This should work. The filter is allowed to modify the
                    // route that flows through it.
                    route.set(local-pref, 200);
