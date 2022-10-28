@@ -22,6 +22,7 @@ pub enum BuiltinTypeValue {
     AsPath(AsPath),
     Route(Route),
     Boolean(Boolean),
+    HexLiteral(HexLiteral),
 }
 
 impl BuiltinTypeValue {
@@ -37,6 +38,7 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::Asn(_) => "Asn",
             BuiltinTypeValue::AsPath(_) => "AsPath",
             BuiltinTypeValue::Route(_) => "Route",
+            BuiltinTypeValue::HexLiteral(_) => "HexLiteral",
         }
     }
 
@@ -52,6 +54,7 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::Asn(val) => val,
             BuiltinTypeValue::AsPath(val) => val,
             BuiltinTypeValue::Route(val) => val,
+            BuiltinTypeValue::HexLiteral(val) => val,
         }
     }
 
@@ -67,6 +70,9 @@ impl BuiltinTypeValue {
                 | "Asn"
                 | "AsPath"
                 | "Route"
+                | "Boolean"
+                | "String"
+                | "HexLiteral"
         )
     }
 
@@ -87,6 +93,13 @@ impl BuiltinTypeValue {
                     BuiltinTypeValue::U8(v)
                 } else {
                     return Err("Not a U8".into());
+                }
+            }
+            TypeDef::HexLiteral => {
+                if let BuiltinTypeValue::HexLiteral(v) = value.into() {
+                    BuiltinTypeValue::HexLiteral(v)
+                } else {
+                    return Err("Not a HexLiteral".into());
                 }
             }
             TypeDef::Prefix => {
@@ -235,6 +248,7 @@ impl std::fmt::Display for BuiltinTypeValue {
             }
             BuiltinTypeValue::Route(_) => write!(f, "Route (BGP Route)"),
             BuiltinTypeValue::Boolean(_) => write!(f, "Boolean"),
+            BuiltinTypeValue::HexLiteral(_) => write!(f, "Hexadecimal literal"),
         }
     }
 }
@@ -268,6 +282,16 @@ pub struct Boolean(pub(crate) Option<bool>);
 impl Boolean {
     pub fn new(val: bool) -> Self {
         Boolean(Some(val))
+    }
+}
+
+//------------ HexLiteral type ----------------------------------------------
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct HexLiteral(pub(crate) Option<u64>);
+impl HexLiteral {
+    pub fn new(val: u64) -> Self {
+        HexLiteral(Some(val))
     }
 }
 

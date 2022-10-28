@@ -244,7 +244,7 @@ pub struct DefineBody {
     pub rx_type: TypeIdentField,
     pub tx_type: TypeIdentField,
     pub use_ext_data: Vec<(Identifier, Identifier)>,
-    pub assignments: Vec<(Identifier, CallExpr)>,
+    pub assignments: Vec<(Identifier, ArgExpr)>,
 }
 
 impl DefineBody {
@@ -277,7 +277,7 @@ impl DefineBody {
                         opt_ws(Identifier::parse),
                         preceded(multispace0, char('=')),
                         terminated(
-                            opt_ws(CallExpr::parse),
+                            opt_ws(ArgExpr::parse),
                             opt_ws(char(';')),
                         ),
                     ),
@@ -1156,6 +1156,40 @@ impl From<&'_ IntegerLiteral> for ShortString {
     }
 }
 
+//------------ HexLiteral ---------------------------------------------------
+
+/// A hex literal is a sequence of hex digits, prefixed by '0x'
+/// HexLiteral ::= '0x' [0-9a-fA-F]+
+#[derive(Clone, Debug)]
+
+pub struct HexLiteral(pub u64);
+
+impl HexLiteral {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, digits) = context(
+            "hex literal",
+            recognize(pair(
+                tag("0x"),
+                take_while1(|ch: char| ch.is_ascii_hexdigit()),
+            )),
+        )(input)?;
+
+        let value = u64::from_str_radix(&digits[2..], 16).unwrap();
+        Ok((input, Self(value)))
+    }
+}
+
+impl From<&'_ HexLiteral> for ShortString {
+    fn from(literal: &HexLiteral) -> Self {
+        ShortString::from(literal.0.to_string().as_str())
+    }
+}
+
+impl From<&'_ HexLiteral> for u64 {
+    fn from(literal: &HexLiteral) -> Self {
+        literal.0
+    }
+}
 
 //------------ FloatLiteral -------------------------------------------------
 
@@ -1240,10 +1274,11 @@ impl<'a> ByteStringLiteral {
 
 // AcceptReject ::= 'return'? ( 'accept' | 'reject' ) ';'
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AcceptReject {
     Accept,
     Reject,
+    NoReturn
 }
 
 fn accept_reject(
@@ -1282,6 +1317,7 @@ pub enum ArgExpr {
     TypeIdentifier(TypeIdentifier),
     StringLiteral(StringLiteral),
     IntegerLiteral(IntegerLiteral),
+    HexLiteral(HexLiteral),
     Bool(bool),
     CallExpr(CallExpr),
     AccessReceiver(AccessReceiver),
@@ -1292,14 +1328,15 @@ impl ArgExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         alt((
             map(CallExpr::parse, ArgExpr::CallExpr),
-            map(AccessReceiver::parse, ArgExpr::AccessReceiver),
-            map(TypeIdentifier::parse, ArgExpr::TypeIdentifier),
-            map(Identifier::parse, ArgExpr::Identifier),
             map(StringLiteral::parse, ArgExpr::StringLiteral),
+            map(HexLiteral::parse, ArgExpr::HexLiteral),
             map(IntegerLiteral::parse, ArgExpr::IntegerLiteral),
             map(tag("true"), |_| ArgExpr::Bool(true)),
             map(tag("false"), |_| ArgExpr::Bool(false)),
             map(PrefixMatchExpr::parse, ArgExpr::PrefixMatchExpr),
+            map(AccessReceiver::parse, ArgExpr::AccessReceiver),
+            map(TypeIdentifier::parse, ArgExpr::TypeIdentifier),
+            map(Identifier::parse, ArgExpr::Identifier),
         ))(input)
     }
 }

@@ -3,7 +3,7 @@
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 
-use crate::{ast::ShortString, traits::RotoFilter};
+use crate::{ast::{ShortString, AcceptReject}, traits::RotoFilter};
 
 use super::{
     builtin::BuiltinTypeValue,
@@ -31,6 +31,8 @@ pub enum TypeDef {
     AsPath,
     Community,
     Route,
+    HexLiteral,
+    AcceptReject(AcceptReject), // used in the apply section
     None,
 }
 
@@ -226,6 +228,7 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             "AsPath" => Ok(TypeDef::AsPath),
             "Community" => Ok(TypeDef::Community),
             "Route" => Ok(TypeDef::Route),
+            "HexLiteral" => Ok(TypeDef::HexLiteral),
             _ => Err(format!("Undefined type: {}", ty.ident).into()),
         }
     }
@@ -244,6 +247,7 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::AsPath(_) => TypeDef::AsPath,
             BuiltinTypeValue::Community(_) => TypeDef::Community,
             BuiltinTypeValue::Route(_) => TypeDef::Route,
+            BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
         }
     }
 }

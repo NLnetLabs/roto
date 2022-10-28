@@ -50,6 +50,7 @@ fn main() {
 
                     // assignments
                     route_in_table = source_asns.contains(extra_asn, route.as-path.origin());
+                    ROV_INVALID_AS = 0xFFFFFF010;
 
                     // specify another RIB that is used in this filter.
                     found_prefix = rib-rov.longest_match(route.prefix);
