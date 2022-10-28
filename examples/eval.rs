@@ -66,22 +66,39 @@ fn main() {
                         route.as-path == found_prefix.as-path.origin();
                     }
                 }
+
+                term on-my-terms for route: Route {
+                    match {
+                        route.prefix.len() == 24;
+                        route.as-path == found_prefix.as-path.origin();
+                    }
+                }
                
                 action set-best {
                    // This shouldn't be allowed, a filter does not get to
                    // decide where to write.
                    // rib-rov.set-best(route);
+                   // Doesn't work either, users can only modify the rx type of a module.
+                   // route_in_table.set(true); 
                    // This should work. The filter is allowed to modify the
                    // route that flows through it.
                    route.set(local-pref, 200);
                    route.set(origin, extra_asn);
                 }
 
+                action set-rov-invalid-asn-community {
+                    route.set(community, ROV_INVALID_AS);
+                }
+
                 apply {
                     use best-path;
-                    filter exactly-one exists(found_prefix) matching { set-best(route); return accept; };
+                    filter exactly-one rov-valid matching { 
+                        set-best; 
+                        set-rov-invalid-asn-community; 
+                        return accept; 
+                    };
                     use backup-path;
-                    filter match rov-invalid-asn matching { set-rov-invalid-asn-community; return reject; };
+                    filter match on-my-terms matching { set-rov-invalid-asn-community; return reject; };
                 }
             }
 

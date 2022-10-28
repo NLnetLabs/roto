@@ -6,6 +6,7 @@ use crate::ast::LogicalExpr;
 use crate::ast::ShortString;
 use crate::types::builtin::Boolean;
 use crate::types::builtin::BuiltinTypeValue;
+use crate::types::builtin::HexLiteral;
 
 use super::ast;
 use super::symbols;
@@ -311,6 +312,10 @@ impl ast::Module {
             }
         }
 
+        for apply in self.body.apply.iter() {
+            apply.eval(symbols.clone(), module_scope.clone())?;
+        }
+
         Ok(())
     }
 
@@ -363,12 +368,13 @@ impl<'a> ast::Define {
             &scope,
         )?;
 
-        // Assignments can only be to method calls, there is no way to assign
-        // a variable to a field (that would be aliasing basically).
+        // Assignments can only be to method calls or constants, there is
+        // no way to assign a variable to a field (that would be aliasing
+        // basically).
         for assignment in &self.body.assignments {
-            let (_name, s) = ast::CallExpr::eval(
+            let s = ast::ArgExpr::eval(
                 &assignment.1,
-                assignment.0.ident.clone(),
+                // assignment.0.ident.clone(),
                 symbols.clone(),
                 scope.clone(),
             )?;
@@ -434,10 +440,7 @@ impl<'a> ast::Action {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let _symbols = symbols.borrow();
         let module_symbols = _symbols.get(&scope).ok_or_else(|| {
-            format!(
-                "no symbols found for module {}",
-                scope
-            )
+            format!("no symbols found for module {}", scope)
         })?;
 
         let mut actions_vec = vec![];
@@ -448,13 +451,21 @@ impl<'a> ast::Action {
             // a SymolKind::RxType.
             let payload_var_name =
                 call_expr.get_receiver().unwrap().clone().ident;
-            
-            let s = module_symbols.get_symbol(&payload_var_name.ident)?;
+
+            let s = module_symbols
+                .get_symbol(&payload_var_name.ident)
+                .map_err(|_| {
+                    format!(
+                        "no variable '{}' found in {}",
+                        payload_var_name.ident, scope
+                    )
+                })?;
             if !(s.get_kind() == symbols::SymbolKind::RxType) {
                 return Err(format!(
-                    "variable {} is not the rx type",
-                    payload_var_name.ident
-                ).into())
+                    "variable '{}' is not the rx type of {}",
+                    payload_var_name.ident, scope
+                )
+                .into());
             };
 
             let (_, s) =
@@ -466,11 +477,102 @@ impl<'a> ast::Action {
         drop(_symbols);
 
         for action in actions_vec {
-            add_action(self.ident.ident.clone(), action, symbols.clone(), &scope)?
+            add_action(
+                self.ident.ident.clone(),
+                action,
+                symbols.clone(),
+                &scope,
+            )?
         }
-    
 
         Ok(())
+    }
+}
+
+//------------ Apply --------------------------------------------------------
+
+impl<'a> ast::Apply {
+    fn eval(
+        &self,
+        symbols: symbols::GlobalSymbolTable<'a>,
+        scope: symbols::Scope,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let _symbols = symbols.borrow();
+        let module_symbols = _symbols.get(&scope).ok_or_else(|| {
+            format!("no symbols found for module {}", scope)
+        })?;
+        drop(_symbols);
+
+        for a_scope in &self.body.scopes {
+            let s = a_scope.eval(symbols.clone(), scope.clone())?;
+            println!("apply scope: {:?}", s);
+            declare_variable_from_symbol(
+                Some(s.get_name()),
+                s,
+                symbols.clone(),
+                &scope,
+            )?;
+        }
+
+        Ok(())
+    }
+}
+
+impl<'a> ast::ApplyScope {
+    fn eval(
+        &self,
+        symbols: symbols::GlobalSymbolTable<'a>,
+        scope: symbols::Scope,
+    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+        let _symbols = symbols.borrow();
+        let module_symbols = _symbols.get(&scope).ok_or_else(|| {
+            format!("no symbols found for module {}", scope)
+        })?;
+
+        let s_name = self.scope.clone().ident;
+        
+        let term_name =
+            self.filter_ident.eval(symbols.clone(), scope.clone())?;
+        module_symbols
+            .terms
+            .get(&term_name.get_name())
+            .ok_or_else(|| {
+                format!(
+                    "no term '{}' found in {}",
+                    term_name.get_name(),
+                    scope
+                )
+            })?;
+
+        let mut args_vec = vec![];
+        for action in &self.actions {
+            let action_name =
+                action.0.eval(symbols.clone(), scope.clone())?;
+
+            let s = symbols::Symbol::new(
+                action_name.get_name(),
+                symbols::SymbolKind::Action,
+                TypeDef::AcceptReject(
+                    action.1.clone().unwrap_or(ast::AcceptReject::NoReturn),
+                ),
+                vec![],
+            );
+            args_vec.push(s);
+        }
+        let s = symbols::Symbol::new(
+            term_name.get_name(),
+            if self.negate {
+                symbols::SymbolKind::NegateMatchAction
+            } else {
+                symbols::SymbolKind::MatchAction
+            },
+            TypeDef::AcceptReject(ast::AcceptReject::Accept),
+            args_vec,
+        );
+
+        drop(_symbols);
+
+        Ok(s)
     }
 }
 
@@ -540,7 +642,7 @@ impl<'a> ast::CallExpr {
             // Case 1. Built-in method calls
             // `base_method(arguments)`
             None => {
-                Err(format!("Unknown built-in method {}", self.get_ident())
+                Err(format!("Unknown built-in method '{}'", self.get_ident())
                     .into())
             }
             // Case 2. Method calls on Builtin type or Record types
@@ -811,16 +913,23 @@ impl ast::ArgExpr {
                     vec![],
                 ))
             }
+            ast::ArgExpr::HexLiteral(hex_lit) => {
+                Ok(symbols::Symbol::new_with_value(
+                    "hex_lit".into(),
+                    symbols::SymbolKind::Constant,
+                    TypeValue::Builtin(BuiltinTypeValue::HexLiteral(HexLiteral::new(hex_lit.into()))),
+                    vec![],
+                ))
+            }
             _ => {
-                Err(format!("Invalid argument expression {:?}", self).into())
-            } // Identifier(Identifier),
-              // TypeIdentifier(TypeIdentifier),
-              // StringLiteral(StringLiteral),
-              // Bool(bool),
-              // CallExpr(CallExpr),
-              // PrefixMatchExpr(PrefixMatchExpr),
-
-              // eval_args.push(arg.eval(symbols.clone(), data_srcs, scope.clone())?);
+                Err(format!("xx Invalid argument expression {:?}", self).into())
+            }
+            // Identifier(Identifier),
+            // TypeIdentifier(TypeIdentifier),
+            // StringLiteral(StringLiteral),
+            // Bool(bool),
+            // CallExpr(CallExpr),
+            // PrefixMatchExpr(PrefixMatchExpr),
         }
     }
 }
@@ -846,18 +955,21 @@ impl ast::ArgExprList {
                             .1,
                     );
                 }
+                ast::ArgExpr::HexLiteral(hex_lit) => {
+                    println!("hex literal {:?}", hex_lit);
+                    eval_args.push(symbols::Symbol::new_with_value(
+                        hex_lit.into(),
+                        symbols::SymbolKind::Constant,
+                        TypeValue::Builtin(BuiltinTypeValue::HexLiteral(
+                            HexLiteral::new(hex_lit.into())
+                        )),
+                        vec![],
+                    ));
+                }
                 ast::ArgExpr::AccessReceiver(call_receiver) => {
                     eval_args.push(
                         call_receiver.eval(symbols.clone(), scope.clone())?,
                     );
-                }
-                ast::ArgExpr::StringLiteral(str_lit) => {
-                    eval_args.push(symbols::Symbol::new(
-                        str_lit.into(),
-                        symbols::SymbolKind::StringLiteral,
-                        TypeDef::String,
-                        vec![],
-                    ));
                 }
                 ast::ArgExpr::IntegerLiteral(int_lit) => {
                     eval_args.push(symbols::Symbol::new(
@@ -867,20 +979,24 @@ impl ast::ArgExprList {
                         vec![],
                     ));
                 }
+                ast::ArgExpr::TypeIdentifier(type_ident) => {
+                    eval_args.push(symbols::Symbol::new(
+                        type_ident.ident.clone(),
+                        symbols::SymbolKind::NamedType,
+                        TypeDef::String,
+                        vec![],
+                    ));
+                }
                 _ => {
                     return Err(format!(
-                        "Invalid argument expression {:?}",
+                        "yy Invalid argument expression {:?}",
                         arg
                     )
                     .into());
                 } // Identifier(Identifier),
                   // TypeIdentifier(TypeIdentifier),
-                  // StringLiteral(StringLiteral),
                   // Bool(bool),
-                  // CallExpr(CallExpr),
                   // PrefixMatchExpr(PrefixMatchExpr),
-
-                  // eval_args.push(arg.eval(symbols.clone(), data_srcs, scope.clone())?);
             }
         }
         Ok(eval_args)
@@ -1445,7 +1561,7 @@ fn declare_variable_from_symbol(
 
     match &scope {
         symbols::Scope::Module(module) => {
-            drop(_symbols);
+            // drop(_symbols);
 
             // Apparently, we have a type.  Let's add it to the symbol table.
             let mut _symbols = symbols.borrow_mut();
@@ -1512,7 +1628,10 @@ fn add_subterm(
 
 fn add_action(
     name: ShortString,
-    action: symbols::Symbol, symbols: symbols::GlobalSymbolTable<'_>, scope: &symbols::Scope) -> Result<(), Box<dyn std::error::Error>> {
+    action: symbols::Symbol,
+    symbols: symbols::GlobalSymbolTable<'_>,
+    scope: &symbols::Scope,
+) -> Result<(), Box<dyn std::error::Error>> {
     // let _symbols = symbols.clone();
 
     match &scope {
@@ -1533,15 +1652,13 @@ fn add_action(
                 None,
             )
         }
-        symbols::Scope::Global => {
-            Err(format!(
-                "Can't create an action in the global scope (NEVER). Action '{}'",
-                action.get_name()
-            )
-            .into())
-        }
+        symbols::Scope::Global => Err(format!(
+            "Can't create an action in the global scope (NEVER). Action '{}'",
+            action.get_name()
+        )
+        .into()),
     }
-    }
+}
 trait BooleanExpr
 where
     Self: std::fmt::Debug,

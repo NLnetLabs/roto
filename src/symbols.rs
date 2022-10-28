@@ -107,12 +107,17 @@ pub enum SymbolKind {
     GlobalMethodCall,
     FieldAccess,
     StringLiteral,
+    // term symbols
     LogicalExpr,
     BooleanExpr,
     CompareExpr(CompareOp),
     AndExpr,
     OrExpr,
     NotExpr,
+    // apply symbols
+    MatchAction,
+    NegateMatchAction,
+    Action
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -125,7 +130,7 @@ impl Display for Scope {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Scope::Global => write!(f, "global"),
-            Scope::Module(name) => write!(f, "module: '{}'", name),
+            Scope::Module(name) => write!(f, "module '{}'", name),
         }
     }
 }
