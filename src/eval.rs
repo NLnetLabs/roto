@@ -419,7 +419,7 @@ impl<'a> ast::Term {
                 "logical formula: {} -> {:?}",
                 self.ident.ident, logical_formula
             );
-            add_subterm(
+            add_logical_formula(
                 Some(self.ident.ident.clone()),
                 logical_formula,
                 symbols.clone(),
@@ -1068,6 +1068,8 @@ impl ast::FieldAccessExpr {
 
 //------------ Logical Expression -------------------------------------------
 
+// See ast::LogicalExpr for more information.
+
 impl ast::LogicalExpr {
     fn eval(
         &self,
@@ -1588,7 +1590,7 @@ fn declare_variable_from_symbol(
 
 // Terms will be added as a vec of Logical Formulas to the `term` hashmap in
 // a module's symbol table. So, a subterm is one element of the vec.
-fn add_subterm(
+fn add_logical_formula(
     key: Option<ast::ShortString>,
     symbol: symbols::Symbol,
     symbols: symbols::GlobalSymbolTable<'_>,
@@ -1605,7 +1607,7 @@ fn add_subterm(
                 .get_mut(scope)
                 .ok_or(format!("No module named '{}' found.", module))?;
 
-            module.add_subterm(
+            module.add_logical_formula(
                 key.unwrap_or_else(|| symbol.get_name()),
                 Some(symbol.get_name()),
                 symbol.get_kind(),

@@ -1630,7 +1630,7 @@ impl MethodCallExpr {
 
 //------------ LogicalExpr --------------------------------------------------
 
-// The Logical expression evaluates to a logic forumula that is a tuple of
+// The Logical expression evaluates to a logical forumula, that is a tuple of
 // (optional boolean expression, logical operator, boolean expression).
 // The first boolean expression is optional, only in the case of a negation
 // (not) operator. The second boolean expression is always present.

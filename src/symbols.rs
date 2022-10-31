@@ -221,7 +221,7 @@ impl SymbolTable {
         Ok(())
     }
 
-    pub(crate) fn add_subterm(
+    pub(crate) fn add_logical_formula(
         &mut self,
         key: ShortString,
         name: Option<ShortString>,
