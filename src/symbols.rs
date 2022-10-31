@@ -172,6 +172,19 @@ impl SymbolTable {
         }
     }
 
+    pub(crate) fn move_symbol_into(&mut self, key: ShortString, symbol: Symbol) -> Result<(), Box<dyn std::error::Error>> {
+        if self.symbols.contains_key(&key) {
+            return Err(format!(
+                "Symbol {} already defined in scope {}",
+                key, self.scope
+            )
+            .into());
+        }
+
+        self.symbols.insert(key, symbol);
+        Ok(())
+    }
+
     pub(crate) fn add_symbol(
         &mut self,
         key: ShortString,

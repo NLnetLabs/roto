@@ -529,8 +529,10 @@ impl<'a> ast::ApplyScope {
             format!("no symbols found for module {}", scope)
         })?;
 
+        // not doing anything with the actual AplyScope (the use statment),
+        // not sure whether it is going to be needed.
         let s_name = self.scope.clone().ident;
-        
+
         let term_name =
             self.filter_ident.eval(symbols.clone(), scope.clone())?;
         module_symbols
@@ -1569,13 +1571,9 @@ fn declare_variable_from_symbol(
                 .get_mut(scope)
                 .ok_or(format!("No module named '{}' found.", module))?;
 
-            module.add_symbol(
+            module.move_symbol_into(
                 key.unwrap_or_else(|| symbol.get_name()),
-                Some(symbol.get_name()),
-                symbol.get_kind(),
-                symbol.get_type(),
-                symbol.get_args_owned(),
-                None,
+                symbol
             )
         }
         symbols::Scope::Global => {
