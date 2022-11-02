@@ -139,10 +139,19 @@ impl Display for Scope {
 #[derive(Debug)]
 pub struct SymbolTable {
     scope: Scope,
-    pub(crate) symbols: HashMap<ShortString, Symbol>,
+    // The special symbols that will be filled in at runtime, once per filter
+    // run.
+    pub(crate) arguments: HashMap<ShortString, Symbol>,
+    // The variables and constants that are defined in the module.
+    pub(crate) variables: HashMap<ShortString, Symbol>,
     types: HashMap<ShortString, TypeDef>,
+    // The evaluated `term` sections that are defined in the module.
     pub(crate) terms: HashMap<ShortString, Vec<Symbol>>,
+    // The evaluated `action` sections that are defined in the module.
     pub(crate) actions: HashMap<ShortString, Vec<Symbol>>,
+    // All the `filter` clauses in the `apply` section, the tie actions to
+    // terms.
+    pub(crate) match_actions: HashMap<ShortString, Vec<Symbol>>,
 }
 
 // The global symbol table.
@@ -165,15 +174,17 @@ impl SymbolTable {
     pub(crate) fn new(module: ShortString) -> Self {
         SymbolTable {
             scope: Scope::Module(module),
-            symbols: HashMap::new(),
+            arguments: HashMap::new(),
+            variables: HashMap::new(),
             terms: HashMap::new(),
             actions: HashMap::new(),
+            match_actions: HashMap::new(),
             types: HashMap::new(),
         }
     }
 
     pub(crate) fn move_symbol_into(&mut self, key: ShortString, symbol: Symbol) -> Result<(), Box<dyn std::error::Error>> {
-        if self.symbols.contains_key(&key) {
+        if self.variables.contains_key(&key) {
             return Err(format!(
                 "Symbol {} already defined in scope {}",
                 key, self.scope
@@ -181,11 +192,11 @@ impl SymbolTable {
             .into());
         }
 
-        self.symbols.insert(key, symbol);
+        self.variables.insert(key, symbol);
         Ok(())
     }
 
-    pub(crate) fn add_symbol(
+    pub(crate) fn add_variable(
         &mut self,
         key: ShortString,
         name: Option<ShortString>,
@@ -200,7 +211,7 @@ impl SymbolTable {
             key.clone()
         };
 
-        if self.symbols.contains_key(&name) {
+        if self.variables.contains_key(&name) {
             return Err(format!(
                 "Symbol {} already defined in scope {}",
                 name, self.scope
@@ -208,7 +219,43 @@ impl SymbolTable {
             .into());
         }
 
-        self.symbols.insert(
+        self.variables.insert(
+            key,
+            Symbol {
+                name,
+                kind,
+                ty,
+                args,
+                value,
+            },
+        );
+        Ok(())
+    }
+
+    pub(crate) fn add_argument(
+        &mut self,
+        key: ShortString,
+        name: Option<ShortString>,
+        kind: SymbolKind,
+        ty: TypeDef,
+        args: Vec<Symbol>,
+        value: Option<TypeValue>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let name = if let Some(name) = name {
+            name
+        } else {
+            key.clone()
+        };
+
+        if self.arguments.contains_key(&name) {
+            return Err(format!(
+                "Symbol {} already defined in scope {}",
+                name, self.scope
+            )
+            .into());
+        }
+
+        self.arguments.insert(
             key,
             Symbol {
                 name,
@@ -314,16 +361,62 @@ impl SymbolTable {
         Ok(())
     }
 
+    pub(crate) fn add_match_action(
+        &mut self,
+        key: ShortString,
+        name: Option<ShortString>,
+        kind: SymbolKind,
+        ty: TypeDef,
+        args: Vec<Symbol>,
+        value: Option<TypeValue>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let name = if let Some(name) = name {
+            name
+        } else {
+            key.clone()
+        };
+
+        if self.match_actions.contains_key(&name) {
+            return Err(format!(
+                "Match Action '{}' already defined in scope {}",
+                name, self.scope
+            )
+            .into());
+        }
+
+        if let Some(match_action) = self.match_actions.get_mut(&key) {
+            match_action.push(Symbol {
+                name,
+                kind,
+                ty,
+                args,
+                value,
+            });
+        } else {
+            self.match_actions.insert(
+                key,
+                vec![Symbol {
+                    name,
+                    kind,
+                    ty,
+                    args,
+                    value,
+                }],
+            );
+        };
+        Ok(())
+    }
+
     pub fn add_type(&mut self, name: ShortString, ty: TypeDef) {
         self.types.insert(name, ty);
     }
 
-    pub(crate) fn get_symbol(
+    pub(crate) fn get_variable(
         &self,
         name: &ShortString,
     ) -> Result<&Symbol, Box<dyn std::error::Error>> {
-        self.symbols
-            .get(name)
+        self.variables
+            .get(name).or_else(|| self.arguments.get(name))
             .ok_or_else(|| format!("Symbol {} not found", name).into())
     }
 

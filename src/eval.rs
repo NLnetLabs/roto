@@ -101,7 +101,7 @@ impl<'a> ast::Rib {
 
         // add a symbol for the user-defined type, the name is derived from
         // the 'contains' clause
-        symbols.add_symbol(
+        symbols.add_variable(
             self.contain_ty.ident.clone(),
             None,
             symbols::SymbolKind::NamedType,
@@ -112,7 +112,7 @@ impl<'a> ast::Rib {
 
         // add a symbol for the RIB itself, using the newly created record
         // type
-        symbols.add_symbol(
+        symbols.add_variable(
             self.ident.ident.clone(),
             None,
             symbols::SymbolKind::Rib,
@@ -137,7 +137,7 @@ impl<'a> ast::Table {
 
         // add a symbol for the user-defined type, the name is derived from
         // the 'contains' clause
-        symbols.add_symbol(
+        symbols.add_variable(
             self.contain_ty.ident.clone(),
             None,
             symbols::SymbolKind::NamedType,
@@ -148,7 +148,7 @@ impl<'a> ast::Table {
 
         // add a symbol for the RIB itself, using the newly created record
         // type
-        symbols.add_symbol(
+        symbols.add_variable(
             self.ident.ident.clone(),
             None,
             symbols::SymbolKind::Table,
@@ -261,7 +261,7 @@ impl<'a> ast::RecordTypeIdentifier {
         }
 
         let record = TypeDef::Record(kvs.clone());
-        symbols.add_symbol(name, None, kind, record, vec![], None)?;
+        symbols.add_variable(name, None, kind, record, vec![], None)?;
 
         Ok(kvs)
     }
@@ -278,7 +278,7 @@ impl ast::Module {
         let with_ty = with_kv
             .into_iter()
             .map(|ty| {
-                declare_variable(
+                declare_argument(
                     ty.clone().field_name.ident,
                     ty,
                     symbols::SymbolKind::Constant,
@@ -312,8 +312,8 @@ impl ast::Module {
             }
         }
 
-        for apply in self.body.apply.iter() {
-            apply.eval(symbols.clone(), module_scope.clone())?;
+        if let Some(apply) = &self.body.apply {
+            apply.eval(symbols.clone(), module_scope)?;
         }
 
         Ok(())
@@ -326,10 +326,13 @@ impl ast::Module {
         // Check the `with` clause for additional arguments.
         let with_kv: Vec<_> = self.body.define.with_kv.clone();
 
+        // The `with` clause of the `define` section acts as an extra
+        // argument to the whole module, that can be used as a extra
+        // read-only payload.
         let with_ty = with_kv
             .into_iter()
             .map(|ty| {
-                declare_variable(
+                declare_argument(
                     ty.clone().field_name.ident,
                     ty,
                     symbols::SymbolKind::Argument,
@@ -352,7 +355,11 @@ impl<'a> ast::Define {
         symbols: symbols::GlobalSymbolTable<'a>,
         scope: symbols::Scope,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        declare_variable(
+
+        // The default input-argument is defined by the 'rx' keyword in the
+        // `define` section. This the argument that holds the payload at
+        // runtime.
+        declare_argument(
             self.body.rx_type.ty.ident.clone(),
             self.body.rx_type.clone(),
             symbols::SymbolKind::RxType,
@@ -360,7 +367,11 @@ impl<'a> ast::Define {
             &scope,
         )?;
 
-        declare_variable(
+        // The default output-argument is defined by the 'tx' keyword in the
+        // 'define' section. This is the argument that will be created by
+        // this filter-module on each run. We start with an empty record of
+        // the specified type.
+        declare_argument(
             self.body.tx_type.ty.ident.clone(),
             self.body.tx_type.clone(),
             symbols::SymbolKind::TxType,
@@ -453,10 +464,10 @@ impl<'a> ast::Action {
                 call_expr.get_receiver().unwrap().clone().ident;
 
             let s = module_symbols
-                .get_symbol(&payload_var_name.ident)
+                .get_variable(&payload_var_name.ident)
                 .map_err(|_| {
                     format!(
-                        "no variable '{}' found in {}",
+                        "for action: no variable '{}' found in {}",
                         payload_var_name.ident, scope
                     )
                 })?;
@@ -506,8 +517,8 @@ impl<'a> ast::Apply {
         for a_scope in &self.body.scopes {
             let s = a_scope.eval(symbols.clone(), scope.clone())?;
             println!("apply scope: {:?}", s);
-            declare_variable_from_symbol(
-                Some(s.get_name()),
+            add_match_action(
+                s.get_name(),
                 s,
                 symbols.clone(),
                 &scope,
@@ -529,7 +540,7 @@ impl<'a> ast::ApplyScope {
             format!("no symbols found for module {}", scope)
         })?;
 
-        // not doing anything with the actual AplyScope (the use statment),
+        // not doing anything with the actual AplyScope (the use statement),
         // not sure whether it is going to be needed.
         let s_name = self.scope.clone().ident;
 
@@ -1141,7 +1152,7 @@ impl ast::BooleanExpr {
                 let gt = _symbols
                     .get(scope)
                     .ok_or(format!("Could not find scope {:?}", scope))?;
-                let var = gt.get_symbol(&ident.ident.ident)?;
+                let var = gt.get_variable(&ident.ident.ident)?;
 
                 is_boolean_expression(var)?;
 
@@ -1365,7 +1376,7 @@ fn check_type(
 
     // is it in the global table?
     let global_ty = symbols.get(&symbols::Scope::Global).and_then(|gt| {
-        gt.symbols
+        gt.variables
             .get(&ty.ident)
             .map(|s| (s.get_type(), s.get_kind()))
     });
@@ -1383,7 +1394,7 @@ fn check_type(
             let module_ty = symbols
                 .get(scope)
                 .and_then(|gt| {
-                    gt.symbols
+                    gt.variables
                         .get(&ty.ident)
                         .map(|s| (s.get_type(), s.get_kind()))
                 })
@@ -1441,7 +1452,7 @@ fn get_type_for_scoped_variable(
             return symbols
                 .get(&scope)
                 .and_then(|gt| {
-                    gt.symbols.get(search_str.as_str()).map(|s| s.get_type())
+                    gt.variables.get(search_str.as_str()).map(|s| s.get_type())
                 })
                 .map_or_else(
                     // no, let's go over the chain of fields to see if it's
@@ -1450,9 +1461,11 @@ fn get_type_for_scoped_variable(
                         let data_src_type = symbols
                             .get(&scope)
                             .and_then(|gt| {
-                                gt.symbols
+                                gt.variables
                                     .get(&fields[0].ident)
-                                    .map(|s| s.get_type())
+                                    .or_else(|| {
+                                        gt.arguments.get(&fields[0].ident)
+                                    }).map(|s| s.get_type())
                             })
                             .ok_or(format!(
                                 "No data source named '{}' found in module '{}' (for variable '{}')",
@@ -1460,7 +1473,7 @@ fn get_type_for_scoped_variable(
                             ))?;
 
                         println!("data_src_type: {:?}", data_src_type);
-                        println!("field {:?}", fields[1]);
+                        // println!("field {:?}", fields[1]);
                         let field_ty = data_src_type.has_fields_chain(&fields[1..]).map_err(|err| format!(
                             "{} on field '{}' for variable '{}' found in module '{}'",
                             err, fields[1], fields[0].ident, module
@@ -1491,7 +1504,7 @@ fn get_data_source_for_ident(
     let src = _symbols
         .get(&symbols::Scope::Global)
         .ok_or("No global symbol table")?
-        .get_symbol(&ident.ident)
+        .get_variable(&ident.ident)
         .map(|r| match r.get_kind() {
             symbols::SymbolKind::Rib => Ok(r.get_type()),
             symbols::SymbolKind::Table => {
@@ -1533,7 +1546,49 @@ fn declare_variable(
                 .get_mut(scope)
                 .ok_or(format!("No module named '{}' found.", module))?;
 
-            module.add_symbol(
+            module.add_variable(
+                type_ident.field_name.ident,
+                Some(name),
+                kind,
+                ty,
+                vec![],
+                None,
+            )
+        }
+        symbols::Scope::Global => {
+            Err(format!(
+                "Can't create a variable in the global scope (NEVER). Variable '{}'",
+                type_ident.field_name
+            )
+            .into())
+        }
+    }
+}
+
+fn declare_argument(
+    name: ShortString,
+    type_ident: ast::TypeIdentField,
+    kind: symbols::SymbolKind,
+    symbols: symbols::GlobalSymbolTable,
+    scope: &symbols::Scope,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let _symbols = symbols.clone();
+
+    // There is NO global scope for variables.  All vars are all local to a
+    // module.
+
+    match &scope {
+        symbols::Scope::Module(module) => {
+            // Does the supplied type exist in our scope?
+            let ty = check_type(type_ident.ty, _symbols, scope)?;
+
+            // Apparently, we have a type.  Let's add it to the symbol table.
+            let mut _symbols = symbols.borrow_mut();
+            let module = _symbols
+                .get_mut(scope)
+                .ok_or(format!("No module named '{}' found.", module))?;
+
+            module.add_argument(
                 type_ident.field_name.ident,
                 Some(name),
                 kind,
@@ -1659,6 +1714,39 @@ fn add_action(
         .into()),
     }
 }
+
+fn add_match_action(
+    name: ShortString,
+    action: symbols::Symbol,
+    symbols: symbols::GlobalSymbolTable<'_>,
+    scope: &symbols::Scope,
+) -> Result<(), Box<dyn std::error::Error>> {
+
+    match &scope {
+        symbols::Scope::Module(module) => {
+
+            let mut _symbols = symbols.borrow_mut();
+            let module = _symbols
+                .get_mut(scope)
+                .ok_or(format!("No module named '{}' found.", module))?;
+
+            module.add_match_action(
+                name,
+                Some(action.get_name()),
+                action.get_kind(),
+                action.get_type(),
+                action.get_args_owned(),
+                None,
+            )
+        }
+        symbols::Scope::Global => Err(format!(
+            "Can't create an action in the global scope (NEVER). Action '{}'",
+            action.get_name()
+        )
+        .into()),
+    }
+}
+
 trait BooleanExpr
 where
     Self: std::fmt::Debug,
@@ -1752,7 +1840,7 @@ fn declare_variable_from_typedef<'a>(
                 .get_mut(scope)
                 .ok_or(format!("No module named '{}' found.", module))?;
 
-            module.add_symbol(
+            module.add_variable(
                 ident.into(),
                 Some(name),
                 kind,
