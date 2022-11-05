@@ -131,6 +131,20 @@ pub struct RawRoute {
     pub status: Status,
 }
 
+// DeltaRawRoute
+// roto -> routecore -> rotonda-runtime
+
+// A BGP message that will be stored in a RIB as a array of bytes like a
+// `RawRoute`, but with an data-structure that stores the changes made by
+// the transformers (filters, etc.) along the way. A few of the first 16
+// bytes of the RawBgpMessage are used to flag which BGP attributes have
+// changed.
+pub struct DeltaRawRoute {
+    pub prefix: Option<Prefix>,
+    pub message: RawBgpMessage,
+    pub attributes_delta: AttributesDelta,
+    pub status: Status,
+}
 
 // RawBgpMessage
 // rotonda-runtime
@@ -171,6 +185,37 @@ pub struct BgpAttributes {
     pub atomic_aggregate: bool,
     pub aggregator: Option<Aggregator>,
     pub communities: Vec<Community>,
+    // pub originator_id: Option<OriginatorId>,
+    // pub cluster_list: Vec<ClusterId>,
+    // pub pmsi_tunnel: Option<PmsiTunnel>,
+    // pub tunnel_encapsulation: Option<TunnelEncapsulation>,
+    // pub traffic_engineering: Option<TrafficEngineering>,
+    // pub aigp: Option<Aigp>,
+    // pub pe_distinguisher_labels: Vec<PeDistinguisherLabel>,
+    // pub bgp_ls: Option<BgpLs>,
+    // pub bgpsec_path: Option<BgpsecPath>,
+    // pub sfp: Option<Sfp>,
+    // pub bfd_discriminator: Option<BfdDiscriminator>,
+    // pub bgp_prefix_sid,
+    // pub attr_set: Option<AttrSet>,
+    pub unknown: Vec<UnknownAttribute>,
+}
+
+// DeltaBgpAttributes
+// roto -> routecore -> rotonda-runtime
+
+// A data-structure that stores the changes made by the transformers on a
+// BGP message.    
+#[derive(Debug, PartialEq)]
+pub struct DeltaBgpAttributes {
+    pub as_path: Option<AsPath>,
+    pub origin: Option<Origin>,
+    pub next_hop: Option<IpAddr>,
+    pub multi_exit_disc: Option<u32>,
+    pub local_pref: Option<u32>,
+    pub atomic_aggregate: Option<bool>,
+    pub aggregator: Option<Aggregator>,
+    pub communities: Option<Vec<Community>>,
     // pub originator_id: Option<OriginatorId>,
     // pub cluster_list: Vec<ClusterId>,
     // pub pmsi_tunnel: Option<PmsiTunnel>,
