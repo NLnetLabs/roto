@@ -27,7 +27,7 @@ fn test_data(name: &str, data: &'static str, expect_success: bool) -> Result<(),
     let ev2 = eval.1.eval(symbols.clone());
 
     println!("{:#?}", symbols);
-    println!("{:?} {:#?}", name, eval);
+    // println!("{:?} {:#?}", name, eval);
    
     ev2
 }
@@ -54,22 +54,22 @@ fn main() {
 
                     // specify another RIB that is used in this filter.
                     found_prefix = rib-rov.longest_match(route.prefix);
-                    fixed_len_prefix = Prefix.from(route.prefix.address(), 24); // maybe /24
+                    // fixed_len_prefix = Prefix.from(route.prefix.address(), 24); // maybe /24
                 }
             
                 term rov-valid for route: Route {
                     match {
-                        (found_prefix.prefix.matches() && found_prefix.prefix.matches()) || route_in_table;
+                        // (found_prefix.prefix.matches() && found_prefix.prefix.matches()) || route_in_table;
                         found_prefix.prefix.len() == 24;
                         route_in_table;
-                        route.prefix.len() <= found_prefix.prefix.len();
-                        route.as-path == found_prefix.as-path.origin();
+                        // route.prefix.len() <= found_prefix.prefix.len();
+                        // route.as-path == found_prefix.as-path.origin();
                     }
                 }
 
                 term on-my-terms for route: Route {
                     match {
-                        route.prefix.len() == 24;
+                        // route.prefix.len() == 24;
                         route.as-path == found_prefix.as-path.origin();
                     }
                 }
