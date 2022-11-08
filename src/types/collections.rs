@@ -1,5 +1,5 @@
 use crate::ast::ShortString;
-use crate::traits::RotoFilter;
+use crate::traits::{RotoFilter, MethodProps};
 
 use super::builtin::{
     AsPath, Asn, Boolean, BuiltinTypeValue, Community, IpAddress, Prefix,
@@ -78,6 +78,25 @@ impl From<TypeValue> for ElementTypeValue {
     }
 }
 
+impl From<ElementTypeValue> for TypeValue {
+    fn from(t: ElementTypeValue) -> Self {
+        match t {
+            ElementTypeValue::Primitive(v) => TypeValue::Builtin(v),
+            ElementTypeValue::Nested(ty) => {
+                match *ty {
+                    TypeValue::List(ty) => {
+                        TypeValue::List(ty)
+                    }
+                    TypeValue::Record(kv_list) => {
+                        TypeValue::Record(kv_list)
+                    }
+                    _ => panic!("Unknown type"),
+                }
+            }
+        }
+    }
+}
+
 //------------ List type ----------------------------------------------------
 
 #[derive(Debug, PartialEq)]
@@ -134,23 +153,26 @@ impl RotoFilter<ListToken> for List {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<(u8, TypeValue), Box<dyn std::error::Error>>
+    ) -> Result<MethodProps, Box<(dyn std::error::Error + 'static)>>
     where
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "get" => Ok((
-                std::mem::size_of_val(&ListToken::Get) as u8,
-                TypeValue::List(self),
-            )),
-            "remove" => Ok((
-                std::mem::size_of_val(&ListToken::Remove) as u8,
-                TypeValue::List(self),
-            )),
-            "contains" => Ok((
-                std::mem::size_of_val(&ListToken::Contains) as u8,
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-            )),
+            "get" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&ListToken::Get) as u8,
+                return_type_value: TypeValue::List(self),
+                arg_types: vec![(&TypeDef::U32).into()],
+        }),
+            "remove" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&ListToken::Remove) as u8,
+                return_type_value: TypeValue::List(self),
+                arg_types: vec![(&TypeDef::U32).into()],
+        }),
+            "contains" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&ListToken::Contains) as u8,
+                return_type_value: (&TypeDef::Boolean).into(),
+                arg_types: vec![],
+        }),
             _ => {
                 Err(format!("Unknown method '{}'", method_name.ident).into())
             }
@@ -254,36 +276,41 @@ impl RotoFilter<RecordToken> for Record {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<(u8, TypeValue), Box<dyn std::error::Error>>
+    ) -> Result<MethodProps, Box<(dyn std::error::Error + 'static)>>
     where
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "longest_match" => Ok((
-                std::mem::size_of_val(&RecordToken::LongestMatch) as u8,
-                TypeValue::Record(Record::new(vec![(
+            "longest_match" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&RecordToken::LongestMatch) as u8,
+                return_type_value: TypeValue::Record(Record::new(vec![(
                     ShortString::from("prefix"),
                     ElementTypeValue::Nested(Box::new(TypeValue::Record(
                         self,
                     ))),
                 )])?),
-            )),
-            "get" => Ok((
-                std::mem::size_of_val(&RecordToken::Get) as u8,
-                TypeValue::Record(self),
-            )),
-            "get_all" => Ok((
-                std::mem::size_of_val(&RecordToken::GetAll) as u8,
-                TypeValue::Record(self),
-            )),
-            "contains" => Ok((
-                std::mem::size_of_val(&RecordToken::Contains) as u8,
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-            )),
-            "set" => Ok((
-                std::mem::size_of_val(&RecordToken::Set) as u8,
-                TypeValue::Record(self),
-            )),
+                arg_types: vec![(&TypeDef::Prefix).into()],
+        }   ),
+            "get" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&RecordToken::Get) as u8,
+                return_type_value: TypeValue::Record(self),
+                arg_types: vec![(&TypeDef::U32).into()],
+        }),
+            "get_all" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&RecordToken::GetAll) as u8,
+                return_type_value: TypeValue::Record(self),
+                arg_types: vec![],
+        }),
+            "contains" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&RecordToken::Contains) as u8,
+                return_type_value: (&TypeDef::Boolean).into(),
+                arg_types: vec![TypeValue::Record(self)],
+        }),
+            "set" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&RecordToken::Set) as u8,
+                return_type_value: TypeValue::None,
+                arg_types: vec![TypeValue::Record(self)],
+        }),
             _ => {
                 Err(format!("Unknown method '{}' for Record type with fields {:?}", method_name.ident, self).into())
             }

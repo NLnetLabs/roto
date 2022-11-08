@@ -4,7 +4,7 @@
 
 use routecore::asn::LongSegmentError;
 
-use crate::traits::RotoFilter;
+use crate::traits::{MethodProps, RotoFilter};
 
 use super::collections::Record;
 use super::typedef::TypeDef;
@@ -66,6 +66,7 @@ impl BuiltinTypeValue {
             ty,
             "U32"
                 | "U8"
+                | "IntegerLiteral"
                 | "Prefix"
                 | "PrefixRecord"
                 | "Community"
@@ -381,35 +382,46 @@ impl Prefix {
     pub fn new(prefix: routecore::addr::Prefix) -> Self {
         Self(Some(prefix))
     }
+
+    pub fn empty() -> Self {
+        Self(None)
+    }
 }
 
 impl RotoFilter<PrefixToken> for Prefix {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<(u8, TypeValue), Box<dyn std::error::Error>>
+    ) -> Result<MethodProps, Box<dyn std::error::Error>>
     where
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "from" => Ok((
-                std::mem::size_of_val(&PrefixToken::From) as u8,
-                TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None))),
-            )),
-            "address" => Ok((
-                std::mem::size_of_val(&PrefixToken::Address) as u8,
-                TypeValue::Builtin(BuiltinTypeValue::IpAddress(IpAddress(
-                    None,
-                ))),
-            )),
-            "len" => Ok((
-                std::mem::size_of_val(&PrefixToken::Len) as u8,
-                TypeValue::Builtin(BuiltinTypeValue::U32(U32(None))),
-            )),
-            "matches" => Ok((
-                std::mem::size_of_val(&PrefixToken::Matches) as u8,
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-            )),
+            "from" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&PrefixToken::From) as u8,
+                return_type_value: TypeValue::from(&TypeDef::Prefix),
+                arg_types: vec![
+                    TypeValue::from(&TypeDef::Prefix),
+                    TypeValue::from(&TypeDef::U8),
+                ],
+            }),
+            "address" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&PrefixToken::Address)
+                    as u8,
+                return_type_value: TypeValue::from(&TypeDef::IpAddress),
+                arg_types: vec![],
+            }),
+            "len" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&PrefixToken::Len) as u8,
+                return_type_value: TypeValue::from(&TypeDef::IntegerLiteral),
+                arg_types: vec![],
+            }),
+            "matches" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&PrefixToken::Matches)
+                    as u8,
+                return_type_value: TypeValue::from(&TypeDef::Boolean),
+                arg_types: vec![TypeValue::from(&TypeDef::Prefix)],
+            }),
             _ => Err(format!(
                 "Unknown method: {} for type Prefix",
                 method_name.ident
@@ -435,7 +447,7 @@ pub(crate) enum PrefixToken {
     From,
     Address,
     Len,
-    Matches
+    Matches,
 }
 
 // ----------- Community ----------------------------------------------------
@@ -566,23 +578,34 @@ impl RotoFilter<AsPathToken> for AsPath {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<(u8, TypeValue), Box<dyn std::error::Error>>
+    ) -> Result<MethodProps, Box<(dyn std::error::Error + 'static)>>
     where
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "origin" => Ok((
-                std::mem::size_of_val(&AsPathToken::Origin) as u8,
-                TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))),
-            )),
-            "contains" => Ok((
-                std::mem::size_of_val(&AsPathToken::Contains) as u8,
-                TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))),
-            )),
-            "len" => Ok((
-                std::mem::size_of_val(&AsPathToken::Len) as u8,
-                TypeValue::Builtin(BuiltinTypeValue::U8(U8(None))),
-            )),
+            "origin" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&AsPathToken::Origin)
+                    as u8,
+                return_type_value: TypeValue::Builtin(
+                    BuiltinTypeValue::AsPath(AsPath(None)),
+                ),
+                arg_types: vec![],
+            }),
+            "contains" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&AsPathToken::Contains)
+                    as u8,
+                return_type_value: TypeValue::Builtin(
+                    BuiltinTypeValue::AsPath(AsPath(None)),
+                ),
+                arg_types: vec![(&TypeDef::Asn).into()],
+            }),
+            "len" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&AsPathToken::Len) as u8,
+                return_type_value: TypeValue::Builtin(BuiltinTypeValue::U8(
+                    U8(None),
+                )),
+                arg_types: vec![],
+            }),
             _ => {
                 Err(format!("Unknown method '{}'", method_name.ident).into())
             }

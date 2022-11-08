@@ -26,7 +26,29 @@ pub(crate) struct Symbol {
 
 impl Symbol {
     pub fn get_type(&self) -> TypeDef {
+        self.ty.clone()
        self.ty.clone() 
+        self.ty.clone()
+    }
+
+    pub fn get_builtin_type(
+        &self,
+    ) -> Result<TypeDef, Box<dyn std::error::Error>> {
+        if !matches!(
+            self.ty,
+            TypeDef::Rib(_)
+                | TypeDef::Table(_)
+                | TypeDef::List(_)
+                | TypeDef::Record(_)
+                | TypeDef::None
+        ) {
+            (&self.ty)
+                .try_into().map(|tv: BuiltinTypeValue| tv.into())
+        } else if let Some(TypeValue::Builtin(ty)) = &self.value {
+            Ok(ty.into())
+        } else {
+            Err("Not a builtin type".into())
+        }
     }
 
     pub fn set_type(mut self, ty: TypeDef) -> Symbol {

@@ -666,7 +666,7 @@ impl<'a> ast::CallExpr {
                 // e.g., `AsPathFilter.first()`
                 if !receiver.has_field_access() {
                     if let Ok(TypeValue::Builtin(prim_ty)) =
-                        TypeValue::from_literal(&receiver_ident)
+                        receiver_ident.as_str().try_into()
                     {
                         let ty: TypeDef = prim_ty.into();
                         return Ok((
@@ -843,7 +843,9 @@ impl ast::MethodCallExpr {
         let args = self.args.eval(symbols, scope)?;
         // we need to lookup the type that is the return type
         // of the method that the user wants to call.
-        let method_result_ty = parent_ty.get_props_for_method(&self.ident)?.1;
+        let method_result_ty = parent_ty
+            .get_props_for_method(&self.ident)?
+            .return_type_value;
 
         Ok(symbols::Symbol::new_with_value(
             self.ident.clone().ident,

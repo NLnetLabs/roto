@@ -2,7 +2,7 @@
 
 // ----------- Rib Type ----------------------------------------------------
 
-use crate::traits::RotoFilter;
+use crate::traits::{RotoFilter, MethodProps};
 
 use super::{
     builtin::{Boolean, BuiltinTypeValue},
@@ -31,23 +31,26 @@ impl RotoFilter<RibToken> for Rib {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<(u8, TypeValue), Box<dyn std::error::Error>>
+    ) -> Result<MethodProps, Box<(dyn std::error::Error)>>
     where
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "match" => Ok((
-                std::mem::size_of_val(&RibToken::Match) as u8,
-                TypeValue::Record(self.record),
-            )),
-            "longest_match" => Ok((
-                std::mem::size_of_val(&RibToken::LongestMatch) as u8,
-                TypeValue::Record(self.record),
-            )),
-            "contains" => Ok((
-                std::mem::size_of_val(&RibToken::Contains) as u8,
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-            )),
+            "match" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&RibToken::Match) as u8,
+                return_type_value: TypeValue::Record(self.record),
+                arg_types: vec![(&TypeDef::Prefix).into()]
+            }),
+            "longest_match" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&RibToken::LongestMatch) as u8,
+                return_type_value: TypeValue::Record(self.record),
+                arg_types: vec![(&TypeDef::Prefix).into()]
+        }),
+            "contains" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&RibToken::Contains) as u8,
+                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                arg_types: vec![(&TypeDef::Prefix).into()]
+        }),
             _ => {
                 Err(format!("Unknown method '{}'", method_name.ident).into())
             }
@@ -100,25 +103,31 @@ impl Table {
             Err("Not a table type".into())
         }
     }
+
+    // pub fn get_type(&self) -> Vec<(ShortString, Box<TypeDef>)> {
+    //     (&self.record).into()
+    // }
 }
 
 impl RotoFilter<TableToken> for Table {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<(u8, TypeValue), Box<dyn std::error::Error>>
+    ) -> Result<MethodProps, Box<(dyn std::error::Error)>>
     where
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "get" => Ok((
-                std::mem::size_of_val(&TableToken::Get) as u8,
-                TypeValue::Record(self.record),
-            )),
-            "contains" => Ok((
-                std::mem::size_of_val(&TableToken::Contains) as u8,
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-            )),
+            "get" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&TableToken::Get) as u8,
+                return_type_value: TypeValue::Record(self.record),
+                arg_types: vec![(&TypeDef::Prefix).into()]
+        }),
+            "contains" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&TableToken::Contains) as u8,
+                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                arg_types: vec![(&TypeDef::Prefix).into()]
+        }),
             _ => {
                 Err(format!("Unknown method '{}'", method_name.ident).into())
             }
