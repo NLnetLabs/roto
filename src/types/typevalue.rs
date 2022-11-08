@@ -38,7 +38,32 @@ impl TypeValue {
         matches!(self, TypeValue::None)
     }
 
-    pub fn from_literal(s: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn create_record(
+        type_ident_pairs: Vec<(&str, TypeValue)>,
+    ) -> Result<Record, Box<dyn std::error::Error>> {
+        let def_ = type_ident_pairs
+            .into_iter()
+            .map(|(ident, ty)| (ShortString::from(ident), ty.into()))
+            .collect::<Vec<_>>();
+        Record::new(def_)
+    }
+
+    pub fn is_boolean_type(&self) -> bool {
+        matches!(self, TypeValue::Builtin(BuiltinTypeValue::Boolean(_)))
+    }
+
+    pub fn get_builtin_type(&self) -> Result<TypeDef, Box<dyn std::error::Error>> {
+        match self {
+            TypeValue::Builtin(b) => Ok(b.into()),
+            _ => Err("Not a builtin type".into()),
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a str> for TypeValue {
+    type Error = Box<dyn std::error::Error>;
+
+    fn try_from(s: &'a str) -> Result<Self, Self::Error> {
         match s {
             "U32" => Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(None)))),
             "U8" => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(None)))),
@@ -61,25 +86,14 @@ impl TypeValue {
             "Community" => Ok(TypeValue::Builtin(
                 BuiltinTypeValue::Community(Community(None)),
             )),
+            "Boolean" => Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(
+                Boolean(None),
+            ))),
             _ => Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!("Unknown type: {}", s),
             ))),
         }
-    }
-
-    pub fn create_record(
-        type_ident_pairs: Vec<(&str, TypeValue)>,
-    ) -> Result<Record, Box<dyn std::error::Error>> {
-        let def_ = type_ident_pairs
-            .into_iter()
-            .map(|(ident, ty)| (ShortString::from(ident), ty.into()))
-            .collect::<Vec<_>>();
-        Record::new(def_)
-    }
-
-    pub fn is_boolean_type(&self) -> bool {
-        matches!(self, TypeValue::Builtin(BuiltinTypeValue::Boolean(_)))
     }
 }
 
@@ -122,7 +136,7 @@ impl<'a> From<&'a TypeDef> for Box<TypeValue> {
                     .collect::<Vec<_>>();
                 Box::new(TypeValue::Record(Record::new(def_).unwrap()))
             }
-            _ => panic!("Unknown type"),
+            _ => { println!("panic on type {:?}", t); panic!("Unknown type") }
         }
     }
 }
@@ -154,6 +168,9 @@ impl<'a> From<&'a TypeDef> for TypeValue {
             TypeDef::Community => TypeValue::Builtin(
                 BuiltinTypeValue::Community(Community(None)),
             ),
+            TypeDef::Boolean => {
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None)))
+            }
             TypeDef::List(ty) => TypeValue::List(ty.as_ref().into()),
             TypeDef::Record(kv_list) => {
                 let def_ = kv_list
@@ -192,7 +209,7 @@ impl<'a> From<&'a TypeDef> for TypeValue {
                     panic!("Table must contain records")
                 }
             }
-            _ => panic!("Unknown type"),
+            _ => panic!("Unknown type {:?}", t),
         }
     }
 }
