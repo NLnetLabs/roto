@@ -2,12 +2,15 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     fmt::{Display, Formatter},
-    rc::Rc, hash::Hash,
+    hash::Hash,
+    rc::Rc,
 };
 
 use crate::{
-    ast::{ShortString, CompareOp},
-    types::{typedef::TypeDef, typevalue::TypeValue},
+    ast::{CompareOp, ShortString},
+    types::{
+        builtin::BuiltinTypeValue, typedef::TypeDef, typevalue::TypeValue,
+    },
 };
 
 //------------ Symbols ------------------------------------------------------
@@ -26,8 +29,6 @@ pub(crate) struct Symbol {
 
 impl Symbol {
     pub fn get_type(&self) -> TypeDef {
-        self.ty.clone()
-       self.ty.clone() 
         self.ty.clone()
     }
 
@@ -76,7 +77,7 @@ impl Symbol {
     pub fn get_args_owned(self) -> Vec<Symbol> {
         self.args
     }
- 
+
     pub fn get_args(&self) -> &[Symbol] {
         self.args.as_slice()
     }
@@ -118,9 +119,9 @@ pub enum SymbolKind {
     Constant,
     Argument,
     AnonymousType, // type of a sub-record
-    NamedType, // User-defined type of a record
-    RxType, // type of the incoming payload
-    TxType, // type of the outgoing payload
+    NamedType,     // User-defined type of a record
+    RxType,        // type of the incoming payload
+    TxType,        // type of the outgoing payload
     Rib,
     Table,
     PrefixList,
@@ -139,7 +140,7 @@ pub enum SymbolKind {
     // apply symbols
     MatchAction,
     NegateMatchAction,
-    Action
+    Action,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -205,7 +206,11 @@ impl SymbolTable {
         }
     }
 
-    pub(crate) fn move_symbol_into(&mut self, key: ShortString, symbol: Symbol) -> Result<(), Box<dyn std::error::Error>> {
+    pub(crate) fn move_symbol_into(
+        &mut self,
+        key: ShortString,
+        symbol: Symbol,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         if self.variables.contains_key(&key) {
             return Err(format!(
                 "Symbol {} already defined in scope {}",
@@ -438,7 +443,8 @@ impl SymbolTable {
         name: &ShortString,
     ) -> Result<&Symbol, Box<dyn std::error::Error>> {
         self.variables
-            .get(name).or_else(|| self.arguments.get(name))
+            .get(name)
+            .or_else(|| self.arguments.get(name))
             .ok_or_else(|| format!("Symbol {} not found", name).into())
     }
 

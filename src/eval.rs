@@ -518,12 +518,7 @@ impl<'a> ast::Apply {
         for a_scope in &self.body.scopes {
             let s = a_scope.eval(symbols.clone(), scope.clone())?;
             println!("apply scope: {:?}", s);
-            add_match_action(
-                s.get_name(),
-                s,
-                symbols.clone(),
-                &scope,
-            )?;
+            add_match_action(s.get_name(), s, symbols.clone(), &scope)?;
         }
 
         Ok(())
