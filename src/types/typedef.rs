@@ -3,11 +3,12 @@
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 
-use crate::{ast::{ShortString, AcceptReject}, traits::RotoFilter};
+use crate::{ast::{ShortString, AcceptReject}, traits::{RotoFilter, MethodProps}};
+use crate::types::collections::ElementTypeValue;
 
 use super::{
     builtin::BuiltinTypeValue,
-    collections::{ElementTypeValue, List},
+    collections::List,
     typevalue::TypeValue,
 };
 
@@ -132,7 +133,7 @@ impl TypeDef {
     pub(crate) fn get_props_for_method(
         &self,
         method: &crate::ast::Identifier,
-    ) -> Result<(u8, TypeValue), Box<dyn std::error::Error>> {
+    ) -> Result<MethodProps, Box<dyn std::error::Error>> {
         let parent_ty: TypeValue = self.into();
         match parent_ty {
             TypeValue::Record(rec_type) => {
@@ -144,6 +145,9 @@ impl TypeDef {
             }
             TypeValue::Builtin(BuiltinTypeValue::Prefix(prefix)) => {
                 prefix.get_props_for_method(method)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(lit_int)) => {
+                lit_int.get_props_for_method(method)
             }
             TypeValue::Rib(rib) => rib.get_props_for_method(method),
             TypeValue::Table(rec) => rec.get_props_for_method(method),
@@ -164,6 +168,9 @@ impl PartialEq<BuiltinTypeValue> for TypeDef {
             }
             TypeDef::U8 => {
                 matches!(other, BuiltinTypeValue::U8(_))
+            }
+            TypeDef::IntegerLiteral => {
+                matches!(other, BuiltinTypeValue::IntegerLiteral(_))
             }
             TypeDef::Prefix => {
                 matches!(other, BuiltinTypeValue::Prefix(_))
@@ -260,6 +267,7 @@ impl From<BuiltinTypeValue> for TypeDef {
         match ty {
             BuiltinTypeValue::U32(_) => TypeDef::U32,
             BuiltinTypeValue::U8(_) => TypeDef::U8,
+            BuiltinTypeValue::IntegerLiteral(_) => TypeDef::IntegerLiteral,
             BuiltinTypeValue::Boolean(_) => TypeDef::Boolean,
             BuiltinTypeValue::Prefix(_) => TypeDef::Prefix,
             BuiltinTypeValue::PrefixRecord(_) => TypeDef::PrefixRecord,
