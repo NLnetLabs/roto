@@ -1132,8 +1132,8 @@ impl RecordTypeIdentifier {
 /// IntegerLiteral ::= [0-9]+
 ///
 /// We parse it as a string and then convert it to an integer.
-#[derive(Clone, Debug)]
-pub struct IntegerLiteral(pub u64);
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IntegerLiteral(pub usize);
 
 impl IntegerLiteral {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
@@ -1155,6 +1155,13 @@ impl From<&'_ IntegerLiteral> for ShortString {
         ShortString::from(literal.0.to_string().as_str())
     }
 }
+
+impl From<&'_ IntegerLiteral> for usize {
+    fn from(literal: &IntegerLiteral) -> Self {
+        literal.0
+    }
+}
+
 
 //------------ HexLiteral ---------------------------------------------------
 
@@ -1313,15 +1320,15 @@ fn accept_reject(
 
 #[derive(Clone, Debug)]
 pub enum ArgExpr {
-    Identifier(Identifier),
-    TypeIdentifier(TypeIdentifier),
-    StringLiteral(StringLiteral),
-    IntegerLiteral(IntegerLiteral),
-    HexLiteral(HexLiteral),
-    Bool(bool),
     CallExpr(CallExpr),
-    AccessReceiver(AccessReceiver),
+    StringLiteral(StringLiteral), // leaf node
+    IntegerLiteral(IntegerLiteral), // leaf node
+    HexLiteral(HexLiteral), // leaf node
+    Bool(bool), // leaf node
     PrefixMatchExpr(PrefixMatchExpr),
+    AccessReceiver(AccessReceiver),
+    TypeIdentifier(TypeIdentifier),
+    Identifier(Identifier),
 }
 
 impl ArgExpr {

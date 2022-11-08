@@ -1,10 +1,10 @@
-//------------ TypeValue ------------------------------------------------
-
+//============ TypeValue ====================================================
 use crate::ast::ShortString;
 
 use super::{
     builtin::{
-        AsPath, Asn, BuiltinTypeValue, Community, IpAddress, Prefix, U32, U8,
+        AsPath, Asn, Boolean, BuiltinTypeValue, Community, IpAddress, Prefix,
+        U32, U8, IntegerLiteral
     },
     collections::{List, Record},
     datasources::{Rib, Table},
@@ -92,6 +92,11 @@ impl<'a> From<&'a TypeDef> for Box<TypeValue> {
             TypeDef::U8 => {
                 Box::new(TypeValue::Builtin(BuiltinTypeValue::U8(U8(None))))
             }
+            TypeDef::IntegerLiteral => {
+                Box::new(TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
+                    IntegerLiteral(None),
+                )))
+            }
             TypeDef::Prefix => Box::new(TypeValue::Builtin(
                 BuiltinTypeValue::Prefix(Prefix(None)),
             )),
@@ -131,6 +136,11 @@ impl<'a> From<&'a TypeDef> for TypeValue {
             TypeDef::U8 => TypeValue::Builtin(BuiltinTypeValue::U8(U8(None))),
             TypeDef::Prefix => {
                 TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None)))
+            }
+            TypeDef::IntegerLiteral => {
+                TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
+                    IntegerLiteral(None),
+                ))
             }
             TypeDef::IpAddress => TypeValue::Builtin(
                 BuiltinTypeValue::IpAddress(IpAddress(None)),

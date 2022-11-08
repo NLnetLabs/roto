@@ -14,6 +14,7 @@ use super::typevalue::TypeValue;
 pub enum BuiltinTypeValue {
     U32(U32),
     U8(U8),
+    IntegerLiteral(IntegerLiteral),
     Prefix(Prefix),
     PrefixRecord((Prefix, Record)),
     Community(Community),
@@ -30,6 +31,7 @@ impl BuiltinTypeValue {
         match self {
             BuiltinTypeValue::U32(_) => "U32",
             BuiltinTypeValue::U8(_) => "U8",
+            BuiltinTypeValue::IntegerLiteral(_) => "IntegerLiteral",
             BuiltinTypeValue::Boolean(_) => "Boolean",
             BuiltinTypeValue::Prefix(_) => "Prefix",
             BuiltinTypeValue::PrefixRecord(_) => "PrefixRecord",
@@ -46,6 +48,7 @@ impl BuiltinTypeValue {
         match self {
             BuiltinTypeValue::U32(val) => val,
             BuiltinTypeValue::U8(val) => val,
+            BuiltinTypeValue::IntegerLiteral(val) => val,
             BuiltinTypeValue::Boolean(val) => val,
             BuiltinTypeValue::Prefix(val) => val,
             BuiltinTypeValue::PrefixRecord(val) => val,
@@ -93,6 +96,13 @@ impl BuiltinTypeValue {
                     BuiltinTypeValue::U8(v)
                 } else {
                     return Err("Not a U8".into());
+                }
+            }
+            TypeDef::IntegerLiteral => {
+                if let BuiltinTypeValue::IntegerLiteral(v) = value.into() {
+                    BuiltinTypeValue::IntegerLiteral(v)
+                } else {
+                    return Err("Not an IntegerLiteral".into());
                 }
             }
             TypeDef::HexLiteral => {
@@ -165,6 +175,12 @@ impl From<u32> for BuiltinTypeValue {
     }
 }
 
+impl From<usize> for BuiltinTypeValue {
+    fn from(val: usize) -> Self {
+        BuiltinTypeValue::IntegerLiteral(IntegerLiteral(Some(val as usize)))
+    }
+}
+
 impl From<std::net::IpAddr> for BuiltinTypeValue {
     fn from(val: std::net::IpAddr) -> Self {
         BuiltinTypeValue::IpAddress(IpAddress(Some(val)))
@@ -184,6 +200,9 @@ impl TryFrom<&'_ str> for BuiltinTypeValue {
         match val {
             "U32" => Ok(BuiltinTypeValue::U32(U32(None))),
             "U8" => Ok(BuiltinTypeValue::U8(U8(None))),
+            "IntegerLiteral" => {
+                Ok(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(None)))
+            }
             "Prefix" => Ok(BuiltinTypeValue::Prefix(Prefix(None))),
             "PrefixRecord" => Ok(BuiltinTypeValue::PrefixRecord((
                 Prefix(None),
@@ -210,6 +229,9 @@ impl TryFrom<&TypeDef> for BuiltinTypeValue {
         match ty {
             TypeDef::U32 => Ok(BuiltinTypeValue::U32(U32(None))),
             TypeDef::U8 => Ok(BuiltinTypeValue::U8(U8(None))),
+            TypeDef::IntegerLiteral => {
+                Ok(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(None)))
+            }
             TypeDef::Prefix => Ok(BuiltinTypeValue::Prefix(Prefix(None))),
             TypeDef::PrefixRecord => Ok(BuiltinTypeValue::PrefixRecord((
                 Prefix(None),
@@ -238,6 +260,9 @@ impl std::fmt::Display for BuiltinTypeValue {
         match self {
             BuiltinTypeValue::U32(_) => write!(f, "unsigned 32-bits integer"),
             BuiltinTypeValue::U8(_) => write!(f, "unsigned 8-bits integer"),
+            BuiltinTypeValue::IntegerLiteral(_) => {
+                write!(f, "host-sized unsigned integer")
+            }
             BuiltinTypeValue::Prefix(_) => write!(f, "Prefix"),
             BuiltinTypeValue::PrefixRecord(_) => write!(f, "Prefix Record"),
             BuiltinTypeValue::Community(_) => write!(f, "Community"),
@@ -248,7 +273,9 @@ impl std::fmt::Display for BuiltinTypeValue {
             }
             BuiltinTypeValue::Route(_) => write!(f, "Route (BGP Route)"),
             BuiltinTypeValue::Boolean(_) => write!(f, "Boolean"),
-            BuiltinTypeValue::HexLiteral(_) => write!(f, "Hexadecimal literal"),
+            BuiltinTypeValue::HexLiteral(_) => {
+                write!(f, "Hexadecimal literal")
+            }
         }
     }
 }
@@ -283,6 +310,56 @@ impl Boolean {
     pub fn new(val: bool) -> Self {
         Boolean(Some(val))
     }
+}
+
+//------------ IntegerLiteral type ------------------------------------------
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct IntegerLiteral(pub(crate) Option<usize>);
+impl IntegerLiteral {
+    pub fn new(val: usize) -> Self {
+        IntegerLiteral(Some(val))
+    }
+}
+
+impl RotoFilter<IntegerLiteral> for IntegerLiteral {
+    fn get_props_for_method(
+        self,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, Box<dyn std::error::Error>> {
+        match method_name.ident.as_str() {
+            "cmp" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&IntegerLiteralToken::Cmp)
+                    as u8,
+                return_type_value: TypeValue::from(&TypeDef::IntegerLiteral),
+                arg_types: vec![
+                    TypeValue::from(&TypeDef::IntegerLiteral),
+                    TypeValue::from(&TypeDef::IntegerLiteral),
+                ],
+            }),
+            _ => Err(format!(
+                "Unknown method: {} for type Prefix",
+                method_name.ident
+            )
+            .into()),
+        }
+    }
+
+    fn exec_method<'a>(
+        &'a self,
+        method_token: IntegerLiteral,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<
+        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
+        Box<dyn std::error::Error>,
+    > {
+        todo!()
+    }
+}
+
+pub(crate) enum IntegerLiteralToken {
+    Cmp,
 }
 
 //------------ HexLiteral type ----------------------------------------------

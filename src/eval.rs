@@ -7,6 +7,7 @@ use crate::ast::ShortString;
 use crate::types::builtin::Boolean;
 use crate::types::builtin::BuiltinTypeValue;
 use crate::types::builtin::HexLiteral;
+use crate::types::builtin::IntegerLiteral;
 
 use super::ast;
 use super::symbols;
@@ -919,10 +920,12 @@ impl ast::ArgExpr {
                 vec![],
             )),
             ast::ArgExpr::IntegerLiteral(int_lit) => {
-                Ok(symbols::Symbol::new(
+                println!("int_lit {:?}", int_lit);
+                println!("as value {}", TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(IntegerLiteral::new(int_lit.into()))));
+                Ok(symbols::Symbol::new_with_value(
                     int_lit.into(),
                     symbols::SymbolKind::Constant,
-                    TypeDef::U32,
+                    TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(IntegerLiteral::new(int_lit.into()))),
                     vec![],
                 ))
             }
@@ -985,10 +988,13 @@ impl ast::ArgExprList {
                     );
                 }
                 ast::ArgExpr::IntegerLiteral(int_lit) => {
-                    eval_args.push(symbols::Symbol::new(
+                    println!("@2 int_lit {:?}", int_lit);
+                    eval_args.push(symbols::Symbol::new_with_value(
                         int_lit.into(),
                         symbols::SymbolKind::Constant,
-                        TypeDef::U32,
+                        TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
+                            IntegerLiteral::new(int_lit.into())
+                        )),
                         vec![],
                     ));
                 }

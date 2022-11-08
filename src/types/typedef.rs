@@ -32,6 +32,7 @@ pub enum TypeDef {
     Community,
     Route,
     HexLiteral,
+    IntegerLiteral,
     AcceptReject(AcceptReject), // used in the apply section
     None,
 }
@@ -221,6 +222,7 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
         match ty.ident.as_str() {
             "U32" => Ok(TypeDef::U32),
             "U8" => Ok(TypeDef::U8),
+            "IntegerLiteral" => Ok(TypeDef::IntegerLiteral),
             "Prefix" => Ok(TypeDef::Prefix),
             "PrefixRecord" => Ok(TypeDef::PrefixRecord),
             "IpAddress" => Ok(TypeDef::IpAddress),
