@@ -236,6 +236,25 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
     }
 }
 
+impl From<&BuiltinTypeValue> for TypeDef {
+    fn from(ty: &BuiltinTypeValue) -> TypeDef {
+        match ty {
+            BuiltinTypeValue::U32(_) => TypeDef::U32,
+            BuiltinTypeValue::U8(_) => TypeDef::U8,
+            BuiltinTypeValue::IntegerLiteral(_) => TypeDef::IntegerLiteral,
+            BuiltinTypeValue::Boolean(_) => TypeDef::Boolean,
+            BuiltinTypeValue::Prefix(_) => TypeDef::Prefix,
+            BuiltinTypeValue::PrefixRecord(_) => TypeDef::PrefixRecord,
+            BuiltinTypeValue::IpAddress(_) => TypeDef::IpAddress,
+            BuiltinTypeValue::Asn(_) => TypeDef::Asn,
+            BuiltinTypeValue::AsPath(_) => TypeDef::AsPath,
+            BuiltinTypeValue::Community(_) => TypeDef::Community,
+            BuiltinTypeValue::Route(_) => TypeDef::Route,
+            BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
+        }
+    }
+}
+
 impl From<BuiltinTypeValue> for TypeDef {
     fn from(ty: BuiltinTypeValue) -> TypeDef {
         match ty {
