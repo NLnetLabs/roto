@@ -204,6 +204,7 @@ impl TryFrom<&'_ str> for BuiltinTypeValue {
             "IntegerLiteral" => {
                 Ok(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(None)))
             }
+            "Boolean" => Ok(BuiltinTypeValue::Boolean(Boolean(None))),
             "Prefix" => Ok(BuiltinTypeValue::Prefix(Prefix(None))),
             "PrefixRecord" => Ok(BuiltinTypeValue::PrefixRecord((
                 Prefix(None),
@@ -233,6 +234,7 @@ impl TryFrom<&TypeDef> for BuiltinTypeValue {
             TypeDef::IntegerLiteral => {
                 Ok(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(None)))
             }
+            TypeDef::Boolean => Ok(BuiltinTypeValue::Boolean(Boolean(None))),
             TypeDef::Prefix => Ok(BuiltinTypeValue::Prefix(Prefix(None))),
             TypeDef::PrefixRecord => Ok(BuiltinTypeValue::PrefixRecord((
                 Prefix(None),
