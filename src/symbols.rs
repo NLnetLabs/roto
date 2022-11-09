@@ -52,6 +52,16 @@ impl Symbol {
         }
     }
 
+    pub fn get_builtin_type_for_leaf_node(
+        &self,
+    ) -> Result<TypeDef, Box<dyn std::error::Error>> {
+        if let Some(TypeValue::Builtin(tv)) = &self.value {
+            Ok(tv.into())
+        } else {
+            Err(format!("Not a builtin type {:?}", self).into())
+        }
+    }
+
     pub fn set_type(mut self, ty: TypeDef) -> Symbol {
         self.ty = ty;
         self

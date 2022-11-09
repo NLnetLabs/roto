@@ -356,7 +356,6 @@ impl<'a> ast::Define {
         symbols: symbols::GlobalSymbolTable<'a>,
         scope: symbols::Scope,
     ) -> Result<(), Box<dyn std::error::Error>> {
-
         // The default input-argument is defined by the 'rx' keyword in the
         // `define` section. This the argument that holds the payload at
         // runtime.
@@ -778,7 +777,7 @@ impl<'a> ast::CallExpr {
                             }
                         }
                     }
-                    // Case 4a. On a variable with fields
+                    // Case 4b. On a variable with fields
                     (Err(_), Some(fields)) => {
                         println!("||| {:?}", receiver);
 
@@ -796,6 +795,11 @@ impl<'a> ast::CallExpr {
                         ) {
                             Ok(var_type) => {
                                 println!("+++ variable {:?}", var_type);
+                                println!("+++ field {:?}", field_access);
+                                println!(
+                                    "+++ method_call {:?}",
+                                    self.get_method_call()
+                                );
 
                                 Ok((
                                     receiver_ident,
@@ -804,7 +808,7 @@ impl<'a> ast::CallExpr {
                                             .get_name()
                                             .as_str()
                                             .into(),
-                                        symbols::SymbolKind::Variable,
+                                        symbols::SymbolKind::FieldAccess,
                                         field_access.get_type(),
                                         vec![ast::MethodCallExpr::eval(
                                             self.get_method_call(),
@@ -865,18 +869,32 @@ impl ast::AccessReceiver {
         let mut search_var = self.get_ident().to_string();
         let mut ty = TypeDef::None;
 
+        // Check if this access receiver has a field beyond the data source.
+        // If so we will return a leaf node, meaning the value has to set.
         if let Some(fields) = &self.get_fields() {
+            println!("AccessReceiver with fields {:?}", self);
+
             let field_access = ast::FieldAccessExpr::eval(
                 fields,
                 self.get_ident(),
                 symbols,
                 scope,
             )?;
+
             search_var = field_access.get_name().to_string();
             ty = field_access.get_type();
+
+            return Ok(symbols::Symbol::new_with_value(
+                search_var.as_str().into(),
+                symbols::SymbolKind::FieldAccess,
+                (&ty).into(),
+                vec![],
+            ));
         }
 
-        Ok(symbols::Symbol::new(
+        // This is an access receiver without fields, we don't know enough
+        // about it to make assumptions about it being a leaf node or not.
+        return Ok(symbols::Symbol::new(
             search_var.as_str().into(),
             symbols::SymbolKind::FieldAccess,
             ty,
@@ -905,11 +923,14 @@ impl ast::ArgExpr {
             }
             ast::ArgExpr::AccessReceiver(call_receiver) => {
                 println!(
-                    "access receiver arg base_name_ident {:?}",
+                    "<--- access receiver arg base_name_ident {:?}",
                     call_receiver
                 );
-                Ok(call_receiver.eval(symbols, scope)?)
+                let ar = call_receiver.eval(symbols, scope)?;
+                println!("---> access receiver arg base_name_ident {:?}", ar);
+                Ok(ar)
             }
+            // Leaf nodes, they all set values.
             ast::ArgExpr::StringLiteral(str_lit) => Ok(symbols::Symbol::new(
                 str_lit.into(),
                 symbols::SymbolKind::StringLiteral,
@@ -941,7 +962,6 @@ impl ast::ArgExpr {
             // TypeIdentifier(TypeIdentifier),
             // StringLiteral(StringLiteral),
             // Bool(bool),
-            // CallExpr(CallExpr),
             // PrefixMatchExpr(PrefixMatchExpr),
         }
     }
@@ -1041,6 +1061,9 @@ impl ast::FieldAccessExpr {
         // First, check if the complete field expression is a built-in type,
         // if so we can return it right away.
         if let Ok(field_type) = rec_type.has_fields_chain(&self.field_names) {
+            println!("::: field_type {:?}", field_type);
+            println!("::: self {:?}", self);
+
             if BuiltinTypeValue::try_from(&field_type).is_ok() {
                 let name = self.field_names.join(".");
                 return Ok(symbols::Symbol::new(
@@ -1068,6 +1091,9 @@ impl ast::FieldAccessExpr {
                 scope.clone(),
             )?;
         }
+
+        println!("::: name {:?}", search_var.as_str());
+        println!("::: self {:?}", self);
 
         Ok(symbols::Symbol::new(
             search_var.as_str().into(),
@@ -1108,6 +1134,10 @@ impl ast::LogicalExpr {
 }
 
 //------------ Boolean Expression -------------------------------------------
+
+// A Boolean Expression is an expresion that takes an input with an arbitrary
+// type and evaluates it into a boolean value, e.g. stand-alone variable of type
+// boolean is a boolean expression.
 
 impl ast::BooleanExpr {
     fn eval(
@@ -1157,25 +1187,43 @@ impl ast::BooleanExpr {
                     .ok_or(format!("Could not find scope {:?}", scope))?;
                 let var = gt.get_variable(&ident.ident.ident)?;
 
+                println!(
+                    "var from access_receiver: {} {:?}",
+                    ident.ident.ident, var
+                );
+
                 is_boolean_expression(var)?;
 
-                Ok(symbols::Symbol::new(
+                Ok(symbols::Symbol::new_with_value(
                     ident.ident.ident.clone(),
                     symbols::SymbolKind::Variable,
-                    var.get_type(),
-                    vec![symbols::Symbol::new_with_value(
-                        var.get_args()[0].get_name(),
-                        var.get_args()[0].get_kind(),
-                        TypeValue::Builtin(BuiltinTypeValue::Boolean(
-                            Boolean(None),
-                        )),
-                        vec![],
-                    )],
+                    TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
+                        None,
+                    ))),
+                    vec![],
                 ))
             }
         }
     }
 }
+
+//----------------- Compare Expression --------------------------------------
+
+// A Compare Expression is an expression of the form
+// `<left handside symbol> <compare operator> <right handside symbol>`.
+
+// The both outer symbols can hold an argument expression or groups of
+// argument expressions. These are called an Compare Argument. In a Compare
+// Expression all the Compare Arguments (both left and right) will have to
+// evaluate to the same BUILTIN type and have to be leaf nodes. This means the
+// user cannot compare complete lists and records to anything. The user can
+// however use fields in lists and records.
+
+// A Leaf Node is a symbol that has a value on the `value` field. Furthermore,
+// a non-leaf node can have a nested leaf node in its `args` field. If the
+// the `ty` field is not set, this is an indication that the symbol is not a
+// not a leaf node. A node having neither a `ty` field filled, nor a `value`
+// should not exist.
 
 impl ast::CompareExpr {
     fn eval(
@@ -1183,53 +1231,103 @@ impl ast::CompareExpr {
         symbols: symbols::GlobalSymbolTable<'_>,
         scope: &symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
-        println!("comparison expression: {:?}", self);
         let _symbols = symbols.clone();
 
-        // A non-leaf node must have a type (in the `ty` field in the symbol
-        // itself), but a leaf node can't have one, instead it has the
-        // `value` field filled (with a TypeValue) somewhere in the `args`
-        // field of the symbol. must evaluate the left and right hand side of
-        // the expression to determine the return type of the expression.
-        let left_args = self.left.eval(_symbols, scope)?.get_args_owned();
-        let mut left_value = None;
+        // Proces the left hand side of the compare expression. This is a
+        // Compare Argument. It has to end in a leaf node, otherwise it's
+        // an error.
+        let left_s = self.left.eval(_symbols, scope)?;
+        let left_type = match left_s.get_kind() {
+            // Any literal in the source code should end up as
+            // SymbolKind::Constant.
+            symbols::SymbolKind::Constant => {
+                left_s.get_builtin_type_for_leaf_node()?
+            }
+            // A FieldAccess could be a leaf node on its own (if its type
+            // is a builtin type), or it could have a leaf node in its `args`
+            // field. Note that it cannot be both a leaf node and have
+            // arguments.
+            symbols::SymbolKind::FieldAccess => {
+                let args = left_s.get_args();
+                let s = if !args.is_empty() {
+                    match left_s.get_args()[0].get_kind() {
+                        // Apparently this is not a leaf node, so the `args`
+                        // field should host a leaf node.
+                        symbols::SymbolKind::DataSourceMethodCall => left_s
+                            .get_args()[0]
+                            .get_builtin_type_for_leaf_node()?,
+                        _ => {
+                            return Err(format!(
+                                "Expected a method call, got {:?}",
+                                left_s.get_kind()
+                            )
+                            .into())
+                        }
+                    }
+                } else {
+                    // This is a leaf node.
+                    left_s.get_builtin_type()?
+                };
+                s
+            }
+            // A variable must be a leaf node, and its type must be a builtin
+            symbols::SymbolKind::Variable => {
+                left_s.get_builtin_type_for_leaf_node()?
+            }
+            _ => {
+                return Err(format!(
+                    "Left hand side of comparison expression must be a constant or method call, got {:?}",
+                    left_s.get_kind()
+                )
+                .into());
+            }
+        };
 
-        let right: Box<TypeValue> =
-            (&self.right.eval(symbols.clone(), scope)?.get_type()).into();
-        let left: Box<TypeValue> =
-            (&self.left.eval(symbols.clone(), scope)?.get_type()).into();
-        println!("right {:?}", right);
-        if !left_args.is_empty()
-            && left_args[0].get_kind()
-                == symbols::SymbolKind::DataSourceMethodCall
-        {
-            left_value = Some(Box::new(left_args[0].get_value().unwrap()));
-        }
-
-        let right_args =
-            self.right.eval(symbols.clone(), scope)?.get_args_owned();
-        let mut right_value: Option<Box<&TypeValue>> = None;
-
-        if !right_args.is_empty()
-            && right_args[0].get_kind()
-                == symbols::SymbolKind::DataSourceMethodCall
-        {
-            right_value = Some(Box::new(right_args[0].get_value().unwrap()));
-        }
-
-        let (left, right) = match (left_value, right_value) {
-            (None, None) => (left.as_ref(), right.as_ref()),
-            (Some(left), None) => (*left, right.as_ref()),
-            (None, Some(right)) => (left.as_ref(), *right),
-            (Some(left), Some(right)) => (*left, *right),
+        let right_s = self.right.eval(symbols.clone(), scope)?;
+        let right_type = match right_s.get_kind() {
+            symbols::SymbolKind::Constant => {
+                right_s.get_builtin_type_for_leaf_node()?
+            }
+            symbols::SymbolKind::FieldAccess => {
+                let args = right_s.get_args();
+                let s = if !args.is_empty() {
+                    match right_s.get_args()[0].get_kind() {
+                        symbols::SymbolKind::DataSourceMethodCall => right_s
+                            .get_args()[0]
+                            .get_builtin_type_for_leaf_node()?,
+                        _ => {
+                            return Err(format!(
+                                "Expected a method call, got {:?}",
+                                right_s.get_kind()
+                            )
+                            .into())
+                        }
+                    }
+                } else {
+                    right_s.get_builtin_type()?
+                };
+                s
+            }
+            symbols::SymbolKind::Variable => {
+                right_s.get_builtin_type_for_leaf_node()?
+            }
+            _ => {
+                return Err(format!(
+                    "Right hand side of comparison expression must be a constant or method call, got {:?}",
+                    right_s.get_kind()
+                )
+                .into());
+            }
         };
 
         // For now we're assuming the left hand-side and the right-hand side
         // return the same type.
-        if left != right {
-            return Err(
-                format!("Cannot compare {} with {}", left, right).into()
-            );
+        if left_type != right_type {
+            return Err(format!(
+                "Cannot compare {:?} from {:?} with {:?} from {:?}",
+                left_type, left_s, right_type, right_s
+            )
+            .into());
         }
 
         Ok(symbols::Symbol::new(
@@ -1237,9 +1335,7 @@ impl ast::CompareExpr {
             symbols::SymbolKind::CompareExpr(self.op),
             TypeDef::Boolean,
             vec![
-                self.left
-                    .eval(symbols.clone(), scope)?
-                    .set_kind(symbols::SymbolKind::LogicalExpr),
+                self.left.eval(symbols.clone(), scope)?,
                 self.right.eval(symbols, scope)?,
             ],
         ))
@@ -1724,10 +1820,8 @@ fn add_match_action(
     symbols: symbols::GlobalSymbolTable<'_>,
     scope: &symbols::Scope,
 ) -> Result<(), Box<dyn std::error::Error>> {
-
     match &scope {
         symbols::Scope::Module(module) => {
-
             let mut _symbols = symbols.borrow_mut();
             let module = _symbols
                 .get_mut(scope)
@@ -1756,6 +1850,8 @@ where
 {
     fn get_args(&self) -> &[symbols::Symbol];
     fn get_type(&self) -> TypeDef;
+    fn get_builtin_type(&self)
+        -> Result<TypeDef, Box<dyn std::error::Error>>;
 }
 
 impl BooleanExpr for symbols::Symbol {
@@ -1765,6 +1861,12 @@ impl BooleanExpr for symbols::Symbol {
 
     fn get_type(&self) -> TypeDef {
         symbols::Symbol::get_type(self)
+    }
+
+    fn get_builtin_type(
+        &self,
+    ) -> Result<TypeDef, Box<dyn std::error::Error>> {
+        symbols::Symbol::get_builtin_type(self)
     }
 }
 
@@ -1778,11 +1880,11 @@ fn is_boolean_function(
     println!("right: {:?}", right);
 
     let left = (
-        left.get_type() == TypeDef::Boolean,
+        left.get_builtin_type()? == TypeDef::Boolean,
         left.get_args().get(0).and_then(|a| a.get_value()),
     );
     let right = (
-        right.get_type() == TypeDef::Boolean,
+        right.get_builtin_type()? == TypeDef::Boolean,
         right.get_args().get(0).and_then(|a| a.get_value()),
     );
 
@@ -1794,7 +1896,7 @@ fn is_boolean_function(
         ((_, _), (false, None)) => Err("Right hand expression doesn't evaluate to a boolean function".into()),
         ((false, None), (_, _)) => Err("Left hand expression doesn't evaluate to a boolean function".into()),
         // Only accept leaf-nodes for now. Can't think of a reason to accept these, but who knows.
-        ((_, None), (_, None)) => Err("not accepting non-leaf nodes as boolean function".into()),
+        // ((_, None), (_, None)) => Err("not accepting non-leaf nodes as boolean function".into()),
         _ => Ok(()),
     }
 }
