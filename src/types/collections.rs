@@ -4,7 +4,7 @@ use crate::traits::{RotoFilter, MethodProps};
 
 use super::builtin::{
     AsPath, Asn, Boolean, BuiltinTypeValue, Community, IpAddress, Prefix,
-    U32, U8,
+    U32, U8, PrefixLengthLiteral,
 };
 use super::typedef::TypeDef;
 use super::typevalue::TypeValue;
@@ -34,6 +34,9 @@ impl<'a> From<&'a TypeDef> for ElementTypeValue {
             }
             TypeDef::Prefix => ElementTypeValue::Primitive(
                 BuiltinTypeValue::Prefix(Prefix(None)),
+            ),
+            TypeDef::PrefixLengthLiteral => ElementTypeValue::Primitive(
+                BuiltinTypeValue::PrefixLengthLiteral(PrefixLengthLiteral(None)),
             ),
             TypeDef::IpAddress => ElementTypeValue::Primitive(
                 BuiltinTypeValue::IpAddress(IpAddress(None)),

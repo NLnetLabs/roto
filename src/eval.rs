@@ -8,6 +8,7 @@ use crate::types::builtin::Boolean;
 use crate::types::builtin::BuiltinTypeValue;
 use crate::types::builtin::HexLiteral;
 use crate::types::builtin::IntegerLiteral;
+use crate::types::builtin::PrefixLengthLiteral;
 
 use super::ast;
 use super::symbols;
@@ -1079,6 +1080,17 @@ impl ast::ArgExprList {
                         symbols::SymbolKind::Constant,
                         TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
                             IntegerLiteral::new(int_lit.into())
+                        )),
+                        vec![],
+                    ));
+                }
+                ast::ArgExpr::PrefixLengthLiteral(prefix_len_lit) => {
+                    println!("prefix_len_lit {:?}", prefix_len_lit);
+                    eval_args.push(symbols::Symbol::new_with_value(
+                        prefix_len_lit.into(),
+                        symbols::SymbolKind::Constant,
+                        TypeValue::Builtin(BuiltinTypeValue::PrefixLengthLiteral(
+                            PrefixLengthLiteral::new(prefix_len_lit.into())
                         )),
                         vec![],
                     ));

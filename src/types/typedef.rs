@@ -27,6 +27,7 @@ pub enum TypeDef {
     String, // used for fieldname in method calls
     Prefix,
     PrefixRecord, // A Record with a prefix as key
+    PrefixLengthLiteral, // A u8 prefixes by a /
     IpAddress,
     Asn,
     AsPath,
@@ -175,6 +176,9 @@ impl PartialEq<BuiltinTypeValue> for TypeDef {
             TypeDef::Prefix => {
                 matches!(other, BuiltinTypeValue::Prefix(_))
             }
+            TypeDef::PrefixLengthLiteral => {
+                matches!(other, BuiltinTypeValue::PrefixLengthLiteral(_))
+            }
             TypeDef::IpAddress => {
                 matches!(other, BuiltinTypeValue::IpAddress(_))
             }
@@ -231,6 +235,7 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             "U8" => Ok(TypeDef::U8),
             "IntegerLiteral" => Ok(TypeDef::IntegerLiteral),
             "Prefix" => Ok(TypeDef::Prefix),
+            "PrefixLengthLiteral" => Ok(TypeDef::PrefixLengthLiteral),
             "PrefixRecord" => Ok(TypeDef::PrefixRecord),
             "IpAddress" => Ok(TypeDef::IpAddress),
             "Asn" => Ok(TypeDef::Asn),
@@ -251,6 +256,7 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::IntegerLiteral(_) => TypeDef::IntegerLiteral,
             BuiltinTypeValue::Boolean(_) => TypeDef::Boolean,
             BuiltinTypeValue::Prefix(_) => TypeDef::Prefix,
+            BuiltinTypeValue::PrefixLengthLiteral(_) => TypeDef::PrefixLengthLiteral,
             BuiltinTypeValue::PrefixRecord(_) => TypeDef::PrefixRecord,
             BuiltinTypeValue::IpAddress(_) => TypeDef::IpAddress,
             BuiltinTypeValue::Asn(_) => TypeDef::Asn,
@@ -270,6 +276,7 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::IntegerLiteral(_) => TypeDef::IntegerLiteral,
             BuiltinTypeValue::Boolean(_) => TypeDef::Boolean,
             BuiltinTypeValue::Prefix(_) => TypeDef::Prefix,
+            BuiltinTypeValue::PrefixLengthLiteral(_) => TypeDef::PrefixLengthLiteral,
             BuiltinTypeValue::PrefixRecord(_) => TypeDef::PrefixRecord,
             BuiltinTypeValue::IpAddress(_) => TypeDef::IpAddress,
             BuiltinTypeValue::Asn(_) => TypeDef::Asn,

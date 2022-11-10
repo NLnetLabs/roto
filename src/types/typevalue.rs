@@ -4,7 +4,7 @@ use crate::ast::ShortString;
 use super::{
     builtin::{
         AsPath, Asn, Boolean, BuiltinTypeValue, Community, IpAddress, Prefix,
-        U32, U8, IntegerLiteral
+        U32, U8, IntegerLiteral, PrefixLengthLiteral
     },
     collections::{List, Record},
     datasources::{Rib, Table},
@@ -111,6 +111,11 @@ impl<'a> From<&'a TypeDef> for Box<TypeValue> {
                     IntegerLiteral(None),
                 )))
             }
+            TypeDef::PrefixLengthLiteral => {
+                Box::new(TypeValue::Builtin(
+                    BuiltinTypeValue::PrefixLengthLiteral(PrefixLengthLiteral(None)),
+                ))
+            }
             TypeDef::Prefix => Box::new(TypeValue::Builtin(
                 BuiltinTypeValue::Prefix(Prefix(None)),
             )),
@@ -154,6 +159,11 @@ impl<'a> From<&'a TypeDef> for TypeValue {
             TypeDef::IntegerLiteral => {
                 TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
                     IntegerLiteral(None),
+                ))
+            }
+            TypeDef::PrefixLengthLiteral => {
+                TypeValue::Builtin(BuiltinTypeValue::PrefixLengthLiteral(
+                    PrefixLengthLiteral(None),
                 ))
             }
             TypeDef::IpAddress => TypeValue::Builtin(

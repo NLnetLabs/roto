@@ -55,7 +55,7 @@ fn main() {
 
                     // specify another RIB that is used in this filter.
                     found_prefix = rib-rov.longest_match(route.prefix);
-                    fixed_len_prefix = Prefix.from(route.prefix.address(), 24); // maybe /24
+                    fixed_len_prefix = Prefix.from(route.prefix.address(), /24);
                 }
             
                 term rov-valid for route: Route {

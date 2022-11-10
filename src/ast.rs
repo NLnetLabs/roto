@@ -1162,6 +1162,42 @@ impl From<&'_ IntegerLiteral> for usize {
     }
 }
 
+//------------ PrefixLengthLiteral ------------------------------------------
+
+/// A prefix length literal is a sequence of digits preceded by a '/'.
+/// PrefixLengthLiteral ::= /[0-9]+
+/// 
+/// We parse it as a string and then convert it to an integer.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PrefixLengthLiteral(pub usize);
+
+impl PrefixLengthLiteral {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, digits) = context(
+            "prefix length literal",
+            preceded(
+                char('/'),
+                take_while1(|ch: char| ch.is_ascii_digit()),
+            ),
+        )(input)?;
+
+        println!("digits: {}", digits);
+        let value = digits.parse().unwrap();
+        Ok((input, Self(value)))
+    }
+}
+
+impl From<&'_ PrefixLengthLiteral> for ShortString {
+    fn from(literal: &PrefixLengthLiteral) -> Self {
+        ShortString::from(literal.0.to_string().as_str())
+    }
+}
+
+impl From<&'_ PrefixLengthLiteral> for u8 {
+    fn from(literal: &PrefixLengthLiteral) -> Self {
+        literal.0 as u8
+    }
+}
 
 //------------ HexLiteral ---------------------------------------------------
 
@@ -1314,6 +1350,8 @@ fn accept_reject(
 // ArgExpr ::= Identifier |
 //  TypeIdentifier |
 //  StringLiteral |
+//  IntegerLiteral |
+//  PrefixLengthLiteral |
 //  Bool |
 //  CallExpr |
 //  FieldExpr
@@ -1323,6 +1361,7 @@ pub enum ArgExpr {
     CallExpr(CallExpr),
     StringLiteral(StringLiteral), // leaf node
     IntegerLiteral(IntegerLiteral), // leaf node
+    PrefixLengthLiteral(PrefixLengthLiteral), // leaf node
     HexLiteral(HexLiteral), // leaf node
     Bool(bool), // leaf node
     PrefixMatchExpr(PrefixMatchExpr),
@@ -1338,6 +1377,7 @@ impl ArgExpr {
             map(StringLiteral::parse, ArgExpr::StringLiteral),
             map(HexLiteral::parse, ArgExpr::HexLiteral),
             map(IntegerLiteral::parse, ArgExpr::IntegerLiteral),
+            map(PrefixLengthLiteral::parse, ArgExpr::PrefixLengthLiteral),
             map(tag("true"), |_| ArgExpr::Bool(true)),
             map(tag("false"), |_| ArgExpr::Bool(false)),
             map(PrefixMatchExpr::parse, ArgExpr::PrefixMatchExpr),
