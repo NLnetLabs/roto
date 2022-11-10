@@ -24,7 +24,7 @@ pub(crate) struct Symbol {
     ty: TypeDef,
     args: Vec<Symbol>,
     pub value: Option<TypeValue>,
-    // location: Location,
+    pub token: Option<u8>, // location: Location,
 }
 
 impl Symbol {
@@ -43,8 +43,7 @@ impl Symbol {
                 | TypeDef::Record(_)
                 | TypeDef::None
         ) {
-            (&self.ty)
-                .try_into().map(|tv: BuiltinTypeValue| tv.into())
+            (&self.ty).try_into().map(|tv: BuiltinTypeValue| tv.into())
         } else if let Some(TypeValue::Builtin(ty)) = &self.value {
             Ok(ty.into())
         } else {
@@ -104,6 +103,7 @@ impl Symbol {
             ty,
             args,
             value: None,
+            token: None,
         }
     }
 
@@ -119,7 +119,17 @@ impl Symbol {
             ty: TypeDef::None,
             args,
             value: Some(value),
+            token: None,
         }
+    }
+
+    pub fn new_argument_type(ty: TypeDef) -> Self {
+        Symbol::new_with_value(
+            "arg".into(),
+            SymbolKind::Argument,
+            (&ty).into(),
+            vec![],
+        )
     }
 }
 
@@ -264,6 +274,7 @@ impl SymbolTable {
                 ty,
                 args,
                 value,
+                token: None,
             },
         );
         Ok(())
@@ -300,6 +311,7 @@ impl SymbolTable {
                 ty,
                 args,
                 value,
+                token: None,
             },
         );
         Ok(())
@@ -335,6 +347,7 @@ impl SymbolTable {
                 ty,
                 args,
                 value,
+                token: None,
             });
         } else {
             self.terms.insert(
@@ -345,6 +358,7 @@ impl SymbolTable {
                     ty,
                     args,
                     value,
+                    token: None,
                 }],
             );
         };
@@ -382,6 +396,7 @@ impl SymbolTable {
                 ty,
                 args,
                 value,
+                token: None,
             });
         } else {
             self.actions.insert(
@@ -392,6 +407,7 @@ impl SymbolTable {
                     ty,
                     args,
                     value,
+                    token: None,
                 }],
             );
         };
@@ -428,6 +444,7 @@ impl SymbolTable {
                 ty,
                 args,
                 value,
+                token: None,
             });
         } else {
             self.match_actions.insert(
@@ -438,6 +455,7 @@ impl SymbolTable {
                     ty,
                     args,
                     value,
+                    token: None,
                 }],
             );
         };

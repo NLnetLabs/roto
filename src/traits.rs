@@ -1,15 +1,24 @@
 // =========== RotoFilter trait ============================================
 
-use crate::types::{typedef::TypeDef, typevalue::TypeValue};
+use crate::{types::{typedef::TypeDef, typevalue::TypeValue}, symbols::Symbol};
 
+pub(crate) struct Token(u8);
+
+impl Token {
+    pub fn new(value: Token) -> Self {
+        Token(std::mem::size_of_val(&Token) as u8)
+    }
+}
+
+#[derive(Debug)]
 pub(crate) struct MethodProps {
     pub(crate) return_type_value: TypeValue,
     pub(crate) method_token: u8,
-    pub(crate) arg_types: Vec<TypeValue>,
+    pub(crate) arg_types: Vec<Symbol>,
 }
 
 impl MethodProps {
-    pub(crate) fn new(return_type_value: TypeValue, method_token: u8, arg_types: Vec<TypeValue>) -> Self {
+    pub(crate) fn new(return_type_value: TypeValue, method_token: u8, arg_types: Vec<Symbol>) -> Self {
         MethodProps {
             return_type_value,
             method_token,
@@ -18,7 +27,7 @@ impl MethodProps {
     }
 }
 
-pub(crate) trait RotoFilter<Token> {
+pub(crate) trait RotoFilter<T> {
     fn get_props_for_method(
         self,
         method_name: &super::ast::Identifier,
@@ -28,7 +37,7 @@ pub(crate) trait RotoFilter<Token> {
 
     fn exec_method<'a>(
         &'a self,
-        method_token: Token,
+        method_token: T,
         args: Vec<TypeValue>,
         res_type: TypeDef,
     ) -> Result<
