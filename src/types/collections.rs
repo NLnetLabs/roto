@@ -1,4 +1,5 @@
 use crate::ast::ShortString;
+use crate::symbols::{Symbol, self};
 use crate::traits::{RotoFilter, MethodProps};
 
 use super::builtin::{
@@ -161,12 +162,12 @@ impl RotoFilter<ListToken> for List {
             "get" => Ok(MethodProps {
                 method_token: std::mem::size_of_val(&ListToken::Get) as u8,
                 return_type_value: TypeValue::List(self),
-                arg_types: vec![(&TypeDef::U32).into()],
+                arg_types: vec![Symbol::new_argument_type(TypeDef::U32)],
         }),
             "remove" => Ok(MethodProps {
                 method_token: std::mem::size_of_val(&ListToken::Remove) as u8,
                 return_type_value: TypeValue::List(self),
-                arg_types: vec![(&TypeDef::U32).into()],
+                arg_types: vec![Symbol::new_argument_type(TypeDef::U32)],
         }),
             "contains" => Ok(MethodProps {
                 method_token: std::mem::size_of_val(&ListToken::Contains) as u8,
@@ -289,12 +290,12 @@ impl RotoFilter<RecordToken> for Record {
                         self,
                     ))),
                 )])?),
-                arg_types: vec![(&TypeDef::Prefix).into()],
+                arg_types: vec![Symbol::new_argument_type(TypeDef::Prefix)],
         }   ),
             "get" => Ok(MethodProps {
                 method_token: std::mem::size_of_val(&RecordToken::Get) as u8,
                 return_type_value: TypeValue::Record(self),
-                arg_types: vec![(&TypeDef::U32).into()],
+                arg_types: vec![Symbol::new_argument_type(TypeDef::U32)],
         }),
             "get_all" => Ok(MethodProps {
                 method_token: std::mem::size_of_val(&RecordToken::GetAll) as u8,
@@ -304,12 +305,12 @@ impl RotoFilter<RecordToken> for Record {
             "contains" => Ok(MethodProps {
                 method_token: std::mem::size_of_val(&RecordToken::Contains) as u8,
                 return_type_value: (&TypeDef::Boolean).into(),
-                arg_types: vec![TypeValue::Record(self)],
+                arg_types: vec![Symbol::new_with_value("self_arg".into(), symbols::SymbolKind::Argument, TypeValue::Record(self), vec![])],
         }),
             "set" => Ok(MethodProps {
                 method_token: std::mem::size_of_val(&RecordToken::Set) as u8,
                 return_type_value: TypeValue::None,
-                arg_types: vec![TypeValue::Record(self)],
+                arg_types: vec![Symbol::new_with_value("self_arg".into(), symbols::SymbolKind::Argument, TypeValue::Record(self), vec![])],
         }),
             _ => {
                 Err(format!("Unknown method '{}' for Record type with fields {:?}", method_name.ident, self).into())

@@ -4,6 +4,7 @@
 
 use routecore::asn::LongSegmentError;
 
+use crate::symbols::Symbol;
 use crate::traits::{MethodProps, RotoFilter};
 
 use super::collections::Record;
@@ -325,7 +326,7 @@ impl IntegerLiteral {
     }
 }
 
-impl RotoFilter<IntegerLiteral> for IntegerLiteral {
+impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -336,8 +337,8 @@ impl RotoFilter<IntegerLiteral> for IntegerLiteral {
                     as u8,
                 return_type_value: TypeValue::from(&TypeDef::IntegerLiteral),
                 arg_types: vec![
-                    TypeValue::from(&TypeDef::IntegerLiteral),
-                    TypeValue::from(&TypeDef::IntegerLiteral),
+                    Symbol::new_argument_type(TypeDef::IntegerLiteral),
+                    Symbol::new_argument_type(TypeDef::IntegerLiteral),
                 ],
             }),
             _ => Err(format!(
@@ -350,7 +351,7 @@ impl RotoFilter<IntegerLiteral> for IntegerLiteral {
 
     fn exec_method<'a>(
         &'a self,
-        method_token: IntegerLiteral,
+        method_token: IntegerLiteralToken,
         args: Vec<TypeValue>,
         res_type: TypeDef,
     ) -> Result<
@@ -403,8 +404,8 @@ impl RotoFilter<PrefixToken> for Prefix {
                 method_token: std::mem::size_of_val(&PrefixToken::From) as u8,
                 return_type_value: TypeValue::from(&TypeDef::Prefix),
                 arg_types: vec![
-                    TypeValue::from(&TypeDef::Prefix),
-                    TypeValue::from(&TypeDef::U8),
+                    Symbol::new_argument_type(TypeDef::IpAddress),
+                    Symbol::new_argument_type(TypeDef::U8),
                 ],
             }),
             "address" => Ok(MethodProps {
@@ -422,7 +423,7 @@ impl RotoFilter<PrefixToken> for Prefix {
                 method_token: std::mem::size_of_val(&PrefixToken::Matches)
                     as u8,
                 return_type_value: TypeValue::from(&TypeDef::Boolean),
-                arg_types: vec![TypeValue::from(&TypeDef::Prefix)],
+                arg_types: vec![Symbol::new_argument_type(TypeDef::Prefix)],
             }),
             _ => Err(format!(
                 "Unknown method: {} for type Prefix",
@@ -588,9 +589,9 @@ impl RotoFilter<AsPathToken> for AsPath {
             "origin" => Ok(MethodProps {
                 method_token: std::mem::size_of_val(&AsPathToken::Origin)
                     as u8,
-                return_type_value: TypeValue::Builtin(
-                    BuiltinTypeValue::AsPath(AsPath(None)),
-                ),
+                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Asn(
+                    Asn(None),
+                )),
                 arg_types: vec![],
             }),
             "contains" => Ok(MethodProps {
@@ -599,7 +600,7 @@ impl RotoFilter<AsPathToken> for AsPath {
                 return_type_value: TypeValue::Builtin(
                     BuiltinTypeValue::AsPath(AsPath(None)),
                 ),
-                arg_types: vec![(&TypeDef::Asn).into()],
+                arg_types: vec![Symbol::new_argument_type(TypeDef::Asn)],
             }),
             "len" => Ok(MethodProps {
                 method_token: std::mem::size_of_val(&AsPathToken::Len) as u8,

@@ -2,7 +2,7 @@
 
 // ----------- Rib Type ----------------------------------------------------
 
-use crate::traits::{RotoFilter, MethodProps};
+use crate::{traits::{RotoFilter, MethodProps}, symbols::Symbol};
 
 use super::{
     builtin::{Boolean, BuiltinTypeValue},
@@ -39,17 +39,17 @@ impl RotoFilter<RibToken> for Rib {
             "match" => Ok(MethodProps {
                 method_token: std::mem::size_of_val(&RibToken::Match) as u8,
                 return_type_value: TypeValue::Record(self.record),
-                arg_types: vec![(&TypeDef::Prefix).into()]
+                arg_types: vec![Symbol::new_argument_type(TypeDef::Prefix)]
             }),
             "longest_match" => Ok(MethodProps {
                 method_token: std::mem::size_of_val(&RibToken::LongestMatch) as u8,
                 return_type_value: TypeValue::Record(self.record),
-                arg_types: vec![(&TypeDef::Prefix).into()]
+                arg_types: vec![Symbol::new_argument_type(TypeDef::Prefix)]
         }),
             "contains" => Ok(MethodProps {
                 method_token: std::mem::size_of_val(&RibToken::Contains) as u8,
                 return_type_value: TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                arg_types: vec![(&TypeDef::Prefix).into()]
+                arg_types: vec![Symbol::new_argument_type(TypeDef::Prefix)]
         }),
             _ => {
                 Err(format!("Unknown method '{}'", method_name.ident).into())
@@ -121,12 +121,12 @@ impl RotoFilter<TableToken> for Table {
             "get" => Ok(MethodProps {
                 method_token: std::mem::size_of_val(&TableToken::Get) as u8,
                 return_type_value: TypeValue::Record(self.record),
-                arg_types: vec![(&TypeDef::Prefix).into()]
+                arg_types: vec![Symbol::new_argument_type(TypeDef::Prefix)]
         }),
             "contains" => Ok(MethodProps {
                 method_token: std::mem::size_of_val(&TableToken::Contains) as u8,
                 return_type_value: TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                arg_types: vec![(&TypeDef::Prefix).into()]
+                arg_types: vec![Symbol::new_argument_type(TypeDef::Asn)]
         }),
             _ => {
                 Err(format!("Unknown method '{}'", method_name.ident).into())

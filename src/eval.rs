@@ -834,29 +834,97 @@ impl<'a> ast::CallExpr {
 impl ast::MethodCallExpr {
     pub(crate) fn eval(
         &self,
-        // Type of the data source this call should be implemented on.
-        parent_ty: TypeDef,
+        // Parsed return type of the method call
+        method_call_type: TypeDef,
         symbols: symbols::GlobalSymbolTable<'_>,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
-        let args = self.args.eval(symbols, scope)?;
-        // we need to lookup the type that is the return type
-        // of the method that the user wants to call.
-        let method_result_ty = parent_ty
-            .get_props_for_method(&self.ident)?
-            .return_type_value;
+        println!("method call args {:?}", self);
+        println!("parent_ty {:?}", method_call_type);
+        // self is the call receiver, e.g. in `rib-rov.longest_match()`,
+        // `rib-rov` is the receiver and `longest_match` is the method call
+        // name. The actual method call lives in the `args` field.
+        let method_call = self.args.eval(symbols, scope)?;
+
+        // we need to lookup the properties of the return type of the method
+        // that the user wants to call, to see if it matches the arguments of
+        // the supplied method call in the source code.
+        let props = method_call_type.get_props_for_method(&self.ident)?;
+        println!("props {:?}", props);
+        let return_type = props.return_type_value;
+        let parsed_args = method_call;
+
+        if parsed_args.is_empty() && props.arg_types.is_empty() {
+            return Ok(symbols::Symbol::new_with_value(
+                self.ident.clone().ident,
+                symbols::SymbolKind::DataSourceMethodCall,
+                return_type,
+                vec![],
+            ));
+        }
+
+        // early return if no arguments were supplied and the method doesn't
+        // take any either.
+        if parsed_args.len() != props.arg_types.len() {
+            return Err(format!(
+                "Method '{}' on type {:?} expects {} arguments, but {} were provided.",
+                self.ident,
+                method_call_type,
+                props.arg_types.len(),
+                parsed_args.len()
+            )
+            .into());
+        }
+
+        // go over the argument types that we got from the return type and
+        // compare those to the ones we got from the parsed arguments.
+        for (parsed_arg_type, expected_arg_type) in
+            parsed_args.iter().zip(props.arg_types.iter())
+        {
+            // A DataSourceMethodCall has its arguments in the value field of the
+            // parsed `args` field of the method call. A FieldAccess MAY also
+            // have that, ...
+            let parsed_arg_type = if parsed_arg_type.value.is_some() {
+                parsed_arg_type
+            } else if parsed_arg_type.get_kind()
+                == symbols::SymbolKind::FieldAccess
+            {
+                // ...but a FieldAccess can also have a DataSourceMethodCall on
+                // it, so then the arguments live in the nested `args` field.
+                parsed_arg_type.get_args().get(0).ok_or_else(|| {
+                    format!(
+                        "a. Method call '{}' does not return a value. Invalid argument type: {:?}",
+                        self.ident,
+                        parsed_arg_type
+                    )
+                })?
+            } else {
+                Err(format!(
+                    "b. Method call '{}' does not return a value. Invalid argument type: {:?}",
+                    self.ident, parsed_arg_type
+                ))?
+            };
+
+            if parsed_arg_type.value != expected_arg_type.value {
+                return Err(format!(
+                    "Invalid argument type for method '{}'. Expected '{:?}', got '{:?}'",
+                    self.ident, expected_arg_type.value, parsed_arg_type.value
+                )
+                .into());
+            }
+        }
 
         Ok(symbols::Symbol::new_with_value(
             self.ident.clone().ident,
             symbols::SymbolKind::DataSourceMethodCall,
-            method_result_ty,
-            args,
+            return_type,
+            props.arg_types,
         ))
     }
 }
 
-// This is a (datasource + field access expression). We need to return one
-// symbol that describes the type and value of the field access.
+// This is a (datasource + optional field access expression). We need to
+// return one symbol that describes the type and value of the field access.
 impl ast::AccessReceiver {
     fn eval(
         &self,
@@ -899,7 +967,7 @@ impl ast::AccessReceiver {
             symbols::SymbolKind::FieldAccess,
             ty,
             vec![],
-        ))
+        ));
     }
 }
 

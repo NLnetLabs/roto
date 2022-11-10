@@ -49,7 +49,8 @@ fn main() {
                     use rib rib-rov;
 
                     // assignments
-                    route_in_table = source_asns.contains(extra_asn, route.as-path.origin());
+                    // extra_in_table = source_asns.contains(extra_asn);
+                    route_in_table = source_asns.contains(route.as-path.origin());
                     ROV_INVALID_AS = 0xFFFFFF010;
 
                     // specify another RIB that is used in this filter.
@@ -59,11 +60,11 @@ fn main() {
             
                 term rov-valid for route: Route {
                     match {
+                        route.origin == found_prefix.as-path.origin();
                         (found_prefix.prefix.matches() && found_prefix.prefix.matches()) || route_in_table;
                         found_prefix.prefix.len() == 24;
                         route_in_table;
                         route.prefix.len() <= found_prefix.prefix.len();
-                        route.as-path == found_prefix.as-path.origin();
                     }
                 }
 
