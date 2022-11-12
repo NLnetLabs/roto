@@ -14,11 +14,11 @@ impl Token {
 pub(crate) struct MethodProps {
     pub(crate) return_type_value: TypeValue,
     pub(crate) method_token: u8,
-    pub(crate) arg_types: Vec<Symbol>,
+    pub(crate) arg_types: Vec<TypeDef>,
 }
 
 impl MethodProps {
-    pub(crate) fn new(return_type_value: TypeValue, method_token: u8, arg_types: Vec<Symbol>) -> Self {
+    pub(crate) fn new(return_type_value: TypeValue, method_token: u8, arg_types: Vec<TypeDef>) -> Self {
         MethodProps {
             return_type_value,
             method_token,

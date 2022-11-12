@@ -401,12 +401,12 @@ impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
                     as u8,
                 return_type_value: TypeValue::from(&TypeDef::IntegerLiteral),
                 arg_types: vec![
-                    Symbol::new_argument_type(TypeDef::IntegerLiteral),
-                    Symbol::new_argument_type(TypeDef::IntegerLiteral),
+                    TypeDef::IntegerLiteral,
+                    TypeDef::IntegerLiteral,
                 ],
             }),
             _ => Err(format!(
-                "Unknown method: {} for type Prefix",
+                "Unknown method: '{}' for type Prefix",
                 method_name.ident
             )
             .into()),
@@ -468,8 +468,8 @@ impl RotoFilter<PrefixToken> for Prefix {
                 method_token: std::mem::size_of_val(&PrefixToken::From) as u8,
                 return_type_value: TypeValue::from(&TypeDef::Prefix),
                 arg_types: vec![
-                    Symbol::new_argument_type(TypeDef::IpAddress),
-                    Symbol::new_argument_type(TypeDef::PrefixLengthLiteral),
+                    TypeDef::IpAddress,
+                    TypeDef::PrefixLengthLiteral,
                 ],
             }),
             "address" => Ok(MethodProps {
@@ -487,10 +487,18 @@ impl RotoFilter<PrefixToken> for Prefix {
                 method_token: std::mem::size_of_val(&PrefixToken::Matches)
                     as u8,
                 return_type_value: TypeValue::from(&TypeDef::Boolean),
-                arg_types: vec![Symbol::new_argument_type(TypeDef::Prefix)],
+                arg_types: vec![TypeDef::Prefix],
+            }),
+            "exists" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&AsPathToken::Contains)
+                    as u8,
+                return_type_value: TypeValue::Builtin(
+                    BuiltinTypeValue::Boolean(Boolean(None)),
+                ),
+                arg_types: vec![],
             }),
             _ => Err(format!(
-                "Unknown method: {} for type Prefix",
+                "Unknown method: '{}' for type Prefix",
                 method_name.ident
             )
             .into()),
@@ -541,10 +549,10 @@ impl RotoFilter<PrefixLengthToken> for PrefixLengthLiteral {
                 method_token: std::mem::size_of_val(&PrefixLengthToken::From)
                     as u8,
                 return_type_value: TypeValue::from(&TypeDef::PrefixLengthLiteral),
-                arg_types: vec![Symbol::new_argument_type(TypeDef::U8)],
+                arg_types: vec![TypeDef::U8],
             }),
             _ => Err(format!(
-                "Unknown method: {} for type PrefixLength",
+                "Unknown method: '{}' for type PrefixLength",
                 method_name.ident
             )
             .into()),
@@ -716,7 +724,7 @@ impl RotoFilter<AsPathToken> for AsPath {
                 return_type_value: TypeValue::Builtin(
                     BuiltinTypeValue::AsPath(AsPath(None)),
                 ),
-                arg_types: vec![Symbol::new_argument_type(TypeDef::Asn)],
+                arg_types: vec![TypeDef::Asn],
             }),
             "len" => Ok(MethodProps {
                 method_token: std::mem::size_of_val(&AsPathToken::Len) as u8,
