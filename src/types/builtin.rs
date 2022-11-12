@@ -644,6 +644,47 @@ impl Asn {
     }
 }
 
+impl RotoFilter<AsnToken> for Asn {
+    fn get_props_for_method(
+            self,
+            method_name: &crate::ast::Identifier,
+        ) -> Result<MethodProps, Box<dyn std::error::Error>>
+        where
+            Self: std::marker::Sized {
+        match method_name.ident.as_str() {
+            "set" => Ok(MethodProps {
+                return_type_value: TypeValue::None,
+                method_token: std::mem::size_of_val(&AsnToken::Set)
+                as u8,
+                arg_types: vec![
+                    TypeDef::AsnLiteral,
+                ],
+            }),
+            _ => Err(format!(
+                "Unknown method: '{}' for type Asn",
+                method_name.ident
+            )
+            .into()),
+        }
+    }
+
+    fn exec_method<'a>(
+            &'a self,
+            method_token: AsnToken,
+            args: Vec<TypeValue>,
+            res_type: TypeDef,
+        ) -> Result<
+            Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
+            Box<dyn std::error::Error>,
+        > {
+        todo!()
+    }
+}
+
+pub enum AsnToken {
+    Set,
+}
+
 // ----------- AsPath type --------------------------------------------------
 
 #[derive(Debug, Eq, PartialEq)]
