@@ -30,6 +30,7 @@ pub enum TypeDef {
     PrefixLengthLiteral, // A u8 prefixes by a /
     IpAddress,
     Asn,
+    AsnLiteral,
     AsPath,
     Community,
     Route,
@@ -149,6 +150,9 @@ impl TypeDef {
             }
             TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(lit_int)) => {
                 lit_int.get_props_for_method(method)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) => {
+                asn.get_props_for_method(method)
             }
             TypeValue::Rib(rib) => rib.get_props_for_method(method),
             TypeValue::Table(rec) => rec.get_props_for_method(method),

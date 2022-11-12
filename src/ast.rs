@@ -1234,6 +1234,42 @@ impl From<&'_ HexLiteral> for u64 {
     }
 }
 
+//------------ AsnLiteral ---------------------------------------------------
+
+/// An ASN literal is a sequence of hex digits, prefixed by 'AS'
+/// 
+/// 
+#[derive(Clone, Debug)]
+
+pub struct AsnLiteral(pub u32);
+
+impl AsnLiteral {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, digits) = context(
+            "ASN literal",
+            recognize(pair(
+                tag("AS"),
+                take_while1(|ch: char| ch.is_ascii_hexdigit()),
+            )),
+        )(input)?;
+
+        let value = u32::from_str_radix(&digits[2..], 16).unwrap();
+        Ok((input, Self(value)))
+    }
+}
+
+impl From<&'_ AsnLiteral> for ShortString {
+    fn from(literal: &AsnLiteral) -> Self {
+        ShortString::from(literal.0.to_string().as_str())
+    }
+}
+
+impl From<&'_ AsnLiteral> for u32 {
+    fn from(literal: &AsnLiteral) -> Self {
+        literal.0
+    }
+}
+
 //------------ FloatLiteral -------------------------------------------------
 
 /// A float literal is a sequence of digits with a decimal point.
