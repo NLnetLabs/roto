@@ -318,6 +318,47 @@ impl U32 {
     }
 }
 
+impl RotoFilter<U32Token> for U32 {
+    fn get_props_for_method(
+            self,
+            method_name: &crate::ast::Identifier,
+        ) -> Result<MethodProps, Box<dyn std::error::Error>>
+        where
+            Self: std::marker::Sized {
+        match method_name.ident.as_str() {
+            "set" => Ok(MethodProps {
+                return_type_value: TypeValue::None,
+                method_token: std::mem::size_of_val(&U32Token::Set)
+                as u8,
+                arg_types: vec![
+                    TypeDef::IntegerLiteral,
+                ],
+            }),
+            _ => Err(format!(
+                "Unknown method: '{}' for type U32",
+                method_name.ident
+            )
+            .into()),
+        }
+    }
+
+    fn exec_method<'a>(
+            &'a self,
+            method_token: U32Token,
+            args: Vec<TypeValue>,
+            res_type: TypeDef,
+        ) -> Result<
+            Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
+            Box<dyn std::error::Error>,
+        > {
+        todo!()
+    }
+}
+
+pub enum U32Token {
+    Set,
+}
+
 // ----------- A simple u8 type ---------------------------------------------
 
 #[derive(Debug, Eq, PartialEq)]

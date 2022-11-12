@@ -151,6 +151,9 @@ impl TypeDef {
             TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(lit_int)) => {
                 lit_int.get_props_for_method(method)
             }
+            TypeValue::Builtin(BuiltinTypeValue::U32(u32)) => {
+                u32.get_props_for_method(method)
+            }
             TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) => {
                 asn.get_props_for_method(method)
             }
