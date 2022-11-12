@@ -61,7 +61,7 @@ fn main() {
                 term rov-valid for route: Route {
                     match {
                         route.origin == found_prefix.as-path.origin();
-                        (found_prefix.prefix.matches() && found_prefix.prefix.matches()) || route_in_table;
+                        (found_prefix.prefix.exists() && found_prefix.prefix.exists()) || route_in_table;
                         found_prefix.prefix.len() == 24;
                         route_in_table;
                         route.prefix.len() <= found_prefix.prefix.len();
@@ -71,7 +71,7 @@ fn main() {
                 term on-my-terms for route: Route {
                     match {
                         route.prefix.len() == 24;
-                        route.as-path == found_prefix.as-path.origin();
+                        route.as-path.origin() == found_prefix.as-path.origin();
                     }
                 }
                
@@ -83,12 +83,12 @@ fn main() {
                    // route_in_table.set(true); 
                    // This should work. The filter is allowed to modify the
                    // route that flows through it.
-                   route.set(local-pref, 200);
-                   route.set(origin, extra_asn);
+                   route.local-pref.set(200);
+                   route.origin.set(extra_asn);
                 }
 
                 action set-rov-invalid-asn-community {
-                    route.set(community, ROV_INVALID_AS);
+                    route.community.set(ROV_INVALID_AS);
                 }
 
                 apply {
