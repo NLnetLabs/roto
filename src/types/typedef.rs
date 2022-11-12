@@ -291,3 +291,36 @@ impl From<BuiltinTypeValue> for TypeDef {
         }
     }
 }
+
+impl From<&ElementTypeValue> for TypeDef {
+    fn from(ty: &ElementTypeValue) -> TypeDef {
+        match ty {
+            ElementTypeValue::Primitive(ty) => ty.into(),
+            ElementTypeValue::Nested(ty) => ty.as_ref().into(),
+        }
+    }
+}
+
+impl From<&TypeValue> for TypeDef {
+    fn from(ty: &TypeValue) -> TypeDef {
+        match ty {
+            TypeValue::Builtin(b) => b.into(),
+            TypeValue::List(l) => match l {
+                List(l) => match &l[0] {
+                    ElementTypeValue::Nested(n) => TypeDef::List(Box::new((&(**n)).into())),
+                    ElementTypeValue::Primitive(p) => TypeDef::List(Box::new(p.into())),
+                },
+            },
+            TypeValue::Record(r) => TypeDef::Record(
+                r.0.iter()
+                    .map(|(k, v)| (k.clone(), Box::new(v.into())))
+                    .collect(),
+            ),
+            TypeValue::Rib(r) => TypeDef::Record(r.record.0.iter().map(|(k, v)| (k.clone(), Box::new(v.into())))
+            .collect()),
+            TypeValue::Table(t) => TypeDef::Record(t.record.0.iter().map(|(k, v)| (k.clone(), Box::new(v.into())))
+            .collect()),
+            TypeValue::None => TypeDef::None
+        }
+    }
+}
