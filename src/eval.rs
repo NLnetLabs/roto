@@ -668,10 +668,11 @@ impl<'a> ast::CallExpr {
                             receiver_ident.clone(),
                             symbols::Symbol::new(
                                 base_name_ident,
-                                symbols::SymbolKind::BuiltInTypeMethodCall,
+                                symbols::SymbolKind::BuiltInType,
                                 ty.clone(),
                                 vec![ast::MethodCallExpr::eval(
                                     self.get_method_call(),
+                                    symbols::SymbolKind::BuiltInTypeMethodCall,
                                     ty,
                                     symbols,
                                     scope,
@@ -705,6 +706,7 @@ impl<'a> ast::CallExpr {
 
                         let method_call = ast::MethodCallExpr::eval(
                             self.get_method_call(),
+                            symbols::SymbolKind::DataSourceMethodCall,
                             field_access.get_type(),
                             symbols,
                             scope,
@@ -730,6 +732,7 @@ impl<'a> ast::CallExpr {
                         );
                         let method_call = ast::MethodCallExpr::eval(
                             self.get_method_call(),
+                            symbols::SymbolKind::DataSourceMethodCall,
                             data_type.clone(),
                             symbols,
                             scope,
@@ -766,6 +769,7 @@ impl<'a> ast::CallExpr {
                                         var_type.clone(),
                                         vec![ast::MethodCallExpr::eval(
                                             self.get_method_call(),
+                                            symbols::SymbolKind::VariableMethodCall,
                                             var_type,
                                             symbols,
                                             scope,
@@ -813,6 +817,7 @@ impl<'a> ast::CallExpr {
                                         field_access.get_type(),
                                         vec![ast::MethodCallExpr::eval(
                                             self.get_method_call(),
+                                            symbols::SymbolKind::VariableMethodCall,
                                             field_access.get_type(),
                                             symbols,
                                             scope,
@@ -836,6 +841,7 @@ impl ast::MethodCallExpr {
     pub(crate) fn eval(
         &self,
         // Parsed return type of the method call
+        method_kind: symbols::SymbolKind,
         method_call_type: TypeDef,
         symbols: symbols::GlobalSymbolTable<'_>,
         scope: symbols::Scope,
@@ -852,14 +858,14 @@ impl ast::MethodCallExpr {
         // the supplied method call in the source code.
         let props = method_call_type.get_props_for_method(&self.ident)?;
         println!("props {:?}", props);
-        let return_type = props.return_type_value;
+        // let return_type = props.return_type_value;
         let parsed_args = method_call;
 
         if parsed_args.is_empty() && props.arg_types.is_empty() {
             return Ok(symbols::Symbol::new_with_value(
                 self.ident.clone().ident,
-                symbols::SymbolKind::DataSourceMethodCall,
-                return_type,
+                method_kind,
+                props.return_type_value,
                 vec![],
             ));
         }
@@ -877,28 +883,28 @@ impl ast::MethodCallExpr {
             .into());
         }
 
-        // go over the argument types that we got from the return type and
+        let mut args = vec![];
+        // go over the argument types that we got from the method props  and
         // compare those to the ones we got from the parsed arguments.
         for (parsed_arg_type, expected_arg_type) in
-            parsed_args.iter().zip(props.arg_types.iter())
+            parsed_args.into_iter().zip(props.arg_types.iter())
         {
+            let value;
             // A DataSourceMethodCall has its arguments in the value field of the
             // parsed `args` field of the method call. A FieldAccess MAY also
             // have that, ...
-            let parsed_arg_type = if parsed_arg_type.value.is_some() {
+            let parsed_arg_type_value = if parsed_arg_type
+                .get_value()
+                .is_some()
+            {
                 parsed_arg_type
             } else if parsed_arg_type.get_kind()
                 == symbols::SymbolKind::FieldAccess
             {
                 // ...but a FieldAccess can also have a DataSourceMethodCall on
                 // it, so then the arguments live in the nested `args` field.
-                parsed_arg_type.get_args().get(0).ok_or_else(|| {
-                    format!(
-                        "a. Method call '{}' does not return a value. Invalid argument type: {:?}",
-                        self.ident,
-                        parsed_arg_type
-                    )
-                })?
+                println!("field access {:?}", parsed_arg_type);
+                parsed_arg_type.get_args_owned().remove(0)
             } else {
                 Err(format!(
                     "b. Method call '{}' does not return a value. Invalid argument type: {:?}",
@@ -906,20 +912,37 @@ impl ast::MethodCallExpr {
                 ))?
             };
 
-            if parsed_arg_type.value != expected_arg_type.value {
+            if parsed_arg_type_value.get_kind()
+                == symbols::SymbolKind::Constant
+                && parsed_arg_type_value.get_builtin_type_for_leaf_node()?
+                    == *expected_arg_type
+            {
+                value = parsed_arg_type_value.value.unwrap();
+            } else if parsed_arg_type_value.value
+                != Some(expected_arg_type.into())
+            {
                 return Err(format!(
                     "Invalid argument type for method '{}'. Expected '{:?}', got '{:?}'",
-                    self.ident, expected_arg_type.value, parsed_arg_type.value
+                    self.ident, expected_arg_type, parsed_arg_type_value.value
                 )
                 .into());
+            } else {
+                value = parsed_arg_type_value.value.unwrap();
             }
+
+            args.push(symbols::Symbol::new_with_value(
+                "arg".into(),
+                symbols::SymbolKind::Argument,
+                value,
+                vec![],
+            ));
         }
 
         Ok(symbols::Symbol::new_with_value(
             self.ident.clone().ident,
-            symbols::SymbolKind::DataSourceMethodCall,
-            return_type,
-            props.arg_types,
+            method_kind,
+            props.return_type_value,
+            args,
         ))
     }
 }
@@ -1333,13 +1356,15 @@ impl ast::CompareExpr {
                     match left_s.get_args()[0].get_kind() {
                         // Apparently this is not a leaf node, so the `args`
                         // field should host a leaf node.
-                        symbols::SymbolKind::DataSourceMethodCall => left_s
+                        symbols::SymbolKind::DataSourceMethodCall
+                        | symbols::SymbolKind::FieldAccess
+                        | symbols::SymbolKind::VariableMethodCall => left_s
                             .get_args()[0]
                             .get_builtin_type_for_leaf_node()?,
                         _ => {
                             return Err(format!(
                                 "Expected a method call, got {:?}",
-                                left_s.get_kind()
+                                left_s.get_args()[0].get_kind()
                             )
                             .into())
                         }
@@ -1372,13 +1397,15 @@ impl ast::CompareExpr {
                 let args = right_s.get_args();
                 let s = if !args.is_empty() {
                     match right_s.get_args()[0].get_kind() {
-                        symbols::SymbolKind::DataSourceMethodCall => right_s
+                        symbols::SymbolKind::DataSourceMethodCall
+                        | symbols::SymbolKind::FieldAccess
+                        | symbols::SymbolKind::VariableMethodCall => right_s
                             .get_args()[0]
                             .get_builtin_type_for_leaf_node()?,
                         _ => {
                             return Err(format!(
                                 "Expected a method call, got {:?}",
-                                right_s.get_kind()
+                                right_s.get_args()[0].get_kind()
                             )
                             .into())
                         }

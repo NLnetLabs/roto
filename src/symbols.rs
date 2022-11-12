@@ -83,6 +83,14 @@ impl Symbol {
         self.value.as_ref()
     }
 
+    pub fn get_value_owned(self) -> Option<TypeValue> {
+        self.value
+    }
+
+    pub fn set_value(&mut self, value: TypeValue) {
+        self.value = Some(value);
+    }
+
     pub fn get_args_owned(self) -> Vec<Symbol> {
         self.args
     }
@@ -138,6 +146,7 @@ pub enum SymbolKind {
     Variable,
     Constant,
     Argument,
+    BuiltInType,
     AnonymousType, // type of a sub-record
     NamedType,     // User-defined type of a record
     RxType,        // type of the incoming payload
@@ -147,6 +156,7 @@ pub enum SymbolKind {
     PrefixList,
     DataSourceMethodCall,
     BuiltInTypeMethodCall,
+    VariableMethodCall,
     GlobalMethodCall,
     FieldAccess,
     StringLiteral,
