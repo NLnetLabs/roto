@@ -143,8 +143,8 @@ impl Symbol {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum SymbolKind {
-    Variable,
-    Constant,
+    Variable,      // A variable defined by the user
+    Constant,      // A literal value or a module-level variable
     Argument,
     BuiltInType,
     AnonymousType, // type of a sub-record
@@ -488,5 +488,15 @@ impl SymbolTable {
 
     pub fn get_type(&self, name: &ShortString) -> Option<&TypeDef> {
         self.types.get(name)
+    }
+
+    pub(crate) fn get_argument(
+        &self,
+        name: &ShortString,
+    ) -> Result<&Symbol, Box<dyn std::error::Error>> {
+        self.arguments
+            .get(name)
+            .or_else(|| self.arguments.get(name))
+            .ok_or_else(|| format!("Symbol {} not found", name).into())
     }
 }

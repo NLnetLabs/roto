@@ -3,13 +3,14 @@
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 
-use crate::{ast::{ShortString, AcceptReject}, traits::{RotoFilter, MethodProps}};
 use crate::types::collections::ElementTypeValue;
+use crate::{
+    ast::{AcceptReject, ShortString},
+    traits::{MethodProps, RotoFilter},
+};
 
 use super::{
-    builtin::BuiltinTypeValue,
-    collections::List,
-    typevalue::TypeValue,
+    builtin::BuiltinTypeValue, collections::List, typevalue::TypeValue,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -27,10 +28,9 @@ pub enum TypeDef {
     String, // used for fieldname in method calls
     Prefix,
     PrefixRecord, // A Record with a prefix as key
-    PrefixLengthLiteral, // A u8 prefixes by a /
+    PrefixLength, // A u8 prefixes by a /
     IpAddress,
     Asn,
-    AsnLiteral,
     AsPath,
     Community,
     Route,
@@ -183,8 +183,8 @@ impl PartialEq<BuiltinTypeValue> for TypeDef {
             TypeDef::Prefix => {
                 matches!(other, BuiltinTypeValue::Prefix(_))
             }
-            TypeDef::PrefixLengthLiteral => {
-                matches!(other, BuiltinTypeValue::PrefixLengthLiteral(_))
+            TypeDef::PrefixLength => {
+                matches!(other, BuiltinTypeValue::PrefixLength(_))
             }
             TypeDef::IpAddress => {
                 matches!(other, BuiltinTypeValue::IpAddress(_))
@@ -242,7 +242,7 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             "U8" => Ok(TypeDef::U8),
             "IntegerLiteral" => Ok(TypeDef::IntegerLiteral),
             "Prefix" => Ok(TypeDef::Prefix),
-            "PrefixLengthLiteral" => Ok(TypeDef::PrefixLengthLiteral),
+            "PrefixLength" => Ok(TypeDef::PrefixLength),
             "PrefixRecord" => Ok(TypeDef::PrefixRecord),
             "IpAddress" => Ok(TypeDef::IpAddress),
             "Asn" => Ok(TypeDef::Asn),
@@ -263,7 +263,7 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::IntegerLiteral(_) => TypeDef::IntegerLiteral,
             BuiltinTypeValue::Boolean(_) => TypeDef::Boolean,
             BuiltinTypeValue::Prefix(_) => TypeDef::Prefix,
-            BuiltinTypeValue::PrefixLengthLiteral(_) => TypeDef::PrefixLengthLiteral,
+            BuiltinTypeValue::PrefixLength(_) => TypeDef::PrefixLength,
             BuiltinTypeValue::PrefixRecord(_) => TypeDef::PrefixRecord,
             BuiltinTypeValue::IpAddress(_) => TypeDef::IpAddress,
             BuiltinTypeValue::Asn(_) => TypeDef::Asn,
@@ -283,7 +283,7 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::IntegerLiteral(_) => TypeDef::IntegerLiteral,
             BuiltinTypeValue::Boolean(_) => TypeDef::Boolean,
             BuiltinTypeValue::Prefix(_) => TypeDef::Prefix,
-            BuiltinTypeValue::PrefixLengthLiteral(_) => TypeDef::PrefixLengthLiteral,
+            BuiltinTypeValue::PrefixLength(_) => TypeDef::PrefixLength,
             BuiltinTypeValue::PrefixRecord(_) => TypeDef::PrefixRecord,
             BuiltinTypeValue::IpAddress(_) => TypeDef::IpAddress,
             BuiltinTypeValue::Asn(_) => TypeDef::Asn,
@@ -310,8 +310,12 @@ impl From<&TypeValue> for TypeDef {
             TypeValue::Builtin(b) => b.into(),
             TypeValue::List(l) => match l {
                 List(l) => match &l[0] {
-                    ElementTypeValue::Nested(n) => TypeDef::List(Box::new((&(**n)).into())),
-                    ElementTypeValue::Primitive(p) => TypeDef::List(Box::new(p.into())),
+                    ElementTypeValue::Nested(n) => {
+                        TypeDef::List(Box::new((&(**n)).into()))
+                    }
+                    ElementTypeValue::Primitive(p) => {
+                        TypeDef::List(Box::new(p.into()))
+                    }
                 },
             },
             TypeValue::Record(r) => TypeDef::Record(
@@ -319,11 +323,21 @@ impl From<&TypeValue> for TypeDef {
                     .map(|(k, v)| (k.clone(), Box::new(v.into())))
                     .collect(),
             ),
-            TypeValue::Rib(r) => TypeDef::Record(r.record.0.iter().map(|(k, v)| (k.clone(), Box::new(v.into())))
-            .collect()),
-            TypeValue::Table(t) => TypeDef::Record(t.record.0.iter().map(|(k, v)| (k.clone(), Box::new(v.into())))
-            .collect()),
-            TypeValue::None => TypeDef::None
+            TypeValue::Rib(r) => TypeDef::Record(
+                r.record
+                    .0
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Box::new(v.into())))
+                    .collect(),
+            ),
+            TypeValue::Table(t) => TypeDef::Record(
+                t.record
+                    .0
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Box::new(v.into())))
+                    .collect(),
+            ),
+            TypeValue::None => TypeDef::None,
         }
     }
 }

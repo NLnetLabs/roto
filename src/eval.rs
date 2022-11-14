@@ -1029,6 +1029,8 @@ impl ast::ArgExpr {
                 TypeDef::String,
                 vec![],
             )),
+            // Integers are special, we are keeping them as is, so that the
+            // receiver can decide how to cast them (into u8, u32 or i64).
             ast::ArgExpr::IntegerLiteral(int_lit) => {
                 println!("int_lit {:?}", int_lit);
                 println!("as value {}", TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(IntegerLiteral::new(int_lit.into()))));
@@ -1044,6 +1046,25 @@ impl ast::ArgExpr {
                     "hex_lit".into(),
                     symbols::SymbolKind::Constant,
                     TypeValue::Builtin(BuiltinTypeValue::HexLiteral(HexLiteral::new(hex_lit.into()))),
+                    vec![],
+                ))
+            }
+            ast::ArgExpr::PrefixLengthLiteral(prefix_len_lit) => {
+                Ok(symbols::Symbol::new_with_value(
+                    "prefix_len_lit".into(),
+                    symbols::SymbolKind::Constant,
+                    TypeValue::Builtin(BuiltinTypeValue::PrefixLength(PrefixLength::new(prefix_len_lit.into()))),
+                    vec![],
+                ))
+            }
+            ast::ArgExpr::AsnLiteral(asn_lit) => {
+                println!("asn_lit {:?}", asn_lit);
+                Ok(symbols::Symbol::new_with_value(
+                    asn_lit.into(),
+                    symbols::SymbolKind::Constant,
+                    TypeValue::Builtin(BuiltinTypeValue::Asn(
+                        asn_lit.into()
+                    )),
                     vec![],
                 ))
             }
