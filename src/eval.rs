@@ -1067,76 +1067,8 @@ impl ast::ArgExprList {
     ) -> Result<Vec<symbols::Symbol>, Box<dyn std::error::Error>> {
         let mut eval_args = vec![];
         for arg in &self.args {
-            match arg {
-                ast::ArgExpr::CallExpr(call_expr) => {
-                    println!("arg base_name_ident {:?}", call_expr);
-                    eval_args.push(
-                        call_expr
-                            .eval(
-                                call_expr.get_ident().clone().ident,
-                                symbols.clone(),
-                                scope.clone(),
-                            )?
-                            .1,
-                    );
-                }
-                ast::ArgExpr::HexLiteral(hex_lit) => {
-                    println!("hex literal {:?}", hex_lit);
-                    eval_args.push(symbols::Symbol::new_with_value(
-                        hex_lit.into(),
-                        symbols::SymbolKind::Constant,
-                        TypeValue::Builtin(BuiltinTypeValue::HexLiteral(
-                            HexLiteral::new(hex_lit.into())
-                        )),
-                        vec![],
-                    ));
-                }
-                ast::ArgExpr::AccessReceiver(call_receiver) => {
-                    eval_args.push(
-                        call_receiver.eval(symbols.clone(), scope.clone())?,
-                    );
-                }
-                ast::ArgExpr::IntegerLiteral(int_lit) => {
-                    println!("@2 int_lit {:?}", int_lit);
-                    eval_args.push(symbols::Symbol::new_with_value(
-                        int_lit.into(),
-                        symbols::SymbolKind::Constant,
-                        TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
-                            IntegerLiteral::new(int_lit.into())
-                        )),
-                        vec![],
-                    ));
-                }
-                ast::ArgExpr::PrefixLengthLiteral(prefix_len_lit) => {
-                    println!("prefix_len_lit {:?}", prefix_len_lit);
-                    eval_args.push(symbols::Symbol::new_with_value(
-                        prefix_len_lit.into(),
-                        symbols::SymbolKind::Constant,
-                        TypeValue::Builtin(BuiltinTypeValue::PrefixLengthLiteral(
-                            PrefixLengthLiteral::new(prefix_len_lit.into())
-                        )),
-                        vec![],
-                    ));
-                }
-                ast::ArgExpr::TypeIdentifier(type_ident) => {
-                    eval_args.push(symbols::Symbol::new(
-                        type_ident.ident.clone(),
-                        symbols::SymbolKind::NamedType,
-                        TypeDef::String,
-                        vec![],
-                    ));
-                }
-                _ => {
-                    return Err(format!(
-                        "yy Invalid argument expression {:?}",
-                        arg
-                    )
-                    .into());
-                } // Identifier(Identifier),
-                  // TypeIdentifier(TypeIdentifier),
-                  // Bool(bool),
-                  // PrefixMatchExpr(PrefixMatchExpr),
-            }
+            let parsed_arg = arg.eval(symbols.clone(), scope.clone())?;
+            eval_args.push(parsed_arg);
         }
         Ok(eval_args)
     }
