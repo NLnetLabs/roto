@@ -20,6 +20,8 @@ use nom::{
 };
 use smallvec::SmallVec;
 
+use crate::types::builtin::Asn;
+
 /// ======== Root ===========================================================
 
 /// The Root of the file.
@@ -276,10 +278,7 @@ impl DefineBody {
                     separated_pair(
                         opt_ws(Identifier::parse),
                         preceded(multispace0, char('=')),
-                        terminated(
-                            opt_ws(ArgExpr::parse),
-                            opt_ws(char(';')),
-                        ),
+                        terminated(opt_ws(ArgExpr::parse), opt_ws(char(';'))),
                     ),
                 )),
             ))(input)?;
@@ -1166,7 +1165,7 @@ impl From<&'_ IntegerLiteral> for usize {
 
 /// A prefix length literal is a sequence of digits preceded by a '/'.
 /// PrefixLengthLiteral ::= /[0-9]+
-/// 
+///
 /// We parse it as a string and then convert it to an integer.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PrefixLengthLiteral(pub usize);
@@ -1175,10 +1174,7 @@ impl PrefixLengthLiteral {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, digits) = context(
             "prefix length literal",
-            preceded(
-                char('/'),
-                take_while1(|ch: char| ch.is_ascii_digit()),
-            ),
+            preceded(char('/'), take_while1(|ch: char| ch.is_ascii_digit())),
         )(input)?;
 
         println!("digits: {}", digits);
@@ -1237,8 +1233,8 @@ impl From<&'_ HexLiteral> for u64 {
 //------------ AsnLiteral ---------------------------------------------------
 
 /// An ASN literal is a sequence of hex digits, prefixed by 'AS'
-/// 
-/// 
+///
+///
 #[derive(Clone, Debug)]
 
 pub struct AsnLiteral(pub u32);
@@ -1253,7 +1249,7 @@ impl AsnLiteral {
             )),
         )(input)?;
 
-        let value = u32::from_str_radix(&digits[2..], 16).unwrap();
+        let value = digits[2..].parse::<u32>().unwrap();
         Ok((input, Self(value)))
     }
 }
@@ -1264,9 +1260,9 @@ impl From<&'_ AsnLiteral> for ShortString {
     }
 }
 
-impl From<&'_ AsnLiteral> for u32 {
+impl From<&'_ AsnLiteral> for Asn {
     fn from(literal: &AsnLiteral) -> Self {
-        literal.0
+        Asn::from_u32(literal.0)
     }
 }
 
@@ -1357,7 +1353,7 @@ impl<'a> ByteStringLiteral {
 pub enum AcceptReject {
     Accept,
     Reject,
-    NoReturn
+    NoReturn,
 }
 
 fn accept_reject(
@@ -1395,15 +1391,16 @@ fn accept_reject(
 #[derive(Clone, Debug)]
 pub enum ArgExpr {
     CallExpr(CallExpr),
-    StringLiteral(StringLiteral), // leaf node
+    StringLiteral(StringLiteral),   // leaf node
     IntegerLiteral(IntegerLiteral), // leaf node
     PrefixLengthLiteral(PrefixLengthLiteral), // leaf node
-    HexLiteral(HexLiteral), // leaf node
-    Bool(bool), // leaf node
+    AsnLiteral(AsnLiteral),         // leaf node
+    HexLiteral(HexLiteral),         // leaf node
+    Bool(bool),                     // leaf node
     PrefixMatchExpr(PrefixMatchExpr),
     AccessReceiver(AccessReceiver),
-    TypeIdentifier(TypeIdentifier),
-    Identifier(Identifier),
+    // TypeIdentifier(TypeIdentifier),
+    // Identifier(Identifier),
 }
 
 impl ArgExpr {
@@ -1414,12 +1411,13 @@ impl ArgExpr {
             map(HexLiteral::parse, ArgExpr::HexLiteral),
             map(IntegerLiteral::parse, ArgExpr::IntegerLiteral),
             map(PrefixLengthLiteral::parse, ArgExpr::PrefixLengthLiteral),
+            map(AsnLiteral::parse, ArgExpr::AsnLiteral),
             map(tag("true"), |_| ArgExpr::Bool(true)),
             map(tag("false"), |_| ArgExpr::Bool(false)),
             map(PrefixMatchExpr::parse, ArgExpr::PrefixMatchExpr),
             map(AccessReceiver::parse, ArgExpr::AccessReceiver),
-            map(TypeIdentifier::parse, ArgExpr::TypeIdentifier),
-            map(Identifier::parse, ArgExpr::Identifier),
+            // map(TypeIdentifier::parse, ArgExpr::TypeIdentifier),
+            // map(Identifier::parse, ArgExpr::Identifier),
         ))(input)
     }
 }
@@ -1562,7 +1560,10 @@ impl AccessReceiver {
         let (input, call_receiver) = context(
             "call receiver",
             tuple((
-                terminated(Identifier::parse, not(char('('))),
+                terminated(
+                    Identifier::parse,
+                    not(char('(')),
+                ),
                 opt(FieldAccessExpr::parse),
             )),
         )(input)?;
@@ -1659,21 +1660,21 @@ impl MethodCallExpr {
 // formula.
 //
 // We are only using a binary logical formula that consists of a tuple of
-// (boolean expression, logical operator, boolean expression), where boolean 
-// expressions can be grouped with parentheses. Also, we are only the 
-// connectives listed in this enum, i.e. ∧ (and), ∨ (or), and ¬ (not). 
+// (boolean expression, logical operator, boolean expression), where boolean
+// expressions can be grouped with parentheses. Also, we are only the
+// connectives listed in this enum, i.e. ∧ (and), ∨ (or), and ¬ (not).
 //
 // This hardly limits the logical expressiveness of our language, because the
 // user can:
-// - Create the missing connectives (material implication ('if-then'), 
+// - Create the missing connectives (material implication ('if-then'),
 //   bi-directional implication ('if and only if') from the given connectives
-//   (for an arity of 2 at least) or they can be constructed in code in the 
+//   (for an arity of 2 at least) or they can be constructed in code in the
 //   `apply` section.
 // - Use the logical connectives in a grouped fashion to reduce
 //   any number of Boolean expressions down to a binary formula, e.g.
 //   (A ∧ B) ∨ (C ∧ D) is equivalent to A ∧ B ∨ C ∧ D. This limits the number
 //   of boolean functions we have to consider when evaluating the formula,
-//   i.e. a fully complete set of boolean functions has 16 functions for an 
+//   i.e. a fully complete set of boolean functions has 16 functions for an
 //   arity of 2.
 //
 // The first point above reduces the cognitive overhead by simplifying the
@@ -1691,7 +1692,7 @@ impl MethodCallExpr {
 // term {
 //      <logical formula>;
 //      <logical formula>;
-//      ... 
+//      ...
 // }
 //
 // where <logical formula> is one of:
@@ -1706,9 +1707,9 @@ impl MethodCallExpr {
 // │(BoolExpr)││&&││(BoolExpr)│ │||│ │(BoolExpr)│
 // └──────────┘└──┘└──────────┘ └──┘ └──────────┘
 // ▲──────────LF::And─────────▲      ▲──LF::BE──▲
-//                                              
+//
 // ▲──────────BoolExpr────────▲      ▲─BoolExpr─▲
-//                                              
+//
 // ▲────────────────────LF::Or──────────────────▲
 
 //------------ LogicalExpr --------------------------------------------------
@@ -1761,8 +1762,8 @@ impl CompareArg {
 //------------ BooleanExpr --------------------------------------------------
 
 // A Boolean expression is an expression that *may* evaluate to one of:
-// - a Boolean-valued function, which is a fn : X → B, where X is an 
-//   arbitrary set and B is a boolean value. For example, an Integer 
+// - a Boolean-valued function, which is a fn : X → B, where X is an
+//   arbitrary set and B is a boolean value. For example, an Integer
 //   expresssion can never evaluate to a boolean value, but a method call
 //   expression may evaluate to a method that returns a Boolean value.
 // - a Literal Boolean value, "true" or "false"
@@ -1770,30 +1771,29 @@ impl CompareArg {
 // - an Expression containing a boolean-valued operator, such as '==', '!=',
 //   ">=", "<="
 
-// BooleanExpr ::= BooleanLiteral | CallExpr | CompareExpr 
-//          | AccessReceiver | SetcompareExpr | PrefixMatchExpr 
+// BooleanExpr ::= BooleanLiteral | CallExpr | CompareExpr
+//          | AccessReceiver | SetcompareExpr | PrefixMatchExpr
 //          | Identifier
-
 
 #[derive(Clone, Debug)]
 pub enum BooleanExpr {
     // A complete formula that is wrapped in parentheses is a Boolean-Valued
     // Function, since it will always return a Boolean value.
-    GroupedLogicalExpr(GroupedLogicalExpr), 
+    GroupedLogicalExpr(GroupedLogicalExpr),
     // "true" | "false" literals
     BooleanLiteral(BooleanLiteral),
-    // A syntactically correct comparison always evaluates to a 
+    // A syntactically correct comparison always evaluates to a
     // Boolean-Valued Function, since it will always return a Boolean value.
     CompareExpr(Box<CompareExpr>),
     // A CallExpression *may* evaluate to a function that returns a boolean
-    CallExpr(CallExpr), 
+    CallExpr(CallExpr),
     // A field access *may* evaluate to a stand-alone variable that *may*
     // return a boolean value.
     AccessReceiver(AccessReceiver),
     // Set Compare expression, will *always* result in a boolean-valued
-    // function. Syntactic sugar for a truth-function that performs 
+    // function. Syntactic sugar for a truth-function that performs
     // fn : a -> {a} ∩ B
-    SetCompareExpr(Box<SetCompareExpr>), 
+    SetCompareExpr(Box<SetCompareExpr>),
     // syntactic sugar for a method on a prefix function that returns a
     // boolean.
     PrefixMatchExpr(PrefixMatchExpr),
@@ -1803,10 +1803,14 @@ impl BooleanExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         alt((
             map(GroupedLogicalExpr::parse, BooleanExpr::GroupedLogicalExpr),
-            map(CompareExpr::parse, |e| BooleanExpr::CompareExpr(Box::new(e))),
+            map(CompareExpr::parse, |e| {
+                BooleanExpr::CompareExpr(Box::new(e))
+            }),
             map(CallExpr::parse, BooleanExpr::CallExpr),
             map(AccessReceiver::parse, BooleanExpr::AccessReceiver),
-            map(SetCompareExpr::parse, |e| BooleanExpr::SetCompareExpr(Box::new(e))),
+            map(SetCompareExpr::parse, |e| {
+                BooleanExpr::SetCompareExpr(Box::new(e))
+            }),
             map(PrefixMatchExpr::parse, BooleanExpr::PrefixMatchExpr),
             map(BooleanLiteral::parse, BooleanExpr::BooleanLiteral),
         ))(input)
@@ -1912,7 +1916,8 @@ pub struct NotExpr {
 
 impl NotExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, expr) = preceded(opt_ws(tag("!")), opt_ws(BooleanExpr::parse))(input)?;
+        let (input, expr) =
+            preceded(opt_ws(tag("!")), opt_ws(BooleanExpr::parse))(input)?;
         Ok((input, Self { expr }))
     }
 }
