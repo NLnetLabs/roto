@@ -4,11 +4,12 @@ use std::rc::Rc;
 
 use crate::ast::LogicalExpr;
 use crate::ast::ShortString;
+use crate::ast::TypeIdentifier;
 use crate::types::builtin::Boolean;
 use crate::types::builtin::BuiltinTypeValue;
 use crate::types::builtin::HexLiteral;
 use crate::types::builtin::IntegerLiteral;
-use crate::types::builtin::PrefixLengthLiteral;
+use crate::types::builtin::PrefixLength;
 
 use super::ast;
 use super::symbols;
@@ -327,6 +328,7 @@ impl ast::Module {
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Check the `with` clause for additional arguments.
         let with_kv: Vec<_> = self.body.define.with_kv.clone();
+        println!("define with kv {:#?}", &with_kv);
 
         // The `with` clause of the `define` section acts as an extra
         // argument to the whole module, that can be used as a extra
@@ -345,7 +347,6 @@ impl ast::Module {
             .collect::<Vec<_>>();
 
         // println!("define for type {:#?}", for_ty);
-        println!("define with type {:#?}", with_ty);
         // for_ty
         Ok(())
     }
@@ -851,7 +852,7 @@ impl ast::MethodCallExpr {
         // self is the call receiver, e.g. in `rib-rov.longest_match()`,
         // `rib-rov` is the receiver and `longest_match` is the method call
         // name. The actual method call lives in the `args` field.
-        let method_call = self.args.eval(symbols, scope)?;
+        let method_call = self.args.eval(symbols.clone(), scope.clone())?;
 
         // we need to lookup the properties of the return type of the method
         // that the user wants to call, to see if it matches the arguments of
@@ -884,15 +885,22 @@ impl ast::MethodCallExpr {
         }
 
         let mut args = vec![];
-        // go over the argument types that we got from the method props  and
-        // compare those to the ones we got from the parsed arguments.
+        let _symbols = symbols.borrow();
+        let module_symbols = _symbols.get(&scope).ok_or_else(|| {
+            format!("no symbols found for module {}", scope)
+        })?;
+
+        // go over the argument types that we got from the parsed arguments
+        // in the the source code and compare those to the argument types
+        // we got from the method definition.
         for (parsed_arg_type, expected_arg_type) in
             parsed_args.into_iter().zip(props.arg_types.iter())
         {
             let value;
-            // A DataSourceMethodCall has its arguments in the value field of the
-            // parsed `args` field of the method call. A FieldAccess MAY also
-            // have that, ...
+            let symbols = symbols.clone();
+
+            // if there's a value already set, we're on a leaf node and we will
+            // use that value to compare to,...
             let parsed_arg_type_value = if parsed_arg_type
                 .get_value()
                 .is_some()
@@ -901,10 +909,89 @@ impl ast::MethodCallExpr {
             } else if parsed_arg_type.get_kind()
                 == symbols::SymbolKind::FieldAccess
             {
-                // ...but a FieldAccess can also have a DataSourceMethodCall on
-                // it, so then the arguments live in the nested `args` field.
-                println!("field access {:?}", parsed_arg_type);
-                parsed_arg_type.get_args_owned().remove(0)
+                // ...but a FieldAccess can also have a DataSourceMethodCall
+                // on it, so then the arguments live in the nested `args`
+                // field, ...
+                if !parsed_arg_type.get_args().is_empty() {
+                    println!("field access {:?}", parsed_arg_type);
+                    parsed_arg_type.get_args_owned().remove(0)
+                }
+                // ..., but a FieldAccess can also be a stand-alone
+                // identifier. That should evaluate into a variable, a
+                // user-defined constant, a data source, or the name of a
+                // type. Since we know what type to expect from this Field
+                // Access, we can try to convert it here.
+                else {
+                    println!("unknown access receiver {:?}", parsed_arg_type);
+                    let ident = ast::Identifier {
+                        ident: parsed_arg_type.get_name(),
+                    };
+                    let mut kind = symbols::SymbolKind::Variable;
+                    // is it an existing variable or constant?
+                    let var = module_symbols
+                        .get_variable(&parsed_arg_type.get_name())
+                        .and_then(
+                            |s| -> Result<
+                                TypeDef,
+                                Box<dyn std::error::Error>,
+                            > {
+                                println!("var s {:?}", s);
+                                let v = s
+                                    .get_value()
+                                    .ok_or_else(|| {
+                                        format!(
+                                            "variable '{}' has no value",
+                                            parsed_arg_type.get_name()
+                                        )
+                                    })?;
+                                TypeDef::try_from(v).map_err(|e| e.into())
+                            },
+                        )
+                        .or_else(|_| {
+                            // is it a global or module argument (from the
+                            // `with` statement)?
+                            module_symbols
+                                .get_argument(&parsed_arg_type.get_name())
+                                .map(|s| s.get_type())
+                        })
+                        .or_else(|_: Box<dyn std::error::Error>| {
+                            // is it the name of a data source?
+                            let type_def: TypeDef =
+                                get_data_source_for_ident(
+                                    ident.clone(),
+                                    symbols,
+                                )?;
+                            kind = match type_def {
+                                TypeDef::Rib(_) => {
+                                    Ok(symbols::SymbolKind::Rib)
+                                }
+                                TypeDef::Table(_) => {
+                                    Ok(symbols::SymbolKind::Table)
+                                }
+                                _ => Err(format!(
+                                    "Data source '{}' is not a Rib or Table.",
+                                    ident
+                                )),
+                            }?;
+                            println!("it's a data source {:?}", type_def);
+                            Ok(type_def)
+                        })
+                        .or_else(|_: Box<dyn std::error::Error>| {
+                            // is it the name of a type?
+                            kind = symbols::SymbolKind::BuiltInType;
+                            TypeDef::try_from(TypeIdentifier {
+                                ident: parsed_arg_type.get_name(),
+                            })
+                        })?;
+
+                    println!("var {:?}", var);
+                    symbols::Symbol::new_with_value(
+                        parsed_arg_type.get_name(),
+                        kind,
+                        (&var).into(),
+                        vec![],
+                    )
+                }
             } else {
                 Err(format!(
                     "b. Method call '{}' does not return a value. Invalid argument type: {:?}",
@@ -912,17 +999,22 @@ impl ast::MethodCallExpr {
                 ))?
             };
 
+            // Compare the two types
+
+            // A constant has a value, but no type. We need to extract the type from
+            // the type_value and thne compare it to the expected type.
+            let into_type_value: TypeValue = expected_arg_type.into();
             if parsed_arg_type_value.get_kind()
                 == symbols::SymbolKind::Constant
                 && parsed_arg_type_value.get_builtin_type_for_leaf_node()?
-                    == *expected_arg_type
+                    == into_type_value
             {
                 value = parsed_arg_type_value.value.unwrap();
             } else if parsed_arg_type_value.value
                 != Some(expected_arg_type.into())
             {
                 return Err(format!(
-                    "Invalid argument type for method '{}'. Expected '{:?}', got '{:?}'",
+                    "zz Invalid argument type for method '{}'. Expected '{:?}', got '{:?}'",
                     self.ident, expected_arg_type, parsed_arg_type_value.value
                 )
                 .into());
@@ -947,8 +1039,10 @@ impl ast::MethodCallExpr {
     }
 }
 
-// This is a (datasource + optional field access expression). We need to
+// This is a (identifier + optional field access expression). We need to
 // return one symbol that describes the type and value of the field access.
+// The identifier may refer to a data source, a variable, a record field, or
+// the name of a type.
 impl ast::AccessReceiver {
     fn eval(
         &self,
@@ -984,8 +1078,8 @@ impl ast::AccessReceiver {
             ));
         }
 
-        // This is an access receiver without fields, we don't know enough
-        // about it to make assumptions about it being a leaf node or not.
+        // This is an access receiver without fields, we don't which one
+        // yet. The caller of this function will need to determine.
         return Ok(symbols::Symbol::new(
             search_var.as_str().into(),
             symbols::SymbolKind::FieldAccess,

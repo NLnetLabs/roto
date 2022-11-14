@@ -4,7 +4,6 @@
 
 use routecore::asn::LongSegmentError;
 
-use crate::symbols::Symbol;
 use crate::traits::{MethodProps, RotoFilter};
 
 use super::collections::Record;
@@ -17,7 +16,7 @@ pub enum BuiltinTypeValue {
     U8(U8),
     IntegerLiteral(IntegerLiteral),
     Prefix(Prefix),
-    PrefixLengthLiteral(PrefixLengthLiteral),
+    PrefixLength(PrefixLength),
     PrefixRecord((Prefix, Record)),
     Community(Community),
     IpAddress(IpAddress),
@@ -36,7 +35,7 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::IntegerLiteral(_) => "IntegerLiteral",
             BuiltinTypeValue::Boolean(_) => "Boolean",
             BuiltinTypeValue::Prefix(_) => "Prefix",
-            BuiltinTypeValue::PrefixLengthLiteral(_) => "PrefixLengthLiteral",
+            BuiltinTypeValue::PrefixLength(_) => "PrefixLengthLiteral",
             BuiltinTypeValue::PrefixRecord(_) => "PrefixRecord",
             BuiltinTypeValue::Community(_) => "Community",
             BuiltinTypeValue::IpAddress(_) => "IpAddress",
@@ -54,7 +53,7 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::IntegerLiteral(val) => val,
             BuiltinTypeValue::Boolean(val) => val,
             BuiltinTypeValue::Prefix(val) => val,
-            BuiltinTypeValue::PrefixLengthLiteral(val) => val,
+            BuiltinTypeValue::PrefixLength(val) => val,
             BuiltinTypeValue::PrefixRecord(val) => val,
             BuiltinTypeValue::Community(val) => val,
             BuiltinTypeValue::IpAddress(val) => val,
@@ -72,7 +71,7 @@ impl BuiltinTypeValue {
                 | "U8"
                 | "IntegerLiteral"
                 | "Prefix"
-                | "PrefixLengthLiteral"
+                | "PrefixLength"
                 | "PrefixRecord"
                 | "Community"
                 | "IpAddress"
@@ -111,9 +110,9 @@ impl BuiltinTypeValue {
                     return Err("Not an IntegerLiteral".into());
                 }
             }
-            TypeDef::PrefixLengthLiteral => {
-                if let BuiltinTypeValue::PrefixLengthLiteral(v) = value.into() {
-                    BuiltinTypeValue::PrefixLengthLiteral(v)
+            TypeDef::PrefixLength => {
+                if let BuiltinTypeValue::PrefixLength(v) = value.into() {
+                    BuiltinTypeValue::PrefixLength(v)
                 } else {
                     return Err("Not a PrefixLength".into());
                 }
@@ -217,14 +216,14 @@ impl TryFrom<&'_ str> for BuiltinTypeValue {
                 Ok(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(None)))
             }
             "PrefixLengthLiteral" => {
-                Ok(BuiltinTypeValue::PrefixLengthLiteral(
-                    PrefixLengthLiteral(None),
+                Ok(BuiltinTypeValue::PrefixLength(
+                    PrefixLength(None),
                 ))
             }
             "Boolean" => Ok(BuiltinTypeValue::Boolean(Boolean(None))),
             "Prefix" => Ok(BuiltinTypeValue::Prefix(Prefix(None))),
             "PrefixLength" => {
-                Ok(BuiltinTypeValue::PrefixLengthLiteral(PrefixLengthLiteral(None)))
+                Ok(BuiltinTypeValue::PrefixLength(PrefixLength(None)))
             }
             "PrefixRecord" => Ok(BuiltinTypeValue::PrefixRecord((
                 Prefix(None),
@@ -256,8 +255,8 @@ impl TryFrom<&TypeDef> for BuiltinTypeValue {
             }
             TypeDef::Boolean => Ok(BuiltinTypeValue::Boolean(Boolean(None))),
             TypeDef::Prefix => Ok(BuiltinTypeValue::Prefix(Prefix(None))),
-            TypeDef::PrefixLengthLiteral => {
-                Ok(BuiltinTypeValue::PrefixLengthLiteral(PrefixLengthLiteral(None)))
+            TypeDef::PrefixLength => {
+                Ok(BuiltinTypeValue::PrefixLength(PrefixLength(None)))
             }
             TypeDef::PrefixRecord => Ok(BuiltinTypeValue::PrefixRecord((
                 Prefix(None),
@@ -290,7 +289,7 @@ impl std::fmt::Display for BuiltinTypeValue {
                 write!(f, "host-sized unsigned integer")
             }
             BuiltinTypeValue::Prefix(_) => write!(f, "Prefix"),
-            BuiltinTypeValue::PrefixLengthLiteral(_) => write!(f, "Prefix length"),
+            BuiltinTypeValue::PrefixLength(_) => write!(f, "Prefix length"),
             BuiltinTypeValue::PrefixRecord(_) => write!(f, "Prefix Record"),
             BuiltinTypeValue::Community(_) => write!(f, "Community"),
             BuiltinTypeValue::IpAddress(_) => write!(f, "IP Address"),
@@ -353,6 +352,17 @@ impl RotoFilter<U32Token> for U32 {
         > {
         todo!()
     }
+
+    fn into_type(self, type_def: &TypeDef) -> Result<TypeValue, Box<dyn std::error::Error>> {
+        match type_def {
+            TypeDef::U32 => Ok(TypeValue::Builtin(BuiltinTypeValue::U32(self))),
+            _ => Err(format!(
+                "Cannot convert type U32 to type {:?}",
+                type_def
+            )
+            .into()),
+        }
+    } 
 }
 
 pub enum U32Token {
@@ -408,6 +418,19 @@ impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
             _ => Err(format!(
                 "Unknown method: '{}' for type Prefix",
                 method_name.ident
+            )
+            .into()),
+        }
+    }
+
+    fn into_type(self, type_def: &TypeDef) -> Result<TypeValue, Box<dyn std::error::Error>> {
+        match type_def {
+            TypeDef::IntegerLiteral => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(self)))
+            }
+            _ => Err(format!(
+                "Cannot convert type IntegerLiteral to type {:?}",
+                type_def
             )
             .into()),
         }
@@ -469,7 +492,7 @@ impl RotoFilter<PrefixToken> for Prefix {
                 return_type_value: TypeValue::from(&TypeDef::Prefix),
                 arg_types: vec![
                     TypeDef::IpAddress,
-                    TypeDef::PrefixLengthLiteral,
+                    TypeDef::PrefixLength,
                 ],
             }),
             "address" => Ok(MethodProps {
@@ -505,6 +528,17 @@ impl RotoFilter<PrefixToken> for Prefix {
         }
     }
 
+    fn into_type(self, type_def: &TypeDef) -> Result<TypeValue, Box<dyn std::error::Error>> {
+        match type_def {
+            TypeDef::Prefix => Ok(TypeValue::Builtin(BuiltinTypeValue::Prefix(self))),
+            _ => Err(format!(
+                "Cannot convert type Prefix to type {:?}",
+                type_def
+            )
+            .into()),
+        }
+    }
+
     fn exec_method<'a>(
         &'a self,
         method_token: PrefixToken,
@@ -528,15 +562,15 @@ pub(crate) enum PrefixToken {
 //------------ PrefixLengthLiteral type -------------------------------------
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct PrefixLengthLiteral(pub(crate) Option<u8>);
+pub struct PrefixLength(pub(crate) Option<u8>);
 
-impl PrefixLengthLiteral {
+impl PrefixLength {
     pub fn new(val: u8) -> Self {
-        PrefixLengthLiteral(Some(val))
+        PrefixLength(Some(val))
     }
 }
 
-impl RotoFilter<PrefixLengthToken> for PrefixLengthLiteral {
+impl RotoFilter<PrefixLengthToken> for PrefixLength {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -548,12 +582,25 @@ impl RotoFilter<PrefixLengthToken> for PrefixLengthLiteral {
             "from" => Ok(MethodProps {
                 method_token: std::mem::size_of_val(&PrefixLengthToken::From)
                     as u8,
-                return_type_value: TypeValue::from(&TypeDef::PrefixLengthLiteral),
+                return_type_value: TypeValue::from(&TypeDef::PrefixLength),
                 arg_types: vec![TypeDef::U8],
             }),
             _ => Err(format!(
                 "Unknown method: '{}' for type PrefixLength",
                 method_name.ident
+            )
+            .into()),
+        }
+    }
+
+    fn into_type(self, type_def: &TypeDef) -> Result<TypeValue, Box<dyn std::error::Error>> {
+        match type_def {
+            TypeDef::PrefixLength => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::PrefixLength(self)))
+            }
+            _ => Err(format!(
+                "Cannot convert type PrefixLength to type {:?}",
+                type_def
             )
             .into()),
         }
@@ -657,12 +704,23 @@ impl RotoFilter<AsnToken> for Asn {
                 method_token: std::mem::size_of_val(&AsnToken::Set)
                 as u8,
                 arg_types: vec![
-                    TypeDef::AsnLiteral,
+                    TypeDef::Asn,
                 ],
             }),
             _ => Err(format!(
                 "Unknown method: '{}' for type Asn",
                 method_name.ident
+            )
+            .into()),
+        }
+    }
+
+    fn into_type(self, type_def: &TypeDef) -> Result<TypeValue, Box<dyn std::error::Error>> {
+        match type_def {
+            TypeDef::Asn => Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(self))),
+            _ => Err(format!(
+                "Cannot convert type Asn to type {:?}",
+                type_def
             )
             .into()),
         }
@@ -775,8 +833,15 @@ impl RotoFilter<AsPathToken> for AsPath {
                 arg_types: vec![],
             }),
             _ => {
-                Err(format!("Unknown method '{}'", method_name.ident).into())
+                Err(format!("Unknown method '{}' for type AsPath", method_name.ident).into())
             }
+        }
+    }
+
+    fn into_type(self, type_def: &TypeDef) -> Result<TypeValue, Box<dyn std::error::Error>> {
+        match type_def {
+            TypeDef::AsPath => Ok(TypeValue::Builtin(BuiltinTypeValue::AsPath(self))),
+            _ => Err(format!("Cannot convert type AsPath to type {:?}", type_def).into()),
         }
     }
 

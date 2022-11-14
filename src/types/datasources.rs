@@ -52,9 +52,16 @@ impl RotoFilter<RibToken> for Rib {
                 arg_types: vec![TypeDef::Prefix]
         }),
             _ => {
-                Err(format!("Unknown method '{}'", method_name.ident).into())
+                Err(format!("Unknown method '{}' for data source", method_name.ident).into())
             }
         }
+    }
+
+    fn into_type(self, _type_def: &TypeDef) -> Result<TypeValue, Box<dyn std::error::Error>>
+    where
+        Self: std::marker::Sized,
+    {
+        Err("Rib type cannot be converted into another type".into())
     }
 
     fn exec_method<'a>(
@@ -129,9 +136,15 @@ impl RotoFilter<TableToken> for Table {
                 arg_types: vec![TypeDef::Asn]
         }),
             _ => {
-                Err(format!("Unknown method '{}'", method_name.ident).into())
+                Err(format!("Unknown method '{}' for table", method_name.ident).into())
             }
         }
+    }
+
+    fn into_type(self, _type_def: &TypeDef) -> Result<TypeValue, Box<dyn std::error::Error>>
+        where
+            Self: std::marker::Sized {
+        Err("Table type cannot be converted into another type".into())
     }
 
     fn exec_method<'a>(

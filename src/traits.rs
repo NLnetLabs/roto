@@ -35,6 +35,10 @@ pub(crate) trait RotoFilter<T> {
     where
         Self: std::marker::Sized;
 
+    fn into_type(self, type_value: &TypeDef) -> Result<TypeValue, Box<dyn std::error::Error>>
+    where
+        Self: std::marker::Sized;
+
     fn exec_method<'a>(
         &'a self,
         method_token: T,

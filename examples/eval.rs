@@ -49,13 +49,14 @@ fn main() {
                     use rib rib-rov;
 
                     // assignments
-                    // extra_in_table = source_asns.contains(extra_asn);
+                    extra_in_table = source_asns.contains(extra_asn);
                     route_in_table = source_asns.contains(route.as-path.origin());
                     ROV_INVALID_AS = 0xFFFFFF010;
 
                     // specify another RIB that is used in this filter.
+                    prefix_len = /24;
                     found_prefix = rib-rov.longest_match(route.prefix);
-                    fixed_len_prefix = Prefix.from(route.prefix.address(), /24);
+                    fixed_len_prefix = Prefix.from(route.prefix.address(), prefix_len);
                 }
             
                 term rov-valid for route: Route {
@@ -84,11 +85,11 @@ fn main() {
                    // This should work. The filter is allowed to modify the
                    // route that flows through it.
                    route.local-pref.set(200);
-                   route.origin.set(extra_asn);
+                   route.origin.set(AS300);
                 }
 
                 action set-rov-invalid-asn-community {
-                    route.community.set(ROV_INVALID_AS);
+                    route.community.push(ROV_INVALID_AS);
                 }
 
                 apply {

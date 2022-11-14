@@ -4,7 +4,7 @@ use crate::traits::{RotoFilter, MethodProps};
 
 use super::builtin::{
     AsPath, Asn, Boolean, BuiltinTypeValue, Community, IpAddress, Prefix,
-    U32, U8, PrefixLengthLiteral,
+    U32, U8, PrefixLength,
 };
 use super::typedef::TypeDef;
 use super::typevalue::TypeValue;
@@ -35,8 +35,8 @@ impl<'a> From<&'a TypeDef> for ElementTypeValue {
             TypeDef::Prefix => ElementTypeValue::Primitive(
                 BuiltinTypeValue::Prefix(Prefix(None)),
             ),
-            TypeDef::PrefixLengthLiteral => ElementTypeValue::Primitive(
-                BuiltinTypeValue::PrefixLengthLiteral(PrefixLengthLiteral(None)),
+            TypeDef::PrefixLength => ElementTypeValue::Primitive(
+                BuiltinTypeValue::PrefixLength(PrefixLength(None)),
             ),
             TypeDef::IpAddress => ElementTypeValue::Primitive(
                 BuiltinTypeValue::IpAddress(IpAddress(None)),
@@ -157,7 +157,7 @@ impl RotoFilter<ListToken> for List {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, Box<(dyn std::error::Error + 'static)>>
+    ) -> Result<MethodProps, Box<(dyn std::error::Error)>>
     where
         Self: std::marker::Sized,
     {
@@ -172,15 +172,24 @@ impl RotoFilter<ListToken> for List {
                 return_type_value: TypeValue::List(self),
                 arg_types: vec![TypeDef::U32],
         }),
+        "push" => Ok(MethodProps {
+            method_token: std::mem::size_of_val(&ListToken::Push) as u8,
+            return_type_value: (&TypeDef::Boolean).into(),
+            arg_types: vec![TypeDef::from(&self.0[0])],
+        }),
             "contains" => Ok(MethodProps {
                 method_token: std::mem::size_of_val(&ListToken::Contains) as u8,
                 return_type_value: (&TypeDef::Boolean).into(),
                 arg_types: vec![],
         }),
             _ => {
-                Err(format!("Unknown method '{}'", method_name.ident).into())
+                Err(format!("Unknown method '{}' for list", method_name.ident).into())
             }
         }
+    }
+
+    fn into_type(self, _type_def: &TypeDef) -> Result<TypeValue, Box<(dyn std::error::Error)>> {
+        Err("List type cannot be converted into another type".into())
     }
 
     fn exec_method(
@@ -314,6 +323,10 @@ impl RotoFilter<RecordToken> for Record {
                 Err(format!("Unknown method '{}' for Record type with fields {:?}", method_name.ident, self).into())
             }
         }
+    }
+
+    fn into_type(self, _type_def: &TypeDef) -> Result<TypeValue, Box<(dyn std::error::Error)>> {
+        Err("Record type cannot be converted into another type".into())
     }
 
     fn exec_method(
