@@ -17,7 +17,6 @@ pub enum BuiltinTypeValue {
     IntegerLiteral(IntegerLiteral),
     Prefix(Prefix),
     PrefixLength(PrefixLength),
-    PrefixRecord((Prefix, Record)),
     Community(Community),
     IpAddress(IpAddress),
     Asn(Asn),
@@ -37,7 +36,6 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::Boolean(_) => "Boolean",
             BuiltinTypeValue::Prefix(_) => "Prefix",
             BuiltinTypeValue::PrefixLength(_) => "PrefixLengthLiteral",
-            BuiltinTypeValue::PrefixRecord(_) => "PrefixRecord",
             BuiltinTypeValue::Community(_) => "Community",
             BuiltinTypeValue::IpAddress(_) => "IpAddress",
             BuiltinTypeValue::Asn(_) => "Asn",
@@ -56,7 +54,6 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::Boolean(val) => val,
             BuiltinTypeValue::Prefix(val) => val,
             BuiltinTypeValue::PrefixLength(val) => val,
-            BuiltinTypeValue::PrefixRecord(val) => val,
             BuiltinTypeValue::Community(val) => val,
             BuiltinTypeValue::IpAddress(val) => val,
             BuiltinTypeValue::Asn(val) => val,
@@ -75,7 +72,6 @@ impl BuiltinTypeValue {
                 | "IntegerLiteral"
                 | "Prefix"
                 | "PrefixLength"
-                | "PrefixRecord"
                 | "Community"
                 | "IpAddress"
                 | "Asn"
@@ -133,13 +129,6 @@ impl BuiltinTypeValue {
                     BuiltinTypeValue::Prefix(v)
                 } else {
                     return Err("Not a Prefix".into());
-                }
-            }
-            TypeDef::PrefixRecord => {
-                if let BuiltinTypeValue::PrefixRecord(v) = value.into() {
-                    BuiltinTypeValue::PrefixRecord(v)
-                } else {
-                    return Err("Not a Prefix Record".into());
                 }
             }
             TypeDef::IpAddress => {
@@ -271,10 +260,6 @@ impl TryFrom<&TypeDef> for BuiltinTypeValue {
             TypeDef::PrefixLength => {
                 Ok(BuiltinTypeValue::PrefixLength(PrefixLength(None)))
             }
-            TypeDef::PrefixRecord => Ok(BuiltinTypeValue::PrefixRecord((
-                Prefix(None),
-                Record(vec![]),
-            ))),
             TypeDef::Community => {
                 Ok(BuiltinTypeValue::Community(Community(None)))
             }

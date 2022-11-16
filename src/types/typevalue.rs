@@ -131,12 +131,6 @@ impl<'a> TryFrom<&'a str> for TypeValue {
             "Prefix" => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None))))
             }
-            "PrefixRecord" => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::PrefixRecord((
-                    Prefix(None),
-                    Record(vec![]),
-                ))))
-            }
             "IpAddress" => Ok(TypeValue::Builtin(
                 BuiltinTypeValue::IpAddress(IpAddress(None)),
             )),
@@ -241,6 +235,7 @@ impl<'a> From<&'a TypeDef> for TypeValue {
                 BuiltinTypeValue::IpAddress(IpAddress(None)),
             ),
             TypeDef::Asn => {
+                println!("into asn");
                 TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(None)))
             }
             TypeDef::AsPath => {
