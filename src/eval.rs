@@ -1622,8 +1622,7 @@ fn check_type(
 
     // is it in the global table?
     let global_ty = symbols.get(&symbols::Scope::Global).and_then(|gt| {
-        gt.variables
-            .get(&ty.ident)
+        gt.get_variable(&ty.ident).ok()
             .map(|s| (s.get_type(), s.get_kind()))
     });
     if let Some(ty) = global_ty {
@@ -1640,8 +1639,7 @@ fn check_type(
             let module_ty = symbols
                 .get(scope)
                 .and_then(|gt| {
-                    gt.variables
-                        .get(&ty.ident)
+                    gt.get_variable(&ty.ident).ok()
                         .map(|s| (s.get_type(), s.get_kind()))
                 })
                 .ok_or(format!(
@@ -1698,7 +1696,7 @@ fn get_type_for_scoped_variable(
             return symbols
                 .get(&scope)
                 .and_then(|gt| {
-                    gt.variables.get(search_str.as_str()).map(|s| s.get_type())
+                    gt.get_variable(&search_str.as_str().into()).map(|s| s.get_type()).ok()
                 })
                 .map_or_else(
                     // no, let's go over the chain of fields to see if it's
@@ -1707,10 +1705,9 @@ fn get_type_for_scoped_variable(
                         let data_src_type = symbols
                             .get(&scope)
                             .and_then(|gt| {
-                                gt.variables
-                                    .get(&fields[0].ident)
+                                gt.get_variable(&fields[0].ident).ok()
                                     .or_else(|| {
-                                        gt.arguments.get(&fields[0].ident)
+                                        gt.get_argument(&fields[0].ident).ok()
                                     }).map(|s| s.get_type())
                             })
                             .ok_or(format!(

@@ -194,9 +194,9 @@ pub struct SymbolTable {
     scope: Scope,
     // The special symbols that will be filled in at runtime, once per filter
     // run.
-    pub(crate) arguments: HashMap<ShortString, Symbol>,
+    arguments: HashMap<ShortString, Symbol>,
     // The variables and constants that are defined in the module.
-    pub(crate) variables: HashMap<ShortString, Symbol>,
+    variables: HashMap<ShortString, Symbol>,
     types: HashMap<ShortString, TypeDef>,
     // The evaluated `term` sections that are defined in the module.
     pub(crate) terms: HashMap<ShortString, Vec<Symbol>>,
