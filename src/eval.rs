@@ -896,7 +896,6 @@ impl ast::MethodCallExpr {
         for (parsed_arg_type, expected_arg_type) in
             parsed_args.into_iter().zip(props.arg_types.iter())
         {
-            let value;
             let symbols = symbols.clone();
 
             // if there's a value already set, we're on a leaf node and we will
@@ -936,14 +935,12 @@ impl ast::MethodCallExpr {
                                 Box<dyn std::error::Error>,
                             > {
                                 println!("var s {:?}", s);
-                                let v = s
-                                    .get_value()
-                                    .ok_or_else(|| {
-                                        format!(
-                                            "variable '{}' has no value",
-                                            parsed_arg_type.get_name()
-                                        )
-                                    })?;
+                                let v = s.get_value().ok_or_else(|| {
+                                    format!(
+                                        "variable '{}' has no value",
+                                        parsed_arg_type.get_name()
+                                    )
+                                })?;
                                 TypeDef::try_from(v).map_err(|e| e.into())
                             },
                         )
@@ -1001,26 +998,22 @@ impl ast::MethodCallExpr {
 
             // Compare the two types
 
-            // A constant has a value, but no type. We need to extract the type from
-            // the type_value and thne compare it to the expected type.
-            let into_type_value: TypeValue = expected_arg_type.into();
-            if parsed_arg_type_value.get_kind()
-                == symbols::SymbolKind::Constant
-                && parsed_arg_type_value.get_builtin_type_for_leaf_node()?
-                    == into_type_value
-            {
-                value = parsed_arg_type_value.value.unwrap();
-            } else if parsed_arg_type_value.value
-                != Some(expected_arg_type.into())
-            {
-                return Err(format!(
-                    "zz Invalid argument type for method '{}'. Expected '{:?}', got '{:?}'",
-                    self.ident, expected_arg_type, parsed_arg_type_value.value
-                )
-                .into());
-            } else {
-                value = parsed_arg_type_value.value.unwrap();
+            // Symbols containing constants have no type set, only a
+            // type_value, make sure to use that, in order to keep that
+            // value. Otherwise, we can just create a new type value with the
+            // value set to None. 
+            // 
+            // Note that only built-in types can be converted.
+            // Note that `try_convert_type_into` includes from a type to the
+            // same type.
+            let value = match parsed_arg_type_value.value {
+                Some(v) => v,
+                None => TypeValue::from(
+                    &parsed_arg_type_value
+                        .get_builtin_type_for_leaf_node()?,
+                ),
             }
+            .try_convert_type_into_value(expected_arg_type)?;
 
             args.push(symbols::Symbol::new_with_value(
                 "arg".into(),
