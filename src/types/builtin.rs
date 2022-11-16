@@ -23,6 +23,7 @@ pub enum BuiltinTypeValue {
     Asn(Asn),
     AsPath(AsPath),
     Route(Route),
+    RouteStatus(RouteStatus),
     Boolean(Boolean),
     HexLiteral(HexLiteral),
 }
@@ -42,6 +43,7 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::Asn(_) => "Asn",
             BuiltinTypeValue::AsPath(_) => "AsPath",
             BuiltinTypeValue::Route(_) => "Route",
+            BuiltinTypeValue::RouteStatus(_) => "RouteStatus",
             BuiltinTypeValue::HexLiteral(_) => "HexLiteral",
         }
     }
@@ -60,6 +62,7 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::Asn(val) => val,
             BuiltinTypeValue::AsPath(val) => val,
             BuiltinTypeValue::Route(val) => val,
+            BuiltinTypeValue::RouteStatus(val) => val,
             BuiltinTypeValue::HexLiteral(val) => val,
         }
     }
@@ -78,6 +81,7 @@ impl BuiltinTypeValue {
                 | "Asn"
                 | "AsPath"
                 | "Route"
+                | "RouteStatus"
                 | "Boolean"
                 | "String"
                 | "HexLiteral"
@@ -166,6 +170,20 @@ impl BuiltinTypeValue {
                     return Err("Not a community".into());
                 }
             }
+            TypeDef::Route => {
+                if let BuiltinTypeValue::Route(v) = value.into() {
+                    BuiltinTypeValue::Route(v)
+                } else {
+                    return Err("Not a route".into());
+                }
+            }
+            TypeDef::RouteStatus => {
+                if let BuiltinTypeValue::RouteStatus(v) = value.into() {
+                    BuiltinTypeValue::RouteStatus(v)
+                } else {
+                    return Err("Not a route status".into());
+                }
+            }
             _ => return Err("Not a primitive type".into()),
         };
         Ok(TypeValue::Builtin(var))
@@ -187,9 +205,9 @@ impl From<u32> for BuiltinTypeValue {
     }
 }
 
-impl From<usize> for BuiltinTypeValue {
-    fn from(val: usize) -> Self {
-        BuiltinTypeValue::IntegerLiteral(IntegerLiteral(Some(val as usize)))
+impl From<i64> for BuiltinTypeValue {
+    fn from(val: i64) -> Self {
+        BuiltinTypeValue::IntegerLiteral(IntegerLiteral(Some(val as i64)))
     }
 }
 
@@ -216,19 +234,13 @@ impl TryFrom<&'_ str> for BuiltinTypeValue {
                 Ok(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(None)))
             }
             "PrefixLengthLiteral" => {
-                Ok(BuiltinTypeValue::PrefixLength(
-                    PrefixLength(None),
-                ))
+                Ok(BuiltinTypeValue::PrefixLength(PrefixLength(None)))
             }
             "Boolean" => Ok(BuiltinTypeValue::Boolean(Boolean(None))),
             "Prefix" => Ok(BuiltinTypeValue::Prefix(Prefix(None))),
             "PrefixLength" => {
                 Ok(BuiltinTypeValue::PrefixLength(PrefixLength(None)))
             }
-            "PrefixRecord" => Ok(BuiltinTypeValue::PrefixRecord((
-                Prefix(None),
-                Record(vec![]),
-            ))),
             "Community" => Ok(BuiltinTypeValue::Community(Community(None))),
             "IpAddress" => Ok(BuiltinTypeValue::IpAddress(IpAddress(None))),
             "Asn" => Ok(BuiltinTypeValue::Asn(Asn(None))),
@@ -236,8 +248,9 @@ impl TryFrom<&'_ str> for BuiltinTypeValue {
             "Route" => Ok(BuiltinTypeValue::Route(Route {
                 prefix: None,
                 bgp: None,
-                status: Status::InConvergence,
+                status: RouteStatus::Empty,
             })),
+            "RouteStatus" => Ok(BuiltinTypeValue::RouteStatus(RouteStatus::Empty)),
             _ => Err(format!("Unknown type: {}", val).into()),
         }
     }
@@ -273,8 +286,11 @@ impl TryFrom<&TypeDef> for BuiltinTypeValue {
             TypeDef::Route => Ok(BuiltinTypeValue::Route(Route {
                 prefix: None,
                 bgp: None,
-                status: Status::InConvergence,
+                status: RouteStatus::Empty,
             })),
+            TypeDef::RouteStatus => {
+                Ok(BuiltinTypeValue::RouteStatus(RouteStatus::Empty))
+            }
             _ => Err(format!("Unknown type: {:?}", ty).into()),
         }
     }
@@ -290,7 +306,6 @@ impl std::fmt::Display for BuiltinTypeValue {
             }
             BuiltinTypeValue::Prefix(_) => write!(f, "Prefix"),
             BuiltinTypeValue::PrefixLength(_) => write!(f, "Prefix length"),
-            BuiltinTypeValue::PrefixRecord(_) => write!(f, "Prefix Record"),
             BuiltinTypeValue::Community(_) => write!(f, "Community"),
             BuiltinTypeValue::IpAddress(_) => write!(f, "IP Address"),
             BuiltinTypeValue::Asn(_) => write!(f, "Autonomous System Number"),
@@ -298,6 +313,7 @@ impl std::fmt::Display for BuiltinTypeValue {
                 write!(f, "AsPath (BGP AS_PATH attribute)")
             }
             BuiltinTypeValue::Route(_) => write!(f, "Route (BGP Route)"),
+            BuiltinTypeValue::RouteStatus(_) => write!(f, "BGP Route status"),
             BuiltinTypeValue::Boolean(_) => write!(f, "Boolean"),
             BuiltinTypeValue::HexLiteral(_) => {
                 write!(f, "Hexadecimal literal")
@@ -319,19 +335,17 @@ impl U32 {
 
 impl RotoFilter<U32Token> for U32 {
     fn get_props_for_method(
-            self,
-            method_name: &crate::ast::Identifier,
-        ) -> Result<MethodProps, Box<dyn std::error::Error>>
-        where
-            Self: std::marker::Sized {
+        self,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, Box<dyn std::error::Error>>
+    where
+        Self: std::marker::Sized,
+    {
         match method_name.ident.as_str() {
             "set" => Ok(MethodProps {
                 return_type_value: TypeValue::None,
-                method_token: std::mem::size_of_val(&U32Token::Set)
-                as u8,
-                arg_types: vec![
-                    TypeDef::IntegerLiteral,
-                ],
+                method_token: std::mem::size_of_val(&U32Token::Set) as u8,
+                arg_types: vec![TypeDef::IntegerLiteral],
             }),
             _ => Err(format!(
                 "Unknown method: '{}' for type U32",
@@ -342,27 +356,31 @@ impl RotoFilter<U32Token> for U32 {
     }
 
     fn exec_method<'a>(
-            &'a self,
-            method_token: U32Token,
-            args: Vec<TypeValue>,
-            res_type: TypeDef,
-        ) -> Result<
-            Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
-            Box<dyn std::error::Error>,
-        > {
+        &'a self,
+        method_token: U32Token,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<
+        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
+        Box<dyn std::error::Error>,
+    > {
         todo!()
     }
 
-    fn into_type(self, type_def: &TypeDef) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    fn into_type(
+        self,
+        type_def: &TypeDef,
+    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
         match type_def {
-            TypeDef::U32 => Ok(TypeValue::Builtin(BuiltinTypeValue::U32(self))),
-            _ => Err(format!(
-                "Cannot convert type U32 to type {:?}",
-                type_def
-            )
-            .into()),
+            TypeDef::U32 => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::U32(self)))
+            }
+            _ => {
+                Err(format!("Cannot convert type U32 to type {:?}", type_def)
+                    .into())
+            }
         }
-    } 
+    }
 }
 
 pub enum U32Token {
@@ -380,6 +398,103 @@ impl U8 {
     }
 }
 
+impl RotoFilter<U8Token> for U8 {
+    fn get_props_for_method(
+        self,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, Box<dyn std::error::Error>>
+    where
+        Self: std::marker::Sized,
+    {
+        match method_name.ident.as_str() {
+            "set" => Ok(MethodProps {
+                return_type_value: TypeValue::None,
+                method_token: std::mem::size_of_val(&U8Token::Set) as u8,
+                arg_types: vec![TypeDef::IntegerLiteral],
+            }),
+            _ => Err(format!(
+                "Unknown method: '{}' for type U8",
+                method_name.ident
+            )
+            .into()),
+        }
+    }
+
+    fn exec_method<'a>(
+        &'a self,
+        method_token: U8Token,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<
+        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
+        Box<dyn std::error::Error>,
+    > {
+        todo!()
+    }
+
+    fn into_type(
+        self,
+        type_def: &TypeDef,
+    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+        match type_def {
+            // Self
+            TypeDef::U8 => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(self))),
+            TypeDef::U32 => match self.0 {
+                Some(value) => Ok(TypeValue::Builtin(BuiltinTypeValue::U32(
+                    U32(Some(value as u32)),
+                ))),
+                None => Err("Cannot convert None to U32".into()),
+            },
+            TypeDef::PrefixLength => match self.0 {
+                Some(value) => {
+                    match value {
+                        0..=128 => Ok(TypeValue::Builtin(
+                            BuiltinTypeValue::PrefixLength(PrefixLength(
+                                Some(value),
+                            )),
+                        )),
+                        _ => Err(format!(
+                            "Prefix length must be between 0 and 128, not {}",
+                            value
+                        )
+                        .into()),
+                    }
+                }
+                None => Ok(TypeValue::Builtin(
+                    BuiltinTypeValue::PrefixLength(PrefixLength(None)),
+                )),
+            },
+            TypeDef::IntegerLiteral => match self.0 {
+                Some(value) => {
+                    match value {
+                        0..=128 => Ok(TypeValue::Builtin(
+                            BuiltinTypeValue::PrefixLength(PrefixLength(
+                                Some(value),
+                            )),
+                        )),
+                        _ => Err(format!(
+                            "Prefix length must be between 0 and 128, not {}",
+                            value
+                        )
+                        .into()),
+                    }
+                }
+                None => Ok(TypeValue::Builtin(
+                    BuiltinTypeValue::PrefixLength(PrefixLength(None)),
+                )),
+            },
+            _ => {
+                Err(format!("Cannot convert type U8 to type {:?}", type_def)
+                    .into())
+            }
+        }
+    }
+}
+
+pub enum U8Token {
+    Set,
+}
+
 // ----------- Boolean type -------------------------------------------------
 
 #[derive(Debug, Eq, PartialEq)]
@@ -390,12 +505,67 @@ impl Boolean {
     }
 }
 
+impl RotoFilter<BooleanToken> for Boolean {
+    fn get_props_for_method(
+        self,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, Box<dyn std::error::Error>>
+    where
+        Self: std::marker::Sized,
+    {
+        match method_name.ident.as_str() {
+            "set" => Ok(MethodProps {
+                return_type_value: TypeValue::None,
+                method_token: std::mem::size_of_val(&BooleanToken::Set) as u8,
+                arg_types: vec![TypeDef::Boolean],
+            }),
+            _ => Err(format!(
+                "Unknown method: '{}' for type Boolean",
+                method_name.ident
+            )
+            .into()),
+        }
+    }
+
+    fn exec_method<'a>(
+        &'a self,
+        method_token: BooleanToken,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<
+        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
+        Box<dyn std::error::Error>,
+    > {
+        todo!()
+    }
+
+    fn into_type(
+        self,
+        type_def: &TypeDef,
+    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+        match type_def {
+            TypeDef::Boolean => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(self)))
+            }
+            _ => Err(format!(
+                "Cannot convert type Boolean to type {:?}",
+                type_def
+            )
+            .into()),
+        }
+    }
+}
+
+pub enum BooleanToken {
+    Set,
+}
+
 //------------ IntegerLiteral type ------------------------------------------
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct IntegerLiteral(pub(crate) Option<usize>);
+pub struct IntegerLiteral(pub(crate) Option<i64>);
 impl IntegerLiteral {
-    pub fn new(val: usize) -> Self {
+    pub fn new(val: i64) -> Self {
         IntegerLiteral(Some(val))
     }
 }
@@ -423,10 +593,34 @@ impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
         }
     }
 
-    fn into_type(self, type_def: &TypeDef) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    fn into_type(
+        self,
+        type_def: &TypeDef,
+    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
         match type_def {
             TypeDef::IntegerLiteral => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(self)))
+            },
+            TypeDef::PrefixLength => {
+                match self.0 {
+                    Some(value) => {
+                        match value {
+                            0..=128 => Ok(TypeValue::Builtin(
+                                BuiltinTypeValue::PrefixLength(PrefixLength(
+                                    Some(value as u8),
+                                )),
+                            )),
+                            _ => Err(format!(
+                                "Prefix length must be between 0 and 128, not {}",
+                                value
+                            )
+                            .into()),
+                        }
+                    }
+                    None => Ok(TypeValue::Builtin(
+                        BuiltinTypeValue::PrefixLength(PrefixLength(None)),
+                    )),
+                }
             }
             _ => Err(format!(
                 "Cannot convert type IntegerLiteral to type {:?}",
@@ -463,6 +657,64 @@ impl HexLiteral {
     }
 }
 
+impl RotoFilter<HexLiteralToken> for HexLiteral {
+    fn get_props_for_method(
+        self,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, Box<dyn std::error::Error>> {
+        match method_name.ident.as_str() {
+            "cmp" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&HexLiteralToken::Cmp)
+                    as u8,
+                return_type_value: TypeValue::from(&TypeDef::IntegerLiteral),
+                arg_types: vec![TypeDef::HexLiteral, TypeDef::HexLiteral],
+            }),
+            _ => Err(format!(
+                "Unknown method: '{}' for type Prefix",
+                method_name.ident
+            )
+            .into()),
+        }
+    }
+
+    fn into_type(
+        self,
+        type_def: &TypeDef,
+    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+        match type_def {
+            TypeDef::HexLiteral => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::HexLiteral(self)))
+            }
+            TypeDef::Community => {
+                // still bogus, but at least it should convert from the hexliteral type.
+                let c = Community::new(CommunityType::Standard);
+                Ok(TypeValue::Builtin(BuiltinTypeValue::Community(c)))
+            }
+            _ => Err(format!(
+                "Cannot convert type HexLiteral to type {:?}",
+                type_def
+            )
+            .into()),
+        }
+    }
+
+    fn exec_method<'a>(
+        &'a self,
+        method_token: HexLiteralToken,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<
+        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
+        Box<dyn std::error::Error>,
+    > {
+        todo!()
+    }
+}
+
+pub(crate) enum HexLiteralToken {
+    Cmp,
+}
+
 // ----------- Prefix type --------------------------------------------------
 
 #[derive(Debug, Eq, PartialEq)]
@@ -490,10 +742,7 @@ impl RotoFilter<PrefixToken> for Prefix {
             "from" => Ok(MethodProps {
                 method_token: std::mem::size_of_val(&PrefixToken::From) as u8,
                 return_type_value: TypeValue::from(&TypeDef::Prefix),
-                arg_types: vec![
-                    TypeDef::IpAddress,
-                    TypeDef::PrefixLength,
-                ],
+                arg_types: vec![TypeDef::IpAddress, TypeDef::PrefixLength],
             }),
             "address" => Ok(MethodProps {
                 method_token: std::mem::size_of_val(&PrefixToken::Address)
@@ -528,9 +777,14 @@ impl RotoFilter<PrefixToken> for Prefix {
         }
     }
 
-    fn into_type(self, type_def: &TypeDef) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    fn into_type(
+        self,
+        type_def: &TypeDef,
+    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
         match type_def {
-            TypeDef::Prefix => Ok(TypeValue::Builtin(BuiltinTypeValue::Prefix(self))),
+            TypeDef::Prefix => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::Prefix(self)))
+            }
             _ => Err(format!(
                 "Cannot convert type Prefix to type {:?}",
                 type_def
@@ -593,7 +847,10 @@ impl RotoFilter<PrefixLengthToken> for PrefixLength {
         }
     }
 
-    fn into_type(self, type_def: &TypeDef) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    fn into_type(
+        self,
+        type_def: &TypeDef,
+    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
         match type_def {
             TypeDef::PrefixLength => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::PrefixLength(self)))
@@ -623,12 +880,11 @@ pub(crate) enum PrefixLengthToken {
     From,
 }
 
-
 // ----------- Community ----------------------------------------------------
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum CommunityType {
-    Normal,
+    Standard,
     Extended,
     Large,
 }
@@ -640,6 +896,106 @@ impl Community {
     pub fn new(community_type: CommunityType) -> Self {
         Self(Some(community_type))
     }
+}
+
+impl RotoFilter<CommunityToken> for Community {
+    fn get_props_for_method(
+        self,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, Box<dyn std::error::Error>>
+    where
+        Self: std::marker::Sized,
+    {
+        match method_name.ident.as_str() {
+            "from" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&CommunityToken::From)
+                    as u8,
+                return_type_value: TypeValue::from(&TypeDef::Community),
+                arg_types: vec![TypeDef::U32],
+            }),
+            "standard" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&CommunityToken::Standard)
+                    as u8,
+                return_type_value: TypeValue::from(&TypeDef::Community),
+                arg_types: vec![TypeDef::U32],
+            }),
+            "extended" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&CommunityToken::Extended)
+                    as u8,
+                return_type_value: TypeValue::from(&TypeDef::Community),
+                arg_types: vec![TypeDef::U32],
+            }),
+            "large" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&CommunityToken::Large)
+                    as u8,
+                return_type_value: TypeValue::from(&TypeDef::Community),
+                arg_types: vec![TypeDef::U32],
+            }),
+            "as" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&CommunityToken::As)
+                    as u8,
+                return_type_value: TypeValue::from(&TypeDef::U32),
+                arg_types: vec![],
+            }),
+            "value" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&CommunityToken::Value)
+                    as u8,
+                return_type_value: TypeValue::from(&TypeDef::U32),
+                arg_types: vec![],
+            }),
+            "exists" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&CommunityToken::Exists)
+                    as u8,
+                return_type_value: TypeValue::from(&TypeDef::Boolean),
+                arg_types: vec![],
+            }),
+            _ => Err(format!(
+                "Unknown method: '{}' for type Community",
+                method_name.ident
+            )
+            .into()),
+        }
+}
+
+    fn into_type(
+        self,
+        type_def: &TypeDef,
+    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+        match type_def {
+            TypeDef::Community => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::Community(self)))
+            }
+            _ => Err(format!(
+                "Cannot convert type Community to type {:?}",
+                type_def
+            )
+            .into()),
+        }
+    }
+
+    fn exec_method<'a>(
+        &'a self,
+        method_token: CommunityToken,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<
+        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
+        Box<dyn std::error::Error>,
+    > {
+        todo!()
+    }
+
+
+}
+
+pub enum CommunityToken {
+    From,
+    Standard,
+    Extended,
+    Large,
+    As,
+    Value,
+    Exists,
 }
 
 // ----------- PrefixRecord -------------------------------------------------
@@ -672,6 +1028,69 @@ impl IpAddress {
     }
 }
 
+impl RotoFilter<IpAddressToken> for IpAddress {
+    fn get_props_for_method(
+        self,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, Box<dyn std::error::Error>>
+    where
+        Self: std::marker::Sized,
+    {
+        match method_name.ident.as_str() {
+            "from" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&IpAddressToken::From)
+                    as u8,
+                return_type_value: TypeValue::from(&TypeDef::IpAddress),
+                arg_types: vec![TypeDef::String],
+            }),
+            "matches" => Ok(MethodProps {
+                method_token: std::mem::size_of_val(&IpAddressToken::Matches)
+                    as u8,
+                return_type_value: TypeValue::from(&TypeDef::Boolean),
+                arg_types: vec![TypeDef::Prefix],
+            }),
+            _ => Err(format!(
+                "Unknown method: '{}' for type IpAddress",
+                method_name.ident
+            )
+            .into()),
+        }
+    }
+
+    fn into_type(
+        self,
+        type_def: &TypeDef,
+    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+        match type_def {
+            TypeDef::IpAddress => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::IpAddress(self)))
+            }
+            _ => Err(format!(
+                "Cannot convert type IpAddress to type {:?}",
+                type_def
+            )
+            .into()),
+        }
+    }
+
+    fn exec_method<'a>(
+        &'a self,
+        method_token: IpAddressToken,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<
+        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
+        Box<dyn std::error::Error>,
+    > {
+        todo!()
+    }
+}
+
+pub(crate) enum IpAddressToken {
+    From,
+    Matches,
+}
+
 // ----------- Asn type -----------------------------------------------------
 
 #[derive(Debug, Eq, PartialEq)]
@@ -693,19 +1112,17 @@ impl Asn {
 
 impl RotoFilter<AsnToken> for Asn {
     fn get_props_for_method(
-            self,
-            method_name: &crate::ast::Identifier,
-        ) -> Result<MethodProps, Box<dyn std::error::Error>>
-        where
-            Self: std::marker::Sized {
+        self,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, Box<dyn std::error::Error>>
+    where
+        Self: std::marker::Sized,
+    {
         match method_name.ident.as_str() {
             "set" => Ok(MethodProps {
                 return_type_value: TypeValue::None,
-                method_token: std::mem::size_of_val(&AsnToken::Set)
-                as u8,
-                arg_types: vec![
-                    TypeDef::Asn,
-                ],
+                method_token: std::mem::size_of_val(&AsnToken::Set) as u8,
+                arg_types: vec![TypeDef::Asn],
             }),
             _ => Err(format!(
                 "Unknown method: '{}' for type Asn",
@@ -715,26 +1132,30 @@ impl RotoFilter<AsnToken> for Asn {
         }
     }
 
-    fn into_type(self, type_def: &TypeDef) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    fn into_type(
+        self,
+        type_def: &TypeDef,
+    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
         match type_def {
-            TypeDef::Asn => Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(self))),
-            _ => Err(format!(
-                "Cannot convert type Asn to type {:?}",
-                type_def
-            )
-            .into()),
+            TypeDef::Asn => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(self)))
+            }
+            _ => {
+                Err(format!("Cannot convert type Asn to type {:?}", type_def)
+                    .into())
+            }
         }
     }
 
     fn exec_method<'a>(
-            &'a self,
-            method_token: AsnToken,
-            args: Vec<TypeValue>,
-            res_type: TypeDef,
-        ) -> Result<
-            Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
-            Box<dyn std::error::Error>,
-        > {
+        &'a self,
+        method_token: AsnToken,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<
+        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
+        Box<dyn std::error::Error>,
+    > {
         todo!()
     }
 }
@@ -832,16 +1253,27 @@ impl RotoFilter<AsPathToken> for AsPath {
                 )),
                 arg_types: vec![],
             }),
-            _ => {
-                Err(format!("Unknown method '{}' for type AsPath", method_name.ident).into())
-            }
+            _ => Err(format!(
+                "Unknown method '{}' for type AsPath",
+                method_name.ident
+            )
+            .into()),
         }
     }
 
-    fn into_type(self, type_def: &TypeDef) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    fn into_type(
+        self,
+        type_def: &TypeDef,
+    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
         match type_def {
-            TypeDef::AsPath => Ok(TypeValue::Builtin(BuiltinTypeValue::AsPath(self))),
-            _ => Err(format!("Cannot convert type AsPath to type {:?}", type_def).into()),
+            TypeDef::AsPath => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::AsPath(self)))
+            }
+            _ => Err(format!(
+                "Cannot convert type AsPath to type {:?}",
+                type_def
+            )
+            .into()),
         }
     }
 
@@ -936,23 +1368,183 @@ pub(crate) enum AsPathToken {
     Len = 3,
 }
 
-// routecore, roto
-// Message iterator -> Routes
+//------------ Route type ---------------------------------------------------
+
+// Generic RFC4271 Route type, that can be parsed with routecore.
+
 #[derive(Debug, Eq, PartialEq)]
 pub struct Route {
     pub prefix: Option<Prefix>,
     pub bgp: Option<BgpAttributes>,
-    pub status: Status,
+    pub status: RouteStatus,
+}
+
+impl RotoFilter<RouteToken> for Route {
+
+    fn get_props_for_method(
+            self,
+            method_name: &crate::ast::Identifier,
+        ) -> Result<MethodProps, Box<dyn std::error::Error>>
+        where
+            Self: std::marker::Sized {
+        match method_name.ident.as_str() {
+            "prefix" => Ok(MethodProps {
+                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None))),
+                arg_types: vec![],
+                method_token: std::mem::size_of_val(&RouteToken::Prefix) as u8,
+            }),
+            "as_path" => Ok(MethodProps {
+                return_type_value: TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))),
+                arg_types: vec![],
+                method_token: std::mem::size_of_val(&RouteToken::AsPath) as u8,
+            }),
+            "communities" => Ok(MethodProps {
+                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Community(Community(None))),
+                arg_types: vec![],
+                method_token: std::mem::size_of_val(&RouteToken::Communities) as u8,
+            }),
+            "status" => Ok(MethodProps {
+                return_type_value: TypeValue::Builtin(BuiltinTypeValue::RouteStatus(RouteStatus::Empty)),
+                arg_types: vec![],
+                method_token: std::mem::size_of_val(&RouteToken::Status) as u8,
+            }),
+            _ => Err(format!(
+                "Unknown method '{}' for type Route",
+                method_name.ident
+            )
+            .into()),
+        }
+    }
+
+    fn into_type(
+        self,
+        type_def: &TypeDef,
+    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+        match type_def {
+            TypeDef::Route => Ok(TypeValue::Builtin(BuiltinTypeValue::Route(
+                self,
+            ))),
+            _ => Err(format!(
+                "Cannot convert type Route to type {:?}",
+                type_def
+            )
+            .into()),
+        }
+    }
+
+    fn exec_method<'b>(
+        &'b self,
+        _method: RouteToken,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<
+        Box<(dyn FnOnce(TypeValue) -> TypeValue + 'b)>,
+        Box<dyn std::error::Error>,
+    > {
+        todo!()
+    }
+}
+
+pub enum RouteToken {
+    Prefix,
+    AsPath,
+    Communities,
+    Status,
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub enum Status {
+pub enum RouteStatus {
     InConvergence, // Between start and EOR on a BGP peer-session
     UpToDate, // After EOR for a BGP peer-session, either Graceful Restart or EOR
     Stale,    // After hold-timer expiry
     StartOfRouteRefresh, // After the request for a Route Refresh to a peer and the reception of a new route
     Withdrawn,           // After the reception of a withdrawal
     Empty, // Status not relevant, e.g. a RIB that holds archived routes.
+}
+
+impl RotoFilter<RouteStatusToken> for RouteStatus {
+    fn get_props_for_method(
+        self,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, Box<dyn std::error::Error>>
+    where
+        Self: std::marker::Sized,
+    {
+        match method_name.ident.as_str() {
+            "is_in_convergence" => Ok(MethodProps {
+                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                arg_types: vec![],
+                method_token: std::mem::size_of_val(&RouteStatusToken::IsInConvergence) as u8,
+            }),
+            "is_up_to_date" => Ok(MethodProps {
+                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                arg_types: vec![],
+                method_token: std::mem::size_of_val(&RouteStatusToken::IsUpToDate) as u8,
+            }),
+            "is_stale" => Ok(MethodProps {
+                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                arg_types: vec![],
+                method_token: std::mem::size_of_val(&RouteStatusToken::IsStale) as u8,
+            }),
+            "is_start_of_route_refresh" => Ok(MethodProps {
+                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                arg_types: vec![],
+                method_token: std::mem::size_of_val(&RouteStatusToken::IsStartOfRouteRefresh) as u8,
+            }),
+            "is_withdrawn" => Ok(MethodProps {
+                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                arg_types: vec![],
+                method_token: std::mem::size_of_val(&RouteStatusToken::IsWithdrawn) as u8,
+            }),
+            "is_empty" => Ok(MethodProps {
+                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                arg_types: vec![],
+                method_token: std::mem::size_of_val(&RouteStatusToken::IsEmpty) as u8,
+            }),
+            _ => Err(format!(
+                "Unknown method '{}' for type RouteStatus",
+                method_name.ident
+            )
+            .into()),
+        }
+    }
+
+    fn into_type(
+        self,
+        type_def: &TypeDef,
+    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+        match type_def {
+            TypeDef::RouteStatus => Ok(TypeValue::Builtin(BuiltinTypeValue::RouteStatus(
+                self,
+            ))),
+            _ => Err(format!(
+                "Cannot convert type RouteStatus to type {:?}",
+                type_def
+            )
+            .into()),
+        }
+    }
+
+    fn exec_method<'a>(
+        &'a self,
+        _method_token: RouteStatusToken,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<
+        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
+        Box<dyn std::error::Error>,
+    > {
+        todo!()
+    }
+}
+
+pub enum RouteStatusToken {
+    IsInConvergence,
+    IsUpToDate,
+    IsStale,
+    IsStartOfRouteRefresh,
+    IsWithdrawn,
+    IsEmpty,
 }
 
 #[derive(Debug, Eq, PartialEq)]

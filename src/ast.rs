@@ -1132,7 +1132,7 @@ impl RecordTypeIdentifier {
 ///
 /// We parse it as a string and then convert it to an integer.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct IntegerLiteral(pub usize);
+pub struct IntegerLiteral(pub i64);
 
 impl IntegerLiteral {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
@@ -1155,7 +1155,7 @@ impl From<&'_ IntegerLiteral> for ShortString {
     }
 }
 
-impl From<&'_ IntegerLiteral> for usize {
+impl From<&'_ IntegerLiteral> for i64 {
     fn from(literal: &IntegerLiteral) -> Self {
         literal.0
     }

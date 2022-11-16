@@ -54,8 +54,9 @@ fn main() {
                     ROV_INVALID_AS = 0xFFFFFF010;
 
                     // specify another RIB that is used in this filter.
-                    prefix_len = /24;
+                    prefix_len = 24;
                     found_prefix = rib-rov.longest_match(route.prefix);
+                    // prefix_len triggers a type conversion from IntegerLiteral to PrefixLength
                     fixed_len_prefix = Prefix.from(route.prefix.address(), prefix_len);
                 }
             

@@ -34,6 +34,7 @@ pub enum TypeDef {
     AsPath,
     Community,
     Route,
+    RouteStatus,
     HexLiteral,
     IntegerLiteral,
     AcceptReject(AcceptReject), // used in the apply section
@@ -157,6 +158,12 @@ impl TypeDef {
             TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) => {
                 asn.get_props_for_method(method)
             }
+            TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) => {
+                ip.get_props_for_method(method)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::Route(route)) => {
+                route.get_props_for_method(method)
+            }
             TypeValue::Rib(rib) => rib.get_props_for_method(method),
             TypeValue::Table(rec) => rec.get_props_for_method(method),
             _ => Err(format!(
@@ -194,6 +201,9 @@ impl PartialEq<BuiltinTypeValue> for TypeDef {
             }
             TypeDef::AsPath => {
                 matches!(other, BuiltinTypeValue::AsPath(_))
+            }
+            TypeDef::RouteStatus => {
+                matches!(other, BuiltinTypeValue::RouteStatus(_))
             }
             TypeDef::Community => {
                 matches!(other, BuiltinTypeValue::Community(_))
@@ -249,6 +259,7 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             "AsPath" => Ok(TypeDef::AsPath),
             "Community" => Ok(TypeDef::Community),
             "Route" => Ok(TypeDef::Route),
+            "RouteStatus" => Ok(TypeDef::RouteStatus),
             "HexLiteral" => Ok(TypeDef::HexLiteral),
             _ => Err(format!("Undefined type: {}", ty.ident).into()),
         }
@@ -264,12 +275,12 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::Boolean(_) => TypeDef::Boolean,
             BuiltinTypeValue::Prefix(_) => TypeDef::Prefix,
             BuiltinTypeValue::PrefixLength(_) => TypeDef::PrefixLength,
-            BuiltinTypeValue::PrefixRecord(_) => TypeDef::PrefixRecord,
             BuiltinTypeValue::IpAddress(_) => TypeDef::IpAddress,
             BuiltinTypeValue::Asn(_) => TypeDef::Asn,
             BuiltinTypeValue::AsPath(_) => TypeDef::AsPath,
             BuiltinTypeValue::Community(_) => TypeDef::Community,
             BuiltinTypeValue::Route(_) => TypeDef::Route,
+            BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
         }
     }
@@ -284,12 +295,12 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::Boolean(_) => TypeDef::Boolean,
             BuiltinTypeValue::Prefix(_) => TypeDef::Prefix,
             BuiltinTypeValue::PrefixLength(_) => TypeDef::PrefixLength,
-            BuiltinTypeValue::PrefixRecord(_) => TypeDef::PrefixRecord,
             BuiltinTypeValue::IpAddress(_) => TypeDef::IpAddress,
             BuiltinTypeValue::Asn(_) => TypeDef::Asn,
             BuiltinTypeValue::AsPath(_) => TypeDef::AsPath,
             BuiltinTypeValue::Community(_) => TypeDef::Community,
             BuiltinTypeValue::Route(_) => TypeDef::Route,
+            BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
         }
     }
