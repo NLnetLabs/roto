@@ -1,6 +1,6 @@
 use crate::ast::ShortString;
 use crate::symbols::{Symbol, self};
-use crate::traits::{RotoFilter, MethodProps};
+use crate::traits::{RotoFilter, MethodProps, TokenConvert};
 
 use super::builtin::{
     AsPath, Asn, Boolean, BuiltinTypeValue, Community, IpAddress, Prefix,
@@ -162,32 +162,32 @@ impl RotoFilter<ListToken> for List {
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "get" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&ListToken::Get) as u8,
-                return_type_value: TypeValue::List(self),
-                arg_types: vec![TypeDef::U32],
-        }),
-            "remove" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&ListToken::Remove) as u8,
-                return_type_value: TypeValue::List(self),
-                arg_types: vec![TypeDef::U32],
-        }),
-        "push" => Ok(MethodProps {
-            method_token: std::mem::size_of_val(&ListToken::Push) as u8,
-            return_type_value: (&TypeDef::Boolean).into(),
-            arg_types: vec![TypeDef::from(&self.0[0])],
-        }),
-            "contains" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&ListToken::Contains) as u8,
-                return_type_value: (&TypeDef::Boolean).into(),
-                arg_types: vec![],
-        }),
+            "get" => Ok(MethodProps::new(
+        TypeValue::List(self),
+        ListToken::Get.into_u8(),
+                vec![TypeDef::U32],
+            )),
+            "remove" => Ok(MethodProps::new(
+                TypeValue::List(self),
+                ListToken::Remove.into_u8(),
+                vec![TypeDef::U32],
+            )),
+        "push" => Ok(MethodProps::new(
+            (&TypeDef::Boolean).into(),
+            ListToken::Push.into_u8(),
+            vec![TypeDef::from(&self.0[0])],
+        )),
+            "contains" => Ok(MethodProps::new(
+                 (&TypeDef::Boolean).into(),
+                ListToken::Contains.into_u8(),
+               vec![],
+            )),
             _ => {
                 Err(format!("Unknown method '{}' for list", method_name.ident).into())
             }
         }
     }
-
+    
     fn into_type(self, _type_def: &TypeDef) -> Result<TypeValue, Box<(dyn std::error::Error)>> {
         Err("List type cannot be converted into another type".into())
     }
@@ -216,6 +216,9 @@ pub enum ListToken {
     Insert,
     Clear,
 }
+
+impl TokenConvert for ListToken {}
+
 
 //---------------- Record type ----------------------------------------------
 
@@ -294,31 +297,31 @@ impl RotoFilter<RecordToken> for Record {
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "longest_match" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&RecordToken::LongestMatch) as u8,
-                return_type_value: TypeValue::Record(Record::new(vec![(
+            "longest_match" => Ok(MethodProps::new(
+                TypeValue::Record(Record::new(vec![(
                     ShortString::from("prefix"),
                     ElementTypeValue::Nested(Box::new(TypeValue::Record(
                         self,
                     ))),
                 )])?),
-                arg_types: vec![TypeDef::Prefix],
-        }   ),
-            "get" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&RecordToken::Get) as u8,
-                return_type_value: TypeValue::Record(self),
-                arg_types: vec![TypeDef::U32],
-        }),
-            "get_all" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&RecordToken::GetAll) as u8,
-                return_type_value: TypeValue::Record(self),
-                arg_types: vec![],
-        }),
-            "contains" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&RecordToken::Contains) as u8,
-                return_type_value: (&TypeDef::Boolean).into(),
-                arg_types: vec![(&TypeValue::Record(self)).into()],
-        }),
+                RecordToken::LongestMatch.into_u8(),
+                vec![TypeDef::Prefix],
+            )),
+            "get" => Ok(MethodProps::new(
+                TypeValue::Record(self),
+                RecordToken::Get.into_u8(),
+                vec![TypeDef::U32],
+            )),
+            "get_all" => Ok(MethodProps::new(
+                TypeValue::Record(self),
+                RecordToken::GetAll.into_u8(),
+                vec![],
+            )),
+            "contains" => Ok(MethodProps::new(
+                (&TypeDef::Boolean).into(),
+                RecordToken::Contains.into_u8(),
+                vec![(&TypeValue::Record(self)).into()],
+            )),
             _ => {
                 Err(format!("Unknown method '{}' for Record type with fields {:?}", method_name.ident, self).into())
             }
@@ -350,3 +353,5 @@ pub enum RecordToken {
     LongestMatch = 3,
     Set
 }
+
+impl TokenConvert for RecordToken {}

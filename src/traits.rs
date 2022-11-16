@@ -1,19 +1,29 @@
 // =========== RotoFilter trait ============================================
 
-use crate::{types::{typedef::TypeDef, typevalue::TypeValue}, symbols::Symbol};
+use crate::types::{typedef::TypeDef, typevalue::TypeValue};
 
-pub(crate) struct Token(u8);
+#[derive(Debug)]
+pub(crate) enum Token {
+    Variable(u8),
+    Method(u8),
+    Argument(u8)
+}
 
 impl Token {
-    pub fn new(value: Token) -> Self {
-        Token(std::mem::size_of_val(&Token) as u8)
+    pub fn new(ty: &str, value: u8) -> Self {
+        match ty {
+            "variable" => Token::Variable(value),
+            "method" => Token::Method(value),
+            "argument" => Token::Argument(value),
+            _ => panic!("Unknown token type")
+        }
     }
 }
 
 #[derive(Debug)]
 pub(crate) struct MethodProps {
     pub(crate) return_type_value: TypeValue,
-    pub(crate) method_token: u8,
+    pub(crate) method_token: Token,
     pub(crate) arg_types: Vec<TypeDef>,
 }
 
@@ -21,13 +31,14 @@ impl MethodProps {
     pub(crate) fn new(return_type_value: TypeValue, method_token: u8, arg_types: Vec<TypeDef>) -> Self {
         MethodProps {
             return_type_value,
-            method_token,
+            method_token: Token::Method(method_token),
             arg_types,
         }
     }
 }
 
-pub(crate) trait RotoFilter<T> {
+pub(crate) trait RotoFilter<T: TokenConvert> {
+
     fn get_props_for_method(
         self,
         method_name: &super::ast::Identifier,
@@ -48,4 +59,10 @@ pub(crate) trait RotoFilter<T> {
         Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
         Box<dyn std::error::Error>,
     >;
+}
+
+pub(crate) trait TokenConvert {
+    fn into_u8(&self) -> u8 {
+        std::mem::size_of_val(self) as u8
+    }
 }

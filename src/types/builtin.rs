@@ -4,13 +4,13 @@
 
 use routecore::asn::LongSegmentError;
 
-use crate::traits::{MethodProps, RotoFilter};
+use crate::traits::{MethodProps, RotoFilter, TokenConvert, Token};
 
 use super::collections::Record;
 use super::typedef::TypeDef;
 use super::typevalue::TypeValue;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum BuiltinTypeValue {
     U32(U32),
     U8(U8),
@@ -327,11 +327,10 @@ impl RotoFilter<U32Token> for U32 {
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "set" => Ok(MethodProps {
-                return_type_value: TypeValue::None,
-                method_token: std::mem::size_of_val(&U32Token::Set) as u8,
-                arg_types: vec![TypeDef::IntegerLiteral],
-            }),
+            "set" => Ok(MethodProps::new(
+                TypeValue::None,
+                U32Token::Set.into_u8(),
+                vec![TypeDef::IntegerLiteral])),
             _ => Err(format!(
                 "Unknown method: '{}' for type U32",
                 method_name.ident
@@ -372,6 +371,8 @@ pub enum U32Token {
     Set,
 }
 
+impl TokenConvert for U32Token {}
+
 // ----------- A simple u8 type ---------------------------------------------
 
 #[derive(Debug, Eq, PartialEq)]
@@ -384,6 +385,8 @@ impl U8 {
 }
 
 impl RotoFilter<U8Token> for U8 {
+    // type TokenList = U8Token;
+
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -392,11 +395,11 @@ impl RotoFilter<U8Token> for U8 {
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "set" => Ok(MethodProps {
-                return_type_value: TypeValue::None,
-                method_token: std::mem::size_of_val(&U8Token::Set) as u8,
-                arg_types: vec![TypeDef::IntegerLiteral],
-            }),
+            "set" => Ok(MethodProps::new(
+                TypeValue::None,
+                U8Token::Set.into_u8(),
+                vec![TypeDef::IntegerLiteral],
+            )),
             _ => Err(format!(
                 "Unknown method: '{}' for type U8",
                 method_name.ident
@@ -480,6 +483,8 @@ pub enum U8Token {
     Set,
 }
 
+impl TokenConvert for U8Token {}
+
 // ----------- Boolean type -------------------------------------------------
 
 #[derive(Debug, Eq, PartialEq)]
@@ -499,11 +504,11 @@ impl RotoFilter<BooleanToken> for Boolean {
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "set" => Ok(MethodProps {
-                return_type_value: TypeValue::None,
-                method_token: std::mem::size_of_val(&BooleanToken::Set) as u8,
-                arg_types: vec![TypeDef::Boolean],
-            }),
+            "set" => Ok(MethodProps::new(
+                TypeValue::None,
+                BooleanToken::Set.into_u8(),
+                vec![TypeDef::Boolean],
+            )),
             _ => Err(format!(
                 "Unknown method: '{}' for type Boolean",
                 method_name.ident
@@ -545,6 +550,8 @@ pub enum BooleanToken {
     Set,
 }
 
+impl TokenConvert for BooleanToken {}
+
 //------------ IntegerLiteral type ------------------------------------------
 
 #[derive(Debug, Eq, PartialEq)]
@@ -561,15 +568,14 @@ impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, Box<dyn std::error::Error>> {
         match method_name.ident.as_str() {
-            "cmp" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&IntegerLiteralToken::Cmp)
-                    as u8,
-                return_type_value: TypeValue::from(&TypeDef::IntegerLiteral),
-                arg_types: vec![
+            "cmp" => Ok(MethodProps::new(
+                TypeValue::from(&TypeDef::IntegerLiteral),
+                IntegerLiteralToken::Cmp.into_u8(),
+                vec![
                     TypeDef::IntegerLiteral,
                     TypeDef::IntegerLiteral,
                 ],
-            }),
+            )),
             _ => Err(format!(
                 "Unknown method: '{}' for type Prefix",
                 method_name.ident
@@ -632,6 +638,8 @@ pub(crate) enum IntegerLiteralToken {
     Cmp,
 }
 
+impl TokenConvert for IntegerLiteralToken {}
+
 //------------ HexLiteral type ----------------------------------------------
 
 #[derive(Debug, Eq, PartialEq)]
@@ -648,12 +656,11 @@ impl RotoFilter<HexLiteralToken> for HexLiteral {
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, Box<dyn std::error::Error>> {
         match method_name.ident.as_str() {
-            "cmp" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&HexLiteralToken::Cmp)
-                    as u8,
-                return_type_value: TypeValue::from(&TypeDef::IntegerLiteral),
-                arg_types: vec![TypeDef::HexLiteral, TypeDef::HexLiteral],
-            }),
+            "cmp" => Ok(MethodProps::new(
+                TypeValue::from(&TypeDef::IntegerLiteral),
+                HexLiteralToken::Cmp.into_u8(),
+                vec![TypeDef::HexLiteral, TypeDef::HexLiteral],
+            )),
             _ => Err(format!(
                 "Unknown method: '{}' for type Prefix",
                 method_name.ident
@@ -700,6 +707,8 @@ pub(crate) enum HexLiteralToken {
     Cmp,
 }
 
+impl TokenConvert for HexLiteralToken {}
+
 // ----------- Prefix type --------------------------------------------------
 
 #[derive(Debug, Eq, PartialEq)]
@@ -724,36 +733,33 @@ impl RotoFilter<PrefixToken> for Prefix {
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "from" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&PrefixToken::From) as u8,
-                return_type_value: TypeValue::from(&TypeDef::Prefix),
-                arg_types: vec![TypeDef::IpAddress, TypeDef::PrefixLength],
-            }),
-            "address" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&PrefixToken::Address)
-                    as u8,
-                return_type_value: TypeValue::from(&TypeDef::IpAddress),
-                arg_types: vec![],
-            }),
-            "len" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&PrefixToken::Len) as u8,
-                return_type_value: TypeValue::from(&TypeDef::IntegerLiteral),
-                arg_types: vec![],
-            }),
-            "matches" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&PrefixToken::Matches)
-                    as u8,
-                return_type_value: TypeValue::from(&TypeDef::Boolean),
-                arg_types: vec![TypeDef::Prefix],
-            }),
-            "exists" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&AsPathToken::Contains)
-                    as u8,
-                return_type_value: TypeValue::Builtin(
+            "from" => Ok(MethodProps::new(
+                TypeValue::from(&TypeDef::Prefix),
+                PrefixToken::From.into_u8(),
+                vec![TypeDef::IpAddress, TypeDef::PrefixLength],
+            )),
+            "address" => Ok(MethodProps::new(
+                TypeValue::from(&TypeDef::IpAddress),
+                PrefixToken::Address.into_u8(),
+                vec![],
+            )),
+            "len" => Ok(MethodProps::new(
+                TypeValue::from(&TypeDef::IntegerLiteral),
+                PrefixToken::Len.into_u8(),
+                vec![],
+            )),
+            "matches" => Ok(MethodProps::new(
+                TypeValue::from(&TypeDef::Boolean),
+                PrefixToken::Matches.into_u8(),
+                vec![TypeDef::Prefix],
+            )),
+            "exists" => Ok(MethodProps::new(
+                TypeValue::Builtin(
                     BuiltinTypeValue::Boolean(Boolean(None)),
                 ),
-                arg_types: vec![],
-            }),
+                PrefixToken::Exists.into_u8(),
+                vec![]
+            )),
             _ => Err(format!(
                 "Unknown method: '{}' for type Prefix",
                 method_name.ident
@@ -793,10 +799,13 @@ impl RotoFilter<PrefixToken> for Prefix {
 
 pub(crate) enum PrefixToken {
     From,
+    Exists,
     Address,
     Len,
     Matches,
 }
+
+impl TokenConvert for PrefixToken {}
 
 //------------ PrefixLengthLiteral type -------------------------------------
 
@@ -818,12 +827,11 @@ impl RotoFilter<PrefixLengthToken> for PrefixLength {
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "from" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&PrefixLengthToken::From)
-                    as u8,
-                return_type_value: TypeValue::from(&TypeDef::PrefixLength),
-                arg_types: vec![TypeDef::U8],
-            }),
+            "from" => Ok(MethodProps::new(
+                TypeValue::from(&TypeDef::PrefixLength),
+                PrefixLengthToken::From.into_u8(),
+               vec![TypeDef::U8],
+            )),
             _ => Err(format!(
                 "Unknown method: '{}' for type PrefixLength",
                 method_name.ident
@@ -865,6 +873,8 @@ pub(crate) enum PrefixLengthToken {
     From,
 }
 
+impl TokenConvert for PrefixLengthToken {}
+
 // ----------- Community ----------------------------------------------------
 
 #[derive(Debug, Eq, PartialEq)]
@@ -892,48 +902,41 @@ impl RotoFilter<CommunityToken> for Community {
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "from" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&CommunityToken::From)
-                    as u8,
-                return_type_value: TypeValue::from(&TypeDef::Community),
-                arg_types: vec![TypeDef::U32],
-            }),
-            "standard" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&CommunityToken::Standard)
-                    as u8,
-                return_type_value: TypeValue::from(&TypeDef::Community),
-                arg_types: vec![TypeDef::U32],
-            }),
-            "extended" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&CommunityToken::Extended)
-                    as u8,
-                return_type_value: TypeValue::from(&TypeDef::Community),
-                arg_types: vec![TypeDef::U32],
-            }),
-            "large" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&CommunityToken::Large)
-                    as u8,
-                return_type_value: TypeValue::from(&TypeDef::Community),
-                arg_types: vec![TypeDef::U32],
-            }),
-            "as" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&CommunityToken::As)
-                    as u8,
-                return_type_value: TypeValue::from(&TypeDef::U32),
-                arg_types: vec![],
-            }),
-            "value" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&CommunityToken::Value)
-                    as u8,
-                return_type_value: TypeValue::from(&TypeDef::U32),
-                arg_types: vec![],
-            }),
-            "exists" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&CommunityToken::Exists)
-                    as u8,
-                return_type_value: TypeValue::from(&TypeDef::Boolean),
-                arg_types: vec![],
-            }),
+            "from" => Ok(MethodProps::new(
+                TypeValue::from(&TypeDef::Community),
+                CommunityToken::From.into_u8(),
+                vec![TypeDef::U32],
+            )),
+            "standard" => Ok(MethodProps::new(
+                TypeValue::from(&TypeDef::Community),
+                CommunityToken::Standard.into_u8(),
+                vec![TypeDef::U32],
+            )),
+            "extended" => Ok(MethodProps::new(
+                TypeValue::from(&TypeDef::Community),
+                CommunityToken::Extended.into_u8(),
+                vec![TypeDef::U32],
+            )),
+            "large" => Ok(MethodProps::new(
+                TypeValue::from(&TypeDef::Community),
+                CommunityToken::Large.into_u8(),
+                vec![TypeDef::U32],
+            )),
+            "as" => Ok(MethodProps::new(
+                TypeValue::from(&TypeDef::U32),
+                CommunityToken::As.into_u8(),
+                vec![],
+            )),
+            "value" => Ok(MethodProps::new(
+                TypeValue::from(&TypeDef::U32),
+                CommunityToken::Value.into_u8(),
+                vec![],
+            )),
+            "exists" => Ok(MethodProps::new(
+                TypeValue::from(&TypeDef::Boolean),
+                CommunityToken::Exists.into_u8(),
+                vec![],
+            )),
             _ => Err(format!(
                 "Unknown method: '{}' for type Community",
                 method_name.ident
@@ -983,6 +986,8 @@ pub enum CommunityToken {
     Exists,
 }
 
+impl TokenConvert for CommunityToken {}
+
 // ----------- PrefixRecord -------------------------------------------------
 
 #[derive(Debug, PartialEq)]
@@ -1022,18 +1027,16 @@ impl RotoFilter<IpAddressToken> for IpAddress {
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "from" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&IpAddressToken::From)
-                    as u8,
-                return_type_value: TypeValue::from(&TypeDef::IpAddress),
-                arg_types: vec![TypeDef::String],
-            }),
-            "matches" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&IpAddressToken::Matches)
-                    as u8,
-                return_type_value: TypeValue::from(&TypeDef::Boolean),
-                arg_types: vec![TypeDef::Prefix],
-            }),
+            "from" => Ok(MethodProps::new(
+                TypeValue::from(&TypeDef::IpAddress),
+                IpAddressToken::From.into_u8(),
+                vec![TypeDef::String],
+            )),
+            "matches" => Ok(MethodProps::new(
+                TypeValue::from(&TypeDef::Boolean),
+                IpAddressToken::Matches.into_u8(),
+                vec![TypeDef::Prefix],
+            )),
             _ => Err(format!(
                 "Unknown method: '{}' for type IpAddress",
                 method_name.ident
@@ -1076,6 +1079,8 @@ pub(crate) enum IpAddressToken {
     Matches,
 }
 
+impl TokenConvert for IpAddressToken {}
+
 // ----------- Asn type -----------------------------------------------------
 
 #[derive(Debug, Eq, PartialEq)]
@@ -1104,11 +1109,11 @@ impl RotoFilter<AsnToken> for Asn {
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "set" => Ok(MethodProps {
-                return_type_value: TypeValue::None,
-                method_token: std::mem::size_of_val(&AsnToken::Set) as u8,
-                arg_types: vec![TypeDef::Asn],
-            }),
+            "set" => Ok(MethodProps::new(
+                TypeValue::None,
+                AsnToken::Set.into_u8(),
+                vec![TypeDef::Asn],
+            )),
             _ => Err(format!(
                 "Unknown method: '{}' for type Asn",
                 method_name.ident
@@ -1148,6 +1153,8 @@ impl RotoFilter<AsnToken> for Asn {
 pub enum AsnToken {
     Set,
 }
+
+impl TokenConvert for AsnToken {}
 
 // ----------- AsPath type --------------------------------------------------
 
@@ -1215,29 +1222,25 @@ impl RotoFilter<AsPathToken> for AsPath {
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "origin" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&AsPathToken::Origin)
-                    as u8,
-                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Asn(
-                    Asn(None),
-                )),
-                arg_types: vec![],
-            }),
-            "contains" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&AsPathToken::Contains)
-                    as u8,
-                return_type_value: TypeValue::Builtin(
+            "origin" => Ok(MethodProps::new(
+                TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(None))),
+                AsPathToken::Origin.into_u8(),
+                vec![],
+            )),
+            "contains" => Ok(MethodProps::new(
+                TypeValue::Builtin(
                     BuiltinTypeValue::AsPath(AsPath(None)),
                 ),
-                arg_types: vec![TypeDef::Asn],
-            }),
-            "len" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&AsPathToken::Len) as u8,
-                return_type_value: TypeValue::Builtin(BuiltinTypeValue::U8(
-                    U8(None),
+                AsPathToken::Contains.into_u8(),
+                vec![TypeDef::Asn],
+            )),
+            "len" => Ok(MethodProps::new(
+                TypeValue::Builtin(BuiltinTypeValue::U8(
+                    U8(None)
                 )),
-                arg_types: vec![],
-            }),
+                AsPathToken::Len.into_u8(),
+                vec![],
+            )),
             _ => Err(format!(
                 "Unknown method '{}' for type AsPath",
                 method_name.ident
@@ -1353,6 +1356,8 @@ pub(crate) enum AsPathToken {
     Len = 3,
 }
 
+impl TokenConvert for AsPathToken {}
+
 //------------ Route type ---------------------------------------------------
 
 // Generic RFC4271 Route type, that can be parsed with routecore.
@@ -1373,26 +1378,26 @@ impl RotoFilter<RouteToken> for Route {
         where
             Self: std::marker::Sized {
         match method_name.ident.as_str() {
-            "prefix" => Ok(MethodProps {
-                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None))),
-                arg_types: vec![],
-                method_token: std::mem::size_of_val(&RouteToken::Prefix) as u8,
-            }),
-            "as_path" => Ok(MethodProps {
-                return_type_value: TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))),
-                arg_types: vec![],
-                method_token: std::mem::size_of_val(&RouteToken::AsPath) as u8,
-            }),
-            "communities" => Ok(MethodProps {
-                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Community(Community(None))),
-                arg_types: vec![],
-                method_token: std::mem::size_of_val(&RouteToken::Communities) as u8,
-            }),
-            "status" => Ok(MethodProps {
-                return_type_value: TypeValue::Builtin(BuiltinTypeValue::RouteStatus(RouteStatus::Empty)),
-                arg_types: vec![],
-                method_token: std::mem::size_of_val(&RouteToken::Status) as u8,
-            }),
+            "prefix" => Ok(MethodProps::new(
+                TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None))),
+                RouteToken::Prefix.into_u8(),
+                vec![],
+            )),
+            "as_path" => Ok(MethodProps::new(
+                TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))),
+                RouteToken::AsPath.into_u8(),
+               vec![],
+            )),
+            "communities" => Ok(MethodProps::new(
+                TypeValue::Builtin(BuiltinTypeValue::Community(Community(None))),
+                RouteToken::Communities.into_u8(),
+                vec![],
+            )),
+            "status" => Ok(MethodProps::new(
+                TypeValue::Builtin(BuiltinTypeValue::RouteStatus(RouteStatus::Empty)),
+                RouteToken::Status.into_u8(),
+                vec![],
+            )),
             _ => Err(format!(
                 "Unknown method '{}' for type Route",
                 method_name.ident
@@ -1437,6 +1442,8 @@ pub enum RouteToken {
     Status,
 }
 
+impl TokenConvert for RouteToken {}
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum RouteStatus {
     InConvergence, // Between start and EOR on a BGP peer-session
@@ -1456,36 +1463,36 @@ impl RotoFilter<RouteStatusToken> for RouteStatus {
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "is_in_convergence" => Ok(MethodProps {
-                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                arg_types: vec![],
-                method_token: std::mem::size_of_val(&RouteStatusToken::IsInConvergence) as u8,
-            }),
-            "is_up_to_date" => Ok(MethodProps {
-                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                arg_types: vec![],
-                method_token: std::mem::size_of_val(&RouteStatusToken::IsUpToDate) as u8,
-            }),
-            "is_stale" => Ok(MethodProps {
-                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                arg_types: vec![],
-                method_token: std::mem::size_of_val(&RouteStatusToken::IsStale) as u8,
-            }),
-            "is_start_of_route_refresh" => Ok(MethodProps {
-                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                arg_types: vec![],
-                method_token: std::mem::size_of_val(&RouteStatusToken::IsStartOfRouteRefresh) as u8,
-            }),
-            "is_withdrawn" => Ok(MethodProps {
-                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                arg_types: vec![],
-                method_token: std::mem::size_of_val(&RouteStatusToken::IsWithdrawn) as u8,
-            }),
-            "is_empty" => Ok(MethodProps {
-                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                arg_types: vec![],
-                method_token: std::mem::size_of_val(&RouteStatusToken::IsEmpty) as u8,
-            }),
+            "is_in_convergence" => Ok(MethodProps::new(
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                RouteStatusToken::IsInConvergence.into_u8(),
+                vec![],
+            )),
+            "is_up_to_date" => Ok(MethodProps::new(
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                RouteStatusToken::IsUpToDate.into_u8(),
+                vec![],
+            )),
+            "is_stale" => Ok(MethodProps::new(
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                RouteStatusToken::IsStale.into_u8(),
+                vec![],
+            )),
+            "is_start_of_route_refresh" => Ok(MethodProps::new(
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                RouteStatusToken::IsStartOfRouteRefresh.into_u8(),
+                vec![],
+            )),  
+            "is_withdrawn" => Ok(MethodProps::new(
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                RouteStatusToken::IsWithdrawn.into_u8(),
+                vec![],
+            )),
+            "is_empty" => Ok(MethodProps::new(
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                RouteStatusToken::IsEmpty.into_u8(),
+                vec![],
+            )),
             _ => Err(format!(
                 "Unknown method '{}' for type RouteStatus",
                 method_name.ident
@@ -1531,6 +1538,8 @@ pub enum RouteStatusToken {
     IsWithdrawn,
     IsEmpty,
 }
+
+impl TokenConvert for RouteStatusToken {}
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct BgpAttributes {

@@ -2,7 +2,7 @@
 
 // ----------- Rib Type ----------------------------------------------------
 
-use crate::traits::{RotoFilter, MethodProps};
+use crate::traits::{RotoFilter, MethodProps, TokenConvert};
 
 use super::{
     builtin::{Boolean, BuiltinTypeValue},
@@ -36,21 +36,21 @@ impl RotoFilter<RibToken> for Rib {
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "match" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&RibToken::Match) as u8,
-                return_type_value: TypeValue::Record(self.record),
-                arg_types: vec![TypeDef::Prefix]
-            }),
-            "longest_match" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&RibToken::LongestMatch) as u8,
-                return_type_value: TypeValue::Record(self.record),
-                arg_types: vec![TypeDef::Prefix]
-        }),
-            "contains" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&RibToken::Contains) as u8,
-                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                arg_types: vec![TypeDef::Prefix]
-        }),
+            "match" => Ok(MethodProps::new(
+                TypeValue::Record(self.record),
+                RibToken::Match.into_u8(),
+                vec![TypeDef::Prefix]
+            )),
+            "longest_match" => Ok(MethodProps::new(
+                TypeValue::Record(self.record),
+                RibToken::LongestMatch.into_u8(),
+                vec![TypeDef::Prefix]
+            )),
+            "contains" => Ok(MethodProps::new(
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                RibToken::Contains.into_u8(),
+                vec![TypeDef::Prefix]
+            )),
             _ => {
                 Err(format!("Unknown method '{}' for data source", method_name.ident).into())
             }
@@ -83,6 +83,8 @@ pub enum RibToken {
     Get,
     Contains,
 }
+
+impl TokenConvert for RibToken {}
 
 impl std::fmt::Display for Rib {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -125,16 +127,16 @@ impl RotoFilter<TableToken> for Table {
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "get" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&TableToken::Get) as u8,
-                return_type_value: TypeValue::Record(self.record),
-                arg_types: vec![TypeDef::Prefix]
-        }),
-            "contains" => Ok(MethodProps {
-                method_token: std::mem::size_of_val(&TableToken::Contains) as u8,
-                return_type_value: TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                arg_types: vec![TypeDef::Asn]
-        }),
+            "get" => Ok(MethodProps::new(
+                TypeValue::Record(self.record),
+                TableToken::Get.into_u8(),
+                vec![TypeDef::Prefix]
+            )),
+            "contains" => Ok(MethodProps::new(
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                TableToken::Contains.into_u8(),
+                vec![TypeDef::Asn]
+            )), 
             _ => {
                 Err(format!("Unknown method '{}' for table", method_name.ident).into())
             }
@@ -164,6 +166,8 @@ pub enum TableToken {
     Get,
     Contains,
 }
+
+impl TokenConvert for TableToken {}
 
 impl std::fmt::Display for Table {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
