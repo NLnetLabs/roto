@@ -55,7 +55,7 @@ impl TypeValue {
     pub fn get_builtin_type(&self) -> Result<TypeDef, Box<dyn std::error::Error>> {
         match self {
             TypeValue::Builtin(b) => Ok(b.into()),
-            _ => Err("Not a builtin type".into()),
+            _ => Err(format!("Type '{:?}' is not a builtin type.", self).into()),
         }
     }
 
