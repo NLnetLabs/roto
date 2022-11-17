@@ -5,6 +5,7 @@ use std::rc::Rc;
 use crate::ast::LogicalExpr;
 use crate::ast::ShortString;
 use crate::ast::TypeIdentifier;
+use crate::traits::Token;
 use crate::types::builtin::Boolean;
 use crate::types::builtin::BuiltinTypeValue;
 use crate::types::builtin::HexLiteral;
@@ -392,6 +393,7 @@ impl<'a> ast::Define {
                 scope.clone(),
             )?;
 
+
             println!("symbol assigned {:?}", s);
             declare_variable_from_symbol(
                 Some(assignment.0.ident.clone()),
@@ -734,7 +736,7 @@ impl<'a> ast::CallExpr {
                         let method_call = ast::MethodCallExpr::eval(
                             self.get_method_call(),
                             symbols::SymbolKind::DataSourceMethodCall,
-                            data_type.clone(),
+                            data_type.0.clone(),
                             symbols,
                             scope,
                         )?;
@@ -744,7 +746,7 @@ impl<'a> ast::CallExpr {
                             symbols::Symbol::new(
                                 receiver_ident,
                                 symbols::SymbolKind::Rib,
-                                data_type,
+                                data_type.0,
                                 vec![method_call],
                             ),
                         ));
@@ -868,6 +870,7 @@ impl ast::MethodCallExpr {
                 method_kind,
                 props.return_type_value,
                 vec![],
+                props.method_token
             ));
         }
 
@@ -927,21 +930,17 @@ impl ast::MethodCallExpr {
                     };
                     let mut kind = symbols::SymbolKind::Variable;
                     // is it an existing variable or constant?
-                    let var = module_symbols
+                    let (var, token) = module_symbols
                         .get_variable(&parsed_arg_type.get_name())
                         .and_then(
                             |s| -> Result<
-                                TypeDef,
+                                (TypeDef, Token),
                                 Box<dyn std::error::Error>,
                             > {
                                 println!("var s {:?}", s);
-                                let v = s.get_value().ok_or_else(|| {
-                                    format!(
-                                        "variable '{}' has no value",
-                                        parsed_arg_type.get_name()
-                                    )
-                                })?;
-                                TypeDef::try_from(v).map_err(|e| e.into())
+                                let v = s.get_type_and_token_for_value()?;
+                                Ok(v)
+                                // TypeDef::try_from(v).map_err(|e| e.into())
                             },
                         )
                         .or_else(|_| {
@@ -949,11 +948,11 @@ impl ast::MethodCallExpr {
                             // `with` statement)?
                             module_symbols
                                 .get_argument(&parsed_arg_type.get_name())
-                                .map(|s| s.get_type())
+                                .map(|s| (s.get_type_and_token()))?
                         })
                         .or_else(|_: Box<dyn std::error::Error>| {
-                            // is it the name of a data source?
-                            let type_def: TypeDef =
+                            // is it the name of a data source?                            
+                            let (type_def, token) =
                                 get_data_source_for_ident(
                                     ident.clone(),
                                     symbols,
@@ -971,14 +970,14 @@ impl ast::MethodCallExpr {
                                 )),
                             }?;
                             println!("it's a data source {:?}", type_def);
-                            Ok(type_def)
+                            Ok((type_def, token))
                         })
                         .or_else(|_: Box<dyn std::error::Error>| {
                             // is it the name of a type?
                             kind = symbols::SymbolKind::BuiltInType;
                             TypeDef::try_from(TypeIdentifier {
                                 ident: parsed_arg_type.get_name(),
-                            })
+                            }).map(|td| (td, Token::BuiltinType))
                         })?;
 
                     println!("var {:?}", var);
@@ -987,6 +986,7 @@ impl ast::MethodCallExpr {
                         kind,
                         (&var).into(),
                         vec![],
+                        token
                     )
                 }
             } else {
@@ -1006,12 +1006,12 @@ impl ast::MethodCallExpr {
             // Note that only built-in types can be converted.
             // Note that `try_convert_type_into` includes from a type to the
             // same type.
-            let value = match parsed_arg_type_value.value {
+            let ty = parsed_arg_type_value.get_type();
+            let token = parsed_arg_type_value.get_token()?;
+            let value = parsed_arg_type_value.get_value_owned();
+            let value = match value {
                 Some(v) => v,
-                None => TypeValue::from(
-                    &parsed_arg_type_value
-                        .get_builtin_type_for_leaf_node()?,
-                ),
+                None => TypeValue::from(&ty),
             }
             .try_convert_type_into_value(expected_arg_type)?;
 
@@ -1020,6 +1020,7 @@ impl ast::MethodCallExpr {
                 symbols::SymbolKind::Argument,
                 value,
                 vec![],
+                token
             ));
         }
 
@@ -1028,6 +1029,7 @@ impl ast::MethodCallExpr {
             method_kind,
             props.return_type_value,
             args,
+            props.method_token
         ))
     }
 }
@@ -1068,6 +1070,7 @@ impl ast::AccessReceiver {
                 symbols::SymbolKind::FieldAccess,
                 (&ty).into(),
                 vec![],
+                Token::FieldAccess(0)
             ));
         }
 
@@ -1078,7 +1081,7 @@ impl ast::AccessReceiver {
             symbols::SymbolKind::FieldAccess,
             ty,
             vec![],
-        ));
+        ).set_token(Token::FieldAccess(254)));
     }
 }
 
@@ -1126,6 +1129,7 @@ impl ast::ArgExpr {
                     symbols::SymbolKind::Constant,
                     TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(IntegerLiteral::new(int_lit.into()))),
                     vec![],
+                    Token::Constant
                 ))
             }
             ast::ArgExpr::HexLiteral(hex_lit) => {
@@ -1134,6 +1138,7 @@ impl ast::ArgExpr {
                     symbols::SymbolKind::Constant,
                     TypeValue::Builtin(BuiltinTypeValue::HexLiteral(HexLiteral::new(hex_lit.into()))),
                     vec![],
+                    Token::Constant
                 ))
             }
             ast::ArgExpr::PrefixLengthLiteral(prefix_len_lit) => {
@@ -1142,6 +1147,7 @@ impl ast::ArgExpr {
                     symbols::SymbolKind::Constant,
                     TypeValue::Builtin(BuiltinTypeValue::PrefixLength(PrefixLength::new(prefix_len_lit.into()))),
                     vec![],
+                    Token::Constant
                 ))
             }
             ast::ArgExpr::AsnLiteral(asn_lit) => {
@@ -1153,6 +1159,7 @@ impl ast::ArgExpr {
                         asn_lit.into()
                     )),
                     vec![],
+                    Token::Constant
                 ))
             }
             _ => {
@@ -1304,6 +1311,7 @@ impl ast::BooleanExpr {
                         Some(bool_lit.0),
                     ))),
                     vec![],
+                    Token::Constant
                 ))
             }
             ast::BooleanExpr::CompareExpr(compare_expr) => {
@@ -1344,6 +1352,7 @@ impl ast::BooleanExpr {
                         None,
                     ))),
                     vec![],
+                    var.token.clone().unwrap()
                 ))
             }
         }
@@ -1741,7 +1750,7 @@ fn get_type_for_scoped_variable(
 fn get_data_source_for_ident(
     ident: ast::Identifier,
     symbols: symbols::GlobalSymbolTable,
-) -> Result<TypeDef, Box<dyn std::error::Error>> {
+) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
     let _symbols = symbols.borrow();
 
     let src = _symbols
@@ -1749,9 +1758,9 @@ fn get_data_source_for_ident(
         .ok_or("No global symbol table")?
         .get_variable(&ident.ident)
         .map(|r| match r.get_kind() {
-            symbols::SymbolKind::Rib => Ok(r.get_type()),
+            symbols::SymbolKind::Rib => Ok(r.get_type_and_token()?),
             symbols::SymbolKind::Table => {
-                Ok(TypeDef::Table(Box::new(r.get_type())))
+                Ok((TypeDef::Table(Box::new(r.get_type())), r.get_token()?))
             }
             _ => {
                 Err(format!("No data source named '{}' found.", ident.ident)
@@ -1996,6 +2005,7 @@ where
     fn get_type(&self) -> TypeDef;
     fn get_builtin_type(&self)
         -> Result<TypeDef, Box<dyn std::error::Error>>;
+    fn get_token(&self) -> Result<Token, Box<dyn std::error::Error>>;
 }
 
 impl BooleanExpr for symbols::Symbol {
@@ -2005,6 +2015,10 @@ impl BooleanExpr for symbols::Symbol {
 
     fn get_type(&self) -> TypeDef {
         symbols::Symbol::get_type(self)
+    }
+
+    fn get_token(&self) -> Result<Token, Box<dyn std::error::Error>> {
+        self.get_token()
     }
 
     fn get_builtin_type(

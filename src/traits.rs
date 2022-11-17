@@ -2,11 +2,15 @@
 
 use crate::types::{typedef::TypeDef, typevalue::TypeValue};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum Token {
     Variable(u8),
     Method(u8),
-    Argument(u8)
+    Argument(u8),
+    DataSource(u8),
+    FieldAccess(u8),
+    Constant,
+    BuiltinType
 }
 
 impl Token {

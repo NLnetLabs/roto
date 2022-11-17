@@ -10,7 +10,7 @@ use crate::{
     ast::{CompareOp, ShortString},
     types::{
         builtin::BuiltinTypeValue, typedef::TypeDef, typevalue::TypeValue,
-    },
+    }, traits::Token,
 };
 
 //------------ Symbols ------------------------------------------------------
@@ -24,12 +24,26 @@ pub(crate) struct Symbol {
     ty: TypeDef,
     args: Vec<Symbol>,
     pub value: Option<TypeValue>,
-    pub token: Option<u8>, // location: Location,
+    pub token: Option<Token>, // location: Location,
 }
 
 impl Symbol {
+    pub fn get_type_and_token(&self) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
+        let token = self.get_token()?;
+        Ok((self.ty.clone(), token))
+    }
+
+    pub fn get_token(&self) -> Result<Token, Box<dyn std::error::Error>> {
+        self.token.clone().ok_or_else(|| "No token found for symbol".into())
+    }
+
     pub fn get_type(&self) -> TypeDef {
         self.ty.clone()
+    }
+
+    pub fn set_token(mut self, token: Token) -> Self {
+        self.token = Some(token);
+        self
     }
 
     pub fn get_builtin_type(
@@ -83,6 +97,10 @@ impl Symbol {
         self.value.as_ref()
     }
 
+    pub fn get_type_and_token_for_value(&self) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
+        self.get_value().map(TypeDef::from).zip(self.token.clone()).map_or_else(|| Err("No value".into()), Ok)
+    }
+
     pub fn get_value_owned(self) -> Option<TypeValue> {
         self.value
     }
@@ -120,6 +138,7 @@ impl Symbol {
         kind: SymbolKind,
         value: TypeValue,
         args: Vec<Symbol>,
+        token: Token
     ) -> Self {
         Symbol {
             name,
@@ -127,16 +146,17 @@ impl Symbol {
             ty: TypeDef::None,
             args,
             value: Some(value),
-            token: None,
+            token: Some(token),
         }
     }
 
-    pub fn new_argument_type(ty: TypeDef) -> Self {
+    pub fn new_argument_type(ty: TypeDef, token: Token) -> Self {
         Symbol::new_with_value(
             "arg".into(),
             SymbolKind::Argument,
             (&ty).into(),
             vec![],
+            token
         )
     }
 }
@@ -239,7 +259,7 @@ impl SymbolTable {
     pub(crate) fn move_symbol_into(
         &mut self,
         key: ShortString,
-        symbol: Symbol,
+        mut symbol: Symbol,
     ) -> Result<(), Box<dyn std::error::Error>> {
         if self.variables.contains_key(&key) {
             return Err(format!(
@@ -249,6 +269,7 @@ impl SymbolTable {
             .into());
         }
 
+        symbol = symbol.set_token(Token::Variable(self.variables.len() as u8));
         self.variables.insert(key, symbol);
         Ok(())
     }
@@ -276,6 +297,13 @@ impl SymbolTable {
             .into());
         }
 
+        let token_int = self.variables.len() as u8;
+
+        let token = Some(match kind {
+            SymbolKind::Rib | SymbolKind::Table | SymbolKind::PrefixList => Token::DataSource(token_int),
+            _ => Token::Variable(token_int),
+        });
+        
         self.variables.insert(
             key,
             Symbol {
@@ -284,7 +312,7 @@ impl SymbolTable {
                 ty,
                 args,
                 value,
-                token: None,
+                token
             },
         );
         Ok(())
@@ -313,6 +341,10 @@ impl SymbolTable {
             .into());
         }
 
+        let token_int = self.arguments.len() as u8;
+
+        let token = Some(Token::Argument(token_int));
+
         self.arguments.insert(
             key,
             Symbol {
@@ -321,7 +353,7 @@ impl SymbolTable {
                 ty,
                 args,
                 value,
-                token: None,
+                token,
             },
         );
         Ok(())
@@ -476,6 +508,10 @@ impl SymbolTable {
         self.types.insert(name, ty);
     }
 
+    pub fn get_type(&self, name: &ShortString) -> Option<&TypeDef> {
+        self.types.get(name)
+    }
+
     pub(crate) fn get_variable(
         &self,
         name: &ShortString,
@@ -484,10 +520,6 @@ impl SymbolTable {
             .get(name)
             .or_else(|| self.arguments.get(name))
             .ok_or_else(|| format!("Symbol {} not found", name).into())
-    }
-
-    pub fn get_type(&self, name: &ShortString) -> Option<&TypeDef> {
-        self.types.get(name)
     }
 
     pub(crate) fn get_argument(
