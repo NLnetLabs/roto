@@ -1074,8 +1074,8 @@ impl ast::AccessReceiver {
             ));
         }
 
-        // This is an access receiver without fields, we don't which one
-        // yet. The caller of this function will need to determine.
+        // This is an access receiver without fields, we don't know which
+        // one yet. The caller of this function will need to determine.
         return Ok(symbols::Symbol::new(
             search_var.as_str().into(),
             symbols::SymbolKind::FieldAccess,
@@ -1157,6 +1157,18 @@ impl ast::ArgExpr {
                     symbols::SymbolKind::Constant,
                     TypeValue::Builtin(BuiltinTypeValue::Asn(
                         asn_lit.into()
+                    )),
+                    vec![],
+                    Token::Constant
+                ))
+            }
+            ast::ArgExpr::BooleanLit(bool_lit) => {
+                println!("bool_lit {:?}", bool_lit);
+                Ok(symbols::Symbol::new_with_value(
+                    bool_lit.into(),
+                    symbols::SymbolKind::Constant,
+                    TypeValue::Builtin(BuiltinTypeValue::Boolean(
+                        bool_lit.into()
                     )),
                     vec![],
                     Token::Constant
