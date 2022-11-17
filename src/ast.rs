@@ -20,7 +20,7 @@ use nom::{
 };
 use smallvec::SmallVec;
 
-use crate::types::builtin::Asn;
+use crate::types::builtin::{Asn, Boolean};
 
 /// ======== Root ===========================================================
 
@@ -1309,6 +1309,18 @@ impl BooleanLiteral {
     }
 }
 
+impl From<&'_ BooleanLiteral> for ShortString {
+    fn from(literal: &BooleanLiteral) -> Self {
+        ShortString::from(literal.0.to_string().as_str())
+    }
+}
+
+impl From<&'_ BooleanLiteral> for Boolean {
+    fn from(literal: &BooleanLiteral) -> Self {
+        Boolean(Some(literal.0))
+    }
+}
+
 //------------ ByteStringLiteral --------------------------------------------
 /// A byte string literal is a sequence of bytes, preceded by '0x'
 /// ByteStringLiteral ::= 0x[0-9a-fA-F]+
@@ -1391,12 +1403,12 @@ fn accept_reject(
 #[derive(Clone, Debug)]
 pub enum ArgExpr {
     CallExpr(CallExpr),
-    StringLiteral(StringLiteral),   // leaf node
-    IntegerLiteral(IntegerLiteral), // leaf node
-    PrefixLengthLiteral(PrefixLengthLiteral), // leaf node
-    AsnLiteral(AsnLiteral),         // leaf node
-    HexLiteral(HexLiteral),         // leaf node
-    Bool(bool),                     // leaf node
+    StringLiteral(StringLiteral),               // leaf node
+    IntegerLiteral(IntegerLiteral),             // leaf node
+    PrefixLengthLiteral(PrefixLengthLiteral),   // leaf node
+    AsnLiteral(AsnLiteral),                     // leaf node
+    HexLiteral(HexLiteral),                     // leaf node
+    BooleanLit(BooleanLiteral),                 // leaf node
     PrefixMatchExpr(PrefixMatchExpr),
     AccessReceiver(AccessReceiver),
     // TypeIdentifier(TypeIdentifier),
@@ -1412,8 +1424,8 @@ impl ArgExpr {
             map(IntegerLiteral::parse, ArgExpr::IntegerLiteral),
             map(PrefixLengthLiteral::parse, ArgExpr::PrefixLengthLiteral),
             map(AsnLiteral::parse, ArgExpr::AsnLiteral),
-            map(tag("true"), |_| ArgExpr::Bool(true)),
-            map(tag("false"), |_| ArgExpr::Bool(false)),
+            map(tag("true"), |_| ArgExpr::BooleanLit(BooleanLiteral(true))),
+            map(tag("false"), |_| ArgExpr::BooleanLit(BooleanLiteral(false))),
             map(PrefixMatchExpr::parse, ArgExpr::PrefixMatchExpr),
             map(AccessReceiver::parse, ArgExpr::AccessReceiver),
             // map(TypeIdentifier::parse, ArgExpr::TypeIdentifier),

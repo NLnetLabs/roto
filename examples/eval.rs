@@ -52,6 +52,7 @@ fn main() {
                     extra_in_table = source_asns.contains(extra_asn);
                     route_in_table = source_asns.contains(route.as-path.origin());
                     ROV_INVALID_AS = 0xFFFFFF010;
+                    some_bool = false;
 
                     // specify another RIB that is used in this filter.
                     prefix_len = 24;
