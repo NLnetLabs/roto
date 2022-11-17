@@ -8,9 +8,9 @@ pub(crate) enum Token {
     Method(u8),
     Argument(u8),
     DataSource(u8),
-    FieldAccess(u8),
+    FieldAccess(Vec<u8>),
     Constant,
-    BuiltinType
+    BuiltinType(u8)
 }
 
 impl Token {
@@ -20,6 +20,13 @@ impl Token {
             "method" => Token::Method(value),
             "argument" => Token::Argument(value),
             _ => panic!("Unknown token type")
+        }
+    }
+
+    pub fn push(&mut self, value: u8) {
+        match self {
+            Token::FieldAccess(v) => v.push(value),
+            _ => panic!("Cannot push to this token")
         }
     }
 }

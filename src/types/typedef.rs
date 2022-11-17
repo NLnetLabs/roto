@@ -75,7 +75,7 @@ impl TypeDef {
     ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
         println!("has_fields_chain: {:?}", fields);
         println!("self: {:?}", self);
-        let mut current_type_token = (self, Token::FieldAccess(0));
+        let mut current_type_token = (self, Token::FieldAccess(vec![]));
         for field in fields {
             let mut index = 0;
             if let (TypeDef::Record(_fields), _) = current_type_token {
@@ -84,8 +84,9 @@ impl TypeDef {
                     .enumerate()
                     .find(|(i, (ident, _))| { index = *i; ident == &field.ident.as_str() })
                 {
-                    current_type_token = (ty, Token::FieldAccess(index as u8));
-                    println!("UwU {}", field.ident);
+                    current_type_token = (ty, current_type_token.1);
+                    current_type_token.1.push(index as u8);
+                    println!("UwU {} {}", field.ident, index);
                 } else {
                     println!("AA none fields:: {}", field.ident.as_str());
                     return Err(Box::new(std::io::Error::new(

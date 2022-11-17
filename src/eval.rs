@@ -675,7 +675,7 @@ impl<'a> ast::CallExpr {
                                     symbols,
                                     scope,
                                 )?],
-                            ),
+                            )
                         ));
                     }
                 }
@@ -977,7 +977,7 @@ impl ast::MethodCallExpr {
                             TypeDef::try_from(TypeIdentifier {
                                 ident: parsed_arg_type.get_name(),
                             })
-                            .map(|td| (td, Token::BuiltinType))
+                            .map(|td| (td, Token::BuiltinType(0)))
                         })?;
 
                     println!("var {:?}", var);
@@ -1070,7 +1070,7 @@ impl ast::AccessReceiver {
                 symbols::SymbolKind::FieldAccess,
                 (&ty).into(),
                 vec![],
-                Token::FieldAccess(0),
+                field_access.get_token()?,
             ));
         }
 
@@ -1082,7 +1082,7 @@ impl ast::AccessReceiver {
             ty,
             vec![],
         )
-        .set_token(Token::FieldAccess(254)));
+        .set_token(Token::FieldAccess(vec![])));
     }
 }
 
@@ -1218,7 +1218,7 @@ impl ast::FieldAccessExpr {
 
         let mut search_var = receiver.to_string();
         let mut search_vec = vec![receiver.clone()];
-        let mut ty_to = (TypeDef::None, Token::FieldAccess(0));
+        let mut ty_to = (TypeDef::None, Token::FieldAccess(vec![]));
 
         let rec_type = get_type_for_scoped_variable(
             &[receiver.clone()],
