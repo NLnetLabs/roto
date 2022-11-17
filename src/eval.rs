@@ -1092,6 +1092,9 @@ impl ast::ArgExpr {
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         match self {
+            // an expression ending in a a method call (e.g. `foo.bar()`).
+            // Note that the evaluation of the method call will check for
+            // the existence of the method.
             ast::ArgExpr::CallExpr(call_expr) => {
                 println!("arg base_name_ident {:?}", call_expr);
 
@@ -1103,12 +1106,16 @@ impl ast::ArgExpr {
                     )?
                     .1)
             }
-            ast::ArgExpr::AccessReceiver(call_receiver) => {
+            // an expression ending in a field access (e.g. `foo.bar`) or a
+            // stand-alone field access (e.g. `bar`). We are not checking
+            // the existence of the field here, that will have to be done by
+            // the caller.
+            ast::ArgExpr::AccessReceiver(access_receiver) => {
                 println!(
                     "<--- access receiver arg base_name_ident {:?}",
-                    call_receiver
+                    access_receiver
                 );
-                let ar = call_receiver.eval(symbols, scope)?;
+                let ar = access_receiver.eval(symbols, scope)?;
                 println!("---> access receiver arg base_name_ident {:?}", ar);
                 Ok(ar)
             }
@@ -1179,8 +1186,6 @@ impl ast::ArgExpr {
             }
             // Identifier(Identifier),
             // TypeIdentifier(TypeIdentifier),
-            // StringLiteral(StringLiteral),
-            // Bool(bool),
             // PrefixMatchExpr(PrefixMatchExpr),
         }
     }
