@@ -382,17 +382,12 @@ impl<'a> ast::Define {
             &scope,
         )?;
 
-        // Assignments can only be to method calls or constants, there is
-        // no way to assign a variable to a field (that would be aliasing
-        // basically).
         for assignment in &self.body.assignments {
             let s = ast::ArgExpr::eval(
                 &assignment.1,
-                // assignment.0.ident.clone(),
                 symbols.clone(),
                 scope.clone(),
             )?;
-
 
             println!("symbol assigned {:?}", s);
             declare_variable_from_symbol(
@@ -762,22 +757,26 @@ impl<'a> ast::CallExpr {
                             scope.clone(),
                         ) {
                             Ok(var_type) => {
-                                println!("??? variable {:?}", var_type);
+                                println!(
+                                    "??? variable {:?} {:?}",
+                                    var_type,
+                                    receiver.get_ident()
+                                );
 
                                 Ok((
                                     receiver_ident.clone(),
                                     symbols::Symbol::new(
                                         receiver_ident,
                                         symbols::SymbolKind::Variable,
-                                        var_type.clone(),
+                                        var_type.0.clone(),
                                         vec![ast::MethodCallExpr::eval(
                                             self.get_method_call(),
                                             symbols::SymbolKind::VariableMethodCall,
-                                            var_type,
+                                            var_type.0,
                                             symbols,
                                             scope,
                                         )?],
-                                    ),
+                                    ).set_token(var_type.1),
                                 ))
                             }
                             Err(_err) => {
@@ -870,7 +869,7 @@ impl ast::MethodCallExpr {
                 method_kind,
                 props.return_type_value,
                 vec![],
-                props.method_token
+                props.method_token,
             ));
         }
 
@@ -951,7 +950,7 @@ impl ast::MethodCallExpr {
                                 .map(|s| (s.get_type_and_token()))?
                         })
                         .or_else(|_: Box<dyn std::error::Error>| {
-                            // is it the name of a data source?                            
+                            // is it the name of a data source?
                             let (type_def, token) =
                                 get_data_source_for_ident(
                                     ident.clone(),
@@ -977,7 +976,8 @@ impl ast::MethodCallExpr {
                             kind = symbols::SymbolKind::BuiltInType;
                             TypeDef::try_from(TypeIdentifier {
                                 ident: parsed_arg_type.get_name(),
-                            }).map(|td| (td, Token::BuiltinType))
+                            })
+                            .map(|td| (td, Token::BuiltinType))
                         })?;
 
                     println!("var {:?}", var);
@@ -986,7 +986,7 @@ impl ast::MethodCallExpr {
                         kind,
                         (&var).into(),
                         vec![],
-                        token
+                        token,
                     )
                 }
             } else {
@@ -1001,8 +1001,8 @@ impl ast::MethodCallExpr {
             // Symbols containing constants have no type set, only a
             // type_value, make sure to use that, in order to keep that
             // value. Otherwise, we can just create a new type value with the
-            // value set to None. 
-            // 
+            // value set to None.
+            //
             // Note that only built-in types can be converted.
             // Note that `try_convert_type_into` includes from a type to the
             // same type.
@@ -1020,7 +1020,7 @@ impl ast::MethodCallExpr {
                 symbols::SymbolKind::Argument,
                 value,
                 vec![],
-                token
+                token,
             ));
         }
 
@@ -1029,7 +1029,7 @@ impl ast::MethodCallExpr {
             method_kind,
             props.return_type_value,
             args,
-            props.method_token
+            props.method_token,
         ))
     }
 }
@@ -1070,7 +1070,7 @@ impl ast::AccessReceiver {
                 symbols::SymbolKind::FieldAccess,
                 (&ty).into(),
                 vec![],
-                Token::FieldAccess(0)
+                Token::FieldAccess(0),
             ));
         }
 
@@ -1081,7 +1081,8 @@ impl ast::AccessReceiver {
             symbols::SymbolKind::FieldAccess,
             ty,
             vec![],
-        ).set_token(Token::FieldAccess(254)));
+        )
+        .set_token(Token::FieldAccess(254)));
     }
 }
 
@@ -1217,7 +1218,7 @@ impl ast::FieldAccessExpr {
 
         let mut search_var = receiver.to_string();
         let mut search_vec = vec![receiver.clone()];
-        let mut ty = TypeDef::None;
+        let mut ty_to = (TypeDef::None, Token::FieldAccess(0));
 
         let rec_type = get_type_for_scoped_variable(
             &[receiver.clone()],
@@ -1227,18 +1228,20 @@ impl ast::FieldAccessExpr {
 
         // First, check if the complete field expression is a built-in type,
         // if so we can return it right away.
-        if let Ok(field_type) = rec_type.has_fields_chain(&self.field_names) {
+        if let Ok(field_type) = rec_type.0.has_fields_chain(&self.field_names)
+        {
             println!("::: field_type {:?}", field_type);
             println!("::: self {:?}", self);
 
-            if BuiltinTypeValue::try_from(&field_type).is_ok() {
+            if BuiltinTypeValue::try_from(&field_type.0).is_ok() {
                 let name = self.field_names.join(".");
                 return Ok(symbols::Symbol::new(
                     format!("{}.{}", search_var, name).as_str().into(),
                     symbols::SymbolKind::FieldAccess,
-                    field_type,
+                    field_type.0,
                     vec![],
-                ));
+                )
+                .set_token(field_type.1));
             }
         };
 
@@ -1252,7 +1255,7 @@ impl ast::FieldAccessExpr {
             search_vec.push(field_name.clone());
 
             let _symbols = symbols.clone();
-            ty = get_type_for_scoped_variable(
+            ty_to = get_type_for_scoped_variable(
                 &search_vec,
                 _symbols,
                 scope.clone(),
@@ -1265,9 +1268,10 @@ impl ast::FieldAccessExpr {
         Ok(symbols::Symbol::new(
             search_var.as_str().into(),
             symbols::SymbolKind::FieldAccess,
-            ty,
+            ty_to.0,
             vec![],
-        ))
+        )
+        .set_token(ty_to.1))
     }
 }
 
@@ -1328,7 +1332,7 @@ impl ast::BooleanExpr {
                         Some(bool_lit.0),
                     ))),
                     vec![],
-                    Token::Constant
+                    Token::Constant,
                 ))
             }
             ast::BooleanExpr::CompareExpr(compare_expr) => {
@@ -1369,7 +1373,7 @@ impl ast::BooleanExpr {
                         None,
                     ))),
                     vec![],
-                    var.token.clone().unwrap()
+                    var.token.clone().unwrap(),
                 ))
             }
         }
@@ -1406,17 +1410,18 @@ impl ast::CompareExpr {
         // Compare Argument. It has to end in a leaf node, otherwise it's
         // an error.
         let left_s = self.left.eval(_symbols, scope)?;
+        println!("left_s: {:?}", left_s);
         let left_type = match left_s.get_kind() {
             // Any literal in the source code should end up as
             // SymbolKind::Constant.
             symbols::SymbolKind::Constant => {
-                left_s.get_builtin_type_for_leaf_node()?
+                left_s.get_builtin_type()?
             }
             // A FieldAccess could be a leaf node on its own (if its type
             // is a builtin type), or it could have a leaf node in its `args`
             // field. Note that it cannot be both a leaf node and have
             // arguments.
-            symbols::SymbolKind::FieldAccess => {
+            symbols::SymbolKind::FieldAccess | symbols::SymbolKind::Variable => {
                 let args = left_s.get_args();
                 let s = if !args.is_empty() {
                     match left_s.get_args()[0].get_kind() {
@@ -1437,13 +1442,9 @@ impl ast::CompareExpr {
                     }
                 } else {
                     // This is a leaf node.
-                    left_s.get_builtin_type()?
+                    left_s.get_builtin_type_for_leaf_node()?
                 };
                 s
-            }
-            // A variable must be a leaf node, and its type must be a builtin
-            symbols::SymbolKind::Variable => {
-                left_s.get_builtin_type_for_leaf_node()?
             }
             _ => {
                 return Err(format!(
@@ -1459,7 +1460,7 @@ impl ast::CompareExpr {
             symbols::SymbolKind::Constant => {
                 right_s.get_builtin_type_for_leaf_node()?
             }
-            symbols::SymbolKind::FieldAccess => {
+            symbols::SymbolKind::FieldAccess | symbols::SymbolKind::Variable => {
                 let args = right_s.get_args();
                 let s = if !args.is_empty() {
                     match right_s.get_args()[0].get_kind() {
@@ -1480,9 +1481,6 @@ impl ast::CompareExpr {
                     right_s.get_builtin_type()?
                 };
                 s
-            }
-            symbols::SymbolKind::Variable => {
-                right_s.get_builtin_type_for_leaf_node()?
             }
             _ => {
                 return Err(format!(
@@ -1648,7 +1646,8 @@ fn check_type(
 
     // is it in the global table?
     let global_ty = symbols.get(&symbols::Scope::Global).and_then(|gt| {
-        gt.get_variable(&ty.ident).ok()
+        gt.get_variable(&ty.ident)
+            .ok()
             .map(|s| (s.get_type(), s.get_kind()))
     });
     if let Some(ty) = global_ty {
@@ -1665,7 +1664,8 @@ fn check_type(
             let module_ty = symbols
                 .get(scope)
                 .and_then(|gt| {
-                    gt.get_variable(&ty.ident).ok()
+                    gt.get_variable(&ty.ident)
+                        .ok()
                         .map(|s| (s.get_type(), s.get_kind()))
                 })
                 .ok_or(format!(
@@ -1712,7 +1712,7 @@ fn get_type_for_scoped_variable(
     fields: &[ast::Identifier],
     symbols: symbols::GlobalSymbolTable<'_>,
     scope: symbols::Scope,
-) -> Result<TypeDef, Box<dyn std::error::Error>> {
+) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
     let symbols = symbols.borrow();
     let search_str = fields.join(".");
     println!("search_str: {}", search_str);
@@ -1722,7 +1722,9 @@ fn get_type_for_scoped_variable(
             return symbols
                 .get(&scope)
                 .and_then(|gt| {
-                    gt.get_variable(&search_str.as_str().into()).map(|s| s.get_type()).ok()
+                    gt.get_variable(&search_str.as_str().into()).map(|s| s.get_type_and_token_for_type_or_value().unwrap_or_else(
+                        |_| panic!("No token found for variable '{}' in module '{}'", search_str, module)
+                    )).ok()
                 })
                 .map_or_else(
                     // no, let's go over the chain of fields to see if it's
@@ -1734,7 +1736,7 @@ fn get_type_for_scoped_variable(
                                 gt.get_variable(&fields[0].ident).ok()
                                     .or_else(|| {
                                         gt.get_argument(&fields[0].ident).ok()
-                                    }).map(|s| s.get_type())
+                                    }).map(|s| s.get_type_and_token())
                             })
                             .ok_or(format!(
                                 "No data source named '{}' found in module '{}' (for variable '{}')",
@@ -1743,12 +1745,12 @@ fn get_type_for_scoped_variable(
 
                         println!("data_src_type: {:?}", data_src_type);
                         // println!("field {:?}", fields[1]);
-                        let field_ty = data_src_type.has_fields_chain(&fields[1..]).map_err(|err| format!(
+                        let field_ty_to = data_src_type?.0.has_fields_chain(&fields[1..]).map_err(|err| format!(
                             "{} on field '{}' for variable '{}' found in module '{}'",
                             err, fields[1], fields[0].ident, module
                         ))?;
 
-                        Ok(field_ty)
+                        Ok(field_ty_to)
                     },
                     // yes, it is:
                     Ok,

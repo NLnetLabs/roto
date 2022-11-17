@@ -3,6 +3,7 @@
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 
+use crate::traits::Token;
 use crate::types::collections::ElementTypeValue;
 use crate::{
     ast::{AcceptReject, ShortString},
@@ -68,20 +69,22 @@ impl TypeDef {
         ))
     }
 
-    pub fn has_fields_chain(
+    pub(crate) fn has_fields_chain(
         &self,
         fields: &[crate::ast::Identifier],
-    ) -> Result<TypeDef, Box<dyn std::error::Error>> {
+    ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
         println!("has_fields_chain: {:?}", fields);
         println!("self: {:?}", self);
-        let mut current_type = self;
+        let mut current_type_token = (self, Token::FieldAccess(0));
         for field in fields {
-            if let TypeDef::Record(_fields) = current_type {
-                if let Some((_, ty)) = _fields
+            let mut index = 0;
+            if let (TypeDef::Record(_fields), _) = current_type_token {
+                if let Some((_, (_, ty))) = _fields
                     .iter()
-                    .find(|(ident, _)| ident == &field.ident.as_str())
+                    .enumerate()
+                    .find(|(i, (ident, _))| { index = *i; ident == &field.ident.as_str() })
                 {
-                    current_type = ty;
+                    current_type_token = (ty, Token::FieldAccess(index as u8));
                     println!("UwU {}", field.ident);
                 } else {
                     println!("AA none fields:: {}", field.ident.as_str());
@@ -98,7 +101,7 @@ impl TypeDef {
                 )));
             }
         }
-        Ok(current_type.clone())
+        Ok((current_type_token.0.clone(), current_type_token.1))
     }
 
     pub(crate) fn _check_record_fields(

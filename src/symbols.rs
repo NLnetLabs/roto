@@ -29,6 +29,8 @@ pub(crate) struct Symbol {
 }
 
 impl Symbol {
+
+    // gets the type only from the `ty` field.
     pub fn get_type_and_token(
         &self,
     ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
@@ -36,20 +38,28 @@ impl Symbol {
         Ok((self.ty.clone(), token))
     }
 
-    pub fn get_token(&self) -> Result<Token, Box<dyn std::error::Error>> {
-        self.token
-            .clone()
-            .ok_or_else(|| "No token found for symbol".into())
+    // gets the type only from the conversion of the `value` field.
+    pub fn get_type_and_token_for_value(
+        &self,
+    ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
+        self.get_value()
+            .map(TypeDef::from)
+            .zip(self.token.clone())
+            .map_or_else(|| Err("No value".into()), Ok)
     }
 
-    pub fn get_type(&self) -> TypeDef {
-        self.ty.clone()
+    // get the type from resp. either the `ty` field or the `value` field.
+    pub fn get_type_and_token_for_type_or_value(
+        &self,
+    ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
+        let ty = self.get_type();
+        if ty != TypeDef::None {
+            Ok((self.get_type(), self.get_token()?))
+        } else {
+            self.get_type_and_token_for_value()
+        }
     }
 
-    pub fn set_token(mut self, token: Token) -> Self {
-        self.token = Some(token);
-        self
-    }
 
     pub fn get_builtin_type(
         &self,
@@ -66,7 +76,7 @@ impl Symbol {
         } else if let Some(TypeValue::Builtin(ty)) = &self.value {
             Ok(ty.into())
         } else {
-            Err("Not a builtin type".into())
+            Err(format!("a Type '{:?}' is not a builtin type", self).into())
         }
     }
 
@@ -76,7 +86,7 @@ impl Symbol {
         if let Some(TypeValue::Builtin(tv)) = &self.value {
             Ok(tv.into())
         } else {
-            Err(format!("Not a builtin type {:?}", self).into())
+            Err(format!("b Not a builtin type {:?}", self).into())
         }
     }
 
@@ -94,21 +104,27 @@ impl Symbol {
         self.kind
     }
 
+    pub fn get_token(&self) -> Result<Token, Box<dyn std::error::Error>> {
+        self.token
+            .clone()
+            .ok_or_else(|| "No token found for symbol".into())
+    }
+
+    pub fn get_type(&self) -> TypeDef {
+        self.ty.clone()
+    }
+
+    pub fn set_token(mut self, token: Token) -> Self {
+        self.token = Some(token);
+        self
+    }
+
     pub fn get_name(&self) -> ShortString {
         self.name.clone()
     }
 
     pub fn get_value(&self) -> Option<&TypeValue> {
         self.value.as_ref()
-    }
-
-    pub fn get_type_and_token_for_value(
-        &self,
-    ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
-        self.get_value()
-            .map(TypeDef::from)
-            .zip(self.token.clone())
-            .map_or_else(|| Err("No value".into()), Ok)
     }
 
     pub fn get_value_owned(self) -> Option<TypeValue> {
