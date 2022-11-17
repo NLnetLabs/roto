@@ -1756,17 +1756,7 @@ fn get_data_source_for_ident(
     let src = _symbols
         .get(&symbols::Scope::Global)
         .ok_or("No global symbol table")?
-        .get_variable(&ident.ident)
-        .map(|r| match r.get_kind() {
-            symbols::SymbolKind::Rib => Ok(r.get_type_and_token()?),
-            symbols::SymbolKind::Table => {
-                Ok((TypeDef::Table(Box::new(r.get_type())), r.get_token()?))
-            }
-            _ => {
-                Err(format!("No data source named '{}' found.", ident.ident)
-                    .into())
-            }
-        })?;
+        .get_data_source(&ident.ident);
 
     drop(_symbols);
 

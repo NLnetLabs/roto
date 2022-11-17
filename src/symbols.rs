@@ -8,9 +8,10 @@ use std::{
 
 use crate::{
     ast::{CompareOp, ShortString},
+    traits::Token,
     types::{
         builtin::BuiltinTypeValue, typedef::TypeDef, typevalue::TypeValue,
-    }, traits::Token,
+    },
 };
 
 //------------ Symbols ------------------------------------------------------
@@ -28,13 +29,17 @@ pub(crate) struct Symbol {
 }
 
 impl Symbol {
-    pub fn get_type_and_token(&self) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
+    pub fn get_type_and_token(
+        &self,
+    ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
         let token = self.get_token()?;
         Ok((self.ty.clone(), token))
     }
 
     pub fn get_token(&self) -> Result<Token, Box<dyn std::error::Error>> {
-        self.token.clone().ok_or_else(|| "No token found for symbol".into())
+        self.token
+            .clone()
+            .ok_or_else(|| "No token found for symbol".into())
     }
 
     pub fn get_type(&self) -> TypeDef {
@@ -97,8 +102,13 @@ impl Symbol {
         self.value.as_ref()
     }
 
-    pub fn get_type_and_token_for_value(&self) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
-        self.get_value().map(TypeDef::from).zip(self.token.clone()).map_or_else(|| Err("No value".into()), Ok)
+    pub fn get_type_and_token_for_value(
+        &self,
+    ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
+        self.get_value()
+            .map(TypeDef::from)
+            .zip(self.token.clone())
+            .map_or_else(|| Err("No value".into()), Ok)
     }
 
     pub fn get_value_owned(self) -> Option<TypeValue> {
@@ -138,7 +148,7 @@ impl Symbol {
         kind: SymbolKind,
         value: TypeValue,
         args: Vec<Symbol>,
-        token: Token
+        token: Token,
     ) -> Self {
         Symbol {
             name,
@@ -156,15 +166,15 @@ impl Symbol {
             SymbolKind::Argument,
             (&ty).into(),
             vec![],
-            token
+            token,
         )
     }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum SymbolKind {
-    Variable,      // A variable defined by the user
-    Constant,      // A literal value or a module-level variable
+    Variable, // A variable defined by the user
+    Constant, // A literal value or a module-level variable
     Argument,
     BuiltInType,
     AnonymousType, // type of a sub-record
@@ -269,7 +279,8 @@ impl SymbolTable {
             .into());
         }
 
-        symbol = symbol.set_token(Token::Variable(self.variables.len() as u8));
+        symbol =
+            symbol.set_token(Token::Variable(self.variables.len() as u8));
         self.variables.insert(key, symbol);
         Ok(())
     }
@@ -300,10 +311,12 @@ impl SymbolTable {
         let token_int = self.variables.len() as u8;
 
         let token = Some(match kind {
-            SymbolKind::Rib | SymbolKind::Table | SymbolKind::PrefixList => Token::DataSource(token_int),
+            SymbolKind::Rib | SymbolKind::Table | SymbolKind::PrefixList => {
+                Token::DataSource(token_int)
+            }
             _ => Token::Variable(token_int),
         });
-        
+
         self.variables.insert(
             key,
             Symbol {
@@ -312,7 +325,7 @@ impl SymbolTable {
                 ty,
                 args,
                 value,
-                token
+                token,
             },
         );
         Ok(())
@@ -519,7 +532,7 @@ impl SymbolTable {
         self.variables
             .get(name)
             .or_else(|| self.arguments.get(name))
-            .ok_or_else(|| format!("Symbol {} not found", name).into())
+            .ok_or_else(|| format!("Symbol '{}' not found", name).into())
     }
 
     pub(crate) fn get_argument(
@@ -529,6 +542,26 @@ impl SymbolTable {
         self.arguments
             .get(name)
             .or_else(|| self.arguments.get(name))
-            .ok_or_else(|| format!("Symbol {} not found", name).into())
+            .ok_or_else(|| format!("Symbol '{}' not found", name).into())
+    }
+
+    pub(crate) fn get_data_source(
+        &self,
+        name: &ShortString,
+    ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
+        let src: Result<&Symbol, Box<dyn std::error::Error>> = self
+            .variables
+            .get(name)
+            .ok_or_else(|| format!("Symbol '{}' not found", name).into());
+
+        src.map(|r| match r.get_kind() {
+            SymbolKind::Rib => Ok(r.get_type_and_token()?),
+            SymbolKind::Table => {
+                Ok((TypeDef::Table(Box::new(r.get_type())), r.get_token()?))
+            }
+            _ => {
+                Err(format!("No data source named '{}' found.", name).into())
+            }
+        })?
     }
 }
