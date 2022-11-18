@@ -383,12 +383,15 @@ impl<'a> ast::Define {
         )?;
 
         for assignment in &self.body.assignments {
+            // rhs part of the assignment can only be an Argument.
             let s = ast::ArgExpr::eval(
                 &assignment.1,
                 symbols.clone(),
                 scope.clone(),
             )?;
 
+            // lhs of the assignemnt represents the name of the variable or
+            // constant.
             println!("symbol assigned {:?}", s);
             declare_variable_from_symbol(
                 Some(assignment.0.ident.clone()),
@@ -1051,7 +1054,7 @@ impl ast::AccessReceiver {
         let mut ty = TypeDef::None;
 
         // Check if this access receiver has a field beyond the data source.
-        // If so we will return a leaf node, meaning the value has to set.
+        // If so we will return a leaf node, meaning the value has to be set.
         if let Some(fields) = &self.get_fields() {
             println!("AccessReceiver with fields {:?}", self);
 
@@ -1632,7 +1635,7 @@ impl ast::GroupedLogicalExpr {
 
 //============ Helper functions =============================================
 
-fn check_type(
+fn check_type_identifier(
     ty: ast::TypeIdentifier,
     symbols: symbols::GlobalSymbolTable,
     scope: &symbols::Scope,
@@ -1756,8 +1759,8 @@ fn get_type_for_scoped_variable(
                     Ok,
                 );
         }
-        // There is NO global scope for variables.  All vars are all local to
-        // a module.
+        // There is NO global scope for variables. All vars are always
+        // in the namespace of a module.
         symbols::Scope::Global => Err(format!(
             "No variable named '{}' found in global scope.",
             fields.join(".").as_str()
@@ -1797,7 +1800,7 @@ fn declare_variable(
     match &scope {
         symbols::Scope::Module(module) => {
             // Does the supplied type exist in our scope?
-            let ty = check_type(type_ident.ty, _symbols, scope)?;
+            let ty = check_type_identifier(type_ident.ty, _symbols, scope)?;
 
             // drop(_symbols);
 
@@ -1841,7 +1844,7 @@ fn declare_argument(
     match &scope {
         symbols::Scope::Module(module) => {
             // Does the supplied type exist in our scope?
-            let ty = check_type(type_ident.ty, _symbols, scope)?;
+            let ty = check_type_identifier(type_ident.ty, _symbols, scope)?;
 
             // Apparently, we have a type.  Let's add it to the symbol table.
             let mut _symbols = symbols.borrow_mut();
@@ -1881,7 +1884,6 @@ fn declare_variable_from_symbol(
 
     match &scope {
         symbols::Scope::Module(module) => {
-            // drop(_symbols);
 
             // Apparently, we have a type.  Let's add it to the symbol table.
             let mut _symbols = symbols.borrow_mut();
