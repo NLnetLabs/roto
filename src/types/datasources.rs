@@ -130,7 +130,7 @@ impl RotoFilter<TableToken> for Table {
             "get" => Ok(MethodProps::new(
                 TypeValue::Record(self.record),
                 TableToken::Get.into_u8(),
-                vec![TypeDef::Prefix]
+                vec![TypeDef::Asn]
             )),
             "contains" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
