@@ -38,17 +38,17 @@ impl RotoFilter<RibToken> for Rib {
         match method_name.ident.as_str() {
             "match" => Ok(MethodProps::new(
                 TypeValue::Record(self.record),
-                RibToken::Match.into_u8(),
+                RibToken::Match.to_u8(),
                 vec![TypeDef::Prefix]
             )),
             "longest_match" => Ok(MethodProps::new(
                 TypeValue::Record(self.record),
-                RibToken::LongestMatch.into_u8(),
+                RibToken::LongestMatch.to_u8(),
                 vec![TypeDef::Prefix]
             )),
             "contains" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                RibToken::Contains.into_u8(),
+                RibToken::Contains.to_u8(),
                 vec![TypeDef::Prefix]
             )),
             _ => {
@@ -129,12 +129,12 @@ impl RotoFilter<TableToken> for Table {
         match method_name.ident.as_str() {
             "get" => Ok(MethodProps::new(
                 TypeValue::Record(self.record),
-                TableToken::Get.into_u8(),
+                TableToken::Get.to_u8(),
                 vec![TypeDef::Asn]
             )),
             "contains" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                TableToken::Contains.into_u8(),
+                TableToken::Contains.to_u8(),
                 vec![TypeDef::Asn]
             )), 
             _ => {

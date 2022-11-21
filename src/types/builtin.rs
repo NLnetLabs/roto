@@ -329,7 +329,7 @@ impl RotoFilter<U32Token> for U32 {
         match method_name.ident.as_str() {
             "set" => Ok(MethodProps::new(
                 TypeValue::None,
-                U32Token::Set.into_u8(),
+                U32Token::Set.to_u8(),
                 vec![TypeDef::IntegerLiteral])),
             _ => Err(format!(
                 "Unknown method: '{}' for type U32",
@@ -397,7 +397,7 @@ impl RotoFilter<U8Token> for U8 {
         match method_name.ident.as_str() {
             "set" => Ok(MethodProps::new(
                 TypeValue::None,
-                U8Token::Set.into_u8(),
+                U8Token::Set.to_u8(),
                 vec![TypeDef::IntegerLiteral],
             )),
             _ => Err(format!(
@@ -506,7 +506,7 @@ impl RotoFilter<BooleanToken> for Boolean {
         match method_name.ident.as_str() {
             "set" => Ok(MethodProps::new(
                 TypeValue::None,
-                BooleanToken::Set.into_u8(),
+                BooleanToken::Set.to_u8(),
                 vec![TypeDef::Boolean],
             )),
             _ => Err(format!(
@@ -570,7 +570,7 @@ impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
         match method_name.ident.as_str() {
             "cmp" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::IntegerLiteral),
-                IntegerLiteralToken::Cmp.into_u8(),
+                IntegerLiteralToken::Cmp.to_u8(),
                 vec![
                     TypeDef::IntegerLiteral,
                     TypeDef::IntegerLiteral,
@@ -658,7 +658,7 @@ impl RotoFilter<HexLiteralToken> for HexLiteral {
         match method_name.ident.as_str() {
             "cmp" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::IntegerLiteral),
-                HexLiteralToken::Cmp.into_u8(),
+                HexLiteralToken::Cmp.to_u8(),
                 vec![TypeDef::HexLiteral, TypeDef::HexLiteral],
             )),
             _ => Err(format!(
@@ -735,29 +735,29 @@ impl RotoFilter<PrefixToken> for Prefix {
         match method_name.ident.as_str() {
             "from" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::Prefix),
-                PrefixToken::From.into_u8(),
+                PrefixToken::From.to_u8(),
                 vec![TypeDef::IpAddress, TypeDef::PrefixLength],
             )),
             "address" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::IpAddress),
-                PrefixToken::Address.into_u8(),
+                PrefixToken::Address.to_u8(),
                 vec![],
             )),
             "len" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::IntegerLiteral),
-                PrefixToken::Len.into_u8(),
+                PrefixToken::Len.to_u8(),
                 vec![],
             )),
             "matches" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::Boolean),
-                PrefixToken::Matches.into_u8(),
+                PrefixToken::Matches.to_u8(),
                 vec![TypeDef::Prefix],
             )),
             "exists" => Ok(MethodProps::new(
                 TypeValue::Builtin(
                     BuiltinTypeValue::Boolean(Boolean(None)),
                 ),
-                PrefixToken::Exists.into_u8(),
+                PrefixToken::Exists.to_u8(),
                 vec![]
             )),
             _ => Err(format!(
@@ -829,7 +829,7 @@ impl RotoFilter<PrefixLengthToken> for PrefixLength {
         match method_name.ident.as_str() {
             "from" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::PrefixLength),
-                PrefixLengthToken::From.into_u8(),
+                PrefixLengthToken::From.to_u8(),
                vec![TypeDef::U8],
             )),
             _ => Err(format!(
@@ -904,37 +904,37 @@ impl RotoFilter<CommunityToken> for Community {
         match method_name.ident.as_str() {
             "from" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::Community),
-                CommunityToken::From.into_u8(),
+                CommunityToken::From.to_u8(),
                 vec![TypeDef::U32],
             )),
             "standard" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::Community),
-                CommunityToken::Standard.into_u8(),
+                CommunityToken::Standard.to_u8(),
                 vec![TypeDef::U32],
             )),
             "extended" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::Community),
-                CommunityToken::Extended.into_u8(),
+                CommunityToken::Extended.to_u8(),
                 vec![TypeDef::U32],
             )),
             "large" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::Community),
-                CommunityToken::Large.into_u8(),
+                CommunityToken::Large.to_u8(),
                 vec![TypeDef::U32],
             )),
             "as" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::U32),
-                CommunityToken::As.into_u8(),
+                CommunityToken::As.to_u8(),
                 vec![],
             )),
             "value" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::U32),
-                CommunityToken::Value.into_u8(),
+                CommunityToken::Value.to_u8(),
                 vec![],
             )),
             "exists" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::Boolean),
-                CommunityToken::Exists.into_u8(),
+                CommunityToken::Exists.to_u8(),
                 vec![],
             )),
             _ => Err(format!(
@@ -1029,12 +1029,12 @@ impl RotoFilter<IpAddressToken> for IpAddress {
         match method_name.ident.as_str() {
             "from" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::IpAddress),
-                IpAddressToken::From.into_u8(),
+                IpAddressToken::From.to_u8(),
                 vec![TypeDef::String],
             )),
             "matches" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::Boolean),
-                IpAddressToken::Matches.into_u8(),
+                IpAddressToken::Matches.to_u8(),
                 vec![TypeDef::Prefix],
             )),
             _ => Err(format!(
@@ -1111,7 +1111,7 @@ impl RotoFilter<AsnToken> for Asn {
         match method_name.ident.as_str() {
             "set" => Ok(MethodProps::new(
                 TypeValue::None,
-                AsnToken::Set.into_u8(),
+                AsnToken::Set.to_u8(),
                 vec![TypeDef::Asn],
             )),
             _ => Err(format!(
@@ -1224,21 +1224,21 @@ impl RotoFilter<AsPathToken> for AsPath {
         match method_name.ident.as_str() {
             "origin" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(None))),
-                AsPathToken::Origin.into_u8(),
+                AsPathToken::Origin.to_u8(),
                 vec![],
             )),
             "contains" => Ok(MethodProps::new(
                 TypeValue::Builtin(
                     BuiltinTypeValue::AsPath(AsPath(None)),
                 ),
-                AsPathToken::Contains.into_u8(),
+                AsPathToken::Contains.to_u8(),
                 vec![TypeDef::Asn],
             )),
             "len" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::U8(
                     U8(None)
                 )),
-                AsPathToken::Len.into_u8(),
+                AsPathToken::Len.to_u8(),
                 vec![],
             )),
             _ => Err(format!(
@@ -1380,22 +1380,22 @@ impl RotoFilter<RouteToken> for Route {
         match method_name.ident.as_str() {
             "prefix" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None))),
-                RouteToken::Prefix.into_u8(),
+                RouteToken::Prefix.to_u8(),
                 vec![],
             )),
             "as_path" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))),
-                RouteToken::AsPath.into_u8(),
+                RouteToken::AsPath.to_u8(),
                vec![],
             )),
             "communities" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Community(Community(None))),
-                RouteToken::Communities.into_u8(),
+                RouteToken::Communities.to_u8(),
                 vec![],
             )),
             "status" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::RouteStatus(RouteStatus::Empty)),
-                RouteToken::Status.into_u8(),
+                RouteToken::Status.to_u8(),
                 vec![],
             )),
             _ => Err(format!(
@@ -1465,32 +1465,32 @@ impl RotoFilter<RouteStatusToken> for RouteStatus {
         match method_name.ident.as_str() {
             "is_in_convergence" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                RouteStatusToken::IsInConvergence.into_u8(),
+                RouteStatusToken::IsInConvergence.to_u8(),
                 vec![],
             )),
             "is_up_to_date" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                RouteStatusToken::IsUpToDate.into_u8(),
+                RouteStatusToken::IsUpToDate.to_u8(),
                 vec![],
             )),
             "is_stale" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                RouteStatusToken::IsStale.into_u8(),
+                RouteStatusToken::IsStale.to_u8(),
                 vec![],
             )),
             "is_start_of_route_refresh" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                RouteStatusToken::IsStartOfRouteRefresh.into_u8(),
+                RouteStatusToken::IsStartOfRouteRefresh.to_u8(),
                 vec![],
             )),  
             "is_withdrawn" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                RouteStatusToken::IsWithdrawn.into_u8(),
+                RouteStatusToken::IsWithdrawn.to_u8(),
                 vec![],
             )),
             "is_empty" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                RouteStatusToken::IsEmpty.into_u8(),
+                RouteStatusToken::IsEmpty.to_u8(),
                 vec![],
             )),
             _ => Err(format!(

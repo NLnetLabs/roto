@@ -164,22 +164,22 @@ impl RotoFilter<ListToken> for List {
         match method_name.ident.as_str() {
             "get" => Ok(MethodProps::new(
         TypeValue::List(self),
-        ListToken::Get.into_u8(),
+        ListToken::Get.to_u8(),
                 vec![TypeDef::U32],
             )),
             "remove" => Ok(MethodProps::new(
                 TypeValue::List(self),
-                ListToken::Remove.into_u8(),
+                ListToken::Remove.to_u8(),
                 vec![TypeDef::U32],
             )),
         "push" => Ok(MethodProps::new(
             (&TypeDef::Boolean).into(),
-            ListToken::Push.into_u8(),
+            ListToken::Push.to_u8(),
             vec![TypeDef::from(&self.0[0])],
         )),
             "contains" => Ok(MethodProps::new(
                  (&TypeDef::Boolean).into(),
-                ListToken::Contains.into_u8(),
+                ListToken::Contains.to_u8(),
                vec![],
             )),
             _ => {
@@ -304,22 +304,22 @@ impl RotoFilter<RecordToken> for Record {
                         self,
                     ))),
                 )])?),
-                RecordToken::LongestMatch.into_u8(),
+                RecordToken::LongestMatch.to_u8(),
                 vec![TypeDef::Prefix],
             )),
             "get" => Ok(MethodProps::new(
                 TypeValue::Record(self),
-                RecordToken::Get.into_u8(),
+                RecordToken::Get.to_u8(),
                 vec![TypeDef::U32],
             )),
             "get_all" => Ok(MethodProps::new(
                 TypeValue::Record(self),
-                RecordToken::GetAll.into_u8(),
+                RecordToken::GetAll.to_u8(),
                 vec![],
             )),
             "contains" => Ok(MethodProps::new(
                 (&TypeDef::Boolean).into(),
-                RecordToken::Contains.into_u8(),
+                RecordToken::Contains.to_u8(),
                 vec![(&TypeValue::Record(self)).into()],
             )),
             _ => {
