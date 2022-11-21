@@ -24,8 +24,8 @@ pub(crate) struct Symbol {
     kind: SymbolKind,
     ty: TypeDef,
     args: Vec<Symbol>,
-    pub value: Option<TypeValue>,
-    pub token: Option<Token>, // location: Location,
+    value: Option<TypeValue>,
+    token: Option<Token>, // location: Location,
 }
 
 impl Symbol {
@@ -38,28 +38,9 @@ impl Symbol {
         Ok((self.ty.clone(), token))
     }
 
-    // gets the type only from the conversion of the `value` field.
-    pub fn get_type_and_token_for_value(
-        &self,
-    ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
-        self.get_value()
-            .map(TypeDef::from)
-            .zip(self.token.clone())
-            .map_or_else(|| Err("No value".into()), Ok)
+    pub fn is_initialised(&self) -> bool {
+        self.value.is_some()
     }
-
-    // get the type from resp. either the `ty` field or the `value` field.
-    pub fn get_type_and_token_for_type_or_value(
-        &self,
-    ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
-        let ty = self.get_type();
-        if ty != TypeDef::None {
-            Ok((self.get_type(), self.get_token()?))
-        } else {
-            self.get_type_and_token_for_value()
-        }
-    }
-
 
     pub fn get_builtin_type(
         &self,
@@ -90,11 +71,6 @@ impl Symbol {
         }
     }
 
-    pub fn set_type(mut self, ty: TypeDef) -> Symbol {
-        self.ty = ty;
-        self
-    }
-
     pub fn set_kind(mut self, kind: SymbolKind) -> Symbol {
         self.kind = kind;
         self
@@ -107,7 +83,7 @@ impl Symbol {
     pub fn get_token(&self) -> Result<Token, Box<dyn std::error::Error>> {
         self.token
             .clone()
-            .ok_or_else(|| "No token found for symbol".into())
+            .ok_or_else(|| format!("No token found for symbol '{:?}'", self).into())
     }
 
     pub fn get_type(&self) -> TypeDef {
@@ -148,6 +124,7 @@ impl Symbol {
         kind: SymbolKind,
         ty: TypeDef,
         args: Vec<Symbol>,
+        token: Option<Token>,
     ) -> Self {
         Symbol {
             name,
@@ -155,7 +132,7 @@ impl Symbol {
             ty,
             args,
             value: None,
-            token: None,
+            token,
         }
     }
 
@@ -169,21 +146,11 @@ impl Symbol {
         Symbol {
             name,
             kind,
-            ty: TypeDef::None,
+            ty: (&value).into(),
             args,
             value: Some(value),
             token: Some(token),
         }
-    }
-
-    pub fn new_argument_type(ty: TypeDef, token: Token) -> Self {
-        Symbol::new_with_value(
-            "arg".into(),
-            SymbolKind::Argument,
-            (&ty).into(),
-            vec![],
-            token,
-        )
     }
 }
 
@@ -245,12 +212,12 @@ pub struct SymbolTable {
     variables: HashMap<ShortString, Symbol>,
     types: HashMap<ShortString, TypeDef>,
     // The evaluated `term` sections that are defined in the module.
-    pub(crate) terms: HashMap<ShortString, Vec<Symbol>>,
+    terms: HashMap<ShortString, Vec<Symbol>>,
     // The evaluated `action` sections that are defined in the module.
-    pub(crate) actions: HashMap<ShortString, Vec<Symbol>>,
+    actions: HashMap<ShortString, Vec<Symbol>>,
     // All the `filter` clauses in the `apply` section, the tie actions to
     // terms.
-    pub(crate) match_actions: HashMap<ShortString, Vec<Symbol>>,
+    match_actions: HashMap<ShortString, Vec<Symbol>>,
 }
 
 // The global symbol table.
@@ -287,6 +254,7 @@ impl SymbolTable {
         key: ShortString,
         mut symbol: Symbol,
     ) -> Result<(), Box<dyn std::error::Error>> {
+
         if self.variables.contains_key(&key) {
             return Err(format!(
                 "Symbol {} already defined in scope {}",
@@ -403,6 +371,10 @@ impl SymbolTable {
             key.clone()
         };
 
+        let token_int = self.terms.len() as u8;
+
+        let token = Some(Token::Term(token_int));
+
         if self.terms.contains_key(&name) {
             return Err(format!(
                 "Term {} already defined in scope {}",
@@ -418,7 +390,7 @@ impl SymbolTable {
                 ty,
                 args,
                 value,
-                token: None,
+                token,
             });
         } else {
             self.terms.insert(
@@ -429,7 +401,7 @@ impl SymbolTable {
                     ty,
                     args,
                     value,
-                    token: None,
+                    token,
                 }],
             );
         };
@@ -460,6 +432,10 @@ impl SymbolTable {
             .into());
         }
 
+        let token_int = self.actions.len() as u8;
+
+        let token = Some(Token::Action(token_int));
+
         if let Some(action) = self.actions.get_mut(&key) {
             action.push(Symbol {
                 name,
@@ -467,7 +443,7 @@ impl SymbolTable {
                 ty,
                 args,
                 value,
-                token: None,
+                token,
             });
         } else {
             self.actions.insert(
@@ -478,7 +454,7 @@ impl SymbolTable {
                     ty,
                     args,
                     value,
-                    token: None,
+                    token,
                 }],
             );
         };
@@ -499,6 +475,10 @@ impl SymbolTable {
         } else {
             key.clone()
         };
+        
+        let token_int = self.match_actions.len() as u8;
+
+        let token = Some(Token::MatchAction(token_int));
 
         if self.match_actions.contains_key(&name) {
             return Err(format!(
@@ -515,7 +495,7 @@ impl SymbolTable {
                 ty,
                 args,
                 value,
-                token: None,
+                token,
             });
         } else {
             self.match_actions.insert(
@@ -526,7 +506,7 @@ impl SymbolTable {
                     ty,
                     args,
                     value,
-                    token: None,
+                    token,
                 }],
             );
         };
@@ -541,6 +521,30 @@ impl SymbolTable {
         self.types.get(name)
     }
 
+    pub(crate) fn get_symbol(&self, name: &ShortString) -> Option<&Symbol> {
+        if let Some(symbol) = self.variables.get(name) {
+            return Some(symbol);
+        }
+
+        if let Some(symbol) = self.arguments.get(name) {
+            return Some(symbol);
+        }
+
+        if let Some(symbol) = self.terms.get(name) {
+            return Some(&symbol[0]);
+        }
+
+        if let Some(symbol) = self.actions.get(name) {
+            return Some(&symbol[0]);
+        }
+
+        if let Some(symbol) = self.match_actions.get(name) {
+            return Some(&symbol[0]);
+        }
+
+        None
+    }
+    
     pub(crate) fn get_variable(
         &self,
         name: &ShortString,
@@ -557,7 +561,28 @@ impl SymbolTable {
     ) -> Result<&Symbol, Box<dyn std::error::Error>> {
         self.arguments
             .get(name)
-            .or_else(|| self.arguments.get(name))
+            .ok_or_else(|| format!("Symbol '{}' not found", name).into())
+    }
+
+    pub(crate) fn get_term_name(
+        &self,
+        name: &ShortString,
+    ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
+        self.terms
+            .get(name)
+            .ok_or_else(|| format!("Symbol '{}' not found", name).into())
+            .map(|terms| {
+                let term = terms.first().unwrap();
+                (term.ty.clone(), term.token.clone().unwrap())
+            })
+    }
+
+    pub(crate) fn get_action(
+        &self,
+        name: &ShortString,
+    ) -> Result<&Vec<Symbol>, Box<dyn std::error::Error>> {
+        self.actions
+            .get(name)
             .ok_or_else(|| format!("Symbol '{}' not found", name).into())
     }
 
@@ -571,7 +596,7 @@ impl SymbolTable {
             .ok_or_else(|| format!("Symbol '{}' not found", name).into());
 
         src.map(|r| match r.get_kind() {
-            SymbolKind::Rib => Ok(r.get_type_and_token()?),
+            SymbolKind::Rib => r.get_type_and_token(),
             SymbolKind::Table => {
                 Ok((TypeDef::Table(Box::new(r.get_type())), r.get_token()?))
             }

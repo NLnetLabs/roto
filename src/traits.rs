@@ -9,6 +9,9 @@ pub(crate) enum Token {
     Argument(u8),
     DataSource(u8),
     FieldAccess(Vec<u8>),
+    Term(u8),
+    Action(u8),
+    MatchAction(u8),
     Constant,
     BuiltinType(u8)
 }
@@ -73,7 +76,7 @@ pub(crate) trait RotoFilter<T: TokenConvert> {
 }
 
 pub(crate) trait TokenConvert {
-    fn into_u8(&self) -> u8 {
+    fn to_u8(&self) -> u8 {
         std::mem::size_of_val(self) as u8
     }
 }

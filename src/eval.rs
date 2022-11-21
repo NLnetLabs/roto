@@ -544,15 +544,7 @@ impl<'a> ast::ApplyScope {
         let term_name =
             self.filter_ident.eval(symbols.clone(), scope.clone())?;
         module_symbols
-            .terms
-            .get(&term_name.get_name())
-            .ok_or_else(|| {
-                format!(
-                    "no term '{}' found in {}",
-                    term_name.get_name(),
-                    scope
-                )
-            })?;
+            .get_term_name(&term_name.get_name())?;
 
         let mut args_vec = vec![];
         for action in &self.actions {
@@ -566,6 +558,7 @@ impl<'a> ast::ApplyScope {
                     action.1.clone().unwrap_or(ast::AcceptReject::NoReturn),
                 ),
                 vec![],
+                None
             );
             args_vec.push(s);
         }
@@ -578,6 +571,7 @@ impl<'a> ast::ApplyScope {
             },
             TypeDef::AcceptReject(ast::AcceptReject::Accept),
             args_vec,
+            None
         );
 
         drop(_symbols);
@@ -678,6 +672,7 @@ impl<'a> ast::CallExpr {
                                     symbols,
                                     scope,
                                 )?],
+                                None
                             )
                         ));
                     }
@@ -719,6 +714,7 @@ impl<'a> ast::CallExpr {
                             method_call.get_kind(),
                             method_call.get_type(),
                             vec![field_access],
+                            None
                         );
                         return Ok((name, s));
                     }
@@ -746,6 +742,7 @@ impl<'a> ast::CallExpr {
                                 symbols::SymbolKind::Rib,
                                 data_type.0,
                                 vec![method_call],
+                                None
                             ),
                         ));
                     }
@@ -779,7 +776,8 @@ impl<'a> ast::CallExpr {
                                             symbols,
                                             scope,
                                         )?],
-                                    ).set_token(var_type.1),
+                                        Some(var_type.1)
+                                    )
                                 ))
                             }
                             Err(_err) => {
@@ -827,6 +825,7 @@ impl<'a> ast::CallExpr {
                                             symbols,
                                             scope,
                                         )?],
+                                        None
                                     ),
                                 ))
                             }
@@ -940,8 +939,8 @@ impl ast::MethodCallExpr {
                                 Box<dyn std::error::Error>,
                             > {
                                 println!("var s {:?}", s);
-                                let v = s.get_type_and_token_for_value()?;
-                                Ok(v)
+                                s.get_type_and_token()
+                                // Ok(v)
                                 // TypeDef::try_from(v).map_err(|e| e.into())
                             },
                         )
@@ -1077,15 +1076,26 @@ impl ast::AccessReceiver {
             ));
         }
 
-        // This is an access receiver without fields, we don't know which
-        // one yet. The caller of this function will need to determine.
-        return Ok(symbols::Symbol::new(
+        // This is an access receiver without fields, so a stand-alone
+        // Identifier (no dots, or anything). This could be evaluated
+        // into a:
+        // - name of a data source
+        // - the name of a built-in constant
+        // - variable name thas was defined in the `with` statement or
+        //   earlier on in the same define section.
+        let ty = get_type_for_scoped_variable(
+            &[self.get_ident().clone()],
+            symbols,
+            scope,
+        )?;
+
+        Ok(symbols::Symbol::new(
             search_var.as_str().into(),
             symbols::SymbolKind::FieldAccess,
-            ty,
+            ty.0,
             vec![],
-        )
-        .set_token(Token::FieldAccess(vec![])));
+            Some(ty.1),
+        ))
     }
 }
 
@@ -1129,6 +1139,7 @@ impl ast::ArgExpr {
                 symbols::SymbolKind::StringLiteral,
                 TypeDef::String,
                 vec![],
+                None
             )),
             // Integers are special, we are keeping them as is, so that the
             // receiver can decide how to cast them (into u8, u32 or i64).
@@ -1243,8 +1254,8 @@ impl ast::FieldAccessExpr {
                     symbols::SymbolKind::FieldAccess,
                     field_type.0,
                     vec![],
-                )
-                .set_token(field_type.1));
+                    Some(field_type.1)
+                ));
             }
         };
 
@@ -1273,8 +1284,8 @@ impl ast::FieldAccessExpr {
             symbols::SymbolKind::FieldAccess,
             ty_to.0,
             vec![],
-        )
-        .set_token(ty_to.1))
+            Some(ty_to.1)
+        ))
     }
 }
 
@@ -1376,7 +1387,7 @@ impl ast::BooleanExpr {
                         None,
                     ))),
                     vec![],
-                    var.token.clone().unwrap(),
+                    var.get_token().unwrap(),
                 ))
             }
         }
@@ -1417,14 +1428,13 @@ impl ast::CompareExpr {
         let left_type = match left_s.get_kind() {
             // Any literal in the source code should end up as
             // SymbolKind::Constant.
-            symbols::SymbolKind::Constant => {
-                left_s.get_builtin_type()?
-            }
+            symbols::SymbolKind::Constant => left_s.get_builtin_type()?,
             // A FieldAccess could be a leaf node on its own (if its type
             // is a builtin type), or it could have a leaf node in its `args`
             // field. Note that it cannot be both a leaf node and have
             // arguments.
-            symbols::SymbolKind::FieldAccess | symbols::SymbolKind::Variable => {
+            symbols::SymbolKind::FieldAccess
+            | symbols::SymbolKind::Variable => {
                 let args = left_s.get_args();
                 let s = if !args.is_empty() {
                     match left_s.get_args()[0].get_kind() {
@@ -1463,7 +1473,8 @@ impl ast::CompareExpr {
             symbols::SymbolKind::Constant => {
                 right_s.get_builtin_type_for_leaf_node()?
             }
-            symbols::SymbolKind::FieldAccess | symbols::SymbolKind::Variable => {
+            symbols::SymbolKind::FieldAccess
+            | symbols::SymbolKind::Variable => {
                 let args = right_s.get_args();
                 let s = if !args.is_empty() {
                     match right_s.get_args()[0].get_kind() {
@@ -1512,6 +1523,7 @@ impl ast::CompareExpr {
                 self.left.eval(symbols.clone(), scope)?,
                 self.right.eval(symbols, scope)?,
             ],
+            None
         ))
     }
 }
@@ -1570,6 +1582,7 @@ impl ast::AndExpr {
             symbols::SymbolKind::LogicalExpr,
             TypeDef::Boolean,
             vec![left, right],
+            None
         ))
     }
 }
@@ -1593,6 +1606,7 @@ impl ast::OrExpr {
             symbols::SymbolKind::LogicalExpr,
             TypeDef::Boolean,
             vec![left, right],
+            None
         ))
     }
 }
@@ -1618,6 +1632,7 @@ impl ast::NotExpr {
             symbols::SymbolKind::Variable,
             TypeDef::Boolean,
             vec![expr],
+            None
         ))
     }
 }
@@ -1716,42 +1731,52 @@ fn get_type_for_scoped_variable(
     symbols: symbols::GlobalSymbolTable<'_>,
     scope: symbols::Scope,
 ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
+    // Implicit early return. Are there any actual fields? If not then we're
+    // done, and there's nothing here.
+    let first_field_name = &fields
+        .first()
+        .ok_or_else(|| "No name found for variable reference".to_string())?
+        .ident;
+
     let symbols = symbols.borrow();
     let search_str = fields.join(".");
     println!("search_str: {}", search_str);
+
     match &scope {
         symbols::Scope::Module(module) => {
-            // 1. is it in the symbol table for this scope?
+            // 1. is the whole dotted name in the symbol table for this scope?
             return symbols
                 .get(&scope)
                 .and_then(|gt| {
-                    gt.get_variable(&search_str.as_str().into()).map(|s| s.get_type_and_token_for_type_or_value().unwrap_or_else(
-                        |_| panic!("No token found for variable '{}' in module '{}'", search_str, module)
-                    )).ok()
+                    gt.get_variable(
+                        &search_str.as_str().into()).map(
+                            |s| s.get_type_and_token()
+                            .unwrap_or_else(
+                            |_| panic!(
+                                "No token found for variable '{}' in module '{}'",
+                                search_str, module
+                            )
+                        )).ok()
                 })
                 .map_or_else(
-                    // no, let's go over the chain of fields to see if it's
-                    // a primitive type.
+                    // No, let's go over the chain of fields to see if it's
+                    // a previously defined variable or constant.
                     || {
+                        println!("first field {}", first_field_name);
                         let data_src_type = symbols
-                            .get(&scope)
-                            .and_then(|gt| {
-                                gt.get_variable(&fields[0].ident).ok()
-                                    .or_else(|| {
-                                        gt.get_argument(&fields[0].ident).ok()
-                                    }).map(|s| s.get_type_and_token())
-                            })
-                            .ok_or(format!(
-                                "No data source named '{}' found in module '{}' (for variable '{}')",
-                                fields[0], module, search_str
+                            .get(&scope).and_then(|gt|
+                            gt.get_symbol(first_field_name) ).map(|s| s.get_type_and_token())
+                            .ok_or_else(|| format!(
+                                "No variable named '{}' found in module '{}'",
+                                first_field_name, module
                             ))?;
 
-                        println!("data_src_type: {:?}", data_src_type);
-                        // println!("field {:?}", fields[1]);
-                        let field_ty_to = data_src_type?.0.has_fields_chain(&fields[1..]).map_err(|err| format!(
-                            "{} on field '{}' for variable '{}' found in module '{}'",
-                            err, fields[1], fields[0].ident, module
-                        ))?;
+                        let field_ty_to = data_src_type?
+                            .0.has_fields_chain(&fields[1..])
+                            .map_err(|err| format!(
+                                "{} on field '{}' for variable '{}' found in module '{}'",
+                                err, fields[1], fields[0].ident, module
+                            ))?;
 
                         Ok(field_ty_to)
                     },
