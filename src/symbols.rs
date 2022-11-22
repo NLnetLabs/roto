@@ -154,7 +154,10 @@ impl Symbol {
     }
 
     // get the return from this symbol if it's a leaf node, otherwise return
-    // the type of the nested leaf node (in the 'args' field).
+    // the type of the nested leaf node (in the 'args' field). Note that this
+    // method will have to change if we're going to allow method calls with
+    // trailing method calls/field accesses, like `d().e`. Currently the
+    // parser won't allow it.
     pub(crate) fn get_return_type(&self) -> TypeDef {
         if self.args.is_empty() {
             self.ty.clone()
@@ -484,6 +487,9 @@ impl SymbolTable {
         ty: TypeDef,
         args: Vec<Symbol>,
         value: Option<TypeValue>,
+        // token is the index of the term that corresponds to the `name` 
+        // argument. It's a token for a term.
+        token: Token
     ) -> Result<(), Box<dyn std::error::Error>> {
         let name = if let Some(name) = name {
             name
@@ -491,10 +497,6 @@ impl SymbolTable {
             key.clone()
         };
         
-        let token_int = self.match_actions.len() as u8;
-
-        let token = Some(Token::MatchAction(token_int));
-
         if self.match_actions.contains_key(&name) {
             return Err(format!(
                 "Match Action '{}' already defined in scope {}",
@@ -510,7 +512,7 @@ impl SymbolTable {
                 ty,
                 args,
                 value,
-                token,
+                token: Some(token),
             });
         } else {
             self.match_actions.insert(
@@ -521,7 +523,7 @@ impl SymbolTable {
                     ty,
                     args,
                     value,
-                    token,
+                    token: Some(token),
                 }],
             );
         };
