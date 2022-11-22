@@ -298,12 +298,7 @@ impl RotoFilter<RecordToken> for Record {
     {
         match method_name.ident.as_str() {
             "longest_match" => Ok(MethodProps::new(
-                TypeValue::Record(Record::new(vec![(
-                    ShortString::from("prefix"),
-                    ElementTypeValue::Nested(Box::new(TypeValue::Record(
-                        self,
-                    ))),
-                )])?),
+                TypeValue::Record(self),
                 RecordToken::LongestMatch.to_u8(),
                 vec![TypeDef::Prefix],
             )),
