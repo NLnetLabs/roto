@@ -541,29 +541,29 @@ impl<'a> ast::ApplyScope {
         // not sure whether it is going to be needed.
         let s_name = self.scope.clone().ident;
 
-        let term_name =
+        let term =
             self.filter_ident.eval(symbols.clone(), scope.clone())?;
-        module_symbols
-            .get_term_name(&term_name.get_name())?;
+        let (_ty, token) = module_symbols
+            .get_term_name(&term.get_name())?;
 
         let mut args_vec = vec![];
         for action in &self.actions {
-            let action_name =
+            let match_action =
                 action.0.eval(symbols.clone(), scope.clone())?;
 
             let s = symbols::Symbol::new(
-                action_name.get_name(),
+                match_action.get_name(),
                 symbols::SymbolKind::Action,
                 TypeDef::AcceptReject(
                     action.1.clone().unwrap_or(ast::AcceptReject::NoReturn),
                 ),
                 vec![],
-                None
+                Some(match_action.get_token()?)
             );
             args_vec.push(s);
         }
         let s = symbols::Symbol::new(
-            term_name.get_name(),
+            term.get_name(),
             if self.negate {
                 symbols::SymbolKind::NegateMatchAction
             } else {
@@ -571,7 +571,7 @@ impl<'a> ast::ApplyScope {
             },
             TypeDef::AcceptReject(ast::AcceptReject::Accept),
             args_vec,
-            None
+            Some(token)
         );
 
         drop(_symbols);
@@ -2018,7 +2018,7 @@ fn add_action(
 
 fn add_match_action(
     name: ShortString,
-    action: symbols::Symbol,
+    match_action: symbols::Symbol,
     symbols: symbols::GlobalSymbolTable<'_>,
     scope: &symbols::Scope,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -2029,18 +2029,21 @@ fn add_match_action(
                 .get_mut(scope)
                 .ok_or(format!("No module named '{}' found.", module))?;
 
+            let token = match_action.get_token()?;
+
             module.add_match_action(
                 name,
-                Some(action.get_name()),
-                action.get_kind(),
-                action.get_type(),
-                action.get_args_owned(),
+                Some(match_action.get_name()),
+                match_action.get_kind(),
+                match_action.get_type(),
+                match_action.get_args_owned(),
                 None,
+                token
             )
         }
         symbols::Scope::Global => Err(format!(
             "Can't create an action in the global scope (NEVER). Action '{}'",
-            action.get_name()
+            match_action.get_name()
         )
         .into()),
     }
