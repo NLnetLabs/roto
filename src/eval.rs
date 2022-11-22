@@ -544,12 +544,15 @@ impl<'a> ast::ApplyScope {
         let term =
             self.filter_ident.eval(symbols.clone(), scope.clone())?;
         let (_ty, token) = module_symbols
-            .get_term_name(&term.get_name())?;
+            .get_term(&term.get_name())?;
 
         let mut args_vec = vec![];
         for action in &self.actions {
             let match_action =
                 action.0.eval(symbols.clone(), scope.clone())?;
+
+                let (_ty, token) = module_symbols
+                    .get_action(&match_action.get_name())?;
 
             let s = symbols::Symbol::new(
                 match_action.get_name(),
@@ -558,7 +561,7 @@ impl<'a> ast::ApplyScope {
                     action.1.clone().unwrap_or(ast::AcceptReject::NoReturn),
                 ),
                 vec![],
-                Some(match_action.get_token()?)
+                Some(token)
             );
             args_vec.push(s);
         }
@@ -825,7 +828,7 @@ impl<'a> ast::CallExpr {
                                             symbols,
                                             scope,
                                         )?],
-                                        None
+                                        Some(field_access.get_token()?)
                                     ),
                                 ))
                             }
@@ -1988,12 +1991,9 @@ fn add_action(
     symbols: symbols::GlobalSymbolTable<'_>,
     scope: &symbols::Scope,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // let _symbols = symbols.clone();
 
     match &scope {
         symbols::Scope::Module(module) => {
-            // drop(_symbols);
-
             let mut _symbols = symbols.borrow_mut();
             let module = _symbols
                 .get_mut(scope)
@@ -2042,7 +2042,7 @@ fn add_match_action(
             )
         }
         symbols::Scope::Global => Err(format!(
-            "Can't create an action in the global scope (NEVER). Action '{}'",
+            "Can't create a match action in the global scope (NEVER). Action '{}'",
             match_action.get_name()
         )
         .into()),

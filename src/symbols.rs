@@ -202,6 +202,7 @@ pub enum SymbolKind {
     MatchAction,
     NegateMatchAction,
     Action,
+    Term
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -230,9 +231,9 @@ pub struct SymbolTable {
     variables: HashMap<ShortString, Symbol>,
     types: HashMap<ShortString, TypeDef>,
     // The evaluated `term` sections that are defined in the module.
-    terms: HashMap<ShortString, Vec<Symbol>>,
+    terms: HashMap<ShortString, Symbol>,
     // The evaluated `action` sections that are defined in the module.
-    actions: HashMap<ShortString, Vec<Symbol>>,
+    actions: HashMap<ShortString, Symbol>,
     // All the `filter` clauses in the `apply` section, the tie actions to
     // terms.
     match_actions: HashMap<ShortString, Vec<Symbol>>,
@@ -390,7 +391,6 @@ impl SymbolTable {
         };
 
         let token_int = self.terms.len() as u8;
-
         let token = Some(Token::Term(token_int));
 
         if self.terms.contains_key(&name) {
@@ -401,28 +401,28 @@ impl SymbolTable {
             .into());
         }
 
-        if let Some(term) = self.terms.get_mut(&key) {
-            term.push(Symbol {
-                name,
-                kind,
-                ty,
-                args,
-                value,
-                token,
-            });
-        } else {
-            self.terms.insert(
-                key,
-                vec![Symbol {
-                    name,
-                    kind,
-                    ty,
-                    args,
-                    value,
-                    token,
-                }],
-            );
+        let args = Symbol {
+            name,
+            kind,
+            ty: ty.clone(),
+            args,
+            value: None,
+            token: None,
         };
+
+        let s = Symbol {
+            name: key.clone(),
+            kind: SymbolKind::Term,
+            ty,
+            args: vec![args],
+            value,
+            token,
+        };
+         
+        self.terms.insert(
+            key,
+            s,
+        );
 
         Ok(())
     }
@@ -451,31 +451,31 @@ impl SymbolTable {
         }
 
         let token_int = self.actions.len() as u8;
-
         let token = Some(Token::Action(token_int));
 
-        if let Some(action) = self.actions.get_mut(&key) {
-            action.push(Symbol {
-                name,
-                kind,
-                ty,
-                args,
-                value,
-                token,
-            });
-        } else {
-            self.actions.insert(
-                key,
-                vec![Symbol {
-                    name,
-                    kind,
-                    ty,
-                    args,
-                    value,
-                    token,
-                }],
-            );
+        let args = Symbol {
+            name,
+            kind,
+            ty: ty.clone(),
+            args,
+            value: None,
+            token: None,
         };
+
+        let s = Symbol {
+            name: key.clone(),
+            kind: SymbolKind::Action,
+            ty,
+            args: vec![args],
+            value,
+            token,
+        };
+         
+        self.actions.insert(
+            key,
+            s,
+        );
+    
         Ok(())
     }
 
@@ -548,11 +548,11 @@ impl SymbolTable {
         }
 
         if let Some(symbol) = self.terms.get(name) {
-            return Some(&symbol[0]);
+            return Some(symbol);
         }
 
         if let Some(symbol) = self.actions.get(name) {
-            return Some(&symbol[0]);
+            return Some(symbol);
         }
 
         if let Some(symbol) = self.match_actions.get(name) {
@@ -581,15 +581,14 @@ impl SymbolTable {
             .ok_or_else(|| format!("Symbol '{}' not found", name).into())
     }
 
-    pub(crate) fn get_term_name(
+    pub(crate) fn get_term(
         &self,
         name: &ShortString,
     ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
         self.terms
             .get(name)
             .ok_or_else(|| format!("Symbol '{}' not found", name).into())
-            .map(|terms| {
-                let term = terms.first().unwrap();
+            .map(|term| {
                 (term.ty.clone(), term.token.clone().unwrap())
             })
     }
@@ -597,10 +596,13 @@ impl SymbolTable {
     pub(crate) fn get_action(
         &self,
         name: &ShortString,
-    ) -> Result<&Vec<Symbol>, Box<dyn std::error::Error>> {
+    ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
         self.actions
             .get(name)
             .ok_or_else(|| format!("Symbol '{}' not found", name).into())
+            .map(|action| {
+                (action.ty.clone(), action.token.clone().unwrap())
+            })
     }
 
     pub(crate) fn get_data_source(
