@@ -69,13 +69,16 @@ impl TypeDef {
         ))
     }
 
+    // this function checks that the that the `fields` vec describes the
+    // fields present in self. If so it returns the positions in the vec
+    // of the corresponding fields, to serve as the token for each field.
     pub(crate) fn has_fields_chain(
         &self,
         fields: &[crate::ast::Identifier],
     ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
         println!("has_fields_chain: {:?}", fields);
         println!("self: {:?}", self);
-        let mut current_type_token = (self, Token::FieldAccess(vec![]));
+        let mut current_type_token = (self, Token::FieldAccess(None,vec![]));
         for field in fields {
             let mut index = 0;
             if let (TypeDef::Record(_fields), _) = current_type_token {
@@ -84,6 +87,7 @@ impl TypeDef {
                     .enumerate()
                     .find(|(i, (ident, _))| { index = *i; ident == &field.ident.as_str() })
                 {
+                    // recurse into the TypeDef of self.
                     current_type_token = (ty, current_type_token.1);
                     current_type_token.1.push(index as u8);
                     println!("UwU {} {}", field.ident, index);

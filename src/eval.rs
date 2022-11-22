@@ -712,12 +712,13 @@ impl<'a> ast::CallExpr {
                         )?;
 
                         let name = field_access.get_name();
+                        let token = field_access.get_token()?;
                         let s = symbols::Symbol::new(
                             method_call.get_name(),
                             method_call.get_kind(),
                             method_call.get_type(),
                             vec![field_access],
-                            None
+                            Some(token)
                         );
                         return Ok((name, s));
                     }
@@ -1235,7 +1236,7 @@ impl ast::FieldAccessExpr {
 
         let mut search_var = receiver.to_string();
         let mut search_vec = vec![receiver.clone()];
-        let mut ty_to = (TypeDef::None, Token::FieldAccess(vec![]));
+        let mut ty_to = (TypeDef::None, Token::FieldAccess(None, vec![]));
 
         let rec_type = get_type_for_scoped_variable(
             &[receiver.clone()],
@@ -1245,13 +1246,15 @@ impl ast::FieldAccessExpr {
 
         // First, check if the complete field expression is a built-in type,
         // if so we can return it right away.
-        if let Ok(field_type) = rec_type.0.has_fields_chain(&self.field_names)
+        if let Ok(mut field_type) = rec_type.0.has_fields_chain(&self.field_names)
         {
             println!("::: field_type {:?}", field_type);
+            println!("::: rec_type token {:?}", rec_type.1);
             println!("::: self {:?}", self);
 
             if BuiltinTypeValue::try_from(&field_type.0).is_ok() {
                 let name = self.field_names.join(".");
+                field_type.1.set_root(rec_type.1);
                 return Ok(symbols::Symbol::new(
                     format!("{}.{}", search_var, name).as_str().into(),
                     symbols::SymbolKind::FieldAccess,
@@ -1281,6 +1284,11 @@ impl ast::FieldAccessExpr {
 
         println!("::: name {:?}", search_var.as_str());
         println!("::: self {:?}", self);
+        if let Token::FieldAccess(_, _) = ty_to.1 {
+            ty_to.1.set_root(rec_type.1);
+        }
+
+        println!("::: ty_to {:?}", ty_to);
 
         Ok(symbols::Symbol::new(
             search_var.as_str().into(),
