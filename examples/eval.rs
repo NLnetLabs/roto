@@ -56,16 +56,25 @@ fn main() {
 
                     // specify another RIB that is used in this filter.
                     prefix_len = 24;
+
+                    // currently not supported is calling a field beyond a method call:
+                    // found_prefix = rib-rov.longest_match(route.prefix).prefix;
                     found_prefix = rib-rov.longest_match(route.prefix);
+                    
                     my_route_path = route.as-path;
                     // prefix_len triggers a type conversion from IntegerLiteral to PrefixLength
                     fixed_len_prefix = Prefix.from(route.prefix.address(), prefix_len);
+
+                    // try to mess it up
+                    // my_recursor = my_recursor_trasher;
+                    // my_recursor_trasher = my_recursor;
+                    leftie = source_asns.contains(route.as-path.origin());
                 }
             
                 term rov-valid for route: Route {
                     match {
+                        route.origin == found_prefix.as-path.origin();
                         found_prefix.as-path.origin() == my_route_path.origin();
-                        route.origin == found_prefix.as-path.origin(); 
                         (found_prefix.prefix.exists() && found_prefix.prefix.exists()) || route_in_table;
                         found_prefix.prefix.len() == 24;
                         route_in_table;
@@ -120,7 +129,7 @@ fn main() {
                 }  
             }
 
-            table source_asns contains Asn { 
+            table source_asns contains AsnLines { 
                 asn: Asn
             }
 
