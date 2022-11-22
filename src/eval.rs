@@ -392,7 +392,7 @@ impl<'a> ast::Define {
 
             // lhs of the assignemnt represents the name of the variable or
             // constant.
-            println!("symbol assigned {:?}", s);
+            println!("symbol assigned with key {} {:?}", assignment.0.ident, s);
             declare_variable_from_symbol(
                 Some(assignment.0.ident.clone()),
                 s,
@@ -1262,8 +1262,8 @@ impl ast::FieldAccessExpr {
         // Second. No, it isn't a built-in type, it has to live in a symbol
         // table specified as `<receiver_name>.<field_name>[.<fieldname>]*`.
         // Even so, we also need to check if all the intermediate fields
-        // exist in the record type. These intermediates type should all have
-        // an entry in the symbol table as well.
+        // exist in the record type. These intermediates types should all
+        // have an entry in the symbol table as well.
         for field_name in &self.field_names {
             search_var = format!("{}.{}", search_var.clone(), field_name);
             search_vec.push(field_name.clone());
@@ -1765,7 +1765,7 @@ fn get_type_for_scoped_variable(
                         println!("first field {}", first_field_name);
                         let data_src_type = symbols
                             .get(&scope).and_then(|gt|
-                            gt.get_symbol(first_field_name) ).map(|s| s.get_type_and_token())
+                            gt.get_symbol(first_field_name) ).map(|s| { println!("symbol: {:?}", s); s.get_type_and_token() })
                             .ok_or_else(|| format!(
                                 "No variable named '{}' found in module '{}'",
                                 first_field_name, module
@@ -1896,9 +1896,14 @@ fn declare_argument(
     }
 }
 
+
+// This methods stores the variable in the right place in the specified
+// scope. The symbol that was passed in by the caller will be put in the
+// `args` field of a newly created symbol. The new symbol will get the
+// return type from the symbol that was passed in.
 fn declare_variable_from_symbol(
     key: Option<ast::ShortString>,
-    symbol: symbols::Symbol,
+    arg_symbol: symbols::Symbol,
     symbols: symbols::GlobalSymbolTable<'_>,
     scope: &symbols::Scope,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -1906,25 +1911,33 @@ fn declare_variable_from_symbol(
 
     // There is NO global scope for variables.  All vars are all local to a
     // module.
-
     match &scope {
         symbols::Scope::Module(module) => {
 
-            // Apparently, we have a type.  Let's add it to the symbol table.
             let mut _symbols = symbols.borrow_mut();
             let module = _symbols
                 .get_mut(scope)
                 .ok_or(format!("No module named '{}' found.", module))?;
 
+            
+            let name = arg_symbol.get_name();
+            let symbol = symbols::Symbol::new(
+                "var".into(),
+                symbols::SymbolKind::Variable,
+                arg_symbol.get_return_type(),
+                vec![arg_symbol],
+                None,
+            );
+
             module.move_symbol_into(
-                key.unwrap_or_else(|| symbol.get_name()),
+                key.unwrap_or(name),
                 symbol
             )
         }
         symbols::Scope::Global => {
             Err(format!(
                 "Can't create a variable in the global scope (NEVER). Variable '{}'",
-                symbol.get_name()
+                arg_symbol.get_name()
             )
             .into())
         }

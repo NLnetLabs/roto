@@ -152,6 +152,21 @@ impl Symbol {
             token: Some(token),
         }
     }
+
+    // get the return from this symbol if it's a leaf node, otherwise return
+    // the type of the nested leaf node (in the 'args' field).
+    pub(crate) fn get_return_type(&self) -> TypeDef {
+        if self.args.is_empty() {
+            self.ty.clone()
+        } else if let Some(first_arg) = self.args.first() {
+            println!("first arg {:?}", first_arg);
+            first_arg.ty.clone()
+        }
+        else {
+            unreachable!()
+        }
+
+    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
