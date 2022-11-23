@@ -4,7 +4,7 @@
 
 use routecore::asn::LongSegmentError;
 
-use crate::traits::{MethodProps, RotoFilter, TokenConvert, Token};
+use crate::traits::{MethodProps, RotoFilter, Token, TokenConvert};
 
 use super::collections::Record;
 use super::typedef::TypeDef;
@@ -239,7 +239,9 @@ impl TryFrom<&'_ str> for BuiltinTypeValue {
                 bgp: None,
                 status: RouteStatus::Empty,
             })),
-            "RouteStatus" => Ok(BuiltinTypeValue::RouteStatus(RouteStatus::Empty)),
+            "RouteStatus" => {
+                Ok(BuiltinTypeValue::RouteStatus(RouteStatus::Empty))
+            }
             _ => Err(format!("Unknown type: {}", val).into()),
         }
     }
@@ -330,7 +332,8 @@ impl RotoFilter<U32Token> for U32 {
             "set" => Ok(MethodProps::new(
                 TypeValue::None,
                 U32Token::Set.to_u8(),
-                vec![TypeDef::IntegerLiteral])),
+                vec![TypeDef::IntegerLiteral],
+            )),
             _ => Err(format!(
                 "Unknown method: '{}' for type U32",
                 method_name.ident
@@ -434,39 +437,35 @@ impl RotoFilter<U8Token> for U8 {
                 None => Err("Cannot convert None to U32".into()),
             },
             TypeDef::PrefixLength => match self.0 {
-                Some(value) => {
-                    match value {
-                        0..=128 => Ok(TypeValue::Builtin(
-                            BuiltinTypeValue::PrefixLength(PrefixLength(
-                                Some(value),
-                            )),
-                        )),
-                        _ => Err(format!(
-                            "Prefix length must be between 0 and 128, not {}",
-                            value
-                        )
-                        .into()),
-                    }
-                }
+                Some(value) => match value {
+                    0..=128 => Ok(TypeValue::Builtin(
+                        BuiltinTypeValue::PrefixLength(PrefixLength(Some(
+                            value,
+                        ))),
+                    )),
+                    _ => Err(format!(
+                        "Prefix length must be between 0 and 128, not {}",
+                        value
+                    )
+                    .into()),
+                },
                 None => Ok(TypeValue::Builtin(
                     BuiltinTypeValue::PrefixLength(PrefixLength(None)),
                 )),
             },
             TypeDef::IntegerLiteral => match self.0 {
-                Some(value) => {
-                    match value {
-                        0..=128 => Ok(TypeValue::Builtin(
-                            BuiltinTypeValue::PrefixLength(PrefixLength(
-                                Some(value),
-                            )),
-                        )),
-                        _ => Err(format!(
-                            "Prefix length must be between 0 and 128, not {}",
-                            value
-                        )
-                        .into()),
-                    }
-                }
+                Some(value) => match value {
+                    0..=128 => Ok(TypeValue::Builtin(
+                        BuiltinTypeValue::PrefixLength(PrefixLength(Some(
+                            value,
+                        ))),
+                    )),
+                    _ => Err(format!(
+                        "Prefix length must be between 0 and 128, not {}",
+                        value
+                    )
+                    .into()),
+                },
                 None => Ok(TypeValue::Builtin(
                     BuiltinTypeValue::PrefixLength(PrefixLength(None)),
                 )),
@@ -571,10 +570,7 @@ impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
             "cmp" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::IntegerLiteral),
                 IntegerLiteralToken::Cmp.to_u8(),
-                vec![
-                    TypeDef::IntegerLiteral,
-                    TypeDef::IntegerLiteral,
-                ],
+                vec![TypeDef::IntegerLiteral, TypeDef::IntegerLiteral],
             )),
             _ => Err(format!(
                 "Unknown method: '{}' for type Prefix",
@@ -591,28 +587,24 @@ impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
         match type_def {
             TypeDef::IntegerLiteral => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(self)))
-            },
-            TypeDef::PrefixLength => {
-                match self.0 {
-                    Some(value) => {
-                        match value {
-                            0..=128 => Ok(TypeValue::Builtin(
-                                BuiltinTypeValue::PrefixLength(PrefixLength(
-                                    Some(value as u8),
-                                )),
-                            )),
-                            _ => Err(format!(
-                                "Prefix length must be between 0 and 128, not {}",
-                                value
-                            )
-                            .into()),
-                        }
-                    }
-                    None => Ok(TypeValue::Builtin(
-                        BuiltinTypeValue::PrefixLength(PrefixLength(None)),
-                    )),
-                }
             }
+            TypeDef::PrefixLength => match self.0 {
+                Some(value) => match value {
+                    0..=128 => Ok(TypeValue::Builtin(
+                        BuiltinTypeValue::PrefixLength(PrefixLength(Some(
+                            value as u8,
+                        ))),
+                    )),
+                    _ => Err(format!(
+                        "Prefix length must be between 0 and 128, not {}",
+                        value
+                    )
+                    .into()),
+                },
+                None => Ok(TypeValue::Builtin(
+                    BuiltinTypeValue::PrefixLength(PrefixLength(None)),
+                )),
+            },
             _ => Err(format!(
                 "Cannot convert type IntegerLiteral to type {:?}",
                 type_def
@@ -754,11 +746,9 @@ impl RotoFilter<PrefixToken> for Prefix {
                 vec![TypeDef::Prefix],
             )),
             "exists" => Ok(MethodProps::new(
-                TypeValue::Builtin(
-                    BuiltinTypeValue::Boolean(Boolean(None)),
-                ),
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
                 PrefixToken::Exists.to_u8(),
-                vec![]
+                vec![],
             )),
             _ => Err(format!(
                 "Unknown method: '{}' for type Prefix",
@@ -830,7 +820,7 @@ impl RotoFilter<PrefixLengthToken> for PrefixLength {
             "from" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::PrefixLength),
                 PrefixLengthToken::From.to_u8(),
-               vec![TypeDef::U8],
+                vec![TypeDef::U8],
             )),
             _ => Err(format!(
                 "Unknown method: '{}' for type PrefixLength",
@@ -943,7 +933,7 @@ impl RotoFilter<CommunityToken> for Community {
             )
             .into()),
         }
-}
+    }
 
     fn into_type(
         self,
@@ -972,8 +962,6 @@ impl RotoFilter<CommunityToken> for Community {
     > {
         todo!()
     }
-
-
 }
 
 pub enum CommunityToken {
@@ -1228,16 +1216,12 @@ impl RotoFilter<AsPathToken> for AsPath {
                 vec![],
             )),
             "contains" => Ok(MethodProps::new(
-                TypeValue::Builtin(
-                    BuiltinTypeValue::AsPath(AsPath(None)),
-                ),
+                TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))),
                 AsPathToken::Contains.to_u8(),
                 vec![TypeDef::Asn],
             )),
             "len" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::U8(
-                    U8(None)
-                )),
+                TypeValue::Builtin(BuiltinTypeValue::U8(U8(None))),
                 AsPathToken::Len.to_u8(),
                 vec![],
             )),
@@ -1370,13 +1354,13 @@ pub struct Route {
 }
 
 impl RotoFilter<RouteToken> for Route {
-
     fn get_props_for_method(
-            self,
-            method_name: &crate::ast::Identifier,
-        ) -> Result<MethodProps, Box<dyn std::error::Error>>
-        where
-            Self: std::marker::Sized {
+        self,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, Box<dyn std::error::Error>>
+    where
+        Self: std::marker::Sized,
+    {
         match method_name.ident.as_str() {
             "prefix" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None))),
@@ -1386,15 +1370,19 @@ impl RotoFilter<RouteToken> for Route {
             "as_path" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))),
                 RouteToken::AsPath.to_u8(),
-               vec![],
+                vec![],
             )),
             "communities" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Community(Community(None))),
+                TypeValue::Builtin(BuiltinTypeValue::Community(Community(
+                    None,
+                ))),
                 RouteToken::Communities.to_u8(),
                 vec![],
             )),
             "status" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::RouteStatus(RouteStatus::Empty)),
+                TypeValue::Builtin(BuiltinTypeValue::RouteStatus(
+                    RouteStatus::Empty,
+                )),
                 RouteToken::Status.to_u8(),
                 vec![],
             )),
@@ -1411,9 +1399,9 @@ impl RotoFilter<RouteToken> for Route {
         type_def: &TypeDef,
     ) -> Result<TypeValue, Box<dyn std::error::Error>> {
         match type_def {
-            TypeDef::Route => Ok(TypeValue::Builtin(BuiltinTypeValue::Route(
-                self,
-            ))),
+            TypeDef::Route => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::Route(self)))
+            }
             _ => Err(format!(
                 "Cannot convert type Route to type {:?}",
                 type_def
@@ -1482,7 +1470,7 @@ impl RotoFilter<RouteStatusToken> for RouteStatus {
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
                 RouteStatusToken::IsStartOfRouteRefresh.to_u8(),
                 vec![],
-            )),  
+            )),
             "is_withdrawn" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
                 RouteStatusToken::IsWithdrawn.to_u8(),
@@ -1506,9 +1494,9 @@ impl RotoFilter<RouteStatusToken> for RouteStatus {
         type_def: &TypeDef,
     ) -> Result<TypeValue, Box<dyn std::error::Error>> {
         match type_def {
-            TypeDef::RouteStatus => Ok(TypeValue::Builtin(BuiltinTypeValue::RouteStatus(
-                self,
-            ))),
+            TypeDef::RouteStatus => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::RouteStatus(self)))
+            }
             _ => Err(format!(
                 "Cannot convert type RouteStatus to type {:?}",
                 type_def

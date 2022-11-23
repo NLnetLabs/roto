@@ -1,10 +1,10 @@
 use crate::ast::ShortString;
-use crate::symbols::{Symbol, self};
-use crate::traits::{RotoFilter, MethodProps, TokenConvert};
+use crate::symbols::{self, Symbol};
+use crate::traits::{MethodProps, RotoFilter, TokenConvert};
 
 use super::builtin::{
     AsPath, Asn, Boolean, BuiltinTypeValue, Community, IpAddress, Prefix,
-    U32, U8, PrefixLength,
+    PrefixLength, U32, U8,
 };
 use super::typedef::TypeDef;
 use super::typevalue::TypeValue;
@@ -86,17 +86,11 @@ impl From<ElementTypeValue> for TypeValue {
     fn from(t: ElementTypeValue) -> Self {
         match t {
             ElementTypeValue::Primitive(v) => TypeValue::Builtin(v),
-            ElementTypeValue::Nested(ty) => {
-                match *ty {
-                    TypeValue::List(ty) => {
-                        TypeValue::List(ty)
-                    }
-                    TypeValue::Record(kv_list) => {
-                        TypeValue::Record(kv_list)
-                    }
-                    _ => panic!("Unknown type"),
-                }
-            }
+            ElementTypeValue::Nested(ty) => match *ty {
+                TypeValue::List(ty) => TypeValue::List(ty),
+                TypeValue::Record(kv_list) => TypeValue::Record(kv_list),
+                _ => panic!("Unknown type"),
+            },
         }
     }
 }
@@ -163,8 +157,8 @@ impl RotoFilter<ListToken> for List {
     {
         match method_name.ident.as_str() {
             "get" => Ok(MethodProps::new(
-        TypeValue::List(self),
-        ListToken::Get.to_u8(),
+                TypeValue::List(self),
+                ListToken::Get.to_u8(),
                 vec![TypeDef::U32],
             )),
             "remove" => Ok(MethodProps::new(
@@ -172,23 +166,28 @@ impl RotoFilter<ListToken> for List {
                 ListToken::Remove.to_u8(),
                 vec![TypeDef::U32],
             )),
-        "push" => Ok(MethodProps::new(
-            (&TypeDef::Boolean).into(),
-            ListToken::Push.to_u8(),
-            vec![TypeDef::from(&self.0[0])],
-        )),
-            "contains" => Ok(MethodProps::new(
-                 (&TypeDef::Boolean).into(),
-                ListToken::Contains.to_u8(),
-               vec![],
+            "push" => Ok(MethodProps::new(
+                (&TypeDef::Boolean).into(),
+                ListToken::Push.to_u8(),
+                vec![TypeDef::from(&self.0[0])],
             )),
-            _ => {
-                Err(format!("Unknown method '{}' for list", method_name.ident).into())
-            }
+            "contains" => Ok(MethodProps::new(
+                (&TypeDef::Boolean).into(),
+                ListToken::Contains.to_u8(),
+                vec![],
+            )),
+            _ => Err(format!(
+                "Unknown method '{}' for list",
+                method_name.ident
+            )
+            .into()),
         }
     }
-    
-    fn into_type(self, _type_def: &TypeDef) -> Result<TypeValue, Box<(dyn std::error::Error)>> {
+
+    fn into_type(
+        self,
+        _type_def: &TypeDef,
+    ) -> Result<TypeValue, Box<(dyn std::error::Error)>> {
         Err("List type cannot be converted into another type".into())
     }
 
@@ -218,7 +217,6 @@ pub enum ListToken {
 }
 
 impl TokenConvert for ListToken {}
-
 
 //---------------- Record type ----------------------------------------------
 
@@ -317,13 +315,18 @@ impl RotoFilter<RecordToken> for Record {
                 RecordToken::Contains.to_u8(),
                 vec![(&TypeValue::Record(self)).into()],
             )),
-            _ => {
-                Err(format!("Unknown method '{}' for Record type with fields {:?}", method_name.ident, self).into())
-            }
+            _ => Err(format!(
+                "Unknown method '{}' for Record type with fields {:?}",
+                method_name.ident, self
+            )
+            .into()),
         }
     }
 
-    fn into_type(self, _type_def: &TypeDef) -> Result<TypeValue, Box<(dyn std::error::Error)>> {
+    fn into_type(
+        self,
+        _type_def: &TypeDef,
+    ) -> Result<TypeValue, Box<(dyn std::error::Error)>> {
         Err("Record type cannot be converted into another type".into())
     }
 
@@ -346,7 +349,7 @@ pub enum RecordToken {
     GetAll = 1,
     Contains = 2,
     LongestMatch = 3,
-    Set
+    Set,
 }
 
 impl TokenConvert for RecordToken {}

@@ -2,7 +2,7 @@
 
 // ----------- Rib Type ----------------------------------------------------
 
-use crate::traits::{RotoFilter, MethodProps, TokenConvert};
+use crate::traits::{MethodProps, RotoFilter, TokenConvert};
 
 use super::{
     builtin::{Boolean, BuiltinTypeValue},
@@ -39,25 +39,30 @@ impl RotoFilter<RibToken> for Rib {
             "match" => Ok(MethodProps::new(
                 TypeValue::Record(self.record),
                 RibToken::Match.to_u8(),
-                vec![TypeDef::Prefix]
+                vec![TypeDef::Prefix],
             )),
             "longest_match" => Ok(MethodProps::new(
                 TypeValue::Record(self.record),
                 RibToken::LongestMatch.to_u8(),
-                vec![TypeDef::Prefix]
+                vec![TypeDef::Prefix],
             )),
             "contains" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
                 RibToken::Contains.to_u8(),
-                vec![TypeDef::Prefix]
+                vec![TypeDef::Prefix],
             )),
-            _ => {
-                Err(format!("Unknown method '{}' for data source", method_name.ident).into())
-            }
+            _ => Err(format!(
+                "Unknown method '{}' for data source",
+                method_name.ident
+            )
+            .into()),
         }
     }
 
-    fn into_type(self, _type_def: &TypeDef) -> Result<TypeValue, Box<dyn std::error::Error>>
+    fn into_type(
+        self,
+        _type_def: &TypeDef,
+    ) -> Result<TypeValue, Box<dyn std::error::Error>>
     where
         Self: std::marker::Sized,
     {
@@ -130,22 +135,28 @@ impl RotoFilter<TableToken> for Table {
             "get" => Ok(MethodProps::new(
                 TypeValue::Record(self.record),
                 TableToken::Get.to_u8(),
-                vec![TypeDef::Asn]
+                vec![TypeDef::Asn],
             )),
             "contains" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
                 TableToken::Contains.to_u8(),
-                vec![TypeDef::Asn]
-            )), 
-            _ => {
-                Err(format!("Unknown method '{}' for table", method_name.ident).into())
-            }
+                vec![TypeDef::Asn],
+            )),
+            _ => Err(format!(
+                "Unknown method '{}' for table",
+                method_name.ident
+            )
+            .into()),
         }
     }
 
-    fn into_type(self, _type_def: &TypeDef) -> Result<TypeValue, Box<dyn std::error::Error>>
-        where
-            Self: std::marker::Sized {
+    fn into_type(
+        self,
+        _type_def: &TypeDef,
+    ) -> Result<TypeValue, Box<dyn std::error::Error>>
+    where
+        Self: std::marker::Sized,
+    {
         Err("Table type cannot be converted into another type".into())
     }
 

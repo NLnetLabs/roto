@@ -1403,12 +1403,12 @@ fn accept_reject(
 #[derive(Clone, Debug)]
 pub enum ArgExpr {
     CallExpr(CallExpr),
-    StringLiteral(StringLiteral),               // leaf node
-    IntegerLiteral(IntegerLiteral),             // leaf node
-    PrefixLengthLiteral(PrefixLengthLiteral),   // leaf node
-    AsnLiteral(AsnLiteral),                     // leaf node
-    HexLiteral(HexLiteral),                     // leaf node
-    BooleanLit(BooleanLiteral),                 // leaf node
+    StringLiteral(StringLiteral),   // leaf node
+    IntegerLiteral(IntegerLiteral), // leaf node
+    PrefixLengthLiteral(PrefixLengthLiteral), // leaf node
+    AsnLiteral(AsnLiteral),         // leaf node
+    HexLiteral(HexLiteral),         // leaf node
+    BooleanLit(BooleanLiteral),     // leaf node
     PrefixMatchExpr(PrefixMatchExpr),
     AccessReceiver(AccessReceiver),
     // TypeIdentifier(TypeIdentifier),
@@ -1572,10 +1572,7 @@ impl AccessReceiver {
         let (input, call_receiver) = context(
             "call receiver",
             tuple((
-                terminated(
-                    Identifier::parse,
-                    not(char('(')),
-                ),
+                terminated(Identifier::parse, not(char('('))),
                 opt(FieldAccessExpr::parse),
             )),
         )(input)?;

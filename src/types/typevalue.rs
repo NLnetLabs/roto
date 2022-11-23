@@ -3,8 +3,8 @@ use crate::{ast::ShortString, traits::RotoFilter};
 
 use super::{
     builtin::{
-        AsPath, Asn, Boolean, BuiltinTypeValue, Community, IpAddress, Prefix,
-        U32, U8, IntegerLiteral, PrefixLength, HexLiteral, Route
+        AsPath, Asn, Boolean, BuiltinTypeValue, Community, HexLiteral,
+        IntegerLiteral, IpAddress, Prefix, PrefixLength, Route, U32, U8,
     },
     collections::{List, Record},
     datasources::{Rib, Table},
@@ -52,10 +52,15 @@ impl TypeValue {
         matches!(self, TypeValue::Builtin(BuiltinTypeValue::Boolean(_)))
     }
 
-    pub fn get_builtin_type(&self) -> Result<TypeDef, Box<dyn std::error::Error>> {
+    pub fn get_builtin_type(
+        &self,
+    ) -> Result<TypeDef, Box<dyn std::error::Error>> {
         match self {
             TypeValue::Builtin(b) => Ok(b.into()),
-            _ => Err(format!("Type '{:?}' is not a builtin type.", self).into()),
+            _ => {
+                Err(format!("Type '{:?}' is not a builtin type.", self)
+                    .into())
+            }
         }
     }
 }
@@ -100,11 +105,9 @@ impl<'a> From<&'a TypeDef> for Box<TypeValue> {
             TypeDef::U8 => {
                 Box::new(TypeValue::Builtin(BuiltinTypeValue::U8(U8(None))))
             }
-            TypeDef::PrefixLength => {
-                Box::new(TypeValue::Builtin(
-                    BuiltinTypeValue::PrefixLength(PrefixLength(None)),
-                ))
-            }
+            TypeDef::PrefixLength => Box::new(TypeValue::Builtin(
+                BuiltinTypeValue::PrefixLength(PrefixLength(None)),
+            )),
             TypeDef::Prefix => Box::new(TypeValue::Builtin(
                 BuiltinTypeValue::Prefix(Prefix(None)),
             )),
@@ -130,32 +133,31 @@ impl<'a> From<&'a TypeDef> for Box<TypeValue> {
                     .collect::<Vec<_>>();
                 Box::new(TypeValue::Record(Record::new(def_).unwrap()))
             }
-             // Literals
+            // Literals
             // They have no business here, but IntegerLiteral and HexLiteral
             // are special, since they can be converted into different types
             // based on who's using them as arguments.
 
             // IntegerLiteral can be converted into U32, U8, I64.
-            TypeDef::IntegerLiteral => {
-                Box::new(TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
-                    IntegerLiteral(None)
-                )))
-            }
+            TypeDef::IntegerLiteral => Box::new(TypeValue::Builtin(
+                BuiltinTypeValue::IntegerLiteral(IntegerLiteral(None)),
+            )),
             // HexLiteral can be converted into different community types
             // (standard, extended, large, etc.)
-            TypeDef::HexLiteral => {
-                Box::new(TypeValue::Builtin(BuiltinTypeValue::HexLiteral(HexLiteral(
-                    None,
-                ))))
-            }
+            TypeDef::HexLiteral => Box::new(TypeValue::Builtin(
+                BuiltinTypeValue::HexLiteral(HexLiteral(None)),
+            )),
 
-            _ => { println!("panic on type {:?}", t); panic!("Unknown type") }
+            _ => {
+                println!("panic on type {:?}", t);
+                panic!("Unknown type")
+            }
         }
     }
 }
 
 impl<'a> From<&'a TypeDef> for TypeValue {
-    fn from(t: &'a TypeDef) -> Self { 
+    fn from(t: &'a TypeDef) -> Self {
         match t {
             TypeDef::U32 => {
                 // let v = U32::into_type(U32(None), t).unwrap();
@@ -165,11 +167,9 @@ impl<'a> From<&'a TypeDef> for TypeValue {
             TypeDef::Prefix => {
                 TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None)))
             }
-            TypeDef::PrefixLength => {
-                TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
-                    PrefixLength(None),
-                ))
-            }
+            TypeDef::PrefixLength => TypeValue::Builtin(
+                BuiltinTypeValue::PrefixLength(PrefixLength(None)),
+            ),
             TypeDef::IpAddress => TypeValue::Builtin(
                 BuiltinTypeValue::IpAddress(IpAddress(None)),
             ),
@@ -230,18 +230,14 @@ impl<'a> From<&'a TypeDef> for TypeValue {
             // based on who's using them as arguments.
 
             // IntegerLiteral can be converted into U32, U8, I64.
-            TypeDef::IntegerLiteral => {
-                TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
-                    IntegerLiteral(None)
-                ))
-            }
+            TypeDef::IntegerLiteral => TypeValue::Builtin(
+                BuiltinTypeValue::IntegerLiteral(IntegerLiteral(None)),
+            ),
             // HexLiteral can be converted into different community types
             // (standard, extended, large, etc.)
-            TypeDef::HexLiteral => {
-                TypeValue::Builtin(BuiltinTypeValue::HexLiteral(HexLiteral(
-                    None,
-                )))
-            }
+            TypeDef::HexLiteral => TypeValue::Builtin(
+                BuiltinTypeValue::HexLiteral(HexLiteral(None)),
+            ),
             _ => panic!("Unknown type {:?}", t),
         }
     }

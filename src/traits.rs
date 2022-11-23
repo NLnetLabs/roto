@@ -14,7 +14,7 @@ pub(crate) enum Token {
     Action(u8),
     MatchAction(u8),
     Constant,
-    BuiltinType(u8)
+    BuiltinType(u8),
 }
 
 impl Token {
@@ -23,22 +23,23 @@ impl Token {
             "variable" => Token::Variable(value),
             "method" => Token::Method(value),
             "argument" => Token::Argument(value),
-            _ => panic!("Unknown token type")
+            _ => panic!("Unknown token type"),
         }
     }
 
     pub fn push(&mut self, value: u8) {
         match self {
             Token::FieldAccess(_, v) => v.push(value),
-            _ => panic!("Cannot push to this token")
+            _ => panic!("Cannot push to this token"),
         }
     }
 
     pub fn set_root(&mut self, token: Token) {
         if let Token::FieldAccess(_, fields) = self {
-            *self = Token::FieldAccess(Some(Box::new(token)), fields.to_vec());
+            *self =
+                Token::FieldAccess(Some(Box::new(token)), fields.to_vec());
         }
-    } 
+    }
 }
 
 #[derive(Debug)]
@@ -49,7 +50,11 @@ pub(crate) struct MethodProps {
 }
 
 impl MethodProps {
-    pub(crate) fn new(return_type_value: TypeValue, method_token: u8, arg_types: Vec<TypeDef>) -> Self {
+    pub(crate) fn new(
+        return_type_value: TypeValue,
+        method_token: u8,
+        arg_types: Vec<TypeDef>,
+    ) -> Self {
         MethodProps {
             return_type_value,
             method_token: Token::Method(method_token),
@@ -59,7 +64,6 @@ impl MethodProps {
 }
 
 pub(crate) trait RotoFilter<T: TokenConvert> {
-
     fn get_props_for_method(
         self,
         method_name: &super::ast::Identifier,
@@ -67,7 +71,10 @@ pub(crate) trait RotoFilter<T: TokenConvert> {
     where
         Self: std::marker::Sized;
 
-    fn into_type(self, type_value: &TypeDef) -> Result<TypeValue, Box<dyn std::error::Error>>
+    fn into_type(
+        self,
+        type_value: &TypeDef,
+    ) -> Result<TypeValue, Box<dyn std::error::Error>>
     where
         Self: std::marker::Sized;
 

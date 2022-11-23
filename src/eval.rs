@@ -392,7 +392,10 @@ impl<'a> ast::Define {
 
             // lhs of the assignemnt represents the name of the variable or
             // constant.
-            println!("symbol assigned with key {} {:?}", assignment.0.ident, s);
+            println!(
+                "symbol assigned with key {} {:?}",
+                assignment.0.ident, s
+            );
             declare_variable_from_symbol(
                 Some(assignment.0.ident.clone()),
                 s,
@@ -541,18 +544,16 @@ impl<'a> ast::ApplyScope {
         // not sure whether it is going to be needed.
         let s_name = self.scope.clone().ident;
 
-        let term =
-            self.filter_ident.eval(symbols.clone(), scope.clone())?;
-        let (_ty, token) = module_symbols
-            .get_term(&term.get_name())?;
+        let term = self.filter_ident.eval(symbols.clone(), scope.clone())?;
+        let (_ty, token) = module_symbols.get_term(&term.get_name())?;
 
         let mut args_vec = vec![];
         for action in &self.actions {
             let match_action =
                 action.0.eval(symbols.clone(), scope.clone())?;
 
-                let (_ty, token) = module_symbols
-                    .get_action(&match_action.get_name())?;
+            let (_ty, token) =
+                module_symbols.get_action(&match_action.get_name())?;
 
             let s = symbols::Symbol::new(
                 match_action.get_name(),
@@ -561,7 +562,7 @@ impl<'a> ast::ApplyScope {
                     action.1.clone().unwrap_or(ast::AcceptReject::NoReturn),
                 ),
                 vec![],
-                Some(token)
+                Some(token),
             );
             args_vec.push(s);
         }
@@ -574,7 +575,7 @@ impl<'a> ast::ApplyScope {
             },
             TypeDef::AcceptReject(ast::AcceptReject::Accept),
             args_vec,
-            Some(token)
+            Some(token),
         );
 
         drop(_symbols);
@@ -718,7 +719,7 @@ impl<'a> ast::CallExpr {
                             method_call.get_kind(),
                             method_call.get_type(),
                             vec![field_access],
-                            Some(token)
+                            Some(token),
                         );
                         return Ok((name, s));
                     }
@@ -746,7 +747,7 @@ impl<'a> ast::CallExpr {
                                 symbols::SymbolKind::Rib,
                                 data_type.0,
                                 vec![method_call],
-                                None
+                                None,
                             ),
                         ));
                     }
@@ -908,10 +909,7 @@ impl ast::MethodCallExpr {
 
             // if there's a value already set, we're on a leaf node and we will
             // use that value to compare to,...
-            let parsed_symbol = if parsed_arg_type
-                .get_value()
-                .is_some()
-            {
+            let parsed_symbol = if parsed_arg_type.get_value().is_some() {
                 parsed_arg_type
             } else if parsed_arg_type.get_kind()
                 == symbols::SymbolKind::FieldAccess
@@ -1006,7 +1004,9 @@ impl ast::MethodCallExpr {
             // Either the types are the same, or the type of the parsed value
             // can be converted to the expected type, e.g. an IntegerLiteral
             // can be converted into a U8, I64, etc (as long as it fits).
-            args.push(parsed_symbol.try_convert_value_into(expected_arg_type)?);
+            args.push(
+                parsed_symbol.try_convert_value_into(expected_arg_type)?,
+            );
         }
 
         Ok(symbols::Symbol::new_with_value(
@@ -1225,7 +1225,8 @@ impl ast::FieldAccessExpr {
 
         // First, check if the complete field expression is a built-in type,
         // if so we can return it right away.
-        if let Ok(mut field_type) = rec_type.0.has_fields_chain(&self.field_names)
+        if let Ok(mut field_type) =
+            rec_type.0.has_fields_chain(&self.field_names)
         {
             println!("::: field_type {:?}", field_type);
             println!("::: rec_type token {:?}", rec_type.1);
@@ -1239,7 +1240,7 @@ impl ast::FieldAccessExpr {
                     symbols::SymbolKind::FieldAccess,
                     field_type.0,
                     vec![],
-                    Some(field_type.1)
+                    Some(field_type.1),
                 ));
             }
         };
@@ -1274,7 +1275,7 @@ impl ast::FieldAccessExpr {
             symbols::SymbolKind::FieldAccess,
             ty_to.0,
             vec![],
-            Some(ty_to.1)
+            Some(ty_to.1),
         ))
     }
 }
@@ -1508,14 +1509,10 @@ impl ast::CompareExpr {
             "compare_expr".into(),
             symbols::SymbolKind::CompareExpr(self.op),
             TypeDef::Boolean,
-            vec![
-                left_s,
-                right_s
-            ],
-            None
+            vec![left_s, right_s],
+            None,
         ))
     }
-        
 }
 
 impl ast::CompareArg {
@@ -1572,7 +1569,7 @@ impl ast::AndExpr {
             symbols::SymbolKind::LogicalExpr,
             TypeDef::Boolean,
             vec![left, right],
-            None
+            None,
         ))
     }
 }
@@ -1596,7 +1593,7 @@ impl ast::OrExpr {
             symbols::SymbolKind::LogicalExpr,
             TypeDef::Boolean,
             vec![left, right],
-            None
+            None,
         ))
     }
 }
@@ -1622,7 +1619,7 @@ impl ast::NotExpr {
             symbols::SymbolKind::Variable,
             TypeDef::Boolean,
             vec![expr],
-            None
+            None,
         ))
     }
 }
@@ -1886,7 +1883,6 @@ fn declare_argument(
     }
 }
 
-
 // This methods stores the variable in the right place in the specified
 // scope. The symbol that was passed in by the caller will be put in the
 // `args` field of a newly created symbol. The new symbol will get the
@@ -1977,7 +1973,6 @@ fn add_action(
     symbols: symbols::GlobalSymbolTable<'_>,
     scope: &symbols::Scope,
 ) -> Result<(), Box<dyn std::error::Error>> {
-
     match &scope {
         symbols::Scope::Module(module) => {
             let mut _symbols = symbols.borrow_mut();
