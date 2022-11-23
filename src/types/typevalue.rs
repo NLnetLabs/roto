@@ -58,67 +58,6 @@ impl TypeValue {
             _ => Err(format!("Type '{:?}' is not a builtin type.", self).into()),
         }
     }
-
-    // Will try to convert a type value into another type, while keeping the
-    // wrapped value. This includes converting from the type_value to the
-    // same type as the type of the type_value.
-    pub fn try_convert_type_into_value(self, type_def: &TypeDef) -> Result<TypeValue, Box<dyn std::error::Error>> {
-        match self {
-            TypeValue::Builtin(BuiltinTypeValue::U32(int)) => {
-                int.into_type(type_def)
-            }
-            TypeValue::Builtin(BuiltinTypeValue::U8(int)) => {
-                int.into_type(type_def)
-                // Ok(TypeValue::Builtin(BuiltinTypeValue::U8(int)))
-            }
-            TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(int)) => {
-                int.into_type(type_def)
-            }
-            TypeValue::Builtin(BuiltinTypeValue::HexLiteral(hex)) => {
-                hex.into_type(type_def)
-            }
-            TypeValue::Builtin(BuiltinTypeValue::PrefixLength(pl)) => {
-                pl.into_type(type_def)
-            }
-            TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) => {
-                asn.into_type(type_def)
-            }
-            TypeValue::Builtin(BuiltinTypeValue::Prefix(prefix)) => {
-                prefix.into_type(type_def)
-            }
-            TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) => {
-                ip.into_type(type_def)
-            }
-            TypeValue::Builtin(BuiltinTypeValue::Community(com)) => {
-               com.into_type(type_def)
-            }
-            TypeValue::Builtin(BuiltinTypeValue::Boolean(bool)) => {
-                bool.into_type(type_def)
-            }
-            TypeValue::Builtin(BuiltinTypeValue::Route(route)) => {
-                route.into_type(type_def)
-            }
-            TypeValue::Builtin(BuiltinTypeValue::RouteStatus(status)) => {
-                status.into_type(type_def)
-            }
-            TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {
-                as_path.into_type(type_def)
-            }
-            TypeValue::List(list) => {
-                list.into_type(type_def)
-            }
-            TypeValue::Record(rec) => {
-                rec.into_type(type_def)
-            }
-            TypeValue::Rib(rib) => {
-                rib.into_type(type_def)
-            }
-            TypeValue::Table(table) => {
-                table.into_type(type_def)
-            }
-            TypeValue::None => Err("Cannot convert None into a type".into()),
-        }
-    }
 }
 
 impl<'a> TryFrom<&'a str> for TypeValue {

@@ -908,7 +908,7 @@ impl ast::MethodCallExpr {
 
             // if there's a value already set, we're on a leaf node and we will
             // use that value to compare to,...
-            let parsed_arg_type_value = if parsed_arg_type
+            let parsed_symbol = if parsed_arg_type
                 .get_value()
                 .is_some()
             {
@@ -1002,32 +1002,11 @@ impl ast::MethodCallExpr {
                 ))?
             };
 
-            // Compare the two types
-
-            // Symbols containing constants have no type set, only a
-            // type_value, make sure to use that, in order to keep that
-            // value. Otherwise, we can just create a new type value with the
-            // value set to None.
-            //
-            // Note that only built-in types can be converted.
-            // Note that `try_convert_type_into` includes from a type to the
-            // same type.
-            let ty = parsed_arg_type_value.get_type();
-            let token = parsed_arg_type_value.get_token()?;
-            let value = parsed_arg_type_value.get_value_owned();
-            let value = match value {
-                Some(v) => v,
-                None => TypeValue::from(&ty),
-            }
-            .try_convert_type_into_value(expected_arg_type)?;
-
-            args.push(symbols::Symbol::new_with_value(
-                "arg".into(),
-                symbols::SymbolKind::Argument,
-                value,
-                vec![],
-                token,
-            ));
+            // Compare the expected type with the type of the parsed value.
+            // Either the types are the same, or the type of the parsed value
+            // can be converted to the expected type, e.g. an IntegerLiteral
+            // can be converted into a U8, I64, etc (as long as it fits).
+            args.push(parsed_symbol.try_convert_value_into(expected_arg_type)?);
         }
 
         Ok(symbols::Symbol::new_with_value(
@@ -1434,7 +1413,7 @@ impl ast::CompareExpr {
         // Proces the left hand side of the compare expression. This is a
         // Compare Argument. It has to end in a leaf node, otherwise it's
         // an error.
-        let left_s = self.left.eval(_symbols, scope)?;
+        let left_s = self.left.eval(_symbols.clone(), scope)?;
         println!("left_s: {:?}", left_s);
         let left_type = match left_s.get_kind() {
             // Any literal in the source code should end up as
@@ -1479,7 +1458,7 @@ impl ast::CompareExpr {
             }
         };
 
-        let right_s = self.right.eval(symbols.clone(), scope)?;
+        let mut right_s = self.right.eval(symbols, scope)?;
         let right_type = match right_s.get_kind() {
             symbols::SymbolKind::Constant => {
                 right_s.get_builtin_type_for_leaf_node()?
@@ -1516,14 +1495,13 @@ impl ast::CompareExpr {
             }
         };
 
-        // For now we're assuming the left hand-side and the right-hand side
-        // return the same type.
+        // Either the left and right hand sides are of the same type OR the
+        // right hand side value can be converted into a type of the left
+        // hand side. For example, a comparison of PrefixLength and
+        // IntegerLiteral will work in the form of `prefix.len() == 32;`, but
+        // NOT reversed, i.e. `32 == prefix.len();` is INVALID.
         if left_type != right_type {
-            return Err(format!(
-                "Cannot compare {:?} from {:?} with {:?} from {:?}",
-                left_type, left_s, right_type, right_s
-            )
-            .into());
+            right_s = right_s.try_convert_value_into(&left_type)?;
         }
 
         Ok(symbols::Symbol::new(
@@ -1531,12 +1509,13 @@ impl ast::CompareExpr {
             symbols::SymbolKind::CompareExpr(self.op),
             TypeDef::Boolean,
             vec![
-                self.left.eval(symbols.clone(), scope)?,
-                self.right.eval(symbols, scope)?,
+                left_s,
+                right_s
             ],
             None
         ))
     }
+        
 }
 
 impl ast::CompareArg {

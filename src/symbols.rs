@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     ast::{CompareOp, ShortString},
-    traits::Token,
+    traits::{RotoFilter, Token},
     types::{
         builtin::BuiltinTypeValue, typedef::TypeDef, typevalue::TypeValue,
     },
@@ -166,6 +166,74 @@ impl Symbol {
         } else {
             unreachable!()
         }
+    }
+
+    pub fn try_convert_value_into(
+        mut self,
+        type_def: &TypeDef,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        match self.value {
+            Some(TypeValue::Builtin(BuiltinTypeValue::U32(int))) => {
+                self.value = Some(int.into_type(type_def)?);
+            }
+            Some(TypeValue::Builtin(BuiltinTypeValue::U8(int))) => {
+                self.value = Some(int.into_type(type_def)?);
+            }
+            Some(TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
+                int,
+            ))) => {
+                self.value = Some(int.into_type(type_def)?);
+            }
+            Some(TypeValue::Builtin(BuiltinTypeValue::HexLiteral(hex))) => {
+                self.value = Some(hex.into_type(type_def)?);
+            }
+            Some(TypeValue::Builtin(BuiltinTypeValue::PrefixLength(pl))) => {
+                self.value = Some(pl.into_type(type_def)?);
+            }
+            Some(TypeValue::Builtin(BuiltinTypeValue::Asn(asn))) => {
+                self.value = Some(asn.into_type(type_def)?);
+            }
+            Some(TypeValue::Builtin(BuiltinTypeValue::Prefix(prefix))) => {
+                self.value = Some(prefix.into_type(type_def)?);
+            }
+            Some(TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip))) => {
+                self.value = Some(ip.into_type(type_def)?);
+            }
+            Some(TypeValue::Builtin(BuiltinTypeValue::Community(com))) => {
+                self.value = Some(com.into_type(type_def)?);
+            }
+            Some(TypeValue::Builtin(BuiltinTypeValue::Boolean(bool))) => {
+                self.value = Some(bool.into_type(type_def)?);
+            }
+            Some(TypeValue::Builtin(BuiltinTypeValue::Route(route))) => {
+                self.value = Some(route.into_type(type_def)?);
+            }
+            Some(TypeValue::Builtin(BuiltinTypeValue::RouteStatus(
+                status,
+            ))) => {
+                self.value = Some(status.into_type(type_def)?);
+            }
+            Some(TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path))) => {
+                self.value = Some(as_path.into_type(type_def)?);
+            }
+            Some(TypeValue::List(list)) => {
+                self.value = Some(list.into_type(type_def)?);
+            }
+            Some(TypeValue::Record(rec)) => {
+                self.value = Some(rec.into_type(type_def)?);
+            }
+            Some(TypeValue::Rib(rib)) => {
+                self.value = Some(rib.into_type(type_def)?);
+            }
+            Some(TypeValue::Table(table)) => {
+                self.value = Some(table.into_type(type_def)?);
+            }
+            Some(TypeValue::None) => {
+                return Err("Cannot convert None into a type".into())
+            }
+            None => return Err("Cannot convert None into a type".into()),
+        };
+        Ok(self)
     }
 }
 
