@@ -744,7 +744,7 @@ impl RotoFilter<PrefixToken> for Prefix {
                 vec![],
             )),
             "len" => Ok(MethodProps::new(
-                TypeValue::from(&TypeDef::IntegerLiteral),
+                TypeValue::from(&TypeDef::PrefixLength),
                 PrefixToken::Len.to_u8(),
                 vec![],
             )),
