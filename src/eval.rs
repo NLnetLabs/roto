@@ -1976,7 +1976,6 @@ fn add_logical_formula(
 
             module.add_logical_formula(
                 key.unwrap_or_else(|| symbol.get_name()),
-                Some(symbol.get_name()),
                 symbol.get_kind(),
                 symbol.get_type(),
                 symbol.get_args_owned(),

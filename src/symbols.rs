@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{hash_map::Entry, HashMap},
     fmt::{Display, Formatter},
     hash::Hash,
     rc::Rc,
@@ -29,7 +29,6 @@ pub(crate) struct Symbol {
 }
 
 impl Symbol {
-
     // gets the type only from the `ty` field.
     pub fn get_type_and_token(
         &self,
@@ -81,9 +80,9 @@ impl Symbol {
     }
 
     pub fn get_token(&self) -> Result<Token, Box<dyn std::error::Error>> {
-        self.token
-            .clone()
-            .ok_or_else(|| format!("No token found for symbol '{:?}'", self).into())
+        self.token.clone().ok_or_else(|| {
+            format!("No token found for symbol '{:?}'", self).into()
+        })
     }
 
     pub fn get_type(&self) -> TypeDef {
@@ -164,11 +163,9 @@ impl Symbol {
         } else if let Some(first_arg) = self.args.first() {
             println!("first arg {:?}", first_arg);
             first_arg.ty.clone()
-        }
-        else {
+        } else {
             unreachable!()
         }
-
     }
 }
 
@@ -202,7 +199,7 @@ pub enum SymbolKind {
     MatchAction,
     NegateMatchAction,
     Action,
-    Term
+    Term,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -273,7 +270,6 @@ impl SymbolTable {
         key: ShortString,
         mut symbol: Symbol,
     ) -> Result<(), Box<dyn std::error::Error>> {
-
         if self.variables.contains_key(&key) {
             return Err(format!(
                 "Symbol {} already defined in scope {}",
@@ -378,31 +374,16 @@ impl SymbolTable {
     pub(crate) fn add_logical_formula(
         &mut self,
         key: ShortString,
-        name: Option<ShortString>,
         kind: SymbolKind,
         ty: TypeDef,
         args: Vec<Symbol>,
         value: Option<TypeValue>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let name = if let Some(name) = name {
-            name
-        } else {
-            key.clone()
-        };
-
         let token_int = self.terms.len() as u8;
         let token = Some(Token::Term(token_int));
 
-        if self.terms.contains_key(&name) {
-            return Err(format!(
-                "Term {} already defined in scope {}",
-                name, self.scope
-            )
-            .into());
-        }
-
-        let args = Symbol {
-            name,
+        let new_arg = Symbol {
+            name: key.clone(),
             kind,
             ty: ty.clone(),
             args,
@@ -410,19 +391,21 @@ impl SymbolTable {
             token: None,
         };
 
-        let s = Symbol {
-            name: key.clone(),
-            kind: SymbolKind::Term,
-            ty,
-            args: vec![args],
-            value,
-            token,
-        };
-         
-        self.terms.insert(
-            key,
-            s,
-        );
+        if let Entry::Vacant(e) = self.terms.entry(key.clone()) {
+            let s = Symbol {
+                name: key.clone(),
+                kind: SymbolKind::Term,
+                ty,
+                args: vec![new_arg],
+                value,
+                token,
+            };
+
+            e.insert(s);
+        } else {
+            let child_args = &mut self.terms.get_mut(&key).unwrap().args;
+            child_args.push(new_arg);
+        }
 
         Ok(())
     }
@@ -470,12 +453,9 @@ impl SymbolTable {
             value,
             token,
         };
-         
-        self.actions.insert(
-            key,
-            s,
-        );
-    
+
+        self.actions.insert(key, s);
+
         Ok(())
     }
 
@@ -487,16 +467,16 @@ impl SymbolTable {
         ty: TypeDef,
         args: Vec<Symbol>,
         value: Option<TypeValue>,
-        // token is the index of the term that corresponds to the `name` 
+        // token is the index of the term that corresponds to the `name`
         // argument. It's a token for a term.
-        token: Token
+        token: Token,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let name = if let Some(name) = name {
             name
         } else {
             key.clone()
         };
-        
+
         if self.match_actions.contains_key(&name) {
             return Err(format!(
                 "Match Action '{}' already defined in scope {}",
@@ -561,7 +541,7 @@ impl SymbolTable {
 
         None
     }
-    
+
     pub(crate) fn get_variable(
         &self,
         name: &ShortString,
@@ -588,9 +568,7 @@ impl SymbolTable {
         self.terms
             .get(name)
             .ok_or_else(|| format!("Symbol '{}' not found", name).into())
-            .map(|term| {
-                (term.ty.clone(), term.token.clone().unwrap())
-            })
+            .map(|term| (term.ty.clone(), term.token.clone().unwrap()))
     }
 
     pub(crate) fn get_action(
@@ -600,9 +578,7 @@ impl SymbolTable {
         self.actions
             .get(name)
             .ok_or_else(|| format!("Symbol '{}' not found", name).into())
-            .map(|action| {
-                (action.ty.clone(), action.token.clone().unwrap())
-            })
+            .map(|action| (action.ty.clone(), action.token.clone().unwrap()))
     }
 
     pub(crate) fn get_data_source(
