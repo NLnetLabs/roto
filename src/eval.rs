@@ -1362,8 +1362,8 @@ impl ast::BooleanExpr {
                 let var = gt.get_variable(&ident.ident.ident)?;
 
                 println!(
-                    "var from access_receiver: {} {:?}",
-                    ident.ident.ident, var
+                    "var from access_receiver: {} {:?} {:?}",
+                    ident.ident.ident, var.get_token(), var
                 );
 
                 is_boolean_expression(var)?;
@@ -1947,11 +1947,8 @@ fn add_logical_formula(
                 .ok_or(format!("No module named '{}' found.", module))?;
 
             module.add_logical_formula(
-                key.unwrap_or_else(|| symbol.get_name()),
-                symbol.get_kind(),
-                symbol.get_type(),
-                symbol.get_args_owned(),
-                None,
+                key.unwrap(),
+                symbol
             )
         }
         symbols::Scope::Global => {

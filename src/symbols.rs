@@ -505,38 +505,23 @@ impl SymbolTable {
 
     pub(crate) fn add_logical_formula(
         &mut self,
-        key: ShortString,
-        kind: SymbolKind,
-        ty: TypeDef,
-        args: Vec<Symbol>,
-        value: Option<TypeValue>,
+        term_key: ShortString,
+        child_symbol: Symbol,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let token_int = self.terms.len() as u8;
-        let token = Some(Token::Term(token_int));
+        let term_token = Some(Token::Term(self.terms.len() as u8));
 
-        let new_arg = Symbol {
-            name: key.clone(),
-            kind,
-            ty: ty.clone(),
-            args,
-            value: None,
-            token: None,
-        };
-
-        if let Entry::Vacant(e) = self.terms.entry(key.clone()) {
-            let s = Symbol {
-                name: key.clone(),
+        if let Entry::Vacant(term) = self.terms.entry(term_key.clone()) {
+            term.insert(Symbol {
+                name: term_key.clone(),
                 kind: SymbolKind::Term,
-                ty,
-                args: vec![new_arg],
-                value,
-                token,
-            };
-
-            e.insert(s);
+                ty: child_symbol.get_type(),
+                args: vec![child_symbol],
+                value: None,
+                token: term_token,
+            });
         } else {
-            let child_args = &mut self.terms.get_mut(&key).unwrap().args;
-            child_args.push(new_arg);
+            let child_args = &mut self.terms.get_mut(&term_key).unwrap().args;
+            child_args.push(child_symbol);
         }
 
         Ok(())
