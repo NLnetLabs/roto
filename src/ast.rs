@@ -1555,7 +1555,7 @@ impl CallExpr {
 // part of a CallExpr) or the field of a data structure that is being
 // accessed (as stand-alone expression).
 
-// CallReceiver ::= Identifier.(FieldExpr)?
+// CallReceiver ::= Identifier.(FieldAccessExpr)?
 
 #[derive(Clone, Debug)]
 pub struct AccessReceiver {
