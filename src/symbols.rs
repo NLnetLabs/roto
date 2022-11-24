@@ -235,6 +235,21 @@ impl Symbol {
         };
         Ok(self)
     }
+
+    // Leaf nodes have an empty `args` field. Recursively check if this
+    // symbol has leaf nodes or is a leaf node itself.
+    pub(crate) fn get_leaf_nodes(&self) -> Vec<&Symbol> {
+        let mut leaves = vec![];
+
+        if self.args.is_empty() {
+            leaves.push(self);
+        } else {
+            for arg in self.args.iter() {
+                leaves.extend(arg.get_leaf_nodes());
+            }
+        }
+        leaves
+    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -334,6 +349,21 @@ impl GlobalSymbolTable {
         GlobalSymbolTable(Rc::new(RefCell::new(HashMap::new())))
     }
 
+    pub(crate) fn get_term_deps(
+        &self,
+    ) -> Result<(Vec<Token>, Vec<Token>), Box<dyn std::error::Error>> {
+        let _symbols = self.borrow();
+        let _symbols = _symbols
+            .get(&Scope::Global)
+            .ok_or("No global symbol table found")
+            .unwrap();
+
+        let bla = _symbols.get_term_deps();
+
+        println!("bla: {:?}", bla);
+        
+        Ok(bla)
+    }
 }
 
 impl Clone for GlobalSymbolTable {
@@ -347,6 +377,7 @@ impl Default for GlobalSymbolTable {
         GlobalSymbolTable::new()
     }
 }
+
 struct Location {
     name: ShortString,
     module: ShortString,
@@ -700,5 +731,28 @@ impl SymbolTable {
                 Err(format!("No data source named '{}' found.", name).into())
             }
         })?
+    }
+
+    pub(crate) fn get_term_deps(&self) -> (Vec<Token>, Vec<Token>) {
+        let mut deps_vec: Vec<Token> = vec![];
+        for s in self.terms.values() {
+            println!("term: {:#?}", s);
+            deps_vec = deps_vec
+                .into_iter()
+                .chain(
+                    s.get_leaf_nodes()
+                        .into_iter()
+                        .map(|s| s.get_token().unwrap()),
+                )
+                .collect()
+        }
+
+        deps_vec.retain(|t| t.is_variable() || t.is_argument());
+        deps_vec.dedup();
+
+        let deps_vec: (Vec<Token>, Vec<Token>) =
+            deps_vec.into_iter().partition(|t| t.is_argument());
+
+        deps_vec
     }
 }

@@ -2,7 +2,7 @@
 
 use crate::types::{typedef::TypeDef, typevalue::TypeValue};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum Token {
     Variable(u8),
     Method(u8),
@@ -39,6 +39,14 @@ impl Token {
             *self =
                 Token::FieldAccess(Some(Box::new(token)), fields.to_vec());
         }
+    }
+
+    pub fn is_variable(&self) -> bool {
+        matches!(self, Token::Variable(_))
+    }
+
+    pub fn is_argument(&self) -> bool {
+        matches!(self, Token::Argument(_))
     }
 }
 
