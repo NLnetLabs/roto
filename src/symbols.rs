@@ -305,15 +305,48 @@ pub struct SymbolTable {
 }
 
 // The global symbol table.
-pub type GlobalSymbolTable<'a> = Rc<
-    RefCell<
-        std::collections::HashMap<
-            super::symbols::Scope,
-            super::symbols::SymbolTable,
+#[derive(Debug)]
+pub struct GlobalSymbolTable(
+    Rc<
+        RefCell<
+            std::collections::HashMap<
+                super::symbols::Scope,
+                super::symbols::SymbolTable,
+            >,
         >,
     >,
->;
+);
 
+impl GlobalSymbolTable {
+    pub(crate) fn borrow_mut(
+        &self,
+    ) -> std::cell::RefMut<'_, HashMap<Scope, SymbolTable>> {
+        self.0.borrow_mut()
+    }
+
+    pub(crate) fn borrow(
+        &self,
+    ) -> std::cell::Ref<'_, HashMap<Scope, SymbolTable>> {
+        self.0.borrow()
+    }
+
+    pub fn new() -> Self {
+        GlobalSymbolTable(Rc::new(RefCell::new(HashMap::new())))
+    }
+
+}
+
+impl Clone for GlobalSymbolTable {
+    fn clone(&self) -> Self {
+        GlobalSymbolTable(Rc::clone(&self.0))
+    }
+}
+
+impl Default for GlobalSymbolTable {
+    fn default() -> Self {
+        GlobalSymbolTable::new()
+    }
+}
 struct Location {
     name: ShortString,
     module: ShortString,

@@ -1,10 +1,7 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::rc::Rc;
-
 use crate::ast::LogicalExpr;
 use crate::ast::ShortString;
 use crate::ast::TypeIdentifier;
+use crate::symbols::GlobalSymbolTable;
 use crate::traits::Token;
 use crate::types::builtin::Boolean;
 use crate::types::builtin::BuiltinTypeValue;
@@ -23,7 +20,7 @@ use std::convert::From;
 impl<'a> ast::Root {
     pub fn eval(
         &'a self,
-        symbols: Rc<RefCell<HashMap<symbols::Scope, symbols::SymbolTable>>>,
+        symbols: GlobalSymbolTable,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let (modules, global): (Vec<_>, Vec<_>) = self
             .expressions
@@ -274,7 +271,7 @@ impl<'a> ast::RecordTypeIdentifier {
 impl ast::Module {
     fn eval(
         &self,
-        symbols: symbols::GlobalSymbolTable<'_>,
+        symbols: symbols::GlobalSymbolTable,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let module_scope = symbols::Scope::Module(self.ident.ident.clone());
         // Check the `with` clause for additional arguments.
@@ -323,9 +320,9 @@ impl ast::Module {
         Ok(())
     }
 
-    fn eval_define_header<'a>(
-        &'a self,
-        symbols: symbols::GlobalSymbolTable<'a>,
+    fn eval_define_header(
+        &self,
+        symbols: symbols::GlobalSymbolTable,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Check the `with` clause for additional arguments.
         let with_kv: Vec<_> = self.body.define.with_kv.clone();
@@ -353,10 +350,10 @@ impl ast::Module {
     }
 }
 
-impl<'a> ast::Define {
+impl ast::Define {
     fn eval(
         &self,
-        symbols: symbols::GlobalSymbolTable<'a>,
+        symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // The default input-argument is defined by the 'rx' keyword in the
@@ -408,10 +405,10 @@ impl<'a> ast::Define {
     }
 }
 
-impl<'a> ast::Term {
+impl ast::Term {
     fn eval(
         &self,
-        symbols: symbols::GlobalSymbolTable<'a>,
+        symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let term_scopes = &self.body.scopes;
@@ -448,10 +445,10 @@ impl<'a> ast::Term {
 
 // =========== Actions ======================================================
 
-impl<'a> ast::Action {
+impl ast::Action {
     fn eval(
         &self,
-        symbols: symbols::GlobalSymbolTable<'a>,
+        symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let _symbols = symbols.borrow();
@@ -507,10 +504,10 @@ impl<'a> ast::Action {
 
 //------------ Apply --------------------------------------------------------
 
-impl<'a> ast::Apply {
+impl ast::Apply {
     fn eval(
         &self,
-        symbols: symbols::GlobalSymbolTable<'a>,
+        symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let _symbols = symbols.borrow();
@@ -529,10 +526,10 @@ impl<'a> ast::Apply {
     }
 }
 
-impl<'a> ast::ApplyScope {
+impl ast::ApplyScope {
     fn eval(
         &self,
-        symbols: symbols::GlobalSymbolTable<'a>,
+        symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         let _symbols = symbols.borrow();
@@ -631,11 +628,11 @@ impl<'a> ast::ApplyScope {
 //         },
 //     }
 
-impl<'a> ast::CallExpr {
+impl ast::CallExpr {
     pub(crate) fn eval(
         &self,
         base_name_ident: ShortString,
-        symbols: symbols::GlobalSymbolTable<'a>,
+        symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
     ) -> Result<(ShortString, symbols::Symbol), Box<dyn std::error::Error>>
     {
@@ -852,7 +849,7 @@ impl ast::MethodCallExpr {
         // Parsed return type of the method call
         method_kind: symbols::SymbolKind,
         method_call_type: TypeDef,
-        symbols: symbols::GlobalSymbolTable<'_>,
+        symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         println!("method call args {:?}", self);
@@ -1026,7 +1023,7 @@ impl ast::MethodCallExpr {
 impl ast::AccessReceiver {
     fn eval(
         &self,
-        symbols: symbols::GlobalSymbolTable<'_>,
+        symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         println!("AccessReceiver::eval() {:?}", self);
@@ -1085,7 +1082,7 @@ impl ast::AccessReceiver {
 impl ast::ArgExpr {
     fn eval(
         &self,
-        symbols: symbols::GlobalSymbolTable<'_>,
+        symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         match self {
@@ -1192,7 +1189,7 @@ impl ast::ArgExpr {
 impl ast::ArgExprList {
     fn eval(
         &self,
-        symbols: symbols::GlobalSymbolTable<'_>,
+        symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
     ) -> Result<Vec<symbols::Symbol>, Box<dyn std::error::Error>> {
         let mut eval_args = vec![];
@@ -1208,7 +1205,7 @@ impl ast::FieldAccessExpr {
     fn eval(
         &self,
         receiver: &ast::Identifier,
-        symbols: symbols::GlobalSymbolTable<'_>,
+        symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         let _symbols = symbols.clone();
@@ -1289,7 +1286,7 @@ impl ast::FieldAccessExpr {
 impl ast::LogicalExpr {
     fn eval(
         &self,
-        symbols: symbols::GlobalSymbolTable<'_>,
+        symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         match self {
@@ -1318,7 +1315,7 @@ impl ast::LogicalExpr {
 impl ast::BooleanExpr {
     fn eval(
         &self,
-        symbols: symbols::GlobalSymbolTable<'_>,
+        symbols: symbols::GlobalSymbolTable,
         scope: &symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         let _symbols = symbols.clone();
@@ -1406,7 +1403,7 @@ impl ast::BooleanExpr {
 impl ast::CompareExpr {
     fn eval(
         &self,
-        symbols: symbols::GlobalSymbolTable<'_>,
+        symbols: symbols::GlobalSymbolTable,
         scope: &symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         let _symbols = symbols.clone();
@@ -1518,7 +1515,7 @@ impl ast::CompareExpr {
 impl ast::CompareArg {
     fn eval(
         &self,
-        symbols: symbols::GlobalSymbolTable<'_>,
+        symbols: symbols::GlobalSymbolTable,
         scope: &symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         let _symbols = symbols.clone();
@@ -1547,7 +1544,7 @@ impl ast::CompareArg {
 impl ast::AndExpr {
     fn eval(
         &self,
-        symbols: symbols::GlobalSymbolTable<'_>,
+        symbols: symbols::GlobalSymbolTable,
         scope: &symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         // An "And Expression" is a Boolean function, meaning it takes a
@@ -1577,7 +1574,7 @@ impl ast::AndExpr {
 impl ast::OrExpr {
     fn eval(
         &self,
-        symbols: symbols::GlobalSymbolTable<'_>,
+        symbols: symbols::GlobalSymbolTable,
         scope: &symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         println!("or expr {:?}", self);
@@ -1601,7 +1598,7 @@ impl ast::OrExpr {
 impl ast::NotExpr {
     fn eval(
         &self,
-        symbols: symbols::GlobalSymbolTable<'_>,
+        symbols: symbols::GlobalSymbolTable,
         scope: &symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         let _symbols = symbols;
@@ -1627,7 +1624,7 @@ impl ast::NotExpr {
 impl ast::GroupedLogicalExpr {
     fn eval(
         &self,
-        symbols: symbols::GlobalSymbolTable<'_>,
+        symbols: symbols::GlobalSymbolTable,
         scope: &symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         println!("grouped logical expr: {:?}", self);
@@ -1715,7 +1712,7 @@ fn check_type_identifier(
 // of a primitive type they live in the user-defined record-type itself.
 fn get_type_for_scoped_variable(
     fields: &[ast::Identifier],
-    symbols: symbols::GlobalSymbolTable<'_>,
+    symbols: symbols::GlobalSymbolTable,
     scope: symbols::Scope,
 ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
     // Implicit early return. Are there any actual fields? If not then we're
@@ -1890,7 +1887,7 @@ fn declare_argument(
 fn declare_variable_from_symbol(
     key: Option<ast::ShortString>,
     arg_symbol: symbols::Symbol,
-    symbols: symbols::GlobalSymbolTable<'_>,
+    symbols: symbols::GlobalSymbolTable,
     scope: &symbols::Scope,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let _symbols = symbols.clone();
@@ -1935,7 +1932,7 @@ fn declare_variable_from_symbol(
 fn add_logical_formula(
     key: Option<ast::ShortString>,
     symbol: symbols::Symbol,
-    symbols: symbols::GlobalSymbolTable<'_>,
+    symbols: symbols::GlobalSymbolTable,
     scope: &symbols::Scope,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let _symbols = symbols.clone();
@@ -1970,7 +1967,7 @@ fn add_logical_formula(
 fn add_action(
     name: ShortString,
     action: symbols::Symbol,
-    symbols: symbols::GlobalSymbolTable<'_>,
+    symbols: symbols::GlobalSymbolTable,
     scope: &symbols::Scope,
 ) -> Result<(), Box<dyn std::error::Error>> {
     match &scope {
@@ -2000,7 +1997,7 @@ fn add_action(
 fn add_match_action(
     name: ShortString,
     match_action: symbols::Symbol,
-    symbols: symbols::GlobalSymbolTable<'_>,
+    symbols: symbols::GlobalSymbolTable,
     scope: &symbols::Scope,
 ) -> Result<(), Box<dyn std::error::Error>> {
     match &scope {
@@ -2118,7 +2115,7 @@ fn declare_variable_from_typedef<'a>(
     ty: TypeDef,
     kind: symbols::SymbolKind,
     _args: Option<ast::ArgExprList>,
-    symbols: symbols::GlobalSymbolTable<'a>,
+    symbols: symbols::GlobalSymbolTable,
     scope: &symbols::Scope,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // let _symbols = symbols.clone();

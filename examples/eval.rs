@@ -4,7 +4,6 @@ use roto::symbols::GlobalSymbolTable;
 
 use nom::error::convert_error;
 use roto::ast::*;
-use roto::symbols::{Scope, SymbolTable};
 
 fn test_data(name: &str, data: &'static str, expect_success: bool) -> Result<(), Box<dyn std::error::Error>> {
     println!("eval test {}", name);
@@ -19,11 +18,11 @@ fn test_data(name: &str, data: &'static str, expect_success: bool) -> Result<(),
         true => assert!(parsed_data.is_ok()),
     }
 
-    let symbols = HashMap::<Scope, SymbolTable>::new();
+    // let _symbols = HashMap::<Scope, SymbolTable>::new();
     let eval = parsed_data?;
     
-    let symbols = RefCell::new(symbols);
-    let symbols = GlobalSymbolTable::new(symbols);
+    // let symbols = RefCell::new(symbols);
+    let symbols = GlobalSymbolTable::new();
     let ev2 = eval.1.eval(symbols.clone());
 
     println!("{:#?}", symbols);
