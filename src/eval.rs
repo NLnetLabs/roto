@@ -1,6 +1,5 @@
 use crate::ast::LogicalExpr;
 use crate::ast::ShortString;
-use crate::ast::TypeIdentifier;
 use crate::symbols::GlobalSymbolTable;
 use crate::traits::Token;
 use crate::types::builtin::Boolean;
@@ -462,8 +461,7 @@ impl ast::Action {
             // The incoming payload variable is the only variable that can be
             // used in the 'action' section. The incoming payload variable has
             // a SymolKind::RxType.
-            let payload_var_name =
-                call_expr.get_receiver().unwrap().clone().ident;
+            let payload_var_name = call_expr.get_receiver().clone().ident;
 
             let s = module_symbols
                 .get_variable(&payload_var_name.ident)
@@ -481,7 +479,7 @@ impl ast::Action {
                 .into());
             };
 
-            let (_, s) =
+            let s =
                 call_expr.eval("".into(), symbols.clone(), scope.clone())?;
 
             actions_vec.push(s);
@@ -589,259 +587,269 @@ impl ast::ApplyScope {
 // The caller needs to insert them in the right place in a enry in the symbol
 // table.
 
-//     Identifier {
-//         ident: "found_prefix",
-//     },
-//     CallExpr {
-//         receiver: Some(
-//             AccessReceiver {
-//                 ident: Identifier {
-//                     ident: "rib-rov",
-//                 },
-//                 fields: None,
-//             },
-//         ),
-//         method_call: MethodCallExpr {
-//             ident: Identifier {
-//                 ident: "longest_match",
-//             },
-//             args: ArgExprList {
-//                 args: [
-//                     CallReceiver(
-//                         AccessReceiver {
-//                             ident: Identifier {
-//                                 ident: "route",
-//                             },
-//                             fields: Some(
-//                                 FieldAccessExpr {
-//                                     field_names: [
-//                                         Identifier {
-//                                             ident: "prefix",
-//                                         },
-//                                     ],
-//                                 },
-//                             ),
-//                         },
-//                     ),
-//                 ],
-//             },
-//         },
-//     }
-
 impl ast::CallExpr {
     pub(crate) fn eval(
         &self,
-        base_name_ident: ShortString,
+        name: ShortString,
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
-    ) -> Result<(ShortString, symbols::Symbol), Box<dyn std::error::Error>>
-    {
-        // assignments are always on these methods calls:
-        // 1. built-in method calls, `base_method(arguments)`,
-        // 2. method calls on Buitin types, `TypeName.method(arguments)`,
-        //    or a method call or a field name on a record type, `var_of_record_type.method(arguments)`,
-        // 3. method calls on a data source, e.g. `rib-rov.longest_match(route.prefix)`,
-        // 4. method calls on a variable, `var.method(arguments)`.
+    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+        let mut symbol =
+            self.get_receiver().eval(symbols.clone(), scope.clone())?;
+        // The rest of the method calls or access receivers are turned into
+        // children of the first one.
 
-        match &self.get_receiver() {
-            // Case 1. Built-in method calls
-            // `base_method(arguments)`
-            None => {
-                Err(format!("Unknown built-in method '{}'", self.get_ident())
-                    .into())
-            }
-            // Case 2. Method calls on Builtin type or Record types
-            Some(receiver) => {
-                let receiver_ident = receiver.get_ident().clone().ident;
-                // Case 2a. method calls on Builtin Type itself.
-                // e.g., `AsPathFilter.first()`
-                if !receiver.has_field_access() {
-                    if let Ok(TypeValue::Builtin(prim_ty)) =
-                        receiver_ident.as_str().try_into()
-                    {
-                        let ty: TypeDef = prim_ty.into();
-                        return Ok((
-                            receiver_ident.clone(),
-                            symbols::Symbol::new(
-                                base_name_ident,
-                                symbols::SymbolKind::BuiltInType,
-                                ty.clone(),
-                                vec![ast::MethodCallExpr::eval(
-                                    self.get_method_call(),
-                                    symbols::SymbolKind::BuiltInTypeMethodCall,
-                                    ty,
-                                    symbols,
-                                    scope,
-                                )?],
-                                None
-                            )
-                        ));
-                    }
-                }
+        let mut s = &mut symbol;
 
-                // Case 3. Method calls on a data source
-                return match (
-                    get_data_source_for_ident(
-                        receiver.ident.clone(),
+        for mc_or_ar in &self.access_expr {
+            let ty = s.get_type();
+            let child_s = match mc_or_ar {
+                ast::AccessExpr::MethodCallExpr(method_call) => method_call
+                    .eval(
+                    symbols::SymbolKind::MethodCall,
+                    ty.clone(),
+                    symbols.clone(),
+                    scope.clone(),
+                )?,
+                ast::AccessExpr::FieldAccessExpr(field_access) => {
+                    field_access.eval(
+                        ty.clone(),
                         symbols.clone(),
-                    ),
-                    receiver.get_fields(),
-                ) {
-                    // Yes, but fields were referenced following it.
-                    (Ok(_data_type), Some(fields)) => {
-                        println!(
-                            "[[[ fields: {:#?} receiver {}",
-                            fields,
-                            receiver.get_ident()
-                        );
-                        let field_access = ast::FieldAccessExpr::eval(
-                            fields,
-                            receiver.get_ident(),
-                            symbols.clone(),
-                            scope.clone(),
-                        )?;
-
-                        let method_call = ast::MethodCallExpr::eval(
-                            self.get_method_call(),
-                            symbols::SymbolKind::DataSourceMethodCall,
-                            field_access.get_type(),
-                            symbols,
-                            scope,
-                        )?;
-
-                        let name = field_access.get_name();
-                        let token = field_access.get_token()?;
-                        let s = symbols::Symbol::new(
-                            method_call.get_name(),
-                            method_call.get_kind(),
-                            method_call.get_type(),
-                            vec![field_access],
-                            Some(token),
-                        );
-                        return Ok((name, s));
-                    }
-                    // Yes, and no fields were referenced following it, so
-                    // this is a method call on a data source, e.g.
-                    // `rib-rov.longest_match()`
-                    (Ok(data_type), None) => {
-                        println!(
-                            "!!! {:?} {:?}",
-                            self.get_receiver(),
-                            data_type
-                        );
-                        let method_call = ast::MethodCallExpr::eval(
-                            self.get_method_call(),
-                            symbols::SymbolKind::DataSourceMethodCall,
-                            data_type.0.clone(),
-                            symbols,
-                            scope,
-                        )?;
-
-                        return Ok((
-                            receiver_ident.clone(),
-                            symbols::Symbol::new(
-                                receiver_ident,
-                                symbols::SymbolKind::Rib,
-                                data_type.0,
-                                vec![method_call],
-                                None,
-                            ),
-                        ));
-                    }
-                    // No, there is no data source referenced, so maybe:
-                    // Case 4. Method calls on a variable
-                    // 4a. on a variable without fields
-                    (Err(_), None) => {
-                        println!(";;; {:?}", receiver);
-                        match get_type_for_scoped_variable(
-                            &[receiver.ident.clone()],
-                            symbols.clone(),
-                            scope.clone(),
-                        ) {
-                            Ok(var_type) => {
-                                println!(
-                                    "??? variable {:?} {:?}",
-                                    var_type,
-                                    receiver.get_ident()
-                                );
-
-                                Ok((
-                                    receiver_ident.clone(),
-                                    symbols::Symbol::new(
-                                        receiver_ident,
-                                        symbols::SymbolKind::Variable,
-                                        var_type.0.clone(),
-                                        vec![ast::MethodCallExpr::eval(
-                                            self.get_method_call(),
-                                            symbols::SymbolKind::VariableMethodCall,
-                                            var_type.0,
-                                            symbols,
-                                            scope,
-                                        )?],
-                                        Some(var_type.1)
-                                    )
-                                ))
-                            }
-                            Err(_err) => {
-                                return Err(format!("YY No data source or variable named '{}' found.",&receiver_ident ).into());
-                            }
-                        }
-                    }
-                    // Case 4b. On a variable with fields
-                    (Err(_), Some(fields)) => {
-                        println!("||| {:?}", receiver);
-
-                        let field_access = ast::FieldAccessExpr::eval(
-                            fields,
-                            receiver.get_ident(),
-                            symbols.clone(),
-                            scope.clone(),
-                        )?;
-
-                        match get_type_for_scoped_variable(
-                            &[receiver.ident.clone()],
-                            symbols.clone(),
-                            scope.clone(),
-                        ) {
-                            Ok(var_type) => {
-                                println!("+++ variable {:?}", var_type);
-                                println!("+++ field {:?}", field_access);
-                                println!(
-                                    "+++ method_call {:?}",
-                                    self.get_method_call()
-                                );
-
-                                Ok((
-                                    receiver_ident,
-                                    symbols::Symbol::new(
-                                        field_access
-                                            .get_name()
-                                            .as_str()
-                                            .into(),
-                                        symbols::SymbolKind::FieldAccess,
-                                        field_access.get_type(),
-                                        vec![ast::MethodCallExpr::eval(
-                                            self.get_method_call(),
-                                            symbols::SymbolKind::VariableMethodCall,
-                                            field_access.get_type(),
-                                            symbols,
-                                            scope,
-                                        )?],
-                                        Some(field_access.get_token()?)
-                                    ),
-                                ))
-                            }
-                            Err(_err) => {
-                                return Err(format!("YY No data source or variable named '{}' found.",&receiver_ident ).into());
-                            }
-                        }
-                    }
-                };
-            }
-            _ => Err("Invalid method call".into()),
+                        scope.clone(),
+                    )?
+                }
+            };
+            s.set_args(vec![child_s]);
+            s = &mut symbol.get_args_mut()[0];
         }
+
+        let (deepest_kind, deepest_type) =
+            symbol.follow_first_leaf().get_kind_and_type();
+        println!("deepest kind: {:?}", deepest_type);
+
+        symbol = symbol
+            .set_type(deepest_type)
+            .set_kind(deepest_kind)
+            .set_name(name);
+
+        Ok(symbol)
     }
 }
+
+// impl ast::SubCallExpr {
+//     pub(crate) fn eval(
+//         &self,
+//         base_name_ident: ShortString,
+//         symbols: symbols::GlobalSymbolTable,
+//         scope: symbols::Scope,
+//     ) -> Result<(ShortString, symbols::Symbol), Box<dyn std::error::Error>>
+//     {
+//         // assignments are always on these methods calls:
+//         // 1. built-in method calls, `base_method(arguments)`,
+//         // 2. method calls on Buitin types, `TypeName.method(arguments)`,
+//         //    or a method call or a field name on a record type, `var_of_record_type.method(arguments)`,
+//         // 3. method calls on a data source, e.g. `rib-rov.longest_match(route.prefix)`,
+//         // 4. method calls on a variable, `var.method(arguments)`.
+
+//         match &self.get_receiver() {
+//             // Case 1. Built-in method calls
+//             // `base_method(arguments)`
+//             None => {
+//                 Err(format!("Unknown built-in method '{}'", self.get_ident())
+//                     .into())
+//             }
+//             // Case 2. Method calls on Builtin type or Record types
+//             Some(receiver) => {
+//                 let receiver_ident = receiver.get_ident().clone().ident;
+//                 // Case 2a. method calls on Builtin Type itself.
+//                 // e.g., `AsPathFilter.first()`
+//                 if !receiver.has_field_access() {
+//                     if let Ok(TypeValue::Builtin(prim_ty)) =
+//                         receiver_ident.as_str().try_into()
+//                     {
+//                         let ty: TypeDef = prim_ty.into();
+//                         return Ok((
+//                             receiver_ident.clone(),
+//                             symbols::Symbol::new(
+//                                 base_name_ident,
+//                                 symbols::SymbolKind::BuiltInType,
+//                                 ty.clone(),
+//                                 vec![ast::MethodCallExpr::eval(
+//                                     self.get_method_call(),
+//                                     symbols::SymbolKind::BuiltInTypeMethodCall,
+//                                     ty,
+//                                     symbols,
+//                                     scope,
+//                                 )?],
+//                                 None
+//                             )
+//                         ));
+//                     }
+//                 }
+
+//                 // Case 3. Method calls on a data source
+//                 return match (
+//                     get_data_source_for_ident(
+//                         receiver.ident.clone(),
+//                         symbols.clone(),
+//                     ),
+//                     receiver.get_fields(),
+//                 ) {
+//                     // Yes, but fields were referenced following it.
+//                     (Ok(_data_type), Some(fields)) => {
+//                         println!(
+//                             "[[[ fields: {:#?} receiver {}",
+//                             fields,
+//                             receiver.get_ident()
+//                         );
+//                         let field_access = ast::FieldAccessExpr::eval(
+//                             fields,
+//                             receiver.get_ident(),
+//                             symbols.clone(),
+//                             scope.clone(),
+//                         )?;
+
+//                         let method_call = ast::MethodCallExpr::eval(
+//                             self.get_method_call(),
+//                             symbols::SymbolKind::DataSourceMethodCall,
+//                             field_access.get_type(),
+//                             symbols,
+//                             scope,
+//                         )?;
+
+//                         let name = field_access.get_name();
+//                         let token = field_access.get_token()?;
+//                         let s = symbols::Symbol::new(
+//                             method_call.get_name(),
+//                             method_call.get_kind(),
+//                             method_call.get_type(),
+//                             vec![field_access],
+//                             Some(token),
+//                         );
+//                         return Ok((name, s));
+//                     }
+//                     // Yes, and no fields were referenced following it, so
+//                     // this is a method call on a data source, e.g.
+//                     // `rib-rov.longest_match()`
+//                     (Ok(data_type), None) => {
+//                         println!(
+//                             "!!! {:?} {:?}",
+//                             self.get_receiver(),
+//                             data_type
+//                         );
+//                         let method_call = ast::MethodCallExpr::eval(
+//                             self.get_method_call(),
+//                             symbols::SymbolKind::DataSourceMethodCall,
+//                             data_type.0.clone(),
+//                             symbols,
+//                             scope,
+//                         )?;
+
+//                         return Ok((
+//                             receiver_ident.clone(),
+//                             symbols::Symbol::new(
+//                                 receiver_ident,
+//                                 symbols::SymbolKind::Rib,
+//                                 data_type.0,
+//                                 vec![method_call],
+//                                 None,
+//                             ),
+//                         ));
+//                     }
+//                     // No, there is no data source referenced, so maybe:
+//                     // Case 4. Method calls on a variable
+//                     // 4a. on a variable without fields
+//                     (Err(_), None) => {
+//                         println!(";;; {:?}", receiver);
+//                         match get_type_for_scoped_variable(
+//                             &[receiver.ident.clone()],
+//                             symbols.clone(),
+//                             scope.clone(),
+//                         ) {
+//                             Ok(var_type) => {
+//                                 println!(
+//                                     "??? variable {:?} {:?}",
+//                                     var_type,
+//                                     receiver.get_ident()
+//                                 );
+
+//                                 Ok((
+//                                     receiver_ident.clone(),
+//                                     symbols::Symbol::new(
+//                                         receiver_ident,
+//                                         symbols::SymbolKind::Variable,
+//                                         var_type.0.clone(),
+//                                         vec![ast::MethodCallExpr::eval(
+//                                             self.get_method_call(),
+//                                             symbols::SymbolKind::VariableMethodCall,
+//                                             var_type.0,
+//                                             symbols,
+//                                             scope,
+//                                         )?],
+//                                         Some(var_type.1)
+//                                     )
+//                                 ))
+//                             }
+//                             Err(_err) => {
+//                                 return Err(format!("YY No data source or variable named '{}' found.",&receiver_ident ).into());
+//                             }
+//                         }
+//                     }
+//                     // Case 4b. On a variable with fields
+//                     (Err(_), Some(fields)) => {
+//                         println!("||| {:?}", receiver);
+
+//                         let field_access = ast::FieldAccessExpr::eval(
+//                             fields,
+//                             receiver.get_ident(),
+//                             symbols.clone(),
+//                             scope.clone(),
+//                         )?;
+
+//                         match get_type_for_scoped_variable(
+//                             &[receiver.ident.clone()],
+//                             symbols.clone(),
+//                             scope.clone(),
+//                         ) {
+//                             Ok(var_type) => {
+//                                 println!("+++ variable {:?}", var_type);
+//                                 println!("+++ field {:?}", field_access);
+//                                 println!(
+//                                     "+++ method_call {:?}",
+//                                     self.get_method_call()
+//                                 );
+
+//                                 Ok((
+//                                     receiver_ident,
+//                                     symbols::Symbol::new(
+//                                         field_access
+//                                             .get_name()
+//                                             .as_str()
+//                                             .into(),
+//                                         symbols::SymbolKind::FieldAccess,
+//                                         field_access.get_type(),
+//                                         vec![ast::MethodCallExpr::eval(
+//                                             self.get_method_call(),
+//                                             symbols::SymbolKind::VariableMethodCall,
+//                                             field_access.get_type(),
+//                                             symbols,
+//                                             scope,
+//                                         )?],
+//                                         Some(field_access.get_token()?)
+//                                     ),
+//                                 ))
+//                             }
+//                             Err(_err) => {
+//                                 return Err(format!("YY No data source or variable named '{}' found.",&receiver_ident ).into());
+//                             }
+//                         }
+//                     }
+//                 };
+//             }
+//             _ => Err("Invalid method call".into()),
+//         }
+//     }
+// }
 
 impl ast::MethodCallExpr {
     pub(crate) fn eval(
@@ -857,7 +865,8 @@ impl ast::MethodCallExpr {
         // self is the call receiver, e.g. in `rib-rov.longest_match()`,
         // `rib-rov` is the receiver and `longest_match` is the method call
         // name. The actual method call lives in the `args` field.
-        let method_call = self.args.eval(symbols.clone(), scope.clone())?;
+        let arguments = self.args.eval(symbols.clone(), scope.clone())?;
+        println!("method call args {:?}", arguments);
 
         // we need to lookup the properties of the return type of the method
         // that the user wants to call, to see if it matches the arguments of
@@ -865,7 +874,7 @@ impl ast::MethodCallExpr {
         let props = method_call_type.get_props_for_method(&self.ident)?;
         println!("props {:?}", props);
         // let return_type = props.return_type_value;
-        let parsed_args = method_call;
+        let parsed_args = arguments;
 
         if parsed_args.is_empty() && props.arg_types.is_empty() {
             return Ok(symbols::Symbol::new_with_value(
@@ -902,107 +911,111 @@ impl ast::MethodCallExpr {
         for (parsed_arg_type, expected_arg_type) in
             parsed_args.into_iter().zip(props.arg_types.iter())
         {
-            let symbols = symbols.clone();
+            // let symbols = symbols.clone();
 
-            // if there's a value already set, we're on a leaf node and we will
-            // use that value to compare to,...
-            let parsed_symbol = if parsed_arg_type.get_value().is_some() {
-                parsed_arg_type
-            } else if parsed_arg_type.get_kind()
-                == symbols::SymbolKind::FieldAccess
-            {
-                // ...but a FieldAccess can also have a DataSourceMethodCall
-                // on it, so then the arguments live in the nested `args`
-                // field, ...
-                if !parsed_arg_type.get_args().is_empty() {
-                    println!("field access {:?}", parsed_arg_type);
-                    parsed_arg_type.get_args_owned().remove(0)
-                }
-                // ..., but a FieldAccess can also be a stand-alone
-                // identifier. That should evaluate into a variable, a
-                // user-defined constant, a data source, or the name of a
-                // type. Since we know what type to expect from this Field
-                // Access, we can try to convert it here.
-                else {
-                    println!("unknown access receiver {:?}", parsed_arg_type);
-                    let ident = ast::Identifier {
-                        ident: parsed_arg_type.get_name(),
-                    };
-                    let mut kind = symbols::SymbolKind::Variable;
-                    // is it an existing variable or constant?
-                    let (var, token) = module_symbols
-                        .get_variable(&parsed_arg_type.get_name())
-                        .and_then(
-                            |s| -> Result<
-                                (TypeDef, Token),
-                                Box<dyn std::error::Error>,
-                            > {
-                                println!("var s {:?}", s);
-                                s.get_type_and_token()
-                                // Ok(v)
-                                // TypeDef::try_from(v).map_err(|e| e.into())
-                            },
-                        )
-                        .or_else(|_| {
-                            // is it a global or module argument (from the
-                            // `with` statement)?
-                            module_symbols
-                                .get_argument(&parsed_arg_type.get_name())
-                                .map(|s| (s.get_type_and_token()))?
-                        })
-                        .or_else(|_: Box<dyn std::error::Error>| {
-                            // is it the name of a data source?
-                            let (type_def, token) =
-                                get_data_source_for_ident(
-                                    ident.clone(),
-                                    symbols,
-                                )?;
-                            kind = match type_def {
-                                TypeDef::Rib(_) => {
-                                    Ok(symbols::SymbolKind::Rib)
-                                }
-                                TypeDef::Table(_) => {
-                                    Ok(symbols::SymbolKind::Table)
-                                }
-                                _ => Err(format!(
-                                    "Data source '{}' is not a Rib or Table.",
-                                    ident
-                                )),
-                            }?;
-                            println!("it's a data source {:?}", type_def);
-                            Ok((type_def, token))
-                        })
-                        .or_else(|_: Box<dyn std::error::Error>| {
-                            // is it the name of a type?
-                            kind = symbols::SymbolKind::BuiltInType;
-                            TypeDef::try_from(TypeIdentifier {
-                                ident: parsed_arg_type.get_name(),
-                            })
-                            .map(|td| (td, Token::BuiltinType(0)))
-                        })?;
+            // // if there's a value already set, we're on a leaf node and we will
+            // // use that value to compare to,...
+            // let parsed_symbol = if parsed_arg_type.get_value().is_some() {
+            //     parsed_arg_type
+            // } else if parsed_arg_type.get_kind()
+            //     == symbols::SymbolKind::FieldAccess
+            // {
+            //     // ...but a FieldAccess can also have a DataSourceMethodCall
+            //     // on it, so then the arguments live in the nested `args`
+            //     // field, ...
+            //     if !parsed_arg_type.get_args().is_empty() {
+            //         println!("field access {:?}", parsed_arg_type);
+            //         parsed_arg_type.get_args_owned().remove(0)
+            //     }
+            //     // ..., but a FieldAccess can also be a stand-alone
+            //     // identifier. That should evaluate into a variable, a
+            //     // user-defined constant, a data source, or the name of a
+            //     // type. Since we know what type to expect from this Field
+            //     // Access, we can try to convert it here.
+            //     else {
+            //         println!("unknown access receiver {:?}", parsed_arg_type);
+            //         let ident = ast::Identifier {
+            //             ident: parsed_arg_type.get_name(),
+            //         };
+            //         let mut kind = symbols::SymbolKind::Variable;
+            //         // is it an existing variable or constant?
+            //         let (var, token) = module_symbols
+            //             .get_variable(&parsed_arg_type.get_name())
+            //             .and_then(
+            //                 |s| -> Result<
+            //                     (TypeDef, Token),
+            //                     Box<dyn std::error::Error>,
+            //                 > {
+            //                     println!("var s {:?}", s);
+            //                     s.get_type_and_token()
+            //                     // Ok(v)
+            //                     // TypeDef::try_from(v).map_err(|e| e.into())
+            //                 },
+            //             )
+            //             .or_else(|_| {
+            //                 // is it a global or module argument (from the
+            //                 // `with` statement)?
+            //                 module_symbols
+            //                     .get_argument(&parsed_arg_type.get_name())
+            //                     .map(|s| (s.get_type_and_token()))?
+            //             })
+            //             .or_else(|_: Box<dyn std::error::Error>| {
+            //                 // is it the name of a data source?
+            //                 let (type_def, token) =
+            //                     get_data_source_for_ident(
+            //                         ident.clone(),
+            //                         symbols,
+            //                     )?;
+            //                 kind = match type_def {
+            //                     TypeDef::Rib(_) => {
+            //                         Ok(symbols::SymbolKind::Rib)
+            //                     }
+            //                     TypeDef::Table(_) => {
+            //                         Ok(symbols::SymbolKind::Table)
+            //                     }
+            //                     _ => Err(format!(
+            //                         "Data source '{}' is not a Rib or Table.",
+            //                         ident
+            //                     )),
+            //                 }?;
+            //                 println!("it's a data source {:?}", type_def);
+            //                 Ok((type_def, token))
+            //             })
+            //             .or_else(|_: Box<dyn std::error::Error>| {
+            //                 // is it the name of a type?
+            //                 kind = symbols::SymbolKind::BuiltInType;
+            //                 TypeDef::try_from(TypeIdentifier {
+            //                     ident: parsed_arg_type.get_name(),
+            //                 })
+            //                 .map(|td| (td, Token::BuiltinType(0)))
+            //             })?;
 
-                    println!("var {:?}", var);
-                    symbols::Symbol::new_with_value(
-                        parsed_arg_type.get_name(),
-                        kind,
-                        (&var).into(),
-                        vec![],
-                        token,
-                    )
-                }
-            } else {
-                Err(format!(
-                    "b. Method call '{}' does not return a value. Invalid argument type: {:?}",
-                    self.ident, parsed_arg_type
-                ))?
-            };
+            //         println!("var {:?}", var);
+            //         symbols::Symbol::new_with_value(
+            //             parsed_arg_type.get_name(),
+            //             kind,
+            //             (&var).into(),
+            //             vec![],
+            //             token,
+            //         )
+            //     }
+            // } else {
+            //     Err(format!(
+            //         "b. Method call '{}' does not return a value. Invalid argument type: {:?}",
+            //         self.ident, parsed_arg_type
+            //     ))?
+            // };
 
             // Compare the expected type with the type of the parsed value.
             // Either the types are the same, or the type of the parsed value
             // can be converted to the expected type, e.g. an IntegerLiteral
             // can be converted into a U8, I64, etc (as long as it fits).
+            println!(
+                "expected {:?} vs parsed {:?}",
+                expected_arg_type, parsed_arg_type
+            );
             args.push(
-                parsed_symbol.try_convert_value_into(expected_arg_type)?,
+                parsed_arg_type.try_convert_value_into(expected_arg_type)?,
             );
         }
 
@@ -1029,37 +1042,72 @@ impl ast::AccessReceiver {
         println!("AccessReceiver::eval() {:?}", self);
         let _symbols = symbols.clone();
 
-        let mut search_var = self.get_ident().to_string();
-        let mut ty = TypeDef::None;
+        let search_var = self.get_ident().ident.clone();
+        // let ty;
 
         // Check if this access receiver has a field beyond the data source.
-        // If so we will return a leaf node, meaning the value has to be set.
-        if let Some(fields) = &self.get_fields() {
-            println!("AccessReceiver with fields {:?}", self);
+        // if let Some(fields) = &self.get_fields() {
+        //     println!("AccessReceiver with fields {:?}", self);
 
-            let field_access = ast::FieldAccessExpr::eval(
-                fields,
-                self.get_ident(),
-                symbols,
-                scope,
-            )?;
+        //     let field_access = ast::FieldAccessExpr::eval(
+        //         fields,
+        //         self.get_ident(),
+        //         symbols,
+        //         scope,
+        //     )?;
 
-            search_var = field_access.get_name().to_string();
-            ty = field_access.get_type();
+        //     search_var = field_access.get_name().to_string();
+        //     ty = field_access.get_type();
 
-            return Ok(symbols::Symbol::new_with_value(
-                search_var.as_str().into(),
-                symbols::SymbolKind::FieldAccess,
-                (&ty).into(),
-                vec![],
-                field_access.get_token()?,
-            ));
-        }
+        //     return Ok(symbols::Symbol::new_with_value(
+        //         search_var.as_str().into(),
+        //         symbols::SymbolKind::FieldAccess,
+        //         (&ty).into(),
+        //         vec![],
+        //         field_access.get_token()?,
+        //     ));
+        // }
 
         // This is an access receiver without fields, so a stand-alone
-        // Identifier (no dots, or anything). This could be evaluated
-        // into a:
-        // - name of a data source
+        // Identifier (no dots, or anything).
+
+        // Is it the name of a builtin type?
+        if let Ok(TypeValue::Builtin(prim_ty)) =
+            search_var.as_str().try_into()
+        {
+            let ty: TypeDef = prim_ty.into();
+
+            return Ok(symbols::Symbol::new(
+                search_var.as_str().into(),
+                symbols::SymbolKind::BuiltInType,
+                ty,
+                vec![],
+                Some(Token::BuiltinType(0)),
+            ));
+        };
+
+        // is it an argument?
+        if let Some(arg) = _symbols
+            .borrow()
+            .get(&scope)
+            .map(|s| s.get_argument(&search_var))
+        {
+            println!("arg {:?}", arg);
+            if let Ok(arg) = arg {
+                let (type_def, token) = arg.get_type_and_token()?;
+
+                return Ok(symbols::Symbol::new(
+                    search_var.as_str().into(),
+                    symbols::SymbolKind::Argument,
+                    type_def,
+                    vec![],
+                    Some(token),
+                ));
+            }
+        }
+
+        // Is it one of:
+        // - a name of a data source
         // - the name of a built-in constant
         // - variable name thas was defined in the `with` statement or
         //   earlier on in the same define section.
@@ -1092,27 +1140,43 @@ impl ast::ArgExpr {
             ast::ArgExpr::CallExpr(call_expr) => {
                 println!("arg base_name_ident {:?}", call_expr);
 
-                Ok(call_expr
-                    .eval(
-                        call_expr.get_ident().clone().ident,
+                call_expr.eval(
+                        call_expr.get_receiver().ident.ident,
                         symbols,
                         scope,
-                    )?
-                    .1)
+                    )
             }
+            ast::ArgExpr::BuiltinMethodCallExpr(builtin_call_expr) => {
+                let name: ShortString = builtin_call_expr.ident.clone().ident;
+                        let mut ty = TypeDef::None;
+                        if let Ok(TypeValue::Builtin(prim_ty)) =
+                            name.as_str().try_into()
+                        {
+                            ty = prim_ty.into();
+                        } else {
+                            Err(format!("Unknown built-in method call: {}", name))?;
+                        }
+
+                        builtin_call_expr.eval(
+                            symbols::SymbolKind::BuiltInTypeMethodCall,
+                            ty,
+                            symbols,
+                            scope,
+                        )
+                }
             // an expression ending in a field access (e.g. `foo.bar`) or a
             // stand-alone field access (e.g. `bar`). We are not checking
             // the existence of the field here, that will have to be done by
             // the caller.
-            ast::ArgExpr::AccessReceiver(access_receiver) => {
-                println!(
-                    "<--- access receiver arg base_name_ident {:?}",
-                    access_receiver
-                );
-                let ar = access_receiver.eval(symbols, scope)?;
-                println!("---> access receiver arg base_name_ident {:?}", ar);
-                Ok(ar)
-            }
+            // ast::ArgExpr::AccessReceiver(access_receiver) => {
+            //     println!(
+            //         "<--- access receiver arg base_name_ident {:?}",
+            //         access_receiver
+            //     );
+            //     let ar = access_receiver.eval(symbols, scope)?;
+            //     println!("---> access receiver arg base_name_ident {:?}", ar);
+            //     Ok(ar)
+            // }
             // Leaf nodes, they all set values.
             ast::ArgExpr::StringLiteral(str_lit) => Ok(symbols::Symbol::new(
                 str_lit.into(),
@@ -1204,76 +1268,85 @@ impl ast::ArgExprList {
 impl ast::FieldAccessExpr {
     fn eval(
         &self,
-        receiver: &ast::Identifier,
+        field_type: TypeDef,
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
-        let _symbols = symbols.clone();
+        // let _symbols = symbols.clone();
 
-        let mut search_var = receiver.to_string();
-        let mut search_vec = vec![receiver.clone()];
-        let mut ty_to = (TypeDef::None, Token::FieldAccess(None, vec![]));
+        // let mut search_var = receiver.to_string();
+        // let mut search_vec = vec![receiver.clone()];
+        // let mut ty_to = (TypeDef::None, Token::FieldAccess(None, vec![]));
 
-        let rec_type = get_type_for_scoped_variable(
-            &[receiver.clone()],
-            symbols.clone(),
-            scope.clone(),
-        )?;
+        // let rec_type = get_type_for_scoped_variable(
+        //     &[receiver.clone()],
+        //     symbols.clone(),
+        //     scope.clone(),
+        // )?;
 
         // First, check if the complete field expression is a built-in type,
         // if so we can return it right away.
-        if let Ok(mut field_type) =
-            rec_type.0.has_fields_chain(&self.field_names)
+        if let Ok(field_type) = field_type.has_fields_chain(&self.field_names)
         {
             println!("::: field_type {:?}", field_type);
-            println!("::: rec_type token {:?}", rec_type.1);
+            // println!("::: rec_type token {:?}", );
             println!("::: self {:?}", self);
 
-            if BuiltinTypeValue::try_from(&field_type.0).is_ok() {
-                let name = self.field_names.join(".");
-                field_type.1.set_root(rec_type.1);
-                return Ok(symbols::Symbol::new(
-                    format!("{}.{}", search_var, name).as_str().into(),
-                    symbols::SymbolKind::FieldAccess,
-                    field_type.0,
-                    vec![],
-                    Some(field_type.1),
-                ));
-            }
-        };
+            // if BuiltinTypeValue::try_from(&field_type.0).is_ok() {
+            let name = self.field_names.join(".");
+            // field_type.1.set_root(field_type.1);
+            return Ok(symbols::Symbol::new(
+                name.as_str().into(),
+                symbols::SymbolKind::FieldAccess,
+                field_type.0,
+                vec![],
+                Some(field_type.1),
+            ));
+            // }
+        } else {
+            Err(format!("Invalid field access expression: {:?}", self).into())
+        }
 
         // Second. No, it isn't a built-in type, it has to live in a symbol
         // table specified as `<receiver_name>.<field_name>[.<fieldname>]*`.
         // Even so, we also need to check if all the intermediate fields
         // exist in the record type. These intermediates types should all
         // have an entry in the symbol table as well.
-        for field_name in &self.field_names {
-            search_var = format!("{}.{}", search_var.clone(), field_name);
-            search_vec.push(field_name.clone());
+        // for field_name in &self.field_names {
+        //     search_var = format!("{}.{}", search_var.clone(), field_name);
+        //     search_vec.push(field_name.clone());
 
-            let _symbols = symbols.clone();
-            ty_to = get_type_for_scoped_variable(
-                &search_vec,
-                _symbols,
-                scope.clone(),
-            )?;
-        }
+        //     let _symbols = symbols.clone();
+        //     ty_to = get_type_for_scoped_variable(
+        //         &search_vec,
+        //         _symbols,
+        //         scope.clone(),
+        //     )?;
+        // }
 
-        println!("::: name {:?}", search_var.as_str());
-        println!("::: self {:?}", self);
-        if let Token::FieldAccess(_, _) = ty_to.1 {
-            ty_to.1.set_root(rec_type.1);
-        }
+        // println!("::: name {:?}", search_var.as_str());
+        // println!("::: self {:?}", self);
+        // if let Token::FieldAccess(_, _) = ty_to.1 {
+        //     ty_to.1.set_root(rec_type.1);
+        // }
 
-        println!("::: ty_to {:?}", ty_to);
+        // println!("::: ty_to {:?}", ty_to);
 
-        Ok(symbols::Symbol::new(
-            search_var.as_str().into(),
-            symbols::SymbolKind::FieldAccess,
-            ty_to.0,
-            vec![],
-            Some(ty_to.1),
-        ))
+        // Ok(symbols::Symbol::new(
+        //     search_var.as_str().into(),
+        //     symbols::SymbolKind::FieldAccess,
+        //     ty_to.0,
+        //     vec![],
+        //     Some(ty_to.1),
+        // ))
+
+        // Ok(symbols::Symbol::new(
+        //     self.get_name().as_str().into(),
+        //     symbols::SymbolKind::FieldAccess,
+        //     ty_to.0,
+        //     vec![],
+        //     None,
+        // ))
     }
 }
 
@@ -1341,43 +1414,46 @@ impl ast::BooleanExpr {
                 ast::CompareExpr::eval(compare_expr, symbols, scope)
             }
             ast::BooleanExpr::CallExpr(call_expr) => {
-                // A Call Expression does not necessarily return a boolean, as
-                // long as the compare expression it is nested in has left and
-                // right hand-sides that return the same type. Checking this
-                // can therefore not be done by the Call Expression check here.
+                // A Call Expression does not necessarily have to return a
+                // boolean, as long as the compare expression it is nested in
+                // has left and right hand-sides that return the same type.
+                // Checking this can therefore not be done by the Call
+                // Expression check here.
                 let s = call_expr.eval(
-                    call_expr.get_ident().clone().ident,
+                    call_expr.get_receiver().ident.clone().ident,
                     symbols,
                     scope.clone(),
                 )?;
-                Ok(s.1)
+                Ok(s)
             }
             ast::BooleanExpr::SetCompareExpr(_) => todo!(),
             ast::BooleanExpr::PrefixMatchExpr(_) => todo!(),
-            ast::BooleanExpr::AccessReceiver(ident) => {
-                let _symbols = symbols.borrow();
-                let gt = _symbols
-                    .get(scope)
-                    .ok_or(format!("Could not find scope {:?}", scope))?;
-                let var = gt.get_variable(&ident.ident.ident)?;
+            // ast::BooleanExpr::AccessReceiver(ident) => {
+            //     let _symbols = symbols.borrow();
+            //     let gt = _symbols
+            //         .get(scope)
+            //         .ok_or(format!("Could not find scope {:?}", scope))?;
+            //     let var = gt.get_variable(&ident.ident.ident)?;
 
-                println!(
-                    "var from access_receiver: {} {:?} {:?}",
-                    ident.ident.ident, var.get_token(), var
-                );
+            //     println!(
+            //         "var from access_receiver: {} {:?} {:?}",
+            //         ident.ident.ident,
+            //         var.get_token(),
+            //         var
+            //     );
 
-                is_boolean_expression(var)?;
+            //     is_boolean_expression(var)?;
 
-                Ok(symbols::Symbol::new_with_value(
-                    ident.ident.ident.clone(),
-                    symbols::SymbolKind::Variable,
-                    TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
-                        None,
-                    ))),
-                    vec![],
-                    var.get_token().unwrap(),
-                ))
-            }
+            //     Ok(symbols::Symbol::new_with_value(
+            //         ident.ident.ident.clone(),
+            //         symbols::SymbolKind::Variable,
+            //         TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
+            //             None,
+            //         ))),
+            //         vec![],
+            //         var.get_token().unwrap(),
+            //     ))
+            // }
         }
     }
 }
@@ -1411,87 +1487,89 @@ impl ast::CompareExpr {
         // Proces the left hand side of the compare expression. This is a
         // Compare Argument. It has to end in a leaf node, otherwise it's
         // an error.
-        let left_s = self.left.eval(_symbols.clone(), scope)?;
+        let left_s = self.left.eval(_symbols, scope)?;
         println!("left_s: {:?}", left_s);
-        let left_type = match left_s.get_kind() {
-            // Any literal in the source code should end up as
-            // SymbolKind::Constant.
-            symbols::SymbolKind::Constant => left_s.get_builtin_type()?,
-            // A FieldAccess could be a leaf node on its own (if its type
-            // is a builtin type), or it could have a leaf node in its `args`
-            // field. Note that it cannot be both a leaf node and have
-            // arguments.
-            symbols::SymbolKind::FieldAccess
-            | symbols::SymbolKind::Variable => {
-                let args = left_s.get_args();
-                let s = if !args.is_empty() {
-                    match left_s.get_args()[0].get_kind() {
-                        // Apparently this is not a leaf node, so the `args`
-                        // field should host a leaf node.
-                        symbols::SymbolKind::DataSourceMethodCall
-                        | symbols::SymbolKind::FieldAccess
-                        | symbols::SymbolKind::VariableMethodCall => left_s
-                            .get_args()[0]
-                            .get_builtin_type_for_leaf_node()?,
-                        _ => {
-                            return Err(format!(
-                                "Expected a method call, got {:?}",
-                                left_s.get_args()[0].get_kind()
-                            )
-                            .into())
-                        }
-                    }
-                } else {
-                    // This is a leaf node.
-                    left_s.get_builtin_type_for_leaf_node()?
-                };
-                s
-            }
-            _ => {
-                return Err(format!(
-                    "Left hand side of comparison expression must be a constant or method call, got {:?}",
-                    left_s.get_kind()
-                )
-                .into());
-            }
-        };
+        let left_type = left_s.get_type();
+        // let left_type = match left_s.get_kind() {
+        //     // Any literal in the source code should end up as
+        //     // SymbolKind::Constant.
+        //     symbols::SymbolKind::Constant => left_s.get_builtin_type()?,
+        //     // A FieldAccess could be a leaf node on its own (if its type
+        //     // is a builtin type), or it could have a leaf node in its `args`
+        //     // field. Note that it cannot be both a leaf node and have
+        //     // arguments.
+        //     symbols::SymbolKind::FieldAccess
+        //     | symbols::SymbolKind::Variable => {
+        //         let args = left_s.get_args();
+        //         let s = if !args.is_empty() {
+        //             match left_s.get_args()[0].get_kind() {
+        //                 // Apparently this is not a leaf node, so the `args`
+        //                 // field should host a leaf node.
+        //                 symbols::SymbolKind::DataSourceMethodCall
+        //                 | symbols::SymbolKind::FieldAccess
+        //                 | symbols::SymbolKind::VariableMethodCall => left_s
+        //                     .get_args()[0]
+        //                     .get_builtin_type()?,
+        //                 _ => {
+        //                     return Err(format!(
+        //                         "Expected a method call, got {:?}",
+        //                         left_s.get_args()[0].get_kind()
+        //                     )
+        //                     .into())
+        //                 }
+        //             }
+        //         } else {
+        //             // This is a leaf node.
+        //             left_s.get_builtin_type()?
+        //         };
+        //         s
+        //     }
+        //     _ => {
+        //         return Err(format!(
+        //             "Left hand side of comparison expression must be a constant or method call, got {:?}",
+        //             left_s.get_kind()
+        //         )
+        //         .into());
+        //     }
+        // };
 
         let mut right_s = self.right.eval(symbols, scope)?;
-        let right_type = match right_s.get_kind() {
-            symbols::SymbolKind::Constant => {
-                right_s.get_builtin_type_for_leaf_node()?
-            }
-            symbols::SymbolKind::FieldAccess
-            | symbols::SymbolKind::Variable => {
-                let args = right_s.get_args();
-                let s = if !args.is_empty() {
-                    match right_s.get_args()[0].get_kind() {
-                        symbols::SymbolKind::DataSourceMethodCall
-                        | symbols::SymbolKind::FieldAccess
-                        | symbols::SymbolKind::VariableMethodCall => right_s
-                            .get_args()[0]
-                            .get_builtin_type_for_leaf_node()?,
-                        _ => {
-                            return Err(format!(
-                                "Expected a method call, got {:?}",
-                                right_s.get_args()[0].get_kind()
-                            )
-                            .into())
-                        }
-                    }
-                } else {
-                    right_s.get_builtin_type()?
-                };
-                s
-            }
-            _ => {
-                return Err(format!(
-                    "Right hand side of comparison expression must be a constant or method call, got {:?}",
-                    right_s.get_kind()
-                )
-                .into());
-            }
-        };
+        let right_type = right_s.get_type();
+        // let right_type = match right_s.get_kind() {
+        //     symbols::SymbolKind::Constant => {
+        //         right_s.get_builtin_type()?
+        //     }
+        //     symbols::SymbolKind::FieldAccess
+        //     | symbols::SymbolKind::Variable => {
+        //         let args = right_s.get_args();
+        //         let s = if !args.is_empty() {
+        //             match right_s.get_args()[0].get_kind() {
+        //                 symbols::SymbolKind::DataSourceMethodCall
+        //                 | symbols::SymbolKind::FieldAccess
+        //                 | symbols::SymbolKind::VariableMethodCall => right_s
+        //                     .get_args()[0]
+        //                     .get_builtin_type()?,
+        //                 _ => {
+        //                     return Err(format!(
+        //                         "Expected a method call, got {:?}",
+        //                         right_s.get_args()[0].get_kind()
+        //                     )
+        //                     .into())
+        //                 }
+        //             }
+        //         } else {
+        //             right_s.get_builtin_type()?
+        //         };
+        //         s
+        //     }
+        //     _ => {
+        //         return Err(format!(
+        //             "Right hand side of comparison expression must be a constant or method call, got {:?}",
+        //             right_s.get_kind()
+        //         )
+        //         .into());
+        //     }
+        // };
 
         // Either the left and right hand sides are of the same type OR the
         // right hand side value can be converted into a type of the left
@@ -1730,7 +1808,7 @@ fn get_type_for_scoped_variable(
         symbols::Scope::Module(module) => {
             // 1. is the whole dotted name in the symbol table for this scope?
             return symbols
-                .get(&scope)
+                .get(&symbols::Scope::Global)
                 .and_then(|gt| {
                     gt.get_variable(
                         &search_str.as_str().into()).map(
@@ -1751,7 +1829,7 @@ fn get_type_for_scoped_variable(
                             .get(&scope).and_then(|gt|
                             gt.get_symbol(first_field_name) ).map(|s| { println!("symbol: {:?}", s); s.get_type_and_token() })
                             .ok_or_else(|| format!(
-                                "No variable named '{}' found in module '{}'",
+                                "___ No variable named '{}' found in module '{}'",
                                 first_field_name, module
                             ))?;
 
@@ -1771,7 +1849,7 @@ fn get_type_for_scoped_variable(
         // There is NO global scope for variables. All vars are always
         // in the namespace of a module.
         symbols::Scope::Global => Err(format!(
-            "No variable named '{}' found in global scope.",
+            "=== No variable named '{}' found in global scope.",
             fields.join(".").as_str()
         )
         .into()),
@@ -1902,7 +1980,6 @@ fn declare_variable_from_symbol(
                 .get_mut(scope)
                 .ok_or(format!("No module named '{}' found.", module))?;
 
-            
             let name = arg_symbol.get_name();
             let symbol = symbols::Symbol::new(
                 "var".into(),

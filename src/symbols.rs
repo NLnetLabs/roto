@@ -37,10 +37,6 @@ impl Symbol {
         Ok((self.ty.clone(), token))
     }
 
-    pub fn is_initialised(&self) -> bool {
-        self.value.is_some()
-    }
-
     pub fn get_builtin_type(
         &self,
     ) -> Result<TypeDef, Box<dyn std::error::Error>> {
@@ -56,18 +52,15 @@ impl Symbol {
         } else if let Some(TypeValue::Builtin(ty)) = &self.value {
             Ok(ty.into())
         } else {
+            println!("get_builtin_type: {:#?}", self);
             Err(format!("a Type '{:?}' is not a builtin type", self).into())
         }
     }
 
-    pub fn get_builtin_type_for_leaf_node(
+    pub fn get_kind_and_type(
         &self,
-    ) -> Result<TypeDef, Box<dyn std::error::Error>> {
-        if let Some(TypeValue::Builtin(tv)) = &self.value {
-            Ok(tv.into())
-        } else {
-            Err(format!("b Not a builtin type {:?}", self).into())
-        }
+    ) -> (SymbolKind, TypeDef) {
+        (self.kind.clone(), self.ty.clone())
     }
 
     pub fn set_kind(mut self, kind: SymbolKind) -> Symbol {
@@ -89,6 +82,11 @@ impl Symbol {
         self.ty.clone()
     }
 
+    pub fn set_type(mut self, ty: TypeDef) -> Self {
+        self.ty = ty;
+        self
+    }
+
     pub fn set_token(mut self, token: Token) -> Self {
         self.token = Some(token);
         self
@@ -98,16 +96,13 @@ impl Symbol {
         self.name.clone()
     }
 
+    pub fn set_name(mut self, name: ShortString) -> Self {
+        self.name = name;
+        self
+    }
+
     pub fn get_value(&self) -> Option<&TypeValue> {
         self.value.as_ref()
-    }
-
-    pub fn get_value_owned(self) -> Option<TypeValue> {
-        self.value
-    }
-
-    pub fn set_value(&mut self, value: TypeValue) {
-        self.value = Some(value);
     }
 
     pub fn get_args_owned(self) -> Vec<Symbol> {
@@ -117,6 +112,15 @@ impl Symbol {
     pub fn get_args(&self) -> &[Symbol] {
         self.args.as_slice()
     }
+
+    pub fn get_args_mut(&mut self) -> &mut [Symbol] {
+        &mut self.args
+    }
+
+    pub fn set_args(&mut self, args: Vec<Symbol>) {
+        self.args = args;
+    }
+
 
     pub fn new(
         name: ShortString,
@@ -168,6 +172,9 @@ impl Symbol {
         }
     }
 
+    // try to return the converted type with its value, if it's set.
+    // Otherwise try to return a None typevalue for the converted type. if no
+    // conversion is available, return an error.
     pub fn try_convert_value_into(
         mut self,
         type_def: &TypeDef,
@@ -231,7 +238,7 @@ impl Symbol {
             Some(TypeValue::None) => {
                 return Err("Cannot convert None into a type".into())
             }
-            None => return Err("Cannot convert None into a type".into()),
+            None => { self.value = Some(type_def.into()); }
         };
         Ok(self)
     }
@@ -250,6 +257,14 @@ impl Symbol {
         }
         leaves
     }
+
+    pub(crate) fn follow_first_leaf(&self) -> &Symbol {
+        if self.args.is_empty() {
+            self
+        } else {
+            self.args.first().unwrap().follow_first_leaf()
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -265,9 +280,8 @@ pub enum SymbolKind {
     Rib,
     Table,
     PrefixList,
-    DataSourceMethodCall,
+    MethodCall,
     BuiltInTypeMethodCall,
-    VariableMethodCall,
     GlobalMethodCall,
     FieldAccess,
     StringLiteral,
@@ -675,7 +689,7 @@ impl SymbolTable {
     ) -> Result<&Symbol, Box<dyn std::error::Error>> {
         self.arguments
             .get(name)
-            .ok_or_else(|| format!("Symbol '{}' not found", name).into())
+            .ok_or_else(|| format!("Symbol of type Argument '{}' not found", name).into())
     }
 
     pub(crate) fn get_term(
