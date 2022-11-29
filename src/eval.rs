@@ -612,9 +612,7 @@ impl ast::CallExpr {
                     scope.clone(),
                 )?,
                 ast::AccessExpr::FieldAccessExpr(field_access) => {
-                    field_access.eval(
-                        ty.clone()
-                    )?
+                    field_access.eval(ty.clone())?
                 }
             };
             s.set_args(vec![child_s]);
@@ -633,7 +631,6 @@ impl ast::CallExpr {
         Ok(symbol)
     }
 }
-
 
 impl ast::MethodCallExpr {
     pub(crate) fn eval(
@@ -684,7 +681,6 @@ impl ast::MethodCallExpr {
 
         let mut args = vec![];
         let _symbols = symbols.borrow();
-
 
         // go over the argument types that we got from the parsed arguments
         // in the the source code and compare those to the argument types
@@ -799,79 +795,76 @@ impl ast::ArgExpr {
                 println!("arg base_name_ident {:?}", call_expr);
 
                 call_expr.eval(
-                        call_expr.get_receiver().ident.ident,
-                        symbols,
-                        scope,
-                    )
+                    call_expr.get_receiver().ident.ident,
+                    symbols,
+                    scope,
+                )
             }
             ast::ArgExpr::BuiltinMethodCallExpr(builtin_call_expr) => {
                 let name: ShortString = builtin_call_expr.ident.clone().ident;
-                        let mut ty = TypeDef::None;
-                        if let Ok(TypeValue::Builtin(prim_ty)) =
-                            name.as_str().try_into()
-                        {
-                            ty = prim_ty.into();
-                        } else {
-                            Err(format!("Unknown built-in method call: {}", name))?;
-                        }
-
-                        builtin_call_expr.eval(
-                            symbols::SymbolKind::BuiltInTypeMethodCall,
-                            ty,
-                            symbols,
-                            scope,
-                        )
+                let mut ty = TypeDef::None;
+                if let Ok(TypeValue::Builtin(prim_ty)) =
+                    name.as_str().try_into()
+                {
+                    ty = prim_ty.into();
+                } else {
+                    Err(format!("Unknown built-in method call: {}", name))?;
                 }
-            // an expression ending in a field access (e.g. `foo.bar`) or a
-            // stand-alone field access (e.g. `bar`). We are not checking
-            // the existence of the field here, that will have to be done by
-            // the caller.
-            // ast::ArgExpr::AccessReceiver(access_receiver) => {
-            //     println!(
-            //         "<--- access receiver arg base_name_ident {:?}",
-            //         access_receiver
-            //     );
-            //     let ar = access_receiver.eval(symbols, scope)?;
-            //     println!("---> access receiver arg base_name_ident {:?}", ar);
-            //     Ok(ar)
-            // }
-            // Leaf nodes, they all set values.
+
+                builtin_call_expr.eval(
+                    symbols::SymbolKind::BuiltInTypeMethodCall,
+                    ty,
+                    symbols,
+                    scope,
+                )
+            }
             ast::ArgExpr::StringLiteral(str_lit) => Ok(symbols::Symbol::new(
                 str_lit.into(),
                 symbols::SymbolKind::StringLiteral,
                 TypeDef::String,
                 vec![],
-                None
+                None,
             )),
             // Integers are special, we are keeping them as is, so that the
             // receiver can decide how to cast them (into u8, u32 or i64).
             ast::ArgExpr::IntegerLiteral(int_lit) => {
                 println!("int_lit {:?}", int_lit);
-                println!("as value {}", TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(IntegerLiteral::new(int_lit.into()))));
+                println!(
+                    "as value {}",
+                    TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
+                        IntegerLiteral::new(int_lit.into())
+                    ))
+                );
                 Ok(symbols::Symbol::new_with_value(
                     int_lit.into(),
                     symbols::SymbolKind::Constant,
-                    TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(IntegerLiteral::new(int_lit.into()))),
+                    TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
+                        IntegerLiteral::new(int_lit.into()),
+                    )),
                     vec![],
-                    Token::Constant
+                    Token::Constant,
                 ))
             }
             ast::ArgExpr::HexLiteral(hex_lit) => {
                 Ok(symbols::Symbol::new_with_value(
                     "hex_lit".into(),
                     symbols::SymbolKind::Constant,
-                    TypeValue::Builtin(BuiltinTypeValue::HexLiteral(HexLiteral::new(hex_lit.into()))),
+                    TypeValue::Builtin(BuiltinTypeValue::HexLiteral(
+                        HexLiteral::new(hex_lit.into()),
+                    )),
                     vec![],
-                    Token::Constant
+                    Token::Constant,
                 ))
             }
             ast::ArgExpr::PrefixLengthLiteral(prefix_len_lit) => {
                 Ok(symbols::Symbol::new_with_value(
                     "prefix_len_lit".into(),
                     symbols::SymbolKind::Constant,
-                    TypeValue::Builtin(BuiltinTypeValue::PrefixLength(PrefixLength::new(prefix_len_lit.into()))),
+                    TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
+                        PrefixLength::new(prefix_len_lit.into()),
+                    )),
                     vec![],
-                    Token::Constant
+                    Token::Constant,
                 ))
             }
             ast::ArgExpr::AsnLiteral(asn_lit) => {
@@ -879,11 +872,9 @@ impl ast::ArgExpr {
                 Ok(symbols::Symbol::new_with_value(
                     asn_lit.into(),
                     symbols::SymbolKind::Constant,
-                    TypeValue::Builtin(BuiltinTypeValue::Asn(
-                        asn_lit.into()
-                    )),
+                    TypeValue::Builtin(BuiltinTypeValue::Asn(asn_lit.into())),
                     vec![],
-                    Token::Constant
+                    Token::Constant,
                 ))
             }
             ast::ArgExpr::BooleanLit(bool_lit) => {
@@ -892,14 +883,15 @@ impl ast::ArgExpr {
                     bool_lit.into(),
                     symbols::SymbolKind::Constant,
                     TypeValue::Builtin(BuiltinTypeValue::Boolean(
-                        bool_lit.into()
+                        bool_lit.into(),
                     )),
                     vec![],
-                    Token::Constant
+                    Token::Constant,
                 ))
             }
             _ => {
-                Err(format!("xx Invalid argument expression {:?}", self).into())
+                Err(format!("xx Invalid argument expression {:?}", self)
+                    .into())
             }
         }
     }
@@ -925,7 +917,6 @@ impl ast::FieldAccessExpr {
         &self,
         field_type: TypeDef,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
-
         // First, check if the complete field expression is a built-in type,
         // if so we can return it right away.
         if let Ok(field_type) = field_type.has_fields_chain(&self.field_names)
@@ -983,7 +974,7 @@ impl ast::LogicalExpr {
 //------------ Boolean Expression -------------------------------------------
 
 // A Boolean Expression is an expresion that takes an input with an arbitrary
-// type and evaluates it into a boolean value, e.g. stand-alone variable of 
+// type and evaluates it into a boolean value, e.g. stand-alone variable of
 // type boolean is a boolean expression.
 
 impl ast::BooleanExpr {
@@ -1067,7 +1058,7 @@ impl ast::CompareExpr {
 
         let mut right_s = self.right.eval(symbols, scope)?;
         let right_type = right_s.get_type();
- 
+
         // Either the left and right hand sides are of the same type OR the
         // right hand side value can be converted into a type of the left
         // hand side. For example, a comparison of PrefixLength and
