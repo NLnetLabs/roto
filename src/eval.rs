@@ -601,9 +601,9 @@ impl ast::CallExpr {
 
         let mut s = &mut symbol;
 
-        for mc_or_ar in &self.access_expr {
+        for a_e in &self.access_expr {
             let ty = s.get_type();
-            let child_s = match mc_or_ar {
+            let child_s = match a_e {
                 ast::AccessExpr::MethodCallExpr(method_call) => method_call
                     .eval(
                     symbols::SymbolKind::MethodCall,
@@ -613,9 +613,7 @@ impl ast::CallExpr {
                 )?,
                 ast::AccessExpr::FieldAccessExpr(field_access) => {
                     field_access.eval(
-                        ty.clone(),
-                        symbols.clone(),
-                        scope.clone(),
+                        ty.clone()
                     )?
                 }
             };
@@ -926,8 +924,6 @@ impl ast::FieldAccessExpr {
     fn eval(
         &self,
         field_type: TypeDef,
-        symbols: symbols::GlobalSymbolTable,
-        scope: symbols::Scope,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
 
         // First, check if the complete field expression is a built-in type,
@@ -987,8 +983,8 @@ impl ast::LogicalExpr {
 //------------ Boolean Expression -------------------------------------------
 
 // A Boolean Expression is an expresion that takes an input with an arbitrary
-// type and evaluates it into a boolean value, e.g. stand-alone variable of type
-// boolean is a boolean expression.
+// type and evaluates it into a boolean value, e.g. stand-alone variable of 
+// type boolean is a boolean expression.
 
 impl ast::BooleanExpr {
     fn eval(
@@ -1389,8 +1385,6 @@ fn declare_variable(
         symbols::Scope::Module(module) => {
             // Does the supplied type exist in our scope?
             let ty = check_type_identifier(type_ident.ty, _symbols, scope)?;
-
-            // drop(_symbols);
 
             // Apparently, we have a type.  Let's add it to the symbol table.
             let mut _symbols = symbols.borrow_mut();
