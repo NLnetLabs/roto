@@ -343,8 +343,6 @@ impl ast::Module {
             })
             .collect::<Vec<_>>();
 
-        // println!("define for type {:#?}", for_ty);
-        // for_ty
         Ok(())
     }
 }
@@ -379,7 +377,7 @@ impl ast::Define {
         )?;
 
         for assignment in &self.body.assignments {
-            // rhs part of the assignment can only be an Argument.
+            // rhs part of the assignment can only be an Argument Expression.
             let s = ast::ArgExpr::eval(
                 &assignment.1,
                 symbols.clone(),
@@ -598,6 +596,7 @@ impl ast::CallExpr {
             self.get_receiver().eval(symbols.clone(), scope.clone())?;
         // The rest of the method calls or access receivers are turned into
         // children of the first one.
+        let token = symbol.get_token().unwrap();
 
         let mut s = &mut symbol;
 
@@ -607,12 +606,12 @@ impl ast::CallExpr {
                 ast::AccessExpr::MethodCallExpr(method_call) => method_call
                     .eval(
                     symbols::SymbolKind::MethodCall,
-                    ty.clone(),
+                    ty,
                     symbols.clone(),
                     scope.clone(),
                 )?,
                 ast::AccessExpr::FieldAccessExpr(field_access) => {
-                    field_access.eval(ty.clone())?
+                    field_access.eval(ty)?
                 }
             };
             s.set_args(vec![child_s]);
@@ -621,12 +620,15 @@ impl ast::CallExpr {
 
         let (deepest_kind, deepest_type) =
             symbol.follow_first_leaf().get_kind_and_type();
+        println!("symbol_name: {:?}", symbol.get_name());
         println!("deepest kind: {:?}", deepest_type);
+        println!("symbol token: {:?}", token);
 
         symbol = symbol
             .set_type(deepest_type)
             .set_kind(deepest_kind)
-            .set_name(name);
+            .set_name(name)
+            .set_token(token);
 
         Ok(symbol)
     }
@@ -711,10 +713,8 @@ impl ast::MethodCallExpr {
     }
 }
 
-// This is a (identifier + optional field access expression). We need to
-// return one symbol that describes the type and value of the field access.
-// The identifier may refer to a data source, a variable, a record field, or
-// the name of a type.
+// This is a simple identifier, it may refer to a data source, a variable,
+// a record field, or the name of a type.
 impl ast::AccessReceiver {
     fn eval(
         &self,
@@ -746,7 +746,6 @@ impl ast::AccessReceiver {
             .get(&scope)
             .map(|s| s.get_argument(&search_var))
         {
-            println!("arg {:?}", arg);
             if let Ok(arg) = arg {
                 let (type_def, token) = arg.get_type_and_token()?;
 
@@ -765,7 +764,7 @@ impl ast::AccessReceiver {
         // - the name of a built-in constant
         // - variable name thas was defined in the `with` statement or
         //   earlier on in the same define section.
-        let ty = get_type_for_scoped_variable(
+        let (ty, to) = get_type_for_scoped_variable(
             &[self.get_ident().clone()],
             symbols,
             scope,
@@ -774,9 +773,9 @@ impl ast::AccessReceiver {
         Ok(symbols::Symbol::new(
             search_var.as_str().into(),
             symbols::SymbolKind::FieldAccess,
-            ty.0,
+            ty,
             vec![],
-            Some(ty.1),
+            Some(to),
         ))
     }
 }
@@ -919,8 +918,7 @@ impl ast::FieldAccessExpr {
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
         // First, check if the complete field expression is a built-in type,
         // if so we can return it right away.
-        if let Ok(field_type) = field_type.has_fields_chain(&self.field_names)
-        {
+        if let Ok((ty, to)) = field_type.has_fields_chain(&self.field_names) {
             println!("::: field_type {:?}", field_type);
             // println!("::: rec_type token {:?}", );
             println!("::: self {:?}", self);
@@ -931,9 +929,9 @@ impl ast::FieldAccessExpr {
             return Ok(symbols::Symbol::new(
                 name.as_str().into(),
                 symbols::SymbolKind::FieldAccess,
-                field_type.0,
+                ty,
                 vec![],
-                Some(field_type.1),
+                Some(to),
             ));
             // }
         } else {
@@ -1300,7 +1298,7 @@ fn get_type_for_scoped_variable(
                 .and_then(|gt| {
                     gt.get_variable(
                         &search_str.as_str().into()).map(
-                            |s| s.get_type_and_token()
+                            |s| { println!("symbol: {:#?}", s); s.get_type_and_token() }
                             .unwrap_or_else(
                             |_| panic!(
                                 "No token found for variable '{}' in module '{}'",
@@ -1310,10 +1308,10 @@ fn get_type_for_scoped_variable(
                 })
                 .map_or_else(
                     // No, let's go over the chain of fields to see if it's
-                    // a previously defined variable or constant.
+                    // a previously defined variable, constant or data-source.
                     || {
                         println!("first field {}", first_field_name);
-                        let data_src_type = symbols
+                        let var_ty_to = symbols
                             .get(&scope).and_then(|gt|
                             gt.get_symbol(first_field_name) ).map(|s| { println!("symbol: {:?}", s); s.get_type_and_token() })
                             .ok_or_else(|| format!(
@@ -1321,14 +1319,17 @@ fn get_type_for_scoped_variable(
                                 first_field_name, module
                             ))?;
 
-                        let field_ty_to = data_src_type?
+                        let var_ty_to = var_ty_to?;
+                        let field_ty = var_ty_to
                             .0.has_fields_chain(&fields[1..])
                             .map_err(|err| format!(
                                 "{} on field '{}' for variable '{}' found in module '{}'",
                                 err, fields[1], fields[0].ident, module
                             ))?;
 
-                        Ok(field_ty_to)
+                        // return the type of the last field, but the token 
+                        // of the var/constant/data-source
+                        Ok((field_ty.0, var_ty_to.1))
                     },
                     // yes, it is:
                     Ok,
@@ -1678,8 +1679,6 @@ fn declare_variable_from_typedef<'a>(
     symbols: symbols::GlobalSymbolTable,
     scope: &symbols::Scope,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // let _symbols = symbols.clone();
-
     // There is NO global scope for variables.  All vars are all local to a
     // module.
 
