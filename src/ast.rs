@@ -1086,8 +1086,9 @@ impl From<&'_ StringLiteral> for ShortString {
 // same), but it simplifies creating the SymbolTable, because they're
 // semantically different.
 
-// RecordIdentifier ::= '{' ( Identifier ':' TypeIdentifier | '{' RecordTypeIdentifier '}'
-//      ','? )+ '}'
+// RecordIdentifier ::= '{' ( Identifier ':' 
+//                          TypeIdentifier | '{' RecordTypeIdentifier '}'
+//                      ','? )+ '}'
 
 #[derive(Clone, Debug)]
 pub struct RecordTypeIdentifier {
@@ -1122,6 +1123,7 @@ impl RecordTypeIdentifier {
         Ok((input, RecordTypeIdentifier { key_values }))
     }
 }
+
 
 //============= Literals ====================================================
 
@@ -1160,6 +1162,7 @@ impl From<&'_ IntegerLiteral> for i64 {
         literal.0
     }
 }
+
 
 //------------ PrefixLengthLiteral ------------------------------------------
 
@@ -1230,6 +1233,7 @@ impl From<&'_ HexLiteral> for u64 {
     }
 }
 
+
 //------------ AsnLiteral ---------------------------------------------------
 
 /// An ASN literal is a sequence of hex digits, prefixed by 'AS'
@@ -1266,6 +1270,7 @@ impl From<&'_ AsnLiteral> for Asn {
     }
 }
 
+
 //------------ FloatLiteral -------------------------------------------------
 
 /// A float literal is a sequence of digits with a decimal point.
@@ -1290,6 +1295,7 @@ impl FloatLiteral {
         Ok((input, Self(value)))
     }
 }
+
 
 //------------ BooleanLiteral -----------------------------------------------
 /// A boolean literal is either `true` or `false`.
@@ -1320,6 +1326,7 @@ impl From<&'_ BooleanLiteral> for Boolean {
         Boolean(Some(literal.0))
     }
 }
+
 
 //------------ ByteStringLiteral --------------------------------------------
 /// A byte string literal is a sequence of bytes, preceded by '0x'
@@ -1353,6 +1360,7 @@ impl<'a> ByteStringLiteral {
         Ok((input, Self(result_value)))
     }
 }
+
 
 //------------ AcceptReject -------------------------------------------------
 
@@ -1389,36 +1397,30 @@ fn accept_reject(
     )(input)
 }
 
+
 //------------ ArgExpr --------------------------------------------------
 
-// ArgExpr ::= Identifier |
-//  TypeIdentifier |
-//  StringLiteral |
-//  IntegerLiteral |
-//  PrefixLengthLiteral |
-//  Bool |
+// ArgExpr ::=
+//  *Literal |
 //  CallExpr |
-//  FieldExpr
+//  BuiltinMethodCallExpr
 
 #[derive(Clone, Debug)]
 pub enum ArgExpr {
-    CallExpr(CallExpr),
-    StringLiteral(StringLiteral),   // leaf node
-    IntegerLiteral(IntegerLiteral), // leaf node
-    PrefixLengthLiteral(PrefixLengthLiteral), // leaf node
-    AsnLiteral(AsnLiteral),         // leaf node
-    HexLiteral(HexLiteral),         // leaf node
-    BooleanLit(BooleanLiteral),     // leaf node
+    StringLiteral(StringLiteral),
+    IntegerLiteral(IntegerLiteral),
+    PrefixLengthLiteral(PrefixLengthLiteral),
+    AsnLiteral(AsnLiteral),
+    HexLiteral(HexLiteral),
+    BooleanLit(BooleanLiteral),
     PrefixMatchExpr(PrefixMatchExpr),
-    AccessReceiver(AccessReceiver),
-    // TypeIdentifier(TypeIdentifier),
-    // Identifier(Identifier),
+    CallExpr(CallExpr),
+    BuiltinMethodCallExpr(MethodCallExpr),
 }
 
 impl ArgExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         alt((
-            map(CallExpr::parse, ArgExpr::CallExpr),
             map(StringLiteral::parse, ArgExpr::StringLiteral),
             map(HexLiteral::parse, ArgExpr::HexLiteral),
             map(IntegerLiteral::parse, ArgExpr::IntegerLiteral),
@@ -1427,12 +1429,12 @@ impl ArgExpr {
             map(tag("true"), |_| ArgExpr::BooleanLit(BooleanLiteral(true))),
             map(tag("false"), |_| ArgExpr::BooleanLit(BooleanLiteral(false))),
             map(PrefixMatchExpr::parse, ArgExpr::PrefixMatchExpr),
-            map(AccessReceiver::parse, ArgExpr::AccessReceiver),
-            // map(TypeIdentifier::parse, ArgExpr::TypeIdentifier),
-            // map(Identifier::parse, ArgExpr::Identifier),
+            map(MethodCallExpr::parse, ArgExpr::BuiltinMethodCallExpr),
+            map(CallExpr::parse, ArgExpr::CallExpr),
         ))(input)
     }
 }
+
 
 //------------ ArgExprList -------------------------------------------------
 
@@ -1453,7 +1455,6 @@ impl ArgExprList {
             ),
         )(input)?;
 
-        println!("args: {:?}", args);
         Ok((input, Self { args }))
     }
 
@@ -1461,6 +1462,7 @@ impl ArgExprList {
         self.args.is_empty()
     }
 }
+
 
 //------------ for & with statements ----------------------------------------
 
@@ -1489,99 +1491,101 @@ fn with_statement(
     )(input)
 }
 
+
 // ============ Compound Expressions ========================================
+
 
 // Compound expressions consist of field access of data structures or method
 // calls on data structures.
 
-// It's complete EBNF would be:
-// CompoundExpr ::= AccessReceiver?(.MethodCallExpr)? | AccessReceiver
 
-// The base of a compound expression is either a CallExpr, for an expression
-// that ends in a method call, or a CallReceiver for an expression that ends
-// in a field access.
+//------------- AccessExpr --------------------------------------------------
+
+// Either a method call or a field access. Used as part of a CallExpr.
+
+// AccessExpr ::= MethodCallExpr | AccessReceiver
+
+#[derive(Clone, Debug)]
+pub enum AccessExpr {
+    MethodCallExpr(MethodCallExpr),
+    FieldAccessExpr(FieldAccessExpr),
+}
+
+impl AccessExpr {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        alt((
+            map(MethodCallExpr::parse, AccessExpr::MethodCallExpr),
+            map(FieldAccessExpr::parse, AccessExpr::FieldAccessExpr),
+        ))(input)
+    }
+}
+
 
 //------------- CallExpr ----------------------------------------------------
 
-// A CallExpr is an expression that ends in a method call.
+// It's complete EBNF would be:
+// CompoundExpr ::= AccessReceiver?(.MethodCallExpr)? | AccessReceiver
 
-// CallExpr ::= (CallReceiver)?.MethodCallExpr
+// A CallExpr is an expression that starts with a Sub Call Expression,
+// optionally followed by one or more method calls, and/or access receivers,
+// e.g. 'rib-rov.longest_match(route.prefix).prefix.len()`.
+//
+// Note that an expression ending in a field acces, i.e. not a method call,
+// is also parsed as a CallExpr, but with an empty method call list.
 
 #[derive(Clone, Debug)]
 pub struct CallExpr {
-    /// The data-structure (or field from a data-structure) or variable on
-    /// // which a method is called. if It's None then it's a built-in
-    /// function (In the global scope).
-    receiver: Option<AccessReceiver>,
-    /// The name of the function.
-    method_call: MethodCallExpr,
+    pub receiver: AccessReceiver,
+    pub access_expr: Vec<AccessExpr>,
 }
 
 impl CallExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (receiver, method_call)) = context(
-            "call expression",
-            tuple((opt(AccessReceiver::parse), MethodCallExpr::parse)),
-        )(input)?;
-
+ 
+        let (input, (receiver, access_expr)) = tuple((
+            AccessReceiver::parse,
+            many0(preceded(char('.'), AccessExpr::parse)),
+        ))(input)?;
         Ok((
             input,
             Self {
                 receiver,
-                method_call,
+                access_expr,
             },
         ))
     }
 
-    pub fn get_receiver(&self) -> Option<&AccessReceiver> {
-        self.receiver.as_ref()
-    }
-
-    pub fn get_method_call(&self) -> &MethodCallExpr {
-        &self.method_call
-    }
-
-    pub fn get_ident(&self) -> &Identifier {
-        match &self.receiver {
-            Some(receiver) => receiver.get_ident(),
-            None => &self.method_call.ident,
-        }
+    pub fn get_receiver(&self) -> AccessReceiver {
+        self.receiver.clone()
     }
 }
 
+
 //------------- AccessReceiver ------------------------------------------------
 
-// The AccessReceiver is the data structure that is being called (used as
-// part of a CallExpr) or the field of a data structure that is being
-// accessed (as stand-alone expression).
+// The AccessReceiver is the specifier of a data structure that is being called
+// (used as part of a CallExpr) or used to retrieve one of its fields. Can also
+// be a stand-alone specifier.
 
-// CallReceiver ::= Identifier.(FieldAccessExpr)?
+// CallReceiver ::= Identifier
 
 #[derive(Clone, Debug)]
 pub struct AccessReceiver {
     // The identifier of the data structure.
     pub ident: Identifier,
-    // The field(s) of the data structure that are being accessed.
-    // A Value of None denotes that the data structure itself is being
-    // accessed (through a method call).
-    fields: Option<FieldAccessExpr>,
 }
 
 impl AccessReceiver {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, call_receiver) = context(
-            "call receiver",
-            tuple((
-                terminated(Identifier::parse, not(char('('))),
-                opt(FieldAccessExpr::parse),
-            )),
+        let (input, receiver) = context(
+            "access receiver",
+            Identifier::parse,
         )(input)?;
 
         Ok((
             input,
             Self {
-                ident: call_receiver.0,
-                fields: call_receiver.1,
+                ident: receiver,
             },
         ))
     }
@@ -1591,22 +1595,15 @@ impl AccessReceiver {
     pub fn get_ident(&self) -> &Identifier {
         &self.ident
     }
-
-    pub fn has_field_access(&self) -> bool {
-        self.fields.is_some()
-    }
-
-    pub fn get_fields(&self) -> Option<&FieldAccessExpr> {
-        self.fields.as_ref()
-    }
 }
 
-//------------- FieldExpr --------------------------------------------------
+
+//------------- FieldAccessExpr ---------------------------------------------
 
 // The chain of fields that are being accesed. The last field is the name of
 // the field that is accessed.
 
-// FieldAccessExpr ::= Identifier ( '.' Identifier )+
+// FieldAccessExpr ::= ( '.'? Identifier )+
 
 #[derive(Clone, Debug)]
 pub struct FieldAccessExpr {
@@ -1619,9 +1616,11 @@ impl FieldAccessExpr {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, field_names) = context(
             "field expression",
-            many1(delimited(char('.'), Identifier::parse, not(char('(')))),
+            separated_list1(
+                char('.'),
+                terminated(Identifier::parse, not(char('('))),
+            ),
         )(input)?;
-        println!("field_names: {:?}", field_names);
         Ok((input, Self { field_names }))
     }
 }
@@ -1646,7 +1645,7 @@ impl MethodCallExpr {
         let (input, (ident, args)) = context(
             "method call expression",
             tuple((
-                preceded(opt(char('.')), Identifier::parse),
+                Identifier::parse,
                 delimited(
                     opt_ws(char('(')),
                     ArgExprList::parse,
@@ -1657,6 +1656,7 @@ impl MethodCallExpr {
         Ok((input, Self { ident, args }))
     }
 }
+
 
 //============ First-Order Logic ============================================
 
@@ -1768,6 +1768,7 @@ impl CompareArg {
     }
 }
 
+
 //------------ BooleanExpr --------------------------------------------------
 
 // A Boolean expression is an expression that *may* evaluate to one of:
@@ -1796,9 +1797,6 @@ pub enum BooleanExpr {
     CompareExpr(Box<CompareExpr>),
     // A CallExpression *may* evaluate to a function that returns a boolean
     CallExpr(CallExpr),
-    // A field access *may* evaluate to a stand-alone variable that *may*
-    // return a boolean value.
-    AccessReceiver(AccessReceiver),
     // Set Compare expression, will *always* result in a boolean-valued
     // function. Syntactic sugar for a truth-function that performs
     // fn : a -> {a} ∩ B
@@ -1816,7 +1814,6 @@ impl BooleanExpr {
                 BooleanExpr::CompareExpr(Box::new(e))
             }),
             map(CallExpr::parse, BooleanExpr::CallExpr),
-            map(AccessReceiver::parse, BooleanExpr::AccessReceiver),
             map(SetCompareExpr::parse, |e| {
                 BooleanExpr::SetCompareExpr(Box::new(e))
             }),
@@ -1825,6 +1822,7 @@ impl BooleanExpr {
         ))(input)
     }
 }
+
 
 //------------ CompareExpr --------------------------------------------------
 
