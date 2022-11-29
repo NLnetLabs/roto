@@ -1,5 +1,4 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
+use roto::compile::compile;
 use roto::symbols::GlobalSymbolTable;
 
 use nom::error::convert_error;
@@ -26,9 +25,13 @@ fn test_data(name: &str, data: &'static str, expect_success: bool) -> Result<(),
     let ev2 = eval.1.eval(symbols.clone());
 
     println!("{:#?}", symbols);
+
+    // compile(symbols)?;
+
     // println!("{:?} {:#?}", name, eval);
    
     ev2
+    // Ok(())
 }
 
 fn main() {
@@ -57,9 +60,10 @@ fn main() {
                     prefix_len = 24;
 
                     // currently not supported is calling a field beyond a method call:
-                    // found_prefix = rib-rov.longest_match(route.prefix).prefix;
+                    found_prefix_prefix = rib-rov.longest_match(route.prefix).prefix;
                     found_prefix = rib-rov.longest_match(route.prefix);
                     
+                    // my_basic_call = builtin_func();
                     my_route_path = route.as-path;
                     // prefix_len triggers a type conversion from IntegerLiteral to PrefixLength
                     fixed_len_prefix = Prefix.from(route.prefix.address(), prefix_len);
@@ -67,6 +71,7 @@ fn main() {
                     // try to mess it up
                     // my_recursor = my_recursor_trasher;
                     // my_recursor_trasher = my_recursor;
+                    // bullshitter = a.b.c.d(x,y,z).e.f(o.p()).g;
                     leftie = source_asns.contains(route.as-path.origin());
                 }
             
