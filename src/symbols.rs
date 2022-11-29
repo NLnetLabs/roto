@@ -366,22 +366,6 @@ impl GlobalSymbolTable {
     pub fn new() -> Self {
         GlobalSymbolTable(Rc::new(RefCell::new(HashMap::new())))
     }
-
-    pub(crate) fn get_term_deps(
-        &self,
-    ) -> Result<(Vec<Token>, Vec<Token>), Box<dyn std::error::Error>> {
-        let _symbols = self.borrow();
-        let _symbols = _symbols
-            .get(&Scope::Global)
-            .ok_or("No global symbol table found")
-            .unwrap();
-
-        let bla = _symbols.get_term_deps();
-
-        println!("bla: {:?}", bla);
-        
-        Ok(bla)
-    }
 }
 
 impl Clone for GlobalSymbolTable {
@@ -736,21 +720,20 @@ impl SymbolTable {
         })?
     }
 
+    // retrieve all the arguments, variables and data-sources that are 
+    // referenced in the terms field of a symbol table (i.e. the terms
+    // sections in a module)
     pub(crate) fn get_term_deps(&self) -> (Vec<Token>, Vec<Token>) {
         let mut deps_vec: Vec<Token> = vec![];
         for s in self.terms.values() {
-            println!("term: {:#?}", s);
-            deps_vec = deps_vec
-                .into_iter()
-                .chain(
-                    s.get_leaf_nodes()
-                        .into_iter()
-                        .map(|s| s.get_token().unwrap()),
-                )
-                .collect()
+            deps_vec.extend(s.get_leaf_nodes()
+            .into_iter()
+            .map(|s| s.get_token().unwrap()));
+
         }
 
         deps_vec.retain(|t| t.is_variable() || t.is_argument());
+        deps_vec.sort();
         deps_vec.dedup();
 
         let deps_vec: (Vec<Token>, Vec<Token>) =

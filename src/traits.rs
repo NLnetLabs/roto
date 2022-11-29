@@ -2,7 +2,7 @@
 
 use crate::types::{typedef::TypeDef, typevalue::TypeValue};
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
 pub(crate) enum Token {
     Variable(u8),
     Method(u8),
