@@ -24,9 +24,9 @@ fn test_data(name: &str, data: &'static str, expect_success: bool) -> Result<(),
     let symbols = GlobalSymbolTable::new();
     let ev2 = eval.1.eval(symbols.clone());
 
-    println!("{:#?}", symbols);
+    // println!("{:#?}", symbols);
 
-    // compile(symbols)?;
+    compile(symbols)?;
 
     // println!("{:?} {:#?}", name, eval);
    
@@ -52,6 +52,7 @@ fn main() {
 
                     // assignments
                     extra_in_table = source_asns.contains(extra_asn);
+                    extra_extra = rib-extra.blixer.bla;
                     route_in_table = source_asns.contains(route.as-path.origin());
                     ROV_INVALID_AS = 0xFFFFFF010;
                     some_bool = false;

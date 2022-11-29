@@ -4,7 +4,7 @@
 
 use routecore::asn::LongSegmentError;
 
-use crate::traits::{MethodProps, RotoFilter, Token, TokenConvert};
+use crate::traits::{MethodProps, RotoFilter, TokenConvert};
 
 use super::collections::Record;
 use super::typedef::TypeDef;
