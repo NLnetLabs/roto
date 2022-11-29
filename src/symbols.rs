@@ -248,13 +248,17 @@ impl Symbol {
     pub(crate) fn get_leaf_nodes(&self) -> Vec<&Symbol> {
         let mut leaves = vec![];
 
-        if self.args.is_empty() {
-            leaves.push(self);
-        } else {
+        if !self.args.is_empty() {
             for arg in self.args.iter() {
+                println!("arg {:?}", arg);
                 leaves.extend(arg.get_leaf_nodes());
             }
         }
+        
+        if self.get_token().is_ok() { 
+            leaves.push(self); 
+        }
+        
         leaves
     }
 
