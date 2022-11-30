@@ -24,7 +24,8 @@ fn test_data(name: &str, data: &'static str, expect_success: bool) -> Result<(),
     let symbols = GlobalSymbolTable::new();
     let ev2 = eval.1.eval(symbols.clone());
 
-    // println!("{:#?}", symbols);
+    println!("{:#?}", symbols);
+
 
     compile(symbols)?;
 
@@ -51,29 +52,40 @@ fn main() {
                     use rib rib-rov;
 
                     // assignments
-                    extra_in_table = source_asns.contains(extra_asn);
-                    extra_extra = rib-extra.blixer.bla;
-                    route_in_table = source_asns.contains(route.as-path.origin());
-                    ROV_INVALID_AS = 0xFFFFFF010;
-                    some_bool = false;
-
-                    // specify another RIB that is used in this filter.
-                    prefix_len = 24;
-
-                    // currently not supported is calling a field beyond a method call:
-                    found_prefix_prefix = rib-rov.longest_match(route.prefix).prefix;
-                    found_prefix = rib-rov.longest_match(route.prefix);
+                    extra_in_table = source_asns.contains(extra_asn); // 0
+                    route_in_table = source_asns.contains(route.as-path.origin()); // 1
                     
+                    // this is aliasing, kinda' useless, but hey, it's allowed
+                    extra_extra = rib-extra.blixer.bla; // 2
+                    my_source = source_asns; // 3
+
+                    // Some literals. Literals are turned into constants, but
+                    // they can be converted to other types.
+                    prefix_len = 24; // 4
+                    ROV_INVALID_AS = 0xFFFFFF010; // 5
+                    some_bool = false; // 6
+
+                    // also supported is calling a field beyond a method call:
+                    found_prefix_prefix = rib-rov.longest_match(route.prefix).prefix; // 7
+
+                    found_prefix = rib-rov.longest_match(route.prefix); // 8
+                    
+                    // syntactically valid, but doesn't exist.
                     // my_basic_call = builtin_func();
-                    my_route_path = route.as-path;
+
+                    // assignment to a field from an argument
+                    my_route_path = route.as-path; // 9
+                    
                     // prefix_len triggers a type conversion from IntegerLiteral to PrefixLength
                     fixed_len_prefix = Prefix.from(route.prefix.address(), prefix_len);
 
                     // try to mess it up
                     // my_recursor = my_recursor_trasher;
                     // my_recursor_trasher = my_recursor;
+
+                    // syntactically correct, but semantically wrong: these
+                    // identifiers are not defined.
                     // bullshitter = a.b.c.d(x,y,z).e.f(o.p()).g;
-                    leftie = source_asns.contains(route.as-path.origin());
                 }
             
                 term rov-valid for route: Route {
@@ -89,6 +101,7 @@ fn main() {
 
                 term on-my-terms for route: Route {
                     match {
+                        rib-extra.contains(route.as-path.origin());
                         route.prefix.len() == 24;
                         route.as-path.origin() == found_prefix.as-path.origin();
                     }
