@@ -1098,7 +1098,6 @@ impl ast::CompareArg {
             }
             ast::CompareArg::ArgExpr(expr) => {
                 // A simple operator.
-                println!("arg expr: {:?}", expr);
                 expr.eval(symbols, scope.clone())
             }
         }
