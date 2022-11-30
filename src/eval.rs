@@ -378,7 +378,7 @@ impl ast::Define {
 
         for assignment in &self.body.assignments {
             // rhs part of the assignment can only be an Argument Expression.
-            let s = ast::ArgExpr::eval(
+            let s = ast::ValueExpr::eval(
                 &assignment.1,
                 symbols.clone(),
                 scope.clone(),
@@ -780,7 +780,7 @@ impl ast::AccessReceiver {
     }
 }
 
-impl ast::ArgExpr {
+impl ast::ValueExpr {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
@@ -790,7 +790,7 @@ impl ast::ArgExpr {
             // an expression ending in a a method call (e.g. `foo.bar()`).
             // Note that the evaluation of the method call will check for
             // the existence of the method.
-            ast::ArgExpr::ComputeExpr(call_expr) => {
+            ast::ValueExpr::ComputeExpr(call_expr) => {
                 println!("arg base_name_ident {:?}", call_expr);
 
                 call_expr.eval(
@@ -799,7 +799,7 @@ impl ast::ArgExpr {
                     scope,
                 )
             }
-            ast::ArgExpr::BuiltinMethodCallExpr(builtin_call_expr) => {
+            ast::ValueExpr::BuiltinMethodCallExpr(builtin_call_expr) => {
                 let name: ShortString = builtin_call_expr.ident.clone().ident;
                 let mut ty = TypeDef::None;
                 if let Ok(TypeValue::Builtin(prim_ty)) =
@@ -817,7 +817,7 @@ impl ast::ArgExpr {
                     scope,
                 )
             }
-            ast::ArgExpr::StringLiteral(str_lit) => Ok(symbols::Symbol::new(
+            ast::ValueExpr::StringLiteral(str_lit) => Ok(symbols::Symbol::new(
                 str_lit.into(),
                 symbols::SymbolKind::StringLiteral,
                 TypeDef::String,
@@ -826,7 +826,7 @@ impl ast::ArgExpr {
             )),
             // Integers are special, we are keeping them as is, so that the
             // receiver can decide how to cast them (into u8, u32 or i64).
-            ast::ArgExpr::IntegerLiteral(int_lit) => {
+            ast::ValueExpr::IntegerLiteral(int_lit) => {
                 println!("int_lit {:?}", int_lit);
                 println!(
                     "as value {}",
@@ -844,7 +844,7 @@ impl ast::ArgExpr {
                     Token::Constant,
                 ))
             }
-            ast::ArgExpr::HexLiteral(hex_lit) => {
+            ast::ValueExpr::HexLiteral(hex_lit) => {
                 Ok(symbols::Symbol::new_with_value(
                     "hex_lit".into(),
                     symbols::SymbolKind::Constant,
@@ -855,7 +855,7 @@ impl ast::ArgExpr {
                     Token::Constant,
                 ))
             }
-            ast::ArgExpr::PrefixLengthLiteral(prefix_len_lit) => {
+            ast::ValueExpr::PrefixLengthLiteral(prefix_len_lit) => {
                 Ok(symbols::Symbol::new_with_value(
                     "prefix_len_lit".into(),
                     symbols::SymbolKind::Constant,
@@ -866,7 +866,7 @@ impl ast::ArgExpr {
                     Token::Constant,
                 ))
             }
-            ast::ArgExpr::AsnLiteral(asn_lit) => {
+            ast::ValueExpr::AsnLiteral(asn_lit) => {
                 println!("asn_lit {:?}", asn_lit);
                 Ok(symbols::Symbol::new_with_value(
                     asn_lit.into(),
@@ -876,7 +876,7 @@ impl ast::ArgExpr {
                     Token::Constant,
                 ))
             }
-            ast::ArgExpr::BooleanLit(bool_lit) => {
+            ast::ValueExpr::BooleanLit(bool_lit) => {
                 println!("bool_lit {:?}", bool_lit);
                 Ok(symbols::Symbol::new_with_value(
                     bool_lit.into(),
@@ -1096,7 +1096,7 @@ impl ast::CompareArg {
                     Err("Cannot return Non-Boolean in ( )".to_string().into())
                 }
             }
-            ast::CompareArg::ArgExpr(expr) => {
+            ast::CompareArg::ValueExpr(expr) => {
                 // A simple operator.
                 expr.eval(symbols, scope.clone())
             }

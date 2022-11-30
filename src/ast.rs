@@ -246,7 +246,7 @@ pub struct DefineBody {
     pub rx_type: TypeIdentField,
     pub tx_type: TypeIdentField,
     pub use_ext_data: Vec<(Identifier, Identifier)>,
-    pub assignments: Vec<(Identifier, ArgExpr)>,
+    pub assignments: Vec<(Identifier, ValueExpr)>,
 }
 
 impl DefineBody {
@@ -278,7 +278,10 @@ impl DefineBody {
                     separated_pair(
                         opt_ws(Identifier::parse),
                         preceded(multispace0, char('=')),
-                        terminated(opt_ws(ArgExpr::parse), opt_ws(char(';'))),
+                        terminated(
+                            opt_ws(ValueExpr::parse),
+                            opt_ws(char(';')),
+                        ),
                     ),
                 )),
             ))(input)?;
@@ -577,9 +580,9 @@ impl ApplyBody {
 pub struct ApplyScope {
     pub scope: Identifier,
     pub operator: MatchOperator,
-    pub filter_ident: ArgExpr,
+    pub filter_ident: ValueExpr,
     pub negate: bool,
-    pub actions: Vec<(ArgExpr, Option<AcceptReject>)>,
+    pub actions: Vec<(ValueExpr, Option<AcceptReject>)>,
 }
 
 impl ApplyScope {
@@ -601,7 +604,7 @@ impl ApplyScope {
                 context(
                     "action expressions",
                     opt_ws(tuple((
-                        ArgExpr::parse,
+                        ValueExpr::parse,
                         opt(terminated(
                             opt(opt_ws(tag("not"))),
                             opt_ws(tag("matching")),
@@ -612,7 +615,7 @@ impl ApplyScope {
                                 "Call Expression",
                                 tuple((
                                     opt_ws(terminated(
-                                        ArgExpr::parse,
+                                        ValueExpr::parse,
                                         opt_ws(char(';')),
                                     )),
                                     opt(opt_ws(accept_reject)),
@@ -1391,15 +1394,15 @@ fn accept_reject(
     )(input)
 }
 
-//------------ ArgExpr --------------------------------------------------
+//------------ ValueExpr --------------------------------------------------
 
-// ArgExpr ::=
+// ValueExpr ::=
 //  *Literal |
 //  ComputeExpr |
 //  BuiltinMethodCallExpr
 
 #[derive(Clone, Debug)]
-pub enum ArgExpr {
+pub enum ValueExpr {
     StringLiteral(StringLiteral),
     IntegerLiteral(IntegerLiteral),
     PrefixLengthLiteral(PrefixLengthLiteral),
@@ -1411,30 +1414,32 @@ pub enum ArgExpr {
     BuiltinMethodCallExpr(MethodComputeExpr),
 }
 
-impl ArgExpr {
+impl ValueExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         alt((
-            map(StringLiteral::parse, ArgExpr::StringLiteral),
-            map(HexLiteral::parse, ArgExpr::HexLiteral),
-            map(IntegerLiteral::parse, ArgExpr::IntegerLiteral),
-            map(PrefixLengthLiteral::parse, ArgExpr::PrefixLengthLiteral),
-            map(AsnLiteral::parse, ArgExpr::AsnLiteral),
-            map(tag("true"), |_| ArgExpr::BooleanLit(BooleanLiteral(true))),
-            map(tag("false"), |_| ArgExpr::BooleanLit(BooleanLiteral(false))),
-            map(PrefixMatchExpr::parse, ArgExpr::PrefixMatchExpr),
-            map(MethodComputeExpr::parse, ArgExpr::BuiltinMethodCallExpr),
-            map(ComputeExpr::parse, ArgExpr::ComputeExpr),
+            map(StringLiteral::parse, ValueExpr::StringLiteral),
+            map(HexLiteral::parse, ValueExpr::HexLiteral),
+            map(IntegerLiteral::parse, ValueExpr::IntegerLiteral),
+            map(PrefixLengthLiteral::parse, ValueExpr::PrefixLengthLiteral),
+            map(AsnLiteral::parse, ValueExpr::AsnLiteral),
+            map(tag("true"), |_| ValueExpr::BooleanLit(BooleanLiteral(true))),
+            map(tag("false"), |_| {
+                ValueExpr::BooleanLit(BooleanLiteral(false))
+            }),
+            map(PrefixMatchExpr::parse, ValueExpr::PrefixMatchExpr),
+            map(MethodComputeExpr::parse, ValueExpr::BuiltinMethodCallExpr),
+            map(ComputeExpr::parse, ValueExpr::ComputeExpr),
         ))(input)
     }
 }
 
 //------------ ArgExprList -------------------------------------------------
 
-// ArgExprList ::= ( ArgExpr ','? )*
+// ArgExprList ::= ( ValueExpr ','? )*
 
 #[derive(Clone, Debug)]
 pub struct ArgExprList {
-    pub args: Vec<ArgExpr>,
+    pub args: Vec<ValueExpr>,
 }
 
 impl ArgExprList {
@@ -1443,7 +1448,7 @@ impl ArgExprList {
             "argument expressions",
             separated_list0(
                 preceded(multispace0, char(',')),
-                opt_ws(ArgExpr::parse),
+                opt_ws(ValueExpr::parse),
             ),
         )(input)?;
 
@@ -1728,7 +1733,7 @@ impl LogicalExpr {
 #[derive(Clone, Debug)]
 pub enum CompareArg {
     // A "stand-alone" left|right-hand side argument of a comparison
-    ArgExpr(ArgExpr),
+    ValueExpr(ValueExpr),
     // A nested logical formula, e.g. (A && B) || (C && D) used as a left|
     // right-hand side argument of a comparison. Note that this can only
     // have the opposite hand be a boolean expression.
@@ -1739,7 +1744,7 @@ impl CompareArg {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         alt((
             map(GroupedLogicalExpr::parse, CompareArg::GroupedLogicalExpr),
-            map(ArgExpr::parse, CompareArg::ArgExpr),
+            map(ValueExpr::parse, CompareArg::ValueExpr),
         ))(input)
     }
 }
@@ -1800,7 +1805,7 @@ impl BooleanExpr {
 
 //------------ CompareExpr --------------------------------------------------
 
-// CompareExpr ::= ArgExpr CompareOp ArgExpr
+// CompareExpr ::= ValueExpr CompareOp ValueExpr
 
 #[derive(Clone, Debug)]
 pub struct CompareExpr {
@@ -1905,7 +1910,7 @@ impl NotExpr {
 
 //------------ SetCompareExpr -----------------------------------------------
 
-// SetCompareExpr ::= ( ArgExpr ( 'in' | 'not in' ) ArgExpr )+
+// SetCompareExpr ::= ( ValueExpr ( 'in' | 'not in' ) ValueExpr )+
 
 #[derive(Clone, Debug)]
 pub struct SetCompareExpr {

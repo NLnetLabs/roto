@@ -23,7 +23,7 @@ fn main() {
     println!("{}, {:#?}", cm.is_ok(), cm);
     assert!(cm.is_ok());
 
-    let mm = ArgExpr::parse(r###"globlaf(bla)"###);
+    let mm = ValueExpr::parse(r###"globlaf(bla)"###);
     println!("{}, {:#?}", mm.is_ok(), mm);
     assert!(mm.is_ok());
 
