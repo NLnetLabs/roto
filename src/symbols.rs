@@ -269,7 +269,6 @@ impl Symbol {
     }
 }
 
-
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum SymbolKind {
     Variable, // A variable defined by the user

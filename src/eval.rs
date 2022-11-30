@@ -790,7 +790,7 @@ impl ast::ArgExpr {
             // an expression ending in a a method call (e.g. `foo.bar()`).
             // Note that the evaluation of the method call will check for
             // the existence of the method.
-            ast::ArgExpr::CallExpr(call_expr) => {
+            ast::ArgExpr::ComputeExpr(call_expr) => {
                 println!("arg base_name_ident {:?}", call_expr);
 
                 call_expr.eval(

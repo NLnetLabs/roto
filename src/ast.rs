@@ -1414,7 +1414,7 @@ pub enum ArgExpr {
     HexLiteral(HexLiteral),
     BooleanLit(BooleanLiteral),
     PrefixMatchExpr(PrefixMatchExpr),
-    CallExpr(CallExpr),
+    ComputeExpr(CallExpr),
     BuiltinMethodCallExpr(MethodCallExpr),
 }
 
@@ -1430,7 +1430,7 @@ impl ArgExpr {
             map(tag("false"), |_| ArgExpr::BooleanLit(BooleanLiteral(false))),
             map(PrefixMatchExpr::parse, ArgExpr::PrefixMatchExpr),
             map(MethodCallExpr::parse, ArgExpr::BuiltinMethodCallExpr),
-            map(CallExpr::parse, ArgExpr::CallExpr),
+            map(CallExpr::parse, ArgExpr::ComputeExpr),
         ))(input)
     }
 }
