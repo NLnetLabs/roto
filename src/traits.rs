@@ -8,8 +8,7 @@ pub(crate) enum Token {
     Method(u8),
     Argument(u8),
     DataSource(u8),
-    // FieldAccess has arguments (access source, vec of field tokens)
-    FieldAccess(Option<Box<Token>>, Vec<u8>),
+    FieldAccess(Vec<u8>),
     Term(u8),
     Action(u8),
     MatchAction(u8),
@@ -29,15 +28,8 @@ impl Token {
 
     pub fn push(&mut self, value: u8) {
         match self {
-            Token::FieldAccess(_, v) => v.push(value),
+            Token::FieldAccess(v) => v.push(value),
             _ => panic!("Cannot push to this token"),
-        }
-    }
-
-    pub fn set_root(&mut self, token: Token) {
-        if let Token::FieldAccess(_, fields) = self {
-            *self =
-                Token::FieldAccess(Some(Box::new(token)), fields.to_vec());
         }
     }
 
@@ -47,6 +39,10 @@ impl Token {
 
     pub fn is_argument(&self) -> bool {
         matches!(self, Token::Argument(_))
+    }
+
+    pub fn is_data_source(&self) -> bool {
+        matches!(self, Token::DataSource(_))
     }
 }
 
