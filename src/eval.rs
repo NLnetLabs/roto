@@ -585,7 +585,7 @@ impl ast::ApplyScope {
 // The caller needs to insert them in the right place in a enry in the symbol
 // table.
 
-impl ast::CallExpr {
+impl ast::ComputeExpr {
     pub(crate) fn eval(
         &self,
         name: ShortString,
@@ -603,7 +603,7 @@ impl ast::CallExpr {
         for a_e in &self.access_expr {
             let ty = s.get_type();
             let child_s = match a_e {
-                ast::AccessExpr::MethodCallExpr(method_call) => method_call
+                ast::AccessExpr::MethodComputeExpr(method_call) => method_call
                     .eval(
                     symbols::SymbolKind::MethodCall,
                     ty,
@@ -634,7 +634,7 @@ impl ast::CallExpr {
     }
 }
 
-impl ast::MethodCallExpr {
+impl ast::MethodComputeExpr {
     pub(crate) fn eval(
         &self,
         // Parsed return type of the method call
@@ -1003,7 +1003,7 @@ impl ast::BooleanExpr {
             ast::BooleanExpr::CompareExpr(compare_expr) => {
                 ast::CompareExpr::eval(compare_expr, symbols, scope)
             }
-            ast::BooleanExpr::CallExpr(call_expr) => {
+            ast::BooleanExpr::ComputeExpr(call_expr) => {
                 // A Call Expression does not necessarily have to return a
                 // boolean, as long as the compare expression it is nested in
                 // has left and right hand-sides that return the same type.

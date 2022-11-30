@@ -471,18 +471,18 @@ impl Action {
 
 //------------ ActionBody -----------------------------------------------------
 
-// ActionBody ::= (CallExpr ';')+
+// ActionBody ::= (ComputeExpr ';')+
 
 #[derive(Clone, Debug)]
 pub struct ActionBody {
-    pub expressions: Vec<CallExpr>,
+    pub expressions: Vec<ComputeExpr>,
 }
 
 impl ActionBody {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, expressions) = context(
             "action body",
-            many1(opt_ws(terminated(CallExpr::parse, opt_ws(char(';'))))),
+            many1(opt_ws(terminated(ComputeExpr::parse, opt_ws(char(';'))))),
         )(input)?;
         Ok((input, Self { expressions }))
     }
@@ -569,9 +569,9 @@ impl ApplyBody {
 
 // ApplyScope ::=
 //      ( 'use' Identifier ';' )?
-//      'filter' MatchOperator ( CallExpr | Identifier )
+//      'filter' MatchOperator ( ComputeExpr | Identifier )
 //      'not'? 'matching'
-//      '{' ( ( CallExpr | Identifier ) ';' ( AcceptReject ';' )? )+ '}' ';'
+//      '{' ( ( ComputeExpr | Identifier ) ';' ( AcceptReject ';' )? )+ '}' ';'
 
 #[derive(Clone, Debug)]
 pub struct ApplyScope {
@@ -1395,7 +1395,7 @@ fn accept_reject(
 
 // ArgExpr ::=
 //  *Literal |
-//  CallExpr |
+//  ComputeExpr |
 //  BuiltinMethodCallExpr
 
 #[derive(Clone, Debug)]
@@ -1407,8 +1407,8 @@ pub enum ArgExpr {
     HexLiteral(HexLiteral),
     BooleanLit(BooleanLiteral),
     PrefixMatchExpr(PrefixMatchExpr),
-    ComputeExpr(CallExpr),
-    BuiltinMethodCallExpr(MethodCallExpr),
+    ComputeExpr(ComputeExpr),
+    BuiltinMethodCallExpr(MethodComputeExpr),
 }
 
 impl ArgExpr {
@@ -1422,8 +1422,8 @@ impl ArgExpr {
             map(tag("true"), |_| ArgExpr::BooleanLit(BooleanLiteral(true))),
             map(tag("false"), |_| ArgExpr::BooleanLit(BooleanLiteral(false))),
             map(PrefixMatchExpr::parse, ArgExpr::PrefixMatchExpr),
-            map(MethodCallExpr::parse, ArgExpr::BuiltinMethodCallExpr),
-            map(CallExpr::parse, ArgExpr::ComputeExpr),
+            map(MethodComputeExpr::parse, ArgExpr::BuiltinMethodCallExpr),
+            map(ComputeExpr::parse, ArgExpr::ComputeExpr),
         ))(input)
     }
 }
@@ -1489,44 +1489,44 @@ fn with_statement(
 
 //------------- AccessExpr --------------------------------------------------
 
-// Either a method call or a field access. Used as part of a CallExpr.
+// Either a method call or a field access. Used as part of a ComputeExpr.
 
-// AccessExpr ::= MethodCallExpr | AccessReceiver
+// AccessExpr ::= MethodComputeExpr | AccessReceiver
 
 #[derive(Clone, Debug)]
 pub enum AccessExpr {
-    MethodCallExpr(MethodCallExpr),
+    MethodComputeExpr(MethodComputeExpr),
     FieldAccessExpr(FieldAccessExpr),
 }
 
 impl AccessExpr {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         alt((
-            map(MethodCallExpr::parse, AccessExpr::MethodCallExpr),
+            map(MethodComputeExpr::parse, AccessExpr::MethodComputeExpr),
             map(FieldAccessExpr::parse, AccessExpr::FieldAccessExpr),
         ))(input)
     }
 }
 
-//------------- CallExpr ----------------------------------------------------
+//------------- ComputeExpr ----------------------------------------------------
 
 // It's complete EBNF would be:
-// CompoundExpr ::= AccessReceiver?(.MethodCallExpr)? | AccessReceiver
+// CompoundExpr ::= AccessReceiver?(.MethodComputeExpr)? | AccessReceiver
 
-// A CallExpr is an expression that starts with a Sub Call Expression,
+// A ComputeExpr is an expression that starts with a Sub Call Expression,
 // optionally followed by one or more method calls, and/or access receivers,
 // e.g. 'rib-rov.longest_match(route.prefix).prefix.len()`.
 //
 // Note that an expression ending in a field acces, i.e. not a method call,
-// is also parsed as a CallExpr, but with an empty method call list.
+// is also parsed as a ComputeExpr, but with an empty method call list.
 
 #[derive(Clone, Debug)]
-pub struct CallExpr {
+pub struct ComputeExpr {
     pub receiver: AccessReceiver,
     pub access_expr: Vec<AccessExpr>,
 }
 
-impl CallExpr {
+impl ComputeExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, (receiver, access_expr)) = tuple((
             AccessReceiver::parse,
@@ -1549,7 +1549,7 @@ impl CallExpr {
 //------------- AccessReceiver ------------------------------------------------
 
 // The AccessReceiver is the specifier of a data structure that is being called
-// (used as part of a CallExpr) or used to retrieve one of its fields. Can also
+// (used as part of a ComputeExpr) or used to retrieve one of its fields. Can also
 // be a stand-alone specifier.
 
 // CallReceiver ::= Identifier
@@ -1602,22 +1602,22 @@ impl FieldAccessExpr {
     }
 }
 
-//------------- MethodCallExpr  ---------------------------------------------
+//------------- MethodComputeExpr  ---------------------------------------------
 
 // The method that is being called on the data structure (directly or on one
 // of its fields).
 
-// MethodCallExpr ::= Identifier '(' ArgExprList ')'
+// MethodComputeExpr ::= Identifier '(' ArgExprList ')'
 
 #[derive(Clone, Debug)]
-pub struct MethodCallExpr {
+pub struct MethodComputeExpr {
     // The name of the method.
     pub ident: Identifier,
     // The list with arguments
     pub args: ArgExprList,
 }
 
-impl MethodCallExpr {
+impl MethodComputeExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, (ident, args)) = context(
             "method call expression",
@@ -1756,7 +1756,7 @@ impl CompareArg {
 // - an Expression containing a boolean-valued operator, such as '==', '!=',
 //   ">=", "<="
 
-// BooleanExpr ::= BooleanLiteral | CallExpr | CompareExpr
+// BooleanExpr ::= BooleanLiteral | ComputeExpr | CompareExpr
 //          | AccessReceiver | SetcompareExpr | PrefixMatchExpr
 //          | Identifier
 
@@ -1770,8 +1770,8 @@ pub enum BooleanExpr {
     // A syntactically correct comparison always evaluates to a
     // Boolean-Valued Function, since it will always return a Boolean value.
     CompareExpr(Box<CompareExpr>),
-    // A CallExpression *may* evaluate to a function that returns a boolean
-    CallExpr(CallExpr),
+    // A ComputeExpression *may* evaluate to a function that returns a boolean
+    ComputeExpr(ComputeExpr),
     // Set Compare expression, will *always* result in a boolean-valued
     // function. Syntactic sugar for a truth-function that performs
     // fn : a -> {a} ∩ B
@@ -1788,7 +1788,7 @@ impl BooleanExpr {
             map(CompareExpr::parse, |e| {
                 BooleanExpr::CompareExpr(Box::new(e))
             }),
-            map(CallExpr::parse, BooleanExpr::CallExpr),
+            map(ComputeExpr::parse, BooleanExpr::ComputeExpr),
             map(SetCompareExpr::parse, |e| {
                 BooleanExpr::SetCompareExpr(Box::new(e))
             }),
