@@ -423,7 +423,8 @@ impl TermScope {
 
 //------------ Action -------------------------------------------------------
 
-// 'action' Identifier '{' ActionBody '}')* ForStatement WithStatement '{' ActionBody '}'
+// 'action' Identifier '{' ActionBody '}')* ForStatement WithStatement
+//  '{' ActionBody '}'
 
 #[derive(Clone, Debug)]
 pub struct Action {
@@ -1039,7 +1040,7 @@ impl TypeIdentField {
     }
 }
 
-//------------ ListTypeIdentifier -----------------------------------------------------
+//------------ ListTypeIdentifier -------------------------------------------
 
 // ListTypeIdentifier ::= '[' TypeIdentifier  ','? ']'+
 
@@ -1080,13 +1081,13 @@ impl From<&'_ StringLiteral> for ShortString {
     }
 }
 
-//------------ RecordTypeIdentifier ---------------------------------------------------
+//------------ RecordTypeIdentifier -----------------------------------------
 
 // The value of a record. It's very similar to a RibBody (in EBNF it's the
 // same), but it simplifies creating the SymbolTable, because they're
 // semantically different.
 
-// RecordIdentifier ::= '{' ( Identifier ':' 
+// RecordIdentifier ::= '{' ( Identifier ':'
 //                          TypeIdentifier | '{' RecordTypeIdentifier '}'
 //                      ','? )+ '}'
 
@@ -1123,7 +1124,6 @@ impl RecordTypeIdentifier {
         Ok((input, RecordTypeIdentifier { key_values }))
     }
 }
-
 
 //============= Literals ====================================================
 
@@ -1162,7 +1162,6 @@ impl From<&'_ IntegerLiteral> for i64 {
         literal.0
     }
 }
-
 
 //------------ PrefixLengthLiteral ------------------------------------------
 
@@ -1233,7 +1232,6 @@ impl From<&'_ HexLiteral> for u64 {
     }
 }
 
-
 //------------ AsnLiteral ---------------------------------------------------
 
 /// An ASN literal is a sequence of hex digits, prefixed by 'AS'
@@ -1270,7 +1268,6 @@ impl From<&'_ AsnLiteral> for Asn {
     }
 }
 
-
 //------------ FloatLiteral -------------------------------------------------
 
 /// A float literal is a sequence of digits with a decimal point.
@@ -1295,7 +1292,6 @@ impl FloatLiteral {
         Ok((input, Self(value)))
     }
 }
-
 
 //------------ BooleanLiteral -----------------------------------------------
 /// A boolean literal is either `true` or `false`.
@@ -1326,7 +1322,6 @@ impl From<&'_ BooleanLiteral> for Boolean {
         Boolean(Some(literal.0))
     }
 }
-
 
 //------------ ByteStringLiteral --------------------------------------------
 /// A byte string literal is a sequence of bytes, preceded by '0x'
@@ -1360,7 +1355,6 @@ impl<'a> ByteStringLiteral {
         Ok((input, Self(result_value)))
     }
 }
-
 
 //------------ AcceptReject -------------------------------------------------
 
@@ -1396,7 +1390,6 @@ fn accept_reject(
         ),
     )(input)
 }
-
 
 //------------ ArgExpr --------------------------------------------------
 
@@ -1435,7 +1428,6 @@ impl ArgExpr {
     }
 }
 
-
 //------------ ArgExprList -------------------------------------------------
 
 // ArgExprList ::= ( ArgExpr ','? )*
@@ -1462,7 +1454,6 @@ impl ArgExprList {
         self.args.is_empty()
     }
 }
-
 
 //------------ for & with statements ----------------------------------------
 
@@ -1491,13 +1482,10 @@ fn with_statement(
     )(input)
 }
 
-
 // ============ Compound Expressions ========================================
-
 
 // Compound expressions consist of field access of data structures or method
 // calls on data structures.
-
 
 //------------- AccessExpr --------------------------------------------------
 
@@ -1520,7 +1508,6 @@ impl AccessExpr {
     }
 }
 
-
 //------------- CallExpr ----------------------------------------------------
 
 // It's complete EBNF would be:
@@ -1541,7 +1528,6 @@ pub struct CallExpr {
 
 impl CallExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
- 
         let (input, (receiver, access_expr)) = tuple((
             AccessReceiver::parse,
             many0(preceded(char('.'), AccessExpr::parse)),
@@ -1560,7 +1546,6 @@ impl CallExpr {
     }
 }
 
-
 //------------- AccessReceiver ------------------------------------------------
 
 // The AccessReceiver is the specifier of a data structure that is being called
@@ -1577,17 +1562,10 @@ pub struct AccessReceiver {
 
 impl AccessReceiver {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, receiver) = context(
-            "access receiver",
-            Identifier::parse,
-        )(input)?;
+        let (input, receiver) =
+            context("access receiver", Identifier::parse)(input)?;
 
-        Ok((
-            input,
-            Self {
-                ident: receiver,
-            },
-        ))
+        Ok((input, Self { ident: receiver }))
     }
 }
 
@@ -1596,7 +1574,6 @@ impl AccessReceiver {
         &self.ident
     }
 }
-
 
 //------------- FieldAccessExpr ---------------------------------------------
 
@@ -1656,7 +1633,6 @@ impl MethodCallExpr {
         Ok((input, Self { ident, args }))
     }
 }
-
 
 //============ First-Order Logic ============================================
 
@@ -1768,7 +1744,6 @@ impl CompareArg {
     }
 }
 
-
 //------------ BooleanExpr --------------------------------------------------
 
 // A Boolean expression is an expression that *may* evaluate to one of:
@@ -1822,7 +1797,6 @@ impl BooleanExpr {
         ))(input)
     }
 }
-
 
 //------------ CompareExpr --------------------------------------------------
 
