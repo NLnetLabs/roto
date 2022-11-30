@@ -369,7 +369,7 @@ impl TermBody {
 
 // TermScope ::=
 //      ('use' Identifier ';')?
-//     ( MatchOperator '{' (CallExpr ';')+ '}' )+
+//     ( MatchOperator '{' (ComputeExpr ';')+ '}' )+
 
 #[derive(Clone, Debug)]
 pub struct TermScope {
