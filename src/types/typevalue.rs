@@ -52,11 +52,11 @@ impl TypeValue {
         matches!(self, TypeValue::Builtin(BuiltinTypeValue::Boolean(_)))
     }
 
-    pub fn get_builtin_type(
+    pub(crate) fn as_builtin_type(
         &self,
-    ) -> Result<TypeDef, Box<dyn std::error::Error>> {
+    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
         match self {
-            TypeValue::Builtin(b) => Ok(b.into()),
+            TypeValue::Builtin(b) => Ok(TypeValue::Builtin(b.clone())),
             _ => {
                 Err(format!("Type '{:?}' is not a builtin type.", self)
                     .into())

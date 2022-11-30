@@ -10,7 +10,7 @@ use super::collections::Record;
 use super::typedef::TypeDef;
 use super::typevalue::TypeValue;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum BuiltinTypeValue {
     U32(U32),
     U8(U8),
@@ -311,7 +311,7 @@ impl std::fmt::Display for BuiltinTypeValue {
 
 // ----------- A simple u32 type --------------------------------------------
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub struct U32(pub(crate) Option<u32>);
 
 impl U32 {
@@ -378,7 +378,7 @@ impl TokenConvert for U32Token {}
 
 // ----------- A simple u8 type ---------------------------------------------
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub struct U8(pub(crate) Option<u8>);
 
 impl U8 {
@@ -486,7 +486,7 @@ impl TokenConvert for U8Token {}
 
 // ----------- Boolean type -------------------------------------------------
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub struct Boolean(pub(crate) Option<bool>);
 impl Boolean {
     pub fn new(val: bool) -> Self {
@@ -553,7 +553,7 @@ impl TokenConvert for BooleanToken {}
 
 //------------ IntegerLiteral type ------------------------------------------
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub struct IntegerLiteral(pub(crate) Option<i64>);
 impl IntegerLiteral {
     pub fn new(val: i64) -> Self {
@@ -634,7 +634,7 @@ impl TokenConvert for IntegerLiteralToken {}
 
 //------------ HexLiteral type ----------------------------------------------
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub struct HexLiteral(pub(crate) Option<u64>);
 impl HexLiteral {
     pub fn new(val: u64) -> Self {
@@ -703,7 +703,7 @@ impl TokenConvert for HexLiteralToken {}
 
 // ----------- Prefix type --------------------------------------------------
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub struct Prefix(pub(crate) Option<routecore::addr::Prefix>);
 
 impl Prefix {
@@ -799,7 +799,7 @@ impl TokenConvert for PrefixToken {}
 
 //------------ PrefixLengthLiteral type -------------------------------------
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub struct PrefixLength(pub(crate) Option<u8>);
 
 impl PrefixLength {
@@ -867,14 +867,14 @@ impl TokenConvert for PrefixLengthToken {}
 
 // ----------- Community ----------------------------------------------------
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum CommunityType {
     Standard,
     Extended,
     Large,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub struct Community(pub(crate) Option<CommunityType>);
 
 impl Community {
@@ -997,7 +997,7 @@ pub enum MatchType {
 
 // ----------- IpAddress type -----------------------------------------------
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub struct IpAddress(pub(crate) Option<std::net::IpAddr>);
 
 impl IpAddress {
@@ -1071,7 +1071,7 @@ impl TokenConvert for IpAddressToken {}
 
 // ----------- Asn type -----------------------------------------------------
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub struct Asn(pub(crate) Option<routecore::asn::Asn>);
 
 impl Asn {
@@ -1146,7 +1146,7 @@ impl TokenConvert for AsnToken {}
 
 // ----------- AsPath type --------------------------------------------------
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct AsPath(
     pub(crate) Option<routecore::asn::AsPath<Vec<routecore::asn::Asn>>>,
 );
@@ -1346,7 +1346,7 @@ impl TokenConvert for AsPathToken {}
 
 // Generic RFC4271 Route type, that can be parsed with routecore.
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Route {
     pub prefix: Option<Prefix>,
     pub bgp: Option<BgpAttributes>,
@@ -1432,7 +1432,7 @@ pub enum RouteToken {
 
 impl TokenConvert for RouteToken {}
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum RouteStatus {
     InConvergence, // Between start and EOR on a BGP peer-session
     UpToDate, // After EOR for a BGP peer-session, either Graceful Restart or EOR
@@ -1529,7 +1529,7 @@ pub enum RouteStatusToken {
 
 impl TokenConvert for RouteStatusToken {}
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct BgpAttributes {
     pub as_path: AsPath,
     pub communities: Vec<Community>,
