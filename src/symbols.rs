@@ -57,10 +57,8 @@ impl Symbol {
         }
     }
 
-    pub fn get_kind_and_type(
-        &self,
-    ) -> (SymbolKind, TypeDef) {
-        (self.kind.clone(), self.ty.clone())
+    pub fn get_kind_and_type(&self) -> (SymbolKind, TypeDef) {
+        (self.kind, self.ty.clone())
     }
 
     pub fn set_kind(mut self, kind: SymbolKind) -> Symbol {
@@ -121,7 +119,6 @@ impl Symbol {
         self.args = args;
     }
 
-
     pub fn new(
         name: ShortString,
         kind: SymbolKind,
@@ -173,8 +170,8 @@ impl Symbol {
     }
 
     // try to return the converted type with its value, if it's set.
-    // Otherwise try to return a None typevalue for the converted type. if no
-    // conversion is available, return an error.
+    // Otherwise try to return an empty typevalue for the converted type. if
+    // no conversion is available, return an error.
     pub fn try_convert_value_into(
         mut self,
         type_def: &TypeDef,
@@ -238,7 +235,9 @@ impl Symbol {
             Some(TypeValue::None) => {
                 return Err("Cannot convert None into a type".into())
             }
-            None => { self.value = Some(type_def.into()); }
+            None => {
+                self.value = Some(type_def.into());
+            }
         };
         Ok(self)
     }
@@ -250,15 +249,14 @@ impl Symbol {
 
         if !self.args.is_empty() {
             for arg in self.args.iter() {
-                println!("arg {:?}", arg);
                 leaves.extend(arg.get_leaf_nodes());
             }
         }
-        
-        if self.get_token().is_ok() { 
-            leaves.push(self); 
+
+        if self.get_token().is_ok() {
+            leaves.push(self);
         }
-        
+
         leaves
     }
 
@@ -270,6 +268,7 @@ impl Symbol {
         }
     }
 }
+
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum SymbolKind {
@@ -301,6 +300,8 @@ pub enum SymbolKind {
     NegateMatchAction,
     Action,
     Term,
+    // A symbol that has been consumed by the compiler
+    Empty,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -671,13 +672,30 @@ impl SymbolTable {
             .ok_or_else(|| format!("Symbol '{}' not found", name).into())
     }
 
+    // Retrieve the symbol from the `variables` table of a module the entry
+    // Used in the compile stage to build the command stack.
+
+    // panics if the symbol is not found.
+    pub(crate) fn get_variable_by_token(&mut self, token: Token) -> &Symbol {
+        match token {
+            Token::Variable(_token_int) => self
+                .variables
+                .values()
+                .find(|s| s.token == Some(token.clone()))
+                .unwrap_or_else(|| {
+                    panic!("Fatal: Created Token does not exist.")
+                }),
+            _ => panic!("Fatal: Created Token does represent a variable."),
+        }
+    }
+
     pub(crate) fn get_argument(
         &self,
         name: &ShortString,
     ) -> Result<&Symbol, Box<dyn std::error::Error>> {
-        self.arguments
-            .get(name)
-            .ok_or_else(|| format!("Symbol of type Argument '{}' not found", name).into())
+        self.arguments.get(name).ok_or_else(|| {
+            format!("Symbol of type Argument '{}' not found", name).into()
+        })
     }
 
     pub(crate) fn get_term(
@@ -720,25 +738,33 @@ impl SymbolTable {
         })?
     }
 
-    // retrieve all the arguments, variables and data-sources that are 
+    // retrieve all the unique arguments, variables and data-sources that are
     // referenced in the terms field of a symbol table (i.e. the terms
     // sections in a module)
-    pub(crate) fn get_term_deps(&self) -> (Vec<Token>, Vec<Token>) {
+    pub(crate) fn get_term_deps(
+        &self,
+    ) -> (Vec<Token>, Vec<Token>, Vec<Token>) {
         let mut deps_vec: Vec<Token> = vec![];
         for s in self.terms.values() {
-            deps_vec.extend(s.get_leaf_nodes()
-            .into_iter()
-            .map(|s| s.get_token().unwrap()));
-
+            deps_vec.extend(
+                s.get_leaf_nodes()
+                    .into_iter()
+                    .map(|s| s.get_token().unwrap()),
+            );
         }
 
-        deps_vec.retain(|t| t.is_variable() || t.is_argument());
+        deps_vec.retain(|t| {
+            t.is_variable() || t.is_argument() || t.is_data_source()
+        });
         deps_vec.sort();
         deps_vec.dedup();
 
-        let deps_vec: (Vec<Token>, Vec<Token>) =
+        let (args_vec, vars_srcs_vec): (Vec<Token>, Vec<Token>) =
             deps_vec.into_iter().partition(|t| t.is_argument());
 
-        deps_vec
+        let vars_vec =
+            vars_srcs_vec.into_iter().partition(|t| t.is_variable());
+
+        (args_vec, vars_vec.0, vars_vec.1)
     }
 }
