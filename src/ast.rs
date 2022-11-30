@@ -239,7 +239,7 @@ impl Define {
 //------------ DefineBody ---------------------------------------------------
 
 // DefineBody ::=
-//     (( 'use' Identifier ';' )? ( Identifier '=' CallExpr ';' )+ )+
+//     (( 'use' Identifier ';' )? ( Identifier '=' ComputeExpr ';' )+ )+
 
 #[derive(Clone, Debug)]
 pub struct DefineBody {

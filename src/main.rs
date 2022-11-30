@@ -16,7 +16,7 @@ fn test_data(name: &str, data: &str, expect_success: bool) {
 }
 
 fn main() {
-    let cm = CallExpr::parse(
+    let cm = ComputeExpr::parse(
         r###"source_asns.contains("asn", route.as_path.origin)"###,
     );
 
