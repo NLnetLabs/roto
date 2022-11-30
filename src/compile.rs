@@ -2,8 +2,10 @@ use std::sync::Arc;
 
 use crate::{
     ast::{AcceptReject, ShortString},
-    symbols::{SymbolTable, GlobalSymbolTable},
-    types::typevalue::TypeValue, vm::Command,
+    symbols::{GlobalSymbolTable, Scope, SymbolTable},
+    traits::Token,
+    types::typevalue::TypeValue,
+    vm::{Arg, Command, OpCode},
 };
 
 struct VecPayload(Vec<(ShortString, TypeValue)>);
@@ -53,27 +55,131 @@ struct VecPayload(Vec<(ShortString, TypeValue)>);
 //                - Constant -> has value -> load the constant
 //                - Variable -> load the variable from the symbol table
 //            - evaluate the right side
+
+#[derive(Debug)]
 pub struct Mir {
-    command_stack: Vec<Command>
+    command_stack: Vec<Command>,
 }
 
-pub fn compile(symbols: GlobalSymbolTable) -> Result<(), Box<dyn std::error::Error>> {
+impl Mir {
+    pub fn new() -> Self {
+        Mir {
+            command_stack: Vec::new(),
+        }
+    }
+
+    pub fn push_command(&mut self, command: Command) {
+        self.command_stack.push(command);
+    }
+
+    pub fn compile(&mut self, ast: &AcceptReject) {
+        todo!()
+    }
+}
+
+pub fn compile(
+    symbols: GlobalSymbolTable,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("Start compiling...");
-    let _global = symbols.borrow();
-    let modules = _global.keys().collect::<Vec<_>>();
+
+    // get all symbols that are used in the filter terms.
+    let mut _global = symbols.borrow_mut();
+    let (_global_mod, modules) = Some::<(Vec<Scope>, Vec<Scope>)>(
+        _global.keys().cloned().partition(|m| *m == Scope::Global),
+    )
+    .unwrap();
+
+    drop(_global);
+    let mut _global = symbols.borrow_mut();
+
+    println!("Found modules: {:?}", modules);
+    let mut args;
+    let mut vars;
+    let mut data_sources;
+
+    // initialize the command stack
+    let mut mir: Vec<Mir> = vec![];
+
     for module in modules {
-        let _module = _global.get(module).unwrap();
-        let (args, vars) = _module.get_term_deps();
+        let _module = _global.get_mut(&module).unwrap();
+        (args, vars, data_sources) = _module.get_term_deps();
 
         println!("args: {:?}", args);
         println!("vars: {:?}", vars);
+        println!("data_sources: {:?}", data_sources);
+
+
+
+        // compile the used vars
+        for var in vars {
+            // a new block
+            let mut mir_block = Mir {
+                command_stack: Vec::new(),
+            };
+
+            let s = _module.get_variable_by_token(var);
+            print!("\nvar: {:?}  ", s.get_name());
+
+            let leaves = s.get_leaf_nodes();
+
+            for arg in leaves {
+                print!("a");
+                match arg.get_token().unwrap() {
+                    Token::Constant => {
+                        let val = arg.get_value().unwrap();
+                        mir_block.push_command(Command::new(
+                            OpCode::LoadConstant,
+                            vec![Arg::Constant(val.as_builtin_type()?)],
+                        ));
+                    }
+                    Token::Variable(var) => {
+                        mir_block.push_command(Command::new(
+                            OpCode::StoreVar,
+                            vec![Arg::Register(var as usize)],
+                        ));
+                    },
+                    Token::Method(method) => {
+                        mir_block.push_command(Command::new(
+                            OpCode::ExecuteMethod,
+                            vec![Arg::Register(method as usize)],
+                        ))
+                    },
+                    Token::Argument(arg) => {
+                        mir_block.push_command(Command::new(
+                            OpCode::LoadArgument,
+                            vec![Arg::Register(arg as usize)],
+                        ));
+                    },
+                    Token::DataSource(ds) => {
+                        mir_block.push_command(Command::new(
+                            OpCode::DataSourceCommand,
+                            vec![Arg::Register(ds as usize)],
+                        ));
+                    },
+                    Token::FieldAccess(fa) => {
+                        mir_block.push_command(Command::new(
+                            OpCode::LoadField,
+                            fa.iter().map(|t| Arg::Register(*t as usize)).collect(),
+                        ));
+                    },
+                    Token::Term(_) => todo!(),
+                    Token::Action(_) => todo!(),
+                    Token::MatchAction(_) => todo!(),
+                    Token::BuiltinType(_) => todo!(),
+                }
+            }
+            mir.push(mir_block);
+        }
+
+        for m in &mir {
+            println!("\nMIR_block: {:?}", m);
+        }
     }
 
     Ok(())
 }
 
 //========================== Virtual Machine =================================
-
 
 pub trait Payload {
     fn set(&mut self, field: ShortString, value: TypeValue);
@@ -114,4 +220,3 @@ pub fn compile_filter<'a, I: Payload, O: Payload>(
         Ok(AcceptReject::Accept)
     }
 }
-
