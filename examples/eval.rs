@@ -77,7 +77,7 @@ fn main() {
                     my_route_path = route.as-path; // 9
                     
                     // prefix_len triggers a type conversion from IntegerLiteral to PrefixLength
-                    fixed_len_prefix = Prefix.from(route.prefix.address(), prefix_len);
+                    fixed_len_prefix = Prefix.from(route.prefix.address(), prefix_len); // 10
 
                     // try to mess it up
                     // my_recursor = my_recursor_trasher;
@@ -90,6 +90,7 @@ fn main() {
             
                 term rov-valid for route: Route {
                     match {
+                        fixed_len_prefix == prefix_len;
                         route.origin == found_prefix.as-path.origin();
                         found_prefix.as-path.origin() == my_route_path.origin();
                         (found_prefix.prefix.exists() && found_prefix.prefix.exists()) || route_in_table;

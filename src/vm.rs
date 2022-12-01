@@ -1,4 +1,6 @@
-use crate::types::typevalue::TypeValue;
+use std::fmt::{Formatter, Display};
+
+use crate::types::{typevalue::TypeValue, typedef::TypeDef};
 
 pub struct VirtualMachine {
     registers: Vec<TypeValue>,
@@ -17,20 +19,33 @@ impl Command {
     }
 }
 
+impl Display for Command {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?} {:?}", self.op, self.args)
+    }
+}
+
 #[derive(Debug)]
 pub enum Arg {
-    Register(usize),
     Constant(TypeValue),
+    Variable(usize),
+    Argument(usize),
+    Method(usize),
+    DataSource(usize),
+    FieldAccess(usize),
+    BuiltinMethod(usize),
+    DataStore(usize),
+    MemPos(u32),
+    Type(TypeDef)
 }
 
 #[derive(Debug)]
 pub enum OpCode {
     Cmp,
-    LoadConstant,
-    DataSourceCommand,
-    LoadArgument,
-    ExecuteMethod,
-    LoadField,
-    LoadVar,
-    StoreVar
+    ExecuteTypeMethod,
+    ExecuteDataStoreMethod,
+    PopStack,
+    PushStack,
+    MemPosOffset,
+    MemPosRef
 }

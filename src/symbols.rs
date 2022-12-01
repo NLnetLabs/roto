@@ -675,7 +675,7 @@ impl SymbolTable {
     // Used in the compile stage to build the command stack.
 
     // panics if the symbol is not found.
-    pub(crate) fn get_variable_by_token(&mut self, token: Token) -> &Symbol {
+    pub(crate) fn get_variable_by_token(&mut self, token: &Token) -> &Symbol {
         match token {
             Token::Variable(_token_int) => self
                 .variables
@@ -684,6 +684,20 @@ impl SymbolTable {
                 .unwrap_or_else(|| {
                     panic!("Fatal: Created Token does not exist.")
                 }),
+            _ => panic!("Fatal: Created Token does represent a variable."),
+        }
+    }
+
+    pub(crate) fn get_variable_name_by_token(&mut self, token: &Token) -> ShortString {
+        match token {
+            Token::Variable(_token_int) => self
+                .variables
+                .iter()
+                .find(|s| s.1.token == Some(token.clone()))
+                .unwrap_or_else(|| {
+                    panic!("Fatal: Created Token does not exist.")
+                })
+                .0.clone(),
             _ => panic!("Fatal: Created Token does represent a variable."),
         }
     }
