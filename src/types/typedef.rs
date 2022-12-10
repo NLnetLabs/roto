@@ -14,7 +14,7 @@ use super::{
     builtin::BuiltinTypeValue, collections::List, typevalue::TypeValue,
 };
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub enum TypeDef {
     // Data Sources
     Rib(Box<TypeDef>),
@@ -39,6 +39,7 @@ pub enum TypeDef {
     HexLiteral,
     IntegerLiteral,
     AcceptReject(AcceptReject), // used in the apply section
+    #[default]
     None,
 }
 
