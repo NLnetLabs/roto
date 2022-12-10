@@ -1,10 +1,26 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use roto::compile::compile;
 use roto::symbols::GlobalSymbolTable;
 
 use nom::error::convert_error;
 use roto::ast::*;
+use roto::compile::RotoPack;
+use roto::types::builtin::{
+    AsPath, Asn, BuiltinTypeValue, Community, CommunityType, U32,
+};
+use roto::types::collections::{ElementTypeValue, List, Record};
+use roto::types::typedef::TypeDef;
+use roto::types::typevalue::TypeValue;
+use roto::vm::ArgumentsMap;
+use roto::vm::{self, Payload};
 
-fn test_data(name: &str, data: &'static str, expect_success: bool) -> Result<(), Box<dyn std::error::Error>> {
+fn test_data(
+    name: &str,
+    data: &'static str,
+    expect_success: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("eval test {}", name);
     let parsed_data = Root::parse_str(data);
     // println!("{} {:#?}", name, parsed_data);
@@ -19,19 +35,126 @@ fn test_data(name: &str, data: &'static str, expect_success: bool) -> Result<(),
 
     // let _symbols = HashMap::<Scope, SymbolTable>::new();
     let eval = parsed_data?;
-    
+
     // let symbols = RefCell::new(symbols);
     let symbols = GlobalSymbolTable::new();
     let ev2 = eval.1.eval(symbols.clone());
 
     println!("{:#?}", symbols);
 
+    let roto_pack = compile(symbols)?;
+    let arguments = ArgumentsMap::new();
+    // let data_sources = vec![];
 
-    compile(symbols)?;
+    // let vm = vm::VirtualMachine::new( arguments, data_sources);
 
-    // println!("{:?} {:#?}", name, eval);
-   
+    let count =
+        BuiltinTypeValue::create_instance(TypeDef::U32, 1_u32).unwrap();
+
+    let count2 = BuiltinTypeValue::create_instance(
+        TypeDef::Prefix,
+        routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)
+            .unwrap(),
+    )
+    .unwrap();
+
+    let ip_address = BuiltinTypeValue::create_instance(
+        TypeDef::IpAddress,
+        std::net::IpAddr::V4(std::net::Ipv4Addr::new(193, 0, 0, 23)),
+    )
+    .unwrap();
+
+    let as_path = BuiltinTypeValue::create_instance(
+        TypeDef::AsPath,
+        BuiltinTypeValue::AsPath(
+            AsPath::new(vec![routecore::asn::Asn::from_u32(1)]).unwrap(),
+        ),
+    )
+    .unwrap();
+
+    let asn = BuiltinTypeValue::create_instance(
+        TypeDef::Asn,
+        Asn::from_u32(211321),
+    )
+    .unwrap();
+    println!("{:?}", asn);
+
+    let comms =
+        TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
+            BuiltinTypeValue::Community(Community::new(
+                CommunityType::Standard,
+            )),
+        )]));
+
+    let my_comms_type =
+        TypeDef::List(Box::new(TypeDef::List(Box::new(TypeDef::Community))));
+
+    let my_nested_rec_type =
+        TypeDef::new_record_type(vec![("counter", Box::new(TypeDef::U32))])
+            .unwrap();
+
+    let my_nested_rec_instance = Record::create_instance(
+        &my_nested_rec_type,
+        vec![(
+            "counter",
+            TypeValue::Builtin(BuiltinTypeValue::U32(U32::new(1))),
+        )],
+    )
+    .unwrap();
+
+    let my_rec_type = TypeDef::new_record_type(vec![
+        ("count", Box::new(TypeDef::U32)),
+        ("count2", Box::new(TypeDef::Prefix)),
+        ("ip_address", Box::new(TypeDef::IpAddress)),
+        ("asn", Box::new(TypeDef::Asn)),
+        ("as_path", Box::new(TypeDef::AsPath)),
+        ("communities", Box::new(my_comms_type)),
+        ("record", Box::new(my_nested_rec_type)),
+    ])
+    .unwrap();
+
+    let mut my_payload = Record::create_instance(
+        &my_rec_type,
+        vec![
+            ("count", count),
+            ("count2", count2),
+            ("ip_address", ip_address),
+            ("asn", asn),
+            ("as_path", as_path),
+            ("communities", comms),
+            ("record", TypeValue::Record(my_nested_rec_instance)),
+        ],
+    )
+    .unwrap();
+
+    let mem = vm::LinearMemory::new();
+    // let mem = Rc::new(mem);
+    let vars = vm::VariablesMap::new();
+    let vars = RefCell::new(vars);
+    // let mem_mem = RefCell::new(vm::LinearMemory::new());
+    // let bm = mem_mem.borrow_mut();
+
+    println!("Arguments");
+    println!("{:#?}", &roto_pack.arguments);
+    println!("Data Sources");
+    println!("{:#?}", &roto_pack.data_sources);
+
+    let mut arguments = ArgumentsMap::new();
+
+    arguments.insert(
+        2,
+        TypeValue::Builtin(BuiltinTypeValue::Asn(Asn::new(65534.into()))),
+    );
+
+    let mut vm = vm::VmBuilder::new()
+        // .with_arguments(arguments)
+        .build(&vars);
+
+    vm.exec(my_payload, None::<Record>, Rc::new(arguments), RefCell::new(mem), roto_pack.mir)
+        .unwrap();
+
     ev2
+
     // Ok(())
 }
 
