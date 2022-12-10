@@ -368,7 +368,14 @@ impl RotoFilter<U32Token> for U32 {
             }
         }
     }
-}
+
+    fn get_field_by_index(
+            self,
+            field_index: usize,
+        ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+            Err(format!("Cannot get field by index for type U32").into())
+        }
+    }
 
 pub enum U32Token {
     Set,
@@ -476,6 +483,13 @@ impl RotoFilter<U8Token> for U8 {
             }
         }
     }
+
+    fn get_field_by_index(
+            self,
+            field_index: usize,
+        ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+            Err(format!("Cannot get field by index for type U8").into())
+        }
 }
 
 pub enum U8Token {
@@ -543,6 +557,13 @@ impl RotoFilter<BooleanToken> for Boolean {
             .into()),
         }
     }
+
+    fn get_field_by_index(
+            self,
+            field_index: usize,
+        ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+            Err(format!("Cannot get field by index for type Boolean").into())
+        }
 }
 
 pub enum BooleanToken {
@@ -624,6 +645,13 @@ impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
     > {
         todo!()
     }
+
+    fn get_field_by_index(
+            self,
+            field_index: usize,
+        ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+            Err(format!("Cannot get field by index for type IntegerLiteral").into())
+        }
 }
 
 pub(crate) enum IntegerLiteralToken {
@@ -693,6 +721,13 @@ impl RotoFilter<HexLiteralToken> for HexLiteral {
     > {
         todo!()
     }
+
+    fn get_field_by_index(
+            self,
+            field_index: usize,
+        ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+            Err(format!("Cannot get field by index for type HexLiteral").into())
+        }
 }
 
 pub(crate) enum HexLiteralToken {
@@ -785,6 +820,13 @@ impl RotoFilter<PrefixToken> for Prefix {
     > {
         todo!()
     }
+
+    fn get_field_by_index(
+            self,
+            field_index: usize,
+        ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+            Err(format!("Cannot get field by index for type Prefix").into())
+        }
 }
 
 pub(crate) enum PrefixToken {
@@ -857,6 +899,13 @@ impl RotoFilter<PrefixLengthToken> for PrefixLength {
     > {
         todo!()
     }
+
+    fn get_field_by_index(
+            self,
+            field_index: usize,
+        ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+            Err(format!("Cannot get field by index for type PrefixLength").into())
+        }
 }
 
 pub(crate) enum PrefixLengthToken {
@@ -962,6 +1011,13 @@ impl RotoFilter<CommunityToken> for Community {
     > {
         todo!()
     }
+
+    fn get_field_by_index(
+            self,
+            field_index: usize,
+        ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+            Err(format!("Cannot get field by index for type Community").into())
+        }
 }
 
 pub enum CommunityToken {
@@ -1060,6 +1116,13 @@ impl RotoFilter<IpAddressToken> for IpAddress {
     > {
         todo!()
     }
+
+    fn get_field_by_index(
+            self,
+            field_index: usize,
+        ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+            Err(format!("Cannot get field by index for type IpAddress").into())
+        }
 }
 
 pub(crate) enum IpAddressToken {
@@ -1136,6 +1199,13 @@ impl RotoFilter<AsnToken> for Asn {
     > {
         todo!()
     }
+
+    fn get_field_by_index(
+            self,
+            field_index: usize,
+        ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+            Err(format!("Cannot get field by index for type Asn").into())
+        }
 }
 
 pub enum AsnToken {
@@ -1198,7 +1268,7 @@ impl AsPath {
             }
             _ => Err("Not an AsPath type".into()),
         }
-    }
+    } 
 }
 
 impl RotoFilter<AsPathToken> for AsPath {
@@ -1331,7 +1401,14 @@ impl RotoFilter<AsPathToken> for AsPath {
             }
         }
     }
-}
+
+    fn get_field_by_index(
+            self,
+            field_index: usize,
+        ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+            Err("Cannot get field by index for AsPath".into())
+        }
+    }
 
 #[repr(u8)]
 pub(crate) enum AsPathToken {
@@ -1421,6 +1498,14 @@ impl RotoFilter<RouteToken> for Route {
     > {
         todo!()
     }
+
+    fn get_field_by_index(
+            self,
+            field_index: usize,
+        ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+            Err("Cannot get field by index for Route".into())
+        }
+    
 }
 
 pub enum RouteToken {
@@ -1516,6 +1601,13 @@ impl RotoFilter<RouteStatusToken> for RouteStatus {
     > {
         todo!()
     }
+
+    fn get_field_by_index(
+            self,
+            field_index: usize,
+        ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+            Err("Cannot get field by index for RouteStatus".into())
+        }
 }
 
 pub enum RouteStatusToken {

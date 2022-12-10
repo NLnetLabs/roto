@@ -1,10 +1,11 @@
 use crate::ast::ShortString;
 use crate::symbols::{self, Symbol};
 use crate::traits::{MethodProps, RotoFilter, TokenConvert};
+use crate::vm::Payload;
 
 use super::builtin::{
-    AsPath, Asn, Boolean, BuiltinTypeValue, Community, IpAddress, Prefix,
-    PrefixLength, U32, U8,
+    self, AsPath, Asn, Boolean, BuiltinTypeValue, Community, IpAddress,
+    Prefix, PrefixLength, U32, U8,
 };
 use super::typedef::TypeDef;
 use super::typevalue::TypeValue;
@@ -17,7 +18,7 @@ use super::typevalue::TypeValue;
 // collections (that only contain primitive types). The latter do not need to
 // be boxed, while the former do.
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ElementTypeValue {
     Primitive(BuiltinTypeValue),
     Nested(Box<TypeValue>),
@@ -97,7 +98,7 @@ impl From<ElementTypeValue> for TypeValue {
 
 //------------ List type ----------------------------------------------------
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct List(pub(crate) Vec<ElementTypeValue>);
 
 impl List {
@@ -202,6 +203,13 @@ impl RotoFilter<ListToken> for List {
     > {
         todo!()
     }
+
+    fn get_field_by_index(
+        self,
+        field_index: usize,
+    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+        todo!()
+    }
 }
 
 #[repr(u8)]
@@ -220,7 +228,7 @@ impl TokenConvert for ListToken {}
 
 //---------------- Record type ----------------------------------------------
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Default)]
 pub struct Record(pub(crate) Vec<(ShortString, ElementTypeValue)>);
 
 impl<'a> Record {
@@ -341,6 +349,25 @@ impl RotoFilter<RecordToken> for Record {
     > {
         todo!()
     }
+
+    fn get_field_by_index<'a>(
+        mut self,
+        index: usize,
+    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+        let e_v = std::mem::replace(
+            self.0.get_mut(index).unwrap(),
+            (
+                ShortString::from(""),
+                ElementTypeValue::Primitive(BuiltinTypeValue::U32(
+                    builtin::U32(Some(0)),
+                )),
+            ),
+        );
+        match e_v {
+            (_, ElementTypeValue::Primitive(v)) => Ok(TypeValue::Builtin(v)),
+            (_, ElementTypeValue::Nested(v)) => Ok(*v),
+        }
+    }
 }
 
 #[repr(u8)]
@@ -353,3 +380,18 @@ pub enum RecordToken {
 }
 
 impl TokenConvert for RecordToken {}
+
+impl Payload for Record {
+    fn set(&mut self, field: ShortString, value: TypeValue) {
+        todo!()
+    }
+
+    fn get(&self, field: ShortString) -> Option<&TypeValue> {
+        todo!()
+    }
+
+    fn take_value(self) -> TypeValue {
+        // let v = std::mem::take(self);
+        TypeValue::Record(self)
+    }
+}

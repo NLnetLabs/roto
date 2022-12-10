@@ -1,5 +1,7 @@
+use std::sync::Arc;
+
 //============ TypeValue ====================================================
-use crate::{ast::ShortString, traits::RotoFilter};
+use crate::{ast::ShortString, vm::Arg, traits::RotoFilter};
 
 use super::{
     builtin::{
@@ -15,7 +17,7 @@ use super::{
 /// holds both the type-level information and the value. The collection
 /// variants can hold multiple values recursively, e.g. a List of Records.
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Default)]
 pub enum TypeValue {
     // All the built-in scalars
     Builtin(BuiltinTypeValue),
@@ -30,6 +32,7 @@ pub enum TypeValue {
     // Another collections of Records, but in a tabular format without any
     // key, e.g. parsed csv files.
     Table(Table),
+    #[default]
     None,
 }
 
@@ -61,6 +64,20 @@ impl TypeValue {
                 Err(format!("Type '{:?}' is not a builtin type.", self)
                     .into())
             }
+        }
+    }
+
+    pub fn get_field_by_index(self, index: usize) -> Result<TypeValue, Box<dyn std::error::Error>> {
+        match self {
+            TypeValue::Record(r) => {
+                let field = r.get_field_by_index(index)?;
+                Ok(field)
+            }
+            TypeValue::List(l) => {
+                let field = l.get_field_by_index(index)?;
+                Ok(field)
+            }
+            _ => Err(format!("Type '{:?}' is not a record.", self).into()),
         }
     }
 }

@@ -11,7 +11,7 @@ use super::{
     typevalue::TypeValue,
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Rib {
     pub(crate) record: Record,
 }
@@ -80,6 +80,13 @@ impl RotoFilter<RibToken> for Rib {
     > {
         todo!()
     }
+
+    fn get_field_by_index(
+        self,
+        _field_index: usize,
+    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+        todo!()
+    }
 }
 
 pub enum RibToken {
@@ -99,7 +106,7 @@ impl std::fmt::Display for Rib {
 
 // ----------- Table Type --------------------------------------------------
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Table {
     pub(crate) record: Record,
 }
@@ -171,6 +178,14 @@ impl RotoFilter<TableToken> for Table {
     > {
         todo!()
     }
+
+    fn get_field_by_index(
+            self,
+            field_index: usize,
+        ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+            todo!()
+        }
+    
 }
 
 pub enum TableToken {
