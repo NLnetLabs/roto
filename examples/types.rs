@@ -1,6 +1,8 @@
+use roto::types::builtin::{
+    AsPath, Asn, BuiltinTypeValue, Community, CommunityType, U32,
+};
+use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
-use roto::types::collections::{List, Record, ElementTypeValue};
-use roto::types::builtin::{BuiltinTypeValue, U32, AsPath, Asn, Community, CommunityType};
 use roto::types::typevalue::TypeValue;
 
 fn main() {
@@ -17,7 +19,8 @@ fn main() {
         TypeDef::Prefix,
         routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)
             .unwrap(),
-    ).unwrap();
+    )
+    .unwrap();
 
     let ip_address = BuiltinTypeValue::create_instance(
         TypeDef::IpAddress,
@@ -27,7 +30,9 @@ fn main() {
 
     let as_path = BuiltinTypeValue::create_instance(
         TypeDef::AsPath,
-        BuiltinTypeValue::AsPath(AsPath::new(vec![routecore::asn::Asn::from_u32(1)]).unwrap()),
+        BuiltinTypeValue::AsPath(
+            AsPath::new(vec![routecore::asn::Asn::from_u32(1)]).unwrap(),
+        ),
     )
     .unwrap();
 
@@ -49,7 +54,8 @@ fn main() {
         TypeDef::List(Box::new(TypeDef::List(Box::new(TypeDef::Community))));
 
     let my_nested_rec_type =
-        TypeDef::new_record_type(vec![("counter", Box::new(TypeDef::U32))]).unwrap();
+        TypeDef::new_record_type(vec![("counter", Box::new(TypeDef::U32))])
+            .unwrap();
 
     let my_nested_rec_instance = Record::create_instance(
         &my_nested_rec_type,
