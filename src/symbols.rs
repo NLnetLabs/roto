@@ -24,7 +24,7 @@ pub(crate) struct Symbol {
     kind: SymbolKind,
     ty: TypeDef,
     args: Vec<Symbol>,
-    value: Option<TypeValue>,
+    value: TypeValue,
     token: Option<Token>, // location: Location,
 }
 
@@ -49,7 +49,7 @@ impl Symbol {
                 | TypeDef::None
         ) {
             (&self.ty).try_into().map(|tv: BuiltinTypeValue| tv.into())
-        } else if let Some(TypeValue::Builtin(ty)) = &self.value {
+        } else if let TypeValue::Builtin(ty) = &self.value {
             Ok(ty.into())
         } else {
             println!("get_builtin_type: {:#?}", self);
@@ -131,7 +131,7 @@ impl Symbol {
             kind,
             ty,
             args,
-            value: None,
+            value: TypeValue::None,
             token,
         }
     }
@@ -148,7 +148,7 @@ impl Symbol {
             kind,
             ty: (&value).into(),
             args,
-            value: Some(value),
+            value,
             token: Some(token),
         }
     }
@@ -177,66 +177,59 @@ impl Symbol {
         type_def: &TypeDef,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         match self.value {
-            Some(TypeValue::Builtin(BuiltinTypeValue::U32(int))) => {
-                self.value = Some(int.into_type(type_def)?);
+            TypeValue::Builtin(BuiltinTypeValue::U32(int)) => {
+                self.value = int.into_type(type_def)?;
             }
-            Some(TypeValue::Builtin(BuiltinTypeValue::U8(int))) => {
-                self.value = Some(int.into_type(type_def)?);
+            TypeValue::Builtin(BuiltinTypeValue::U8(int)) => {
+                self.value = int.into_type(type_def)?;
             }
-            Some(TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
-                int,
-            ))) => {
-                self.value = Some(int.into_type(type_def)?);
+            TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(int)) => {
+                self.value = int.into_type(type_def)?;
             }
-            Some(TypeValue::Builtin(BuiltinTypeValue::HexLiteral(hex))) => {
-                self.value = Some(hex.into_type(type_def)?);
+            TypeValue::Builtin(BuiltinTypeValue::HexLiteral(hex)) => {
+                self.value = hex.into_type(type_def)?;
             }
-            Some(TypeValue::Builtin(BuiltinTypeValue::PrefixLength(pl))) => {
-                self.value = Some(pl.into_type(type_def)?);
+            TypeValue::Builtin(BuiltinTypeValue::PrefixLength(pl)) => {
+                self.value = pl.into_type(type_def)?;
             }
-            Some(TypeValue::Builtin(BuiltinTypeValue::Asn(asn))) => {
-                self.value = Some(asn.into_type(type_def)?);
+            TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) => {
+                self.value = asn.into_type(type_def)?;
             }
-            Some(TypeValue::Builtin(BuiltinTypeValue::Prefix(prefix))) => {
-                self.value = Some(prefix.into_type(type_def)?);
+            TypeValue::Builtin(BuiltinTypeValue::Prefix(prefix)) => {
+                self.value = prefix.into_type(type_def)?;
             }
-            Some(TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip))) => {
-                self.value = Some(ip.into_type(type_def)?);
+            TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) => {
+                self.value = ip.into_type(type_def)?;
             }
-            Some(TypeValue::Builtin(BuiltinTypeValue::Community(com))) => {
-                self.value = Some(com.into_type(type_def)?);
+            TypeValue::Builtin(BuiltinTypeValue::Community(com)) => {
+                self.value = com.into_type(type_def)?;
             }
-            Some(TypeValue::Builtin(BuiltinTypeValue::Boolean(bool))) => {
-                self.value = Some(bool.into_type(type_def)?);
+            TypeValue::Builtin(BuiltinTypeValue::Boolean(bool)) => {
+                self.value = bool.into_type(type_def)?;
             }
-            Some(TypeValue::Builtin(BuiltinTypeValue::Route(route))) => {
-                self.value = Some(route.into_type(type_def)?);
+            TypeValue::Builtin(BuiltinTypeValue::Route(route)) => {
+                self.value = route.into_type(type_def)?;
             }
-            Some(TypeValue::Builtin(BuiltinTypeValue::RouteStatus(
-                status,
-            ))) => {
-                self.value = Some(status.into_type(type_def)?);
+            TypeValue::Builtin(BuiltinTypeValue::RouteStatus(status)) => {
+                self.value = status.into_type(type_def)?;
             }
-            Some(TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path))) => {
-                self.value = Some(as_path.into_type(type_def)?);
+            TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {
+                self.value = as_path.into_type(type_def)?;
             }
-            Some(TypeValue::List(list)) => {
-                self.value = Some(list.into_type(type_def)?);
+            TypeValue::List(list) => {
+                self.value = list.into_type(type_def)?;
             }
-            Some(TypeValue::Record(rec)) => {
-                self.value = Some(rec.into_type(type_def)?);
+            TypeValue::Record(rec) => {
+                self.value = rec.into_type(type_def)?;
             }
-            Some(TypeValue::Rib(rib)) => {
-                self.value = Some(rib.into_type(type_def)?);
+            TypeValue::Rib(rib) => {
+                self.value = rib.into_type(type_def)?;
             }
-            Some(TypeValue::Table(table)) => {
-                self.value = Some(table.into_type(type_def)?);
+            TypeValue::Table(table) => {
+                self.value = table.into_type(type_def)?;
             }
-            Some(TypeValue::None) => {
-                return Err("Cannot convert None into a type".into())
-            }
-            None => {
-                self.value = Some(type_def.into());
+            TypeValue::None => {
+                self.value = type_def.into();
             }
         };
         Ok(self)
@@ -425,7 +418,7 @@ impl SymbolTable {
         kind: SymbolKind,
         ty: TypeDef,
         args: Vec<Symbol>,
-        value: Option<TypeValue>,
+        value: TypeValue,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let name = if let Some(name) = name {
             name
@@ -471,7 +464,7 @@ impl SymbolTable {
         kind: SymbolKind,
         ty: TypeDef,
         args: Vec<Symbol>,
-        value: Option<TypeValue>,
+        value: TypeValue,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let name = if let Some(name) = name {
             name
@@ -536,7 +529,7 @@ impl SymbolTable {
         kind: SymbolKind,
         ty: TypeDef,
         args: Vec<Symbol>,
-        value: Option<TypeValue>,
+        value: TypeValue,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let name = if let Some(name) = name {
             name
@@ -560,7 +553,7 @@ impl SymbolTable {
             kind,
             ty: ty.clone(),
             args,
-            value: None,
+            value: TypeValue::None,
             token: None,
         };
 
@@ -585,7 +578,7 @@ impl SymbolTable {
         kind: SymbolKind,
         ty: TypeDef,
         args: Vec<Symbol>,
-        value: Option<TypeValue>,
+        value: TypeValue,
         // token is the index of the term that corresponds to the `name`
         // argument. It's a token for a term.
         token: Token,
