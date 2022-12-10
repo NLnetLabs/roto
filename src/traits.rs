@@ -91,6 +91,11 @@ pub(crate) trait RotoFilter<T: TokenConvert> {
         Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
         Box<dyn std::error::Error>,
     >;
+
+    fn get_field_by_index(
+        self,
+        field_index: usize,
+    ) -> Result<TypeValue, Box<dyn std::error::Error>>;
 }
 
 pub(crate) trait TokenConvert {
