@@ -1,18 +1,15 @@
 use std::{
     collections::VecDeque,
     fmt::{Display, Formatter},
-    sync::Arc,
 };
 
 use crate::{
     ast::{AcceptReject, ShortString},
-    symbols::{GlobalSymbolTable, Scope, SymbolTable},
+    symbols::{DepsGraph, GlobalSymbolTable, Scope, Symbol},
     traits::Token,
-    types::typevalue::TypeValue,
+    types::typedef::TypeDef,
     vm::{Arg, Command, OpCode},
 };
-
-struct VecPayload(Vec<(ShortString, TypeValue)>);
 
 //============ The Compiler (Filter creation time) ==========================
 
@@ -61,13 +58,40 @@ struct VecPayload(Vec<(ShortString, TypeValue)>);
 //            - evaluate the right side
 
 #[derive(Debug)]
-pub struct Mir {
-    command_stack: Vec<Command>,
+pub struct RotoPack {
+    pub mir: Vec<MirBlock>,
+    pub rx_type: TypeDef,
+    pub tx_type: Option<TypeDef>,
+    pub arguments: Vec<(usize, TypeDef)>,
+    pub data_sources: Vec<(usize, TypeDef)>,
 }
 
-impl Mir {
+impl RotoPack {
+    fn new(
+        mir: Vec<MirBlock>,
+        rx_type: TypeDef,
+        tx_type: Option<TypeDef>,
+        arguments: Vec<(usize, TypeDef)>,
+        data_sources: Vec<(usize, TypeDef)>,
+    ) -> Self {
+        RotoPack {
+            mir,
+            rx_type,
+            tx_type,
+            arguments,
+            data_sources,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct MirBlock {
+    pub command_stack: Vec<Command>,
+}
+
+impl MirBlock {
     pub fn new() -> Self {
-        Mir {
+        MirBlock {
             command_stack: Vec::new(),
         }
     }
@@ -81,7 +105,7 @@ impl Mir {
     }
 }
 
-impl Display for Mir {
+impl Display for MirBlock {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         for (i, command) in self.command_stack.iter().enumerate() {
             writeln!(f, "{:3}: {}", i, command)?;
@@ -92,7 +116,7 @@ impl Display for Mir {
 
 pub fn compile(
     symbols: GlobalSymbolTable,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<RotoPack, Box<dyn std::error::Error>> {
     fn unwind(
         mut stack: std::collections::VecDeque<Command>,
     ) -> Vec<Command> {
@@ -116,33 +140,55 @@ pub fn compile(
     let mut _global = symbols.borrow_mut();
 
     println!("Found modules: {:?}", modules);
-    let mut args;
-    let mut vars;
-    let mut data_sources;
+    let arguments: Vec<(&ShortString, &Symbol)> = vec![];
+    let variables: Vec<(&ShortString, &Symbol)> = vec![];
+    let data_sources: Vec<(ShortString, &Symbol)> = vec![];
 
     // initialize the command stack
-    let mut mir: Vec<Mir> = vec![];
+    let mut mir: Vec<MirBlock> = vec![];
 
     for module in modules {
-        let _module = _global.get_mut(&module).unwrap();
-        (args, vars, data_sources) = _module.get_term_deps();
+        let _module = _global.get(&module).unwrap();
+        let (
+            rx_type,
+            tx_type,
+            DepsGraph {
+                arguments,
+                variables,
+                data_sources,
+            },
+        ) = _module.create_terms_graph()?;
 
-        println!("args: {:?}", args);
         println!(
-            "vars: \n{:?}",
-            vars.iter().for_each(|t| {
-                println!(
-                    "{:?} {:?}",
-                    t,
-                    _module.get_variable_name_by_token(t)
-                );
-            })
+            "======== dependencies for module: {:?} ===========",
+            module
         );
-        println!("data_sources: {:?}", data_sources);
-        // compile the used vars
-        for (mem_block, var) in (0_u32..).zip(vars.into_iter()) {
+
+        println!("___args");
+        arguments.iter().for_each(|s| {
+            println!("{:?}: {:?}", s.1.get_token().unwrap(), s.0)
+        });
+
+        println!("___vars");
+
+        variables.iter().for_each(|s| {
+            println!("{:?} {:?}", s.1.get_token().unwrap(), s.0);
+        });
+
+        println!("___data_sources");
+
+        data_sources.iter().for_each(|t| {
+            println!("{:?} {:?}", t.1.get_token().unwrap(), t.0);
+        });
+
+        println!("=================================================");
+
+        // compile the used vars,
+        for (mut mem_pos, var) in (2_u32..)
+            .zip(variables.into_iter().map(|s| s.1.get_token().unwrap()))
+        {
             // a new block
-            let mut mir_block = Mir {
+            let mut mir_block = MirBlock {
                 command_stack: Vec::new(),
             };
 
@@ -165,7 +211,7 @@ pub fn compile(
                     )
                 })
             );
-            while let Some(arg) = leaves.next() {
+            while let Some(arg) = &mut leaves.next() {
                 print!("a");
                 match arg.get_token().unwrap() {
                     // assignment
@@ -175,7 +221,7 @@ pub fn compile(
                             OpCode::MemPosRef,
                             vec![
                                 Arg::Variable(var as usize),
-                                Arg::MemPos(mem_block),
+                                Arg::MemPos(mem_pos),
                             ],
                         ));
                         print!(" {:?}", local_stack);
@@ -186,7 +232,7 @@ pub fn compile(
                     }
                     // concrete value already.
                     Token::Constant => {
-                        let val = arg.get_value().unwrap();
+                        let val = arg.get_value();
                         local_stack.push_front(Command::new(
                             OpCode::PushStack,
                             vec![Arg::Constant(val.as_builtin_type()?)],
@@ -217,11 +263,11 @@ pub fn compile(
                                 ],
                             ),
                         };
-                        args.push(Arg::MemPos(mem_block));
+                        args.push(Arg::MemPos(mem_pos));
 
                         local_stack.push_front(Command::new(
                             OpCode::PushStack,
-                            vec![Arg::MemPos(mem_block)],
+                            vec![Arg::MemPos(mem_pos)],
                         ));
                         local_stack.push_front(Command::new(opcode, args))
                     }
@@ -229,9 +275,9 @@ pub fn compile(
                         let mut args = vec![];
                         local_stack.push_front(Command::new(
                             OpCode::PushStack,
-                            vec![Arg::MemPos(mem_block)],
+                            vec![Arg::MemPos(mem_pos)],
                         ));
-                        args.push(Arg::MemPos(mem_block));
+                        args.push(Arg::MemPos(mem_pos));
                         args.extend(
                             fa.iter()
                                 .map(|t| Arg::FieldAccess(*t as usize))
@@ -241,10 +287,10 @@ pub fn compile(
                             OpCode::MemPosOffset,
                             args,
                         ));
-                        local_stack.push_front(Command::new(
-                            OpCode::PopStack,
-                            vec![Arg::MemPos(mem_block)],
-                        ));
+                        // local_stack.push_front(Command::new(
+                        //     OpCode::PopStack,
+                        //     vec![Arg::MemPos(mem_pos)],
+                        // ));
                     }
                     // roots
                     Token::Variable(var) => {
@@ -257,12 +303,30 @@ pub fn compile(
                     }
                     Token::Argument(arg) => {
                         local_stack.push_front(Command::new(
-                            OpCode::PushStack,
-                            vec![Arg::Argument(arg as usize)],
+                            OpCode::ArgToMemPos,
+                            vec![
+                                Arg::Argument(arg as usize),
+                                Arg::MemPos(mem_pos),
+                            ],
                         ));
+                        mem_pos += 1;
                         mir_block.command_stack.extend(unwind(local_stack));
                         local_stack = VecDeque::new();
                     }
+                    Token::RxType => local_stack.push_front(Command::new(
+                        OpCode::MemPosSet,
+                        vec![
+                            Arg::MemPos(0),
+                            Arg::Argument(arg.get_token().unwrap().into()),
+                        ],
+                    )),
+                    Token::TxType => local_stack.push_front(Command::new(
+                        OpCode::MemPosSet,
+                        vec![
+                            Arg::MemPos(1),
+                            Arg::Argument(arg.get_token().unwrap().into()),
+                        ],
+                    )),
                     Token::DataSource(_) => {
                         // No further action for a data-source, it's only
                         // used to call methods on, which should already have
@@ -296,47 +360,35 @@ pub fn compile(
         }
     }
 
-    Ok(())
-}
+    println!("args before packing:  {:?}", arguments);
 
-//========================== Virtual Machine =================================
+    let args = arguments
+        .iter()
+        .map(|a| {
+            (
+                a.1.get_token()
+                    .unwrap_or_else(|_| {
+                        panic!("Fatal: Cannot find Token for Argument.");
+                    })
+                    .into(),
+                a.1.get_type(),
+            )
+        })
+        .collect::<Vec<_>>();
 
-pub trait Payload {
-    fn set(&mut self, field: ShortString, value: TypeValue);
-    fn get(&self, field: ShortString) -> Option<&Vec<u8>>;
-}
+    let data_sources = data_sources
+        .iter()
+        .map(|ds| {
+            (
+                ds.1.get_token()
+                    .unwrap_or_else(|_| {
+                        panic!("Fatal: Cannot find Token for data source.");
+                    })
+                    .into(),
+                ds.1.get_type(),
+            )
+        })
+        .collect::<Vec<_>>();
 
-impl VecPayload {
-    fn set(&mut self, field: ShortString, data: TypeValue) {
-        let field = &mut self.0.iter().find(|k| k.0 == field);
-        let key = field.unwrap().0.clone();
-        let _old = std::mem::replace(field, Some(&(key, data)));
-    }
-
-    fn get(&self, field: ShortString) -> Option<&TypeValue> {
-        self.0.iter().find(|k| k.0 == field).map(|kv| &kv.1)
-    }
-}
-
-trait ExtSource {
-    fn get(&self, key: &str) -> Option<TypeValue>;
-}
-
-#[derive(Clone)]
-pub struct ExtSources(Vec<Arc<dyn ExtSource>>);
-
-pub fn compile_filter<'a, I: Payload, O: Payload>(
-    symbols: &mut SymbolTable,
-    available_sources: ExtSources,
-) -> impl Fn(&mut I, &mut O) -> Result<AcceptReject, Box<dyn std::error::Error>> + 'a
-{
-    let _used_source = available_sources.0[0].clone();
-
-    move |input: &mut I,
-          output: &mut O|
-          -> Result<AcceptReject, Box<dyn std::error::Error>> {
-        input.set("bla".into(), TypeValue::try_from("blub").unwrap());
-        output.set("bla".into(), TypeValue::try_from("blub").unwrap());
-        Ok(AcceptReject::Accept)
-    }
+    Ok(RotoPack::new(mir, TypeDef::None, None, args, data_sources))
 }

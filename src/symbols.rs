@@ -1,5 +1,6 @@
 use std::{
     cell::RefCell,
+    cmp::Ordering,
     collections::{hash_map::Entry, HashMap},
     fmt::{Display, Formatter},
     hash::Hash,
@@ -18,7 +19,7 @@ use crate::{
 
 // The only symbols we really have are variables & (user-defined) types.
 
-#[derive(Debug)]
+#[derive(Debug, Eq)]
 pub(crate) struct Symbol {
     name: ShortString,
     kind: SymbolKind,
@@ -90,6 +91,14 @@ impl Symbol {
         self
     }
 
+    pub fn has_name(&self, name: &str) -> Option<&Self> {
+        if self.name == name {
+            Some(self)
+        } else {
+            None
+        }
+    }
+
     pub fn get_name(&self) -> ShortString {
         self.name.clone()
     }
@@ -99,8 +108,12 @@ impl Symbol {
         self
     }
 
-    pub fn get_value(&self) -> Option<&TypeValue> {
-        self.value.as_ref()
+    pub fn get_value(&self) -> &TypeValue {
+        &self.value
+    }
+
+    pub fn get_value_owned(self) -> TypeValue {
+        self.value
     }
 
     pub fn get_args_owned(self) -> Vec<Symbol> {
@@ -117,6 +130,17 @@ impl Symbol {
 
     pub fn set_args(&mut self, args: Vec<Symbol>) {
         self.args = args;
+    }
+
+    pub fn empty() -> Self {
+        Symbol {
+            name: "".into(),
+            kind: SymbolKind::Empty,
+            ty: TypeDef::None,
+            args: vec![],
+            value: TypeValue::None,
+            token: None,
+        }
     }
 
     pub fn new(
@@ -262,6 +286,32 @@ impl Symbol {
     }
 }
 
+impl std::cmp::PartialOrd for Symbol {
+    fn partial_cmp(&self, other: &Symbol) -> Option<std::cmp::Ordering> {
+        Some(
+            self.token
+                .as_ref()
+                .unwrap()
+                .cmp(other.token.as_ref().unwrap()),
+        )
+    }
+}
+
+impl std::cmp::Ord for Symbol {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.token
+            .as_ref()
+            .unwrap()
+            .cmp(other.token.as_ref().unwrap())
+    }
+}
+
+impl PartialEq for Symbol {
+    fn eq(&self, other: &Symbol) -> bool {
+        self.token.as_ref().unwrap() == other.token.as_ref().unwrap()
+    }
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum SymbolKind {
     Variable, // A variable defined by the user
@@ -315,6 +365,11 @@ impl Display for Scope {
 #[derive(Debug)]
 pub struct SymbolTable {
     scope: Scope,
+    // The input payload type of the module.
+    rx_type: Symbol,
+    // The output payload type of the module. If it's none its identical
+    // to the input payload type.
+    tx_type: Option<Symbol>,
     // The special symbols that will be filled in at runtime, once per filter
     // run.
     arguments: HashMap<ShortString, Symbol>,
@@ -373,6 +428,12 @@ impl Default for GlobalSymbolTable {
     }
 }
 
+pub(crate) struct DepsGraph<'a> {
+    pub(crate) variables: Vec<(ShortString, &'a Symbol)>,
+    pub(crate) arguments: Vec<(ShortString, &'a Symbol)>,
+    pub(crate) data_sources: Vec<(ShortString, &'a Symbol)>,
+}
+
 struct Location {
     name: ShortString,
     module: ShortString,
@@ -383,6 +444,8 @@ impl SymbolTable {
     pub(crate) fn new(module: ShortString) -> Self {
         SymbolTable {
             scope: Scope::Module(module),
+            rx_type: Symbol::empty(),
+            tx_type: None,
             arguments: HashMap::new(),
             variables: HashMap::new(),
             terms: HashMap::new(),
@@ -480,21 +543,35 @@ impl SymbolTable {
             .into());
         }
 
-        let token_int = self.arguments.len() as u8;
+        let token_int = self.arguments.len();
 
-        let token = Some(Token::Argument(token_int));
+        let token = match kind {
+            SymbolKind::RxType => Some(Token::RxType),
+            SymbolKind::TxType => Some(Token::TxType),
+            _ => Some(Token::Argument(token_int)),
+        };
 
-        self.arguments.insert(
-            key,
-            Symbol {
-                name,
-                kind,
-                ty,
-                args,
-                value,
-                token,
-            },
-        );
+        match kind {
+            SymbolKind::RxType => {
+                self.rx_type = Symbol::new(name, kind, ty, args, token);
+            }
+            SymbolKind::TxType => {
+                self.tx_type = Some(Symbol::new(name, kind, ty, args, token));
+            }
+            _ => {
+                self.arguments.insert(
+                    key,
+                    Symbol {
+                        name,
+                        kind,
+                        ty,
+                        args,
+                        value,
+                        token,
+                    },
+                );
+            }
+        };
         Ok(())
     }
 
@@ -511,7 +588,7 @@ impl SymbolTable {
                 kind: SymbolKind::Term,
                 ty: child_symbol.get_type(),
                 args: vec![child_symbol],
-                value: None,
+                value: TypeValue::None,
                 token: term_token,
             });
         } else {
@@ -631,6 +708,14 @@ impl SymbolTable {
     }
 
     pub(crate) fn get_symbol(&self, name: &ShortString) -> Option<&Symbol> {
+        if let Some(symbol) = self.rx_type.has_name(name) {
+            return Some(symbol);
+        }
+        if let Some(tx_type) = self.tx_type.as_ref() {
+            if let Some(symbol) = tx_type.has_name(name) {
+                return Some(symbol);
+            }
+        }
         if let Some(symbol) = self.variables.get(name) {
             return Some(symbol);
         }
@@ -668,7 +753,7 @@ impl SymbolTable {
     // Used in the compile stage to build the command stack.
 
     // panics if the symbol is not found.
-    pub(crate) fn get_variable_by_token(&mut self, token: &Token) -> &Symbol {
+    pub(crate) fn get_variable_by_token(&self, token: &Token) -> &Symbol {
         match token {
             Token::Variable(_token_int) => self
                 .variables
@@ -681,7 +766,10 @@ impl SymbolTable {
         }
     }
 
-    pub(crate) fn get_variable_name_by_token(&mut self, token: &Token) -> ShortString {
+    pub(crate) fn get_variable_name_by_token(
+        &mut self,
+        token: &Token,
+    ) -> ShortString {
         match token {
             Token::Variable(_token_int) => self
                 .variables
@@ -690,7 +778,8 @@ impl SymbolTable {
                 .unwrap_or_else(|| {
                     panic!("Fatal: Created Token does not exist.")
                 })
-                .0.clone(),
+                .0
+                .clone(),
             _ => panic!("Fatal: Created Token does represent a variable."),
         }
     }
@@ -747,30 +836,116 @@ impl SymbolTable {
     // retrieve all the unique arguments, variables and data-sources that are
     // referenced in the terms field of a symbol table (i.e. the terms
     // sections in a module)
-    pub(crate) fn get_term_deps(
+    pub(crate) fn create_terms_graph(
         &self,
-    ) -> (Vec<Token>, Vec<Token>, Vec<Token>) {
-        let mut deps_vec: Vec<Token> = vec![];
+    ) -> Result<
+        (
+            (ShortString, TypeDef),
+            Option<(ShortString, TypeDef)>,
+            DepsGraph,
+        ),
+        Box<dyn std::error::Error>,
+    > {
+        // First, go over all the terms and see which variables, arguments
+        // and data-sources they refer to.
+
+        let mut deps_vec: Vec<&Symbol> = vec![];
         for s in self.terms.values() {
-            deps_vec.extend(
-                s.get_leaf_nodes()
-                    .into_iter()
-                    .map(|s| s.get_token().unwrap()),
-            );
+            deps_vec.extend(s.get_leaf_nodes().into_iter());
         }
 
+        let DepsGraph {
+            mut variables,
+            mut arguments,
+            mut data_sources,
+        } = self._partition_deps_graph(deps_vec)?;
+
+        // Second, go over all the variables that we gathered in the last
+        // step and see which variables, arguments and data-sources they
+        // refer to.
+
+        let mut vars_deps_vec = vec![];
+        for s in variables.iter().map(|s| s.1) {
+            vars_deps_vec.extend(s.get_leaf_nodes().into_iter());
+        }
+
+        let DepsGraph {
+            variables: vars_vars,
+            arguments: vars_args,
+            data_sources: vars_data_sources,
+        } = self._partition_deps_graph(vars_deps_vec)?;
+
+        variables.extend(vars_vars);
+        arguments.extend(vars_args);
+        data_sources.extend(vars_data_sources);
+
+        for col in [&mut variables, &mut arguments, &mut data_sources] {
+            col.sort_by(|a, b| a.1.cmp(b.1));
+            col.dedup_by(|a, b| a.1.eq(b.1));
+        }
+
+        Ok((
+            (self.rx_type.get_name(), self.rx_type.get_type()),
+            self.tx_type.as_ref().map(|s| (s.get_name(), s.get_type())),
+            DepsGraph {
+                variables,
+                arguments,
+                data_sources,
+            },
+        ))
+    }
+
+    fn _partition_deps_graph<'a>(
+        &'a self,
+        mut deps_vec: Vec<&'a Symbol>,
+    ) -> Result<DepsGraph, Box<dyn std::error::Error>> {
         deps_vec.retain(|t| {
-            t.is_variable() || t.is_argument() || t.is_data_source()
+            t.get_token().unwrap().is_variable()
+                || t.get_token().unwrap().is_argument()
+                || t.get_token().unwrap().is_data_source()
         });
-        deps_vec.sort();
-        deps_vec.dedup();
 
-        let (args_vec, vars_srcs_vec): (Vec<Token>, Vec<Token>) =
-            deps_vec.into_iter().partition(|t| t.is_argument());
+        let (args_vec, vars_srcs_vec): (Vec<&Symbol>, Vec<&Symbol>) =
+            deps_vec
+                .into_iter()
+                .partition(|s| s.get_token().unwrap().is_argument());
 
-        let vars_vec =
-            vars_srcs_vec.into_iter().partition(|t| t.is_variable());
+        let args_vec = args_vec
+            .into_iter()
+            .map(|s| {
+                if let Some(s) = self.arguments.get_key_value(&s.get_name()) {
+                    (s.0.clone(), s.1)
+                } else {
+                    (s.get_name(), s)
+                }
+            })
+            .collect::<Vec<(ShortString, &Symbol)>>();
 
-        (args_vec, vars_vec.0, vars_vec.1)
+        let vars_src_vec: (Vec<_>, Vec<_>) = vars_srcs_vec
+            .into_iter()
+            .partition(|s| s.get_token().unwrap().is_variable());
+
+        let (vars_vec, data_sources_vec): (Vec<_>, Vec<_>) = (
+            vars_src_vec
+                .0
+                .into_iter()
+                .map(|s| {
+                    if let Some(s) =
+                        self.variables.get_key_value(&s.get_name())
+                    {
+                        (s.0.clone(), s.1)
+                    } else {
+                        (s.get_name(), s)
+                    }
+                })
+                .collect(),
+            vars_src_vec.1.iter().map(|s| (s.get_name(), *s)).collect(),
+        );
+
+        Ok(DepsGraph {
+            arguments: args_vec,
+            variables: vars_vec,
+            data_sources: data_sources_vec,
+        })
     }
 }

@@ -107,7 +107,7 @@ impl<'a> ast::Rib {
             symbols::SymbolKind::NamedType,
             rec_type.clone(),
             vec![],
-            None,
+            TypeValue::None,
         )?;
 
         // add a symbol for the RIB itself, using the newly created record
@@ -118,7 +118,7 @@ impl<'a> ast::Rib {
             symbols::SymbolKind::Rib,
             rec_type,
             vec![],
-            None,
+            TypeValue::None,
         )?;
 
         Ok(())
@@ -143,7 +143,7 @@ impl<'a> ast::Table {
             symbols::SymbolKind::NamedType,
             rec_type.clone(),
             vec![],
-            None,
+            TypeValue::None,
         )?;
 
         // add a symbol for the RIB itself, using the newly created record
@@ -154,7 +154,7 @@ impl<'a> ast::Table {
             symbols::SymbolKind::Table,
             rec_type,
             vec![],
-            None,
+            TypeValue::None,
         )?;
 
         Ok(())
@@ -261,7 +261,7 @@ impl<'a> ast::RecordTypeIdentifier {
         }
 
         let record = TypeDef::Record(kvs.clone());
-        symbols.add_variable(name, None, kind, record, vec![], None)?;
+        symbols.add_variable(name, None, kind, record, vec![], TypeValue::None)?;
 
         Ok(kvs)
     }
@@ -357,7 +357,7 @@ impl ast::Define {
         // `define` section. This the argument that holds the payload at
         // runtime.
         declare_argument(
-            self.body.rx_type.ty.ident.clone(),
+            self.body.rx_type.field_name.ident.clone(),
             self.body.rx_type.clone(),
             symbols::SymbolKind::RxType,
             symbols.clone(),
@@ -369,7 +369,7 @@ impl ast::Define {
         // this filter-module on each run. We start with an empty record of
         // the specified type.
         declare_argument(
-            self.body.tx_type.ty.ident.clone(),
+            self.body.tx_type.field_name.ident.clone(),
             self.body.tx_type.clone(),
             symbols::SymbolKind::TxType,
             symbols.clone(),
@@ -1389,7 +1389,7 @@ fn declare_variable(
                 kind,
                 ty,
                 vec![],
-                None,
+                TypeValue::None,
             )
         }
         symbols::Scope::Global => {
@@ -1431,7 +1431,7 @@ fn declare_argument(
                 kind,
                 ty,
                 vec![],
-                None,
+                TypeValue::None,
             )
         }
         symbols::Scope::Global => {
@@ -1543,7 +1543,7 @@ fn add_action(
                 action.get_kind(),
                 action.get_type(),
                 action.get_args_owned(),
-                None,
+                TypeValue::None,
             )
         }
         symbols::Scope::Global => Err(format!(
@@ -1575,7 +1575,7 @@ fn add_match_action(
                 match_action.get_kind(),
                 match_action.get_type(),
                 match_action.get_args_owned(),
-                None,
+                TypeValue::None,
                 token
             )
         }
@@ -1629,11 +1629,11 @@ fn is_boolean_function(
 
     let left = (
         left.get_builtin_type()? == TypeDef::Boolean,
-        left.get_args().get(0).and_then(|a| a.get_value()),
+        left.get_args().get(0).and_then(|a| Some(a.get_value())),
     );
     let right = (
         right.get_builtin_type()? == TypeDef::Boolean,
-        right.get_args().get(0).and_then(|a| a.get_value()),
+        right.get_args().get(0).and_then(|a| Some(a.get_value())),
     );
 
     println!("left value: {:?}", left);
@@ -1658,7 +1658,7 @@ fn is_boolean_expression(
         return Ok(());
     };
 
-    if let Some(value) = expr.get_args().get(0).and_then(|a| a.get_value()) {
+    if let Some(value) = expr.get_args().get(0).and_then(|a| Some(a.get_value())) {
         if value.is_boolean_type() {
             return Ok(());
         };
@@ -1697,7 +1697,7 @@ fn declare_variable_from_typedef<'a>(
                 kind,
                 ty,
                 vec![],
-                None,
+                TypeValue::None,
             )
         }
         symbols::Scope::Global => {
