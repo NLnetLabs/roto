@@ -2,11 +2,15 @@
 
 use crate::types::{typedef::TypeDef, typevalue::TypeValue};
 
-#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub(crate) enum Token {
     Variable(u8),
     Method(u8),
-    Argument(u8),
+    Argument(usize),
+    // There can only ever be one RxType
+    RxType,
+    // There can only ever be one TxType too
+    TxType,
     DataSource(u8),
     FieldAccess(Vec<u8>),
     Term(u8),
@@ -21,7 +25,7 @@ impl Token {
         match ty {
             "variable" => Token::Variable(value),
             "method" => Token::Method(value),
-            "argument" => Token::Argument(value),
+            "argument" => Token::Argument(value as usize),
             _ => panic!("Unknown token type"),
         }
     }
@@ -43,6 +47,18 @@ impl Token {
 
     pub fn is_data_source(&self) -> bool {
         matches!(self, Token::DataSource(_))
+    }
+}
+
+impl From<Token> for usize {
+    fn from(token: Token) -> Self {
+        match token {
+            Token::Argument(v) => v,
+            Token::DataSource(v) => v as usize,
+            Token::RxType => 0,
+            Token::TxType => 1,
+            _ => panic!("Cannot convert to public token"),
+        }
     }
 }
 
