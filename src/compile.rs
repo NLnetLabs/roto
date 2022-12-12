@@ -213,7 +213,8 @@ pub fn compile(
             );
             while let Some(arg) = &mut leaves.next() {
                 print!("a");
-                match arg.get_token().unwrap() {
+                let token = arg.get_token().unwrap();
+                match token {
                     // assignment
                     Token::Variable(var) if arg.get_name() == "var" => {
                         print!("V");
@@ -252,16 +253,40 @@ pub fn compile(
                                 OpCode::ExecuteDataStoreMethod,
                                 vec![
                                     Arg::DataSource(ds as usize),
-                                    Arg::Method(method as usize),
+                                    Arg::Method(token.into()),
                                 ],
                             ),
-                            _ => (
+                            Ok(Token::BuiltinType(_)) => (
                                 OpCode::ExecuteTypeMethod,
                                 vec![
                                     Arg::Type(next_arg.get_type()),
-                                    Arg::Method(method as usize),
+                                    Arg::Method(token.into()),
                                 ],
                             ),
+                            Ok(Token::Variable(_)) => {
+                                (
+                                    OpCode::ExecuteValueMethod,
+                                    vec![
+                                        Arg::MemPos(mem_pos),
+                                        Arg::Method(token.into()),
+                                    ],
+                                )
+                            },
+                            Ok(Token::FieldAccess(_)) => (
+                                OpCode::ExecuteValueMethod,
+                                vec![
+                                    Arg::MemPos(mem_pos),
+                                    Arg::Method(token.into()),
+                                ],
+                            ),
+                            _ => {
+                                return Err(
+                                    format!(
+                                        "Invalid token for method call: {:?}",
+                                        next_arg.get_token()
+                                    ).into()
+                                )
+                            }
                         };
                         args.push(Arg::MemPos(mem_pos));
 

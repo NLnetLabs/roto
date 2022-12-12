@@ -326,7 +326,7 @@ impl<'a> VirtualMachine<'a> {
                             return Err(VmError::InvalidValueType);
                         }
                     }
-                    // args: mem_pos, constant_value
+                    // args: [mem_pos, constant_value]
                     OpCode::MemPosSet => {
                         if let Arg::MemPos(pos) = args[0] {
                             if let Some(Arg::Constant(v)) = args.get_mut(1) {
@@ -339,6 +339,18 @@ impl<'a> VirtualMachine<'a> {
                             }
                         } else {
                             return Err(VmError::InvalidValueType);
+                        }
+                    }
+                    // args: vec<field_index>
+                    OpCode::StackOffset => {
+                        for arg in args {
+                            if let Arg::FieldAccess(field) = arg {
+                                let mut s = self.stack.borrow_mut();
+                                s.set_field_index(field)?;
+                                drop(s);
+                            } else {
+                                return Err(VmError::InvalidValueType);
+                            }
                         }
                     }
                     // args: mem_pos, field_access_token
@@ -400,22 +412,6 @@ impl<'a> VirtualMachine<'a> {
                                     println!("v: {:?}", v);
                                     m.set(pos as usize, v.1);
                                 }
-                                // Arg::RxValue => {
-                                //     let v = rx.take_value();
-                                //     let v = std::mem::take(v);
-                                //     let mut m = mem.borrow_mut();
-                                //     m.set(pos as usize, v);
-                                // }
-                                // Arg::TxValue => {
-                                //     if let Some(tx) = tx {
-                                //         let v = tx.take_value();
-                                //         let v = std::mem::take(v);
-                                //         let mut m = mem.borrow_mut();
-                                //         m.set(pos as usize, v);
-                                //     } else {
-                                //         return Err(VmError::InvalidValueType);
-                                //     }
-                                // }
                                 _ => {
                                     return Err(VmError::InvalidValueType);
                                 }
@@ -490,6 +486,7 @@ pub enum VmError {
     InvalidValueType,
     InvalidVariableAccess,
     InvalidFieldAccess(usize),
+    InvalidMethodCall,
 }
 
 #[derive(Debug)]
@@ -518,6 +515,7 @@ impl Display for Command {
             OpCode::MemPosRef => "",
             // OpCode::PushArgStack => "->",
             OpCode::ArgToMemPos => "->",
+            OpCode::StackOffset => "",
         };
         write!(f, "{:?}{}{:?}", self.op, arrow, self.args)
     }
@@ -565,6 +563,7 @@ pub enum OpCode {
     ExecuteValueMethod,
     PopStack,
     PushStack,
+    StackOffset,
     MemPosSet,
     MemPosOffset,
     MemPosRef,
