@@ -10,6 +10,9 @@ use crate::{
     traits::{MethodProps, RotoFilter},
 };
 
+use super::builtin::{AsPath, Prefix, U32, Asn, Route, IpAddress};
+use super::collections::Record;
+use super::datasources::{Table, Rib};
 use super::{
     builtin::BuiltinTypeValue, collections::List, typevalue::TypeValue,
 };
@@ -181,6 +184,86 @@ impl TypeDef {
                 method.ident, parent_ty
             )
             .into()),
+        }
+    }
+
+    pub(crate) fn exec_type_method<'a>(
+        &'a self,
+        method_token: usize,
+        args: Vec<&'a TypeValue>,
+        return_type: TypeDef,
+    ) -> TypeValue {
+        match self {
+            TypeDef::Record(_rec_type) => {
+                Record::exec_type_method(method_token, args, return_type).unwrap()()
+            }
+            TypeDef::List(_list) => {
+                List::exec_type_method(method_token as usize, args, return_type).unwrap()()
+            },
+            TypeDef::AsPath => {
+                AsPath::exec_type_method(method_token, args, return_type).unwrap()()
+            }
+            TypeDef::Prefix => {
+                Prefix::exec_type_method(method_token, args, return_type).unwrap()()
+            }
+            TypeDef::U32 => {
+                U32::exec_type_method(method_token, args, return_type).unwrap()()
+            }
+            TypeDef::Asn => {
+                Asn::exec_type_method(method_token, args, return_type).unwrap()()
+            }
+            TypeDef::IpAddress => {
+                IpAddress::exec_type_method(method_token, args, return_type).unwrap()()
+            }
+            TypeDef::Route => {
+                Route::exec_type_method(method_token, args, return_type).unwrap()()
+            }
+            TypeDef::Rib(_rib) => Rib::exec_type_method(method_token, args, return_type).unwrap()(),
+            TypeDef::Table(_rec) => Table::exec_type_method(method_token, args, return_type).unwrap()(),
+            _ => panic!("No corresponding Type method found for {:?}.", self),
+        }
+    }
+
+    pub(crate) fn exec_value_method<'a>(
+        &'a self,
+        mut value: TypeValue,
+        method_token: usize,
+        args: Vec<&'a TypeValue>,
+        return_type: TypeDef,
+    ) -> TypeValue {
+        let t_v = &mut TypeValue::from(self);
+        let call_type: TypeValue = std::mem::take(if value != TypeValue::None { &mut value } else { t_v });
+        match call_type {
+            TypeValue::Record(rec_type) => {
+                rec_type.exec_method( method_token, args, return_type).unwrap()(value)
+            }
+            TypeValue::List(list) => {
+                list.exec_method(method_token as usize, args, return_type).unwrap()(value)
+            },
+            TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {
+                as_path.exec_method(method_token, args, return_type).unwrap()(value)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::Prefix(prefix)) => {
+                prefix.exec_method(method_token, args, return_type).unwrap()(value)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(lit_int)) => {
+                lit_int.exec_method(method_token, args, return_type).unwrap()(value)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::U32(u32)) => {
+                u32.exec_method(method_token, args, return_type).unwrap()(value)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) => {
+                asn.exec_method(method_token, args, return_type).unwrap()(value)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) => {
+                ip.exec_method(method_token, args, return_type).unwrap()(value)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::Route(route)) => {
+                route.exec_method(method_token, args, return_type).unwrap()(value)
+            }
+            TypeValue::Rib(rib) => rib.exec_method(method_token, args, return_type).unwrap()(value),
+            TypeValue::Table(rec) => rec.exec_method(method_token, args, return_type).unwrap()(value),
+            _ => panic!("No method found for {}.", call_type),
         }
     }
 }

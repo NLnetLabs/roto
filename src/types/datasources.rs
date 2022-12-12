@@ -2,7 +2,7 @@
 
 // ----------- Rib Type ----------------------------------------------------
 
-use crate::traits::{MethodProps, RotoFilter, TokenConvert};
+use crate::traits::{MethodProps, RotoFilter, TokenConvert, Token};
 
 use super::{
     builtin::{Boolean, BuiltinTypeValue},
@@ -71,11 +71,22 @@ impl RotoFilter<RibToken> for Rib {
 
     fn exec_method<'a>(
         &'a self,
-        method: RibToken,
-        args: Vec<TypeValue>,
-        res_type: TypeDef,
+        _method: usize,
+        _args: Vec<&'a TypeValue>,
+        _res_type: TypeDef,
     ) -> Result<
         Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
+        Box<dyn std::error::Error>,
+    > {
+        todo!()
+    }
+
+    fn exec_type_method<'a>(
+        _method: usize,
+        _args: Vec<&'a TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<
+        Box<dyn FnOnce() -> TypeValue + 'a>,
         Box<dyn std::error::Error>,
     > {
         todo!()
@@ -89,6 +100,7 @@ impl RotoFilter<RibToken> for Rib {
     }
 }
 
+#[derive(Debug)]
 pub enum RibToken {
     Match,
     LongestMatch,
@@ -169,11 +181,22 @@ impl RotoFilter<TableToken> for Table {
 
     fn exec_method<'a>(
         &'a self,
-        method: TableToken,
-        args: Vec<TypeValue>,
-        res_type: TypeDef,
+        _method: usize,
+        _args: Vec<&'a TypeValue>,
+        _res_type: TypeDef,
     ) -> Result<
         Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
+        Box<dyn std::error::Error>,
+    > {
+        todo!()
+    }
+
+    fn exec_type_method<'a>(
+        _method: usize,
+        _args: Vec<&'a TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<
+        Box<dyn FnOnce() -> TypeValue + 'a>,
         Box<dyn std::error::Error>,
     > {
         todo!()
@@ -188,6 +211,7 @@ impl RotoFilter<TableToken> for Table {
     
 }
 
+#[derive(Debug)]
 pub enum TableToken {
     Get,
     Contains,

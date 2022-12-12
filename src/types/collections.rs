@@ -1,6 +1,6 @@
 use crate::ast::ShortString;
 use crate::symbols::{self, Symbol};
-use crate::traits::{MethodProps, RotoFilter, TokenConvert};
+use crate::traits::{MethodProps, RotoFilter, Token, TokenConvert};
 use crate::vm::Payload;
 
 use super::builtin::{
@@ -124,6 +124,18 @@ impl List {
             _ => Err("Not a List type".into()),
         }
     }
+
+    pub fn exec_method(
+        &self,
+        _method_token: usize,
+        _args: Vec<&TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<
+        Box<dyn FnOnce(TypeValue) -> TypeValue + '_>,
+        Box<dyn std::error::Error>,
+    > {
+        todo!()
+    }
 }
 
 impl<'a> From<&'a TypeDef> for List {
@@ -194,13 +206,24 @@ impl RotoFilter<ListToken> for List {
 
     fn exec_method(
         &self,
-        _method: ListToken,
-        _args: Vec<TypeValue>,
+        _method: usize,
+        _args: Vec<&TypeValue>,
         _res_type: TypeDef,
     ) -> Result<
         std::boxed::Box<(dyn FnOnce(TypeValue) -> TypeValue)>,
         Box<dyn std::error::Error>,
     > {
+        todo!()
+    }
+
+    fn exec_type_method<'a>(
+            method_token: usize,
+            args: Vec<&'a TypeValue>,
+            res_type: TypeDef,
+        ) -> Result<
+            Box<dyn FnOnce() -> TypeValue + 'a>,
+            Box<dyn std::error::Error>,
+        > {
         todo!()
     }
 
@@ -212,6 +235,7 @@ impl RotoFilter<ListToken> for List {
     }
 }
 
+#[derive(Debug)]
 #[repr(u8)]
 pub enum ListToken {
     Len,
@@ -225,6 +249,22 @@ pub enum ListToken {
 }
 
 impl TokenConvert for ListToken {}
+
+impl From<usize> for ListToken {
+    fn from(i: usize) -> Self {
+        match i {
+            0 => ListToken::Len,
+            1 => ListToken::Contains,
+            2 => ListToken::Get,
+            3 => ListToken::Push,
+            4 => ListToken::Pop,
+            5 => ListToken::Remove,
+            6 => ListToken::Insert,
+            7 => ListToken::Clear,
+            _ => panic!("Unknown ListToken"),
+        }
+    }
+}
 
 //---------------- Record type ----------------------------------------------
 
@@ -340,14 +380,25 @@ impl RotoFilter<RecordToken> for Record {
 
     fn exec_method(
         &self,
-        _method: RecordToken,
-        _args: Vec<TypeValue>,
+        _method: usize,
+        _args: Vec<&TypeValue>,
         _res_type: TypeDef,
     ) -> Result<
         Box<dyn FnOnce(TypeValue) -> TypeValue + '_>,
         Box<dyn std::error::Error>,
     > {
         todo!()
+    }
+
+    fn exec_type_method<'a>(
+            method_token: usize,
+            args: Vec<&'a TypeValue>,
+            res_type: TypeDef,
+        ) -> Result<
+            Box<dyn FnOnce() -> TypeValue + 'a>,
+            Box<dyn std::error::Error>,
+        > {
+            todo!()
     }
 
     fn get_field_by_index<'a>(
@@ -370,6 +421,7 @@ impl RotoFilter<RecordToken> for Record {
     }
 }
 
+#[derive(Debug)]
 #[repr(u8)]
 pub enum RecordToken {
     Get = 0,
@@ -380,6 +432,18 @@ pub enum RecordToken {
 }
 
 impl TokenConvert for RecordToken {}
+
+// impl From<usize> for RecordToken {
+//     fn from(i: usize) -> Self {
+//         match i {
+//             0 => RecordToken::Get,
+//             1 => RecordToken::GetAll,
+//             2 => RecordToken::Contains,
+//             3 => RecordToken::LongestMatch,
+//             _ => panic!("Unknown RecordToken"),
+//         }
+//     }
+// }
 
 impl Payload for Record {
     fn set(&mut self, field: ShortString, value: TypeValue) {

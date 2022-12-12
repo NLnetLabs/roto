@@ -265,8 +265,36 @@ impl<'a> VirtualMachine<'a> {
                 println!("-> {:3?} {:?}", op, args);
                 match op {
                     OpCode::Cmp => todo!(),
-                    OpCode::ExecuteTypeMethod => todo!(),
-                    OpCode::ExecuteDataStoreMethod => todo!(),
+                    // args: [type, method_token, return memory position]
+                    OpCode::ExecuteTypeMethod => {
+                        let mut s = self.stack.borrow_mut();
+                        let m = mem.borrow();
+                        let method_args = s
+                            .unwind()
+                            .into_iter()
+                            .map(|sr| {
+                                m.get(sr.mem_pos)
+                                    .ok_or(VmError::InvalidMemoryAccess(
+                                        sr.mem_pos,
+                                    ))
+                                    .unwrap()
+                            })
+                            .collect::<Vec<_>>();
+                        let return_type = args.remove(2).into();
+                        if let Arg::Type(t) = &args[0] {
+                            if let Arg::Method(method_token) = args[1] {
+                                t.exec_type_method(
+                                    method_token,
+                                    method_args,
+                                    return_type,
+                                );
+                            } else {
+                                return Err(VmError::InvalidValueType);
+                            }
+                        }
+                    }
+                    OpCode::ExecuteDataStoreMethod => {}
+                    OpCode::ExecuteValueMethod => {}
                     OpCode::PushStack => {
                         if let Arg::MemPos(pos) = args[0] {
                             let mut s = self.stack.borrow_mut();
@@ -468,8 +496,9 @@ impl Display for Command {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let arrow = match self.op {
             OpCode::Cmp => "<->",
-            OpCode::ExecuteTypeMethod => "->",
+            OpCode::ExecuteTypeMethod => "=>",
             OpCode::ExecuteDataStoreMethod => "",
+            OpCode::ExecuteValueMethod => "=>",
             OpCode::PushStack => "<-",
             OpCode::PopStack => "->",
             OpCode::MemPosSet => "->",
@@ -507,11 +536,21 @@ impl Arg {
     }
 }
 
+impl From<Arg> for TypeDef {
+    fn from(value: Arg) -> Self {
+        match value {
+            Arg::Type(t) => t,
+            _ => panic!("Cannot convert to TypeDef"),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum OpCode {
     Cmp,
     ExecuteTypeMethod,
     ExecuteDataStoreMethod,
+    ExecuteValueMethod,
     PopStack,
     PushStack,
     MemPosSet,
