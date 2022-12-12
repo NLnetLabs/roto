@@ -37,6 +37,18 @@ impl<'a> Stack {
         let v = mem.get(pos).ok_or(VmError::StackUnderflow)?;
         Ok(())
     }
+
+    fn set_field_index(&mut self, index: usize) -> Result<(), VmError> {
+        self.0
+            .last_mut()
+            .ok_or(VmError::StackUnderflow)?
+            .field_index = index;
+        Ok(())
+    }
+
+    fn unwind(&mut self) -> Vec<StackRef> {
+        self.0.drain(..).collect()
+    }
 }
 
 #[derive(Debug)]
