@@ -273,18 +273,18 @@ pub fn compile(
                     }
                     Token::FieldAccess(fa) => {
                         let mut args = vec![];
-                        local_stack.push_front(Command::new(
-                            OpCode::PushStack,
-                            vec![Arg::MemPos(mem_pos)],
-                        ));
-                        args.push(Arg::MemPos(mem_pos));
+                        // local_stack.push_front(Command::new(
+                        //     OpCode::PushStack,
+                        //     vec![Arg::MemPos(mem_pos)],
+                        // ));
+                        // args.push(Arg::MemPos(mem_pos));
                         args.extend(
                             fa.iter()
                                 .map(|t| Arg::FieldAccess(*t as usize))
                                 .collect::<Vec<_>>(),
                         );
                         local_stack.push_front(Command::new(
-                            OpCode::MemPosOffset,
+                            OpCode::StackOffset,
                             args,
                         ));
                         // local_stack.push_front(Command::new(
@@ -313,20 +313,24 @@ pub fn compile(
                         mir_block.command_stack.extend(unwind(local_stack));
                         local_stack = VecDeque::new();
                     }
-                    Token::RxType => local_stack.push_front(Command::new(
-                        OpCode::MemPosSet,
+                    Token::RxType => { local_stack.push_front(Command::new(
+                        OpCode::PushStack,
                         vec![
                             Arg::MemPos(0),
-                            Arg::Argument(arg.get_token().unwrap().into()),
                         ],
-                    )),
-                    Token::TxType => local_stack.push_front(Command::new(
-                        OpCode::MemPosSet,
+                    ));
+                    mir_block.command_stack.extend(unwind(local_stack));
+                    local_stack = VecDeque::new();
+                } ,
+                    Token::TxType => { local_stack.push_front(Command::new(
+                        OpCode::PushStack,
                         vec![
                             Arg::MemPos(1),
-                            Arg::Argument(arg.get_token().unwrap().into()),
                         ],
-                    )),
+                    ));
+                    // mir_block.command_stack.extend(unwind(local_stack));
+                    // local_stack = VecDeque::new();
+                },
                     Token::DataSource(_) => {
                         // No further action for a data-source, it's only
                         // used to call methods on, which should already have
