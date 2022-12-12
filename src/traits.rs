@@ -55,9 +55,13 @@ impl From<Token> for usize {
         match token {
             Token::Argument(v) => v,
             Token::DataSource(v) => v as usize,
+            Token::Method(v) => v as usize,
             Token::RxType => 0,
             Token::TxType => 1,
-            _ => panic!("Cannot convert to public token"),
+            _ => {
+                println!("Cannot convert to usize: {:?}", token);
+                panic!("..and that's fatal");
+            }
         }
     }
 }
@@ -83,7 +87,7 @@ impl MethodProps {
     }
 }
 
-pub(crate) trait RotoFilter<T: TokenConvert> {
+pub(crate) trait RotoFilter<T: TokenConvert> where Self: std::fmt::Debug {
     fn get_props_for_method(
         self,
         method_name: &super::ast::Identifier,
@@ -100,11 +104,20 @@ pub(crate) trait RotoFilter<T: TokenConvert> {
 
     fn exec_method<'a>(
         &'a self,
-        method_token: T,
-        args: Vec<TypeValue>,
+        method_token: usize,
+        args: Vec<&'a TypeValue>,
         res_type: TypeDef,
     ) -> Result<
         Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
+        Box<dyn std::error::Error>,
+    >;
+
+    fn exec_type_method<'a>(
+        method_token: usize,
+        args: Vec<&'a TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<
+        Box<dyn FnOnce() -> TypeValue + 'a>,
         Box<dyn std::error::Error>,
     >;
 
@@ -114,7 +127,7 @@ pub(crate) trait RotoFilter<T: TokenConvert> {
     ) -> Result<TypeValue, Box<dyn std::error::Error>>;
 }
 
-pub(crate) trait TokenConvert {
+pub(crate) trait TokenConvert where Self: std::fmt::Debug + Sized {
     fn to_u8(&self) -> u8 {
         std::mem::size_of_val(self) as u8
     }
