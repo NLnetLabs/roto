@@ -331,7 +331,7 @@ impl RotoFilter<U32Token> for U32 {
         match method_name.ident.as_str() {
             "set" => Ok(MethodProps::new(
                 TypeValue::None,
-                U32Token::Set.to_u8(),
+                U32Token::Set.into(),
                 vec![TypeDef::IntegerLiteral],
             )),
             _ => Err(format!(
@@ -358,10 +358,8 @@ impl RotoFilter<U32Token> for U32 {
         method_token: usize,
         args: Vec<&'a TypeValue>,
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce() -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 
@@ -404,6 +402,14 @@ impl From<usize> for U32Token {
     }
 }
 
+impl From<U32Token> for usize {
+    fn from(val: U32Token) -> Self {
+        match val {
+            U32Token::Set => 0,
+        }
+    }
+}
+
 // ----------- A simple u8 type ---------------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -428,7 +434,7 @@ impl RotoFilter<U8Token> for U8 {
         match method_name.ident.as_str() {
             "set" => Ok(MethodProps::new(
                 TypeValue::None,
-                U8Token::Set.to_u8(),
+                U8Token::Set.into(),
                 vec![TypeDef::IntegerLiteral],
             )),
             _ => Err(format!(
@@ -455,12 +461,10 @@ impl RotoFilter<U8Token> for U8 {
         method_token: usize,
         args: Vec<&'a TypeValue>,
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce() -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
-    } 
+    }
 
     fn into_type(
         self,
@@ -540,6 +544,14 @@ impl From<usize> for U8Token {
     }
 }
 
+impl From<U8Token> for usize {
+    fn from(val: U8Token) -> Self {
+        match val {
+            U8Token::Set => 0,
+        }
+    }
+}
+
 // ----------- Boolean type -------------------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -561,7 +573,7 @@ impl RotoFilter<BooleanToken> for Boolean {
         match method_name.ident.as_str() {
             "set" => Ok(MethodProps::new(
                 TypeValue::None,
-                BooleanToken::Set.to_u8(),
+                BooleanToken::Set.into(),
                 vec![TypeDef::Boolean],
             )),
             _ => Err(format!(
@@ -588,10 +600,8 @@ impl RotoFilter<BooleanToken> for Boolean {
         method_token: usize,
         args: Vec<&'a TypeValue>,
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce() -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 
@@ -635,6 +645,12 @@ impl From<usize> for BooleanToken {
     }
 }
 
+impl From<BooleanToken> for usize {
+    fn from(val: BooleanToken) -> Self {
+       val as usize
+    }
+}
+
 //------------ IntegerLiteral type ------------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -653,7 +669,7 @@ impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
         match method_name.ident.as_str() {
             "cmp" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::IntegerLiteral),
-                IntegerLiteralToken::Cmp.to_u8(),
+                IntegerLiteralToken::Cmp.into(),
                 vec![TypeDef::IntegerLiteral, TypeDef::IntegerLiteral],
             )),
             _ => Err(format!(
@@ -713,10 +729,8 @@ impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
         method_token: usize,
         args: Vec<&'a TypeValue>,
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce() -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 
@@ -745,6 +759,12 @@ impl From<usize> for IntegerLiteralToken {
     }
 }
 
+impl From<IntegerLiteralToken> for usize {
+    fn from(val: IntegerLiteralToken) -> Self {
+        val as usize
+    }
+}
+
 //------------ HexLiteral type ----------------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -763,7 +783,7 @@ impl RotoFilter<HexLiteralToken> for HexLiteral {
         match method_name.ident.as_str() {
             "cmp" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::IntegerLiteral),
-                HexLiteralToken::Cmp.to_u8(),
+                HexLiteralToken::Cmp.into(),
                 vec![TypeDef::HexLiteral, TypeDef::HexLiteral],
             )),
             _ => Err(format!(
@@ -811,10 +831,8 @@ impl RotoFilter<HexLiteralToken> for HexLiteral {
         method_token: usize,
         args: Vec<&'a TypeValue>,
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce() -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 
@@ -839,6 +857,12 @@ impl From<usize> for HexLiteralToken {
             0 => HexLiteralToken::Cmp,
             _ => panic!("Unknown token value: {}", val),
         }
+    }
+}
+
+impl From<HexLiteralToken> for usize {
+    fn from(val: HexLiteralToken) -> Self {
+        val as usize
     }
 }
 
@@ -880,27 +904,27 @@ impl RotoFilter<PrefixToken> for Prefix {
         match method_name.ident.as_str() {
             "from" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::Prefix),
-                PrefixToken::From.to_u8(),
+                PrefixToken::From.into(),
                 vec![TypeDef::IpAddress, TypeDef::PrefixLength],
             )),
             "address" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::IpAddress),
-                PrefixToken::Address.to_u8(),
+                PrefixToken::Address.into(),
                 vec![],
             )),
             "len" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::PrefixLength),
-                PrefixToken::Len.to_u8(),
+                PrefixToken::Len.into(),
                 vec![],
             )),
             "matches" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::Boolean),
-                PrefixToken::Matches.to_u8(),
+                PrefixToken::Matches.into(),
                 vec![TypeDef::Prefix],
             )),
             "exists" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                PrefixToken::Exists.to_u8(),
+                PrefixToken::Exists.into(),
                 vec![],
             )),
             _ => Err(format!(
@@ -943,11 +967,35 @@ impl RotoFilter<PrefixToken> for Prefix {
         method_token: usize,
         args: Vec<&'a TypeValue>,
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce() -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
-        todo!()
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
+        match method_token.into() {
+            PrefixToken::From => {
+                if let TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) =
+                    args[0]
+                {
+                    let len: PrefixLength = args[1].try_into()?;
+                    let ip = ip.0.ok_or("Cannot convert empty IP address")?;
+                    Ok(Box::new(move || {
+                        TypeValue::Builtin(BuiltinTypeValue::Prefix(
+                            Prefix::new(
+                                routecore::addr::Prefix::new(ip, len.into())
+                                    .map_err(|e| {
+                                        format!("Invalid prefix: {}", e)
+                                    })
+                                    .unwrap(),
+                            ),
+                        ))
+                    }))
+                } else {
+                    Err(format!("Invalid argument type for method 'from'")
+                        .into())
+                }
+            }
+            _ => {
+                Err(format!("Unknown method token: {}", method_token).into())
+            }
+        }
     }
 
     fn get_field_by_index(
@@ -959,12 +1007,13 @@ impl RotoFilter<PrefixToken> for Prefix {
 }
 
 #[derive(Debug)]
+#[repr(u8)]
 pub(crate) enum PrefixToken {
-    From,
-    Exists,
-    Address,
-    Len,
-    Matches,
+    From = 0 ,
+    Exists = 1,
+    Address = 2,
+    Len = 3,
+    Matches = 4,
 }
 
 impl TokenConvert for PrefixToken {}
@@ -979,6 +1028,12 @@ impl From<usize> for PrefixToken {
             4 => PrefixToken::Matches,
             _ => panic!("Unknown token value: {}", val),
         }
+    }
+}
+
+impl From<PrefixToken> for usize {
+    fn from(val: PrefixToken) -> Self {
+        val as usize
     }
 }
 
@@ -1004,7 +1059,7 @@ impl RotoFilter<PrefixLengthToken> for PrefixLength {
         match method_name.ident.as_str() {
             "from" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::PrefixLength),
-                PrefixLengthToken::From.to_u8(),
+                PrefixLengthToken::From.into(),
                 vec![TypeDef::U8],
             )),
             _ => Err(format!(
@@ -1047,10 +1102,8 @@ impl RotoFilter<PrefixLengthToken> for PrefixLength {
         method_token: usize,
         args: Vec<&'a TypeValue>,
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce() -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 
@@ -1075,6 +1128,33 @@ impl From<usize> for PrefixLengthToken {
             0 => PrefixLengthToken::From,
             _ => panic!("Unknown token value: {}", val),
         }
+    }
+}
+
+impl From<PrefixLengthToken> for usize {
+    fn from(val: PrefixLengthToken) -> Self {
+        val as usize
+    }
+}
+
+impl TryFrom<&TypeValue> for PrefixLength {
+    type Error = Box<dyn std::error::Error>;
+
+    fn try_from(value: &TypeValue) -> Result<Self, Self::Error> {
+        match value {
+            TypeValue::Builtin(BuiltinTypeValue::PrefixLength(pl)) => Ok(*pl),
+            _ => Err(format!(
+                "Cannot convert type {:?} to type PrefixLength",
+                value
+            )
+            .into()),
+        }
+    }
+}
+
+impl From<PrefixLength> for u8 {
+    fn from(val: PrefixLength) -> Self {
+        val.0.unwrap()
     }
 }
 
@@ -1107,37 +1187,37 @@ impl RotoFilter<CommunityToken> for Community {
         match method_name.ident.as_str() {
             "from" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::Community),
-                CommunityToken::From.to_u8(),
+                CommunityToken::From.into(),
                 vec![TypeDef::U32],
             )),
             "standard" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::Community),
-                CommunityToken::Standard.to_u8(),
+                CommunityToken::Standard.into(),
                 vec![TypeDef::U32],
             )),
             "extended" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::Community),
-                CommunityToken::Extended.to_u8(),
+                CommunityToken::Extended.into(),
                 vec![TypeDef::U32],
             )),
             "large" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::Community),
-                CommunityToken::Large.to_u8(),
+                CommunityToken::Large.into(),
                 vec![TypeDef::U32],
             )),
             "as" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::U32),
-                CommunityToken::As.to_u8(),
+                CommunityToken::As.into(),
                 vec![],
             )),
             "value" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::U32),
-                CommunityToken::Value.to_u8(),
+                CommunityToken::Value.into(),
                 vec![],
             )),
             "exists" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::Boolean),
-                CommunityToken::Exists.to_u8(),
+                CommunityToken::Exists.into(),
                 vec![],
             )),
             _ => Err(format!(
@@ -1180,10 +1260,8 @@ impl RotoFilter<CommunityToken> for Community {
         method_token: usize,
         args: Vec<&'a TypeValue>,
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce() -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 
@@ -1220,6 +1298,12 @@ impl From<usize> for CommunityToken {
             6 => CommunityToken::Exists,
             _ => panic!("Unknown token value: {}", val),
         }
+    }
+}
+
+impl From<CommunityToken> for usize {
+    fn from(val: CommunityToken) -> Self {
+        val as usize
     }
 }
 
@@ -1264,12 +1348,12 @@ impl RotoFilter<IpAddressToken> for IpAddress {
         match method_name.ident.as_str() {
             "from" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::IpAddress),
-                IpAddressToken::From.to_u8(),
+                IpAddressToken::From.into(),
                 vec![TypeDef::String],
             )),
             "matches" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::Boolean),
-                IpAddressToken::Matches.to_u8(),
+                IpAddressToken::Matches.into(),
                 vec![TypeDef::Prefix],
             )),
             _ => Err(format!(
@@ -1305,17 +1389,25 @@ impl RotoFilter<IpAddressToken> for IpAddress {
         Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
         Box<dyn std::error::Error>,
     > {
-        todo!()
+        todo!();
+        // match method_token.into() {
+        //     IpAddressToken::From => {
+        //         let addr_string: &str = args[0].try_into()?;
+        //         let addr = addr_string.parse::<std::net::IpAddr>()?;
+        //         Ok(Box::new(move |_| TypeValue::from(IpAddress::new(addr))))
+        //     }
+        //     _ => {
+        //         Err(format!("Unknown method token: {}", method_token).into())
+        //     }
+        // }
     }
 
     fn exec_type_method<'a>(
         method_token: usize,
         args: Vec<&'a TypeValue>,
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce() -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 
@@ -1323,7 +1415,7 @@ impl RotoFilter<IpAddressToken> for IpAddress {
         self,
         field_index: usize,
     ) -> Result<TypeValue, Box<dyn std::error::Error>> {
-        Err(format!("Cannot get field by index for type IpAddress").into())
+        Err("Cannot get field by index for type IpAddress".into())
     }
 }
 
@@ -1334,6 +1426,22 @@ pub(crate) enum IpAddressToken {
 }
 
 impl TokenConvert for IpAddressToken {}
+
+impl From<usize> for IpAddressToken {
+    fn from(val: usize) -> Self {
+        match val {
+            0 => IpAddressToken::From,
+            1 => IpAddressToken::Matches,
+            _ => panic!("Unknown token value: {}", val),
+        }
+    }
+}
+
+impl From<IpAddressToken> for usize {
+    fn from(val: IpAddressToken) -> Self {
+        val as usize
+    }
+}
 
 // ----------- Asn type -----------------------------------------------------
 
@@ -1365,7 +1473,7 @@ impl RotoFilter<AsnToken> for Asn {
         match method_name.ident.as_str() {
             "set" => Ok(MethodProps::new(
                 TypeValue::None,
-                AsnToken::Set.to_u8(),
+                AsnToken::Set.into(),
                 vec![TypeDef::Asn],
             )),
             _ => Err(format!(
@@ -1407,10 +1515,8 @@ impl RotoFilter<AsnToken> for Asn {
         method_token: usize,
         args: Vec<&'a TypeValue>,
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce() -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 
@@ -1428,6 +1534,21 @@ pub enum AsnToken {
 }
 
 impl TokenConvert for AsnToken {}
+
+impl From<usize> for AsnToken {
+    fn from(val: usize) -> Self {
+        match val {
+            0 => AsnToken::Set,
+            _ => panic!("Unknown token value: {}", val),
+        }
+    }
+}
+
+impl From<AsnToken> for usize {
+    fn from(val: AsnToken) -> Self {
+        val as usize
+    }
+}
 
 // ----------- AsPath type --------------------------------------------------
 
@@ -1497,17 +1618,17 @@ impl RotoFilter<AsPathToken> for AsPath {
         match method_name.ident.as_str() {
             "origin" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(None))),
-                AsPathToken::Origin.to_u8(),
+                AsPathToken::Origin.into(),
                 vec![],
             )),
             "contains" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))),
-                AsPathToken::Contains.to_u8(),
+                AsPathToken::Contains.into(),
                 vec![TypeDef::Asn],
             )),
             "len" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::U8(U8(None))),
-                AsPathToken::Len.to_u8(),
+                AsPathToken::Len.into(),
                 vec![],
             )),
             _ => Err(format!(
@@ -1623,18 +1744,15 @@ impl RotoFilter<AsPathToken> for AsPath {
             }
         }
     }
-    
+
     fn exec_type_method<'a>(
-            method_token: usize,
-            args: Vec<&'a TypeValue>,
-            res_type: TypeDef,
-        ) -> Result<
-            Box<dyn FnOnce() -> TypeValue + 'a>,
-            Box<dyn std::error::Error>,
-        > {
-            todo!()
-        }
-    
+        method_token: usize,
+        args: Vec<&'a TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
+        todo!()
+    }
 }
 
 #[repr(u8)]
@@ -1655,6 +1773,12 @@ impl From<usize> for AsPathToken {
             3 => AsPathToken::Len,
             _ => panic!("Unknown AsPathToken value: {}", value),
         }
+    }
+}
+
+impl From<AsPathToken> for usize {
+    fn from(val: AsPathToken) -> Self {
+        val as usize
     }
 }
 
@@ -1680,26 +1804,26 @@ impl RotoFilter<RouteToken> for Route {
         match method_name.ident.as_str() {
             "prefix" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None))),
-                RouteToken::Prefix.to_u8(),
+                RouteToken::Prefix.into(),
                 vec![],
             )),
             "as_path" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))),
-                RouteToken::AsPath.to_u8(),
+                RouteToken::AsPath.into(),
                 vec![],
             )),
             "communities" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Community(Community(
                     None,
                 ))),
-                RouteToken::Communities.to_u8(),
+                RouteToken::Communities.into(),
                 vec![],
             )),
             "status" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::RouteStatus(
                     RouteStatus::Empty,
                 )),
-                RouteToken::Status.to_u8(),
+                RouteToken::Status.into(),
                 vec![],
             )),
             _ => Err(format!(
@@ -1739,15 +1863,13 @@ impl RotoFilter<RouteToken> for Route {
     }
 
     fn exec_type_method<'a>(
-            method_token: usize,
-            args: Vec<&'a TypeValue>,
-            res_type: TypeDef,
-        ) -> Result<
-            Box<dyn FnOnce() -> TypeValue + 'a>,
-            Box<dyn std::error::Error>,
-        > {
-            todo!()
-        }
+        method_token: usize,
+        args: Vec<&'a TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
+        todo!()
+    }
 
     fn get_field_by_index(
         self,
@@ -1766,6 +1888,24 @@ pub enum RouteToken {
 }
 
 impl TokenConvert for RouteToken {}
+
+impl From<usize> for RouteToken {
+    fn from(value: usize) -> Self {
+        match value {
+            1 => RouteToken::Prefix,
+            2 => RouteToken::AsPath,
+            3 => RouteToken::Communities,
+            4 => RouteToken::Status,
+            _ => panic!("Unknown RouteToken value: {}", value),
+        }
+    }
+}
+
+impl From<RouteToken> for usize {
+    fn from(val: RouteToken) -> Self {
+        val as usize
+    }
+}
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum RouteStatus {
@@ -1788,32 +1928,32 @@ impl RotoFilter<RouteStatusToken> for RouteStatus {
         match method_name.ident.as_str() {
             "is_in_convergence" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                RouteStatusToken::IsInConvergence.to_u8(),
+                RouteStatusToken::IsInConvergence.into(),
                 vec![],
             )),
             "is_up_to_date" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                RouteStatusToken::IsUpToDate.to_u8(),
+                RouteStatusToken::IsUpToDate.into(),
                 vec![],
             )),
             "is_stale" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                RouteStatusToken::IsStale.to_u8(),
+                RouteStatusToken::IsStale.into(),
                 vec![],
             )),
             "is_start_of_route_refresh" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                RouteStatusToken::IsStartOfRouteRefresh.to_u8(),
+                RouteStatusToken::IsStartOfRouteRefresh.into(),
                 vec![],
             )),
             "is_withdrawn" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                RouteStatusToken::IsWithdrawn.to_u8(),
+                RouteStatusToken::IsWithdrawn.into(),
                 vec![],
             )),
             "is_empty" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                RouteStatusToken::IsEmpty.to_u8(),
+                RouteStatusToken::IsEmpty.into(),
                 vec![],
             )),
             _ => Err(format!(
@@ -1853,14 +1993,12 @@ impl RotoFilter<RouteStatusToken> for RouteStatus {
     }
 
     fn exec_type_method<'a>(
-            method_token: usize,
-            args: Vec<&'a TypeValue>,
-            res_type: TypeDef,
-        ) -> Result<
-            Box<dyn FnOnce() -> TypeValue + 'a>,
-            Box<dyn std::error::Error>,
-        > {
-            todo!()
+        method_token: usize,
+        args: Vec<&'a TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
+        todo!()
     }
 
     fn get_field_by_index(
@@ -1882,6 +2020,26 @@ pub enum RouteStatusToken {
 }
 
 impl TokenConvert for RouteStatusToken {}
+
+impl From<usize> for RouteStatusToken {
+    fn from(value: usize) -> Self {
+        match value {
+            1 => RouteStatusToken::IsInConvergence,
+            2 => RouteStatusToken::IsUpToDate,
+            3 => RouteStatusToken::IsStale,
+            4 => RouteStatusToken::IsStartOfRouteRefresh,
+            5 => RouteStatusToken::IsWithdrawn,
+            6 => RouteStatusToken::IsEmpty,
+            _ => panic!("Unknown RouteStatusToken value: {}", value),
+        }
+    }
+}
+
+impl From<RouteStatusToken> for usize {
+    fn from(val: RouteStatusToken) -> Self {
+        val as usize
+    }
+}
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct BgpAttributes {

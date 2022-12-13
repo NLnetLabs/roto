@@ -469,7 +469,7 @@ impl SymbolTable {
         }
 
         symbol =
-            symbol.set_token(Token::Variable(self.variables.len() as u8));
+            symbol.set_token(Token::Variable(self.variables.len()));
         self.variables.insert(key, symbol);
         Ok(())
     }
@@ -497,7 +497,7 @@ impl SymbolTable {
             .into());
         }
 
-        let token_int = self.variables.len() as u8;
+        let token_int = self.variables.len();
 
         let token = Some(match kind {
             SymbolKind::Rib | SymbolKind::Table | SymbolKind::PrefixList => {

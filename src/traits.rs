@@ -4,14 +4,14 @@ use crate::types::{typedef::TypeDef, typevalue::TypeValue};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub(crate) enum Token {
-    Variable(u8),
-    Method(u8),
+    Variable(usize),
+    Method(usize),
     Argument(usize),
     // There can only ever be one RxType
     RxType,
     // There can only ever be one TxType too
     TxType,
-    DataSource(u8),
+    DataSource(usize),
     FieldAccess(Vec<u8>),
     Term(u8),
     Action(u8),
@@ -21,7 +21,7 @@ pub(crate) enum Token {
 }
 
 impl Token {
-    pub fn new(ty: &str, value: u8) -> Self {
+    pub fn new(ty: &str, value: usize) -> Self {
         match ty {
             "variable" => Token::Variable(value),
             "method" => Token::Method(value),
@@ -76,7 +76,7 @@ pub(crate) struct MethodProps {
 impl MethodProps {
     pub(crate) fn new(
         return_type_value: TypeValue,
-        method_token: u8,
+        method_token: usize,
         arg_types: Vec<TypeDef>,
     ) -> Self {
         MethodProps {

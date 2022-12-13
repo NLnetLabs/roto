@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 //============ TypeValue ====================================================
-use crate::{ast::ShortString, vm::Arg, traits::RotoFilter};
+use crate::{ast::ShortString, traits::RotoFilter};
 
 use super::{
     builtin::{

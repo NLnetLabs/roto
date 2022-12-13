@@ -171,22 +171,22 @@ impl RotoFilter<ListToken> for List {
         match method_name.ident.as_str() {
             "get" => Ok(MethodProps::new(
                 TypeValue::List(self),
-                ListToken::Get.to_u8(),
+                ListToken::Get.into(),
                 vec![TypeDef::U32],
             )),
             "remove" => Ok(MethodProps::new(
                 TypeValue::List(self),
-                ListToken::Remove.to_u8(),
+                ListToken::Remove.into(),
                 vec![TypeDef::U32],
             )),
             "push" => Ok(MethodProps::new(
                 (&TypeDef::Boolean).into(),
-                ListToken::Push.to_u8(),
+                ListToken::Push.into(),
                 vec![TypeDef::from(&self.0[0])],
             )),
             "contains" => Ok(MethodProps::new(
                 (&TypeDef::Boolean).into(),
-                ListToken::Contains.to_u8(),
+                ListToken::Contains.into(),
                 vec![],
             )),
             _ => Err(format!(
@@ -263,6 +263,12 @@ impl From<usize> for ListToken {
             7 => ListToken::Clear,
             _ => panic!("Unknown ListToken"),
         }
+    }
+}
+
+impl From<ListToken> for usize {
+    fn from(t: ListToken) -> Self {
+       t as usize
     }
 }
 
@@ -345,22 +351,22 @@ impl RotoFilter<RecordToken> for Record {
         match method_name.ident.as_str() {
             "longest_match" => Ok(MethodProps::new(
                 TypeValue::Record(self),
-                RecordToken::LongestMatch.to_u8(),
+                RecordToken::LongestMatch.into(),
                 vec![TypeDef::Prefix],
             )),
             "get" => Ok(MethodProps::new(
                 TypeValue::Record(self),
-                RecordToken::Get.to_u8(),
+                RecordToken::Get.into(),
                 vec![TypeDef::U32],
             )),
             "get_all" => Ok(MethodProps::new(
                 TypeValue::Record(self),
-                RecordToken::GetAll.to_u8(),
+                RecordToken::GetAll.into(),
                 vec![],
             )),
             "contains" => Ok(MethodProps::new(
                 (&TypeDef::Boolean).into(),
-                RecordToken::Contains.to_u8(),
+                RecordToken::Contains.into(),
                 vec![(&TypeValue::Record(self)).into()],
             )),
             _ => Err(format!(
@@ -433,17 +439,23 @@ pub enum RecordToken {
 
 impl TokenConvert for RecordToken {}
 
-// impl From<usize> for RecordToken {
-//     fn from(i: usize) -> Self {
-//         match i {
-//             0 => RecordToken::Get,
-//             1 => RecordToken::GetAll,
-//             2 => RecordToken::Contains,
-//             3 => RecordToken::LongestMatch,
-//             _ => panic!("Unknown RecordToken"),
-//         }
-//     }
-// }
+impl From<usize> for RecordToken {
+    fn from(i: usize) -> Self {
+        match i {
+            0 => RecordToken::Get,
+            1 => RecordToken::GetAll,
+            2 => RecordToken::Contains,
+            3 => RecordToken::LongestMatch,
+            _ => panic!("Unknown RecordToken"),
+        }
+    }
+}
+
+impl From<RecordToken> for usize {
+    fn from(t: RecordToken) -> Self {
+        t as usize
+    }
+}
 
 impl Payload for Record {
     fn set(&mut self, field: ShortString, value: TypeValue) {

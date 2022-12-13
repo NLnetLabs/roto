@@ -133,16 +133,18 @@ impl ArgumentsMap {
     }
 }
 
+#[derive(Debug)]
 pub struct VariableRef {
-    var_token_value: usize,
-    mem_pos: usize,
-    field_index: usize,
+    pub var_token_value: usize,
+    pub mem_pos: u32,
+    pub field_index: usize,
 }
 
+#[derive(Debug)]
 pub struct VariablesMap(Vec<VariableRef>);
 
 impl VariablesMap {
-    fn get_by_token_value(&self, index: usize) -> Option<&VariableRef> {
+    pub fn get_by_token_value(&self, index: usize) -> Option<&VariableRef> {
         self.0.iter().find(
             |VariableRef {
                  var_token_value: t, ..
@@ -153,7 +155,7 @@ impl VariablesMap {
     pub fn set(
         &mut self,
         var_token_value: usize,
-        mem_pos: usize,
+        mem_pos: u32,
         field_index: usize,
     ) -> Result<(), VmError> {
         self.0.push(VariableRef {
@@ -273,8 +275,9 @@ impl<'a> VirtualMachine<'a> {
         drop(m);
 
         for MirBlock { command_stack } in mir_code {
+            println!("\n\n--mirblock------------------");
             for Command { op, mut args } in command_stack {
-                println!("-> {:3?} {:?}", op, args);
+                print!("\n-> {:3?} {:?} ", op, args);
                 match op {
                     OpCode::Cmp => todo!(),
                     // args: [type, method_token, return memory position]
@@ -294,6 +297,9 @@ impl<'a> VirtualMachine<'a> {
                             .collect::<Vec<_>>();
                         let return_type = args.remove(2).into();
                         if let Arg::Type(t) = &args[0] {
+                            println!("-> with ");
+                            method_args.iter().for_each(|a| print!("{}, ", a));
+                            println!("\nwith return type {:?}", return_type);
                             if let Arg::Method(method_token) = args[1] {
                                 t.exec_type_method(
                                     method_token,
@@ -377,11 +383,12 @@ impl<'a> VirtualMachine<'a> {
                             return Err(VmError::InvalidValueType);
                         }
                     }
+                    // args: mem_pos, variable_token
                     OpCode::MemPosRef => {
                         if let Arg::MemPos(pos) = args[0] {
                             self.variables.borrow_mut().set(
                                 args[1].as_token_value(),
-                                pos as usize,
+                                pos,
                                 0,
                             )?;
                         } else {
@@ -541,7 +548,11 @@ impl Arg {
     pub fn as_token_value(&self) -> usize {
         match self {
             Arg::Argument(v) => *v as usize,
-            _ => panic!("Cannot get index from this token"),
+            Arg::Variable(v) => *v as usize,
+            _ => {
+                println!("Cannot get token value from this arg: {:?}", self);
+                panic!("..and that's fatal.");
+            }
         }
     }
 }
@@ -550,7 +561,10 @@ impl From<Arg> for TypeDef {
     fn from(value: Arg) -> Self {
         match value {
             Arg::Type(t) => t,
-            _ => panic!("Cannot convert to TypeDef"),
+            _ => {
+                println!("Cannot convert to TypeDef: {:?}", value);
+                panic!("..and that's fatal.");
+            }
         }
     }
 }

@@ -2,7 +2,7 @@
 
 // ----------- Rib Type ----------------------------------------------------
 
-use crate::traits::{MethodProps, RotoFilter, TokenConvert, Token};
+use crate::traits::{MethodProps, RotoFilter, TokenConvert};
 
 use super::{
     builtin::{Boolean, BuiltinTypeValue},
@@ -38,17 +38,17 @@ impl RotoFilter<RibToken> for Rib {
         match method_name.ident.as_str() {
             "match" => Ok(MethodProps::new(
                 TypeValue::Record(self.record),
-                RibToken::Match.to_u8(),
+                RibToken::Match.into(),
                 vec![TypeDef::Prefix],
             )),
             "longest_match" => Ok(MethodProps::new(
                 TypeValue::Record(self.record),
-                RibToken::LongestMatch.to_u8(),
+                RibToken::LongestMatch.into(),
                 vec![TypeDef::Prefix],
             )),
             "contains" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                RibToken::Contains.to_u8(),
+                RibToken::Contains.into(),
                 vec![TypeDef::Prefix],
             )),
             _ => Err(format!(
@@ -110,6 +110,24 @@ pub enum RibToken {
 
 impl TokenConvert for RibToken {}
 
+impl From<usize> for RibToken {
+    fn from(token: usize) -> Self {
+        match token {
+            0 => RibToken::Match,
+            1 => RibToken::LongestMatch,
+            2 => RibToken::Get,
+            3 => RibToken::Contains,
+            _ => panic!("Unknown token"),
+        }
+    }
+}
+
+impl From<RibToken> for usize {
+    fn from(t: RibToken) -> usize {
+        t as usize
+    }
+}
+
 impl std::fmt::Display for Rib {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Rib with record type {}", self.record)
@@ -153,12 +171,12 @@ impl RotoFilter<TableToken> for Table {
         match method_name.ident.as_str() {
             "get" => Ok(MethodProps::new(
                 TypeValue::Record(self.record),
-                TableToken::Get.to_u8(),
+                TableToken::Get.into(),
                 vec![TypeDef::Asn],
             )),
             "contains" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                TableToken::Contains.to_u8(),
+                TableToken::Contains.into(),
                 vec![TypeDef::Asn],
             )),
             _ => Err(format!(
@@ -218,6 +236,22 @@ pub enum TableToken {
 }
 
 impl TokenConvert for TableToken {}
+
+impl From<usize> for TableToken {
+    fn from(token: usize) -> Self {
+        match token {
+            0 => TableToken::Get,
+            1 => TableToken::Contains,
+            _ => panic!("Unknown token"),
+        }
+    }
+}
+
+impl From<TableToken> for usize {
+    fn from(t: TableToken) -> usize {
+        t as usize
+    }
+}
 
 impl std::fmt::Display for Table {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
