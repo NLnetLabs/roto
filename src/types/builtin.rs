@@ -988,8 +988,7 @@ impl RotoFilter<PrefixToken> for Prefix {
                         ))
                     }))
                 } else {
-                    Err(format!("Invalid argument type for method 'from'")
-                        .into())
+                    Err(format!("Invalid argument type for method 'from': {}", args[0]).into())
                 }
             }
             _ => {

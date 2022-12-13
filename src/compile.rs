@@ -84,7 +84,7 @@ impl RotoPack {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct MirBlock {
     pub command_stack: Vec<Command>,
 }
@@ -100,7 +100,7 @@ impl MirBlock {
         self.command_stack.push(command);
     }
 
-    pub fn compile(&mut self, ast: &AcceptReject) {
+    pub fn compile(&mut self, _ast: &AcceptReject) {
         todo!()
     }
 }
@@ -141,7 +141,7 @@ pub fn compile(
 
     println!("Found modules: {:?}", modules);
     let arguments: Vec<(&ShortString, &Symbol)> = vec![];
-    let variables: Vec<(&ShortString, &Symbol)> = vec![];
+    let _variables: Vec<(&ShortString, &Symbol)> = vec![];
     let data_sources: Vec<(ShortString, &Symbol)> = vec![];
 
     // initialize the command stack
@@ -150,8 +150,8 @@ pub fn compile(
     for module in modules {
         let _module = _global.get(&module).unwrap();
         let (
-            rx_type,
-            tx_type,
+            _rx_type,
+            _tx_type,
             DepsGraph {
                 arguments,
                 variables,

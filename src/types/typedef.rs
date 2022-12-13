@@ -3,6 +3,7 @@
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 
+use crate::types::NamedTypeDef;
 use crate::traits::Token;
 use crate::types::collections::ElementTypeValue;
 use crate::{
@@ -24,7 +25,7 @@ pub enum TypeDef {
     Table(Box<TypeDef>),
     // Collection Types
     List(Box<TypeDef>),
-    Record(Vec<(ShortString, Box<TypeDef>)>),
+    Record(Vec<NamedTypeDef>),
     // Builtin Types
     U32,
     U8,
@@ -48,7 +49,7 @@ pub enum TypeDef {
 
 impl TypeDef {
     pub(crate) fn new_record_type_from_short_string(
-        type_ident_pairs: Vec<(ShortString, Box<TypeDef>)>,
+        type_ident_pairs: Vec<NamedTypeDef>,
     ) -> Result<TypeDef, Box<dyn std::error::Error>> {
         Ok(TypeDef::Record(type_ident_pairs))
     }

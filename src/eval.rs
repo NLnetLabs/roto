@@ -2,6 +2,7 @@ use crate::ast::LogicalExpr;
 use crate::ast::ShortString;
 use crate::symbols::GlobalSymbolTable;
 use crate::traits::Token;
+use crate::types::NamedTypeDef;
 use crate::types::builtin::Boolean;
 use crate::types::builtin::BuiltinTypeValue;
 use crate::types::builtin::HexLiteral;
@@ -166,9 +167,9 @@ impl<'a> ast::RibBody {
         &'a self,
         parent_name: ast::ShortString,
         symbols: &'_ mut symbols::SymbolTable,
-    ) -> Result<Vec<(ShortString, Box<TypeDef>)>, Box<dyn std::error::Error>>
+    ) -> Result<Vec<NamedTypeDef>, Box<dyn std::error::Error>>
     {
-        let mut kvs: Vec<(ShortString, Box<TypeDef>)> = vec![];
+        let mut kvs: Vec<NamedTypeDef> = vec![];
 
         for kv in self.key_values.iter() {
             match kv {
@@ -218,9 +219,9 @@ impl<'a> ast::RecordTypeIdentifier {
         name: ast::ShortString,
         kind: symbols::SymbolKind,
         symbols: &'_ mut symbols::SymbolTable,
-    ) -> Result<Vec<(ShortString, Box<TypeDef>)>, Box<dyn std::error::Error>>
+    ) -> Result<Vec<NamedTypeDef>, Box<dyn std::error::Error>>
     {
-        let mut kvs: Vec<(ShortString, Box<TypeDef>)> = vec![];
+        let mut kvs: Vec<NamedTypeDef> = vec![];
 
         for kv in self.key_values.iter() {
             match kv {
@@ -275,7 +276,7 @@ impl ast::Module {
         let module_scope = symbols::Scope::Module(self.ident.ident.clone());
         // Check the `with` clause for additional arguments.
         let with_kv: Vec<_> = self.with_kv.clone();
-        let with_ty = with_kv
+        let _with_ty = with_kv
             .into_iter()
             .map(|ty| {
                 declare_argument(
@@ -330,7 +331,7 @@ impl ast::Module {
         // The `with` clause of the `define` section acts as an extra
         // argument to the whole module, that can be used as a extra
         // read-only payload.
-        let with_ty = with_kv
+        let _with_ty = with_kv
             .into_iter()
             .map(|ty| {
                 declare_argument(
@@ -507,7 +508,7 @@ impl ast::Apply {
         scope: symbols::Scope,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let _symbols = symbols.borrow();
-        let module_symbols = _symbols.get(&scope).ok_or_else(|| {
+        let _module_symbols = _symbols.get(&scope).ok_or_else(|| {
             format!("no symbols found for module {}", scope)
         })?;
         drop(_symbols);
@@ -535,7 +536,7 @@ impl ast::ApplyScope {
 
         // not doing anything with the actual AplyScope (the use statement),
         // not sure whether it is going to be needed.
-        let s_name = self.scope.clone().ident;
+        let _s_name = self.scope.clone().ident;
 
         let term = self.filter_ident.eval(symbols.clone(), scope.clone())?;
         let (_ty, token) = module_symbols.get_term(&term.get_name())?;
@@ -648,7 +649,7 @@ impl ast::MethodComputeExpr {
         // self is the call receiver, e.g. in `rib-rov.longest_match()`,
         // `rib-rov` is the receiver and `longest_match` is the method call
         // name. The actual method call lives in the `args` field.
-        let arguments = self.args.eval(symbols.clone(), scope.clone())?;
+        let arguments = self.args.eval(symbols.clone(), scope)?;
         println!("method call args {:?}", arguments);
 
         // we need to lookup the properties of the return type of the method
@@ -1010,7 +1011,7 @@ impl ast::BooleanExpr {
                 // Checking this can therefore not be done by the Call
                 // Expression check here.
                 let s = call_expr.eval(
-                    call_expr.get_receiver().ident.clone().ident,
+                    call_expr.get_receiver().ident.ident,
                     symbols,
                     scope.clone(),
                 )?;
@@ -1629,11 +1630,11 @@ fn is_boolean_function(
 
     let left = (
         left.get_builtin_type()? == TypeDef::Boolean,
-        left.get_args().get(0).and_then(|a| Some(a.get_value())),
+        left.get_args().get(0).map(|a| a.get_value()),
     );
     let right = (
         right.get_builtin_type()? == TypeDef::Boolean,
-        right.get_args().get(0).and_then(|a| Some(a.get_value())),
+        right.get_args().get(0).map(|a| a.get_value()),
     );
 
     println!("left value: {:?}", left);
@@ -1658,7 +1659,7 @@ fn is_boolean_expression(
         return Ok(());
     };
 
-    if let Some(value) = expr.get_args().get(0).and_then(|a| Some(a.get_value())) {
+    if let Some(value) = expr.get_args().get(0).map(|a| a.get_value()) {
         if value.is_boolean_type() {
             return Ok(());
         };

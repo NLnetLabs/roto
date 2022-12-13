@@ -154,10 +154,6 @@ impl Table {
             Err("Not a table type".into())
         }
     }
-
-    // pub fn get_type(&self) -> Vec<(ShortString, Box<TypeDef>)> {
-    //     (&self.record).into()
-    // }
 }
 
 impl RotoFilter<TableToken> for Table {
