@@ -8,7 +8,7 @@ use crate::{
     symbols::{DepsGraph, GlobalSymbolTable, Scope, Symbol},
     traits::Token,
     types::typedef::TypeDef,
-    vm::{Arg, Command, OpCode},
+    vm::{Arg, Command, OpCode, VariablesMap},
 };
 
 //============ The Compiler (Filter creation time) ==========================
@@ -183,6 +183,9 @@ pub fn compile(
 
         println!("=================================================");
 
+        // local vars state during compilation
+        let mut local_vars = VariablesMap::new();
+
         // compile the used vars,
         for (mut mem_pos, var) in (2_u32..)
             .zip(variables.into_iter().map(|s| s.1.get_token().unwrap()))
@@ -211,6 +214,7 @@ pub fn compile(
                     )
                 })
             );
+
             while let Some(arg) = &mut leaves.next() {
                 print!("a");
                 let token = arg.get_token().unwrap();
@@ -221,11 +225,13 @@ pub fn compile(
                         local_stack.push_front(Command::new(
                             OpCode::MemPosRef,
                             vec![
-                                Arg::Variable(var as usize),
                                 Arg::MemPos(mem_pos),
+                                Arg::Variable(var as usize),
                             ],
                         ));
-                        print!(" {:?}", local_stack);
+                        println!("local_stack {:?}", local_stack);
+                        local_vars.set(var as usize, mem_pos, 0).unwrap();
+                        println!("local_vars {:?}", local_vars);
                         let mut local_st_v = unwind(local_stack);
                         local_st_v.reverse();
                         mir_block.command_stack.extend(local_st_v);
@@ -234,9 +240,17 @@ pub fn compile(
                     // concrete value already.
                     Token::Constant => {
                         let val = arg.get_value();
+                        mem_pos += 1;
+                        local_stack.push_front(Command::new(
+                            OpCode::MemPosSet,
+                            vec![
+                                Arg::MemPos(mem_pos),
+                                Arg::Constant(val.as_builtin_type()?),
+                            ],
+                        ));
                         local_stack.push_front(Command::new(
                             OpCode::PushStack,
-                            vec![Arg::Constant(val.as_builtin_type()?)],
+                            vec![Arg::MemPos(mem_pos)],
                         ));
                     }
                     // external calls
@@ -256,22 +270,28 @@ pub fn compile(
                                     Arg::Method(token.into()),
                                 ],
                             ),
-                            Ok(Token::BuiltinType(_)) => (
+                            Ok(Token::BuiltinType(_)) => {
+                                
+                                println!("arg : {:?}", arg);
+                                println!("next_arg : {:?}", next_arg);
+                                
+                                (
+                                // args: [ call_type, method_call, return_type ]
                                 OpCode::ExecuteTypeMethod,
                                 vec![
+                                    Arg::Type(arg.get_type()),
+                                    Arg::Method(token.into()),
                                     Arg::Type(next_arg.get_type()),
+                                ],
+                            )
+                        },
+                            Ok(Token::Variable(_)) => (
+                                OpCode::ExecuteValueMethod,
+                                vec![
+                                    Arg::MemPos(mem_pos),
                                     Arg::Method(token.into()),
                                 ],
                             ),
-                            Ok(Token::Variable(_)) => {
-                                (
-                                    OpCode::ExecuteValueMethod,
-                                    vec![
-                                        Arg::MemPos(mem_pos),
-                                        Arg::Method(token.into()),
-                                    ],
-                                )
-                            },
                             Ok(Token::FieldAccess(_)) => (
                                 OpCode::ExecuteValueMethod,
                                 vec![
@@ -280,12 +300,11 @@ pub fn compile(
                                 ],
                             ),
                             _ => {
-                                return Err(
-                                    format!(
-                                        "Invalid token for method call: {:?}",
-                                        next_arg.get_token()
-                                    ).into()
+                                return Err(format!(
+                                    "Invalid token for method call: {:?}",
+                                    next_arg.get_token()
                                 )
+                                .into())
                             }
                         };
                         args.push(Arg::MemPos(mem_pos));
@@ -319,9 +338,12 @@ pub fn compile(
                     }
                     // roots
                     Token::Variable(var) => {
+                        println!("get var: {:?}", var);
+                        println!("local vars {:?}", local_vars);
+                        let mem_pos = local_vars.get_by_token_value(var as usize).unwrap();
                         local_stack.push_front(Command::new(
                             OpCode::PushStack,
-                            vec![Arg::Variable(var as usize)],
+                            vec![Arg::MemPos(mem_pos.mem_pos as u32)],
                         ));
                         mir_block.command_stack.extend(unwind(local_stack));
                         local_stack = VecDeque::new();
@@ -338,24 +360,22 @@ pub fn compile(
                         mir_block.command_stack.extend(unwind(local_stack));
                         local_stack = VecDeque::new();
                     }
-                    Token::RxType => { local_stack.push_front(Command::new(
-                        OpCode::PushStack,
-                        vec![
-                            Arg::MemPos(0),
-                        ],
-                    ));
-                    mir_block.command_stack.extend(unwind(local_stack));
-                    local_stack = VecDeque::new();
-                } ,
-                    Token::TxType => { local_stack.push_front(Command::new(
-                        OpCode::PushStack,
-                        vec![
-                            Arg::MemPos(1),
-                        ],
-                    ));
-                    // mir_block.command_stack.extend(unwind(local_stack));
-                    // local_stack = VecDeque::new();
-                },
+                    Token::RxType => {
+                        local_stack.push_front(Command::new(
+                            OpCode::PushStack,
+                            vec![Arg::MemPos(0)],
+                        ));
+                        mir_block.command_stack.extend(unwind(local_stack));
+                        local_stack = VecDeque::new();
+                    }
+                    Token::TxType => {
+                        local_stack.push_front(Command::new(
+                            OpCode::PushStack,
+                            vec![Arg::MemPos(1)],
+                        ));
+                        // mir_block.command_stack.extend(unwind(local_stack));
+                        // local_stack = VecDeque::new();
+                    }
                     Token::DataSource(_) => {
                         // No further action for a data-source, it's only
                         // used to call methods on, which should already have
