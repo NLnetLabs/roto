@@ -6,15 +6,14 @@ use roto::symbols::GlobalSymbolTable;
 
 use nom::error::convert_error;
 use roto::ast::*;
-use roto::compile::RotoPack;
 use roto::types::builtin::{
     AsPath, Asn, BuiltinTypeValue, Community, CommunityType, U32,
 };
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
+use roto::vm;
 use roto::vm::ArgumentsMap;
-use roto::vm::{self, Payload};
 
 fn test_data(
     name: &str,
@@ -23,7 +22,6 @@ fn test_data(
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("eval test {}", name);
     let parsed_data = Root::parse_str(data);
-    // println!("{} {:#?}", name, parsed_data);
     if let Err(e) = parsed_data.clone() {
         println!("{}", convert_error(data, e));
     }
@@ -33,20 +31,14 @@ fn test_data(
         true => assert!(parsed_data.is_ok()),
     }
 
-    // let _symbols = HashMap::<Scope, SymbolTable>::new();
     let eval = parsed_data?;
 
-    // let symbols = RefCell::new(symbols);
     let symbols = GlobalSymbolTable::new();
     let ev2 = eval.1.eval(symbols.clone());
 
     println!("{:#?}", symbols);
 
     let roto_pack = compile(symbols)?;
-    let arguments = ArgumentsMap::new();
-    // let data_sources = vec![];
-
-    // let vm = vm::VirtualMachine::new( arguments, data_sources);
 
     let count =
         BuiltinTypeValue::create_instance(TypeDef::U32, 1_u32).unwrap();
@@ -113,7 +105,7 @@ fn test_data(
     ])
     .unwrap();
 
-    let mut my_payload = Record::create_instance(
+    let my_payload = Record::create_instance(
         &my_rec_type,
         vec![
             ("count", count),
@@ -128,11 +120,8 @@ fn test_data(
     .unwrap();
 
     let mem = vm::LinearMemory::new();
-    // let mem = Rc::new(mem);
     let vars = vm::VariablesMap::new();
     let vars = RefCell::new(vars);
-    // let mem_mem = RefCell::new(vm::LinearMemory::new());
-    // let bm = mem_mem.borrow_mut();
 
     println!("Arguments");
     println!("{:#?}", &roto_pack.arguments);
@@ -150,8 +139,14 @@ fn test_data(
         // .with_arguments(arguments)
         .build(&vars);
 
-    vm.exec(my_payload, None::<Record>, Rc::new(arguments), RefCell::new(mem), roto_pack.mir)
-        .unwrap();
+    vm.exec(
+        my_payload,
+        None::<Record>,
+        Rc::new(arguments),
+        RefCell::new(mem),
+        roto_pack.mir,
+    )
+    .unwrap();
 
     ev2
 
