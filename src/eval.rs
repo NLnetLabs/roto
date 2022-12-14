@@ -468,13 +468,14 @@ impl ast::Action {
             let payload_var_name = call_expr.get_receiver().clone().ident;
 
             let s = module_symbols
-                .get_variable(&payload_var_name.ident)
-                .map_err(|_| {
+                .get_symbol(&payload_var_name.ident)
+                .ok_or_else(|| {
                     format!(
                         "for action: no variable '{}' found in {}",
                         payload_var_name.ident, scope
                     )
                 })?;
+            
             if !(s.get_kind() == symbols::SymbolKind::RxType) {
                 return Err(format!(
                     "variable '{}' is not the rx type of {}",
