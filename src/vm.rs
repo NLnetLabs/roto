@@ -20,6 +20,7 @@ struct StackRef {
     field_index: Option<usize>,
 }
 
+#[derive(Debug)]
 struct Stack(Vec<StackRef>);
 
 impl<'a> Stack {
@@ -51,6 +52,10 @@ impl<'a> Stack {
 
     fn unwind(&mut self) -> Vec<StackRef> {
         self.0.drain(..).collect()
+    }
+
+    fn clear(&mut self) {
+        self.0.clear();
     }
 }
 
@@ -247,6 +252,12 @@ impl<'a> VirtualMachine<'a> {
 
         for MirBlock { command_stack } in mir_code {
             println!("\n\n--mirblock------------------");
+
+            let mut s = self.stack.borrow_mut();
+            s.clear();
+            drop(s);
+
+            println!("stack: {:?}", self.stack);
             for Command { op, mut args } in command_stack {
                 print!("\n-> {:3?} {:?} ", op, args);
                 match op {
@@ -451,7 +462,9 @@ impl<'a> VirtualMachine<'a> {
                     }
                 };
             }
+            println!("\n\n(end) stack: {:?}", self.stack);
         }
+        println!("successfully executed");
         Ok(())
     }
 }
