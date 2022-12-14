@@ -446,7 +446,6 @@ impl From<U32Token> for usize {
     }
 }
 
-
 // ----------- A simple u8 type ---------------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -1184,6 +1183,20 @@ impl TryFrom<&TypeValue> for PrefixLength {
     fn try_from(value: &TypeValue) -> Result<Self, Self::Error> {
         match value {
             TypeValue::Builtin(BuiltinTypeValue::PrefixLength(pl)) => Ok(*pl),
+            TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(int_lit)) => {
+                if let TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
+                    PrefixLength(pl),
+                )) = int_lit.into_type(&TypeDef::PrefixLength)?
+                {
+                    Ok(PrefixLength(pl))
+                } else {
+                    Err(format!(
+                        "Cannot convert type {:?} to type PrefixLength",
+                        value
+                    )
+                    .into())
+                }
+            }
             _ => Err(format!(
                 "Cannot convert type {:?} to type PrefixLength",
                 value
@@ -1537,11 +1550,23 @@ impl RotoFilter<AsnToken> for Asn {
     fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        args: &[&TypeValue],
+        args: &'a [&'a TypeValue],
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
-        todo!()
+        match method_token.into() {
+            AsnToken::Set => {
+                if let TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) =
+                    args[0]
+                {
+                    Ok(Box::new(move || {
+                        TypeValue::from(Asn::new(asn.0.unwrap()))
+                    }))
+                } else {
+                    Err("Invalid argument type".into())
+                }
+            }
+        }
     }
 
     fn exec_type_method<'a>(
