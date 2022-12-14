@@ -119,7 +119,7 @@ fn test_data(
     )
     .unwrap();
 
-    let mem = vm::LinearMemory::new();
+    let mem = vm::LinearMemory::empty();
     let vars = vm::VariablesMap::new();
     let vars = RefCell::new(vars);
 

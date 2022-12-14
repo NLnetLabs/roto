@@ -37,7 +37,7 @@ impl<'a> Stack {
 
     fn pop(&'a mut self, mem: Ref<LinearMemory>) -> Result<(), VmError> {
         let pos = self.0.pop().ok_or(VmError::StackUnderflow)?.mem_pos;
-        let v = mem.get(pos).ok_or(VmError::StackUnderflow)?;
+        mem.get(pos).ok_or(VmError::StackUnderflow)?;
         Ok(())
     }
 
@@ -58,7 +58,7 @@ impl<'a> Stack {
 pub struct LinearMemory([TypeValue; 512]);
 
 impl LinearMemory {
-    pub fn new() -> Self {
+    pub fn empty() -> Self {
         LinearMemory(std::array::from_fn(|_| TypeValue::None))
     }
 
@@ -66,11 +66,11 @@ impl LinearMemory {
         self.0.get(index)
     }
 
-    fn get_mut(&mut self, index: usize) -> Option<&mut TypeValue> {
+    fn _get_mut(&mut self, index: usize) -> Option<&mut TypeValue> {
         self.0.get_mut(index)
     }
 
-    fn take(&mut self, index: usize) -> Option<TypeValue> {
+    fn _take(&mut self, index: usize) -> Option<TypeValue> {
         self.0.get_mut(index).map(std::mem::take)
     }
 
@@ -108,14 +108,11 @@ impl ArgumentsMap {
             .ok_or(VmError::ArgumentNotFound)
     }
 
-    fn get_by_token_value(&self, index: usize) -> Option<&TypeValue> {
-        self.0
-            .iter()
-            .find(|(t, _)| *t == index.into())
-            .map(|(_, v)| v)
+    fn _get_by_token_value(&self, index: usize) -> Option<&TypeValue> {
+        self.0.iter().find(|(t, _)| *t == index).map(|(_, v)| v)
     }
 
-    fn take_by_index(mut self, index: usize) -> Option<TypeValue> {
+    fn _take_by_index(mut self, index: usize) -> Option<TypeValue> {
         self.0.get_mut(index).map(std::mem::take).map(|(_, v)| v)
     }
 
@@ -128,7 +125,7 @@ impl ArgumentsMap {
     }
 
     pub fn last_index(&self) -> Option<usize> {
-        if self.0.len() > 0 {
+        if self.0.is_empty() {
             Some(self.0.len())
         } else {
             None
@@ -143,7 +140,7 @@ pub struct VariableRef {
     pub field_index: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct VariablesMap(Vec<VariableRef>);
 
 impl VariablesMap {
@@ -185,6 +182,23 @@ pub struct VirtualMachine<'a> {
 }
 
 impl<'a> VirtualMachine<'a> {
+    pub fn copy_tx_rx_to_mem(
+        &mut self,
+        rx: impl Payload,
+        tx: Option<impl Payload>,
+        mem: &RefCell<LinearMemory>,
+    ) {
+        let mut m = mem.borrow_mut();
+        let rx = rx.take_value();
+        m.set(0, rx);
+
+        if let Some(tx) = tx {
+            let tx = tx.take_value();
+            println!("move tx to mem[1s]: {}", tx);
+            m.set(1, tx);
+        }
+    }
+
     pub fn exec(
         &'a mut self,
         rx: impl Payload,
@@ -196,23 +210,7 @@ impl<'a> VirtualMachine<'a> {
     ) -> Result<(), VmError> {
         println!("\nstart executing vm...");
 
-        // put rx and tx into memory in the first two slots
-        let rx = rx.take_value();
-        println!("move rx to mem[0]: {}", rx);
-
-        // let v = std::mem::take(v);
-        let mut m = mem.borrow_mut();
-        m.set(0, rx);
-
-        if let Some(tx) = tx {
-            let tx = tx.take_value();
-            // let v = std::mem::take(v);
-            // let mut m = mem.borrow_mut();
-            println!("move tx to mem[1s]: {}", tx);
-            m.set(1, tx);
-        }
-
-        drop(m);
+        self.copy_tx_rx_to_mem(rx, tx, &mem);
 
         for MirBlock { command_stack } in mir_code {
             println!("\n\n--mirblock------------------");
@@ -262,28 +260,29 @@ impl<'a> VirtualMachine<'a> {
                         let mut s = self.stack.borrow_mut();
                         let mut m = mem.borrow_mut();
 
-                        let mem_pos = if let Arg::MemPos(pos) = args.pop().unwrap() {
-                            pos as usize
-                        } else {
-                            return Err(VmError::InvalidValueType);
-                        };
+                        let mem_pos =
+                            if let Arg::MemPos(pos) = args.pop().unwrap() {
+                                pos as usize
+                            } else {
+                                return Err(VmError::InvalidValueType);
+                            };
                         let return_type = args.pop().unwrap().into();
                         let method_token: Arg = args.pop().unwrap();
 
                         let mut field_index = None;
                         // pop all refs from the stack and resolve them to
                         // their values.
-                        let mut method_args = s
+                        let method_args = s
                             .unwind()
                             .into_iter()
                             .map(|sr| {
                                 println!("\nsr = {:#?}", sr);
                                 field_index = sr.field_index;
-                                std::mem::take(m.get_mut(sr.mem_pos)
+                                m.get(sr.mem_pos)
                                     .ok_or(VmError::InvalidMemoryAccess(
                                         sr.mem_pos,
                                     ))
-                                    .unwrap())
+                                    .unwrap()
                             })
                             .collect::<Vec<_>>();
 
@@ -291,33 +290,32 @@ impl<'a> VirtualMachine<'a> {
                         // are going to call a method with.
                         match field_index {
                             None => {
-                                let v = method_args.remove(0);
-                                v.exec_value_method(
+                                let v = method_args.get(0).unwrap();
+                                let vv = v.exec_value_method(
                                     method_token.into(),
-                                    method_args,
+                                    method_args.as_slice(),
                                     return_type,
                                 );
-                                m.set(mem_pos, v);
-                            
-                            },
+                                m.set(mem_pos, vv);
+                            }
                             Some(i) => {
-                                let parent_val = method_args
-                                    .remove(0);
-                                let elm_val = parent_val.get_field_by_index(i)
-                                    .unwrap();
-                                match elm_val {
-                                    ElementTypeValue::Nested(nested) => {
+                                let parent_val = method_args.get(0).unwrap();
+                                match &parent_val
+                                    .get_field_by_index(i)
+                                    .unwrap()
+                                {
+                                    (_, ElementTypeValue::Nested(nested)) => {
                                         let v = nested.exec_value_method(
                                             method_token.into(),
-                                            method_args,
+                                            method_args.as_slice(),
                                             return_type,
                                         );
                                         m.set(mem_pos, v);
                                     }
-                                    ElementTypeValue::Primitive(tv) => {
+                                    (_, ElementTypeValue::Primitive(tv)) => {
                                         let v = tv.exec_value_method(
                                             method_token.into(),
-                                            method_args,
+                                            method_args.as_slice(),
                                             return_type,
                                         );
                                         m.set(mem_pos, v);

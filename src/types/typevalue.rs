@@ -65,15 +65,15 @@ impl TypeValue {
         }
     }
 
-    pub fn get_field_by_index(self, index: usize) -> Result<ElementTypeValue, Box<dyn std::error::Error>> {
+    pub fn get_field_by_index(&self, index: usize) -> Result<&(ShortString, ElementTypeValue), Box<dyn std::error::Error>> {
         match self {
             TypeValue::Record(r) => {
                 let field = r.get_field_by_index(index);
-                Ok(field.1)
+                field.ok_or(format!("Index {} out of bounds for record '{:?}'", index, self).into())
             }
             TypeValue::List(l) => {
                 let field = l.get_field_by_index(index);
-                Ok(field)
+                field.ok_or(format!("Index {} out of bounds for list '{:?}'", index, self).into())
             }
             _ => Err(format!("Type '{:?}' is not a record.", self).into()),
         }
@@ -82,7 +82,7 @@ impl TypeValue {
     pub(crate) fn exec_value_method(
         &self,
         method_token: usize,
-        args: Vec<TypeValue>,
+        args: &[&TypeValue],
         return_type: TypeDef,
     ) -> TypeValue {
         match self {

@@ -72,7 +72,7 @@ impl RotoFilter<RibToken> for Rib {
     fn exec_value_method<'a>(
         &'a self,
         _method: usize,
-        _args: Vec<TypeValue>,
+        _args: &[&TypeValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
@@ -185,7 +185,7 @@ impl RotoFilter<TableToken> for Table {
     fn exec_value_method<'a>(
         &'a self,
         _method: usize,
-        _args: Vec<TypeValue>,
+        _args: &[&TypeValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {

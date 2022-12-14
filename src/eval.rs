@@ -2,12 +2,12 @@ use crate::ast::LogicalExpr;
 use crate::ast::ShortString;
 use crate::symbols::GlobalSymbolTable;
 use crate::traits::Token;
-use crate::types::NamedTypeDef;
 use crate::types::builtin::Boolean;
 use crate::types::builtin::BuiltinTypeValue;
 use crate::types::builtin::HexLiteral;
 use crate::types::builtin::IntegerLiteral;
 use crate::types::builtin::PrefixLength;
+use crate::types::NamedTypeDef;
 
 use super::ast;
 use super::symbols;
@@ -167,8 +167,7 @@ impl<'a> ast::RibBody {
         &'a self,
         parent_name: ast::ShortString,
         symbols: &'_ mut symbols::SymbolTable,
-    ) -> Result<Vec<NamedTypeDef>, Box<dyn std::error::Error>>
-    {
+    ) -> Result<Vec<NamedTypeDef>, Box<dyn std::error::Error>> {
         let mut kvs: Vec<NamedTypeDef> = vec![];
 
         for kv in self.key_values.iter() {
@@ -219,8 +218,7 @@ impl<'a> ast::RecordTypeIdentifier {
         name: ast::ShortString,
         kind: symbols::SymbolKind,
         symbols: &'_ mut symbols::SymbolTable,
-    ) -> Result<Vec<NamedTypeDef>, Box<dyn std::error::Error>>
-    {
+    ) -> Result<Vec<NamedTypeDef>, Box<dyn std::error::Error>> {
         let mut kvs: Vec<NamedTypeDef> = vec![];
 
         for kv in self.key_values.iter() {
@@ -262,7 +260,14 @@ impl<'a> ast::RecordTypeIdentifier {
         }
 
         let record = TypeDef::Record(kvs.clone());
-        symbols.add_variable(name, None, kind, record, vec![], TypeValue::None)?;
+        symbols.add_variable(
+            name,
+            None,
+            kind,
+            record,
+            vec![],
+            TypeValue::None,
+        )?;
 
         Ok(kvs)
     }
@@ -604,13 +609,14 @@ impl ast::ComputeExpr {
         for a_e in &self.access_expr {
             let ty = s.get_type();
             let child_s = match a_e {
-                ast::AccessExpr::MethodComputeExpr(method_call) => method_call
-                    .eval(
-                    symbols::SymbolKind::MethodCall,
-                    ty,
-                    symbols.clone(),
-                    scope.clone(),
-                )?,
+                ast::AccessExpr::MethodComputeExpr(method_call) => {
+                    method_call.eval(
+                        symbols::SymbolKind::MethodCall,
+                        ty,
+                        symbols.clone(),
+                        scope.clone(),
+                    )?
+                }
                 ast::AccessExpr::FieldAccessExpr(field_access) => {
                     field_access.eval(ty)?
                 }
@@ -742,22 +748,19 @@ impl ast::AccessReceiver {
         };
 
         // is it an argument?
-        if let Some(arg) = _symbols
+        if let Some(Ok(arg)) = _symbols
             .borrow()
             .get(&scope)
             .map(|s| s.get_argument(&search_var))
         {
-            if let Ok(arg) = arg {
-                let (type_def, token) = arg.get_type_and_token()?;
-
-                return Ok(symbols::Symbol::new(
-                    search_var.as_str().into(),
-                    symbols::SymbolKind::Argument,
-                    type_def,
-                    vec![],
-                    Some(token),
-                ));
-            }
+            let (type_def, token) = arg.get_type_and_token()?;
+            return Ok(symbols::Symbol::new(
+                search_var.as_str().into(),
+                symbols::SymbolKind::Argument,
+                type_def,
+                vec![],
+                Some(token),
+            ));
         }
 
         // Is it one of:
@@ -818,13 +821,15 @@ impl ast::ValueExpr {
                     scope,
                 )
             }
-            ast::ValueExpr::StringLiteral(str_lit) => Ok(symbols::Symbol::new(
-                str_lit.into(),
-                symbols::SymbolKind::StringLiteral,
-                TypeDef::String,
-                vec![],
-                None,
-            )),
+            ast::ValueExpr::StringLiteral(str_lit) => {
+                Ok(symbols::Symbol::new(
+                    str_lit.into(),
+                    symbols::SymbolKind::StringLiteral,
+                    TypeDef::String,
+                    vec![],
+                    None,
+                ))
+            }
             // Integers are special, we are keeping them as is, so that the
             // receiver can decide how to cast them (into u8, u32 or i64).
             ast::ValueExpr::IntegerLiteral(int_lit) => {
@@ -1345,7 +1350,7 @@ fn get_type_for_scoped_variable(
     }
 }
 
-fn get_data_source_for_ident(
+fn _get_data_source_for_ident(
     ident: ast::Identifier,
     symbols: symbols::GlobalSymbolTable,
 ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
@@ -1361,7 +1366,7 @@ fn get_data_source_for_ident(
     src
 }
 
-fn declare_variable(
+fn _declare_variable(
     name: ShortString,
     type_ident: ast::TypeIdentField,
     kind: symbols::SymbolKind,
@@ -1652,7 +1657,7 @@ fn is_boolean_function(
 
 // A boolean expression only accepts on expression, that should return a
 // boolean value.
-fn is_boolean_expression(
+fn _is_boolean_expression(
     expr: &impl BooleanExpr,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if expr.get_type() == TypeDef::Boolean {
@@ -1670,7 +1675,7 @@ fn is_boolean_expression(
         .into())
 }
 
-fn declare_variable_from_typedef<'a>(
+fn _declare_variable_from_typedef(
     ident: &str,
     name: ast::ShortString,
     ty: TypeDef,

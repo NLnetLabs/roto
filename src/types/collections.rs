@@ -141,7 +141,7 @@ impl List {
     pub fn get_field_by_index(
         &self,
         index: usize,
-    ) -> ElementTypeValue {
+    ) -> Option<&(ShortString, ElementTypeValue)> {
         // self.0.get(index).ok_or("Index out of bounds".into()).into()
         todo!()
     }
@@ -216,7 +216,7 @@ impl RotoFilter<ListToken> for List {
     fn exec_value_method(
         &self,
         _method: usize,
-        _args: Vec<TypeValue>,
+        _args: &[&TypeValue],
         _res_type: TypeDef,
     ) -> Result<
         std::boxed::Box<(dyn FnOnce() -> TypeValue)>,
@@ -312,8 +312,8 @@ impl<'a> Record {
         self.0.iter().find(|(f, _)| f == &field).map(|(_, v)| v)
     }
 
-    pub fn get_field_by_index(mut self, index: usize) -> (ShortString, ElementTypeValue) {
-        self.0.swap_remove(index)
+    pub fn get_field_by_index(&'a self, index: usize) -> Option<&'a (ShortString, ElementTypeValue)> {
+        self.0.get(index)
     }
 
     fn inner_from_typevalue(
@@ -326,8 +326,7 @@ impl<'a> Record {
             TypeValue::Record(r) => Ok(r.0),
             _ => Err("Not a record type".into()),
         }
-    }
-    
+    }   
 }
 
 impl std::fmt::Display for Record {
@@ -394,7 +393,7 @@ impl RotoFilter<RecordToken> for Record {
     fn exec_value_method(
         &self,
         _method: usize,
-        _args: Vec<TypeValue>,
+        _args: &[&TypeValue],
         _res_type: TypeDef,
     ) -> Result<
         Box<dyn FnOnce() -> TypeValue + '_>,

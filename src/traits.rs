@@ -105,7 +105,7 @@ pub(crate) trait RotoFilter<T: TokenConvert> where Self: std::fmt::Debug {
     fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        args: Vec<TypeValue>,
+        args: &'a [&'a TypeValue],
         res_type: TypeDef,
     ) -> Result<
         Box<dyn FnOnce() -> TypeValue + 'a>,

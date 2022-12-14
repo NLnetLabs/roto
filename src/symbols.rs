@@ -112,10 +112,6 @@ impl Symbol {
         &self.value
     }
 
-    pub fn get_value_owned(self) -> TypeValue {
-        self.value
-    }
-
     pub fn get_args_owned(self) -> Vec<Symbol> {
         self.args
     }
