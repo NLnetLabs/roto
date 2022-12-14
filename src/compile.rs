@@ -229,12 +229,10 @@ pub fn compile(
                                 Arg::Variable(var as usize),
                             ],
                         ));
-                        println!("local_stack {:?}", local_stack);
+                        println!("\nlocal_stack {:?}", local_stack);
                         local_vars.set(var as usize, mem_pos, 0).unwrap();
                         println!("local_vars {:?}", local_vars);
-                        let mut local_st_v = unwind(local_stack);
-                        local_st_v.reverse();
-                        mir_block.command_stack.extend(local_st_v);
+                        mir_block.command_stack.extend(local_stack);
                         local_stack = VecDeque::new();
                     }
                     // concrete value already.
