@@ -53,7 +53,7 @@ impl TypeValue {
         matches!(self, TypeValue::Builtin(BuiltinTypeValue::Boolean(_)))
     }
 
-    pub(crate) fn as_builtin_type(
+    pub(crate) fn as_cloned_builtin(
         &self,
     ) -> Result<TypeValue, Box<dyn std::error::Error>> {
         match self {

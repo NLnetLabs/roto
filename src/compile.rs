@@ -243,7 +243,7 @@ pub fn compile(
                             OpCode::MemPosSet,
                             vec![
                                 Arg::MemPos(mem_pos),
-                                Arg::Constant(val.as_builtin_type()?),
+                                Arg::Constant(val.as_cloned_builtin()?),
                             ],
                         ));
                         local_stack.push_front(Command::new(
