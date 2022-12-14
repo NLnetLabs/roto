@@ -34,7 +34,7 @@ fn test_data(
     let eval = parsed_data?;
 
     let symbols = GlobalSymbolTable::new();
-    let ev2 = eval.1.eval(symbols.clone());
+    let ev2 = eval.1.eval(symbols.clone())?;
 
     println!("{:#?}", symbols);
 
@@ -167,7 +167,7 @@ fn test_data(
     )
     .unwrap();
 
-    ev2
+    Ok(ev2)
 
     // Ok(())
 }
