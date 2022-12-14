@@ -284,17 +284,21 @@ pub fn compile(
                             )
                         },
                             Ok(Token::Variable(_)) => (
+                                // args: [ method_call, return_type ]
                                 OpCode::ExecuteValueMethod,
                                 vec![
-                                    Arg::MemPos(mem_pos),
+                                    // Arg::MemPos(mem_pos),
                                     Arg::Method(token.into()),
+                                    Arg::Type(arg.get_type()),
                                 ],
                             ),
                             Ok(Token::FieldAccess(_)) => (
+                                // args: [ method_call, return_type ]
                                 OpCode::ExecuteValueMethod,
                                 vec![
-                                    Arg::MemPos(mem_pos),
+                                    // Arg::MemPos(mem_pos),
                                     Arg::Method(token.into()),
+                                    Arg::Type(arg.get_type()),
                                 ],
                             ),
                             _ => {
