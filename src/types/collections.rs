@@ -20,7 +20,7 @@ use super::typevalue::TypeValue;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ElementTypeValue {
-    Primitive(BuiltinTypeValue),
+    Primitive(TypeValue),
     Nested(Box<TypeValue>),
 }
 
@@ -28,28 +28,28 @@ impl<'a> From<&'a TypeDef> for ElementTypeValue {
     fn from(t: &'a TypeDef) -> Self {
         match t {
             TypeDef::U32 => {
-                ElementTypeValue::Primitive(BuiltinTypeValue::U32(U32(None)))
+                ElementTypeValue::Primitive(U32(None).into())
             }
             TypeDef::U8 => {
-                ElementTypeValue::Primitive(BuiltinTypeValue::U8(U8(None)))
+                ElementTypeValue::Primitive(U8(None).into())
             }
             TypeDef::Prefix => ElementTypeValue::Primitive(
-                BuiltinTypeValue::Prefix(Prefix(None)),
+                Prefix(None).into(),
             ),
             TypeDef::PrefixLength => ElementTypeValue::Primitive(
-                BuiltinTypeValue::PrefixLength(PrefixLength(None)),
+                PrefixLength(None).into(),
             ),
             TypeDef::IpAddress => ElementTypeValue::Primitive(
-                BuiltinTypeValue::IpAddress(IpAddress(None)),
+                IpAddress(None).into()
             ),
             TypeDef::Asn => {
-                ElementTypeValue::Primitive(BuiltinTypeValue::Asn(Asn(None)))
+                ElementTypeValue::Primitive(Asn(None).into())
             }
             TypeDef::AsPath => ElementTypeValue::Primitive(
-                BuiltinTypeValue::AsPath(AsPath(None)),
+                AsPath(None).into()
             ),
             TypeDef::Community => ElementTypeValue::Primitive(
-                BuiltinTypeValue::Community(Community(None)),
+                Community(None).into(),
             ),
             TypeDef::List(ty) => ElementTypeValue::Nested(Box::new(
                 TypeValue::List(ty.as_ref().into()),
@@ -71,7 +71,7 @@ impl<'a> From<&'a TypeDef> for ElementTypeValue {
 impl From<TypeValue> for ElementTypeValue {
     fn from(t: TypeValue) -> Self {
         match t {
-            TypeValue::Builtin(v) => ElementTypeValue::Primitive(v),
+            TypeValue::Builtin(v) => ElementTypeValue::Primitive(v.into()),
             TypeValue::List(ty) => {
                 ElementTypeValue::Nested(Box::new(TypeValue::List(ty)))
             }
@@ -86,7 +86,7 @@ impl From<TypeValue> for ElementTypeValue {
 impl From<ElementTypeValue> for TypeValue {
     fn from(t: ElementTypeValue) -> Self {
         match t {
-            ElementTypeValue::Primitive(v) => TypeValue::Builtin(v),
+            ElementTypeValue::Primitive(v) => v,
             ElementTypeValue::Nested(ty) => match *ty {
                 TypeValue::List(ty) => TypeValue::List(ty),
                 TypeValue::Record(kv_list) => TypeValue::Record(kv_list),

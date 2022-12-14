@@ -5,6 +5,7 @@
 use routecore::asn::LongSegmentError;
 
 use crate::traits::{MethodProps, RotoFilter, TokenConvert};
+use crate::vm::Payload;
 
 use super::collections::{ElementTypeValue, Record};
 use super::typedef::TypeDef;
@@ -358,6 +359,12 @@ impl U32 {
     }
 }
 
+impl From<U32> for TypeValue {
+    fn from(val: U32) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::U32(val))
+    }
+}
+
 impl RotoFilter<U32Token> for U32 {
     fn get_props_for_method(
         self,
@@ -438,6 +445,7 @@ impl From<U32Token> for usize {
         }
     }
 }
+
 
 // ----------- A simple u8 type ---------------------------------------------
 
@@ -548,6 +556,12 @@ impl RotoFilter<U8Token> for U8 {
     }
 }
 
+impl From<U8> for TypeValue {
+    fn from(val: U8) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::U8(val))
+    }
+}
+
 #[derive(Debug)]
 pub enum U8Token {
     Set,
@@ -637,6 +651,12 @@ impl RotoFilter<BooleanToken> for Boolean {
             )
             .into()),
         }
+    }
+}
+
+impl From<Boolean> for TypeValue {
+    fn from(val: Boolean) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::Boolean(val))
     }
 }
 
@@ -744,6 +764,12 @@ impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
     }
 }
 
+impl From<IntegerLiteral> for TypeValue {
+    fn from(val: IntegerLiteral) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(val))
+    }
+}
+
 #[derive(Debug)]
 pub(crate) enum IntegerLiteralToken {
     Cmp,
@@ -833,6 +859,12 @@ impl RotoFilter<HexLiteralToken> for HexLiteral {
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
         todo!()
+    }
+}
+
+impl From<HexLiteral> for TypeValue {
+    fn from(val: HexLiteral) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::HexLiteral(val))
     }
 }
 
@@ -950,7 +982,21 @@ impl RotoFilter<PrefixToken> for Prefix {
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
-        todo!()
+        match method_token.into() {
+            PrefixToken::Address => {
+                let prefix = self.0.ok_or("Cannot convert empty prefix")?;
+                Ok(Box::new(move || {
+                    TypeValue::Builtin(BuiltinTypeValue::IpAddress(
+                        IpAddress(Some(prefix.addr())),
+                    ))
+                }))
+            }
+            _ => Err(format!(
+                "Unknown method for type Prefix: {}",
+                method_token
+            )
+            .into()),
+        }
     }
 
     fn exec_type_method<'a>(
@@ -989,6 +1035,18 @@ impl RotoFilter<PrefixToken> for Prefix {
                 Err(format!("Unknown method token: {}", method_token).into())
             }
         }
+    }
+}
+
+impl From<Prefix> for TypeValue {
+    fn from(val: Prefix) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::Prefix(val))
+    }
+}
+
+impl From<routecore::addr::Prefix> for Prefix {
+    fn from(val: routecore::addr::Prefix) -> Self {
+        Prefix(Some(val))
     }
 }
 
@@ -1089,6 +1147,12 @@ impl RotoFilter<PrefixLengthToken> for PrefixLength {
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
         todo!()
+    }
+}
+
+impl From<PrefixLength> for TypeValue {
+    fn from(val: PrefixLength) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::PrefixLength(val))
     }
 }
 
@@ -1241,6 +1305,12 @@ impl RotoFilter<CommunityToken> for Community {
     }
 }
 
+impl From<Community> for TypeValue {
+    fn from(val: Community) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::Community(val))
+    }
+}
+
 #[derive(Debug)]
 pub enum CommunityToken {
     From,
@@ -1378,6 +1448,12 @@ impl RotoFilter<IpAddressToken> for IpAddress {
     }
 }
 
+impl From<IpAddress> for TypeValue {
+    fn from(val: IpAddress) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::IpAddress(val))
+    }
+}
+
 #[derive(Debug)]
 pub(crate) enum IpAddressToken {
     From,
@@ -1475,6 +1551,12 @@ impl RotoFilter<AsnToken> for Asn {
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
         todo!()
+    }
+}
+
+impl From<Asn> for TypeValue {
+    fn from(val: Asn) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::Asn(val))
     }
 }
 
@@ -1684,6 +1766,12 @@ impl RotoFilter<AsPathToken> for AsPath {
     }
 }
 
+impl From<AsPath> for TypeValue {
+    fn from(val: AsPath) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::AsPath(val))
+    }
+}
+
 #[repr(u8)]
 #[derive(Debug)]
 pub(crate) enum AsPathToken {
@@ -1801,6 +1889,12 @@ impl RotoFilter<RouteToken> for Route {
     }
 }
 
+impl From<Route> for TypeValue {
+    fn from(val: Route) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::Route(val))
+    }
+}
+
 #[derive(Debug)]
 pub enum RouteToken {
     Prefix,
@@ -1826,6 +1920,20 @@ impl From<usize> for RouteToken {
 impl From<RouteToken> for usize {
     fn from(val: RouteToken) -> Self {
         val as usize
+    }
+}
+
+impl Payload for Route {
+    fn set(&mut self, field: crate::ast::ShortString, value: TypeValue) {
+        todo!()
+    }
+
+    fn get(&self, field: crate::ast::ShortString) -> Option<&TypeValue> {
+        todo!()
+    }
+
+    fn take_value(self) -> TypeValue {
+        TypeValue::Builtin(BuiltinTypeValue::Route(self))
     }
 }
 
@@ -1919,6 +2027,12 @@ impl RotoFilter<RouteStatusToken> for RouteStatus {
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
         todo!()
+    }
+}
+
+impl From<RouteStatus> for TypeValue {
+    fn from(val: RouteStatus) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::RouteStatus(val))
     }
 }
 
