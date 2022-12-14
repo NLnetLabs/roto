@@ -6,7 +6,7 @@ use super::{
         AsPath, Asn, Boolean, BuiltinTypeValue, Community, HexLiteral,
         IntegerLiteral, IpAddress, Prefix, PrefixLength, Route, U32, U8,
     },
-    collections::{List, Record, ElementTypeValue},
+    collections::{ElementTypeValue, List, Record},
     datasources::{Rib, Table},
     typedef::TypeDef,
 };
@@ -65,15 +65,31 @@ impl TypeValue {
         }
     }
 
-    pub fn get_field_by_index(&self, index: usize) -> Result<&(ShortString, ElementTypeValue), Box<dyn std::error::Error>> {
+    pub fn get_field_by_index(
+        &self,
+        index: usize,
+    ) -> Result<&(ShortString, ElementTypeValue), Box<dyn std::error::Error>>
+    {
         match self {
             TypeValue::Record(r) => {
                 let field = r.get_field_by_index(index);
-                field.ok_or(format!("Index {} out of bounds for record '{:?}'", index, self).into())
+                field.ok_or_else(|| 
+                    format!(
+                        "Index {} out of bounds for record '{:?}'",
+                        index, self
+                    )
+                    .into(),
+                )
             }
             TypeValue::List(l) => {
                 let field = l.get_field_by_index(index);
-                field.ok_or(format!("Index {} out of bounds for list '{:?}'", index, self).into())
+                field.ok_or_else(||
+                    format!(
+                        "Index {} out of bounds for list '{:?}'",
+                        index, self
+                    )
+                    .into(),
+                )
             }
             _ => Err(format!("Type '{:?}' is not a record.", self).into()),
         }
@@ -86,54 +102,77 @@ impl TypeValue {
         return_type: TypeDef,
     ) -> TypeValue {
         match self {
-            TypeValue::Record(rec_type) => {
-                rec_type.exec_value_method( method_token, args, return_type).unwrap()()
-            }
-            TypeValue::List(list) => {
-                list.exec_value_method(method_token as usize, args, return_type).unwrap()()
-            },
-            TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {
-                as_path.exec_value_method(method_token, args, return_type).unwrap()()
-            }
-            TypeValue::Builtin(BuiltinTypeValue::Prefix(prefix)) => {
-                prefix.exec_value_method(method_token, args, return_type).unwrap()()
-            }
+            TypeValue::Record(rec_type) => rec_type
+                .exec_value_method(method_token, args, return_type)
+                .unwrap()(),
+            TypeValue::List(list) => list
+                .exec_value_method(method_token as usize, args, return_type)
+                .unwrap()(),
+            TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => as_path
+                .exec_value_method(method_token, args, return_type)
+                .unwrap()(
+            ),
+            TypeValue::Builtin(BuiltinTypeValue::Prefix(prefix)) => prefix
+                .exec_value_method(method_token, args, return_type)
+                .unwrap()(
+            ),
             TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(lit_int)) => {
-                lit_int.exec_value_method(method_token, args, return_type).unwrap()()
+                lit_int
+                    .exec_value_method(method_token, args, return_type)
+                    .unwrap()()
             }
             TypeValue::Builtin(BuiltinTypeValue::U32(u32)) => {
-                u32.exec_value_method(method_token, args, return_type).unwrap()()
+                u32.exec_value_method(method_token, args, return_type)
+                    .unwrap()()
             }
             TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) => {
-                asn.exec_value_method(method_token, args, return_type).unwrap()()
+                asn.exec_value_method(method_token, args, return_type)
+                    .unwrap()()
             }
             TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) => {
-                ip.exec_value_method(method_token, args, return_type).unwrap()()
+                ip.exec_value_method(method_token, args, return_type)
+                    .unwrap()()
             }
-            TypeValue::Builtin(BuiltinTypeValue::Route(route)) => {
-                route.exec_value_method(method_token, args, return_type).unwrap()()
-            }
+            TypeValue::Builtin(BuiltinTypeValue::Route(route)) => route
+                .exec_value_method(method_token, args, return_type)
+                .unwrap()(
+            ),
             TypeValue::Builtin(BuiltinTypeValue::Community(community)) => {
-                community.exec_value_method(method_token, args, return_type).unwrap()()
+                community
+                    .exec_value_method(method_token, args, return_type)
+                    .unwrap()()
             }
             TypeValue::Builtin(BuiltinTypeValue::HexLiteral(hex)) => {
-                hex.exec_value_method(method_token, args, return_type).unwrap()()
+                hex.exec_value_method(method_token, args, return_type)
+                    .unwrap()()
             }
-            TypeValue::Builtin(BuiltinTypeValue::U8(u8_lit)) => {
-                u8_lit.exec_value_method(method_token, args, return_type).unwrap()()
+            TypeValue::Builtin(BuiltinTypeValue::U8(u8_lit)) => u8_lit
+                .exec_value_method(method_token, args, return_type)
+                .unwrap()(
+            ),
+            TypeValue::Builtin(BuiltinTypeValue::Boolean(boolean)) => boolean
+                .exec_value_method(method_token, args, return_type)
+                .unwrap()(
+            ),
+            TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
+                prefix_length,
+            )) => prefix_length
+                .exec_value_method(method_token, args, return_type)
+                .unwrap()(),
+            TypeValue::Builtin(BuiltinTypeValue::RouteStatus(
+                route_status,
+            )) => route_status
+                .exec_value_method(method_token, args, return_type)
+                .unwrap()(),
+            TypeValue::Rib(rib) => rib
+                .exec_value_method(method_token, args, return_type)
+                .unwrap()(),
+            TypeValue::Table(rec) => rec
+                .exec_value_method(method_token, args, return_type)
+                .unwrap()(),
+            TypeValue::None => {
+                panic!("Missing type value. That's fatal.")
             }
-            TypeValue::Builtin(BuiltinTypeValue::Boolean(boolean)) => {
-                boolean.exec_value_method(method_token, args, return_type).unwrap()()
-            }
-            TypeValue::Builtin(BuiltinTypeValue::PrefixLength(prefix_length)) => {
-                prefix_length.exec_value_method(method_token, args, return_type).unwrap()()
-            }
-            TypeValue::Builtin(BuiltinTypeValue::RouteStatus(route_status)) => {
-                route_status.exec_value_method(method_token, args, return_type).unwrap()()
-            }
-            TypeValue::Rib(rib) => rib.exec_value_method(method_token, args, return_type).unwrap()(),
-            TypeValue::Table(rec) => rec.exec_value_method(method_token, args, return_type).unwrap()(),
-            TypeValue::None => { panic!("Missing type value. That's fatal.") },
         }
     }
 }
@@ -313,6 +352,12 @@ impl<'a> From<&'a TypeDef> for TypeValue {
             ),
             _ => panic!("Unknown type {:?}", t),
         }
+    }
+}
+
+impl From<BuiltinTypeValue> for TypeValue {
+    fn from(t: BuiltinTypeValue) -> Self {
+        TypeValue::Builtin(t)
     }
 }
 

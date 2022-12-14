@@ -66,6 +66,39 @@ impl LinearMemory {
         self.0.get(index)
     }
 
+    pub fn get_at_field_index(
+        &self,
+        index: usize,
+        field_index: Option<usize>,
+    ) -> Option<&TypeValue> {
+        match field_index {
+            None => self.get(index),
+            Some(field_index) => match self.get(index) {
+                Some(TypeValue::Record(r)) => {
+                    let field = r.get_field_by_index(field_index);
+                    match field {
+                        Some((_, ElementTypeValue::Nested(nested))) => {
+                            Some(nested)
+                        }
+                        Some((_, ElementTypeValue::Primitive(b))) => Some(b),
+                        _ => None,
+                    }
+                }
+                Some(TypeValue::List(l)) => {
+                    let field = l.get_field_by_index(field_index);
+                    match field {
+                        Some((_, ElementTypeValue::Nested(nested))) => {
+                            Some(nested)
+                        }
+                        Some((_, ElementTypeValue::Primitive(b))) => Some(b),
+                        _ => None,
+                    }
+                }
+                _ => None,
+            },
+        }
+    }
+
     fn _get_mut(&mut self, index: usize) -> Option<&mut TypeValue> {
         self.0.get_mut(index)
     }
@@ -230,7 +263,7 @@ impl<'a> VirtualMachine<'a> {
                                 let value = m
                                     .get(sr.mem_pos)
                                     .ok_or(VmError::InvalidMemoryAccess(
-                                        sr.mem_pos,
+                                        sr.mem_pos, sr.field_index
                                     ))
                                     .unwrap();
                                 field_index = sr.field_index;
@@ -257,7 +290,7 @@ impl<'a> VirtualMachine<'a> {
                     }
                     // args: [method_token, return_type, return memory position]
                     OpCode::ExecuteValueMethod => {
-                        let mut s = self.stack.borrow_mut();
+                        let mut stack = self.stack.borrow_mut();
                         let mut m = mem.borrow_mut();
 
                         let mem_pos =
@@ -269,60 +302,34 @@ impl<'a> VirtualMachine<'a> {
                         let return_type = args.pop().unwrap().into();
                         let method_token: Arg = args.pop().unwrap();
 
-                        let mut field_index = None;
                         // pop all refs from the stack and resolve them to
                         // their values.
-                        let method_args = s
+                        let method_args = stack
                             .unwind()
                             .into_iter()
                             .map(|sr| {
                                 println!("\nsr = {:#?}", sr);
-                                field_index = sr.field_index;
-                                m.get(sr.mem_pos)
-                                    .ok_or(VmError::InvalidMemoryAccess(
-                                        sr.mem_pos,
-                                    ))
-                                    .unwrap()
+                                // println!("m = {:#?}", m[sr.mem_pos]);
+                                m.get_at_field_index(
+                                    sr.mem_pos,
+                                    sr.field_index,
+                                )
+                                .ok_or(VmError::InvalidMemoryAccess(
+                                    sr.mem_pos, sr.field_index
+                                ))
+                                .unwrap()
                             })
                             .collect::<Vec<_>>();
 
                         // The first value on the stack is the value which we
                         // are going to call a method with.
-                        match field_index {
-                            None => {
-                                let v = method_args.get(0).unwrap();
-                                let vv = v.exec_value_method(
-                                    method_token.into(),
-                                    method_args.as_slice(),
-                                    return_type,
-                                );
-                                m.set(mem_pos, vv);
-                            }
-                            Some(i) => {
-                                let parent_val = method_args.get(0).unwrap();
-                                match &parent_val
-                                    .get_field_by_index(i)
-                                    .unwrap()
-                                {
-                                    (_, ElementTypeValue::Nested(nested)) => {
-                                        let v = nested.exec_value_method(
-                                            method_token.into(),
-                                            method_args.as_slice(),
-                                            return_type,
-                                        );
-                                        m.set(mem_pos, v);
-                                    }
-                                    (_, ElementTypeValue::Primitive(tv)) => {
-                                        let v = tv.exec_value_method(
-                                            method_token.into(),
-                                            method_args.as_slice(),
-                                            return_type,
-                                        );
-                                        m.set(mem_pos, v);
-                                    }
-                                };
-                            }
-                        };
+                        let call_value = *method_args.get(0).unwrap();
+                        let v = call_value.exec_value_method(
+                            method_token.into(),
+                            &method_args[1..],
+                            return_type,
+                        );
+                        m.set(mem_pos, v);
                     }
                     OpCode::ExecuteDataStoreMethod => {}
                     OpCode::PushStack => {
@@ -503,7 +510,7 @@ pub enum VmError {
     StackUnderflow,
     StackOverflow,
     MemOutOfBounds,
-    InvalidMemoryAccess(usize),
+    InvalidMemoryAccess(usize, Option<usize>),
     ArgumentNotFound,
     InvalidValueType,
     InvalidVariableAccess,
