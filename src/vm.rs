@@ -9,12 +9,15 @@ use std::{
 use crate::{
     ast::ShortString,
     compile::MirBlock,
-    types::{typedef::TypeDef, typevalue::TypeValue},
+    types::{
+        collections::ElementTypeValue, typedef::TypeDef, typevalue::TypeValue,
+    },
 };
 
+#[derive(Debug)]
 struct StackRef {
     mem_pos: usize,
-    field_index: usize,
+    field_index: Option<usize>,
 }
 
 struct Stack(Vec<StackRef>);
@@ -27,7 +30,7 @@ impl<'a> Stack {
     fn push(&'a mut self, pos: usize) -> Result<(), VmError> {
         self.0.push(StackRef {
             mem_pos: pos,
-            field_index: 0,
+            field_index: None,
         });
         Ok(())
     }
@@ -42,7 +45,7 @@ impl<'a> Stack {
         self.0
             .last_mut()
             .ok_or(VmError::StackUnderflow)?
-            .field_index = index;
+            .field_index = Some(index);
         Ok(())
     }
 
@@ -220,22 +223,28 @@ impl<'a> VirtualMachine<'a> {
                     // args: [type, method_token, return memory position]
                     OpCode::ExecuteTypeMethod => {
                         let mut s = self.stack.borrow_mut();
+                        let mut field_index = None;
                         let m = mem.borrow();
                         let method_args = s
                             .unwind()
                             .into_iter()
                             .map(|sr| {
-                                m.get(sr.mem_pos)
+                                let value = m
+                                    .get(sr.mem_pos)
                                     .ok_or(VmError::InvalidMemoryAccess(
                                         sr.mem_pos,
                                     ))
-                                    .unwrap()
+                                    .unwrap();
+                                field_index = sr.field_index;
+                                value
                             })
                             .collect::<Vec<_>>();
                         let return_type = args.remove(2).into();
                         if let Arg::Type(t) = &args[0] {
                             println!("-> with ");
-                            method_args.iter().for_each(|a| print!("{}, ", a));
+                            method_args
+                                .iter()
+                                .for_each(|a| print!("{:?}, ", a));
                             println!("\nwith return type {:?}", return_type);
                             if let Arg::Method(method_token) = args[1] {
                                 t.exec_type_method(
@@ -248,8 +257,76 @@ impl<'a> VirtualMachine<'a> {
                             }
                         }
                     }
+                    // args: [method_token, return_type, return memory position]
+                    OpCode::ExecuteValueMethod => {
+                        let mut s = self.stack.borrow_mut();
+                        let mut m = mem.borrow_mut();
+
+                        let mem_pos = if let Arg::MemPos(pos) = args.pop().unwrap() {
+                            pos as usize
+                        } else {
+                            return Err(VmError::InvalidValueType);
+                        };
+                        let return_type = args.pop().unwrap().into();
+                        let method_token: Arg = args.pop().unwrap();
+
+                        let mut field_index = None;
+                        // pop all refs from the stack and resolve them to
+                        // their values.
+                        let mut method_args = s
+                            .unwind()
+                            .into_iter()
+                            .map(|sr| {
+                                println!("\nsr = {:#?}", sr);
+                                field_index = sr.field_index;
+                                std::mem::take(m.get_mut(sr.mem_pos)
+                                    .ok_or(VmError::InvalidMemoryAccess(
+                                        sr.mem_pos,
+                                    ))
+                                    .unwrap())
+                            })
+                            .collect::<Vec<_>>();
+
+                        // The first value on the stack is the value which we
+                        // are going to call a method with.
+                        match field_index {
+                            None => {
+                                let v = method_args.remove(0);
+                                v.exec_value_method(
+                                    method_token.into(),
+                                    method_args,
+                                    return_type,
+                                );
+                                m.set(mem_pos, v);
+                            
+                            },
+                            Some(i) => {
+                                let parent_val = method_args
+                                    .remove(0);
+                                let elm_val = parent_val.get_field_by_index(i)
+                                    .unwrap();
+                                match elm_val {
+                                    ElementTypeValue::Nested(nested) => {
+                                        let v = nested.exec_value_method(
+                                            method_token.into(),
+                                            method_args,
+                                            return_type,
+                                        );
+                                        m.set(mem_pos, v);
+                                    }
+                                    ElementTypeValue::Primitive(tv) => {
+                                        let v = tv.exec_value_method(
+                                            method_token.into(),
+                                            method_args,
+                                            return_type,
+                                        );
+                                        m.set(mem_pos, v);
+                                    }
+                                };
+                            }
+                        };
+                    }
                     OpCode::ExecuteDataStoreMethod => {}
-                    OpCode::ExecuteValueMethod => {}
                     OpCode::PushStack => {
                         if let Arg::MemPos(pos) = args[0] {
                             let mut s = self.stack.borrow_mut();

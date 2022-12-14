@@ -6,7 +6,7 @@ use routecore::asn::LongSegmentError;
 
 use crate::traits::{MethodProps, RotoFilter, TokenConvert};
 
-use super::collections::Record;
+use super::collections::{ElementTypeValue, Record};
 use super::typedef::TypeDef;
 use super::typevalue::TypeValue;
 
@@ -177,6 +177,44 @@ impl BuiltinTypeValue {
         };
         Ok(TypeValue::Builtin(var))
     }
+
+    pub(crate) fn exec_value_method(
+        &self,
+        method_token: usize,
+        args: Vec<TypeValue>,
+        return_type: TypeDef,
+    ) -> TypeValue {
+        match self {
+            BuiltinTypeValue::AsPath(as_path) => as_path
+                .exec_value_method(method_token, args, return_type)
+                .unwrap()(),
+            BuiltinTypeValue::Prefix(prefix) => prefix
+                .exec_value_method(method_token, args, return_type)
+                .unwrap()(),
+            BuiltinTypeValue::IntegerLiteral(lit_int) => lit_int
+                .exec_value_method(method_token, args, return_type)
+                .unwrap()(
+            ),
+            BuiltinTypeValue::U32(u32) => u32
+                .exec_value_method(method_token, args, return_type)
+                .unwrap()(),
+            BuiltinTypeValue::Asn(asn) => asn
+                .exec_value_method(method_token, args, return_type)
+                .unwrap()(),
+            BuiltinTypeValue::IpAddress(ip) => ip
+                .exec_value_method(method_token, args, return_type)
+                .unwrap()(),
+            BuiltinTypeValue::Route(route) => route
+                .exec_value_method(method_token, args, return_type)
+                .unwrap()(),
+            BuiltinTypeValue::U8(_) => todo!(),
+            BuiltinTypeValue::PrefixLength(_) => todo!(),
+            BuiltinTypeValue::Community(_) => todo!(),
+            BuiltinTypeValue::RouteStatus(_) => todo!(),
+            BuiltinTypeValue::Boolean(_) => todo!(),
+            BuiltinTypeValue::HexLiteral(_) => todo!(),
+        }
+    }
 }
 
 // These From impls allow the user to use the create_instance function with
@@ -342,15 +380,13 @@ impl RotoFilter<U32Token> for U32 {
         }
     }
 
-    fn exec_method<'a>(
+    fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: Vec<TypeValue>,
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 
@@ -376,13 +412,6 @@ impl RotoFilter<U32Token> for U32 {
                     .into())
             }
         }
-    }
-
-    fn get_field_by_index(
-        self,
-        field_index: usize,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
-        Err(format!("Cannot get field by index for type U32").into())
     }
 }
 
@@ -445,15 +474,13 @@ impl RotoFilter<U8Token> for U8 {
         }
     }
 
-    fn exec_method<'a>(
+    fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: Vec<TypeValue>,
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 
@@ -519,13 +546,6 @@ impl RotoFilter<U8Token> for U8 {
             }
         }
     }
-
-    fn get_field_by_index(
-        self,
-        field_index: usize,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
-        Err(format!("Cannot get field by index for type U8").into())
-    }
 }
 
 #[derive(Debug)]
@@ -584,15 +604,13 @@ impl RotoFilter<BooleanToken> for Boolean {
         }
     }
 
-    fn exec_method<'a>(
+    fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: Vec<TypeValue>,
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 
@@ -620,13 +638,6 @@ impl RotoFilter<BooleanToken> for Boolean {
             .into()),
         }
     }
-
-    fn get_field_by_index(
-        self,
-        field_index: usize,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
-        Err(format!("Cannot get field by index for type Boolean").into())
-    }
 }
 
 #[derive(Debug)]
@@ -647,7 +658,7 @@ impl From<usize> for BooleanToken {
 
 impl From<BooleanToken> for usize {
     fn from(val: BooleanToken) -> Self {
-       val as usize
+        val as usize
     }
 }
 
@@ -713,15 +724,13 @@ impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
         }
     }
 
-    fn exec_method<'a>(
+    fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: Vec<TypeValue>,
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 
@@ -732,14 +741,6 @@ impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
         todo!()
-    }
-
-    fn get_field_by_index(
-        self,
-        field_index: usize,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
-        Err(format!("Cannot get field by index for type IntegerLiteral")
-            .into())
     }
 }
 
@@ -815,15 +816,13 @@ impl RotoFilter<HexLiteralToken> for HexLiteral {
         }
     }
 
-    fn exec_method<'a>(
+    fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: Vec<TypeValue>,
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 
@@ -834,13 +833,6 @@ impl RotoFilter<HexLiteralToken> for HexLiteral {
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
         todo!()
-    }
-
-    fn get_field_by_index(
-        self,
-        field_index: usize,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
-        Err(format!("Cannot get field by index for type HexLiteral").into())
     }
 }
 
@@ -951,15 +943,13 @@ impl RotoFilter<PrefixToken> for Prefix {
         }
     }
 
-    fn exec_method<'a>(
+    fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: Vec<TypeValue>,
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 
@@ -988,7 +978,11 @@ impl RotoFilter<PrefixToken> for Prefix {
                         ))
                     }))
                 } else {
-                    Err(format!("Invalid argument type for method 'from': {}", args[0]).into())
+                    Err(format!(
+                        "Invalid argument type for method 'from': {}",
+                        args[0]
+                    )
+                    .into())
                 }
             }
             _ => {
@@ -996,19 +990,12 @@ impl RotoFilter<PrefixToken> for Prefix {
             }
         }
     }
-
-    fn get_field_by_index(
-        self,
-        field_index: usize,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
-        Err(format!("Cannot get field by index for type Prefix").into())
-    }
 }
 
 #[derive(Debug)]
 #[repr(u8)]
 pub(crate) enum PrefixToken {
-    From = 0 ,
+    From = 0,
     Exists = 1,
     Address = 2,
     Len = 3,
@@ -1085,15 +1072,13 @@ impl RotoFilter<PrefixLengthToken> for PrefixLength {
         }
     }
 
-    fn exec_method<'a>(
+    fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: Vec<TypeValue>,
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 
@@ -1104,13 +1089,6 @@ impl RotoFilter<PrefixLengthToken> for PrefixLength {
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
         todo!()
-    }
-
-    fn get_field_by_index(
-        self,
-        field_index: usize,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
-        Err(format!("Cannot get field by index for type PrefixLength").into())
     }
 }
 
@@ -1243,15 +1221,13 @@ impl RotoFilter<CommunityToken> for Community {
         }
     }
 
-    fn exec_method<'a>(
+    fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: Vec<TypeValue>,
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 
@@ -1262,13 +1238,6 @@ impl RotoFilter<CommunityToken> for Community {
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
         todo!()
-    }
-
-    fn get_field_by_index(
-        self,
-        field_index: usize,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
-        Err(format!("Cannot get field by index for type Community").into())
     }
 }
 
@@ -1379,15 +1348,13 @@ impl RotoFilter<IpAddressToken> for IpAddress {
         }
     }
 
-    fn exec_method<'a>(
+    fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: Vec<TypeValue>,
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!();
         // match method_token.into() {
         //     IpAddressToken::From => {
@@ -1408,13 +1375,6 @@ impl RotoFilter<IpAddressToken> for IpAddress {
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
         todo!()
-    }
-
-    fn get_field_by_index(
-        self,
-        field_index: usize,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
-        Err("Cannot get field by index for type IpAddress".into())
     }
 }
 
@@ -1498,15 +1458,13 @@ impl RotoFilter<AsnToken> for Asn {
         }
     }
 
-    fn exec_method<'a>(
+    fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: Vec<TypeValue>,
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 
@@ -1517,13 +1475,6 @@ impl RotoFilter<AsnToken> for Asn {
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
         todo!()
-    }
-
-    fn get_field_by_index(
-        self,
-        field_index: usize,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
-        Err(format!("Cannot get field by index for type Asn").into())
     }
 }
 
@@ -1654,26 +1605,19 @@ impl RotoFilter<AsPathToken> for AsPath {
         }
     }
 
-    fn get_field_by_index(
-        self,
-        field_index: usize,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
-        Err("Cannot get field by index for AsPath".into())
-    }
-
-    fn exec_method<'b>(
+    fn exec_value_method<'b>(
         &'b self,
         method: usize,
-        args: Vec<&'b TypeValue>,
+        args: Vec<TypeValue>,
         _res_type: TypeDef,
     ) -> Result<
-        Box<(dyn FnOnce(TypeValue) -> TypeValue + 'b)>,
+        Box<(dyn FnOnce() -> TypeValue + 'b)>,
         Box<dyn std::error::Error>,
     > {
         match method.into() {
             AsPathToken::Origin => {
                 if let Some(rc_as_path) = &self.0 {
-                    Ok(Box::new(move |as_path| {
+                    Ok(Box::new(move || {
                         let origin: routecore::asn::Asn =
                             rc_as_path.iter().next().unwrap().elements()[0];
 
@@ -1682,37 +1626,24 @@ impl RotoFilter<AsPathToken> for AsPath {
                         ))))
                     }))
                 } else {
-                    Ok(Box::new(move |_| {
+                    Ok(Box::new(move || {
                         TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(None)))
                     }))
                 }
             }
             AsPathToken::Contains => {
-                if let Some(_rc_as_path) = &self.0 {
+                if let Some(rc_as_path) = &self.0 {
                     {
-                        Ok(Box::new(move |as_path| {
+                        Ok(Box::new(move || {
                             if let TypeValue::Builtin(
-                                BuiltinTypeValue::AsPath(x_as_path),
-                            ) = as_path
+                                BuiltinTypeValue::Asn(Asn(search_asn)),
+                            ) = args[0]
                             {
-                                if let TypeValue::Builtin(
-                                    BuiltinTypeValue::Asn(Asn(search_asn)),
-                                ) = args[0]
-                                {
-                                    let contains = x_as_path
-                                        .contains(search_asn.unwrap());
-                                    TypeValue::Builtin(
-                                        BuiltinTypeValue::Boolean(Boolean(
-                                            Some(contains),
-                                        )),
-                                    )
-                                } else {
-                                    TypeValue::Builtin(
-                                        BuiltinTypeValue::Boolean(Boolean(
-                                            None,
-                                        )),
-                                    )
-                                }
+                                let contains =
+                                    rc_as_path.contains(search_asn.unwrap());
+                                TypeValue::Builtin(BuiltinTypeValue::Boolean(
+                                    Boolean(Some(contains)),
+                                ))
                             } else {
                                 TypeValue::Builtin(BuiltinTypeValue::Boolean(
                                     Boolean(None),
@@ -1721,22 +1652,21 @@ impl RotoFilter<AsPathToken> for AsPath {
                         }))
                     }
                 } else {
-                    Ok(Box::new(move |_| {
+                    Ok(Box::new(|| {
                         TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(None)))
                     }))
                 }
             }
-
             AsPathToken::Len => {
                 if let Some(rc_as_path) = &self.0 {
-                    Ok(Box::new(move |as_path| {
+                    Ok(Box::new(|| {
                         let len = rc_as_path.iter().count();
                         TypeValue::Builtin(BuiltinTypeValue::U8(U8(Some(
                             len as u8,
                         ))))
                     }))
                 } else {
-                    Ok(Box::new(move |_| {
+                    Ok(Box::new(|| {
                         TypeValue::Builtin(BuiltinTypeValue::U8(U8(None)))
                     }))
                 }
@@ -1849,13 +1779,13 @@ impl RotoFilter<RouteToken> for Route {
         }
     }
 
-    fn exec_method<'b>(
-        &'b self,
+    fn exec_value_method<'a>(
+        &'a self,
         _method: usize,
-        _args: Vec<&'b TypeValue>,
+        _args: Vec<TypeValue>,
         _res_type: TypeDef,
     ) -> Result<
-        Box<(dyn FnOnce(TypeValue) -> TypeValue + 'b)>,
+        Box<(dyn FnOnce() -> TypeValue + 'a)>,
         Box<dyn std::error::Error>,
     > {
         todo!()
@@ -1868,13 +1798,6 @@ impl RotoFilter<RouteToken> for Route {
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
         todo!()
-    }
-
-    fn get_field_by_index(
-        self,
-        field_index: usize,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
-        Err("Cannot get field by index for Route".into())
     }
 }
 
@@ -1979,15 +1902,13 @@ impl RotoFilter<RouteStatusToken> for RouteStatus {
         }
     }
 
-    fn exec_method<'a>(
+    fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _args: Vec<&'a TypeValue>,
+        _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 
@@ -1998,13 +1919,6 @@ impl RotoFilter<RouteStatusToken> for RouteStatus {
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
         todo!()
-    }
-
-    fn get_field_by_index(
-        self,
-        field_index: usize,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
-        Err("Cannot get field by index for RouteStatus".into())
     }
 }
 

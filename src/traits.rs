@@ -1,6 +1,6 @@
 // =========== RotoFilter trait ============================================
 
-use crate::types::{typedef::TypeDef, typevalue::TypeValue};
+use crate::types::{typedef::TypeDef, typevalue::TypeValue, collections::ElementTypeValue};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub(crate) enum Token {
@@ -102,13 +102,13 @@ pub(crate) trait RotoFilter<T: TokenConvert> where Self: std::fmt::Debug {
     where
         Self: std::marker::Sized;
 
-    fn exec_method<'a>(
+    fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: Vec<TypeValue>,
         res_type: TypeDef,
     ) -> Result<
-        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
+        Box<dyn FnOnce() -> TypeValue + 'a>,
         Box<dyn std::error::Error>,
     >;
 
@@ -120,11 +120,6 @@ pub(crate) trait RotoFilter<T: TokenConvert> where Self: std::fmt::Debug {
         Box<dyn FnOnce() -> TypeValue + 'a>,
         Box<dyn std::error::Error>,
     >;
-
-    fn get_field_by_index(
-        self,
-        field_index: usize,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>>;
 }
 
 pub(crate) trait TokenConvert where Self: std::fmt::Debug + Sized {

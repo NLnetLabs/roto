@@ -96,6 +96,7 @@ impl From<ElementTypeValue> for TypeValue {
     }
 }
 
+
 //------------ List type ----------------------------------------------------
 
 #[derive(Debug, PartialEq, Eq)]
@@ -134,6 +135,14 @@ impl List {
         Box<dyn FnOnce(TypeValue) -> TypeValue + '_>,
         Box<dyn std::error::Error>,
     > {
+        todo!()
+    }
+
+    pub fn get_field_by_index(
+        &self,
+        index: usize,
+    ) -> ElementTypeValue {
+        // self.0.get(index).ok_or("Index out of bounds".into()).into()
         todo!()
     }
 }
@@ -204,13 +213,13 @@ impl RotoFilter<ListToken> for List {
         Err("List type cannot be converted into another type".into())
     }
 
-    fn exec_method(
+    fn exec_value_method(
         &self,
         _method: usize,
-        _args: Vec<&TypeValue>,
+        _args: Vec<TypeValue>,
         _res_type: TypeDef,
     ) -> Result<
-        std::boxed::Box<(dyn FnOnce(TypeValue) -> TypeValue)>,
+        std::boxed::Box<(dyn FnOnce() -> TypeValue)>,
         Box<dyn std::error::Error>,
     > {
         todo!()
@@ -224,13 +233,6 @@ impl RotoFilter<ListToken> for List {
             Box<dyn FnOnce() -> TypeValue + 'a>,
             Box<dyn std::error::Error>,
         > {
-        todo!()
-    }
-
-    fn get_field_by_index(
-        self,
-        field_index: usize,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
         todo!()
     }
 }
@@ -310,6 +312,10 @@ impl<'a> Record {
         self.0.iter().find(|(f, _)| f == &field).map(|(_, v)| v)
     }
 
+    pub fn get_field_by_index(mut self, index: usize) -> (ShortString, ElementTypeValue) {
+        self.0.swap_remove(index)
+    }
+
     fn inner_from_typevalue(
         ty: TypeValue,
     ) -> std::result::Result<
@@ -321,6 +327,7 @@ impl<'a> Record {
             _ => Err("Not a record type".into()),
         }
     }
+    
 }
 
 impl std::fmt::Display for Record {
@@ -384,13 +391,13 @@ impl RotoFilter<RecordToken> for Record {
         Err("Record type cannot be converted into another type".into())
     }
 
-    fn exec_method(
+    fn exec_value_method(
         &self,
         _method: usize,
-        _args: Vec<&TypeValue>,
+        _args: Vec<TypeValue>,
         _res_type: TypeDef,
     ) -> Result<
-        Box<dyn FnOnce(TypeValue) -> TypeValue + '_>,
+        Box<dyn FnOnce() -> TypeValue + '_>,
         Box<dyn std::error::Error>,
     > {
         todo!()
@@ -405,25 +412,6 @@ impl RotoFilter<RecordToken> for Record {
             Box<dyn std::error::Error>,
         > {
             todo!()
-    }
-
-    fn get_field_by_index<'a>(
-        mut self,
-        index: usize,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
-        let e_v = std::mem::replace(
-            self.0.get_mut(index).unwrap(),
-            (
-                ShortString::from(""),
-                ElementTypeValue::Primitive(BuiltinTypeValue::U32(
-                    builtin::U32(Some(0)),
-                )),
-            ),
-        );
-        match e_v {
-            (_, ElementTypeValue::Primitive(v)) => Ok(TypeValue::Builtin(v)),
-            (_, ElementTypeValue::Nested(v)) => Ok(*v),
-        }
     }
 }
 

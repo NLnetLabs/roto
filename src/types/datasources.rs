@@ -6,7 +6,7 @@ use crate::traits::{MethodProps, RotoFilter, TokenConvert};
 
 use super::{
     builtin::{Boolean, BuiltinTypeValue},
-    collections::Record,
+    collections::{ElementTypeValue, Record},
     typedef::TypeDef,
     typevalue::TypeValue,
 };
@@ -69,15 +69,13 @@ impl RotoFilter<RibToken> for Rib {
         Err("Rib type cannot be converted into another type".into())
     }
 
-    fn exec_method<'a>(
+    fn exec_value_method<'a>(
         &'a self,
         _method: usize,
-        _args: Vec<&'a TypeValue>,
+        _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 
@@ -85,17 +83,8 @@ impl RotoFilter<RibToken> for Rib {
         _method: usize,
         _args: Vec<&'a TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce() -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
-        todo!()
-    }
-
-    fn get_field_by_index(
-        self,
-        _field_index: usize,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 }
@@ -193,15 +182,13 @@ impl RotoFilter<TableToken> for Table {
         Err("Table type cannot be converted into another type".into())
     }
 
-    fn exec_method<'a>(
+    fn exec_value_method<'a>(
         &'a self,
         _method: usize,
-        _args: Vec<&'a TypeValue>,
+        _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce(TypeValue) -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 
@@ -209,20 +196,10 @@ impl RotoFilter<TableToken> for Table {
         _method: usize,
         _args: Vec<&'a TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce() -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
-
-    fn get_field_by_index(
-            self,
-            field_index: usize,
-        ) -> Result<TypeValue, Box<dyn std::error::Error>> {
-            todo!()
-        }
-    
 }
 
 #[derive(Debug)]
