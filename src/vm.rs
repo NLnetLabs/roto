@@ -509,6 +509,24 @@ impl From<Arg> for TypeDef {
     }
 }
 
+// extract the token value from an argument
+impl From<Arg> for usize {
+    fn from(value: Arg) -> Self {
+        match value {
+            Arg::Method(m) => m,
+            Arg::DataSource(d) => d,
+            Arg::FieldAccess(f) => f,
+            Arg::BuiltinMethod(b) => b,
+            Arg::DataStore(d) => d,
+            Arg::MemPos(m) => m as usize,
+            _ => {
+                println!("Cannot convert to usize: {:?}", value);
+                panic!("..and that's fatal.");
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum OpCode {
     Cmp,
