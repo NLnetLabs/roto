@@ -7,7 +7,7 @@ use roto::symbols::GlobalSymbolTable;
 use nom::error::convert_error;
 use roto::ast::*;
 use roto::types::builtin::{
-    AsPath, Asn, BuiltinTypeValue, Community, CommunityType, U32,
+    AsPath, Asn, BuiltinTypeValue, Community, CommunityType, U32, Route, Prefix, self, BgpAttributes
 };
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
@@ -43,7 +43,7 @@ fn test_data(
     let count =
         BuiltinTypeValue::create_instance(TypeDef::U32, 1_u32).unwrap();
 
-    let count2 = BuiltinTypeValue::create_instance(
+    let prefix = BuiltinTypeValue::create_instance(
         TypeDef::Prefix,
         routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)
             .unwrap(),
@@ -73,9 +73,9 @@ fn test_data(
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            BuiltinTypeValue::Community(Community::new(
+            Community::new(
                 CommunityType::Standard,
-            )),
+            ).into(),
         )]));
 
     let my_comms_type =
@@ -95,29 +95,48 @@ fn test_data(
     .unwrap();
 
     let my_rec_type = TypeDef::new_record_type(vec![
-        ("count", Box::new(TypeDef::U32)),
-        ("count2", Box::new(TypeDef::Prefix)),
-        ("ip_address", Box::new(TypeDef::IpAddress)),
-        ("asn", Box::new(TypeDef::Asn)),
-        ("as_path", Box::new(TypeDef::AsPath)),
+        ("prefix", Box::new(TypeDef::Prefix)),
+        ("as-path", Box::new(TypeDef::AsPath)),
+        ("origin", Box::new(TypeDef::Asn)),
+        ("next-hop", Box::new(TypeDef::IpAddress)),
+        ("med", Box::new(TypeDef::U32)),
+        ("local-pref", Box::new(TypeDef::U32)),
         ("communities", Box::new(my_comms_type)),
-        ("record", Box::new(my_nested_rec_type)),
     ])
     .unwrap();
 
     let my_payload = Record::create_instance(
         &my_rec_type,
         vec![
-            ("count", count),
-            ("count2", count2),
-            ("ip_address", ip_address),
-            ("asn", asn),
-            ("as_path", as_path),
+            ("prefix", prefix),
+            ("as-path", as_path),
+            ("origin", asn),
+            ("next-hop", ip_address),
+            ("med", builtin::BuiltinTypeValue::U32(builtin::U32::new(80)).into()),
+            ("local-pref", builtin::BuiltinTypeValue::U32(builtin::U32::new(20)).into()),
             ("communities", comms),
-            ("record", TypeValue::Record(my_nested_rec_instance)),
         ],
     )
     .unwrap();
+
+    // rib rib-rov contains StreamRoute {
+    //     prefix: Prefix, // this is shit: it's the key
+    //     as-path: AsPath,
+    //     origin: Asn,
+    //     next-hop: IpAddress,
+    //     med: U32,
+    //     local-pref: U32,
+    //     community: [Community]
+    // }
+
+    let payload_as_path = builtin::AsPath::new(vec![routecore::asn::Asn::from_u32(1), routecore::asn::Asn::from_u32(10), routecore::asn::Asn::from_u32(32455)]).unwrap();
+    let payload_communities = vec![builtin::Community::new(builtin::CommunityType::Standard)];
+
+    let payload: Route = Route {
+        prefix: Some(routecore::addr::Prefix::new("83.24.10.0".parse().unwrap(), 24).unwrap().into()),
+        bgp: Some(BgpAttributes { as_path: payload_as_path, communities: payload_communities }),
+        status: builtin::RouteStatus::Empty
+    };
 
     let mem = vm::LinearMemory::empty();
     let vars = vm::VariablesMap::new();

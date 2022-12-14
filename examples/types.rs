@@ -45,9 +45,9 @@ fn main() {
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            BuiltinTypeValue::Community(Community::new(
+            Community::new(
                 CommunityType::Standard,
-            )),
+            ).into()
         )]));
 
     let my_comms_type =
