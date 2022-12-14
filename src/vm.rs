@@ -182,69 +182,6 @@ pub struct VirtualMachine<'a> {
 }
 
 impl<'a> VirtualMachine<'a> {
-    // fn push_ref_to_stack(
-    //     &'a self,
-    //     slot: usize,
-    //     // mem: &'a Rc<RefCell<LinearMemory>>,
-    // ) -> Result<(), VmError> {
-    //     let m = Rc::clone(&self.memory);
-    //     let m = m.borrow();
-    //     self.stack
-    //         .push(slot)?;
-    //     Ok(())
-    // }
-
-    // fn pop_from_stack(&'a mut self, mem: &'a LinearMemory) -> Result<&'a TypeValue, VmError> {
-    //     self.stack.pop(mem)
-    // }
-
-    // fn get_mem(
-    //     &'a self,
-    //     slot: usize,
-    //     mem: &'a Ref<'a, LinearMemory>,
-    // ) -> Result<&'a TypeValue, VmError> {
-    //     Ok(mem.get(slot).ok_or(VmError::InvalidMemoryAccess(slot))?)
-    // }
-
-    // fn set_mem(
-    //     &'a self,
-    //     slot: usize,
-    //     value: TypeValue,
-    //     mem: RefMut<'a, LinearMemory>,
-    // ) -> Result<(), VmError> {
-    //     mem.set(slot, value);
-    //     Ok(())
-    // }
-
-    // fn take_mem(
-    //     &'a self,
-    //     slot: usize,
-    //     mut mem: RefMut<LinearMemory>,
-    // ) -> Result<TypeValue, VmError> {
-    //     let v = std::mem::take(
-    //         mem.get_mut(slot)
-    //             .ok_or(VmError::InvalidMemoryAccess(slot))?,
-    //     );
-    //     Ok(v)
-    // }
-
-    // fn create_var_ref(
-    //     &'a self,
-    //     var_token_value: usize,
-    //     mem_pos: usize,
-    //     field_index: usize,
-    //     // value: &'a TypeValue,
-    //     // mut vars: Rc<RefCell<VariablesMap<'a>>>,
-    // ) -> Result<(), VmError> {
-    //     // let v = Rc::get_mut(&mut vars).unwrap();
-    //     // let v = v.borrow_mut();
-    //     // let v = Rc::clone(self.variables);
-    //     let mut v = self.variables.borrow_mut();
-    //     // let value_ref = mem.get(mem_pos).ok_or(VmError::InvalidVariableAccess)?;
-    //     v.set(var_token_value, mem_pos, field_index)?;
-    //     Ok(())
-    // }
-
     pub fn exec(
         &'a mut self,
         rx: impl Payload,
@@ -347,7 +284,7 @@ impl<'a> VirtualMachine<'a> {
                             return Err(VmError::InvalidValueType);
                         }
                     }
-                    // args: vec<field_index>
+                    // args: [field_index]
                     OpCode::StackOffset => {
                         for arg in args {
                             if let Arg::FieldAccess(field) = arg {
@@ -359,30 +296,33 @@ impl<'a> VirtualMachine<'a> {
                             }
                         }
                     }
-                    // args: mem_pos, field_access_token
                     OpCode::MemPosOffset => {
-                        if let Arg::FieldAccess(field) = args[1] {
-                            if let Arg::MemPos(pos) = args[0] {
-                                let mut m = mem.borrow_mut();
-                                let mem_loc = m.take(pos as usize).ok_or(
-                                    VmError::InvalidMemoryAccess(
-                                        pos as usize,
-                                    ),
-                                )?;
-                                println!("mem_loc: {:?}", mem_loc);
-                                let v = mem_loc
-                                    .get_field_by_index(field)
-                                    .map_err(|e| {
-                                        VmError::InvalidFieldAccess(field)
-                                    })?;
-                                m.set(pos as usize, v);
-                            } else {
-                                return Err(VmError::InvalidValueType);
-                            }
-                        } else {
-                            return Err(VmError::InvalidValueType);
-                        }
+                        unimplemented!()
                     }
+                    // args: mem_pos, field_access_token
+                    // OpCode::MemPosOffset => {
+                    //     if let Arg::FieldAccess(field) = args[1] {
+                    //         if let Arg::MemPos(pos) = args[0] {
+                    //             let mut m = mem.borrow_mut();
+                    //             let mem_loc = m.take(pos as usize).ok_or(
+                    //                 VmError::InvalidMemoryAccess(
+                    //                     pos as usize,
+                    //                 ),
+                    //             )?;
+                    //             println!("mem_loc: {:?}", mem_loc);
+                    //             let v = mem_loc
+                    //                 .get_field_by_index(field)
+                    //                 .map_err(|e| {
+                    //                     VmError::InvalidFieldAccess(field)
+                    //                 })?;
+                    //             m.set(pos as usize, v);
+                    //         } else {
+                    //             return Err(VmError::InvalidValueType);
+                    //         }
+                    //     } else {
+                    //         return Err(VmError::InvalidValueType);
+                    //     }
+                    // }
                     // args: mem_pos, variable_token
                     OpCode::MemPosRef => {
                         if let Arg::MemPos(pos) = args[0] {
