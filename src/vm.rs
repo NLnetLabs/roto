@@ -1,16 +1,16 @@
 use std::{
     cell::{Ref, RefCell},
     fmt::{Display, Formatter},
-    ops::{Index, IndexMut},
-    rc::Rc,
-    sync::Arc,
+    ops::{Index, IndexMut}
 };
 
 use crate::{
     ast::ShortString,
     compile::MirBlock,
+    traits::RotoFilter,
     types::{
-        collections::ElementTypeValue, typedef::TypeDef, typevalue::TypeValue,
+        collections::ElementTypeValue, datasources::Table, typedef::TypeDef,
+        typevalue::TypeValue,
     },
 };
 
@@ -213,7 +213,7 @@ pub struct VirtualMachine<'a> {
     rx_type: TypeDef,
     tx_type: Option<TypeDef>,
     variables: &'a RefCell<VariablesMap>,
-    data_sources: DataSources,
+    data_sources: &'a [&'a ExtDataSource],
     stack: RefCell<Stack>,
 }
 
@@ -235,38 +235,48 @@ impl<'a> VirtualMachine<'a> {
         }
     }
 
-    fn _unwind_resolved_stack_into_vec(&'a self, mem: &'a LinearMemory) -> Vec<&'a TypeValue> {
+    fn _unwind_resolved_stack_into_vec(
+        &'a self,
+        mem: &'a LinearMemory,
+    ) -> Vec<&'a TypeValue> {
         let mut stack = self.stack.borrow_mut();
         stack
-        .unwind()
-        .into_iter()
-        .map(|sr| {
-            mem.get_at_field_index(
-                sr.mem_pos,
-                sr.field_index,
-            )
-            .ok_or(VmError::InvalidMemoryAccess(
-                sr.mem_pos,
-                sr.field_index,
-            ))
-            .unwrap()
-        })
-        .collect::<Vec<_>>()
+            .unwind()
+            .into_iter()
+            .map(|sr| {
+                mem.get_at_field_index(sr.mem_pos, sr.field_index)
+                    .ok_or(VmError::InvalidMemoryAccess(
+                        sr.mem_pos,
+                        sr.field_index,
+                    ))
+                    .unwrap()
+            })
+            .collect::<Vec<_>>()
+    }
+
+    fn _get_data_source(
+        &self,
+        token: usize,
+    ) -> Result<&ExtDataSource, VmError> {
+        self.data_sources
+            .iter()
+            .find(|ds| ds.token == token).copied()
+            .ok_or(VmError::DataSourceNotFound(token))
     }
 
     pub fn exec(
         &'a mut self,
         rx: impl Payload,
         tx: Option<impl Payload>,
-        mut arguments: Rc<ArgumentsMap>,
+        mut arguments: Option<ArgumentsMap>,
         mem: RefCell<LinearMemory>,
-        // data_sources: DataSources,
         mir_code: Vec<MirBlock>,
     ) -> Result<(), VmError> {
         println!("\nstart executing vm...");
         let mut commands_num: usize = 0;
 
         self._move_rx_tx_to_mem(rx, tx, &mem);
+        let mut arguments = arguments.take().unwrap_or_default();
 
         for MirBlock { command_stack } in mir_code {
             println!("\n\n--mirblock------------------");
@@ -284,14 +294,14 @@ impl<'a> VirtualMachine<'a> {
                     // stack args: [type, method_token, return memory position]
                     OpCode::ExecuteTypeMethod => {
                         let m = mem.borrow();
-                        let stack_args = self._unwind_resolved_stack_into_vec(&m);
+                        let stack_args =
+                            self._unwind_resolved_stack_into_vec(&m);
                         let return_type = args.remove(2).into();
 
                         // We are going to call a method on a type, so we
                         // extract the type from the first argument on the
                         // stack.
                         if let Arg::Type(t) = &args[0] {
-                            
                             println!("-> with ");
                             stack_args
                                 .iter()
@@ -301,7 +311,7 @@ impl<'a> VirtualMachine<'a> {
                             if let Arg::Method(method_token) = args[1] {
                                 t.exec_type_method(
                                     method_token,
-                                    stack_args,
+                                    &stack_args,
                                     return_type,
                                 );
                             } else {
@@ -324,7 +334,8 @@ impl<'a> VirtualMachine<'a> {
 
                         // pop all refs from the stack and resolve them to
                         // their values.
-                        let stack_args = self._unwind_resolved_stack_into_vec(&m);
+                        let stack_args =
+                            self._unwind_resolved_stack_into_vec(&m);
 
                         // The first value on the stack is the value which we
                         // are going to call a method with.
@@ -336,7 +347,31 @@ impl<'a> VirtualMachine<'a> {
                         );
                         m.set(mem_pos, v);
                     }
-                    OpCode::ExecuteDataStoreMethod => {}
+                    // args: [data_source_token, method_token, return memory position]
+                    OpCode::ExecuteDataStoreMethod => {
+                        let mut m = mem.borrow_mut();
+
+                        let mem_pos =
+                            if let Arg::MemPos(pos) = args.pop().unwrap() {
+                                pos as usize
+                            } else {
+                                return Err(VmError::InvalidValueType);
+                            };
+                        // let return_type = args.pop().unwrap().into();
+                        let method_token: Arg = args.pop().unwrap();
+
+                        if let Arg::DataSource(ds) = args[0] {
+                            let ds = self._get_data_source(ds).unwrap();
+                            let stack_args =
+                                self._unwind_resolved_stack_into_vec(&m);
+                            let v = ds.exec_method(
+                                method_token.into(),
+                                &stack_args[..],
+                                TypeDef::None,
+                            );
+                            m.set(mem_pos, v);
+                        }
+                    }
                     // stack args: [mem_pos, constant_value]
                     OpCode::PushStack => {
                         if let Arg::MemPos(pos) = args[0] {
@@ -400,15 +435,12 @@ impl<'a> VirtualMachine<'a> {
                     OpCode::ArgToMemPos => {
                         if let Arg::MemPos(pos) = args[1] {
                             match args[0] {
-                                Arg::Argument(arg) => {
-                                    let a =
-                                        Rc::get_mut(&mut arguments).unwrap();
-                                    let v = a
-                                        .take_by_token_value(arg as usize)
-                                        .unwrap();
+                                Arg::Argument(token_value) => {
+                                    let (arg_index, arg_value) = arguments
+                                        .take_by_token_value(token_value)?;
+
                                     let mut m = mem.borrow_mut();
-                                    println!("v: {:?}", v);
-                                    m.set(pos as usize, v.1);
+                                    m.set(pos as usize, arg_value);
                                 }
                                 _ => {
                                     return Err(VmError::InvalidValueType);
@@ -440,14 +472,14 @@ impl<'a> VirtualMachine<'a> {
 }
 
 #[derive(Default)]
-pub struct VmBuilder {
+pub struct VmBuilder<'a> {
     rx_type: TypeDef,
     tx_type: Option<TypeDef>,
     arguments: ArgumentsMap,
-    data_sources: DataSources,
+    data_sources: &'a [&'a ExtDataSource],
 }
 
-impl VmBuilder {
+impl<'a> VmBuilder<'a> {
     pub fn new() -> Self {
         Self::default()
     }
@@ -457,7 +489,10 @@ impl VmBuilder {
         self
     }
 
-    pub fn with_data_sources(mut self, data_sources: DataSources) -> Self {
+    pub fn with_data_sources(
+        mut self,
+        data_sources: &'a [&ExtDataSource],
+    ) -> Self {
         self.data_sources = data_sources;
         self
     }
@@ -474,8 +509,8 @@ impl VmBuilder {
 
     pub fn build(
         self,
-        variables: &'_ RefCell<VariablesMap>,
-    ) -> VirtualMachine<'_> {
+        variables: &'a RefCell<VariablesMap>,
+    ) -> VirtualMachine<'a> {
         VirtualMachine {
             rx_type: self.rx_type,
             tx_type: self.tx_type,
@@ -499,6 +534,7 @@ pub enum VmError {
     InvalidVariableAccess,
     InvalidFieldAccess(usize),
     InvalidMethodCall,
+    DataSourceNotFound(usize),
 }
 
 #[derive(Debug)]
@@ -542,7 +578,6 @@ pub enum Arg {
     DataSource(usize),
     FieldAccess(usize),
     BuiltinMethod(usize),
-    DataStore(usize),
     MemPos(u32),
     Type(TypeDef),
 }
@@ -553,8 +588,7 @@ impl Arg {
             Arg::Argument(v) => *v as usize,
             Arg::Variable(v) => *v as usize,
             _ => {
-                println!("Cannot get token value from this arg: {:?}", self);
-                panic!("..and that's fatal.");
+                panic!("Cannot get token value from this arg: {:?} and that's fatal", self);
             }
         }
     }
@@ -565,8 +599,10 @@ impl From<Arg> for TypeDef {
         match value {
             Arg::Type(t) => t,
             _ => {
-                println!("Cannot convert to TypeDef: {:?}", value);
-                panic!("..and that's fatal.");
+                panic!(
+                    "Cannot convert to TypeDef: {:?} and that's fatal.",
+                    value
+                );
             }
         }
     }
@@ -580,11 +616,13 @@ impl From<Arg> for usize {
             Arg::DataSource(d) => d,
             Arg::FieldAccess(f) => f,
             Arg::BuiltinMethod(b) => b,
-            Arg::DataStore(d) => d,
+            // Arg::DataStore(d) => d,
             Arg::MemPos(m) => m as usize,
             _ => {
-                println!("Cannot convert to usize: {:?}", value);
-                panic!("..and that's fatal.");
+                panic!(
+                    "Cannot convert to usize {:?} and that's fatal.",
+                    value
+                );
             }
         }
     }
@@ -628,12 +666,40 @@ pub trait Payload {
     fn take_value(self) -> TypeValue;
 }
 
-trait ExtSource {
-    fn get(&self, key: &str) -> Option<TypeValue>;
+#[derive(Debug)]
+pub struct ExtDataSource {
+    name: ShortString,
+    token: usize,
+    ty: TypeDef,
+    values: Vec<TypeValue>,
 }
 
-#[derive(Clone, Default)]
-pub struct DataSources(Vec<Arc<dyn ExtSource>>);
+impl ExtDataSource {
+    pub fn new(name: &str, token: usize, ty: TypeDef) -> Self {
+        ExtDataSource {
+            name: name.into(),
+            token,
+            ty,
+            values: vec![],
+        }
+    }
+
+    pub fn get_by_key<'a>(&'a self, key: &str) -> Option<&'a TypeValue> {
+        self.values.iter().find(|v| {
+            v.get_field_by_index(0).ok().map(|v| v.0.as_str()) == Some(key)
+        })
+    }
+
+    pub fn exec_method<'a>(
+        &self,
+        method_token: usize,
+        args: &[&'a TypeValue],
+        res_type: TypeDef,
+    ) -> TypeValue {
+        Table::exec_type_method(method_token, args, res_type).unwrap()()
+    }
+}
+
 
 // pub fn compile_filter<'a, I: Payload, O: Payload>(
 //     symbols: &mut SymbolTable,

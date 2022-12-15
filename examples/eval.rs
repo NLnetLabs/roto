@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::rc::Rc;
 
 use roto::compile::compile;
 use roto::symbols::GlobalSymbolTable;
@@ -13,8 +12,8 @@ use roto::types::builtin::{
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
-use roto::vm;
 use roto::vm::ArgumentsMap;
+use roto::vm;
 
 fn test_data(
     name: &str,
@@ -35,13 +34,13 @@ fn test_data(
     let eval = parsed_data?;
 
     let symbols = GlobalSymbolTable::new();
-    let ev2 = eval.1.eval(symbols.clone())?;
+    eval.1.eval(symbols.clone())?;
 
     println!("{:#?}", symbols);
 
     let roto_pack = compile(symbols)?;
 
-    let count =
+    let _count =
         BuiltinTypeValue::create_instance(TypeDef::U32, 1_u32).unwrap();
 
     let prefix = BuiltinTypeValue::create_instance(
@@ -84,7 +83,7 @@ fn test_data(
         TypeDef::new_record_type(vec![("counter", Box::new(TypeDef::U32))])
             .unwrap();
 
-    let my_nested_rec_instance = Record::create_instance(
+    let _my_nested_rec_instance = Record::create_instance(
         &my_nested_rec_type,
         vec![(
             "counter",
@@ -160,34 +159,35 @@ fn test_data(
     let vars = vm::VariablesMap::new();
     let vars = RefCell::new(vars);
 
-    println!("Arguments");
+    println!("Used Arguments");
     println!("{:#?}", &roto_pack.arguments);
-    println!("Data Sources");
+    println!("Used Data Sources");
     println!("{:#?}", &roto_pack.data_sources);
 
-    let mut arguments = ArgumentsMap::new();
+    let mut module_arguments = ArgumentsMap::new();
 
-    arguments.insert(
+    module_arguments.insert(
         2,
         TypeValue::Builtin(BuiltinTypeValue::Asn(Asn::new(65534.into()))),
     );
+;
+    let ds_ref = roto_pack.data_sources.iter().collect::<Vec<_>>();
 
     let mut vm = vm::VmBuilder::new()
-        // .with_arguments(arguments)
+        .with_arguments(module_arguments)
+        .with_data_sources(ds_ref.as_slice())
         .build(&vars);
 
     vm.exec(
         my_payload,
         None::<Record>,
-        Rc::new(arguments),
+        None,
         RefCell::new(mem),
         roto_pack.mir,
     )
     .unwrap();
 
-    Ok(ev2)
-
-    // Ok(())
+    Ok(())
 }
 
 fn main() {

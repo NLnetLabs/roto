@@ -191,7 +191,7 @@ impl TypeDef {
     pub(crate) fn exec_type_method<'a>(
         &'a self,
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: &[&'a TypeValue],
         return_type: TypeDef,
     ) -> TypeValue {
         match self {

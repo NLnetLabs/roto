@@ -1,12 +1,11 @@
 use std::fmt::{Display, Formatter};
 
 use crate::ast::ShortString;
-use crate::symbols::{self, Symbol};
-use crate::traits::{MethodProps, RotoFilter, Token, TokenConvert};
+use crate::traits::{MethodProps, RotoFilter, TokenConvert};
 use crate::vm::Payload;
 
 use super::builtin::{
-    self, AsPath, Asn, Boolean, BuiltinTypeValue, Community, IpAddress,
+    AsPath, Asn, Community, IpAddress,
     Prefix, PrefixLength, U32, U8,
 };
 use super::typedef::TypeDef;
@@ -222,7 +221,7 @@ impl RotoFilter<ListToken> for List {
 
     fn exec_type_method<'a>(
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: &[&'a TypeValue],
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
@@ -398,7 +397,7 @@ impl RotoFilter<RecordToken> for Record {
 
     fn exec_type_method<'a>(
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: &[&'a TypeValue],
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {

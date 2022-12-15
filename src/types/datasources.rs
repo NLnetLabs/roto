@@ -6,7 +6,7 @@ use crate::traits::{MethodProps, RotoFilter, TokenConvert};
 
 use super::{
     builtin::{Boolean, BuiltinTypeValue},
-    collections::{ElementTypeValue, Record},
+    collections::Record,
     typedef::TypeDef,
     typevalue::TypeValue,
 };
@@ -81,7 +81,7 @@ impl RotoFilter<RibToken> for Rib {
 
     fn exec_type_method<'a>(
         _method: usize,
-        _args: Vec<&'a TypeValue>,
+        _args: &[&'a TypeValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
@@ -194,7 +194,7 @@ impl RotoFilter<TableToken> for Table {
 
     fn exec_type_method<'a>(
         _method: usize,
-        _args: Vec<&'a TypeValue>,
+        _args: &[&'a TypeValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {

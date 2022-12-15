@@ -8,7 +8,7 @@ use crate::{
     symbols::{DepsGraph, GlobalSymbolTable, Scope, Symbol},
     traits::Token,
     types::typedef::TypeDef,
-    vm::{Arg, Command, OpCode, VariablesMap},
+    vm::{Arg, Command, OpCode, VariablesMap, ExtDataSource},
 };
 
 //============ The Compiler (Filter creation time) ==========================
@@ -63,7 +63,7 @@ pub struct RotoPack {
     pub rx_type: TypeDef,
     pub tx_type: Option<TypeDef>,
     pub arguments: Vec<(usize, TypeDef)>,
-    pub data_sources: Vec<(usize, TypeDef)>,
+    pub data_sources: Vec<ExtDataSource>,
 }
 
 impl RotoPack {
@@ -72,7 +72,7 @@ impl RotoPack {
         rx_type: TypeDef,
         tx_type: Option<TypeDef>,
         arguments: Vec<(usize, TypeDef)>,
-        data_sources: Vec<(usize, TypeDef)>,
+        data_sources: Vec<ExtDataSource>,
     ) -> Self {
         RotoPack {
             mir,
@@ -140,9 +140,8 @@ pub fn compile(
     let mut _global = symbols.borrow_mut();
 
     println!("Found modules: {:?}", modules);
-    let arguments: Vec<(&ShortString, &Symbol)> = vec![];
-    let _variables: Vec<(&ShortString, &Symbol)> = vec![];
-    let data_sources: Vec<(ShortString, &Symbol)> = vec![];
+    let mut used_arguments: Vec<(ShortString, &Symbol)> = vec![];
+    let mut used_data_sources: Vec<(ShortString, &Symbol)> = vec![];
 
     // initialize the command stack
     let mut mir: Vec<MirBlock> = vec![];
@@ -261,13 +260,18 @@ pub fn compile(
                         let next_arg = leaves.peek().unwrap();
 
                         let (opcode, mut args) = match next_arg.get_token() {
-                            Ok(Token::DataSource(ds)) => (
+                            Ok(Token::DataSource(ds)) => {
+                                used_data_sources.push((
+                                    next_arg.get_name().clone(),
+                                    next_arg,
+                                ));
+                                (
                                 OpCode::ExecuteDataStoreMethod,
                                 vec![
                                     Arg::DataSource(ds as usize),
                                     Arg::Method(token.into()),
                                 ],
-                            ),
+                            )},
                             Ok(Token::BuiltinType(_)) => {
                                 println!("arg : {:?}", arg);
                                 println!("next_arg : {:?}", next_arg);
@@ -352,6 +356,7 @@ pub fn compile(
                         local_stack = VecDeque::new();
                     }
                     Token::Argument(arg) => {
+                        used_arguments.push((s.get_name(), s));
                         local_stack.push_front(Command::new(
                             OpCode::ArgToMemPos,
                             vec![
@@ -412,9 +417,7 @@ pub fn compile(
         }
     }
 
-    println!("args before packing:  {:?}", arguments);
-
-    let args = arguments
+    let args = used_arguments
         .iter()
         .map(|a| {
             (
@@ -428,10 +431,11 @@ pub fn compile(
         })
         .collect::<Vec<_>>();
 
-    let data_sources = data_sources
+    let data_sources = used_data_sources
         .iter()
         .map(|ds| {
-            (
+            ExtDataSource::new(
+                     &ds.1.get_name(),
                 ds.1.get_token()
                     .unwrap_or_else(|_| {
                         panic!("Fatal: Cannot find Token for data source.");

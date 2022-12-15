@@ -405,7 +405,7 @@ impl RotoFilter<U32Token> for U32 {
 
     fn exec_type_method<'a>(
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: &[&'a TypeValue],
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
@@ -509,7 +509,7 @@ impl RotoFilter<U8Token> for U8 {
 
     fn exec_type_method<'a>(
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: &[&'a TypeValue],
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
@@ -655,7 +655,7 @@ impl RotoFilter<BooleanToken> for Boolean {
 
     fn exec_type_method<'a>(
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: &[&'a TypeValue],
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
@@ -791,7 +791,7 @@ impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
 
     fn exec_type_method<'a>(
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: &[&'a TypeValue],
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
@@ -899,7 +899,7 @@ impl RotoFilter<HexLiteralToken> for HexLiteral {
 
     fn exec_type_method<'a>(
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: &[&'a TypeValue],
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
@@ -1056,7 +1056,7 @@ impl RotoFilter<PrefixToken> for Prefix {
 
     fn exec_type_method<'a>(
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: &[&'a TypeValue],
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
@@ -1207,7 +1207,7 @@ impl RotoFilter<PrefixLengthToken> for PrefixLength {
 
     fn exec_type_method<'a>(
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: &[&'a TypeValue],
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
@@ -1386,7 +1386,7 @@ impl RotoFilter<CommunityToken> for Community {
 
     fn exec_type_method<'a>(
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: &[&'a TypeValue],
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
@@ -1535,7 +1535,7 @@ impl RotoFilter<IpAddressToken> for IpAddress {
 
     fn exec_type_method<'a>(
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: &[&'a TypeValue],
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
@@ -1663,7 +1663,7 @@ impl RotoFilter<AsnToken> for Asn {
 
     fn exec_type_method<'a>(
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: &[&'a TypeValue],
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
@@ -1885,7 +1885,7 @@ impl RotoFilter<AsPathToken> for AsPath {
 
     fn exec_type_method<'a>(
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: &[&'a TypeValue],
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
@@ -2018,7 +2018,7 @@ impl RotoFilter<RouteToken> for Route {
 
     fn exec_type_method<'a>(
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: &[&'a TypeValue],
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
@@ -2173,7 +2173,7 @@ impl RotoFilter<RouteStatusToken> for RouteStatus {
 
     fn exec_type_method<'a>(
         method_token: usize,
-        args: Vec<&'a TypeValue>,
+        args: &[&'a TypeValue],
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
