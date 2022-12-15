@@ -218,7 +218,7 @@ pub struct VirtualMachine<'a> {
 }
 
 impl<'a> VirtualMachine<'a> {
-    fn _move_tx_rx_to_mem(
+    fn _move_rx_tx_to_mem(
         &mut self,
         rx: impl Payload,
         tx: Option<impl Payload>,
@@ -241,7 +241,6 @@ impl<'a> VirtualMachine<'a> {
         .unwind()
         .into_iter()
         .map(|sr| {
-            println!("\nsr = {:#?}", sr);
             mem.get_at_field_index(
                 sr.mem_pos,
                 sr.field_index,
@@ -267,7 +266,7 @@ impl<'a> VirtualMachine<'a> {
         println!("\nstart executing vm...");
         let mut commands_num: usize = 0;
 
-        self._move_tx_rx_to_mem(rx, tx, &mem);
+        self._move_rx_tx_to_mem(rx, tx, &mem);
 
         for MirBlock { command_stack } in mir_code {
             println!("\n\n--mirblock------------------");
@@ -381,30 +380,6 @@ impl<'a> VirtualMachine<'a> {
                     OpCode::MemPosOffset => {
                         unimplemented!()
                     }
-                    // args: mem_pos, field_access_token
-                    // OpCode::MemPosOffset => {
-                    //     if let Arg::FieldAccess(field) = args[1] {
-                    //         if let Arg::MemPos(pos) = args[0] {
-                    //             let mut m = mem.borrow_mut();
-                    //             let mem_loc = m.take(pos as usize).ok_or(
-                    //                 VmError::InvalidMemoryAccess(
-                    //                     pos as usize,
-                    //                 ),
-                    //             )?;
-                    //             println!("mem_loc: {:?}", mem_loc);
-                    //             let v = mem_loc
-                    //                 .get_field_by_index(field)
-                    //                 .map_err(|e| {
-                    //                     VmError::InvalidFieldAccess(field)
-                    //                 })?;
-                    //             m.set(pos as usize, v);
-                    //         } else {
-                    //             return Err(VmError::InvalidValueType);
-                    //         }
-                    //     } else {
-                    //         return Err(VmError::InvalidValueType);
-                    //     }
-                    // }
                     // args: mem_pos, variable_token
                     OpCode::MemPosRef => {
                         if let Arg::MemPos(pos) = args[0] {
@@ -417,18 +392,8 @@ impl<'a> VirtualMachine<'a> {
                             return Err(VmError::InvalidValueType);
                         }
                     }
-                    // OpCode::PushArgStack => {
-                    //     if let Arg::Argument(arg) = args[0] {
-                    //         let v = self
-                    //             .arguments
-                    //             .get_by_token_value(arg as usize)
-                    //             .unwrap();
-                    //         self.stack.push(v)?;
-                    //     }
-                    // }
-                    // 2 arguments: arg_token_value, mem_pos
+                    // 2 arguments: [arg_token_value, mem_pos]
                     OpCode::ArgToMemPos => {
-                        // println!("args: {:?}", args);
                         if let Arg::MemPos(pos) = args[1] {
                             match args[0] {
                                 Arg::Argument(arg) => {
