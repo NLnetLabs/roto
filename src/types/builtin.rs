@@ -2,6 +2,8 @@
 
 // The built-in types
 
+use std::fmt::{Display, Formatter};
+
 use routecore::asn::LongSegmentError;
 
 use crate::traits::{MethodProps, RotoFilter, TokenConvert};
@@ -322,27 +324,27 @@ impl TryFrom<&TypeDef> for BuiltinTypeValue {
     }
 }
 
-impl std::fmt::Display for BuiltinTypeValue {
+impl Display for BuiltinTypeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            BuiltinTypeValue::U32(_) => write!(f, "unsigned 32-bits integer"),
-            BuiltinTypeValue::U8(_) => write!(f, "unsigned 8-bits integer"),
-            BuiltinTypeValue::IntegerLiteral(_) => {
-                write!(f, "host-sized unsigned integer")
+            BuiltinTypeValue::U32(v) => write!(f, "{} (U32)", v),
+            BuiltinTypeValue::U8(v) => write!(f, "{} (U8)", v),
+            BuiltinTypeValue::IntegerLiteral(v) => {
+                write!(f, "{} (Integer)", v)
             }
-            BuiltinTypeValue::Prefix(_) => write!(f, "Prefix"),
-            BuiltinTypeValue::PrefixLength(_) => write!(f, "Prefix length"),
-            BuiltinTypeValue::Community(_) => write!(f, "Community"),
-            BuiltinTypeValue::IpAddress(_) => write!(f, "IP Address"),
-            BuiltinTypeValue::Asn(_) => write!(f, "Autonomous System Number"),
-            BuiltinTypeValue::AsPath(_) => {
-                write!(f, "AsPath (BGP AS_PATH attribute)")
+            BuiltinTypeValue::Prefix(v) => write!(f, "{} (Prefix)", v),
+            BuiltinTypeValue::PrefixLength(v) => write!(f, "{} (Prefix Length)", v),
+            BuiltinTypeValue::Community(v) => write!(f, "{} (Community)", v),
+            BuiltinTypeValue::IpAddress(v) => write!(f, "{} (IP Address)", v),
+            BuiltinTypeValue::Asn(v) => write!(f, "{} (ASN)", v),
+            BuiltinTypeValue::AsPath(v) => {
+                write!(f, "{} (AS Path)", v)
             }
-            BuiltinTypeValue::Route(_) => write!(f, "Route (BGP Route)"),
-            BuiltinTypeValue::RouteStatus(_) => write!(f, "BGP Route status"),
-            BuiltinTypeValue::Boolean(_) => write!(f, "Boolean"),
-            BuiltinTypeValue::HexLiteral(_) => {
-                write!(f, "Hexadecimal literal")
+            BuiltinTypeValue::Route(v) => write!(f, "{} (Route)", v),
+            BuiltinTypeValue::RouteStatus(v) => write!(f, "{} (Route Status)", v),
+            BuiltinTypeValue::Boolean(v) => write!(f, "{} (Boolean)", v),
+            BuiltinTypeValue::HexLiteral(v) => {
+                write!(f, "{} (Hex)", v)
             }
         }
     }
@@ -422,6 +424,16 @@ impl RotoFilter<U32Token> for U32 {
     }
 }
 
+impl Display for U32 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let v = match self.0 {
+            Some(v) => v.to_string(),
+            None => "None".to_string(),
+        };
+        write!(f, "{}", v)
+    }
+}
+
 #[derive(Debug)]
 pub enum U32Token {
     Set,
@@ -445,6 +457,7 @@ impl From<U32Token> for usize {
         }
     }
 }
+
 
 // ----------- A simple u8 type ---------------------------------------------
 
@@ -555,6 +568,16 @@ impl RotoFilter<U8Token> for U8 {
     }
 }
 
+impl Display for U8 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let v = match self.0 {
+            Some(v) => v.to_string(),
+            None => "None".to_string(),
+        };
+        write!(f, "{}", v)
+    }
+}
+
 impl From<U8> for TypeValue {
     fn from(val: U8) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::U8(val))
@@ -656,6 +679,16 @@ impl RotoFilter<BooleanToken> for Boolean {
 impl From<Boolean> for TypeValue {
     fn from(val: Boolean) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::Boolean(val))
+    }
+}
+
+impl Display for Boolean {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let v = match self.0 {
+            Some(v) => v.to_string(),
+            None => "None".to_string(),
+        };
+        write!(f, "{}", v)
     }
 }
 
@@ -769,6 +802,16 @@ impl From<IntegerLiteral> for TypeValue {
     }
 }
 
+impl Display for IntegerLiteral {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let v = match self.0 {
+            Some(v) => v.to_string(),
+            None => "None".to_string(),
+        };
+        write!(f, "{}", v)
+    }
+}
+
 #[derive(Debug)]
 pub(crate) enum IntegerLiteralToken {
     Cmp,
@@ -864,6 +907,16 @@ impl RotoFilter<HexLiteralToken> for HexLiteral {
 impl From<HexLiteral> for TypeValue {
     fn from(val: HexLiteral) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::HexLiteral(val))
+    }
+}
+
+impl Display for HexLiteral {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let v = match self.0 {
+            Some(v) => format!("0x{:x}", v),
+            None => "None".to_string(),
+        };
+        write!(f, "{}", v)
     }
 }
 
@@ -1049,6 +1102,16 @@ impl From<routecore::addr::Prefix> for Prefix {
     }
 }
 
+impl Display for Prefix {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(prefix) = &self.0 {
+            write!(f, "{}", prefix)
+        } else {
+            write!(f, "empty")
+        }
+    }
+}
+
 #[derive(Debug)]
 #[repr(u8)]
 pub(crate) enum PrefixToken {
@@ -1152,6 +1215,16 @@ impl RotoFilter<PrefixLengthToken> for PrefixLength {
 impl From<PrefixLength> for TypeValue {
     fn from(val: PrefixLength) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::PrefixLength(val))
+    }
+}
+
+impl Display for PrefixLength {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(len) = &self.0 {
+            write!(f, "/{}", len)
+        } else {
+            write!(f, "None")
+        }
     }
 }
 
@@ -1324,6 +1397,12 @@ impl From<Community> for TypeValue {
     }
 }
 
+impl Display for Community {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
+
 #[derive(Debug)]
 pub enum CommunityToken {
     From,
@@ -1467,6 +1546,16 @@ impl From<IpAddress> for TypeValue {
     }
 }
 
+impl Display for IpAddress {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(addr) = self.0 {
+            write!(f, "{}", addr)
+        } else {
+            write!(f, "None")
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) enum IpAddressToken {
     From,
@@ -1582,6 +1671,16 @@ impl RotoFilter<AsnToken> for Asn {
 impl From<Asn> for TypeValue {
     fn from(val: Asn) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::Asn(val))
+    }
+}
+
+impl Display for Asn {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(asn) = self.0 {
+            write!(f, "{}", asn)
+        } else {
+            write!(f, "None")
+        }
     }
 }
 
@@ -1797,6 +1896,16 @@ impl From<AsPath> for TypeValue {
     }
 }
 
+impl Display for AsPath {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(rc_as_path) = &self.0 {
+            write!(f, "{}", rc_as_path)
+        } else {
+            write!(f, "None")
+        }
+    }
+}
+
 #[repr(u8)]
 #[derive(Debug)]
 pub(crate) enum AsPathToken {
@@ -1917,6 +2026,20 @@ impl RotoFilter<RouteToken> for Route {
 impl From<Route> for TypeValue {
     fn from(val: Route) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::Route(val))
+    }
+}
+
+impl Display for Route {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(prefix) = &self.prefix {
+            write!(f, "{}", prefix)?;
+        } else {
+            write!(f, "None")?;
+        }
+        if let Some(bgp) = &self.bgp {
+            write!(f, " {}", bgp)?;
+        }
+        write!(f, " {}", self.status)
     }
 }
 
@@ -2061,6 +2184,19 @@ impl From<RouteStatus> for TypeValue {
     }
 }
 
+impl Display for RouteStatus {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RouteStatus::InConvergence => write!(f, "in convergence"),
+            RouteStatus::UpToDate => write!(f, "up to date"),
+            RouteStatus::Stale => write!(f, "stale"),
+            RouteStatus::StartOfRouteRefresh => write!(f, "start of route refresh"),
+            RouteStatus::Withdrawn => write!(f, "withdrawn"),
+            RouteStatus::Empty => write!(f, "empty"),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum RouteStatusToken {
     IsInConvergence,
@@ -2097,4 +2233,10 @@ impl From<RouteStatusToken> for usize {
 pub struct BgpAttributes {
     pub as_path: AsPath,
     pub communities: Vec<Community>,
+}
+
+impl Display for BgpAttributes {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BGP attributes: {:?} {:?}", self.as_path, self.communities)
+    }
 }

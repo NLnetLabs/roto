@@ -247,6 +247,7 @@ impl<'a> VirtualMachine<'a> {
         mir_code: Vec<MirBlock>,
     ) -> Result<(), VmError> {
         println!("\nstart executing vm...");
+        let mut commands_num: usize = 0;
 
         self.copy_tx_rx_to_mem(rx, tx, &mem);
 
@@ -259,6 +260,7 @@ impl<'a> VirtualMachine<'a> {
 
             println!("stack: {:?}", self.stack);
             for Command { op, mut args } in command_stack {
+                commands_num += 1;
                 print!("\n-> {:3?} {:?} ", op, args);
                 match op {
                     OpCode::Cmp => todo!(),
@@ -464,7 +466,14 @@ impl<'a> VirtualMachine<'a> {
             }
             println!("\n\n(end) stack: {:?}", self.stack);
         }
-        println!("successfully executed");
+
+        let m = mem.borrow();
+        for (i, addr) in m.0.as_slice().iter().enumerate() {
+            if !addr.is_empty() { println!("{}: {}", i, addr); }
+        }
+
+        println!("vars {:?}", self.variables);
+        println!("\n🍺 Done! Successfully executed {} instruections.", commands_num);
         Ok(())
     }
 }

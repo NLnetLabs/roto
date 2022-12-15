@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 //============ TypeValue ====================================================
 use crate::{ast::ShortString, traits::RotoFilter};
 
@@ -361,19 +363,19 @@ impl From<BuiltinTypeValue> for TypeValue {
     }
 }
 
-impl std::fmt::Display for TypeValue {
+impl Display for TypeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            TypeValue::Builtin(p) => write!(f, "built-in type '{}'", p),
-            TypeValue::List(l) => write!(f, "list that contains type {}", l),
+            TypeValue::Builtin(p) => write!(f, "{}", p),
+            TypeValue::List(l) => write!(f, "List containing type {}", l),
             TypeValue::Record(r) => {
-                write!(f, "record that contains type {}", r)
+                write!(f, "Record containing type {}", r)
             }
             TypeValue::Rib(r) => {
-                write!(f, "rib that contains type {}", r)
+                write!(f, "Rib containing type {}", r)
             }
             TypeValue::Table(r) => {
-                write!(f, "table that contains type {}", r)
+                write!(f, "Table containing type {}", r)
             }
             TypeValue::None => write!(f, "None"),
         }
