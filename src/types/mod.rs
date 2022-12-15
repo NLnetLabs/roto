@@ -1,5 +1,5 @@
-use crate::ast::ShortString;
 use self::typedef::TypeDef;
+use crate::ast::ShortString;
 
 pub mod builtin;
 pub mod collections;

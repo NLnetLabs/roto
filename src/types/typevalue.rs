@@ -75,23 +75,23 @@ impl TypeValue {
         match self {
             TypeValue::Record(r) => {
                 let field = r.get_field_by_index(index);
-                field.ok_or_else(|| 
+                field.ok_or_else(|| {
                     format!(
                         "Index {} out of bounds for record '{:?}'",
                         index, self
                     )
-                    .into(),
-                )
+                    .into()
+                })
             }
             TypeValue::List(l) => {
                 let field = l.get_field_by_index(index);
-                field.ok_or_else(||
+                field.ok_or_else(|| {
                     format!(
                         "Index {} out of bounds for list '{:?}'",
                         index, self
                     )
-                    .into(),
-                )
+                    .into()
+                })
             }
             _ => Err(format!("Type '{:?}' is not a record.", self).into()),
         }

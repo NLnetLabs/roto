@@ -269,20 +269,19 @@ pub fn compile(
                                 ],
                             ),
                             Ok(Token::BuiltinType(_)) => {
-                                
                                 println!("arg : {:?}", arg);
                                 println!("next_arg : {:?}", next_arg);
-                                
+
                                 (
-                                // args: [ call_type, method_call, return_type ]
-                                OpCode::ExecuteTypeMethod,
-                                vec![
-                                    Arg::Type(arg.get_type()),
-                                    Arg::Method(token.into()),
-                                    Arg::Type(next_arg.get_type()),
-                                ],
-                            )
-                        },
+                                    // args: [ call_type, method_call, return_type ]
+                                    OpCode::ExecuteTypeMethod,
+                                    vec![
+                                        Arg::Type(arg.get_type()),
+                                        Arg::Method(token.into()),
+                                        Arg::Type(next_arg.get_type()),
+                                    ],
+                                )
+                            }
                             Ok(Token::Variable(_)) => (
                                 // args: [ method_call, return_type ]
                                 OpCode::ExecuteValueMethod,
@@ -342,7 +341,9 @@ pub fn compile(
                     Token::Variable(var) => {
                         println!("get var: {:?}", var);
                         println!("local vars {:?}", local_vars);
-                        let mem_pos = local_vars.get_by_token_value(var as usize).unwrap();
+                        let mem_pos = local_vars
+                            .get_by_token_value(var as usize)
+                            .unwrap();
                         local_stack.push_front(Command::new(
                             OpCode::PushStack,
                             vec![Arg::MemPos(mem_pos.mem_pos as u32)],

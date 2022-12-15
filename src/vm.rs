@@ -276,7 +276,8 @@ impl<'a> VirtualMachine<'a> {
                                 let value = m
                                     .get(sr.mem_pos)
                                     .ok_or(VmError::InvalidMemoryAccess(
-                                        sr.mem_pos, sr.field_index
+                                        sr.mem_pos,
+                                        sr.field_index,
                                     ))
                                     .unwrap();
                                 field_index = sr.field_index;
@@ -328,7 +329,8 @@ impl<'a> VirtualMachine<'a> {
                                     sr.field_index,
                                 )
                                 .ok_or(VmError::InvalidMemoryAccess(
-                                    sr.mem_pos, sr.field_index
+                                    sr.mem_pos,
+                                    sr.field_index,
                                 ))
                                 .unwrap()
                             })
@@ -469,11 +471,16 @@ impl<'a> VirtualMachine<'a> {
 
         let m = mem.borrow();
         for (i, addr) in m.0.as_slice().iter().enumerate() {
-            if !addr.is_empty() { println!("{}: {}", i, addr); }
+            if !addr.is_empty() {
+                println!("{}: {}", i, addr);
+            }
         }
 
         println!("vars {:?}", self.variables);
-        println!("\n🍺 Done! Successfully executed {} instruections.", commands_num);
+        println!(
+            "\n🍺 Done! Successfully executed {} instruections.",
+            commands_num
+        );
         Ok(())
     }
 }

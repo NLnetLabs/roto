@@ -464,8 +464,7 @@ impl SymbolTable {
             .into());
         }
 
-        symbol =
-            symbol.set_token(Token::Variable(self.variables.len()));
+        symbol = symbol.set_token(Token::Variable(self.variables.len()));
         self.variables.insert(key, symbol);
         Ok(())
     }

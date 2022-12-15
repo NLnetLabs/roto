@@ -333,7 +333,9 @@ impl Display for BuiltinTypeValue {
                 write!(f, "{} (Integer)", v)
             }
             BuiltinTypeValue::Prefix(v) => write!(f, "{} (Prefix)", v),
-            BuiltinTypeValue::PrefixLength(v) => write!(f, "{} (Prefix Length)", v),
+            BuiltinTypeValue::PrefixLength(v) => {
+                write!(f, "{} (Prefix Length)", v)
+            }
             BuiltinTypeValue::Community(v) => write!(f, "{} (Community)", v),
             BuiltinTypeValue::IpAddress(v) => write!(f, "{} (IP Address)", v),
             BuiltinTypeValue::Asn(v) => write!(f, "{} (ASN)", v),
@@ -341,7 +343,9 @@ impl Display for BuiltinTypeValue {
                 write!(f, "{} (AS Path)", v)
             }
             BuiltinTypeValue::Route(v) => write!(f, "{} (Route)", v),
-            BuiltinTypeValue::RouteStatus(v) => write!(f, "{} (Route Status)", v),
+            BuiltinTypeValue::RouteStatus(v) => {
+                write!(f, "{} (Route Status)", v)
+            }
             BuiltinTypeValue::Boolean(v) => write!(f, "{} (Boolean)", v),
             BuiltinTypeValue::HexLiteral(v) => {
                 write!(f, "{} (Hex)", v)
@@ -457,7 +461,6 @@ impl From<U32Token> for usize {
         }
     }
 }
-
 
 // ----------- A simple u8 type ---------------------------------------------
 
@@ -2190,7 +2193,9 @@ impl Display for RouteStatus {
             RouteStatus::InConvergence => write!(f, "in convergence"),
             RouteStatus::UpToDate => write!(f, "up to date"),
             RouteStatus::Stale => write!(f, "stale"),
-            RouteStatus::StartOfRouteRefresh => write!(f, "start of route refresh"),
+            RouteStatus::StartOfRouteRefresh => {
+                write!(f, "start of route refresh")
+            }
             RouteStatus::Withdrawn => write!(f, "withdrawn"),
             RouteStatus::Empty => write!(f, "empty"),
         }
@@ -2237,6 +2242,10 @@ pub struct BgpAttributes {
 
 impl Display for BgpAttributes {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "BGP attributes: {:?} {:?}", self.as_path, self.communities)
+        write!(
+            f,
+            "BGP attributes: {:?} {:?}",
+            self.as_path, self.communities
+        )
     }
 }

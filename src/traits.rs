@@ -1,6 +1,8 @@
 // =========== RotoFilter trait ============================================
 
-use crate::types::{typedef::TypeDef, typevalue::TypeValue, collections::ElementTypeValue};
+use crate::types::{
+    collections::ElementTypeValue, typedef::TypeDef, typevalue::TypeValue,
+};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub(crate) enum Token {
@@ -87,7 +89,10 @@ impl MethodProps {
     }
 }
 
-pub(crate) trait RotoFilter<T: TokenConvert> where Self: std::fmt::Debug {
+pub(crate) trait RotoFilter<T: TokenConvert>
+where
+    Self: std::fmt::Debug,
+{
     fn get_props_for_method(
         self,
         method_name: &super::ast::Identifier,
@@ -107,22 +112,19 @@ pub(crate) trait RotoFilter<T: TokenConvert> where Self: std::fmt::Debug {
         method_token: usize,
         args: &'a [&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce() -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    >;
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>;
 
     fn exec_type_method<'a>(
         method_token: usize,
         args: Vec<&'a TypeValue>,
         res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce() -> TypeValue + 'a>,
-        Box<dyn std::error::Error>,
-    >;
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>;
 }
 
-pub(crate) trait TokenConvert where Self: std::fmt::Debug + Sized {
+pub(crate) trait TokenConvert
+where
+    Self: std::fmt::Debug + Sized,
+{
     fn to_u8(&self) -> u8 {
         std::mem::size_of_val(self) as u8
     }

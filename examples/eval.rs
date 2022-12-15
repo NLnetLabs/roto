@@ -7,7 +7,8 @@ use roto::symbols::GlobalSymbolTable;
 use nom::error::convert_error;
 use roto::ast::*;
 use roto::types::builtin::{
-    AsPath, Asn, BuiltinTypeValue, Community, CommunityType, U32, Route, Prefix, self, BgpAttributes
+    self, AsPath, Asn, BgpAttributes, BuiltinTypeValue, Community,
+    CommunityType, Prefix, Route, U32,
 };
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
@@ -73,9 +74,7 @@ fn test_data(
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            Community::new(
-                CommunityType::Standard,
-            ).into(),
+            Community::new(CommunityType::Standard).into(),
         )]));
 
     let my_comms_type =
@@ -112,8 +111,14 @@ fn test_data(
             ("as-path", as_path),
             ("origin", asn),
             ("next-hop", ip_address),
-            ("med", builtin::BuiltinTypeValue::U32(builtin::U32::new(80)).into()),
-            ("local-pref", builtin::BuiltinTypeValue::U32(builtin::U32::new(20)).into()),
+            (
+                "med",
+                builtin::BuiltinTypeValue::U32(builtin::U32::new(80)).into(),
+            ),
+            (
+                "local-pref",
+                builtin::BuiltinTypeValue::U32(builtin::U32::new(20)).into(),
+            ),
             ("communities", comms),
         ],
     )
@@ -129,13 +134,26 @@ fn test_data(
     //     community: [Community]
     // }
 
-    let payload_as_path = builtin::AsPath::new(vec![routecore::asn::Asn::from_u32(1), routecore::asn::Asn::from_u32(10), routecore::asn::Asn::from_u32(32455)]).unwrap();
-    let payload_communities = vec![builtin::Community::new(builtin::CommunityType::Standard)];
+    let payload_as_path = builtin::AsPath::new(vec![
+        routecore::asn::Asn::from_u32(1),
+        routecore::asn::Asn::from_u32(10),
+        routecore::asn::Asn::from_u32(32455),
+    ])
+    .unwrap();
+    let payload_communities =
+        vec![builtin::Community::new(builtin::CommunityType::Standard)];
 
     let payload: Route = Route {
-        prefix: Some(routecore::addr::Prefix::new("83.24.10.0".parse().unwrap(), 24).unwrap().into()),
-        bgp: Some(BgpAttributes { as_path: payload_as_path, communities: payload_communities }),
-        status: builtin::RouteStatus::Empty
+        prefix: Some(
+            routecore::addr::Prefix::new("83.24.10.0".parse().unwrap(), 24)
+                .unwrap()
+                .into(),
+        ),
+        bgp: Some(BgpAttributes {
+            as_path: payload_as_path,
+            communities: payload_communities,
+        }),
+        status: builtin::RouteStatus::Empty,
     };
 
     let mem = vm::LinearMemory::empty();

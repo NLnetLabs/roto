@@ -27,30 +27,24 @@ pub enum ElementTypeValue {
 impl<'a> From<&'a TypeDef> for ElementTypeValue {
     fn from(t: &'a TypeDef) -> Self {
         match t {
-            TypeDef::U32 => {
-                ElementTypeValue::Primitive(U32(None).into())
+            TypeDef::U32 => ElementTypeValue::Primitive(U32(None).into()),
+            TypeDef::U8 => ElementTypeValue::Primitive(U8(None).into()),
+            TypeDef::Prefix => {
+                ElementTypeValue::Primitive(Prefix(None).into())
             }
-            TypeDef::U8 => {
-                ElementTypeValue::Primitive(U8(None).into())
+            TypeDef::PrefixLength => {
+                ElementTypeValue::Primitive(PrefixLength(None).into())
             }
-            TypeDef::Prefix => ElementTypeValue::Primitive(
-                Prefix(None).into(),
-            ),
-            TypeDef::PrefixLength => ElementTypeValue::Primitive(
-                PrefixLength(None).into(),
-            ),
-            TypeDef::IpAddress => ElementTypeValue::Primitive(
-                IpAddress(None).into()
-            ),
-            TypeDef::Asn => {
-                ElementTypeValue::Primitive(Asn(None).into())
+            TypeDef::IpAddress => {
+                ElementTypeValue::Primitive(IpAddress(None).into())
             }
-            TypeDef::AsPath => ElementTypeValue::Primitive(
-                AsPath(None).into()
-            ),
-            TypeDef::Community => ElementTypeValue::Primitive(
-                Community(None).into(),
-            ),
+            TypeDef::Asn => ElementTypeValue::Primitive(Asn(None).into()),
+            TypeDef::AsPath => {
+                ElementTypeValue::Primitive(AsPath(None).into())
+            }
+            TypeDef::Community => {
+                ElementTypeValue::Primitive(Community(None).into())
+            }
             TypeDef::List(ty) => ElementTypeValue::Nested(Box::new(
                 TypeValue::List(ty.as_ref().into()),
             )),
@@ -95,7 +89,6 @@ impl From<ElementTypeValue> for TypeValue {
         }
     }
 }
-
 
 //------------ List type ----------------------------------------------------
 
@@ -226,13 +219,11 @@ impl RotoFilter<ListToken> for List {
     }
 
     fn exec_type_method<'a>(
-            method_token: usize,
-            args: Vec<&'a TypeValue>,
-            res_type: TypeDef,
-        ) -> Result<
-            Box<dyn FnOnce() -> TypeValue + 'a>,
-            Box<dyn std::error::Error>,
-        > {
+        method_token: usize,
+        args: Vec<&'a TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 }
@@ -270,7 +261,7 @@ impl From<usize> for ListToken {
 
 impl From<ListToken> for usize {
     fn from(t: ListToken) -> Self {
-       t as usize
+        t as usize
     }
 }
 
@@ -312,7 +303,10 @@ impl<'a> Record {
         self.0.iter().find(|(f, _)| f == &field).map(|(_, v)| v)
     }
 
-    pub fn get_field_by_index(&'a self, index: usize) -> Option<&'a (ShortString, ElementTypeValue)> {
+    pub fn get_field_by_index(
+        &'a self,
+        index: usize,
+    ) -> Option<&'a (ShortString, ElementTypeValue)> {
         self.0.get(index)
     }
 
@@ -326,7 +320,7 @@ impl<'a> Record {
             TypeValue::Record(r) => Ok(r.0),
             _ => Err("Not a record type".into()),
         }
-    }   
+    }
 }
 
 impl std::fmt::Display for Record {
@@ -395,22 +389,18 @@ impl RotoFilter<RecordToken> for Record {
         _method: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce() -> TypeValue + '_>,
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + '_>, Box<dyn std::error::Error>>
+    {
         todo!()
     }
 
     fn exec_type_method<'a>(
-            method_token: usize,
-            args: Vec<&'a TypeValue>,
-            res_type: TypeDef,
-        ) -> Result<
-            Box<dyn FnOnce() -> TypeValue + 'a>,
-            Box<dyn std::error::Error>,
-        > {
-            todo!()
+        method_token: usize,
+        args: Vec<&'a TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
+        todo!()
     }
 }
 

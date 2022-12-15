@@ -475,7 +475,7 @@ impl ast::Action {
                         payload_var_name.ident, scope
                     )
                 })?;
-            
+
             if !(s.get_kind() == symbols::SymbolKind::RxType) {
                 return Err(format!(
                     "variable '{}' is not the rx type of {}",
