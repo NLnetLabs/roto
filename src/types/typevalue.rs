@@ -367,15 +367,15 @@ impl Display for TypeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             TypeValue::Builtin(p) => write!(f, "{}", p),
-            TypeValue::List(l) => write!(f, "List containing type {}", l),
+            TypeValue::List(l) => write!(f, "{} (List Element)", l),
             TypeValue::Record(r) => {
-                write!(f, "Record containing type {}", r)
+                write!(f, "{} (Record)", r)
             }
             TypeValue::Rib(r) => {
-                write!(f, "Rib containing type {}", r)
+                write!(f, "{} (Rib Record)", r)
             }
             TypeValue::Table(r) => {
-                write!(f, "Table containing type {}", r)
+                write!(f, "{} (Table Entry)", r)
             }
             TypeValue::None => write!(f, "None"),
         }
