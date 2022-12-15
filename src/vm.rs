@@ -212,15 +212,13 @@ impl VariablesMap {
 pub struct VirtualMachine<'a> {
     rx_type: TypeDef,
     tx_type: Option<TypeDef>,
-    // arguments: ArgumentsMap,
     variables: &'a RefCell<VariablesMap>,
     data_sources: DataSources,
     stack: RefCell<Stack>,
-    // memory: &'a Rc<RefCell<LinearMemory>>,
 }
 
 impl<'a> VirtualMachine<'a> {
-    pub fn copy_tx_rx_to_mem(
+    fn _move_tx_rx_to_mem(
         &mut self,
         rx: impl Payload,
         tx: Option<impl Payload>,
@@ -237,6 +235,26 @@ impl<'a> VirtualMachine<'a> {
         }
     }
 
+    fn _unwind_resolved_stack_into_vec(&'a self, mem: &'a LinearMemory) -> Vec<&'a TypeValue> {
+        let mut stack = self.stack.borrow_mut();
+        stack
+        .unwind()
+        .into_iter()
+        .map(|sr| {
+            println!("\nsr = {:#?}", sr);
+            mem.get_at_field_index(
+                sr.mem_pos,
+                sr.field_index,
+            )
+            .ok_or(VmError::InvalidMemoryAccess(
+                sr.mem_pos,
+                sr.field_index,
+            ))
+            .unwrap()
+        })
+        .collect::<Vec<_>>()
+    }
+
     pub fn exec(
         &'a mut self,
         rx: impl Payload,
@@ -249,7 +267,7 @@ impl<'a> VirtualMachine<'a> {
         println!("\nstart executing vm...");
         let mut commands_num: usize = 0;
 
-        self.copy_tx_rx_to_mem(rx, tx, &mem);
+        self._move_tx_rx_to_mem(rx, tx, &mem);
 
         for MirBlock { command_stack } in mir_code {
             println!("\n\n--mirblock------------------");
@@ -266,24 +284,8 @@ impl<'a> VirtualMachine<'a> {
                     OpCode::Cmp => todo!(),
                     // args: [type, method_token, return memory position]
                     OpCode::ExecuteTypeMethod => {
-                        let mut s = self.stack.borrow_mut();
-                        let mut field_index = None;
                         let m = mem.borrow();
-                        let method_args = s
-                            .unwind()
-                            .into_iter()
-                            .map(|sr| {
-                                let value = m
-                                    .get(sr.mem_pos)
-                                    .ok_or(VmError::InvalidMemoryAccess(
-                                        sr.mem_pos,
-                                        sr.field_index,
-                                    ))
-                                    .unwrap();
-                                field_index = sr.field_index;
-                                value
-                            })
-                            .collect::<Vec<_>>();
+                        let method_args = self._unwind_resolved_stack_into_vec(&m);
                         let return_type = args.remove(2).into();
                         if let Arg::Type(t) = &args[0] {
                             println!("-> with ");
@@ -304,7 +306,6 @@ impl<'a> VirtualMachine<'a> {
                     }
                     // args: [method_token, return_type, return memory position]
                     OpCode::ExecuteValueMethod => {
-                        let mut stack = self.stack.borrow_mut();
                         let mut m = mem.borrow_mut();
 
                         let mem_pos =
@@ -318,23 +319,7 @@ impl<'a> VirtualMachine<'a> {
 
                         // pop all refs from the stack and resolve them to
                         // their values.
-                        let method_args = stack
-                            .unwind()
-                            .into_iter()
-                            .map(|sr| {
-                                println!("\nsr = {:#?}", sr);
-                                // println!("m = {:#?}", m[sr.mem_pos]);
-                                m.get_at_field_index(
-                                    sr.mem_pos,
-                                    sr.field_index,
-                                )
-                                .ok_or(VmError::InvalidMemoryAccess(
-                                    sr.mem_pos,
-                                    sr.field_index,
-                                ))
-                                .unwrap()
-                            })
-                            .collect::<Vec<_>>();
+                        let method_args = self._unwind_resolved_stack_into_vec(&m);
 
                         // The first value on the stack is the value which we
                         // are going to call a method with.
