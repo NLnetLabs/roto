@@ -281,21 +281,27 @@ impl<'a> VirtualMachine<'a> {
                 print!("\n-> {:3?} {:?} ", op, args);
                 match op {
                     OpCode::Cmp => todo!(),
-                    // args: [type, method_token, return memory position]
+                    // stack args: [type, method_token, return memory position]
                     OpCode::ExecuteTypeMethod => {
                         let m = mem.borrow();
-                        let method_args = self._unwind_resolved_stack_into_vec(&m);
+                        let stack_args = self._unwind_resolved_stack_into_vec(&m);
                         let return_type = args.remove(2).into();
+
+                        // We are going to call a method on a type, so we
+                        // extract the type from the first argument on the
+                        // stack.
                         if let Arg::Type(t) = &args[0] {
+                            
                             println!("-> with ");
-                            method_args
+                            stack_args
                                 .iter()
                                 .for_each(|a| print!("{:?}, ", a));
                             println!("\nwith return type {:?}", return_type);
+
                             if let Arg::Method(method_token) = args[1] {
                                 t.exec_type_method(
                                     method_token,
-                                    method_args,
+                                    stack_args,
                                     return_type,
                                 );
                             } else {
@@ -303,7 +309,7 @@ impl<'a> VirtualMachine<'a> {
                             }
                         }
                     }
-                    // args: [method_token, return_type, return memory position]
+                    // stack args: [method_token, return_type, return memory position]
                     OpCode::ExecuteValueMethod => {
                         let mut m = mem.borrow_mut();
 
@@ -318,19 +324,20 @@ impl<'a> VirtualMachine<'a> {
 
                         // pop all refs from the stack and resolve them to
                         // their values.
-                        let method_args = self._unwind_resolved_stack_into_vec(&m);
+                        let stack_args = self._unwind_resolved_stack_into_vec(&m);
 
                         // The first value on the stack is the value which we
                         // are going to call a method with.
-                        let call_value = *method_args.get(0).unwrap();
+                        let call_value = *stack_args.get(0).unwrap();
                         let v = call_value.exec_value_method(
                             method_token.into(),
-                            &method_args[1..],
+                            &stack_args[1..],
                             return_type,
                         );
                         m.set(mem_pos, v);
                     }
                     OpCode::ExecuteDataStoreMethod => {}
+                    // stack args: [mem_pos, constant_value]
                     OpCode::PushStack => {
                         if let Arg::MemPos(pos) = args[0] {
                             let mut s = self.stack.borrow_mut();
@@ -350,7 +357,7 @@ impl<'a> VirtualMachine<'a> {
                             return Err(VmError::InvalidValueType);
                         }
                     }
-                    // args: [mem_pos, constant_value]
+                    // stack args: [mem_pos, constant_value]
                     OpCode::MemPosSet => {
                         if let Arg::MemPos(pos) = args[0] {
                             if let Some(Arg::Constant(v)) = args.get_mut(1) {
@@ -365,7 +372,7 @@ impl<'a> VirtualMachine<'a> {
                             return Err(VmError::InvalidValueType);
                         }
                     }
-                    // args: [field_index]
+                    // stack args: [field_index]
                     OpCode::StackOffset => {
                         for arg in args {
                             if let Arg::FieldAccess(field) = arg {
@@ -377,10 +384,7 @@ impl<'a> VirtualMachine<'a> {
                             }
                         }
                     }
-                    OpCode::MemPosOffset => {
-                        unimplemented!()
-                    }
-                    // args: mem_pos, variable_token
+                    // stack args: [mem_pos, variable_token]
                     OpCode::MemPosRef => {
                         if let Arg::MemPos(pos) = args[0] {
                             self.variables.borrow_mut().set(
@@ -392,7 +396,7 @@ impl<'a> VirtualMachine<'a> {
                             return Err(VmError::InvalidValueType);
                         }
                     }
-                    // 2 arguments: [arg_token_value, mem_pos]
+                    // stack args: [arg_token_value, mem_pos]
                     OpCode::ArgToMemPos => {
                         if let Arg::MemPos(pos) = args[1] {
                             match args[0] {
@@ -514,14 +518,12 @@ impl Display for Command {
         let arrow = match self.op {
             OpCode::Cmp => "<->",
             OpCode::ExecuteTypeMethod => "=>",
-            OpCode::ExecuteDataStoreMethod => "",
+            OpCode::ExecuteDataStoreMethod => "=>",
             OpCode::ExecuteValueMethod => "=>",
             OpCode::PushStack => "<-",
             OpCode::PopStack => "->",
             OpCode::MemPosSet => "->",
-            OpCode::MemPosOffset => "",
             OpCode::MemPosRef => "",
-            // OpCode::PushArgStack => "->",
             OpCode::ArgToMemPos => "->",
             OpCode::StackOffset => "",
         };
@@ -598,10 +600,8 @@ pub enum OpCode {
     PushStack,
     StackOffset,
     MemPosSet,
-    MemPosOffset,
     MemPosRef,
     ArgToMemPos,
-    // PushArgStack,
 }
 
 // struct VecPayload(Vec<(ShortString, TypeValue)>);
