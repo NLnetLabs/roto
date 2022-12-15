@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter};
+
 use crate::ast::ShortString;
 use crate::symbols::{self, Symbol};
 use crate::traits::{MethodProps, RotoFilter, Token, TokenConvert};
@@ -323,20 +325,20 @@ impl<'a> Record {
     }
 }
 
-impl std::fmt::Display for Record {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for Record {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{{")?;
         for (i, (field, elem)) in self.0.iter().enumerate() {
             if i > 0 {
                 write!(f, ", ")?;
             }
-            write!(f, "{}: ", field)?;
+            write!(f, "\n\t{}: ", field)?;
             match elem {
                 ElementTypeValue::Primitive(v) => write!(f, "{}", v)?,
                 ElementTypeValue::Nested(v) => write!(f, "{}", v)?,
             }
         }
-        write!(f, "}}")
+        write!(f, "\n   }}")
     }
 }
 
