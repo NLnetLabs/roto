@@ -2,7 +2,10 @@
 
 // ----------- Rib Type ----------------------------------------------------
 
-use crate::traits::{MethodProps, RotoFilter, TokenConvert};
+use crate::{
+    ast::ShortString,
+    traits::{MethodProps, RotoFilter, TokenConvert},
+};
 
 use super::{
     builtin::{Boolean, BuiltinTypeValue},
@@ -125,9 +128,12 @@ impl std::fmt::Display for Rib {
 
 // ----------- Table Type --------------------------------------------------
 
+pub type NamedTypeDef = (ShortString, Box<TypeDef>);
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct Table {
-    pub(crate) record: Record,
+    pub(crate) ty: Vec<NamedTypeDef>,
+    pub(crate) records: Vec<Record>,
 }
 
 impl Table {
@@ -155,7 +161,7 @@ impl RotoFilter<TableToken> for Table {
     {
         match method_name.ident.as_str() {
             "get" => Ok(MethodProps::new(
-                TypeValue::Record(self.record),
+                TypeValue::Record(self.ty.into()),
                 TableToken::Get.into(),
                 vec![TypeDef::Asn],
             )),
@@ -193,12 +199,19 @@ impl RotoFilter<TableToken> for Table {
     }
 
     fn exec_type_method<'a>(
-        _method: usize,
-        _args: &[&'a TypeValue],
-        _res_type: TypeDef,
+        method_token: usize,
+        args: &[&'a TypeValue],
+        res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
-        todo!()
+        match method_token.into() {
+            TableToken::Get => {
+                todo!()
+            }
+            TableToken::Contains => {
+                todo!()
+            }
+        }
     }
 }
 
@@ -215,7 +228,7 @@ impl From<usize> for TableToken {
         match token {
             0 => TableToken::Get,
             1 => TableToken::Contains,
-            _ => panic!("Unknown token"),
+            t => panic!("Unknown token {}", t),
         }
     }
 }
@@ -228,6 +241,6 @@ impl From<TableToken> for usize {
 
 impl std::fmt::Display for Table {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Table with record type {}", self.record)
+        write!(f, "Table with record type {:#?}", self.ty)
     }
 }

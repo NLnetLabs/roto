@@ -5,7 +5,7 @@
 
 use crate::traits::Token;
 use crate::types::collections::ElementTypeValue;
-use crate::types::NamedTypeDef;
+use crate::types::datasources::NamedTypeDef;
 use crate::{
     ast::{AcceptReject, ShortString},
     traits::{MethodProps, RotoFilter},
@@ -85,7 +85,18 @@ impl TypeDef {
     ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
         println!("has_fields_chain: {:?}", fields);
         println!("self: {:?}", self);
-        let mut current_type_token = (self, Token::FieldAccess(vec![]));
+
+        // Data sources (rib and table) are special cases, because they have
+        // their methods on the container (the datasource) and not on the
+        // contained type. They don't have field access.
+        let mut current_type_token = (
+            if let TypeDef::Table(rec) | TypeDef::Rib(rec) = self {
+                rec
+            } else {
+                self
+            },
+            Token::FieldAccess(vec![]),
+        );
         for field in fields {
             let mut index = 0;
             if let (TypeDef::Record(_fields), _) = current_type_token {
@@ -181,7 +192,7 @@ impl TypeDef {
                 route.get_props_for_method(method)
             }
             TypeValue::Rib(rib) => rib.get_props_for_method(method),
-            TypeValue::Table(rec) => rec.get_props_for_method(method),
+            TypeValue::Table(table) => table.get_props_for_method(method),
             _ => Err(format!(
                 "No method named '{}' found for {}.",
                 method.ident, parent_ty
@@ -413,7 +424,7 @@ impl From<&TypeValue> for TypeDef {
                     .collect(),
             ),
             TypeValue::Table(t) => TypeDef::Record(
-                t.record
+                t.records[0]
                     .0
                     .iter()
                     .map(|(k, v)| (k.clone(), Box::new(v.into())))

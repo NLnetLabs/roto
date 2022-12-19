@@ -497,8 +497,10 @@ impl SymbolTable {
         let token_int = self.variables.len();
 
         let token = Some(match kind {
-            SymbolKind::Rib | SymbolKind::Table | SymbolKind::PrefixList => {
-                Token::DataSource(token_int)
+            SymbolKind::Rib => Token::Rib(token_int),
+            // Treat PrefixList like a table, they share the same methods.
+            SymbolKind::Table | SymbolKind::PrefixList => {
+                Token::Table(token_int)
             }
             _ => Token::Variable(token_int),
         });

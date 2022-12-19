@@ -260,7 +260,8 @@ pub fn compile(
                         let next_arg = leaves.peek().unwrap();
 
                         let (opcode, mut args) = match next_arg.get_token() {
-                            Ok(Token::DataSource(ds)) => {
+                            Ok(Token::Rib(ds) | Token::Table(ds)) => {
+                                println!("datastore {} method {}", ds, method);
                                 used_data_sources.push((
                                     next_arg.get_name().clone(),
                                     next_arg,
@@ -269,7 +270,7 @@ pub fn compile(
                                 OpCode::ExecuteDataStoreMethod,
                                 vec![
                                     Arg::DataSource(ds as usize),
-                                    Arg::Method(token.into()),
+                                    Arg::Method(method),
                                 ],
                             )},
                             Ok(Token::BuiltinType(_)) => {
@@ -384,7 +385,7 @@ pub fn compile(
                         // mir_block.command_stack.extend(unwind(local_stack));
                         // local_stack = VecDeque::new();
                     }
-                    Token::DataSource(_) => {
+                    Token::Rib(_) | Token::Table(_) => {
                         // No further action for a data-source, it's only
                         // used to call methods on, which should already have
                         // been peeked into, by the command before this one.

@@ -405,6 +405,12 @@ impl RotoFilter<RecordToken> for Record {
     }
 }
 
+impl From<Vec<(ShortString, Box<TypeDef>)>> for Record {
+    fn from(st_vec: Vec<(ShortString, Box<TypeDef>)>) -> Self {
+        Record(st_vec.iter().map(|(s, t)| (s.clone(), t.as_ref().into())).collect::<Vec<_>>())
+    }
+}
+
 #[derive(Debug)]
 #[repr(u8)]
 pub enum RecordToken {

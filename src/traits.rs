@@ -1,7 +1,7 @@
 // =========== RotoFilter trait ============================================
 
 use crate::types::{
-    collections::ElementTypeValue, typedef::TypeDef, typevalue::TypeValue,
+    typedef::TypeDef, typevalue::TypeValue,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
@@ -13,7 +13,9 @@ pub(crate) enum Token {
     RxType,
     // There can only ever be one TxType too
     TxType,
-    DataSource(usize),
+    // External Data Sources
+    Table(usize),
+    Rib(usize),
     FieldAccess(Vec<u8>),
     Term(u8),
     Action(u8),
@@ -48,7 +50,7 @@ impl Token {
     }
 
     pub fn is_data_source(&self) -> bool {
-        matches!(self, Token::DataSource(_))
+        matches!(self, Token::Rib(_) | Token::Table(_))
     }
 }
 
@@ -56,7 +58,7 @@ impl From<Token> for usize {
     fn from(token: Token) -> Self {
         match token {
             Token::Argument(v) => v,
-            Token::DataSource(v) => v as usize,
+            Token::Table(v) | Token::Rib(v) => v as usize,
             Token::Method(v) => v as usize,
             Token::RxType => 0,
             Token::TxType => 1,

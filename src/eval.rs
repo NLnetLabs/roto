@@ -8,7 +8,7 @@ use crate::types::builtin::HexLiteral;
 use crate::types::builtin::IntegerLiteral;
 use crate::types::builtin::PrefixLength;
 use crate::types::builtin::StringLiteral;
-use crate::types::NamedTypeDef;
+use crate::types::datasources::NamedTypeDef;
 
 use super::ast;
 use super::symbols;
@@ -604,12 +604,20 @@ impl ast::ComputeExpr {
             self.get_receiver().eval(symbols.clone(), scope.clone())?;
         // The rest of the method calls or access receivers are turned into
         // children of the first one.
+        
         let token = symbol.get_token().unwrap();
-
         let mut s = &mut symbol;
 
         for a_e in &self.access_expr {
-            let ty = s.get_type();
+            // Data sources are different from other access receivers: their
+            // method come from the data source (the container), not the type
+            // contained in the data source. They dont' have field access.
+            let ty = match token {
+                Token::Table(_) => TypeDef::Table(Box::new(s.get_type())),
+                Token::Rib(_) => TypeDef::Rib(Box::new(s.get_type())),
+                _ => s.get_type()
+            };
+            
             let child_s = match a_e {
                 ast::AccessExpr::MethodComputeExpr(method_call) => {
                     method_call.eval(
@@ -926,16 +934,13 @@ impl ast::FieldAccessExpr {
         &self,
         field_type: TypeDef,
     ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
-        // First, check if the complete field expression is a built-in type,
-        // if so we can return it right away.
+        
         if let Ok((ty, to)) = field_type.has_fields_chain(&self.field_names) {
             println!("::: field_type {:?}", field_type);
-            // println!("::: rec_type token {:?}", );
             println!("::: self {:?}", self);
 
-            // if BuiltinTypeValue::try_from(&field_type.0).is_ok() {
             let name = self.field_names.join(".");
-            // field_type.1.set_root(field_type.1);
+
             return Ok(symbols::Symbol::new(
                 name.as_str().into(),
                 symbols::SymbolKind::FieldAccess,
@@ -943,7 +948,6 @@ impl ast::FieldAccessExpr {
                 vec![],
                 Some(to),
             ));
-            // }
         } else {
             Err(format!("Invalid field access expression: {:?}", self).into())
         }
