@@ -371,7 +371,6 @@ pub struct SymbolTable {
     arguments: HashMap<ShortString, Symbol>,
     // The variables and constants that are defined in the module.
     variables: HashMap<ShortString, Symbol>,
-    types: HashMap<ShortString, TypeDef>,
     // The evaluated `term` sections that are defined in the module.
     terms: HashMap<ShortString, Symbol>,
     // The evaluated `action` sections that are defined in the module.
@@ -447,7 +446,6 @@ impl SymbolTable {
             terms: HashMap::new(),
             actions: HashMap::new(),
             match_actions: HashMap::new(),
-            types: HashMap::new(),
         }
     }
 
@@ -692,14 +690,6 @@ impl SymbolTable {
             );
         };
         Ok(())
-    }
-
-    pub fn add_type(&mut self, name: ShortString, ty: TypeDef) {
-        self.types.insert(name, ty);
-    }
-
-    pub fn get_type(&self, name: &ShortString) -> Option<&TypeDef> {
-        self.types.get(name)
     }
 
     pub(crate) fn get_symbol(&self, name: &ShortString) -> Option<&Symbol> {
