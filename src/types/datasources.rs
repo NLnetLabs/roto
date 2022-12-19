@@ -132,7 +132,7 @@ pub type NamedTypeDef = (ShortString, Box<TypeDef>);
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Table {
-    pub(crate) ty: Vec<NamedTypeDef>,
+    pub(crate) ty: TypeDef,
     pub(crate) records: Vec<Record>,
 }
 
@@ -149,6 +149,65 @@ impl Table {
             Err("Not a table type".into())
         }
     }
+
+    pub fn get_at_field_index(
+        &self,
+        index: usize,
+        field_index: Option<usize>,
+    ) -> Option<&TypeValue> {
+        match field_index {
+            None => self
+                .records
+                .get(index)
+                .and_then(|r| r.0.get(index).map(|v| (&v.1).into())),
+            Some(field_index) => match self.records.get(index) {
+                Some(r) => {
+                    r.get_field_by_index(field_index).map(|v| (&v.1).into())
+                }
+                _ => None,
+            },
+        }
+    }
+
+    pub(crate) fn exec_ref_value_method<'a>(
+        &'a self,
+        method_token: usize,
+        args: &'a [&'a TypeValue],
+        _res_type: TypeDef,
+    ) -> Box<dyn FnOnce() -> Option<usize> + 'a> {
+        match method_token.into() {
+            TableToken::Find => Box::new(|| {
+                self.records
+                    .iter()
+                    .enumerate()
+                    .find(|v| {
+                        if let Some(val) =
+                            v.1.get_field_by_index(0).map(|v| &v.1)
+                        {
+                            val == args[0]
+                        } else {
+                            false
+                        }
+                    })
+                    .map(|v| v.0)
+            }),
+            TableToken::Contains => Box::new(|| {
+                self.records
+                    .iter()
+                    .enumerate()
+                    .find(|v| {
+                        if let Some(val) =
+                            v.1.get_field_by_index(0).map(|v| &v.1)
+                        {
+                            val == args[0]
+                        } else {
+                            false
+                        }
+                    })
+                    .map(|v| v.0)
+            }),
+        }
+    }
 }
 
 impl RotoFilter<TableToken> for Table {
@@ -160,9 +219,9 @@ impl RotoFilter<TableToken> for Table {
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "get" => Ok(MethodProps::new(
-                TypeValue::Record(self.ty.into()),
-                TableToken::Get.into(),
+            "find" => Ok(MethodProps::new(
+                (&self.ty).into(),
+                TableToken::Find.into(),
                 vec![TypeDef::Asn],
             )),
             "contains" => Ok(MethodProps::new(
@@ -190,12 +249,12 @@ impl RotoFilter<TableToken> for Table {
 
     fn exec_value_method<'a>(
         &'a self,
-        _method: usize,
-        _args: &[&TypeValue],
+        method_token: usize,
+        args: &[&TypeValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
-        todo!()
+        unimplemented!()
     }
 
     fn exec_type_method<'a>(
@@ -204,20 +263,13 @@ impl RotoFilter<TableToken> for Table {
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
     {
-        match method_token.into() {
-            TableToken::Get => {
-                todo!()
-            }
-            TableToken::Contains => {
-                todo!()
-            }
-        }
+        unimplemented!()
     }
 }
 
 #[derive(Debug)]
 pub enum TableToken {
-    Get,
+    Find,
     Contains,
 }
 
@@ -226,7 +278,7 @@ impl TokenConvert for TableToken {}
 impl From<usize> for TableToken {
     fn from(token: usize) -> Self {
         match token {
-            0 => TableToken::Get,
+            0 => TableToken::Find,
             1 => TableToken::Contains,
             t => panic!("Unknown token {}", t),
         }

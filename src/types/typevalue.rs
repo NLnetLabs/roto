@@ -342,7 +342,7 @@ impl<'a> From<&'a TypeDef> for TypeValue {
                         })
                         .collect::<Vec<_>>();
                     TypeValue::Table(Table {
-                        ty: def_,
+                        ty: TypeDef::Record(def_),
                         records: vec![],
                     })
                 } else {

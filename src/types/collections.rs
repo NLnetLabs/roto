@@ -91,6 +91,28 @@ impl From<ElementTypeValue> for TypeValue {
     }
 }
 
+impl<'a> From<&'a ElementTypeValue> for &'a TypeValue {
+    fn from(t: &'a ElementTypeValue) -> Self {
+        match t {
+            ElementTypeValue::Primitive(v) => v,
+            ElementTypeValue::Nested(ty) => match ty.as_ref() {
+                TypeValue::List(li) => ty,
+                TypeValue::Record(kv_list) => ty,
+                _ => panic!("Unknown type"),
+            },
+        }
+    }
+}
+
+impl PartialEq<TypeValue> for ElementTypeValue {
+    fn eq(&self, other: &TypeValue) -> bool {
+        match self {
+            ElementTypeValue::Primitive(v) => v == other,
+            _ => false
+        }
+    }
+}
+
 //------------ List type ----------------------------------------------------
 
 #[derive(Debug, PartialEq, Eq)]

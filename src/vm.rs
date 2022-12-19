@@ -1,22 +1,35 @@
 use std::{
-    cell::{Ref, RefCell},
+    cell::RefCell,
     fmt::{Display, Formatter},
-    ops::{Index, IndexMut}
+    ops::{Index, IndexMut},
 };
 
 use crate::{
     ast::ShortString,
     compile::MirBlock,
-    traits::RotoFilter,
+    traits::Token,
     types::{
-        collections::ElementTypeValue, datasources::Table, typedef::TypeDef,
+        collections::{ElementTypeValue, Record},
+        datasources::Table,
+        typedef::TypeDef,
         typevalue::TypeValue,
     },
 };
 
 #[derive(Debug)]
+enum StackRefPos {
+    // index into LinearMemory
+    MemPos(usize),
+    // index into a Table (which is a vec of Records)
+    TablePos(Token, usize),
+    // 'Terniary' value, used for None results on search fields and/or values
+    // in data sources.
+    Unknown
+}
+
+#[derive(Debug)]
 struct StackRef {
-    mem_pos: usize,
+    pos: StackRefPos,
     field_index: Option<usize>,
 }
 
@@ -28,17 +41,16 @@ impl<'a> Stack {
         Stack(Vec::new())
     }
 
-    fn push(&'a mut self, pos: usize) -> Result<(), VmError> {
+    fn push(&'a mut self, pos: StackRefPos) -> Result<(), VmError> {
         self.0.push(StackRef {
-            mem_pos: pos,
+            pos,
             field_index: None,
         });
         Ok(())
     }
 
-    fn pop(&'a mut self, mem: Ref<LinearMemory>) -> Result<(), VmError> {
-        let pos = self.0.pop().ok_or(VmError::StackUnderflow)?.mem_pos;
-        mem.get(pos).ok_or(VmError::StackUnderflow)?;
+    fn pop(&'a mut self) -> Result<(), VmError> {
+        self.0.pop().ok_or(VmError::StackUnderflow)?;
         Ok(())
     }
 
@@ -238,29 +250,40 @@ impl<'a> VirtualMachine<'a> {
     fn _unwind_resolved_stack_into_vec(
         &'a self,
         mem: &'a LinearMemory,
-    ) -> Vec<&'a TypeValue> {
+    ) -> Option<Vec<&'a TypeValue>> {
         let mut stack = self.stack.borrow_mut();
-        stack
-            .unwind()
-            .into_iter()
-            .map(|sr| {
-                mem.get_at_field_index(sr.mem_pos, sr.field_index)
-                    .ok_or(VmError::InvalidMemoryAccess(
-                        sr.mem_pos,
-                        sr.field_index,
-                    ))
-                    .unwrap()
-            })
-            .collect::<Vec<_>>()
+        let mut unwind_stack = vec![];
+        for sr in stack.unwind().into_iter() {
+            match sr.pos {
+                StackRefPos::MemPos(pos) => {
+                    let v = mem.get_at_field_index(pos, sr.field_index).unwrap();
+                    unwind_stack.push(v);
+                }
+                StackRefPos::TablePos(token, pos) => {
+                    let ds = &self.data_sources[token];
+                    let v = ds.table.get_at_field_index(pos, sr.field_index);
+                    if let Some(v) = v {
+                        unwind_stack.push(v);
+                    } else {
+                        return None;
+                    }
+                }
+                StackRefPos::Unknown => {
+                    return None;
+                }
+            }
+        }
+        Some(unwind_stack)
     }
 
-    fn _get_data_source(
+    fn get_data_source(
         &self,
         token: usize,
     ) -> Result<&ExtDataSource, VmError> {
         self.data_sources
             .iter()
-            .find(|ds| ds.token == token).copied()
+            .find(|ds| ds.token == token)
+            .copied()
             .ok_or(VmError::DataSourceNotFound(token))
     }
 
@@ -295,7 +318,7 @@ impl<'a> VirtualMachine<'a> {
                     OpCode::ExecuteTypeMethod => {
                         let m = mem.borrow();
                         let stack_args =
-                            self._unwind_resolved_stack_into_vec(&m);
+                            self._unwind_resolved_stack_into_vec(&m).unwrap();
                         let return_type = args.remove(2).into();
 
                         // We are going to call a method on a type, so we
@@ -318,6 +341,7 @@ impl<'a> VirtualMachine<'a> {
                                 return Err(VmError::InvalidValueType);
                             }
                         }
+
                     }
                     // stack args: [method_token, return_type, return memory position]
                     OpCode::ExecuteValueMethod => {
@@ -335,7 +359,7 @@ impl<'a> VirtualMachine<'a> {
                         // pop all refs from the stack and resolve them to
                         // their values.
                         let stack_args =
-                            self._unwind_resolved_stack_into_vec(&m);
+                            self._unwind_resolved_stack_into_vec(&m).unwrap();
 
                         // The first value on the stack is the value which we
                         // are going to call a method with.
@@ -349,34 +373,39 @@ impl<'a> VirtualMachine<'a> {
                     }
                     // args: [data_source_token, method_token, return memory position]
                     OpCode::ExecuteDataStoreMethod => {
-                        let mut m = mem.borrow_mut();
-
-                        let mem_pos =
-                            if let Arg::MemPos(pos) = args.pop().unwrap() {
-                                pos as usize
-                            } else {
-                                return Err(VmError::InvalidValueType);
-                            };
-                        // let return_type = args.pop().unwrap().into();
+                        let m = mem.borrow();
+                        let data_source_token = args.pop().unwrap();
                         let method_token: Arg = args.pop().unwrap();
 
-                        if let Arg::DataSource(ds) = args[0] {
-                            let ds = self._get_data_source(ds).unwrap();
+                        if let Arg::DataSource(ds_t) = data_source_token {
+                            let ds = self.get_data_source(ds_t).unwrap();
                             let stack_args =
                                 self._unwind_resolved_stack_into_vec(&m);
-                            let v = ds.exec_method(
+
+                            if let Some(stack_args) = stack_args {
+                                println!("stack in data source method: {:?}", stack_args);
+
+                             let v = ds.exec_method(
                                 method_token.into(),
                                 &stack_args[..],
                                 TypeDef::None,
                             );
-                            m.set(mem_pos, v);
+                            let mut s = self.stack.borrow_mut();
+                            if let Some(v) = v {
+                                s.push(StackRefPos::TablePos(Token::Table(ds_t), v))?;
+                            } else {
+                                s.push(StackRefPos::Unknown)?;
+                            }
+                            drop(s);
+                            drop(m);
+                            } else {}
                         }
                     }
                     // stack args: [mem_pos, constant_value]
                     OpCode::PushStack => {
                         if let Arg::MemPos(pos) = args[0] {
                             let mut s = self.stack.borrow_mut();
-                            s.push(pos as usize)?;
+                            s.push(StackRefPos::MemPos(pos as usize))?;
                             drop(s);
                         } else {
                             return Err(VmError::InvalidValueType);
@@ -385,8 +414,7 @@ impl<'a> VirtualMachine<'a> {
                     OpCode::PopStack => {
                         if args.is_empty() {
                             let mut s = self.stack.borrow_mut();
-                            let m = mem.borrow();
-                            s.pop(m)?;
+                            s.pop()?;
                             drop(s);
                         } else {
                             return Err(VmError::InvalidValueType);
@@ -670,8 +698,7 @@ pub trait Payload {
 pub struct ExtDataSource {
     name: ShortString,
     token: usize,
-    ty: TypeDef,
-    values: Vec<TypeValue>,
+    table: Table,
 }
 
 impl ExtDataSource {
@@ -679,14 +706,16 @@ impl ExtDataSource {
         ExtDataSource {
             name: name.into(),
             token,
-            ty,
-            values: vec![],
+            table: Table {
+                ty,
+                records: vec![],
+            },
         }
     }
 
-    pub fn get_by_key<'a>(&'a self, key: &str) -> Option<&'a TypeValue> {
-        self.values.iter().find(|v| {
-            v.get_field_by_index(0).ok().map(|v| v.0.as_str()) == Some(key)
+    pub fn get_by_key<'a>(&'a self, key: &str) -> Option<&'a Record> {
+        self.table.records.iter().find(|v| {
+            v.get_field_by_index(0).map(|v| v.0.as_str()) == Some(key)
         })
     }
 
@@ -695,10 +724,25 @@ impl ExtDataSource {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> TypeValue {
-        Table::exec_type_method(method_token, args, res_type).unwrap()()
+    ) -> Option<usize> {
+        println!("exec_method: {:?} {:?} {:?}", method_token, args, res_type);
+        self.table
+            .exec_ref_value_method(method_token, args, res_type)()
     }
 }
+
+impl Index<Token> for [&'_ ExtDataSource] {
+    type Output = ExtDataSource;
+
+    fn index(&self, index: Token) -> &Self::Output {
+        if let Token::Table(token) = index {
+            self[token]
+        } else {
+            panic!("Cannot index with {:?}", index);
+        }
+    }
+}
+
 
 
 // pub fn compile_filter<'a, I: Payload, O: Payload>(
