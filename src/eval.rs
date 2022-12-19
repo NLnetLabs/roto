@@ -7,6 +7,7 @@ use crate::types::builtin::BuiltinTypeValue;
 use crate::types::builtin::HexLiteral;
 use crate::types::builtin::IntegerLiteral;
 use crate::types::builtin::PrefixLength;
+use crate::types::builtin::StringLiteral;
 use crate::types::NamedTypeDef;
 
 use super::ast;
@@ -823,12 +824,14 @@ impl ast::ValueExpr {
                 )
             }
             ast::ValueExpr::StringLiteral(str_lit) => {
-                Ok(symbols::Symbol::new(
+                Ok(symbols::Symbol::new_with_value(
                     str_lit.into(),
-                    symbols::SymbolKind::StringLiteral,
-                    TypeDef::String,
+                    symbols::SymbolKind::Constant,
+                    TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
+                        StringLiteral::new(str_lit.into()),
+                    )),
                     vec![],
-                    None,
+                    Token::Constant,
                 ))
             }
             // Integers are special, we are keeping them as is, so that the

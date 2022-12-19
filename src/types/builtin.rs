@@ -6,6 +6,7 @@ use std::fmt::{Display, Formatter};
 
 use routecore::asn::LongSegmentError;
 
+use crate::ast::ShortString;
 use crate::traits::{MethodProps, RotoFilter, TokenConvert};
 use crate::vm::Payload;
 
@@ -18,6 +19,7 @@ pub enum BuiltinTypeValue {
     U32(U32),
     U8(U8),
     IntegerLiteral(IntegerLiteral),
+    StringLiteral(StringLiteral),
     Prefix(Prefix),
     PrefixLength(PrefixLength),
     Community(Community),
@@ -36,6 +38,7 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::U32(_) => "U32",
             BuiltinTypeValue::U8(_) => "U8",
             BuiltinTypeValue::IntegerLiteral(_) => "IntegerLiteral",
+            BuiltinTypeValue::StringLiteral(_) => "StringLiteral",
             BuiltinTypeValue::Boolean(_) => "Boolean",
             BuiltinTypeValue::Prefix(_) => "Prefix",
             BuiltinTypeValue::PrefixLength(_) => "PrefixLengthLiteral",
@@ -54,6 +57,7 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::U32(val) => val,
             BuiltinTypeValue::U8(val) => val,
             BuiltinTypeValue::IntegerLiteral(val) => val,
+            BuiltinTypeValue::StringLiteral(val) => val,
             BuiltinTypeValue::Boolean(val) => val,
             BuiltinTypeValue::Prefix(val) => val,
             BuiltinTypeValue::PrefixLength(val) => val,
@@ -198,6 +202,9 @@ impl BuiltinTypeValue {
                 .exec_value_method(method_token, args, return_type)
                 .unwrap()(
             ),
+            BuiltinTypeValue::StringLiteral(lit_str) => lit_str
+                .exec_value_method(method_token, args, return_type)
+                .unwrap()(),
             BuiltinTypeValue::U32(u32) => u32
                 .exec_value_method(method_token, args, return_type)
                 .unwrap()(),
@@ -331,6 +338,9 @@ impl Display for BuiltinTypeValue {
             BuiltinTypeValue::U8(v) => write!(f, "{} (U8)", v),
             BuiltinTypeValue::IntegerLiteral(v) => {
                 write!(f, "{} (Integer)", v)
+            }
+            BuiltinTypeValue::StringLiteral(v) => {
+                write!(f, "{} (String)", v)
             }
             BuiltinTypeValue::Prefix(v) => write!(f, "{} (Prefix)", v),
             BuiltinTypeValue::PrefixLength(v) => {
@@ -713,6 +723,109 @@ impl From<usize> for BooleanToken {
 
 impl From<BooleanToken> for usize {
     fn from(val: BooleanToken) -> Self {
+        val as usize
+    }
+}
+
+//------------ StringLiteral type -------------------------------------------
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct StringLiteral(pub(crate) Option<ShortString>);
+impl StringLiteral {
+    pub fn new(val: ShortString) -> Self {
+        StringLiteral(Some(val))
+    }
+}
+
+impl RotoFilter<StringLiteralToken> for StringLiteral {
+    fn get_props_for_method(
+        self,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, Box<dyn std::error::Error>> {
+        match method_name.ident.as_str() {
+            "cmp" => Ok(MethodProps::new(
+                TypeValue::from(&TypeDef::IntegerLiteral),
+                StringLiteralToken::Cmp.into(),
+                vec![TypeDef::StringLiteral, TypeDef::StringLiteral],
+            )),
+            _ => Err(format!(
+                "Unknown method: '{}' for type StringLiteral",
+                method_name.ident
+            )
+            .into()),
+        }
+    }
+
+    fn exec_value_method<'a>(
+        &'a self,
+        method_token: usize,
+        args: &[&TypeValue],
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
+        todo!()
+    }
+
+    fn exec_type_method<'a>(
+        method_token: usize,
+        args: &[&'a TypeValue],
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    {
+        todo!()
+    }
+
+    fn into_type(
+        self,
+        type_def: &TypeDef,
+    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+        match type_def {
+            TypeDef::StringLiteral => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::StringLiteral(self)))
+            }
+            _ => Err(format!(
+                "Cannot convert type StringLiteral to type {:?}",
+                type_def
+            )
+            .into()),
+        }
+    }
+}
+
+impl From<StringLiteral> for TypeValue {
+    fn from(val: StringLiteral) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::StringLiteral(val))
+    }
+}
+
+impl Display for StringLiteral {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let v = match &self.0 {
+            Some(v) => v.to_string(),
+            None => "None".to_string(),
+        };
+        write!(f, "{}", v)
+    }
+}
+
+#[derive(Debug)]
+pub enum StringLiteralToken {
+    Cmp,
+}
+
+impl TokenConvert for StringLiteralToken {}
+
+impl From<usize> for StringLiteralToken {
+    fn from(val: usize) -> Self {
+        match val {
+            0 => StringLiteralToken::Cmp,
+            _ => panic!("Unknown token value: {}", val),
+        }
+    }
+}
+
+impl From<StringLiteralToken> for usize {
+    fn from(val: StringLiteralToken) -> Self {
         val as usize
     }
 }

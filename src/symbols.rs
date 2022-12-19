@@ -206,6 +206,9 @@ impl Symbol {
             TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(int)) => {
                 self.value = int.into_type(type_def)?;
             }
+            TypeValue::Builtin(BuiltinTypeValue::StringLiteral(str)) => {
+                self.value = str.into_type(type_def)?;
+            }
             TypeValue::Builtin(BuiltinTypeValue::HexLiteral(hex)) => {
                 self.value = hex.into_type(type_def)?;
             }
@@ -318,14 +321,15 @@ pub enum SymbolKind {
     NamedType,     // User-defined type of a record
     RxType,        // type of the incoming payload
     TxType,        // type of the outgoing payload
+    // data sources
     Rib,
     Table,
     PrefixList,
+    // accessors
     MethodCall,
     BuiltInTypeMethodCall,
     GlobalMethodCall,
     FieldAccess,
-    StringLiteral,
     // term symbols
     LogicalExpr,
     BooleanExpr,

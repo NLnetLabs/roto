@@ -40,8 +40,10 @@ pub enum TypeDef {
     Community,
     Route,
     RouteStatus,
+    // Literals
     HexLiteral,
     IntegerLiteral,
+    StringLiteral,
     AcceptReject(AcceptReject), // used in the apply section
     #[default]
     None,
@@ -339,6 +341,7 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::U32(_) => TypeDef::U32,
             BuiltinTypeValue::U8(_) => TypeDef::U8,
             BuiltinTypeValue::IntegerLiteral(_) => TypeDef::IntegerLiteral,
+            BuiltinTypeValue::StringLiteral(_) => TypeDef::StringLiteral,
             BuiltinTypeValue::Boolean(_) => TypeDef::Boolean,
             BuiltinTypeValue::Prefix(_) => TypeDef::Prefix,
             BuiltinTypeValue::PrefixLength(_) => TypeDef::PrefixLength,
@@ -359,6 +362,7 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::U32(_) => TypeDef::U32,
             BuiltinTypeValue::U8(_) => TypeDef::U8,
             BuiltinTypeValue::IntegerLiteral(_) => TypeDef::IntegerLiteral,
+            BuiltinTypeValue::StringLiteral(_) => TypeDef::StringLiteral,
             BuiltinTypeValue::Boolean(_) => TypeDef::Boolean,
             BuiltinTypeValue::Prefix(_) => TypeDef::Prefix,
             BuiltinTypeValue::PrefixLength(_) => TypeDef::PrefixLength,

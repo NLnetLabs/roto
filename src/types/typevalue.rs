@@ -123,6 +123,16 @@ impl TypeValue {
                     .exec_value_method(method_token, args, return_type)
                     .unwrap()()
             }
+            TypeValue::Builtin(BuiltinTypeValue::StringLiteral(lit_str)) => {
+                lit_str
+                    .exec_value_method(method_token, args, return_type)
+                    .unwrap()()
+            }
+            TypeValue::Builtin(BuiltinTypeValue::HexLiteral(lit_hex)) => {
+                lit_hex
+                    .exec_value_method(method_token, args, return_type)
+                    .unwrap()()
+            }
             TypeValue::Builtin(BuiltinTypeValue::U32(u32)) => {
                 u32.exec_value_method(method_token, args, return_type)
                     .unwrap()()
@@ -328,11 +338,12 @@ impl<'a> From<&'a TypeDef> for TypeValue {
                     let def_ = kv_list
                         .iter()
                         .map(|(ident, ty)| {
-                            (ident.clone(), ty.as_ref().into())
+                            (ident.clone(), ty.clone())
                         })
                         .collect::<Vec<_>>();
                     TypeValue::Table(Table {
-                        record: Record::new(def_).unwrap(),
+                        ty: def_,
+                        records: vec![],
                     })
                 } else {
                     panic!("Table must contain records")
