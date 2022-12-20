@@ -4,11 +4,12 @@
 
 use crate::{
     ast::ShortString,
-    traits::{MethodProps, RotoFilter, TokenConvert},
+    traits::{MethodProps, RotoFilter, Token, TokenConvert},
+    vm::StackRefPos,
 };
 
 use super::{
-    builtin::{Boolean, BuiltinTypeValue},
+    builtin::{self, Boolean, BuiltinTypeValue},
     collections::Record,
     typedef::TypeDef,
     typevalue::TypeValue,
@@ -130,6 +131,11 @@ impl std::fmt::Display for Rib {
 
 pub type NamedTypeDef = (ShortString, Box<TypeDef>);
 
+pub(crate) enum TableMethodValue {
+    Ref(StackRefPos),
+    TypeValue(TypeValue),
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct Table {
     pub(crate) ty: TypeDef,
@@ -174,7 +180,7 @@ impl Table {
         method_token: usize,
         args: &'a [&'a TypeValue],
         _res_type: TypeDef,
-    ) -> Box<dyn FnOnce() -> Option<usize> + 'a> {
+    ) -> Box<dyn FnOnce() -> TableMethodValue + 'a> {
         match method_token.into() {
             TableToken::Find => Box::new(|| {
                 self.records
@@ -189,7 +195,15 @@ impl Table {
                             false
                         }
                     })
-                    .map(|v| v.0)
+                    .map(|v| {
+                        TableMethodValue::Ref(StackRefPos::TablePos(
+                            Token::Table(v.0),
+                            0,
+                        ))
+                    })
+                    .unwrap_or_else(|| {
+                        TableMethodValue::TypeValue(TypeValue::None)
+                    })
             }),
             TableToken::Contains => Box::new(|| {
                 self.records
@@ -204,7 +218,16 @@ impl Table {
                             false
                         }
                     })
-                    .map(|v| v.0)
+                    .map(|_v| {
+                        TableMethodValue::TypeValue(TypeValue::Builtin(
+                            BuiltinTypeValue::Boolean(Boolean(Some(true))),
+                        ))
+                    })
+                    .unwrap_or_else(|| {
+                        TableMethodValue::TypeValue(TypeValue::Builtin(
+                            BuiltinTypeValue::Boolean(Boolean(Some(false))),
+                        ))
+                    })
             }),
         }
     }

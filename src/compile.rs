@@ -8,7 +8,7 @@ use crate::{
     symbols::{DepsGraph, GlobalSymbolTable, Scope, Symbol},
     traits::Token,
     types::typedef::TypeDef,
-    vm::{Arg, Command, OpCode, VariablesMap, ExtDataSource},
+    vm::{Arg, Command, ExtDataSource, OpCode, VariablesMap},
 };
 
 //============ The Compiler (Filter creation time) ==========================
@@ -233,11 +233,11 @@ pub fn compile(
                         println!("local_vars {:?}", local_vars);
                         mir_block.command_stack.extend(local_stack);
                         local_stack = VecDeque::new();
+                        mem_pos += 1;
                     }
                     // concrete value already.
                     Token::Constant => {
                         let val = arg.get_value();
-                        mem_pos += 1;
                         local_stack.push_front(Command::new(
                             OpCode::MemPosSet,
                             vec![
@@ -259,20 +259,21 @@ pub fn compile(
                         );
                         let next_arg = leaves.peek().unwrap();
 
-                        let (opcode, mut args) = match next_arg.get_token() {
+                        let (opcode, args) = match next_arg.get_token() {
                             Ok(Token::Rib(ds) | Token::Table(ds)) => {
-                                println!("datastore {} method {}", ds, method);
                                 used_data_sources.push((
                                     next_arg.get_name().clone(),
                                     next_arg,
                                 ));
                                 (
-                                OpCode::ExecuteDataStoreMethod,
-                                vec![
-                                    Arg::DataSource(ds as usize),
-                                    Arg::Method(method),
-                                ],
-                            )},
+                                    OpCode::ExecuteDataStoreMethod,
+                                    vec![
+                                        Arg::DataSource(ds as usize),
+                                        Arg::Method(method),
+                                        Arg::MemPos(mem_pos),
+                                    ],
+                                )
+                            }
                             Ok(Token::BuiltinType(_)) => {
                                 println!("arg : {:?}", arg);
                                 println!("next_arg : {:?}", next_arg);
@@ -284,6 +285,7 @@ pub fn compile(
                                         Arg::Type(arg.get_type()),
                                         Arg::Method(token.into()),
                                         Arg::Type(next_arg.get_type()),
+                                        Arg::MemPos(mem_pos),
                                     ],
                                 )
                             }
@@ -291,18 +293,18 @@ pub fn compile(
                                 // args: [ method_call, return_type ]
                                 OpCode::ExecuteValueMethod,
                                 vec![
-                                    // Arg::MemPos(mem_pos),
                                     Arg::Method(token.into()),
                                     Arg::Type(arg.get_type()),
+                                    Arg::MemPos(mem_pos),
                                 ],
                             ),
                             Ok(Token::FieldAccess(_)) => (
                                 // args: [ method_call, return_type ]
                                 OpCode::ExecuteValueMethod,
                                 vec![
-                                    // Arg::MemPos(mem_pos),
                                     Arg::Method(token.into()),
                                     Arg::Type(arg.get_type()),
+                                    Arg::MemPos(mem_pos),
                                 ],
                             ),
                             _ => {
@@ -313,7 +315,6 @@ pub fn compile(
                                 .into())
                             }
                         };
-                        args.push(Arg::MemPos(mem_pos));
 
                         local_stack.push_front(Command::new(
                             OpCode::PushStack,
@@ -323,11 +324,6 @@ pub fn compile(
                     }
                     Token::FieldAccess(fa) => {
                         let mut args = vec![];
-                        // local_stack.push_front(Command::new(
-                        //     OpCode::PushStack,
-                        //     vec![Arg::MemPos(mem_pos)],
-                        // ));
-                        // args.push(Arg::MemPos(mem_pos));
                         args.extend(
                             fa.iter()
                                 .map(|t| Arg::FieldAccess(*t as usize))
@@ -337,10 +333,6 @@ pub fn compile(
                             OpCode::StackOffset,
                             args,
                         ));
-                        // local_stack.push_front(Command::new(
-                        //     OpCode::PopStack,
-                        //     vec![Arg::MemPos(mem_pos)],
-                        // ));
                     }
                     // roots
                     Token::Variable(var) => {
@@ -436,7 +428,7 @@ pub fn compile(
         .iter()
         .map(|ds| {
             ExtDataSource::new(
-                     &ds.1.get_name(),
+                &ds.1.get_name(),
                 ds.1.get_token()
                     .unwrap_or_else(|_| {
                         panic!("Fatal: Cannot find Token for data source.");
