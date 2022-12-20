@@ -154,10 +154,6 @@ impl TypeValue {
                     .exec_value_method(method_token, args, return_type)
                     .unwrap()()
             }
-            TypeValue::Builtin(BuiltinTypeValue::HexLiteral(hex)) => {
-                hex.exec_value_method(method_token, args, return_type)
-                    .unwrap()()
-            }
             TypeValue::Builtin(BuiltinTypeValue::U8(u8_lit)) => u8_lit
                 .exec_value_method(method_token, args, return_type)
                 .unwrap()(
