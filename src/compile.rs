@@ -3,11 +3,19 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use nom::error::VerboseError;
+
 use crate::{
-    ast::{AcceptReject, ShortString},
-    symbols::{DepsGraph, GlobalSymbolTable, Scope, Symbol},
+    ast::{AcceptReject, ShortString, SyntaxTree},
+    symbols::{
+        DepsGraph, GlobalSymbolTable, Scope, Symbol, SymbolKind, SymbolTable,
+    },
     traits::Token,
-    types::typedef::TypeDef,
+    types::{
+        builtin::{Boolean, BuiltinTypeValue},
+        typedef::TypeDef,
+        typevalue::TypeValue,
+    },
     vm::{Arg, Command, ExtDataSource, OpCode, VariablesMap},
 };
 
@@ -57,7 +65,7 @@ use crate::{
 //                - Variable -> load the variable from the symbol table
 //            - evaluate the right side
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct RotoPack {
     pub mir: Vec<MirBlock>,
     pub rx_type: TypeDef,
@@ -85,6 +93,123 @@ impl RotoPack {
 }
 
 #[derive(Debug, Default)]
+pub struct CompileError {
+    message: String,
+}
+
+impl CompileError {
+    pub fn new(message: String) -> Self {
+        CompileError { message }
+    }
+}
+
+impl From<String> for CompileError {
+    fn from(message: String) -> Self {
+        CompileError { message }
+    }
+}
+
+impl From<&str> for CompileError {
+    fn from(message: &str) -> Self {
+        CompileError {
+            message: message.to_string(),
+        }
+    }
+}
+
+impl Display for CompileError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+type Arguments<'a> = Vec<(ShortString, &'a Symbol)>;
+type DataSources<'a> = Vec<(ShortString, &'a Symbol)>;
+type Variables<'a> = Vec<(ShortString, &'a Symbol)>;
+type Terms<'a> = Vec<(ShortString, &'a Symbol)>;
+type Term<'a> = &'a Symbol;
+
+#[derive(Debug)]
+struct CompilerState<'a> {
+    cur_module: &'a SymbolTable,
+    local_vars: VariablesMap,
+    local_stack: std::collections::VecDeque<Command>,
+    used_variables: Variables<'a>,
+    used_data_sources: DataSources<'a>,
+    used_arguments: Arguments<'a>,
+    cur_mir_block: MirBlock,
+    mem_pos: u32,
+}
+
+#[derive(Debug, Default)]
+pub struct Compiler<'a> {
+    source_code: &'a str,
+    ast: SyntaxTree,
+    symbols: GlobalSymbolTable,
+    mir: Vec<MirBlock>,
+}
+
+impl<'a> Compiler<'a> {
+    pub fn new(source_code: &'a str) -> Self {
+        Compiler {
+            source_code,
+            ast: SyntaxTree::default(),
+            symbols: GlobalSymbolTable::new(),
+            mir: Vec::new(),
+        }
+    }
+
+    pub fn parse_source_code(
+        &mut self,
+        source_code: &'a str,
+    ) -> Result<(), VerboseError<&'a str>> {
+        self.source_code = source_code;
+        self.ast = SyntaxTree::parse_str(self.source_code)?.1;
+
+        Ok(())
+    }
+
+    pub fn eval_ast(&mut self) -> Result<(), CompileError> {
+        self.ast.eval(self.symbols.clone())?;
+        Ok(())
+    }
+
+    pub fn compile(self) -> Vec<Result<RotoPack, CompileError>> {
+        println!("Start compiling...");
+
+        // get all symbols that are used in the filter terms.
+        let mut _global = self.symbols.borrow_mut();
+        let (_global_mod, modules) = Some::<(Vec<Scope>, Vec<Scope>)>(
+            _global.keys().cloned().partition(|m| *m == Scope::Global),
+        )
+        .unwrap();
+
+        drop(_global);
+        let mut _global = self.symbols.borrow_mut();
+
+        // each module outputs one roto-pack with its own MIR (composed of MIR blocks),
+        // its used arguments and used data sources.
+        let mut roto_packs = vec![];
+
+        for module in modules {
+            let _module = _global.get(&module).unwrap();
+            roto_packs.push(compile_module(_module));
+        }
+
+        roto_packs
+    }
+
+    pub fn build(
+        source_code: &'a str,
+    ) -> Vec<Result<RotoPack, CompileError>> {
+        let mut compiler = Compiler::new(source_code);
+        compiler.parse_source_code(source_code).unwrap();
+        compiler.eval_ast().unwrap();
+        compiler.compile()
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct MirBlock {
     pub command_stack: Vec<Command>,
 }
@@ -99,10 +224,6 @@ impl MirBlock {
     pub fn push_command(&mut self, command: Command) {
         self.command_stack.push(command);
     }
-
-    pub fn compile(&mut self, _ast: &AcceptReject) {
-        todo!()
-    }
 }
 
 impl Display for MirBlock {
@@ -114,303 +235,113 @@ impl Display for MirBlock {
     }
 }
 
-pub fn compile(
-    symbols: GlobalSymbolTable,
-) -> Result<RotoPack, Box<dyn std::error::Error>> {
-    fn unwind(
-        mut stack: std::collections::VecDeque<Command>,
-    ) -> Vec<Command> {
-        let mut v = vec![];
-        while let Some(c) = stack.pop_front() {
-            v.push(c);
-        }
-        v
+// pub fn compile(
+//     symbols: GlobalSymbolTable,
+// ) -> Vec<Result<RotoPack, CompileError>> {
+//     println!("Start compiling...");
+
+//     // get all symbols that are used in the filter terms.
+//     let mut _global = symbols.borrow_mut();
+//     let (_global_mod, modules) = Some::<(Vec<Scope>, Vec<Scope>)>(
+//         _global.keys().cloned().partition(|m| *m == Scope::Global),
+//     )
+//     .unwrap();
+
+//     drop(_global);
+//     let mut _global = symbols.borrow_mut();
+
+//     // each module outputs one roto-pack with its own MIR (composed of MIR blocks),
+//     // its used arguments and used data sources.
+//     let mut roto_packs = vec![];
+
+//     for module in modules {
+//         let _module = _global.get(&module).unwrap();
+//         roto_packs.push(compile_module(_module));
+//     }
+
+//     roto_packs
+// }
+
+fn unwind_stack(
+    mut stack: std::collections::VecDeque<Command>,
+) -> Vec<Command> {
+    let mut v = vec![];
+    while let Some(c) = stack.pop_front() {
+        v.push(c);
     }
+    v
+}
 
-    println!("Start compiling...");
+fn compile_module(_module: &SymbolTable) -> Result<RotoPack, CompileError> {
+    let (
+        _rx_type,
+        _tx_type,
+        DepsGraph {
+            arguments,
+            variables,
+            data_sources,
+        },
+    ) = _module.create_terms_graph()?;
 
-    // get all symbols that are used in the filter terms.
-    let mut _global = symbols.borrow_mut();
-    let (_global_mod, modules) = Some::<(Vec<Scope>, Vec<Scope>)>(
-        _global.keys().cloned().partition(|m| *m == Scope::Global),
-    )
-    .unwrap();
+    let mut state = CompilerState {
+        cur_module: _module,
+        local_vars: VariablesMap::default(),
+        local_stack: VecDeque::new(),
+        used_variables: variables,
+        used_data_sources: data_sources,
+        used_arguments: arguments,
+        cur_mir_block: MirBlock::new(),
+        mem_pos: 0,
+    };
 
-    drop(_global);
-    let mut _global = symbols.borrow_mut();
-
-    println!("Found modules: {:?}", modules);
-    let mut used_arguments: Vec<(ShortString, &Symbol)> = vec![];
-    let mut used_data_sources: Vec<(ShortString, &Symbol)> = vec![];
+    // let mut used_arguments: Arguments = vec![];
+    // let mut used_data_sources: DataSources = vec![];
 
     // initialize the command stack
     let mut mir: Vec<MirBlock> = vec![];
 
-    for module in modules {
-        let _module = _global.get(&module).unwrap();
-        let (
-            _rx_type,
-            _tx_type,
-            DepsGraph {
-                arguments,
-                variables,
-                data_sources,
-            },
-        ) = _module.create_terms_graph()?;
+    println!(
+        "======== dependencies for module: {:?} ===========",
+        _module
+    );
 
-        println!(
-            "======== dependencies for module: {:?} ===========",
-            module
-        );
+    println!("___args");
+    state.used_arguments
+        .iter()
+        .for_each(|s| println!("{:?}: {:?}", s.1.get_token().unwrap(), s.0));
 
-        println!("___args");
-        arguments.iter().for_each(|s| {
-            println!("{:?}: {:?}", s.1.get_token().unwrap(), s.0)
-        });
+    println!("___vars");
 
-        println!("___vars");
+    state.used_variables.iter().for_each(|s| {
+        println!("{:?} {:?}", s.1.get_token().unwrap(), s.0);
+    });
 
-        variables.iter().for_each(|s| {
-            println!("{:?} {:?}", s.1.get_token().unwrap(), s.0);
-        });
+    println!("___data_sources");
 
-        println!("___data_sources");
+    state.used_data_sources.iter().for_each(|t| {
+        println!("{:?} {:?}", t.1.get_token().unwrap(), t.0);
+    });
 
-        data_sources.iter().for_each(|t| {
-            println!("{:?} {:?}", t.1.get_token().unwrap(), t.0);
-        });
+    println!("=================================================");
 
-        println!("=================================================");
+    // compile the variables used in the terms
+    (mir, state) = compile_vars(
+        mir,
+        state,
+    )?;
 
-        // local vars state during compilation
-        let mut local_vars = VariablesMap::new();
+    let mut mem_pos: u32 = (state.used_variables.len() + 1).try_into().unwrap();
+    // for term in _module.get_terms() {
+    //     mir = compile_term(term, _module, &state.local_vars, mir, mem_pos)?;
+    //     mem_pos += 1;
+    // }
 
-        // compile the used vars,
-        for (mut mem_pos, var) in (2_u32..)
-            .zip(variables.into_iter().map(|s| s.1.get_token().unwrap()))
-        {
-            // a new block
-            let mut mir_block = MirBlock {
-                command_stack: Vec::new(),
-            };
-
-            let s = _module.get_variable_by_token(&var);
-            print!("\nvar: {:?} ", s.get_token());
-
-            let leaves = s.get_leaf_nodes();
-            let mut local_stack =
-                std::collections::VecDeque::<Command>::new();
-
-            let mut leaves = leaves.into_iter().peekable();
-            println!("\nleaves");
-            println!(
-                "{:?}",
-                leaves.clone().for_each(|lv| {
-                    println!(
-                        "{:3?} {}",
-                        lv.get_token().unwrap(),
-                        lv.get_name()
-                    )
-                })
-            );
-
-            while let Some(arg) = &mut leaves.next() {
-                print!("a");
-                let token = arg.get_token().unwrap();
-                match token {
-                    // assignment
-                    Token::Variable(var) if arg.get_name() == "var" => {
-                        print!("V");
-                        local_stack.push_front(Command::new(
-                            OpCode::MemPosRef,
-                            vec![
-                                Arg::MemPos(mem_pos),
-                                Arg::Variable(var as usize),
-                            ],
-                        ));
-                        println!("\nlocal_stack {:?}", local_stack);
-                        local_vars.set(var as usize, mem_pos, 0).unwrap();
-                        println!("local_vars {:?}", local_vars);
-                        mir_block.command_stack.extend(local_stack);
-                        local_stack = VecDeque::new();
-                        mem_pos += 1;
-                    }
-                    // concrete value already.
-                    Token::Constant => {
-                        let val = arg.get_value();
-                        local_stack.push_front(Command::new(
-                            OpCode::MemPosSet,
-                            vec![
-                                Arg::MemPos(mem_pos),
-                                Arg::Constant(val.as_cloned_builtin()?),
-                            ],
-                        ));
-                        local_stack.push_front(Command::new(
-                            OpCode::PushStack,
-                            vec![Arg::MemPos(mem_pos)],
-                        ));
-                    }
-                    // external calls
-                    Token::Method(method) => {
-                        println!(
-                            "m {} for {:?}",
-                            method,
-                            leaves.peek().unwrap().get_type()
-                        );
-                        let next_arg = leaves.peek().unwrap();
-
-                        let (opcode, args) = match next_arg.get_token() {
-                            Ok(Token::Rib(ds) | Token::Table(ds)) => {
-                                used_data_sources.push((
-                                    next_arg.get_name().clone(),
-                                    next_arg,
-                                ));
-                                (
-                                    OpCode::ExecuteDataStoreMethod,
-                                    vec![
-                                        Arg::DataSource(ds as usize),
-                                        Arg::Method(method),
-                                        Arg::MemPos(mem_pos),
-                                    ],
-                                )
-                            }
-                            Ok(Token::BuiltinType(_)) => {
-                                println!("arg : {:?}", arg);
-                                println!("next_arg : {:?}", next_arg);
-
-                                (
-                                    // args: [ call_type, method_call, return_type ]
-                                    OpCode::ExecuteTypeMethod,
-                                    vec![
-                                        Arg::Type(arg.get_type()),
-                                        Arg::Method(token.into()),
-                                        Arg::Type(next_arg.get_type()),
-                                        Arg::MemPos(mem_pos),
-                                    ],
-                                )
-                            }
-                            Ok(Token::Variable(_)) => (
-                                // args: [ method_call, return_type ]
-                                OpCode::ExecuteValueMethod,
-                                vec![
-                                    Arg::Method(token.into()),
-                                    Arg::Type(arg.get_type()),
-                                    Arg::MemPos(mem_pos),
-                                ],
-                            ),
-                            Ok(Token::FieldAccess(_)) => (
-                                // args: [ method_call, return_type ]
-                                OpCode::ExecuteValueMethod,
-                                vec![
-                                    Arg::Method(token.into()),
-                                    Arg::Type(arg.get_type()),
-                                    Arg::MemPos(mem_pos),
-                                ],
-                            ),
-                            _ => {
-                                return Err(format!(
-                                    "Invalid token for method call: {:?}",
-                                    next_arg.get_token()
-                                )
-                                .into())
-                            }
-                        };
-
-                        local_stack.push_front(Command::new(
-                            OpCode::PushStack,
-                            vec![Arg::MemPos(mem_pos)],
-                        ));
-                        local_stack.push_front(Command::new(opcode, args))
-                    }
-                    Token::FieldAccess(fa) => {
-                        let mut args = vec![];
-                        args.extend(
-                            fa.iter()
-                                .map(|t| Arg::FieldAccess(*t as usize))
-                                .collect::<Vec<_>>(),
-                        );
-                        local_stack.push_front(Command::new(
-                            OpCode::StackOffset,
-                            args,
-                        ));
-                    }
-                    // roots
-                    Token::Variable(var) => {
-                        println!("get var: {:?}", var);
-                        println!("local vars {:?}", local_vars);
-                        let mem_pos = local_vars
-                            .get_by_token_value(var as usize)
-                            .unwrap();
-                        local_stack.push_front(Command::new(
-                            OpCode::PushStack,
-                            vec![Arg::MemPos(mem_pos.mem_pos as u32)],
-                        ));
-                        mir_block.command_stack.extend(unwind(local_stack));
-                        local_stack = VecDeque::new();
-                    }
-                    Token::Argument(arg) => {
-                        used_arguments.push((s.get_name(), s));
-                        local_stack.push_front(Command::new(
-                            OpCode::ArgToMemPos,
-                            vec![
-                                Arg::Argument(arg as usize),
-                                Arg::MemPos(mem_pos),
-                            ],
-                        ));
-                        mem_pos += 1;
-                        mir_block.command_stack.extend(unwind(local_stack));
-                        local_stack = VecDeque::new();
-                    }
-                    Token::RxType => {
-                        local_stack.push_front(Command::new(
-                            OpCode::PushStack,
-                            vec![Arg::MemPos(0)],
-                        ));
-                        mir_block.command_stack.extend(unwind(local_stack));
-                        local_stack = VecDeque::new();
-                    }
-                    Token::TxType => {
-                        local_stack.push_front(Command::new(
-                            OpCode::PushStack,
-                            vec![Arg::MemPos(1)],
-                        ));
-                        // mir_block.command_stack.extend(unwind(local_stack));
-                        // local_stack = VecDeque::new();
-                    }
-                    Token::Rib(_) | Token::Table(_) => {
-                        // No further action for a data-source, it's only
-                        // used to call methods on, which should already have
-                        // been peeked into, by the command before this one.
-
-                        // we are unwinding the local stack, though
-                        mir_block.command_stack.extend(unwind(local_stack));
-                        local_stack = VecDeque::new();
-                    }
-                    Token::BuiltinType(_) => {
-                        // No further action for a builtin type, it's only
-                        // used to call methods on, which should already have
-                        // been peeked into, by the command before this one.
-
-                        // we are unwinding the local stack, though
-                        mir_block.command_stack.extend(unwind(local_stack));
-                        local_stack = VecDeque::new();
-                    }
-                    Token::Term(_) => todo!(),
-                    Token::Action(_) => todo!(),
-                    Token::MatchAction(_) => todo!(),
-                }
-            }
-            // mir_block.command_stack.extend(local_stack);
-            mir.push(mir_block);
-            local_stack.clear();
-        }
-
-        for m in &mir {
-            println!("\nMIR_block: \n{}", m);
-        }
+    for m in &mir {
+        println!("\nMIR_block: \n{}", m);
     }
 
-    let args = used_arguments
+    let args = state
+        .used_arguments
         .iter()
         .map(|a| {
             (
@@ -424,7 +355,8 @@ pub fn compile(
         })
         .collect::<Vec<_>>();
 
-    let data_sources = used_data_sources
+    let data_sources = state
+        .used_data_sources
         .iter()
         .map(|ds| {
             ExtDataSource::new(
@@ -440,4 +372,412 @@ pub fn compile(
         .collect::<Vec<_>>();
 
     Ok(RotoPack::new(mir, TypeDef::None, None, args, data_sources))
+}
+
+fn compile_var<'a>(
+    arg: &'a Symbol,
+    next_arg: Option<&&'a Symbol>,
+    mut state: CompilerState<'a>,
+) -> Result<CompilerState<'a>, CompileError> {
+    let token = arg.get_token().unwrap();
+
+    match token {
+        // assignment
+        Token::Variable(var) if arg.get_name() == "var" => {
+            print!("V");
+            state.local_stack.push_front(Command::new(
+                OpCode::MemPosRef,
+                vec![Arg::MemPos(state.mem_pos), Arg::Variable(var)],
+            ));
+            println!("\nlocal_stack {:?}", state.local_stack);
+            state.local_vars.set(var, state.mem_pos, 0).unwrap();
+            println!("local_vars {:?}", state.local_vars);
+            state.cur_mir_block.command_stack.extend(state.local_stack);
+            state.local_stack = VecDeque::new();
+        }
+        // concrete value already.
+        Token::Constant => {
+            let val = arg.get_value();
+            state.local_stack.push_front(Command::new(
+                OpCode::MemPosSet,
+                vec![
+                    Arg::MemPos(state.mem_pos),
+                    Arg::Constant(val.as_cloned_builtin()?),
+                ],
+            ));
+            state.local_stack.push_front(Command::new(
+                OpCode::PushStack,
+                vec![Arg::MemPos(state.mem_pos)],
+            ));
+        }
+        // external calls
+        Token::Method(method) => {
+            println!("m {} for {:?}", method, next_arg.unwrap().get_type());
+            let next_arg = next_arg.unwrap();
+
+            let (opcode, args) = match next_arg.get_token() {
+                Ok(Token::Rib(ds) | Token::Table(ds)) => {
+                    state
+                        .used_data_sources
+                        .push((next_arg.get_name(), next_arg));
+                    (
+                        OpCode::ExecuteDataStoreMethod,
+                        vec![
+                            Arg::DataSource(ds),
+                            Arg::Method(method),
+                            Arg::MemPos(state.mem_pos),
+                        ],
+                    )
+                }
+                Ok(Token::BuiltinType(_)) => {
+                    println!("arg : {:?}", arg);
+                    println!("next_arg : {:?}", next_arg);
+
+                    (
+                        // args: [ call_type, method_call, return_type ]
+                        OpCode::ExecuteTypeMethod,
+                        vec![
+                            Arg::Type(arg.get_type()),
+                            Arg::Method(token.into()),
+                            Arg::Type(next_arg.get_type()),
+                            Arg::MemPos(state.mem_pos),
+                        ],
+                    )
+                }
+                Ok(Token::Variable(_)) => (
+                    // args: [ method_call, return_type ]
+                    OpCode::ExecuteValueMethod,
+                    vec![
+                        Arg::Method(token.into()),
+                        Arg::Type(arg.get_type()),
+                        Arg::MemPos(state.mem_pos),
+                    ],
+                ),
+                Ok(Token::FieldAccess(_)) => (
+                    // args: [ method_call, return_type ]
+                    OpCode::ExecuteValueMethod,
+                    vec![
+                        Arg::Method(token.into()),
+                        Arg::Type(arg.get_type()),
+                        Arg::MemPos(state.mem_pos),
+                    ],
+                ),
+                _ => {
+                    return Err(format!(
+                        "Invalid token for method call: {:?}",
+                        next_arg.get_token()
+                    )
+                    .into())
+                }
+            };
+
+            state.local_stack.push_front(Command::new(
+                OpCode::PushStack,
+                vec![Arg::MemPos(state.mem_pos)],
+            ));
+            state.local_stack.push_front(Command::new(opcode, args))
+        }
+        Token::FieldAccess(fa) => {
+            let mut args = vec![];
+            args.extend(
+                fa.iter()
+                    .map(|t| Arg::FieldAccess(*t as usize))
+                    .collect::<Vec<_>>(),
+            );
+            state
+                .local_stack
+                .push_front(Command::new(OpCode::StackOffset, args));
+        }
+        // roots
+        Token::Variable(var) => {
+            println!("get var: {:?}", var);
+            println!("local vars {:?}", state.local_vars);
+            let mem_pos = state.local_vars.get_by_token_value(var).unwrap();
+            state.local_stack.push_front(Command::new(
+                OpCode::PushStack,
+                vec![Arg::MemPos(mem_pos.mem_pos)],
+            ));
+            state.cur_mir_block
+                .command_stack
+                .extend(unwind_stack(state.local_stack));
+            state.local_stack = VecDeque::new();
+        }
+        Token::Argument(arg_arg) => {
+            state.used_arguments.push((arg.get_name(), arg));
+            state.local_stack.push_front(Command::new(
+                OpCode::ArgToMemPos,
+                vec![Arg::Argument(arg_arg), Arg::MemPos(state.mem_pos)],
+            ));
+            state.cur_mir_block
+                .command_stack
+                .extend(unwind_stack(state.local_stack));
+            state.local_stack = VecDeque::new();
+        }
+        Token::RxType => {
+            state.local_stack.push_front(Command::new(
+                OpCode::PushStack,
+                vec![Arg::MemPos(0)],
+            ));
+            state.cur_mir_block
+                .command_stack
+                .extend(unwind_stack(state.local_stack));
+            state.local_stack = VecDeque::new();
+        }
+        Token::TxType => {
+            state.local_stack.push_front(Command::new(
+                OpCode::PushStack,
+                vec![Arg::MemPos(1)],
+            ));
+        }
+        Token::Rib(_) | Token::Table(_) => {
+            // No further action for a data-source, it's only
+            // used to call methods on, which should already have
+            // been peeked into, by the command before this one.
+
+            // we are unwinding the local stack, though
+            state.cur_mir_block
+                .command_stack
+                .extend(unwind_stack(state.local_stack));
+            state.local_stack = VecDeque::new();
+        }
+        Token::BuiltinType(_) => {
+            // No further action for a builtin type, it's only
+            // used to call methods on, which should already have
+            // been peeked into, by the command before this one.
+
+            // we are unwinding the local stack, though
+            state.cur_mir_block
+                .command_stack
+                .extend(unwind_stack(state.local_stack));
+            state.local_stack = VecDeque::new();
+        }
+        Token::Term(_) => todo!(),
+        Token::Action(_) => todo!(),
+        Token::MatchAction(_) => todo!(),
+    }
+
+    Ok(state)
+}
+
+fn compile_vars(
+    mut mir: Vec<MirBlock>,
+    mut state: CompilerState<'_>,
+) -> Result<(Vec<MirBlock>, CompilerState<'_>), CompileError> {
+    
+    // a new block
+    state.cur_mir_block = MirBlock {
+        command_stack: Vec::new(),
+    };
+
+    let _module = state.cur_module;
+
+    // compile the used vars. Since the rx and tx value live in memory
+    // positions 0 and 1, we start with memory position 2.
+    for (mem_pos, var) in (2_u32..).zip(
+        state.used_variables.clone()
+            .iter()
+            .map(|s| s.1.get_token().unwrap()),
+    ) {
+
+        state.mem_pos = mem_pos;
+        let s = _module.get_variable_by_token(&var);
+        print!("\nvar: {:?} ", s.get_token());
+
+        let leaves = s.get_leaf_nodes();
+        state.local_stack = std::collections::VecDeque::<Command>::new();
+
+        let mut leaves = leaves.into_iter().peekable();
+        println!("\nleaves");
+        println!(
+            "{:?}",
+            leaves.clone().for_each(|lv| {
+                println!("{:3?} {}", lv.get_token().unwrap(), lv.get_name())
+            })
+        );
+
+        while let Some(arg) = &mut leaves.next() {
+            print!("a");
+
+            state = compile_var(
+                arg,
+                leaves.peek(),
+                state,
+            )?;
+        }
+
+        mir.push(state.cur_mir_block);
+        state.cur_mir_block = MirBlock {
+            command_stack: Vec::new(),
+        };
+        state.local_stack.clear();
+    }
+
+    Ok((mir, state))
+}
+
+fn compile_term(
+    term: Term,
+    _module: &'_ SymbolTable,
+    local_vars: &VariablesMap,
+    mut mir: Vec<MirBlock>,
+    mem_pos: u32,
+) -> Result<Vec<MirBlock>, CompileError> {
+    // a new block
+    let mut mir_block = MirBlock {
+        command_stack: Vec::new(),
+    };
+
+    let leaves = term.get_leaf_nodes();
+    let mut local_stack = std::collections::VecDeque::<Command>::new();
+    let mut leaves = leaves.into_iter().peekable();
+
+    while let Some(bool_expr) = &mut leaves.next() {
+        println!("sub-term {:?}", bool_expr);
+        match bool_expr.get_kind() {
+            SymbolKind::CompareExpr(op) => {}
+            SymbolKind::LogicalExpr => {}
+            SymbolKind::NotExpr => {}
+            SymbolKind::AndExpr => {}
+            SymbolKind::OrExpr => {}
+            // A method call can have return type boolean
+            SymbolKind::MethodCall => {
+                let method = bool_expr.get_token().unwrap().into();
+                println!(
+                    "m {} for {:?}",
+                    method,
+                    leaves.peek().unwrap().get_type()
+                );
+                let next_arg = leaves.peek().unwrap();
+
+                let (opcode, args) = match next_arg.get_token() {
+                    Ok(Token::Rib(ds) | Token::Table(ds)) => {
+                        // used_data_sources.push((
+                        //     next_arg.get_name().clone(),
+                        //     next_arg,
+                        // ));
+                        (
+                            OpCode::ExecuteDataStoreMethod,
+                            vec![
+                                Arg::DataSource(ds),
+                                Arg::Method(method),
+                                Arg::MemPos(mem_pos),
+                            ],
+                        )
+                    }
+                    Ok(Token::BuiltinType(_)) => {
+                        println!("arg : {:?}", bool_expr);
+                        println!("next_arg : {:?}", next_arg);
+
+                        (
+                            // args: [ call_type, method_call, return_type ]
+                            OpCode::ExecuteTypeMethod,
+                            vec![
+                                Arg::Type(bool_expr.get_type()),
+                                Arg::Method(method),
+                                Arg::Type(next_arg.get_type()),
+                                Arg::MemPos(mem_pos),
+                            ],
+                        )
+                    }
+                    Ok(Token::Variable(_)) => (
+                        // args: [ method_call, return_type ]
+                        OpCode::ExecuteValueMethod,
+                        vec![
+                            Arg::Method(method),
+                            Arg::Type(bool_expr.get_type()),
+                            Arg::MemPos(mem_pos),
+                        ],
+                    ),
+                    Ok(Token::FieldAccess(_)) => (
+                        // args: [ method_call, return_type ]
+                        OpCode::ExecuteValueMethod,
+                        vec![
+                            Arg::Method(method),
+                            Arg::Type(bool_expr.get_type()),
+                            Arg::MemPos(mem_pos),
+                        ],
+                    ),
+                    _ => {
+                        return Err(format!(
+                            "Invalid token for method call: {:?}",
+                            next_arg.get_token()
+                        )
+                        .into())
+                    }
+                };
+
+                local_stack.push_front(Command::new(
+                    OpCode::PushStack,
+                    vec![Arg::MemPos(mem_pos)],
+                ));
+                local_stack.push_front(Command::new(opcode, args))
+            }
+            // A variable may evaluate to a boolean value, but variables are referenced
+            // by their the kind of their value, not by their own kind.
+            SymbolKind::FieldAccess => {
+                println!("field access for {:?}", bool_expr);
+                let var = local_vars
+                    .get_by_token_value(
+                        bool_expr
+                            .get_token()
+                            .map_err(|e| {
+                                format!("Invalid token for variable: {:?}", e)
+                            })?
+                            .into(),
+                    )
+                    .unwrap()
+                    .mem_pos;
+                mir_block.command_stack.push(Command::new(
+                    OpCode::Cmp,
+                    vec![Arg::MemPos(var), Arg::Boolean(true)],
+                ));
+                mir_block
+                    .command_stack
+                    .push(Command::new(OpCode::ReturnIfFalse, vec![]));
+            }
+            // A constant can have type boolean, we can evaluate it here at
+            // compile time of course.
+            SymbolKind::Constant => {
+                if bool_expr.get_value()
+                    == &TypeValue::Builtin(BuiltinTypeValue::Boolean(
+                        Boolean(Some(true)),
+                    ))
+                {
+                    mir_block.command_stack.push(Command::new(
+                        OpCode::PushStack,
+                        vec![Arg::Constant(TypeValue::Builtin(
+                            BuiltinTypeValue::Boolean(Boolean(Some(true))),
+                        ))],
+                    ));
+                } else {
+                    mir_block.command_stack.push(Command::new(
+                        OpCode::PushStack,
+                        vec![Arg::Constant(TypeValue::Builtin(
+                            BuiltinTypeValue::Boolean(Boolean(Some(false))),
+                        ))],
+                    ));
+                    mir_block
+                        .command_stack
+                        .push(Command::new(OpCode::Return, vec![]));
+                    mir.push(mir_block);
+                    return Ok(mir);
+                }
+            }
+            _ => {
+                return Err(format!(
+                    "Invalid token in term {}, sub-term: {:?}",
+                    term.get_name(),
+                    bool_expr.get_token()
+                )
+                .into())
+            }
+        }
+    }
+    mir_block
+        .command_stack
+        .push(Command::new(OpCode::Return, vec![]));
+
+    mir.push(mir_block);
+
+    Ok(mir)
 }

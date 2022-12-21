@@ -17,28 +17,37 @@ use roto::vm;
 
 fn test_data(
     name: &str,
-    data: &'static str,
+    source_code: &'static str,
     expect_success: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("eval test {}", name);
-    let parsed_data = Root::parse_str(data);
-    if let Err(e) = parsed_data.clone() {
-        println!("{}", convert_error(data, e));
-    }
+    // let parsed_data = SyntaxTree::parse_str(source_code);
+    // if let Err(e) = parsed_data.clone() {
+    //     println!("{}", convert_error(source_code, e));
+    // }
 
-    match expect_success {
-        false => assert!(parsed_data.is_err()),
-        true => assert!(parsed_data.is_ok()),
-    }
+    // match expect_success {
+    //     false => assert!(parsed_data.is_err()),
+    //     true => assert!(parsed_data.is_ok()),
+    // }
 
-    let eval = parsed_data?;
+    // let eval = parsed_data?;
 
-    let symbols = GlobalSymbolTable::new();
-    eval.1.eval(symbols.clone())?;
+    // let symbols = GlobalSymbolTable::new();
+    // eval.1.eval(symbols.clone()).map_err(
+    //     |_e| {
+    //         Box::new(std::io::Error::new(
+    //             std::io::ErrorKind::InvalidData,
+    //             "Can't evaluate AST",
+    //         ))
+    //     }
+    // )?;
 
-    println!("{:#?}", symbols);
+    // println!("{:#?}", symbols);
 
-    let roto_pack = compile(symbols)?;
+    // let compiler = Compiler::new();
+    let mut _packs = Compiler::build(source_code);
+    let roto_pack = std::mem::take(_packs[0].as_mut().unwrap());
 
     let _count =
         BuiltinTypeValue::create_instance(TypeDef::U32, 1_u32).unwrap();
