@@ -1,13 +1,13 @@
 use std::cell::RefCell;
 
-use roto::compile::compile;
+use roto::compile::Compiler;
 use roto::symbols::GlobalSymbolTable;
 
 use nom::error::convert_error;
 use roto::ast::*;
 use roto::types::builtin::{
-    self, AsPath, Asn, BgpAttributes, BuiltinTypeValue, Community,
-    CommunityType, Prefix, Route, U32,
+    self, AsPath, Asn, BuiltinTypeValue, Community,
+    CommunityType, U32,
 };
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
@@ -142,27 +142,27 @@ fn test_data(
     //     community: [Community]
     // }
 
-    let payload_as_path = builtin::AsPath::new(vec![
-        routecore::asn::Asn::from_u32(1),
-        routecore::asn::Asn::from_u32(10),
-        routecore::asn::Asn::from_u32(32455),
-    ])
-    .unwrap();
-    let payload_communities =
-        vec![builtin::Community::new(builtin::CommunityType::Standard)];
+    // let payload_as_path = builtin::AsPath::new(vec![
+    //     routecore::asn::Asn::from_u32(1),
+    //     routecore::asn::Asn::from_u32(10),
+    //     routecore::asn::Asn::from_u32(32455),
+    // ])
+    // .unwrap();
+    // let payload_communities =
+    //     vec![builtin::Community::new(builtin::CommunityType::Standard)];
 
-    let payload: Route = Route {
-        prefix: Some(
-            routecore::addr::Prefix::new("83.24.10.0".parse().unwrap(), 24)
-                .unwrap()
-                .into(),
-        ),
-        bgp: Some(BgpAttributes {
-            as_path: payload_as_path,
-            communities: payload_communities,
-        }),
-        status: builtin::RouteStatus::Empty,
-    };
+    // let payload: Route = Route {
+    //     prefix: Some(
+    //         routecore::addr::Prefix::new("83.24.10.0".parse().unwrap(), 24)
+    //             .unwrap()
+    //             .into(),
+    //     ),
+    //     bgp: Some(BgpAttributes {
+    //         as_path: payload_as_path,
+    //         communities: payload_communities,
+    //     }),
+    //     status: builtin::RouteStatus::Empty,
+    // };
 
     let mem = vm::LinearMemory::empty();
     let vars = vm::VariablesMap::new();
@@ -179,7 +179,7 @@ fn test_data(
         2,
         TypeValue::Builtin(BuiltinTypeValue::Asn(Asn::new(65534.into()))),
     );
-;
+
     let ds_ref = roto_pack.data_sources.iter().collect::<Vec<_>>();
 
     let mut vm = vm::VmBuilder::new()
@@ -243,6 +243,9 @@ fn main() {
                     // prefix_len triggers a type conversion from IntegerLiteral to PrefixLength
                     fixed_len_prefix = Prefix.from(route.prefix.address(), prefix_len); // 10
 
+
+                    my_my_route_path = my_route_path;
+
                     // try to mess it up
                     // my_recursor = my_recursor_trasher;
                     // my_recursor_trasher = my_recursor;
@@ -250,6 +253,8 @@ fn main() {
                     // syntactically correct, but semantically wrong: these
                     // identifiers are not defined.
                     // bullshitter = a.b.c.d(x,y,z).e.f(o.p()).g;
+
+                    my_false = false;
                 }
             
                 term rov-valid for route: Route {
@@ -264,8 +269,16 @@ fn main() {
                     }
                 }
 
+                // term var-test for route: Route {
+                //     match {
+                //         my_my_route_path;
+                //         my_route_path;
+                //     }
+                // }
+
                 term on-my-terms for route: Route {
                     match {
+                        my_false;
                         rib-extra.contains(route.as-path.origin());
                         route.prefix.len() == 24;
                         route.as-path.origin() == found_prefix.as-path.origin();
