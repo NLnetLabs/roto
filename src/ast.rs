@@ -29,12 +29,12 @@ use crate::types::builtin::{Asn, Boolean};
 ///
 // Root ::= RootExpr+
 
-#[derive(Clone, Debug)]
-pub struct Root {
+#[derive(Clone, Debug, Default)]
+pub struct SyntaxTree {
     pub expressions: Vec<RootExpr>,
 }
 
-impl Root {
+impl SyntaxTree {
     pub fn parse_str(
         input: &str,
     ) -> Result<(&str, Self), VerboseError<&str>> {

@@ -3,7 +3,7 @@ use roto::ast::*;
 
 fn test_data(name: &str, data: &str, expect_success: bool) {
     println!("test {}", name);
-    let parsed_data = Root::parse_str(data);
+    let parsed_data = SyntaxTree::parse_str(data);
     println!("{} {:#?}", name, parsed_data);
     if let Err(e) = parsed_data.clone() {
         println!("{}", convert_error(data, e));

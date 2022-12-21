@@ -19,7 +19,7 @@ use super::types::typevalue::TypeValue;
 
 use std::convert::From;
 
-impl<'a> ast::Root {
+impl<'a> ast::SyntaxTree {
     pub fn eval(
         &'a self,
         symbols: GlobalSymbolTable,
