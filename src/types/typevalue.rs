@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 //============ TypeValue ====================================================
-use crate::{ast::ShortString, traits::RotoFilter};
+use crate::{ast::ShortString, traits::RotoFilter, compile::CompileError};
 
 use super::{
     builtin::{
@@ -43,7 +43,7 @@ impl TypeValue {
 
     pub fn create_record(
         type_ident_pairs: Vec<(&str, TypeValue)>,
-    ) -> Result<Record, Box<dyn std::error::Error>> {
+    ) -> Result<Record, CompileError> {
         let def_ = type_ident_pairs
             .into_iter()
             .map(|(ident, ty)| (ShortString::from(ident), ty.into()))
@@ -57,7 +57,7 @@ impl TypeValue {
 
     pub(crate) fn as_cloned_builtin(
         &self,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    ) -> Result<TypeValue, CompileError> {
         match self {
             TypeValue::Builtin(b) => Ok(TypeValue::Builtin(b.clone())),
             _ => {
@@ -70,7 +70,7 @@ impl TypeValue {
     pub fn get_field_by_index(
         &self,
         index: usize,
-    ) -> Result<&(ShortString, ElementTypeValue), Box<dyn std::error::Error>>
+    ) -> Result<&(ShortString, ElementTypeValue), CompileError>
     {
         match self {
             TypeValue::Record(r) => {
@@ -186,7 +186,7 @@ impl TypeValue {
 }
 
 impl<'a> TryFrom<&'a str> for TypeValue {
-    type Error = Box<dyn std::error::Error>;
+    type Error = CompileError;
 
     fn try_from(s: &'a str) -> Result<Self, Self::Error> {
         match s {
@@ -208,10 +208,9 @@ impl<'a> TryFrom<&'a str> for TypeValue {
             "Boolean" => Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(
                 Boolean(None),
             ))),
-            _ => Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
+            _ => Err(CompileError::new(
                 format!("Unknown type: {}", s),
-            ))),
+            )),
         }
     }
 }

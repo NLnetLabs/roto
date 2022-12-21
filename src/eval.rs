@@ -1,5 +1,6 @@
 use crate::ast::LogicalExpr;
 use crate::ast::ShortString;
+use crate::compile::CompileError;
 use crate::symbols::GlobalSymbolTable;
 use crate::traits::Token;
 use crate::types::builtin::Boolean;
@@ -22,7 +23,7 @@ impl<'a> ast::Root {
     pub fn eval(
         &'a self,
         symbols: GlobalSymbolTable,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), CompileError> {
         let (modules, global): (Vec<_>, Vec<_>) = self
             .expressions
             .iter()
@@ -95,7 +96,7 @@ impl<'a> ast::Rib {
     fn eval(
         &'a self,
         symbols: &'_ mut symbols::SymbolTable,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), CompileError> {
         let child_kvs = self.body.eval(self.ident.clone().ident, symbols)?;
 
         // create a new user-defined type for the record type in the RIB
@@ -131,7 +132,7 @@ impl<'a> ast::Table {
     fn eval(
         &'a self,
         symbols: &'_ mut symbols::SymbolTable,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), CompileError> {
         let child_kvs = self.body.eval(self.ident.clone().ident, symbols)?;
 
         // create a new user-defined type for the record type in the table
@@ -168,7 +169,7 @@ impl<'a> ast::RibBody {
         &'a self,
         parent_name: ast::ShortString,
         symbols: &'_ mut symbols::SymbolTable,
-    ) -> Result<Vec<NamedTypeDef>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<NamedTypeDef>, CompileError> {
         let mut kvs: Vec<NamedTypeDef> = vec![];
 
         for kv in self.key_values.iter() {
@@ -219,7 +220,7 @@ impl<'a> ast::RecordTypeIdentifier {
         name: ast::ShortString,
         kind: symbols::SymbolKind,
         symbols: &'_ mut symbols::SymbolTable,
-    ) -> Result<Vec<NamedTypeDef>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<NamedTypeDef>, CompileError> {
         let mut kvs: Vec<NamedTypeDef> = vec![];
 
         for kv in self.key_values.iter() {
@@ -278,7 +279,7 @@ impl ast::Module {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), CompileError> {
         let module_scope = symbols::Scope::Module(self.ident.ident.clone());
         // Check the `with` clause for additional arguments.
         let with_kv: Vec<_> = self.with_kv.clone();
@@ -329,7 +330,7 @@ impl ast::Module {
     fn eval_define_header(
         &self,
         symbols: symbols::GlobalSymbolTable,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), CompileError> {
         // Check the `with` clause for additional arguments.
         let with_kv: Vec<_> = self.body.define.with_kv.clone();
         println!("define with kv {:#?}", &with_kv);
@@ -359,7 +360,7 @@ impl ast::Define {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), CompileError> {
         // The default input-argument is defined by the 'rx' keyword in the
         // `define` section. This the argument that holds the payload at
         // runtime.
@@ -414,7 +415,7 @@ impl ast::Term {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), CompileError> {
         let term_scopes = &self.body.scopes;
         for term in term_scopes[0].match_exprs.iter().enumerate() {
             let logical_formula = match &term.1 {
@@ -454,7 +455,7 @@ impl ast::Action {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), CompileError> {
         let _symbols = symbols.borrow();
         let module_symbols = _symbols.get(&scope).ok_or_else(|| {
             format!("no symbols found for module {}", scope)
@@ -513,7 +514,7 @@ impl ast::Apply {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), CompileError> {
         let _symbols = symbols.borrow();
         let _module_symbols = _symbols.get(&scope).ok_or_else(|| {
             format!("no symbols found for module {}", scope)
@@ -535,7 +536,7 @@ impl ast::ApplyScope {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
-    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+    ) -> Result<symbols::Symbol, CompileError> {
         let _symbols = symbols.borrow();
         let module_symbols = _symbols.get(&scope).ok_or_else(|| {
             format!("no symbols found for module {}", scope)
@@ -599,7 +600,7 @@ impl ast::ComputeExpr {
         name: ShortString,
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
-    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+    ) -> Result<symbols::Symbol, CompileError> {
         let mut symbol =
             self.get_receiver().eval(symbols.clone(), scope.clone())?;
         // The rest of the method calls or access receivers are turned into
@@ -659,7 +660,7 @@ impl ast::MethodComputeExpr {
         method_call_type: TypeDef,
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
-    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+    ) -> Result<symbols::Symbol, CompileError> {
         println!("method call args {:?}", self);
         println!("parent_ty {:?}", method_call_type);
         // self is the call receiver, e.g. in `rib-rov.longest_match()`,
@@ -737,7 +738,7 @@ impl ast::AccessReceiver {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
-    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+    ) -> Result<symbols::Symbol, CompileError> {
         println!("AccessReceiver::eval() {:?}", self);
         let _symbols = symbols.clone();
         let search_var = self.get_ident().ident.clone();
@@ -799,7 +800,7 @@ impl ast::ValueExpr {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
-    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+    ) -> Result<symbols::Symbol, CompileError> {
         match self {
             // an expression ending in a a method call (e.g. `foo.bar()`).
             // Note that the evaluation of the method call will check for
@@ -919,7 +920,7 @@ impl ast::ArgExprList {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
-    ) -> Result<Vec<symbols::Symbol>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<symbols::Symbol>, CompileError> {
         let mut eval_args = vec![];
         for arg in &self.args {
             let parsed_arg = arg.eval(symbols.clone(), scope.clone())?;
@@ -933,7 +934,7 @@ impl ast::FieldAccessExpr {
     fn eval(
         &self,
         field_type: TypeDef,
-    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+    ) -> Result<symbols::Symbol, CompileError> {
         
         if let Ok((ty, to)) = field_type.has_fields_chain(&self.field_names) {
             println!("::: field_type {:?}", field_type);
@@ -965,7 +966,7 @@ impl ast::LogicalExpr {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
-    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+    ) -> Result<symbols::Symbol, CompileError> {
         match self {
             LogicalExpr::BooleanExpr(expr) => {
                 ast::BooleanExpr::eval(expr, symbols, &scope)
@@ -994,7 +995,7 @@ impl ast::BooleanExpr {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: &symbols::Scope,
-    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+    ) -> Result<symbols::Symbol, CompileError> {
         let _symbols = symbols.clone();
 
         match &self {
@@ -1059,7 +1060,7 @@ impl ast::CompareExpr {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: &symbols::Scope,
-    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+    ) -> Result<symbols::Symbol, CompileError> {
         let _symbols = symbols.clone();
 
         // Proces the left hand side of the compare expression. This is a
@@ -1095,7 +1096,7 @@ impl ast::CompareArg {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: &symbols::Scope,
-    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+    ) -> Result<symbols::Symbol, CompileError> {
         let _symbols = symbols.clone();
 
         println!("comparison argument: {:?}", self);
@@ -1123,7 +1124,7 @@ impl ast::AndExpr {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: &symbols::Scope,
-    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+    ) -> Result<symbols::Symbol, CompileError> {
         // An "And Expression" is a Boolean function, meaning it takes a
         // boolean as input and returns a boolean as output. That way
         // it can be composed into bigger logical expressions by combining
@@ -1153,7 +1154,7 @@ impl ast::OrExpr {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: &symbols::Scope,
-    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+    ) -> Result<symbols::Symbol, CompileError> {
         println!("or expr {:?}", self);
         let _symbols = symbols.clone();
 
@@ -1177,7 +1178,7 @@ impl ast::NotExpr {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: &symbols::Scope,
-    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+    ) -> Result<symbols::Symbol, CompileError> {
         let _symbols = symbols;
 
         let expr = self.expr.eval(_symbols, scope)?;
@@ -1203,7 +1204,7 @@ impl ast::GroupedLogicalExpr {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: &symbols::Scope,
-    ) -> Result<symbols::Symbol, Box<dyn std::error::Error>> {
+    ) -> Result<symbols::Symbol, CompileError> {
         println!("grouped logical expr: {:?}", self);
         self.expr.eval(symbols, scope.clone())
     }
@@ -1215,7 +1216,7 @@ fn check_type_identifier(
     ty: ast::TypeIdentifier,
     symbols: symbols::GlobalSymbolTable,
     scope: &symbols::Scope,
-) -> Result<TypeDef, Box<dyn std::error::Error>> {
+) -> Result<TypeDef, CompileError> {
     let symbols = symbols.borrow();
     // is it a builtin type?
     let builtin_ty = TypeDef::try_from(ty.clone());
@@ -1291,7 +1292,7 @@ fn get_type_for_scoped_variable(
     fields: &[ast::Identifier],
     symbols: symbols::GlobalSymbolTable,
     scope: symbols::Scope,
-) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
+) -> Result<(TypeDef, Token), CompileError> {
     // Implicit early return. Are there any actual fields? If not then we're
     // done, and there's nothing here.
     let first_field_name = &fields
@@ -1358,21 +1359,21 @@ fn get_type_for_scoped_variable(
     }
 }
 
-fn _get_data_source_for_ident(
-    ident: ast::Identifier,
-    symbols: symbols::GlobalSymbolTable,
-) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
-    let _symbols = symbols.borrow();
+// fn _get_data_source_for_ident(
+//     ident: ast::Identifier,
+//     symbols: symbols::GlobalSymbolTable,
+// ) -> Result<(TypeDef, Token), CompileError> {
+//     let _symbols = symbols.borrow();
 
-    let src = _symbols
-        .get(&symbols::Scope::Global)
-        .ok_or("No global symbol table")?
-        .get_data_source(&ident.ident);
+//     let src = _symbols
+//         .get(&symbols::Scope::Global)
+//         .ok_or("No global symbol table")?
+//         .get_data_source(&ident.ident);
 
-    drop(_symbols);
+//     drop(_symbols);
 
-    src
-}
+//     src
+// }
 
 fn _declare_variable(
     name: ShortString,
@@ -1380,7 +1381,7 @@ fn _declare_variable(
     kind: symbols::SymbolKind,
     symbols: symbols::GlobalSymbolTable,
     scope: &symbols::Scope,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), CompileError> {
     let _symbols = symbols.clone();
 
     // There is NO global scope for variables.  All vars are all local to a
@@ -1422,7 +1423,7 @@ fn declare_argument(
     kind: symbols::SymbolKind,
     symbols: symbols::GlobalSymbolTable,
     scope: &symbols::Scope,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), CompileError> {
     let _symbols = symbols.clone();
 
     // There is NO global scope for variables.  All vars are all local to a
@@ -1467,7 +1468,7 @@ fn declare_variable_from_symbol(
     arg_symbol: symbols::Symbol,
     symbols: symbols::GlobalSymbolTable,
     scope: &symbols::Scope,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), CompileError> {
     let _symbols = symbols.clone();
 
     // There is NO global scope for variables.  All vars are all local to a
@@ -1511,7 +1512,7 @@ fn add_logical_formula(
     symbol: symbols::Symbol,
     symbols: symbols::GlobalSymbolTable,
     scope: &symbols::Scope,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), CompileError> {
     let _symbols = symbols.clone();
 
     match &scope {
@@ -1543,7 +1544,7 @@ fn add_action(
     action: symbols::Symbol,
     symbols: symbols::GlobalSymbolTable,
     scope: &symbols::Scope,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), CompileError> {
     match &scope {
         symbols::Scope::Module(module) => {
             let mut _symbols = symbols.borrow_mut();
@@ -1573,7 +1574,7 @@ fn add_match_action(
     match_action: symbols::Symbol,
     symbols: symbols::GlobalSymbolTable,
     scope: &symbols::Scope,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), CompileError> {
     match &scope {
         symbols::Scope::Module(module) => {
             let mut _symbols = symbols.borrow_mut();
@@ -1608,8 +1609,8 @@ where
     fn get_args(&self) -> &[symbols::Symbol];
     fn get_type(&self) -> TypeDef;
     fn get_builtin_type(&self)
-        -> Result<TypeDef, Box<dyn std::error::Error>>;
-    fn get_token(&self) -> Result<Token, Box<dyn std::error::Error>>;
+        -> Result<TypeDef, CompileError>;
+    fn get_token(&self) -> Result<Token, CompileError>;
 }
 
 impl BooleanExpr for symbols::Symbol {
@@ -1621,13 +1622,13 @@ impl BooleanExpr for symbols::Symbol {
         symbols::Symbol::get_type(self)
     }
 
-    fn get_token(&self) -> Result<Token, Box<dyn std::error::Error>> {
+    fn get_token(&self) -> Result<Token, CompileError> {
         self.get_token()
     }
 
     fn get_builtin_type(
         &self,
-    ) -> Result<TypeDef, Box<dyn std::error::Error>> {
+    ) -> Result<TypeDef, CompileError> {
         symbols::Symbol::get_builtin_type(self)
     }
 }
@@ -1637,7 +1638,7 @@ impl BooleanExpr for symbols::Symbol {
 fn is_boolean_function(
     left: &impl BooleanExpr,
     right: &impl BooleanExpr,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), CompileError> {
     println!("left: {:?}", left);
     println!("right: {:?}", right);
 
@@ -1667,7 +1668,7 @@ fn is_boolean_function(
 // boolean value.
 fn _is_boolean_expression(
     expr: &impl BooleanExpr,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), CompileError> {
     if expr.get_type() == TypeDef::Boolean {
         return Ok(());
     };
@@ -1691,7 +1692,7 @@ fn _declare_variable_from_typedef(
     _args: Option<ast::ArgExprList>,
     symbols: symbols::GlobalSymbolTable,
     scope: &symbols::Scope,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), CompileError> {
     // There is NO global scope for variables.  All vars are all local to a
     // module.
 

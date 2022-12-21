@@ -20,6 +20,7 @@ use nom::{
 };
 use smallvec::SmallVec;
 
+use crate::compile::CompileError;
 use crate::types::builtin::{Asn, Boolean};
 
 /// ======== Root ===========================================================
@@ -79,10 +80,10 @@ impl RootExpr {
         Ok((input, expressions))
     }
 
-    pub fn get_module(&self) -> Result<&Module, &str> {
+    pub fn get_module(&self) -> Result<&Module, CompileError> {
         match self {
             Self::Module(m) => Ok(m),
-            _ => Err("not a module"),
+            _ => Err(CompileError::new("not a module".into())),
         }
     }
 }

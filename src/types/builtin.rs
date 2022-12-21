@@ -7,10 +7,11 @@ use std::fmt::{Display, Formatter};
 use routecore::asn::LongSegmentError;
 
 use crate::ast::ShortString;
+use crate::compile::CompileError;
 use crate::traits::{MethodProps, RotoFilter, TokenConvert};
 use crate::vm::Payload;
 
-use super::collections::{ElementTypeValue, Record};
+use super::collections::Record;
 use super::typedef::TypeDef;
 use super::typevalue::TypeValue;
 
@@ -94,7 +95,7 @@ impl BuiltinTypeValue {
     pub fn create_instance(
         ty: TypeDef,
         value: impl Into<BuiltinTypeValue>,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    ) -> Result<TypeValue, CompileError> {
         let var = match ty {
             TypeDef::U32 => {
                 if let BuiltinTypeValue::U32(v) = value.into() {
@@ -261,7 +262,7 @@ impl From<routecore::addr::Prefix> for BuiltinTypeValue {
 }
 
 impl TryFrom<&'_ str> for BuiltinTypeValue {
-    type Error = Box<dyn std::error::Error>;
+    type Error = CompileError;
 
     fn try_from(val: &'_ str) -> Result<Self, Self::Error> {
         match val {
@@ -296,7 +297,7 @@ impl TryFrom<&'_ str> for BuiltinTypeValue {
 }
 
 impl TryFrom<&TypeDef> for BuiltinTypeValue {
-    type Error = Box<dyn std::error::Error>;
+    type Error = CompileError;
 
     fn try_from(ty: &TypeDef) -> Result<Self, Self::Error> {
         match ty {
@@ -385,7 +386,7 @@ impl RotoFilter<U32Token> for U32 {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, Box<dyn std::error::Error>>
+    ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
     {
@@ -408,7 +409,7 @@ impl RotoFilter<U32Token> for U32 {
         method_token: usize,
         args: &[&TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -417,7 +418,7 @@ impl RotoFilter<U32Token> for U32 {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -425,7 +426,7 @@ impl RotoFilter<U32Token> for U32 {
     fn into_type(
         self,
         type_def: &TypeDef,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    ) -> Result<TypeValue, CompileError> {
         match type_def {
             TypeDef::U32 => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::U32(self)))
@@ -489,7 +490,7 @@ impl RotoFilter<U8Token> for U8 {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, Box<dyn std::error::Error>>
+    ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
     {
@@ -512,7 +513,7 @@ impl RotoFilter<U8Token> for U8 {
         method_token: usize,
         args: &[&TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -521,7 +522,7 @@ impl RotoFilter<U8Token> for U8 {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -529,7 +530,7 @@ impl RotoFilter<U8Token> for U8 {
     fn into_type(
         self,
         type_def: &TypeDef,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    ) -> Result<TypeValue, CompileError> {
         match type_def {
             // Self
             TypeDef::U8 => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(self))),
@@ -635,7 +636,7 @@ impl RotoFilter<BooleanToken> for Boolean {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, Box<dyn std::error::Error>>
+    ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
     {
@@ -658,7 +659,7 @@ impl RotoFilter<BooleanToken> for Boolean {
         method_token: usize,
         args: &[&TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -667,7 +668,7 @@ impl RotoFilter<BooleanToken> for Boolean {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -675,7 +676,7 @@ impl RotoFilter<BooleanToken> for Boolean {
     fn into_type(
         self,
         type_def: &TypeDef,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    ) -> Result<TypeValue, CompileError> {
         match type_def {
             TypeDef::Boolean => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(self)))
@@ -741,7 +742,7 @@ impl RotoFilter<StringLiteralToken> for StringLiteral {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, Box<dyn std::error::Error>> {
+    ) -> Result<MethodProps, CompileError> {
         match method_name.ident.as_str() {
             "cmp" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::IntegerLiteral),
@@ -761,7 +762,7 @@ impl RotoFilter<StringLiteralToken> for StringLiteral {
         method_token: usize,
         args: &[&TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -770,7 +771,7 @@ impl RotoFilter<StringLiteralToken> for StringLiteral {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -778,7 +779,7 @@ impl RotoFilter<StringLiteralToken> for StringLiteral {
     fn into_type(
         self,
         type_def: &TypeDef,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    ) -> Result<TypeValue, CompileError> {
         match type_def {
             TypeDef::StringLiteral => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::StringLiteral(self)))
@@ -844,7 +845,7 @@ impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, Box<dyn std::error::Error>> {
+    ) -> Result<MethodProps, CompileError> {
         match method_name.ident.as_str() {
             "cmp" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::IntegerLiteral),
@@ -862,7 +863,7 @@ impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
     fn into_type(
         self,
         type_def: &TypeDef,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    ) -> Result<TypeValue, CompileError> {
         match type_def {
             TypeDef::IntegerLiteral => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(self)))
@@ -897,7 +898,7 @@ impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
         method_token: usize,
         args: &[&TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -906,7 +907,7 @@ impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -964,7 +965,7 @@ impl RotoFilter<HexLiteralToken> for HexLiteral {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, Box<dyn std::error::Error>> {
+    ) -> Result<MethodProps, CompileError> {
         match method_name.ident.as_str() {
             "cmp" => Ok(MethodProps::new(
                 TypeValue::from(&TypeDef::IntegerLiteral),
@@ -982,7 +983,7 @@ impl RotoFilter<HexLiteralToken> for HexLiteral {
     fn into_type(
         self,
         type_def: &TypeDef,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    ) -> Result<TypeValue, CompileError> {
         match type_def {
             TypeDef::HexLiteral => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::HexLiteral(self)))
@@ -1005,7 +1006,7 @@ impl RotoFilter<HexLiteralToken> for HexLiteral {
         method_token: usize,
         args: &[&TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -1014,7 +1015,7 @@ impl RotoFilter<HexLiteralToken> for HexLiteral {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -1079,7 +1080,7 @@ impl Prefix {
         _res_type: TypeDef,
     ) -> Result<
         Box<dyn FnOnce(TypeValue) -> TypeValue + '_>,
-        Box<dyn std::error::Error>,
+        CompileError,
     > {
         todo!()
     }
@@ -1089,7 +1090,7 @@ impl RotoFilter<PrefixToken> for Prefix {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, Box<dyn std::error::Error>>
+    ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
     {
@@ -1130,7 +1131,7 @@ impl RotoFilter<PrefixToken> for Prefix {
     fn into_type(
         self,
         type_def: &TypeDef,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    ) -> Result<TypeValue, CompileError> {
         match type_def {
             TypeDef::Prefix => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::Prefix(self)))
@@ -1148,7 +1149,7 @@ impl RotoFilter<PrefixToken> for Prefix {
         method_token: usize,
         args: &[&TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         match method_token.into() {
             PrefixToken::Address => {
@@ -1171,7 +1172,7 @@ impl RotoFilter<PrefixToken> for Prefix {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         match method_token.into() {
             PrefixToken::From => {
@@ -1274,7 +1275,7 @@ impl RotoFilter<PrefixLengthToken> for PrefixLength {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, Box<dyn std::error::Error>>
+    ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
     {
@@ -1295,7 +1296,7 @@ impl RotoFilter<PrefixLengthToken> for PrefixLength {
     fn into_type(
         self,
         type_def: &TypeDef,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    ) -> Result<TypeValue, CompileError> {
         match type_def {
             TypeDef::PrefixLength => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::PrefixLength(self)))
@@ -1313,7 +1314,7 @@ impl RotoFilter<PrefixLengthToken> for PrefixLength {
         method_token: usize,
         args: &[&TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -1322,7 +1323,7 @@ impl RotoFilter<PrefixLengthToken> for PrefixLength {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -1367,7 +1368,7 @@ impl From<PrefixLengthToken> for usize {
 }
 
 impl TryFrom<&TypeValue> for PrefixLength {
-    type Error = Box<dyn std::error::Error>;
+    type Error = CompileError;
 
     fn try_from(value: &TypeValue) -> Result<Self, Self::Error> {
         match value {
@@ -1423,7 +1424,7 @@ impl RotoFilter<CommunityToken> for Community {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, Box<dyn std::error::Error>>
+    ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
     {
@@ -1474,7 +1475,7 @@ impl RotoFilter<CommunityToken> for Community {
     fn into_type(
         self,
         type_def: &TypeDef,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    ) -> Result<TypeValue, CompileError> {
         match type_def {
             TypeDef::Community => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::Community(self)))
@@ -1492,7 +1493,7 @@ impl RotoFilter<CommunityToken> for Community {
         method_token: usize,
         args: &[&TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -1501,7 +1502,7 @@ impl RotoFilter<CommunityToken> for Community {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -1587,7 +1588,7 @@ impl RotoFilter<IpAddressToken> for IpAddress {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, Box<dyn std::error::Error>>
+    ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
     {
@@ -1613,7 +1614,7 @@ impl RotoFilter<IpAddressToken> for IpAddress {
     fn into_type(
         self,
         type_def: &TypeDef,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    ) -> Result<TypeValue, CompileError> {
         match type_def {
             TypeDef::IpAddress => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::IpAddress(self)))
@@ -1631,7 +1632,7 @@ impl RotoFilter<IpAddressToken> for IpAddress {
         method_token: usize,
         args: &[&TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!();
         // match method_token.into() {
@@ -1650,7 +1651,7 @@ impl RotoFilter<IpAddressToken> for IpAddress {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -1719,7 +1720,7 @@ impl RotoFilter<AsnToken> for Asn {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, Box<dyn std::error::Error>>
+    ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
     {
@@ -1740,7 +1741,7 @@ impl RotoFilter<AsnToken> for Asn {
     fn into_type(
         self,
         type_def: &TypeDef,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    ) -> Result<TypeValue, CompileError> {
         match type_def {
             TypeDef::Asn => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(self)))
@@ -1757,7 +1758,7 @@ impl RotoFilter<AsnToken> for Asn {
         method_token: usize,
         args: &'a [&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         match method_token.into() {
             AsnToken::Set => {
@@ -1778,7 +1779,7 @@ impl RotoFilter<AsnToken> for Asn {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -1861,7 +1862,7 @@ impl AsPath {
         type_value: TypeValue,
     ) -> Result<
         routecore::asn::AsPath<Vec<routecore::asn::Asn>>,
-        Box<dyn std::error::Error>,
+        CompileError,
     >
     where
         Self: std::marker::Sized,
@@ -1883,7 +1884,7 @@ impl RotoFilter<AsPathToken> for AsPath {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, Box<(dyn std::error::Error + 'static)>>
+    ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
     {
@@ -1914,7 +1915,7 @@ impl RotoFilter<AsPathToken> for AsPath {
     fn into_type(
         self,
         type_def: &TypeDef,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    ) -> Result<TypeValue, CompileError> {
         match type_def {
             TypeDef::AsPath => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::AsPath(self)))
@@ -1934,7 +1935,7 @@ impl RotoFilter<AsPathToken> for AsPath {
         _res_type: TypeDef,
     ) -> Result<
         Box<(dyn FnOnce() -> TypeValue + 'a)>,
-        Box<dyn std::error::Error>,
+        CompileError,
     > {
         match method.into() {
             AsPathToken::Origin => {
@@ -2000,7 +2001,7 @@ impl RotoFilter<AsPathToken> for AsPath {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -2064,7 +2065,7 @@ impl RotoFilter<RouteToken> for Route {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, Box<dyn std::error::Error>>
+    ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
     {
@@ -2104,7 +2105,7 @@ impl RotoFilter<RouteToken> for Route {
     fn into_type(
         self,
         type_def: &TypeDef,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    ) -> Result<TypeValue, CompileError> {
         match type_def {
             TypeDef::Route => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::Route(self)))
@@ -2124,7 +2125,7 @@ impl RotoFilter<RouteToken> for Route {
         _res_type: TypeDef,
     ) -> Result<
         Box<(dyn FnOnce() -> TypeValue + 'a)>,
-        Box<dyn std::error::Error>,
+        CompileError,
     > {
         todo!()
     }
@@ -2133,7 +2134,7 @@ impl RotoFilter<RouteToken> for Route {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -2215,7 +2216,7 @@ impl RotoFilter<RouteStatusToken> for RouteStatus {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, Box<dyn std::error::Error>>
+    ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
     {
@@ -2261,7 +2262,7 @@ impl RotoFilter<RouteStatusToken> for RouteStatus {
     fn into_type(
         self,
         type_def: &TypeDef,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>> {
+    ) -> Result<TypeValue, CompileError> {
         match type_def {
             TypeDef::RouteStatus => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::RouteStatus(self)))
@@ -2279,7 +2280,7 @@ impl RotoFilter<RouteStatusToken> for RouteStatus {
         _method_token: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -2288,7 +2289,7 @@ impl RotoFilter<RouteStatusToken> for RouteStatus {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }

@@ -1,6 +1,7 @@
 use std::fmt::{Display, Formatter};
 
 use crate::ast::ShortString;
+use crate::compile::CompileError;
 use crate::traits::{MethodProps, RotoFilter, TokenConvert};
 use crate::vm::Payload;
 
@@ -131,7 +132,7 @@ impl List {
         type_value: TypeValue,
     ) -> std::result::Result<
         Vec<ElementTypeValue>,
-        std::boxed::Box<(dyn std::error::Error)>,
+        CompileError,
     >
     where
         Self: std::marker::Sized,
@@ -149,7 +150,7 @@ impl List {
         _res_type: TypeDef,
     ) -> Result<
         Box<dyn FnOnce(TypeValue) -> TypeValue + '_>,
-        Box<dyn std::error::Error>,
+        CompileError,
     > {
         todo!()
     }
@@ -189,7 +190,7 @@ impl RotoFilter<ListToken> for List {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, Box<(dyn std::error::Error)>>
+    ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
     {
@@ -225,7 +226,7 @@ impl RotoFilter<ListToken> for List {
     fn into_type(
         self,
         _type_def: &TypeDef,
-    ) -> Result<TypeValue, Box<(dyn std::error::Error)>> {
+    ) -> Result<TypeValue, CompileError> {
         Err("List type cannot be converted into another type".into())
     }
 
@@ -236,7 +237,7 @@ impl RotoFilter<ListToken> for List {
         _res_type: TypeDef,
     ) -> Result<
         std::boxed::Box<(dyn FnOnce() -> TypeValue)>,
-        Box<dyn std::error::Error>,
+        CompileError,
     > {
         todo!()
     }
@@ -245,7 +246,7 @@ impl RotoFilter<ListToken> for List {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
@@ -296,14 +297,14 @@ pub struct Record(pub(crate) Vec<(ShortString, ElementTypeValue)>);
 impl<'a> Record {
     pub(crate) fn new(
         elems: Vec<(ShortString, ElementTypeValue)>,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self, CompileError> {
         Ok(Self(elems))
     }
 
     pub fn create_instance(
         ty: &TypeDef,
         kvs: Vec<(&str, TypeValue)>,
-    ) -> Result<Record, Box<dyn std::error::Error>> {
+    ) -> Result<Record, CompileError> {
         let shortstring_vec = kvs
             .iter()
             .map(|(name, ty)| (ShortString::from(*name), ty))
@@ -312,10 +313,10 @@ impl<'a> Record {
             if ty._check_record_fields(shortstring_vec.as_slice()) {
                 TypeValue::create_record(kvs)
             } else {
-                Err("Record fields do not match record type".into())
+                Err(CompileError::new("Record fields do not match record type".into()))
             }
         } else {
-            Err("Not a record type".into())
+            Err(CompileError::new("Not a record type".into()))
         }
     }
 
@@ -337,7 +338,7 @@ impl<'a> Record {
         ty: TypeValue,
     ) -> std::result::Result<
         Vec<(ShortString, ElementTypeValue)>,
-        std::boxed::Box<(dyn std::error::Error)>,
+        CompileError,
     > {
         match ty {
             TypeValue::Record(r) => Ok(r.0),
@@ -367,7 +368,7 @@ impl RotoFilter<RecordToken> for Record {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, Box<(dyn std::error::Error + 'static)>>
+    ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
     {
@@ -403,7 +404,7 @@ impl RotoFilter<RecordToken> for Record {
     fn into_type(
         self,
         _type_def: &TypeDef,
-    ) -> Result<TypeValue, Box<(dyn std::error::Error)>> {
+    ) -> Result<TypeValue, CompileError> {
         Err("Record type cannot be converted into another type".into())
     }
 
@@ -412,7 +413,7 @@ impl RotoFilter<RecordToken> for Record {
         _method: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + '_>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + '_>, CompileError>
     {
         todo!()
     }
@@ -421,7 +422,7 @@ impl RotoFilter<RecordToken> for Record {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }

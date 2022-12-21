@@ -12,7 +12,7 @@ use crate::{
     traits::{RotoFilter, Token},
     types::{
         builtin::BuiltinTypeValue, typedef::TypeDef, typevalue::TypeValue,
-    },
+    }, compile::CompileError,
 };
 
 //------------ Symbols ------------------------------------------------------
@@ -33,14 +33,14 @@ impl Symbol {
     // gets the type only from the `ty` field.
     pub fn get_type_and_token(
         &self,
-    ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
+    ) -> Result<(TypeDef, Token), CompileError> {
         let token = self.get_token()?;
         Ok((self.ty.clone(), token))
     }
 
     pub fn get_builtin_type(
         &self,
-    ) -> Result<TypeDef, Box<dyn std::error::Error>> {
+    ) -> Result<TypeDef, CompileError> {
         if !matches!(
             self.ty,
             TypeDef::Rib(_)
@@ -71,7 +71,7 @@ impl Symbol {
         self.kind
     }
 
-    pub fn get_token(&self) -> Result<Token, Box<dyn std::error::Error>> {
+    pub fn get_token(&self) -> Result<Token, CompileError> {
         self.token.clone().ok_or_else(|| {
             format!("No token found for symbol '{:?}'", self).into()
         })
@@ -195,7 +195,7 @@ impl Symbol {
     pub fn try_convert_value_into(
         mut self,
         type_def: &TypeDef,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self, CompileError> {
         match self.value {
             TypeValue::Builtin(BuiltinTypeValue::U32(int)) => {
                 self.value = int.into_type(type_def)?;
@@ -457,7 +457,7 @@ impl SymbolTable {
         &mut self,
         key: ShortString,
         mut symbol: Symbol,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), CompileError> {
         if self.variables.contains_key(&key) {
             return Err(format!(
                 "Symbol {} already defined in scope {}",
@@ -479,7 +479,7 @@ impl SymbolTable {
         ty: TypeDef,
         args: Vec<Symbol>,
         value: TypeValue,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), CompileError> {
         let name = if let Some(name) = name {
             name
         } else {
@@ -527,7 +527,7 @@ impl SymbolTable {
         ty: TypeDef,
         args: Vec<Symbol>,
         value: TypeValue,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), CompileError> {
         let name = if let Some(name) = name {
             name
         } else {
@@ -578,7 +578,7 @@ impl SymbolTable {
         &mut self,
         term_key: ShortString,
         child_symbol: Symbol,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), CompileError> {
         let term_token = Some(Token::Term(self.terms.len() as u8));
 
         if let Entry::Vacant(term) = self.terms.entry(term_key.clone()) {
@@ -606,7 +606,7 @@ impl SymbolTable {
         ty: TypeDef,
         args: Vec<Symbol>,
         value: TypeValue,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), CompileError> {
         let name = if let Some(name) = name {
             name
         } else {
@@ -658,7 +658,7 @@ impl SymbolTable {
         // token is the index of the term that corresponds to the `name`
         // argument. It's a token for a term.
         token: Token,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), CompileError> {
         let name = if let Some(name) = name {
             name
         } else {
@@ -733,7 +733,7 @@ impl SymbolTable {
     pub(crate) fn get_variable(
         &self,
         name: &ShortString,
-    ) -> Result<&Symbol, Box<dyn std::error::Error>> {
+    ) -> Result<&Symbol, CompileError> {
         self.variables
             .get(name)
             .or_else(|| self.arguments.get(name))
@@ -778,7 +778,7 @@ impl SymbolTable {
     pub(crate) fn get_argument(
         &self,
         name: &ShortString,
-    ) -> Result<&Symbol, Box<dyn std::error::Error>> {
+    ) -> Result<&Symbol, CompileError> {
         self.arguments.get(name).ok_or_else(|| {
             format!("Symbol of type Argument '{}' not found", name).into()
         })
@@ -787,17 +787,23 @@ impl SymbolTable {
     pub(crate) fn get_term(
         &self,
         name: &ShortString,
-    ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
+    ) -> Result<(TypeDef, Token), CompileError> {
         self.terms
             .get(name)
             .ok_or_else(|| format!("Symbol '{}' not found", name).into())
             .map(|term| (term.ty.clone(), term.token.clone().unwrap()))
     }
 
+    pub(crate) fn get_terms(
+        &self,
+    ) -> Vec<&Symbol> {
+        self.terms.values().collect::<Vec<_>>()
+    }
+
     pub(crate) fn get_action(
         &self,
         name: &ShortString,
-    ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
+    ) -> Result<(TypeDef, Token), CompileError> {
         self.actions
             .get(name)
             .ok_or_else(|| format!("Symbol '{}' not found", name).into())
@@ -807,8 +813,8 @@ impl SymbolTable {
     pub(crate) fn get_data_source(
         &self,
         name: &ShortString,
-    ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
-        let src: Result<&Symbol, Box<dyn std::error::Error>> = self
+    ) -> Result<(TypeDef, Token), CompileError> {
+        let src: Result<&Symbol, CompileError> = self
             .variables
             .get(name)
             .ok_or_else(|| format!("Symbol '{}' not found", name).into());
@@ -819,7 +825,7 @@ impl SymbolTable {
                 Ok((TypeDef::Table(Box::new(r.get_type())), r.get_token()?))
             }
             _ => {
-                Err(format!("No data source named '{}' found.", name).into())
+                Err(CompileError::new(format!("No data source named '{}' found.", name).into()))
             }
         })?
     }
@@ -835,7 +841,7 @@ impl SymbolTable {
             Option<(ShortString, TypeDef)>,
             DepsGraph,
         ),
-        Box<dyn std::error::Error>,
+        CompileError,
     > {
         // First, go over all the terms and see which variables, arguments
         // and data-sources they refer to.
@@ -849,7 +855,10 @@ impl SymbolTable {
             mut variables,
             mut arguments,
             mut data_sources,
-        } = self._partition_deps_graph(deps_vec)?;
+        } = self._partition_deps_graph(deps_vec).map_err(|e| {
+            CompileError::new(
+                "can't create dependencies graph for terms".into())
+        })?;
 
         // Second, go over all the variables that we gathered in the last
         // step and see which variables, arguments and data-sources they
@@ -864,7 +873,7 @@ impl SymbolTable {
             variables: vars_vars,
             arguments: vars_args,
             data_sources: vars_data_sources,
-        } = self._partition_deps_graph(vars_deps_vec)?;
+        } = self._partition_deps_graph(vars_deps_vec).map_err(|e| CompileError::new("can't create dependencies graph for variables".into()))?;
 
         variables.extend(vars_vars);
         arguments.extend(vars_args);
@@ -889,7 +898,7 @@ impl SymbolTable {
     fn _partition_deps_graph<'a>(
         &'a self,
         mut deps_vec: Vec<&'a Symbol>,
-    ) -> Result<DepsGraph, Box<dyn std::error::Error>> {
+    ) -> Result<DepsGraph, CompileError> {
         deps_vec.retain(|t| {
             t.get_token().unwrap().is_variable()
                 || t.get_token().unwrap().is_argument()

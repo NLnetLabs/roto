@@ -3,6 +3,7 @@
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 
+use crate::compile::CompileError;
 use crate::traits::Token;
 use crate::types::collections::ElementTypeValue;
 use crate::types::datasources::NamedTypeDef;
@@ -52,7 +53,7 @@ pub enum TypeDef {
 impl TypeDef {
     pub(crate) fn new_record_type_from_short_string(
         type_ident_pairs: Vec<NamedTypeDef>,
-    ) -> Result<TypeDef, Box<dyn std::error::Error>> {
+    ) -> Result<TypeDef, CompileError> {
         Ok(TypeDef::Record(type_ident_pairs))
     }
 
@@ -67,7 +68,7 @@ impl TypeDef {
 
     pub fn new_record_type(
         type_ident_pairs: Vec<(&str, Box<TypeDef>)>,
-    ) -> Result<TypeDef, Box<dyn std::error::Error>> {
+    ) -> Result<TypeDef, CompileError> {
         Ok(TypeDef::Record(
             type_ident_pairs
                 .iter()
@@ -82,7 +83,7 @@ impl TypeDef {
     pub(crate) fn has_fields_chain(
         &self,
         fields: &[crate::ast::Identifier],
-    ) -> Result<(TypeDef, Token), Box<dyn std::error::Error>> {
+    ) -> Result<(TypeDef, Token), CompileError> {
         println!("has_fields_chain: {:?}", fields);
         println!("self: {:?}", self);
 
@@ -112,17 +113,15 @@ impl TypeDef {
                     println!("UwU {} {}", field.ident, index);
                 } else {
                     println!("AA none fields:: {}", field.ident.as_str());
-                    return Err(Box::new(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        format!("No field named '{}'", field.ident.as_str()),
-                    )));
+                    return Err(
+                        format!("No field named '{}'", field.ident.as_str()).into(),
+                    );
                 }
             } else {
                 println!("BB none fields:: {}", field.ident.as_str());
-                return Err(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!("No field named '{}'", field.ident.as_str()),
-                )));
+                return Err(
+                    format!("No field named '{}'", field.ident.as_str()).into(),
+                );
             }
         }
         Ok((current_type_token.0.clone(), current_type_token.1))
@@ -163,7 +162,7 @@ impl TypeDef {
     pub(crate) fn get_props_for_method(
         &self,
         method: &crate::ast::Identifier,
-    ) -> Result<MethodProps, Box<dyn std::error::Error>> {
+    ) -> Result<MethodProps, CompileError> {
         let parent_ty: TypeValue = self.into();
         match parent_ty {
             TypeValue::Record(rec_type) => {
@@ -323,10 +322,10 @@ impl PartialEq<TypeValue> for TypeDef {
 // This From impl creates the link between the AST and the TypeDef enum
 // for built-in types.
 impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
-    type Error = Box<dyn std::error::Error>;
+    type Error = CompileError;
     fn try_from(
         ty: crate::ast::TypeIdentifier,
-    ) -> Result<TypeDef, std::boxed::Box<dyn std::error::Error>> {
+    ) -> Result<TypeDef, CompileError> {
         match ty.ident.as_str() {
             "U32" => Ok(TypeDef::U32),
             "U8" => Ok(TypeDef::U8),

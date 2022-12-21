@@ -1,8 +1,8 @@
 // =========== RotoFilter trait ============================================
 
-use crate::types::{
+use crate::{types::{
     typedef::TypeDef, typevalue::TypeValue,
-};
+}, compile::CompileError};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub(crate) enum Token {
@@ -29,7 +29,7 @@ impl Token {
         match ty {
             "variable" => Token::Variable(value),
             "method" => Token::Method(value),
-            "argument" => Token::Argument(value as usize),
+            "argument" => Token::Argument(value),
             _ => panic!("Unknown token type"),
         }
     }
@@ -58,8 +58,9 @@ impl From<Token> for usize {
     fn from(token: Token) -> Self {
         match token {
             Token::Argument(v) => v,
-            Token::Table(v) | Token::Rib(v) => v as usize,
-            Token::Method(v) => v as usize,
+            Token::Table(v) | Token::Rib(v) => v,
+            Token::Method(v) => v,
+            Token::Variable(v) => v,
             Token::RxType => 0,
             Token::TxType => 1,
             _ => {
@@ -98,14 +99,14 @@ where
     fn get_props_for_method(
         self,
         method_name: &super::ast::Identifier,
-    ) -> Result<MethodProps, Box<dyn std::error::Error>>
+    ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized;
 
     fn into_type(
         self,
         type_value: &TypeDef,
-    ) -> Result<TypeValue, Box<dyn std::error::Error>>
+    ) -> Result<TypeValue, CompileError>
     where
         Self: std::marker::Sized;
 
@@ -114,13 +115,13 @@ where
         method_token: usize,
         args: &'a [&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>;
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>;
 
     fn exec_type_method<'a>(
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, Box<dyn std::error::Error>>;
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>;
 }
 
 pub(crate) trait TokenConvert
