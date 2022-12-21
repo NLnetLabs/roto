@@ -76,7 +76,7 @@ impl LinearMemory {
         LinearMemory(std::array::from_fn(|_| TypeValue::None))
     }
 
-    fn get(&self, index: usize) -> Option<&TypeValue> {
+    pub fn get(&self, index: usize) -> Option<&TypeValue> {
         self.0.get(index)
     }
 
@@ -475,6 +475,16 @@ impl<'a> VirtualMachine<'a> {
                         } else {
                             return Err(VmError::InvalidValueType);
                         }
+                    },
+                    // Term procedures
+                    OpCode::Call => {
+                        todo!();
+                    }
+                    OpCode::Return => {
+                        todo!();
+                    },
+                    OpCode::ReturnIfFalse => {
+                        todo!();
                     }
                 };
             }
@@ -589,6 +599,9 @@ impl Display for Command {
             OpCode::MemPosRef => "",
             OpCode::ArgToMemPos => "->",
             OpCode::StackOffset => "",
+            OpCode::Call => "-->",
+            OpCode::Return => "<--",
+            OpCode::ReturnIfFalse => "<--",
         };
         write!(f, "{:?}{}{:?}", self.op, arrow, self.args)
     }
@@ -596,17 +609,19 @@ impl Display for Command {
 
 #[derive(Debug)]
 pub enum Arg {
-    Constant(TypeValue),
-    Variable(usize),
+    Constant(TypeValue), // Constant value
+    Variable(usize), // Variable with token value
     Argument(usize), // extra runtime arguments
     RxValue, // the placeholder for the value of the rx type at runtime
     TxValue, // the placeholder for the value of the tx type at runtime
-    Method(usize),
-    DataSource(usize),
-    FieldAccess(usize),
-    BuiltinMethod(usize),
-    MemPos(u32),
-    Type(TypeDef),
+    Method(usize), // method token value
+    DataSource(usize), // data source token value
+    FieldAccess(usize), // field access token value
+    BuiltinMethod(usize), // builtin method token value
+    MemPos(u32), // memory position
+    Type(TypeDef), // type definition
+    Boolean(bool), // boolean value (used in cmp opcode)
+    Term(usize), // term token value
 }
 
 impl Arg {
@@ -643,6 +658,7 @@ impl From<Arg> for usize {
             Arg::DataSource(d) => d,
             Arg::FieldAccess(f) => f,
             Arg::BuiltinMethod(b) => b,
+            Arg::Variable(v) => v,
             // Arg::DataStore(d) => d,
             Arg::MemPos(m) => m as usize,
             _ => {
@@ -667,6 +683,11 @@ pub enum OpCode {
     MemPosSet,
     MemPosRef,
     ArgToMemPos,
+    // call a term pr
+    Call,
+    // return from a term procedure
+    Return, // unconditional return
+    ReturnIfFalse, // return if the top of the stack is false
 }
 
 // struct VecPayload(Vec<(ShortString, TypeValue)>);
