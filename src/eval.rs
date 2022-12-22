@@ -1141,7 +1141,7 @@ impl ast::AndExpr {
 
         Ok(symbols::Symbol::new(
             "and_expr".into(),
-            symbols::SymbolKind::LogicalExpr,
+            symbols::SymbolKind::AndExpr,
             TypeDef::Boolean,
             vec![left, right],
             None,
@@ -1165,7 +1165,7 @@ impl ast::OrExpr {
 
         Ok(symbols::Symbol::new(
             "or_expr".into(),
-            symbols::SymbolKind::LogicalExpr,
+            symbols::SymbolKind::OrExpr,
             TypeDef::Boolean,
             vec![left, right],
             None,
@@ -1191,7 +1191,7 @@ impl ast::NotExpr {
 
         Ok(symbols::Symbol::new(
             "not_expr".into(),
-            symbols::SymbolKind::Variable,
+            symbols::SymbolKind::NotExpr,
             TypeDef::Boolean,
             vec![expr],
             None,

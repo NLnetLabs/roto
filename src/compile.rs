@@ -646,7 +646,7 @@ fn compile_term<'a>(
                 .command_stack
                 .push(Command::new(OpCode::ReturnIfFalse, vec![]));
         }
-        SymbolKind::LogicalExpr if sub_term.get_name() == "or_expr" => {
+        SymbolKind::OrExpr => {
             let args = sub_term.get_args();
             (mir, state) = compile_term(&args[0], state, mir)?;
             state.mem_pos += 1;
@@ -661,7 +661,7 @@ fn compile_term<'a>(
                 .command_stack
                 .push(Command::new(OpCode::ReturnIfFalse, vec![]));
         }
-        SymbolKind::LogicalExpr if sub_term.get_name() == "and_expr" => {
+        SymbolKind::AndExpr => {
             let args = sub_term.get_args();
             (mir, state) = compile_term(&args[0], state, mir)?;
             state.mem_pos += 1;
@@ -676,9 +676,9 @@ fn compile_term<'a>(
                 .command_stack
                 .push(Command::new(OpCode::ReturnIfFalse, vec![]));
         }
-        SymbolKind::NotExpr => {}
-        SymbolKind::AndExpr => {}
-        SymbolKind::OrExpr => {}
+        SymbolKind::NotExpr => {
+            panic!("NOT NOT!");
+        }
         _ => {
             state = compile_var(sub_term, state)?;
         }
