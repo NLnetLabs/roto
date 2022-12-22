@@ -235,33 +235,6 @@ impl Display for MirBlock {
     }
 }
 
-// pub fn compile(
-//     symbols: GlobalSymbolTable,
-// ) -> Vec<Result<RotoPack, CompileError>> {
-//     println!("Start compiling...");
-
-//     // get all symbols that are used in the filter terms.
-//     let mut _global = symbols.borrow_mut();
-//     let (_global_mod, modules) = Some::<(Vec<Scope>, Vec<Scope>)>(
-//         _global.keys().cloned().partition(|m| *m == Scope::Global),
-//     )
-//     .unwrap();
-
-//     drop(_global);
-//     let mut _global = symbols.borrow_mut();
-
-//     // each module outputs one roto-pack with its own MIR (composed of MIR blocks),
-//     // its used arguments and used data sources.
-//     let mut roto_packs = vec![];
-
-//     for module in modules {
-//         let _module = _global.get(&module).unwrap();
-//         roto_packs.push(compile_module(_module));
-//     }
-
-//     roto_packs
-// }
-
 fn unwind_stack(
     mut stack: std::collections::VecDeque<Command>,
 ) -> Vec<Command> {
@@ -292,9 +265,6 @@ fn compile_module(_module: &SymbolTable) -> Result<RotoPack, CompileError> {
         cur_mir_block: MirBlock::new(),
         mem_pos: 0,
     };
-
-    // let mut used_arguments: Arguments = vec![];
-    // let mut used_data_sources: DataSources = vec![];
 
     // initialize the command stack
     let mut mir: Vec<MirBlock> = vec![];
@@ -615,7 +585,7 @@ fn compile_terms(
 ) -> Result<(Vec<MirBlock>, CompilerState<'_>), CompileError> {
     let _module = state.cur_module;
 
-    // compile the terms.
+    // compile all the terms.
     for term in _module.get_terms() {
         let sub_terms = term.get_args();
 
