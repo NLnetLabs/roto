@@ -430,9 +430,6 @@ fn compile_var<'a>(
 
                 let (opcode, args) = match next_arg.get_token() {
                     Ok(Token::Rib(ds) | Token::Table(ds)) => {
-                        state
-                            .used_data_sources
-                            .push((next_arg.get_name(), next_arg));
                         (
                             OpCode::ExecuteDataStoreMethod,
                             vec![
@@ -517,7 +514,6 @@ fn compile_var<'a>(
                 local_stack = VecDeque::new();
             }
             Token::Argument(arg_arg) => {
-                state.used_arguments.push((arg.get_name(), arg));
                 local_stack.push_front(Command::new(
                     OpCode::ArgToMemPos,
                     vec![Arg::Argument(arg_arg), Arg::MemPos(state.mem_pos)],
