@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    ast::ShortString,
+    ast::{ShortString, self},
     compile::MirBlock,
     traits::Token,
     types::{
@@ -622,13 +622,14 @@ pub enum Arg {
     Type(TypeDef), // type definition
     Boolean(bool), // boolean value (used in cmp opcode)
     Term(usize), // term token value
+    CompareOp(ast::CompareOp), // compare operation
 }
 
 impl Arg {
     pub fn as_token_value(&self) -> usize {
         match self {
-            Arg::Argument(v) => *v as usize,
-            Arg::Variable(v) => *v as usize,
+            Arg::Argument(v) => *v,
+            Arg::Variable(v) => *v,
             _ => {
                 panic!("Cannot get token value from this arg: {:?} and that's fatal", self);
             }
@@ -668,6 +669,12 @@ impl From<Arg> for usize {
                 );
             }
         }
+    }
+}
+
+impl From<ast::CompareOp> for Arg {
+    fn from(op: ast::CompareOp) -> Self {
+       Arg::CompareOp(op)
     }
 }
 
