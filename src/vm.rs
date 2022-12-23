@@ -5,14 +5,14 @@ use std::{
 };
 
 use crate::{
-    ast::{self, ShortString},
+    ast::{self, ShortString, CompareOp},
     compile::MirBlock,
     traits::Token,
     types::{
         collections::{ElementTypeValue, Record},
         datasources::{DataSourceMethodValue, Rib, Table},
         typedef::TypeDef,
-        typevalue::TypeValue,
+        typevalue::TypeValue, builtin::{Boolean, BuiltinTypeValue},
     },
 };
 
@@ -306,7 +306,84 @@ impl<'a> VirtualMachine<'a> {
                 commands_num += 1;
                 print!("\n-> {:3?} {:?} ", op, args);
                 match op {
-                    OpCode::Cmp => todo!(),
+                    OpCode::Cmp => {
+                        let mut m = mem.borrow_mut();
+                        let stack_args =
+                            self._unwind_resolved_stack_into_vec(&m);
+                        let left = stack_args[0];
+                        let right = stack_args[1];
+
+                        match &args[0] {
+                            Arg::CompareOp(CompareOp::Eq) => {
+                                let res = left == right;
+                                println!("-> {:?} == {:?} = {}", left, right, res);
+                                m.set(2, TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(Some(res)))));
+                                self.stack.borrow_mut().push(
+                                    StackRefPos::MemPos(2),
+                                )?;
+                            },
+                            Arg::CompareOp(CompareOp::Ne) => {
+                                let res = left != right;
+                                println!("-> {:?} != {:?} = {}", left, right, res);
+                                m.set(2, TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(Some(res)))));
+                                self.stack.borrow_mut().push(
+                                    StackRefPos::MemPos(2),
+                                )?;
+                            },
+                            Arg::CompareOp(CompareOp::Lt) => {
+                                let res = left < right;
+                                println!("-> {:?} < {:?} = {}", left, right, res);
+                                m.set(2, TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(Some(res)))));
+                                self.stack.borrow_mut().push(
+                                    StackRefPos::MemPos(2),
+                                )?;
+                            },
+                            Arg::CompareOp(CompareOp::Le) => {
+                                let res = left <= right;
+                                println!("-> {:?} <= {:?} = {}", left, right, res);
+                                m.set(2, TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(Some(res)))));
+                                self.stack.borrow_mut().push(
+                                    StackRefPos::MemPos(2),
+                                )?;
+                            },
+                            Arg::CompareOp(CompareOp::Gt) => {
+                                let res = left > right;
+                                println!("-> {:?} > {:?} = {}", left, right, res);
+                                m.set(2, TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(Some(res)))));
+                                self.stack.borrow_mut().push(
+                                    StackRefPos::MemPos(2),
+                                )?;
+                            },
+                            Arg::CompareOp(CompareOp::Ge) => {
+                                let res = left >= right;
+                                println!("-> {:?} >= {:?} = {}", left, right, res);
+                                m.set(2, TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(Some(res)))));
+                                self.stack.borrow_mut().push(
+                                    StackRefPos::MemPos(2),
+                                )?;
+                            },
+                            Arg::CompareOp(CompareOp::Or) => {
+                                let l = left.try_into()?;
+                                let r = right.try_into()?;
+                                let res = l || r;
+                                println!("-> {:?} || {:?} = {}", left, right, res);
+                                m.set(2, TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(Some(res)))));
+                                self.stack.borrow_mut().push(
+                                    StackRefPos::MemPos(2),
+                                )?;
+                            },
+                            Arg::CompareOp(CompareOp::And) => {
+                                let res = left.try_into()? && right.try_into()?;
+                                println!("-> {:?} && {:?} = {}", left, right, res);
+                                m.set(2, TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(Some(res)))));
+                                self.stack.borrow_mut().push(
+                                    StackRefPos::MemPos(2),
+                                )?;
+                            },
+                            _ => panic!("invalid compare op"),
+                        }
+
+                    },
                     // stack args: [type, method_token, return memory position]
                     OpCode::ExecuteTypeMethod => {
                         let m = mem.borrow();
@@ -574,6 +651,7 @@ pub enum VmError {
     InvalidFieldAccess(usize),
     InvalidMethodCall,
     DataSourceNotFound(usize),
+    ImpossibleComparison,
 }
 
 #[derive(Debug)]
@@ -814,7 +892,7 @@ impl ExtDataSource {
                 t.exec_ref_value_method(method_token, args, res_type)()
             }
             DataSource::Rib(ref r) => {
-                todo!()
+                r.exec_ref_value_method(method_token, args, res_type)()
             }
         }
     }

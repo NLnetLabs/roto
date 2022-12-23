@@ -1,12 +1,15 @@
-use std::fmt::Display;
+use std::{cmp::Ordering, fmt::Display};
 
 //============ TypeValue ====================================================
-use crate::{ast::ShortString, traits::RotoFilter, compile::CompileError};
+use crate::{
+    ast::ShortString, compile::CompileError, traits::RotoFilter, vm::VmError,
+};
 
 use super::{
     builtin::{
         AsPath, Asn, Boolean, BuiltinTypeValue, Community, HexLiteral,
-        IntegerLiteral, IpAddress, Prefix, PrefixLength, Route, U32, U8,
+        IntegerLiteral, IpAddress, Prefix, PrefixLength, Route, RouteStatus,
+        StringLiteral, U32, U8,
     },
     collections::{ElementTypeValue, List, Record},
     datasources::{Rib, Table},
@@ -70,8 +73,7 @@ impl TypeValue {
     pub fn get_field_by_index(
         &self,
         index: usize,
-    ) -> Result<&(ShortString, ElementTypeValue), CompileError>
-    {
+    ) -> Result<&(ShortString, ElementTypeValue), CompileError> {
         match self {
             TypeValue::Record(r) => {
                 let field = r.get_field_by_index(index);
@@ -185,6 +187,177 @@ impl TypeValue {
     }
 }
 
+impl Display for TypeValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            TypeValue::Builtin(p) => write!(f, "{}", p),
+            TypeValue::List(l) => write!(f, "{} (List Element)", l),
+            TypeValue::Record(r) => {
+                write!(f, "{} (Record)", r)
+            }
+            TypeValue::Rib(r) => {
+                write!(f, "{} (Rib Record)", r)
+            }
+            TypeValue::Table(r) => {
+                write!(f, "{} (Table Entry)", r)
+            }
+            TypeValue::None => write!(f, "None"),
+        }
+    }
+}
+
+impl PartialOrd for &TypeValue {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (
+                TypeValue::Builtin(BuiltinTypeValue::U8(U8(Some(u)))),
+                TypeValue::Builtin(BuiltinTypeValue::U8(U8(Some(v)))),
+            ) => Some(u.cmp(v)),
+            (
+                TypeValue::Builtin(BuiltinTypeValue::U32(U32(Some(u)))),
+                TypeValue::Builtin(BuiltinTypeValue::U32(U32(Some(v)))),
+            ) => Some(u.cmp(v)),
+            (
+                TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
+                    IntegerLiteral(Some(u)),
+                )),
+                TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
+                    IntegerLiteral(Some(v)),
+                )),
+            ) => Some(u.cmp(v)),
+            (
+                TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
+                    StringLiteral(u),
+                )),
+                TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
+                    StringLiteral(v),
+                )),
+            ) => Some(u.cmp(v)),
+            (
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(u))),
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(v))),
+            ) => Some(u.cmp(v)),
+            (
+                TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(u))),
+                TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(v))),
+            ) => Some(u.cmp(v)),
+            (
+                TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
+                    PrefixLength(u),
+                )),
+                TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
+                    PrefixLength(v),
+                )),
+            ) => Some(u.cmp(v)),
+            (
+                TypeValue::Builtin(BuiltinTypeValue::Community(_)),
+                TypeValue::Builtin(BuiltinTypeValue::Community(_)),
+            ) => {
+                panic!("Communities have no ordering.")
+            }
+            (
+                TypeValue::Builtin(BuiltinTypeValue::IpAddress(IpAddress(u))),
+                TypeValue::Builtin(BuiltinTypeValue::IpAddress(IpAddress(v))),
+            ) => Some(u.cmp(v)),
+            (
+                TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(u))),
+                TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(v))),
+            ) => Some(u.cmp(v)),
+            (
+                TypeValue::Builtin(BuiltinTypeValue::AsPath(_)),
+                TypeValue::Builtin(BuiltinTypeValue::AsPath(_)),
+            ) => {
+                panic!("AS Paths have no ordering.")
+            }
+            (
+                TypeValue::Builtin(BuiltinTypeValue::Route(_)),
+                TypeValue::Builtin(BuiltinTypeValue::Route(_)),
+            ) => {
+                panic!("Routes have no ordering.")
+            }
+            (
+                TypeValue::Builtin(BuiltinTypeValue::RouteStatus(_)),
+                TypeValue::Builtin(BuiltinTypeValue::RouteStatus(_)),
+            ) => {
+                panic!("Route statuses have no ordering.")
+            }
+            (
+                TypeValue::Builtin(BuiltinTypeValue::HexLiteral(HexLiteral(
+                    u,
+                ))),
+                TypeValue::Builtin(BuiltinTypeValue::HexLiteral(HexLiteral(
+                    v,
+                ))),
+            ) => Some(u.cmp(v)),
+            (TypeValue::List(_), TypeValue::List(_)) => {
+                panic!("Lists are not comparable.")
+            }
+            (TypeValue::Record(_), TypeValue::Record(_)) => {
+                panic!("Records are not comparable.")
+            }
+            (TypeValue::Rib(_), TypeValue::Rib(_)) => {
+                panic!("Ribs are not comparable.")
+            }
+            (TypeValue::Table(_), TypeValue::Table(_)) => {
+                panic!("Tables are not comparable.")
+            }
+            (TypeValue::None, TypeValue::None) => {
+                panic!("None is uncomparable.")
+            }
+            _ => {
+                panic!("Incomparable types.")
+            }
+        }
+    }
+}
+
+impl Ord for &TypeValue {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (
+                TypeValue::Builtin(BuiltinTypeValue::U8(U8(Some(u1)))),
+                TypeValue::Builtin(BuiltinTypeValue::U8(U8(Some(u2)))),
+            ) => u1.cmp(u2),
+            (TypeValue::List(l1), TypeValue::List(l2)) => {
+                panic!("Lists are not comparable.")
+            }
+            (TypeValue::Record(r1), TypeValue::Record(r2)) => {
+                panic!("Records are not comparable.")
+            }
+            (TypeValue::Rib(r1), TypeValue::Rib(r2)) => {
+                panic!("Ribs are not comparable.")
+            }
+            (TypeValue::Table(r1), TypeValue::Table(r2)) => {
+                panic!("Tables are not comparable.")
+            }
+            (TypeValue::None, TypeValue::None) => Ordering::Equal,
+            (TypeValue::Builtin(_), _) => Ordering::Less,
+            (_, TypeValue::Builtin(_)) => Ordering::Greater,
+            (TypeValue::List(_), _) => Ordering::Less,
+            (_, TypeValue::List(_)) => Ordering::Greater,
+            (TypeValue::Record(_), _) => Ordering::Less,
+            (_, TypeValue::Record(_)) => Ordering::Greater,
+            (TypeValue::Rib(_), _) => Ordering::Less,
+            (_, TypeValue::Rib(_)) => Ordering::Greater,
+            (TypeValue::Table(_), _) => Ordering::Less,
+            (_, TypeValue::Table(_)) => Ordering::Greater,
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a TypeValue> for bool {
+    type Error = VmError;
+
+    fn try_from(t: &'a TypeValue) -> Result<Self, Self::Error> {
+        match t {
+            TypeValue::Builtin(BuiltinTypeValue::Boolean(b)) => {
+                b.0.ok_or(VmError::ImpossibleComparison)
+            }
+            _ => Err(VmError::ImpossibleComparison),
+        }
+    }
+}
+
 impl<'a> TryFrom<&'a str> for TypeValue {
     type Error = CompileError;
 
@@ -208,9 +381,7 @@ impl<'a> TryFrom<&'a str> for TypeValue {
             "Boolean" => Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(
                 Boolean(None),
             ))),
-            _ => Err(CompileError::new(
-                format!("Unknown type: {}", s),
-            )),
+            _ => Err(CompileError::new(format!("Unknown type: {}", s))),
         }
     }
 }
@@ -317,9 +488,7 @@ impl<'a> From<&'a TypeDef> for TypeValue {
                 if let TypeDef::Record(kv_list) = rec.as_ref() {
                     let def_ = kv_list
                         .iter()
-                        .map(|(ident, ty)| {
-                            (ident.clone(), ty.clone())
-                        })
+                        .map(|(ident, ty)| (ident.clone(), ty.clone()))
                         .collect::<Vec<_>>();
                     TypeValue::Rib(Rib {
                         ty: TypeDef::Record(def_),
@@ -332,9 +501,7 @@ impl<'a> From<&'a TypeDef> for TypeValue {
                 if let TypeDef::Record(kv_list) = rec.as_ref() {
                     let def_ = kv_list
                         .iter()
-                        .map(|(ident, ty)| {
-                            (ident.clone(), ty.clone())
-                        })
+                        .map(|(ident, ty)| (ident.clone(), ty.clone()))
                         .collect::<Vec<_>>();
                     TypeValue::Table(Table {
                         ty: TypeDef::Record(def_),
@@ -366,24 +533,5 @@ impl<'a> From<&'a TypeDef> for TypeValue {
 impl From<BuiltinTypeValue> for TypeValue {
     fn from(t: BuiltinTypeValue) -> Self {
         TypeValue::Builtin(t)
-    }
-}
-
-impl Display for TypeValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            TypeValue::Builtin(p) => write!(f, "{}", p),
-            TypeValue::List(l) => write!(f, "{} (List Element)", l),
-            TypeValue::Record(r) => {
-                write!(f, "{} (Record)", r)
-            }
-            TypeValue::Rib(r) => {
-                write!(f, "{} (Rib Record)", r)
-            }
-            TypeValue::Table(r) => {
-                write!(f, "{} (Table Entry)", r)
-            }
-            TypeValue::None => write!(f, "None"),
-        }
     }
 }
