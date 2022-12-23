@@ -4,8 +4,9 @@
 
 use crate::{
     ast::ShortString,
+    compile::CompileError,
     traits::{MethodProps, RotoFilter, Token, TokenConvert},
-    vm::StackRefPos, compile::CompileError,
+    vm::StackRefPos,
 };
 
 use super::{
@@ -17,7 +18,7 @@ use super::{
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Rib {
-    pub(crate) ty: TypeDef
+    pub(crate) ty: TypeDef,
 }
 
 impl Rib {
@@ -28,6 +29,26 @@ impl Rib {
         Self: std::marker::Sized,
     {
         todo!()
+    }
+
+    pub(crate) fn exec_ref_value_method<'a>(
+        &'a self,
+        method: usize,
+        args: &'a [&'a TypeValue],
+        res_type: TypeDef,
+    ) -> Box<dyn FnOnce() -> DataSourceMethodValue + 'a> {
+        match RibToken::from(method) {
+            RibToken::Match => {
+                todo!()
+            }
+            RibToken::LongestMatch => {
+                todo!()
+            }
+            RibToken::Contains => {
+                todo!()
+            }
+            RibToken::Get => todo!(),
+        }
     }
 }
 
@@ -63,10 +84,7 @@ impl RotoFilter<RibToken> for Rib {
         }
     }
 
-    fn into_type(
-        self,
-        _type_def: &TypeDef,
-    ) -> Result<TypeValue, CompileError>
+    fn into_type(self, _type_def: &TypeDef) -> Result<TypeValue, CompileError>
     where
         Self: std::marker::Sized,
     {
@@ -78,18 +96,16 @@ impl RotoFilter<RibToken> for Rib {
         _method: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
-        todo!()
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+        unimplemented!()
     }
 
     fn exec_type_method<'a>(
         _method: usize,
         _args: &[&'a TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
-        todo!()
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+        unimplemented!()
     }
 }
 
@@ -260,10 +276,7 @@ impl RotoFilter<TableToken> for Table {
         }
     }
 
-    fn into_type(
-        self,
-        _type_def: &TypeDef,
-    ) -> Result<TypeValue, CompileError>
+    fn into_type(self, _type_def: &TypeDef) -> Result<TypeValue, CompileError>
     where
         Self: std::marker::Sized,
     {
@@ -275,8 +288,7 @@ impl RotoFilter<TableToken> for Table {
         method_token: usize,
         args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         unimplemented!()
     }
 
@@ -284,8 +296,7 @@ impl RotoFilter<TableToken> for Table {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         unimplemented!()
     }
 }
