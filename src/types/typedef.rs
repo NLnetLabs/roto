@@ -33,7 +33,6 @@ pub enum TypeDef {
     Boolean,
     String, // used for fieldname in method calls
     Prefix,
-    PrefixRecord, // A Record with a prefix as key
     PrefixLength, // A u8 prefixes by a /
     IpAddress,
     Asn,
@@ -366,7 +365,6 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             "IntegerLiteral" => Ok(TypeDef::IntegerLiteral),
             "Prefix" => Ok(TypeDef::Prefix),
             "PrefixLength" => Ok(TypeDef::PrefixLength),
-            "PrefixRecord" => Ok(TypeDef::PrefixRecord),
             "IpAddress" => Ok(TypeDef::IpAddress),
             "Asn" => Ok(TypeDef::Asn),
             "AsPath" => Ok(TypeDef::AsPath),
