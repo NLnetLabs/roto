@@ -5,7 +5,7 @@ use crate::{types::{
 }, compile::CompileError};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
-pub(crate) enum Token {
+pub enum Token {
     Variable(usize),
     Method(usize),
     Argument(usize),

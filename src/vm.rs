@@ -750,19 +750,22 @@ pub struct ExtDataSource {
 }
 
 impl ExtDataSource {
-    pub fn new(name: &str, token: usize, ty: TypeDef) -> Self {
+    pub fn new(name: &str, token: Token, ty: TypeDef) -> Self {
         ExtDataSource {
             name: name.into(),
-            token,
-            source: match token {
-                Table => DataSource::Table(Table {
+            source: match &token {
+                Token::Table(_) => DataSource::Table(Table {
                     ty,
                     records: vec![],
                 }),
-                Rib => DataSource::Rib(Rib {
+                Token::Rib(_) => DataSource::Rib(Rib {
                     ty
                 }),
+                _ => {
+                    panic!("Invalid data source type: {:?}", ty);
+                }
             },
+            token: token.into(),
         }
     }
 
