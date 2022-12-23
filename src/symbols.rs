@@ -833,7 +833,7 @@ impl SymbolTable {
     // retrieve all the unique arguments, variables and data-sources that are
     // referenced in the terms field of a symbol table (i.e. the terms
     // sections in a module)
-    pub(crate) fn create_terms_graph(
+    pub(crate) fn create_deps_graph(
         &self,
     ) -> Result<
         (

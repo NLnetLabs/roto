@@ -5,12 +5,12 @@ use std::{
 };
 
 use crate::{
-    ast::{ShortString, self},
+    ast::{self, ShortString},
     compile::MirBlock,
     traits::Token,
     types::{
         collections::{ElementTypeValue, Record},
-        datasources::{Table, TableMethodValue},
+        datasources::{DataSourceMethodValue, Rib, Table},
         typedef::TypeDef,
         typevalue::TypeValue,
     },
@@ -259,7 +259,7 @@ impl<'a> VirtualMachine<'a> {
                 }
                 StackRefPos::TablePos(token, pos) => {
                     let ds = &self.data_sources[token];
-                    let v = ds.table.get_at_field_index(pos, sr.field_index);
+                    let v = ds.get_at_field_index(pos, sr.field_index);
                     if let Some(v) = v {
                         unwind_stack.push(v);
                     }
@@ -371,8 +371,10 @@ impl<'a> VirtualMachine<'a> {
                         let method_token: Arg = args.pop().unwrap();
                         let data_source_token = args.pop().unwrap();
 
-                        if let Arg::DataSource(ds_t) = data_source_token {
-                            let ds = self.get_data_source(ds_t).unwrap();
+                        if let Arg::DataSourceTable(ds_s)
+                        | Arg::DataSourceRib(ds_s) = data_source_token
+                        {
+                            let ds = self.get_data_source(ds_s).unwrap();
                             let stack_args =
                                 self._unwind_resolved_stack_into_vec(&m);
 
@@ -383,10 +385,10 @@ impl<'a> VirtualMachine<'a> {
                             );
                             let mut s = self.stack.borrow_mut();
                             match v {
-                                TableMethodValue::Ref(sr_pos) => {
+                                DataSourceMethodValue::Ref(sr_pos) => {
                                     s.push(sr_pos)?;
                                 }
-                                TableMethodValue::TypeValue(tv) => {
+                                DataSourceMethodValue::TypeValue(tv) => {
                                     m.set(mem_pos, tv);
                                 }
                             }
@@ -475,14 +477,14 @@ impl<'a> VirtualMachine<'a> {
                         } else {
                             return Err(VmError::InvalidValueType);
                         }
-                    },
+                    }
                     // Term procedures
                     OpCode::Call => {
                         todo!();
                     }
                     OpCode::Return => {
                         todo!();
-                    },
+                    }
                     OpCode::ReturnIfFalse => {
                         todo!();
                     }
@@ -615,7 +617,8 @@ pub enum Arg {
     RxValue, // the placeholder for the value of the rx type at runtime
     TxValue, // the placeholder for the value of the tx type at runtime
     Method(usize), // method token value
-    DataSource(usize), // data source token value
+    DataSourceTable(usize), // data source: table token value
+    DataSourceRib(usize), // data source: rib token value
     FieldAccess(usize), // field access token value
     BuiltinMethod(usize), // builtin method token value
     MemPos(u32), // memory position
@@ -656,7 +659,8 @@ impl From<Arg> for usize {
     fn from(value: Arg) -> Self {
         match value {
             Arg::Method(m) => m,
-            Arg::DataSource(d) => d,
+            Arg::DataSourceTable(d) => d,
+            Arg::DataSourceRib(d) => d,
             Arg::FieldAccess(f) => f,
             Arg::BuiltinMethod(b) => b,
             Arg::Variable(v) => v,
@@ -674,7 +678,7 @@ impl From<Arg> for usize {
 
 impl From<ast::CompareOp> for Arg {
     fn from(op: ast::CompareOp) -> Self {
-       Arg::CompareOp(op)
+        Arg::CompareOp(op)
     }
 }
 
@@ -693,7 +697,7 @@ pub enum OpCode {
     // call a term pr
     Call,
     // return from a term procedure
-    Return, // unconditional return
+    Return,        // unconditional return
     ReturnIfFalse, // return if the top of the stack is false
 }
 
@@ -722,10 +726,27 @@ pub trait Payload {
 }
 
 #[derive(Debug)]
+pub enum DataSource {
+    Table(Table),
+    Rib(Rib),
+}
+
+trait Source {
+    fn new(name: &str, token: usize, ty: TypeDef) -> Self;
+    fn get_by_key<'a>(&'a self, key: &str) -> Option<&'a Record>;
+    fn exec_ref_value_method<'a>(
+        &self,
+        method_token: usize,
+        args: &[&'a TypeValue],
+        res_type: TypeDef,
+    ) -> DataSourceMethodValue;
+}
+
+#[derive(Debug)]
 pub struct ExtDataSource {
     name: ShortString,
     token: usize,
-    table: Table,
+    source: DataSource,
 }
 
 impl ExtDataSource {
@@ -733,17 +754,42 @@ impl ExtDataSource {
         ExtDataSource {
             name: name.into(),
             token,
-            table: Table {
-                ty,
-                records: vec![],
+            source: match token {
+                Table => DataSource::Table(Table {
+                    ty,
+                    records: vec![],
+                }),
+                Rib => DataSource::Rib(Rib {
+                    ty
+                }),
             },
         }
     }
 
     pub fn get_by_key<'a>(&'a self, key: &str) -> Option<&'a Record> {
-        self.table.records.iter().find(|v| {
-            v.get_field_by_index(0).map(|v| v.0.as_str()) == Some(key)
-        })
+        match self.source {
+            DataSource::Table(ref t) => t.records.iter().find(|v| {
+                v.get_field_by_index(0).map(|v| v.0.as_str()) == Some(key)
+            }),
+            DataSource::Rib(ref r) => {
+                todo!()
+            }
+        }
+    }
+
+    pub fn get_at_field_index(
+        &self,
+        index: usize,
+        field_index: Option<usize>,
+    ) -> Option<&TypeValue> {
+        match self.source {
+            DataSource::Table(ref t) => {
+                t.get_at_field_index(index, field_index)
+            }
+            DataSource::Rib(ref r) => {
+                todo!()
+            }
+        }
     }
 
     // methods on a data source can indicate whether they are returning a
@@ -754,10 +800,20 @@ impl ExtDataSource {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> TableMethodValue {
-        println!("exec_method: {:?} {:?} {:?}", method_token, args, res_type);
-        self.table
-            .exec_ref_value_method(method_token, args, res_type)()
+    ) -> DataSourceMethodValue {
+        println!(
+            "exec_method: {:?} {:?} {:?} {:?}",
+            self.source, method_token, args, res_type
+        );
+
+        match self.source {
+            DataSource::Table(ref t) => {
+                t.exec_ref_value_method(method_token, args, res_type)()
+            }
+            DataSource::Rib(ref r) => {
+                todo!()
+            }
+        }
     }
 }
 

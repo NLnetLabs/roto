@@ -415,20 +415,8 @@ impl From<&TypeValue> for TypeDef {
                     .map(|(k, v)| (k.clone(), Box::new(v.into())))
                     .collect(),
             ),
-            TypeValue::Rib(r) => TypeDef::Record(
-                r.record
-                    .0
-                    .iter()
-                    .map(|(k, v)| (k.clone(), Box::new(v.into())))
-                    .collect(),
-            ),
-            TypeValue::Table(t) => TypeDef::Record(
-                t.records[0]
-                    .0
-                    .iter()
-                    .map(|(k, v)| (k.clone(), Box::new(v.into())))
-                    .collect(),
-            ),
+            TypeValue::Rib(r) => r.ty.clone(),
+            TypeValue::Table(t) => t.ty.clone(),
             TypeValue::None => TypeDef::None,
         }
     }

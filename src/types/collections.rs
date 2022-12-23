@@ -301,10 +301,28 @@ impl<'a> Record {
         Ok(Self(elems))
     }
 
+    pub fn create_empty_instance(ty: &TypeDef) -> Result<Record, CompileError> {
+        if let TypeDef::Record(_rec) = ty {
+            let empty_instance = _rec
+            .iter()
+            .map(|(name, ty)| (name.clone(), ty.clone()))
+            .collect::<Vec<(ShortString, Box<TypeDef>)>>();
+            println!("new empty instance: {:#?}", empty_instance);
+            Ok(empty_instance.into())
+        } else {
+            Err(CompileError::new("Not a record type".into()))
+        }
+    }
+ 
     pub fn create_instance(
         ty: &TypeDef,
         kvs: Vec<(&str, TypeValue)>,
     ) -> Result<Record, CompileError> {
+        
+        if kvs.is_empty() {
+            return Self::create_empty_instance(ty);
+        }
+
         let shortstring_vec = kvs
             .iter()
             .map(|(name, ty)| (ShortString::from(*name), ty))
@@ -403,9 +421,15 @@ impl RotoFilter<RecordToken> for Record {
 
     fn into_type(
         self,
-        _type_def: &TypeDef,
+        type_def: &TypeDef,
     ) -> Result<TypeValue, CompileError> {
-        Err("Record type cannot be converted into another type".into())
+        match type_def {
+            TypeDef::Record(_) => {
+                Ok(TypeValue::Record(self))
+            }
+            _ => Err("Record type cannot be converted into another type".to_string()
+            .into()),
+        }
     }
 
     fn exec_value_method(

@@ -9,7 +9,7 @@ use crate::{
 };
 
 use super::{
-    builtin::{self, Boolean, BuiltinTypeValue},
+    builtin::{Boolean, BuiltinTypeValue},
     collections::Record,
     typedef::TypeDef,
     typevalue::TypeValue,
@@ -17,7 +17,7 @@ use super::{
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Rib {
-    pub(crate) record: Record,
+    pub(crate) ty: TypeDef
 }
 
 impl Rib {
@@ -41,12 +41,12 @@ impl RotoFilter<RibToken> for Rib {
     {
         match method_name.ident.as_str() {
             "match" => Ok(MethodProps::new(
-                TypeValue::Record(self.record),
+                TypeValue::Record(Record::create_empty_instance(&self.ty)?),
                 RibToken::Match.into(),
                 vec![TypeDef::Prefix],
             )),
             "longest_match" => Ok(MethodProps::new(
-                TypeValue::Record(self.record),
+                TypeValue::Record(Record::create_empty_instance(&self.ty)?),
                 RibToken::LongestMatch.into(),
                 vec![TypeDef::Prefix],
             )),
@@ -123,7 +123,7 @@ impl From<RibToken> for usize {
 
 impl std::fmt::Display for Rib {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Rib with record type {}", self.record)
+        write!(f, "Rib with record type {}", self.ty)
     }
 }
 
@@ -131,7 +131,7 @@ impl std::fmt::Display for Rib {
 
 pub type NamedTypeDef = (ShortString, Box<TypeDef>);
 
-pub(crate) enum TableMethodValue {
+pub(crate) enum DataSourceMethodValue {
     Ref(StackRefPos),
     TypeValue(TypeValue),
 }
@@ -180,7 +180,7 @@ impl Table {
         method_token: usize,
         args: &'a [&'a TypeValue],
         _res_type: TypeDef,
-    ) -> Box<dyn FnOnce() -> TableMethodValue + 'a> {
+    ) -> Box<dyn FnOnce() -> DataSourceMethodValue + 'a> {
         match method_token.into() {
             TableToken::Find => Box::new(|| {
                 self.records
@@ -196,13 +196,13 @@ impl Table {
                         }
                     })
                     .map(|v| {
-                        TableMethodValue::Ref(StackRefPos::TablePos(
+                        DataSourceMethodValue::Ref(StackRefPos::TablePos(
                             Token::Table(v.0),
                             0,
                         ))
                     })
                     .unwrap_or_else(|| {
-                        TableMethodValue::TypeValue(TypeValue::None)
+                        DataSourceMethodValue::TypeValue(TypeValue::None)
                     })
             }),
             TableToken::Contains => Box::new(|| {
@@ -219,12 +219,12 @@ impl Table {
                         }
                     })
                     .map(|_v| {
-                        TableMethodValue::TypeValue(TypeValue::Builtin(
+                        DataSourceMethodValue::TypeValue(TypeValue::Builtin(
                             BuiltinTypeValue::Boolean(Boolean(Some(true))),
                         ))
                     })
                     .unwrap_or_else(|| {
-                        TableMethodValue::TypeValue(TypeValue::Builtin(
+                        DataSourceMethodValue::TypeValue(TypeValue::Builtin(
                             BuiltinTypeValue::Boolean(Boolean(Some(false))),
                         ))
                     })
@@ -303,7 +303,7 @@ impl From<usize> for TableToken {
         match token {
             0 => TableToken::Find,
             1 => TableToken::Contains,
-            t => panic!("Unknown token {}", t),
+            t => panic!("Unknown method with token {}", t),
         }
     }
 }

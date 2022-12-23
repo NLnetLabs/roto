@@ -318,11 +318,11 @@ impl<'a> From<&'a TypeDef> for TypeValue {
                     let def_ = kv_list
                         .iter()
                         .map(|(ident, ty)| {
-                            (ident.clone(), ty.as_ref().into())
+                            (ident.clone(), ty.clone())
                         })
                         .collect::<Vec<_>>();
                     TypeValue::Rib(Rib {
-                        record: Record::new(def_).unwrap(),
+                        ty: TypeDef::Record(def_),
                     })
                 } else {
                     panic!("Rib must contains records")

@@ -254,7 +254,7 @@ fn compile_module(_module: &SymbolTable) -> Result<RotoPack, CompileError> {
             variables,
             data_sources,
         },
-    ) = _module.create_terms_graph()?;
+    ) = _module.create_deps_graph()?;
 
     let mut state = CompilerState {
         cur_module: _module,
@@ -336,6 +336,8 @@ fn compile_module(_module: &SymbolTable) -> Result<RotoPack, CompileError> {
         })
         .collect::<Vec<_>>();
 
+    println!("data_sources: {:?}", data_sources);
+
     Ok(RotoPack::new(mir, TypeDef::None, None, args, data_sources))
 }
 
@@ -399,10 +401,18 @@ fn compile_var<'a>(
                 let next_arg = leaves.peek().unwrap();
 
                 let (opcode, args) = match next_arg.get_token() {
-                    Ok(Token::Rib(ds) | Token::Table(ds)) => (
+                    Ok(Token::Rib(ds)) => (
                         OpCode::ExecuteDataStoreMethod,
                         vec![
-                            Arg::DataSource(ds),
+                            Arg::DataSourceRib(ds),
+                            Arg::Method(method),
+                            Arg::MemPos(state.mem_pos),
+                        ],
+                    ),
+                    Ok(Token::Table(ds)) => (
+                        OpCode::ExecuteDataStoreMethod,
+                        vec![
+                            Arg::DataSourceTable(ds),
                             Arg::Method(method),
                             Arg::MemPos(state.mem_pos),
                         ],
@@ -546,7 +556,7 @@ fn compile_vars(
     mut state: CompilerState<'_>,
 ) -> Result<(Vec<MirBlock>, CompilerState<'_>), CompileError> {
     let _module = state.cur_module;
-    
+
     // a new block
     state.cur_mir_block = MirBlock {
         command_stack: Vec::new(),
