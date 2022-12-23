@@ -399,16 +399,14 @@ fn compile_var<'a>(
                 let next_arg = leaves.peek().unwrap();
 
                 let (opcode, args) = match next_arg.get_token() {
-                    Ok(Token::Rib(ds) | Token::Table(ds)) => {
-                        (
-                            OpCode::ExecuteDataStoreMethod,
-                            vec![
-                                Arg::DataSource(ds),
-                                Arg::Method(method),
-                                Arg::MemPos(state.mem_pos),
-                            ],
-                        )
-                    }
+                    Ok(Token::Rib(ds) | Token::Table(ds)) => (
+                        OpCode::ExecuteDataStoreMethod,
+                        vec![
+                            Arg::DataSource(ds),
+                            Arg::Method(method),
+                            Arg::MemPos(state.mem_pos),
+                        ],
+                    ),
                     Ok(Token::BuiltinType(_)) => {
                         println!("arg : {:?}", arg);
                         println!("next_arg : {:?}", next_arg);
@@ -547,12 +545,12 @@ fn compile_vars(
     mut mir: Vec<MirBlock>,
     mut state: CompilerState<'_>,
 ) -> Result<(Vec<MirBlock>, CompilerState<'_>), CompileError> {
+    let _module = state.cur_module;
+    
     // a new block
     state.cur_mir_block = MirBlock {
         command_stack: Vec::new(),
     };
-
-    let _module = state.cur_module;
 
     // compile the used vars. Since the rx and tx value live in memory
     // positions 0 and 1, we start with memory position 2.
@@ -566,7 +564,6 @@ fn compile_vars(
         state.mem_pos = mem_pos;
         let s = _module.get_variable_by_token(&var);
         print!("\nvar: {:?} ", s.get_token());
-
 
         state = compile_var(s, state)?;
 
@@ -585,6 +582,11 @@ fn compile_terms(
 ) -> Result<(Vec<MirBlock>, CompilerState<'_>), CompileError> {
     let _module = state.cur_module;
 
+    // a new block
+    state.cur_mir_block = MirBlock {
+        command_stack: Vec::new(),
+    };
+
     // compile all the terms.
     for term in _module.get_terms() {
         let sub_terms = term.get_args();
@@ -599,14 +601,11 @@ fn compile_terms(
         );
 
         while let Some(arg) = &mut sub_terms.next() {
-            print!("a");
+            print!("term {:?}", arg);
 
-            (mir, state) = compile_term(arg, state, mir)?;
+            state = compile_term(arg, state)?;
 
-            state
-                .cur_mir_block
-                .command_stack
-                .push(Command::new(OpCode::ReturnIfFalse, vec![]));
+            assert_ne!(state.cur_mir_block.command_stack.len(), 0);
 
             mir.push(state.cur_mir_block);
 
@@ -622,8 +621,7 @@ fn compile_terms(
 fn compile_term<'a>(
     sub_term: Term<'a>,
     mut state: CompilerState<'a>,
-    mut mir: Vec<MirBlock>,
-) -> Result<(Vec<MirBlock>, CompilerState<'a>), CompileError> {
+) -> Result<CompilerState<'a>, CompileError> {
     println!(
         "sub-term {:?} {:?}",
         sub_term.get_name(),
@@ -648,9 +646,9 @@ fn compile_term<'a>(
         }
         SymbolKind::OrExpr => {
             let args = sub_term.get_args();
-            (mir, state) = compile_term(&args[0], state, mir)?;
+            state = compile_term(&args[0], state)?;
             state.mem_pos += 1;
-            (mir, state) = compile_term(&args[1], state, mir)?;
+            state = compile_term(&args[1], state)?;
 
             state.cur_mir_block.command_stack.push(Command::new(
                 OpCode::Cmp,
@@ -663,9 +661,9 @@ fn compile_term<'a>(
         }
         SymbolKind::AndExpr => {
             let args = sub_term.get_args();
-            (mir, state) = compile_term(&args[0], state, mir)?;
+            state = compile_term(&args[0], state)?;
             state.mem_pos += 1;
-            (mir, state) = compile_term(&args[1], state, mir)?;
+            state = compile_term(&args[1], state)?;
 
             state.cur_mir_block.command_stack.push(Command::new(
                 OpCode::Cmp,
@@ -680,19 +678,18 @@ fn compile_term<'a>(
             panic!("NOT NOT!");
         }
         _ => {
+            println!(
+                "compile-var sub-term {:?} {:?}",
+                sub_term.get_name(),
+                sub_term.get_kind()
+            );
             state = compile_var(sub_term, state)?;
+            println!("command_stack {:?}", state.cur_mir_block.command_stack);
         }
-    }
-
-    mir.push(state.cur_mir_block);
-
-    // a new block
-    state.cur_mir_block = MirBlock {
-        command_stack: Vec::new(),
     };
 
     // restore old mem_pos, let's not waste memory
     state.mem_pos = saved_mem_pos;
 
-    Ok((mir, state))
+    Ok(state)
 }
