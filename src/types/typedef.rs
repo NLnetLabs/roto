@@ -254,6 +254,40 @@ impl TypeDef {
     }
 }
 
+impl std::fmt::Display for TypeDef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TypeDef::Record(rec) => {
+                write!(f, "Record {{")?;
+                for (name, ty) in rec {
+                    write!(f, "{}: {}, ", name, ty)?;
+                }
+                write!(f, "}}")
+            }
+            TypeDef::List(list) => write!(f, "List of {}", list),
+            TypeDef::AsPath => write!(f, "AsPath"),
+            TypeDef::Prefix => write!(f, "Prefix"),
+            TypeDef::U32 => write!(f, "U32"),
+            TypeDef::Asn => write!(f, "Asn"),
+            TypeDef::IpAddress => write!(f, "IpAddress"),
+            TypeDef::Route => write!(f, "Route"),
+            TypeDef::Rib(rib) => write!(f, "Rib of {}", rib),
+            TypeDef::Table(table) => write!(f, "Table of {}", table),
+            TypeDef::PrefixLength => write!(f, "PrefixLength"),
+            TypeDef::IntegerLiteral => write!(f, "IntegerLiteral"),
+            TypeDef::U8 => write!(f, "U8"),
+            TypeDef::Boolean => write!(f, "Boolean"),
+            TypeDef::String => write!(f, "String"),
+            TypeDef::Community => write!(f, "Community"),
+            TypeDef::RouteStatus => write!(f, "RouteStatus"),
+            TypeDef::HexLiteral => write!(f, "HexLiteral"),
+            TypeDef::StringLiteral => write!(f, "StringLiteral"),
+            TypeDef::AcceptReject(_) => write!(f, "AcceptReject"),
+            TypeDef::None => write!(f, "None"),
+        }
+    }
+}
+
 impl PartialEq<BuiltinTypeValue> for TypeDef {
     fn eq(&self, other: &BuiltinTypeValue) -> bool {
         match self {
