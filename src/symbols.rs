@@ -825,7 +825,7 @@ impl SymbolTable {
                 Ok((TypeDef::Table(Box::new(r.get_type())), r.get_token()?))
             }
             _ => {
-                Err(CompileError::new(format!("No data source named '{}' found.", name).into()))
+                Err(CompileError::new(format!("No data source named '{}' found.", name)))
             }
         })?
     }

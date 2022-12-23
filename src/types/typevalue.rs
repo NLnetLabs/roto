@@ -8,7 +8,7 @@ use crate::{
 use super::{
     builtin::{
         AsPath, Asn, Boolean, BuiltinTypeValue, Community, HexLiteral,
-        IntegerLiteral, IpAddress, Prefix, PrefixLength, Route, RouteStatus,
+        IntegerLiteral, IpAddress, Prefix, PrefixLength,
         StringLiteral, U32, U8,
     },
     collections::{ElementTypeValue, List, Record},
@@ -110,7 +110,7 @@ impl TypeValue {
                 .exec_value_method(method_token, args, return_type)
                 .unwrap()(),
             TypeValue::List(list) => list
-                .exec_value_method(method_token as usize, args, return_type)
+                .exec_value_method(method_token, args, return_type)
                 .unwrap()(),
             TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => as_path
                 .exec_value_method(method_token, args, return_type)
@@ -318,16 +318,16 @@ impl Ord for &TypeValue {
                 TypeValue::Builtin(BuiltinTypeValue::U8(U8(Some(u1)))),
                 TypeValue::Builtin(BuiltinTypeValue::U8(U8(Some(u2)))),
             ) => u1.cmp(u2),
-            (TypeValue::List(l1), TypeValue::List(l2)) => {
+            (TypeValue::List(_l1), TypeValue::List(_l2)) => {
                 panic!("Lists are not comparable.")
             }
-            (TypeValue::Record(r1), TypeValue::Record(r2)) => {
+            (TypeValue::Record(_r1), TypeValue::Record(_r2)) => {
                 panic!("Records are not comparable.")
             }
-            (TypeValue::Rib(r1), TypeValue::Rib(r2)) => {
+            (TypeValue::Rib(_r1), TypeValue::Rib(_r2)) => {
                 panic!("Ribs are not comparable.")
             }
-            (TypeValue::Table(r1), TypeValue::Table(r2)) => {
+            (TypeValue::Table(_r1), TypeValue::Table(_r2)) => {
                 panic!("Tables are not comparable.")
             }
             (TypeValue::None, TypeValue::None) => Ordering::Equal,

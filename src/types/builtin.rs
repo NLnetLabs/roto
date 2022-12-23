@@ -186,46 +186,46 @@ impl BuiltinTypeValue {
         Ok(TypeValue::Builtin(var))
     }
 
-    pub(crate) fn exec_value_method(
-        &self,
-        method_token: usize,
-        args: &[&TypeValue],
-        return_type: TypeDef,
-    ) -> TypeValue {
-        match self {
-            BuiltinTypeValue::AsPath(as_path) => as_path
-                .exec_value_method(method_token, args, return_type)
-                .unwrap()(),
-            BuiltinTypeValue::Prefix(prefix) => prefix
-                .exec_value_method(method_token, args, return_type)
-                .unwrap()(),
-            BuiltinTypeValue::IntegerLiteral(lit_int) => lit_int
-                .exec_value_method(method_token, args, return_type)
-                .unwrap()(
-            ),
-            BuiltinTypeValue::StringLiteral(lit_str) => lit_str
-                .exec_value_method(method_token, args, return_type)
-                .unwrap()(),
-            BuiltinTypeValue::U32(u32) => u32
-                .exec_value_method(method_token, args, return_type)
-                .unwrap()(),
-            BuiltinTypeValue::Asn(asn) => asn
-                .exec_value_method(method_token, args, return_type)
-                .unwrap()(),
-            BuiltinTypeValue::IpAddress(ip) => ip
-                .exec_value_method(method_token, args, return_type)
-                .unwrap()(),
-            BuiltinTypeValue::Route(route) => route
-                .exec_value_method(method_token, args, return_type)
-                .unwrap()(),
-            BuiltinTypeValue::U8(_) => todo!(),
-            BuiltinTypeValue::PrefixLength(_) => todo!(),
-            BuiltinTypeValue::Community(_) => todo!(),
-            BuiltinTypeValue::RouteStatus(_) => todo!(),
-            BuiltinTypeValue::Boolean(_) => todo!(),
-            BuiltinTypeValue::HexLiteral(_) => todo!(),
-        }
-    }
+    // pub(crate) fn exec_value_method(
+    //     &self,
+    //     method_token: usize,
+    //     args: &[&TypeValue],
+    //     return_type: TypeDef,
+    // ) -> TypeValue {
+    //     match self {
+    //         BuiltinTypeValue::AsPath(as_path) => as_path
+    //             .exec_value_method(method_token, args, return_type)
+    //             .unwrap()(),
+    //         BuiltinTypeValue::Prefix(prefix) => prefix
+    //             .exec_value_method(method_token, args, return_type)
+    //             .unwrap()(),
+    //         BuiltinTypeValue::IntegerLiteral(lit_int) => lit_int
+    //             .exec_value_method(method_token, args, return_type)
+    //             .unwrap()(
+    //         ),
+    //         BuiltinTypeValue::StringLiteral(lit_str) => lit_str
+    //             .exec_value_method(method_token, args, return_type)
+    //             .unwrap()(),
+    //         BuiltinTypeValue::U32(u32) => u32
+    //             .exec_value_method(method_token, args, return_type)
+    //             .unwrap()(),
+    //         BuiltinTypeValue::Asn(asn) => asn
+    //             .exec_value_method(method_token, args, return_type)
+    //             .unwrap()(),
+    //         BuiltinTypeValue::IpAddress(ip) => ip
+    //             .exec_value_method(method_token, args, return_type)
+    //             .unwrap()(),
+    //         BuiltinTypeValue::Route(route) => route
+    //             .exec_value_method(method_token, args, return_type)
+    //             .unwrap()(),
+    //         BuiltinTypeValue::U8(_) => todo!(),
+    //         BuiltinTypeValue::PrefixLength(_) => todo!(),
+    //         BuiltinTypeValue::Community(_) => todo!(),
+    //         BuiltinTypeValue::RouteStatus(_) => todo!(),
+    //         BuiltinTypeValue::Boolean(_) => todo!(),
+    //         BuiltinTypeValue::HexLiteral(_) => todo!(),
+    //     }
+    // }
 }
 
 // These From impls allow the user to use the create_instance function with
@@ -406,18 +406,18 @@ impl RotoFilter<U32Token> for U32 {
 
     fn exec_value_method<'a>(
         &'a self,
-        method_token: usize,
-        args: &[&TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[&TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
 
     fn exec_type_method<'a>(
-        method_token: usize,
-        args: &[&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
@@ -510,18 +510,18 @@ impl RotoFilter<U8Token> for U8 {
 
     fn exec_value_method<'a>(
         &'a self,
-        method_token: usize,
-        args: &[&TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[&TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
 
     fn exec_type_method<'a>(
-        method_token: usize,
-        args: &[&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
@@ -656,18 +656,18 @@ impl RotoFilter<BooleanToken> for Boolean {
 
     fn exec_value_method<'a>(
         &'a self,
-        method_token: usize,
-        args: &[&TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[&TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
 
     fn exec_type_method<'a>(
-        method_token: usize,
-        args: &[&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
@@ -759,18 +759,18 @@ impl RotoFilter<StringLiteralToken> for StringLiteral {
 
     fn exec_value_method<'a>(
         &'a self,
-        method_token: usize,
-        args: &[&TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[&TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
 
     fn exec_type_method<'a>(
-        method_token: usize,
-        args: &[&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
@@ -1490,18 +1490,18 @@ impl RotoFilter<CommunityToken> for Community {
 
     fn exec_value_method<'a>(
         &'a self,
-        method_token: usize,
-        args: &[&TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[&TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()
     }
 
     fn exec_type_method<'a>(
-        method_token: usize,
-        args: &[&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()

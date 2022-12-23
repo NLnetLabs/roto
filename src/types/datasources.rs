@@ -285,17 +285,17 @@ impl RotoFilter<TableToken> for Table {
 
     fn exec_value_method<'a>(
         &'a self,
-        method_token: usize,
-        args: &[&TypeValue],
+        _method_token: usize,
+        _args: &[&TypeValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         unimplemented!()
     }
 
     fn exec_type_method<'a>(
-        method_token: usize,
-        args: &[&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         unimplemented!()
     }

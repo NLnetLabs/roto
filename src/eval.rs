@@ -321,7 +321,7 @@ impl ast::Module {
         }
 
         if let Some(apply) = &self.body.apply {
-            apply.eval(symbols.clone(), module_scope)?;
+            apply.eval(symbols, module_scope)?;
         }
 
         Ok(())

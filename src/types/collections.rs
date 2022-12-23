@@ -97,8 +97,8 @@ impl<'a> From<&'a ElementTypeValue> for &'a TypeValue {
         match t {
             ElementTypeValue::Primitive(v) => v,
             ElementTypeValue::Nested(ty) => match ty.as_ref() {
-                TypeValue::List(li) => ty,
-                TypeValue::Record(kv_list) => ty,
+                TypeValue::List(_li) => ty,
+                TypeValue::Record(_kv_list) => ty,
                 _ => panic!("Unknown type"),
             },
         }
@@ -443,9 +443,9 @@ impl RotoFilter<RecordToken> for Record {
     }
 
     fn exec_type_method<'a>(
-        method_token: usize,
-        args: &[&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
         todo!()

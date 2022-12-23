@@ -6,16 +6,12 @@ use std::{
 use nom::error::VerboseError;
 
 use crate::{
-    ast::{self, AcceptReject, ShortString, SyntaxTree},
+    ast::{self, ShortString, SyntaxTree},
     symbols::{
         DepsGraph, GlobalSymbolTable, Scope, Symbol, SymbolKind, SymbolTable,
     },
     traits::Token,
-    types::{
-        builtin::{Boolean, BuiltinTypeValue},
-        typedef::TypeDef,
-        typevalue::TypeValue,
-    },
+    types::typedef::TypeDef,
     vm::{Arg, Command, ExtDataSource, OpCode, VariablesMap},
 };
 
@@ -329,14 +325,11 @@ fn compile_module(_module: &SymbolTable) -> Result<RotoPack, CompileError> {
                 ds.1.get_token()
                     .unwrap_or_else(|_| {
                         panic!("Fatal: Cannot find Token for data source.");
-                    })
-                    .into(),
+                    }),
                 ds.1.get_type(),
             )
         })
         .collect::<Vec<_>>();
-
-    println!("data_sources: {:?}", data_sources);
 
     Ok(RotoPack::new(mir, TypeDef::None, None, args, data_sources))
 }

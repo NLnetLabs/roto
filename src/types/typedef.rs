@@ -211,7 +211,7 @@ impl TypeDef {
                     .unwrap()()
             }
             TypeDef::List(_list) => List::exec_type_method(
-                method_token as usize,
+                method_token,
                 args,
                 return_type,
             )

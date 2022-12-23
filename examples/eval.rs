@@ -1,10 +1,7 @@
 use std::cell::RefCell;
 
 use roto::compile::Compiler;
-use roto::symbols::GlobalSymbolTable;
 
-use nom::error::convert_error;
-use roto::ast::*;
 use roto::types::builtin::{
     self, AsPath, Asn, BuiltinTypeValue, Community,
     CommunityType, U32,
@@ -18,34 +15,11 @@ use roto::vm;
 fn test_data(
     name: &str,
     source_code: &'static str,
-    expect_success: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("eval test {}", name);
-    // let parsed_data = SyntaxTree::parse_str(source_code);
-    // if let Err(e) = parsed_data.clone() {
-    //     println!("{}", convert_error(source_code, e));
-    // }
-
-    // match expect_success {
-    //     false => assert!(parsed_data.is_err()),
-    //     true => assert!(parsed_data.is_ok()),
-    // }
-
-    // let eval = parsed_data?;
-
-    // let symbols = GlobalSymbolTable::new();
-    // eval.1.eval(symbols.clone()).map_err(
-    //     |_e| {
-    //         Box::new(std::io::Error::new(
-    //             std::io::ErrorKind::InvalidData,
-    //             "Can't evaluate AST",
-    //         ))
-    //     }
-    // )?;
 
     // println!("{:#?}", symbols);
 
-    // let compiler = Compiler::new();
     let mut _packs = Compiler::build(source_code);
     let roto_pack = std::mem::take(_packs[0].as_mut().unwrap());
 
@@ -340,6 +314,5 @@ fn main() {
                 community: [Community]
             }
         "###,
-        true,
     ).unwrap();
 }
