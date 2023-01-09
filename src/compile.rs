@@ -12,7 +12,7 @@ use crate::{
     },
     traits::Token,
     types::typedef::TypeDef,
-    vm::{Arg, Command, ExtDataSource, OpCode, VariablesMap},
+    vm::{Arg, Command, ExtDataSource, OpCode, VariablesMap, StackRefPos},
 };
 
 //============ The Compiler (Filter creation time) ==========================
@@ -122,7 +122,7 @@ impl Display for CompileError {
 type Arguments<'a> = Vec<(ShortString, &'a Symbol)>;
 type DataSources<'a> = Vec<(ShortString, &'a Symbol)>;
 type Variables<'a> = Vec<(ShortString, &'a Symbol)>;
-type Terms<'a> = Vec<(ShortString, &'a Symbol)>;
+type Terms<'a> = Vec<(ShortString, StackRefPos)>;
 type Term<'a> = &'a Symbol;
 
 #[derive(Debug)]
@@ -134,6 +134,7 @@ struct CompilerState<'a> {
     used_arguments: Arguments<'a>,
     cur_mir_block: MirBlock,
     mem_pos: u32,
+    computed_terms: Terms<'a>,
 }
 
 #[derive(Debug, Default)]
@@ -258,6 +259,7 @@ fn compile_module(_module: &SymbolTable) -> Result<RotoPack, CompileError> {
         used_variables: variables,
         used_data_sources: data_sources,
         used_arguments: arguments,
+        computed_terms: Terms::new(),
         cur_mir_block: MirBlock::new(),
         mem_pos: 0,
     };
@@ -322,10 +324,9 @@ fn compile_module(_module: &SymbolTable) -> Result<RotoPack, CompileError> {
         .map(|ds| {
             ExtDataSource::new(
                 &ds.1.get_name(),
-                ds.1.get_token()
-                    .unwrap_or_else(|_| {
-                        panic!("Fatal: Cannot find Token for data source.");
-                    }),
+                ds.1.get_token().unwrap_or_else(|_| {
+                    panic!("Fatal: Cannot find Token for data source.");
+                }),
                 ds.1.get_type(),
             )
         })
@@ -590,8 +591,11 @@ fn compile_terms(
         command_stack: Vec::new(),
     };
 
+    let terms = _module.get_terms();
+    let mut terms_iter = terms.iter().peekable();
+
     // compile all the terms.
-    for term in _module.get_terms() {
+    while let Some(term) = &mut terms_iter.next() {
         let sub_terms = term.get_args();
 
         let mut sub_terms = sub_terms.iter().peekable();
@@ -603,6 +607,12 @@ fn compile_terms(
             })
         );
 
+        // Set a Label so that each term block is identifieble for humans.
+        state.cur_mir_block.command_stack.push(Command::new(
+            OpCode::Label,
+            vec![Arg::Label(term.get_name())],
+        ));
+
         while let Some(arg) = &mut sub_terms.next() {
             print!("term {:?}", arg);
 
@@ -610,12 +620,31 @@ fn compile_terms(
 
             assert_ne!(state.cur_mir_block.command_stack.len(), 0);
 
-            mir.push(state.cur_mir_block);
+            // Since sub-terms are ANDed we can create an early return after
+            // each sub-term that isn't last.
+            if sub_terms.peek().is_some() {
+                state
+                    .cur_mir_block
+                    .command_stack
+                    .push(Command::new(OpCode::SkipToEOB, vec![]));
+            }
 
-            state.cur_mir_block = MirBlock {
-                command_stack: Vec::new(),
-            };
         }
+
+        // store the resulting value into a variable so that future references
+        // to this term can directly use the result instead of doing the whole
+        // computation again.
+        state.computed_terms.push((term.get_name(), state.mem_pos.into()));
+
+        state.mem_pos += 1;
+
+        // move the current mir block to the end of all the collected MIR.
+        mir.push(state.cur_mir_block);
+
+        // continue with a fresh block
+        state.cur_mir_block = MirBlock {
+            command_stack: Vec::new(),
+        };
     }
 
     Ok((mir, state))
@@ -630,6 +659,13 @@ fn compile_term<'a>(
         sub_term.get_name(),
         sub_term.get_kind()
     );
+
+    if state.computed_terms.iter().any(|st| st.0 == sub_term.get_name()) {
+        state.cur_mir_block.command_stack.push(Command::new(
+            OpCode::Label, vec![Arg::Label(sub_term.get_name())]
+        ));
+    };
+
     let saved_mem_pos = state.mem_pos;
     match sub_term.get_kind() {
         SymbolKind::CompareExpr(op) => {
@@ -642,10 +678,6 @@ fn compile_term<'a>(
                 .cur_mir_block
                 .command_stack
                 .push(Command::new(OpCode::Cmp, vec![op.into()]));
-            state
-                .cur_mir_block
-                .command_stack
-                .push(Command::new(OpCode::ReturnIfFalse, vec![]));
         }
         SymbolKind::OrExpr => {
             let args = sub_term.get_args();
@@ -657,10 +689,6 @@ fn compile_term<'a>(
                 OpCode::Cmp,
                 vec![Arg::CompareOp(ast::CompareOp::Or)],
             ));
-            state
-                .cur_mir_block
-                .command_stack
-                .push(Command::new(OpCode::ReturnIfFalse, vec![]));
         }
         SymbolKind::AndExpr => {
             let args = sub_term.get_args();
@@ -672,10 +700,6 @@ fn compile_term<'a>(
                 OpCode::Cmp,
                 vec![Arg::CompareOp(ast::CompareOp::And)],
             ));
-            state
-                .cur_mir_block
-                .command_stack
-                .push(Command::new(OpCode::ReturnIfFalse, vec![]));
         }
         SymbolKind::NotExpr => {
             panic!("NOT NOT!");
