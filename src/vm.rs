@@ -24,6 +24,12 @@ pub(crate) enum StackRefPos {
     TablePos(Token, usize),
 }
 
+impl From<u32> for StackRefPos {
+    fn from(mem_pos: u32) -> Self {
+        StackRefPos::MemPos(mem_pos as usize)
+    }
+}
+
 #[derive(Debug)]
 struct StackRef {
     pos: StackRefPos,
@@ -46,9 +52,9 @@ impl<'a> Stack {
         Ok(())
     }
 
-    fn pop(&'a mut self) -> Result<(), VmError> {
-        self.0.pop().ok_or(VmError::StackUnderflow)?;
-        Ok(())
+    fn pop(&'a mut self) -> Result<StackRef, VmError> {
+        let val = self.0.pop().ok_or(VmError::StackUnderflow)?;
+        Ok(val)
     }
 
     fn set_field_index(&mut self, index: usize) -> Result<(), VmError> {
@@ -488,10 +494,11 @@ impl<'a> VirtualMachine<'a> {
                         }
                         _ => return Err(VmError::InvalidValueType),
                     },
+                    // no stack_args
                     OpCode::PopStack => {
                         if args.is_empty() {
                             let mut s = self.stack.borrow_mut();
-                            s.pop()?;
+                            s.pop();
                             drop(s);
                         } else {
                             return Err(VmError::InvalidValueType);
@@ -556,13 +563,13 @@ impl<'a> VirtualMachine<'a> {
                         }
                     }
                     // Term procedures
-                    OpCode::Call => {
+                    OpCode::SkipToEOB => {
                         todo!();
                     }
-                    OpCode::Return => {
+                    OpCode::Label => {
                         todo!();
                     }
-                    OpCode::ReturnIfFalse => {
+                    OpCode::Exit => {
                         todo!();
                     }
                 };
@@ -679,9 +686,9 @@ impl Display for Command {
             OpCode::MemPosRef => "",
             OpCode::ArgToMemPos => "->",
             OpCode::StackOffset => "",
-            OpCode::Call => "-->",
-            OpCode::Return => "<--",
-            OpCode::ReturnIfFalse => "<--",
+            OpCode::SkipToEOB => "-->",
+            OpCode::Label => "=",
+            OpCode::Exit => "."
         };
         write!(f, "{:?}{}{:?}", self.op, arrow, self.args)
     }
@@ -704,6 +711,8 @@ pub enum Arg {
     Boolean(bool), // boolean value (used in cmp opcode)
     Term(usize), // term token value
     CompareOp(ast::CompareOp), // compare operation
+    Label(ShortString), // a label with its name (to jump to)
+    Exit // exit the vm
 }
 
 impl Arg {
@@ -772,11 +781,12 @@ pub enum OpCode {
     MemPosSet,
     MemPosRef,
     ArgToMemPos,
-    // call a term pr
-    Call,
-    // return from a term procedure
-    Return,        // unconditional return
-    ReturnIfFalse, // return if the top of the stack is false
+    // Skip to the end of the MIR block if the top of the stack
+    // is false
+    SkipToEOB,
+    // Debug Label for terms
+    Label,
+    Exit
 }
 
 // struct VecPayload(Vec<(ShortString, TypeValue)>);
