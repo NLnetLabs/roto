@@ -2,6 +2,7 @@ use crate::ast::LogicalExpr;
 use crate::ast::ShortString;
 use crate::compile::CompileError;
 use crate::symbols::GlobalSymbolTable;
+use crate::symbols::SymbolKind;
 use crate::traits::Token;
 use crate::types::builtin::Boolean;
 use crate::types::builtin::BuiltinTypeValue;
@@ -764,7 +765,7 @@ impl ast::AccessReceiver {
             .get(&scope)
             .map(|s| s.get_argument(&search_var))
         {
-            let (type_def, token) = arg.get_type_and_token()?;
+            let (_, type_def, token) = arg.get_kind_type_and_token()?;
             return Ok(symbols::Symbol::new(
                 search_var.as_str().into(),
                 symbols::SymbolKind::Argument,
@@ -779,7 +780,7 @@ impl ast::AccessReceiver {
         // - the name of a built-in constant
         // - variable name thas was defined in the `with` statement or
         //   earlier on in the same define section.
-        let (ty, to) = get_type_for_scoped_variable(
+        let (kind, ty, to) = get_type_for_scoped_variable(
             &[self.get_ident().clone()],
             symbols,
             scope,
@@ -787,7 +788,7 @@ impl ast::AccessReceiver {
 
         Ok(symbols::Symbol::new(
             search_var.as_str().into(),
-            symbols::SymbolKind::FieldAccess,
+            kind,
             ty,
             vec![],
             Some(to),
@@ -1292,7 +1293,7 @@ fn get_type_for_scoped_variable(
     fields: &[ast::Identifier],
     symbols: symbols::GlobalSymbolTable,
     scope: symbols::Scope,
-) -> Result<(TypeDef, Token), CompileError> {
+) -> Result<(SymbolKind, TypeDef, Token), CompileError> {
     // Implicit early return. Are there any actual fields? If not then we're
     // done, and there's nothing here.
     let first_field_name = &fields
@@ -1312,7 +1313,7 @@ fn get_type_for_scoped_variable(
                 .and_then(|gt| {
                     gt.get_variable(
                         &search_str.as_str().into()).map(
-                            |s| { println!("symbol: {:#?}", s); s.get_type_and_token() }
+                            |s| { println!("symbol: {:#?}", s); s.get_kind_type_and_token() }
                             .unwrap_or_else(
                             |_| panic!(
                                 "No token found for variable '{}' in module '{}'",
@@ -1327,7 +1328,7 @@ fn get_type_for_scoped_variable(
                         println!("first field {}", first_field_name);
                         let var_ty_to = symbols
                             .get(&scope).and_then(|gt|
-                            gt.get_symbol(first_field_name) ).map(|s| { println!("symbol: {:?}", s); s.get_type_and_token() })
+                            gt.get_symbol(first_field_name) ).map(|s| { println!("symbol: {:?}", s); s.get_kind_type_and_token() })
                             .ok_or_else(|| format!(
                                 "___ No variable named '{}' found in module '{}'",
                                 first_field_name, module
@@ -1335,7 +1336,7 @@ fn get_type_for_scoped_variable(
 
                         let var_ty_to = var_ty_to?;
                         let field_ty = var_ty_to
-                            .0.has_fields_chain(&fields[1..])
+                            .1.has_fields_chain(&fields[1..])
                             .map_err(|err| format!(
                                 "{} on field '{}' for variable '{}' found in module '{}'",
                                 err, fields[1], fields[0].ident, module
@@ -1343,7 +1344,7 @@ fn get_type_for_scoped_variable(
 
                         // return the type of the last field, but the token 
                         // of the var/constant/data-source
-                        Ok((field_ty.0, var_ty_to.1))
+                        Ok((var_ty_to.0, field_ty.0, var_ty_to.2))
                     },
                     // yes, it is:
                     Ok,

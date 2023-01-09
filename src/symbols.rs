@@ -31,11 +31,11 @@ pub(crate) struct Symbol {
 
 impl Symbol {
     // gets the type only from the `ty` field.
-    pub fn get_type_and_token(
+    pub fn get_kind_type_and_token(
         &self,
-    ) -> Result<(TypeDef, Token), CompileError> {
+    ) -> Result<(SymbolKind, TypeDef, Token), CompileError> {
         let token = self.get_token()?;
-        Ok((self.ty.clone(), token))
+        Ok((self.kind, self.ty.clone(), token))
     }
 
     pub fn get_builtin_type(
@@ -820,7 +820,7 @@ impl SymbolTable {
             .ok_or_else(|| format!("Symbol '{}' not found", name).into());
 
         src.map(|r| match r.get_kind() {
-            SymbolKind::Rib => r.get_type_and_token(),
+            SymbolKind::Rib => r.get_kind_type_and_token().map(|ktt| (ktt.1, ktt.2)),
             SymbolKind::Table => {
                 Ok((TypeDef::Table(Box::new(r.get_type())), r.get_token()?))
             }
