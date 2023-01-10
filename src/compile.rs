@@ -124,6 +124,7 @@ type DataSources<'a> = Vec<(ShortString, &'a Symbol)>;
 type Variables<'a> = Vec<(ShortString, &'a Symbol)>;
 type Terms<'a> = Vec<(ShortString, StackRefPos)>;
 type Term<'a> = &'a Symbol;
+type Action<'a> = &'a Symbol;
 
 #[derive(Debug)]
 struct CompilerState<'a> {
@@ -629,10 +630,155 @@ fn compile_apply(
 
     // Collect the terms that we need to compile.
     for match_action in match_actions {
-        let term = ();
+        let term_name = match_action[0].get_name();
+
+        // See if it was already compiled earlier on.
+        let term = state.computed_terms.iter().find(|t| t.0 == term_name);
+
+        match term {
+            // yes, it was, create a reference to the result on the stack
+            Some((.., stack_ref_pos)) => {
+                if let StackRefPos::MemPos(mem_pos) = stack_ref_pos {
+                    // This is shit. u64 (in 64bit architectures) gets cast to u32.
+                    state.cur_mir_block.command_stack.extend(vec![
+                        Command::new(
+                            OpCode::Label,
+                            vec![Arg::Label(term_name.clone())],
+                        ),
+                        Command::new(
+                            OpCode::PushStack,
+                            vec![Arg::MemPos(*mem_pos as u32)],
+                        ),
+                    ]);
+                };
+            }
+            // no, compile the term.
+            _ => {
+                let _module = state.cur_module;
+                let terms = _module.get_terms();
+                let term =
+                    terms.iter().find(|t| t.get_name() == term_name).unwrap();
+                state = compile_term(term, state)?;
+
+                // store the resulting value into a variable so that future references
+                // to this term can directly use the result instead of doing the whole
+                // computation again.
+                state
+                    .computed_terms
+                    .push((term_name.clone(), state.mem_pos.into()));
+            }
+        };
+
+        state.mem_pos += 1;
+
+        // move the current mir block to the end of all the collected MIR.
+        mir.push(state.cur_mir_block);
+
+        // continue with a fresh block
+        state.cur_mir_block = MirBlock {
+            command_stack: Vec::new(),
+        };
+
+        if let SymbolKind::MatchAction(ma) = match_action[0].get_kind() {
+            match ma {
+                MatchActionType::MatchAction => {
+                    state.cur_mir_block.command_stack.extend([
+                        Command::new(
+                            OpCode::Label,
+                            vec![Arg::Label(
+                                format!(
+                                    "{}-{:?}",
+                                    term_name.clone(),
+                                    match_action[0].get_kind()
+                                )
+                                .as_str()
+                                .into(),
+                            )],
+                        ),
+                        Command::new(OpCode::CondFalseSkipToEOB, vec![]),
+                        Command::new(OpCode::SetRxField, vec![]),
+                    ]);
+                }
+                MatchActionType::NegateMatchAction => {
+                    state.cur_mir_block.command_stack.extend(vec![
+                        Command::new(
+                            OpCode::Label,
+                            vec![Arg::Label(
+                                format!(
+                                    "{}-{:?}",
+                                    term_name,
+                                    match_action[0].get_kind()
+                                )
+                                .as_str()
+                                .into(),
+                            )],
+                        ),
+                        Command::new(OpCode::CondTrueSkipToEOB, vec![]),
+                        Command::new(OpCode::SetRxField, vec![]),
+                    ]);
+                }
+            }
+        } else {
+            return Err(CompileError::new("invalid match action".into()));
+        };
+
+        // collect all actions included in this match_action and compile them
+        for action in match_action[0].get_args() {
+            let _module = state.cur_module;
+            let action_name = action.get_name();
+            let actions = _module.get_actions();
+            let action = actions
+                .iter()
+                .find(|t| t.get_name() == action_name)
+                .unwrap();
+
+            state = compile_action(action, state)?;
+        }
+
+        // move the current mir block to the end of all the collected MIR.
+        mir.push(state.cur_mir_block);
+
+        // continue with a fresh block
+        state.cur_mir_block = MirBlock {
+            command_stack: Vec::new(),
+        };
     }
 
     Ok((mir, state))
+}
+
+fn compile_action<'a>(
+    action: Action<'a>,
+    mut state: CompilerState<'a>,
+) -> Result<CompilerState<'a>, CompileError> {
+    println!("action {:#?}", action);
+
+    for sub_action in action.get_args() {
+        state = compile_sub_action(sub_action, state)?;
+    }
+
+    Ok(state)
+}
+
+fn compile_sub_action<'a>(
+    sub_action: Action<'a>,
+    mut state: CompilerState<'a>,
+) -> Result<CompilerState<'a>, CompileError> {
+    println!(
+        "sub-action {:?} {:?}",
+        sub_action.get_name(),
+        sub_action.get_kind()
+    );
+
+    match sub_action.get_kind() {
+        SymbolKind::Constant | SymbolKind::Variable => {}
+        _ => return Err(CompileError::new(
+            "invalid sub action. Does not resolve to variable or constant."
+                .into(),
+        )),
+    }
+
+    Ok(state)
 }
 
 fn compile_term<'a>(

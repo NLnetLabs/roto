@@ -578,6 +578,14 @@ impl<'a> VirtualMachine<'a> {
                     OpCode::Exit => {
                         todo!();
                     }
+                    // stack args: [field, value]
+                    OpCode::SetRxField => {
+                        todo!();
+                    }
+                    // stack args: [field, value]
+                    OpCode::SetTxField => {
+                        todo!();
+                    }
                 };
             }
             println!("\n\n(end) stack: {:?}", self.stack);
@@ -695,7 +703,9 @@ impl Display for Command {
             OpCode::CondFalseSkipToEOB => "-->",
             OpCode::CondTrueSkipToEOB => "-->",
             OpCode::Label => "=",
-            OpCode::Exit => "."
+            OpCode::Exit => ".",
+            OpCode::SetRxField => "->",
+            OpCode::SetTxField => "->"
         };
         write!(f, "{:?}{}{:?}", self.op, arrow, self.args)
     }
@@ -796,6 +806,8 @@ pub enum OpCode {
     CondTrueSkipToEOB,
     // Debug Label for terms
     Label,
+    SetRxField,
+    SetTxField,
     Exit
 }
 
