@@ -671,7 +671,7 @@ fn compile_term<'a>(
             state
                 .cur_mir_block
                 .command_stack
-                .push(Command::new(OpCode::SkipToEOB, vec![]));
+                .push(Command::new(OpCode::CondFalseSkipToEOB, vec![]));
         }
     }
 
