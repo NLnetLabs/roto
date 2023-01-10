@@ -562,13 +562,19 @@ impl<'a> VirtualMachine<'a> {
                             return Err(VmError::InvalidValueType);
                         }
                     }
-                    // Term procedures
-                    OpCode::SkipToEOB => {
-                        todo!();
-                    }
                     OpCode::Label => {
                         todo!();
                     }
+                    // Term procedures
+                    // stack args ignored
+                    OpCode::CondFalseSkipToEOB => {
+                        todo!();
+                    }
+                    // stack args ignored
+                    OpCode::CondTrueSkipToEOB => {
+                        todo!();
+                    }
+                    // stack args: [exit value]
                     OpCode::Exit => {
                         todo!();
                     }
@@ -686,7 +692,8 @@ impl Display for Command {
             OpCode::MemPosRef => "",
             OpCode::ArgToMemPos => "->",
             OpCode::StackOffset => "",
-            OpCode::SkipToEOB => "-->",
+            OpCode::CondFalseSkipToEOB => "-->",
+            OpCode::CondTrueSkipToEOB => "-->",
             OpCode::Label => "=",
             OpCode::Exit => "."
         };
@@ -782,8 +789,11 @@ pub enum OpCode {
     MemPosRef,
     ArgToMemPos,
     // Skip to the end of the MIR block if the top of the stack
-    // is false
-    SkipToEOB,
+    // holds a reference to a boolean value true
+    CondFalseSkipToEOB,
+    // Skip to the end of the MIR block if the top of the stack
+    // holds a redference to a boolean value false.
+    CondTrueSkipToEOB,
     // Debug Label for terms
     Label,
     Exit
