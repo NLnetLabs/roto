@@ -632,7 +632,11 @@ impl ApplyScope {
             Self {
                 scope,
                 operator,
-                negate: negate.is_none(),
+                negate: if let Some(negate) = negate {
+                    negate.is_none()
+                } else {
+                    false
+                },
                 actions: action_exprs,
                 filter_ident,
             },

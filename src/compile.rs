@@ -12,7 +12,7 @@ use crate::{
     },
     traits::Token,
     types::typedef::TypeDef,
-    vm::{Arg, Command, ExtDataSource, OpCode, VariablesMap, StackRefPos},
+    vm::{Arg, Command, ExtDataSource, OpCode, StackRefPos, VariablesMap},
 };
 
 //============ The Compiler (Filter creation time) ==========================
@@ -297,7 +297,9 @@ fn compile_module(_module: &SymbolTable) -> Result<RotoPack, CompileError> {
 
     state.mem_pos += 1;
 
-    (mir, state) = compile_terms(mir, state)?;
+    // (mir, state) = compile_terms(mir, state)?;
+
+    (mir, state) = compile_apply(mir, state)?;
 
     for m in &mir {
         println!("\nMIR_block: \n{}", m);
@@ -596,45 +598,14 @@ fn compile_terms(
 
     // compile all the terms.
     while let Some(term) = &mut terms_iter.next() {
-        let sub_terms = term.get_args();
-
-        let mut sub_terms = sub_terms.iter().peekable();
-        println!("\nsub terms {}", term.get_name());
-        println!(
-            "{:?}",
-            sub_terms.clone().for_each(|lv| {
-                println!("{:3?} {:3?}", lv.get_name(), lv.get_kind());
-            })
-        );
-
-        // Set a Label so that each term block is identifieble for humans.
-        state.cur_mir_block.command_stack.push(Command::new(
-            OpCode::Label,
-            vec![Arg::Label(term.get_name())],
-        ));
-
-        while let Some(arg) = &mut sub_terms.next() {
-            print!("term {:?}", arg);
-
-            state = compile_term(arg, state)?;
-
-            assert_ne!(state.cur_mir_block.command_stack.len(), 0);
-
-            // Since sub-terms are ANDed we can create an early return after
-            // each sub-term that isn't last.
-            if sub_terms.peek().is_some() {
-                state
-                    .cur_mir_block
-                    .command_stack
-                    .push(Command::new(OpCode::SkipToEOB, vec![]));
-            }
-
-        }
+        state = compile_term(term, state)?;
 
         // store the resulting value into a variable so that future references
         // to this term can directly use the result instead of doing the whole
         // computation again.
-        state.computed_terms.push((term.get_name(), state.mem_pos.into()));
+        state
+            .computed_terms
+            .push((term.get_name(), state.mem_pos.into()));
 
         state.mem_pos += 1;
 
@@ -650,7 +621,64 @@ fn compile_terms(
     Ok((mir, state))
 }
 
+fn compile_apply(
+    mut mir: Vec<MirBlock>,
+    mut state: CompilerState<'_>,
+) -> Result<(Vec<MirBlock>, CompilerState), CompileError> {
+    let match_actions = state.cur_module.get_match_actions();
+
+    // Collect the terms that we need to compile.
+    for match_action in match_actions {
+        let term = ();
+    }
+
+    Ok((mir, state))
+}
+
 fn compile_term<'a>(
+    term: Term<'a>,
+    mut state: CompilerState<'a>,
+) -> Result<CompilerState<'a>, CompileError> {
+    println!("term {:?} {:?}", term.get_name(), term.get_kind());
+
+    // Set a Label so that each term block is identifieble for humans.
+    state.cur_mir_block.command_stack.push(Command::new(
+        OpCode::Label,
+        vec![Arg::Label(term.get_name())],
+    ));
+
+    let sub_terms = term.get_args();
+    let mut sub_terms = sub_terms.iter().peekable();
+
+    println!("\nsub terms {}", term.get_name());
+    println!(
+        "{:?}",
+        sub_terms.clone().for_each(|lv| {
+            println!("{:3?} {:3?}", lv.get_name(), lv.get_kind());
+        })
+    );
+
+    while let Some(arg) = &mut sub_terms.next() {
+        print!("term {:?}", arg);
+
+        state = compile_sub_term(arg, state)?;
+
+        assert_ne!(state.cur_mir_block.command_stack.len(), 0);
+
+        // Since sub-terms are ANDed we can create an early return after
+        // each sub-term that isn't last.
+        if sub_terms.peek().is_some() {
+            state
+                .cur_mir_block
+                .command_stack
+                .push(Command::new(OpCode::SkipToEOB, vec![]));
+        }
+    }
+
+    Ok(state)
+}
+
+fn compile_sub_term<'a>(
     sub_term: Term<'a>,
     mut state: CompilerState<'a>,
 ) -> Result<CompilerState<'a>, CompileError> {
@@ -660,9 +688,14 @@ fn compile_term<'a>(
         sub_term.get_kind()
     );
 
-    if state.computed_terms.iter().any(|st| st.0 == sub_term.get_name()) {
+    if state
+        .computed_terms
+        .iter()
+        .any(|st| st.0 == sub_term.get_name())
+    {
         state.cur_mir_block.command_stack.push(Command::new(
-            OpCode::Label, vec![Arg::Label(sub_term.get_name())]
+            OpCode::Label,
+            vec![Arg::Label(sub_term.get_name())],
         ));
     };
 
@@ -681,9 +714,9 @@ fn compile_term<'a>(
         }
         SymbolKind::OrExpr => {
             let args = sub_term.get_args();
-            state = compile_term(&args[0], state)?;
+            state = compile_sub_term(&args[0], state)?;
             state.mem_pos += 1;
-            state = compile_term(&args[1], state)?;
+            state = compile_sub_term(&args[1], state)?;
 
             state.cur_mir_block.command_stack.push(Command::new(
                 OpCode::Cmp,
@@ -692,9 +725,9 @@ fn compile_term<'a>(
         }
         SymbolKind::AndExpr => {
             let args = sub_term.get_args();
-            state = compile_term(&args[0], state)?;
+            state = compile_sub_term(&args[0], state)?;
             state.mem_pos += 1;
-            state = compile_term(&args[1], state)?;
+            state = compile_sub_term(&args[1], state)?;
 
             state.cur_mir_block.command_stack.push(Command::new(
                 OpCode::Cmp,
