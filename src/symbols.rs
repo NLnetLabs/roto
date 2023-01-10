@@ -618,51 +618,12 @@ impl SymbolTable {
         Ok(())
     }
 
-    pub(crate) fn add_action(
-        &mut self,
-        key: ShortString,
-        name: Option<ShortString>,
-        kind: SymbolKind,
-        ty: TypeDef,
-        args: Vec<Symbol>,
-        value: TypeValue,
-    ) -> Result<(), CompileError> {
-        let name = if let Some(name) = name {
-            name
-        } else {
-            key.clone()
-        };
-
-        if self.actions.contains_key(&name) {
-            return Err(format!(
-                "Action '{}' already defined in scope {}",
-                name, self.scope
-            )
-            .into());
-        }
-
+    pub(crate) fn add_action(&mut self, key: ShortString, mut action: Symbol) -> Result<(), CompileError> {
         let token_int = self.actions.len() as u8;
         let token = Some(Token::Action(token_int));
 
-        let args = Symbol {
-            name,
-            kind,
-            ty: ty.clone(),
-            args,
-            value: TypeValue::None,
-            token: None,
-        };
-
-        let s = Symbol {
-            name: key.clone(),
-            kind: SymbolKind::Action,
-            ty,
-            args: vec![args],
-            value,
-            token,
-        };
-
-        self.actions.insert(key, s);
+        action.token = token;
+        self.actions.insert(key, action);
 
         Ok(())
     }
@@ -682,7 +643,7 @@ impl SymbolTable {
         let name = if let Some(name) = name {
             name
         } else {
-            key.clone()
+            key
         };
 
         let key = MatchActionKey((name, kind.try_into()?));
@@ -830,6 +791,10 @@ impl SymbolTable {
             .get(name)
             .ok_or_else(|| format!("Symbol '{}' not found", name).into())
             .map(|action| (action.ty.clone(), action.token.clone().unwrap()))
+    }
+
+    pub(crate) fn get_actions(&self) -> Vec<&Symbol> {
+        self.actions.values().collect::<Vec<_>>()
     }
 
     pub(crate) fn get_match_action(

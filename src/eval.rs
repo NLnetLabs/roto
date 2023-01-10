@@ -463,7 +463,7 @@ impl ast::Action {
             format!("no symbols found for module {}", scope)
         })?;
 
-        let mut actions_vec = vec![];
+        let mut sub_actions_vec = vec![];
 
         for call_expr in &self.body.expressions {
             // The incoming payload variable is the only variable that can be
@@ -491,19 +491,25 @@ impl ast::Action {
             let s =
                 call_expr.eval("".into(), symbols.clone(), scope.clone())?;
 
-            actions_vec.push(s);
+            sub_actions_vec.push(s);
         }
 
         drop(_symbols);
 
-        for action in actions_vec {
-            add_action(
-                self.ident.ident.clone(),
-                action,
-                symbols.clone(),
-                &scope,
-            )?
-        }
+        let action = symbols::Symbol::new(
+            self.ident.ident.clone(),
+            symbols::SymbolKind::Action,
+            TypeDef::None,
+            sub_actions_vec,
+            None
+        );
+
+        add_action(
+            self.ident.ident.clone(),
+            action,
+            symbols.clone(),
+            &scope,
+        )?;
 
         Ok(())
     }
@@ -1554,14 +1560,9 @@ fn add_action(
                 .get_mut(scope)
                 .ok_or(format!("No module named '{}' found.", module))?;
 
-            module.add_action(
-                name,
-                Some(action.get_name()),
-                action.get_kind(),
-                action.get_type(),
-                action.get_args_owned(),
-                TypeValue::None,
-            )
+            let action = action.set_name(name.clone());
+ 
+            module.add_action(name, action)
         }
         symbols::Scope::Global => Err(format!(
             "Can't create an action in the global scope (NEVER). Action '{}'",
