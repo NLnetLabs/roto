@@ -283,6 +283,8 @@ fn main() {
                         return accept; 
                     };
                     use backup-path;
+                    filter match on-my-terms matching { set-best; return accept; };
+                    use backup-path;
                     filter match on-my-terms not matching { set-rov-invalid-asn-community; return reject; };
                 }
             }

@@ -9,10 +9,11 @@ use std::{
 
 use crate::{
     ast::{CompareOp, ShortString},
+    compile::CompileError,
     traits::{RotoFilter, Token},
     types::{
         builtin::BuiltinTypeValue, typedef::TypeDef, typevalue::TypeValue,
-    }, compile::CompileError,
+    },
 };
 
 //------------ Symbols ------------------------------------------------------
@@ -38,9 +39,7 @@ impl Symbol {
         Ok((self.kind, self.ty.clone(), token))
     }
 
-    pub fn get_builtin_type(
-        &self,
-    ) -> Result<TypeDef, CompileError> {
+    pub fn get_builtin_type(&self) -> Result<TypeDef, CompileError> {
         if !matches!(
             self.ty,
             TypeDef::Rib(_)
@@ -338,13 +337,34 @@ pub enum SymbolKind {
     OrExpr,
     NotExpr,
     // apply symbols
-    MatchAction,
-    NegateMatchAction,
+    MatchAction(MatchActionType),
     Action,
     Term,
     // A symbol that has been consumed by the compiler
     Empty,
 }
+
+#[derive(Debug, Hash, Copy, Clone, Eq, PartialEq)]
+pub enum MatchActionType {
+    MatchAction,
+    NegateMatchAction
+}
+
+impl TryFrom<SymbolKind> for MatchActionType {
+    type Error = CompileError;
+
+    fn try_from(kind: SymbolKind) ->  Result<Self, CompileError> {
+       if let SymbolKind::MatchAction(ma) = kind {
+            Ok(ma)
+       } else {
+           Err(CompileError::new("Invalid Match Action Type".into()))
+       }
+
+    }
+}
+
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
+pub struct MatchActionKey((ShortString, MatchActionType));
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Scope {
@@ -381,7 +401,7 @@ pub struct SymbolTable {
     actions: HashMap<ShortString, Symbol>,
     // All the `filter` clauses in the `apply` section, the tie actions to
     // terms.
-    match_actions: HashMap<ShortString, Vec<Symbol>>,
+    match_actions: HashMap<MatchActionKey, Vec<Symbol>>,
 }
 
 // The global symbol table.
@@ -665,17 +685,19 @@ impl SymbolTable {
             key.clone()
         };
 
-        if self.match_actions.contains_key(&name) {
+        let key = MatchActionKey((name, kind.try_into()?));
+
+        if self.match_actions.contains_key(&key) {
             return Err(format!(
-                "Match Action '{}' already defined in scope {}",
-                name, self.scope
+                "Match Action '{}' with type {:?} already defined in scope {}",
+                key.0.0.clone(), key.0.1, self.scope
             )
             .into());
         }
 
         if let Some(match_action) = self.match_actions.get_mut(&key) {
             match_action.push(Symbol {
-                name,
+                name: key.0.0,
                 kind,
                 ty,
                 args,
@@ -684,9 +706,9 @@ impl SymbolTable {
             });
         } else {
             self.match_actions.insert(
-                key,
+                key.clone(),
                 vec![Symbol {
-                    name,
+                    name: key.0.0,
                     kind,
                     ty,
                     args,
@@ -723,9 +745,11 @@ impl SymbolTable {
             return Some(symbol);
         }
 
-        if let Some(symbol) = self.match_actions.get(name) {
-            return Some(&symbol[0]);
-        }
+        // match_actions can't be retrieved with `get`: there could be multiple matching
+
+        // if let Some(symbol) = self.match_actions.get(&MatchActionKey((*name, kind.try_into()?))) {
+        //     return Some(&symbol[0]);
+        // }
 
         None
     }
@@ -794,9 +818,7 @@ impl SymbolTable {
             .map(|term| (term.ty.clone(), term.token.clone().unwrap()))
     }
 
-    pub(crate) fn get_terms(
-        &self,
-    ) -> Vec<&Symbol> {
+    pub(crate) fn get_terms(&self) -> Vec<&Symbol> {
         self.terms.values().collect::<Vec<_>>()
     }
 
@@ -810,6 +832,25 @@ impl SymbolTable {
             .map(|action| (action.ty.clone(), action.token.clone().unwrap()))
     }
 
+    pub(crate) fn get_match_action(
+        &self,
+        name: &ShortString,
+        ty: MatchActionType
+    ) -> Result<Vec<(TypeDef, Token)>, CompileError> {
+        self.match_actions
+            .get(&MatchActionKey((name.clone(), ty)))
+            .ok_or_else(|| format!("Symbol '{}' not found", name).into())
+            .map(|mas| {
+                mas.iter()
+                    .map(|ma| (ma.ty.clone(), ma.token.clone().unwrap()))
+                    .collect()
+            })
+    }
+
+    pub(crate) fn get_match_actions(&self) -> Vec<&Vec<Symbol>> {
+        self.match_actions.values().collect::<Vec<_>>()
+    }
+
     pub(crate) fn get_data_source(
         &self,
         name: &ShortString,
@@ -820,13 +861,16 @@ impl SymbolTable {
             .ok_or_else(|| format!("Symbol '{}' not found", name).into());
 
         src.map(|r| match r.get_kind() {
-            SymbolKind::Rib => r.get_kind_type_and_token().map(|ktt| (ktt.1, ktt.2)),
+            SymbolKind::Rib => {
+                r.get_kind_type_and_token().map(|ktt| (ktt.1, ktt.2))
+            }
             SymbolKind::Table => {
                 Ok((TypeDef::Table(Box::new(r.get_type())), r.get_token()?))
             }
-            _ => {
-                Err(CompileError::new(format!("No data source named '{}' found.", name)))
-            }
+            _ => Err(CompileError::new(format!(
+                "No data source named '{}' found.",
+                name
+            ))),
         })?
     }
 
@@ -857,7 +901,8 @@ impl SymbolTable {
             mut data_sources,
         } = self._partition_deps_graph(deps_vec).map_err(|e| {
             CompileError::new(
-                "can't create dependencies graph for terms".into())
+                "can't create dependencies graph for terms".into(),
+            )
         })?;
 
         // Second, go over all the variables that we gathered in the last
@@ -873,7 +918,11 @@ impl SymbolTable {
             variables: vars_vars,
             arguments: vars_args,
             data_sources: vars_data_sources,
-        } = self._partition_deps_graph(vars_deps_vec).map_err(|e| CompileError::new("can't create dependencies graph for variables".into()))?;
+        } = self._partition_deps_graph(vars_deps_vec).map_err(|e| {
+            CompileError::new(
+                "can't create dependencies graph for variables".into(),
+            )
+        })?;
 
         variables.extend(vars_vars);
         arguments.extend(vars_args);

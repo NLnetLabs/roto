@@ -2,6 +2,7 @@ use crate::ast::LogicalExpr;
 use crate::ast::ShortString;
 use crate::compile::CompileError;
 use crate::symbols::GlobalSymbolTable;
+use crate::symbols::MatchActionType;
 use crate::symbols::SymbolKind;
 use crate::traits::Token;
 use crate::types::builtin::Boolean;
@@ -572,9 +573,9 @@ impl ast::ApplyScope {
         let s = symbols::Symbol::new(
             term.get_name(),
             if self.negate {
-                symbols::SymbolKind::NegateMatchAction
+                symbols::SymbolKind::MatchAction(MatchActionType::MatchAction)
             } else {
-                symbols::SymbolKind::MatchAction
+                symbols::SymbolKind::MatchAction(MatchActionType::NegateMatchAction)
             },
             TypeDef::AcceptReject(ast::AcceptReject::Accept),
             args_vec,
