@@ -8,7 +8,8 @@ use nom::error::VerboseError;
 use crate::{
     ast::{self, ShortString, SyntaxTree},
     symbols::{
-        DepsGraph, GlobalSymbolTable, Scope, Symbol, SymbolKind, SymbolTable,
+        DepsGraph, GlobalSymbolTable, MatchActionType, Scope, Symbol,
+        SymbolKind, SymbolTable,
     },
     traits::Token,
     types::typedef::TypeDef,
@@ -793,6 +794,18 @@ fn compile_term<'a>(
         vec![Arg::Label(term.get_name())],
     ));
 
+    if state
+        .computed_terms
+        .iter()
+        .any(|st| st.0 == term.get_name())
+    {
+        state.cur_mir_block.command_stack.push(Command::new(
+            OpCode::Label,
+            vec![Arg::Label(term.get_name())],
+        ));
+        return Ok(state);
+    }
+
     let sub_terms = term.get_args();
     let mut sub_terms = sub_terms.iter().peekable();
 
@@ -833,17 +846,6 @@ fn compile_sub_term<'a>(
         sub_term.get_name(),
         sub_term.get_kind()
     );
-
-    if state
-        .computed_terms
-        .iter()
-        .any(|st| st.0 == sub_term.get_name())
-    {
-        state.cur_mir_block.command_stack.push(Command::new(
-            OpCode::Label,
-            vec![Arg::Label(sub_term.get_name())],
-        ));
-    };
 
     let saved_mem_pos = state.mem_pos;
     match sub_term.get_kind() {
