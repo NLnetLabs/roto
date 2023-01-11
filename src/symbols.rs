@@ -31,12 +31,14 @@ pub(crate) struct Symbol {
 }
 
 impl Symbol {
-    // gets the type only from the `ty` field.
-    pub fn get_kind_type_and_token(
+    // gets (a clone of) kind, type, token and a optional ref to the 
+    // TypeValue. The last field will only contain a typevalue if it's a
+    // Constant.
+    pub fn get_props(
         &self,
-    ) -> Result<(SymbolKind, TypeDef, Token), CompileError> {
+    ) -> Result<(SymbolKind, TypeDef, Token, Option<TypeValue>), CompileError> {
         let token = self.get_token()?;
-        Ok((self.kind, self.ty.clone(), token))
+        Ok((self.kind, self.ty.clone(), token, self.get_value().as_cloned_builtin().ok()))
     }
 
     pub fn get_builtin_type(&self) -> Result<TypeDef, CompileError> {
@@ -59,6 +61,11 @@ impl Symbol {
 
     pub fn get_kind_and_type(&self) -> (SymbolKind, TypeDef) {
         (self.kind, self.ty.clone())
+    }
+
+    pub fn get_kind_type_and_token(&self) -> Result<(SymbolKind, TypeDef, Token), CompileError> {
+        let token = self.get_token()?;
+        Ok((self.kind, self.ty.clone(), token))
     }
 
     pub fn set_kind(mut self, kind: SymbolKind) -> Symbol {
@@ -107,8 +114,21 @@ impl Symbol {
         self
     }
 
+    pub fn has_value(&self) -> bool {
+        self.value != TypeValue::None
+    }
+
     pub fn get_value(&self) -> &TypeValue {
         &self.value
+    }
+
+    pub fn get_value_owned(self) -> TypeValue {
+        self.value
+    }
+
+    pub fn set_value(mut self, value: TypeValue) -> Self {
+        self.value = value;
+        self
     }
 
     pub fn get_args_owned(self) -> Vec<Symbol> {
@@ -473,7 +493,7 @@ impl SymbolTable {
         }
     }
 
-    pub(crate) fn move_symbol_into(
+    pub(crate) fn move_var_const_into(
         &mut self,
         key: ShortString,
         mut symbol: Symbol,
@@ -486,7 +506,11 @@ impl SymbolTable {
             .into());
         }
 
-        symbol = symbol.set_token(Token::Variable(self.variables.len()));
+        symbol = match symbol.get_kind() {
+            SymbolKind::Variable => symbol.set_token(Token::Variable(self.variables.len())),
+            SymbolKind::Constant => symbol.set_token(Token::Constant(Some(self.variables.len()))),
+            _ => { return Err(CompileError::new("Invalid Symbol to store as Variable/Constant".into())); }
+        };
         self.variables.insert(key, symbol);
         Ok(())
     }

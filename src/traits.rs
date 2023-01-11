@@ -20,7 +20,9 @@ pub enum Token {
     Term(u8),
     Action(u8),
     MatchAction(u8),
-    Constant,
+    // None as data indicates a constant that wasn't stored (yet) in the
+    // symbol table.
+    Constant(Option<usize>),
     BuiltinType(u8),
 }
 

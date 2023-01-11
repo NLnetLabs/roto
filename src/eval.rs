@@ -19,6 +19,8 @@ use super::symbols;
 use super::types::typedef::TypeDef;
 use super::types::typevalue::TypeValue;
 
+use std::borrow::Borrow;
+use std::cell::Ref;
 use std::convert::From;
 
 impl<'a> ast::SyntaxTree {
@@ -394,12 +396,13 @@ impl ast::Define {
                 scope.clone(),
             )?;
 
-            // lhs of the assignemnt represents the name of the variable or
+            // lhs of the assignment represents the name of the variable or
             // constant.
             println!(
                 "symbol assigned with key {} {:?}",
                 assignment.0.ident, s
             );
+
             declare_variable_from_symbol(
                 Some(assignment.0.ident.clone()),
                 s,
@@ -465,11 +468,11 @@ impl ast::Action {
 
         let mut sub_actions_vec = vec![];
 
-        for call_expr in &self.body.expressions {
+        for call_expr in self.body.expressions.iter().enumerate() {
             // The incoming payload variable is the only variable that can be
             // used in the 'action' section. The incoming payload variable has
             // a SymolKind::RxType.
-            let payload_var_name = call_expr.get_receiver().clone().ident;
+            let payload_var_name = call_expr.1.get_receiver().clone().ident;
 
             let s = module_symbols
                 .get_symbol(&payload_var_name.ident)
@@ -488,8 +491,13 @@ impl ast::Action {
                 .into());
             };
 
-            let s =
-                call_expr.eval("".into(), symbols.clone(), scope.clone())?;
+            println!("action symbol creating: {:?}", call_expr.1);
+
+            let s = call_expr.1.eval(
+                format!("sub-action-{}", call_expr.0).as_str().into(),
+                symbols.clone(),
+                scope.clone(),
+            )?;
 
             sub_actions_vec.push(s);
         }
@@ -501,7 +509,7 @@ impl ast::Action {
             symbols::SymbolKind::Action,
             TypeDef::None,
             sub_actions_vec,
-            None
+            None,
         );
 
         add_action(
@@ -581,7 +589,9 @@ impl ast::ApplyScope {
             if self.negate {
                 symbols::SymbolKind::MatchAction(MatchActionType::MatchAction)
             } else {
-                symbols::SymbolKind::MatchAction(MatchActionType::NegateMatchAction)
+                symbols::SymbolKind::MatchAction(
+                    MatchActionType::NegateMatchAction,
+                )
             },
             TypeDef::AcceptReject(ast::AcceptReject::Accept),
             args_vec,
@@ -613,7 +623,7 @@ impl ast::ComputeExpr {
             self.get_receiver().eval(symbols.clone(), scope.clone())?;
         // The rest of the method calls or access receivers are turned into
         // children of the first one.
-        
+
         let token = symbol.get_token().unwrap();
         let mut s = &mut symbol;
 
@@ -624,9 +634,9 @@ impl ast::ComputeExpr {
             let ty = match token {
                 Token::Table(_) => TypeDef::Table(Box::new(s.get_type())),
                 Token::Rib(_) => TypeDef::Rib(Box::new(s.get_type())),
-                _ => s.get_type()
+                _ => s.get_type(),
             };
-            
+
             let child_s = match a_e {
                 ast::AccessExpr::MethodComputeExpr(method_call) => {
                     method_call.eval(
@@ -787,19 +797,30 @@ impl ast::AccessReceiver {
         // - the name of a built-in constant
         // - variable name thas was defined in the `with` statement or
         //   earlier on in the same define section.
-        let (kind, ty, to) = get_type_for_scoped_variable(
-            &[self.get_ident().clone()],
-            symbols,
-            scope,
-        )?;
-
-        Ok(symbols::Symbol::new(
-            search_var.as_str().into(),
-            kind,
-            ty,
-            vec![],
-            Some(to),
-        ))
+        let ident = &[self.get_ident().clone()];
+        let (kind, ty, to, val) =
+            get_props_for_scoped_variable(ident, symbols, scope)?;
+        // Additionally check if this is a Variable or a Constant.
+        // Constants need their values to be preserved.
+        match val {
+            // It's a Constant, clone the (builtin-typed) value into the the
+            // symbol.
+            Some(val) => Ok(symbols::Symbol::new_with_value(
+                search_var.as_str().into(),
+                kind,
+                val,
+                vec![],
+                to,
+            )),
+            // It's a Variable, create a symbol with an empty value.
+            None => Ok(symbols::Symbol::new(
+                search_var.as_str().into(),
+                kind,
+                ty,
+                vec![],
+                Some(to),
+            )),
+        }
     }
 }
 
@@ -848,7 +869,7 @@ impl ast::ValueExpr {
                         StringLiteral::new(str_lit.into()),
                     )),
                     vec![],
-                    Token::Constant,
+                    Token::Constant(None),
                 ))
             }
             // Integers are special, we are keeping them as is, so that the
@@ -868,7 +889,7 @@ impl ast::ValueExpr {
                         IntegerLiteral::new(int_lit.into()),
                     )),
                     vec![],
-                    Token::Constant,
+                    Token::Constant(None),
                 ))
             }
             ast::ValueExpr::HexLiteral(hex_lit) => {
@@ -879,7 +900,7 @@ impl ast::ValueExpr {
                         HexLiteral::new(hex_lit.into()),
                     )),
                     vec![],
-                    Token::Constant,
+                    Token::Constant(None),
                 ))
             }
             ast::ValueExpr::PrefixLengthLiteral(prefix_len_lit) => {
@@ -890,7 +911,7 @@ impl ast::ValueExpr {
                         PrefixLength::new(prefix_len_lit.into()),
                     )),
                     vec![],
-                    Token::Constant,
+                    Token::Constant(None),
                 ))
             }
             ast::ValueExpr::AsnLiteral(asn_lit) => {
@@ -900,7 +921,7 @@ impl ast::ValueExpr {
                     symbols::SymbolKind::Constant,
                     TypeValue::Builtin(BuiltinTypeValue::Asn(asn_lit.into())),
                     vec![],
-                    Token::Constant,
+                    Token::Constant(None),
                 ))
             }
             ast::ValueExpr::BooleanLit(bool_lit) => {
@@ -912,7 +933,7 @@ impl ast::ValueExpr {
                         bool_lit.into(),
                     )),
                     vec![],
-                    Token::Constant,
+                    Token::Constant(None),
                 ))
             }
             _ => {
@@ -943,7 +964,6 @@ impl ast::FieldAccessExpr {
         &self,
         field_type: TypeDef,
     ) -> Result<symbols::Symbol, CompileError> {
-        
         if let Ok((ty, to)) = field_type.has_fields_chain(&self.field_names) {
             println!("::: field_type {:?}", field_type);
             println!("::: self {:?}", self);
@@ -1020,7 +1040,7 @@ impl ast::BooleanExpr {
                         Some(bool_lit.0),
                     ))),
                     vec![],
-                    Token::Constant,
+                    Token::Constant(None),
                 ))
             }
             ast::BooleanExpr::CompareExpr(compare_expr) => {
@@ -1296,11 +1316,15 @@ fn check_type_identifier(
 // In the last case the whole form may live in the module scope as an
 // anonymous type (deducted from user-defined record-types), but in the case
 // of a primitive type they live in the user-defined record-type itself.
-fn get_type_for_scoped_variable(
+//
+// The last value in the return tuple is a builtin-typed value in case it's
+// present in the symbol, this should only be the case with a Constant,
+// containing a literral value.
+fn get_props_for_scoped_variable(
     fields: &[ast::Identifier],
-    symbols: symbols::GlobalSymbolTable,
+    symbols: GlobalSymbolTable,
     scope: symbols::Scope,
-) -> Result<(SymbolKind, TypeDef, Token), CompileError> {
+) -> Result<(SymbolKind, TypeDef, Token, Option<TypeValue>), CompileError> {
     // Implicit early return. Are there any actual fields? If not then we're
     // done, and there's nothing here.
     let first_field_name = &fields
@@ -1320,7 +1344,7 @@ fn get_type_for_scoped_variable(
                 .and_then(|gt| {
                     gt.get_variable(
                         &search_str.as_str().into()).map(
-                            |s| { println!("symbol: {:#?}", s); s.get_kind_type_and_token() }
+                            |s| { println!("symbol: {:#?}", s); s.get_props() }
                             .unwrap_or_else(
                             |_| panic!(
                                 "No token found for variable '{}' in module '{}'",
@@ -1335,7 +1359,7 @@ fn get_type_for_scoped_variable(
                         println!("first field {}", first_field_name);
                         let var_ty_to = symbols
                             .get(&scope).and_then(|gt|
-                            gt.get_symbol(first_field_name) ).map(|s| { println!("symbol: {:?}", s); s.get_kind_type_and_token() })
+                            gt.get_symbol(first_field_name) ).map(|s| { println!("symbol: {:?}", s); s.get_props() })
                             .ok_or_else(|| format!(
                                 "___ No variable named '{}' found in module '{}'",
                                 first_field_name, module
@@ -1351,7 +1375,7 @@ fn get_type_for_scoped_variable(
 
                         // return the type of the last field, but the token 
                         // of the var/constant/data-source
-                        Ok((var_ty_to.0, field_ty.0, var_ty_to.2))
+                        Ok((var_ty_to.0, field_ty.0, var_ty_to.2, var_ty_to.3))
                     },
                     // yes, it is:
                     Ok,
@@ -1490,18 +1514,41 @@ fn declare_variable_from_symbol(
                 .ok_or(format!("No module named '{}' found.", module))?;
 
             let name = arg_symbol.get_name();
-            let symbol = symbols::Symbol::new(
-                "var".into(),
-                symbols::SymbolKind::Variable,
-                arg_symbol.get_return_type(),
-                vec![arg_symbol],
-                None,
-            );
 
-            module.move_symbol_into(
-                key.unwrap_or(name),
-                symbol
-            )
+            match arg_symbol.has_value() {
+                // This is a variable, create an empty value on the symbol.
+                false => {
+                    let symbol = symbols::Symbol::new(
+                        "var".into(),
+                        symbols::SymbolKind::Variable,
+                        arg_symbol.get_return_type(),
+                        vec![arg_symbol],
+                        None,
+                    );
+
+                    module.move_var_const_into(
+                        key.unwrap_or(name),
+                        symbol
+                    )
+                }
+                // This is a constant, move the value into the symbol we're
+                // storing. This can only be a builtin-typed value.
+                true => {
+                    let symbol = symbols::Symbol::new_with_value(
+                        "const".into(),
+                        symbols::SymbolKind::Constant,
+                        arg_symbol.get_value_owned(),
+                        vec![],
+                        Token::Constant(None),
+                    );
+
+                    module.move_var_const_into(
+                        key.unwrap_or(name),
+                        symbol
+                    )
+                }
+            }
+
         }
         symbols::Scope::Global => {
             Err(format!(
@@ -1512,6 +1559,46 @@ fn declare_variable_from_symbol(
         }
     }
 }
+
+// fn declare_constant_from_symbol(
+//     key: Option<ast::ShortString>,
+//     arg_symbol: symbols::Symbol,
+//     symbols: symbols::GlobalSymbolTable,
+//     scope: &symbols::Scope,
+// ) -> Result<(), CompileError> {
+//     // There is NO global scope for variables.  All vars are all local to a
+//     // module.
+//     match &scope {
+//         symbols::Scope::Module(module) => {
+
+//             let mut _symbols = symbols.borrow_mut();
+//             let module = _symbols
+//                 .get_mut(scope)
+//                 .ok_or(format!("No module named '{}' found.", module))?;
+
+//             let name = arg_symbol.get_name();
+//             let symbol = symbols::Symbol::new_with_value(
+//                 "const".into(),
+//                 symbols::SymbolKind::Constant,
+//                 arg_symbol.get_value_owned(),
+//                 vec![],
+//                 Token::Constant,
+//             );
+
+//             module.move_symbol_into(
+//                 key.unwrap_or(name),
+//                 symbol
+//             )
+//         }
+//         symbols::Scope::Global => {
+//             Err(format!(
+//                 "Can't create a variable in the global scope (NEVER). Variable '{}'",
+//                 arg_symbol.get_name()
+//             )
+//             .into())
+//         }
+//     }
+// }
 
 // Terms will be added as a vec of Logical Formulas to the `term` hashmap in
 // a module's symbol table. So, a subterm is one element of the vec.
@@ -1561,7 +1648,7 @@ fn add_action(
                 .ok_or(format!("No module named '{}' found.", module))?;
 
             let action = action.set_name(name.clone());
- 
+
             module.add_action(name, action)
         }
         symbols::Scope::Global => Err(format!(
@@ -1611,8 +1698,7 @@ where
 {
     fn get_args(&self) -> &[symbols::Symbol];
     fn get_type(&self) -> TypeDef;
-    fn get_builtin_type(&self)
-        -> Result<TypeDef, CompileError>;
+    fn get_builtin_type(&self) -> Result<TypeDef, CompileError>;
     fn get_token(&self) -> Result<Token, CompileError>;
 }
 
@@ -1629,9 +1715,7 @@ impl BooleanExpr for symbols::Symbol {
         self.get_token()
     }
 
-    fn get_builtin_type(
-        &self,
-    ) -> Result<TypeDef, CompileError> {
+    fn get_builtin_type(&self) -> Result<TypeDef, CompileError> {
         symbols::Symbol::get_builtin_type(self)
     }
 }
