@@ -233,7 +233,7 @@ fn main() {
             
                 term rov-valid for route: Route {
                     match {
-                        fixed_len_prefix == prefix_len;
+                        fixed_len_prefix.len() == prefix_len;
                         route.origin == found_prefix.as-path.origin();
                         found_prefix.as-path.origin() == my_route_path.origin();
                         (found_prefix.prefix.exists() && found_prefix.prefix.exists()) || route_in_table;

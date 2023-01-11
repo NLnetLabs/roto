@@ -274,19 +274,19 @@ fn compile_module(_module: &SymbolTable) -> Result<RotoPack, CompileError> {
         _module
     );
 
-    println!("___args");
+    println!("___used args");
     state
         .used_arguments
         .iter()
         .for_each(|s| println!("{:?}: {:?}", s.1.get_token().unwrap(), s.0));
 
-    println!("___vars");
+    println!("___used vars");
 
     state.used_variables.iter().for_each(|s| {
         println!("{:?} {:?}", s.1.get_token().unwrap(), s.0);
     });
 
-    println!("___data_sources");
+    println!("___used data_sources");
 
     state.used_data_sources.iter().for_each(|t| {
         println!("{:?} {:?}", t.1.get_token().unwrap(), t.0);
@@ -375,7 +375,8 @@ fn compile_var<'a>(
                 local_stack = VecDeque::new();
             }
             // concrete value already.
-            Token::Constant => {
+            Token::Constant(_) => {
+                println!("C");
                 let val = arg.get_value();
                 local_stack.push_front(Command::new(
                     OpCode::MemPosSet,
@@ -772,7 +773,20 @@ fn compile_sub_action<'a>(
     );
 
     match sub_action.get_kind() {
-        SymbolKind::Constant | SymbolKind::Variable => {}
+        SymbolKind::Variable => {
+            let args = sub_action.get_args();
+            state = compile_var(&args[0], state)?;
+            state.mem_pos += 1;
+            state = compile_var(&args[1], state)?;
+
+            state
+                .cur_mir_block
+                .command_stack
+                .push(Command::new(OpCode::SetRxField, vec![]));
+        }
+        SymbolKind::Constant => {
+            println!("constant in action {:#?}", sub_action);
+        }
         _ => return Err(CompileError::new(
             "invalid sub action. Does not resolve to variable or constant."
                 .into(),
