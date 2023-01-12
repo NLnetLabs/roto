@@ -9,7 +9,7 @@ use routecore::asn::LongSegmentError;
 use crate::ast::ShortString;
 use crate::compile::CompileError;
 use crate::traits::{MethodProps, RotoFilter, TokenConvert};
-use crate::vm::Payload;
+use crate::vm::{Payload, VmError};
 
 use super::collections::Record;
 use super::typedef::TypeDef;
@@ -629,6 +629,14 @@ pub struct Boolean(pub(crate) Option<bool>);
 impl Boolean {
     pub fn new(val: bool) -> Self {
         Boolean(Some(val))
+    }
+
+    pub fn is_false(&self) -> Result<bool, VmError> {
+        if let Boolean(Some(bool_val)) = self {
+            Ok(!*bool_val)
+        } else {
+            Err(VmError::InvalidValueType)
+        }
     }
 }
 

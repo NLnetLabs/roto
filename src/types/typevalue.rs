@@ -58,6 +58,14 @@ impl TypeValue {
         matches!(self, TypeValue::Builtin(BuiltinTypeValue::Boolean(_)))
     }
 
+    pub fn is_false(&self) -> Result<bool, VmError> {
+        if let TypeValue::Builtin(BuiltinTypeValue::Boolean(bool_val)) = self {
+            bool_val.is_false()
+        } else {
+            Err(VmError::InvalidValueType)
+        }
+    }
+
     pub(crate) fn as_cloned_builtin(
         &self,
     ) -> Result<TypeValue, CompileError> {
@@ -492,6 +500,7 @@ impl<'a> From<&'a TypeDef> for TypeValue {
                         .collect::<Vec<_>>();
                     TypeValue::Rib(Rib {
                         ty: TypeDef::Record(def_),
+                        records: vec![]
                     })
                 } else {
                     panic!("Rib must contains records")
