@@ -563,7 +563,7 @@ impl<'a> VirtualMachine<'a> {
                         }
                     }
                     OpCode::Label => {
-                        todo!();
+                       // NOOP
                     }
                     // Term procedures
                     // stack args ignored
@@ -578,11 +578,11 @@ impl<'a> VirtualMachine<'a> {
                     OpCode::Exit => {
                         todo!();
                     }
-                    // stack args: [field, value]
+                    // stack args: [rx type instance field, new value]
                     OpCode::SetRxField => {
                         todo!();
                     }
-                    // stack args: [field, value]
+                    // stack args: [tx type instance field, new value]
                     OpCode::SetTxField => {
                         todo!();
                     }
@@ -702,7 +702,7 @@ impl Display for Command {
             OpCode::StackOffset => "",
             OpCode::CondFalseSkipToEOB => "-->",
             OpCode::CondTrueSkipToEOB => "-->",
-            OpCode::Label => "=",
+            OpCode::Label => { return write!(f, "🏷  {}", self.args[0]); },
             OpCode::Exit => ".",
             OpCode::SetRxField => "->",
             OpCode::SetTxField => "->"
@@ -744,6 +744,16 @@ impl Arg {
     }
 }
 
+impl Display for Arg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Arg::Label(v) => write!(f, "{}", v),
+            _ => write!(f, "")
+        }
+        
+    } 
+}
+
 impl From<Arg> for TypeDef {
     fn from(value: Arg) -> Self {
         match value {
@@ -783,6 +793,16 @@ impl From<Arg> for usize {
 impl From<ast::CompareOp> for Arg {
     fn from(op: ast::CompareOp) -> Self {
         Arg::CompareOp(op)
+    }
+}
+
+impl From<crate::traits::Token> for Vec<Arg> {
+    fn from(to: crate::traits::Token) -> Self {
+        if let Token::FieldAccess(v) = to { 
+            v.iter().map(|f| Arg::FieldAccess(*f as usize)).collect::<Vec<_>>()
+        } else {
+            panic!("PANIC")
+        } 
     }
 }
 
