@@ -868,20 +868,8 @@ fn compile_term<'a>(
     // Set a Label so that each term block is identifieble for humans.
     state.cur_mir_block.command_stack.push(Command::new(
         OpCode::Label,
-        vec![Arg::Label(term.get_name())],
+        vec![Arg::Label(format!("TERM {}", term.get_name()).as_str().into())],
     ));
-
-    if state
-        .computed_terms
-        .iter()
-        .any(|st| st.0 == term.get_name())
-    {
-        state.cur_mir_block.command_stack.push(Command::new(
-            OpCode::Label,
-            vec![Arg::Label(term.get_name())],
-        ));
-        return Ok(state);
-    }
 
     let sub_terms = term.get_args();
     let mut sub_terms = sub_terms.iter().peekable();
