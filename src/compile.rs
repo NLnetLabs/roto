@@ -13,7 +13,10 @@ use crate::{
     },
     traits::Token,
     types::typedef::TypeDef,
-    vm::{Arg, Command, ExtDataSource, OpCode, StackRefPos, VariablesMap},
+    vm::{
+        Arg, Command, ExtDataSource, OpCode, StackRefPos, VariablesMap,
+        VmError,
+    },
 };
 
 //============ The Compiler (Filter creation time) ==========================
@@ -295,11 +298,9 @@ fn compile_module(_module: &SymbolTable) -> Result<RotoPack, CompileError> {
     println!("=================================================");
 
     // compile the variables used in the terms
-    (mir, state) = compile_vars(mir, state)?;
+    (mir, state) = compile_assignments(mir, state)?;
 
     state.mem_pos += 1;
-
-    // (mir, state) = compile_terms(mir, state)?;
 
     (mir, state) = compile_apply(mir, state)?;
 
@@ -339,9 +340,12 @@ fn compile_module(_module: &SymbolTable) -> Result<RotoPack, CompileError> {
     Ok(RotoPack::new(mir, TypeDef::None, None, args, data_sources))
 }
 
-fn compile_var<'a>(
+fn compile_expr<'a>(
     symbol: &'a Symbol,
     mut state: CompilerState<'a>,
+    // The posision at which to write the Variable assignment. This allows for the use of the
+    // state.mem_pos to be used for temp variables.
+    var_assign_mem_pos: u32
 ) -> Result<CompilerState<'a>, CompileError> {
     let leaves = symbol.get_leaf_nodes();
     let mut local_stack = std::collections::VecDeque::<Command>::new();
@@ -364,20 +368,30 @@ fn compile_var<'a>(
             // assignment to a variable
             Token::Variable(var) if arg.get_name() == "var" => {
                 print!("V");
+
+                local_stack.push_front(Command::new(OpCode::ClearStack, vec![]));
                 local_stack.push_front(Command::new(
                     OpCode::MemPosRef,
-                    vec![Arg::MemPos(state.mem_pos), Arg::Variable(var)],
+                    vec![Arg::MemPos(var_assign_mem_pos), Arg::Variable(var)],
                 ));
+
                 println!("\nlocal_stack {:?}", local_stack);
                 state.local_vars.set(var, state.mem_pos, 0).unwrap();
                 println!("local_vars {:?}", state.local_vars);
+                
                 state.cur_mir_block.command_stack.extend(local_stack);
                 local_stack = VecDeque::new();
             }
             // assignment to a constant
             Token::Constant(_) => {
                 println!("C");
+                state.mem_pos += 1;
+
                 let val = arg.get_value();
+                local_stack.push_front(Command::new(
+                    OpCode::PushStack,
+                    vec![Arg::MemPos(state.mem_pos)],
+                ));
                 local_stack.push_front(Command::new(
                     OpCode::MemPosSet,
                     vec![
@@ -385,10 +399,7 @@ fn compile_var<'a>(
                         Arg::Constant(val.as_cloned_builtin()?),
                     ],
                 ));
-                local_stack.push_front(Command::new(
-                    OpCode::PushStack,
-                    vec![Arg::MemPos(state.mem_pos)],
-                ));
+
                 state.cur_mir_block.command_stack.extend(local_stack);
                 local_stack = VecDeque::new();
             }
@@ -521,16 +532,20 @@ fn compile_var<'a>(
 
                 match first_child.get_kind() {
                     SymbolKind::FieldAccess => {
-                        let mut field_accesses = if let Token::FieldAccess(v) =
-                            first_child.get_token()?
-                        {
-                            v
-                        } else {
-                            vec![]
-                        };
+                        let mut field_accesses =
+                            if let Token::FieldAccess(v) =
+                                first_child.get_token()?
+                            {
+                                v
+                            } else {
+                                vec![]
+                            };
 
                         // push in reverse order.
-                        local_stack.push_front(Command::new(OpCode::Label, vec![Arg::Label("end-set-rx-type".into())]));
+                        local_stack.push_front(Command::new(
+                            OpCode::Label,
+                            vec![Arg::Label("end-set-rx-type".into())],
+                        ));
 
                         local_stack.push_front(Command::new(
                             OpCode::SetRxField,
@@ -542,7 +557,7 @@ fn compile_var<'a>(
                         for fa in field_accesses.iter() {
                             local_stack.push_front(Command::new(
                                 OpCode::StackOffset,
-                                vec![Arg::FieldAccess(*fa as usize)]
+                                vec![Arg::FieldAccess(*fa as usize)],
                             ));
                             args_vec.push(Arg::FieldAccess(*fa as usize));
                         }
@@ -553,7 +568,10 @@ fn compile_var<'a>(
                             vec![Arg::MemPos(0)],
                         ));
 
-                        local_stack.push_front(Command::new(OpCode::Label, vec![Arg::Label("start-set-rx-type".into())]));
+                        local_stack.push_front(Command::new(
+                            OpCode::Label,
+                            vec![Arg::Label("start-set-rx-type".into())],
+                        ));
                     }
                     SymbolKind::MethodCall => {
                         todo!();
@@ -623,7 +641,7 @@ fn compile_var<'a>(
     Ok(state)
 }
 
-fn compile_vars(
+fn compile_assignments(
     mut mir: Vec<MirBlock>,
     mut state: CompilerState<'_>,
 ) -> Result<(Vec<MirBlock>, CompilerState<'_>), CompileError> {
@@ -634,20 +652,25 @@ fn compile_vars(
         command_stack: Vec::new(),
     };
 
-    // compile the used vars. Since the rx and tx value live in memory
-    // positions 0 and 1, we start with memory position 2.
-    for (mem_pos, var) in (2_u32..).zip(
-        state
-            .used_variables
-            .clone()
-            .iter()
-            .map(|s| s.1.get_token().unwrap()),
-    ) {
+    // compile the used variable assignments. Since the rx and tx value live
+    // in memory positions 0 and 1, we start with memory position 2.
+    for (mem_pos, var) in
+        (2_u32..).zip(state.used_variables.clone().iter())
+    {
+        // set the mem_pos in state to the counter we use here. Recursive
+        // `compile_expr` may increase state.mem_pos to temporarily store
+        // argument variables.
         state.mem_pos = mem_pos;
-        let s = _module.get_variable_by_token(&var);
-        print!("\nvar: {:?} ", s.get_token());
 
-        state = compile_var(s, state)?;
+        let s = _module.get_variable_by_token(&var.1.get_token()?);
+        print!("\nvar: {:?} ({})", s.get_token(), mem_pos);
+
+        state.cur_mir_block.command_stack.push(Command::new(
+            OpCode::Label,
+            vec![Arg::Label(format!("ASSIGNMENT {}", var.0).as_str().into())],
+        ));
+
+        state = compile_expr(s, state, mem_pos)?;
 
         mir.push(state.cur_mir_block);
         state.cur_mir_block = MirBlock {
@@ -658,7 +681,9 @@ fn compile_vars(
     Ok((mir, state))
 }
 
-fn compile_terms(
+// This is not used currently, it will compile *ALL* terms, regardless of
+// whether they are actually consumed by the (match) actions.
+fn _compile_terms(
     mut mir: Vec<MirBlock>,
     mut state: CompilerState<'_>,
 ) -> Result<(Vec<MirBlock>, CompilerState<'_>), CompileError> {
@@ -714,15 +739,21 @@ fn compile_apply(
             // yes, it was, create a reference to the result on the stack
             Some((.., stack_ref_pos)) => {
                 if let StackRefPos::MemPos(mem_pos) = stack_ref_pos {
-                    // This is shit. u64 (in 64bit architectures) gets cast to u32.
                     state.cur_mir_block.command_stack.extend(vec![
                         Command::new(
                             OpCode::Label,
-                            vec![Arg::Label(term_name.clone())],
+                            vec![Arg::Label(
+                                format!(
+                                    "COPY TERM RESULT {}",
+                                    term_name.clone()
+                                )
+                                .as_str()
+                                .into(),
+                            )],
                         ),
                         Command::new(
                             OpCode::PushStack,
-                            vec![Arg::MemPos(*mem_pos as u32)],
+                            vec![Arg::MemPos(*mem_pos)],
                         ),
                     ]);
                 };
@@ -762,7 +793,7 @@ fn compile_apply(
                             OpCode::Label,
                             vec![Arg::Label(
                                 format!(
-                                    "{}-{:?}",
+                                    "MATCH ACTION {}-{:?}",
                                     term_name.clone(),
                                     match_action[0].get_kind()
                                 )
@@ -779,7 +810,7 @@ fn compile_apply(
                             OpCode::Label,
                             vec![Arg::Label(
                                 format!(
-                                    "{}-{:?}",
+                                    "MATCH ACTION NEGATE {}-{:?}",
                                     term_name,
                                     match_action[0].get_kind()
                                 )
@@ -847,13 +878,17 @@ fn compile_sub_action<'a>(
     match sub_action.get_kind() {
         SymbolKind::SubAction => {
             println!("constant in action {:#?}", sub_action);
-            state = compile_var(sub_action, state)?;
+            let start_pos = state.mem_pos;
+            state = compile_expr(sub_action, state, start_pos)?;
             state.mem_pos += 1;
             println!("ACTION BLOCK {:?}", state.cur_mir_block.command_stack);
         }
-        _ => return Err(CompileError::new(
-            format!("Invalid sub-action {}", sub_action.get_name())
-        )),
+        _ => {
+            return Err(CompileError::new(format!(
+                "Invalid sub-action {}",
+                sub_action.get_name()
+            )))
+        }
     }
 
     Ok(state)
@@ -868,7 +903,9 @@ fn compile_term<'a>(
     // Set a Label so that each term block is identifieble for humans.
     state.cur_mir_block.command_stack.push(Command::new(
         OpCode::Label,
-        vec![Arg::Label(format!("TERM {}", term.get_name()).as_str().into())],
+        vec![Arg::Label(
+            format!("TERM {}", term.get_name()).as_str().into(),
+        )],
     ));
 
     let sub_terms = term.get_args();
@@ -916,9 +953,10 @@ fn compile_sub_term<'a>(
     match sub_term.get_kind() {
         SymbolKind::CompareExpr(op) => {
             let args = sub_term.get_args();
-            state = compile_var(&args[0], state)?;
+            let start_pos = state.mem_pos;
+            state = compile_expr(&args[0], state, start_pos)?;
             state.mem_pos += 1;
-            state = compile_var(&args[1], state)?;
+            state = compile_expr(&args[1], state, start_pos)?;
 
             state
                 .cur_mir_block
@@ -956,7 +994,8 @@ fn compile_sub_term<'a>(
                 sub_term.get_name(),
                 sub_term.get_kind()
             );
-            state = compile_var(sub_term, state)?;
+            let start_pos = state.mem_pos;
+            state = compile_expr(sub_term, state, start_pos)?;
             println!("command_stack {:?}", state.cur_mir_block.command_stack);
         }
     };
