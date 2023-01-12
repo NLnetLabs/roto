@@ -1,37 +1,38 @@
 use std::{
-    cell::RefCell,
+    cell::{Ref, RefCell},
     fmt::{Display, Formatter},
     ops::{Index, IndexMut},
 };
 
 use crate::{
-    ast::{self, ShortString, CompareOp},
+    ast::{self, CompareOp, ShortString},
     compile::MirBlock,
     traits::Token,
     types::{
+        builtin::{Boolean, BuiltinTypeValue},
         collections::{ElementTypeValue, Record},
         datasources::{DataSourceMethodValue, Rib, Table},
         typedef::TypeDef,
-        typevalue::TypeValue, builtin::{Boolean, BuiltinTypeValue},
+        typevalue::TypeValue,
     },
 };
 
 #[derive(Debug)]
 pub(crate) enum StackRefPos {
     // index into LinearMemory
-    MemPos(usize),
+    MemPos(u32),
     // index into a Table (which is a vec of Records)
     TablePos(Token, usize),
 }
 
 impl From<u32> for StackRefPos {
     fn from(mem_pos: u32) -> Self {
-        StackRefPos::MemPos(mem_pos as usize)
+        StackRefPos::MemPos(mem_pos)
     }
 }
 
 #[derive(Debug)]
-struct StackRef {
+pub(crate) struct StackRef {
     pos: StackRefPos,
     field_index: Option<usize>,
 }
@@ -84,6 +85,17 @@ impl LinearMemory {
 
     pub fn get(&self, index: usize) -> Option<&TypeValue> {
         self.0.get(index)
+    }
+
+    pub(crate) fn get_by_stack_ref<'a>(
+        &'a self,
+        stack_ref: StackRef,
+    ) -> Option<&TypeValue> {
+        if let StackRefPos::MemPos(pos) = stack_ref.pos {
+            self.get_at_field_index(pos as usize, stack_ref.field_index)
+        } else {
+            None
+        }
     }
 
     pub fn get_at_field_index(
@@ -259,8 +271,9 @@ impl<'a> VirtualMachine<'a> {
         for sr in stack.unwind().into_iter() {
             match sr.pos {
                 StackRefPos::MemPos(pos) => {
-                    let v =
-                        mem.get_at_field_index(pos, sr.field_index).unwrap();
+                    let v = mem
+                        .get_at_field_index(pos as usize, sr.field_index)
+                        .unwrap();
                     unwind_stack.push(v);
                 }
                 StackRefPos::TablePos(token, pos) => {
@@ -303,10 +316,6 @@ impl<'a> VirtualMachine<'a> {
         for MirBlock { command_stack } in mir_code {
             println!("\n\n--mirblock------------------");
 
-            let mut s = self.stack.borrow_mut();
-            s.clear();
-            drop(s);
-
             println!("stack: {:?}", self.stack);
             for Command { op, mut args } in command_stack {
                 commands_num += 1;
@@ -322,77 +331,165 @@ impl<'a> VirtualMachine<'a> {
                         match &args[0] {
                             Arg::CompareOp(CompareOp::Eq) => {
                                 let res = left == right;
-                                println!("-> {:?} == {:?} = {}", left, right, res);
-                                m.set(2, TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(Some(res)))));
-                                self.stack.borrow_mut().push(
-                                    StackRefPos::MemPos(2),
-                                )?;
-                            },
+                                println!(
+                                    "-> {:?} == {:?} = {}",
+                                    left, right, res
+                                );
+                                m.set(
+                                    2,
+                                    TypeValue::Builtin(
+                                        BuiltinTypeValue::Boolean(Boolean(
+                                            Some(res),
+                                        )),
+                                    ),
+                                );
+                                self.stack
+                                    .borrow_mut()
+                                    .push(StackRefPos::MemPos(2))?;
+                            }
                             Arg::CompareOp(CompareOp::Ne) => {
                                 let res = left != right;
-                                println!("-> {:?} != {:?} = {}", left, right, res);
-                                m.set(2, TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(Some(res)))));
-                                self.stack.borrow_mut().push(
-                                    StackRefPos::MemPos(2),
-                                )?;
-                            },
+                                println!(
+                                    "-> {:?} != {:?} = {}",
+                                    left, right, res
+                                );
+                                m.set(
+                                    2,
+                                    TypeValue::Builtin(
+                                        BuiltinTypeValue::Boolean(Boolean(
+                                            Some(res),
+                                        )),
+                                    ),
+                                );
+                                self.stack
+                                    .borrow_mut()
+                                    .push(StackRefPos::MemPos(2))?;
+                            }
                             Arg::CompareOp(CompareOp::Lt) => {
                                 let res = left < right;
-                                println!("-> {:?} < {:?} = {}", left, right, res);
-                                m.set(2, TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(Some(res)))));
-                                self.stack.borrow_mut().push(
-                                    StackRefPos::MemPos(2),
-                                )?;
-                            },
+                                println!(
+                                    "-> {:?} < {:?} = {}",
+                                    left, right, res
+                                );
+                                m.set(
+                                    2,
+                                    TypeValue::Builtin(
+                                        BuiltinTypeValue::Boolean(Boolean(
+                                            Some(res),
+                                        )),
+                                    ),
+                                );
+                                self.stack
+                                    .borrow_mut()
+                                    .push(StackRefPos::MemPos(2))?;
+                            }
                             Arg::CompareOp(CompareOp::Le) => {
                                 let res = left <= right;
-                                println!("-> {:?} <= {:?} = {}", left, right, res);
-                                m.set(2, TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(Some(res)))));
-                                self.stack.borrow_mut().push(
-                                    StackRefPos::MemPos(2),
-                                )?;
-                            },
+                                println!(
+                                    "-> {:?} <= {:?} = {}",
+                                    left, right, res
+                                );
+                                m.set(
+                                    2,
+                                    TypeValue::Builtin(
+                                        BuiltinTypeValue::Boolean(Boolean(
+                                            Some(res),
+                                        )),
+                                    ),
+                                );
+                                self.stack
+                                    .borrow_mut()
+                                    .push(StackRefPos::MemPos(2))?;
+                            }
                             Arg::CompareOp(CompareOp::Gt) => {
                                 let res = left > right;
-                                println!("-> {:?} > {:?} = {}", left, right, res);
-                                m.set(2, TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(Some(res)))));
-                                self.stack.borrow_mut().push(
-                                    StackRefPos::MemPos(2),
-                                )?;
-                            },
+                                println!(
+                                    "-> {:?} > {:?} = {}",
+                                    left, right, res
+                                );
+                                m.set(
+                                    2,
+                                    TypeValue::Builtin(
+                                        BuiltinTypeValue::Boolean(Boolean(
+                                            Some(res),
+                                        )),
+                                    ),
+                                );
+                                self.stack
+                                    .borrow_mut()
+                                    .push(StackRefPos::MemPos(2))?;
+                            }
                             Arg::CompareOp(CompareOp::Ge) => {
                                 let res = left >= right;
-                                println!("-> {:?} >= {:?} = {}", left, right, res);
-                                m.set(2, TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(Some(res)))));
-                                self.stack.borrow_mut().push(
-                                    StackRefPos::MemPos(2),
-                                )?;
-                            },
+                                println!(
+                                    "-> {:?} >= {:?} = {}",
+                                    left, right, res
+                                );
+                                m.set(
+                                    2,
+                                    TypeValue::Builtin(
+                                        BuiltinTypeValue::Boolean(Boolean(
+                                            Some(res),
+                                        )),
+                                    ),
+                                );
+                                self.stack
+                                    .borrow_mut()
+                                    .push(StackRefPos::MemPos(2))?;
+                            }
                             Arg::CompareOp(CompareOp::Or) => {
                                 let l = left.try_into()?;
                                 let r = right.try_into()?;
                                 let res = l || r;
-                                println!("-> {:?} || {:?} = {}", left, right, res);
-                                m.set(2, TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(Some(res)))));
-                                self.stack.borrow_mut().push(
-                                    StackRefPos::MemPos(2),
-                                )?;
-                            },
+                                println!(
+                                    "-> {:?} || {:?} = {}",
+                                    left, right, res
+                                );
+                                m.set(
+                                    2,
+                                    TypeValue::Builtin(
+                                        BuiltinTypeValue::Boolean(Boolean(
+                                            Some(res),
+                                        )),
+                                    ),
+                                );
+                                self.stack
+                                    .borrow_mut()
+                                    .push(StackRefPos::MemPos(2))?;
+                            }
                             Arg::CompareOp(CompareOp::And) => {
-                                let res = left.try_into()? && right.try_into()?;
-                                println!("-> {:?} && {:?} = {}", left, right, res);
-                                m.set(2, TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(Some(res)))));
-                                self.stack.borrow_mut().push(
-                                    StackRefPos::MemPos(2),
-                                )?;
-                            },
+                                let res =
+                                    left.try_into()? && right.try_into()?;
+                                println!(
+                                    "-> {:?} && {:?} = {}",
+                                    left, right, res
+                                );
+                                m.set(
+                                    2,
+                                    TypeValue::Builtin(
+                                        BuiltinTypeValue::Boolean(Boolean(
+                                            Some(res),
+                                        )),
+                                    ),
+                                );
+                                self.stack
+                                    .borrow_mut()
+                                    .push(StackRefPos::MemPos(2))?;
+                            }
                             _ => panic!("invalid compare op"),
                         }
-
-                    },
+                    }
                     // stack args: [type, method_token, return memory position]
                     OpCode::ExecuteTypeMethod => {
-                        let m = mem.borrow();
+                        println!("Stack {:?}", self.stack);
+                        let mut m = mem.borrow_mut();
+
+                        let mem_pos =
+                            if let Arg::MemPos(pos) = args.pop().unwrap() {
+                                pos as usize
+                            } else {
+                                return Err(VmError::InvalidValueType);
+                            };
                         let stack_args =
                             self._unwind_resolved_stack_into_vec(&m);
                         let return_type = args.remove(2).into();
@@ -408,11 +505,12 @@ impl<'a> VirtualMachine<'a> {
                             println!("\nwith return type {:?}", return_type);
 
                             if let Arg::Method(method_token) = args[1] {
-                                t.exec_type_method(
+                                let val = t.exec_type_method(
                                     method_token,
                                     &stack_args,
                                     return_type,
                                 );
+                                m.set(mem_pos, val);
                             } else {
                                 return Err(VmError::InvalidValueType);
                             }
@@ -489,7 +587,7 @@ impl<'a> VirtualMachine<'a> {
                             );
 
                             let mut s = self.stack.borrow_mut();
-                            s.push(StackRefPos::MemPos(pos as usize))?;
+                            s.push(StackRefPos::MemPos(pos))?;
                             drop(s);
                         }
                         _ => return Err(VmError::InvalidValueType),
@@ -503,6 +601,12 @@ impl<'a> VirtualMachine<'a> {
                         } else {
                             return Err(VmError::InvalidValueType);
                         }
+                    }
+                    // no stack_args
+                    OpCode::ClearStack => {
+                        let mut s = self.stack.borrow_mut();
+                        s.clear();
+                        drop(s);
                     }
                     // stack args: [mem_pos, constant_value]
                     OpCode::MemPosSet => {
@@ -563,16 +667,34 @@ impl<'a> VirtualMachine<'a> {
                         }
                     }
                     OpCode::Label => {
-                       // NOOP
+                        // NOOP
                     }
                     // Term procedures
                     // stack args ignored
                     OpCode::CondFalseSkipToEOB => {
-                        todo!();
+                        let m = mem.borrow();
+                        let stack_ref = self.stack.borrow_mut().pop()?;
+                        let bool_val = m.get_by_stack_ref(stack_ref).unwrap();
+                        if bool_val.is_false()? {
+                            print!(" skip to end of block");
+                            break;
+                        } else {
+                            print!(" continue");
+                            continue;
+                        }
                     }
                     // stack args ignored
                     OpCode::CondTrueSkipToEOB => {
-                        todo!();
+                        let m = mem.borrow();
+                        let stack_ref = self.stack.borrow_mut().pop()?;
+                        let bool_val = m.get_by_stack_ref(stack_ref).unwrap();
+                        if bool_val.is_false()? {
+                            print!(" continue");
+                            continue;
+                        } else {
+                            print!(" skip to end of block");
+                            break;
+                        }
                     }
                     // stack args: [exit value]
                     OpCode::Exit => {
@@ -696,16 +818,19 @@ impl Display for Command {
             OpCode::ExecuteValueMethod => "=>",
             OpCode::PushStack => "<-",
             OpCode::PopStack => "->",
+            OpCode::ClearStack => "::",
             OpCode::MemPosSet => "->",
             OpCode::MemPosRef => "",
             OpCode::ArgToMemPos => "->",
             OpCode::StackOffset => "",
             OpCode::CondFalseSkipToEOB => "-->",
             OpCode::CondTrueSkipToEOB => "-->",
-            OpCode::Label => { return write!(f, "🏷  {}", self.args[0]); },
+            OpCode::Label => {
+                return write!(f, "🏷  {}", self.args[0]);
+            }
             OpCode::Exit => ".",
             OpCode::SetRxField => "->",
-            OpCode::SetTxField => "->"
+            OpCode::SetTxField => "->",
         };
         write!(f, "{:?}{}{:?}", self.op, arrow, self.args)
     }
@@ -713,9 +838,9 @@ impl Display for Command {
 
 #[derive(Debug)]
 pub enum Arg {
-    Constant(TypeValue), // Constant value
-    Variable(usize), // Variable with token value
-    Argument(usize), // extra runtime arguments
+    Constant(TypeValue),       // Constant value
+    Variable(usize),           // Variable with token value
+    Argument(usize),           // extra runtime arguments
     RxValue, // the placeholder for the value of the rx type at runtime
     TxValue, // the placeholder for the value of the tx type at runtime
     Method(usize), // method token value
@@ -729,7 +854,7 @@ pub enum Arg {
     Term(usize), // term token value
     CompareOp(ast::CompareOp), // compare operation
     Label(ShortString), // a label with its name (to jump to)
-    Exit // exit the vm
+    Exit,    // exit the vm
 }
 
 impl Arg {
@@ -748,10 +873,9 @@ impl Display for Arg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Arg::Label(v) => write!(f, "{}", v),
-            _ => write!(f, "")
+            _ => write!(f, ""),
         }
-        
-    } 
+    }
 }
 
 impl From<Arg> for TypeDef {
@@ -798,11 +922,13 @@ impl From<ast::CompareOp> for Arg {
 
 impl From<crate::traits::Token> for Vec<Arg> {
     fn from(to: crate::traits::Token) -> Self {
-        if let Token::FieldAccess(v) = to { 
-            v.iter().map(|f| Arg::FieldAccess(*f as usize)).collect::<Vec<_>>()
+        if let Token::FieldAccess(v) = to {
+            v.iter()
+                .map(|f| Arg::FieldAccess(*f as usize))
+                .collect::<Vec<_>>()
         } else {
             panic!("PANIC")
-        } 
+        }
     }
 }
 
@@ -814,6 +940,7 @@ pub enum OpCode {
     ExecuteValueMethod,
     PopStack,
     PushStack,
+    ClearStack,
     StackOffset,
     MemPosSet,
     MemPosRef,
@@ -828,7 +955,7 @@ pub enum OpCode {
     Label,
     SetRxField,
     SetTxField,
-    Exit
+    Exit,
 }
 
 // struct VecPayload(Vec<(ShortString, TypeValue)>);
@@ -889,7 +1016,8 @@ impl ExtDataSource {
                     records: vec![],
                 }),
                 Token::Rib(_) => DataSource::Rib(Rib {
-                    ty
+                    ty,
+                    records: vec![],
                 }),
                 _ => {
                     panic!("Invalid data source type: {:?}", ty);
