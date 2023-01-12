@@ -19,6 +19,7 @@ use super::{
 #[derive(Debug, PartialEq, Eq)]
 pub struct Rib {
     pub(crate) ty: TypeDef,
+    pub(crate) records: Vec<Record>
 }
 
 impl Rib {
@@ -42,7 +43,27 @@ impl Rib {
                 todo!()
             }
             RibToken::LongestMatch => {
-                todo!()
+                Box::new(|| self.records
+                    .iter()
+                    .enumerate()
+                    .find(|v| {
+                        if let Some(val) =
+                            v.1.get_field_by_index(0).map(|v| &v.1)
+                        {
+                            val == args[0]
+                        } else {
+                            false
+                        }
+                    })
+                    .map(|v| {
+                        DataSourceMethodValue::Ref(StackRefPos::TablePos(
+                            Token::Table(v.0),
+                            0,
+                        ))
+                    })
+                    .unwrap_or_else(|| {
+                        DataSourceMethodValue::TypeValue(TypeValue::None)
+                    }))
             }
             RibToken::Contains => {
                 todo!()
