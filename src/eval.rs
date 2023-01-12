@@ -468,11 +468,11 @@ impl ast::Action {
 
         let mut sub_actions_vec = vec![];
 
-        for call_expr in self.body.expressions.iter().enumerate() {
+        for call_expr in &self.body.expressions {
             // The incoming payload variable is the only variable that can be
             // used in the 'action' section. The incoming payload variable has
             // a SymolKind::RxType.
-            let payload_var_name = call_expr.1.get_receiver().clone().ident;
+            let payload_var_name = call_expr.get_receiver().clone().ident;
 
             let s = module_symbols
                 .get_symbol(&payload_var_name.ident)
@@ -491,13 +491,15 @@ impl ast::Action {
                 .into());
             };
 
-            println!("action symbol creating: {:?}", call_expr.1);
+            println!("action symbol creating: {:?}", call_expr);
 
-            let s = call_expr.1.eval(
-                format!("sub-action-{}", call_expr.0).as_str().into(),
+            let mut s = call_expr.eval(
+                format!("sub-action-{}",s.get_name()).as_str().into(),
                 symbols.clone(),
                 scope.clone(),
             )?;
+
+            s = s.set_kind(SymbolKind::SubAction);
 
             sub_actions_vec.push(s);
         }

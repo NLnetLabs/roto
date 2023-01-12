@@ -67,7 +67,7 @@ impl From<Token> for usize {
             Token::TxType => 1,
             Token::Term(v) => v as usize,
             _ => {
-                println!("Cannot convert to usize: {:?}", token);
+                println!("Cannot convert {:?} to usize.", token);
                 panic!("..and that's fatal");
             }
         }

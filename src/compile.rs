@@ -361,7 +361,7 @@ fn compile_var<'a>(
         let token = arg.get_token().unwrap();
 
         match token {
-            // assignment
+            // assignment to a variable
             Token::Variable(var) if arg.get_name() == "var" => {
                 print!("V");
                 local_stack.push_front(Command::new(
@@ -374,7 +374,7 @@ fn compile_var<'a>(
                 state.cur_mir_block.command_stack.extend(local_stack);
                 local_stack = VecDeque::new();
             }
-            // concrete value already.
+            // assignment to a constant
             Token::Constant(_) => {
                 println!("C");
                 let val = arg.get_value();
@@ -389,6 +389,8 @@ fn compile_var<'a>(
                     OpCode::PushStack,
                     vec![Arg::MemPos(state.mem_pos)],
                 ));
+                state.cur_mir_block.command_stack.extend(local_stack);
+                local_stack = VecDeque::new();
             }
             // external calls
             Token::Method(method) => {
@@ -440,15 +442,20 @@ fn compile_var<'a>(
                             Arg::MemPos(state.mem_pos),
                         ],
                     ),
-                    Ok(Token::FieldAccess(_)) => (
-                        // args: [ method_call, return_type ]
-                        OpCode::ExecuteValueMethod,
-                        vec![
-                            Arg::Method(token.into()),
-                            Arg::Type(arg.get_type()),
-                            Arg::MemPos(state.mem_pos),
-                        ],
-                    ),
+                    Ok(Token::FieldAccess(_)) => {
+                        println!("FIELD_ACCESS arg: {:?}", arg);
+                        println!("next_arg: {:?}", next_arg);
+
+                        (
+                            // args: [ method_call, return_type ]
+                            OpCode::ExecuteValueMethod,
+                            vec![
+                                Arg::Method(token.into()),
+                                Arg::Type(arg.get_type()),
+                                Arg::MemPos(state.mem_pos),
+                            ],
+                        )
+                    }
                     _ => {
                         return Err(format!(
                             "Invalid token for method call: {:?}",
@@ -501,11 +508,77 @@ fn compile_var<'a>(
                     .extend(unwind_stack(local_stack));
                 local_stack = VecDeque::new();
             }
+            // An RxType in a sub-action can only be used to modify a field on the
+            // instance.
+            Token::RxType if arg.get_kind() == SymbolKind::SubAction => {
+                // the first child of RxType root should hold a FieldAccess,
+                // specifying a field of the Rx record, or a MethodCall on
+                // the type of the RxType directly.
+                println!("got rxtype");
+
+                let first_child = &arg.get_args()[0];
+                let mut args_vec = vec![];
+
+                match first_child.get_kind() {
+                    SymbolKind::FieldAccess => {
+                        let mut field_accesses = if let Token::FieldAccess(v) =
+                            first_child.get_token()?
+                        {
+                            v
+                        } else {
+                            vec![]
+                        };
+
+                        // push in reverse order.
+                        local_stack.push_front(Command::new(OpCode::Label, vec![Arg::Label("end-set-rx-type".into())]));
+
+                        local_stack.push_front(Command::new(
+                            OpCode::SetRxField,
+                            vec![],
+                        ));
+
+                        // explode the FieldAccess vec into separate PushStack commands.
+                        field_accesses.reverse();
+                        for fa in field_accesses.iter() {
+                            local_stack.push_front(Command::new(
+                                OpCode::StackOffset,
+                                vec![Arg::FieldAccess(*fa as usize)]
+                            ));
+                            args_vec.push(Arg::FieldAccess(*fa as usize));
+                        }
+
+                        // copy Rx to top of the stack
+                        local_stack.push_front(Command::new(
+                            OpCode::PushStack,
+                            vec![Arg::MemPos(0)],
+                        ));
+
+                        local_stack.push_front(Command::new(OpCode::Label, vec![Arg::Label("start-set-rx-type".into())]));
+                    }
+                    SymbolKind::MethodCall => {
+                        todo!();
+                    }
+                    _ => {
+                        return Err(CompileError::new(
+                            "Unknown RxType fieldname or method.".into(),
+                        ))
+                    }
+                };
+
+                state
+                    .cur_mir_block
+                    .command_stack
+                    .extend(unwind_stack(local_stack));
+                local_stack = VecDeque::new();
+            }
             Token::RxType => {
+                // RxType instance always lives at MemPos(0). retrieve it
+                // and push to stack.
                 local_stack.push_front(Command::new(
                     OpCode::PushStack,
                     vec![Arg::MemPos(0)],
                 ));
+
                 state
                     .cur_mir_block
                     .command_stack
@@ -698,7 +771,6 @@ fn compile_apply(
                             )],
                         ),
                         Command::new(OpCode::CondFalseSkipToEOB, vec![]),
-                        Command::new(OpCode::SetRxField, vec![]),
                     ]);
                 }
                 MatchActionType::NegateMatchAction => {
@@ -716,7 +788,6 @@ fn compile_apply(
                             )],
                         ),
                         Command::new(OpCode::CondTrueSkipToEOB, vec![]),
-                        Command::new(OpCode::SetRxField, vec![]),
                     ]);
                 }
             }
@@ -753,10 +824,11 @@ fn compile_action<'a>(
     action: Action<'a>,
     mut state: CompilerState<'a>,
 ) -> Result<CompilerState<'a>, CompileError> {
-    println!("action {:#?}", action);
+    println!("-> action {:#?}", action);
 
     for sub_action in action.get_args() {
         state = compile_sub_action(sub_action, state)?;
+        // state = compile_var(action, state)?;
     }
 
     Ok(state)
@@ -773,23 +845,14 @@ fn compile_sub_action<'a>(
     );
 
     match sub_action.get_kind() {
-        SymbolKind::Variable => {
-            let args = sub_action.get_args();
-            state = compile_var(&args[0], state)?;
-            state.mem_pos += 1;
-            state = compile_var(&args[1], state)?;
-
-            state
-                .cur_mir_block
-                .command_stack
-                .push(Command::new(OpCode::SetRxField, vec![]));
-        }
-        SymbolKind::Constant => {
+        SymbolKind::SubAction => {
             println!("constant in action {:#?}", sub_action);
+            state = compile_var(sub_action, state)?;
+            state.mem_pos += 1;
+            println!("ACTION BLOCK {:?}", state.cur_mir_block.command_stack);
         }
         _ => return Err(CompileError::new(
-            "invalid sub action. Does not resolve to variable or constant."
-                .into(),
+            format!("Invalid sub-action {}", sub_action.get_name())
         )),
     }
 

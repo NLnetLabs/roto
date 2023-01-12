@@ -359,6 +359,7 @@ pub enum SymbolKind {
     // apply symbols
     MatchAction(MatchActionType),
     Action,
+    SubAction,
     Term,
     // A symbol that has been consumed by the compiler
     Empty,
