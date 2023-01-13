@@ -54,8 +54,11 @@ impl<'a> Stack {
     }
 
     fn pop(&'a mut self) -> Result<StackRef, VmError> {
-        let val = self.0.pop().ok_or(VmError::StackUnderflow)?;
-        Ok(val)
+        self.0.pop().ok_or(VmError::StackUnderflow)
+    }
+
+    fn get_top_value(&'a self) -> Result<&StackRef, VmError> {
+        self.0.get(0).ok_or(VmError::StackUnderflow)
     }
 
     fn set_field_index(&mut self, index: usize) -> Result<(), VmError> {
@@ -87,9 +90,9 @@ impl LinearMemory {
         self.0.get(index)
     }
 
-    pub(crate) fn get_by_stack_ref<'a>(
-        &'a self,
-        stack_ref: StackRef,
+    pub(crate) fn get_by_stack_ref(
+        &self,
+        stack_ref: &StackRef,
     ) -> Option<&TypeValue> {
         if let StackRefPos::MemPos(pos) = stack_ref.pos {
             self.get_at_field_index(pos as usize, stack_ref.field_index)
@@ -673,7 +676,8 @@ impl<'a> VirtualMachine<'a> {
                     // stack args ignored
                     OpCode::CondFalseSkipToEOB => {
                         let m = mem.borrow();
-                        let stack_ref = self.stack.borrow_mut().pop()?;
+                        let s = self.stack.borrow();
+                        let stack_ref = s.get_top_value()?;
                         let bool_val = m.get_by_stack_ref(stack_ref).unwrap();
                         if bool_val.is_false()? {
                             print!(" skip to end of block");
@@ -686,7 +690,8 @@ impl<'a> VirtualMachine<'a> {
                     // stack args ignored
                     OpCode::CondTrueSkipToEOB => {
                         let m = mem.borrow();
-                        let stack_ref = self.stack.borrow_mut().pop()?;
+                        let s = self.stack.borrow();
+                        let stack_ref = s.get_top_value()?;
                         let bool_val = m.get_by_stack_ref(stack_ref).unwrap();
                         if bool_val.is_false()? {
                             print!(" continue");
@@ -700,7 +705,7 @@ impl<'a> VirtualMachine<'a> {
                     OpCode::Exit => {
                         todo!();
                     }
-                    // stack args: [rx type instance field, new value]
+                    // stack args: [vec[rx type instance field], new value]
                     OpCode::SetRxField => {
                         todo!();
                     }
