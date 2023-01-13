@@ -1155,7 +1155,7 @@ impl RotoFilter<PrefixToken> for Prefix {
     fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        args: &[&TypeValue],
+        args: &[&'a TypeValue],
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
     {
@@ -1167,6 +1167,19 @@ impl RotoFilter<PrefixToken> for Prefix {
                         IpAddress(Some(prefix.addr())),
                     ))
                 }))
+            }
+            PrefixToken::Len => {
+                if let TypeValue::Builtin(BuiltinTypeValue::PrefixLength(len)) =
+                    args[1]
+                {
+                    Ok(Box::new(move || (*len).into()))
+                } else {
+                    Err(format!(
+                        "Invalid argument type for method 'len': {}",
+                        args[0]
+                    )
+                    .into())
+                }
             }
             _ => Err(format!(
                 "Unknown method for type Prefix: {}",
