@@ -33,7 +33,7 @@ impl From<u32> for StackRefPos {
 
 #[derive(Debug)]
 pub(crate) struct StackRef {
-    pos: StackRefPos,
+    pub(crate) pos: StackRefPos,
     field_index: Option<usize>,
 }
 
@@ -95,13 +95,53 @@ impl LinearMemory {
         stack_ref: &StackRef,
     ) -> Option<&TypeValue> {
         if let StackRefPos::MemPos(pos) = stack_ref.pos {
-            self.get_at_field_index(pos as usize, stack_ref.field_index)
+            self.get_value_at_field_index(pos as usize, stack_ref.field_index)
         } else {
             None
         }
     }
 
-    pub fn get_at_field_index(
+    pub(crate) fn get_by_stack_ref_owned(
+        &mut self,
+        stack_ref: &StackRef
+    ) -> Result<TypeValue, VmError> {
+        let StackRef {
+            pos: stack_ref_pos,
+            field_index,
+        } = stack_ref;
+
+        match stack_ref_pos {
+            StackRefPos::MemPos(pos) => match field_index {
+                None => self
+                    .get_owned(*pos as usize)
+                    .ok_or(VmError::MemOutOfBounds),
+                Some(field_index) => match self.get_owned(*pos as usize) {
+                    Some(TypeValue::Record(mut r)) => {
+                        let field = r.get_field_by_index_owned(*field_index);
+                        match field {
+                            ElementTypeValue::Nested(nested) => Ok(*nested),
+                            ElementTypeValue::Primitive(b) => Ok(b),
+                            _ => Err(VmError::MemOutOfBounds),
+                        }
+                    }
+                    Some(TypeValue::List(mut l)) => {
+                        let field = l.get_field_by_index_owned(*field_index);
+                        match field {
+                            Some(ElementTypeValue::Nested(nested)) => {
+                                Ok(*nested)
+                            }
+                            Some(ElementTypeValue::Primitive(b)) => Ok(b),
+                            _ => Err(VmError::MemOutOfBounds),
+                        }
+                    }
+                    _ => Err(VmError::MemOutOfBounds),
+                },
+            },
+            _ => Err(VmError::MemOutOfBounds)
+        }
+    }
+
+    pub fn get_value_at_field_index(
         &self,
         index: usize,
         field_index: Option<usize>,
@@ -135,11 +175,7 @@ impl LinearMemory {
         }
     }
 
-    fn _get_mut(&mut self, index: usize) -> Option<&mut TypeValue> {
-        self.0.get_mut(index)
-    }
-
-    fn _take(&mut self, index: usize) -> Option<TypeValue> {
+    fn get_owned(&mut self, index: usize) -> Option<TypeValue> {
         self.0.get_mut(index).map(std::mem::take)
     }
 
@@ -159,6 +195,12 @@ impl Index<usize> for LinearMemory {
 impl IndexMut<usize> for LinearMemory {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.0[index]
+    }
+}
+
+impl Display for LinearMemory {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "{:?}", self.0)
     }
 }
 
@@ -299,6 +341,14 @@ impl<'a> VirtualMachine<'a> {
             }
         }
         unwind_stack
+    }
+
+    fn unwind_stack_into_vec(
+        &'a self,
+        mem: &'a LinearMemory,
+    ) -> Vec<StackRef> {
+        let mut stack = self.stack.borrow_mut();
+        stack.unwind().into_iter().collect::<Vec<_>>()
     }
 
     fn get_data_source(
@@ -586,10 +636,8 @@ impl<'a> VirtualMachine<'a> {
                                     m.set(mem_pos, tv);
                                 }
                             }
-                            drop(s);
                         }
 
-                        drop(m);
                     }
                     // stack args: [mem_pos, constant_value]
                     OpCode::PushStack => match args[0] {
@@ -601,7 +649,6 @@ impl<'a> VirtualMachine<'a> {
 
                             let mut s = self.stack.borrow_mut();
                             s.push(StackRefPos::MemPos(pos))?;
-                            drop(s);
                         }
                         _ => return Err(VmError::InvalidValueType),
                     },
@@ -609,8 +656,7 @@ impl<'a> VirtualMachine<'a> {
                     OpCode::PopStack => {
                         if args.is_empty() {
                             let mut s = self.stack.borrow_mut();
-                            s.pop();
-                            drop(s);
+                            s.pop()?;
                         } else {
                             return Err(VmError::InvalidValueType);
                         }
@@ -619,7 +665,6 @@ impl<'a> VirtualMachine<'a> {
                     OpCode::ClearStack => {
                         let mut s = self.stack.borrow_mut();
                         s.clear();
-                        drop(s);
                     }
                     // stack args: [mem_pos, constant_value]
                     OpCode::MemPosSet => {
@@ -628,7 +673,6 @@ impl<'a> VirtualMachine<'a> {
                                 let v = std::mem::take(v);
                                 let mut m = mem.borrow_mut();
                                 m.set(pos as usize, v);
-                                drop(m);
                             } else {
                                 return Err(VmError::InvalidValueType);
                             }
@@ -642,7 +686,6 @@ impl<'a> VirtualMachine<'a> {
                             if let Arg::FieldAccess(field) = arg {
                                 let mut s = self.stack.borrow_mut();
                                 s.set_field_index(field)?;
-                                drop(s);
                             } else {
                                 return Err(VmError::InvalidValueType);
                             }
@@ -715,9 +758,35 @@ impl<'a> VirtualMachine<'a> {
                     OpCode::Exit => {
                         todo!();
                     }
+                    // SetRxField is different from MemPosSet, not only
+                    // because it can only change the Rx instance, but also
+                    // because it can modify a specific field on the Rx
+                    // instance. (MemPosSet can only replace the whole
+                    // instance).
+
                     // stack args: [vec[rx type instance field], new value]
                     OpCode::SetRxField => {
-                        todo!();
+                        let mut m = mem.borrow_mut();
+                        // pop all refs from the stack and resolve them to
+                        // their values.
+                        let stack_args = self.unwind_stack_into_vec(&m);
+
+                        // swap out the Rx instance from memory
+                        let mut rx = m.get_owned(0).unwrap();
+
+                        // swap out the new value from memory
+                        let val = m
+                            .get_by_stack_ref_owned(
+                                stack_args.get(1).unwrap(),
+                            )
+                            .unwrap();
+
+                        // change the rx instance to hold the new value in the
+                        // right field.
+                        rx.set_field_by_stack_ref(&stack_args[0], val)?;
+
+                        // swap the rx instance back into memory at position 0.
+                        m.set(0, rx);
                     }
                     // stack args: [tx type instance field, new value]
                     OpCode::SetTxField => {
@@ -731,7 +800,7 @@ impl<'a> VirtualMachine<'a> {
 
         let m = mem.borrow();
         for (i, addr) in m.0.as_slice().iter().enumerate() {
-            if !addr.is_empty() {
+            if !addr.is_unitialized() {
                 println!("{}: {}", i, addr);
             }
         }
@@ -810,6 +879,7 @@ pub enum VmError {
     InvalidMethodCall,
     DataSourceNotFound(usize),
     ImpossibleComparison,
+    InvalidWrite,
 }
 
 #[derive(Debug)]
@@ -992,7 +1062,7 @@ pub enum OpCode {
 // }
 
 pub trait Payload {
-    fn set(&mut self, field: ShortString, value: TypeValue);
+    fn set_field(&mut self, field: ShortString, value: TypeValue);
     fn get(&self, field: ShortString) -> Option<&TypeValue>;
     fn take_value(self) -> TypeValue;
 }
@@ -1042,16 +1112,16 @@ impl ExtDataSource {
         }
     }
 
-    pub fn get_by_key<'a>(&'a self, key: &str) -> Option<&'a Record> {
-        match self.source {
-            DataSource::Table(ref t) => t.records.iter().find(|v| {
-                v.get_field_by_index(0).map(|v| v.0.as_str()) == Some(key)
-            }),
-            DataSource::Rib(ref r) => {
-                todo!()
-            }
-        }
-    }
+    // pub fn get_by_key<'a>(&'a self, key: &str) -> Option<&'a Record> {
+    //     match self.source {
+    //         DataSource::Table(ref t) => t.records.iter().find(|v| {
+    //             v.get_field_by_index(0).map(|v| v.0.as_str()) == Some(key)
+    //         }),
+    //         DataSource::Rib(ref r) => {
+    //             todo!()
+    //         }
+    //     }
+    // }
 
     pub fn get_at_field_index(
         &self,

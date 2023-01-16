@@ -2,14 +2,14 @@ use std::{cmp::Ordering, fmt::Display};
 
 //============ TypeValue ====================================================
 use crate::{
-    ast::ShortString, compile::CompileError, traits::RotoFilter, vm::VmError,
+    ast::ShortString, compile::CompileError, traits::RotoFilter, vm::{VmError, StackRef, StackRefPos, Payload},
 };
 
 use super::{
     builtin::{
         AsPath, Asn, Boolean, BuiltinTypeValue, Community, HexLiteral,
         IntegerLiteral, IpAddress, Prefix, PrefixLength,
-        StringLiteral, U32, U8,
+        StringLiteral, U32, U8
     },
     collections::{ElementTypeValue, List, Record},
     datasources::{Rib, Table},
@@ -86,7 +86,7 @@ impl TypeValue {
     pub fn get_field_by_index(
         &self,
         index: usize,
-    ) -> Result<&(ShortString, ElementTypeValue), CompileError> {
+    ) -> Result<&ElementTypeValue, CompileError> {
         match self {
             TypeValue::Record(r) => {
                 let field = r.get_field_by_index(index);
@@ -94,7 +94,7 @@ impl TypeValue {
                     format!(
                         "Index {} out of bounds for record '{:?}'",
                         index, self
-                    )
+                    ).as_str()
                     .into()
                 })
             }
@@ -105,11 +105,29 @@ impl TypeValue {
                         "Index {} out of bounds for list '{:?}'",
                         index, self
                     )
-                    .into()
+                    .as_str().into()
                 })
             }
             _ => Err(format!("Type '{:?}' is not a record.", self).into()),
         }
+    }
+
+    pub(crate) fn set_field_by_stack_ref(&mut self, stack_ref: &StackRef, value: TypeValue) -> Result<(), VmError> {
+        if let StackRefPos::MemPos(index) = stack_ref.pos {
+            match self {
+                TypeValue::Record(rec) => {
+                    rec.set_field_for_index(index as usize, value)?
+                }
+                TypeValue::List(list) => {
+                    list.set_field_for_index(index as usize, value)?
+                }
+                _ => return Err(VmError::InvalidWrite)
+            };
+        } else {
+            return Err(VmError::InvalidWrite);
+        };
+        
+        Ok(())
     }
 
     pub(crate) fn exec_value_method(

@@ -6,8 +6,7 @@ use crate::traits::{MethodProps, RotoFilter, TokenConvert};
 use crate::vm::{Payload, VmError};
 
 use super::builtin::{
-    AsPath, Asn, Community, IpAddress,
-    Prefix, PrefixLength, U32, U8,
+    AsPath, Asn, Community, IpAddress, Prefix, PrefixLength, U32, U8,
 };
 use super::typedef::TypeDef;
 use super::typevalue::TypeValue;
@@ -149,10 +148,7 @@ impl List {
 
     fn inner_from_typevalue(
         type_value: TypeValue,
-    ) -> std::result::Result<
-        Vec<ElementTypeValue>,
-        CompileError,
-    >
+    ) -> std::result::Result<Vec<ElementTypeValue>, CompileError>
     where
         Self: std::marker::Sized,
     {
@@ -167,10 +163,8 @@ impl List {
         _method_token: usize,
         _args: Vec<&TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce(TypeValue) -> TypeValue + '_>,
-        CompileError,
-    > {
+    ) -> Result<Box<dyn FnOnce(TypeValue) -> TypeValue + '_>, CompileError>
+    {
         todo!()
     }
 
@@ -181,9 +175,23 @@ impl List {
         // self.0.get(index).ok_or("Index out of bounds".into())
         self.0.get(index)
     }
-    
-    pub fn get_field_by_index_owned(&mut self, index: usize) -> Option<ElementTypeValue> {
+
+    pub fn get_field_by_index_owned(
+        &mut self,
+        index: usize,
+    ) -> Option<ElementTypeValue> {
         self.0.get_mut(index).map(std::mem::take)
+    }
+
+    pub fn set_field_for_index(
+        &mut self,
+        index: usize,
+        value: TypeValue,
+    ) -> Result<(), VmError> {
+        let e_tv = self.0.get_mut(index).ok_or(VmError::MemOutOfBounds)?;
+        let new_field = &mut ElementTypeValue::from(value);
+        std::mem::swap(e_tv, new_field);
+        Ok(())
     }
 }
 
@@ -258,10 +266,8 @@ impl RotoFilter<ListToken> for List {
         _method: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<
-        std::boxed::Box<(dyn FnOnce() -> TypeValue)>,
-        CompileError,
-    > {
+    ) -> Result<std::boxed::Box<(dyn FnOnce() -> TypeValue)>, CompileError>
+    {
         todo!()
     }
 
@@ -269,8 +275,7 @@ impl RotoFilter<ListToken> for List {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 }
@@ -324,24 +329,25 @@ impl<'a> Record {
         Ok(Self(elems))
     }
 
-    pub fn create_empty_instance(ty: &TypeDef) -> Result<Record, CompileError> {
+    pub fn create_empty_instance(
+        ty: &TypeDef,
+    ) -> Result<Record, CompileError> {
         if let TypeDef::Record(_rec) = ty {
             let empty_instance = _rec
-            .iter()
-            .map(|(name, ty)| (name.clone(), ty.clone()))
-            .collect::<Vec<(ShortString, Box<TypeDef>)>>();
+                .iter()
+                .map(|(name, ty)| (name.clone(), ty.clone()))
+                .collect::<Vec<(ShortString, Box<TypeDef>)>>();
             println!("new empty instance: {:#?}", empty_instance);
             Ok(empty_instance.into())
         } else {
             Err(CompileError::new("Not a record type".into()))
         }
     }
- 
+
     pub fn create_instance(
         ty: &TypeDef,
         kvs: Vec<(&str, TypeValue)>,
     ) -> Result<Record, CompileError> {
-        
         if kvs.is_empty() {
             return Self::create_empty_instance(ty);
         }
@@ -354,7 +360,9 @@ impl<'a> Record {
             if ty._check_record_fields(shortstring_vec.as_slice()) {
                 TypeValue::create_record(kvs)
             } else {
-                Err(CompileError::new("Record fields do not match record type".into()))
+                Err(CompileError::new(
+                    "Record fields do not match record type".into(),
+                ))
             }
         } else {
             Err(CompileError::new("Not a record type".into()))
@@ -377,17 +385,29 @@ impl<'a> Record {
 
     pub fn get_field_by_index_owned(
         &mut self,
-        index: usize
+        index: usize,
     ) -> ElementTypeValue {
-        self.0.get_mut(index).map(|f| std::mem::take(&mut f.1)).unwrap()
+        self.0
+            .get_mut(index)
+            .map(|f| std::mem::take(&mut f.1))
+            .unwrap()
+    }
+
+    pub fn set_field_for_index(
+        &mut self,
+        index: usize,
+        value: TypeValue,
+    ) -> Result<(), VmError> {
+        let e_tv = self.0.get_mut(index).ok_or(VmError::MemOutOfBounds)?;
+        let new_field = &mut (e_tv.0.clone(), ElementTypeValue::from(value));
+        std::mem::swap(e_tv, new_field);
+        Ok(())
     }
 
     fn inner_from_typevalue(
         ty: TypeValue,
-    ) -> std::result::Result<
-        Vec<(ShortString, ElementTypeValue)>,
-        CompileError,
-    > {
+    ) -> std::result::Result<Vec<(ShortString, ElementTypeValue)>, CompileError>
+    {
         match ty {
             TypeValue::Record(r) => Ok(r.0),
             _ => Err("Not a record type".into()),
@@ -454,11 +474,10 @@ impl RotoFilter<RecordToken> for Record {
         type_def: &TypeDef,
     ) -> Result<TypeValue, CompileError> {
         match type_def {
-            TypeDef::Record(_) => {
-                Ok(TypeValue::Record(self))
-            }
-            _ => Err("Record type cannot be converted into another type".to_string()
-            .into()),
+            TypeDef::Record(_) => Ok(TypeValue::Record(self)),
+            _ => Err("Record type cannot be converted into another type"
+                .to_string()
+                .into()),
         }
     }
 
@@ -467,8 +486,7 @@ impl RotoFilter<RecordToken> for Record {
         _method: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + '_>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + '_>, CompileError> {
         todo!()
     }
 
@@ -476,15 +494,19 @@ impl RotoFilter<RecordToken> for Record {
         _method_token: usize,
         _args: &[&'a TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 }
 
 impl From<Vec<(ShortString, Box<TypeDef>)>> for Record {
     fn from(st_vec: Vec<(ShortString, Box<TypeDef>)>) -> Self {
-        Record(st_vec.iter().map(|(s, t)| (s.clone(), t.as_ref().into())).collect::<Vec<_>>())
+        Record(
+            st_vec
+                .iter()
+                .map(|(s, t)| (s.clone(), t.as_ref().into()))
+                .collect::<Vec<_>>(),
+        )
     }
 }
 
