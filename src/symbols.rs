@@ -368,6 +368,35 @@ pub enum SymbolKind {
     Empty,
 }
 
+#[derive(Debug)]
+pub struct MatchAction {
+    // name: ShortString,
+    action_type: MatchActionType,
+    quantifier: MatchActionQuantifier,
+    symbol: Symbol
+}
+
+impl MatchAction { 
+    pub(crate) fn get_args(&self) -> &[Symbol] {
+        self.symbol.get_args()
+    }
+
+    pub(crate) fn get_kind(&self) -> SymbolKind {
+        self.symbol.get_kind()
+    }
+
+    pub fn get_name(&self) -> ShortString {
+        self.symbol.get_name()
+    }
+}
+
+#[derive(Debug)]
+pub enum MatchActionQuantifier {
+    Exists,
+    ExactlyOne,
+    Every
+}
+
 #[derive(Debug, Hash, Copy, Clone, Eq, PartialEq)]
 pub enum MatchActionType {
     MatchAction,
@@ -425,7 +454,8 @@ pub struct SymbolTable {
     actions: HashMap<ShortString, Symbol>,
     // All the `filter` clauses in the `apply` section, the tie actions to
     // terms.
-    match_actions: HashMap<MatchActionKey, Vec<Symbol>>,
+    // match_actions: HashMap<MatchActionKey, Vec<Symbol>>,
+    match_actions: Vec<MatchAction>
 }
 
 // The global symbol table.
@@ -493,7 +523,7 @@ impl SymbolTable {
             variables: HashMap::new(),
             terms: HashMap::new(),
             actions: HashMap::new(),
-            match_actions: HashMap::new(),
+            match_actions: vec![],
         }
     }
 
@@ -674,38 +704,19 @@ impl SymbolTable {
             key
         };
 
-        let key = MatchActionKey((name, kind.try_into()?));
-
-        if self.match_actions.contains_key(&key) {
-            return Err(format!(
-                "Match Action '{}' with type {:?} already defined in scope {}",
-                key.0.0.clone(), key.0.1, self.scope
-            )
-            .into());
-        }
-
-        if let Some(match_action) = self.match_actions.get_mut(&key) {
-            match_action.push(Symbol {
-                name: key.0.0,
+        self.match_actions.push(MatchAction {
+            symbol: Symbol {
+                name,
                 kind,
                 ty,
                 args,
                 value,
                 token: Some(token),
-            });
-        } else {
-            self.match_actions.insert(
-                key.clone(),
-                vec![Symbol {
-                    name: key.0.0,
-                    kind,
-                    ty,
-                    args,
-                    value,
-                    token: Some(token),
-                }],
-            );
-        };
+            },
+            action_type: kind.try_into()?,
+            quantifier: MatchActionQuantifier::Exists,
+         });
+         
         Ok(())
     }
 
@@ -825,23 +836,23 @@ impl SymbolTable {
         self.actions.values().collect::<Vec<_>>()
     }
 
-    pub(crate) fn get_match_action(
-        &self,
-        name: &ShortString,
-        ty: MatchActionType
-    ) -> Result<Vec<(TypeDef, Token)>, CompileError> {
-        self.match_actions
-            .get(&MatchActionKey((name.clone(), ty)))
-            .ok_or_else(|| format!("Symbol '{}' not found", name).into())
-            .map(|mas| {
-                mas.iter()
-                    .map(|ma| (ma.ty.clone(), ma.token.clone().unwrap()))
-                    .collect()
-            })
-    }
+    // pub(crate) fn get_match_action(
+    //     &self,
+    //     name: &ShortString,
+    //     ty: MatchActionType
+    // ) -> Result<Vec<(TypeDef, Token)>, CompileError> {
+    //     self.match_actions
+    //         .get(&MatchActionKey((name.clone(), ty)))
+    //         .ok_or_else(|| format!("Symbol '{}' not found", name).into())
+    //         .map(|mas| {
+    //             mas.iter()
+    //                 .map(|ma| (ma.ty.clone(), ma.token.clone().unwrap()))
+    //                 .collect()
+    //         })
+    // }
 
-    pub(crate) fn get_match_actions(&self) -> Vec<&Vec<Symbol>> {
-        self.match_actions.values().collect::<Vec<_>>()
+    pub(crate) fn get_match_actions(&self) -> Vec<&MatchAction> {
+        self.match_actions.iter().collect::<Vec<_>>() //.values().collect::<Vec<_>>()
     }
 
     pub(crate) fn get_data_source(
@@ -874,9 +885,9 @@ impl SymbolTable {
         &self,
     ) -> Result<
         (
-            (ShortString, TypeDef),
-            Option<(ShortString, TypeDef)>,
-            DepsGraph,
+            (ShortString, TypeDef), // rx type
+            Option<(ShortString, TypeDef)>, // tx type 
+            DepsGraph,// (variables, arguments, data sources)
         ),
         CompileError,
     > {

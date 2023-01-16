@@ -244,7 +244,7 @@ fn unwind_stack(
     v
 }
 
-fn compile_module(_module: &SymbolTable) -> Result<RotoPack, CompileError> {
+fn compile_module(module: &SymbolTable) -> Result<RotoPack, CompileError> {
     let (
         _rx_type,
         _tx_type,
@@ -253,10 +253,10 @@ fn compile_module(_module: &SymbolTable) -> Result<RotoPack, CompileError> {
             variables,
             data_sources,
         },
-    ) = _module.create_deps_graph()?;
+    ) = module.create_deps_graph()?;
 
     let mut state = CompilerState {
-        cur_module: _module,
+        cur_module: module,
         local_vars: VariablesMap::default(),
         used_variables: variables,
         used_data_sources: data_sources,
@@ -271,7 +271,7 @@ fn compile_module(_module: &SymbolTable) -> Result<RotoPack, CompileError> {
 
     println!(
         "======== dependencies for module: {:?} ===========",
-        _module
+        module
     );
 
     println!("___used args");
@@ -725,9 +725,10 @@ fn compile_apply(
 ) -> Result<(Vec<MirBlock>, CompilerState), CompileError> {
     let match_actions = state.cur_module.get_match_actions();
 
+    println!("match action in order: {:#?}", match_actions.iter().map(|ma| ma.get_name()).collect::<Vec<_>>());
     // Collect the terms that we need to compile.
     for match_action in match_actions {
-        let term_name = match_action[0].get_name();
+        let term_name = match_action.get_name();
 
         // See if it was already compiled earlier on.
         let term = state.computed_terms.iter().find(|t| t.0 == term_name);
@@ -782,7 +783,7 @@ fn compile_apply(
             command_stack: Vec::new(),
         };
 
-        if let SymbolKind::MatchAction(ma) = match_action[0].get_kind() {
+        if let SymbolKind::MatchAction(ma) = match_action.get_kind() {
             match ma {
                 MatchActionType::MatchAction => {
                     state.cur_mir_block.command_stack.extend([
@@ -792,7 +793,7 @@ fn compile_apply(
                                 format!(
                                     "MATCH ACTION {}-{:?}",
                                     term_name.clone(),
-                                    match_action[0].get_kind()
+                                    match_action.get_kind()
                                 )
                                 .as_str()
                                 .into(),
@@ -809,7 +810,7 @@ fn compile_apply(
                                 format!(
                                     "MATCH ACTION NEGATE {}-{:?}",
                                     term_name,
-                                    match_action[0].get_kind()
+                                    match_action.get_kind()
                                 )
                                 .as_str()
                                 .into(),
@@ -824,7 +825,7 @@ fn compile_apply(
         };
 
         // collect all actions included in this match_action and compile them
-        for action in match_action[0].get_args() {
+        for action in match_action.get_args() {
             let _module = state.cur_module;
             let action_name = action.get_name();
             let actions = _module.get_actions();
