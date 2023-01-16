@@ -1169,10 +1169,15 @@ impl RotoFilter<PrefixToken> for Prefix {
                 }))
             }
             PrefixToken::Len => {
-                if let TypeValue::Builtin(BuiltinTypeValue::PrefixLength(len)) =
-                    args[1]
+                if let TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(
+                    Some(pfx),
+                ))) = args[0]
                 {
-                    Ok(Box::new(move || (*len).into()))
+                    Ok(Box::new(move || {
+                        TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
+                            PrefixLength(Some(pfx.len())),
+                        ))
+                    }))
                 } else {
                     Err(format!(
                         "Invalid argument type for method 'len': {}",
