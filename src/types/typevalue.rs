@@ -36,8 +36,8 @@ pub enum TypeValue {
     // key, e.g. parsed csv files.
     Table(Table),
     #[default]
-    // Unknown is not empty or unitialized, e.g. it may be the result of a
-    // search.
+    // Unknown is NOT EQUAL tO empty or unitialized, e.g. it may be the
+    // result of a search. A ternary logic value, if you will.
     Unknown,
     // Used for LinearMemory online, it's the initial state of all positions
     // except the first two positions (rx and tx)

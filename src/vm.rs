@@ -380,9 +380,9 @@ impl<'a> VirtualMachine<'a> {
             println!("\n\n--mirblock------------------");
 
             println!("stack: {:?}", self.stack);
-            for Command { op, mut args } in command_stack {
+            for (pc, Command { op, mut args }) in command_stack.into_iter().enumerate() {
                 commands_num += 1;
-                print!("\n-> {:3?} {:?} ", op, args);
+                print!("\n{:3} -> {:3?} {:?} ", pc, op, args);
                 match op {
                     OpCode::Cmp => {
                         let mut m = mem.borrow_mut();
@@ -395,8 +395,8 @@ impl<'a> VirtualMachine<'a> {
                             Arg::CompareOp(CompareOp::Eq) => {
                                 let res = left == right;
                                 println!(
-                                    "-> {:?} == {:?} = {}",
-                                    left, right, res
+                                    "{:3} -> {:?} == {:?} = {}",
+                                    pc, left, right, res
                                 );
                                 m.set(
                                     2,
@@ -413,8 +413,8 @@ impl<'a> VirtualMachine<'a> {
                             Arg::CompareOp(CompareOp::Ne) => {
                                 let res = left != right;
                                 println!(
-                                    "-> {:?} != {:?} = {}",
-                                    left, right, res
+                                    "{:3} -> {:?} != {:?} = {}",
+                                    pc, left, right, res
                                 );
                                 m.set(
                                     2,
@@ -431,8 +431,8 @@ impl<'a> VirtualMachine<'a> {
                             Arg::CompareOp(CompareOp::Lt) => {
                                 let res = left < right;
                                 println!(
-                                    "-> {:?} < {:?} = {}",
-                                    left, right, res
+                                    "{:3} -> {:?} < {:?} = {}",
+                                    pc, left, right, res
                                 );
                                 m.set(
                                     2,
@@ -449,8 +449,8 @@ impl<'a> VirtualMachine<'a> {
                             Arg::CompareOp(CompareOp::Le) => {
                                 let res = left <= right;
                                 println!(
-                                    "-> {:?} <= {:?} = {}",
-                                    left, right, res
+                                    "{:3} -> {:?} <= {:?} = {}",
+                                    pc, left, right, res
                                 );
                                 m.set(
                                     2,
@@ -467,8 +467,8 @@ impl<'a> VirtualMachine<'a> {
                             Arg::CompareOp(CompareOp::Gt) => {
                                 let res = left > right;
                                 println!(
-                                    "-> {:?} > {:?} = {}",
-                                    left, right, res
+                                    "{:3} -> {:?} > {:?} = {}",
+                                    pc, left, right, res
                                 );
                                 m.set(
                                     2,
@@ -485,8 +485,8 @@ impl<'a> VirtualMachine<'a> {
                             Arg::CompareOp(CompareOp::Ge) => {
                                 let res = left >= right;
                                 println!(
-                                    "-> {:?} >= {:?} = {}",
-                                    left, right, res
+                                    "{:3} -> {:?} >= {:?} = {}",
+                                    pc, left, right, res
                                 );
                                 m.set(
                                     2,
@@ -505,8 +505,8 @@ impl<'a> VirtualMachine<'a> {
                                 let r = right.try_into()?;
                                 let res = l || r;
                                 println!(
-                                    "-> {:?} || {:?} = {}",
-                                    left, right, res
+                                    "{:3} -> {:?} || {:?} = {}",
+                                    pc, left, right, res
                                 );
                                 m.set(
                                     2,
@@ -524,8 +524,8 @@ impl<'a> VirtualMachine<'a> {
                                 let res =
                                     left.try_into()? && right.try_into()?;
                                 println!(
-                                    "-> {:?} && {:?} = {}",
-                                    left, right, res
+                                    "{:3} -> {:?} && {:?} = {}",
+                                    pc, left, right, res
                                 );
                                 m.set(
                                     2,
@@ -539,7 +539,7 @@ impl<'a> VirtualMachine<'a> {
                                     .borrow_mut()
                                     .push(StackRefPos::MemPos(2))?;
                             }
-                            _ => panic!("invalid compare op"),
+                            _ => panic!("{:3} -> invalid compare op", pc),
                         }
                     }
                     // stack args: [type, method_token, return memory position]
@@ -600,6 +600,8 @@ impl<'a> VirtualMachine<'a> {
                         // The first value on the stack is the value which we
                         // are going to call a method with.
                         let call_value = *stack_args.get(0).unwrap();
+
+                        print!("method on type {}", call_value);
                         let v = call_value.exec_value_method(
                             method_token.into(),
                             &stack_args[1..],
