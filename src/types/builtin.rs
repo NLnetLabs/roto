@@ -245,7 +245,7 @@ impl From<u32> for BuiltinTypeValue {
 
 impl From<i64> for BuiltinTypeValue {
     fn from(val: i64) -> Self {
-        BuiltinTypeValue::IntegerLiteral(IntegerLiteral(Some(val as i64)))
+        BuiltinTypeValue::IntegerLiteral(IntegerLiteral(Some(val)))
     }
 }
 
@@ -409,8 +409,7 @@ impl RotoFilter<U32Token> for U32 {
         _method_token: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 
@@ -418,8 +417,7 @@ impl RotoFilter<U32Token> for U32 {
         _method_token: usize,
         _args: &[&'a TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 
@@ -513,8 +511,7 @@ impl RotoFilter<U8Token> for U8 {
         _method_token: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 
@@ -522,8 +519,7 @@ impl RotoFilter<U8Token> for U8 {
         _method_token: usize,
         _args: &[&'a TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 
@@ -667,8 +663,7 @@ impl RotoFilter<BooleanToken> for Boolean {
         _method_token: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 
@@ -676,8 +671,7 @@ impl RotoFilter<BooleanToken> for Boolean {
         _method_token: usize,
         _args: &[&'a TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 
@@ -770,8 +764,7 @@ impl RotoFilter<StringLiteralToken> for StringLiteral {
         _method_token: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 
@@ -779,8 +772,7 @@ impl RotoFilter<StringLiteralToken> for StringLiteral {
         _method_token: usize,
         _args: &[&'a TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 
@@ -906,8 +898,7 @@ impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
         method_token: usize,
         args: &[&TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 
@@ -915,8 +906,7 @@ impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 }
@@ -1014,8 +1004,7 @@ impl RotoFilter<HexLiteralToken> for HexLiteral {
         method_token: usize,
         args: &[&TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 
@@ -1023,8 +1012,7 @@ impl RotoFilter<HexLiteralToken> for HexLiteral {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 }
@@ -1086,10 +1074,8 @@ impl Prefix {
         _method: usize,
         _args: Vec<&TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce(TypeValue) -> TypeValue + '_>,
-        CompileError,
-    > {
+    ) -> Result<Box<dyn FnOnce(TypeValue) -> TypeValue + '_>, CompileError>
+    {
         todo!()
     }
 }
@@ -1157,8 +1143,7 @@ impl RotoFilter<PrefixToken> for Prefix {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         match method_token.into() {
             PrefixToken::Address => {
                 let prefix = self.0.ok_or("Cannot convert empty prefix")?;
@@ -1198,8 +1183,7 @@ impl RotoFilter<PrefixToken> for Prefix {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         match method_token.into() {
             PrefixToken::From => {
                 if let TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) =
@@ -1340,8 +1324,7 @@ impl RotoFilter<PrefixLengthToken> for PrefixLength {
         method_token: usize,
         args: &[&TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 
@@ -1349,8 +1332,7 @@ impl RotoFilter<PrefixLengthToken> for PrefixLength {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 }
@@ -1519,8 +1501,7 @@ impl RotoFilter<CommunityToken> for Community {
         _method_token: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 
@@ -1528,8 +1509,7 @@ impl RotoFilter<CommunityToken> for Community {
         _method_token: usize,
         _args: &[&'a TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 }
@@ -1658,8 +1638,7 @@ impl RotoFilter<IpAddressToken> for IpAddress {
         method_token: usize,
         args: &[&TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!();
         // match method_token.into() {
         //     IpAddressToken::From => {
@@ -1677,8 +1656,7 @@ impl RotoFilter<IpAddressToken> for IpAddress {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 }
@@ -1784,8 +1762,7 @@ impl RotoFilter<AsnToken> for Asn {
         method_token: usize,
         args: &'a [&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         match method_token.into() {
             AsnToken::Set => {
                 if let TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) =
@@ -1805,8 +1782,7 @@ impl RotoFilter<AsnToken> for Asn {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 }
@@ -1886,10 +1862,7 @@ impl AsPath {
 
     fn inner_from_typevalue(
         type_value: TypeValue,
-    ) -> Result<
-        routecore::asn::AsPath<Vec<routecore::asn::Asn>>,
-        CompileError,
-    >
+    ) -> Result<routecore::asn::AsPath<Vec<routecore::asn::Asn>>, CompileError>
     where
         Self: std::marker::Sized,
     {
@@ -1959,10 +1932,7 @@ impl RotoFilter<AsPathToken> for AsPath {
         method: usize,
         args: &'a [&'a TypeValue],
         _res_type: TypeDef,
-    ) -> Result<
-        Box<(dyn FnOnce() -> TypeValue + 'a)>,
-        CompileError,
-    > {
+    ) -> Result<Box<(dyn FnOnce() -> TypeValue + 'a)>, CompileError> {
         match method.into() {
             AsPathToken::Origin => {
                 if let Some(rc_as_path) = &self.0 {
@@ -2027,8 +1997,7 @@ impl RotoFilter<AsPathToken> for AsPath {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 }
@@ -2149,10 +2118,7 @@ impl RotoFilter<RouteToken> for Route {
         _method: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<
-        Box<(dyn FnOnce() -> TypeValue + 'a)>,
-        CompileError,
-    > {
+    ) -> Result<Box<(dyn FnOnce() -> TypeValue + 'a)>, CompileError> {
         todo!()
     }
 
@@ -2160,8 +2126,7 @@ impl RotoFilter<RouteToken> for Route {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 }
@@ -2215,7 +2180,11 @@ impl From<RouteToken> for usize {
 }
 
 impl Payload for Route {
-    fn set(&mut self, field: crate::ast::ShortString, value: TypeValue) {
+    fn set_field(
+        &mut self,
+        field: crate::ast::ShortString,
+        value: TypeValue,
+    ) {
         todo!()
     }
 
@@ -2306,8 +2275,7 @@ impl RotoFilter<RouteStatusToken> for RouteStatus {
         _method_token: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 
@@ -2315,8 +2283,7 @@ impl RotoFilter<RouteStatusToken> for RouteStatus {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>
-    {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
         todo!()
     }
 }
