@@ -15,7 +15,6 @@ use crate::{
     types::typedef::TypeDef,
     vm::{
         Arg, Command, ExtDataSource, OpCode, StackRefPos, VariablesMap,
-        VmError,
     },
 };
 
@@ -147,7 +146,6 @@ pub struct Compiler<'a> {
     source_code: &'a str,
     ast: SyntaxTree,
     symbols: GlobalSymbolTable,
-    mir: Vec<MirBlock>,
 }
 
 impl<'a> Compiler<'a> {
@@ -156,7 +154,6 @@ impl<'a> Compiler<'a> {
             source_code,
             ast: SyntaxTree::default(),
             symbols: GlobalSymbolTable::new(),
-            mir: Vec::new(),
         }
     }
 
@@ -378,7 +375,7 @@ fn compile_expr<'a>(
                 println!("\nlocal_stack {:?}", local_stack);
                 state.local_vars.set(var, state.mem_pos, 0).unwrap();
                 println!("local_vars {:?}", state.local_vars);
-                
+
                 state.cur_mir_block.command_stack.extend(local_stack);
                 local_stack = VecDeque::new();
             }
