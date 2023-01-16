@@ -83,7 +83,7 @@ pub struct LinearMemory([TypeValue; 512]);
 
 impl LinearMemory {
     pub fn empty() -> Self {
-        LinearMemory(std::array::from_fn(|_| TypeValue::None))
+        LinearMemory(std::array::from_fn(|_| TypeValue::UnInit))
     }
 
     pub fn get(&self, index: usize) -> Option<&TypeValue> {
@@ -112,24 +112,25 @@ impl LinearMemory {
                 Some(TypeValue::Record(r)) => {
                     let field = r.get_field_by_index(field_index);
                     match field {
-                        Some((_, ElementTypeValue::Nested(nested))) => {
+                        Some(ElementTypeValue::Nested(nested)) => {
                             Some(nested)
                         }
-                        Some((_, ElementTypeValue::Primitive(b))) => Some(b),
+                        Some(ElementTypeValue::Primitive(b)) => Some(b),
                         _ => None,
                     }
                 }
                 Some(TypeValue::List(l)) => {
                     let field = l.get_field_by_index(field_index);
                     match field {
-                        Some((_, ElementTypeValue::Nested(nested))) => {
+                        Some(ElementTypeValue::Nested(nested)) => {
                             Some(nested)
                         }
-                        Some((_, ElementTypeValue::Primitive(b))) => Some(b),
+                        Some(ElementTypeValue::Primitive(b)) => Some(b),
                         _ => None,
                     }
                 }
-                _ => None,
+                Some(TypeValue::Unknown) => Some(&TypeValue::Unknown),
+                Some(_) | None => None,
             },
         }
     }
@@ -275,8 +276,17 @@ impl<'a> VirtualMachine<'a> {
             match sr.pos {
                 StackRefPos::MemPos(pos) => {
                     let v = mem
-                        .get_at_field_index(pos as usize, sr.field_index)
-                        .unwrap();
+                        .get_value_at_field_index(pos as usize, sr.field_index)
+                        .unwrap_or_else(|| {
+                            println!("\nstack: {:?}", stack);
+                            println!("mem: {:#?}", mem.0);
+                            // for (i, addr) in m.0.as_slice().iter().enumerate() {
+                            //     if !addr.is_empty() {
+                            //         println!("{}: {}", i, addr);
+                            //     }
+                            // }
+                            panic!("Uninitialized memory in position {}", pos);
+                        });
                     unwind_stack.push(v);
                 }
                 StackRefPos::TablePos(token, pos) => {
@@ -565,7 +575,7 @@ impl<'a> VirtualMachine<'a> {
                             let v = ds.exec_method(
                                 method_token.into(),
                                 &stack_args[..],
-                                TypeDef::None,
+                                TypeDef::Unknown,
                             );
                             let mut s = self.stack.borrow_mut();
                             match v {

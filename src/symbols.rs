@@ -48,7 +48,7 @@ impl Symbol {
                 | TypeDef::Table(_)
                 | TypeDef::List(_)
                 | TypeDef::Record(_)
-                | TypeDef::None
+                | TypeDef::Unknown
         ) {
             (&self.ty).try_into().map(|tv: BuiltinTypeValue| tv.into())
         } else if let TypeValue::Builtin(ty) = &self.value {
@@ -115,7 +115,7 @@ impl Symbol {
     }
 
     pub fn has_value(&self) -> bool {
-        self.value != TypeValue::None
+        self.value != TypeValue::Unknown
     }
 
     pub fn get_value(&self) -> &TypeValue {
@@ -151,9 +151,9 @@ impl Symbol {
         Symbol {
             name: "".into(),
             kind: SymbolKind::Empty,
-            ty: TypeDef::None,
+            ty: TypeDef::Unknown,
             args: vec![],
-            value: TypeValue::None,
+            value: TypeValue::Unknown,
             token: None,
         }
     }
@@ -170,7 +170,7 @@ impl Symbol {
             kind,
             ty,
             args,
-            value: TypeValue::None,
+            value: TypeValue::Unknown,
             token,
         }
     }
@@ -270,8 +270,11 @@ impl Symbol {
             TypeValue::Table(table) => {
                 self.value = table.into_type(type_def)?;
             }
-            TypeValue::None => {
+            TypeValue::Unknown => {
                 self.value = type_def.into();
+            }
+            TypeValue::UnInit => {
+                return Err(CompileError::new("Unitialized Memory conversion.".into()));
             }
         };
         Ok(self)
@@ -632,7 +635,7 @@ impl SymbolTable {
                 kind: SymbolKind::Term,
                 ty: child_symbol.get_type(),
                 args: vec![child_symbol],
-                value: TypeValue::None,
+                value: TypeValue::Unknown,
                 token: term_token,
             });
         } else {

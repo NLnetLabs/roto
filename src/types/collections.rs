@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use crate::ast::ShortString;
 use crate::compile::CompileError;
 use crate::traits::{MethodProps, RotoFilter, TokenConvert};
-use crate::vm::Payload;
+use crate::vm::{Payload, VmError};
 
 use super::builtin::{
     AsPath, Asn, Community, IpAddress,
@@ -114,6 +114,12 @@ impl PartialEq<TypeValue> for ElementTypeValue {
     }
 }
 
+impl Default for ElementTypeValue {
+    fn default() -> Self {
+        Self::Primitive(TypeValue::None)
+    }
+}
+
 //------------ List type ----------------------------------------------------
 
 #[derive(Debug, PartialEq, Eq)]
@@ -158,9 +164,13 @@ impl List {
     pub fn get_field_by_index(
         &self,
         index: usize,
-    ) -> Option<&(ShortString, ElementTypeValue)> {
-        // self.0.get(index).ok_or("Index out of bounds".into()).into()
-        todo!()
+    ) -> Option<&ElementTypeValue> {
+        // self.0.get(index).ok_or("Index out of bounds".into())
+        self.0.get(index)
+    }
+    
+    pub fn get_field_by_index_owned(&mut self, index: usize) -> Option<ElementTypeValue> {
+        self.0.get_mut(index).map(std::mem::take)
     }
 }
 
@@ -348,8 +358,15 @@ impl<'a> Record {
     pub fn get_field_by_index(
         &'a self,
         index: usize,
-    ) -> Option<&'a (ShortString, ElementTypeValue)> {
-        self.0.get(index)
+    ) -> Option<&'a ElementTypeValue> {
+        self.0.get(index).map(|f| &f.1)
+    }
+
+    pub fn get_field_by_index_owned(
+        &mut self,
+        index: usize
+    ) -> ElementTypeValue {
+        self.0.get_mut(index).map(|f| std::mem::take(&mut f.1)).unwrap()
     }
 
     fn inner_from_typevalue(
@@ -489,7 +506,7 @@ impl From<RecordToken> for usize {
 }
 
 impl Payload for Record {
-    fn set(&mut self, field: ShortString, value: TypeValue) {
+    fn set_field(&mut self, field: ShortString, value: TypeValue) {
         todo!()
     }
 

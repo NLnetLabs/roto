@@ -114,7 +114,7 @@ impl<'a> ast::Rib {
             symbols::SymbolKind::NamedType,
             rec_type.clone(),
             vec![],
-            TypeValue::None,
+            TypeValue::Unknown,
         )?;
 
         // add a symbol for the RIB itself, using the newly created record
@@ -125,7 +125,7 @@ impl<'a> ast::Rib {
             symbols::SymbolKind::Rib,
             rec_type,
             vec![],
-            TypeValue::None,
+            TypeValue::Unknown,
         )?;
 
         Ok(())
@@ -150,7 +150,7 @@ impl<'a> ast::Table {
             symbols::SymbolKind::NamedType,
             rec_type.clone(),
             vec![],
-            TypeValue::None,
+            TypeValue::Unknown,
         )?;
 
         // add a symbol for the RIB itself, using the newly created record
@@ -161,7 +161,7 @@ impl<'a> ast::Table {
             symbols::SymbolKind::Table,
             rec_type,
             vec![],
-            TypeValue::None,
+            TypeValue::Unknown,
         )?;
 
         Ok(())
@@ -272,7 +272,7 @@ impl<'a> ast::RecordTypeIdentifier {
             kind,
             record,
             vec![],
-            TypeValue::None,
+            TypeValue::Unknown,
         )?;
 
         Ok(kvs)
@@ -509,7 +509,7 @@ impl ast::Action {
         let action = symbols::Symbol::new(
             self.ident.ident.clone(),
             symbols::SymbolKind::Action,
-            TypeDef::None,
+            TypeDef::Unknown,
             sub_actions_vec,
             None,
         );
@@ -847,7 +847,7 @@ impl ast::ValueExpr {
             }
             ast::ValueExpr::BuiltinMethodCallExpr(builtin_call_expr) => {
                 let name: ShortString = builtin_call_expr.ident.clone().ident;
-                let mut ty = TypeDef::None;
+                let mut ty = TypeDef::Unknown;
                 if let Ok(TypeValue::Builtin(prim_ty)) =
                     name.as_str().try_into()
                 {
@@ -1438,7 +1438,7 @@ fn _declare_variable(
                 kind,
                 ty,
                 vec![],
-                TypeValue::None,
+                TypeValue::Unknown,
             )
         }
         symbols::Scope::Global => {
@@ -1480,7 +1480,7 @@ fn declare_argument(
                 kind,
                 ty,
                 vec![],
-                TypeValue::None,
+                TypeValue::Unknown,
             )
         }
         symbols::Scope::Global => {
@@ -1682,7 +1682,7 @@ fn add_match_action(
                 match_action.get_kind(),
                 match_action.get_type(),
                 match_action.get_args_owned(),
-                TypeValue::None,
+                TypeValue::Unknown,
                 token
             )
         }
@@ -1801,7 +1801,7 @@ fn _declare_variable_from_typedef(
                 kind,
                 ty,
                 vec![],
-                TypeValue::None,
+                TypeValue::Unknown,
             )
         }
         symbols::Scope::Global => {

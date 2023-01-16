@@ -36,12 +36,17 @@ pub enum TypeValue {
     // key, e.g. parsed csv files.
     Table(Table),
     #[default]
-    None,
+    // Unknown is not empty or unitialized, e.g. it may be the result of a
+    // search.
+    Unknown,
+    // Used for LinearMemory online, it's the initial state of all positions
+    // except the first two positions (rx and tx)
+    UnInit
 }
 
 impl TypeValue {
-    pub fn is_empty(&self) -> bool {
-        matches!(self, TypeValue::None)
+    pub fn is_unitialized(&self) -> bool {
+        matches!(self, TypeValue::UnInit)
     }
 
     pub fn create_record(
@@ -188,8 +193,11 @@ impl TypeValue {
             TypeValue::Table(rec) => rec
                 .exec_value_method(method_token, args, return_type)
                 .unwrap()(),
-            TypeValue::None => {
-                panic!("Missing type value. That's fatal.")
+            TypeValue::Unknown => {
+                TypeValue::Unknown
+            }
+            TypeValue::UnInit => {
+                panic!("Unitialized memory cannot be read. That's fatal.");
             }
         }
     }
@@ -209,7 +217,8 @@ impl Display for TypeValue {
             TypeValue::Table(r) => {
                 write!(f, "{} (Table Entry)", r)
             }
-            TypeValue::None => write!(f, "None"),
+            TypeValue::Unknown => write!(f, "None"),
+            TypeValue::UnInit => write!(f, "Uninitialized")
         }
     }
 }
@@ -309,7 +318,7 @@ impl PartialOrd for &TypeValue {
             (TypeValue::Table(_), TypeValue::Table(_)) => {
                 panic!("Tables are not comparable.")
             }
-            (TypeValue::None, TypeValue::None) => {
+            (TypeValue::Unknown, TypeValue::Unknown) => {
                 panic!("None is uncomparable.")
             }
             _ => {
@@ -338,7 +347,7 @@ impl Ord for &TypeValue {
             (TypeValue::Table(_r1), TypeValue::Table(_r2)) => {
                 panic!("Tables are not comparable.")
             }
-            (TypeValue::None, TypeValue::None) => Ordering::Equal,
+            (TypeValue::Unknown, TypeValue::Unknown) => Ordering::Equal,
             (TypeValue::Builtin(_), _) => Ordering::Less,
             (_, TypeValue::Builtin(_)) => Ordering::Greater,
             (TypeValue::List(_), _) => Ordering::Less,
@@ -349,6 +358,8 @@ impl Ord for &TypeValue {
             (_, TypeValue::Rib(_)) => Ordering::Greater,
             (TypeValue::Table(_), _) => Ordering::Less,
             (_, TypeValue::Table(_)) => Ordering::Greater,
+            (_, TypeValue::UnInit) => panic!("comparing with unitialized memory."),
+            (TypeValue::UnInit, _) => panic!("comparing with unitialized memory.")
         }
     }
 }

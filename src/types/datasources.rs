@@ -48,7 +48,7 @@ impl Rib {
                     .enumerate()
                     .find(|v| {
                         if let Some(val) =
-                            v.1.get_field_by_index(0).map(|v| &v.1)
+                            v.1.get_field_by_index(0)
                         {
                             val == args[0]
                         } else {
@@ -62,7 +62,8 @@ impl Rib {
                         ))
                     })
                     .unwrap_or_else(|| {
-                        DataSourceMethodValue::TypeValue(TypeValue::None)
+                        println!("WRITING NONE INTO RIB FIELD");
+                        DataSourceMethodValue::TypeValue(TypeValue::Unknown)
                     }))
             }
             RibToken::Contains => {
@@ -205,7 +206,7 @@ impl Table {
                 .and_then(|r| r.0.get(index).map(|v| (&v.1).into())),
             Some(field_index) => match self.records.get(index) {
                 Some(r) => {
-                    r.get_field_by_index(field_index).map(|v| (&v.1).into())
+                    r.get_field_by_index(field_index).map(|v| v.into())
                 }
                 _ => None,
             },
@@ -225,7 +226,7 @@ impl Table {
                     .enumerate()
                     .find(|v| {
                         if let Some(val) =
-                            v.1.get_field_by_index(0).map(|v| &v.1)
+                            v.1.get_field_by_index(0)
                         {
                             val == args[0]
                         } else {
@@ -239,7 +240,7 @@ impl Table {
                         ))
                     })
                     .unwrap_or_else(|| {
-                        DataSourceMethodValue::TypeValue(TypeValue::None)
+                        DataSourceMethodValue::TypeValue(TypeValue::Unknown)
                     })
             }),
             TableToken::Contains => Box::new(|| {
@@ -248,7 +249,7 @@ impl Table {
                     .enumerate()
                     .find(|v| {
                         if let Some(val) =
-                            v.1.get_field_by_index(0).map(|v| &v.1)
+                            v.1.get_field_by_index(0)
                         {
                             val == args[0]
                         } else {

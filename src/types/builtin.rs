@@ -392,7 +392,7 @@ impl RotoFilter<U32Token> for U32 {
     {
         match method_name.ident.as_str() {
             "set" => Ok(MethodProps::new(
-                TypeValue::None,
+                TypeValue::Unknown,
                 U32Token::Set.into(),
                 vec![TypeDef::IntegerLiteral],
             )),
@@ -494,7 +494,7 @@ impl RotoFilter<U8Token> for U8 {
     {
         match method_name.ident.as_str() {
             "set" => Ok(MethodProps::new(
-                TypeValue::None,
+                TypeValue::Unknown,
                 U8Token::Set.into(),
                 vec![TypeDef::IntegerLiteral],
             )),
@@ -646,7 +646,7 @@ impl RotoFilter<BooleanToken> for Boolean {
     {
         match method_name.ident.as_str() {
             "set" => Ok(MethodProps::new(
-                TypeValue::None,
+                TypeValue::Unknown,
                 BooleanToken::Set.into(),
                 vec![TypeDef::Boolean],
             )),
@@ -1154,9 +1154,10 @@ impl RotoFilter<PrefixToken> for Prefix {
                 }))
             }
             PrefixToken::Len => {
-                if let TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(
+                println!("prefix args {:?}", args);
+                if let Prefix(
                     Some(pfx),
-                ))) = args[0]
+                ) = self
                 {
                     Ok(Box::new(move || {
                         TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
@@ -1730,7 +1731,7 @@ impl RotoFilter<AsnToken> for Asn {
     {
         match method_name.ident.as_str() {
             "set" => Ok(MethodProps::new(
-                TypeValue::None,
+                TypeValue::Unknown,
                 AsnToken::Set.into(),
                 vec![TypeDef::Asn],
             )),
