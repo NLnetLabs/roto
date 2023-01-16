@@ -46,7 +46,7 @@ pub enum TypeDef {
     StringLiteral,
     AcceptReject(AcceptReject), // used in the apply section
     #[default]
-    None,
+    Unknown,
 }
 
 impl TypeDef {
@@ -282,7 +282,7 @@ impl std::fmt::Display for TypeDef {
             TypeDef::HexLiteral => write!(f, "HexLiteral"),
             TypeDef::StringLiteral => write!(f, "StringLiteral"),
             TypeDef::AcceptReject(_) => write!(f, "AcceptReject"),
-            TypeDef::None => write!(f, "None"),
+            TypeDef::Unknown => write!(f, "None"),
         }
     }
 }
@@ -449,7 +449,8 @@ impl From<&TypeValue> for TypeDef {
             ),
             TypeValue::Rib(r) => r.ty.clone(),
             TypeValue::Table(t) => t.ty.clone(),
-            TypeValue::None => TypeDef::None,
+            TypeValue::Unknown => TypeDef::Unknown,
+            TypeValue::UnInit => TypeDef::Unknown
         }
     }
 }

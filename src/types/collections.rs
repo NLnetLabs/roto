@@ -59,7 +59,20 @@ impl<'a> From<&'a TypeDef> for ElementTypeValue {
                     Record::new(def_).unwrap(),
                 )))
             }
-            _ => panic!("Unknown type"),
+            TypeDef::Rib(_) => todo!(),
+            TypeDef::Table(_) => todo!(),
+            TypeDef::Boolean => todo!(),
+            TypeDef::String => todo!(),
+            TypeDef::Route => todo!(),
+            TypeDef::RouteStatus => todo!(),
+            TypeDef::HexLiteral => todo!(),
+            TypeDef::IntegerLiteral => todo!(),
+            TypeDef::StringLiteral => todo!(),
+            TypeDef::AcceptReject(_) => todo!(),
+            TypeDef::Unknown => {
+                ElementTypeValue::Primitive(TypeValue::Unknown)
+            }
+            // _ => panic!("Unknown type"),
         }
     }
 }
@@ -109,14 +122,14 @@ impl PartialEq<TypeValue> for ElementTypeValue {
     fn eq(&self, other: &TypeValue) -> bool {
         match self {
             ElementTypeValue::Primitive(v) => v == other,
-            _ => false
+            _ => false,
         }
     }
 }
 
 impl Default for ElementTypeValue {
     fn default() -> Self {
-        Self::Primitive(TypeValue::None)
+        Self::Primitive(TypeValue::Unknown)
     }
 }
 

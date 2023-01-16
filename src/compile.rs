@@ -334,7 +334,7 @@ fn compile_module(_module: &SymbolTable) -> Result<RotoPack, CompileError> {
         })
         .collect::<Vec<_>>();
 
-    Ok(RotoPack::new(mir, TypeDef::None, None, args, data_sources))
+    Ok(RotoPack::new(mir, TypeDef::Unknown, None, args, data_sources))
 }
 
 fn compile_expr<'a>(
