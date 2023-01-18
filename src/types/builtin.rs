@@ -1895,7 +1895,7 @@ impl RotoFilter<AsPathToken> for AsPath {
                 vec![],
             )),
             "contains" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))),
+                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
                 AsPathToken::Contains.into(),
                 vec![TypeDef::Asn],
             )),
