@@ -6,7 +6,7 @@ use crate::traits::{MethodProps, RotoFilter, TokenConvert};
 use crate::vm::{Payload, VmError};
 
 use super::builtin::{
-    AsPath, Asn, Community, IpAddress, Prefix, PrefixLength, U32, U8,
+    AsPath, Asn, Community, IpAddress, Prefix, PrefixLength, U32, U8, BuiltinTypeValue,
 };
 use super::typedef::TypeDef;
 use super::typevalue::TypeValue;
@@ -71,7 +71,6 @@ impl<'a> From<&'a TypeDef> for ElementTypeValue {
             TypeDef::Unknown => {
                 ElementTypeValue::Primitive(TypeValue::Unknown)
             }
-            // _ => panic!("Unknown type"),
         }
     }
 }
@@ -261,14 +260,50 @@ impl RotoFilter<ListToken> for List {
         Err("List type cannot be converted into another type".into())
     }
 
-    fn exec_value_method(
-        &self,
-        _method: usize,
-        _args: &[&TypeValue],
+    fn exec_value_method<'a>(
+        &'a self,
+        method: usize,
+        args: &'a [&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<std::boxed::Box<(dyn FnOnce() -> TypeValue)>, CompileError>
+    ) -> Result<std::boxed::Box<(dyn FnOnce() -> TypeValue + '_)>, CompileError>
     {
-        todo!()
+        match method.into() {
+            ListToken::Len => {
+                Ok(Box::new(move || {
+                    TypeValue::Builtin(BuiltinTypeValue::U32(U32(Some(self.0.len() as u32))))
+                }))                
+            }
+            ListToken::Contains => {
+                Ok(Box::new(move || {
+                    self.iter().any(|e| e == args[0]).into()
+                }))
+            }
+            // TODO: There's no reasonable way to write to self or parts of self.
+
+            // ListToken::Get => {
+            //    Ok(Box::new(move || {
+            //         match self.0.iter().find(|e| e == &args[0]) {
+            //             Some(e) => (*e).into(),
+            //             None => TypeValue::Unknown
+            //         }
+            //    }))
+            // }
+            ListToken::Get => todo!(),
+            // ListToken::Push => {
+            //     Ok(Box::new(move || {
+            //         self.0.push((*args[0]).into());
+            //         TypeValue::List(*self)
+            //     }))
+            // },
+            ListToken::Pop => todo!(),
+            ListToken::Remove => todo!(),
+            ListToken::Insert => todo!(),
+            ListToken::Clear => todo!(),
+            // Placeholder to make it compile & run
+            ListToken::Push => { Ok(Box::new(move || {
+                TypeValue::Unknown
+            })) },
+        }
     }
 
     fn exec_type_method<'a>(

@@ -6,6 +6,7 @@ use crate::{
     ast::ShortString,
     compile::CompileError,
     traits::{MethodProps, RotoFilter, Token, TokenConvert},
+    types::builtin::Prefix,
     vm::StackRefPos,
 };
 
@@ -19,7 +20,7 @@ use super::{
 #[derive(Debug, PartialEq, Eq)]
 pub struct Rib {
     pub(crate) ty: TypeDef,
-    pub(crate) records: Vec<Record>
+    pub(crate) records: Vec<Record>,
 }
 
 impl Rib {
@@ -42,14 +43,12 @@ impl Rib {
             RibToken::Match => {
                 todo!()
             }
-            RibToken::LongestMatch => {
-                Box::new(|| self.records
+            RibToken::LongestMatch => Box::new(|| {
+                self.records
                     .iter()
                     .enumerate()
                     .find(|v| {
-                        if let Some(val) =
-                            v.1.get_field_by_index(0)
-                        {
+                        if let Some(val) = v.1.get_field_by_index(0) {
                             val == args[0]
                         } else {
                             false
@@ -62,10 +61,16 @@ impl Rib {
                         ))
                     })
                     .unwrap_or_else(|| {
-                        println!("WRITING NONE INTO RIB FIELD");
-                        DataSourceMethodValue::TypeValue(TypeValue::Unknown)
-                    }))
-            }
+                        println!("WRITING Empty record INTO RIB FIELD");
+                        // We can't write TypeValue::Unknown directly in here
+                        // because we would erase the type then. Since this
+                        // method can be in the middle of a chain we need to
+                        // pass on the type
+                        println!("record type {}", self.ty);
+                        let rec = Record::create_empty_instance(&self.ty).unwrap();
+                        DataSourceMethodValue::TypeValue(TypeValue::Record(rec))
+                    })
+            }),
             RibToken::Contains => {
                 todo!()
             }
@@ -225,9 +230,7 @@ impl Table {
                     .iter()
                     .enumerate()
                     .find(|v| {
-                        if let Some(val) =
-                            v.1.get_field_by_index(0)
-                        {
+                        if let Some(val) = v.1.get_field_by_index(0) {
                             val == args[0]
                         } else {
                             false
@@ -248,9 +251,7 @@ impl Table {
                     .iter()
                     .enumerate()
                     .find(|v| {
-                        if let Some(val) =
-                            v.1.get_field_by_index(0)
-                        {
+                        if let Some(val) = v.1.get_field_by_index(0) {
                             val == args[0]
                         } else {
                             false
