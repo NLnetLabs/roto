@@ -1965,15 +1965,13 @@ impl RotoFilter<AsPathToken> for AsPath {
                                     Boolean(Some(contains)),
                                 ))
                             } else {
-                                TypeValue::Builtin(BuiltinTypeValue::Boolean(
-                                    Boolean(None),
-                                ))
+                                TypeValue::Unknown
                             }
                         }))
                     }
                 } else {
                     Ok(Box::new(|| {
-                        TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(None)))
+                        TypeValue::Unknown
                     }))
                 }
             }

@@ -235,7 +235,7 @@ impl Display for TypeValue {
             TypeValue::Table(r) => {
                 write!(f, "{} (Table Entry)", r)
             }
-            TypeValue::Unknown => write!(f, "None"),
+            TypeValue::Unknown => write!(f, "Unknown"),
             TypeValue::UnInit => write!(f, "Uninitialized")
         }
     }
@@ -337,7 +337,7 @@ impl PartialOrd for &TypeValue {
                 panic!("Tables are not comparable.")
             }
             (TypeValue::Unknown, TypeValue::Unknown) => {
-                panic!("None is uncomparable.")
+                panic!("Unknown is unsortable.")
             }
             _ => {
                 panic!("Incomparable types.")
@@ -571,5 +571,11 @@ impl<'a> From<&'a TypeDef> for TypeValue {
 impl From<BuiltinTypeValue> for TypeValue {
     fn from(t: BuiltinTypeValue) -> Self {
         TypeValue::Builtin(t)
+    }
+}
+
+impl From<bool> for TypeValue {
+    fn from(val: bool) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(Some(val))))
     }
 }

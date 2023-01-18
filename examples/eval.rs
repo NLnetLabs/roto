@@ -138,7 +138,7 @@ fn test_data(
     //     status: builtin::RouteStatus::Empty,
     // };
 
-    let mem = vm::LinearMemory::empty();
+    let mem = vm::LinearMemory::uninit();
     let vars = vm::VariablesMap::new();
     let vars = RefCell::new(vars);
 
