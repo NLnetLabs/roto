@@ -1,6 +1,6 @@
 use std::{
-    collections::VecDeque,
-    fmt::{Display, Formatter},
+    collections::{VecDeque, HashMap},
+    fmt::{Display, Formatter}, cell::RefMut,
 };
 
 use nom::error::VerboseError;
@@ -9,7 +9,7 @@ use crate::{
     ast::{self, ShortString, SyntaxTree},
     symbols::{
         DepsGraph, GlobalSymbolTable, MatchActionType, Scope, Symbol,
-        SymbolKind, SymbolTable,
+        SymbolKind, SymbolTable, self,
     },
     traits::Token,
     types::typedef::TypeDef,
@@ -191,7 +191,7 @@ impl<'a> Compiler<'a> {
 
         for module in modules {
             let _module = _global.get(&module).unwrap();
-            roto_packs.push(compile_module(_module));
+            roto_packs.push(compile_module(_module, _global.get(&Scope::Global).unwrap()));
         }
 
         roto_packs
@@ -208,15 +208,24 @@ impl<'a> Compiler<'a> {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, PartialEq)]
+pub enum MirBlockType {
+    Assignment,
+    Term,
+    MatchAction
+}
+
+#[derive(Debug)]
 pub struct MirBlock {
     pub command_stack: Vec<Command>,
+    pub ty: MirBlockType
 }
 
 impl MirBlock {
-    pub fn new() -> Self {
+    pub fn new(ty: MirBlockType) -> Self {
         MirBlock {
             command_stack: Vec::new(),
+            ty
         }
     }
 
@@ -244,25 +253,25 @@ fn unwind_stack(
     v
 }
 
-fn compile_module(module: &SymbolTable) -> Result<RotoPack, CompileError> {
+fn compile_module(module: &SymbolTable, global_table:&SymbolTable) -> Result<RotoPack, CompileError> {
     let (
         _rx_type,
         _tx_type,
         DepsGraph {
-            arguments,
-            variables,
-            data_sources,
+            used_arguments,
+            used_variables,
+            used_data_sources,
         },
-    ) = module.create_deps_graph()?;
+    ) = module.create_deps_graph(global_table)?;
 
     let mut state = CompilerState {
         cur_module: module,
         local_vars: VariablesMap::default(),
-        used_variables: variables,
-        used_data_sources: data_sources,
-        used_arguments: arguments,
+        used_variables,
+        used_data_sources,
+        used_arguments,
         computed_terms: Terms::new(),
-        cur_mir_block: MirBlock::new(),
+        cur_mir_block: MirBlock::new(MirBlockType::Assignment),
         mem_pos: 0,
     };
 
@@ -290,6 +299,8 @@ fn compile_module(module: &SymbolTable) -> Result<RotoPack, CompileError> {
 
     state.used_data_sources.iter().for_each(|t| {
         println!("{:?} {:?}", t.1.get_token().unwrap(), t.0);
+        println!("--- DATA SOURCE");
+        println!("{:#?}", t);
     });
 
     println!("=================================================");
@@ -302,7 +313,7 @@ fn compile_module(module: &SymbolTable) -> Result<RotoPack, CompileError> {
     (mir, state) = compile_apply(mir, state)?;
 
     for m in &mir {
-        println!("\nMIR_block: \n{}", m);
+        println!("\nMIR_block ({:?}): \n{} ()", m.ty, m);
     }
 
     let args = state
@@ -320,16 +331,22 @@ fn compile_module(module: &SymbolTable) -> Result<RotoPack, CompileError> {
         })
         .collect::<Vec<_>>();
 
+    // Lookup all the data sources in the global symbol table. The module
+    // table does not have (the right) typedefs for data sources.
     let data_sources = state
         .used_data_sources
         .iter()
         .map(|ds| {
-            ExtDataSource::new(
-                &ds.1.get_name(),
-                ds.1.get_token().unwrap_or_else(|_| {
+            let name = ds.1.get_name();
+            let resolved_ds = global_table.get_data_source(&name).unwrap_or_else(
+                |_| {
                     panic!("Fatal: Cannot find Token for data source.");
-                }),
-                ds.1.get_type(),
+                }
+            );
+            ExtDataSource::new(
+                &name,
+                resolved_ds.1,
+                resolved_ds.0,
             )
         })
         .collect::<Vec<_>>();
@@ -445,8 +462,9 @@ fn compile_expr<'a>(
                         // args: [ method_call, return_type ]
                         OpCode::ExecuteValueMethod,
                         vec![
-                            Arg::Method(token.into()),
-                            Arg::Type(arg.get_type()),
+                            Arg::Method(token.into()), // method token
+                            Arg::Type(arg.get_type()), // return type
+                            Arg::Arguments(arg.get_args().iter().map(|s| s.get_type()).collect::<Vec<_>>()), // argument types and number
                             Arg::MemPos(state.mem_pos),
                         ],
                     ),
@@ -460,6 +478,7 @@ fn compile_expr<'a>(
                             vec![
                                 Arg::Method(token.into()),
                                 Arg::Type(arg.get_type()),
+                                Arg::Arguments(arg.get_args().iter().map(|s| s.get_type()).collect::<Vec<_>>()), // argument types and number
                                 Arg::MemPos(state.mem_pos),
                             ],
                         )
@@ -477,7 +496,7 @@ fn compile_expr<'a>(
                     OpCode::PushStack,
                     vec![Arg::MemPos(state.mem_pos)],
                 ));
-                local_stack.push_front(Command::new(opcode, args))
+                local_stack.push_front(Command::new(opcode, args));
             }
             Token::FieldAccess(fa) => {
                 let mut args = vec![];
@@ -525,39 +544,35 @@ fn compile_expr<'a>(
                 println!("got rxtype");
 
                 let first_child = &arg.get_args()[0];
-                let mut args_vec = vec![];
+                // let mut args_vec = vec![];
 
                 match first_child.get_kind() {
                     SymbolKind::FieldAccess => {
-                        let mut field_accesses =
-                            if let Token::FieldAccess(v) =
-                                first_child.get_token()?
-                            {
-                                v
-                            } else {
-                                vec![]
-                            };
+                        // let mut field_accesses =
+                        //     if let Token::FieldAccess(v) =
+                        //         first_child.get_token()?
+                        //     {
+                        //         v
+                        //     } else {
+                        //         vec![]
+                        //     };
 
                         // push in reverse order.
-                        local_stack.push_front(Command::new(
-                            OpCode::Label,
-                            vec![Arg::Label("end-set-rx-type".into())],
-                        ));
-
-                        local_stack.push_front(Command::new(
-                            OpCode::SetRxField,
-                            vec![],
-                        ));
+                        // local_stack.push_front(Command::new(
+                        //     OpCode::Label,
+                        //     vec![Arg::Label("end-set-rx-type".into())],
+                        // ));
 
                         // explode the FieldAccess vec into separate PushStack commands.
-                        field_accesses.reverse();
-                        for fa in field_accesses.iter() {
-                            local_stack.push_front(Command::new(
-                                OpCode::StackOffset,
-                                vec![Arg::FieldAccess(*fa as usize)],
-                            ));
-                            args_vec.push(Arg::FieldAccess(*fa as usize));
-                        }
+                        // field_accesses.reverse();
+                        // for fa in field_accesses.iter() {
+                        //     local_stack.push_front(Command::new(
+                        //         OpCode::StackOffset,
+                        //         vec![Arg::FieldAccess(*fa as usize)],
+                        //     ));
+                        //     local_stack.push_front(Command::new(OpCode::Label, vec![Arg::Label("first_child_field_access".into())]));
+                        //     // args_vec.push(Arg::FieldAccess(*fa as usize));
+                        // }
 
                         // copy Rx to top of the stack
                         local_stack.push_front(Command::new(
@@ -580,11 +595,11 @@ fn compile_expr<'a>(
                     }
                 };
 
-                state
-                    .cur_mir_block
-                    .command_stack
-                    .extend(unwind_stack(local_stack));
-                local_stack = VecDeque::new();
+                // state
+                //     .cur_mir_block
+                //     .command_stack
+                //     .extend(unwind_stack(local_stack));
+                // local_stack = VecDeque::new();
             }
             Token::RxType => {
                 // RxType instance always lives at MemPos(0). retrieve it
@@ -635,6 +650,24 @@ fn compile_expr<'a>(
             Token::MatchAction(_) => todo!(),
         }
     }
+
+    if state.cur_mir_block.ty == MirBlockType::MatchAction {
+        state
+            .cur_mir_block
+            .command_stack
+            .extend(unwind_stack(local_stack));
+
+        state.cur_mir_block.command_stack.push(Command::new(
+            OpCode::SetRxField,
+            vec![],
+        ));
+
+        state.cur_mir_block.command_stack.push(Command::new(
+            OpCode::Label,
+            vec![Arg::Label("end-set-rx-type".into())],
+        ));
+    }
+
     Ok(state)
 }
 
@@ -645,9 +678,7 @@ fn compile_assignments(
     let _module = state.cur_module;
 
     // a new block
-    state.cur_mir_block = MirBlock {
-        command_stack: Vec::new(),
-    };
+    state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
 
     // compile the used variable assignments. Since the rx and tx value live
     // in memory positions 0 and 1, we start with memory position 2.
@@ -670,9 +701,7 @@ fn compile_assignments(
         state = compile_expr(s, state, mem_pos)?;
 
         mir.push(state.cur_mir_block);
-        state.cur_mir_block = MirBlock {
-            command_stack: Vec::new(),
-        };
+        state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
     }
 
     Ok((mir, state))
@@ -687,9 +716,7 @@ fn _compile_terms(
     let _module = state.cur_module;
 
     // a new block
-    state.cur_mir_block = MirBlock {
-        command_stack: Vec::new(),
-    };
+    state.cur_mir_block = MirBlock::new(MirBlockType::Term);
 
     let terms = _module.get_terms();
     let mut terms_iter = terms.iter().peekable();
@@ -711,9 +738,7 @@ fn _compile_terms(
         mir.push(state.cur_mir_block);
 
         // continue with a fresh block
-        state.cur_mir_block = MirBlock {
-            command_stack: Vec::new(),
-        };
+        state.cur_mir_block = MirBlock::new(MirBlockType::Term);
     }
 
     Ok((mir, state))
@@ -723,6 +748,8 @@ fn compile_apply(
     mut mir: Vec<MirBlock>,
     mut state: CompilerState<'_>,
 ) -> Result<(Vec<MirBlock>, CompilerState), CompileError> {
+    state.cur_mir_block = MirBlock::new(MirBlockType::MatchAction);
+
     let match_actions = state.cur_module.get_match_actions();
 
     println!("match action in order: {:#?}", match_actions.iter().map(|ma| ma.get_name()).collect::<Vec<_>>());
@@ -779,9 +806,7 @@ fn compile_apply(
         mir.push(state.cur_mir_block);
 
         // continue with a fresh block
-        state.cur_mir_block = MirBlock {
-            command_stack: Vec::new(),
-        };
+        state.cur_mir_block = MirBlock::new(MirBlockType::MatchAction);
 
         if let SymbolKind::MatchAction(ma) = match_action.get_kind() {
             match ma {
@@ -841,9 +866,7 @@ fn compile_apply(
         mir.push(state.cur_mir_block);
 
         // continue with a fresh block
-        state.cur_mir_block = MirBlock {
-            command_stack: Vec::new(),
-        };
+        state.cur_mir_block = MirBlock::new(MirBlockType::MatchAction);
     }
 
     Ok((mir, state))
@@ -896,9 +919,12 @@ fn compile_term<'a>(
     term: Term<'a>,
     mut state: CompilerState<'a>,
 ) -> Result<CompilerState<'a>, CompileError> {
+
+    state.cur_mir_block = MirBlock::new(MirBlockType::Term);
+
     println!("term {:?} {:?}", term.get_name(), term.get_kind());
 
-    // Set a Label so that each term block is identifieble for humans.
+    // Set a Label so that each term block is identifiable for humans.
     state.cur_mir_block.command_stack.push(Command::new(
         OpCode::Label,
         vec![Arg::Label(

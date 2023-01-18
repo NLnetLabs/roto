@@ -31,14 +31,20 @@ pub(crate) struct Symbol {
 }
 
 impl Symbol {
-    // gets (a clone of) kind, type, token and a optional ref to the 
+    // gets (a clone of) kind, type, token and a optional ref to the
     // TypeValue. The last field will only contain a typevalue if it's a
     // Constant.
     pub fn get_props(
         &self,
-    ) -> Result<(SymbolKind, TypeDef, Token, Option<TypeValue>), CompileError> {
+    ) -> Result<(SymbolKind, TypeDef, Token, Option<TypeValue>), CompileError>
+    {
         let token = self.get_token()?;
-        Ok((self.kind, self.ty.clone(), token, self.get_value().as_cloned_builtin().ok()))
+        Ok((
+            self.kind,
+            self.ty.clone(),
+            token,
+            self.get_value().as_cloned_builtin().ok(),
+        ))
     }
 
     pub fn get_builtin_type(&self) -> Result<TypeDef, CompileError> {
@@ -63,7 +69,9 @@ impl Symbol {
         (self.kind, self.ty.clone())
     }
 
-    pub fn get_kind_type_and_token(&self) -> Result<(SymbolKind, TypeDef, Token), CompileError> {
+    pub fn get_kind_type_and_token(
+        &self,
+    ) -> Result<(SymbolKind, TypeDef, Token), CompileError> {
         let token = self.get_token()?;
         Ok((self.kind, self.ty.clone(), token))
     }
@@ -274,7 +282,9 @@ impl Symbol {
                 self.value = type_def.into();
             }
             TypeValue::UnInit => {
-                return Err(CompileError::new("Unitialized Memory conversion.".into()));
+                return Err(CompileError::new(
+                    "Unitialized Memory conversion.".into(),
+                ));
             }
         };
         Ok(self)
@@ -296,6 +306,21 @@ impl Symbol {
         }
 
         leaves
+    }
+
+    pub(crate) fn flatten_nodes(
+        &self,
+    ) -> Vec<&Symbol> {
+
+        let mut new_nodes = vec![];
+        for arg in self.get_args() {
+            print!(" {} ", self.get_name());
+            new_nodes.extend(arg.flatten_nodes());
+        }
+
+        new_nodes.push(self);
+
+        new_nodes
     }
 
     pub(crate) fn follow_first_leaf(&self) -> &Symbol {
@@ -373,10 +398,10 @@ pub struct MatchAction {
     // name: ShortString,
     action_type: MatchActionType,
     quantifier: MatchActionQuantifier,
-    symbol: Symbol
+    symbol: Symbol,
 }
 
-impl MatchAction { 
+impl MatchAction {
     pub(crate) fn get_args(&self) -> &[Symbol] {
         self.symbol.get_args()
     }
@@ -394,25 +419,24 @@ impl MatchAction {
 pub enum MatchActionQuantifier {
     Exists,
     ExactlyOne,
-    Every
+    Every,
 }
 
 #[derive(Debug, Hash, Copy, Clone, Eq, PartialEq)]
 pub enum MatchActionType {
     MatchAction,
-    NegateMatchAction
+    NegateMatchAction,
 }
 
 impl TryFrom<SymbolKind> for MatchActionType {
     type Error = CompileError;
 
-    fn try_from(kind: SymbolKind) ->  Result<Self, CompileError> {
-       if let SymbolKind::MatchAction(ma) = kind {
+    fn try_from(kind: SymbolKind) -> Result<Self, CompileError> {
+        if let SymbolKind::MatchAction(ma) = kind {
             Ok(ma)
-       } else {
-           Err(CompileError::new("Invalid Match Action Type".into()))
-       }
-
+        } else {
+            Err(CompileError::new("Invalid Match Action Type".into()))
+        }
     }
 }
 
@@ -455,7 +479,7 @@ pub struct SymbolTable {
     // All the `filter` clauses in the `apply` section, the tie actions to
     // terms.
     // match_actions: HashMap<MatchActionKey, Vec<Symbol>>,
-    match_actions: Vec<MatchAction>
+    match_actions: Vec<MatchAction>,
 }
 
 // The global symbol table.
@@ -502,9 +526,9 @@ impl Default for GlobalSymbolTable {
 }
 
 pub(crate) struct DepsGraph<'a> {
-    pub(crate) variables: Vec<(ShortString, &'a Symbol)>,
-    pub(crate) arguments: Vec<(ShortString, &'a Symbol)>,
-    pub(crate) data_sources: Vec<(ShortString, &'a Symbol)>,
+    pub(crate) used_variables: Vec<(ShortString, &'a Symbol)>,
+    pub(crate) used_arguments: Vec<(ShortString, &'a Symbol)>,
+    pub(crate) used_data_sources: Vec<(ShortString, &'a Symbol)>,
 }
 
 struct Location {
@@ -541,9 +565,17 @@ impl SymbolTable {
         }
 
         symbol = match symbol.get_kind() {
-            SymbolKind::Variable => symbol.set_token(Token::Variable(self.variables.len())),
-            SymbolKind::Constant => symbol.set_token(Token::Constant(Some(self.variables.len()))),
-            _ => { return Err(CompileError::new("Invalid Symbol to store as Variable/Constant".into())); }
+            SymbolKind::Variable => {
+                symbol.set_token(Token::Variable(self.variables.len()))
+            }
+            SymbolKind::Constant => {
+                symbol.set_token(Token::Constant(Some(self.variables.len())))
+            }
+            _ => {
+                return Err(CompileError::new(
+                    "Invalid Symbol to store as Variable/Constant".into(),
+                ));
+            }
         };
         self.variables.insert(key, symbol);
         Ok(())
@@ -676,7 +708,11 @@ impl SymbolTable {
         Ok(())
     }
 
-    pub(crate) fn add_action(&mut self, key: ShortString, mut action: Symbol) -> Result<(), CompileError> {
+    pub(crate) fn add_action(
+        &mut self,
+        key: ShortString,
+        mut action: Symbol,
+    ) -> Result<(), CompileError> {
         let token_int = self.actions.len() as u8;
         let token = Some(Token::Action(token_int));
 
@@ -698,11 +734,7 @@ impl SymbolTable {
         // argument. It's a token for a term.
         token: Token,
     ) -> Result<(), CompileError> {
-        let name = if let Some(name) = name {
-            name
-        } else {
-            key
-        };
+        let name = if let Some(name) = name { name } else { key };
 
         self.match_actions.push(MatchAction {
             symbol: Symbol {
@@ -715,8 +747,8 @@ impl SymbolTable {
             },
             action_type: kind.try_into()?,
             quantifier: MatchActionQuantifier::Exists,
-         });
-         
+        });
+
         Ok(())
     }
 
@@ -861,14 +893,16 @@ impl SymbolTable {
     ) -> Result<(TypeDef, Token), CompileError> {
         let src: Result<&Symbol, CompileError> = self
             .variables
-            .get(name)
+            .values()
+            .into_iter()
+            .find(|kv| kv.get_name() == name)
             .ok_or_else(|| format!("Symbol '{}' not found", name).into());
 
-        src.map(|r| match r.get_kind() {
-            SymbolKind::Rib => {
+        src.map(|r| match r.get_token() {
+            Ok(Token::Rib(_)) => {
                 r.get_kind_type_and_token().map(|ktt| (ktt.1, ktt.2))
             }
-            SymbolKind::Table => {
+            Ok(Token::Table(_)) => {
                 Ok((TypeDef::Table(Box::new(r.get_type())), r.get_token()?))
             }
             _ => Err(CompileError::new(format!(
@@ -883,11 +917,12 @@ impl SymbolTable {
     // sections in a module)
     pub(crate) fn create_deps_graph(
         &self,
+        global_table: &SymbolTable
     ) -> Result<
         (
-            (ShortString, TypeDef), // rx type
-            Option<(ShortString, TypeDef)>, // tx type 
-            DepsGraph,// (variables, arguments, data sources)
+            (ShortString, TypeDef),         // rx type
+            Option<(ShortString, TypeDef)>, // tx type
+            DepsGraph, // (variables, arguments, data sources)
         ),
         CompileError,
     > {
@@ -896,14 +931,19 @@ impl SymbolTable {
 
         let mut deps_vec: Vec<&Symbol> = vec![];
         for s in self.terms.values() {
-            deps_vec.extend(s.get_leaf_nodes().into_iter());
+            deps_vec.extend(s.flatten_nodes()) // .into_iter().filter(|s| s.get_token().is_ok()));
         }
 
+        println!(
+            "data sources in deps vec {:#?}",
+            deps_vec.iter().filter(|s| if let Ok(t) = s.get_token() { t.is_data_source() } else { false }).collect::<Vec<_>>()
+        );
+
         let DepsGraph {
-            mut variables,
-            mut arguments,
-            mut data_sources,
-        } = self._partition_deps_graph(deps_vec).map_err(|e| {
+            mut used_variables,
+            mut used_arguments,
+            mut used_data_sources,
+        } = self._partition_deps_graph(deps_vec).map_err(|_e| {
             CompileError::new(
                 "can't create dependencies graph for terms".into(),
             )
@@ -914,36 +954,49 @@ impl SymbolTable {
         // refer to.
 
         let mut vars_deps_vec = vec![];
-        for s in variables.iter().map(|s| s.1) {
-            vars_deps_vec.extend(s.get_leaf_nodes().into_iter());
+        for s in used_variables.iter().map(|s| s.1) {
+            vars_deps_vec.extend(s.flatten_nodes());
         }
 
         let DepsGraph {
-            variables: vars_vars,
-            arguments: vars_args,
-            data_sources: vars_data_sources,
-        } = self._partition_deps_graph(vars_deps_vec).map_err(|e| {
+            used_variables: vars_vars,
+            used_arguments: vars_args,
+            used_data_sources: vars_data_sources,
+        } = self._partition_deps_graph(vars_deps_vec).map_err(|_e| {
             CompileError::new(
                 "can't create dependencies graph for variables".into(),
             )
         })?;
 
-        variables.extend(vars_vars);
-        arguments.extend(vars_args);
-        data_sources.extend(vars_data_sources);
+        used_variables.extend(vars_vars);
+        used_arguments.extend(vars_args);
+        used_data_sources.extend(vars_data_sources);
 
-        for col in [&mut variables, &mut arguments, &mut data_sources] {
+        for col in [
+            &mut used_variables,
+            &mut used_arguments,
+            &mut used_data_sources,
+        ] {
             col.sort_by(|a, b| a.1.cmp(b.1));
             col.dedup_by(|a, b| a.1.eq(b.1));
         }
+
+
+        println!(
+            "DATA SOURCES FOUND {:#?}",
+            used_data_sources
+                .iter()
+                .map(|ds| global_table.get_data_source(&ds.0))
+                .collect::<Vec<_>>()
+        );
 
         Ok((
             (self.rx_type.get_name(), self.rx_type.get_type()),
             self.tx_type.as_ref().map(|s| (s.get_name(), s.get_type())),
             DepsGraph {
-                variables,
-                arguments,
-                data_sources,
+                used_variables,
+                used_arguments,
+                used_data_sources
             },
         ))
     }
@@ -952,10 +1005,9 @@ impl SymbolTable {
         &'a self,
         mut deps_vec: Vec<&'a Symbol>,
     ) -> Result<DepsGraph, CompileError> {
-        deps_vec.retain(|t| {
-            t.get_token().unwrap().is_variable()
-                || t.get_token().unwrap().is_argument()
-                || t.get_token().unwrap().is_data_source()
+        deps_vec.retain(|t| match t.get_token() {
+            Ok(t) => t.is_variable() || t.is_argument() || t.is_data_source(),
+            _ => false,
         });
 
         let (args_vec, vars_srcs_vec): (Vec<&Symbol>, Vec<&Symbol>) =
@@ -996,9 +1048,9 @@ impl SymbolTable {
         );
 
         Ok(DepsGraph {
-            arguments: args_vec,
-            variables: vars_vec,
-            data_sources: data_sources_vec,
+            used_arguments: args_vec,
+            used_variables: vars_vec,
+            used_data_sources: data_sources_vec,
         })
     }
 }

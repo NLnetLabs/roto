@@ -9,7 +9,7 @@ use crate::{
     compile::MirBlock,
     traits::Token,
     types::{
-        builtin::{Boolean, BuiltinTypeValue},
+        builtin::{Boolean, BuiltinTypeValue, Prefix},
         collections::{ElementTypeValue, Record},
         datasources::{DataSourceMethodValue, Rib, Table},
         typedef::TypeDef,
@@ -82,28 +82,28 @@ impl<'a> Stack {
 pub struct LinearMemory([TypeValue; 512]);
 
 impl LinearMemory {
-    pub fn empty() -> Self {
+    pub fn uninit() -> Self {
         LinearMemory(std::array::from_fn(|_| TypeValue::UnInit))
     }
 
-    pub fn get(&self, index: usize) -> Option<&TypeValue> {
+    pub fn get_mem_pos(&self, index: usize) -> Option<&TypeValue> {
         self.0.get(index)
     }
 
-    pub(crate) fn get_by_stack_ref(
+    pub(crate) fn get_mp_field_by_stack_ref(
         &self,
         stack_ref: &StackRef,
     ) -> Option<&TypeValue> {
         if let StackRefPos::MemPos(pos) = stack_ref.pos {
-            self.get_value_at_field_index(pos as usize, stack_ref.field_index)
+            self.get_mp_field_by_index(pos as usize, stack_ref.field_index)
         } else {
             None
         }
     }
 
-    pub(crate) fn get_by_stack_ref_owned(
+    pub(crate) fn get_mp_field_by_stack_ref_owned(
         &mut self,
-        stack_ref: &StackRef
+        stack_ref: &StackRef,
     ) -> Result<TypeValue, VmError> {
         let StackRef {
             pos: stack_ref_pos,
@@ -113,9 +113,11 @@ impl LinearMemory {
         match stack_ref_pos {
             StackRefPos::MemPos(pos) => match field_index {
                 None => self
-                    .get_owned(*pos as usize)
+                    .get_mem_pos_as_owned(*pos as usize)
                     .ok_or(VmError::MemOutOfBounds),
-                Some(field_index) => match self.get_owned(*pos as usize) {
+                Some(field_index) => match self
+                    .get_mem_pos_as_owned(*pos as usize)
+                {
                     Some(TypeValue::Record(mut r)) => {
                         let field = r.get_field_by_index_owned(*field_index);
                         match field {
@@ -137,20 +139,21 @@ impl LinearMemory {
                     _ => Err(VmError::MemOutOfBounds),
                 },
             },
-            _ => Err(VmError::MemOutOfBounds)
+            _ => Err(VmError::MemOutOfBounds),
         }
     }
 
-    pub fn get_value_at_field_index(
+    pub fn get_mp_field_by_index(
         &self,
         index: usize,
         field_index: Option<usize>,
     ) -> Option<&TypeValue> {
         match field_index {
-            None => self.get(index),
-            Some(field_index) => match self.get(index) {
+            None => self.get_mem_pos(index),
+            Some(field_index) => match self.get_mem_pos(index) {
                 Some(TypeValue::Record(r)) => {
                     let field = r.get_field_by_index(field_index);
+                    print!(" FI {} FIELD {:?}", field_index, field);
                     match field {
                         Some(ElementTypeValue::Nested(nested)) => {
                             Some(nested)
@@ -169,17 +172,21 @@ impl LinearMemory {
                         _ => None,
                     }
                 }
-                Some(TypeValue::Unknown) => Some(&TypeValue::Unknown),
-                Some(_) | None => None,
+                // This is a serious logical error, Unknown should not happen at this point.
+                Some(TypeValue::Unknown) => {
+                    panic!("Unknown value has erased type, cannot continue.")
+                }
+                // This is apparantly a type that does not have fields
+                _ => None,
             },
         }
     }
 
-    fn get_owned(&mut self, index: usize) -> Option<TypeValue> {
+    fn get_mem_pos_as_owned(&mut self, index: usize) -> Option<TypeValue> {
         self.0.get_mut(index).map(std::mem::take)
     }
 
-    fn set(&mut self, index: usize, value: TypeValue) {
+    fn set_mem_pos(&mut self, index: usize, value: TypeValue) {
         *self.0.get_mut(index).unwrap() = value;
     }
 }
@@ -299,12 +306,12 @@ impl<'a> VirtualMachine<'a> {
     ) {
         let mut m = mem.borrow_mut();
         let rx = rx.take_value();
-        m.set(0, rx);
+        m.set_mem_pos(0, rx);
 
         if let Some(tx) = tx {
             let tx = tx.take_value();
             println!("move tx to mem[1s]: {}", tx);
-            m.set(1, tx);
+            m.set_mem_pos(1, tx);
         }
     }
 
@@ -318,7 +325,7 @@ impl<'a> VirtualMachine<'a> {
             match sr.pos {
                 StackRefPos::MemPos(pos) => {
                     let v = mem
-                        .get_value_at_field_index(pos as usize, sr.field_index)
+                        .get_mp_field_by_index(pos as usize, sr.field_index)
                         .unwrap_or_else(|| {
                             println!("\nstack: {:?}", stack);
                             println!("mem: {:#?}", mem.0);
@@ -327,7 +334,10 @@ impl<'a> VirtualMachine<'a> {
                             //         println!("{}: {}", i, addr);
                             //     }
                             // }
-                            panic!("Uninitialized memory in position {}", pos);
+                            panic!(
+                                "Uninitialized memory in position {}",
+                                pos
+                            );
                         });
                     unwind_stack.push(v);
                 }
@@ -376,13 +386,15 @@ impl<'a> VirtualMachine<'a> {
         self._move_rx_tx_to_mem(rx, tx, &mem);
         let mut arguments = arguments.take().unwrap_or_default();
 
-        for MirBlock { command_stack } in mir_code {
+        for MirBlock { command_stack, ty: _ } in mir_code {
             println!("\n\n--mirblock------------------");
 
             println!("stack: {:?}", self.stack);
-            for (pc, Command { op, mut args }) in command_stack.into_iter().enumerate() {
+            for (pc, Command { op, mut args }) in
+                command_stack.into_iter().enumerate()
+            {
                 commands_num += 1;
-                print!("\n{:3} -> {:3?} {:?} ", pc, op, args);
+                print!("\n{:3} -> {:?} {:?} ", pc, op, args);
                 match op {
                     OpCode::Cmp => {
                         let mut m = mem.borrow_mut();
@@ -398,7 +410,7 @@ impl<'a> VirtualMachine<'a> {
                                     "{:3} -> {:?} == {:?} = {}",
                                     pc, left, right, res
                                 );
-                                m.set(
+                                m.set_mem_pos(
                                     2,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
@@ -416,7 +428,7 @@ impl<'a> VirtualMachine<'a> {
                                     "{:3} -> {:?} != {:?} = {}",
                                     pc, left, right, res
                                 );
-                                m.set(
+                                m.set_mem_pos(
                                     2,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
@@ -434,7 +446,7 @@ impl<'a> VirtualMachine<'a> {
                                     "{:3} -> {:?} < {:?} = {}",
                                     pc, left, right, res
                                 );
-                                m.set(
+                                m.set_mem_pos(
                                     2,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
@@ -452,7 +464,7 @@ impl<'a> VirtualMachine<'a> {
                                     "{:3} -> {:?} <= {:?} = {}",
                                     pc, left, right, res
                                 );
-                                m.set(
+                                m.set_mem_pos(
                                     2,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
@@ -470,7 +482,7 @@ impl<'a> VirtualMachine<'a> {
                                     "{:3} -> {:?} > {:?} = {}",
                                     pc, left, right, res
                                 );
-                                m.set(
+                                m.set_mem_pos(
                                     2,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
@@ -488,7 +500,7 @@ impl<'a> VirtualMachine<'a> {
                                     "{:3} -> {:?} >= {:?} = {}",
                                     pc, left, right, res
                                 );
-                                m.set(
+                                m.set_mem_pos(
                                     2,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
@@ -508,7 +520,7 @@ impl<'a> VirtualMachine<'a> {
                                     "{:3} -> {:?} || {:?} = {}",
                                     pc, left, right, res
                                 );
-                                m.set(
+                                m.set_mem_pos(
                                     2,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
@@ -527,7 +539,7 @@ impl<'a> VirtualMachine<'a> {
                                     "{:3} -> {:?} && {:?} = {}",
                                     pc, left, right, res
                                 );
-                                m.set(
+                                m.set_mem_pos(
                                     2,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
@@ -573,7 +585,7 @@ impl<'a> VirtualMachine<'a> {
                                     &stack_args,
                                     return_type,
                                 );
-                                m.set(mem_pos, val);
+                                m.set_mem_pos(mem_pos, val);
                             } else {
                                 return Err(VmError::InvalidValueType);
                             }
@@ -589,16 +601,52 @@ impl<'a> VirtualMachine<'a> {
                             } else {
                                 return Err(VmError::InvalidValueType);
                             };
+
+                        println!("Args {:?}", args);
+                        // in reverse order
+                        let args_len: usize = if let Some(Arg::Arguments(args)) =
+                            args.pop()
+                        {
+                            args.len()
+                        } else {
+                            0
+                        };
                         let return_type = args.pop().unwrap().into();
                         let method_token: Arg = args.pop().unwrap();
 
                         // pop all refs from the stack and resolve them to
                         // their values.
-                        let stack_args =
-                            self._unwind_resolved_stack_into_vec(&m);
+                        // let stack_args =
+                        // self._unwind_resolved_stack_into_vec(&m);
+                        let mut stack = self.stack.borrow_mut();
+
+                        let stack_args = [0..args_len].iter().map(|_i| {
+                            let sr = stack.pop().unwrap();
+                            match sr.pos {
+                                StackRefPos::MemPos(pos) => {
+                                    let v = m
+                                        .get_mp_field_by_index(pos as usize, sr.field_index)
+                                        .unwrap_or_else(|| {
+                                            println!("\nstack: {:?}", stack);
+                                            println!("mem: {:#?}", m.0);
+                                            panic!("Uninitialized memory in position {}", pos);
+                                        });
+                                    v
+                                }
+                                StackRefPos::TablePos(token, pos) => {
+                                    let ds = &self.data_sources[token];
+                                    let v = ds.get_at_field_index(pos, sr.field_index);
+                                    if let Some(v) = v {
+                                        v
+                                    } else { &TypeValue::Unknown }
+                                }
+                            }
+                        }).collect::<Vec<_>>();
+                        drop(stack);
 
                         // The first value on the stack is the value which we
                         // are going to call a method with.
+                        println!("stack_args {:?}", stack_args);
                         let call_value = *stack_args.get(0).unwrap();
 
                         print!("method on type {}", call_value);
@@ -607,7 +655,7 @@ impl<'a> VirtualMachine<'a> {
                             &stack_args[1..],
                             return_type,
                         );
-                        m.set(mem_pos, v);
+                        m.set_mem_pos(mem_pos, v);
                     }
                     // args: [data_source_token, method_token, return memory position]
                     OpCode::ExecuteDataStoreMethod => {
@@ -635,18 +683,17 @@ impl<'a> VirtualMachine<'a> {
                                     s.push(sr_pos)?;
                                 }
                                 DataSourceMethodValue::TypeValue(tv) => {
-                                    m.set(mem_pos, tv);
+                                    m.set_mem_pos(mem_pos, tv);
                                 }
                             }
                         }
-
                     }
                     // stack args: [mem_pos, constant_value]
                     OpCode::PushStack => match args[0] {
                         Arg::MemPos(pos) => {
                             print!(
                                 " content: {:?}",
-                                mem.borrow().get(pos as usize)
+                                mem.borrow().get_mem_pos(pos as usize)
                             );
 
                             let mut s = self.stack.borrow_mut();
@@ -674,7 +721,7 @@ impl<'a> VirtualMachine<'a> {
                             if let Some(Arg::Constant(v)) = args.get_mut(1) {
                                 let v = std::mem::take(v);
                                 let mut m = mem.borrow_mut();
-                                m.set(pos as usize, v);
+                                m.set_mem_pos(pos as usize, v);
                             } else {
                                 return Err(VmError::InvalidValueType);
                             }
@@ -714,7 +761,7 @@ impl<'a> VirtualMachine<'a> {
                                         .take_by_token_value(token_value)?;
 
                                     let mut m = mem.borrow_mut();
-                                    m.set(pos as usize, arg_value);
+                                    m.set_mem_pos(pos as usize, arg_value);
                                 }
                                 _ => {
                                     return Err(VmError::InvalidValueType);
@@ -733,7 +780,8 @@ impl<'a> VirtualMachine<'a> {
                         let m = mem.borrow();
                         let s = self.stack.borrow();
                         let stack_ref = s.get_top_value()?;
-                        let bool_val = m.get_by_stack_ref(stack_ref).unwrap();
+                        let bool_val =
+                            m.get_mp_field_by_stack_ref(&stack_ref).unwrap();
                         if bool_val.is_false()? {
                             print!(" skip to end of block");
                             break;
@@ -747,7 +795,8 @@ impl<'a> VirtualMachine<'a> {
                         let m = mem.borrow();
                         let s = self.stack.borrow();
                         let stack_ref = s.get_top_value()?;
-                        let bool_val = m.get_by_stack_ref(stack_ref).unwrap();
+                        let bool_val =
+                            m.get_mp_field_by_stack_ref(&stack_ref).unwrap();
                         if bool_val.is_false()? {
                             print!(" continue");
                             continue;
@@ -774,11 +823,11 @@ impl<'a> VirtualMachine<'a> {
                         let stack_args = self.unwind_stack_into_vec(&m);
 
                         // swap out the Rx instance from memory
-                        let mut rx = m.get_owned(0).unwrap();
+                        let mut rx = m.get_mem_pos_as_owned(0).unwrap();
 
                         // swap out the new value from memory
                         let val = m
-                            .get_by_stack_ref_owned(
+                            .get_mp_field_by_stack_ref_owned(
                                 stack_args.get(1).unwrap(),
                             )
                             .unwrap();
@@ -788,7 +837,8 @@ impl<'a> VirtualMachine<'a> {
                         rx.set_field_by_stack_ref(&stack_args[0], val)?;
 
                         // swap the rx instance back into memory at position 0.
-                        m.set(0, rx);
+                        m.set_mem_pos(0, rx);
+                        println!("DONE WITH SETRX");
                     }
                     // stack args: [tx type instance field, new value]
                     OpCode::SetTxField => {
@@ -937,6 +987,7 @@ pub enum Arg {
     BuiltinMethod(usize), // builtin method token value
     MemPos(u32), // memory position
     Type(TypeDef), // type definition
+    Arguments(Vec<TypeDef>), // argument types (for method calls)
     Boolean(bool), // boolean value (used in cmp opcode)
     Term(usize), // term token value
     CompareOp(ast::CompareOp), // compare operation
