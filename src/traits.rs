@@ -95,7 +95,7 @@ impl MethodProps {
     }
 }
 
-pub(crate) trait RotoFilter<T: TokenConvert>
+pub(crate) trait RotoFilter
 where
     Self: std::fmt::Debug,
 {

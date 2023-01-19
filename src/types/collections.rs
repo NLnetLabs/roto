@@ -216,7 +216,7 @@ impl std::fmt::Display for List {
     }
 }
 
-impl RotoFilter<ListToken> for List {
+impl RotoFilter for List {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -467,7 +467,7 @@ impl Display for Record {
     }
 }
 
-impl RotoFilter<RecordToken> for Record {
+impl RotoFilter for Record {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,

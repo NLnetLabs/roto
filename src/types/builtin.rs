@@ -382,7 +382,7 @@ impl From<U32> for TypeValue {
     }
 }
 
-impl RotoFilter<U32Token> for U32 {
+impl RotoFilter for U32 {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -482,7 +482,7 @@ impl U8 {
     }
 }
 
-impl RotoFilter<U8Token> for U8 {
+impl RotoFilter for U8 {
     // type TokenList = U8Token;
 
     fn get_props_for_method(
@@ -636,7 +636,7 @@ impl Boolean {
     }
 }
 
-impl RotoFilter<BooleanToken> for Boolean {
+impl RotoFilter for Boolean {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -740,7 +740,7 @@ impl StringLiteral {
     }
 }
 
-impl RotoFilter<StringLiteralToken> for StringLiteral {
+impl RotoFilter for StringLiteral {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -841,7 +841,7 @@ impl IntegerLiteral {
     }
 }
 
-impl RotoFilter<IntegerLiteralToken> for IntegerLiteral {
+impl RotoFilter for IntegerLiteral {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -959,7 +959,7 @@ impl HexLiteral {
     }
 }
 
-impl RotoFilter<HexLiteralToken> for HexLiteral {
+impl RotoFilter for HexLiteral {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -1080,7 +1080,7 @@ impl Prefix {
     }
 }
 
-impl RotoFilter<PrefixToken> for Prefix {
+impl RotoFilter for Prefix {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -1282,7 +1282,7 @@ impl PrefixLength {
     }
 }
 
-impl RotoFilter<PrefixLengthToken> for PrefixLength {
+impl RotoFilter for PrefixLength {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -1429,7 +1429,7 @@ impl Community {
     }
 }
 
-impl RotoFilter<CommunityToken> for Community {
+impl RotoFilter for Community {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -1591,7 +1591,7 @@ impl IpAddress {
     }
 }
 
-impl RotoFilter<IpAddressToken> for IpAddress {
+impl RotoFilter for IpAddress {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -1721,7 +1721,7 @@ impl Asn {
     }
 }
 
-impl RotoFilter<AsnToken> for Asn {
+impl RotoFilter for Asn {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -1880,7 +1880,7 @@ impl AsPath {
     }
 }
 
-impl RotoFilter<AsPathToken> for AsPath {
+impl RotoFilter for AsPath {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -2055,7 +2055,7 @@ pub struct Route {
     pub status: RouteStatus,
 }
 
-impl RotoFilter<RouteToken> for Route {
+impl RotoFilter for Route {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -2206,7 +2206,7 @@ pub enum RouteStatus {
     Empty, // Status not relevant, e.g. a RIB that holds archived routes.
 }
 
-impl RotoFilter<RouteStatusToken> for RouteStatus {
+impl RotoFilter for RouteStatus {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,

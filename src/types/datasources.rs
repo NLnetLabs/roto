@@ -79,7 +79,7 @@ impl Rib {
     }
 }
 
-impl RotoFilter<RibToken> for Rib {
+impl RotoFilter for Rib {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -272,7 +272,7 @@ impl Table {
     }
 }
 
-impl RotoFilter<TableToken> for Table {
+impl RotoFilter for Table {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
