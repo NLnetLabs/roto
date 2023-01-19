@@ -386,7 +386,11 @@ impl<'a> VirtualMachine<'a> {
         self._move_rx_tx_to_mem(rx, tx, &mem);
         let mut arguments = arguments.take().unwrap_or_default();
 
-        for MirBlock { command_stack, ty: _ } in mir_code {
+        for MirBlock {
+            command_stack,
+            ty: _,
+        } in mir_code
+        {
             println!("\n\n--mirblock------------------");
 
             println!("stack: {:?}", self.stack);
@@ -602,22 +606,18 @@ impl<'a> VirtualMachine<'a> {
                                 return Err(VmError::InvalidValueType);
                             };
 
-                        println!("Args {:?}", args);
-                        // in reverse order
-                        let args_len: usize = if let Some(Arg::Arguments(args)) =
-                            args.pop()
-                        {
-                            args.len()
-                        } else {
-                            0
-                        };
+                        let args_len: usize =
+                            if let Some(Arg::Arguments(args)) = args.pop() {
+                                args.len()
+                            } else {
+                                0
+                            };
                         let return_type = args.pop().unwrap().into();
                         let method_token: Arg = args.pop().unwrap();
 
-                        // pop all refs from the stack and resolve them to
+                        // pop as many refs from the stack as we have
+                        // arguments for this method and resolve them  to
                         // their values.
-                        // let stack_args =
-                        // self._unwind_resolved_stack_into_vec(&m);
                         let mut stack = self.stack.borrow_mut();
 
                         let stack_args = [0..args_len].iter().map(|_i| {
@@ -642,11 +642,10 @@ impl<'a> VirtualMachine<'a> {
                                 }
                             }
                         }).collect::<Vec<_>>();
-                        drop(stack);
 
                         // The first value on the stack is the value which we
                         // are going to call a method with.
-                        println!("stack_args {:?}", stack_args);
+                        println!(" stack_args {:?}", stack_args);
                         let call_value = *stack_args.get(0).unwrap();
 
                         print!("method on type {}", call_value);
