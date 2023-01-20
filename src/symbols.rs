@@ -373,8 +373,18 @@ pub enum SymbolKind {
     Table,
     PrefixList,
     // accessors
-    MethodCall,
+
+    // A method call, that will either mutate the typevalue this SymolKind
+    // lives on when the data field is true, otherwise it will just read
+    // it (to produce a new typevalue).
+    MethodCallbyRef,
+    MethodCallByConsumedValue,
+
+    // A method call on a built-in type, e.g. `AsPath.contains()`
     BuiltInTypeMethodCall,
+
+    // A method call that's a builtin of the roto language, e.g.
+    // `send-to-log`
     GlobalMethodCall,
     FieldAccess,
     // term symbols

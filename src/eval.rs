@@ -19,8 +19,6 @@ use super::symbols;
 use super::types::typedef::TypeDef;
 use super::types::typevalue::TypeValue;
 
-use std::borrow::Borrow;
-use std::cell::Ref;
 use std::convert::From;
 
 impl<'a> ast::SyntaxTree {
@@ -494,7 +492,7 @@ impl ast::Action {
             println!("action symbol creating: {:?}", call_expr);
 
             let mut s = call_expr.eval(
-                format!("sub-action-{}",s.get_name()).as_str().into(),
+                format!("sub-action-{}", s.get_name()).as_str().into(),
                 symbols.clone(),
                 scope.clone(),
             )?;
@@ -632,7 +630,7 @@ impl ast::ComputeExpr {
         for a_e in &self.access_expr {
             // Data sources are different from other access receivers: their
             // method come from the data source (the container), not the type
-            // contained in the data source. They dont' have field access.
+            // contained in the data source. They don't have field access.
             let ty = match token {
                 Token::Table(_) => TypeDef::Table(Box::new(s.get_type())),
                 Token::Rib(_) => TypeDef::Rib(Box::new(s.get_type())),
@@ -642,7 +640,10 @@ impl ast::ComputeExpr {
             let child_s = match a_e {
                 ast::AccessExpr::MethodComputeExpr(method_call) => {
                     method_call.eval(
-                        symbols::SymbolKind::MethodCall,
+                        // At this stage we don't know really whether the
+                        // method call will be mutating or not, but we're
+                        // setting the safe choice here.
+                        symbols::SymbolKind::MethodCallbyRef,
                         ty,
                         symbols.clone(),
                         scope.clone(),
@@ -676,7 +677,7 @@ impl ast::MethodComputeExpr {
     pub(crate) fn eval(
         &self,
         // Parsed return type of the method call
-        method_kind: symbols::SymbolKind,
+        mut method_kind: symbols::SymbolKind,
         method_call_type: TypeDef,
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
@@ -694,6 +695,16 @@ impl ast::MethodComputeExpr {
         // the supplied method call in the source code.
         let props = method_call_type.get_props_for_method(&self.ident)?;
         println!("props {:?}", props);
+
+        // If this is a "regular" method call, then we set use the `consume` flag
+        // from the props we retrieved to set the right MethodCall kind.
+        if method_kind == SymbolKind::MethodCallbyRef {
+            method_kind = match props.consume {
+                false => SymbolKind::MethodCallbyRef,
+                true => SymbolKind::MethodCallByConsumedValue
+            };
+        }
+
         let parsed_args = arguments;
 
         if parsed_args.is_empty() && props.arg_types.is_empty() {
