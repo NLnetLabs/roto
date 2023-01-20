@@ -5,7 +5,7 @@ use crate::{
     ast::ShortString,
     compile::CompileError,
     traits::RotoFilter,
-    vm::{Payload, StackRef, StackRefPos, VmError},
+    vm::{StackRef, StackRefPos, VmError},
 };
 
 use super::{

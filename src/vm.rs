@@ -153,7 +153,6 @@ impl LinearMemory {
             Some(field_index) => match self.get_mem_pos(index) {
                 Some(TypeValue::Record(r)) => {
                     let field = r.get_field_by_index(field_index);
-                    print!(" FI {} FIELD {:?}", field_index, field);
                     match field {
                         Some(ElementTypeValue::Nested(nested)) => {
                             Some(nested)
@@ -945,7 +944,12 @@ impl<'a> VirtualMachine<'a> {
                 };
             }
             println!("\n\n(end) stack: {:?}", self.stack);
-            println!("mem  : {:?}", &mem.borrow().0[..10]);
+            println!("\nINITIALIZED MEMORY POSITIONS");
+            for (i, addr) in mem.borrow().0.as_slice().iter().enumerate() {
+                if !addr.is_unitialized() {
+                    println!("{}: {}", i, addr);
+                }
+            }
         }
 
         Err(VmError::UnexpectedTermination)
