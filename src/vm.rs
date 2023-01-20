@@ -954,7 +954,7 @@ impl<'a> VirtualMachine<'a> {
                     
                             println!("\nVARIABLES\n{:#?}", self.variables);
                             println!(
-                                "\n🍺 Done! Successfully executed {} instruections.",
+                                "\n🍺 Done! Successfully executed {} instructions.",
                                 commands_num
                             );
 
