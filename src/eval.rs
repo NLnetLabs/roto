@@ -1,3 +1,4 @@
+use crate::ast::AcceptReject;
 use crate::ast::LogicalExpr;
 use crate::ast::ShortString;
 use crate::compile::CompileError;
@@ -531,10 +532,19 @@ impl ast::Apply {
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
     ) -> Result<(), CompileError> {
-        let _symbols = symbols.borrow();
-        let _module_symbols = _symbols.get(&scope).ok_or_else(|| {
+        let mut _symbols = symbols.borrow_mut();
+        let _module_symbols = _symbols.get_mut(&scope).ok_or_else(|| {
             format!("no symbols found for module {}", scope)
         })?;
+
+        // There can only be one `apply` section in a modules, so we can set
+        // the default action from the apply section for the whole module.
+        if let Some(accept_reject) = self.body.accept_reject.clone() {
+            _module_symbols.set_default_action(accept_reject);
+        } else {
+            _module_symbols.set_default_action(AcceptReject::Accept);
+        }
+        
         drop(_symbols);
 
         for a_scope in &self.body.scopes {
@@ -558,7 +568,7 @@ impl ast::ApplyScope {
             format!("no symbols found for module {}", scope)
         })?;
 
-        // not doing anything with the actual AplyScope (the use statement),
+        // not doing anything with the actual ApplyScope (the use statement),
         // not sure whether it is going to be needed.
         let _s_name = self.scope.clone().ident;
 
@@ -593,7 +603,10 @@ impl ast::ApplyScope {
                     MatchActionType::NegateMatchAction,
                 )
             },
-            TypeDef::AcceptReject(ast::AcceptReject::Accept),
+            // The AcceptReject value from the Apply section does not end up
+            // here, instead it lives on the ApplyBody, and it is saved in the
+            // symboltable of the module.
+            TypeDef::Unknown,
             args_vec,
             Some(token),
         );

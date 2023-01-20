@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    ast::{CompareOp, ShortString},
+    ast::{CompareOp, ShortString, AcceptReject},
     compile::CompileError,
     traits::{RotoFilter, Token},
     types::{
@@ -423,6 +423,10 @@ impl MatchAction {
     pub fn get_name(&self) -> ShortString {
         self.symbol.get_name()
     }
+
+    pub fn get_type(&self) -> TypeDef {
+        self.symbol.get_type()
+    }
 }
 
 #[derive(Debug)]
@@ -490,6 +494,9 @@ pub struct SymbolTable {
     // terms.
     // match_actions: HashMap<MatchActionKey, Vec<Symbol>>,
     match_actions: Vec<MatchAction>,
+    // the action that will be activated when all of the match_actions are
+    // processed and no early return has been issued
+    default_action: crate::ast::AcceptReject
 }
 
 // The global symbol table.
@@ -558,6 +565,7 @@ impl SymbolTable {
             terms: HashMap::new(),
             actions: HashMap::new(),
             match_actions: vec![],
+            default_action: crate::ast::AcceptReject::Accept
         }
     }
 
@@ -876,6 +884,14 @@ impl SymbolTable {
 
     pub(crate) fn get_actions(&self) -> Vec<&Symbol> {
         self.actions.values().collect::<Vec<_>>()
+    }
+
+    pub(crate) fn set_default_action(&mut self, default_action: AcceptReject) {
+        self.default_action = default_action;
+    }
+
+    pub(crate) fn get_default_action(&self) -> AcceptReject {
+        self.default_action.clone()
     }
 
     // pub(crate) fn get_match_action(

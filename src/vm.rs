@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    ast::{self, CompareOp, ShortString},
+    ast::{self, AcceptReject, CompareOp, ShortString},
     compile::MirBlock,
     traits::Token,
     types::{
@@ -379,7 +379,8 @@ impl<'a> VirtualMachine<'a> {
         mut arguments: Option<ArgumentsMap>,
         mem: RefCell<LinearMemory>,
         mir_code: Vec<MirBlock>,
-    ) -> Result<(), VmError> {
+    ) -> Result<(AcceptReject, impl Payload, Option<impl Payload>), VmError>
+    {
         println!("\nstart executing vm...");
         let mut commands_num: usize = 0;
 
@@ -595,7 +596,7 @@ impl<'a> VirtualMachine<'a> {
                             }
                         }
                     }
-                    // stack args: [method_token, return_type, 
+                    // stack args: [method_token, return_type,
                     //      arguments, result memory position
                     // ]
                     OpCode::ExecuteValueMethod => {
@@ -661,7 +662,7 @@ impl<'a> VirtualMachine<'a> {
                         m.set_mem_pos(mem_pos, v);
                     }
                     // stack args: [
-                    //      method_token, return_type, 
+                    //      method_token, return_type,
                     //      arguments, result memory position
                     // ]
                     // pops arguments from the stack
@@ -931,8 +932,34 @@ impl<'a> VirtualMachine<'a> {
                         }
                     }
                     // stack args: [exit value]
-                    OpCode::Exit => {
-                        todo!();
+                    OpCode::Exit(accept_reject) => {
+                        let mut m = mem.borrow_mut();
+                        let rx = match m.get_mem_pos_as_owned(0) {
+                            Some(TypeValue::Record(rec)) => rec,
+                            _ => return Err(VmError::InvalidPayload),
+                        };
+
+                        let tx = match m.get_mem_pos_as_owned(1) {
+                            Some(TypeValue::Record(rec)) => Some(rec),
+                            _ => None,
+                        };
+
+                        if accept_reject != AcceptReject::NoReturn {
+                            println!("\n\nINITALIZED MEMORY POSITIONS");
+                            for (i, addr) in m.0.as_slice().iter().enumerate() {
+                                if !addr.is_unitialized() {
+                                    println!("{}: {}", i, addr);
+                                }
+                            }
+                    
+                            println!("\nVARIABLES\n{:#?}", self.variables);
+                            println!(
+                                "\n🍺 Done! Successfully executed {} instruections.",
+                                commands_num
+                            );
+
+                            return Ok((accept_reject, rx, tx));
+                        }
                     }
 
                     // SetRxField will replace the rx instance with the
@@ -967,19 +994,7 @@ impl<'a> VirtualMachine<'a> {
             println!("mem  : {:?}", &mem.borrow().0[..10]);
         }
 
-        let m = mem.borrow();
-        for (i, addr) in m.0.as_slice().iter().enumerate() {
-            if !addr.is_unitialized() {
-                println!("{}: {}", i, addr);
-            }
-        }
-
-        println!("vars {:?}", self.variables);
-        println!(
-            "\n🍺 Done! Successfully executed {} instruections.",
-            commands_num
-        );
-        Ok(())
+        Err(VmError::UnexpectedTermination)
     }
 }
 
@@ -1043,6 +1058,7 @@ pub enum VmError {
     InvalidMemoryAccess(usize, Option<usize>),
     ArgumentNotFound,
     InvalidValueType,
+    InvalidPayload,
     InvalidVariableAccess,
     InvalidFieldAccess(usize),
     InvalidMethodCall,
@@ -1050,6 +1066,7 @@ pub enum VmError {
     ImpossibleComparison,
     InvalidWrite,
     InvalidConversion,
+    UnexpectedTermination
 }
 
 #[derive(Debug)]
@@ -1066,7 +1083,7 @@ impl Command {
 
 impl Display for Command {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let arrow = match self.op {
+        let arrow = match &self.op {
             OpCode::Cmp => "<->",
             OpCode::ExecuteTypeMethod => "->",
             OpCode::ExecuteDataStoreMethod => "->",
@@ -1084,7 +1101,9 @@ impl Display for Command {
             OpCode::Label => {
                 return write!(f, "🏷  {}", self.args[0]);
             }
-            OpCode::Exit => ".",
+            OpCode::Exit(accept_reject) => {
+                return write!(f, "Exit::{}", accept_reject.clone())
+            }
             OpCode::SetRxField => "->",
             OpCode::SetTxField => "->",
         };
@@ -1111,7 +1130,8 @@ pub enum Arg {
     Term(usize), // term token value
     CompareOp(ast::CompareOp), // compare operation
     Label(ShortString), // a label with its name (to jump to)
-    Exit,    // exit the vm
+    AcceptReject(AcceptReject), // argument tell what should happen after
+             // exiting  the vm.
 }
 
 impl Arg {
@@ -1213,7 +1233,7 @@ pub enum OpCode {
     Label,
     SetRxField,
     SetTxField,
-    Exit,
+    Exit(AcceptReject),
 }
 
 // struct VecPayload(Vec<(ShortString, TypeValue)>);
@@ -1234,7 +1254,7 @@ pub enum OpCode {
 //     }
 // }
 
-pub trait Payload {
+pub trait Payload where Self: std::fmt::Debug + std::fmt::Display {
     fn set_field(&mut self, field: ShortString, value: TypeValue);
     fn get(&self, field: ShortString) -> Option<&TypeValue>;
     fn take_value(self) -> TypeValue;

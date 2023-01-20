@@ -6,7 +6,7 @@ use std::{
 use nom::error::VerboseError;
 
 use crate::{
-    ast::{self, ShortString, SyntaxTree},
+    ast::{self, ShortString, SyntaxTree, AcceptReject},
     symbols::{
         DepsGraph, GlobalSymbolTable, MatchActionType, Scope, Symbol,
         SymbolKind, SymbolTable,
@@ -15,7 +15,6 @@ use crate::{
     types::typedef::TypeDef,
     vm::{
         Arg, Command, ExtDataSource, OpCode, StackRefPos, VariablesMap,
-        VmError,
     },
 };
 
@@ -217,6 +216,7 @@ pub enum MirBlockType {
     Assignment,
     Term,
     MatchAction,
+    Terminator
 }
 
 #[derive(Debug)]
@@ -316,8 +316,14 @@ fn compile_module(
 
     (mir, state) = compile_apply(mir, state)?;
 
+    state.cur_mir_block = MirBlock::new(MirBlockType::Terminator);
+    state.cur_mir_block.command_stack.push(Command::new(OpCode::Exit(state.cur_module.get_default_action()), vec![]));
+
+    mir.push(state.cur_mir_block);
+
+    println!("\n");
     for m in &mir {
-        println!("\nMIR_block ({:?}): \n{} ()", m.ty, m);
+        println!("MIR_block ({:?}): \n{}", m.ty, m);
     }
 
     let args = state
@@ -574,7 +580,7 @@ fn compile_expr<'a>(
                 local_stack
                     .push_front(Command::new(OpCode::StackOffset, args));
             }
-            // roots
+            // roots : an expression starting with any of these.
             Token::Variable(var) => {
                 println!("get var: {:?}", var);
                 println!("local vars {:?}", state.local_vars);
@@ -607,39 +613,11 @@ fn compile_expr<'a>(
                 // the first child of RxType root should hold a FieldAccess,
                 // specifying a field of the Rx record, or a MethodCall on
                 // the type of the RxType directly.
-                println!("got rxtype");
 
                 let first_child = &arg.get_args()[0];
-                // let mut args_vec = vec![];
 
                 match first_child.get_kind() {
                     SymbolKind::FieldAccess => {
-                        // let mut field_accesses =
-                        //     if let Token::FieldAccess(v) =
-                        //         first_child.get_token()?
-                        //     {
-                        //         v
-                        //     } else {
-                        //         vec![]
-                        //     };
-
-                        // push in reverse order.
-                        // local_stack.push_front(Command::new(
-                        //     OpCode::Label,
-                        //     vec![Arg::Label("end-set-rx-type".into())],
-                        // ));
-
-                        // explode the FieldAccess vec into separate PushStack commands.
-                        // field_accesses.reverse();
-                        // for fa in field_accesses.iter() {
-                        //     local_stack.push_front(Command::new(
-                        //         OpCode::StackOffset,
-                        //         vec![Arg::FieldAccess(*fa as usize)],
-                        //     ));
-                        //     local_stack.push_front(Command::new(OpCode::Label, vec![Arg::Label("first_child_field_access".into())]));
-                        //     // args_vec.push(Arg::FieldAccess(*fa as usize));
-                        // }
-
                         // copy Rx to top of the stack
                         local_stack.push_front(Command::new(
                             OpCode::PushStack,
@@ -657,13 +635,9 @@ fn compile_expr<'a>(
                         ))
                     }
                 };
-
-                // state
-                //     .cur_mir_block
-                //     .command_stack
-                //     .extend(unwind_stack(local_stack));
-                // local_stack = VecDeque::new();
             }
+            // an expression starting with the variable name of the rx 
+            // instance, e.g. `route` (the default name).
             Token::RxType => {
                 // RxType instance always lives at MemPos(0). retrieve it
                 // and push to stack.
@@ -920,6 +894,11 @@ fn compile_apply(
         for action in match_action.get_args() {
             let _module = state.cur_module;
             let action_name = action.get_name();
+            let accept_reject = if let TypeDef::AcceptReject(accept_reject) = action.get_type() {
+                accept_reject
+            } else {
+                panic!("NO ACCEPT REJECT {:?}", action);
+            };
             let actions = _module.get_actions();
             let action = actions
                 .iter()
@@ -927,6 +906,14 @@ fn compile_apply(
                 .unwrap();
 
             state = compile_action(action, state)?;
+
+            // Add an early return if the type of the match action is either `Reject` or
+            // `Accept`.
+            if accept_reject != AcceptReject::NoReturn {
+                state.cur_mir_block.command_stack.push(Command::new(
+                    OpCode::Exit(accept_reject), vec![]
+                ))
+            }
         }
 
         // move the current mir block to the end of all the collected MIR.
@@ -947,7 +934,6 @@ fn compile_action<'a>(
 
     for sub_action in action.get_args() {
         state = compile_sub_action(sub_action, state)?;
-        // state = compile_var(action, state)?;
     }
 
     Ok(state)
@@ -957,19 +943,12 @@ fn compile_sub_action<'a>(
     sub_action: Action<'a>,
     mut state: CompilerState<'a>,
 ) -> Result<CompilerState<'a>, CompileError> {
-    println!(
-        "sub-action {:?} {:?}",
-        sub_action.get_name(),
-        sub_action.get_kind()
-    );
 
     match sub_action.get_kind() {
         SymbolKind::SubAction => {
-            println!("constant in action {:#?}", sub_action);
             let start_pos = state.mem_pos;
             state = compile_expr(sub_action, state, start_pos)?;
             state.mem_pos += 1;
-            println!("ACTION BLOCK {:?}", state.cur_mir_block.command_stack);
         }
         _ => {
             return Err(CompileError::new(format!(

@@ -1399,6 +1399,16 @@ fn accept_reject(
     )(input)
 }
 
+impl std::fmt::Display for AcceptReject {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AcceptReject::Accept => write!(f, "accept"),
+            AcceptReject::NoReturn => write!(f, "no return"),
+            AcceptReject::Reject => write!(f, "reject")
+        }
+    }
+}
+
 //------------ ValueExpr --------------------------------------------------
 
 // ValueExpr ::=

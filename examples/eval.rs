@@ -161,7 +161,7 @@ fn test_data(
         .with_data_sources(ds_ref.as_slice())
         .build(&vars);
 
-    vm.exec(
+    let res = vm.exec(
         my_payload,
         None::<Record>,
         None,
@@ -169,6 +169,11 @@ fn test_data(
         roto_pack.mir,
     )
     .unwrap();
+
+    println!("\nRESULT");
+    println!("action: {}", res.0);
+    println!("rx    : {}", res.1);
+    println!("tx    : {:?}", res.2);
 
     Ok(())
 }
@@ -285,7 +290,11 @@ fn main() {
                     use backup-path;
                     filter match on-my-terms matching { set-best; return accept; };
                     use backup-path;
-                    filter match on-my-terms not matching { set-rov-invalid-asn-community; return reject; };
+                    filter match on-my-terms not matching { 
+                        set-rov-invalid-asn-community; 
+                        return reject;
+                    };
+                    return accept;
                 }
             }
 
