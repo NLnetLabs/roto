@@ -2,7 +2,7 @@
 
 use crate::{types::{
     typedef::TypeDef, typevalue::TypeValue,
-}, compile::CompileError};
+}, compile::CompileError, vm::VmError};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub enum Token {
@@ -79,6 +79,7 @@ pub(crate) struct MethodProps {
     pub(crate) return_type_value: TypeValue,
     pub(crate) method_token: Token,
     pub(crate) arg_types: Vec<TypeDef>,
+    pub(crate) consume: bool
 }
 
 impl MethodProps {
@@ -91,7 +92,13 @@ impl MethodProps {
             return_type_value,
             method_token: Token::Method(method_token),
             arg_types,
+            consume: false
         }
+    }
+
+    pub(crate) fn consume_value(mut self) -> Self {
+        self.consume = true;
+        self
     }
 }
 
@@ -118,13 +125,20 @@ where
         method_token: usize,
         args: &'a [&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>;
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError>;
+
+    fn exec_consume_value_method(
+        self,
+        method_token: usize,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError>;
 
     fn exec_type_method<'a>(
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError>;
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError>;
 }
 
 pub(crate) trait TokenConvert

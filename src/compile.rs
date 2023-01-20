@@ -1,6 +1,6 @@
 use std::{
-    collections::{VecDeque, HashMap},
-    fmt::{Display, Formatter}, cell::RefMut,
+    collections::VecDeque,
+    fmt::{Display, Formatter},
 };
 
 use nom::error::VerboseError;
@@ -9,12 +9,13 @@ use crate::{
     ast::{self, ShortString, SyntaxTree},
     symbols::{
         DepsGraph, GlobalSymbolTable, MatchActionType, Scope, Symbol,
-        SymbolKind, SymbolTable, self,
+        SymbolKind, SymbolTable,
     },
     traits::Token,
     types::typedef::TypeDef,
     vm::{
         Arg, Command, ExtDataSource, OpCode, StackRefPos, VariablesMap,
+        VmError,
     },
 };
 
@@ -191,7 +192,10 @@ impl<'a> Compiler<'a> {
 
         for module in modules {
             let _module = _global.get(&module).unwrap();
-            roto_packs.push(compile_module(_module, _global.get(&Scope::Global).unwrap()));
+            roto_packs.push(compile_module(
+                _module,
+                _global.get(&Scope::Global).unwrap(),
+            ));
         }
 
         roto_packs
@@ -212,20 +216,20 @@ impl<'a> Compiler<'a> {
 pub enum MirBlockType {
     Assignment,
     Term,
-    MatchAction
+    MatchAction,
 }
 
 #[derive(Debug)]
 pub struct MirBlock {
     pub command_stack: Vec<Command>,
-    pub ty: MirBlockType
+    pub ty: MirBlockType,
 }
 
 impl MirBlock {
     pub fn new(ty: MirBlockType) -> Self {
         MirBlock {
             command_stack: Vec::new(),
-            ty
+            ty,
         }
     }
 
@@ -253,7 +257,10 @@ fn unwind_stack(
     v
 }
 
-fn compile_module(module: &SymbolTable, global_table:&SymbolTable) -> Result<RotoPack, CompileError> {
+fn compile_module(
+    module: &SymbolTable,
+    global_table: &SymbolTable,
+) -> Result<RotoPack, CompileError> {
     let (
         _rx_type,
         _tx_type,
@@ -278,10 +285,7 @@ fn compile_module(module: &SymbolTable, global_table:&SymbolTable) -> Result<Rot
     // initialize the command stack
     let mut mir: Vec<MirBlock> = vec![];
 
-    println!(
-        "======== dependencies for module: {:?} ===========",
-        module
-    );
+    println!("======== dependencies for module: {:?} ===========", module);
 
     println!("___used args");
     state
@@ -338,20 +342,21 @@ fn compile_module(module: &SymbolTable, global_table:&SymbolTable) -> Result<Rot
         .iter()
         .map(|ds| {
             let name = ds.1.get_name();
-            let resolved_ds = global_table.get_data_source(&name).unwrap_or_else(
-                |_| {
+            let resolved_ds =
+                global_table.get_data_source(&name).unwrap_or_else(|_| {
                     panic!("Fatal: Cannot find Token for data source.");
-                }
-            );
-            ExtDataSource::new(
-                &name,
-                resolved_ds.1,
-                resolved_ds.0,
-            )
+                });
+            ExtDataSource::new(&name, resolved_ds.1, resolved_ds.0)
         })
         .collect::<Vec<_>>();
 
-    Ok(RotoPack::new(mir, TypeDef::Unknown, None, args, data_sources))
+    Ok(RotoPack::new(
+        mir,
+        TypeDef::Unknown,
+        None,
+        args,
+        data_sources,
+    ))
 }
 
 fn compile_expr<'a>(
@@ -359,7 +364,7 @@ fn compile_expr<'a>(
     mut state: CompilerState<'a>,
     // The posision at which to write the Variable assignment. This allows for the use of the
     // state.mem_pos to be used for temp variables.
-    var_assign_mem_pos: u32
+    var_assign_mem_pos: u32,
 ) -> Result<CompilerState<'a>, CompileError> {
     let leaves = symbol.get_leaf_nodes();
     let mut local_stack = std::collections::VecDeque::<Command>::new();
@@ -383,7 +388,8 @@ fn compile_expr<'a>(
             Token::Variable(var) if arg.get_name() == "var" => {
                 print!("V");
 
-                local_stack.push_front(Command::new(OpCode::ClearStack, vec![]));
+                local_stack
+                    .push_front(Command::new(OpCode::ClearStack, vec![]));
                 local_stack.push_front(Command::new(
                     OpCode::MemPosRef,
                     vec![Arg::MemPos(var_assign_mem_pos), Arg::Variable(var)],
@@ -458,30 +464,90 @@ fn compile_expr<'a>(
                             ],
                         )
                     }
-                    Ok(Token::Variable(_)) => (
-                        // args: [ method_call, return_type ]
-                        OpCode::ExecuteValueMethod,
-                        vec![
-                            Arg::Method(token.into()), // method token
-                            Arg::Type(arg.get_type()), // return type
-                            Arg::Arguments(arg.get_args().iter().map(|s| s.get_type()).collect::<Vec<_>>()), // argument types and number
-                            Arg::MemPos(state.mem_pos),
-                        ],
-                    ),
+                    Ok(Token::Variable(_)) => match arg.get_kind() {
+                        SymbolKind::MethodCallbyRef => {
+                            // args: [ method_call, return_type ]
+                            (
+                                OpCode::ExecuteValueMethod,
+                                vec![
+                                    Arg::Method(token.into()), // method token
+                                    Arg::Type(arg.get_type()), // return type
+                                    Arg::Arguments(
+                                        arg.get_args()
+                                            .iter()
+                                            .map(|s| s.get_type())
+                                            .collect::<Vec<_>>(),
+                                    ), // argument types and number
+                                    Arg::MemPos(state.mem_pos),
+                                ],
+                            )
+                        }
+                        SymbolKind::MethodCallByConsumedValue => {
+                            // args: [ method_call, return_type ]
+                            (
+                                OpCode::ExecuteConsumeValueMethod,
+                                vec![
+                                    Arg::Method(token.into()), // method token
+                                    Arg::Type(arg.get_type()), // return type
+                                    Arg::Arguments(
+                                        arg.get_args()
+                                            .iter()
+                                            .map(|s| s.get_type())
+                                            .collect::<Vec<_>>(),
+                                    ), // argument types and number
+                                    Arg::MemPos(state.mem_pos),
+                                ],
+                            )
+                        }
+                        _ => {
+                            return Err(CompileError::new(
+                                format!(
+                                    "Invalid MethodCall type {:?}",
+                                    arg.get_kind()
+                                )
+                                .into(),
+                            ))
+                        }
+                    },
+
                     Ok(Token::FieldAccess(_)) => {
                         println!("FIELD_ACCESS arg: {:?}", arg);
                         println!("next_arg: {:?}", next_arg);
-
-                        (
-                            // args: [ method_call, return_type ]
-                            OpCode::ExecuteValueMethod,
-                            vec![
-                                Arg::Method(token.into()),
-                                Arg::Type(arg.get_type()),
-                                Arg::Arguments(arg.get_args().iter().map(|s| s.get_type()).collect::<Vec<_>>()), // argument types and number
-                                Arg::MemPos(state.mem_pos),
-                            ],
-                        )
+                        match arg.get_kind() {
+                            SymbolKind::MethodCallbyRef => (
+                                // args: [ method_call, return_type ]
+                                OpCode::ExecuteValueMethod,
+                                vec![
+                                    Arg::Method(token.into()),
+                                    Arg::Type(arg.get_type()),
+                                    Arg::Arguments(
+                                        arg.get_args()
+                                            .iter()
+                                            .map(|s| s.get_type())
+                                            .collect::<Vec<_>>(),
+                                    ), 
+                                    // argument types and number
+                                    Arg::MemPos(state.mem_pos),
+                                ],
+                            ),
+                            SymbolKind::MethodCallByConsumedValue => (
+                                // args: [ method_call, return_type ]
+                                OpCode::ExecuteConsumeValueMethod,
+                                vec![
+                                    Arg::Method(token.into()),
+                                    Arg::Type(arg.get_type()),
+                                    Arg::Arguments(
+                                        arg.get_args()
+                                            .iter()
+                                            .map(|s| s.get_type())
+                                            .collect::<Vec<_>>(),
+                                    ), 
+                                    // argument types and number
+                                    Arg::MemPos(state.mem_pos),
+                                ],
+                            ),
+                            _ => { panic!("PANIC!"); }
+                        }
                     }
                     _ => {
                         return Err(format!(
@@ -585,9 +651,6 @@ fn compile_expr<'a>(
                             vec![Arg::Label("start-set-rx-type".into())],
                         ));
                     }
-                    SymbolKind::MethodCall => {
-                        todo!();
-                    }
                     _ => {
                         return Err(CompileError::new(
                             "Unknown RxType fieldname or method.".into(),
@@ -657,10 +720,10 @@ fn compile_expr<'a>(
             .command_stack
             .extend(unwind_stack(local_stack));
 
-        state.cur_mir_block.command_stack.push(Command::new(
-            OpCode::SetRxField,
-            vec![],
-        ));
+        state
+            .cur_mir_block
+            .command_stack
+            .push(Command::new(OpCode::SetRxField, vec![]));
 
         state.cur_mir_block.command_stack.push(Command::new(
             OpCode::Label,
@@ -682,9 +745,7 @@ fn compile_assignments(
 
     // compile the used variable assignments. Since the rx and tx value live
     // in memory positions 0 and 1, we start with memory position 2.
-    for (mem_pos, var) in
-        (2_u32..).zip(state.used_variables.clone().iter())
-    {
+    for (mem_pos, var) in (2_u32..).zip(state.used_variables.clone().iter()) {
         // set the mem_pos in state to the counter we use here. Recursive
         // `compile_expr` may increase state.mem_pos to temporarily store
         // argument variables.
@@ -752,7 +813,13 @@ fn compile_apply(
 
     let match_actions = state.cur_module.get_match_actions();
 
-    println!("match action in order: {:#?}", match_actions.iter().map(|ma| ma.get_name()).collect::<Vec<_>>());
+    println!(
+        "match action in order: {:#?}",
+        match_actions
+            .iter()
+            .map(|ma| ma.get_name())
+            .collect::<Vec<_>>()
+    );
     // Collect the terms that we need to compile.
     for match_action in match_actions {
         let term_name = match_action.get_name();
@@ -919,7 +986,6 @@ fn compile_term<'a>(
     term: Term<'a>,
     mut state: CompilerState<'a>,
 ) -> Result<CompilerState<'a>, CompileError> {
-
     state.cur_mir_block = MirBlock::new(MirBlockType::Term);
 
     println!("term {:?} {:?}", term.get_name(), term.get_kind());

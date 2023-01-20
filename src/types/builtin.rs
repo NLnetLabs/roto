@@ -2,6 +2,7 @@
 
 // The built-in types
 
+use std::convert::Infallible;
 use std::fmt::{Display, Formatter};
 
 use routecore::asn::LongSegmentError;
@@ -34,63 +35,63 @@ pub enum BuiltinTypeValue {
 }
 
 impl BuiltinTypeValue {
-    pub fn get_type_name(&self) -> &'static str {
-        match self {
-            BuiltinTypeValue::U32(_) => "U32",
-            BuiltinTypeValue::U8(_) => "U8",
-            BuiltinTypeValue::IntegerLiteral(_) => "IntegerLiteral",
-            BuiltinTypeValue::StringLiteral(_) => "StringLiteral",
-            BuiltinTypeValue::Boolean(_) => "Boolean",
-            BuiltinTypeValue::Prefix(_) => "Prefix",
-            BuiltinTypeValue::PrefixLength(_) => "PrefixLengthLiteral",
-            BuiltinTypeValue::Community(_) => "Community",
-            BuiltinTypeValue::IpAddress(_) => "IpAddress",
-            BuiltinTypeValue::Asn(_) => "Asn",
-            BuiltinTypeValue::AsPath(_) => "AsPath",
-            BuiltinTypeValue::Route(_) => "Route",
-            BuiltinTypeValue::RouteStatus(_) => "RouteStatus",
-            BuiltinTypeValue::HexLiteral(_) => "HexLiteral",
-        }
-    }
+    // pub fn get_type_name(&self) -> &'static str {
+    //     match self {
+    //         BuiltinTypeValue::U32(_) => "U32",
+    //         BuiltinTypeValue::U8(_) => "U8",
+    //         BuiltinTypeValue::IntegerLiteral(_) => "IntegerLiteral",
+    //         BuiltinTypeValue::StringLiteral(_) => "StringLiteral",
+    //         BuiltinTypeValue::Boolean(_) => "Boolean",
+    //         BuiltinTypeValue::Prefix(_) => "Prefix",
+    //         BuiltinTypeValue::PrefixLength(_) => "PrefixLengthLiteral",
+    //         BuiltinTypeValue::Community(_) => "Community",
+    //         BuiltinTypeValue::IpAddress(_) => "IpAddress",
+    //         BuiltinTypeValue::Asn(_) => "Asn",
+    //         BuiltinTypeValue::AsPath(_) => "AsPath",
+    //         BuiltinTypeValue::Route(_) => "Route",
+    //         BuiltinTypeValue::RouteStatus(_) => "RouteStatus",
+    //         BuiltinTypeValue::HexLiteral(_) => "HexLiteral",
+    //     }
+    // }
 
-    pub fn get_value(&self) -> &dyn std::any::Any {
-        match self {
-            BuiltinTypeValue::U32(val) => val,
-            BuiltinTypeValue::U8(val) => val,
-            BuiltinTypeValue::IntegerLiteral(val) => val,
-            BuiltinTypeValue::StringLiteral(val) => val,
-            BuiltinTypeValue::Boolean(val) => val,
-            BuiltinTypeValue::Prefix(val) => val,
-            BuiltinTypeValue::PrefixLength(val) => val,
-            BuiltinTypeValue::Community(val) => val,
-            BuiltinTypeValue::IpAddress(val) => val,
-            BuiltinTypeValue::Asn(val) => val,
-            BuiltinTypeValue::AsPath(val) => val,
-            BuiltinTypeValue::Route(val) => val,
-            BuiltinTypeValue::RouteStatus(val) => val,
-            BuiltinTypeValue::HexLiteral(val) => val,
-        }
-    }
+    // pub fn get_value(&self) -> &dyn std::any::Any {
+    //     match self {
+    //         BuiltinTypeValue::U32(val) => val,
+    //         BuiltinTypeValue::U8(val) => val,
+    //         BuiltinTypeValue::IntegerLiteral(val) => val,
+    //         BuiltinTypeValue::StringLiteral(val) => val,
+    //         BuiltinTypeValue::Boolean(val) => val,
+    //         BuiltinTypeValue::Prefix(val) => val,
+    //         BuiltinTypeValue::PrefixLength(val) => val,
+    //         BuiltinTypeValue::Community(val) => val,
+    //         BuiltinTypeValue::IpAddress(val) => val,
+    //         BuiltinTypeValue::Asn(val) => val,
+    //         BuiltinTypeValue::AsPath(val) => val,
+    //         BuiltinTypeValue::Route(val) => val,
+    //         BuiltinTypeValue::RouteStatus(val) => val,
+    //         BuiltinTypeValue::HexLiteral(val) => val,
+    //     }
+    // }
 
-    pub fn exists(ty: &'_ str) -> bool {
-        matches!(
-            ty,
-            "U32"
-                | "U8"
-                | "IntegerLiteral"
-                | "Prefix"
-                | "PrefixLength"
-                | "Community"
-                | "IpAddress"
-                | "Asn"
-                | "AsPath"
-                | "Route"
-                | "RouteStatus"
-                | "Boolean"
-                | "String"
-                | "HexLiteral"
-        )
-    }
+    // pub fn exists(ty: &'_ str) -> bool {
+    //     matches!(
+    //         ty,
+    //         "U32"
+    //             | "U8"
+    //             | "IntegerLiteral"
+    //             | "Prefix"
+    //             | "PrefixLength"
+    //             | "Community"
+    //             | "IpAddress"
+    //             | "Asn"
+    //             | "AsPath"
+    //             | "Route"
+    //             | "RouteStatus"
+    //             | "Boolean"
+    //             | "String"
+    //             | "HexLiteral"
+    //     )
+    // }
 
     pub fn create_instance(
         ty: TypeDef,
@@ -395,7 +396,7 @@ impl RotoFilter for U32 {
                 TypeValue::Unknown,
                 U32Token::Set.into(),
                 vec![TypeDef::IntegerLiteral],
-            )),
+            ).consume_value()),
             _ => Err(format!(
                 "Unknown method: '{}' for type U32",
                 method_name.ident
@@ -409,7 +410,16 @@ impl RotoFilter for U32 {
         _method_token: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+
+    fn exec_consume_value_method(
+        self,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         todo!()
     }
 
@@ -417,7 +427,7 @@ impl RotoFilter for U32 {
         _method_token: usize,
         _args: &[&'a TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 
@@ -483,8 +493,6 @@ impl U8 {
 }
 
 impl RotoFilter for U8 {
-    // type TokenList = U8Token;
-
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -497,7 +505,7 @@ impl RotoFilter for U8 {
                 TypeValue::Unknown,
                 U8Token::Set.into(),
                 vec![TypeDef::IntegerLiteral],
-            )),
+            ).consume_value()),
             _ => Err(format!(
                 "Unknown method: '{}' for type U8",
                 method_name.ident
@@ -511,7 +519,16 @@ impl RotoFilter for U8 {
         _method_token: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+
+    fn exec_consume_value_method(
+        self,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         todo!()
     }
 
@@ -519,7 +536,7 @@ impl RotoFilter for U8 {
         _method_token: usize,
         _args: &[&'a TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 
@@ -649,7 +666,7 @@ impl RotoFilter for Boolean {
                 TypeValue::Unknown,
                 BooleanToken::Set.into(),
                 vec![TypeDef::Boolean],
-            )),
+            ).consume_value()),
             _ => Err(format!(
                 "Unknown method: '{}' for type Boolean",
                 method_name.ident
@@ -663,7 +680,16 @@ impl RotoFilter for Boolean {
         _method_token: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+
+    fn exec_consume_value_method(
+        self,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         todo!()
     }
 
@@ -671,7 +697,7 @@ impl RotoFilter for Boolean {
         _method_token: usize,
         _args: &[&'a TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 
@@ -764,7 +790,16 @@ impl RotoFilter for StringLiteral {
         _method_token: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+
+     fn exec_consume_value_method(
+        self,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         todo!()
     }
 
@@ -772,7 +807,7 @@ impl RotoFilter for StringLiteral {
         _method_token: usize,
         _args: &[&'a TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 
@@ -898,7 +933,16 @@ impl RotoFilter for IntegerLiteral {
         method_token: usize,
         args: &[&TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+
+     fn exec_consume_value_method(
+        self,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         todo!()
     }
 
@@ -906,7 +950,7 @@ impl RotoFilter for IntegerLiteral {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 }
@@ -1004,7 +1048,16 @@ impl RotoFilter for HexLiteral {
         method_token: usize,
         args: &[&TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+
+     fn exec_consume_value_method(
+        self,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         todo!()
     }
 
@@ -1012,7 +1065,7 @@ impl RotoFilter for HexLiteral {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 }
@@ -1143,10 +1196,10 @@ impl RotoFilter for Prefix {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         match method_token.into() {
             PrefixToken::Address => {
-                let prefix = self.0.ok_or("Cannot convert empty prefix")?;
+                let prefix = self.0.ok_or(VmError::InvalidConversion)?;
                 Ok(Box::new(move || {
                     TypeValue::Builtin(BuiltinTypeValue::IpAddress(
                         IpAddress(Some(prefix.addr())),
@@ -1165,33 +1218,34 @@ impl RotoFilter for Prefix {
                         ))
                     }))
                 } else {
-                    Err(format!(
-                        "Invalid argument type for method 'len': {}",
-                        args[0]
-                    )
-                    .into())
+                    Err(VmError::ArgumentNotFound)
                 }
             }
-            _ => Err(format!(
-                "Unknown method for type Prefix: {}",
-                method_token
-            )
-            .into()),
+            _ => Err(VmError::InvalidMethodCall),
         }
+    }
+
+     fn exec_consume_value_method(
+        self,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+        todo!()
     }
 
     fn exec_type_method<'a>(
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         match method_token.into() {
             PrefixToken::From => {
                 if let TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) =
                     args[0]
                 {
-                    let len: PrefixLength = args[1].try_into()?;
-                    let ip = ip.0.ok_or("Cannot convert empty IP address")?;
+                    let len: PrefixLength = args[1].try_into().map_err(|_e| VmError::InvalidConversion)?;
+                    let ip = ip.0.ok_or("Cannot convert empty IP address").map_err(|_e| VmError::InvalidConversion)?;
                     Ok(Box::new(move || {
                         TypeValue::Builtin(BuiltinTypeValue::Prefix(
                             Prefix::new(
@@ -1204,15 +1258,11 @@ impl RotoFilter for Prefix {
                         ))
                     }))
                 } else {
-                    Err(format!(
-                        "Invalid argument type for method 'from': {}",
-                        args[0]
-                    )
-                    .into())
+                    Err(VmError::ArgumentNotFound)
                 }
             }
             _ => {
-                Err(format!("Unknown method token: {}", method_token).into())
+                Err(VmError::InvalidMethodCall)
             }
         }
     }
@@ -1325,7 +1375,16 @@ impl RotoFilter for PrefixLength {
         method_token: usize,
         args: &[&TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+
+     fn exec_consume_value_method(
+        self,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         todo!()
     }
 
@@ -1333,7 +1392,7 @@ impl RotoFilter for PrefixLength {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 }
@@ -1502,7 +1561,16 @@ impl RotoFilter for Community {
         _method_token: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+
+     fn exec_consume_value_method(
+        self,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         todo!()
     }
 
@@ -1510,7 +1578,7 @@ impl RotoFilter for Community {
         _method_token: usize,
         _args: &[&'a TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 }
@@ -1639,7 +1707,7 @@ impl RotoFilter for IpAddress {
         method_token: usize,
         args: &[&TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!();
         // match method_token.into() {
         //     IpAddressToken::From => {
@@ -1653,11 +1721,20 @@ impl RotoFilter for IpAddress {
         // }
     }
 
+     fn exec_consume_value_method(
+        self,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+        todo!()
+    }
+
     fn exec_type_method<'a>(
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 }
@@ -1734,7 +1811,7 @@ impl RotoFilter for Asn {
                 TypeValue::Unknown,
                 AsnToken::Set.into(),
                 vec![TypeDef::Asn],
-            )),
+            ).consume_value()),
             _ => Err(format!(
                 "Unknown method: '{}' for type Asn",
                 method_name.ident
@@ -1763,7 +1840,7 @@ impl RotoFilter for Asn {
         method_token: usize,
         args: &'a [&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         match method_token.into() {
             AsnToken::Set => {
                 if let TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) =
@@ -1773,17 +1850,26 @@ impl RotoFilter for Asn {
                         TypeValue::from(Asn::new(asn.0.unwrap()))
                     }))
                 } else {
-                    Err("Invalid argument type".into())
+                    Err(VmError::ArgumentNotFound)
                 }
             }
         }
+    }
+
+     fn exec_consume_value_method(
+        self,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+        todo!()
     }
 
     fn exec_type_method<'a>(
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 }
@@ -1933,7 +2019,7 @@ impl RotoFilter for AsPath {
         method: usize,
         args: &'a [&'a TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<(dyn FnOnce() -> TypeValue + 'a)>, CompileError> {
+    ) -> Result<Box<(dyn FnOnce() -> TypeValue + 'a)>, VmError> {
         match method.into() {
             AsPathToken::Origin => {
                 if let Some(rc_as_path) = &self.0 {
@@ -1992,11 +2078,20 @@ impl RotoFilter for AsPath {
         }
     }
 
+     fn exec_consume_value_method(
+        self,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+        todo!()
+    }
+
     fn exec_type_method<'a>(
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 }
@@ -2117,7 +2212,16 @@ impl RotoFilter for Route {
         _method: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<(dyn FnOnce() -> TypeValue + 'a)>, CompileError> {
+    ) -> Result<Box<(dyn FnOnce() -> TypeValue + 'a)>, VmError> {
+        todo!()
+    }
+
+     fn exec_consume_value_method(
+        self,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         todo!()
     }
 
@@ -2125,7 +2229,7 @@ impl RotoFilter for Route {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 }
@@ -2274,7 +2378,16 @@ impl RotoFilter for RouteStatus {
         _method_token: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+
+     fn exec_consume_value_method(
+        self,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         todo!()
     }
 
@@ -2282,7 +2395,7 @@ impl RotoFilter for RouteStatus {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 }

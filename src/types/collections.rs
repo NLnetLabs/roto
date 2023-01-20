@@ -187,6 +187,7 @@ impl List {
         index: usize,
         value: TypeValue,
     ) -> Result<(), VmError> {
+        println!("I V {} {}", index, value);
         let e_tv = self.0.get_mut(index).ok_or(VmError::MemOutOfBounds)?;
         let new_field = &mut ElementTypeValue::from(value);
         std::mem::swap(e_tv, new_field);
@@ -234,12 +235,12 @@ impl RotoFilter for List {
                 TypeValue::List(self),
                 ListToken::Remove.into(),
                 vec![TypeDef::U32],
-            )),
+            ).consume_value()),
             "push" => Ok(MethodProps::new(
-                (&TypeDef::Boolean).into(),
+                (&TypeDef::U32).into(),
                 ListToken::Push.into(),
                 vec![TypeDef::from(&self.0[0])],
-            )),
+            ).consume_value()),
             "contains" => Ok(MethodProps::new(
                 (&TypeDef::Boolean).into(),
                 ListToken::Contains.into(),
@@ -265,7 +266,7 @@ impl RotoFilter for List {
         method: usize,
         args: &'a [&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<std::boxed::Box<(dyn FnOnce() -> TypeValue + '_)>, CompileError>
+    ) -> Result<std::boxed::Box<(dyn FnOnce() -> TypeValue + '_)>, VmError>
     {
         match method.into() {
             ListToken::Len => {
@@ -277,32 +278,38 @@ impl RotoFilter for List {
                 Ok(Box::new(move || {
                     self.iter().any(|e| e == args[0]).into()
                 }))
-            }
-            // TODO: There's no reasonable way to write to self or parts of self.
+            },
+            _ => Err(VmError::InvalidMethodCall)
+        }
+    }
 
-            // ListToken::Get => {
-            //    Ok(Box::new(move || {
-            //         match self.0.iter().find(|e| e == &args[0]) {
-            //             Some(e) => (*e).into(),
-            //             None => TypeValue::Unknown
-            //         }
-            //    }))
-            // }
-            ListToken::Get => todo!(),
-            // ListToken::Push => {
-            //     Ok(Box::new(move || {
-            //         self.0.push((*args[0]).into());
-            //         TypeValue::List(*self)
-            //     }))
-            // },
+    fn exec_consume_value_method(
+        mut self,
+        method: usize,
+        mut args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+        match method.into() {
+            ListToken::Get => {
+               Ok(Box::new(move || {
+                    match self.0.into_iter().find(|e| *e == args[0]) {
+                        Some(e) => e.into(),
+                        None => TypeValue::Unknown
+                    }
+               }))
+            }
+            ListToken::Push => {
+                println!("push {:?} to  {}", args, self);
+                Ok(Box::new(move || {
+                    self.0.push((args.remove(0)).into());
+                    TypeValue::List(self)
+                }))
+            },
             ListToken::Pop => todo!(),
             ListToken::Remove => todo!(),
             ListToken::Insert => todo!(),
             ListToken::Clear => todo!(),
-            // Placeholder to make it compile & run
-            ListToken::Push => { Ok(Box::new(move || {
-                TypeValue::Unknown
-            })) },
+            _ => Err(VmError::InvalidMethodCall)
         }
     }
 
@@ -310,7 +317,7 @@ impl RotoFilter for List {
         method_token: usize,
         args: &[&'a TypeValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 }
@@ -476,11 +483,6 @@ impl RotoFilter for Record {
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
-            "longest_match" => Ok(MethodProps::new(
-                TypeValue::Record(self),
-                RecordToken::LongestMatch.into(),
-                vec![TypeDef::Prefix],
-            )),
             "get" => Ok(MethodProps::new(
                 TypeValue::Record(self),
                 RecordToken::Get.into(),
@@ -521,15 +523,24 @@ impl RotoFilter for Record {
         _method: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + '_>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + '_>, VmError> {
         todo!()
     }
 
+    fn exec_consume_value_method(
+        mut self,
+        method: usize,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+        todo!()
+    }
+    
     fn exec_type_method<'a>(
         _method_token: usize,
         _args: &[&'a TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 }
@@ -551,8 +562,7 @@ pub enum RecordToken {
     Get = 0,
     GetAll = 1,
     Contains = 2,
-    LongestMatch = 3,
-    Set,
+    Set = 3,
 }
 
 impl TokenConvert for RecordToken {}
@@ -563,7 +573,6 @@ impl From<usize> for RecordToken {
             0 => RecordToken::Get,
             1 => RecordToken::GetAll,
             2 => RecordToken::Contains,
-            3 => RecordToken::LongestMatch,
             _ => panic!("Unknown RecordToken"),
         }
     }

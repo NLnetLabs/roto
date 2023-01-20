@@ -7,7 +7,7 @@ use crate::{
     compile::CompileError,
     traits::{MethodProps, RotoFilter, Token, TokenConvert},
     types::builtin::Prefix,
-    vm::StackRefPos,
+    vm::{StackRefPos, VmError},
 };
 
 use super::{
@@ -123,15 +123,24 @@ impl RotoFilter for Rib {
         _method: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         unimplemented!()
+    }
+
+     fn exec_consume_value_method(
+        self,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+        todo!()
     }
 
     fn exec_type_method<'a>(
         _method: usize,
         _args: &[&'a TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         unimplemented!()
     }
 }
@@ -311,15 +320,24 @@ impl RotoFilter for Table {
         _method_token: usize,
         _args: &[&TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         unimplemented!()
+    }
+
+     fn exec_consume_value_method(
+        self,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+        todo!()
     }
 
     fn exec_type_method<'a>(
         _method_token: usize,
         _args: &[&'a TypeValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, CompileError> {
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         unimplemented!()
     }
 }

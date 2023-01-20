@@ -9,7 +9,7 @@ use crate::{
     compile::MirBlock,
     traits::Token,
     types::{
-        builtin::{Boolean, BuiltinTypeValue, Prefix},
+        builtin::{Boolean, BuiltinTypeValue},
         collections::{ElementTypeValue, Record},
         datasources::{DataSourceMethodValue, Rib, Table},
         typedef::TypeDef,
@@ -595,7 +595,9 @@ impl<'a> VirtualMachine<'a> {
                             }
                         }
                     }
-                    // stack args: [method_token, return_type, return memory position]
+                    // stack args: [method_token, return_type, 
+                    //      arguments, result memory position
+                    // ]
                     OpCode::ExecuteValueMethod => {
                         let mut m = mem.borrow_mut();
 
@@ -612,6 +614,7 @@ impl<'a> VirtualMachine<'a> {
                             } else {
                                 0
                             };
+
                         let return_type = args.pop().unwrap().into();
                         let method_token: Arg = args.pop().unwrap();
 
@@ -648,13 +651,136 @@ impl<'a> VirtualMachine<'a> {
                         println!(" stack_args {:?}", stack_args);
                         let call_value = *stack_args.get(0).unwrap();
 
-                        print!("method on type {}", call_value);
+                        print!("method on type {} ", call_value);
                         let v = call_value.exec_value_method(
                             method_token.into(),
                             &stack_args[1..],
                             return_type,
-                        );
+                        )?();
+
                         m.set_mem_pos(mem_pos, v);
+                    }
+                    // stack args: [
+                    //      method_token, return_type, 
+                    //      arguments, result memory position
+                    // ]
+                    // pops arguments from the stack
+                    OpCode::ExecuteConsumeValueMethod => {
+                        let mut m = mem.borrow_mut();
+
+                        let mem_pos =
+                            if let Arg::MemPos(pos) = args.pop().unwrap() {
+                                pos as usize
+                            } else {
+                                return Err(VmError::InvalidValueType);
+                            };
+
+                        let args_len: usize =
+                            if let Some(Arg::Arguments(args)) = args.pop() {
+                                args.len()
+                            } else {
+                                0
+                            };
+
+                        let return_type = args.pop().unwrap().into();
+                        let method_token: Arg = args.pop().unwrap();
+
+                        // pop as many refs from the stack as we have
+                        // arguments for this method and resolve them  to
+                        // their values.
+                        let mut stack = self.stack.borrow_mut();
+
+                        // the field_index of the first argument on the
+                        // stack, this is the field that will be consumed
+                        // and returned by `exec_consume_value_method`
+                        // later on.
+                        let mut target_field_index = None;
+
+                        let mut stack_args = (0..=args_len).into_iter().map(|_i| {
+                            let sr = stack.pop().unwrap();
+
+                            target_field_index = if target_field_index.is_none() { 
+                                sr.field_index 
+                            } else {
+                                target_field_index
+                            };
+                            
+                            match sr.pos {
+                                StackRefPos::MemPos(pos) => {
+                                    let v = m
+                                        .get_mem_pos_as_owned(pos as usize)
+                                        .unwrap_or_else(|| {
+                                            println!("\nstack: {:?}", stack);
+                                            println!("mem: {:#?}", m.0);
+                                            panic!(r#"Uninitialized memory in 
+                                                pos {}. That's fatal"#, pos);
+                                        });
+                                    v
+                                }
+                                StackRefPos::TablePos(_token, _pos) => {
+                                    panic!(r#"Can't mutate data in a data source. 
+                                    That's fatal."#);
+                                }
+                            }
+                        }).collect::<Vec<_>>();
+
+                        // The first value on the stack is the value which we
+                        // are going to call a method with.
+                        let collection_value = stack_args.remove(0);
+
+                        // We have the complete instance, now see if we can:
+                        // - get hold of the right field in this instance
+                        //   (it is taken out of the instance!)
+                        // - invoke the method that was requested on the
+                        //   field
+                        // - put the result of the method back in the
+                        //   instance
+                        // - write the instance back in the right memory
+                        //   position.
+                        let result_value = match collection_value {
+                            TypeValue::Record(mut rec) => {
+                                let call_value = TypeValue::from(
+                                    rec.get_field_by_index_owned(
+                                        target_field_index.unwrap(),
+                                    ),
+                                )
+                                .exec_consume_value_method(
+                                    method_token.into(),
+                                    stack_args,
+                                    return_type,
+                                    target_field_index,
+                                )?(
+                                );
+                                rec.set_field_for_index(
+                                    target_field_index.unwrap(),
+                                    call_value,
+                                )?;
+                                TypeValue::Record(rec)
+                            }
+                            TypeValue::List(mut list) => {
+                                let call_value = TypeValue::from(
+                                    list.get_field_by_index_owned(
+                                        target_field_index.unwrap(),
+                                    )
+                                    .unwrap(),
+                                )
+                                .exec_consume_value_method(
+                                    method_token.into(),
+                                    stack_args,
+                                    return_type,
+                                    target_field_index,
+                                )?(
+                                );
+                                list.set_field_for_index(
+                                    target_field_index.unwrap(),
+                                    call_value,
+                                )?;
+                                TypeValue::List(list)
+                            }
+                            _ => collection_value,
+                        };
+
+                        m.set_mem_pos(mem_pos, result_value);
                     }
                     // args: [data_source_token, method_token, return memory position]
                     OpCode::ExecuteDataStoreMethod => {
@@ -808,36 +934,28 @@ impl<'a> VirtualMachine<'a> {
                     OpCode::Exit => {
                         todo!();
                     }
-                    // SetRxField is different from MemPosSet, not only
-                    // because it can only change the Rx instance, but also
-                    // because it can modify a specific field on the Rx
-                    // instance. (MemPosSet can only replace the whole
-                    // instance).
 
-                    // stack args: [vec[rx type instance field], new value]
+                    // SetRxField will replace the rx instance with the
+                    // latest the value that is ref'ed by the top of the
+                    // stack.
+
+                    // stack args: [new value]
                     OpCode::SetRxField => {
                         let mut m = mem.borrow_mut();
                         // pop all refs from the stack and resolve them to
                         // their values.
                         let stack_args = self.unwind_stack_into_vec(&m);
 
-                        // swap out the Rx instance from memory
-                        let mut rx = m.get_mem_pos_as_owned(0).unwrap();
-
                         // swap out the new value from memory
                         let val = m
                             .get_mp_field_by_stack_ref_owned(
-                                stack_args.get(1).unwrap(),
+                                stack_args.last().unwrap(),
                             )
                             .unwrap();
 
-                        // change the rx instance to hold the new value in the
-                        // right field.
-                        rx.set_field_by_stack_ref(&stack_args[0], val)?;
-
-                        // swap the rx instance back into memory at position 0.
-                        m.set_mem_pos(0, rx);
-                        println!("DONE WITH SETRX");
+                        // save the value in memory position 0 (rx instance
+                        // by definition).
+                        m.set_mem_pos(0, val);
                     }
                     // stack args: [tx type instance field, new value]
                     OpCode::SetTxField => {
@@ -931,6 +1049,7 @@ pub enum VmError {
     DataSourceNotFound(usize),
     ImpossibleComparison,
     InvalidWrite,
+    InvalidConversion,
 }
 
 #[derive(Debug)]
@@ -949,9 +1068,10 @@ impl Display for Command {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let arrow = match self.op {
             OpCode::Cmp => "<->",
-            OpCode::ExecuteTypeMethod => "=>",
-            OpCode::ExecuteDataStoreMethod => "=>",
-            OpCode::ExecuteValueMethod => "=>",
+            OpCode::ExecuteTypeMethod => "->",
+            OpCode::ExecuteDataStoreMethod => "->",
+            OpCode::ExecuteValueMethod => "->",
+            OpCode::ExecuteConsumeValueMethod => "=>",
             OpCode::PushStack => "<-",
             OpCode::PopStack => "->",
             OpCode::ClearStack => "::",
@@ -1075,6 +1195,7 @@ pub enum OpCode {
     ExecuteTypeMethod,
     ExecuteDataStoreMethod,
     ExecuteValueMethod,
+    ExecuteConsumeValueMethod,
     PopStack,
     PushStack,
     ClearStack,
