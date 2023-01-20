@@ -66,7 +66,6 @@ impl Rib {
                         // because we would erase the type then. Since this
                         // method can be in the middle of a chain we need to
                         // pass on the type
-                        println!("record type {}", self.ty);
                         let rec = Record::create_empty_instance(&self.ty).unwrap();
                         DataSourceMethodValue::TypeValue(TypeValue::Record(rec))
                     })

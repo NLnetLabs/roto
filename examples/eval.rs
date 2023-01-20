@@ -16,7 +16,7 @@ fn test_data(
     name: &str,
     source_code: &'static str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    println!("eval test {}", name);
+    println!("Evaluate module {}...", name);
 
     // println!("{:#?}", symbols);
 

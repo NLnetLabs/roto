@@ -336,7 +336,6 @@ impl ast::Module {
     ) -> Result<(), CompileError> {
         // Check the `with` clause for additional arguments.
         let with_kv: Vec<_> = self.body.define.with_kv.clone();
-        println!("define with kv {:#?}", &with_kv);
 
         // The `with` clause of the `define` section acts as an extra
         // argument to the whole module, that can be used as a extra
@@ -397,11 +396,6 @@ impl ast::Define {
 
             // lhs of the assignment represents the name of the variable or
             // constant.
-            println!(
-                "symbol assigned with key {} {:?}",
-                assignment.0.ident, s
-            );
-
             declare_variable_from_symbol(
                 Some(assignment.0.ident.clone()),
                 s,
@@ -437,10 +431,6 @@ impl ast::Term {
                 }
             };
 
-            println!(
-                "logical formula: {} -> {:?}",
-                self.ident.ident, logical_formula
-            );
             add_logical_formula(
                 Some(self.ident.ident.clone()),
                 logical_formula,
@@ -489,8 +479,6 @@ impl ast::Action {
                 )
                 .into());
             };
-
-            println!("action symbol creating: {:?}", call_expr);
 
             let mut s = call_expr.eval(
                 format!("sub-action-{}", s.get_name()).as_str().into(),
@@ -549,7 +537,6 @@ impl ast::Apply {
 
         for a_scope in &self.body.scopes {
             let s = a_scope.eval(symbols.clone(), scope.clone())?;
-            println!("apply scope: {:?}", s);
             add_match_action(s.get_name(), s, symbols.clone(), &scope)?;
         }
 
@@ -672,9 +659,6 @@ impl ast::ComputeExpr {
 
         let (deepest_kind, deepest_type) =
             symbol.follow_first_leaf().get_kind_and_type();
-        println!("symbol_name: {:?}", symbol.get_name());
-        println!("deepest kind: {:?}", deepest_type);
-        println!("symbol token: {:?}", token);
 
         symbol = symbol
             .set_type(deepest_type)
@@ -695,19 +679,15 @@ impl ast::MethodComputeExpr {
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, CompileError> {
-        println!("method call args {:?}", self);
-        println!("parent_ty {:?}", method_call_type);
         // self is the call receiver, e.g. in `rib-rov.longest_match()`,
         // `rib-rov` is the receiver and `longest_match` is the method call
         // name. The actual method call lives in the `args` field.
         let arguments = self.args.eval(symbols.clone(), scope)?;
-        println!("method call args {:?}", arguments);
 
         // we need to lookup the properties of the return type of the method
         // that the user wants to call, to see if it matches the arguments of
         // the supplied method call in the source code.
         let props = method_call_type.get_props_for_method(&self.ident)?;
-        println!("props {:?}", props);
 
         // If this is a "regular" method call, then we set use the `consume` flag
         // from the props we retrieved to set the right MethodCall kind.
@@ -756,10 +736,6 @@ impl ast::MethodComputeExpr {
             // Either the types are the same, or the type of the parsed value
             // can be converted to the expected type, e.g. an IntegerLiteral
             // can be converted into a U8, I64, etc (as long as it fits).
-            println!(
-                "expected {:?} vs parsed {:?}",
-                expected_arg_type, parsed_arg_type
-            );
             args.push(
                 parsed_arg_type.try_convert_value_into(expected_arg_type)?,
             );
@@ -783,7 +759,6 @@ impl ast::AccessReceiver {
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, CompileError> {
-        println!("AccessReceiver::eval() {:?}", self);
         let _symbols = symbols.clone();
         let search_var = self.get_ident().ident.clone();
 
@@ -861,7 +836,6 @@ impl ast::ValueExpr {
             // Note that the evaluation of the method call will check for
             // the existence of the method.
             ast::ValueExpr::ComputeExpr(call_expr) => {
-                println!("arg base_name_ident {:?}", call_expr);
 
                 call_expr.eval(
                     call_expr.get_receiver().ident.ident,
@@ -901,13 +875,6 @@ impl ast::ValueExpr {
             // Integers are special, we are keeping them as is, so that the
             // receiver can decide how to cast them (into u8, u32 or i64).
             ast::ValueExpr::IntegerLiteral(int_lit) => {
-                println!("int_lit {:?}", int_lit);
-                println!(
-                    "as value {}",
-                    TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
-                        IntegerLiteral::new(int_lit.into())
-                    ))
-                );
                 Ok(symbols::Symbol::new_with_value(
                     int_lit.into(),
                     symbols::SymbolKind::Constant,
@@ -941,7 +908,6 @@ impl ast::ValueExpr {
                 ))
             }
             ast::ValueExpr::AsnLiteral(asn_lit) => {
-                println!("asn_lit {:?}", asn_lit);
                 Ok(symbols::Symbol::new_with_value(
                     asn_lit.into(),
                     symbols::SymbolKind::Constant,
@@ -951,7 +917,6 @@ impl ast::ValueExpr {
                 ))
             }
             ast::ValueExpr::BooleanLit(bool_lit) => {
-                println!("bool_lit {:?}", bool_lit);
                 Ok(symbols::Symbol::new_with_value(
                     bool_lit.into(),
                     symbols::SymbolKind::Constant,
@@ -991,8 +956,6 @@ impl ast::FieldAccessExpr {
         field_type: TypeDef,
     ) -> Result<symbols::Symbol, CompileError> {
         if let Ok((ty, to)) = field_type.has_fields_chain(&self.field_names) {
-            println!("::: field_type {:?}", field_type);
-            println!("::: self {:?}", self);
 
             let name = self.field_names.join(".");
 
@@ -1153,7 +1116,6 @@ impl ast::CompareArg {
     ) -> Result<symbols::Symbol, CompileError> {
         let _symbols = symbols.clone();
 
-        println!("comparison argument: {:?}", self);
         match self {
             ast::CompareArg::GroupedLogicalExpr(expr) => {
                 // This is a grouped expression that will return a boolean.
@@ -1187,7 +1149,6 @@ impl ast::AndExpr {
         // meaning they have a value, not a type.
         let _symbols = symbols.clone();
 
-        println!("and expr {:?}", self);
         let left = self.left.eval(_symbols, scope)?;
         let right = self.right.eval(symbols, scope)?;
 
@@ -1209,7 +1170,6 @@ impl ast::OrExpr {
         symbols: symbols::GlobalSymbolTable,
         scope: &symbols::Scope,
     ) -> Result<symbols::Symbol, CompileError> {
-        println!("or expr {:?}", self);
         let _symbols = symbols.clone();
 
         let left = self.left.eval(_symbols, scope)?;
@@ -1259,7 +1219,6 @@ impl ast::GroupedLogicalExpr {
         symbols: symbols::GlobalSymbolTable,
         scope: &symbols::Scope,
     ) -> Result<symbols::Symbol, CompileError> {
-        println!("grouped logical expr: {:?}", self);
         self.expr.eval(symbols, scope.clone())
     }
 }
@@ -1360,7 +1319,6 @@ fn get_props_for_scoped_variable(
 
     let symbols = symbols.borrow();
     let search_str = fields.join(".");
-    println!("search_str: {}", search_str);
 
     match &scope {
         symbols::Scope::Module(module) => {
@@ -1370,7 +1328,7 @@ fn get_props_for_scoped_variable(
                 .and_then(|gt| {
                     gt.get_variable(
                         &search_str.as_str().into()).map(
-                            |s| { println!("symbol: {:#?}", s); s.get_props() }
+                            |s| s.get_props()
                             .unwrap_or_else(
                             |_| panic!(
                                 "No token found for variable '{}' in module '{}'",
@@ -1382,10 +1340,9 @@ fn get_props_for_scoped_variable(
                     // No, let's go over the chain of fields to see if it's
                     // a previously defined variable, constant or data-source.
                     || {
-                        println!("first field {}", first_field_name);
                         let var_ty_to = symbols
                             .get(&scope).and_then(|gt|
-                            gt.get_symbol(first_field_name) ).map(|s| { println!("symbol: {:?}", s); s.get_props() })
+                            gt.get_symbol(first_field_name) ).map(|s| s.get_props())
                             .ok_or_else(|| format!(
                                 "___ No variable named '{}' found in module '{}'",
                                 first_field_name, module
@@ -1752,8 +1709,6 @@ fn is_boolean_function(
     left: &impl BooleanExpr,
     right: &impl BooleanExpr,
 ) -> Result<(), CompileError> {
-    println!("left: {:?}", left);
-    println!("right: {:?}", right);
 
     let left = (
         left.get_builtin_type()? == TypeDef::Boolean,
@@ -1763,9 +1718,6 @@ fn is_boolean_function(
         right.get_builtin_type()? == TypeDef::Boolean,
         right.get_args().get(0).map(|a| a.get_value()),
     );
-
-    println!("left value: {:?}", left);
-    println!("right value: {:?}", right);
 
     match (left, right) {
         ((false, None), (false, None)) => Err("Right and Left hand expressions don't evaluate to boolean functions".into()),

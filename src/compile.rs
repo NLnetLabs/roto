@@ -206,7 +206,6 @@ impl<'a> Compiler<'a> {
         let mut compiler = Compiler::new(source_code);
         compiler.parse_source_code(source_code).unwrap();
         compiler.eval_ast().unwrap();
-        println!("symbols = {:#?}", compiler.symbols);
         compiler.compile()
     }
 }
@@ -285,8 +284,6 @@ fn compile_module(
     // initialize the command stack
     let mut mir: Vec<MirBlock> = vec![];
 
-    println!("======== dependencies for module: {:?} ===========", module);
-
     println!("___used args");
     state
         .used_arguments
@@ -303,8 +300,6 @@ fn compile_module(
 
     state.used_data_sources.iter().for_each(|t| {
         println!("{:?} {:?}", t.1.get_token().unwrap(), t.0);
-        println!("--- DATA SOURCE");
-        println!("{:#?}", t);
     });
 
     println!("=================================================");
@@ -376,24 +371,14 @@ fn compile_expr<'a>(
     let mut local_stack = std::collections::VecDeque::<Command>::new();
 
     let mut leaves = leaves.into_iter().peekable();
-    println!("\nleaves");
-    println!(
-        "{:?}",
-        leaves.clone().for_each(|lv| {
-            println!("{:3?} {}", lv.get_token().unwrap(), lv.get_name())
-        })
-    );
 
     while let Some(arg) = &mut leaves.next() {
-        print!("a");
 
         let token = arg.get_token().unwrap();
 
         match token {
             // assignment to a variable
             Token::Variable(var) if arg.get_name() == "var" => {
-                print!("V");
-
                 local_stack
                     .push_front(Command::new(OpCode::ClearStack, vec![]));
                 local_stack.push_front(Command::new(
@@ -401,16 +386,13 @@ fn compile_expr<'a>(
                     vec![Arg::MemPos(var_assign_mem_pos), Arg::Variable(var)],
                 ));
 
-                println!("\nlocal_stack {:?}", local_stack);
                 state.local_vars.set(var, state.mem_pos, 0).unwrap();
-                println!("local_vars {:?}", state.local_vars);
 
                 state.cur_mir_block.command_stack.extend(local_stack);
                 local_stack = VecDeque::new();
             }
             // assignment to a constant
             Token::Constant(_) => {
-                println!("C");
                 state.mem_pos += 1;
 
                 let val = arg.get_value();
@@ -431,11 +413,6 @@ fn compile_expr<'a>(
             }
             // external calls
             Token::Method(method) => {
-                println!(
-                    "m {} for {:?}",
-                    method,
-                    leaves.peek().unwrap().get_type()
-                );
                 let next_arg = leaves.peek().unwrap();
 
                 let (opcode, args) = match next_arg.get_token() {
@@ -456,8 +433,6 @@ fn compile_expr<'a>(
                         ],
                     ),
                     Ok(Token::BuiltinType(_)) => {
-                        println!("arg : {:?}", arg);
-                        println!("next_arg : {:?}", next_arg);
 
                         (
                             // args: [ call_type, method_call, return_type ]
@@ -517,8 +492,6 @@ fn compile_expr<'a>(
                     },
 
                     Ok(Token::FieldAccess(_)) => {
-                        println!("FIELD_ACCESS arg: {:?}", arg);
-                        println!("next_arg: {:?}", next_arg);
                         match arg.get_kind() {
                             SymbolKind::MethodCallbyRef => (
                                 // args: [ method_call, return_type ]
@@ -582,8 +555,6 @@ fn compile_expr<'a>(
             }
             // roots : an expression starting with any of these.
             Token::Variable(var) => {
-                println!("get var: {:?}", var);
-                println!("local vars {:?}", state.local_vars);
                 let mem_pos =
                     state.local_vars.get_by_token_value(var).unwrap();
                 local_stack.push_front(Command::new(
@@ -726,7 +697,6 @@ fn compile_assignments(
         state.mem_pos = mem_pos;
 
         let s = _module.get_variable_by_token(&var.1.get_token()?);
-        print!("\nvar: {:?} ({})", s.get_token(), mem_pos);
 
         state.cur_mir_block.command_stack.push(Command::new(
             OpCode::Label,
@@ -787,13 +757,6 @@ fn compile_apply(
 
     let match_actions = state.cur_module.get_match_actions();
 
-    println!(
-        "match action in order: {:#?}",
-        match_actions
-            .iter()
-            .map(|ma| ma.get_name())
-            .collect::<Vec<_>>()
-    );
     // Collect the terms that we need to compile.
     for match_action in match_actions {
         let term_name = match_action.get_name();
@@ -930,7 +893,6 @@ fn compile_action<'a>(
     action: Action<'a>,
     mut state: CompilerState<'a>,
 ) -> Result<CompilerState<'a>, CompileError> {
-    println!("-> action {:#?}", action);
 
     for sub_action in action.get_args() {
         state = compile_sub_action(sub_action, state)?;
@@ -967,8 +929,6 @@ fn compile_term<'a>(
 ) -> Result<CompilerState<'a>, CompileError> {
     state.cur_mir_block = MirBlock::new(MirBlockType::Term);
 
-    println!("term {:?} {:?}", term.get_name(), term.get_kind());
-
     // Set a Label so that each term block is identifiable for humans.
     state.cur_mir_block.command_stack.push(Command::new(
         OpCode::Label,
@@ -980,17 +940,7 @@ fn compile_term<'a>(
     let sub_terms = term.get_args();
     let mut sub_terms = sub_terms.iter().peekable();
 
-    println!("\nsub terms {}", term.get_name());
-    println!(
-        "{:?}",
-        sub_terms.clone().for_each(|lv| {
-            println!("{:3?} {:3?}", lv.get_name(), lv.get_kind());
-        })
-    );
-
     while let Some(arg) = &mut sub_terms.next() {
-        print!("term {:?}", arg);
-
         state = compile_sub_term(arg, state)?;
 
         assert_ne!(state.cur_mir_block.command_stack.len(), 0);
@@ -1012,11 +962,6 @@ fn compile_sub_term<'a>(
     sub_term: Term<'a>,
     mut state: CompilerState<'a>,
 ) -> Result<CompilerState<'a>, CompileError> {
-    println!(
-        "sub-term {:?} {:?}",
-        sub_term.get_name(),
-        sub_term.get_kind()
-    );
 
     let saved_mem_pos = state.mem_pos;
     match sub_term.get_kind() {
@@ -1058,14 +1003,8 @@ fn compile_sub_term<'a>(
             panic!("NOT NOT!");
         }
         _ => {
-            println!(
-                "compile-var sub-term {:?} {:?}",
-                sub_term.get_name(),
-                sub_term.get_kind()
-            );
             let start_pos = state.mem_pos;
             state = compile_expr(sub_term, state, start_pos)?;
-            println!("command_stack {:?}", state.cur_mir_block.command_stack);
         }
     };
 

@@ -60,8 +60,7 @@ impl Symbol {
         } else if let TypeValue::Builtin(ty) = &self.value {
             Ok(ty.into())
         } else {
-            println!("get_builtin_type: {:#?}", self);
-            Err(format!("a Type '{:?}' is not a builtin type", self).into())
+            Err(format!("Type '{:?}' is not a builtin type", self).into())
         }
     }
 
@@ -209,7 +208,6 @@ impl Symbol {
         if self.args.is_empty() {
             self.ty.clone()
         } else if let Some(first_arg) = self.args.first() {
-            println!("first arg {:?}", first_arg);
             first_arg.ty.clone()
         } else {
             unreachable!()
@@ -314,7 +312,6 @@ impl Symbol {
 
         let mut new_nodes = vec![];
         for arg in self.get_args() {
-            print!(" {} ", self.get_name());
             new_nodes.extend(arg.flatten_nodes());
         }
 
@@ -960,11 +957,6 @@ impl SymbolTable {
             deps_vec.extend(s.flatten_nodes()) // .into_iter().filter(|s| s.get_token().is_ok()));
         }
 
-        println!(
-            "data sources in deps vec {:#?}",
-            deps_vec.iter().filter(|s| if let Ok(t) = s.get_token() { t.is_data_source() } else { false }).collect::<Vec<_>>()
-        );
-
         let DepsGraph {
             mut used_variables,
             mut used_arguments,
@@ -1006,15 +998,6 @@ impl SymbolTable {
             col.sort_by(|a, b| a.1.cmp(b.1));
             col.dedup_by(|a, b| a.1.eq(b.1));
         }
-
-
-        println!(
-            "DATA SOURCES FOUND {:#?}",
-            used_data_sources
-                .iter()
-                .map(|ds| global_table.get_data_source(&ds.0))
-                .collect::<Vec<_>>()
-        );
 
         Ok((
             (self.rx_type.get_name(), self.rx_type.get_type()),

@@ -1207,7 +1207,6 @@ impl RotoFilter for Prefix {
                 }))
             }
             PrefixToken::Len => {
-                println!("prefix args {:?}", args);
                 if let Prefix(
                     Some(pfx),
                 ) = self

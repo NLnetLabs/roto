@@ -83,8 +83,6 @@ impl TypeDef {
         &self,
         fields: &[crate::ast::Identifier],
     ) -> Result<(TypeDef, Token), CompileError> {
-        println!("has_fields_chain: {:?}", fields);
-        println!("self: {:?}", self);
 
         // Data sources (rib and table) are special cases, because they have
         // their methods on the container (the datasource) and not on the
@@ -109,15 +107,12 @@ impl TypeDef {
                     // recurse into the TypeDef of self.
                     current_type_token = (ty, current_type_token.1);
                     current_type_token.1.push(index as u8);
-                    println!("UwU {} {}", field.ident, index);
                 } else {
-                    println!("AA none fields:: {}", field.ident.as_str());
                     return Err(
                         format!("No field named '{}'", field.ident.as_str()).into(),
                     );
                 }
             } else {
-                println!("BB none fields:: {}", field.ident.as_str());
                 return Err(
                     format!("No field named '{}'", field.ident.as_str()).into(),
                 );

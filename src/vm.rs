@@ -310,7 +310,6 @@ impl<'a> VirtualMachine<'a> {
 
         if let Some(tx) = tx {
             let tx = tx.take_value();
-            println!("move tx to mem[1s]: {}", tx);
             m.set_mem_pos(1, tx);
         }
     }
@@ -329,11 +328,6 @@ impl<'a> VirtualMachine<'a> {
                         .unwrap_or_else(|| {
                             println!("\nstack: {:?}", stack);
                             println!("mem: {:#?}", mem.0);
-                            // for (i, addr) in m.0.as_slice().iter().enumerate() {
-                            //     if !addr.is_empty() {
-                            //         println!("{}: {}", i, addr);
-                            //     }
-                            // }
                             panic!(
                                 "Uninitialized memory in position {}",
                                 pos
@@ -411,10 +405,6 @@ impl<'a> VirtualMachine<'a> {
                         match &args[0] {
                             Arg::CompareOp(CompareOp::Eq) => {
                                 let res = left == right;
-                                println!(
-                                    "{:3} -> {:?} == {:?} = {}",
-                                    pc, left, right, res
-                                );
                                 m.set_mem_pos(
                                     2,
                                     TypeValue::Builtin(
@@ -429,10 +419,6 @@ impl<'a> VirtualMachine<'a> {
                             }
                             Arg::CompareOp(CompareOp::Ne) => {
                                 let res = left != right;
-                                println!(
-                                    "{:3} -> {:?} != {:?} = {}",
-                                    pc, left, right, res
-                                );
                                 m.set_mem_pos(
                                     2,
                                     TypeValue::Builtin(
@@ -447,10 +433,6 @@ impl<'a> VirtualMachine<'a> {
                             }
                             Arg::CompareOp(CompareOp::Lt) => {
                                 let res = left < right;
-                                println!(
-                                    "{:3} -> {:?} < {:?} = {}",
-                                    pc, left, right, res
-                                );
                                 m.set_mem_pos(
                                     2,
                                     TypeValue::Builtin(
@@ -465,10 +447,6 @@ impl<'a> VirtualMachine<'a> {
                             }
                             Arg::CompareOp(CompareOp::Le) => {
                                 let res = left <= right;
-                                println!(
-                                    "{:3} -> {:?} <= {:?} = {}",
-                                    pc, left, right, res
-                                );
                                 m.set_mem_pos(
                                     2,
                                     TypeValue::Builtin(
@@ -483,10 +461,6 @@ impl<'a> VirtualMachine<'a> {
                             }
                             Arg::CompareOp(CompareOp::Gt) => {
                                 let res = left > right;
-                                println!(
-                                    "{:3} -> {:?} > {:?} = {}",
-                                    pc, left, right, res
-                                );
                                 m.set_mem_pos(
                                     2,
                                     TypeValue::Builtin(
@@ -501,10 +475,6 @@ impl<'a> VirtualMachine<'a> {
                             }
                             Arg::CompareOp(CompareOp::Ge) => {
                                 let res = left >= right;
-                                println!(
-                                    "{:3} -> {:?} >= {:?} = {}",
-                                    pc, left, right, res
-                                );
                                 m.set_mem_pos(
                                     2,
                                     TypeValue::Builtin(
@@ -521,10 +491,6 @@ impl<'a> VirtualMachine<'a> {
                                 let l = left.try_into()?;
                                 let r = right.try_into()?;
                                 let res = l || r;
-                                println!(
-                                    "{:3} -> {:?} || {:?} = {}",
-                                    pc, left, right, res
-                                );
                                 m.set_mem_pos(
                                     2,
                                     TypeValue::Builtin(
@@ -540,10 +506,6 @@ impl<'a> VirtualMachine<'a> {
                             Arg::CompareOp(CompareOp::And) => {
                                 let res =
                                     left.try_into()? && right.try_into()?;
-                                println!(
-                                    "{:3} -> {:?} && {:?} = {}",
-                                    pc, left, right, res
-                                );
                                 m.set_mem_pos(
                                     2,
                                     TypeValue::Builtin(
@@ -578,12 +540,6 @@ impl<'a> VirtualMachine<'a> {
                         // extract the type from the first argument on the
                         // stack.
                         if let Arg::Type(t) = &args[0] {
-                            println!("-> with ");
-                            stack_args
-                                .iter()
-                                .for_each(|a| print!("{:?}, ", a));
-                            println!("\nwith return type {:?}", return_type);
-
                             if let Arg::Method(method_token) = args[1] {
                                 let val = t.exec_type_method(
                                     method_token,
@@ -649,10 +605,8 @@ impl<'a> VirtualMachine<'a> {
 
                         // The first value on the stack is the value which we
                         // are going to call a method with.
-                        println!(" stack_args {:?}", stack_args);
                         let call_value = *stack_args.get(0).unwrap();
 
-                        print!("method on type {} ", call_value);
                         let v = call_value.exec_value_method(
                             method_token.into(),
                             &stack_args[1..],
@@ -945,7 +899,7 @@ impl<'a> VirtualMachine<'a> {
                         };
 
                         if accept_reject != AcceptReject::NoReturn {
-                            println!("\n\nINITALIZED MEMORY POSITIONS");
+                            println!("\n\nINITIALIZED MEMORY POSITIONS");
                             for (i, addr) in m.0.as_slice().iter().enumerate() {
                                 if !addr.is_unitialized() {
                                     println!("{}: {}", i, addr);
@@ -1340,10 +1294,6 @@ impl ExtDataSource {
         args: &[&'a TypeValue],
         res_type: TypeDef,
     ) -> DataSourceMethodValue {
-        println!(
-            "exec_method: {:?} {:?} {:?} {:?}",
-            self.source, method_token, args, res_type
-        );
 
         match self.source {
             DataSource::Table(ref t) => {

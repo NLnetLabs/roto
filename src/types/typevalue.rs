@@ -124,17 +124,14 @@ impl TypeValue {
         value: TypeValue,
     ) -> Result<(), VmError> {
         if let StackRefPos::MemPos(index) = stack_ref.pos {
-            println!("WRITE stack_ref {:?} value {:?}", stack_ref, value);
             match self {
                 TypeValue::Record(rec) => {
                     rec.set_field_for_index(index as usize, value)?
                 }
                 TypeValue::List(list) => {
-                    println!("LIST WRITE {:?}", list);
                     list.set_field_for_index(index as usize, value)?
                 }
                 _ => {
-                    println!("TYPEVALUE {:?}", self);
                     return Err(VmError::InvalidWrite)
                 },
             };
@@ -155,11 +152,9 @@ impl TypeValue {
                 rec.set_field_for_index(field_index as usize, value)?;
             }
             TypeValue::List(ref mut list) => {
-                println!("LIST WRITE {:?}", list);
                 list.set_field_for_index(field_index as usize, value)?;
             }
             _ => {
-                println!("TYPEVALUE {:?}", self);
                 return Err(VmError::InvalidWrite)
             },
         };
@@ -582,8 +577,7 @@ impl<'a> From<&'a TypeDef> for Box<TypeValue> {
             )),
 
             _ => {
-                println!("panic on type {:?}", t);
-                panic!("Unknown type")
+                panic!("panic on unknown type {:?}", t);
             }
         }
     }
@@ -607,7 +601,6 @@ impl<'a> From<&'a TypeDef> for TypeValue {
                 BuiltinTypeValue::IpAddress(IpAddress(None)),
             ),
             TypeDef::Asn => {
-                println!("into asn");
                 TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(None)))
             }
             TypeDef::AsPath => {

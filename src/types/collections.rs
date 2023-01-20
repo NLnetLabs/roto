@@ -187,7 +187,6 @@ impl List {
         index: usize,
         value: TypeValue,
     ) -> Result<(), VmError> {
-        println!("I V {} {}", index, value);
         let e_tv = self.0.get_mut(index).ok_or(VmError::MemOutOfBounds)?;
         let new_field = &mut ElementTypeValue::from(value);
         std::mem::swap(e_tv, new_field);
@@ -299,7 +298,6 @@ impl RotoFilter for List {
                }))
             }
             ListToken::Push => {
-                println!("push {:?} to  {}", args, self);
                 Ok(Box::new(move || {
                     self.0.push((args.remove(0)).into());
                     TypeValue::List(self)
@@ -379,7 +377,6 @@ impl<'a> Record {
                 .iter()
                 .map(|(name, ty)| (name.clone(), ty.clone()))
                 .collect::<Vec<(ShortString, Box<TypeDef>)>>();
-            println!("new empty instance: {:#?}", empty_instance);
             Ok(empty_instance.into())
         } else {
             Err(CompileError::new("Not a record type".into()))

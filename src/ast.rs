@@ -1187,7 +1187,6 @@ impl PrefixLengthLiteral {
             preceded(char('/'), take_while1(|ch: char| ch.is_ascii_digit())),
         )(input)?;
 
-        println!("digits: {}", digits);
         let value = digits.parse().unwrap();
         Ok((input, Self(value)))
     }
