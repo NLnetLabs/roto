@@ -1,21 +1,19 @@
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
     fmt::{Display, Formatter},
 };
 
 use nom::error::VerboseError;
 
 use crate::{
-    ast::{self, ShortString, SyntaxTree, AcceptReject},
+    ast::{self, AcceptReject, ShortString, SyntaxTree},
     symbols::{
         DepsGraph, GlobalSymbolTable, MatchActionType, Scope, Symbol,
         SymbolKind, SymbolTable,
     },
     traits::Token,
     types::typedef::TypeDef,
-    vm::{
-        Arg, Command, ExtDataSource, OpCode, StackRefPos, VariablesMap,
-    },
+    vm::{Arg, Command, ExtDataSource, OpCode, StackRefPos},
 };
 
 //============ The Compiler (Filter creation time) ==========================
@@ -132,13 +130,20 @@ type Action<'a> = &'a Symbol;
 #[derive(Debug)]
 struct CompilerState<'a> {
     cur_module: &'a SymbolTable,
-    local_vars: VariablesMap,
+    alias_mir_cache: HashMap<usize, MemPosOrAliasBlock>,
     used_variables: Variables<'a>,
     used_data_sources: DataSources<'a>,
     used_arguments: Arguments<'a>,
     cur_mir_block: MirBlock,
+    cur_mir_block_is_alias: bool,
     mem_pos: u32,
     computed_terms: Terms<'a>,
+}
+
+#[derive(Debug)]
+enum MemPosOrAliasBlock {
+    MemPos(u32),
+    AliasBlock(MirBlock),
 }
 
 #[derive(Debug, Default)]
@@ -215,7 +220,8 @@ pub enum MirBlockType {
     Assignment,
     Term,
     MatchAction,
-    Terminator
+    Alias,
+    Terminator,
 }
 
 #[derive(Debug)]
@@ -246,6 +252,28 @@ impl Display for MirBlock {
     }
 }
 
+// Cloning a MirBlock only works if a Constant argument contains a TypeValue
+// that can be converted into a BuiltinTypeValue, meaning that the constant
+// doesn't hold a Record or a Value.
+impl Clone for MirBlock {
+    fn clone(&self) -> Self {
+        let c_stack = self
+            .command_stack
+            .iter()
+            .map(|c| {
+                let args = c
+                    .args.to_vec();
+                Command::new(c.op, args)
+            })
+            .collect::<Vec<_>>();
+
+        MirBlock {
+            ty: MirBlockType::Alias,
+            command_stack: c_stack,
+        }
+    }
+}
+
 fn unwind_stack(
     mut stack: std::collections::VecDeque<Command>,
 ) -> Vec<Command> {
@@ -272,12 +300,14 @@ fn compile_module(
 
     let mut state = CompilerState {
         cur_module: module,
-        local_vars: VariablesMap::default(),
+        // local_vars: VariablesMap::default(),
+        alias_mir_cache: HashMap::new(),
         used_variables,
         used_data_sources,
         used_arguments,
         computed_terms: Terms::new(),
         cur_mir_block: MirBlock::new(MirBlockType::Assignment),
+        cur_mir_block_is_alias: false,
         mem_pos: 0,
     };
 
@@ -312,7 +342,10 @@ fn compile_module(
     (mir, state) = compile_apply(mir, state)?;
 
     state.cur_mir_block = MirBlock::new(MirBlockType::Terminator);
-    state.cur_mir_block.command_stack.push(Command::new(OpCode::Exit(state.cur_module.get_default_action()), vec![]));
+    state.cur_mir_block.command_stack.push(Command::new(
+        OpCode::Exit(state.cur_module.get_default_action()),
+        vec![],
+    ));
 
     mir.push(state.cur_mir_block);
 
@@ -363,36 +396,59 @@ fn compile_module(
 fn compile_expr<'a>(
     symbol: &'a Symbol,
     mut state: CompilerState<'a>,
-    // The posision at which to write the Variable assignment. This allows for the use of the
-    // state.mem_pos to be used for temp variables.
+    // The position at which to write the Variable assignment. This allows
+    // for the use of the state.mem_pos to be used for temp variables.
     var_assign_mem_pos: u32,
 ) -> Result<CompilerState<'a>, CompileError> {
     let leaves = symbol.get_leaf_nodes();
+    // An alias is an expression that doesn't perform a method call anywhere
+    // in its chain.
+    state.cur_mir_block_is_alias = true;
     let mut local_stack = std::collections::VecDeque::<Command>::new();
 
     let mut leaves = leaves.into_iter().peekable();
 
     while let Some(arg) = &mut leaves.next() {
-
         let token = arg.get_token().unwrap();
 
         match token {
-            // assignment to a variable
+            // assignment to a variable.
+            // There are 3 scenarios:
+            // - The result of a method call, in which case a new
+            //   TypeValue is returned and stored in a memory position.
+            // - a field access that was specified AFTER a method call.
+            // - an alias to a variable, data source, or a field on a
+            //   variable.
             Token::Variable(var) if arg.get_name() == "var" => {
-                local_stack
-                    .push_front(Command::new(OpCode::ClearStack, vec![]));
-                local_stack.push_front(Command::new(
-                    OpCode::MemPosRef,
-                    vec![Arg::MemPos(var_assign_mem_pos), Arg::Variable(var)],
-                ));
-
-                state.local_vars.set(var, state.mem_pos, 0).unwrap();
-
-                state.cur_mir_block.command_stack.extend(local_stack);
+                // local_stack.push_front(Command::new(
+                //     OpCode::MemPosRef,
+                //     vec![Arg::MemPos(var_assign_mem_pos), Arg::Variable(var)],
+                // ));
+                if state.cur_mir_block_is_alias {
+                    println!("VAR {} IS ALIAS {:?}", var, local_stack);
+                    state.alias_mir_cache.insert(
+                        var,
+                        MemPosOrAliasBlock::AliasBlock(MirBlock {
+                            ty: MirBlockType::Alias,
+                            command_stack: local_stack.into(),
+                        }),
+                    );
+                } else {
+                    state.alias_mir_cache.insert(
+                        var,
+                        MemPosOrAliasBlock::MemPos(var_assign_mem_pos),
+                    );
+                    local_stack
+                        .push_front(Command::new(OpCode::ClearStack, vec![]));
+                    state.cur_mir_block.command_stack.extend(local_stack);
+                }
                 local_stack = VecDeque::new();
             }
             // assignment to a constant
             Token::Constant(_) => {
+                // Constants can be cached in a memory position, so no
+                // aliasing
+                state.cur_mir_block_is_alias = false;
                 state.mem_pos += 1;
 
                 let val = arg.get_value();
@@ -413,6 +469,8 @@ fn compile_expr<'a>(
             }
             // external calls
             Token::Method(method) => {
+                // Method calls can and should be cached in memory
+                state.cur_mir_block_is_alias = false;
                 let next_arg = leaves.peek().unwrap();
 
                 let (opcode, args) = match next_arg.get_token() {
@@ -433,7 +491,6 @@ fn compile_expr<'a>(
                         ],
                     ),
                     Ok(Token::BuiltinType(_)) => {
-
                         (
                             // args: [ call_type, method_call, return_type ]
                             OpCode::ExecuteTypeMethod,
@@ -481,13 +538,10 @@ fn compile_expr<'a>(
                             )
                         }
                         _ => {
-                            return Err(CompileError::new(
-                                format!(
-                                    "Invalid MethodCall type {:?}",
-                                    arg.get_kind()
-                                )
-                                .into(),
-                            ))
+                            return Err(CompileError::new(format!(
+                                "Invalid MethodCall type {:?}",
+                                arg.get_kind()
+                            )))
                         }
                     },
 
@@ -504,7 +558,7 @@ fn compile_expr<'a>(
                                             .iter()
                                             .map(|s| s.get_type())
                                             .collect::<Vec<_>>(),
-                                    ), 
+                                    ),
                                     // argument types and number
                                     Arg::MemPos(state.mem_pos),
                                 ],
@@ -520,12 +574,14 @@ fn compile_expr<'a>(
                                             .iter()
                                             .map(|s| s.get_type())
                                             .collect::<Vec<_>>(),
-                                    ), 
+                                    ),
                                     // argument types and number
                                     Arg::MemPos(state.mem_pos),
                                 ],
                             ),
-                            _ => { panic!("PANIC!"); }
+                            _ => {
+                                panic!("PANIC!");
+                            }
                         }
                     }
                     _ => {
@@ -544,6 +600,9 @@ fn compile_expr<'a>(
                 local_stack.push_front(Command::new(opcode, args));
             }
             Token::FieldAccess(fa) => {
+                // field accesses can't be cached in memory, they can
+                // however be aliased.
+                // state.cur_mir_block_is_alias = true;
                 let mut args = vec![];
                 args.extend(
                     fa.iter()
@@ -555,12 +614,26 @@ fn compile_expr<'a>(
             }
             // roots : an expression starting with any of these.
             Token::Variable(var) => {
-                let mem_pos =
-                    state.local_vars.get_by_token_value(var).unwrap();
-                local_stack.push_front(Command::new(
-                    OpCode::PushStack,
-                    vec![Arg::MemPos(mem_pos.mem_pos)],
-                ));
+                // A Variable might be cached in memory, i.e. the result of a
+                // method call, OR it may be an alias, e.g. for a field
+                // access.
+                if let Some(alias_stack) = state.alias_mir_cache.get(&var) {
+                    match alias_stack {
+                        MemPosOrAliasBlock::AliasBlock(alias_block) => {
+                            let st = (*alias_block).clone();
+                            state
+                                .cur_mir_block
+                                .command_stack
+                                .extend(st.command_stack);
+                        }
+                        MemPosOrAliasBlock::MemPos(mem_pos) => {
+                            local_stack.push_front(Command::new(
+                                OpCode::PushStack,
+                                vec![Arg::MemPos(*mem_pos)],
+                            ));
+                        }
+                    }
+                }
                 state
                     .cur_mir_block
                     .command_stack
@@ -607,7 +680,7 @@ fn compile_expr<'a>(
                     }
                 };
             }
-            // an expression starting with the variable name of the rx 
+            // an expression starting with the variable name of the rx
             // instance, e.g. `route` (the default name).
             Token::RxType => {
                 // RxType instance always lives at MemPos(0). retrieve it
@@ -688,9 +761,13 @@ fn compile_assignments(
     // a new block
     state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
 
+    // reset the alias detector.
+    state.cur_mir_block_is_alias = true;
+
     // compile the used variable assignments. Since the rx and tx value live
     // in memory positions 0 and 1, we start with memory position 2.
-    for (mem_pos, var) in (2_u32..).zip(state.used_variables.clone().iter()) {
+    let mut mem_pos = 2;
+    for var in state.used_variables.clone().iter() {
         // set the mem_pos in state to the counter we use here. Recursive
         // `compile_expr` may increase state.mem_pos to temporarily store
         // argument variables.
@@ -698,56 +775,95 @@ fn compile_assignments(
 
         let s = _module.get_variable_by_token(&var.1.get_token()?);
 
+        // reset the alias detector.
+        state.cur_mir_block_is_alias = true;
+
         state.cur_mir_block.command_stack.push(Command::new(
             OpCode::Label,
-            vec![Arg::Label(format!("ASSIGNMENT {}", var.0).as_str().into())],
+            vec![Arg::Label(
+                format!(
+                    "VAR {}",
+                    var.0
+                )
+                .as_str()
+                .into(),
+            )],
         ));
 
         state = compile_expr(s, state, mem_pos)?;
 
-        mir.push(state.cur_mir_block);
+        if !state.cur_mir_block_is_alias {
+            // This is NOT an alias, meaning there's at least one method call
+            // involved, creating a new TypeValue. So we're caching that new
+            // TypeValue into a memory position and increase the memory
+            // position.
+            mir.push(state.cur_mir_block);
+            mem_pos += 1;
+        } else {
+            // This IS an alias. It would be meaningless to cache this, apart
+            // from the fact, that the memory data-structure doesn't allow
+            // any referencing or indexing.
+            state.cur_mir_block.command_stack.push(Command::new(
+                OpCode::Label,
+                vec![Arg::Label(
+                    format!("END ALIAS {}", var.0).as_str().into(),
+                )],
+            ));
+            state.alias_mir_cache.insert(
+                var.1.get_token()?.into(),
+                MemPosOrAliasBlock::AliasBlock(state.cur_mir_block),
+            );
+            state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
+            state.cur_mir_block.command_stack.push(Command::new(
+                OpCode::Label,
+                vec![Arg::Label(format!("ALIAS {}", var.0).as_str().into())],
+            ));
+        }
+
         state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
     }
+
+    println!("ALIAS CACHE {:#?}", state.alias_mir_cache);
 
     Ok((mir, state))
 }
 
 // This is not used currently, it will compile *ALL* terms, regardless of
 // whether they are actually consumed by the (match) actions.
-fn _compile_terms(
-    mut mir: Vec<MirBlock>,
-    mut state: CompilerState<'_>,
-) -> Result<(Vec<MirBlock>, CompilerState<'_>), CompileError> {
-    let _module = state.cur_module;
+// fn _compile_terms(
+//     mut mir: Vec<MirBlock>,
+//     mut state: CompilerState<'_>,
+// ) -> Result<(Vec<MirBlock>, CompilerState<'_>), CompileError> {
+//     let _module = state.cur_module;
 
-    // a new block
-    state.cur_mir_block = MirBlock::new(MirBlockType::Term);
+//     // a new block
+//     state.cur_mir_block = MirBlock::new(MirBlockType::Term);
 
-    let terms = _module.get_terms();
-    let mut terms_iter = terms.iter().peekable();
+//     let terms = _module.get_terms();
+//     let mut terms_iter = terms.iter().peekable();
 
-    // compile all the terms.
-    while let Some(term) = &mut terms_iter.next() {
-        state = compile_term(term, state)?;
+//     // compile all the terms.
+//     while let Some(term) = &mut terms_iter.next() {
+//         state = compile_term(term, state)?;
 
-        // store the resulting value into a variable so that future references
-        // to this term can directly use the result instead of doing the whole
-        // computation again.
-        state
-            .computed_terms
-            .push((term.get_name(), state.mem_pos.into()));
+//         // store the resulting value into a variable so that future references
+//         // to this term can directly use the result instead of doing the whole
+//         // computation again.
+//         state
+//             .computed_terms
+//             .push((term.get_name(), state.mem_pos.into()));
 
-        state.mem_pos += 1;
+//         state.mem_pos += 1;
 
-        // move the current mir block to the end of all the collected MIR.
-        mir.push(state.cur_mir_block);
+//         // move the current mir block to the end of all the collected MIR.
+//         mir.push(state.cur_mir_block);
 
-        // continue with a fresh block
-        state.cur_mir_block = MirBlock::new(MirBlockType::Term);
-    }
+//         // continue with a fresh block
+//         state.cur_mir_block = MirBlock::new(MirBlockType::Term);
+//     }
 
-    Ok((mir, state))
-}
+//     Ok((mir, state))
+// }
 
 fn compile_apply(
     mut mir: Vec<MirBlock>,
@@ -857,7 +973,9 @@ fn compile_apply(
         for action in match_action.get_args() {
             let _module = state.cur_module;
             let action_name = action.get_name();
-            let accept_reject = if let TypeDef::AcceptReject(accept_reject) = action.get_type() {
+            let accept_reject = if let TypeDef::AcceptReject(accept_reject) =
+                action.get_type()
+            {
                 accept_reject
             } else {
                 panic!("NO ACCEPT REJECT {:?}", action);
@@ -873,9 +991,10 @@ fn compile_apply(
             // Add an early return if the type of the match action is either `Reject` or
             // `Accept`.
             if accept_reject != AcceptReject::NoReturn {
-                state.cur_mir_block.command_stack.push(Command::new(
-                    OpCode::Exit(accept_reject), vec![]
-                ))
+                state
+                    .cur_mir_block
+                    .command_stack
+                    .push(Command::new(OpCode::Exit(accept_reject), vec![]))
             }
         }
 
@@ -893,7 +1012,6 @@ fn compile_action<'a>(
     action: Action<'a>,
     mut state: CompilerState<'a>,
 ) -> Result<CompilerState<'a>, CompileError> {
-
     for sub_action in action.get_args() {
         state = compile_sub_action(sub_action, state)?;
     }
@@ -905,7 +1023,6 @@ fn compile_sub_action<'a>(
     sub_action: Action<'a>,
     mut state: CompilerState<'a>,
 ) -> Result<CompilerState<'a>, CompileError> {
-
     match sub_action.get_kind() {
         SymbolKind::SubAction => {
             let start_pos = state.mem_pos;
@@ -962,7 +1079,6 @@ fn compile_sub_term<'a>(
     sub_term: Term<'a>,
     mut state: CompilerState<'a>,
 ) -> Result<CompilerState<'a>, CompileError> {
-
     let saved_mem_pos = state.mem_pos;
     match sub_term.get_kind() {
         SymbolKind::CompareExpr(op) => {

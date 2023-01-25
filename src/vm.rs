@@ -254,7 +254,7 @@ impl ArgumentsMap {
 pub struct VariableRef {
     pub var_token_value: usize,
     pub mem_pos: u32,
-    pub field_index: usize,
+    pub field_index: Option<usize>,
 }
 
 #[derive(Debug, Default)]
@@ -273,7 +273,7 @@ impl VariablesMap {
         &mut self,
         var_token_value: usize,
         mem_pos: u32,
-        field_index: usize,
+        field_index: Option<usize>,
     ) -> Result<(), VmError> {
         self.0.push(VariableRef {
             var_token_value,
@@ -825,7 +825,7 @@ impl<'a> VirtualMachine<'a> {
                             self.variables.borrow_mut().set(
                                 args[1].as_token_value(),
                                 pos,
-                                0,
+                                None,
                             )?;
                         } else {
                             return Err(VmError::InvalidValueType);
@@ -899,12 +899,13 @@ impl<'a> VirtualMachine<'a> {
 
                         if accept_reject != AcceptReject::NoReturn {
                             println!("\n\nINITIALIZED MEMORY POSITIONS");
-                            for (i, addr) in m.0.as_slice().iter().enumerate() {
+                            for (i, addr) in m.0.as_slice().iter().enumerate()
+                            {
                                 if !addr.is_unitialized() {
                                     println!("{}: {}", i, addr);
                                 }
                             }
-                    
+
                             println!("\nVARIABLES\n{:#?}", self.variables);
                             println!(
                                 "\n🍺 Done! Successfully executed {} instructions.",
@@ -1024,7 +1025,7 @@ pub enum VmError {
     ImpossibleComparison,
     InvalidWrite,
     InvalidConversion,
-    UnexpectedTermination
+    UnexpectedTermination,
 }
 
 #[derive(Debug)]
@@ -1167,7 +1168,34 @@ impl From<crate::traits::Token> for Vec<Arg> {
     }
 }
 
-#[derive(Debug)]
+// Cloning an Arg works only it Arg::Constants does NOT contain a
+// (used-defined) Record or List
+impl Clone for Arg {
+    fn clone(&self) -> Self {
+        match self {
+            Arg::Constant(c) => Arg::Constant(c.as_cloned_builtin().unwrap()),
+            Arg::Variable(v) => Arg::Variable(*v),
+            Arg::Argument(a) => Arg::Argument(*a),
+            Arg::RxValue => Arg::RxValue,
+            Arg::TxValue => Arg::TxValue,
+            Arg::Method(m) => Arg::Method(*m),
+            Arg::DataSourceTable(ds) => Arg::DataSourceTable(*ds),
+            Arg::DataSourceRib(ds) => Arg::DataSourceTable(*ds),
+            Arg::FieldAccess(fa) => Arg::FieldAccess(*fa),
+            Arg::BuiltinMethod(bim) => Arg::BuiltinMethod(*bim),
+            Arg::MemPos(mp) => Arg::MemPos(*mp),
+            Arg::Type(ty) => Arg::Type(ty.clone()),
+            Arg::Arguments(args) => Arg::Arguments(args.to_vec()),
+            Arg::Boolean(b) => Arg::Boolean(*b),
+            Arg::Term(t) => Arg::Term(*t),
+            Arg::CompareOp(op) => Arg::CompareOp(*op),
+            Arg::Label(l) => Arg::Label(l.clone()),
+            Arg::AcceptReject(ar) => Arg::AcceptReject(*ar),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
 pub enum OpCode {
     Cmp,
     ExecuteTypeMethod,
@@ -1212,7 +1240,10 @@ pub enum OpCode {
 //     }
 // }
 
-pub trait Payload where Self: std::fmt::Debug + std::fmt::Display {
+pub trait Payload
+where
+    Self: std::fmt::Debug + std::fmt::Display,
+{
     fn set_field(&mut self, field: ShortString, value: TypeValue);
     fn get(&self, field: ShortString) -> Option<&TypeValue>;
     fn take_value(self) -> TypeValue;
@@ -1298,7 +1329,6 @@ impl ExtDataSource {
         args: &[&'a TypeValue],
         res_type: TypeDef,
     ) -> DataSourceMethodValue {
-
         match self.source {
             DataSource::Table(ref t) => {
                 t.exec_ref_value_method(method_token, args, res_type)()
