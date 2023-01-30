@@ -474,10 +474,10 @@ impl Ord for &TypeValue {
             (TypeValue::Table(_), _) => Ordering::Less,
             (_, TypeValue::Table(_)) => Ordering::Greater,
             (_, TypeValue::UnInit) => {
-                panic!("comparing with unitialized memory.")
+                panic!("comparing with uninitialized memory.")
             }
             (TypeValue::UnInit, _) => {
-                panic!("comparing with unitialized memory.")
+                panic!("comparing with uninitialized memory.")
             }
         }
     }
