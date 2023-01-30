@@ -394,6 +394,7 @@ impl ast::Define {
                 scope.clone(),
             )?;
 
+            println!("DECLARE VAR {} = {:#?}", assignment.0.ident, s);
             // lhs of the assignment represents the name of the variable or
             // constant.
             declare_variable_from_symbol(
@@ -527,7 +528,7 @@ impl ast::Apply {
 
         // There can only be one `apply` section in a modules, so we can set
         // the default action from the apply section for the whole module.
-        if let Some(accept_reject) = self.body.accept_reject.clone() {
+        if let Some(accept_reject) = self.body.accept_reject {
             _module_symbols.set_default_action(accept_reject);
         } else {
             _module_symbols.set_default_action(AcceptReject::Accept);
@@ -574,7 +575,7 @@ impl ast::ApplyScope {
                 match_action.get_name(),
                 symbols::SymbolKind::Action,
                 TypeDef::AcceptReject(
-                    action.1.clone().unwrap_or(ast::AcceptReject::NoReturn),
+                    action.1.unwrap_or(ast::AcceptReject::NoReturn),
                 ),
                 vec![],
                 Some(token),
@@ -609,8 +610,43 @@ impl ast::ApplyScope {
 // These are types that can be nested inside of other types, or are used
 // recursively. They return the symbols that they create, unlike the types
 // that go directly in the root of a SymbolTable.
-// The caller needs to insert them in the right place in a enry in the symbol
+// The caller needs to insert them in the right place in a entry in the symbol
 // table.
+
+
+//------------ ComputeExpr --------------------------------------------------
+
+// An Expression that computes a return value based on the AccessReceiver, 
+// (the `receiver` field), the root of the expression and its arguments 
+// (`args` field). Each argument is a dot-divided part of the expression. 
+// A compute expression may have an arbitrary number of arguments, e.g.
+// the compute expression `my_var.a.b.c().d` will have 4 arguments and an
+// access receiver 'my_var'.
+
+// Access Receiver
+// 
+// The access receiver is the data source that provides a combination of 
+// fields to be accessed and methods to be called. The access receiver will
+// be encoded in the resulting symbol in its `kind` and `token` fields.
+// The resulting symbol will always have a `kind` set to `AccessReceiver` 
+// and the type of the access receiever will be encoded in the token, e.g.
+//
+// Symbol {
+//      name: 'my_var',  
+//      kind: SymbolKind::AccessReceiver,
+//      args: [see below]
+//      ...,
+//      token: DataSource(1)
+// }
+// 
+// Arguments
+//
+// These are the expressions that are divided by dots, e.g. a.b.c().d, will 
+// turn up as:
+//
+// args: [ FieldAccessSymbolA, FieldAccessSymbolB, MethodCallSymbolC, 
+//         FieldAccessSymbolC, FieldAccessSymbolD ]
+//
 
 impl ast::ComputeExpr {
     pub(crate) fn eval(
@@ -621,25 +657,28 @@ impl ast::ComputeExpr {
     ) -> Result<symbols::Symbol, CompileError> {
         let mut symbol =
             self.get_receiver().eval(symbols.clone(), scope.clone())?;
-        // The rest of the method calls or access receivers are turned into
-        // children of the first one.
 
         let token = symbol.get_token().unwrap();
         let mut s = &mut symbol;
 
+        println!("ACCESS EXPRESSION {:#?}", self.access_expr);
         for a_e in &self.access_expr {
             // Data sources are different from other access receivers: their
-            // method come from the data source (the container), not the type
-            // contained in the data source. They don't have field access.
+            // methods come from the data source (the container), not 
+            // from the type contained in the data source. They don't have
+            // field access.
             let ty = match token {
                 Token::Table(_) => TypeDef::Table(Box::new(s.get_type())),
                 Token::Rib(_) => TypeDef::Rib(Box::new(s.get_type())),
                 _ => s.get_type(),
             };
 
-            let child_s = match a_e {
+            match a_e {
                 ast::AccessExpr::MethodComputeExpr(method_call) => {
-                    method_call.eval(
+                    println!("MethodComputeExpr in ComputeExpr {:?} on type {:?}", method_call, ty);
+                    println!("symbol (s) {:#?}", s);
+                    println!("{:#?}", symbols.borrow().get(&scope));
+                    let child_s = method_call.eval(
                         // At this stage we don't know really whether the
                         // method call will be mutating or not, but we're
                         // setting the safe choice here.
@@ -647,25 +686,39 @@ impl ast::ComputeExpr {
                         ty,
                         symbols.clone(),
                         scope.clone(),
-                    )?
+                    )?;
+                    s.add_arg(child_s);
                 }
                 ast::AccessExpr::FieldAccessExpr(field_access) => {
-                    field_access.eval(ty)?
+                    println!("FieldAccessExpr in ComputeExpr {:?}", field_access);
+                    // println!("symbol already has args {:?}", s.get_args());
+                    let child_s = field_access.eval(ty)?;
+                    let (k, ty, to) = child_s.get_kind_type_and_token()?;
+                    let i = s.add_arg(child_s);
+                    println!("symbol -> {:#?}", s);
+                    s = &mut s.get_args_mut()[i];
                 }
             };
-            s.set_args(vec![child_s]);
-            s = &mut symbol.get_args_mut()[0];
+            
         }
 
-        let (deepest_kind, deepest_type) =
-            symbol.follow_first_leaf().get_kind_and_type();
+        // The type of a compute expression is 
+        let s_type = match s.get_kind() {
+            SymbolKind::BuiltInTypeMethodCall | 
+            SymbolKind::MethodCallByConsumedValue | 
+            SymbolKind::MethodCallbyRef |
+            SymbolKind::GlobalMethodCall  => {
+                s.get_type()
+            }
+            _ => {
+                s.follow_last_leaf().get_type()
+            }
+        };
 
         symbol = symbol
-            .set_type(deepest_type)
-            .set_kind(deepest_kind)
+            .set_type(s_type)
             .set_name(name)
             .set_token(token);
-
         Ok(symbol)
     }
 }
@@ -759,6 +812,7 @@ impl ast::AccessReceiver {
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, CompileError> {
+        println!("AccessReceiver {:#?}", self);
         let _symbols = symbols.clone();
         let search_var = self.get_ident().ident.clone();
 
@@ -770,7 +824,7 @@ impl ast::AccessReceiver {
 
             return Ok(symbols::Symbol::new(
                 search_var.as_str().into(),
-                symbols::SymbolKind::BuiltInType,
+                symbols::SymbolKind::AccessReceiver,
                 ty,
                 vec![],
                 Some(Token::BuiltinType(0)),
@@ -786,7 +840,7 @@ impl ast::AccessReceiver {
             let (_, type_def, token) = arg.get_kind_type_and_token()?;
             return Ok(symbols::Symbol::new(
                 search_var.as_str().into(),
-                symbols::SymbolKind::Argument,
+                symbols::SymbolKind::AccessReceiver,
                 type_def,
                 vec![],
                 Some(token),
@@ -799,7 +853,7 @@ impl ast::AccessReceiver {
         // - variable name thas was defined in the `with` statement or
         //   earlier on in the same define section.
         let ident = &[self.get_ident().clone()];
-        let (kind, ty, to, val) =
+        let (_kind, ty, to, val) =
             get_props_for_scoped_variable(ident, symbols, scope)?;
         // Additionally check if this is a Variable or a Constant.
         // Constants need their values to be preserved.
@@ -808,7 +862,7 @@ impl ast::AccessReceiver {
             // symbol.
             Some(val) => Ok(symbols::Symbol::new_with_value(
                 search_var.as_str().into(),
-                kind,
+                SymbolKind::AccessReceiver,
                 val,
                 vec![],
                 to,
@@ -816,7 +870,7 @@ impl ast::AccessReceiver {
             // It's a Variable, create a symbol with an empty value.
             None => Ok(symbols::Symbol::new(
                 search_var.as_str().into(),
-                kind,
+                SymbolKind::AccessReceiver,
                 ty,
                 vec![],
                 Some(to),
@@ -836,6 +890,7 @@ impl ast::ValueExpr {
             // Note that the evaluation of the method call will check for
             // the existence of the method.
             ast::ValueExpr::ComputeExpr(call_expr) => {
+                println!("VALUE COMPUTE EXPRESSION {:?}", call_expr.get_receiver());
 
                 call_expr.eval(
                     call_expr.get_receiver().ident.ident,
@@ -955,6 +1010,9 @@ impl ast::FieldAccessExpr {
         &self,
         field_type: TypeDef,
     ) -> Result<symbols::Symbol, CompileError> {
+
+        println!("FieldAccessExpr {:?}", self);
+
         if let Ok((ty, to)) = field_type.has_fields_chain(&self.field_names) {
 
             let name = self.field_names.join(".");
@@ -1094,9 +1152,11 @@ impl ast::CompareExpr {
         // hand side. For example, a comparison of PrefixLength and
         // IntegerLiteral will work in the form of `prefix.len() == 32;`, but
         // NOT reversed, i.e. `32 == prefix.len();` is INVALID.
+        println!("left_type {:#?} <-> right_type {:#?}", left_s, right_s);
         if left_type != right_type {
             right_s = right_s.try_convert_value_into(&left_type)?;
         }
+        println!("after conversion {} <-> {:?}", left_type, right_s);
 
         Ok(symbols::Symbol::new(
             "compare_expr".into(),
@@ -1129,6 +1189,7 @@ impl ast::CompareArg {
             }
             ast::CompareArg::ValueExpr(expr) => {
                 // A simple operator.
+                println!("COMPARE VALUE EXPRESSION {:#?}", expr);
                 expr.eval(symbols, scope.clone())
             }
         }
@@ -1502,9 +1563,9 @@ fn declare_variable_from_symbol(
                 // This is a variable, create an empty value on the symbol.
                 false => {
                     let symbol = symbols::Symbol::new(
-                        "var".into(),
-                        symbols::SymbolKind::Variable,
-                        arg_symbol.get_return_type(),
+                        name.clone(), // same as the key we're inserting.
+                        symbols::SymbolKind::VariableAssignment,
+                        arg_symbol.get_recursive_return_type(),
                         vec![arg_symbol],
                         None,
                     );
@@ -1518,7 +1579,7 @@ fn declare_variable_from_symbol(
                 // storing. This can only be a builtin-typed value.
                 true => {
                     let symbol = symbols::Symbol::new_with_value(
-                        "const".into(),
+                        name.clone(), // same as the key we're inserting.
                         symbols::SymbolKind::Constant,
                         arg_symbol.get_value_owned(),
                         vec![],

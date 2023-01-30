@@ -217,10 +217,16 @@ impl<'a> Compiler<'a> {
 
 #[derive(Debug, PartialEq)]
 pub enum MirBlockType {
+    // A block that contains a variable assignment in the `define` section
     Assignment,
+    // One complete `term` section
     Term,
+    // a single match action from the `apply` section
     MatchAction,
+    // A block that should be inserted whenever the variable/data souce is
+    // referenced outside of the `define` section.
     Alias,
+    // Exit statements
     Terminator,
 }
 
@@ -240,6 +246,14 @@ impl MirBlock {
 
     pub fn push_command(&mut self, command: Command) {
         self.command_stack.push(command);
+    }
+
+    pub fn last(&self) -> &Command {
+        self.command_stack.last().unwrap()
+    }
+
+    pub fn pop_last(&mut self) -> Command {
+        self.command_stack.pop().unwrap()
     }
 }
 
@@ -288,6 +302,8 @@ fn compile_module(
     module: &SymbolTable,
     global_table: &SymbolTable,
 ) -> Result<RotoPack, CompileError> {
+    println!("SYMBOL MAP\n{:#?}", module);
+
     let (
         _rx_type,
         _tx_type,
@@ -419,11 +435,7 @@ fn compile_expr<'a>(
             // - a field access that was specified AFTER a method call.
             // - an alias to a variable, data source, or a field on a
             //   variable.
-            Token::Variable(var) if arg.get_name() == "var" => {
-                // local_stack.push_front(Command::new(
-                //     OpCode::MemPosRef,
-                //     vec![Arg::MemPos(var_assign_mem_pos), Arg::Variable(var)],
-                // ));
+            Token::Variable(var) if arg.get_kind() == SymbolKind::VariableAssignment => {
                 if state.cur_mir_block_is_alias {
                     println!("VAR {} IS ALIAS {:?}", var, local_stack);
                     state.alias_mir_cache.insert(
@@ -438,8 +450,8 @@ fn compile_expr<'a>(
                         var,
                         MemPosOrAliasBlock::MemPos(var_assign_mem_pos),
                     );
-                    local_stack
-                        .push_front(Command::new(OpCode::ClearStack, vec![]));
+                    // local_stack
+                    //     .push_front(Command::new(OpCode::ClearStack, vec![]));
                     state.cur_mir_block.command_stack.extend(local_stack);
                 }
                 local_stack = VecDeque::new();
@@ -546,6 +558,8 @@ fn compile_expr<'a>(
                     },
 
                     Ok(Token::FieldAccess(_)) => {
+                        state.cur_mir_block_is_alias = true;
+
                         match arg.get_kind() {
                             SymbolKind::MethodCallbyRef => (
                                 // args: [ method_call, return_type ]
@@ -602,7 +616,7 @@ fn compile_expr<'a>(
             Token::FieldAccess(fa) => {
                 // field accesses can't be cached in memory, they can
                 // however be aliased.
-                // state.cur_mir_block_is_alias = true;
+                state.cur_mir_block_is_alias = true;
                 let mut args = vec![];
                 args.extend(
                     fa.iter()
@@ -792,6 +806,27 @@ fn compile_assignments(
 
         state = compile_expr(s, state, mem_pos)?;
 
+        let is_alias = match state.cur_mir_block.last().op {
+            OpCode::PushStack => {
+                state.cur_mir_block.command_stack.push(Command::new(OpCode::ClearStack, vec![]));
+                true
+            },
+            OpCode::StackOffset => {
+                let mut block = MirBlock::new(MirBlockType::Alias);
+                block.command_stack.push(Command::new(OpCode::PushStack, vec![
+                    Arg::MemPos(state.mem_pos)
+                ]));
+                block.command_stack.push(state.cur_mir_block.pop_last());
+                state.alias_mir_cache.insert(
+                    var.1.get_token()?.into(),
+                    MemPosOrAliasBlock::AliasBlock(block)
+                );
+                state.cur_mir_block.command_stack.push(Command::new(OpCode::ClearStack, vec![]));
+                false
+            },
+            _ => { panic!("stop making sense. {:?}", state.cur_mir_block); }
+        };
+
         if !state.cur_mir_block_is_alias {
             // This is NOT an alias, meaning there's at least one method call
             // involved, creating a new TypeValue. So we're caching that new
@@ -799,6 +834,7 @@ fn compile_assignments(
             // position.
             mir.push(state.cur_mir_block);
             mem_pos += 1;
+            state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
         } else {
             // This IS an alias. It would be meaningless to cache this, apart
             // from the fact, that the memory data-structure doesn't allow
@@ -813,14 +849,19 @@ fn compile_assignments(
                 var.1.get_token()?.into(),
                 MemPosOrAliasBlock::AliasBlock(state.cur_mir_block),
             );
-            state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
+
+            // create an ALIAS block with only a label in it for debugging
+            // purposes.
+            state.cur_mir_block = MirBlock::new(MirBlockType::Alias);
             state.cur_mir_block.command_stack.push(Command::new(
                 OpCode::Label,
                 vec![Arg::Label(format!("ALIAS {}", var.0).as_str().into())],
             ));
-        }
+            // end of block
 
-        state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
+            mir.push(state.cur_mir_block);
+            state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
+        }
     }
 
     println!("ALIAS CACHE {:#?}", state.alias_mir_cache);

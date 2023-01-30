@@ -99,6 +99,10 @@ impl Symbol {
         self
     }
 
+    pub fn set_type_mut(&mut self, ty: TypeDef) {
+        self.ty = ty;
+    }
+
     pub fn set_token(mut self, token: Token) -> Self {
         self.token = Some(token);
         self
@@ -154,6 +158,17 @@ impl Symbol {
         self.args = args;
     }
 
+    // Go into the first arg of a symbol until we find a empty args vec and
+    // store it there.
+    pub fn add_arg(&mut self, arg: Symbol) -> usize {
+        // if self.args.is_empty() {
+        self.args.push(arg);
+        self.args.len() - 1
+        // } else {
+        //     self.get_args_mut()[0].add_arg(arg)
+        // }
+    }
+
     pub fn empty() -> Self {
         Symbol {
             name: "".into(),
@@ -204,23 +219,26 @@ impl Symbol {
     // method will have to change if we're going to allow method calls with
     // trailing method calls/field accesses, like `d().e`. Currently the
     // parser won't allow it.
-    pub(crate) fn get_return_type(&self) -> TypeDef {
+    pub(crate) fn get_recursive_return_type(&self) -> TypeDef {
         if self.args.is_empty() {
             self.ty.clone()
-        } else if let Some(first_arg) = self.args.first() {
-            first_arg.ty.clone()
+        } else if let Some(last_arg) = self.args.last() {
+            last_arg.get_type() // get_recursive_return_type()
         } else {
             unreachable!()
         }
     }
 
-    // try to return the converted type with its value, if it's set.
-    // Otherwise try to return an empty typevalue for the converted type. if
-    // no conversion is available, return an error.
+    // try to return the converted type with its value, if it's set. This is
+    // basically only the case if the kin of self, is Constant.
+    // Otherwise create an empty value for the type of self, and recursively
+    // try to convert that into the desired type.
+    // If these two steps fail, return an error.
     pub fn try_convert_value_into(
         mut self,
         type_def: &TypeDef,
     ) -> Result<Self, CompileError> {
+        println!("CONVERT {:#?} -> {}", self, type_def);
         match self.value {
             TypeValue::Builtin(BuiltinTypeValue::U32(int)) => {
                 self.value = int.into_type(type_def)?;
@@ -277,7 +295,8 @@ impl Symbol {
                 self.value = table.into_type(type_def)?;
             }
             TypeValue::Unknown => {
-                self.value = type_def.into();
+                self.value = (&self.ty).into();
+                self = self.try_convert_value_into(type_def)?;
             }
             TypeValue::UnInit => {
                 return Err(CompileError::new(
@@ -327,6 +346,14 @@ impl Symbol {
             self.args.first().unwrap().follow_first_leaf()
         }
     }
+
+    pub(crate) fn follow_last_leaf(&self) -> &Symbol {
+        if self.args.is_empty() {
+            self
+        } else {
+            self.args.last().unwrap() //.follow_last_leaf()
+        }
+    }
 }
 
 impl std::cmp::PartialOrd for Symbol {
@@ -357,33 +384,43 @@ impl PartialEq for Symbol {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum SymbolKind {
-    Variable, // A variable defined by the user
+    // assigment symbols
+    VariableAssignment, // A variable defined by the user
+
+    // assigment+access receiver symbols
+    // these symbols are used both for assignment and as
+    // root access receivers.
     Constant, // A literal value or a module-level variable
-    Argument,
-    BuiltInType,
-    AnonymousType, // type of a sub-record
-    NamedType,     // User-defined type of a record
     RxType,        // type of the incoming payload
     TxType,        // type of the outgoing payload
-    // data sources
+    // data sources access receivers
     Rib,
     Table,
     PrefixList,
-    // accessors
+
+    // access receiver symbols
+    AccessReceiver,
+    // these symbols are only used to as roots for receiving
+    // data.
+    Argument,      // a passed-in module or term level argument
+    AnonymousType, // type of a sub-record
+    NamedType,     // User-defined type of a record
+
+    // accessor symbols
+    // symbols that come after an access receiver in the args list.
 
     // A method call, that will either mutate the typevalue this SymolKind
     // lives on when the data field is true, otherwise it will just read
     // it (to produce a new typevalue).
     MethodCallbyRef,
     MethodCallByConsumedValue,
-
     // A method call on a built-in type, e.g. `AsPath.contains()`
     BuiltInTypeMethodCall,
-
     // A method call that's a builtin of the roto language, e.g.
     // `send-to-log`
     GlobalMethodCall,
     FieldAccess,
+
     // term symbols
     LogicalExpr,
     BooleanExpr,
@@ -391,11 +428,13 @@ pub enum SymbolKind {
     AndExpr,
     OrExpr,
     NotExpr,
+
     // apply symbols
     MatchAction(MatchActionType),
     Action,
     SubAction,
     Term,
+    
     // A symbol that has been consumed by the compiler
     Empty,
 }
@@ -580,7 +619,7 @@ impl SymbolTable {
         }
 
         symbol = match symbol.get_kind() {
-            SymbolKind::Variable => {
+            SymbolKind::VariableAssignment => {
                 symbol.set_token(Token::Variable(self.variables.len()))
             }
             SymbolKind::Constant => {
