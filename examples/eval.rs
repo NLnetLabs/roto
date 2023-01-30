@@ -209,7 +209,7 @@ fn main() {
                     some_bool = false; // 6
 
                     // also supported is calling a field beyond a method call:
-                    found_prefix_prefix = rib-rov.longest_match(route.prefix).prefix; // 7
+                    found_prefix_pref = rib-rov.longest_match(route.prefix).local-pref; // 7
 
                     found_prefix = rib-rov.longest_match(route.prefix); // 8
                     
@@ -238,10 +238,10 @@ fn main() {
             
                 term rov-valid for route: Route {
                     match {
-                        found_prefix_prefix == route.prefix;
-                        my_route_path.origin() == found_prefix.as-path.origin();
+                        found_prefix_pref == route.local-pref;
+                        // my_route_path.origin() == found_prefix.as-path.origin();
                         fixed_len_prefix.len() == prefix_len;
-                        route.origin == found_prefix.as-path.origin();
+                        // route.origin == found_prefix.as-path.origin();
                         (found_prefix.prefix.exists() && found_prefix.prefix.exists()) || route_in_table;
                         found_prefix.prefix.len() == 24;
                         route_in_table;
@@ -259,7 +259,7 @@ fn main() {
                 term on-my-terms for route: Route {
                     match {
                         my_false;
-                        rib-extra.contains(route.as-path.origin());
+                        //  rib-extra.contains(route.as-path.origin());
                         route.prefix.len() == 24;
                         route.as-path.origin() == found_prefix.as-path.origin();
                     }
