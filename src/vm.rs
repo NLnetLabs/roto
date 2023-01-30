@@ -148,6 +148,7 @@ impl LinearMemory {
         index: usize,
         field_index: Option<usize>,
     ) -> Option<&TypeValue> {
+
         match field_index {
             None => self.get_mem_pos(index),
             Some(field_index) => match self.get_mem_pos(index) {
@@ -175,8 +176,10 @@ impl LinearMemory {
                 Some(TypeValue::Unknown) => {
                     panic!("Unknown value has erased type, cannot continue.")
                 }
-                // This is apparantly a type that does not have fields
-                _ => None,
+                // This is apparently a type that does not have fields
+                _ => {
+                    None
+                }
             },
         }
     }
@@ -401,11 +404,13 @@ impl<'a> VirtualMachine<'a> {
                         let left = stack_args[0];
                         let right = stack_args[1];
 
+                        print!(" {:?} <-> {:?}", left, right);
+
                         match &args[0] {
                             Arg::CompareOp(CompareOp::Eq) => {
                                 let res = left == right;
                                 m.set_mem_pos(
-                                    2,
+                                    0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
                                             Some(res),
@@ -414,12 +419,12 @@ impl<'a> VirtualMachine<'a> {
                                 );
                                 self.stack
                                     .borrow_mut()
-                                    .push(StackRefPos::MemPos(2))?;
+                                    .push(StackRefPos::MemPos(0xff))?;
                             }
                             Arg::CompareOp(CompareOp::Ne) => {
                                 let res = left != right;
                                 m.set_mem_pos(
-                                    2,
+                                    0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
                                             Some(res),
@@ -428,12 +433,12 @@ impl<'a> VirtualMachine<'a> {
                                 );
                                 self.stack
                                     .borrow_mut()
-                                    .push(StackRefPos::MemPos(2))?;
+                                    .push(StackRefPos::MemPos(0xff))?;
                             }
                             Arg::CompareOp(CompareOp::Lt) => {
                                 let res = left < right;
                                 m.set_mem_pos(
-                                    2,
+                                    0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
                                             Some(res),
@@ -442,12 +447,12 @@ impl<'a> VirtualMachine<'a> {
                                 );
                                 self.stack
                                     .borrow_mut()
-                                    .push(StackRefPos::MemPos(2))?;
+                                    .push(StackRefPos::MemPos(0xff))?;
                             }
                             Arg::CompareOp(CompareOp::Le) => {
                                 let res = left <= right;
                                 m.set_mem_pos(
-                                    2,
+                                    0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
                                             Some(res),
@@ -456,12 +461,12 @@ impl<'a> VirtualMachine<'a> {
                                 );
                                 self.stack
                                     .borrow_mut()
-                                    .push(StackRefPos::MemPos(2))?;
+                                    .push(StackRefPos::MemPos(0xff))?;
                             }
                             Arg::CompareOp(CompareOp::Gt) => {
                                 let res = left > right;
                                 m.set_mem_pos(
-                                    2,
+                                    0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
                                             Some(res),
@@ -470,12 +475,12 @@ impl<'a> VirtualMachine<'a> {
                                 );
                                 self.stack
                                     .borrow_mut()
-                                    .push(StackRefPos::MemPos(2))?;
+                                    .push(StackRefPos::MemPos(0xff))?;
                             }
                             Arg::CompareOp(CompareOp::Ge) => {
                                 let res = left >= right;
                                 m.set_mem_pos(
-                                    2,
+                                    0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
                                             Some(res),
@@ -484,14 +489,14 @@ impl<'a> VirtualMachine<'a> {
                                 );
                                 self.stack
                                     .borrow_mut()
-                                    .push(StackRefPos::MemPos(2))?;
+                                    .push(StackRefPos::MemPos(0xff))?;
                             }
                             Arg::CompareOp(CompareOp::Or) => {
                                 let l = left.try_into()?;
                                 let r = right.try_into()?;
                                 let res = l || r;
                                 m.set_mem_pos(
-                                    2,
+                                    0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
                                             Some(res),
@@ -500,13 +505,13 @@ impl<'a> VirtualMachine<'a> {
                                 );
                                 self.stack
                                     .borrow_mut()
-                                    .push(StackRefPos::MemPos(2))?;
+                                    .push(StackRefPos::MemPos(0xff))?;
                             }
                             Arg::CompareOp(CompareOp::And) => {
                                 let res =
                                     left.try_into()? && right.try_into()?;
                                 m.set_mem_pos(
-                                    2,
+                                    0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
                                             Some(res),
@@ -515,7 +520,7 @@ impl<'a> VirtualMachine<'a> {
                                 );
                                 self.stack
                                     .borrow_mut()
-                                    .push(StackRefPos::MemPos(2))?;
+                                    .push(StackRefPos::MemPos(0xff))?;
                             }
                             _ => panic!("{:3} -> invalid compare op", pc),
                         }
@@ -814,6 +819,7 @@ impl<'a> VirtualMachine<'a> {
                             if let Arg::FieldAccess(field) = arg {
                                 let mut s = self.stack.borrow_mut();
                                 s.set_field_index(field)?;
+                                print!(" -> stack {:?}", s);
                             } else {
                                 return Err(VmError::InvalidValueType);
                             }
