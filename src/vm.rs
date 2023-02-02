@@ -1,12 +1,12 @@
 use std::{
-    cell::{Ref, RefCell},
+    cell::RefCell,
     fmt::{Display, Formatter},
     ops::{Index, IndexMut},
 };
 
 use crate::{
     ast::{self, AcceptReject, CompareOp, ShortString},
-    compile::MirBlock,
+    compile::{CompileError, MirBlock},
     traits::Token,
     types::{
         builtin::{Boolean, BuiltinTypeValue},
@@ -17,7 +17,7 @@ use crate::{
     },
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum StackRefPos {
     // index into LinearMemory
     MemPos(u32),
@@ -31,7 +31,7 @@ impl From<u32> for StackRefPos {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct StackRef {
     pub(crate) pos: StackRefPos,
     field_index: Option<usize>,
@@ -148,7 +148,6 @@ impl LinearMemory {
         index: usize,
         field_index: Option<usize>,
     ) -> Option<&TypeValue> {
-
         match field_index {
             None => self.get_mem_pos(index),
             Some(field_index) => match self.get_mem_pos(index) {
@@ -177,9 +176,7 @@ impl LinearMemory {
                     panic!("Unknown value has erased type, cannot continue.")
                 }
                 // This is apparently a type that does not have fields
-                _ => {
-                    None
-                }
+                _ => None,
             },
         }
     }
@@ -257,7 +254,7 @@ impl ArgumentsMap {
 pub struct VariableRef {
     pub var_token_value: usize,
     pub mem_pos: u32,
-    pub field_index: Option<usize>,
+    pub field_index: Vec<usize>,
 }
 
 #[derive(Debug, Default)]
@@ -276,8 +273,8 @@ impl VariablesMap {
         &mut self,
         var_token_value: usize,
         mem_pos: u32,
-        field_index: Option<usize>,
-    ) -> Result<(), VmError> {
+        field_index: Vec<usize>,
+    ) -> Result<(), CompileError> {
         self.0.push(VariableRef {
             var_token_value,
             mem_pos,
@@ -525,9 +522,10 @@ impl<'a> VirtualMachine<'a> {
                             _ => panic!("{:3} -> invalid compare op", pc),
                         }
                     }
-                    // stack args: [type, method_token, return memory position]
+                    // stack args: [type, method_token, args, return memory position]
                     OpCode::ExecuteTypeMethod => {
                         println!("Stack {:?}", self.stack);
+                        println!("Args {:?}", args);
                         let mut m = mem.borrow_mut();
 
                         let mem_pos =
@@ -536,24 +534,23 @@ impl<'a> VirtualMachine<'a> {
                             } else {
                                 return Err(VmError::InvalidValueType);
                             };
+                        let _args = args.pop().unwrap();
+                        let method_t = args.pop().unwrap();
+                        let return_type = args.pop().unwrap();
+
                         let stack_args =
                             self._unwind_resolved_stack_into_vec(&m);
-                        let return_type = args.remove(2).into();
 
                         // We are going to call a method on a type, so we
                         // extract the type from the first argument on the
                         // stack.
-                        if let Arg::Type(t) = &args[0] {
-                            if let Arg::Method(method_token) = args[1] {
-                                let val = t.exec_type_method(
-                                    method_token,
-                                    &stack_args,
-                                    return_type,
-                                );
-                                m.set_mem_pos(mem_pos, val);
-                            } else {
-                                return Err(VmError::InvalidValueType);
-                            }
+                        if let Arg::Type(t) = return_type.clone() {
+                            let val = t.exec_type_method(
+                                method_t.into(),
+                                &stack_args,
+                                return_type.into(),
+                            );
+                            m.set_mem_pos(mem_pos, val);
                         }
                     }
                     // stack args: [method_token, return_type,
@@ -645,7 +642,7 @@ impl<'a> VirtualMachine<'a> {
                         let method_token: Arg = args.pop().unwrap();
 
                         // pop as many refs from the stack as we have
-                        // arguments for this method and resolve them  to
+                        // arguments for this method and resolve them to
                         // their values.
                         let mut stack = self.stack.borrow_mut();
 
@@ -655,26 +652,28 @@ impl<'a> VirtualMachine<'a> {
                         // later on.
                         let mut target_field_index = None;
 
-                        let mut stack_args = (0..=args_len).into_iter().map(|_i| {
+                        println!("\nargs_len {}", args_len);
+                        println!("Args {:?}", args);
+                        println!("Stack {:?}", stack);
+                        let mut stack_args = (0..args_len).into_iter().map(|_i| {
                             let sr = stack.pop().unwrap();
 
-                            target_field_index = if target_field_index.is_none() { 
-                                sr.field_index 
+                            target_field_index = if target_field_index.is_none() {
+                                sr.field_index
                             } else {
                                 target_field_index
                             };
-                            
+
                             match sr.pos {
                                 StackRefPos::MemPos(pos) => {
-                                    let v = m
+                                    m
                                         .get_mem_pos_as_owned(pos as usize)
                                         .unwrap_or_else(|| {
                                             println!("\nstack: {:?}", stack);
                                             println!("mem: {:#?}", m.0);
                                             panic!(r#"Uninitialized memory in 
                                                 pos {}. That's fatal"#, pos);
-                                        });
-                                    v
+                                        })
                                 }
                                 StackRefPos::TablePos(_token, _pos) => {
                                     panic!(r#"Can't mutate data in a data source. 
@@ -782,6 +781,7 @@ impl<'a> VirtualMachine<'a> {
 
                             let mut s = self.stack.borrow_mut();
                             s.push(StackRefPos::MemPos(pos))?;
+                            println!(" stack {:?}", s);
                         }
                         _ => return Err(VmError::InvalidValueType),
                     },
@@ -823,18 +823,6 @@ impl<'a> VirtualMachine<'a> {
                             } else {
                                 return Err(VmError::InvalidValueType);
                             }
-                        }
-                    }
-                    // stack args: [mem_pos, variable_token]
-                    OpCode::MemPosRef => {
-                        if let Arg::MemPos(pos) = args[0] {
-                            self.variables.borrow_mut().set(
-                                args[1].as_token_value(),
-                                pos,
-                                None,
-                            )?;
-                        } else {
-                            return Err(VmError::InvalidValueType);
                         }
                     }
                     // stack args: [arg_token_value, mem_pos]
@@ -1006,11 +994,9 @@ impl<'a> VmBuilder<'a> {
         VirtualMachine {
             rx_type: self.rx_type,
             tx_type: self.tx_type,
-            // arguments: self.arguments,
             variables,
             data_sources: self.data_sources,
             stack: RefCell::new(Stack::new()),
-            // memory,
         }
     }
 }
@@ -1034,7 +1020,7 @@ pub enum VmError {
     UnexpectedTermination,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Command {
     pub(crate) op: OpCode,
     pub(crate) args: Vec<Arg>,
@@ -1058,7 +1044,6 @@ impl Display for Command {
             OpCode::PopStack => "->",
             OpCode::ClearStack => "::",
             OpCode::MemPosSet => "->",
-            OpCode::MemPosRef => "",
             OpCode::ArgToMemPos => "->",
             OpCode::StackOffset => "",
             OpCode::CondFalseSkipToEOB => "-->",
@@ -1078,9 +1063,9 @@ impl Display for Command {
 
 #[derive(Debug)]
 pub enum Arg {
-    Constant(TypeValue),       // Constant value
-    Variable(usize),           // Variable with token value
-    Argument(usize),           // extra runtime arguments
+    Constant(TypeValue),        // Constant value
+    Variable(usize),            // Variable with token value
+    Argument(usize),            // extra runtime argument for module & term
     RxValue, // the placeholder for the value of the rx type at runtime
     TxValue, // the placeholder for the value of the tx type at runtime
     Method(usize), // method token value
@@ -1096,7 +1081,6 @@ pub enum Arg {
     CompareOp(ast::CompareOp), // compare operation
     Label(ShortString), // a label with its name (to jump to)
     AcceptReject(AcceptReject), // argument tell what should happen after
-             // exiting  the vm.
 }
 
 impl Arg {
@@ -1213,7 +1197,6 @@ pub enum OpCode {
     ClearStack,
     StackOffset,
     MemPosSet,
-    MemPosRef,
     ArgToMemPos,
     // Skip to the end of the MIR block if the top of the stack
     // holds a reference to a boolean value true
