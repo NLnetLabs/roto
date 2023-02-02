@@ -1220,7 +1220,15 @@ impl RotoFilter for Prefix {
                     Err(VmError::ArgumentNotFound)
                 }
             }
-            _ => Err(VmError::InvalidMethodCall),
+            PrefixToken::From => unimplemented!(),
+            PrefixToken::Exists => {
+                if self.0.is_some() {
+                    Ok(Box::new(move || true.into()))
+                } else {
+                    Ok(Box::new(move || false.into()))
+                }
+            },
+            PrefixToken::Matches => todo!(),
         }
     }
 
@@ -1260,9 +1268,13 @@ impl RotoFilter for Prefix {
                     Err(VmError::ArgumentNotFound)
                 }
             }
-            _ => {
-                Err(VmError::InvalidMethodCall)
-            }
+            PrefixToken::Exists => unimplemented!(),
+            PrefixToken::Address => unimplemented!(),
+            PrefixToken::Len => unimplemented!(),
+            PrefixToken::Matches => unimplemented!(),
+            // _ => {
+            //     Err(VmError::InvalidMethodCall)
+            // }
         }
     }
 }

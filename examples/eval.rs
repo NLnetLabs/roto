@@ -239,9 +239,9 @@ fn main() {
                 term rov-valid for route: Route {
                     match {
                         found_prefix_pref == route.local-pref;
-                        // my_route_path.origin() == found_prefix.as-path.origin();
+                        my_route_path.origin() == found_prefix.as-path.origin();
                         fixed_len_prefix.len() == prefix_len;
-                        // route.origin == found_prefix.as-path.origin();
+                        route.origin == found_prefix.as-path.origin();
                         (found_prefix.prefix.exists() && found_prefix.prefix.exists()) || route_in_table;
                         found_prefix.prefix.len() == 24;
                         route_in_table;
