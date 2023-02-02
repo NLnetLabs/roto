@@ -278,7 +278,10 @@ impl RotoFilter for List {
                     self.iter().any(|e| e == args[0]).into()
                 }))
             },
-            _ => Err(VmError::InvalidMethodCall)
+            _ => {
+                println!("can't exec method on {}", method);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 
@@ -307,7 +310,10 @@ impl RotoFilter for List {
             ListToken::Remove => todo!(),
             ListToken::Insert => todo!(),
             ListToken::Clear => todo!(),
-            _ => Err(VmError::InvalidMethodCall)
+            m => {
+                println!("Can't call method on {:?}", m);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 
