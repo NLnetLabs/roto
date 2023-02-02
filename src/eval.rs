@@ -398,7 +398,7 @@ impl ast::Define {
             // lhs of the assignment represents the name of the variable or
             // constant.
             declare_variable_from_symbol(
-                Some(assignment.0.ident.clone()),
+                assignment.0.ident.clone(),
                 s,
                 symbols.clone(),
                 &scope,
@@ -533,7 +533,7 @@ impl ast::Apply {
         } else {
             _module_symbols.set_default_action(AcceptReject::Accept);
         }
-        
+
         drop(_symbols);
 
         for a_scope in &self.body.scopes {
@@ -613,38 +613,37 @@ impl ast::ApplyScope {
 // The caller needs to insert them in the right place in a entry in the symbol
 // table.
 
-
 //------------ ComputeExpr --------------------------------------------------
 
-// An Expression that computes a return value based on the AccessReceiver, 
-// (the `receiver` field), the root of the expression and its arguments 
-// (`args` field). Each argument is a dot-divided part of the expression. 
+// An Expression that computes a return value based on the AccessReceiver,
+// (the `receiver` field), the root of the expression and its arguments
+// (`args` field). Each argument is a dot-divided part of the expression.
 // A compute expression may have an arbitrary number of arguments, e.g.
 // the compute expression `my_var.a.b.c().d` will have 4 arguments and an
 // access receiver 'my_var'.
 
 // Access Receiver
-// 
-// The access receiver is the data source that provides a combination of 
+//
+// The access receiver is the data source that provides a combination of
 // fields to be accessed and methods to be called. The access receiver will
 // be encoded in the resulting symbol in its `kind` and `token` fields.
-// The resulting symbol will always have a `kind` set to `AccessReceiver` 
+// The resulting symbol will always have a `kind` set to `AccessReceiver`
 // and the type of the access receiever will be encoded in the token, e.g.
 //
 // Symbol {
-//      name: 'my_var',  
+//      name: 'my_var',
 //      kind: SymbolKind::AccessReceiver,
 //      args: [see below]
 //      ...,
 //      token: DataSource(1)
 // }
-// 
+//
 // Arguments
 //
-// These are the expressions that are divided by dots, e.g. a.b.c().d, will 
+// These are the expressions that are divided by dots, e.g. a.b.c().d, will
 // turn up as:
 //
-// args: [ FieldAccessSymbolA, FieldAccessSymbolB, MethodCallSymbolC, 
+// args: [ FieldAccessSymbolA, FieldAccessSymbolB, MethodCallSymbolC,
 //         FieldAccessSymbolC, FieldAccessSymbolD ]
 //
 
@@ -664,7 +663,7 @@ impl ast::ComputeExpr {
         println!("ACCESS EXPRESSION {:#?}", self.access_expr);
         for a_e in &self.access_expr {
             // Data sources are different from other access receivers: their
-            // methods come from the data source (the container), not 
+            // methods come from the data source (the container), not
             // from the type contained in the data source. They don't have
             // field access.
             let ty = match token {
@@ -675,7 +674,6 @@ impl ast::ComputeExpr {
 
             match a_e {
                 ast::AccessExpr::MethodComputeExpr(method_call) => {
-                    println!("MethodComputeExpr in ComputeExpr {:?} on type {:?}", method_call, ty);
                     println!("symbol (s) {:#?}", s);
                     println!("{:#?}", symbols.borrow().get(&scope));
                     let child_s = method_call.eval(
@@ -690,7 +688,6 @@ impl ast::ComputeExpr {
                     s.add_arg(child_s);
                 }
                 ast::AccessExpr::FieldAccessExpr(field_access) => {
-                    println!("FieldAccessExpr in ComputeExpr {:?}", field_access);
                     // println!("symbol already has args {:?}", s.get_args());
                     let child_s = field_access.eval(ty)?;
                     let (k, ty, to) = child_s.get_kind_type_and_token()?;
@@ -699,26 +696,20 @@ impl ast::ComputeExpr {
                     s = &mut s.get_args_mut()[i];
                 }
             };
-            
         }
 
-        // The type of a compute expression is 
+        // The return type of a compute expression is propagated from the
+        // last argument to its parent, except for method calls, which get to
+        // keep their own return type.
         let s_type = match s.get_kind() {
-            SymbolKind::BuiltInTypeMethodCall | 
-            SymbolKind::MethodCallByConsumedValue | 
-            SymbolKind::MethodCallbyRef |
-            SymbolKind::GlobalMethodCall  => {
-                s.get_type()
-            }
-            _ => {
-                s.follow_last_leaf().get_type()
-            }
+            SymbolKind::BuiltInTypeMethodCall
+            | SymbolKind::MethodCallByConsumedValue
+            | SymbolKind::MethodCallbyRef
+            | SymbolKind::GlobalMethodCall => s.get_type(),
+            _ => s.follow_last_leaf().get_type(),
         };
 
-        symbol = symbol
-            .set_type(s_type)
-            .set_name(name)
-            .set_token(token);
+        symbol = symbol.set_type(s_type).set_name(name).set_token(token);
         Ok(symbol)
     }
 }
@@ -747,7 +738,7 @@ impl ast::MethodComputeExpr {
         if method_kind == SymbolKind::MethodCallbyRef {
             method_kind = match props.consume {
                 false => SymbolKind::MethodCallbyRef,
-                true => SymbolKind::MethodCallByConsumedValue
+                true => SymbolKind::MethodCallByConsumedValue,
             };
         }
 
@@ -890,7 +881,6 @@ impl ast::ValueExpr {
             // Note that the evaluation of the method call will check for
             // the existence of the method.
             ast::ValueExpr::ComputeExpr(call_expr) => {
-                println!("VALUE COMPUTE EXPRESSION {:?}", call_expr.get_receiver());
 
                 call_expr.eval(
                     call_expr.get_receiver().ident.ident,
@@ -1010,11 +1000,7 @@ impl ast::FieldAccessExpr {
         &self,
         field_type: TypeDef,
     ) -> Result<symbols::Symbol, CompileError> {
-
-        println!("FieldAccessExpr {:?}", self);
-
         if let Ok((ty, to)) = field_type.has_fields_chain(&self.field_names) {
-
             let name = self.field_names.join(".");
 
             return Ok(symbols::Symbol::new(
@@ -1765,7 +1751,6 @@ fn is_boolean_function(
     left: &impl BooleanExpr,
     right: &impl BooleanExpr,
 ) -> Result<(), CompileError> {
-
     let left = (
         left.get_builtin_type()? == TypeDef::Boolean,
         left.get_args().get(0).map(|a| a.get_value()),
