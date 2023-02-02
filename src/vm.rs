@@ -291,7 +291,6 @@ impl VariablesMap {
 pub struct VirtualMachine<'a> {
     rx_type: TypeDef,
     tx_type: Option<TypeDef>,
-    variables: &'a RefCell<VariablesMap>,
     data_sources: &'a [&'a ExtDataSource],
     stack: RefCell<Stack>,
 }
@@ -914,7 +913,6 @@ impl<'a> VirtualMachine<'a> {
                                 }
                             }
 
-                            println!("\nVARIABLES\n{:#?}", self.variables);
                             println!(
                                 "\n🍺 Done! Successfully executed {} instructions.",
                                 commands_num
@@ -1008,7 +1006,6 @@ impl<'a> VmBuilder<'a> {
         VirtualMachine {
             rx_type: self.rx_type,
             tx_type: self.tx_type,
-            variables,
             data_sources: self.data_sources,
             stack: RefCell::new(Stack::new()),
         }
