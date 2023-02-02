@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, VecDeque},
-    fmt::{Display, Formatter},
-};
+use std::fmt::{Display, Formatter};
 
 use nom::error::VerboseError;
 
@@ -13,7 +10,7 @@ use crate::{
     },
     traits::Token,
     types::typedef::TypeDef,
-    vm::{Arg, Command, ExtDataSource, OpCode, StackRefPos},
+    vm::{Arg, Command, ExtDataSource, OpCode, StackRefPos, VariablesMap},
 };
 
 //============ The Compiler (Filter creation time) ==========================
@@ -130,20 +127,18 @@ type Action<'a> = &'a Symbol;
 #[derive(Debug)]
 struct CompilerState<'a> {
     cur_module: &'a SymbolTable,
-    alias_mir_cache: HashMap<usize, MemPosOrAliasBlock>,
+    // the vec of variables that were referenced in the actions -> terms
+    // chain in the source code
     used_variables: Variables<'a>,
+    // map of variable tokens -> memory positions to use when reading a
+    // variable
+    local_variables: VariablesMap,
     used_data_sources: DataSources<'a>,
     used_arguments: Arguments<'a>,
     cur_mir_block: MirBlock,
-    cur_mir_block_is_alias: bool,
-    mem_pos: u32,
+    cur_mem_pos: u32,
+    var_read_only: bool,
     computed_terms: Terms<'a>,
-}
-
-#[derive(Debug)]
-enum MemPosOrAliasBlock {
-    MemPos(u32),
-    AliasBlock(MirBlock),
 }
 
 #[derive(Debug, Default)]
@@ -255,6 +250,78 @@ impl MirBlock {
     pub fn pop_last(&mut self) -> Command {
         self.command_stack.pop().unwrap()
     }
+
+    // Post-process this block to filter out any PushStack and StackOffset
+    // commands beyond the last *MethodCall command and to change the memory
+    // position the result of the last *MethodCall command into the position
+    // that was passed in as an argument.
+    //
+    // This is used by a block that computes a variable and needs to store it
+    // in a memory position. Only newly created values can be stored in a
+    // memory postion, and those can only be the result of a method. Field
+    // indexes do *not* create new values. This, we store only the result of
+    // the last MethodCall command and we the consumer of `into_assign_block`
+    // will have to keep a map of field indexes for each variable to insert
+    // those when reading a variable.
+    //
+    // Returns the changed block and the memory position a reader of this
+    // variable should use. The memory position will be changed if there are
+    // no *MethodCall commands in the command stack, meaning the variable
+    // is an alias to a field on some access receiver.
+    pub fn into_assign_block(
+        mut self,
+        var_mem_pos: usize,
+    ) -> (Self, usize, Vec<usize>) {
+        let mut field_indexes = vec![];
+
+        self.command_stack.reverse();
+
+        let mut method_encountered = false;
+        let mut mem_pos = var_mem_pos;
+
+        let mut c_stack = self
+            .command_stack
+            .into_iter()
+            .filter_map(|mut c| match c.op {
+                OpCode::PushStack if !method_encountered => {
+                    mem_pos = c.args.first().unwrap().clone().into();
+                    None
+                }
+                OpCode::StackOffset if !method_encountered => {
+                    field_indexes.push(c.args[0].clone().into());
+                    None
+                }
+                OpCode::ExecuteValueMethod
+                | OpCode::ExecuteDataStoreMethod
+                | OpCode::ExecuteConsumeValueMethod
+                | OpCode::ExecuteTypeMethod => {
+                    // rewrite the memory position if this is the last
+                    // MethodCall we've encountered.
+                    if !method_encountered {
+                        let last_i = c.args.len() - 1;
+                        c.args[last_i] = Arg::MemPos(var_mem_pos as u32);
+                    }
+
+                    method_encountered = true;
+                    Some(c)
+                }
+                _ => Some(c),
+            })
+            .collect::<Vec<_>>();
+
+        // No MethodCall encountered? Then it's an alias
+        mem_pos = if !method_encountered {
+            mem_pos
+        } else {
+            var_mem_pos
+        };
+
+        c_stack.reverse();
+
+        self.command_stack = c_stack;
+
+        (self, mem_pos, field_indexes)
+    }
 }
 
 impl Display for MirBlock {
@@ -275,8 +342,7 @@ impl Clone for MirBlock {
             .command_stack
             .iter()
             .map(|c| {
-                let args = c
-                    .args.to_vec();
+                let args = c.args.to_vec();
                 Command::new(c.op, args)
             })
             .collect::<Vec<_>>();
@@ -316,15 +382,14 @@ fn compile_module(
 
     let mut state = CompilerState {
         cur_module: module,
-        // local_vars: VariablesMap::default(),
-        alias_mir_cache: HashMap::new(),
+        local_variables: VariablesMap::default(),
         used_variables,
         used_data_sources,
         used_arguments,
         computed_terms: Terms::new(),
         cur_mir_block: MirBlock::new(MirBlockType::Assignment),
-        cur_mir_block_is_alias: false,
-        mem_pos: 0,
+        var_read_only: false,
+        cur_mem_pos: 0,
     };
 
     // initialize the command stack
@@ -352,8 +417,6 @@ fn compile_module(
 
     // compile the variables used in the terms
     (mir, state) = compile_assignments(mir, state)?;
-
-    state.mem_pos += 1;
 
     (mir, state) = compile_apply(mir, state)?;
 
@@ -409,358 +472,281 @@ fn compile_module(
     ))
 }
 
-fn compile_expr<'a>(
+fn compile_compute_expr<'a>(
     symbol: &'a Symbol,
     mut state: CompilerState<'a>,
-    // The position at which to write the Variable assignment. This allows
-    // for the use of the state.mem_pos to be used for temp variables.
-    var_assign_mem_pos: u32,
+    mut data_source_token: Option<Token>,
 ) -> Result<CompilerState<'a>, CompileError> {
-    let leaves = symbol.get_leaf_nodes();
-    // An alias is an expression that doesn't perform a method call anywhere
-    // in its chain.
-    state.cur_mir_block_is_alias = true;
-    let mut local_stack = std::collections::VecDeque::<Command>::new();
+    // println!("SYMBOL {:#?}", ar_symbol);
 
-    let mut leaves = leaves.into_iter().peekable();
+    // AccessReceiver
 
-    while let Some(arg) = &mut leaves.next() {
-        let token = arg.get_token().unwrap();
+    // Compute expression trees always should have the form:
+    // AccessReceiver (args) -> (MethodCall | FieldAccess)*
+    // so always starting with an AccessReceiver. Furthermore, a variable
+    // reference or assignment should always be a AccessReceiver.
+    let is_ar = symbol.get_kind() == SymbolKind::AccessReceiver;
+    let token = symbol.get_token()?;
+    let kind = symbol.get_kind();
 
-        match token {
-            // assignment to a variable.
-            // There are 3 scenarios:
-            // - The result of a method call, in which case a new
-            //   TypeValue is returned and stored in a memory position.
-            // - a field access that was specified AFTER a method call.
-            // - an alias to a variable, data source, or a field on a
-            //   variable.
-            Token::Variable(var) if arg.get_kind() == SymbolKind::VariableAssignment => {
-                if state.cur_mir_block_is_alias {
-                    println!("VAR {} IS ALIAS {:?}", var, local_stack);
-                    state.alias_mir_cache.insert(
-                        var,
-                        MemPosOrAliasBlock::AliasBlock(MirBlock {
-                            ty: MirBlockType::Alias,
-                            command_stack: local_stack.into(),
-                        }),
-                    );
-                } else {
-                    state.alias_mir_cache.insert(
-                        var,
-                        MemPosOrAliasBlock::MemPos(var_assign_mem_pos),
-                    );
-                    // local_stack
-                    //     .push_front(Command::new(OpCode::ClearStack, vec![]));
-                    state.cur_mir_block.command_stack.extend(local_stack);
+    match token {
+        // Assign a variable
+        Token::Variable(var_to) => {
+            // println!("symbol {:#?}", ar_symbol);
+            // panic!("var_to {}", var_to);
+            assert!(is_ar);
+
+            let var_ref =
+                state.local_variables.get_by_token_value(var_to).unwrap();
+            data_source_token = Some(token);
+
+            // when writing, push the content of the referenced variable to the stack,
+            // note this might be the same as the assigned mem position, but it may also
+            // be different!
+            state.cur_mir_block.command_stack.push(Command::new(
+                OpCode::PushStack,
+                vec![Arg::MemPos(var_ref.mem_pos)],
+            ));
+
+            for field_index in &var_ref.field_index {
+                state.cur_mir_block.command_stack.push(Command::new(
+                    OpCode::StackOffset,
+                    vec![Arg::FieldAccess(*field_index)],
+                ));
+            }
+        }
+        // a method as access receiver can only be a global builtin method.
+        Token::Method(m_to) => {
+            // first retrieve all arguments and compile them. The result of each of them
+            // will end up on the stack.
+            for arg in symbol.get_args() {
+                state = compile_compute_expr(
+                    arg,
+                    state,
+                    data_source_token.clone(),
+                )?;
+            }
+            // Now append the actual method call.
+            match data_source_token {
+                Some(Token::Table(t_to)) => {
+                    state.cur_mir_block.command_stack.push(Command::new(
+                        OpCode::ExecuteDataStoreMethod,
+                        vec![
+                            Arg::DataSourceTable(t_to),
+                            Arg::Method(m_to),
+                            Arg::MemPos(state.cur_mem_pos),
+                        ],
+                    ));
                 }
-                local_stack = VecDeque::new();
-            }
-            // assignment to a constant
-            Token::Constant(_) => {
-                // Constants can be cached in a memory position, so no
-                // aliasing
-                state.cur_mir_block_is_alias = false;
-                state.mem_pos += 1;
-
-                let val = arg.get_value();
-                local_stack.push_front(Command::new(
-                    OpCode::PushStack,
-                    vec![Arg::MemPos(state.mem_pos)],
-                ));
-                local_stack.push_front(Command::new(
-                    OpCode::MemPosSet,
-                    vec![
-                        Arg::MemPos(state.mem_pos),
-                        Arg::Constant(val.as_cloned_builtin()?),
-                    ],
-                ));
-
-                state.cur_mir_block.command_stack.extend(local_stack);
-                local_stack = VecDeque::new();
-            }
-            // external calls
-            Token::Method(method) => {
-                // Method calls can and should be cached in memory
-                state.cur_mir_block_is_alias = false;
-                let next_arg = leaves.peek().unwrap();
-
-                let (opcode, args) = match next_arg.get_token() {
-                    Ok(Token::Rib(ds)) => (
+                Some(Token::Rib(r_to)) => {
+                    state.cur_mir_block.command_stack.push(Command::new(
                         OpCode::ExecuteDataStoreMethod,
                         vec![
-                            Arg::DataSourceRib(ds),
-                            Arg::Method(method),
-                            Arg::MemPos(state.mem_pos),
+                            Arg::DataSourceRib(r_to),
+                            Arg::Method(m_to),
+                            Arg::MemPos(state.cur_mem_pos),
                         ],
-                    ),
-                    Ok(Token::Table(ds)) => (
-                        OpCode::ExecuteDataStoreMethod,
+                    ));
+                }
+                Some(Token::Variable(_v_to))
+                    if kind == SymbolKind::MethodCallbyRef =>
+                {
+                    state.cur_mir_block.command_stack.push(Command::new(
+                        OpCode::ExecuteValueMethod,
                         vec![
-                            Arg::DataSourceTable(ds),
-                            Arg::Method(method),
-                            Arg::MemPos(state.mem_pos),
+                            Arg::Method(token.into()),    // method token
+                            Arg::Type(symbol.get_type()), // return type
+                            Arg::Arguments(
+                                symbol
+                                    .get_args()
+                                    .iter()
+                                    .map(|s| s.get_type())
+                                    .collect::<Vec<_>>(),
+                            ), // argument types and number
+                            Arg::MemPos(state.cur_mem_pos),
                         ],
-                    ),
-                    Ok(Token::BuiltinType(_)) => {
-                        (
-                            // args: [ call_type, method_call, return_type ]
-                            OpCode::ExecuteTypeMethod,
-                            vec![
-                                Arg::Type(arg.get_type()),
-                                Arg::Method(token.into()),
-                                Arg::Type(next_arg.get_type()),
-                                Arg::MemPos(state.mem_pos),
-                            ],
-                        )
-                    }
-                    Ok(Token::Variable(_)) => match arg.get_kind() {
+                    ));
+                }
+                Some(Token::Variable(_v_to))
+                    if kind == SymbolKind::MethodCallByConsumedValue =>
+                {
+                    state.cur_mir_block.command_stack.push(Command::new(
+                        OpCode::ExecuteConsumeValueMethod,
+                        vec![
+                            Arg::Method(token.into()),    // method token
+                            Arg::Type(symbol.get_type()), // return type
+                            Arg::Arguments(
+                                symbol
+                                    .get_args()
+                                    .iter()
+                                    .map(|s| s.get_type())
+                                    .collect::<Vec<_>>(),
+                            ), // argument types and number
+                            Arg::MemPos(state.cur_mem_pos),
+                        ],
+                    ));
+                }
+                Some(Token::BuiltinType(_b_to)) => {
+                    state.cur_mir_block.command_stack.push(Command::new(
+                        OpCode::ExecuteTypeMethod,
+                        vec![
+                            Arg::Type(symbol.get_type()), // return type
+                            Arg::Method(token.into()),    // method token
+                            Arg::Arguments(
+                                symbol
+                                    .get_args()
+                                    .iter()
+                                    .map(|s| s.get_type())
+                                    .collect::<Vec<_>>(),
+                            ), // argument types and number
+                            Arg::MemPos(state.cur_mem_pos),
+                        ],
+                    ));
+                }
+                Some(Token::FieldAccess(_)) => {
+                    match symbol.get_kind() {
                         SymbolKind::MethodCallbyRef => {
                             // args: [ method_call, return_type ]
-                            (
-                                OpCode::ExecuteValueMethod,
-                                vec![
-                                    Arg::Method(token.into()), // method token
-                                    Arg::Type(arg.get_type()), // return type
-                                    Arg::Arguments(
-                                        arg.get_args()
-                                            .iter()
-                                            .map(|s| s.get_type())
-                                            .collect::<Vec<_>>(),
-                                    ), // argument types and number
-                                    Arg::MemPos(state.mem_pos),
-                                ],
-                            )
+                            state.cur_mir_block.command_stack.push(
+                                Command::new(
+                                    OpCode::ExecuteValueMethod,
+                                    vec![
+                                        Arg::Method(token.into()),
+                                        Arg::Type(symbol.get_type()),
+                                        Arg::Arguments(
+                                            symbol
+                                                .get_args()
+                                                .iter()
+                                                .map(|s| s.get_type())
+                                                .collect::<Vec<_>>(),
+                                        ),
+                                        // argument types and number
+                                        Arg::MemPos(state.cur_mem_pos),
+                                    ],
+                                ),
+                            );
                         }
                         SymbolKind::MethodCallByConsumedValue => {
                             // args: [ method_call, return_type ]
-                            (
-                                OpCode::ExecuteConsumeValueMethod,
-                                vec![
-                                    Arg::Method(token.into()), // method token
-                                    Arg::Type(arg.get_type()), // return type
-                                    Arg::Arguments(
-                                        arg.get_args()
-                                            .iter()
-                                            .map(|s| s.get_type())
-                                            .collect::<Vec<_>>(),
-                                    ), // argument types and number
-                                    Arg::MemPos(state.mem_pos),
-                                ],
-                            )
+                            state.cur_mir_block.command_stack.push(
+                                Command::new(
+                                    OpCode::ExecuteConsumeValueMethod,
+                                    vec![
+                                        Arg::Method(token.into()),
+                                        Arg::Type(symbol.get_type()),
+                                        Arg::Arguments(
+                                            symbol
+                                                .get_args()
+                                                .iter()
+                                                .map(|s| s.get_type())
+                                                .collect::<Vec<_>>(),
+                                        ),
+                                        // argument types and number
+                                        Arg::MemPos(state.cur_mem_pos),
+                                    ],
+                                ),
+                            );
                         }
                         _ => {
-                            return Err(CompileError::new(format!(
-                                "Invalid MethodCall type {:?}",
-                                arg.get_kind()
-                            )))
+                            panic!("PANIC!");
                         }
-                    },
-
-                    Ok(Token::FieldAccess(_)) => {
-                        state.cur_mir_block_is_alias = true;
-
-                        match arg.get_kind() {
-                            SymbolKind::MethodCallbyRef => (
-                                // args: [ method_call, return_type ]
-                                OpCode::ExecuteValueMethod,
-                                vec![
-                                    Arg::Method(token.into()),
-                                    Arg::Type(arg.get_type()),
-                                    Arg::Arguments(
-                                        arg.get_args()
-                                            .iter()
-                                            .map(|s| s.get_type())
-                                            .collect::<Vec<_>>(),
-                                    ),
-                                    // argument types and number
-                                    Arg::MemPos(state.mem_pos),
-                                ],
-                            ),
-                            SymbolKind::MethodCallByConsumedValue => (
-                                // args: [ method_call, return_type ]
-                                OpCode::ExecuteConsumeValueMethod,
-                                vec![
-                                    Arg::Method(token.into()),
-                                    Arg::Type(arg.get_type()),
-                                    Arg::Arguments(
-                                        arg.get_args()
-                                            .iter()
-                                            .map(|s| s.get_type())
-                                            .collect::<Vec<_>>(),
-                                    ),
-                                    // argument types and number
-                                    Arg::MemPos(state.mem_pos),
-                                ],
-                            ),
-                            _ => {
-                                panic!("PANIC!");
-                            }
-                        }
-                    }
-                    _ => {
-                        return Err(format!(
-                            "Invalid token for method call: {:?}",
-                            next_arg.get_token()
-                        )
-                        .into())
-                    }
-                };
-
-                local_stack.push_front(Command::new(
-                    OpCode::PushStack,
-                    vec![Arg::MemPos(state.mem_pos)],
-                ));
-                local_stack.push_front(Command::new(opcode, args));
-            }
-            Token::FieldAccess(fa) => {
-                // field accesses can't be cached in memory, they can
-                // however be aliased.
-                state.cur_mir_block_is_alias = true;
-                let mut args = vec![];
-                args.extend(
-                    fa.iter()
-                        .map(|t| Arg::FieldAccess(*t as usize))
-                        .collect::<Vec<_>>(),
-                );
-                local_stack
-                    .push_front(Command::new(OpCode::StackOffset, args));
-            }
-            // roots : an expression starting with any of these.
-            Token::Variable(var) => {
-                // A Variable might be cached in memory, i.e. the result of a
-                // method call, OR it may be an alias, e.g. for a field
-                // access.
-                if let Some(alias_stack) = state.alias_mir_cache.get(&var) {
-                    match alias_stack {
-                        MemPosOrAliasBlock::AliasBlock(alias_block) => {
-                            let st = (*alias_block).clone();
-                            state
-                                .cur_mir_block
-                                .command_stack
-                                .extend(st.command_stack);
-                        }
-                        MemPosOrAliasBlock::MemPos(mem_pos) => {
-                            local_stack.push_front(Command::new(
-                                OpCode::PushStack,
-                                vec![Arg::MemPos(*mem_pos)],
-                            ));
-                        }
-                    }
+                    };
                 }
-                state
-                    .cur_mir_block
-                    .command_stack
-                    .extend(unwind_stack(local_stack));
-                local_stack = VecDeque::new();
-            }
-            Token::Argument(arg_arg) => {
-                local_stack.push_front(Command::new(
-                    OpCode::ArgToMemPos,
-                    vec![Arg::Argument(arg_arg), Arg::MemPos(state.mem_pos)],
-                ));
-                state
-                    .cur_mir_block
-                    .command_stack
-                    .extend(unwind_stack(local_stack));
-                local_stack = VecDeque::new();
-            }
-            // An RxType in a sub-action can only be used to modify a field on the
-            // instance.
-            Token::RxType if arg.get_kind() == SymbolKind::SubAction => {
-                // the first child of RxType root should hold a FieldAccess,
-                // specifying a field of the Rx record, or a MethodCall on
-                // the type of the RxType directly.
+                _ => {
+                    return Err(CompileError::new(format!(
+                        "Invalid data source: {:?} {:?}",
+                        token, data_source_token
+                    )));
+                }
+            };
 
-                let first_child = &arg.get_args()[0];
+            // Push the result to the stack for an (optional) next Accessor
+            //  to be used.
+            state.cur_mir_block.command_stack.push(Command::new(
+                OpCode::PushStack,
+                vec![Arg::MemPos(state.cur_mem_pos)],
+            ));
 
-                match first_child.get_kind() {
-                    SymbolKind::FieldAccess => {
-                        // copy Rx to top of the stack
-                        local_stack.push_front(Command::new(
-                            OpCode::PushStack,
-                            vec![Arg::MemPos(0)],
-                        ));
-
-                        local_stack.push_front(Command::new(
-                            OpCode::Label,
-                            vec![Arg::Label("start-set-rx-type".into())],
-                        ));
-                    }
-                    _ => {
-                        return Err(CompileError::new(
-                            "Unknown RxType fieldname or method.".into(),
-                        ))
-                    }
-                };
-            }
-            // an expression starting with the variable name of the rx
-            // instance, e.g. `route` (the default name).
-            Token::RxType => {
-                // RxType instance always lives at MemPos(0). retrieve it
-                // and push to stack.
-                local_stack.push_front(Command::new(
-                    OpCode::PushStack,
-                    vec![Arg::MemPos(0)],
-                ));
-
-                state
-                    .cur_mir_block
-                    .command_stack
-                    .extend(unwind_stack(local_stack));
-                local_stack = VecDeque::new();
-            }
-            Token::TxType => {
-                local_stack.push_front(Command::new(
-                    OpCode::PushStack,
-                    vec![Arg::MemPos(1)],
-                ));
-            }
-            Token::Rib(_) | Token::Table(_) => {
-                // No further action for a data-source, it's only
-                // used to call methods on, which should already have
-                // been peeked into, by the command before this one.
-
-                // we are unwinding the local stack, though
-                state
-                    .cur_mir_block
-                    .command_stack
-                    .extend(unwind_stack(local_stack));
-                local_stack = VecDeque::new();
-            }
-            Token::BuiltinType(_) => {
-                // No further action for a builtin type, it's only
-                // used to call methods on, which should already have
-                // been peeked into, by the command before this one.
-
-                // we are unwinding the local stack, though
-                state
-                    .cur_mir_block
-                    .command_stack
-                    .extend(unwind_stack(local_stack));
-                local_stack = VecDeque::new();
-            }
-            Token::Term(_) => todo!(),
-            Token::Action(_) => todo!(),
-            Token::MatchAction(_) => todo!(),
+            state.cur_mem_pos += 1;
+            return Ok(state);
         }
-    }
+        // a user-defined argument (module or term)
+        Token::Argument(arg_to) => {
+            state.cur_mir_block.command_stack.push(Command::new(
+                OpCode::ArgToMemPos,
+                vec![Arg::Argument(arg_to), Arg::MemPos(state.cur_mem_pos)],
+            ));
+        }
+        // rx instance reference
+        Token::RxType => {
+            state
+                .cur_mir_block
+                .command_stack
+                .push(Command::new(OpCode::PushStack, vec![Arg::MemPos(0)]));
+        }
+        // tx instance reference
+        Token::TxType => {
+            state
+                .cur_mir_block
+                .command_stack
+                .push(Command::new(OpCode::PushStack, vec![Arg::MemPos(1)]));
+        }
+        // a constant value (not a reference!)
+        Token::Constant(_) => {
+            let val = symbol.get_value();
 
-    if state.cur_mir_block.ty == MirBlockType::MatchAction {
-        state
-            .cur_mir_block
-            .command_stack
-            .extend(unwind_stack(local_stack));
+            state.cur_mir_block.command_stack.push(Command::new(
+                OpCode::MemPosSet,
+                vec![
+                    Arg::MemPos(state.cur_mem_pos),
+                    Arg::Constant(val.as_cloned_builtin()?),
+                ],
+            ));
+            state.cur_mir_block.command_stack.push(Command::new(
+                OpCode::PushStack,
+                vec![Arg::MemPos(state.cur_mem_pos)],
+            ));
+        }
+        // Data sources
+        Token::Table(_) | Token::Rib(_) => {
+            assert!(is_ar);
 
-        state
-            .cur_mir_block
-            .command_stack
-            .push(Command::new(OpCode::SetRxField, vec![]));
+            data_source_token = Some(token);
+        }
+        // field access (can't be an access receiver)
+        Token::FieldAccess(ref fa) => {
+            data_source_token = Some(token.clone());
+            assert!(!is_ar);
 
-        state.cur_mir_block.command_stack.push(Command::new(
-            OpCode::Label,
-            vec![Arg::Label("end-set-rx-type".into())],
-        ));
+            let mut args = vec![];
+            args.extend(
+                fa.iter()
+                    .map(|t| Arg::FieldAccess(*t as usize))
+                    .collect::<Vec<_>>(),
+            );
+
+            state
+                .cur_mir_block
+                .command_stack
+                .push(Command::new(OpCode::StackOffset, args));
+        }
+        Token::BuiltinType(_) => {
+            data_source_token = Some(token);
+        }
+        Token::Term(_) => todo!(),
+        Token::Action(_) => todo!(),
+        Token::MatchAction(_) => todo!(),
+    };
+
+    // Arguments
+
+    for arg in symbol.get_args() {
+        state = compile_compute_expr(
+            arg,
+            state,
+            // var_assign_mem_pos + 1,
+            data_source_token.clone(),
+        )?;
     }
 
     Ok(state)
@@ -776,135 +762,59 @@ fn compile_assignments(
     state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
 
     // reset the alias detector.
-    state.cur_mir_block_is_alias = true;
+    // state.cur_mir_block_has_alias = true;
 
     // compile the used variable assignments. Since the rx and tx value live
-    // in memory positions 0 and 1, we start with memory position 2.
-    let mut mem_pos = 2;
-    for var in state.used_variables.clone().iter() {
+    // in memory positions 0 and 1, we start with memory position 2 plus the
+    // number of variables that we need to resolve.
+    for (var_mem_pos, var) in state.used_variables.clone().iter().enumerate()
+    {
         // set the mem_pos in state to the counter we use here. Recursive
         // `compile_expr` may increase state.mem_pos to temporarily store
         // argument variables.
-        state.mem_pos = mem_pos;
+        // state.cur_mem_pos = mem_pos;
+        state.cur_mem_pos = 2 + state.used_variables.len() as u32;
+        println!(
+            "VAR {:?} MEM POS {} TEMP POS START {}",
+            var.0,
+            var_mem_pos + 2,
+            state.cur_mem_pos
+        );
 
         let s = _module.get_variable_by_token(&var.1.get_token()?);
 
-        // reset the alias detector.
-        state.cur_mir_block_is_alias = true;
-
         state.cur_mir_block.command_stack.push(Command::new(
             OpCode::Label,
-            vec![Arg::Label(
-                format!(
-                    "VAR {}",
-                    var.0
-                )
-                .as_str()
-                .into(),
-            )],
+            vec![Arg::Label(format!("VAR {}", var.0).as_str().into())],
         ));
 
-        state = compile_expr(s, state, mem_pos)?;
+        state =
+            compile_compute_expr(s.get_args().get(0).unwrap(), state, None)?;
 
-        let is_alias = match state.cur_mir_block.last().op {
-            OpCode::PushStack => {
-                state.cur_mir_block.command_stack.push(Command::new(OpCode::ClearStack, vec![]));
-                true
-            },
-            OpCode::StackOffset => {
-                let mut block = MirBlock::new(MirBlockType::Alias);
-                block.command_stack.push(Command::new(OpCode::PushStack, vec![
-                    Arg::MemPos(state.mem_pos)
-                ]));
-                block.command_stack.push(state.cur_mir_block.pop_last());
-                state.alias_mir_cache.insert(
-                    var.1.get_token()?.into(),
-                    MemPosOrAliasBlock::AliasBlock(block)
-                );
-                state.cur_mir_block.command_stack.push(Command::new(OpCode::ClearStack, vec![]));
-                false
-            },
-            _ => { panic!("stop making sense. {:?}", state.cur_mir_block); }
-        };
+        state
+            .cur_mir_block
+            .command_stack
+            .push(Command::new(OpCode::ClearStack, vec![]));
 
-        if !state.cur_mir_block_is_alias {
-            // This is NOT an alias, meaning there's at least one method call
-            // involved, creating a new TypeValue. So we're caching that new
-            // TypeValue into a memory position and increase the memory
-            // position.
-            mir.push(state.cur_mir_block);
-            mem_pos += 1;
-            state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
-        } else {
-            // This IS an alias. It would be meaningless to cache this, apart
-            // from the fact, that the memory data-structure doesn't allow
-            // any referencing or indexing.
-            state.cur_mir_block.command_stack.push(Command::new(
-                OpCode::Label,
-                vec![Arg::Label(
-                    format!("END ALIAS {}", var.0).as_str().into(),
-                )],
-            ));
-            state.alias_mir_cache.insert(
-                var.1.get_token()?.into(),
-                MemPosOrAliasBlock::AliasBlock(state.cur_mir_block),
-            );
+        let (cur_mir_block, cur_mem_pos, field_indexes) =
+            state.cur_mir_block.into_assign_block(var_mem_pos + 2);
 
-            // create an ALIAS block with only a label in it for debugging
-            // purposes.
-            state.cur_mir_block = MirBlock::new(MirBlockType::Alias);
-            state.cur_mir_block.command_stack.push(Command::new(
-                OpCode::Label,
-                vec![Arg::Label(format!("ALIAS {}", var.0).as_str().into())],
-            ));
-            // end of block
+        state.local_variables.set(
+            var.1.get_token()?.into(),
+            cur_mem_pos as u32,
+            field_indexes,
+        )?;
 
-            mir.push(state.cur_mir_block);
-            state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
-        }
+        mir.push(cur_mir_block);
+        state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
     }
 
-    println!("ALIAS CACHE {:#?}", state.alias_mir_cache);
+    state.cur_mem_pos = 2 + state.used_variables.len() as u32;
+    println!("local variables map");
+    println!("{:#?}", state.local_variables);
 
     Ok((mir, state))
 }
-
-// This is not used currently, it will compile *ALL* terms, regardless of
-// whether they are actually consumed by the (match) actions.
-// fn _compile_terms(
-//     mut mir: Vec<MirBlock>,
-//     mut state: CompilerState<'_>,
-// ) -> Result<(Vec<MirBlock>, CompilerState<'_>), CompileError> {
-//     let _module = state.cur_module;
-
-//     // a new block
-//     state.cur_mir_block = MirBlock::new(MirBlockType::Term);
-
-//     let terms = _module.get_terms();
-//     let mut terms_iter = terms.iter().peekable();
-
-//     // compile all the terms.
-//     while let Some(term) = &mut terms_iter.next() {
-//         state = compile_term(term, state)?;
-
-//         // store the resulting value into a variable so that future references
-//         // to this term can directly use the result instead of doing the whole
-//         // computation again.
-//         state
-//             .computed_terms
-//             .push((term.get_name(), state.mem_pos.into()));
-
-//         state.mem_pos += 1;
-
-//         // move the current mir block to the end of all the collected MIR.
-//         mir.push(state.cur_mir_block);
-
-//         // continue with a fresh block
-//         state.cur_mir_block = MirBlock::new(MirBlockType::Term);
-//     }
-
-//     Ok((mir, state))
-// }
 
 fn compile_apply(
     mut mir: Vec<MirBlock>,
@@ -957,11 +867,11 @@ fn compile_apply(
                 // computation again.
                 state
                     .computed_terms
-                    .push((term_name.clone(), state.mem_pos.into()));
+                    .push((term_name.clone(), state.cur_mem_pos.into()));
             }
         };
 
-        state.mem_pos += 1;
+        state.cur_mem_pos += 1;
 
         // move the current mir block to the end of all the collected MIR.
         mir.push(state.cur_mir_block);
@@ -1066,9 +976,8 @@ fn compile_sub_action<'a>(
 ) -> Result<CompilerState<'a>, CompileError> {
     match sub_action.get_kind() {
         SymbolKind::SubAction => {
-            let start_pos = state.mem_pos;
-            state = compile_expr(sub_action, state, start_pos)?;
-            state.mem_pos += 1;
+            state = compile_compute_expr(sub_action, state, None)?;
+            state.cur_mem_pos += 1;
         }
         _ => {
             return Err(CompileError::new(format!(
@@ -1085,6 +994,9 @@ fn compile_term<'a>(
     term: Term<'a>,
     mut state: CompilerState<'a>,
 ) -> Result<CompilerState<'a>, CompileError> {
+    // do not create assignment block, only produce code to read variables
+    // when referenced.
+    state.var_read_only = true;
     state.cur_mir_block = MirBlock::new(MirBlockType::Term);
 
     // Set a Label so that each term block is identifiable for humans.
@@ -1120,14 +1032,13 @@ fn compile_sub_term<'a>(
     sub_term: Term<'a>,
     mut state: CompilerState<'a>,
 ) -> Result<CompilerState<'a>, CompileError> {
-    let saved_mem_pos = state.mem_pos;
+    let saved_mem_pos = state.cur_mem_pos;
     match sub_term.get_kind() {
         SymbolKind::CompareExpr(op) => {
             let args = sub_term.get_args();
-            let start_pos = state.mem_pos;
-            state = compile_expr(&args[0], state, start_pos)?;
-            state.mem_pos += 1;
-            state = compile_expr(&args[1], state, start_pos)?;
+            state = compile_compute_expr(&args[0], state, None)?;
+            state.cur_mem_pos += 1;
+            state = compile_compute_expr(&args[1], state, None)?;
 
             state
                 .cur_mir_block
@@ -1137,7 +1048,7 @@ fn compile_sub_term<'a>(
         SymbolKind::OrExpr => {
             let args = sub_term.get_args();
             state = compile_sub_term(&args[0], state)?;
-            state.mem_pos += 1;
+            state.cur_mem_pos += 1;
             state = compile_sub_term(&args[1], state)?;
 
             state.cur_mir_block.command_stack.push(Command::new(
@@ -1148,7 +1059,7 @@ fn compile_sub_term<'a>(
         SymbolKind::AndExpr => {
             let args = sub_term.get_args();
             state = compile_sub_term(&args[0], state)?;
-            state.mem_pos += 1;
+            state.cur_mem_pos += 1;
             state = compile_sub_term(&args[1], state)?;
 
             state.cur_mir_block.command_stack.push(Command::new(
@@ -1160,13 +1071,13 @@ fn compile_sub_term<'a>(
             panic!("NOT NOT!");
         }
         _ => {
-            let start_pos = state.mem_pos;
-            state = compile_expr(sub_term, state, start_pos)?;
+            // let start_pos = state.cur_mem_pos;
+            state = compile_compute_expr(sub_term, state, None)?;
         }
     };
 
     // restore old mem_pos, let's not waste memory
-    state.mem_pos = saved_mem_pos;
+    state.cur_mem_pos = saved_mem_pos;
 
     Ok(state)
 }
