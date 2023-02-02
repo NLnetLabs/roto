@@ -139,8 +139,6 @@ fn test_data(
     // };
 
     let mem = vm::LinearMemory::uninit();
-    let vars = vm::VariablesMap::new();
-    let vars = RefCell::new(vars);
 
     println!("Used Arguments");
     println!("{:#?}", &roto_pack.arguments);
@@ -159,7 +157,7 @@ fn test_data(
     let mut vm = vm::VmBuilder::new()
         .with_arguments(module_arguments)
         .with_data_sources(ds_ref.as_slice())
-        .build(&vars);
+        .build();
 
     let res = vm.exec(
         my_payload,

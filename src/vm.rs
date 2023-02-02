@@ -1001,7 +1001,6 @@ impl<'a> VmBuilder<'a> {
 
     pub fn build(
         self,
-        variables: &'a RefCell<VariablesMap>,
     ) -> VirtualMachine<'a> {
         VirtualMachine {
             rx_type: self.rx_type,
