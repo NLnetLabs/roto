@@ -318,9 +318,9 @@ impl RotoFilter for List {
     }
 
     fn exec_type_method<'a>(
-        method_token: usize,
-        args: &[&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }

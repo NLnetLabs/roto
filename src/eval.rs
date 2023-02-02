@@ -4,6 +4,7 @@ use crate::ast::ShortString;
 use crate::compile::CompileError;
 use crate::symbols::GlobalSymbolTable;
 use crate::symbols::MatchActionType;
+use crate::symbols::Symbol;
 use crate::symbols::SymbolKind;
 use crate::traits::Token;
 use crate::types::builtin::Boolean;
@@ -690,7 +691,7 @@ impl ast::ComputeExpr {
                 ast::AccessExpr::FieldAccessExpr(field_access) => {
                     // println!("symbol already has args {:?}", s.get_args());
                     let child_s = field_access.eval(ty)?;
-                    let (k, ty, to) = child_s.get_kind_type_and_token()?;
+                    let (_k, _ty, _to) = child_s.get_kind_type_and_token()?;
                     let i = s.add_arg(child_s);
                     println!("symbol -> {:#?}", s);
                     s = &mut s.get_args_mut()[i];
@@ -880,14 +881,11 @@ impl ast::ValueExpr {
             // an expression ending in a a method call (e.g. `foo.bar()`).
             // Note that the evaluation of the method call will check for
             // the existence of the method.
-            ast::ValueExpr::ComputeExpr(call_expr) => {
-
-                call_expr.eval(
-                    call_expr.get_receiver().ident.ident,
-                    symbols,
-                    scope,
-                )
-            }
+            ast::ValueExpr::ComputeExpr(call_expr) => call_expr.eval(
+                call_expr.get_receiver().ident.ident,
+                symbols,
+                scope,
+            ),
             ast::ValueExpr::BuiltinMethodCallExpr(builtin_call_expr) => {
                 let name: ShortString = builtin_call_expr.ident.clone().ident;
                 let mut ty = TypeDef::Unknown;
@@ -1699,15 +1697,13 @@ fn add_match_action(
 
             let token = match_action.get_token()?;
 
-            module.add_match_action(
+            module.move_match_action_into(Symbol::new(
                 name,
-                Some(match_action.get_name()),
                 match_action.get_kind(),
                 match_action.get_type(),
                 match_action.get_args_owned(),
-                TypeValue::Unknown,
-                token
-            )
+                Some(token)
+            ))
         }
         symbols::Scope::Global => Err(format!(
             "Can't create a match action in the global scope (NEVER). Action '{}'",

@@ -123,7 +123,6 @@ impl LinearMemory {
                         match field {
                             ElementTypeValue::Nested(nested) => Ok(*nested),
                             ElementTypeValue::Primitive(b) => Ok(b),
-                            _ => Err(VmError::MemOutOfBounds),
                         }
                     }
                     Some(TypeValue::List(mut l)) => {
@@ -289,8 +288,8 @@ impl VariablesMap {
 }
 
 pub struct VirtualMachine<'a> {
-    rx_type: TypeDef,
-    tx_type: Option<TypeDef>,
+    // _rx_type: TypeDef,
+    // _tx_type: Option<TypeDef>,
     data_sources: &'a [&'a ExtDataSource],
     stack: RefCell<Stack>,
 }
@@ -345,9 +344,8 @@ impl<'a> VirtualMachine<'a> {
         unwind_stack
     }
 
-    fn unwind_stack_into_vec(
+    fn as_vec(
         &'a self,
-        mem: &'a LinearMemory,
     ) -> Vec<StackRef> {
         let mut stack = self.stack.borrow_mut();
         stack.unwind().into_iter().collect::<Vec<_>>()
@@ -843,7 +841,7 @@ impl<'a> VirtualMachine<'a> {
                         if let Arg::MemPos(pos) = args[1] {
                             match args[0] {
                                 Arg::Argument(token_value) => {
-                                    let (arg_index, arg_value) = arguments
+                                    let (_arg_index, arg_value) = arguments
                                         .take_by_token_value(token_value)?;
 
                                     let mut m = mem.borrow_mut();
@@ -867,7 +865,7 @@ impl<'a> VirtualMachine<'a> {
                         let s = self.stack.borrow();
                         let stack_ref = s.get_top_value()?;
                         let bool_val =
-                            m.get_mp_field_by_stack_ref(&stack_ref).unwrap();
+                            m.get_mp_field_by_stack_ref(stack_ref).unwrap();
                         if bool_val.is_false()? {
                             print!(" skip to end of block");
                             break;
@@ -882,7 +880,7 @@ impl<'a> VirtualMachine<'a> {
                         let s = self.stack.borrow();
                         let stack_ref = s.get_top_value()?;
                         let bool_val =
-                            m.get_mp_field_by_stack_ref(&stack_ref).unwrap();
+                            m.get_mp_field_by_stack_ref(stack_ref).unwrap();
                         if bool_val.is_false()? {
                             print!(" continue");
                             continue;
@@ -931,7 +929,7 @@ impl<'a> VirtualMachine<'a> {
                         let mut m = mem.borrow_mut();
                         // pop all refs from the stack and resolve them to
                         // their values.
-                        let stack_args = self.unwind_stack_into_vec(&m);
+                        let stack_args = self.as_vec();
 
                         // swap out the new value from memory
                         let val = m
@@ -1003,8 +1001,8 @@ impl<'a> VmBuilder<'a> {
         self,
     ) -> VirtualMachine<'a> {
         VirtualMachine {
-            rx_type: self.rx_type,
-            tx_type: self.tx_type,
+            // rx_type: self.rx_type,
+            // tx_type: self.tx_type,
             data_sources: self.data_sources,
             stack: RefCell::new(Stack::new()),
         }
@@ -1267,7 +1265,7 @@ trait Source {
 
 #[derive(Debug)]
 pub struct ExtDataSource {
-    name: ShortString,
+    _name: ShortString,
     token: usize,
     source: DataSource,
 }
@@ -1275,7 +1273,7 @@ pub struct ExtDataSource {
 impl ExtDataSource {
     pub fn new(name: &str, token: Token, ty: TypeDef) -> Self {
         ExtDataSource {
-            name: name.into(),
+            _name: name.into(),
             source: match &token {
                 Token::Table(_) => DataSource::Table(Table {
                     ty,
@@ -1313,7 +1311,7 @@ impl ExtDataSource {
             DataSource::Table(ref t) => {
                 t.get_at_field_index(index, field_index)
             }
-            DataSource::Rib(ref r) => {
+            DataSource::Rib(ref _r) => {
                 todo!()
             }
         }

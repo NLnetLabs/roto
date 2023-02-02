@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    ast::{CompareOp, ShortString, AcceptReject},
+    ast::{AcceptReject, CompareOp, ShortString},
     compile::CompileError,
     traits::{RotoFilter, Token},
     types::{
@@ -64,10 +64,6 @@ impl Symbol {
         }
     }
 
-    pub fn get_kind_and_type(&self) -> (SymbolKind, TypeDef) {
-        (self.kind, self.ty.clone())
-    }
-
     pub fn get_kind_type_and_token(
         &self,
     ) -> Result<(SymbolKind, TypeDef, Token), CompileError> {
@@ -97,10 +93,6 @@ impl Symbol {
     pub fn set_type(mut self, ty: TypeDef) -> Self {
         self.ty = ty;
         self
-    }
-
-    pub fn set_type_mut(&mut self, ty: TypeDef) {
-        self.ty = ty;
     }
 
     pub fn set_token(mut self, token: Token) -> Self {
@@ -137,11 +129,6 @@ impl Symbol {
         self.value
     }
 
-    pub fn set_value(mut self, value: TypeValue) -> Self {
-        self.value = value;
-        self
-    }
-
     pub fn get_args_owned(self) -> Vec<Symbol> {
         self.args
     }
@@ -152,10 +139,6 @@ impl Symbol {
 
     pub fn get_args_mut(&mut self) -> &mut [Symbol] {
         &mut self.args
-    }
-
-    pub fn set_args(&mut self, args: Vec<Symbol>) {
-        self.args = args;
     }
 
     // Go into the first arg of a symbol until we find a empty args vec and
@@ -307,27 +290,7 @@ impl Symbol {
         Ok(self)
     }
 
-    // Leaf nodes have an empty `args` field. Recursively check if this
-    // symbol has leaf nodes or is a leaf node itself.
-    pub(crate) fn get_leaf_nodes(&self) -> Vec<&Symbol> {
-        let mut leaves = vec![];
-
-        if !self.args.is_empty() {
-            for arg in self.args.iter() {
-                leaves.extend(arg.get_leaf_nodes());
-            }
-        }
-
-        if self.get_token().is_ok() {
-            leaves.push(self);
-        }
-
-        leaves
-    }
-
-    pub(crate) fn flatten_nodes(
-        &self,
-    ) -> Vec<&Symbol> {
+    pub(crate) fn flatten_nodes(&self) -> Vec<&Symbol> {
         let mut new_nodes = vec![];
         for arg in self.get_args() {
             new_nodes.extend(arg.flatten_nodes());
@@ -336,14 +299,6 @@ impl Symbol {
         new_nodes.push(self);
 
         new_nodes
-    }
-
-    pub(crate) fn follow_first_leaf(&self) -> &Symbol {
-        if self.args.is_empty() {
-            self
-        } else {
-            self.args.first().unwrap().follow_first_leaf()
-        }
     }
 
     pub(crate) fn follow_last_leaf(&self) -> &Symbol {
@@ -390,8 +345,8 @@ pub enum SymbolKind {
     // these symbols are used both for assignment and as
     // root access receivers.
     Constant, // A literal value or a module-level variable
-    RxType,        // type of the incoming payload
-    TxType,        // type of the outgoing payload
+    RxType,   // type of the incoming payload
+    TxType,   // type of the outgoing payload
     // data sources access receivers
     Rib,
     Table,
@@ -433,16 +388,15 @@ pub enum SymbolKind {
     Action,
     SubAction,
     Term,
-    
+
     // A symbol that has been consumed by the compiler
     Empty,
 }
 
 #[derive(Debug)]
 pub struct MatchAction {
-    // name: ShortString,
-    action_type: MatchActionType,
-    quantifier: MatchActionQuantifier,
+    _action_type: MatchActionType,
+    _quantifier: MatchActionQuantifier,
     symbol: Symbol,
 }
 
@@ -531,7 +485,7 @@ pub struct SymbolTable {
     match_actions: Vec<MatchAction>,
     // the action that will be activated when all of the match_actions are
     // processed and no early return has been issued
-    default_action: crate::ast::AcceptReject
+    default_action: crate::ast::AcceptReject,
 }
 
 // The global symbol table.
@@ -583,11 +537,11 @@ pub(crate) struct DepsGraph<'a> {
     pub(crate) used_data_sources: Vec<(ShortString, &'a Symbol)>,
 }
 
-struct Location {
-    name: ShortString,
-    module: ShortString,
-    line: usize,
-}
+// struct Location {
+//     name: ShortString,
+//     module: ShortString,
+//     line: usize,
+// }
 
 impl SymbolTable {
     pub(crate) fn new(module: ShortString) -> Self {
@@ -600,7 +554,7 @@ impl SymbolTable {
             terms: HashMap::new(),
             actions: HashMap::new(),
             match_actions: vec![],
-            default_action: crate::ast::AcceptReject::Accept
+            default_action: crate::ast::AcceptReject::Accept,
         }
     }
 
@@ -775,33 +729,17 @@ impl SymbolTable {
         Ok(())
     }
 
-    pub(crate) fn add_match_action(
+    pub(crate) fn move_match_action_into(
         &mut self,
-        key: ShortString,
-        name: Option<ShortString>,
-        kind: SymbolKind,
-        ty: TypeDef,
-        args: Vec<Symbol>,
-        value: TypeValue,
-        // token is the index of the term that corresponds to the `name`
-        // argument. It's a token for a term.
-        token: Token,
+        symbol: Symbol,
     ) -> Result<(), CompileError> {
-        let name = if let Some(name) = name { name } else { key };
-
-        self.match_actions.push(MatchAction {
-            symbol: Symbol {
-                name,
-                kind,
-                ty,
-                args,
-                value,
-                token: Some(token),
-            },
-            action_type: kind.try_into()?,
-            quantifier: MatchActionQuantifier::Exists,
-        });
-
+        if let SymbolKind::MatchAction(s) = symbol.get_kind() {
+            self.match_actions.push(MatchAction {
+                symbol,
+                _action_type: s,
+                _quantifier: MatchActionQuantifier::Exists,
+            })
+        }
         Ok(())
     }
 
@@ -830,12 +768,6 @@ impl SymbolTable {
             return Some(symbol);
         }
 
-        // match_actions can't be retrieved with `get`: there could be multiple matching
-
-        // if let Some(symbol) = self.match_actions.get(&MatchActionKey((*name, kind.try_into()?))) {
-        //     return Some(&symbol[0]);
-        // }
-
         None
     }
 
@@ -862,24 +794,6 @@ impl SymbolTable {
                 .unwrap_or_else(|| {
                     panic!("Fatal: Created Token does not exist.")
                 }),
-            _ => panic!("Fatal: Created Token does represent a variable."),
-        }
-    }
-
-    pub(crate) fn get_variable_name_by_token(
-        &mut self,
-        token: &Token,
-    ) -> ShortString {
-        match token {
-            Token::Variable(_token_int) => self
-                .variables
-                .iter()
-                .find(|s| s.1.token == Some(token.clone()))
-                .unwrap_or_else(|| {
-                    panic!("Fatal: Created Token does not exist.")
-                })
-                .0
-                .clone(),
             _ => panic!("Fatal: Created Token does represent a variable."),
         }
     }
@@ -921,28 +835,16 @@ impl SymbolTable {
         self.actions.values().collect::<Vec<_>>()
     }
 
-    pub(crate) fn set_default_action(&mut self, default_action: AcceptReject) {
+    pub(crate) fn set_default_action(
+        &mut self,
+        default_action: AcceptReject,
+    ) {
         self.default_action = default_action;
     }
 
     pub(crate) fn get_default_action(&self) -> AcceptReject {
-        self.default_action.clone()
+        self.default_action
     }
-
-    // pub(crate) fn get_match_action(
-    //     &self,
-    //     name: &ShortString,
-    //     ty: MatchActionType
-    // ) -> Result<Vec<(TypeDef, Token)>, CompileError> {
-    //     self.match_actions
-    //         .get(&MatchActionKey((name.clone(), ty)))
-    //         .ok_or_else(|| format!("Symbol '{}' not found", name).into())
-    //         .map(|mas| {
-    //             mas.iter()
-    //                 .map(|ma| (ma.ty.clone(), ma.token.clone().unwrap()))
-    //                 .collect()
-    //         })
-    // }
 
     pub(crate) fn get_match_actions(&self) -> Vec<&MatchAction> {
         self.match_actions.iter().collect::<Vec<_>>() //.values().collect::<Vec<_>>()
@@ -978,7 +880,6 @@ impl SymbolTable {
     // sections in a module)
     pub(crate) fn create_deps_graph(
         &self,
-        global_table: &SymbolTable
     ) -> Result<
         (
             (ShortString, TypeDef),         // rx type
@@ -1043,7 +944,7 @@ impl SymbolTable {
             DepsGraph {
                 used_variables,
                 used_arguments,
-                used_data_sources
+                used_data_sources,
             },
         ))
     }

@@ -354,16 +354,6 @@ impl Clone for MirBlock {
     }
 }
 
-fn unwind_stack(
-    mut stack: std::collections::VecDeque<Command>,
-) -> Vec<Command> {
-    let mut v = vec![];
-    while let Some(c) = stack.pop_front() {
-        v.push(c);
-    }
-    v
-}
-
 fn compile_module(
     module: &SymbolTable,
     global_table: &SymbolTable,
@@ -378,7 +368,7 @@ fn compile_module(
             used_variables,
             used_data_sources,
         },
-    ) = module.create_deps_graph(global_table)?;
+    ) = module.create_deps_graph()?;
 
     let mut state = CompilerState {
         cur_module: module,
@@ -590,7 +580,6 @@ fn compile_compute_expr<'a>(
             }
 
             // This symbol is a method, but what is the parent?
-            println!("parent_token {:?} symbol {:?}", parent_token, symbol);
             match parent_token.unwrap() {
                 // The parent is a table, so this symbol is a method on a
                 // table.

@@ -149,10 +149,10 @@ impl TypeValue {
     ) -> Result<Self, VmError> {
         match self {
             TypeValue::Record(ref mut rec) => {
-                rec.set_field_for_index(field_index as usize, value)?;
+                rec.set_field_for_index(field_index, value)?;
             }
             TypeValue::List(ref mut list) => {
-                list.set_field_for_index(field_index as usize, value)?;
+                list.set_field_for_index(field_index, value)?;
             }
             _ => {
                 return Err(VmError::InvalidWrite)
@@ -523,6 +523,7 @@ impl<'a> TryFrom<&'a str> for TypeValue {
         }
     }
 }
+
 
 impl<'a> From<&'a TypeDef> for Box<TypeValue> {
     fn from(t: &'a TypeDef) -> Self {
