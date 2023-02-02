@@ -1540,7 +1540,7 @@ fn declare_argument(
 // `args` field of a newly created symbol. The new symbol will get the
 // return type from the symbol that was passed in.
 fn declare_variable_from_symbol(
-    key: Option<ast::ShortString>,
+    key: ast::ShortString,
     arg_symbol: symbols::Symbol,
     symbols: symbols::GlobalSymbolTable,
     scope: &symbols::Scope,
@@ -1557,13 +1557,11 @@ fn declare_variable_from_symbol(
                 .get_mut(scope)
                 .ok_or(format!("No module named '{}' found.", module))?;
 
-            let name = arg_symbol.get_name();
-
             match arg_symbol.has_value() {
                 // This is a variable, create an empty value on the symbol.
                 false => {
                     let symbol = symbols::Symbol::new(
-                        name.clone(), // same as the key we're inserting.
+                        key,
                         symbols::SymbolKind::VariableAssignment,
                         arg_symbol.get_recursive_return_type(),
                         vec![arg_symbol],
@@ -1571,7 +1569,6 @@ fn declare_variable_from_symbol(
                     );
 
                     module.move_var_const_into(
-                        key.unwrap_or(name),
                         symbol
                     )
                 }
@@ -1579,15 +1576,13 @@ fn declare_variable_from_symbol(
                 // storing. This can only be a builtin-typed value.
                 true => {
                     let symbol = symbols::Symbol::new_with_value(
-                        name.clone(), // same as the key we're inserting.
+                        key,
                         symbols::SymbolKind::Constant,
                         arg_symbol.get_value_owned(),
                         vec![],
                         Token::Constant(None),
                     );
-
                     module.move_var_const_into(
-                        key.unwrap_or(name),
                         symbol
                     )
                 }
