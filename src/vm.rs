@@ -740,11 +740,25 @@ impl<'a> VirtualMachine<'a> {
 
                         m.set_mem_pos(mem_pos, result_value);
                     }
-                    // args: [data_source_token, method_token, return memory position]
+                    // args: [data_source_token, method_token, arguments,
+                    //       return memory position]
                     OpCode::ExecuteDataStoreMethod => {
                         let mut m = mem.borrow_mut();
 
-                        let mem_pos = args.pop().unwrap().into();
+                        let mem_pos =
+                            if let Arg::MemPos(pos) = args.pop().unwrap() {
+                                pos as usize
+                            } else {
+                                return Err(VmError::InvalidValueType);
+                            };
+
+                        let _args_len: usize =
+                            if let Some(Arg::Arguments(args)) = args.pop() {
+                                args.len()
+                            } else {
+                                0
+                            };
+
                         let method_token: Arg = args.pop().unwrap();
                         let data_source_token = args.pop().unwrap();
 

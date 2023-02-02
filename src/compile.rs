@@ -475,30 +475,29 @@ fn compile_module(
 fn compile_compute_expr<'a>(
     symbol: &'a Symbol,
     mut state: CompilerState<'a>,
-    mut data_source_token: Option<Token>,
+    // the token of the parent (the holder of the `args` field), 
+    // needed to retrieve methods from.
+    mut parent_token: Option<Token>,
 ) -> Result<CompilerState<'a>, CompileError> {
-    // println!("SYMBOL {:#?}", ar_symbol);
-
-    // AccessReceiver
-
     // Compute expression trees always should have the form:
+    //
     // AccessReceiver (args) -> (MethodCall | FieldAccess)*
+    //
     // so always starting with an AccessReceiver. Furthermore, a variable
-    // reference or assignment should always be a AccessReceiver.
+    // reference or assignment should always be an AccessReceiver.
     let is_ar = symbol.get_kind() == SymbolKind::AccessReceiver;
     let token = symbol.get_token()?;
     let kind = symbol.get_kind();
 
     match token {
+        // ACCESS RECEIVERS
+
         // Assign a variable
         Token::Variable(var_to) => {
-            // println!("symbol {:#?}", ar_symbol);
-            // panic!("var_to {}", var_to);
             assert!(is_ar);
 
             let var_ref =
                 state.local_variables.get_by_token_value(var_to).unwrap();
-            data_source_token = Some(token);
 
             // when writing, push the content of the referenced variable to the stack,
             // note this might be the same as the assigned mem position, but it may also
@@ -515,47 +514,110 @@ fn compile_compute_expr<'a>(
                 ));
             }
         }
-        // a method as access receiver can only be a global builtin method.
-        Token::Method(m_to) => {
-            // first retrieve all arguments and compile them. The result of each of them
-            // will end up on the stack.
+        // a user-defined argument (module or term)
+        Token::Argument(arg_to) => {
+            assert!(is_ar);
+
+            state.cur_mir_block.command_stack.push(Command::new(
+                OpCode::ArgToMemPos,
+                vec![Arg::Argument(arg_to), Arg::MemPos(state.cur_mem_pos)],
+            ));
+        }
+        // rx instance reference
+        Token::RxType => {
+            assert!(is_ar);
+
+            state
+                .cur_mir_block
+                .command_stack
+                .push(Command::new(OpCode::PushStack, vec![Arg::MemPos(0)]));
+        }
+        // tx instance reference
+        Token::TxType => {
+            assert!(is_ar);
+
+            state
+                .cur_mir_block
+                .command_stack
+                .push(Command::new(OpCode::PushStack, vec![Arg::MemPos(1)]));
+        }
+        // a constant value (not a reference!)
+        Token::Constant(_) => {
+
+            let val = symbol.get_value();
+
+            state.cur_mir_block.command_stack.push(Command::new(
+                OpCode::MemPosSet,
+                vec![
+                    Arg::MemPos(state.cur_mem_pos),
+                    Arg::Constant(val.as_cloned_builtin()?),
+                ],
+            ));
+            state.cur_mir_block.command_stack.push(Command::new(
+                OpCode::PushStack,
+                vec![Arg::MemPos(state.cur_mem_pos)],
+            ));
+        }
+        // Data sources
+        Token::Table(_) | Token::Rib(_) => {
+            assert!(is_ar);
+        }
+        Token::BuiltinType(_) => {
+        }
+
+        // ARGUMENTS ON ACCESS RECEIVERS
+
+        // Non-builtin methods can't be access receivers
+        Token::Method(m_to) if !is_ar => {
+            // First retrieve all arguments and the recursively compile 
+            // them. The result of each of them will end up on the stack 
+            // (when executed in the vm).
+            //
+            // The arguments will start out as a fresh recursion, that is to
+            // say, without a parent. After the first argument we're passing
+            // in the its token to its argument sibling.
+            //
+            // (parent, argument)  : (None, arg1), (Token(arg1), arg2) ->
+            // (token(arg2), arg3), etc.
+            let mut arg_parent_token = None;
             for arg in symbol.get_args() {
                 state = compile_compute_expr(
                     arg,
                     state,
-                    data_source_token.clone(),
+                    arg_parent_token,
                 )?;
+                arg_parent_token = arg.get_token().ok();
             }
-            // Now append the actual method call.
-            match data_source_token {
-                Some(Token::Table(t_to)) => {
+
+            // This symbol is a method, but what is the parent?
+            println!("parent_token {:?} symbol {:?}", parent_token, symbol);
+            match parent_token.unwrap() {
+                // The parent is a table, so this symbol is a method on a
+                // table.
+                Token::Table(t_to) => {
                     state.cur_mir_block.command_stack.push(Command::new(
                         OpCode::ExecuteDataStoreMethod,
                         vec![
                             Arg::DataSourceTable(t_to),
                             Arg::Method(m_to),
+                            Arg::Arguments(
+                                symbol
+                                    .get_args()
+                                    .iter()
+                                    .map(|s| s.get_type())
+                                    .collect::<Vec<_>>(),
+                            ), // argument types and number
                             Arg::MemPos(state.cur_mem_pos),
                         ],
                     ));
                 }
-                Some(Token::Rib(r_to)) => {
+                // The parent is a RIB, so this symbol is a method on a rib
+                Token::Rib(r_to) => {
                     state.cur_mir_block.command_stack.push(Command::new(
                         OpCode::ExecuteDataStoreMethod,
                         vec![
                             Arg::DataSourceRib(r_to),
                             Arg::Method(m_to),
-                            Arg::MemPos(state.cur_mem_pos),
-                        ],
-                    ));
-                }
-                Some(Token::Variable(_v_to))
-                    if kind == SymbolKind::MethodCallbyRef =>
-                {
-                    state.cur_mir_block.command_stack.push(Command::new(
-                        OpCode::ExecuteValueMethod,
-                        vec![
-                            Arg::Method(token.into()),    // method token
-                            Arg::Type(symbol.get_type()), // return type
                             Arg::Arguments(
                                 symbol
                                     .get_args()
@@ -567,26 +629,9 @@ fn compile_compute_expr<'a>(
                         ],
                     ));
                 }
-                Some(Token::Variable(_v_to))
-                    if kind == SymbolKind::MethodCallByConsumedValue =>
-                {
-                    state.cur_mir_block.command_stack.push(Command::new(
-                        OpCode::ExecuteConsumeValueMethod,
-                        vec![
-                            Arg::Method(token.into()),    // method token
-                            Arg::Type(symbol.get_type()), // return type
-                            Arg::Arguments(
-                                symbol
-                                    .get_args()
-                                    .iter()
-                                    .map(|s| s.get_type())
-                                    .collect::<Vec<_>>(),
-                            ), // argument types and number
-                            Arg::MemPos(state.cur_mem_pos),
-                        ],
-                    ));
-                }
-                Some(Token::BuiltinType(_b_to)) => {
+                // The parent is a built-tin method, so this symbol is a 
+                // method on a built-in method.
+                Token::BuiltinType(_b_to) => {
                     state.cur_mir_block.command_stack.push(Command::new(
                         OpCode::ExecuteTypeMethod,
                         vec![
@@ -603,10 +648,20 @@ fn compile_compute_expr<'a>(
                         ],
                     ));
                 }
-                Some(Token::FieldAccess(_)) => {
-                    match symbol.get_kind() {
+                // The parent is a Field Access, this symbol is one of:
+                //
+                // a Field Access, e.g. `my_field.method()`
+                // a Method on a method, `my_method().my_method2()`
+                // a method a user-defined var, or argument, or rxtype, 
+                // or txtype, e.g. `my_var.method()`
+                // a method on a constant, e.g. `24.to_prefix_length()`
+                Token::FieldAccess(_) | Token::Method(_) | Token::Variable(_) |
+                Token::Argument(_) | Token::RxType | Token::TxType | 
+                Token::Constant(_) => {
+                    match kind {
                         SymbolKind::MethodCallbyRef => {
-                            // args: [ method_call, return_type ]
+                            // args: [ method_call, type, arguments, 
+                            //         return_type ]
                             state.cur_mir_block.command_stack.push(
                                 Command::new(
                                     OpCode::ExecuteValueMethod,
@@ -627,7 +682,8 @@ fn compile_compute_expr<'a>(
                             );
                         }
                         SymbolKind::MethodCallByConsumedValue => {
-                            // args: [ method_call, return_type ]
+                            // args: [ method_call, type, arguments,
+                            //         return_type ]
                             state.cur_mir_block.command_stack.push(
                                 Command::new(
                                     OpCode::ExecuteConsumeValueMethod,
@@ -651,71 +707,35 @@ fn compile_compute_expr<'a>(
                             panic!("PANIC!");
                         }
                     };
-                }
-                _ => {
+                },
+                Token::Term(parent_to) |
+                Token::Action(parent_to) |
+                Token::MatchAction(parent_to) => {
                     return Err(CompileError::new(format!(
                         "Invalid data source: {:?} {:?}",
-                        token, data_source_token
-                    )));
+                        token, parent_to
+                    ))); 
                 }
             };
 
             // Push the result to the stack for an (optional) next Accessor
-            //  to be used.
+            // to be used.
             state.cur_mir_block.command_stack.push(Command::new(
                 OpCode::PushStack,
                 vec![Arg::MemPos(state.cur_mem_pos)],
             ));
 
             state.cur_mem_pos += 1;
+
+            // Since we already have compiled in the arguments of this symbol
+            // we will return here, to avoind doing it again.
             return Ok(state);
         }
-        // a user-defined argument (module or term)
-        Token::Argument(arg_to) => {
-            state.cur_mir_block.command_stack.push(Command::new(
-                OpCode::ArgToMemPos,
-                vec![Arg::Argument(arg_to), Arg::MemPos(state.cur_mem_pos)],
-            ));
-        }
-        // rx instance reference
-        Token::RxType => {
-            state
-                .cur_mir_block
-                .command_stack
-                .push(Command::new(OpCode::PushStack, vec![Arg::MemPos(0)]));
-        }
-        // tx instance reference
-        Token::TxType => {
-            state
-                .cur_mir_block
-                .command_stack
-                .push(Command::new(OpCode::PushStack, vec![Arg::MemPos(1)]));
-        }
-        // a constant value (not a reference!)
-        Token::Constant(_) => {
-            let val = symbol.get_value();
-
-            state.cur_mir_block.command_stack.push(Command::new(
-                OpCode::MemPosSet,
-                vec![
-                    Arg::MemPos(state.cur_mem_pos),
-                    Arg::Constant(val.as_cloned_builtin()?),
-                ],
-            ));
-            state.cur_mir_block.command_stack.push(Command::new(
-                OpCode::PushStack,
-                vec![Arg::MemPos(state.cur_mem_pos)],
-            ));
-        }
-        // Data sources
-        Token::Table(_) | Token::Rib(_) => {
+        // built-in methods
+        Token::Method(_m) => {
             assert!(is_ar);
-
-            data_source_token = Some(token);
         }
-        // field access (can't be an access receiver)
         Token::FieldAccess(ref fa) => {
-            data_source_token = Some(token.clone());
             assert!(!is_ar);
 
             let mut args = vec![];
@@ -730,23 +750,35 @@ fn compile_compute_expr<'a>(
                 .command_stack
                 .push(Command::new(OpCode::StackOffset, args));
         }
-        Token::BuiltinType(_) => {
-            data_source_token = Some(token);
+        Token::Term(to) | Token::Action(to) | Token::MatchAction(to) => {
+            return Err(CompileError::new(format!(
+                "Invalid Token encountered in compute expression: {}",
+                to
+            )));
         }
-        Token::Term(_) => todo!(),
-        Token::Action(_) => todo!(),
-        Token::MatchAction(_) => todo!(),
     };
 
     // Arguments
 
+    // The arguments are recursively compiled, similar (but not the same!) as
+    // the argument compilation for methods. If the token of the current
+    // symbol was Method(_) then the Token::Method match pattern above
+    // already compiled the arguments and this section will be skipped.
+    //
+    // The argument compilation will *not* start with a fresh recursion.
+    // Instead it will start with the token of the access receiver
+    // and that will be passed as the parent token of the first recursion.
+    // After that the parent token will be the token of the predecessing
+    // sibling of the current symbol:
+    //
+    // (parent, argument)  : (parent token, arg1), (Token(arg1), arg2) ->
+    // (token(arg2), arg3), etc.
+
+
+    parent_token = if parent_token.is_some() { parent_token } else { symbol.get_token().ok() };
     for arg in symbol.get_args() {
-        state = compile_compute_expr(
-            arg,
-            state,
-            // var_assign_mem_pos + 1,
-            data_source_token.clone(),
-        )?;
+        state = compile_compute_expr(arg, state, parent_token)?;
+        parent_token = arg.get_token().ok();
     }
 
     Ok(state)
@@ -975,7 +1007,8 @@ fn compile_sub_action<'a>(
     mut state: CompilerState<'a>,
 ) -> Result<CompilerState<'a>, CompileError> {
     match sub_action.get_kind() {
-        SymbolKind::SubAction => {
+        // A symbol with an RxType token, should be an access receiver.
+        SymbolKind::AccessReceiver => {
             state = compile_compute_expr(sub_action, state, None)?;
             state.cur_mem_pos += 1;
         }

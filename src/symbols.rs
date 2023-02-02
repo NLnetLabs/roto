@@ -328,7 +328,6 @@ impl Symbol {
     pub(crate) fn flatten_nodes(
         &self,
     ) -> Vec<&Symbol> {
-        println!("FLATTEN {} {:?}", self.get_name(), self.get_args());
         let mut new_nodes = vec![];
         for arg in self.get_args() {
             new_nodes.extend(arg.flatten_nodes());

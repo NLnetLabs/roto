@@ -487,7 +487,7 @@ impl ast::Action {
                 scope.clone(),
             )?;
 
-            s = s.set_kind(SymbolKind::SubAction);
+            s = s.set_kind(SymbolKind::AccessReceiver);
 
             sub_actions_vec.push(s);
         }
