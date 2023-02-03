@@ -142,16 +142,14 @@ struct CompilerState<'a> {
 }
 
 #[derive(Debug, Default)]
-pub struct Compiler<'a> {
-    source_code: &'a str,
-    ast: SyntaxTree,
+pub struct Compiler {
+    pub ast: SyntaxTree,
     symbols: GlobalSymbolTable,
 }
 
-impl<'a> Compiler<'a> {
-    pub fn new(source_code: &'a str) -> Self {
+impl<'a> Compiler {
+    pub fn new() -> Self {
         Compiler {
-            source_code,
             ast: SyntaxTree::default(),
             symbols: GlobalSymbolTable::new(),
         }
@@ -161,8 +159,7 @@ impl<'a> Compiler<'a> {
         &mut self,
         source_code: &'a str,
     ) -> Result<(), VerboseError<&'a str>> {
-        self.source_code = source_code;
-        self.ast = SyntaxTree::parse_str(self.source_code)?.1;
+        self.ast = SyntaxTree::parse_str(source_code)?.1;
 
         Ok(())
     }
@@ -203,7 +200,7 @@ impl<'a> Compiler<'a> {
     pub fn build(
         source_code: &'a str,
     ) -> Vec<Result<RotoPack, CompileError>> {
-        let mut compiler = Compiler::new(source_code);
+        let mut compiler = Compiler::new();
         compiler.parse_source_code(source_code).unwrap();
         compiler.eval_ast().unwrap();
         compiler.compile()
