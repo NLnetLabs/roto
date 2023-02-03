@@ -32,7 +32,7 @@ fn main() {
     assert!(r.is_err());
 
     let mut r = LogicalExpr::parse(
-        "( blaffer.waf() in my_set ) || ( blaffer.blaf() < bop() )",
+        "( blaffer.waf().contains(my_set) ) || ( blaffer.blaf() < bop() )",
     );
     assert!(r.is_ok());
 
@@ -46,8 +46,8 @@ fn main() {
 
     r = LogicalExpr::parse(
         r###"
-        // blaffer.blaf.contains(something,"somewhat") > blaf();
-        ( bla.bla() in my_set ) || ( bla.bla() in my_other_set );
+        blaffer.blaf.contains(something,"somewhat") > blaf();
+        // ( bla.bla() in my_set ) || ( bla.bla() in my_other_set );
     "###,
     );
     println!("{:#?}", r);
@@ -150,17 +150,81 @@ fn main() {
     test_data(
         "module_1",
         r###"
-        module my_module for blaf: Route with bla: Blaffer { 
-            define { 
-                use rib bla;
+        module in-module with my_asn: Asn {
+            define for ext_r: ExtRoute with extra_asn: Asn {
+                // specify the types of that this filter receives
+                // and sends.
+                // rx_tx route: StreamRoute;
+                rx route: StreamRoute;
+                tx ext_route: ExtRoute;
+
+                // specify additional external data sets that will be consulted.
+                use table source_asns;
+
+                // syntactically correct, but semantically wrong: these
+                // identifiers are not defined.
+                // bullshitter = a.b.c.d(x,y,z).e.f(o.p()).g;
+
+                my_false = false;
             }
-            term my_term {
-                match { bazooka; }
+        
+            term rov-valid for route: Route {
+                match {
+                    found_prefix_pref == route.local-pref;  
+                }
+            }
+
+            term on-my-terms for route: Route {
+                match {
+                    my_false;
+                }
+            }
+           
+            action set-best {
+               route.origin.set(AS300);
+            }
+
+            action set-rov-invalid-asn-community {
+                route.community.push(ROV_INVALID_AS);
+            }
+
+            apply {
+                use best-path;
+                filter exactly-one rov-valid matching { 
+                    set-best; 
+                    set-rov-invalid-asn-community; 
+                    return accept; 
+                };
+                return accept;
             }
         }
 
         // comment
-        rib unrib contains Blaffer { blaffer: Blaf }
+        rib rib-extra contains ExtRoute { 
+            blaffer: U32, 
+            blooper: Prefix,
+            blixer: { 
+                bla: U8, 
+                salt: { 
+                    pp: Prefix 
+                } 
+            }  
+        }
+
+        table source_asns contains AsnLines { 
+            asn: Asn
+        }
+
+        // yo, rib
+        rib rib-rov contains StreamRoute {
+            prefix: Prefix, // this is shit: it's the key
+            as-path: AsPath,
+            origin: Asn,
+            next-hop: IpAddress,
+            med: U32,
+            local-pref: U32,
+            community: [Community]
+        }
         "###,
         true,
     );
@@ -267,8 +331,10 @@ fn main() {
         r###"
             module my_module for route_in: Route with bla: Blaffer {
                define {
-                   use rib bla;
-                   bla = bla4(Bla);
+                    rx route: StreamRoute;
+                    tx ext_route: ExtRoute;
+                    use rib bla;
+                    bla = bla4(Bla);
                }
             
                term blaffer_filter {

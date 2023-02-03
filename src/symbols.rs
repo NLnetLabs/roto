@@ -338,15 +338,35 @@ impl PartialEq for Symbol {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum SymbolKind {
-    // assigment symbols
+    // Assigment Symbols
     VariableAssignment, // A variable defined by the user
 
     // assigment+access receiver symbols
     // these symbols are used both for assignment and as
     // root access receivers.
     Constant, // A literal value or a module-level variable
-    RxType,   // type of the incoming payload
-    TxType,   // type of the outgoing payload
+
+    // Rx and Tx Types
+    // The payload can be a mutable type, that comes in at the input of the
+    // VM, and is mutated. In that case there is no separate Rx and Tx types:
+    // they have to be the same type. These two types are the indicators for
+    // that situation.
+    PassThroughRxType, // type of the mutatable incoming payload
+    PassThroughTxType, // type of the mutable outgoing payload (== incoming
+                       // type)
+    // The incoming and outgoing are separate types, this means that the
+    // incoming payload is *not* mutated, but instead a new outgoing, empty
+    // payload of the SplitTxType is created and filled by the specified
+    // filter.
+    // Note: this has the effect that specifying a `rx_tx: Route` results in
+    // a different outgoing payload that specifying `rx: Route; tx: Route`.
+    // In the first case, the incoming payload is mutated, that means that
+    // fields in the Route instance that are left alone by the filter will be
+    // there unchanged in the outgoing payload. In the second case only the
+    // fields that are filled by the filter will have a (non-default) value.
+    SplitRxType,   // type of the incoming payload
+    SplitTxType,   // type of the outgoing payload
+
     // data sources access receivers
     Rib,
     Table,
@@ -651,6 +671,10 @@ impl SymbolTable {
             key.clone()
         };
 
+        if key.as_str() == "route" { 
+            println!("k {} n {} k {:?} t {} a {:?} v {} ", key, name, kind, ty, args, value);
+        }
+
         if self.arguments.contains_key(&name) {
             return Err(format!(
                 "Symbol {} already defined in scope {}",
@@ -662,16 +686,18 @@ impl SymbolTable {
         let token_int = self.arguments.len();
 
         let token = match kind {
-            SymbolKind::RxType => Some(Token::RxType),
-            SymbolKind::TxType => Some(Token::TxType),
+            SymbolKind::SplitRxType => Some(Token::RxType),
+            SymbolKind::SplitTxType => Some(Token::TxType),
+            SymbolKind::PassThroughRxType => Some(Token::RxType),
+            SymbolKind::PassThroughTxType => Some(Token::TxType),
             _ => Some(Token::Argument(token_int)),
         };
 
         match kind {
-            SymbolKind::RxType => {
+            SymbolKind::SplitRxType => {
                 self.rx_type = Symbol::new(name, kind, ty, args, token);
             }
-            SymbolKind::TxType => {
+            SymbolKind::SplitTxType => {
                 self.tx_type = Some(Symbol::new(name, kind, ty, args, token));
             }
             _ => {

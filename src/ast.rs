@@ -237,63 +237,78 @@ impl Define {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum RxTxType {
+    Split(TypeIdentField, TypeIdentField),
+    PassThrough(TypeIdentField),
+}
+
 //------------ DefineBody ---------------------------------------------------
 
 // DefineBody ::=
-//     (( 'use' Identifier ';' )? ( Identifier '=' ComputeExpr ';' )+ )+
+//     (( 'use' Identifier ';' )? 
+//     (('rx' Identifier ':' TypeIdentifier ';') ('tx' Identifier ':' TypeIdentifier ';')) | 
+//     ( 'rx_tx' Identifier ':' TypeIdentifier ';' ))?
+//     ( Identifier '=' ComputeExpr ';' )+ )+
 
 #[derive(Clone, Debug)]
 pub struct DefineBody {
-    pub rx_type: TypeIdentField,
-    pub tx_type: TypeIdentField,
+    pub rx_tx_type: RxTxType,
     pub use_ext_data: Vec<(Identifier, Identifier)>,
     pub assignments: Vec<(Identifier, ValueExpr)>,
 }
 
 impl DefineBody {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, ((rx_type, tx_type), use_ext_data, assignments)) =
-            tuple((
-                permutation((
-                    cut(delimited(
-                        opt_ws(tag("rx")),
+        let (input, (rx_tx_type, use_ext_data, assignments)) = tuple((
+            alt((
+                map(
+                    delimited(
+                        opt_ws(tag("rx_tx")),
                         opt_ws(TypeIdentField::parse),
                         opt_ws(char(';')),
-                    )),
-                    cut(delimited(
-                        opt_ws(tag("tx")),
-                        opt_ws(TypeIdentField::parse),
-                        opt_ws(char(';')),
-                    )),
-                )),
-                many1(delimited(
-                    opt_ws(tag("use")),
-                    tuple((
-                        opt_ws(Identifier::parse),
-                        opt_ws(Identifier::parse),
-                    )),
-                    opt_ws(char(';')),
-                )),
-                many1(context(
-                    "assignments",
-                    separated_pair(
-                        opt_ws(Identifier::parse),
-                        preceded(multispace0, char('=')),
-                        terminated(
-                            opt_ws(ValueExpr::parse),
+                    ),
+                RxTxType::PassThrough,
+                ),
+                map(
+                    permutation((
+                        delimited(
+                            opt_ws(tag("rx")),
+                            opt_ws(TypeIdentField::parse),
                             opt_ws(char(';')),
                         ),
-                    ),
-                )),
-            ))(input)?;
+                        delimited(
+                            opt_ws(tag("tx")),
+                            opt_ws(TypeIdentField::parse),
+                            opt_ws(char(';')),
+                        ),
+                    )),
+                    |t| RxTxType::Split(t.0, t.1),
+                )
+            )),
+            many0(delimited(
+                opt_ws(tag("use")),
+                tuple((opt_ws(Identifier::parse), opt_ws(Identifier::parse))),
+                opt_ws(char(';')),
+            )),
+            many0(context(
+                "assignments",
+                separated_pair(
+                    opt_ws(Identifier::parse),
+                    preceded(multispace0, char('=')),
+                    terminated(opt_ws(ValueExpr::parse), opt_ws(char(';'))),
+                ),
+            )),
+        ))(
+            input
+        )?;
 
         // let (use_ext_data, assignments) = statements.iter().cloned().unzip();
 
         Ok((
             input,
             Self {
-                rx_type,
-                tx_type,
+                rx_tx_type,
                 use_ext_data,
                 assignments,
             },
@@ -1403,7 +1418,7 @@ impl std::fmt::Display for AcceptReject {
         match self {
             AcceptReject::Accept => write!(f, "accept"),
             AcceptReject::NoReturn => write!(f, "no return"),
-            AcceptReject::Reject => write!(f, "reject")
+            AcceptReject::Reject => write!(f, "reject"),
         }
     }
 }

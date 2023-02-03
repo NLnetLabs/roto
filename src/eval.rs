@@ -367,10 +367,22 @@ impl ast::Define {
         // The default input-argument is defined by the 'rx' keyword in the
         // `define` section. This the argument that holds the payload at
         // runtime.
+        let rx_kind;
+        let rx_type = match &self.body.rx_tx_type {
+            ast::RxTxType::Split(rx_type, _tx_type) => { 
+                rx_kind = SymbolKind::SplitRxType;
+                rx_type 
+            }
+            ast::RxTxType::PassThrough(rx_tx_type) => { 
+                rx_kind = SymbolKind::PassThroughRxType;
+                rx_tx_type
+            }
+        };
+
         declare_argument(
-            self.body.rx_type.field_name.ident.clone(),
-            self.body.rx_type.clone(),
-            symbols::SymbolKind::RxType,
+            rx_type.field_name.ident.clone(),
+            rx_type.clone(),
+            rx_kind,
             symbols.clone(),
             &scope,
         )?;
@@ -379,10 +391,21 @@ impl ast::Define {
         // 'define' section. This is the argument that will be created by
         // this filter-module on each run. We start with an empty record of
         // the specified type.
+        let tx_kind;
+        let tx_type = match &self.body.rx_tx_type {
+            ast::RxTxType::Split(_rx_type, tx_type) => { 
+                tx_kind = SymbolKind::SplitTxType;
+                tx_type 
+            }
+            ast::RxTxType::PassThrough(rx_tx_type) => { 
+                tx_kind = SymbolKind::PassThroughRxType;
+                rx_tx_type
+            }
+        };
         declare_argument(
-            self.body.tx_type.field_name.ident.clone(),
-            self.body.tx_type.clone(),
-            symbols::SymbolKind::TxType,
+            tx_type.field_name.ident.clone(),
+            tx_type.clone(),
+            tx_kind,
             symbols.clone(),
             &scope,
         )?;
@@ -474,7 +497,7 @@ impl ast::Action {
                     )
                 })?;
 
-            if !(s.get_kind() == symbols::SymbolKind::RxType) {
+            if !(s.get_kind() == symbols::SymbolKind::SplitRxType) {
                 return Err(format!(
                     "variable '{}' is not the rx type of {}",
                     payload_var_name.ident, scope
