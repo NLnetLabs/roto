@@ -31,20 +31,21 @@ fn test_source_code_eval(
 ) -> Result<(), CompileError> {
     println!("test eval {}", name);
     let mut compiler = Compiler::new();
-    compiler.parse_source_code(source_code).unwrap();
-    match compiler.eval_ast() {
-        Err(e) => {
-            println!("{}", e);
-        }
-        Ok(_res) => {
-            match expect_success {
-                false => panic!("Source Code was successfully compiled, however an invalid result was requested."),
-                true => {}
-            };
-        }
+    let parse_tree = test_source_code_parse(name, source_code, expect_success);
+
+     match expect_success {
+        false => assert!(parse_tree.is_err()),
+        true => assert!(parse_tree.is_ok()),
+    };
+
+    let eval_res = compiler.eval_ast();
+
+    match expect_success {
+        false => assert!(eval_res.is_err()),
+        true => assert!(eval_res.is_ok())
     }
 
-    Ok(())
+    eval_res
 }
 
 #[test]
