@@ -351,9 +351,7 @@ pub enum SymbolKind {
     // VM, and is mutated. In that case there is no separate Rx and Tx types:
     // they have to be the same type. These two types are the indicators for
     // that situation.
-    PassThroughRxType, // type of the mutatable incoming payload
-    PassThroughTxType, // type of the mutable outgoing payload (== incoming
-                       // type)
+    PassThroughRxTxType, // type of the mutatable incoming & outgoing payload
     // The incoming and outgoing are separate types, this means that the
     // incoming payload is *not* mutated, but instead a new outgoing, empty
     // payload of the SplitTxType is created and filled by the specified
@@ -688,13 +686,12 @@ impl SymbolTable {
         let token = match kind {
             SymbolKind::SplitRxType => Some(Token::RxType),
             SymbolKind::SplitTxType => Some(Token::TxType),
-            SymbolKind::PassThroughRxType => Some(Token::RxType),
-            SymbolKind::PassThroughTxType => Some(Token::TxType),
+            SymbolKind::PassThroughRxTxType => Some(Token::RxType),
             _ => Some(Token::Argument(token_int)),
         };
 
         match kind {
-            SymbolKind::SplitRxType => {
+            SymbolKind::SplitRxType | SymbolKind::PassThroughRxTxType => {
                 self.rx_type = Symbol::new(name, kind, ty, args, token);
             }
             SymbolKind::SplitTxType => {

@@ -369,12 +369,12 @@ impl ast::Define {
         // runtime.
         let rx_kind;
         let rx_type = match &self.body.rx_tx_type {
-            ast::RxTxType::Split(rx_type, _tx_type) => { 
+            ast::RxTxType::Split(rx_type, _tx_type) => {
                 rx_kind = SymbolKind::SplitRxType;
-                rx_type 
+                rx_type
             }
-            ast::RxTxType::PassThrough(rx_tx_type) => { 
-                rx_kind = SymbolKind::PassThroughRxType;
+            ast::RxTxType::PassThrough(rx_tx_type) => {
+                rx_kind = SymbolKind::PassThroughRxTxType;
                 rx_tx_type
             }
         };
@@ -392,23 +392,26 @@ impl ast::Define {
         // this filter-module on each run. We start with an empty record of
         // the specified type.
         let tx_kind;
-        let tx_type = match &self.body.rx_tx_type {
-            ast::RxTxType::Split(_rx_type, tx_type) => { 
+        match &self.body.rx_tx_type {
+            ast::RxTxType::Split(_rx_type, tx_type) => {
                 tx_kind = SymbolKind::SplitTxType;
-                tx_type 
+                declare_argument(
+                    tx_type.field_name.ident.clone(),
+                    tx_type.clone(),
+                    tx_kind,
+                    symbols.clone(),
+                    &scope,
+                )?;
             }
-            ast::RxTxType::PassThrough(rx_tx_type) => { 
-                tx_kind = SymbolKind::PassThroughRxType;
-                rx_tx_type
+            ast::RxTxType::PassThrough(rx_tx_type) => {
+                assert!(check_type_identifier(
+                    rx_tx_type.ty.clone(),
+                    symbols.clone(),
+                    &scope
+                )
+                .is_ok());
             }
         };
-        declare_argument(
-            tx_type.field_name.ident.clone(),
-            tx_type.clone(),
-            tx_kind,
-            symbols.clone(),
-            &scope,
-        )?;
 
         for assignment in &self.body.assignments {
             // rhs part of the assignment can only be an Argument Expression.
@@ -485,7 +488,7 @@ impl ast::Action {
         for call_expr in &self.body.expressions {
             // The incoming payload variable is the only variable that can be
             // used in the 'action' section. The incoming payload variable has
-            // a SymolKind::RxType.
+            // either SymolKind::SplitRxType/SplitTxType OR PassthroughRxTxType.
             let payload_var_name = call_expr.get_receiver().clone().ident;
 
             let s = module_symbols
@@ -497,7 +500,10 @@ impl ast::Action {
                     )
                 })?;
 
-            if !(s.get_kind() == symbols::SymbolKind::SplitRxType) {
+            if !(s.get_kind() == symbols::SymbolKind::SplitRxType)
+                && !(s.get_kind() == symbols::SymbolKind::SplitTxType)
+                && !(s.get_kind() == symbols::SymbolKind::PassThroughRxTxType)
+            {
                 return Err(format!(
                     "variable '{}' is not the rx type of {}",
                     payload_var_name.ident, scope
@@ -712,7 +718,8 @@ impl ast::ComputeExpr {
                     s.add_arg(child_s);
                 }
                 ast::AccessExpr::FieldAccessExpr(field_access) => {
-                    // println!("symbol already has args {:?}", s.get_args());
+                    println!("symbol (s) {:#?}", s);
+                    println!("{:#?}", symbols.borrow().get(&scope));
                     let child_s = field_access.eval(ty)?;
                     let (_k, _ty, _to) = child_s.get_kind_type_and_token()?;
                     let i = s.add_arg(child_s);
@@ -1021,6 +1028,7 @@ impl ast::FieldAccessExpr {
         &self,
         field_type: TypeDef,
     ) -> Result<symbols::Symbol, CompileError> {
+        println!("yolo field access {}", field_type);
         if let Ok((ty, to)) = field_type.has_fields_chain(&self.field_names) {
             let name = self.field_names.join(".");
 
