@@ -1534,7 +1534,7 @@ pub enum AccessExpr {
 }
 
 impl AccessExpr {
-    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         alt((
             map(MethodComputeExpr::parse, AccessExpr::MethodComputeExpr),
             map(FieldAccessExpr::parse, AccessExpr::FieldAccessExpr),
