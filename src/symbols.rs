@@ -300,14 +300,6 @@ impl Symbol {
 
         new_nodes
     }
-
-    pub(crate) fn follow_last_leaf(&self) -> &Symbol {
-        if self.args.is_empty() {
-            self
-        } else {
-            self.args.last().unwrap() //.follow_last_leaf()
-        }
-    }
 }
 
 impl std::cmp::PartialOrd for Symbol {
@@ -550,6 +542,8 @@ impl Default for GlobalSymbolTable {
 }
 
 pub(crate) struct DepsGraph<'a> {
+    pub(crate) rx_type: Option<(ShortString, TypeDef)>,
+    pub(crate) tx_type: Option<(ShortString, TypeDef)>,
     pub(crate) used_variables: Vec<(ShortString, &'a Symbol)>,
     pub(crate) used_arguments: Vec<(ShortString, &'a Symbol)>,
     pub(crate) used_data_sources: Vec<(ShortString, &'a Symbol)>,
@@ -904,11 +898,7 @@ impl SymbolTable {
     pub(crate) fn create_deps_graph(
         &self,
     ) -> Result<
-        (
-            (ShortString, TypeDef),         // rx type
-            Option<(ShortString, TypeDef)>, // tx type
             DepsGraph, // (variables, arguments, data sources)
-        ),
         CompileError,
     > {
         // First, go over all the terms and see which variables, arguments
@@ -920,9 +910,12 @@ impl SymbolTable {
         }
 
         let DepsGraph {
+            // rx_type,
+            // tx_type,
             mut used_variables,
             mut used_arguments,
             mut used_data_sources,
+            ..
         } = self._partition_deps_graph(deps_vec).map_err(|_e| {
             CompileError::new(
                 "can't create dependencies graph for terms".into(),
@@ -942,6 +935,7 @@ impl SymbolTable {
             used_variables: vars_vars,
             used_arguments: vars_args,
             used_data_sources: vars_data_sources,
+            ..
         } = self._partition_deps_graph(vars_deps_vec).map_err(|_e| {
             CompileError::new(
                 "can't create dependencies graph for variables".into(),
@@ -961,15 +955,15 @@ impl SymbolTable {
             col.dedup_by(|a, b| a.1.eq(b.1));
         }
 
-        Ok((
-            (self.rx_type.get_name(), self.rx_type.get_type()),
-            self.tx_type.as_ref().map(|s| (s.get_name(), s.get_type())),
+        Ok(
             DepsGraph {
+                rx_type: Some((self.rx_type.get_name(), self.rx_type.get_type())),
+                tx_type: self.tx_type.as_ref().map(|s| (s.get_name(), s.get_type())),
                 used_variables,
                 used_arguments,
                 used_data_sources,
             },
-        ))
+        )
     }
 
     fn _partition_deps_graph<'a>(
@@ -1019,6 +1013,8 @@ impl SymbolTable {
         );
 
         Ok(DepsGraph {
+            rx_type: None,
+            tx_type: None,
             used_arguments: args_vec,
             used_variables: vars_vec,
             used_data_sources: data_sources_vec,

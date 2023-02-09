@@ -645,7 +645,7 @@ impl ast::ApplyScope {
 
 //------------ ComputeExpr --------------------------------------------------
 
-// An Expression that computes a return value based on the AccessReceiver,
+// An expression that computes a return value based on the AccessReceiver,
 // (the `receiver` field), the root of the expression and its arguments
 // (`args` field). Each argument is a dot-divided part of the expression.
 // A compute expression may have an arbitrary number of arguments, e.g.
@@ -684,45 +684,48 @@ impl ast::ComputeExpr {
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, CompileError> {
-        let mut symbol =
+        let mut ar_symbol =
             self.get_receiver().eval(symbols.clone(), scope.clone())?;
 
-        let token = symbol.get_token().unwrap();
-        let mut s = &mut symbol;
+        let ar_token = ar_symbol.get_token().unwrap();
+        let mut s = &mut ar_symbol;
 
         println!("ACCESS EXPRESSION {:#?}", self.access_expr);
+
+        // Use the type the access receiver to put on the arguments.
+        let mut ty = match ar_token {
+            Token::Table(_) => TypeDef::Table(Box::new(s.get_type())),
+            Token::Rib(_) => TypeDef::Rib(Box::new(s.get_type())),
+            _ => s.get_type(),
+        };
+
         for a_e in &self.access_expr {
-            // Data sources are different from other access receivers: their
-            // methods come from the data source (the container), not
-            // from the type contained in the data source. They don't have
-            // field access.
-            let ty = match token {
-                Token::Table(_) => TypeDef::Table(Box::new(s.get_type())),
-                Token::Rib(_) => TypeDef::Rib(Box::new(s.get_type())),
-                _ => s.get_type(),
-            };
 
             match a_e {
                 ast::AccessExpr::MethodComputeExpr(method_call) => {
-                    println!("symbol (s) {:#?}", s);
-                    println!("{:#?}", symbols.borrow().get(&scope));
-                    let child_s = method_call.eval(
+                    println!("MC symbol (s) {:#?}", s);
+                    println!("All Symbols {:#?}", symbols.borrow().get(&scope));
+                    println!("method call {:?} on type {}", method_call, ty);
+                    let arg_s = method_call.eval(
                         // At this stage we don't know really whether the
                         // method call will be mutating or not, but we're
-                        // setting the safe choice here.
+                        // setting the safe choice here (non-mutable).
                         symbols::SymbolKind::MethodCallbyRef,
                         ty,
                         symbols.clone(),
                         scope.clone(),
                     )?;
-                    s.add_arg(child_s);
+                    // propagate the type of this argument to a possible next one
+                    ty = arg_s.get_type();
+                    s.add_arg(arg_s);
                 }
                 ast::AccessExpr::FieldAccessExpr(field_access) => {
-                    println!("symbol (s) {:#?}", s);
-                    println!("{:#?}", symbols.borrow().get(&scope));
-                    let child_s = field_access.eval(ty)?;
-                    let (_k, _ty, _to) = child_s.get_kind_type_and_token()?;
-                    let i = s.add_arg(child_s);
+                    println!("FA symbol (s) {:#?}", s);
+                    println!("all symbols in module table {:#?}", symbols.borrow().get(&scope));
+                    let arg_s = field_access.eval(ty)?;
+                    // propagate the type of this argument to a possible next one
+                    ty = arg_s.get_type();
+                    let i = s.add_arg(arg_s);
                     println!("symbol -> {:#?}", s);
                     s = &mut s.get_args_mut()[i];
                 }
@@ -730,18 +733,10 @@ impl ast::ComputeExpr {
         }
 
         // The return type of a compute expression is propagated from the
-        // last argument to its parent, except for method calls, which get to
-        // keep their own return type.
-        let s_type = match s.get_kind() {
-            SymbolKind::BuiltInTypeMethodCall
-            | SymbolKind::MethodCallByConsumedValue
-            | SymbolKind::MethodCallbyRef
-            | SymbolKind::GlobalMethodCall => s.get_type(),
-            _ => s.follow_last_leaf().get_type(),
-        };
+        // last argument to its parent, the access receiver symbol.
 
-        symbol = symbol.set_type(s_type).set_name(name).set_token(token);
-        Ok(symbol)
+        ar_symbol = ar_symbol.set_type(ty).set_name(name).set_token(ar_token);
+        Ok(ar_symbol)
     }
 }
 
@@ -911,8 +906,8 @@ impl ast::ValueExpr {
             // an expression ending in a a method call (e.g. `foo.bar()`).
             // Note that the evaluation of the method call will check for
             // the existence of the method.
-            ast::ValueExpr::ComputeExpr(call_expr) => call_expr.eval(
-                call_expr.get_receiver().ident.ident,
+            ast::ValueExpr::ComputeExpr(compute_expr) => compute_expr.eval(
+                compute_expr.get_receiver().ident.ident,
                 symbols,
                 scope,
             ),

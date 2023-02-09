@@ -88,7 +88,30 @@ fn test_module_garbage_1() {
 }
 
 #[test]
-fn test_module_1() {
+fn test_module_00() {
+    let mut _compiler = TestCompiler::create(
+        "module_1",
+        r###"
+        module in-module {
+            define {
+                rx_tx route: Route;
+            }
+
+            term on-my-terms {
+                match {
+                    route.as_path().origin() == AS211321;
+                }
+            }
+        }
+        "###,
+    )
+    .test_parse(true)
+    .test_eval(true)
+    .test_compile(true);
+}
+
+#[test]
+fn test_module_20() {
     let mut _compiler = TestCompiler::create(
         "module_1",
         r###"
@@ -116,7 +139,7 @@ fn test_module_1() {
 }
 
 #[test]
-fn test_module_2() {
+fn test_module_30() {
     let _compiler = TestCompiler::create(
         "module_1",
         r###"
