@@ -12,7 +12,7 @@ use super::{
     builtin::{
         AsPath, Asn, Boolean, BuiltinTypeValue, Community, HexLiteral,
         IntegerLiteral, IpAddress, Prefix, PrefixLength, StringLiteral, U32,
-        U8,
+        U8, Route,
     },
     collections::{ElementTypeValue, List, Record},
     datasources::{Rib, Table},
@@ -612,6 +612,9 @@ impl<'a> From<&'a TypeDef> for TypeValue {
             ),
             TypeDef::Boolean => {
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None)))
+            }
+            TypeDef::Route => {
+                TypeValue::Builtin(BuiltinTypeValue::Route(Route::new()))
             }
             TypeDef::List(ty) => TypeValue::List(ty.as_ref().into()),
             TypeDef::Record(kv_list) => {

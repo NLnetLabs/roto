@@ -6,7 +6,6 @@ use crate::{
     ast::ShortString,
     compile::CompileError,
     traits::{MethodProps, RotoFilter, Token, TokenConvert},
-    types::builtin::Prefix,
     vm::{StackRefPos, VmError},
 };
 
