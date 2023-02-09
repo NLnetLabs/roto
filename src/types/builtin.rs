@@ -2143,11 +2143,18 @@ impl From<AsPathToken> for usize {
 
 // Generic RFC4271 Route type, that can be parsed with routecore.
 
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub struct Route {
+#[derive(Debug, Eq, PartialEq, Clone, Default)]
+pub struct 
+Route {
     pub prefix: Option<Prefix>,
     pub bgp: Option<BgpAttributes>,
     pub status: RouteStatus,
+}
+
+impl Route {
+    pub fn new() -> Self {
+        Route { prefix: None, bgp: None, status: RouteStatus::Empty }
+    }
 }
 
 impl RotoFilter for Route {
@@ -2300,13 +2307,14 @@ impl Payload for Route {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
 pub enum RouteStatus {
     InConvergence, // Between start and EOR on a BGP peer-session
     UpToDate, // After EOR for a BGP peer-session, either Graceful Restart or EOR
     Stale,    // After hold-timer expiry
     StartOfRouteRefresh, // After the request for a Route Refresh to a peer and the reception of a new route
     Withdrawn,           // After the reception of a withdrawal
+    #[default]
     Empty, // Status not relevant, e.g. a RIB that holds archived routes.
 }
 
