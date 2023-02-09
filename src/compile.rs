@@ -357,15 +357,15 @@ fn compile_module(
 ) -> Result<RotoPack, CompileError> {
     println!("SYMBOL MAP\n{:#?}", module);
 
-    let (
-        _rx_type,
-        _tx_type,
+    let
         DepsGraph {
+            rx_type,
+            tx_type,
             used_arguments,
             used_variables,
             used_data_sources,
-        },
-    ) = module.create_deps_graph()?;
+        }
+     = module.create_deps_graph()?;
 
     let mut state = CompilerState {
         cur_module: module,
@@ -399,6 +399,10 @@ fn compile_module(
     state.used_data_sources.iter().for_each(|t| {
         println!("{:?} {:?}", t.1.get_token().unwrap(), t.0);
     });
+
+    println!("___rx tx types");
+    println!("Rx {:?}", rx_type);
+    println!("Tx {:?}", tx_type);
 
     println!("=================================================");
 
