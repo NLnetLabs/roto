@@ -3,8 +3,7 @@ use std::cell::RefCell;
 use roto::compile::Compiler;
 
 use roto::types::builtin::{
-    self, AsPath, Asn, BuiltinTypeValue, Community,
-    CommunityType, U32,
+    self, AsPath, Asn, BuiltinTypeValue, Community, U32,
 };
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
@@ -56,7 +55,7 @@ fn test_data(
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            Community::new(CommunityType::Standard).into(),
+            Community::new().into(),
         )]));
 
     let my_comms_type =

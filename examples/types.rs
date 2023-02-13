@@ -1,5 +1,5 @@
 use roto::types::builtin::{
-    AsPath, Asn, BuiltinTypeValue, Community, CommunityType, U32,
+    AsPath, Asn, BuiltinTypeValue, Community, U32,
 };
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
@@ -45,9 +45,7 @@ fn main() {
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            Community::new(
-                CommunityType::Standard,
-            ).into()
+            Community::new().into()
         )]));
 
     let my_comms_type =
