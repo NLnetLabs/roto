@@ -9,10 +9,10 @@ use crate::types::collections::ElementTypeValue;
 use crate::types::datasources::NamedTypeDef;
 use crate::{
     ast::{AcceptReject, ShortString},
-    traits::{MethodProps, RotoFilter},
+    traits::{MethodProps, RotoType},
 };
 
-use super::builtin::{AsPath, Asn, IpAddress, Prefix, Route, U32};
+use super::builtin::{AsPath, Asn, IpAddress, Prefix, Route, U32, RawRouteDelta};
 use super::collections::Record;
 use super::datasources::{Rib, Table};
 use super::{
@@ -181,8 +181,8 @@ impl TypeDef {
             TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) => {
                 ip.get_props_for_method(method)
             }
-            TypeValue::Builtin(BuiltinTypeValue::Route(route)) => {
-                route.get_props_for_method(method)
+            TypeValue::Builtin(BuiltinTypeValue::Route(_route)) => {
+                RawRouteDelta::get_props_for_method_static(method)
             }
             TypeValue::Rib(rib) => rib.get_props_for_method(method),
             TypeValue::Table(table) => table.get_props_for_method(method),
@@ -232,7 +232,7 @@ impl TypeDef {
                     .unwrap()()
             }
             TypeDef::Route => {
-                Route::exec_type_method(method_token, args, return_type)
+                RawRouteDelta::exec_type_method(method_token, args, return_type)
                     .unwrap()()
             }
             TypeDef::Rib(_rib) => {

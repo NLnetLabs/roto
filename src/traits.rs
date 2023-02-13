@@ -103,7 +103,7 @@ impl MethodProps {
     }
 }
 
-pub(crate) trait RotoFilter
+pub(crate) trait RotoType
 where
     Self: std::fmt::Debug,
 {

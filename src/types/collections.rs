@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 
 use crate::ast::ShortString;
 use crate::compile::CompileError;
-use crate::traits::{MethodProps, RotoFilter, TokenConvert};
+use crate::traits::{MethodProps, RotoType, TokenConvert};
 use crate::vm::{Payload, VmError};
 
 use super::builtin::{
@@ -216,7 +216,7 @@ impl std::fmt::Display for List {
     }
 }
 
-impl RotoFilter for List {
+impl RotoType for List {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -477,7 +477,7 @@ impl Display for Record {
     }
 }
 
-impl RotoFilter for Record {
+impl RotoType for Record {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,

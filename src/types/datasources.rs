@@ -5,7 +5,7 @@
 use crate::{
     ast::ShortString,
     compile::CompileError,
-    traits::{MethodProps, RotoFilter, Token, TokenConvert},
+    traits::{MethodProps, RotoType, Token, TokenConvert},
     vm::{StackRefPos, VmError},
 };
 
@@ -77,7 +77,7 @@ impl Rib {
     }
 }
 
-impl RotoFilter for Rib {
+impl RotoType for Rib {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -279,7 +279,7 @@ impl Table {
     }
 }
 
-impl RotoFilter for Table {
+impl RotoType for Table {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,

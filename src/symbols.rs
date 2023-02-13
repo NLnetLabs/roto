@@ -10,7 +10,7 @@ use std::{
 use crate::{
     ast::{AcceptReject, CompareOp, ShortString},
     compile::CompileError,
-    traits::{RotoFilter, Token},
+    traits::{RotoType, Token},
     types::{
         builtin::BuiltinTypeValue, typedef::TypeDef, typevalue::TypeValue,
     },

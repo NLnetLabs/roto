@@ -4,7 +4,7 @@ use std::{cmp::Ordering, fmt::Display};
 use crate::{
     ast::ShortString,
     compile::CompileError,
-    traits::RotoFilter,
+    traits::RotoType,
     vm::{StackRef, StackRefPos, VmError},
 };
 
