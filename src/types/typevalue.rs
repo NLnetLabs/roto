@@ -12,7 +12,7 @@ use super::{
     builtin::{
         AsPath, Asn, Boolean, BuiltinTypeValue, Community, HexLiteral,
         IntegerLiteral, IpAddress, Prefix, PrefixLength, StringLiteral, U32,
-        U8, Route,
+        U8,
     },
     collections::{ElementTypeValue, List, Record},
     datasources::{Rib, Table},
@@ -198,8 +198,11 @@ impl TypeValue {
             TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) => {
                 ip.exec_value_method(method_token, args, return_type)
             }
-            TypeValue::Builtin(BuiltinTypeValue::Route(route)) => {
+            TypeValue::Builtin(BuiltinTypeValue::Route(Some(route))) => {
                 route.exec_value_method(method_token, args, return_type)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::Route(None)) => {
+                Err(VmError::InvalidValueType)
             }
             TypeValue::Builtin(BuiltinTypeValue::Community(community)) => {
                 community.exec_value_method(method_token, args, return_type)
@@ -277,8 +280,11 @@ pub(crate) fn exec_consume_value_method<'a>(
         TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) => {
             ip.exec_consume_value_method(method_token, args, return_type)
         }
-        TypeValue::Builtin(BuiltinTypeValue::Route(route)) => {
+        TypeValue::Builtin(BuiltinTypeValue::Route(Some(route))) => {
             route.exec_consume_value_method(method_token, args, return_type)
+        }
+        TypeValue::Builtin(BuiltinTypeValue::Route(None)) => {
+            Err(VmError::InvalidValueType)
         }
         TypeValue::Builtin(BuiltinTypeValue::Community(community)) => {
             community.exec_consume_value_method(method_token, args, return_type)
@@ -289,7 +295,6 @@ pub(crate) fn exec_consume_value_method<'a>(
         TypeValue::Builtin(BuiltinTypeValue::Boolean(boolean)) => {
             boolean.exec_consume_value_method(method_token, args, return_type)
         }
-
         TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
             prefix_length,
         )) => prefix_length.exec_consume_value_method(
@@ -614,7 +619,7 @@ impl<'a> From<&'a TypeDef> for TypeValue {
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None)))
             }
             TypeDef::Route => {
-                TypeValue::Builtin(BuiltinTypeValue::Route(Route::new()))
+                TypeValue::Builtin(BuiltinTypeValue::Route(None))
             }
             TypeDef::List(ty) => TypeValue::List(ty.as_ref().into()),
             TypeDef::Record(kv_list) => {
