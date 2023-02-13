@@ -1,6 +1,3 @@
-//------------ BuiltinTypeValue -------------------------------------------
-
-// The built-in types
 
 use std::fmt::{Display, Formatter};
 
@@ -8,362 +5,13 @@ use routecore::asn::LongSegmentError;
 
 use crate::ast::ShortString;
 use crate::compile::CompileError;
-use crate::traits::{MethodProps, RotoFilter, TokenConvert};
-use crate::vm::{Payload, VmError};
+use crate::traits::{MethodProps, RotoType, TokenConvert};
+use crate::vm::VmError;
 
-use super::collections::Record;
-use super::typedef::TypeDef;
-use super::typevalue::TypeValue;
-
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub enum BuiltinTypeValue {
-    U32(U32),
-    U8(U8),
-    IntegerLiteral(IntegerLiteral),
-    StringLiteral(StringLiteral),
-    Prefix(Prefix),
-    PrefixLength(PrefixLength),
-    Community(Community),
-    IpAddress(IpAddress),
-    Asn(Asn),
-    AsPath(AsPath),
-    Route(Route),
-    RouteStatus(RouteStatus),
-    Boolean(Boolean),
-    HexLiteral(HexLiteral),
-}
-
-impl BuiltinTypeValue {
-    // pub fn get_type_name(&self) -> &'static str {
-    //     match self {
-    //         BuiltinTypeValue::U32(_) => "U32",
-    //         BuiltinTypeValue::U8(_) => "U8",
-    //         BuiltinTypeValue::IntegerLiteral(_) => "IntegerLiteral",
-    //         BuiltinTypeValue::StringLiteral(_) => "StringLiteral",
-    //         BuiltinTypeValue::Boolean(_) => "Boolean",
-    //         BuiltinTypeValue::Prefix(_) => "Prefix",
-    //         BuiltinTypeValue::PrefixLength(_) => "PrefixLengthLiteral",
-    //         BuiltinTypeValue::Community(_) => "Community",
-    //         BuiltinTypeValue::IpAddress(_) => "IpAddress",
-    //         BuiltinTypeValue::Asn(_) => "Asn",
-    //         BuiltinTypeValue::AsPath(_) => "AsPath",
-    //         BuiltinTypeValue::Route(_) => "Route",
-    //         BuiltinTypeValue::RouteStatus(_) => "RouteStatus",
-    //         BuiltinTypeValue::HexLiteral(_) => "HexLiteral",
-    //     }
-    // }
-
-    // pub fn get_value(&self) -> &dyn std::any::Any {
-    //     match self {
-    //         BuiltinTypeValue::U32(val) => val,
-    //         BuiltinTypeValue::U8(val) => val,
-    //         BuiltinTypeValue::IntegerLiteral(val) => val,
-    //         BuiltinTypeValue::StringLiteral(val) => val,
-    //         BuiltinTypeValue::Boolean(val) => val,
-    //         BuiltinTypeValue::Prefix(val) => val,
-    //         BuiltinTypeValue::PrefixLength(val) => val,
-    //         BuiltinTypeValue::Community(val) => val,
-    //         BuiltinTypeValue::IpAddress(val) => val,
-    //         BuiltinTypeValue::Asn(val) => val,
-    //         BuiltinTypeValue::AsPath(val) => val,
-    //         BuiltinTypeValue::Route(val) => val,
-    //         BuiltinTypeValue::RouteStatus(val) => val,
-    //         BuiltinTypeValue::HexLiteral(val) => val,
-    //     }
-    // }
-
-    // pub fn exists(ty: &'_ str) -> bool {
-    //     matches!(
-    //         ty,
-    //         "U32"
-    //             | "U8"
-    //             | "IntegerLiteral"
-    //             | "Prefix"
-    //             | "PrefixLength"
-    //             | "Community"
-    //             | "IpAddress"
-    //             | "Asn"
-    //             | "AsPath"
-    //             | "Route"
-    //             | "RouteStatus"
-    //             | "Boolean"
-    //             | "String"
-    //             | "HexLiteral"
-    //     )
-    // }
-
-    pub fn create_instance(
-        ty: TypeDef,
-        value: impl Into<BuiltinTypeValue>,
-    ) -> Result<TypeValue, CompileError> {
-        let var = match ty {
-            TypeDef::U32 => {
-                if let BuiltinTypeValue::U32(v) = value.into() {
-                    BuiltinTypeValue::U32(v)
-                } else {
-                    return Err("Not a U32".into());
-                }
-            }
-            TypeDef::U8 => {
-                if let BuiltinTypeValue::U8(v) = value.into() {
-                    BuiltinTypeValue::U8(v)
-                } else {
-                    return Err("Not a U8".into());
-                }
-            }
-            TypeDef::IntegerLiteral => {
-                if let BuiltinTypeValue::IntegerLiteral(v) = value.into() {
-                    BuiltinTypeValue::IntegerLiteral(v)
-                } else {
-                    return Err("Not an IntegerLiteral".into());
-                }
-            }
-            TypeDef::PrefixLength => {
-                if let BuiltinTypeValue::PrefixLength(v) = value.into() {
-                    BuiltinTypeValue::PrefixLength(v)
-                } else {
-                    return Err("Not a PrefixLength".into());
-                }
-            }
-            TypeDef::HexLiteral => {
-                if let BuiltinTypeValue::HexLiteral(v) = value.into() {
-                    BuiltinTypeValue::HexLiteral(v)
-                } else {
-                    return Err("Not a HexLiteral".into());
-                }
-            }
-            TypeDef::Prefix => {
-                if let BuiltinTypeValue::Prefix(v) = value.into() {
-                    BuiltinTypeValue::Prefix(v)
-                } else {
-                    return Err("Not a Prefix".into());
-                }
-            }
-            TypeDef::IpAddress => {
-                if let BuiltinTypeValue::IpAddress(v) = value.into() {
-                    BuiltinTypeValue::IpAddress(v)
-                } else {
-                    return Err("Not an IP address".into());
-                }
-            }
-            TypeDef::Asn => {
-                if let BuiltinTypeValue::Asn(v) = value.into() {
-                    BuiltinTypeValue::Asn(v)
-                } else {
-                    return Err("Not an ASN".into());
-                }
-            }
-            TypeDef::AsPath => {
-                if let BuiltinTypeValue::AsPath(v) = value.into() {
-                    BuiltinTypeValue::AsPath(v)
-                } else {
-                    return Err("Not an AS Path".into());
-                }
-            }
-            TypeDef::Community => {
-                if let BuiltinTypeValue::Community(v) = value.into() {
-                    BuiltinTypeValue::Community(v)
-                } else {
-                    return Err("Not a community".into());
-                }
-            }
-            TypeDef::Route => {
-                if let BuiltinTypeValue::Route(v) = value.into() {
-                    BuiltinTypeValue::Route(v)
-                } else {
-                    return Err("Not a route".into());
-                }
-            }
-            TypeDef::RouteStatus => {
-                if let BuiltinTypeValue::RouteStatus(v) = value.into() {
-                    BuiltinTypeValue::RouteStatus(v)
-                } else {
-                    return Err("Not a route status".into());
-                }
-            }
-            _ => return Err("Not a primitive type".into()),
-        };
-        Ok(TypeValue::Builtin(var))
-    }
-
-    // pub(crate) fn exec_value_method(
-    //     &self,
-    //     method_token: usize,
-    //     args: &[&TypeValue],
-    //     return_type: TypeDef,
-    // ) -> TypeValue {
-    //     match self {
-    //         BuiltinTypeValue::AsPath(as_path) => as_path
-    //             .exec_value_method(method_token, args, return_type)
-    //             .unwrap()(),
-    //         BuiltinTypeValue::Prefix(prefix) => prefix
-    //             .exec_value_method(method_token, args, return_type)
-    //             .unwrap()(),
-    //         BuiltinTypeValue::IntegerLiteral(lit_int) => lit_int
-    //             .exec_value_method(method_token, args, return_type)
-    //             .unwrap()(
-    //         ),
-    //         BuiltinTypeValue::StringLiteral(lit_str) => lit_str
-    //             .exec_value_method(method_token, args, return_type)
-    //             .unwrap()(),
-    //         BuiltinTypeValue::U32(u32) => u32
-    //             .exec_value_method(method_token, args, return_type)
-    //             .unwrap()(),
-    //         BuiltinTypeValue::Asn(asn) => asn
-    //             .exec_value_method(method_token, args, return_type)
-    //             .unwrap()(),
-    //         BuiltinTypeValue::IpAddress(ip) => ip
-    //             .exec_value_method(method_token, args, return_type)
-    //             .unwrap()(),
-    //         BuiltinTypeValue::Route(route) => route
-    //             .exec_value_method(method_token, args, return_type)
-    //             .unwrap()(),
-    //         BuiltinTypeValue::U8(_) => todo!(),
-    //         BuiltinTypeValue::PrefixLength(_) => todo!(),
-    //         BuiltinTypeValue::Community(_) => todo!(),
-    //         BuiltinTypeValue::RouteStatus(_) => todo!(),
-    //         BuiltinTypeValue::Boolean(_) => todo!(),
-    //         BuiltinTypeValue::HexLiteral(_) => todo!(),
-    //     }
-    // }
-}
-
-// These From impls allow the user to use the create_instance function with
-// simple types like u32, u8, etc. (without the nested variants).
-
-impl From<Asn> for BuiltinTypeValue {
-    fn from(val: Asn) -> Self {
-        BuiltinTypeValue::Asn(val)
-    }
-}
-
-impl From<u32> for BuiltinTypeValue {
-    fn from(val: u32) -> Self {
-        BuiltinTypeValue::U32(U32(Some(val)))
-    }
-}
-
-impl From<i64> for BuiltinTypeValue {
-    fn from(val: i64) -> Self {
-        BuiltinTypeValue::IntegerLiteral(IntegerLiteral(Some(val)))
-    }
-}
-
-impl From<std::net::IpAddr> for BuiltinTypeValue {
-    fn from(val: std::net::IpAddr) -> Self {
-        BuiltinTypeValue::IpAddress(IpAddress(Some(val)))
-    }
-}
-
-impl From<routecore::addr::Prefix> for BuiltinTypeValue {
-    fn from(val: routecore::addr::Prefix) -> Self {
-        BuiltinTypeValue::Prefix(Prefix(Some(val)))
-    }
-}
-
-impl TryFrom<&'_ str> for BuiltinTypeValue {
-    type Error = CompileError;
-
-    fn try_from(val: &'_ str) -> Result<Self, Self::Error> {
-        match val {
-            "U32" => Ok(BuiltinTypeValue::U32(U32(None))),
-            "U8" => Ok(BuiltinTypeValue::U8(U8(None))),
-            "IntegerLiteral" => {
-                Ok(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(None)))
-            }
-            "PrefixLengthLiteral" => {
-                Ok(BuiltinTypeValue::PrefixLength(PrefixLength(None)))
-            }
-            "Boolean" => Ok(BuiltinTypeValue::Boolean(Boolean(None))),
-            "Prefix" => Ok(BuiltinTypeValue::Prefix(Prefix(None))),
-            "PrefixLength" => {
-                Ok(BuiltinTypeValue::PrefixLength(PrefixLength(None)))
-            }
-            "Community" => Ok(BuiltinTypeValue::Community(Community(None))),
-            "IpAddress" => Ok(BuiltinTypeValue::IpAddress(IpAddress(None))),
-            "Asn" => Ok(BuiltinTypeValue::Asn(Asn(None))),
-            "AsPath" => Ok(BuiltinTypeValue::AsPath(AsPath(None))),
-            "Route" => Ok(BuiltinTypeValue::Route(Route {
-                prefix: None,
-                bgp: None,
-                status: RouteStatus::Empty,
-            })),
-            "RouteStatus" => {
-                Ok(BuiltinTypeValue::RouteStatus(RouteStatus::Empty))
-            }
-            _ => Err(format!("Unknown type: {}", val).into()),
-        }
-    }
-}
-
-impl TryFrom<&TypeDef> for BuiltinTypeValue {
-    type Error = CompileError;
-
-    fn try_from(ty: &TypeDef) -> Result<Self, Self::Error> {
-        match ty {
-            TypeDef::U32 => Ok(BuiltinTypeValue::U32(U32(None))),
-            TypeDef::U8 => Ok(BuiltinTypeValue::U8(U8(None))),
-            TypeDef::IntegerLiteral => {
-                Ok(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(None)))
-            }
-            TypeDef::Boolean => Ok(BuiltinTypeValue::Boolean(Boolean(None))),
-            TypeDef::Prefix => Ok(BuiltinTypeValue::Prefix(Prefix(None))),
-            TypeDef::PrefixLength => {
-                Ok(BuiltinTypeValue::PrefixLength(PrefixLength(None)))
-            }
-            TypeDef::Community => {
-                Ok(BuiltinTypeValue::Community(Community(None)))
-            }
-            TypeDef::IpAddress => {
-                Ok(BuiltinTypeValue::IpAddress(IpAddress(None)))
-            }
-            TypeDef::Asn => Ok(BuiltinTypeValue::Asn(Asn(None))),
-            TypeDef::AsPath => Ok(BuiltinTypeValue::AsPath(AsPath(None))),
-            TypeDef::Route => Ok(BuiltinTypeValue::Route(Route {
-                prefix: None,
-                bgp: None,
-                status: RouteStatus::Empty,
-            })),
-            TypeDef::RouteStatus => {
-                Ok(BuiltinTypeValue::RouteStatus(RouteStatus::Empty))
-            }
-            _ => Err(format!("Unknown type: {:?}", ty).into()),
-        }
-    }
-}
-
-impl Display for BuiltinTypeValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            BuiltinTypeValue::U32(v) => write!(f, "{} (U32)", v),
-            BuiltinTypeValue::U8(v) => write!(f, "{} (U8)", v),
-            BuiltinTypeValue::IntegerLiteral(v) => {
-                write!(f, "{} (Integer)", v)
-            }
-            BuiltinTypeValue::StringLiteral(v) => {
-                write!(f, "{} (String)", v)
-            }
-            BuiltinTypeValue::Prefix(v) => write!(f, "{} (Prefix)", v),
-            BuiltinTypeValue::PrefixLength(v) => {
-                write!(f, "{} (Prefix Length)", v)
-            }
-            BuiltinTypeValue::Community(v) => write!(f, "{} (Community)", v),
-            BuiltinTypeValue::IpAddress(v) => write!(f, "{} (IP Address)", v),
-            BuiltinTypeValue::Asn(v) => write!(f, "{} (ASN)", v),
-            BuiltinTypeValue::AsPath(v) => {
-                write!(f, "{} (AS Path)", v)
-            }
-            BuiltinTypeValue::Route(v) => write!(f, "{} (Route)", v),
-            BuiltinTypeValue::RouteStatus(v) => {
-                write!(f, "{} (Route Status)", v)
-            }
-            BuiltinTypeValue::Boolean(v) => write!(f, "{} (Boolean)", v),
-            BuiltinTypeValue::HexLiteral(v) => {
-                write!(f, "{} (Hex)", v)
-            }
-        }
-    }
-}
+use super::super::collections::Record;
+use super::super::typedef::TypeDef;
+use super::super::typevalue::TypeValue;
+use super::builtin_type_value::BuiltinTypeValue;
 
 // ----------- A simple u32 type --------------------------------------------
 
@@ -382,7 +30,7 @@ impl From<U32> for TypeValue {
     }
 }
 
-impl RotoFilter for U32 {
+impl RotoType for U32 {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -491,7 +139,7 @@ impl U8 {
     }
 }
 
-impl RotoFilter for U8 {
+impl RotoType for U8 {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -652,7 +300,7 @@ impl Boolean {
     }
 }
 
-impl RotoFilter for Boolean {
+impl RotoType for Boolean {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -765,7 +413,7 @@ impl StringLiteral {
     }
 }
 
-impl RotoFilter for StringLiteral {
+impl RotoType for StringLiteral {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -875,7 +523,7 @@ impl IntegerLiteral {
     }
 }
 
-impl RotoFilter for IntegerLiteral {
+impl RotoType for IntegerLiteral {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -1002,7 +650,7 @@ impl HexLiteral {
     }
 }
 
-impl RotoFilter for HexLiteral {
+impl RotoType for HexLiteral {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -1031,7 +679,7 @@ impl RotoFilter for HexLiteral {
             }
             TypeDef::Community => {
                 // still bogus, but at least it should convert from the hexliteral type.
-                let c = Community::new(CommunityType::Standard);
+                let c = Community::new();
                 Ok(TypeValue::Builtin(BuiltinTypeValue::Community(c)))
             }
             _ => Err(format!(
@@ -1132,7 +780,7 @@ impl Prefix {
     }
 }
 
-impl RotoFilter for Prefix {
+impl RotoType for Prefix {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -1342,7 +990,7 @@ impl PrefixLength {
     }
 }
 
-impl RotoFilter for PrefixLength {
+impl RotoType for PrefixLength {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -1482,23 +1130,17 @@ impl From<PrefixLength> for u8 {
 
 // ----------- Community ----------------------------------------------------
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub enum CommunityType {
-    Standard,
-    Extended,
-    Large,
-}
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub struct Community(pub(crate) Option<CommunityType>);
+pub struct Community(pub(crate) Option<routecore::bgp::communities::Community>);
 
 impl Community {
-    pub fn new(community_type: CommunityType) -> Self {
-        Self(Some(community_type))
+    pub fn new() -> Self {
+        Self(None)
     }
 }
 
-impl RotoFilter for Community {
+impl RotoType for Community {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -1639,6 +1281,12 @@ impl From<CommunityToken> for usize {
     }
 }
 
+//------------ Communities --------------------------------------------------
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Communities(
+    pub(crate) Option<Vec<Community>>,
+);
+
 // ----------- PrefixRecord -------------------------------------------------
 
 #[derive(Debug, PartialEq)]
@@ -1669,7 +1317,7 @@ impl IpAddress {
     }
 }
 
-impl RotoFilter for IpAddress {
+impl RotoType for IpAddress {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -1798,7 +1446,7 @@ impl Asn {
     }
 }
 
-impl RotoFilter for Asn {
+impl RotoType for Asn {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -1966,7 +1614,7 @@ impl AsPath {
     }
 }
 
-impl RotoFilter for AsPath {
+impl RotoType for AsPath {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
@@ -2139,262 +1787,46 @@ impl From<AsPathToken> for usize {
     }
 }
 
-//------------ Route type ---------------------------------------------------
+//------------ OriginType type ----------------------------------------------
 
-// Generic RFC4271 Route type, that can be parsed with routecore.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct OriginType(
+    pub(crate) Option<routecore::bgp::types::OriginType>,
+);
 
-#[derive(Debug, Eq, PartialEq, Clone, Default)]
-pub struct 
-Route {
-    pub prefix: Option<Prefix>,
-    pub bgp: Option<BgpAttributes>,
-    pub status: RouteStatus,
-}
-
-impl Route {
-    pub fn new() -> Self {
-        Route { prefix: None, bgp: None, status: RouteStatus::Empty }
-    }
-}
-
-impl RotoFilter for Route {
+impl RotoType for OriginType {
     fn get_props_for_method(
         self,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
-        Self: std::marker::Sized,
-    {
-        match method_name.ident.as_str() {
-            "prefix" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None))),
-                RouteToken::Prefix.into(),
-                vec![],
-            )),
-            "as_path" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))),
-                RouteToken::AsPath.into(),
-                vec![],
-            )),
-            "communities" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Community(Community(
-                    None,
-                ))),
-                RouteToken::Communities.into(),
-                vec![],
-            )),
-            "status" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::RouteStatus(
-                    RouteStatus::Empty,
-                )),
-                RouteToken::Status.into(),
-                vec![],
-            )),
-            _ => Err(format!(
-                "Unknown method '{}' for type Route",
-                method_name.ident
-            )
-            .into()),
-        }
+        Self: std::marker::Sized {
+        todo!()
     }
 
     fn into_type(
         self,
-        type_def: &TypeDef,
-    ) -> Result<TypeValue, CompileError> {
-        match type_def {
-            TypeDef::Route => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::Route(self)))
-            }
-            _ => Err(format!(
-                "Cannot convert type Route to type {:?}",
-                type_def
-            )
-            .into()),
-        }
-    }
-
-    fn exec_value_method<'a>(
-        &'a self,
-        _method: usize,
-        _args: &[&TypeValue],
-        _res_type: TypeDef,
-    ) -> Result<Box<(dyn FnOnce() -> TypeValue + 'a)>, VmError> {
-        todo!()
-    }
-
-     fn exec_consume_value_method(
-        self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
-        _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
-        todo!()
-    }
-
-    fn exec_type_method<'a>(
-        _method_token: usize,
-        _args: &[&'a TypeValue],
-        _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
-        todo!()
-    }
-}
-
-impl From<Route> for TypeValue {
-    fn from(val: Route) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Route(val))
-    }
-}
-
-impl Display for Route {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Some(prefix) = &self.prefix {
-            write!(f, "{}", prefix)?;
-        } else {
-            write!(f, "None")?;
-        }
-        if let Some(bgp) = &self.bgp {
-            write!(f, " {}", bgp)?;
-        }
-        write!(f, " {}", self.status)
-    }
-}
-
-#[derive(Debug)]
-pub enum RouteToken {
-    Prefix,
-    AsPath,
-    Communities,
-    Status,
-}
-
-impl TokenConvert for RouteToken {}
-
-impl From<usize> for RouteToken {
-    fn from(value: usize) -> Self {
-        match value {
-            1 => RouteToken::Prefix,
-            2 => RouteToken::AsPath,
-            3 => RouteToken::Communities,
-            4 => RouteToken::Status,
-            _ => panic!("Unknown RouteToken value: {}", value),
-        }
-    }
-}
-
-impl From<RouteToken> for usize {
-    fn from(val: RouteToken) -> Self {
-        val as usize
-    }
-}
-
-impl Payload for Route {
-    fn set_field(
-        &mut self,
-        field: crate::ast::ShortString,
-        value: TypeValue,
-    ) {
-        todo!()
-    }
-
-    fn get(&self, field: crate::ast::ShortString) -> Option<&TypeValue> {
-        todo!()
-    }
-
-    fn take_value(self) -> TypeValue {
-        TypeValue::Builtin(BuiltinTypeValue::Route(self))
-    }
-}
-
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
-pub enum RouteStatus {
-    InConvergence, // Between start and EOR on a BGP peer-session
-    UpToDate, // After EOR for a BGP peer-session, either Graceful Restart or EOR
-    Stale,    // After hold-timer expiry
-    StartOfRouteRefresh, // After the request for a Route Refresh to a peer and the reception of a new route
-    Withdrawn,           // After the reception of a withdrawal
-    #[default]
-    Empty, // Status not relevant, e.g. a RIB that holds archived routes.
-}
-
-impl RotoFilter for RouteStatus {
-    fn get_props_for_method(
-        self,
-        method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, CompileError>
+        type_value: &TypeDef,
+    ) -> Result<TypeValue, CompileError>
     where
-        Self: std::marker::Sized,
-    {
-        match method_name.ident.as_str() {
-            "is_in_convergence" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                RouteStatusToken::IsInConvergence.into(),
-                vec![],
-            )),
-            "is_up_to_date" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                RouteStatusToken::IsUpToDate.into(),
-                vec![],
-            )),
-            "is_stale" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                RouteStatusToken::IsStale.into(),
-                vec![],
-            )),
-            "is_start_of_route_refresh" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                RouteStatusToken::IsStartOfRouteRefresh.into(),
-                vec![],
-            )),
-            "is_withdrawn" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                RouteStatusToken::IsWithdrawn.into(),
-                vec![],
-            )),
-            "is_empty" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
-                RouteStatusToken::IsEmpty.into(),
-                vec![],
-            )),
-            _ => Err(format!(
-                "Unknown method '{}' for type RouteStatus",
-                method_name.ident
-            )
-            .into()),
-        }
-    }
-
-    fn into_type(
-        self,
-        type_def: &TypeDef,
-    ) -> Result<TypeValue, CompileError> {
-        match type_def {
-            TypeDef::RouteStatus => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::RouteStatus(self)))
-            }
-            _ => Err(format!(
-                "Cannot convert type RouteStatus to type {:?}",
-                type_def
-            )
-            .into()),
-        }
+        Self: std::marker::Sized {
+        todo!()
     }
 
     fn exec_value_method<'a>(
         &'a self,
-        _method_token: usize,
-        _args: &[&TypeValue],
-        _res_type: TypeDef,
+        method_token: usize,
+        args: &'a [&'a TypeValue],
+        res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 
-     fn exec_consume_value_method(
+    fn exec_consume_value_method(
         self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
-        _res_type: TypeDef,
+        method_token: usize,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         todo!()
     }
@@ -2408,71 +1840,30 @@ impl RotoFilter for RouteStatus {
     }
 }
 
-impl From<RouteStatus> for TypeValue {
-    fn from(val: RouteStatus) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::RouteStatus(val))
-    }
-}
+//------------ NextHop type -------------------------------------------------
 
-impl Display for RouteStatus {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            RouteStatus::InConvergence => write!(f, "in convergence"),
-            RouteStatus::UpToDate => write!(f, "up to date"),
-            RouteStatus::Stale => write!(f, "stale"),
-            RouteStatus::StartOfRouteRefresh => {
-                write!(f, "start of route refresh")
-            }
-            RouteStatus::Withdrawn => write!(f, "withdrawn"),
-            RouteStatus::Empty => write!(f, "empty"),
-        }
-    }
-}
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct NextHop(
+    pub(crate) Option<routecore::bgp::types::NextHop>,
+);
 
-#[derive(Debug)]
-pub enum RouteStatusToken {
-    IsInConvergence,
-    IsUpToDate,
-    IsStale,
-    IsStartOfRouteRefresh,
-    IsWithdrawn,
-    IsEmpty,
-}
+//------------ Multi Exit Discriminator type --------------------------------
 
-impl TokenConvert for RouteStatusToken {}
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct MultiExitDisc(
+    pub(crate) Option<routecore::bgp::types::MultiExitDisc>,
+);
 
-impl From<usize> for RouteStatusToken {
-    fn from(value: usize) -> Self {
-        match value {
-            1 => RouteStatusToken::IsInConvergence,
-            2 => RouteStatusToken::IsUpToDate,
-            3 => RouteStatusToken::IsStale,
-            4 => RouteStatusToken::IsStartOfRouteRefresh,
-            5 => RouteStatusToken::IsWithdrawn,
-            6 => RouteStatusToken::IsEmpty,
-            _ => panic!("Unknown RouteStatusToken value: {}", value),
-        }
-    }
-}
+//------------ Local Preference type ----------------------------------------
 
-impl From<RouteStatusToken> for usize {
-    fn from(val: RouteStatusToken) -> Self {
-        val as usize
-    }
-}
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct LocalPref(
+    pub(crate) Option<routecore::bgp::types::LocalPref>,
+);
 
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub struct BgpAttributes {
-    pub as_path: AsPath,
-    pub communities: Vec<Community>,
-}
+//------------ Aggregator type ----------------------------------------------
 
-impl Display for BgpAttributes {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "BGP attributes: {:?} {:?}",
-            self.as_path, self.communities
-        )
-    }
-}
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Aggregator(
+    pub(crate) Option<routecore::bgp::message::update::Aggregator>,
+);
