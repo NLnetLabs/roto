@@ -23,7 +23,7 @@ pub enum BuiltinTypeValue {
     IpAddress(IpAddress), // scalar
     Asn(Asn), // scalar 
     AsPath(AsPath), // vector
-    Route(Option<RawRouteDelta>), // vector
+    Route(Option<RawRouteWithDeltas>), // vector
     RouteStatus(RouteStatus), // scalar
     Boolean(Boolean), // scalar
     HexLiteral(HexLiteral), // scalar

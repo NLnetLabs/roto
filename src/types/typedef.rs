@@ -12,7 +12,7 @@ use crate::{
     traits::{MethodProps, RotoType},
 };
 
-use super::builtin::{AsPath, Asn, IpAddress, Prefix, Route, U32, RawRouteDelta};
+use super::builtin::{AsPath, Asn, IpAddress, Prefix, Route, U32, RawRouteWithDeltas};
 use super::collections::Record;
 use super::datasources::{Rib, Table};
 use super::{
@@ -182,7 +182,7 @@ impl TypeDef {
                 ip.get_props_for_method(method)
             }
             TypeValue::Builtin(BuiltinTypeValue::Route(_route)) => {
-                RawRouteDelta::get_props_for_method_static(method)
+                RawRouteWithDeltas::get_props_for_method_static(method)
             }
             TypeValue::Rib(rib) => rib.get_props_for_method(method),
             TypeValue::Table(table) => table.get_props_for_method(method),
@@ -232,7 +232,7 @@ impl TypeDef {
                     .unwrap()()
             }
             TypeDef::Route => {
-                RawRouteDelta::exec_type_method(method_token, args, return_type)
+                RawRouteWithDeltas::exec_type_method(method_token, args, return_type)
                     .unwrap()()
             }
             TypeDef::Rib(_rib) => {
