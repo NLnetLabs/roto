@@ -12,7 +12,9 @@ use crate::{
     traits::{MethodProps, RotoType},
 };
 
-use super::builtin::{AsPath, Asn, IpAddress, Prefix, MaterializedRoute, U32, RawRouteWithDeltas};
+use super::builtin::{
+    AsPath, Asn, IpAddress, Prefix, RawRouteWithDeltas, U32,
+};
 use super::collections::Record;
 use super::datasources::{Rib, Table};
 use super::{
@@ -83,7 +85,6 @@ impl TypeDef {
         &self,
         fields: &[crate::ast::Identifier],
     ) -> Result<(TypeDef, Token), CompileError> {
-
         // Data sources (rib and table) are special cases, because they have
         // their methods on the container (the datasource) and not on the
         // contained type. They don't have field access.
@@ -108,14 +109,18 @@ impl TypeDef {
                     current_type_token = (ty, current_type_token.1);
                     current_type_token.1.push(index as u8);
                 } else {
-                    return Err(
-                        format!("No field named '{}'", field.ident.as_str()).into(),
-                    );
+                    return Err(format!(
+                        "No field named '{}'",
+                        field.ident.as_str()
+                    )
+                    .into());
                 }
             } else {
-                return Err(
-                    format!("No field named '{}'", field.ident.as_str()).into(),
-                );
+                return Err(format!(
+                    "No field named '{}'",
+                    field.ident.as_str()
+                )
+                .into());
             }
         }
         Ok((current_type_token.0.clone(), current_type_token.1))
@@ -205,12 +210,10 @@ impl TypeDef {
                 Record::exec_type_method(method_token, args, return_type)
                     .unwrap()()
             }
-            TypeDef::List(_list) => List::exec_type_method(
-                method_token,
-                args,
-                return_type,
-            )
-            .unwrap()(),
+            TypeDef::List(_list) => {
+                List::exec_type_method(method_token, args, return_type)
+                    .unwrap()()
+            }
             TypeDef::AsPath => {
                 AsPath::exec_type_method(method_token, args, return_type)
                     .unwrap()()
@@ -231,10 +234,12 @@ impl TypeDef {
                 IpAddress::exec_type_method(method_token, args, return_type)
                     .unwrap()()
             }
-            TypeDef::Route => {
-                RawRouteWithDeltas::exec_type_method(method_token, args, return_type)
-                    .unwrap()()
-            }
+            TypeDef::Route => RawRouteWithDeltas::exec_type_method(
+                method_token,
+                args,
+                return_type,
+            )
+            .unwrap()(),
             TypeDef::Rib(_rib) => {
                 Rib::exec_type_method(method_token, args, return_type)
                     .unwrap()()
@@ -445,7 +450,7 @@ impl From<&TypeValue> for TypeDef {
             TypeValue::Rib(r) => r.ty.clone(),
             TypeValue::Table(t) => t.ty.clone(),
             TypeValue::Unknown => TypeDef::Unknown,
-            TypeValue::UnInit => TypeDef::Unknown
+            TypeValue::UnInit => TypeDef::Unknown,
         }
     }
 }
