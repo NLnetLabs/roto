@@ -12,7 +12,7 @@ use crate::{
     traits::{MethodProps, RotoType},
 };
 
-use super::builtin::{AsPath, Asn, IpAddress, Prefix, Route, U32, RawRouteWithDeltas};
+use super::builtin::{AsPath, Asn, IpAddress, Prefix, MaterializedRoute, U32, RawRouteWithDeltas};
 use super::collections::Record;
 use super::datasources::{Rib, Table};
 use super::{

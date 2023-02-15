@@ -48,10 +48,22 @@ use super::{AsPath, Boolean, BuiltinTypeValue, Community, Prefix};
 // serialize the data into on export and transport.
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct Route {
+pub struct MaterializedRoute {
     pub prefix: Prefix,
     pub path_attributes: AttributeList,
     pub status: RouteStatus,
+}
+
+impl TryFrom<&RawRouteWithDeltas> for MaterializedRoute {
+    type Error = VmError;
+
+    fn try_from(raw_route: &RawRouteWithDeltas) -> Result<Self, Self::Error> {
+        Ok(MaterializedRoute {
+            prefix: raw_route.prefix,
+            path_attributes: raw_route.materialized_attributes(),
+            status: raw_route.status_deltas.current(),
+        })
+    }
 }
 
 //------------ RawRouteWithDelta ============================================
@@ -78,41 +90,19 @@ pub struct RawRouteWithDeltas {
 impl RawRouteWithDeltas {
     pub fn get_current_attribute_value(
         &self,
-        key: &PathAttributeType,
+        key: PathAttributeType,
     ) -> Option<AttributeTypeValue> {
         self.attribute_deltas
-            .get_latest_value(*key)
-            .cloned()
-            .or_else(|| Some(self.raw_message.get_attribute_value(*key)))
+            .get_latest_value_materialized(key)
+            .or_else(|| self.raw_message.get_attribute_value(key))
     }
-    pub fn materialized_attributes(&self) -> Result<AttributeList, VmError> {
-        let mut attr_list = AttributeList(vec![]);
-        attr_list.insert(AttributeTypeValue::AsPath(
-            self.raw_message.raw_message.aspath(),
-        ))?;
-        attr_list.insert(AttributeTypeValue::OriginType(
-            self.raw_message.raw_message.origin(),
-        ))?;
-        attr_list.insert(AttributeTypeValue::NextHop(
-            self.raw_message.raw_message.next_hop(),
-        ))?;
-        attr_list.insert(AttributeTypeValue::MultiExitDiscriminator(
-            self.raw_message.raw_message.multi_exit_desc(),
-        ))?;
-        attr_list.insert(AttributeTypeValue::LocalPref(
-            self.raw_message.raw_message.local_pref(),
-        ))?;
-        attr_list.insert(AttributeTypeValue::AtomicAggregate(
-            self.raw_message.raw_message.is_atomic_aggregate(),
-        ))?;
-        attr_list.insert(AttributeTypeValue::Aggregator(
-            self.raw_message.raw_message.aggregator(),
-        ))?;
-        attr_list.insert(AttributeTypeValue::Communities(
-            self.raw_message.raw_message.all_communities(),
-        ))?;
 
-        Ok(attr_list)
+    pub fn iter_current_attrs(&self) -> impl Iterator<Item = AttributeTypeValue> + '_ {
+        PATH_ATTRIBUTES.iter().filter_map(|attr| self.get_current_attribute_value(*attr))
+    }
+
+    pub fn materialized_attributes(&self) -> AttributeList {
+        self.iter_current_attrs().collect()
     }
 }
 
@@ -139,10 +129,21 @@ impl RouteDeltas {
         None
     }
 
-    // Gets the most recently Attribute List that was added by a Rotonda
-    // writer.
-    fn get_latest_delta(&self) -> Option<&Vec<AttributeTypeValue>> {
-        self.0.first().map(|delta| &delta.attributes.0)
+    fn get_latest_value_materialized(
+        &self,
+        key: PathAttributeType,
+    ) -> Option<AttributeTypeValue> {
+        for delta in self.0.iter() {
+            if let Some(value) = delta.get(key) {
+                return Some(value.clone());
+            }
+        }
+        None
+    }
+
+    // Gets the most recent AttributeList that was added by a Rotonda writer,
+    fn get_latest_delta(&self) -> Option<&AttributeList> {
+        self.0.first().map(|delta| &delta.attributes)
     }
 
     // Adds a new delta and returns the whole RouteDeltas instance.
@@ -153,7 +154,7 @@ impl RouteDeltas {
         RouteDeltas(res)
     }
 
-    // Iterate over all the most recently added Path attributes.
+    // Iterate over all the most recently added Path Attributes.
     fn iter_latest_attrs(
         &self,
     ) -> impl Iterator<Item = &AttributeTypeValue> + '_ {
@@ -179,7 +180,9 @@ impl AttributeDelta {
     }
 }
 
-// START TO ROUTECORE
+// ----------------------------------------------------------------------- //
+// START: ROUTECORE
+// ----------------------------------------------------------------------- //
 
 //------------ AttributeList ------------------------------------------------
 
@@ -213,34 +216,22 @@ impl AttributeList {
             }
         }
     }
+}
 
-    // Extract the attributes from a BGP update message as a AttributeList
-    pub fn from_raw_message(
-        raw_message: &UpdateMessage<bytes::Bytes>,
-    ) -> Result<Self, VmError> {
-        let mut attr_list = Self(vec![]);
-        attr_list.insert(AttributeTypeValue::AsPath(raw_message.aspath()))?;
-        attr_list
-            .insert(AttributeTypeValue::OriginType(raw_message.origin()))?;
-        attr_list
-            .insert(AttributeTypeValue::NextHop(raw_message.next_hop()))?;
-        attr_list.insert(AttributeTypeValue::MultiExitDiscriminator(
-            raw_message.multi_exit_desc(),
-        ))?;
-        attr_list.insert(AttributeTypeValue::LocalPref(
-            raw_message.local_pref(),
-        ))?;
-        attr_list.insert(AttributeTypeValue::AtomicAggregate(
-            raw_message.is_atomic_aggregate(),
-        ))?;
-        attr_list.insert(AttributeTypeValue::Aggregator(
-            raw_message.aggregator(),
-        ))?;
-        attr_list.insert(AttributeTypeValue::Communities(
-            raw_message.all_communities(),
-        ))?;
+impl FromIterator<AttributeTypeValue> for AttributeList {
+    fn from_iter<T: IntoIterator<Item = AttributeTypeValue>>(
+        iter: T,
+    ) -> Self {
+        let mut attr_list = AttributeList(vec![]);
 
-        Ok(attr_list)
+        for attr in iter {
+            let res = attr_list.insert(attr);
+            if res.is_err() {
+                panic!("Invalid Insert into MGP attributes list")
+            }
+        }
+
+        attr_list
     }
 }
 
@@ -333,7 +324,9 @@ pub enum RouteStatus {
     Empty,
 }
 
-// END TO ROUTECORE
+// ----------------------------------------------------------------------- //
+// END ROUTECORE
+// ----------------------------------------------------------------------- //
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct RouteStatusDelta {
@@ -365,19 +358,38 @@ impl RawBgpMessage {
     fn get_attribute_value(
         &self,
         key: PathAttributeType,
-    ) -> AttributeTypeValue {
+    ) -> Option<AttributeTypeValue> {
         match key {
-            PathAttributeType::Reserved => todo!(),
-            PathAttributeType::Origin => {
-                AttributeTypeValue::OriginType(self.raw_message.origin())
+            PathAttributeType::Origin => Some(
+                AttributeTypeValue::OriginType(self.raw_message.origin()),
+            ),
+            PathAttributeType::AsPath => {
+                Some(AttributeTypeValue::AsPath(self.raw_message.aspath()))
             }
-            PathAttributeType::AsPath => todo!(),
-            PathAttributeType::NextHop => todo!(),
-            PathAttributeType::MultiExitDisc => todo!(),
-            PathAttributeType::LocalPref => todo!(),
-            PathAttributeType::AtomicAggregate => todo!(),
-            PathAttributeType::Aggregator => todo!(),
-            PathAttributeType::Communities => todo!(),
+            PathAttributeType::NextHop => {
+                Some(AttributeTypeValue::NextHop(self.raw_message.next_hop()))
+            }
+            PathAttributeType::MultiExitDisc => {
+                Some(AttributeTypeValue::MultiExitDiscriminator(
+                    self.raw_message.multi_exit_desc(),
+                ))
+            }
+            PathAttributeType::LocalPref => Some(
+                AttributeTypeValue::LocalPref(self.raw_message.local_pref()),
+            ),
+            PathAttributeType::AtomicAggregate => {
+                Some(AttributeTypeValue::AtomicAggregate(
+                    self.raw_message.is_atomic_aggregate(),
+                ))
+            }
+            PathAttributeType::Aggregator => Some(
+                AttributeTypeValue::Aggregator(self.raw_message.aggregator()),
+            ),
+            PathAttributeType::Communities => {
+                Some(AttributeTypeValue::Communities(
+                    self.raw_message.all_communities(),
+                ))
+            }
             PathAttributeType::OriginatorId => todo!(),
             PathAttributeType::ClusterList => todo!(),
             PathAttributeType::MpReachNlri => todo!(),
@@ -393,8 +405,17 @@ impl RawBgpMessage {
             PathAttributeType::BgpsecAsPath => todo!(),
             PathAttributeType::AttrSet => todo!(),
             PathAttributeType::RsrvdDevelopment => todo!(),
+            PathAttributeType::Reserved => todo!(),
             PathAttributeType::Unimplemented(_) => todo!(),
         }
+    }
+
+    // Collect the attributes on the raw message into an AttributeList.
+    pub fn materialized_attributes(&self) -> Result<AttributeList, VmError> {
+        Ok(PATH_ATTRIBUTES
+            .iter()
+            .filter_map(|attr| self.get_attribute_value(*attr))
+            .collect())
     }
 }
 
@@ -405,18 +426,6 @@ impl PartialEq for RawBgpMessage {
 }
 
 impl Eq for RawBgpMessage {}
-
-impl TryFrom<&RawRouteWithDeltas> for Route {
-    type Error = VmError;
-
-    fn try_from(raw_route: &RawRouteWithDeltas) -> Result<Self, Self::Error> {
-        Ok(Route {
-            prefix: raw_route.prefix,
-            path_attributes: raw_route.materialized_attributes()?,
-            status: raw_route.status_deltas.current(),
-        })
-    }
-}
 
 impl RawRouteWithDeltas {
     pub(crate) fn get_props_for_method_static(
