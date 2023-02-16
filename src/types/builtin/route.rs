@@ -54,15 +54,15 @@ pub struct MaterializedRoute {
     pub status: RouteStatus,
 }
 
-impl TryFrom<&RawRouteWithDeltas> for MaterializedRoute {
-    type Error = VmError;
+impl From<RawRouteWithDeltas> for MaterializedRoute {
+    fn from(raw_route: RawRouteWithDeltas) -> Self {
+        let status = raw_route.status_deltas.current();
 
-    fn try_from(raw_route: &RawRouteWithDeltas) -> Result<Self, Self::Error> {
-        Ok(MaterializedRoute {
+        MaterializedRoute {
             prefix: raw_route.prefix,
-            path_attributes: raw_route.materialized_attributes(),
-            status: raw_route.status_deltas.current(),
-        })
+            path_attributes: raw_route.attribute_deltas.into_iter().collect(),
+            status,
+        }
     }
 }
 
@@ -82,27 +82,59 @@ pub struct RawRouteWithDeltas {
     // Arc'ed BGP message
     raw_message: Arc<RawBgpMessage>,
     // history of recorded changes to the route
-    attribute_deltas: RouteDeltas,
+    attribute_deltas: AttributeDeltaList,
     // history of status changes to the route
-    status_deltas: RouteStatusDeltas,
+    status_deltas: RouteStatusDeltaList,
 }
 
 impl RawRouteWithDeltas {
-    pub fn get_current_attribute_value(
+    pub fn new(
+        delta_id: (RotondaId, LogicalTime),
+        prefix: Prefix,
+        raw_message: RawBgpMessage,
+    ) -> Self {
+        // The first delta is filled with the path attributes from the raw
+        // message.
+        let attribute_deltas = AttributeDeltaList::new().with_new_delta(
+            AttributeDelta::new(delta_id, raw_message.get_attribute_list()),
+        );
+
+        Self {
+            prefix,
+            raw_message: Arc::new(raw_message),
+            attribute_deltas,
+            status_deltas: RouteStatusDeltaList(vec![RouteStatusDelta::new(
+                delta_id,
+            )]),
+        }
+    }
+
+    pub fn get_latest_attribute_value(
         &self,
         key: PathAttributeType,
-    ) -> Option<AttributeTypeValue> {
-        self.attribute_deltas
-            .get_latest_value_materialized(key)
-            .or_else(|| self.raw_message.get_attribute_value(key))
+    ) -> Option<&AttributeTypeValue> {
+        self.attribute_deltas.get_latest_value(key)
     }
 
-    pub fn iter_current_attrs(&self) -> impl Iterator<Item = AttributeTypeValue> + '_ {
-        PATH_ATTRIBUTES.iter().filter_map(|attr| self.get_current_attribute_value(*attr))
+    pub fn iter_latest_attrs(
+        &self,
+    ) -> impl Iterator<Item = &AttributeTypeValue> + '_ {
+        self.attribute_deltas.iter_latest_attrs()
     }
 
-    pub fn materialized_attributes(&self) -> AttributeList {
-        self.iter_current_attrs().collect()
+    pub fn materialized_attributes(&mut self) -> AttributeList {
+        let mut al = AttributeList::new();
+        let deltas = &mut self.attribute_deltas;
+
+        for attr in PATH_ATTRIBUTES {
+            al.0.push(deltas.take_latest_value(attr).unwrap())
+        }
+
+        al
+    }
+
+    pub fn materialize(self) -> MaterializedRoute {
+        self.into()
     }
 }
 
@@ -113,15 +145,21 @@ impl RawRouteWithDeltas {
 // writer in in one go (so with one logical timestamp). The outer list holds
 // those attribute lists in chronological order, with newest first.
 #[derive(Debug, Clone, Eq, PartialEq)]
-struct RouteDeltas(Vec<AttributeDelta>);
+struct AttributeDeltaList {
+    deltas: Vec<AttributeDelta>,
+}
 
-impl RouteDeltas {
-    // Gets the most recently added Path Attribute.
+impl AttributeDeltaList {
+    fn new() -> Self {
+        Self { deltas: vec![] }
+    }
+
+    // Gets the most recently added value for this Path Attribute.
     fn get_latest_value(
         &self,
         key: PathAttributeType,
     ) -> Option<&AttributeTypeValue> {
-        for delta in self.0.iter() {
+        for delta in self.deltas.iter() {
             if let Some(value) = delta.get(key) {
                 return Some(value);
             }
@@ -129,11 +167,27 @@ impl RouteDeltas {
         None
     }
 
-    fn get_latest_value_materialized(
-        &self,
+    // Swaps the most recently added value for this Path Attribute with an
+    // empty value and returns the swapped value.
+    fn take_latest_value(
+        &mut self,
         key: PathAttributeType,
     ) -> Option<AttributeTypeValue> {
-        for delta in self.0.iter() {
+        for delta in self.deltas.iter_mut() {
+            if let Some(mut value) = delta.get_owned(key) {
+                return Some(std::mem::take(&mut value));
+            }
+        }
+        None
+    }
+
+    // Get the most recently added value for this Path Attribute and returns
+    // a clone.
+    fn get_value_cloned(
+        &mut self,
+        key: PathAttributeType,
+    ) -> Option<AttributeTypeValue> {
+        for delta in self.deltas.iter_mut() {
             if let Some(value) = delta.get(key) {
                 return Some(value.clone());
             }
@@ -143,15 +197,15 @@ impl RouteDeltas {
 
     // Gets the most recent AttributeList that was added by a Rotonda writer,
     fn get_latest_delta(&self) -> Option<&AttributeList> {
-        self.0.first().map(|delta| &delta.attributes)
+        self.deltas.first().map(|delta| &delta.attributes)
     }
 
     // Adds a new delta and returns the whole RouteDeltas instance.
-    fn with_new_delta(self, delta: RouteDeltas) -> Self {
-        let mut res = Vec::with_capacity(self.0.len() + 1);
-        res.extend(delta.0);
-        res.extend_from_slice(self.0.as_slice());
-        RouteDeltas(res)
+    fn with_new_delta(self, delta: AttributeDelta) -> Self {
+        let mut res = Vec::with_capacity(self.deltas.len() + 1);
+        res.push(delta);
+        res.extend_from_slice(self.deltas.as_slice());
+        AttributeDeltaList { deltas: res }
     }
 
     // Iterate over all the most recently added Path Attributes.
@@ -161,6 +215,19 @@ impl RouteDeltas {
         PATH_ATTRIBUTES
             .iter()
             .filter_map(|attr| self.get_latest_value(*attr))
+    }
+}
+
+impl IntoIterator for AttributeDeltaList {
+    type Item = AttributeTypeValue;
+    type IntoIter = std::vec::IntoIter<AttributeTypeValue>;
+
+    fn into_iter(mut self) -> Self::IntoIter {
+        PATH_ATTRIBUTES
+            .iter()
+            .filter_map(|attr| self.get_value_cloned(*attr))
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 }
 
@@ -175,8 +242,32 @@ struct AttributeDelta {
 }
 
 impl AttributeDelta {
+    fn new(
+        delta_id: (RotondaId, LogicalTime),
+        attributes: AttributeList,
+    ) -> Self {
+        Self {
+            delta_id,
+            attributes,
+        }
+    }
+
     fn get(&self, key: PathAttributeType) -> Option<&AttributeTypeValue> {
         self.attributes.get(key)
+    }
+
+    fn get_owned(
+        &mut self,
+        key: PathAttributeType,
+    ) -> Option<AttributeTypeValue> {
+        self.attributes.get_owned(key)
+    }
+
+    fn insert(
+        &mut self,
+        attr: AttributeTypeValue,
+    ) -> Option<&AttributeTypeValue> {
+        self.attributes.insert(attr)
     }
 }
 
@@ -194,6 +285,10 @@ impl AttributeDelta {
 pub struct AttributeList(Vec<AttributeTypeValue>);
 
 impl AttributeList {
+    pub fn new() -> Self {
+        Self(vec![])
+    }
+
     pub fn get(&self, key: PathAttributeType) -> Option<&AttributeTypeValue> {
         self.0
             .binary_search_by_key(&key, |item| item.get_type())
@@ -201,20 +296,34 @@ impl AttributeList {
             .ok()
     }
 
+    pub fn get_owned(
+        &mut self,
+        key: PathAttributeType,
+    ) -> Option<AttributeTypeValue> {
+        self.0
+            .binary_search_by_key(&key, |item| item.get_type())
+            .map(|idx| std::mem::take(&mut self.0[idx]))
+            .ok()
+    }
+
     pub fn insert(
         &mut self,
         value: AttributeTypeValue,
-    ) -> Result<(), VmError> {
+    ) -> Option<&AttributeTypeValue> {
         match self
             .0
             .binary_search_by_key(&value.get_type(), |item| item.get_type())
         {
-            Ok(_) => Err(VmError::InvalidPayload),
+            Ok(_) => None,
             Err(idx) => {
                 self.0.insert(idx, value);
-                Ok(())
+                Some(&self.0[0])
             }
         }
+    }
+
+    pub fn replace(&mut self, new_list: AttributeList) {
+        *self = new_list;
     }
 }
 
@@ -226,7 +335,7 @@ impl FromIterator<AttributeTypeValue> for AttributeList {
 
         for attr in iter {
             let res = attr_list.insert(attr);
-            if res.is_err() {
+            if res.is_none() {
                 panic!("Invalid Insert into MGP attributes list")
             }
         }
@@ -239,7 +348,7 @@ impl FromIterator<AttributeTypeValue> for AttributeList {
 
 // Wrapper for all different values and their types that live in a BGP update
 // message.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Default)]
 pub enum AttributeTypeValue {
     AsPath(Option<routecore::asn::AsPath<Vec<routecore::asn::Asn>>>),
     OriginType(Option<routecore::bgp::types::OriginType>),
@@ -263,6 +372,8 @@ pub enum AttributeTypeValue {
     // pub bgp_prefix_sid,
     // pub attr_set: Option<AttrSet>,
     // pub unknown: Vec<UnknownAttribute>,
+    #[default]
+    Empty,
 }
 
 impl AttributeTypeValue {
@@ -284,11 +395,12 @@ impl AttributeTypeValue {
             AttributeTypeValue::Communities(_) => {
                 PathAttributeType::Communities
             }
+            AttributeTypeValue::Empty => todo!(),
         }
     }
 }
 
-const PATH_ATTRIBUTES: [PathAttributeType; 8] = [
+const PATH_ATTRIBUTES: [PathAttributeType; 24] = [
     PathAttributeType::AsPath,
     PathAttributeType::Origin,
     PathAttributeType::NextHop,
@@ -297,6 +409,22 @@ const PATH_ATTRIBUTES: [PathAttributeType; 8] = [
     PathAttributeType::AtomicAggregate,
     PathAttributeType::Aggregator,
     PathAttributeType::Communities,
+    PathAttributeType::Reserved,
+    PathAttributeType::OriginatorId,
+    PathAttributeType::ClusterList,
+    PathAttributeType::MpReachNlri,
+    PathAttributeType::MpUnreachNlri,
+    PathAttributeType::ExtendedCommunities,
+    PathAttributeType::As4Path,
+    PathAttributeType::As4Aggregator,
+    PathAttributeType::Connector,
+    PathAttributeType::AsPathLimit,
+    PathAttributeType::PmsiTunnel,
+    PathAttributeType::Ipv6ExtendedCommunities,
+    PathAttributeType::LargeCommunities,
+    PathAttributeType::BgpsecAsPath,
+    PathAttributeType::AttrSet,
+    PathAttributeType::RsrvdDevelopment,
 ];
 
 //------------ Route Status -------------------------------------------------
@@ -334,10 +462,19 @@ struct RouteStatusDelta {
     status: RouteStatus,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-struct RouteStatusDeltas(Vec<RouteStatusDelta>);
+impl RouteStatusDelta {
+    pub fn new(delta_id: (RotondaId, LogicalTime)) -> Self {
+        Self {
+            delta_id,
+            status: RouteStatus::Empty,
+        }
+    }
+}
 
-impl RouteStatusDeltas {
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct RouteStatusDeltaList(Vec<RouteStatusDelta>);
+
+impl RouteStatusDeltaList {
     pub fn current(&self) -> RouteStatus {
         self.0.iter().last().unwrap().status
     }
@@ -411,11 +548,12 @@ impl RawBgpMessage {
     }
 
     // Collect the attributes on the raw message into an AttributeList.
-    pub fn materialized_attributes(&self) -> Result<AttributeList, VmError> {
-        Ok(PATH_ATTRIBUTES
+    pub fn get_attribute_list(&self) -> AttributeList {
+        self.raw_message
+            .path_attributes()
             .iter()
-            .filter_map(|attr| self.get_attribute_value(*attr))
-            .collect())
+            .filter_map(|attr| self.get_attribute_value(attr.type_code()))
+            .collect()
     }
 }
 
