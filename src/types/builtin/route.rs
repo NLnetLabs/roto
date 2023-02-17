@@ -12,7 +12,12 @@
 //                 └─────────────┘  status
 
 use routecore::{
-    bgp::message::update::{PathAttributeType, UpdateMessage},
+    bgp::{
+        communities::{
+            ExtendedCommunity, Ipv6ExtendedCommunity, LargeCommunity,
+        },
+        message::update::{PathAttributeType, UpdateMessage},
+    },
     record::LogicalTime,
 };
 use std::sync::Arc;
@@ -95,9 +100,12 @@ impl RawRouteWithDeltas {
     ) -> Self {
         // The first delta is filled with the path attributes from the raw
         // message.
-        let attribute_deltas = AttributeDeltaList::new().with_new_delta(
-            AttributeDelta::new(delta_id, raw_message.get_attribute_list()),
-        );
+        let mut attribute_deltas = AttributeDeltaList::new();
+
+        attribute_deltas.add_new_delta(AttributeDelta::new(
+            delta_id,
+            raw_message.get_attribute_list(),
+        ));
 
         Self {
             prefix,
@@ -112,13 +120,15 @@ impl RawRouteWithDeltas {
     pub fn new_with_message_ref(
         delta_id: (RotondaId, LogicalTime),
         prefix: routecore::addr::Prefix,
-        raw_message: &Arc<RawBgpMessage>
+        raw_message: &Arc<RawBgpMessage>,
     ) -> Self {
         // The first delta is filled with the path attributes from the raw
         // message.
-        let attribute_deltas = AttributeDeltaList::new().with_new_delta(
-            AttributeDelta::new(delta_id, raw_message.get_attribute_list()),
-        );
+        let mut attribute_deltas = AttributeDeltaList::new();
+        attribute_deltas.add_new_delta(AttributeDelta::new(
+            delta_id,
+            raw_message.get_attribute_list(),
+        ));
 
         Self {
             prefix,
@@ -128,6 +138,10 @@ impl RawRouteWithDeltas {
                 delta_id,
             )]),
         }
+    }
+
+    pub fn add_new_delta(&mut self, delta_id: (RotondaId, LogicalTime), attributes_list: AttributeList) {
+        self.attribute_deltas.add_new_delta(AttributeDelta::new(delta_id, attributes_list));
     }
 
     pub fn get_latest_attribute_value(
@@ -189,8 +203,8 @@ impl AttributeDeltaList {
         key: PathAttributeType,
     ) -> Option<AttributeTypeValue> {
         for delta in self.deltas.iter_mut() {
-            if let Some(mut value) = delta.get_owned(key) {
-                return Some(std::mem::take(&mut value));
+            if let Some(value) = delta.get_owned(key) {
+                return Some(value);
             }
         }
         None
@@ -216,11 +230,11 @@ impl AttributeDeltaList {
     }
 
     // Adds a new delta and returns the whole RouteDeltas instance.
-    fn with_new_delta(self, delta: AttributeDelta) -> Self {
+    fn add_new_delta(&mut self, delta: AttributeDelta) {
         let mut res = Vec::with_capacity(self.deltas.len() + 1);
         res.push(delta);
         res.extend_from_slice(self.deltas.as_slice());
-        AttributeDeltaList { deltas: res }
+        self.deltas = res;
     }
 
     // Iterate over all the most recently added Path Attributes.
@@ -260,13 +274,13 @@ impl IntoIterator for AttributeDeltaList {
 // A set of attribute changes that were atomically created by a Rotonda
 // writer in one go (with one logical timestamp).
 #[derive(Debug, Clone, Eq, PartialEq)]
-struct AttributeDelta {
+pub struct AttributeDelta {
     delta_id: (RotondaId, LogicalTime),
     attributes: AttributeList,
 }
 
 impl AttributeDelta {
-    fn new(
+    pub fn new(
         delta_id: (RotondaId, LogicalTime),
         attributes: AttributeList,
     ) -> Self {
@@ -285,13 +299,6 @@ impl AttributeDelta {
         key: PathAttributeType,
     ) -> Option<AttributeTypeValue> {
         self.attributes.get_owned(key)
-    }
-
-    fn insert(
-        &mut self,
-        attr: AttributeTypeValue,
-    ) -> Option<&AttributeTypeValue> {
-        self.attributes.insert(attr)
     }
 }
 
@@ -372,7 +379,7 @@ impl FromIterator<AttributeTypeValue> for AttributeList {
 
 // Wrapper for all different values and their types that live in a BGP update
 // message.
-#[derive(Debug, PartialEq, Eq, Clone, Default)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum AttributeTypeValue {
     AsPath(Option<routecore::asn::AsPath<Vec<routecore::asn::Asn>>>),
     OriginType(Option<routecore::bgp::types::OriginType>),
@@ -384,22 +391,19 @@ pub enum AttributeTypeValue {
     Communities(Option<Vec<routecore::bgp::communities::Community>>),
     MpReachNlri(Option<Vec<routecore::addr::Prefix>>),
     MpUnReachNlri(Option<Vec<routecore::addr::Prefix>>),
-    // pub originator_id: Option<OriginatorId>,
-    // pub cluster_list: Vec<ClusterId>,
-    // pub pmsi_tunnel: Option<PmsiTunnel>,
-    // pub tunnel_encapsulation: Option<TunnelEncapsulation>,
-    // pub traffic_engineering: Option<TrafficEngineering>,
-    // pub aigp: Option<Aigp>,
-    // pub pe_distinguisher_labels: Vec<PeDistinguisherLabel>,
-    // pub bgp_ls: Option<BgpLs>,
-    // pub bgpsec_path: Option<BgpsecPath>,
-    // pub sfp: Option<Sfp>,
-    // pub bfd_discriminator: Option<BfdDiscriminator>,
-    // pub bgp_prefix_sid,
-    // pub attr_set: Option<AttrSet>,
-    // pub unknown: Vec<UnknownAttribute>,
-    #[default]
-    Empty,
+    OriginatorId(Option<u32>),
+    ClusterList(Option<u32>),
+    ExtendedCommunities(Option<Vec<ExtendedCommunity>>),
+    As4Path(Option<u32>),
+    As4Aggregator(Option<u32>),
+    Connector,
+    AsPathLimit(Option<(u8, u32)>),
+    PmsiTunnel,
+    Ipv6ExtendedCommunities(Option<Vec<Ipv6ExtendedCommunity>>),
+    LargeCommunities(Option<Vec<LargeCommunity>>),
+    BgpsecAsPath,
+    AttrSet,
+    RsrvdDevelopment,
 }
 
 impl AttributeTypeValue {
@@ -427,7 +431,37 @@ impl AttributeTypeValue {
             AttributeTypeValue::MpUnReachNlri(_) => {
                 PathAttributeType::MpUnreachNlri
             }
-            AttributeTypeValue::Empty => todo!(),
+            AttributeTypeValue::OriginatorId(_) => {
+                PathAttributeType::OriginatorId
+            }
+            AttributeTypeValue::ClusterList(_) => {
+                PathAttributeType::ClusterList
+            }
+            AttributeTypeValue::ExtendedCommunities(_) => {
+                PathAttributeType::ExtendedCommunities
+            }
+            AttributeTypeValue::As4Path(_) => PathAttributeType::As4Path,
+            AttributeTypeValue::As4Aggregator(_) => {
+                PathAttributeType::As4Aggregator
+            }
+            AttributeTypeValue::Connector => PathAttributeType::Connector,
+            AttributeTypeValue::AsPathLimit(_) => {
+                PathAttributeType::AsPathLimit
+            }
+            AttributeTypeValue::PmsiTunnel => PathAttributeType::PmsiTunnel,
+            AttributeTypeValue::Ipv6ExtendedCommunities(_) => {
+                PathAttributeType::Ipv6ExtendedCommunities
+            }
+            AttributeTypeValue::LargeCommunities(_) => {
+                PathAttributeType::LargeCommunities
+            }
+            AttributeTypeValue::BgpsecAsPath => {
+                PathAttributeType::BgpsecAsPath
+            }
+            AttributeTypeValue::AttrSet => PathAttributeType::AttrSet,
+            AttributeTypeValue::RsrvdDevelopment => {
+                PathAttributeType::RsrvdDevelopment
+            }
         }
     }
 }
