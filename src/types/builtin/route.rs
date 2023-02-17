@@ -263,15 +263,8 @@ impl AttributeDelta {
         }
     }
 
-    fn get_attr(&self, key: PathAttributeType) -> Option<&AttributeTypeValue> {
+    pub fn get_attr(&self, key: PathAttributeType) -> Option<&AttributeTypeValue> {
         self.attributes.get_attr(key)
-    }
-
-    fn get_attr_owned(
-        &mut self,
-        key: PathAttributeType,
-    ) -> Option<AttributeTypeValue> {
-        self.attributes.get_attr_owned(key)
     }
 }
 
@@ -373,7 +366,7 @@ pub struct RawBgpMessage {
 }
 
 impl RawBgpMessage {
-    pub fn new(
+    fn new(
         message_id: (RotondaId, u64),
         raw_message: UpdateMessage<bytes::Bytes>,
     ) -> Self {
