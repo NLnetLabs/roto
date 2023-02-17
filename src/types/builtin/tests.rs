@@ -74,14 +74,14 @@ mod route {
         let mut attribute_list = AttributeList::new();
         if let std::net::IpAddr::V6(v6) = prefixes[0].addr() {
             attribute_list
-                .insert(AttributeTypeValue::NextHop(Some(NextHop::Ipv6(v6))));
+                .insert_attr(AttributeTypeValue::NextHop(Some(NextHop::Ipv6(v6))));
         }
 
         roto_msgs[2].add_new_delta(delta_id, attribute_list);
 
         println!(
             "materialize! {:#?}",
-            roto_msgs[2].materialized_attributes()
+            roto_msgs[2].materialized_attrs()
         );
     }
 }

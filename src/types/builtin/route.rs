@@ -17,7 +17,7 @@ use routecore::{
     },
     record::LogicalTime,
 };
-use std::{sync::Arc, path::Path};
+use std::sync::Arc;
 
 use crate::{
     compile::CompileError,
@@ -131,7 +131,7 @@ impl RawRouteWithDeltas {
         &self,
         key: PathAttributeType,
     ) -> Option<&AttributeTypeValue> {
-        self.attribute_deltas.get_latest_value(key)
+        self.attribute_deltas.get_latest_attr(key)
             .or_else(|| self.raw_message.get_attr_from_cache(key))
     }
 
@@ -141,7 +141,7 @@ impl RawRouteWithDeltas {
         self.attribute_deltas.iter_latest_attrs()
     }
 
-    pub fn materialized_attributes(&mut self) -> AttributeList {
+    pub fn materialized_attrs(&mut self) -> AttributeList {
         let ad = std::mem::take(&mut self.attribute_deltas);
         ad.into_iter_latest_attrs().collect()
     }
@@ -176,12 +176,12 @@ impl AttributeDeltaList {
     }
 
     // Gets the most recently added value for this Path Attribute.
-    fn get_latest_value(
+    fn get_latest_attr(
         &self,
         key: PathAttributeType,
     ) -> Option<&AttributeTypeValue> {
         for delta in self.deltas.iter() {
-            if let Some(value) = delta.get(key) {
+            if let Some(value) = delta.get_attr(key) {
                 return Some(value);
             }
         }
@@ -190,12 +190,12 @@ impl AttributeDeltaList {
 
     // Swaps the most recently added value for this Path Attribute with an
     // empty value and returns the swapped value.
-    fn take_latest_value(
+    fn take_latest_attr(
         &mut self,
         key: PathAttributeType,
     ) -> Option<AttributeTypeValue> {
         for delta in self.deltas.iter_mut() {
-            if let Some(value) = delta.get_owned(key) {
+            if let Some(value) = delta.get_attr_owned(key) {
                 return Some(value);
             }
         }
@@ -204,12 +204,12 @@ impl AttributeDeltaList {
 
     // Get the most recently added value for this Path Attribute and returns
     // a clone.
-    fn get_value_cloned(
+    fn get_attr_cloned(
         &mut self,
         key: PathAttributeType,
     ) -> Option<AttributeTypeValue> {
         for delta in self.deltas.iter_mut() {
-            if let Some(value) = delta.get(key) {
+            if let Some(value) = delta.get_attr(key) {
                 return Some(value.clone());
             }
         }
@@ -235,7 +235,7 @@ impl AttributeDeltaList {
     ) -> impl Iterator<Item = &AttributeTypeValue> + '_ {
         PATH_ATTRIBUTES
             .iter()
-            .filter_map(|attr| self.get_latest_value(*attr))
+            .filter_map(|attr| self.get_latest_attr(*attr))
     }
 
     // Iterate over all the most recently added Path Attributes.
@@ -244,7 +244,7 @@ impl AttributeDeltaList {
     ) -> impl Iterator<Item = AttributeTypeValue> {
         PATH_ATTRIBUTES
             .iter()
-            .filter_map(move |attr| self.take_latest_value(*attr))
+            .filter_map(move |attr| self.take_latest_attr(*attr))
     }
 }
 
@@ -255,7 +255,7 @@ impl IntoIterator for AttributeDeltaList {
     fn into_iter(mut self) -> Self::IntoIter {
         PATH_ATTRIBUTES
             .iter()
-            .filter_map(|attr| self.get_value_cloned(*attr))
+            .filter_map(|attr| self.get_attr_cloned(*attr))
             .collect::<Vec<_>>()
             .into_iter()
     }
@@ -282,15 +282,15 @@ impl AttributeDelta {
         }
     }
 
-    fn get(&self, key: PathAttributeType) -> Option<&AttributeTypeValue> {
-        self.attributes.get(key)
+    fn get_attr(&self, key: PathAttributeType) -> Option<&AttributeTypeValue> {
+        self.attributes.get_attr(key)
     }
 
-    fn get_owned(
+    fn get_attr_owned(
         &mut self,
         key: PathAttributeType,
     ) -> Option<AttributeTypeValue> {
-        self.attributes.get_owned(key)
+        self.attributes.get_attr_owned(key)
     }
 }
 
@@ -380,6 +380,10 @@ impl RouteStatusDeltaList {
 // A data-structure that stores the array of bytes of the incoming BGP Update
 // message, together with its logical timestamp and an ID of the instance
 // and/or unit that received it originally.
+//
+// The `attr_cache` AttributeList allows readers to get a reference to a path
+// attribute. This avoids having to clone from the AttributeLists in the
+// iterator over the latest attributes.
 #[derive(Debug)]
 pub struct RawBgpMessage {
     message_id: (RotondaId, LogicalTime),
@@ -392,7 +396,9 @@ impl RawBgpMessage {
         message_id: (RotondaId, u64),
         raw_message: UpdateMessage<bytes::Bytes>,
     ) -> Self {
-        let attr_cache = raw_message.get_attribute_list();
+        // Populate the shared cache with all values from the raw message.
+        let attr_cache = raw_message.get_attr_list();
+
         Self {
             message_id,
             raw_message,
@@ -401,11 +407,11 @@ impl RawBgpMessage {
     }
 
     fn get_attr_from_cache(&self, key: PathAttributeType) -> Option<&AttributeTypeValue> {
-        self.attr_cache.get(key)
+        self.attr_cache.get_attr(key)
     }
 
     fn get_attr_from_raw(&self, key: PathAttributeType) -> Option<AttributeTypeValue> {
-        self.raw_message.get_attribute_value(key)
+        self.raw_message.get_attr(key)
     }
 }
 
