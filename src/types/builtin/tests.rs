@@ -1,9 +1,15 @@
 use routecore::{
     addr::Prefix,
-    bgp::message::{Message, SessionConfig, UpdateMessage},
+    bgp::{
+        message::{Message, SessionConfig, UpdateMessage},
+        types::{NextHop, PathAttributeType},
+    },
 };
 
-use crate::types::builtin::{RawBgpMessage, RawRouteWithDeltas, RotondaId};
+use crate::types::builtin::{
+    AttributeDelta, AttributeList, AttributeTypeValue, RawBgpMessage,
+    RawRouteWithDeltas, RotondaId,
+};
 
 #[test]
 fn create_update_msg() {
@@ -52,7 +58,10 @@ fn create_update_msg() {
     }
 
     println!("{:?}", roto_msgs);
-    println!("{:#?}", roto_msgs[2].iter_latest_attrs().collect::<Vec<_>>());
+    println!(
+        "{:#?}",
+        roto_msgs[2].iter_latest_attrs().collect::<Vec<_>>()
+    );
 
     assert_eq!(roto_msgs[0].prefix, prefixes[0]);
     assert_eq!(roto_msgs[1].prefix, prefixes[1]);
@@ -61,6 +70,14 @@ fn create_update_msg() {
     assert_eq!(roto_msgs[4].prefix, prefixes[4]);
     assert_eq!(roto_msgs.len(), 5);
 
-    println!("materialize! {:#?}", roto_msgs[2].materialized_attributes());
+    let delta_id = (RotondaId(0), 1);
+    let mut attribute_list = AttributeList::new();
+    if let std::net::IpAddr::V6(v6) = prefixes[0].addr() {
+        attribute_list
+            .insert(AttributeTypeValue::NextHop(Some(NextHop::Ipv6(v6))));
+    }
 
+    roto_msgs[2].add_new_delta(delta_id, attribute_list);
+
+    println!("materialize! {:#?}", roto_msgs[2].materialized_attributes());
 }
