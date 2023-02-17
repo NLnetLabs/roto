@@ -59,7 +59,7 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
         let status = raw_route.status_deltas.current();
 
         MaterializedRoute {
-            prefix: raw_route.prefix,
+            prefix: raw_route.prefix.into(), // The roto prefix type
             path_attributes: raw_route.attribute_deltas.into_iter().collect(),
             status,
         }
@@ -78,9 +78,9 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
 // the transformers (filters, etc.) along the way.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct RawRouteWithDeltas {
-    prefix: Prefix,
+    pub prefix: routecore::addr::Prefix,
     // Arc'ed BGP message
-    raw_message: Arc<RawBgpMessage>,
+    pub raw_message: Arc<RawBgpMessage>,
     // history of recorded changes to the route
     attribute_deltas: AttributeDeltaList,
     // history of status changes to the route
@@ -88,9 +88,9 @@ pub struct RawRouteWithDeltas {
 }
 
 impl RawRouteWithDeltas {
-    pub fn new(
+    pub fn new_with_message(
         delta_id: (RotondaId, LogicalTime),
-        prefix: Prefix,
+        prefix: routecore::addr::Prefix,
         raw_message: RawBgpMessage,
     ) -> Self {
         // The first delta is filled with the path attributes from the raw
@@ -102,6 +102,27 @@ impl RawRouteWithDeltas {
         Self {
             prefix,
             raw_message: Arc::new(raw_message),
+            attribute_deltas,
+            status_deltas: RouteStatusDeltaList(vec![RouteStatusDelta::new(
+                delta_id,
+            )]),
+        }
+    }
+
+    pub fn new_with_message_ref(
+        delta_id: (RotondaId, LogicalTime),
+        prefix: routecore::addr::Prefix,
+        raw_message: &Arc<RawBgpMessage>
+    ) -> Self {
+        // The first delta is filled with the path attributes from the raw
+        // message.
+        let attribute_deltas = AttributeDeltaList::new().with_new_delta(
+            AttributeDelta::new(delta_id, raw_message.get_attribute_list()),
+        );
+
+        Self {
+            prefix,
+            raw_message: Arc::clone(raw_message),
             attribute_deltas,
             status_deltas: RouteStatusDeltaList(vec![RouteStatusDelta::new(
                 delta_id,
@@ -123,14 +144,8 @@ impl RawRouteWithDeltas {
     }
 
     pub fn materialized_attributes(&mut self) -> AttributeList {
-        let mut al = AttributeList::new();
-        let deltas = &mut self.attribute_deltas;
-
-        for attr in PATH_ATTRIBUTES {
-            al.0.push(deltas.take_latest_value(attr).unwrap())
-        }
-
-        al
+        let ad = std::mem::take(&mut self.attribute_deltas);
+        ad.into_iter_latest_attrs().collect()
     }
 
     pub fn materialize(self) -> MaterializedRoute {
@@ -144,7 +159,7 @@ impl RawRouteWithDeltas {
 // inner lists hold the all the attributes that were changed by a Rotonda
 // writer in in one go (so with one logical timestamp). The outer list holds
 // those attribute lists in chronological order, with newest first.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
 struct AttributeDeltaList {
     deltas: Vec<AttributeDelta>,
 }
@@ -215,6 +230,15 @@ impl AttributeDeltaList {
         PATH_ATTRIBUTES
             .iter()
             .filter_map(|attr| self.get_latest_value(*attr))
+    }
+
+    // Iterate over all the most recently added Path Attributes.
+    fn into_iter_latest_attrs(
+        mut self,
+    ) -> impl Iterator<Item = AttributeTypeValue> {
+        PATH_ATTRIBUTES
+            .iter()
+            .filter_map(move |attr| self.take_latest_value(*attr))
     }
 }
 
@@ -302,7 +326,7 @@ impl AttributeList {
     ) -> Option<AttributeTypeValue> {
         self.0
             .binary_search_by_key(&key, |item| item.get_type())
-            .map(|idx| std::mem::take(&mut self.0[idx]))
+            .map(|idx| self.0.remove(idx))
             .ok()
     }
 
@@ -504,6 +528,16 @@ pub struct RawBgpMessage {
 }
 
 impl RawBgpMessage {
+    pub fn new(
+        message_id: (RotondaId, u64),
+        raw_message: UpdateMessage<bytes::Bytes>,
+    ) -> Self {
+        Self {
+            message_id,
+            raw_message,
+        }
+    }
+
     fn get_attribute_value(
         &self,
         key: PathAttributeType,
@@ -923,4 +957,4 @@ impl From<RouteStatusToken> for usize {
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct RotondaId(usize);
+pub struct RotondaId(pub usize);
