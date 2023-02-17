@@ -4,10 +4,11 @@ use routecore::{
         message::{Message, SessionConfig, UpdateMessage},
         types::{NextHop, PathAttributeType},
     },
+    bgp::message::attribute_list::{AttributeList, AttributeTypeValue}
 };
 
 use crate::types::builtin::{
-    AttributeDelta, AttributeList, AttributeTypeValue, RawBgpMessage,
+    AttributeDelta, 
     RawRouteWithDeltas, RotondaId,
 };
 
@@ -46,7 +47,7 @@ fn create_update_msg() {
     roto_msgs.push(RawRouteWithDeltas::new_with_message(
         msg_id,
         prefixes[0],
-        RawBgpMessage::new(msg_id, update),
+        update,
     ));
 
     for prefix in &prefixes[1..] {

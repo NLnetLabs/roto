@@ -13,10 +13,7 @@
 
 use routecore::{
     bgp::{
-        communities::{
-            ExtendedCommunity, Ipv6ExtendedCommunity, LargeCommunity,
-        },
-        message::update::{PathAttributeType, UpdateMessage},
+        message::{update::{PathAttributeType, UpdateMessage}, attribute_list::{AttributeTypeValue, AttributeList}},
     },
     record::LogicalTime,
 };
@@ -302,170 +299,6 @@ impl AttributeDelta {
     }
 }
 
-// ----------------------------------------------------------------------- //
-// START: ROUTECORE
-// ----------------------------------------------------------------------- //
-
-//------------ AttributeList ------------------------------------------------
-
-// A Set of BGP Path Attributes (its type name ends in `List` because there's
-// a RFC-defined BGP attribute called `attr_set` ("attributes set")). Used to
-// create and modify BGP Update messages.
-
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct AttributeList(Vec<AttributeTypeValue>);
-
-impl AttributeList {
-    pub fn new() -> Self {
-        Self(vec![])
-    }
-
-    pub fn get(&self, key: PathAttributeType) -> Option<&AttributeTypeValue> {
-        self.0
-            .binary_search_by_key(&key, |item| item.get_type())
-            .map(|idx| &self.0[idx])
-            .ok()
-    }
-
-    pub fn get_owned(
-        &mut self,
-        key: PathAttributeType,
-    ) -> Option<AttributeTypeValue> {
-        self.0
-            .binary_search_by_key(&key, |item| item.get_type())
-            .map(|idx| self.0.remove(idx))
-            .ok()
-    }
-
-    pub fn insert(
-        &mut self,
-        value: AttributeTypeValue,
-    ) -> Option<&AttributeTypeValue> {
-        match self
-            .0
-            .binary_search_by_key(&value.get_type(), |item| item.get_type())
-        {
-            Ok(_) => None,
-            Err(idx) => {
-                self.0.insert(idx, value);
-                Some(&self.0[0])
-            }
-        }
-    }
-
-    pub fn replace(&mut self, new_list: AttributeList) {
-        *self = new_list;
-    }
-}
-
-impl FromIterator<AttributeTypeValue> for AttributeList {
-    fn from_iter<T: IntoIterator<Item = AttributeTypeValue>>(
-        iter: T,
-    ) -> Self {
-        let mut attr_list = AttributeList(vec![]);
-
-        for attr in iter {
-            let res = attr_list.insert(attr);
-            if res.is_none() {
-                panic!("Invalid Insert into MGP attributes list")
-            }
-        }
-
-        attr_list
-    }
-}
-
-//------------ Path Attribute TypeValues ------------------------------------
-
-// Wrapper for all different values and their types that live in a BGP update
-// message.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum AttributeTypeValue {
-    AsPath(Option<routecore::asn::AsPath<Vec<routecore::asn::Asn>>>),
-    OriginType(Option<routecore::bgp::types::OriginType>),
-    NextHop(Option<routecore::bgp::types::NextHop>),
-    MultiExitDiscriminator(Option<routecore::bgp::types::MultiExitDisc>),
-    LocalPref(Option<routecore::bgp::types::LocalPref>),
-    AtomicAggregate(bool),
-    Aggregator(Option<routecore::bgp::message::update::Aggregator>),
-    Communities(Option<Vec<routecore::bgp::communities::Community>>),
-    MpReachNlri(Option<Vec<routecore::addr::Prefix>>),
-    MpUnReachNlri(Option<Vec<routecore::addr::Prefix>>),
-    OriginatorId(Option<u32>),
-    ClusterList(Option<u32>),
-    ExtendedCommunities(Option<Vec<ExtendedCommunity>>),
-    As4Path(Option<u32>),
-    As4Aggregator(Option<u32>),
-    Connector,
-    AsPathLimit(Option<(u8, u32)>),
-    PmsiTunnel,
-    Ipv6ExtendedCommunities(Option<Vec<Ipv6ExtendedCommunity>>),
-    LargeCommunities(Option<Vec<LargeCommunity>>),
-    BgpsecAsPath,
-    AttrSet,
-    RsrvdDevelopment,
-}
-
-impl AttributeTypeValue {
-    fn get_type(&self) -> PathAttributeType {
-        match self {
-            AttributeTypeValue::AsPath(_) => PathAttributeType::AsPath,
-            AttributeTypeValue::OriginType(_) => PathAttributeType::Origin,
-            AttributeTypeValue::NextHop(_) => PathAttributeType::NextHop,
-            AttributeTypeValue::MultiExitDiscriminator(_) => {
-                PathAttributeType::MultiExitDisc
-            }
-            AttributeTypeValue::LocalPref(_) => PathAttributeType::LocalPref,
-            AttributeTypeValue::AtomicAggregate(_) => {
-                PathAttributeType::AtomicAggregate
-            }
-            AttributeTypeValue::Aggregator(_) => {
-                PathAttributeType::Aggregator
-            }
-            AttributeTypeValue::Communities(_) => {
-                PathAttributeType::Communities
-            }
-            AttributeTypeValue::MpReachNlri(_) => {
-                PathAttributeType::MpReachNlri
-            }
-            AttributeTypeValue::MpUnReachNlri(_) => {
-                PathAttributeType::MpUnreachNlri
-            }
-            AttributeTypeValue::OriginatorId(_) => {
-                PathAttributeType::OriginatorId
-            }
-            AttributeTypeValue::ClusterList(_) => {
-                PathAttributeType::ClusterList
-            }
-            AttributeTypeValue::ExtendedCommunities(_) => {
-                PathAttributeType::ExtendedCommunities
-            }
-            AttributeTypeValue::As4Path(_) => PathAttributeType::As4Path,
-            AttributeTypeValue::As4Aggregator(_) => {
-                PathAttributeType::As4Aggregator
-            }
-            AttributeTypeValue::Connector => PathAttributeType::Connector,
-            AttributeTypeValue::AsPathLimit(_) => {
-                PathAttributeType::AsPathLimit
-            }
-            AttributeTypeValue::PmsiTunnel => PathAttributeType::PmsiTunnel,
-            AttributeTypeValue::Ipv6ExtendedCommunities(_) => {
-                PathAttributeType::Ipv6ExtendedCommunities
-            }
-            AttributeTypeValue::LargeCommunities(_) => {
-                PathAttributeType::LargeCommunities
-            }
-            AttributeTypeValue::BgpsecAsPath => {
-                PathAttributeType::BgpsecAsPath
-            }
-            AttributeTypeValue::AttrSet => PathAttributeType::AttrSet,
-            AttributeTypeValue::RsrvdDevelopment => {
-                PathAttributeType::RsrvdDevelopment
-            }
-        }
-    }
-}
-
 // All the path attributes that can be present in an
 // AttributeList.
 const PATH_ATTRIBUTES: [PathAttributeType; 22] = [
@@ -522,9 +355,6 @@ pub enum RouteStatus {
     Empty,
 }
 
-// ----------------------------------------------------------------------- //
-// END ROUTECORE
-// ----------------------------------------------------------------------- //
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct RouteStatusDelta {
