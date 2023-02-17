@@ -62,7 +62,7 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
 
         MaterializedRoute {
             prefix: raw_route.prefix.into(), // The roto prefix type
-            path_attributes: raw_route.attribute_deltas.into_iter().collect(),
+            path_attributes: raw_route.attribute_deltas.into_iter_latest_attrs().collect(),
             status,
         }
     }
@@ -135,10 +135,12 @@ impl RawRouteWithDeltas {
             .or_else(|| self.raw_message.get_attr_from_cache(key))
     }
 
-    pub fn iter_latest_attrs(
-        &self,
-    ) -> impl Iterator<Item = &AttributeTypeValue> + '_ {
-        self.attribute_deltas.iter_latest_attrs()
+    pub fn take_latest_attr(
+        &mut self,
+        key: PathAttributeType
+    ) -> Option<AttributeTypeValue> {
+            self.attribute_deltas.take_latest_attr(key)
+            .or_else(|| self.get_attr_from_raw(key))
     }
 
     pub fn materialized_attrs(&mut self) -> AttributeList {
@@ -154,6 +156,26 @@ impl RawRouteWithDeltas {
         self.attribute_deltas.deltas.iter()
     }
 
+    // Iterate over all the most recently added Path Attributes.
+    pub fn iter_latest_attrs(
+        &self,
+    ) -> impl Iterator<Item = &AttributeTypeValue> + '_ {
+        PATH_ATTRIBUTES
+            .iter()
+            .filter_map(|attr| self.get_latest_attr(*attr))
+    }
+
+    // Iterate over all the most recently added Path Attributes.
+    pub fn into_iter_latest_attrs(
+        mut self,
+    ) -> impl Iterator<Item = AttributeTypeValue> {
+        PATH_ATTRIBUTES
+            .iter()
+            .filter_map(move |attr| self.take_latest_attr(*attr))
+    }
+
+    // Ignore all the additions to this message and inspect the original
+    // bytes.
     pub fn get_attr_from_raw(&self, key: PathAttributeType) -> Option<AttributeTypeValue> {
         self.raw_message.get_attr_from_raw(key)
     }
@@ -181,7 +203,7 @@ impl AttributeDeltaList {
         key: PathAttributeType,
     ) -> Option<&AttributeTypeValue> {
         for delta in self.deltas.iter() {
-            if let Some(value) = delta.get_attr(key) {
+            if let Some(value) = delta.attributes.get_attr(key) {
                 return Some(value);
             }
         }
@@ -195,30 +217,11 @@ impl AttributeDeltaList {
         key: PathAttributeType,
     ) -> Option<AttributeTypeValue> {
         for delta in self.deltas.iter_mut() {
-            if let Some(value) = delta.get_attr_owned(key) {
+            if let Some(value) = delta.attributes.get_attr_owned(key) {
                 return Some(value);
             }
         }
         None
-    }
-
-    // Get the most recently added value for this Path Attribute and returns
-    // a clone.
-    fn get_attr_cloned(
-        &mut self,
-        key: PathAttributeType,
-    ) -> Option<AttributeTypeValue> {
-        for delta in self.deltas.iter_mut() {
-            if let Some(value) = delta.get_attr(key) {
-                return Some(value.clone());
-            }
-        }
-        None
-    }
-
-    // Gets the most recent AttributeList that was added by a Rotonda writer,
-    fn get_latest_delta(&self) -> Option<&AttributeList> {
-        self.deltas.first().map(|delta| &delta.attributes)
     }
 
     // Adds a new delta and returns the whole RouteDeltas instance.
@@ -230,34 +233,12 @@ impl AttributeDeltaList {
     }
 
     // Iterate over all the most recently added Path Attributes.
-    fn iter_latest_attrs(
-        &self,
-    ) -> impl Iterator<Item = &AttributeTypeValue> + '_ {
-        PATH_ATTRIBUTES
-            .iter()
-            .filter_map(|attr| self.get_latest_attr(*attr))
-    }
-
-    // Iterate over all the most recently added Path Attributes.
     fn into_iter_latest_attrs(
         mut self,
     ) -> impl Iterator<Item = AttributeTypeValue> {
         PATH_ATTRIBUTES
             .iter()
             .filter_map(move |attr| self.take_latest_attr(*attr))
-    }
-}
-
-impl IntoIterator for AttributeDeltaList {
-    type Item = AttributeTypeValue;
-    type IntoIter = std::vec::IntoIter<AttributeTypeValue>;
-
-    fn into_iter(mut self) -> Self::IntoIter {
-        PATH_ATTRIBUTES
-            .iter()
-            .filter_map(|attr| self.get_attr_cloned(*attr))
-            .collect::<Vec<_>>()
-            .into_iter()
     }
 }
 
