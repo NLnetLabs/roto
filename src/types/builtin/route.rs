@@ -17,7 +17,7 @@ use routecore::{
     },
     record::LogicalTime,
 };
-use std::sync::Arc;
+use std::{sync::Arc, path::Path};
 
 use crate::{
     compile::CompileError,
@@ -93,21 +93,14 @@ impl RawRouteWithDeltas {
     pub fn new_with_message(
         delta_id: (RotondaId, LogicalTime),
         prefix: routecore::addr::Prefix,
-        raw_message: RawBgpMessage,
+        raw_message: UpdateMessage<bytes::Bytes>,
     ) -> Self {
-        // The first delta is filled with the path attributes from the raw
-        // message.
-        let mut attribute_deltas = AttributeDeltaList::new();
-
-        attribute_deltas.add_new_delta(AttributeDelta::new(
-            delta_id,
-            raw_message.get_attribute_list(),
-        ));
+        let raw_message = RawBgpMessage::new(delta_id, raw_message);
 
         Self {
             prefix,
             raw_message: Arc::new(raw_message),
-            attribute_deltas,
+            attribute_deltas: AttributeDeltaList::new(),
             status_deltas: RouteStatusDeltaList(vec![RouteStatusDelta::new(
                 delta_id,
             )]),
@@ -119,18 +112,11 @@ impl RawRouteWithDeltas {
         prefix: routecore::addr::Prefix,
         raw_message: &Arc<RawBgpMessage>,
     ) -> Self {
-        // The first delta is filled with the path attributes from the raw
-        // message.
-        let mut attribute_deltas = AttributeDeltaList::new();
-        attribute_deltas.add_new_delta(AttributeDelta::new(
-            delta_id,
-            raw_message.get_attribute_list(),
-        ));
 
         Self {
             prefix,
             raw_message: Arc::clone(raw_message),
-            attribute_deltas,
+            attribute_deltas: AttributeDeltaList::new(),
             status_deltas: RouteStatusDeltaList(vec![RouteStatusDelta::new(
                 delta_id,
             )]),
@@ -141,11 +127,12 @@ impl RawRouteWithDeltas {
         self.attribute_deltas.add_new_delta(AttributeDelta::new(delta_id, attributes_list));
     }
 
-    pub fn get_latest_attribute_value(
+    pub fn get_latest_attr(
         &self,
         key: PathAttributeType,
     ) -> Option<&AttributeTypeValue> {
         self.attribute_deltas.get_latest_value(key)
+            .or_else(|| self.raw_message.get_attr_from_cache(key))
     }
 
     pub fn iter_latest_attrs(
@@ -161,6 +148,14 @@ impl RawRouteWithDeltas {
 
     pub fn materialize(self) -> MaterializedRoute {
         self.into()
+    }
+
+    pub fn iter_deltas(&self) -> impl Iterator<Item = &AttributeDelta> + '_ { 
+        self.attribute_deltas.deltas.iter()
+    }
+
+    pub fn get_attr_from_raw(&self, key: PathAttributeType) -> Option<AttributeTypeValue> {
+        self.raw_message.get_attr_from_raw(key)
     }
 }
 
@@ -389,6 +384,7 @@ impl RouteStatusDeltaList {
 pub struct RawBgpMessage {
     message_id: (RotondaId, LogicalTime),
     raw_message: UpdateMessage<bytes::Bytes>,
+    attr_cache: AttributeList
 }
 
 impl RawBgpMessage {
@@ -396,10 +392,20 @@ impl RawBgpMessage {
         message_id: (RotondaId, u64),
         raw_message: UpdateMessage<bytes::Bytes>,
     ) -> Self {
+        let attr_cache = raw_message.get_attribute_list();
         Self {
             message_id,
             raw_message,
+            attr_cache
         }
+    }
+
+    fn get_attr_from_cache(&self, key: PathAttributeType) -> Option<&AttributeTypeValue> {
+        self.attr_cache.get(key)
+    }
+
+    fn get_attr_from_raw(&self, key: PathAttributeType) -> Option<AttributeTypeValue> {
+        self.raw_message.get_attribute_value(key)
     }
 }
 
