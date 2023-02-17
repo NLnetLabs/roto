@@ -358,6 +358,8 @@ pub enum AttributeTypeValue {
     AtomicAggregate(bool),
     Aggregator(Option<routecore::bgp::message::update::Aggregator>),
     Communities(Option<Vec<routecore::bgp::communities::Community>>),
+    MpReachNlri(Option<Vec<routecore::addr::Prefix>>),
+    MpUnReachNlri(Option<Vec<routecore::addr::Prefix>>),
     // pub originator_id: Option<OriginatorId>,
     // pub cluster_list: Vec<ClusterId>,
     // pub pmsi_tunnel: Option<PmsiTunnel>,
@@ -395,12 +397,20 @@ impl AttributeTypeValue {
             AttributeTypeValue::Communities(_) => {
                 PathAttributeType::Communities
             }
+            AttributeTypeValue::MpReachNlri(_) => {
+                PathAttributeType::MpReachNlri
+            }
+            AttributeTypeValue::MpUnReachNlri(_) => {
+                PathAttributeType::MpUnreachNlri
+            }
             AttributeTypeValue::Empty => todo!(),
         }
     }
 }
 
-const PATH_ATTRIBUTES: [PathAttributeType; 24] = [
+// All the path attributes that can be present in an
+// AttributeList.
+const PATH_ATTRIBUTES: [PathAttributeType; 22] = [
     PathAttributeType::AsPath,
     PathAttributeType::Origin,
     PathAttributeType::NextHop,
@@ -412,8 +422,10 @@ const PATH_ATTRIBUTES: [PathAttributeType; 24] = [
     PathAttributeType::Reserved,
     PathAttributeType::OriginatorId,
     PathAttributeType::ClusterList,
-    PathAttributeType::MpReachNlri,
-    PathAttributeType::MpUnreachNlri,
+    // Mp(Un)ReachNlri does not live in an attribute list, since they lists
+    // are stored per prefix (the nlri is thus exploded).
+    // PathAttributeType::MpReachNlri,
+    // PathAttributeType::MpUnreachNlri,
     PathAttributeType::ExtendedCommunities,
     PathAttributeType::As4Path,
     PathAttributeType::As4Aggregator,
@@ -529,8 +541,24 @@ impl RawBgpMessage {
             }
             PathAttributeType::OriginatorId => todo!(),
             PathAttributeType::ClusterList => todo!(),
-            PathAttributeType::MpReachNlri => todo!(),
-            PathAttributeType::MpUnreachNlri => todo!(),
+            PathAttributeType::MpReachNlri => {
+                Some(AttributeTypeValue::MpReachNlri(Some(
+                    self.raw_message
+                        .nlris()
+                        .iter()
+                        .filter_map(|n| n.prefix())
+                        .collect(),
+                )))
+            }
+            PathAttributeType::MpUnreachNlri => {
+                Some(AttributeTypeValue::MpUnReachNlri(Some(
+                    self.raw_message
+                        .withdrawals()
+                        .iter()
+                        .filter_map(|n| n.prefix())
+                        .collect(),
+                )))
+            }
             PathAttributeType::ExtendedCommunities => todo!(),
             PathAttributeType::As4Path => todo!(),
             PathAttributeType::As4Aggregator => todo!(),
