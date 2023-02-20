@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod route {
     use routecore::{
-        bgp::message::attribute_list::{AttributeList, AttributeTypeValue},
+        bgp::message::attribute::{AttributeList, AttributeTypeValue},
         bgp::{
             message::{Message, SessionConfig, UpdateMessage},
             types::NextHop,

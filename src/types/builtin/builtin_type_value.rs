@@ -4,6 +4,8 @@
 
 use std::fmt::Display;
 
+use routecore::bgp::route::RouteStatus;
+
 use crate::compile::CompileError;
 
 use super::super::typedef::TypeDef;
