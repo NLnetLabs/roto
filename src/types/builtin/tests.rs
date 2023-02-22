@@ -1,11 +1,10 @@
 #[cfg(test)]
 mod route {
     use routecore::{
-        bgp::message::attribute::{AttributeList, AttributeTypeValue},
         bgp::{
             message::{Message, SessionConfig, UpdateMessage},
             types::NextHop,
-        },
+        }, asn::Asn,
     };
 
     use crate::types::builtin::{RawRouteWithDeltas, RotondaId};
@@ -59,7 +58,7 @@ mod route {
         println!("{:?}", roto_msgs);
         println!(
             "{:#?}",
-            roto_msgs[2].iter_latest_attrs().collect::<Vec<_>>()
+            roto_msgs[2].get_latest_attrs()
         );
 
         assert_eq!(roto_msgs[0].prefix, prefixes[0]);
@@ -71,17 +70,23 @@ mod route {
 
         let delta_id = (RotondaId(0), 1);
 
-        let mut attribute_list = AttributeList::new();
+        let mut change_set = roto_msgs[0].new_delta();
         if let std::net::IpAddr::V6(v6) = prefixes[0].addr() {
-            attribute_list
-                .insert_attr(AttributeTypeValue::NextHop(Some(NextHop::Ipv6(v6))));
+            change_set
+                .set_next_hop(NextHop::Ipv6(v6));
         }
 
-        roto_msgs[2].add_new_delta(delta_id, attribute_list);
+        let res = change_set.prepend_to_as_path(Asn::from(211321));
+        assert!(res.is_ok());
+
+        println!("change set {:?}", change_set);
+        println!("as_path {:?}", &change_set.as_path.materialize());
+
+        roto_msgs[2].add_delta(delta_id, change_set);
 
         println!(
             "materialize! {:#?}",
-            roto_msgs[2].materialized_attrs()
+            roto_msgs[2].get_latest_attrs()
         );
     }
 }

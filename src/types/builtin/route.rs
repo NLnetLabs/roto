@@ -13,8 +13,9 @@
 
 use routecore::{
     bgp::{
+        communities::{ExtendedCommunity, LargeCommunity},
+        message::UpdateMessage,
         route::RouteStatus,
-        message::{update::{PathAttributeType, UpdateMessage}, attribute::{AttributeTypeValue, AttributeList}},
     },
     record::LogicalTime,
 };
@@ -23,11 +24,17 @@ use std::sync::Arc;
 use crate::{
     compile::CompileError,
     traits::{MethodProps, RotoType, TokenConvert},
-    types::{typedef::TypeDef, typevalue::TypeValue},
+    types::{
+        builtin::attributes::AttrChangeSet, typedef::TypeDef,
+        typevalue::TypeValue,
+    },
     vm::{Payload, VmError},
 };
 
-use super::{AsPath, Boolean, BuiltinTypeValue, Community, Prefix};
+use super::{
+    attributes::{ChangedOption, AsPathModifier}, AsPath, Boolean, BuiltinTypeValue, Community,
+    Prefix,
+};
 
 //============ Route ========================================================
 
@@ -53,7 +60,7 @@ use super::{AsPath, Boolean, BuiltinTypeValue, Community, Prefix};
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct MaterializedRoute {
     pub prefix: Prefix,
-    pub path_attributes: AttributeList,
+    pub path_attributes: AttrChangeSet,
     pub status: RouteStatus,
 }
 
@@ -63,7 +70,7 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
 
         MaterializedRoute {
             prefix: raw_route.prefix.into(), // The roto prefix type
-            path_attributes: raw_route.attribute_deltas.into_iter_latest_attrs().collect(),
+            path_attributes: raw_route.attribute_deltas.take_latest_attrs(),
             status,
         }
     }
@@ -113,7 +120,6 @@ impl RawRouteWithDeltas {
         prefix: routecore::addr::Prefix,
         raw_message: &Arc<RawBgpMessage>,
     ) -> Self {
-
         Self {
             prefix,
             raw_message: Arc::clone(raw_message),
@@ -124,61 +130,135 @@ impl RawRouteWithDeltas {
         }
     }
 
-    pub fn add_new_delta(&mut self, delta_id: (RotondaId, LogicalTime), attributes_list: AttributeList) {
-        self.attribute_deltas.add_new_delta(AttributeDelta::new(delta_id, attributes_list));
+    pub fn new_delta(&self) -> AttrChangeSet {
+        if let Some(attr_set) = self.attribute_deltas.deltas.last() {
+            attr_set.attributes.copy_change_set()
+        } else {
+            self.changeset_from_raw()
+        }
     }
 
-    pub fn get_latest_attr(
-        &self,
-        key: PathAttributeType,
-    ) -> Option<&AttributeTypeValue> {
-        self.attribute_deltas.get_latest_attr(key)
-            .or_else(|| self.raw_message.get_attr_from_cache(key))
-    }
-
-    pub fn take_latest_attr(
+    pub fn add_delta(
         &mut self,
-        key: PathAttributeType
-    ) -> Option<AttributeTypeValue> {
-            self.attribute_deltas.take_latest_attr(key)
-            .or_else(|| self.get_attr_from_raw(key))
+        delta_id: (RotondaId, LogicalTime),
+        attributes_list: AttrChangeSet,
+    ) {
+        self.attribute_deltas
+            .add_new_delta(AttributeDelta::new(delta_id, attributes_list));
     }
 
-    pub fn materialized_attrs(&mut self) -> AttributeList {
-        let ad = std::mem::take(&mut self.attribute_deltas);
-        ad.into_iter_latest_attrs().collect()
+    pub fn get_latest_attrs(&self) -> AttrChangeSet {
+        self.attribute_deltas
+            .get_latest_attrs().cloned()
+            .unwrap_or_else(|| self.changeset_from_raw())
+    }
+
+    fn changeset_from_raw(&self) -> AttrChangeSet {
+        AttrChangeSet {
+            as_path: AsPathModifier::new(self.raw_message.raw_message.aspath_as_slice().unwrap_or_else(|| routecore::asn::AsPath { segments: vec![].into() })),
+            origin_type: ChangedOption {
+                value: self.raw_message.raw_message.origin(),
+                changed: false,
+            },
+            next_hop: ChangedOption {
+                value: self.raw_message.raw_message.next_hop(),
+                changed: false,
+            },
+            multi_exit_discriminator: ChangedOption {
+                value: self.raw_message.raw_message.multi_exit_desc(),
+                changed: false,
+            },
+            local_pref: ChangedOption {
+                value: self.raw_message.raw_message.local_pref(),
+                changed: false,
+            },
+            atomic_aggregate: ChangedOption {
+                value: Some(
+                    self.raw_message.raw_message.is_atomic_aggregate(),
+                ),
+                changed: false,
+            },
+            aggregator: ChangedOption {
+                value: self.raw_message.raw_message.aggregator(),
+                changed: false,
+            },
+            communities: ChangedOption {
+                value: self
+                    .raw_message
+                    .raw_message
+                    .all_communities()
+                    .map(|c| c.as_slice().into()),
+                changed: false,
+            },
+            originator_id: ChangedOption {
+                value: None,
+                changed: false,
+            },
+            cluster_list: ChangedOption {
+                value: None,
+                changed: false,
+            },
+            extended_communities: ChangedOption {
+                value: self.raw_message.raw_message.ext_communities().map(
+                    |c| {
+                        c.collect::<Vec<ExtendedCommunity>>()
+                            .as_slice()
+                            .into()
+                    },
+                ),
+                changed: false,
+            },
+            as4_path: ChangedOption {
+                value: self.raw_message.raw_message.as4path_as_slice(),
+                changed: false,
+            },
+            as4_aggregator: ChangedOption {
+                value: None,
+                changed: false,
+            },
+            connector: ChangedOption {
+                value: None,
+                changed: false,
+            },
+            as_path_limit: ChangedOption {
+                value: None,
+                changed: false,
+            },
+            pmsi_tunnel: ChangedOption {
+                value: None,
+                changed: false,
+            },
+            ipv6_extended_communities: ChangedOption {
+                value: None,
+                changed: false,
+            },
+            large_communities: ChangedOption {
+                value: self.raw_message.raw_message.large_communities().map(
+                    |c| c.collect::<Vec<LargeCommunity>>().as_slice().into(),
+                ),
+                changed: false,
+            },
+            bgpsec_as_path: ChangedOption {
+                value: None,
+                changed: false,
+            },
+            attr_set: ChangedOption {
+                value: None,
+                changed: false,
+            },
+            rsrvd_development: ChangedOption {
+                value: None,
+                changed: false,
+            },
+        }
     }
 
     pub fn materialize(self) -> MaterializedRoute {
         self.into()
     }
 
-    pub fn iter_deltas(&self) -> impl Iterator<Item = &AttributeDelta> + '_ { 
+    pub fn iter_deltas(&self) -> impl Iterator<Item = &AttributeDelta> + '_ {
         self.attribute_deltas.deltas.iter()
-    }
-
-    // Iterate over all the most recently added Path Attributes.
-    pub fn iter_latest_attrs(
-        &self,
-    ) -> impl Iterator<Item = &AttributeTypeValue> + '_ {
-        PATH_ATTRIBUTES
-            .iter()
-            .filter_map(|attr| self.get_latest_attr(*attr))
-    }
-
-    // Iterate over all the most recently added Path Attributes.
-    pub fn into_iter_latest_attrs(
-        mut self,
-    ) -> impl Iterator<Item = AttributeTypeValue> {
-        PATH_ATTRIBUTES
-            .iter()
-            .filter_map(move |attr| self.take_latest_attr(*attr))
-    }
-
-    // Ignore all the additions to this message and inspect the original
-    // bytes.
-    pub fn get_attr_from_raw(&self, key: PathAttributeType) -> Option<AttributeTypeValue> {
-        self.raw_message.get_attr_from_raw(key)
     }
 }
 
@@ -199,30 +279,17 @@ impl AttributeDeltaList {
     }
 
     // Gets the most recently added value for this Path Attribute.
-    fn get_latest_attr(
-        &self,
-        key: PathAttributeType,
-    ) -> Option<&AttributeTypeValue> {
-        for delta in self.deltas.iter() {
-            if let Some(value) = delta.attributes.get_attr(key) {
-                return Some(value);
-            }
-        }
-        None
+    fn get_latest_attrs(&self) -> Option<&AttrChangeSet> {
+        self.deltas.last().map(|d| &d.attributes)
     }
 
-    // Swaps the most recently added value for this Path Attribute with an
-    // empty value and returns the swapped value.
-    fn take_latest_attr(
-        &mut self,
-        key: PathAttributeType,
-    ) -> Option<AttributeTypeValue> {
-        for delta in self.deltas.iter_mut() {
-            if let Some(value) = delta.attributes.get_attr_owned(key) {
-                return Some(value);
-            }
-        }
-        None
+    fn take_latest_attrs(&self) -> AttrChangeSet {
+        self.deltas
+            .last()
+            .map(|d| d.attributes.clone())
+            .unwrap_or_else(|| {
+                panic!("No AttributeDeltaList available");
+            })
     }
 
     // Adds a new delta and returns the whole RouteDeltas instance.
@@ -231,15 +298,6 @@ impl AttributeDeltaList {
         res.push(delta);
         res.extend_from_slice(self.deltas.as_slice());
         self.deltas = res;
-    }
-
-    // Iterate over all the most recently added Path Attributes.
-    fn into_iter_latest_attrs(
-        mut self,
-    ) -> impl Iterator<Item = AttributeTypeValue> {
-        PATH_ATTRIBUTES
-            .iter()
-            .filter_map(move |attr| self.take_latest_attr(*attr))
     }
 }
 
@@ -250,56 +308,20 @@ impl AttributeDeltaList {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct AttributeDelta {
     delta_id: (RotondaId, LogicalTime),
-    attributes: AttributeList,
+    attributes: AttrChangeSet,
 }
 
 impl AttributeDelta {
     pub fn new(
         delta_id: (RotondaId, LogicalTime),
-        attributes: AttributeList,
+        attributes: AttrChangeSet,
     ) -> Self {
         Self {
             delta_id,
             attributes,
         }
     }
-
-    pub fn get_attr(&self, key: PathAttributeType) -> Option<&AttributeTypeValue> {
-        self.attributes.get_attr(key)
-    }
 }
-
-// All the path attributes that can be present in an
-// AttributeList.
-const PATH_ATTRIBUTES: [PathAttributeType; 22] = [
-    PathAttributeType::AsPath,
-    PathAttributeType::Origin,
-    PathAttributeType::NextHop,
-    PathAttributeType::MultiExitDisc,
-    PathAttributeType::LocalPref,
-    PathAttributeType::AtomicAggregate,
-    PathAttributeType::Aggregator,
-    PathAttributeType::Communities,
-    PathAttributeType::Reserved,
-    PathAttributeType::OriginatorId,
-    PathAttributeType::ClusterList,
-    // Mp(Un)ReachNlri does not live in an attribute list, since they lists
-    // are stored per prefix (the nlri is thus exploded).
-    // PathAttributeType::MpReachNlri,
-    // PathAttributeType::MpUnreachNlri,
-    PathAttributeType::ExtendedCommunities,
-    PathAttributeType::As4Path,
-    PathAttributeType::As4Aggregator,
-    PathAttributeType::Connector,
-    PathAttributeType::AsPathLimit,
-    PathAttributeType::PmsiTunnel,
-    PathAttributeType::Ipv6ExtendedCommunities,
-    PathAttributeType::LargeCommunities,
-    PathAttributeType::BgpsecAsPath,
-    PathAttributeType::AttrSet,
-    PathAttributeType::RsrvdDevelopment,
-];
-
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct RouteStatusDelta {
@@ -338,7 +360,7 @@ impl RouteStatusDeltaList {
 pub struct RawBgpMessage {
     message_id: (RotondaId, LogicalTime),
     raw_message: UpdateMessage<bytes::Bytes>,
-    attr_cache: AttributeList
+    // attr_cache: AttrChangeSet
 }
 
 impl RawBgpMessage {
@@ -346,22 +368,10 @@ impl RawBgpMessage {
         message_id: (RotondaId, u64),
         raw_message: UpdateMessage<bytes::Bytes>,
     ) -> Self {
-        // Populate the shared cache with all values from the raw message.
-        let attr_cache = raw_message.get_attr_list();
-
         Self {
             message_id,
             raw_message,
-            attr_cache
         }
-    }
-
-    fn get_attr_from_cache(&self, key: PathAttributeType) -> Option<&AttributeTypeValue> {
-        self.attr_cache.get_attr(key)
-    }
-
-    fn get_attr_from_raw(&self, key: PathAttributeType) -> Option<AttributeTypeValue> {
-        self.raw_message.get_attr(key)
     }
 }
 
@@ -662,7 +672,7 @@ pub enum RouteStatusToken {
     IsStale = 3,
     IsStartOfRouteRefresh = 4,
     IsWithdrawn = 5,
-    IsEmpty= 6,
+    IsEmpty = 6,
 }
 
 impl TokenConvert for RouteStatusToken {}
