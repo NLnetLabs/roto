@@ -12,8 +12,7 @@ categories = ["network-programming"]
 license = "BSD-3-Clause"
 
 [dependencies]
-# routecore = { git = "https://github.com/NLnetLabs/routecore", branch = "main", features = [ "bgp" ] }
-routecore = { path = "../../routecore", features = [ "bgp" ] }
+routecore = { path = "../../routecore", features = [ "bgp" ]}
+bytes = "1"
 nom = "7.1"
-bytes = { version = "1" }
 smallvec = { version = "1.8", features = [ "const_generics" ] }
