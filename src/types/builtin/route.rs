@@ -32,7 +32,7 @@ use crate::{
 };
 
 use super::{
-    attributes::{ChangedOption, AsPathModifier}, AsPath, Boolean, BuiltinTypeValue, Community,
+    attributes::ChangedOption, AsPath, Boolean, BuiltinTypeValue, Community,
     Prefix,
 };
 
@@ -70,7 +70,7 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
 
         MaterializedRoute {
             prefix: raw_route.prefix.into(), // The roto prefix type
-            path_attributes: raw_route.attribute_deltas.take_latest_attrs(),
+            path_attributes: raw_route.clone_latest_attrs(),
             status,
         }
     }
@@ -132,7 +132,7 @@ impl RawRouteWithDeltas {
 
     pub fn new_delta(&self) -> AttrChangeSet {
         if let Some(attr_set) = self.attribute_deltas.deltas.last() {
-            attr_set.attributes.copy_change_set()
+            attr_set.attributes.clone()
         } else {
             self.changeset_from_raw()
         }
@@ -147,15 +147,38 @@ impl RawRouteWithDeltas {
             .add_new_delta(AttributeDelta::new(delta_id, attributes_list));
     }
 
-    pub fn get_latest_attrs(&self) -> AttrChangeSet {
+    pub fn clone_latest_attrs(&self) -> AttrChangeSet {
         self.attribute_deltas
-            .get_latest_attrs().cloned()
+            .get_latest_delta()
+            .cloned()
             .unwrap_or_else(|| self.changeset_from_raw())
+    }
+
+    pub fn get_latest_delta(&self) -> Option<&AttrChangeSet> {
+        self.attribute_deltas.get_latest_delta()
+    }
+
+    pub fn get_attrs_for_rotonda_id(
+        &self,
+        rotonda_id: RotondaId,
+    ) -> Option<&AttrChangeSet> {
+        self.attribute_deltas
+            .deltas
+            .iter()
+            .find(|d| d.delta_id.0 == rotonda_id)
+            .map(|d| &d.attributes)
     }
 
     fn changeset_from_raw(&self) -> AttrChangeSet {
         AttrChangeSet {
-            as_path: AsPathModifier::new(self.raw_message.raw_message.aspath_as_slice().unwrap_or_else(|| routecore::asn::AsPath { segments: vec![].into() })),
+            as_path: ChangedOption {
+                value: self
+                    .raw_message
+                    .raw_message
+                    .aspath()
+                    .map(|p| p.into()),
+                changed: false,
+            },
             origin_type: ChangedOption {
                 value: self.raw_message.raw_message.origin(),
                 changed: false,
@@ -183,11 +206,7 @@ impl RawRouteWithDeltas {
                 changed: false,
             },
             communities: ChangedOption {
-                value: self
-                    .raw_message
-                    .raw_message
-                    .all_communities()
-                    .map(|c| c.as_slice().into()),
+                value: self.raw_message.raw_message.all_communities(),
                 changed: false,
             },
             originator_id: ChangedOption {
@@ -199,17 +218,15 @@ impl RawRouteWithDeltas {
                 changed: false,
             },
             extended_communities: ChangedOption {
-                value: self.raw_message.raw_message.ext_communities().map(
-                    |c| {
-                        c.collect::<Vec<ExtendedCommunity>>()
-                            .as_slice()
-                            .into()
-                    },
-                ),
+                value: self
+                    .raw_message
+                    .raw_message
+                    .ext_communities()
+                    .map(|c| c.collect::<Vec<ExtendedCommunity>>()),
                 changed: false,
             },
             as4_path: ChangedOption {
-                value: self.raw_message.raw_message.as4path_as_slice(),
+                value: self.raw_message.raw_message.as4path(),
                 changed: false,
             },
             as4_aggregator: ChangedOption {
@@ -233,9 +250,11 @@ impl RawRouteWithDeltas {
                 changed: false,
             },
             large_communities: ChangedOption {
-                value: self.raw_message.raw_message.large_communities().map(
-                    |c| c.collect::<Vec<LargeCommunity>>().as_slice().into(),
-                ),
+                value: self
+                    .raw_message
+                    .raw_message
+                    .large_communities()
+                    .map(|c| c.collect::<Vec<LargeCommunity>>()),
                 changed: false,
             },
             bgpsec_as_path: ChangedOption {
@@ -251,10 +270,6 @@ impl RawRouteWithDeltas {
                 changed: false,
             },
         }
-    }
-
-    pub fn materialize(self) -> MaterializedRoute {
-        self.into()
     }
 
     pub fn iter_deltas(&self) -> impl Iterator<Item = &AttributeDelta> + '_ {
@@ -279,20 +294,11 @@ impl AttributeDeltaList {
     }
 
     // Gets the most recently added value for this Path Attribute.
-    fn get_latest_attrs(&self) -> Option<&AttrChangeSet> {
+    fn get_latest_delta(&self) -> Option<&AttrChangeSet> {
         self.deltas.last().map(|d| &d.attributes)
     }
 
-    fn take_latest_attrs(&self) -> AttrChangeSet {
-        self.deltas
-            .last()
-            .map(|d| d.attributes.clone())
-            .unwrap_or_else(|| {
-                panic!("No AttributeDeltaList available");
-            })
-    }
-
-    // Adds a new delta and returns the whole RouteDeltas instance.
+    // Adds a new delta to the list.
     fn add_new_delta(&mut self, delta: AttributeDelta) {
         let mut res = Vec::with_capacity(self.deltas.len() + 1);
         res.push(delta);

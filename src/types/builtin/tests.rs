@@ -3,7 +3,7 @@ mod route {
     use routecore::{
         bgp::{
             message::{Message, SessionConfig, UpdateMessage},
-            types::NextHop,
+            types::{OriginType, NextHop},
         }, asn::Asn,
     };
 
@@ -58,7 +58,7 @@ mod route {
         println!("{:?}", roto_msgs);
         println!(
             "{:#?}",
-            roto_msgs[2].get_latest_attrs()
+            roto_msgs[2].clone_latest_attrs()
         );
 
         assert_eq!(roto_msgs[0].prefix, prefixes[0]);
@@ -73,20 +73,23 @@ mod route {
         let mut change_set = roto_msgs[0].new_delta();
         if let std::net::IpAddr::V6(v6) = prefixes[0].addr() {
             change_set
-                .set_next_hop(NextHop::Ipv6(v6));
+                .next_hop.set(NextHop::Ipv6(v6));
         }
 
-        let res = change_set.prepend_to_as_path(Asn::from(211321));
+        let res = change_set.as_path.prepend(Asn::from(211321));
         assert!(res.is_ok());
 
+        let res = change_set.origin_type.set(OriginType::Incomplete);
+        assert_eq!(res, Some(OriginType::Igp));
+
         println!("change set {:?}", change_set);
-        println!("as_path {:?}", &change_set.as_path.materialize());
+        println!("as_path {:?}", &change_set.as_path);
 
         roto_msgs[2].add_delta(delta_id, change_set);
 
         println!(
             "materialize! {:#?}",
-            roto_msgs[2].get_latest_attrs()
+            roto_msgs[2].clone_latest_attrs()
         );
     }
 }
