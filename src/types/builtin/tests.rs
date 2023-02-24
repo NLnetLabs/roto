@@ -70,7 +70,7 @@ mod route {
 
         let delta_id = (RotondaId(0), 1);
 
-        let mut change_set = roto_msgs[0].new_delta();
+        let mut change_set = roto_msgs[0].clone_latest_attrs();
         if let std::net::IpAddr::V6(v6) = prefixes[0].addr() {
             change_set
                 .next_hop.set(NextHop::Ipv6(v6));

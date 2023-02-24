@@ -45,6 +45,7 @@ pub struct AttrChangeSet {
     pub rsrvd_development: ChangedOption<Todo>, // RsrvdDevelopment,
 }
 
+
 //------------ ChangedOption ------------------------------------------------
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -85,7 +86,7 @@ impl<T> ChangedOption<T> {
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub struct Todo {}
+pub struct Todo;
 
 impl ChangedOption<AsPath<Vec<MaterializedPathSegment>>> {
     pub fn new(as_path: AsPath<Vec<Asn>>) -> Self {

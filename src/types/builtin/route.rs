@@ -70,7 +70,7 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
 
         MaterializedRoute {
             prefix: raw_route.prefix.into(), // The roto prefix type
-            path_attributes: raw_route.clone_latest_attrs(),
+            path_attributes: raw_route.take_latest_attrs(),
             status,
         }
     }
@@ -84,8 +84,13 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
 //
 // It will be stored as a array of bytes, its BGP path attributes can be
 // extracted from the original bytes on the fly (with routecore).
-// Additionally it features a data-structure that stores the changes made by
-// the transformers (filters, etc.) along the way.
+// Additionally it features a data-structure (AttributesDeltaList) that
+// stores the changes made by the transformers (filters, etc.) along the way.
+//
+// Each Delta describes the complete state of all the attributes at the time it
+// was stored in the RawRouteWithDeltas instance. So it reflects both the
+// original attributes from the raw message, their modifications and the
+// newly set attributes.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct RawRouteWithDeltas {
     pub prefix: routecore::addr::Prefix,
@@ -104,11 +109,17 @@ impl RawRouteWithDeltas {
         raw_message: UpdateMessage<bytes::Bytes>,
     ) -> Self {
         let raw_message = RawBgpMessage::new(delta_id, raw_message);
+        let attribute_deltas = AttributeDeltaList::new();
+        // This would store the attributes in the raw message as the first delta.
+        // attribute_deltas.add_new_delta(AttributeDelta::new(
+        //     delta_id,
+        //     raw_message.changeset_from_raw(),
+        // ));
 
         Self {
             prefix,
             raw_message: Arc::new(raw_message),
-            attribute_deltas: AttributeDeltaList::new(),
+            attribute_deltas,
             status_deltas: RouteStatusDeltaList(vec![RouteStatusDelta::new(
                 delta_id,
             )]),
@@ -130,35 +141,38 @@ impl RawRouteWithDeltas {
         }
     }
 
-    pub fn new_delta(&self) -> AttrChangeSet {
+    // Get a clone of the latest delta, or of the original attributes from
+    // the raw message, if no delta has been added (yet).
+    pub fn clone_latest_attrs(&self) -> AttrChangeSet {
         if let Some(attr_set) = self.attribute_deltas.deltas.last() {
             attr_set.attributes.clone()
         } else {
-            self.changeset_from_raw()
+            self.raw_message.changeset_from_raw()
         }
     }
 
-    pub fn add_delta(
-        &mut self,
-        delta_id: (RotondaId, LogicalTime),
-        attributes_list: AttrChangeSet,
-    ) {
+    // Get either the moved last delta (it is removed from the Delta list), or
+    // get a freshly rolled ChangeSet from the raw message, if there are no
+    // deltas.
+    pub fn take_latest_attrs(mut self) -> AttrChangeSet {
+        if self.attribute_deltas.deltas.is_empty() {
+            return self.raw_message.changeset_from_raw();
+        }
+
         self.attribute_deltas
-            .add_new_delta(AttributeDelta::new(delta_id, attributes_list));
+            .deltas
+            .remove(self.attribute_deltas.deltas.len() - 1)
+            .attributes
     }
 
-    pub fn clone_latest_attrs(&self) -> AttrChangeSet {
-        self.attribute_deltas
-            .get_latest_delta()
-            .cloned()
-            .unwrap_or_else(|| self.changeset_from_raw())
-    }
-
+    // Get the latest changeset, if any. So, this will *not* try to get the
+    // original attributes in the raw message.
     pub fn get_latest_delta(&self) -> Option<&AttrChangeSet> {
         self.attribute_deltas.get_latest_delta()
     }
 
-    pub fn get_attrs_for_rotonda_id(
+    // Get a ChangeSet that was added by a specific unit, e.g. a filter.
+    pub fn get_delta_for_rotonda_id(
         &self,
         rotonda_id: RotondaId,
     ) -> Option<&AttrChangeSet> {
@@ -169,107 +183,14 @@ impl RawRouteWithDeltas {
             .map(|d| &d.attributes)
     }
 
-    fn changeset_from_raw(&self) -> AttrChangeSet {
-        AttrChangeSet {
-            as_path: ChangedOption {
-                value: self
-                    .raw_message
-                    .raw_message
-                    .aspath()
-                    .map(|p| p.into()),
-                changed: false,
-            },
-            origin_type: ChangedOption {
-                value: self.raw_message.raw_message.origin(),
-                changed: false,
-            },
-            next_hop: ChangedOption {
-                value: self.raw_message.raw_message.next_hop(),
-                changed: false,
-            },
-            multi_exit_discriminator: ChangedOption {
-                value: self.raw_message.raw_message.multi_exit_desc(),
-                changed: false,
-            },
-            local_pref: ChangedOption {
-                value: self.raw_message.raw_message.local_pref(),
-                changed: false,
-            },
-            atomic_aggregate: ChangedOption {
-                value: Some(
-                    self.raw_message.raw_message.is_atomic_aggregate(),
-                ),
-                changed: false,
-            },
-            aggregator: ChangedOption {
-                value: self.raw_message.raw_message.aggregator(),
-                changed: false,
-            },
-            communities: ChangedOption {
-                value: self.raw_message.raw_message.all_communities(),
-                changed: false,
-            },
-            originator_id: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            cluster_list: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            extended_communities: ChangedOption {
-                value: self
-                    .raw_message
-                    .raw_message
-                    .ext_communities()
-                    .map(|c| c.collect::<Vec<ExtendedCommunity>>()),
-                changed: false,
-            },
-            as4_path: ChangedOption {
-                value: self.raw_message.raw_message.as4path(),
-                changed: false,
-            },
-            as4_aggregator: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            connector: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            as_path_limit: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            pmsi_tunnel: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            ipv6_extended_communities: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            large_communities: ChangedOption {
-                value: self
-                    .raw_message
-                    .raw_message
-                    .large_communities()
-                    .map(|c| c.collect::<Vec<LargeCommunity>>()),
-                changed: false,
-            },
-            bgpsec_as_path: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            attr_set: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            rsrvd_development: ChangedOption {
-                value: None,
-                changed: false,
-            },
-        }
+    // Add a ChangeSet with some metadata to this RawRouteWithDelta.
+    pub fn add_delta(
+        &mut self,
+        delta_id: (RotondaId, LogicalTime),
+        change_set: AttrChangeSet,
+    ) {
+        self.attribute_deltas
+            .add_new_delta(AttributeDelta::new(delta_id, change_set));
     }
 
     pub fn iter_deltas(&self) -> impl Iterator<Item = &AttributeDelta> + '_ {
@@ -279,10 +200,12 @@ impl RawRouteWithDeltas {
 
 //------------ RouteDeltas --------------------------------------------------
 
-// The history of changes to the route in the form of a list of lists. The
-// inner lists hold the all the attributes that were changed by a Rotonda
-// writer in in one go (so with one logical timestamp). The outer list holds
-// those attribute lists in chronological order, with newest first.
+// The history of changes to this route. Each Delta holds the attributes that
+// were originally present in the raw message, their modifications and newly
+// created ones.
+//
+// The list of deltas describes the changes that were made by one Rotonda
+// unit along the way.
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 struct AttributeDeltaList {
     deltas: Vec<AttributeDelta>,
@@ -293,7 +216,7 @@ impl AttributeDeltaList {
         Self { deltas: vec![] }
     }
 
-    // Gets the most recently added value for this Path Attribute.
+    // Gets the most recently added delta in this list.
     fn get_latest_delta(&self) -> Option<&AttrChangeSet> {
         self.deltas.last().map(|d| &d.attributes)
     }
@@ -310,7 +233,7 @@ impl AttributeDeltaList {
 //------------ AttributeDelta ----------------------------------------------
 
 // A set of attribute changes that were atomically created by a Rotonda
-// writer in one go (with one logical timestamp).
+// unit in one go (with one logical timestamp).
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct AttributeDelta {
     delta_id: (RotondaId, LogicalTime),
@@ -366,7 +289,6 @@ impl RouteStatusDeltaList {
 pub struct RawBgpMessage {
     message_id: (RotondaId, LogicalTime),
     raw_message: UpdateMessage<bytes::Bytes>,
-    // attr_cache: AttrChangeSet
 }
 
 impl RawBgpMessage {
@@ -377,6 +299,102 @@ impl RawBgpMessage {
         Self {
             message_id,
             raw_message,
+        }
+    }
+
+    // Synthesize a ChangeSet from the raw message.
+    fn changeset_from_raw(&self) -> AttrChangeSet {
+        AttrChangeSet {
+            as_path: ChangedOption {
+                value: self.raw_message.aspath().map(|p| p.into()),
+                changed: false,
+            },
+            origin_type: ChangedOption {
+                value: self.raw_message.origin(),
+                changed: false,
+            },
+            next_hop: ChangedOption {
+                value: self.raw_message.next_hop(),
+                changed: false,
+            },
+            multi_exit_discriminator: ChangedOption {
+                value: self.raw_message.multi_exit_desc(),
+                changed: false,
+            },
+            local_pref: ChangedOption {
+                value: self.raw_message.local_pref(),
+                changed: false,
+            },
+            atomic_aggregate: ChangedOption {
+                value: Some(self.raw_message.is_atomic_aggregate()),
+                changed: false,
+            },
+            aggregator: ChangedOption {
+                value: self.raw_message.aggregator(),
+                changed: false,
+            },
+            communities: ChangedOption {
+                value: self.raw_message.all_communities(),
+                changed: false,
+            },
+            originator_id: ChangedOption {
+                value: None,
+                changed: false,
+            },
+            cluster_list: ChangedOption {
+                value: None,
+                changed: false,
+            },
+            extended_communities: ChangedOption {
+                value: self
+                    .raw_message
+                    .ext_communities()
+                    .map(|c| c.collect::<Vec<ExtendedCommunity>>()),
+                changed: false,
+            },
+            as4_path: ChangedOption {
+                value: self.raw_message.as4path(),
+                changed: false,
+            },
+            as4_aggregator: ChangedOption {
+                value: None,
+                changed: false,
+            },
+            connector: ChangedOption {
+                value: None,
+                changed: false,
+            },
+            as_path_limit: ChangedOption {
+                value: None,
+                changed: false,
+            },
+            pmsi_tunnel: ChangedOption {
+                value: None,
+                changed: false,
+            },
+            ipv6_extended_communities: ChangedOption {
+                value: None,
+                changed: false,
+            },
+            large_communities: ChangedOption {
+                value: self
+                    .raw_message
+                    .large_communities()
+                    .map(|c| c.collect::<Vec<LargeCommunity>>()),
+                changed: false,
+            },
+            bgpsec_as_path: ChangedOption {
+                value: None,
+                changed: false,
+            },
+            attr_set: ChangedOption {
+                value: None,
+                changed: false,
+            },
+            rsrvd_development: ChangedOption {
+                value: None,
+                changed: false,
+            },
         }
     }
 }
