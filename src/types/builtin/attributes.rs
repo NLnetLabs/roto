@@ -1,6 +1,6 @@
 use routecore::{
     asn::{
-        encode_sentinel, AsPath, Asn, MaterializedPathSegment, SegmentType,
+        AsPath, Asn, MaterializedPathSegment,
     },
     bgp::communities::{
         Community, ExtendedCommunity, Ipv6ExtendedCommunity, LargeCommunity,
@@ -102,8 +102,8 @@ impl ChangedOption<AsPath<Vec<MaterializedPathSegment>>> {
         }
     }
 
-    pub fn get(&self) -> Option<AsPath<Vec<Asn>>> {
-        self.value.as_ref().map(|p| p.into())
+    pub fn get(&self, pos: u8) -> Option<&MaterializedPathSegment> {
+        self.value.as_ref().and_then(|p| p.get(pos))
     }
 
     // Undoes all previous modifications in this change set!
@@ -117,73 +117,32 @@ impl ChangedOption<AsPath<Vec<MaterializedPathSegment>>> {
     }
 
     pub fn append(&mut self, asn: Asn) -> Result<(), VmError> {
-        if let Some(mut p) = self.value.clone() {
-            p.segments.push(MaterializedPathSegment {
-                stype: SegmentType::Sequence,
-                elements: vec![
-                    encode_sentinel(SegmentType::Sequence, 1),
-                    asn,
-                ],
-            });
-            *self = ChangedOption {
-                value: Some(p),
-                changed: true,
-            }
-        }
+        self.value.as_mut().map(|p| p.append(vec![asn]));
+        self.changed = true;
 
         Ok(())
     }
 
     pub fn prepend(&mut self, asn: Asn) -> Result<(), VmError> {
-        let as_path = AsPath {
-            segments: self
-                .value
-                .clone()
-                .unwrap()
-                .segments
-                .into_iter()
-                .collect::<Vec<MaterializedPathSegment>>(),
-        };
+        self.value
+            .as_mut()
+            .map(|p| p.prepend(vec![asn]));
+        self.changed = true;
 
-        let mut pre_path = AsPath {
-            segments: vec![MaterializedPathSegment {
-                stype: SegmentType::Sequence,
-                elements: vec![asn],
-            }],
-        };
-        pre_path.segments.extend_from_slice(&as_path.segments);
-
-        *self = ChangedOption {
-            value: Some(pre_path),
-            changed: true,
-        };
         Ok(())
     }
 
     pub fn insert(&mut self, pos: u8, asn: Asn) -> Result<(), VmError> {
-        let as_path = AsPath {
-            segments: self
-                .value
-                .clone()
-                .unwrap()
-                .segments
-                .into_iter()
-                .collect::<Vec<MaterializedPathSegment>>(),
-        };
+        self.value
+            .as_mut()
+            .map(|p| p.insert(pos, vec![asn]));
+        self.changed = true;
 
-        let mut pre_path = (as_path.segments[0..pos as usize]).to_vec();
-        pre_path.push(MaterializedPathSegment {
-            stype: SegmentType::Sequence,
-            elements: vec![encode_sentinel(SegmentType::Sequence, 0), asn],
-        });
-        pre_path.push(asn.into());
-        pre_path.extend_from_slice(&as_path.segments[pos as usize..]);
-
-        *self = ChangedOption {
-            value: Some(AsPath { segments: pre_path }),
-            changed: true,
-        };
         Ok(())
+    }
+
+    pub fn len(&self) -> Option<u8> {
+        self.value.as_ref().map(|p| p.len())
     }
 }
 
