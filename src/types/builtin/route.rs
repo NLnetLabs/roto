@@ -165,10 +165,19 @@ impl RawRouteWithDeltas {
             .attributes
     }
 
-    // Get the latest changeset, if any. So, this will *not* try to get the
-    // original attributes in the raw message.
-    pub fn get_latest_delta(&self) -> Option<&AttrChangeSet> {
-        self.attribute_deltas.get_latest_delta()
+
+    // Get a reference to the current state of the attributes, including the
+    // original raw message. In the latter case it will copy the raw message
+    // attributes into the attribute deltas, and return a reference from that,
+    // hence the `&mut self`.
+    pub fn get_latest_attrs(&mut self) -> &AttrChangeSet {
+        if self.attribute_deltas.deltas.is_empty() {
+            self.attribute_deltas.add_new_delta(AttributeDelta::new(
+                self.raw_message.message_id,
+    self.raw_message.changeset_from_raw(),
+            ));
+        }
+        self.attribute_deltas.get_latest_change_set().unwrap()
     }
 
     // Get a ChangeSet that was added by a specific unit, e.g. a filter.
@@ -217,7 +226,7 @@ impl AttributeDeltaList {
     }
 
     // Gets the most recently added delta in this list.
-    fn get_latest_delta(&self) -> Option<&AttrChangeSet> {
+    fn get_latest_change_set(&self) -> Option<&AttrChangeSet> {
         self.deltas.last().map(|d| &d.attributes)
     }
 
