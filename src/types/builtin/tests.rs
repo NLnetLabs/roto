@@ -91,5 +91,10 @@ mod route {
             "materialize! {:#?}",
             roto_msgs[2].clone_latest_attrs()
         );
+
+        let attr_set = roto_msgs[2].get_latest_attrs();
+        assert_eq!(attr_set.as_path.len(), Some(2));
+        assert_eq!(attr_set.as_path.get(0).unwrap(), &Asn::from(211321).into());
+        assert_eq!(attr_set.as_path.get(1).unwrap(), &Asn::from(200).into());
     }
 }
