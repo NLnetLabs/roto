@@ -1,7 +1,6 @@
 mod primitives;
 mod route;
 mod builtin_type_value;
-mod attributes;
 
 mod tests;
 

@@ -15,7 +15,7 @@ use routecore::{
     bgp::{
         communities::{ExtendedCommunity, LargeCommunity},
         message::UpdateMessage,
-        route::RouteStatus,
+        route::{RouteStatus, AttrChangeSet, ChangedOption},
     },
     record::LogicalTime,
 };
@@ -25,14 +25,13 @@ use crate::{
     compile::CompileError,
     traits::{MethodProps, RotoType, TokenConvert},
     types::{
-        builtin::attributes::AttrChangeSet, typedef::TypeDef,
-        typevalue::TypeValue,
+        typevalue::TypeValue, typedef::TypeDef,
     },
     vm::{Payload, VmError},
 };
 
 use super::{
-    attributes::ChangedOption, AsPath, Boolean, BuiltinTypeValue, Community,
+    AsPath, Boolean, BuiltinTypeValue, Community,
     Prefix,
 };
 
@@ -153,14 +152,17 @@ impl RawRouteWithDeltas {
 
     // Return a clone of the latest attribute set, so that changes can be
     // made to it by the caller.
-    pub fn open_new_delta(&mut self, delta_id: (RotondaId, LogicalTime)) -> AttributeDelta {
-        let delta_index = self.attribute_deltas.get_new_delta_index();
+    pub fn open_new_delta(
+        &mut self,
+        delta_id: (RotondaId, LogicalTime),
+    ) -> Result<AttributeDelta, VmError> {
+        let delta_index = self.attribute_deltas.acquire_new_delta()?;
 
-        AttributeDelta {
+        Ok(AttributeDelta {
             attributes: self.clone_latest_attrs(),
             delta_id,
-            delta_index
-        }
+            delta_index,
+        })
     }
 
     // Get either the moved last delta (it is removed from the Delta list), or
@@ -177,19 +179,19 @@ impl RawRouteWithDeltas {
             .attributes
     }
 
-
     // Get a reference to the current state of the attributes, including the
     // original raw message. In the latter case it will copy the raw message
     // attributes into the attribute deltas, and return a reference from that,
     // hence the `&mut self`.
     pub fn get_latest_attrs(&mut self) -> &AttrChangeSet {
         if self.attribute_deltas.deltas.is_empty() {
-            let idx = self.attribute_deltas.get_new_delta_index();
-
-            self.attribute_deltas.store_delta(AttributeDelta::new(
-                self.raw_message.message_id,idx,
-    self.raw_message.changeset_from_raw(),
-            )).unwrap();
+            self.attribute_deltas
+                .store_delta(AttributeDelta::new(
+                    self.raw_message.message_id,
+                    0,
+                    self.raw_message.changeset_from_raw(),
+                ))
+                .unwrap();
         }
         self.attribute_deltas.get_latest_change_set().unwrap()
     }
@@ -211,8 +213,7 @@ impl RawRouteWithDeltas {
         &mut self,
         attr_delta: AttributeDelta,
     ) -> Result<(), VmError> {
-        self.attribute_deltas
-            .store_delta(attr_delta)
+        self.attribute_deltas.store_delta(attr_delta)
     }
 
     pub fn iter_deltas(&self) -> impl Iterator<Item = &AttributeDelta> + '_ {
@@ -233,12 +234,15 @@ struct AttributeDeltaList {
     deltas: Vec<AttributeDelta>,
     // The delta that was handed out the most recently. This is the only
     // delta that can be written back!
-    locked_delta: usize
+    locked_delta: Option<usize>,
 }
 
 impl AttributeDeltaList {
     fn new() -> Self {
-        Self { deltas: vec![], locked_delta: 0 }
+        Self {
+            deltas: vec![],
+            locked_delta: None,
+        }
     }
 
     // Gets the most recently added delta in this list.
@@ -248,19 +252,27 @@ impl AttributeDeltaList {
 
     // Adds a new delta to the list.
     fn store_delta(&mut self, delta: AttributeDelta) -> Result<(), VmError> {
-        if self.locked_delta != delta.delta_index {
-            println!("{} {}", self.locked_delta, delta.delta_index);
-            return Err(VmError::DeltaLocked)
+        if let Some(locked_delta) = self.locked_delta {
+            if locked_delta != delta.delta_index {
+                println!("{:?} {}", self.locked_delta, delta.delta_index);
+                return Err(VmError::DeltaLocked);
+            }
         }
 
         self.deltas.push(delta);
+        self.locked_delta = None;
 
         Ok(())
     }
 
-    fn get_new_delta_index(&mut self) -> usize {
-        self.locked_delta += 1;
-        self.locked_delta
+    fn acquire_new_delta(&mut self) -> Result<usize, VmError> {
+        if self.locked_delta.is_none() {
+            let delta_index = self.deltas.len();
+            self.locked_delta = Some(delta_index);
+            Ok(delta_index)
+        } else {
+            Err(VmError::DeltaLocked)
+        }
     }
 }
 
