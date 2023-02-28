@@ -143,11 +143,23 @@ impl RawRouteWithDeltas {
 
     // Get a clone of the latest delta, or of the original attributes from
     // the raw message, if no delta has been added (yet).
-    pub fn clone_latest_attrs(&self) -> AttrChangeSet {
+    fn clone_latest_attrs(&self) -> AttrChangeSet {
         if let Some(attr_set) = self.attribute_deltas.deltas.last() {
             attr_set.attributes.clone()
         } else {
             self.raw_message.changeset_from_raw()
+        }
+    }
+
+    // Return a clone of the latest attribute set, so that changes can be
+    // made to it by the caller.
+    pub fn open_new_delta(&mut self, delta_id: (RotondaId, LogicalTime)) -> AttributeDelta {
+        let delta_index = self.attribute_deltas.get_new_delta_index();
+
+        AttributeDelta {
+            attributes: self.clone_latest_attrs(),
+            delta_id,
+            delta_index
         }
     }
 
@@ -172,10 +184,12 @@ impl RawRouteWithDeltas {
     // hence the `&mut self`.
     pub fn get_latest_attrs(&mut self) -> &AttrChangeSet {
         if self.attribute_deltas.deltas.is_empty() {
-            self.attribute_deltas.add_new_delta(AttributeDelta::new(
-                self.raw_message.message_id,
+            let idx = self.attribute_deltas.get_new_delta_index();
+
+            self.attribute_deltas.store_delta(AttributeDelta::new(
+                self.raw_message.message_id,idx,
     self.raw_message.changeset_from_raw(),
-            ));
+            )).unwrap();
         }
         self.attribute_deltas.get_latest_change_set().unwrap()
     }
@@ -193,13 +207,12 @@ impl RawRouteWithDeltas {
     }
 
     // Add a ChangeSet with some metadata to this RawRouteWithDelta.
-    pub fn add_delta(
+    pub fn store_delta(
         &mut self,
-        delta_id: (RotondaId, LogicalTime),
-        change_set: AttrChangeSet,
-    ) {
+        attr_delta: AttributeDelta,
+    ) -> Result<(), VmError> {
         self.attribute_deltas
-            .add_new_delta(AttributeDelta::new(delta_id, change_set));
+            .store_delta(attr_delta)
     }
 
     pub fn iter_deltas(&self) -> impl Iterator<Item = &AttributeDelta> + '_ {
@@ -218,11 +231,14 @@ impl RawRouteWithDeltas {
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 struct AttributeDeltaList {
     deltas: Vec<AttributeDelta>,
+    // The delta that was handed out the most recently. This is the only
+    // delta that can be written back!
+    locked_delta: usize
 }
 
 impl AttributeDeltaList {
     fn new() -> Self {
-        Self { deltas: vec![] }
+        Self { deltas: vec![], locked_delta: 0 }
     }
 
     // Gets the most recently added delta in this list.
@@ -231,11 +247,20 @@ impl AttributeDeltaList {
     }
 
     // Adds a new delta to the list.
-    fn add_new_delta(&mut self, delta: AttributeDelta) {
-        let mut res = Vec::with_capacity(self.deltas.len() + 1);
-        res.push(delta);
-        res.extend_from_slice(self.deltas.as_slice());
-        self.deltas = res;
+    fn store_delta(&mut self, delta: AttributeDelta) -> Result<(), VmError> {
+        if self.locked_delta != delta.delta_index {
+            println!("{} {}", self.locked_delta, delta.delta_index);
+            return Err(VmError::DeltaLocked)
+        }
+
+        self.deltas.push(delta);
+
+        Ok(())
+    }
+
+    fn get_new_delta_index(&mut self) -> usize {
+        self.locked_delta += 1;
+        self.locked_delta
     }
 }
 
@@ -246,16 +271,19 @@ impl AttributeDeltaList {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct AttributeDelta {
     delta_id: (RotondaId, LogicalTime),
-    attributes: AttrChangeSet,
+    delta_index: usize,
+    pub attributes: AttrChangeSet,
 }
 
 impl AttributeDelta {
-    pub fn new(
+    fn new(
         delta_id: (RotondaId, LogicalTime),
+        delta_index: usize,
         attributes: AttrChangeSet,
     ) -> Self {
         Self {
             delta_id,
+            delta_index,
             attributes,
         }
     }

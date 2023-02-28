@@ -1026,7 +1026,8 @@ pub enum VmError {
     InvalidWrite,
     InvalidConversion,
     UnexpectedTermination,
-    AsPathTooLong
+    AsPathTooLong,
+    DeltaLocked
 }
 
 #[derive(Debug, Clone)]
