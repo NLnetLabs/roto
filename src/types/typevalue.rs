@@ -207,6 +207,9 @@ impl TypeValue {
             TypeValue::Builtin(BuiltinTypeValue::Community(community)) => {
                 community.exec_value_method(method_token, args, return_type)
             }
+            TypeValue::Builtin(BuiltinTypeValue::OriginType(origin)) => {
+                origin.exec_value_method(method_token, args, return_type)
+            }
             TypeValue::Builtin(BuiltinTypeValue::U8(u8_lit)) => {
                 u8_lit.exec_value_method(method_token, args, return_type)
             }
@@ -288,6 +291,9 @@ pub(crate) fn exec_consume_value_method<'a>(
         }
         TypeValue::Builtin(BuiltinTypeValue::Community(community)) => {
             community.exec_consume_value_method(method_token, args, return_type)
+        }
+        TypeValue::Builtin(BuiltinTypeValue::OriginType(origin)) => {
+            origin.exec_consume_value_method(method_token, args, return_type)
         }
         TypeValue::Builtin(BuiltinTypeValue::U8(u8_lit)) => {
             u8_lit.exec_consume_value_method(method_token, args, return_type)

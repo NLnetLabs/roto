@@ -13,9 +13,8 @@
 
 use routecore::{
     bgp::{
-        communities::{ExtendedCommunity, LargeCommunity},
         message::UpdateMessage,
-        route::{RouteStatus, AttrChangeSet, ChangedOption},
+        route::{RouteStatus, AttrChangeSet},
     },
     record::LogicalTime,
 };
@@ -27,12 +26,12 @@ use crate::{
     types::{
         typevalue::TypeValue, typedef::TypeDef,
     },
-    vm::{Payload, VmError},
+    vm::VmError,
 };
 
 use super::{
     AsPath, Boolean, BuiltinTypeValue, Community,
-    Prefix,
+    Prefix, OriginType,
 };
 
 //============ Route ========================================================
@@ -378,6 +377,11 @@ impl RawRouteWithDeltas {
                 RouteToken::AsPath.into(),
                 vec![],
             )),
+            "origin" => Ok(MethodProps::new(
+                TypeValue::Builtin(BuiltinTypeValue::OriginType(OriginType(None))),
+                RouteToken::OriginType.into(),
+                vec![]
+            )),
             "communities" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Community(Community(
                     None,
@@ -532,24 +536,6 @@ impl From<usize> for RouteToken {
 impl From<RouteToken> for usize {
     fn from(val: RouteToken) -> Self {
         val as usize
-    }
-}
-
-impl Payload for RawRouteWithDeltas {
-    fn set_field(
-        &mut self,
-        field: crate::ast::ShortString,
-        value: TypeValue,
-    ) {
-        todo!()
-    }
-
-    fn get(&self, field: crate::ast::ShortString) -> Option<&TypeValue> {
-        todo!()
-    }
-
-    fn take_value(self) -> TypeValue {
-        TypeValue::Builtin(BuiltinTypeValue::Route(Some(self)))
     }
 }
 

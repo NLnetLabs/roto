@@ -76,7 +76,7 @@ impl From<Token> for usize {
 }
 
 #[derive(Debug)]
-pub(crate) struct MethodProps {
+pub struct MethodProps {
     pub(crate) return_type_value: TypeValue,
     pub(crate) method_token: Token,
     pub(crate) arg_types: Vec<TypeDef>,
@@ -103,10 +103,12 @@ impl MethodProps {
     }
 }
 
-pub(crate) trait RotoType
+pub trait RotoType: Into<TypeValue>
 where
-    Self: std::fmt::Debug,
+    Self: std::fmt::Debug + Sized,
 {
+    fn take_value(self) -> Self { self }
+
     fn get_props_for_method(
         self,
         method_name: &super::ast::Identifier,

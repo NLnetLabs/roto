@@ -3,10 +3,10 @@ use std::fmt::{Display, Formatter};
 use crate::ast::ShortString;
 use crate::compile::CompileError;
 use crate::traits::{MethodProps, RotoType, TokenConvert};
-use crate::vm::{Payload, VmError};
+use crate::vm::VmError;
 
 use super::builtin::{
-    AsPath, Asn, Community, IpAddress, Prefix, PrefixLength, U32, U8, BuiltinTypeValue,
+    AsPath, Asn, Community, IpAddress, Prefix, PrefixLength, U32, U8, BuiltinTypeValue, OriginType,
 };
 use super::typedef::TypeDef;
 use super::typevalue::TypeValue;
@@ -45,6 +45,9 @@ impl<'a> From<&'a TypeDef> for ElementTypeValue {
             }
             TypeDef::Community => {
                 ElementTypeValue::Primitive(Community(None).into())
+            }
+            TypeDef::OriginType => {
+                ElementTypeValue::Primitive(OriginType(None).into())
             }
             TypeDef::List(ty) => ElementTypeValue::Nested(Box::new(
                 TypeValue::List(ty.as_ref().into()),
@@ -326,6 +329,12 @@ impl RotoType for List {
     }
 }
 
+impl From<List> for TypeValue {
+    fn from(value: List) -> Self {
+        TypeValue::List(value)
+    }
+}
+
 #[derive(Debug)]
 #[repr(u8)]
 pub enum ListToken {
@@ -362,6 +371,7 @@ impl From<ListToken> for usize {
         t as usize
     }
 }
+
 
 //---------------- Record type ----------------------------------------------
 
@@ -559,6 +569,12 @@ impl From<Vec<(ShortString, Box<TypeDef>)>> for Record {
     }
 }
 
+impl From<Record> for TypeValue {
+    fn from(value: Record) -> Self {
+        TypeValue::Record(value)
+    }
+}
+
 #[derive(Debug)]
 #[repr(u8)]
 pub enum RecordToken {
@@ -584,20 +600,5 @@ impl From<usize> for RecordToken {
 impl From<RecordToken> for usize {
     fn from(t: RecordToken) -> Self {
         t as usize
-    }
-}
-
-impl Payload for Record {
-    fn set_field(&mut self, field: ShortString, value: TypeValue) {
-        todo!()
-    }
-
-    fn get(&self, field: ShortString) -> Option<&TypeValue> {
-        todo!()
-    }
-
-    fn take_value(self) -> TypeValue {
-        // let v = std::mem::take(self);
-        TypeValue::Record(self)
     }
 }

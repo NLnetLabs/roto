@@ -8,7 +8,6 @@ use crate::compile::CompileError;
 use crate::traits::{MethodProps, RotoType, TokenConvert};
 use crate::vm::VmError;
 
-use super::super::collections::Record;
 use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 use super::builtin_type_value::BuiltinTypeValue;
@@ -1286,16 +1285,6 @@ impl From<CommunityToken> for usize {
 pub struct Communities(
     pub(crate) Option<Vec<Community>>,
 );
-
-// ----------- PrefixRecord -------------------------------------------------
-
-#[derive(Debug, PartialEq)]
-pub struct PrefixRecord {
-    pub prefix: routecore::addr::Prefix,
-    pub matches: bool,
-    pub match_type: MatchType,
-    pub record: Record,
-}
 
 //------------ MatchType ----------------------------------------------------
 

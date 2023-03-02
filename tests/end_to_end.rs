@@ -168,7 +168,7 @@ fn test_data(
 
     println!("\nRESULT");
     println!("action: {}", res.0);
-    println!("rx    : {}", res.1);
+    println!("rx    : {:?}", res.1);
     println!("tx    : {:?}", res.2);
 
     Ok(())

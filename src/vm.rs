@@ -7,7 +7,7 @@ use std::{
 use crate::{
     ast::{self, AcceptReject, CompareOp, ShortString},
     compile::{CompileError, MirBlock},
-    traits::Token,
+    traits::{Token, RotoType},
     types::{
         builtin::{Boolean, BuiltinTypeValue},
         collections::{ElementTypeValue, Record},
@@ -297,17 +297,17 @@ pub struct VirtualMachine<'a> {
 impl<'a> VirtualMachine<'a> {
     fn _move_rx_tx_to_mem(
         &mut self,
-        rx: impl Payload,
-        tx: Option<impl Payload>,
+        rx: impl RotoType,
+        tx: Option<impl RotoType>,
         mem: &RefCell<LinearMemory>,
     ) {
         let mut m = mem.borrow_mut();
         let rx = rx.take_value();
-        m.set_mem_pos(0, rx);
+        m.set_mem_pos(0, rx.into());
 
         if let Some(tx) = tx {
             let tx = tx.take_value();
-            m.set_mem_pos(1, tx);
+            m.set_mem_pos(1, tx.into());
         }
     }
 
@@ -364,12 +364,12 @@ impl<'a> VirtualMachine<'a> {
 
     pub fn exec(
         &'a mut self,
-        rx: impl Payload,
-        tx: Option<impl Payload>,
+        rx: impl RotoType,
+        tx: Option<impl RotoType>,
         mut arguments: Option<ArgumentsMap>,
         mem: RefCell<LinearMemory>,
         mir_code: Vec<MirBlock>,
-    ) -> Result<(AcceptReject, impl Payload, Option<impl Payload>), VmError>
+    ) -> Result<(AcceptReject, impl RotoType, Option<impl RotoType>), VmError>
     {
         println!("\nstart executing vm...");
         let mut commands_num: usize = 0;
@@ -1239,14 +1239,14 @@ pub enum OpCode {
 //     }
 // }
 
-pub trait Payload
-where
-    Self: std::fmt::Debug + std::fmt::Display,
-{
-    fn set_field(&mut self, field: ShortString, value: TypeValue);
-    fn get(&self, field: ShortString) -> Option<&TypeValue>;
-    fn take_value(self) -> TypeValue;
-}
+// pub trait Payload
+// where
+//     Self: std::fmt::Debug + std::fmt::Display,
+// {
+//     fn set_field(&mut self, field: ShortString, value: TypeValue);
+//     fn get(&self, field: ShortString) -> Option<&TypeValue>;
+//     fn take_value(self) -> TypeValue;
+// }
 
 #[derive(Debug)]
 pub enum DataSource {

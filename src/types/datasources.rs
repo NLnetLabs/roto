@@ -143,6 +143,12 @@ impl RotoType for Rib {
     }
 }
 
+impl From<Rib> for TypeValue {
+    fn from(_value: Rib) -> Self {
+       unimplemented!()
+    }
+}
+
 #[derive(Debug)]
 pub enum RibToken {
     Match,
@@ -336,6 +342,12 @@ impl RotoType for Table {
         _args: &[&'a TypeValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        unimplemented!()
+    }
+}
+
+impl From<Table> for TypeValue {
+    fn from(_value: Table) -> Self {
         unimplemented!()
     }
 }
