@@ -14,7 +14,7 @@
 use routecore::{
     bgp::{
         message::UpdateMessage,
-        route::{RouteStatus, AttrChangeSet},
+        route::{AttrChangeSet, RouteStatus},
     },
     record::LogicalTime,
 };
@@ -22,17 +22,15 @@ use std::sync::Arc;
 
 use crate::{
     compile::CompileError,
-    traits::{MethodProps, RotoType, TokenConvert},
+    traits::{RotoType, TokenConvert},
     types::{
-        typevalue::TypeValue, typedef::TypeDef,
+        typedef::{MethodProps, TypeDef},
+        typevalue::TypeValue,
     },
     vm::VmError,
 };
 
-use super::{
-    AsPath, Boolean, BuiltinTypeValue, Community,
-    Prefix, OriginType,
-};
+use super::{BuiltinTypeValue, Prefix};
 
 //============ Route ========================================================
 
@@ -359,55 +357,9 @@ impl PartialEq for RawBgpMessage {
 
 impl Eq for RawBgpMessage {}
 
-impl RawRouteWithDeltas {
-    pub(crate) fn get_props_for_method_static(
-        method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        match method_name.ident.as_str() {
-            "prefix" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None))),
-                RouteToken::Prefix.into(),
-                vec![],
-            )),
-            "as_path" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))),
-                RouteToken::AsPath.into(),
-                vec![],
-            )),
-            "origin" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::OriginType(OriginType(None))),
-                RouteToken::OriginType.into(),
-                vec![]
-            )),
-            "communities" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Community(Community(
-                    None,
-                ))),
-                RouteToken::Communities.into(),
-                vec![],
-            )),
-            "status" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::RouteStatus(
-                    RouteStatus::Empty,
-                )),
-                RouteToken::Status.into(),
-                vec![],
-            )),
-            _ => Err(format!(
-                "Unknown method '{}' for type Route",
-                method_name.ident
-            )
-            .into()),
-        }
-    }
-}
-
 impl RotoType for RawRouteWithDeltas {
     fn get_props_for_method(
-        self,
+        _ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
@@ -415,31 +367,27 @@ impl RotoType for RawRouteWithDeltas {
     {
         match method_name.ident.as_str() {
             "prefix" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None))),
+                TypeDef::Prefix,
                 RouteToken::Prefix.into(),
                 vec![],
             )),
             "as_path" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))),
+                TypeDef::AsPath,
                 RouteToken::AsPath.into(),
                 vec![],
             )),
             "origin" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::OriginType(OriginType(None))),
+                TypeDef::OriginType,
                 RouteToken::OriginType.into(),
-                vec![]
+                vec![],
             )),
             "communities" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Community(Community(
-                    None,
-                ))),
+                TypeDef::Community,
                 RouteToken::Communities.into(),
                 vec![],
             )),
             "status" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::RouteStatus(
-                    RouteStatus::Empty,
-                )),
+                TypeDef::RouteStatus,
                 RouteToken::Status.into(),
                 vec![],
             )),
@@ -541,7 +489,7 @@ impl From<RouteToken> for usize {
 
 impl RotoType for RouteStatus {
     fn get_props_for_method(
-        self,
+        _ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
@@ -549,32 +497,32 @@ impl RotoType for RouteStatus {
     {
         match method_name.ident.as_str() {
             "is_in_convergence" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                TypeDef::Boolean,
                 RouteStatusToken::IsInConvergence.into(),
                 vec![],
             )),
             "is_up_to_date" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                TypeDef::Boolean,
                 RouteStatusToken::IsUpToDate.into(),
                 vec![],
             )),
             "is_stale" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                TypeDef::Boolean,
                 RouteStatusToken::IsStale.into(),
                 vec![],
             )),
             "is_start_of_route_refresh" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                TypeDef::Boolean,
                 RouteStatusToken::IsStartOfRouteRefresh.into(),
                 vec![],
             )),
             "is_withdrawn" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                TypeDef::Boolean,
                 RouteStatusToken::IsWithdrawn.into(),
                 vec![],
             )),
             "is_empty" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                TypeDef::Boolean,
                 RouteStatusToken::IsEmpty.into(),
                 vec![],
             )),

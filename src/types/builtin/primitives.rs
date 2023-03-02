@@ -1,11 +1,11 @@
-
 use std::fmt::{Display, Formatter};
 
 use routecore::asn::LongSegmentError;
 
 use crate::ast::ShortString;
 use crate::compile::CompileError;
-use crate::traits::{MethodProps, RotoType, TokenConvert};
+use crate::traits::{RotoType, TokenConvert};
+use crate::types::typedef::MethodProps;
 use crate::vm::VmError;
 
 use super::super::typedef::TypeDef;
@@ -31,7 +31,7 @@ impl From<U32> for TypeValue {
 
 impl RotoType for U32 {
     fn get_props_for_method(
-        self,
+        _ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
@@ -39,10 +39,11 @@ impl RotoType for U32 {
     {
         match method_name.ident.as_str() {
             "set" => Ok(MethodProps::new(
-                TypeValue::Unknown,
+                TypeDef::Unknown,
                 U32Token::Set.into(),
                 vec![TypeDef::IntegerLiteral],
-            ).consume_value()),
+            )
+            .consume_value()),
             _ => Err(format!(
                 "Unknown method: '{}' for type U32",
                 method_name.ident
@@ -140,7 +141,7 @@ impl U8 {
 
 impl RotoType for U8 {
     fn get_props_for_method(
-        self,
+        _ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
@@ -148,10 +149,11 @@ impl RotoType for U8 {
     {
         match method_name.ident.as_str() {
             "set" => Ok(MethodProps::new(
-                TypeValue::Unknown,
+                TypeDef::Unknown,
                 U8Token::Set.into(),
                 vec![TypeDef::IntegerLiteral],
-            ).consume_value()),
+            )
+            .consume_value()),
             _ => Err(format!(
                 "Unknown method: '{}' for type U8",
                 method_name.ident
@@ -301,7 +303,7 @@ impl Boolean {
 
 impl RotoType for Boolean {
     fn get_props_for_method(
-        self,
+        _ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
@@ -309,10 +311,11 @@ impl RotoType for Boolean {
     {
         match method_name.ident.as_str() {
             "set" => Ok(MethodProps::new(
-                TypeValue::Unknown,
+                TypeDef::Unknown,
                 BooleanToken::Set.into(),
                 vec![TypeDef::Boolean],
-            ).consume_value()),
+            )
+            .consume_value()),
             _ => Err(format!(
                 "Unknown method: '{}' for type Boolean",
                 method_name.ident
@@ -414,12 +417,12 @@ impl StringLiteral {
 
 impl RotoType for StringLiteral {
     fn get_props_for_method(
-        self,
+        _ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError> {
         match method_name.ident.as_str() {
             "cmp" => Ok(MethodProps::new(
-                TypeValue::from(&TypeDef::IntegerLiteral),
+                TypeDef::IntegerLiteral,
                 StringLiteralToken::Cmp.into(),
                 vec![TypeDef::StringLiteral, TypeDef::StringLiteral],
             )),
@@ -440,7 +443,7 @@ impl RotoType for StringLiteral {
         todo!()
     }
 
-     fn exec_consume_value_method(
+    fn exec_consume_value_method(
         self,
         _method_token: usize,
         _args: Vec<TypeValue>,
@@ -524,12 +527,12 @@ impl IntegerLiteral {
 
 impl RotoType for IntegerLiteral {
     fn get_props_for_method(
-        self,
+        _ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError> {
         match method_name.ident.as_str() {
             "cmp" => Ok(MethodProps::new(
-                TypeValue::from(&TypeDef::IntegerLiteral),
+                TypeDef::IntegerLiteral,
                 IntegerLiteralToken::Cmp.into(),
                 vec![TypeDef::IntegerLiteral, TypeDef::IntegerLiteral],
             )),
@@ -583,7 +586,7 @@ impl RotoType for IntegerLiteral {
         todo!()
     }
 
-     fn exec_consume_value_method(
+    fn exec_consume_value_method(
         self,
         _method_token: usize,
         _args: Vec<TypeValue>,
@@ -651,12 +654,12 @@ impl HexLiteral {
 
 impl RotoType for HexLiteral {
     fn get_props_for_method(
-        self,
+        _ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError> {
         match method_name.ident.as_str() {
             "cmp" => Ok(MethodProps::new(
-                TypeValue::from(&TypeDef::IntegerLiteral),
+                TypeDef::IntegerLiteral,
                 HexLiteralToken::Cmp.into(),
                 vec![TypeDef::HexLiteral, TypeDef::HexLiteral],
             )),
@@ -698,7 +701,7 @@ impl RotoType for HexLiteral {
         todo!()
     }
 
-     fn exec_consume_value_method(
+    fn exec_consume_value_method(
         self,
         _method_token: usize,
         _args: Vec<TypeValue>,
@@ -781,7 +784,7 @@ impl Prefix {
 
 impl RotoType for Prefix {
     fn get_props_for_method(
-        self,
+        _ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
@@ -789,27 +792,27 @@ impl RotoType for Prefix {
     {
         match method_name.ident.as_str() {
             "from" => Ok(MethodProps::new(
-                TypeValue::from(&TypeDef::Prefix),
+                TypeDef::Prefix,
                 PrefixToken::From.into(),
                 vec![TypeDef::IpAddress, TypeDef::PrefixLength],
             )),
             "address" => Ok(MethodProps::new(
-                TypeValue::from(&TypeDef::IpAddress),
+                TypeDef::IpAddress,
                 PrefixToken::Address.into(),
                 vec![],
             )),
             "len" => Ok(MethodProps::new(
-                TypeValue::from(&TypeDef::PrefixLength),
+                TypeDef::PrefixLength,
                 PrefixToken::Len.into(),
                 vec![],
             )),
             "matches" => Ok(MethodProps::new(
-                TypeValue::from(&TypeDef::Boolean),
+                TypeDef::Boolean,
                 PrefixToken::Matches.into(),
                 vec![TypeDef::Prefix],
             )),
             "exists" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                TypeDef::Boolean,
                 PrefixToken::Exists.into(),
                 vec![],
             )),
@@ -853,10 +856,7 @@ impl RotoType for Prefix {
                 }))
             }
             PrefixToken::Len => {
-                if let Prefix(
-                    Some(pfx),
-                ) = self
-                {
+                if let Prefix(Some(pfx)) = self {
                     Ok(Box::new(move || {
                         TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
                             PrefixLength(Some(pfx.len())),
@@ -873,12 +873,12 @@ impl RotoType for Prefix {
                 } else {
                     Ok(Box::new(move || false.into()))
                 }
-            },
+            }
             PrefixToken::Matches => todo!(),
         }
     }
 
-     fn exec_consume_value_method(
+    fn exec_consume_value_method(
         self,
         _method_token: usize,
         _args: Vec<TypeValue>,
@@ -897,8 +897,12 @@ impl RotoType for Prefix {
                 if let TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) =
                     args[0]
                 {
-                    let len: PrefixLength = args[1].try_into().map_err(|_e| VmError::InvalidConversion)?;
-                    let ip = ip.0.ok_or("Cannot convert empty IP address").map_err(|_e| VmError::InvalidConversion)?;
+                    let len: PrefixLength = args[1]
+                        .try_into()
+                        .map_err(|_e| VmError::InvalidConversion)?;
+                    let ip =
+                        ip.0.ok_or("Cannot convert empty IP address")
+                            .map_err(|_e| VmError::InvalidConversion)?;
                     Ok(Box::new(move || {
                         TypeValue::Builtin(BuiltinTypeValue::Prefix(
                             Prefix::new(
@@ -991,7 +995,7 @@ impl PrefixLength {
 
 impl RotoType for PrefixLength {
     fn get_props_for_method(
-        self,
+        ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
@@ -999,7 +1003,7 @@ impl RotoType for PrefixLength {
     {
         match method_name.ident.as_str() {
             "from" => Ok(MethodProps::new(
-                TypeValue::from(&TypeDef::PrefixLength),
+                TypeDef::PrefixLength,
                 PrefixLengthToken::From.into(),
                 vec![TypeDef::U8],
             )),
@@ -1036,7 +1040,7 @@ impl RotoType for PrefixLength {
         todo!()
     }
 
-     fn exec_consume_value_method(
+    fn exec_consume_value_method(
         self,
         _method_token: usize,
         _args: Vec<TypeValue>,
@@ -1129,9 +1133,10 @@ impl From<PrefixLength> for u8 {
 
 // ----------- Community ----------------------------------------------------
 
-
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub struct Community(pub(crate) Option<routecore::bgp::communities::Community>);
+pub struct Community(
+    pub(crate) Option<routecore::bgp::communities::Community>,
+);
 
 impl Community {
     pub fn new() -> Self {
@@ -1141,7 +1146,7 @@ impl Community {
 
 impl RotoType for Community {
     fn get_props_for_method(
-        self,
+        _ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
@@ -1149,37 +1154,37 @@ impl RotoType for Community {
     {
         match method_name.ident.as_str() {
             "from" => Ok(MethodProps::new(
-                TypeValue::from(&TypeDef::Community),
+                TypeDef::Community,
                 CommunityToken::From.into(),
                 vec![TypeDef::U32],
             )),
             "standard" => Ok(MethodProps::new(
-                TypeValue::from(&TypeDef::Community),
+                TypeDef::Community,
                 CommunityToken::Standard.into(),
                 vec![TypeDef::U32],
             )),
             "extended" => Ok(MethodProps::new(
-                TypeValue::from(&TypeDef::Community),
+                TypeDef::Community,
                 CommunityToken::Extended.into(),
                 vec![TypeDef::U32],
             )),
             "large" => Ok(MethodProps::new(
-                TypeValue::from(&TypeDef::Community),
+                TypeDef::Community,
                 CommunityToken::Large.into(),
                 vec![TypeDef::U32],
             )),
             "as" => Ok(MethodProps::new(
-                TypeValue::from(&TypeDef::U32),
+                TypeDef::U32,
                 CommunityToken::As.into(),
                 vec![],
             )),
             "value" => Ok(MethodProps::new(
-                TypeValue::from(&TypeDef::U32),
+                TypeDef::U32,
                 CommunityToken::Value.into(),
                 vec![],
             )),
             "exists" => Ok(MethodProps::new(
-                TypeValue::from(&TypeDef::Boolean),
+                TypeDef::Boolean,
                 CommunityToken::Exists.into(),
                 vec![],
             )),
@@ -1216,7 +1221,7 @@ impl RotoType for Community {
         todo!()
     }
 
-     fn exec_consume_value_method(
+    fn exec_consume_value_method(
         self,
         _method_token: usize,
         _args: Vec<TypeValue>,
@@ -1282,9 +1287,7 @@ impl From<CommunityToken> for usize {
 
 //------------ Communities --------------------------------------------------
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Communities(
-    pub(crate) Option<Vec<Community>>,
-);
+pub struct Communities(pub(crate) Option<Vec<Community>>);
 
 //------------ MatchType ----------------------------------------------------
 
@@ -1308,7 +1311,7 @@ impl IpAddress {
 
 impl RotoType for IpAddress {
     fn get_props_for_method(
-        self,
+        _ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
@@ -1316,12 +1319,12 @@ impl RotoType for IpAddress {
     {
         match method_name.ident.as_str() {
             "from" => Ok(MethodProps::new(
-                TypeValue::from(&TypeDef::IpAddress),
+                TypeDef::IpAddress,
                 IpAddressToken::From.into(),
                 vec![TypeDef::String],
             )),
             "matches" => Ok(MethodProps::new(
-                TypeValue::from(&TypeDef::Boolean),
+                TypeDef::Boolean,
                 IpAddressToken::Matches.into(),
                 vec![TypeDef::Prefix],
             )),
@@ -1358,7 +1361,7 @@ impl RotoType for IpAddress {
         todo!();
     }
 
-     fn exec_consume_value_method(
+    fn exec_consume_value_method(
         self,
         _method_token: usize,
         _args: Vec<TypeValue>,
@@ -1437,7 +1440,7 @@ impl Asn {
 
 impl RotoType for Asn {
     fn get_props_for_method(
-        self,
+        _ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
@@ -1445,10 +1448,11 @@ impl RotoType for Asn {
     {
         match method_name.ident.as_str() {
             "set" => Ok(MethodProps::new(
-                TypeValue::Unknown,
+                TypeDef::Unknown,
                 AsnToken::Set.into(),
                 vec![TypeDef::Asn],
-            ).consume_value()),
+            )
+            .consume_value()),
             _ => Err(format!(
                 "Unknown method: '{}' for type Asn",
                 method_name.ident
@@ -1493,7 +1497,7 @@ impl RotoType for Asn {
         }
     }
 
-     fn exec_consume_value_method(
+    fn exec_consume_value_method(
         self,
         _method_token: usize,
         _args: Vec<TypeValue>,
@@ -1605,7 +1609,7 @@ impl AsPath {
 
 impl RotoType for AsPath {
     fn get_props_for_method(
-        self,
+        _ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
@@ -1613,17 +1617,17 @@ impl RotoType for AsPath {
     {
         match method_name.ident.as_str() {
             "origin" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(None))),
+                TypeDef::Asn,
                 AsPathToken::Origin.into(),
                 vec![],
             )),
             "contains" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                TypeDef::Boolean,
                 AsPathToken::Contains.into(),
                 vec![TypeDef::Asn],
             )),
             "len" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::U8(U8(None))),
+                TypeDef::U8,
                 AsPathToken::Len.into(),
                 vec![],
             )),
@@ -1693,9 +1697,7 @@ impl RotoType for AsPath {
                         }))
                     }
                 } else {
-                    Ok(Box::new(|| {
-                        TypeValue::Unknown
-                    }))
+                    Ok(Box::new(|| TypeValue::Unknown))
                 }
             }
             AsPathToken::Len => {
@@ -1715,7 +1717,7 @@ impl RotoType for AsPath {
         }
     }
 
-     fn exec_consume_value_method(
+    fn exec_consume_value_method(
         self,
         _method_token: usize,
         _args: Vec<TypeValue>,
@@ -1779,51 +1781,51 @@ impl From<AsPathToken> for usize {
 //------------ OriginType type ----------------------------------------------
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct OriginType(
-    pub(crate) Option<routecore::bgp::types::OriginType>,
-);
+pub struct OriginType(pub(crate) Option<routecore::bgp::types::OriginType>);
 
 impl RotoType for OriginType {
     fn get_props_for_method(
-        self,
-        method_name: &crate::ast::Identifier,
+        _ty: TypeDef,
+        _method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
-        Self: std::marker::Sized {
+        Self: std::marker::Sized,
+    {
         todo!()
     }
 
     fn into_type(
         self,
-        type_value: &TypeDef,
+        _type_value: &TypeDef,
     ) -> Result<TypeValue, CompileError>
     where
-        Self: std::marker::Sized {
+        Self: std::marker::Sized,
+    {
         todo!()
     }
 
     fn exec_value_method<'a>(
         &'a self,
-        method_token: usize,
-        args: &'a [&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &'a [&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 
     fn exec_consume_value_method(
         self,
-        method_token: usize,
-        args: Vec<TypeValue>,
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         todo!()
     }
 
     fn exec_type_method<'a>(
-        method_token: usize,
-        args: &[&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
@@ -1831,7 +1833,12 @@ impl RotoType for OriginType {
 
 impl From<OriginType> for TypeValue {
     fn from(value: OriginType) -> Self {
-        value.0.map(|t| TypeValue::Builtin(BuiltinTypeValue::OriginType(t.into()))).unwrap_or(TypeValue::Unknown)
+        value
+            .0
+            .map(|t| {
+                TypeValue::Builtin(BuiltinTypeValue::OriginType(t.into()))
+            })
+            .unwrap_or(TypeValue::Unknown)
     }
 }
 
@@ -1854,9 +1861,7 @@ impl Display for OriginType {
 //------------ NextHop type -------------------------------------------------
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NextHop(
-    pub(crate) Option<routecore::bgp::types::NextHop>,
-);
+pub struct NextHop(pub(crate) Option<routecore::bgp::types::NextHop>);
 
 //------------ Multi Exit Discriminator type --------------------------------
 
@@ -1868,9 +1873,7 @@ pub struct MultiExitDisc(
 //------------ Local Preference type ----------------------------------------
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct LocalPref(
-    pub(crate) Option<routecore::bgp::types::LocalPref>,
-);
+pub struct LocalPref(pub(crate) Option<routecore::bgp::types::LocalPref>);
 
 //------------ Aggregator type ----------------------------------------------
 

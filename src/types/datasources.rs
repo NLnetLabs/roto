@@ -5,14 +5,14 @@
 use crate::{
     ast::ShortString,
     compile::CompileError,
-    traits::{MethodProps, RotoType, Token, TokenConvert},
+    traits::{RotoType, Token, TokenConvert},
     vm::{StackRefPos, VmError},
 };
 
 use super::{
     builtin::{Boolean, BuiltinTypeValue},
     collections::Record,
-    typedef::TypeDef,
+    typedef::{MethodProps, TypeDef},
     typevalue::TypeValue,
 };
 
@@ -65,8 +65,11 @@ impl Rib {
                         // because we would erase the type then. Since this
                         // method can be in the middle of a chain we need to
                         // pass on the type
-                        let rec = Record::create_empty_instance(&self.ty).unwrap();
-                        DataSourceMethodValue::TypeValue(TypeValue::Record(rec))
+                        let rec =
+                            Record::create_empty_instance(&self.ty).unwrap();
+                        DataSourceMethodValue::TypeValue(TypeValue::Record(
+                            rec,
+                        ))
                     })
             }),
             RibToken::Contains => {
@@ -79,7 +82,7 @@ impl Rib {
 
 impl RotoType for Rib {
     fn get_props_for_method(
-        self,
+        ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
@@ -87,17 +90,17 @@ impl RotoType for Rib {
     {
         match method_name.ident.as_str() {
             "match" => Ok(MethodProps::new(
-                TypeValue::Record(Record::create_empty_instance(&self.ty)?),
+                ty,
                 RibToken::Match.into(),
                 vec![TypeDef::Prefix],
             )),
             "longest_match" => Ok(MethodProps::new(
-                TypeValue::Record(Record::create_empty_instance(&self.ty)?),
+                ty,
                 RibToken::LongestMatch.into(),
                 vec![TypeDef::Prefix],
             )),
             "contains" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                TypeDef::Boolean,
                 RibToken::Contains.into(),
                 vec![TypeDef::Prefix],
             )),
@@ -125,7 +128,7 @@ impl RotoType for Rib {
         unimplemented!()
     }
 
-     fn exec_consume_value_method(
+    fn exec_consume_value_method(
         self,
         _method_token: usize,
         _args: Vec<TypeValue>,
@@ -145,7 +148,7 @@ impl RotoType for Rib {
 
 impl From<Rib> for TypeValue {
     fn from(_value: Rib) -> Self {
-       unimplemented!()
+        unimplemented!()
     }
 }
 
@@ -287,7 +290,7 @@ impl Table {
 
 impl RotoType for Table {
     fn get_props_for_method(
-        self,
+        ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
@@ -295,12 +298,12 @@ impl RotoType for Table {
     {
         match method_name.ident.as_str() {
             "find" => Ok(MethodProps::new(
-                (&self.ty).into(),
+                ty,
                 TableToken::Find.into(),
                 vec![TypeDef::Asn],
             )),
             "contains" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                TypeDef::Boolean,
                 TableToken::Contains.into(),
                 vec![TypeDef::Asn],
             )),
@@ -328,7 +331,7 @@ impl RotoType for Table {
         unimplemented!()
     }
 
-     fn exec_consume_value_method(
+    fn exec_consume_value_method(
         self,
         _method_token: usize,
         _args: Vec<TypeValue>,

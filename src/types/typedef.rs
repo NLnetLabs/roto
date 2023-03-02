@@ -3,17 +3,21 @@
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 
+use routecore::bgp::route::RouteStatus;
+
 use crate::compile::CompileError;
 use crate::traits::Token;
 use crate::types::collections::ElementTypeValue;
 use crate::types::datasources::NamedTypeDef;
 use crate::{
     ast::{AcceptReject, ShortString},
-    traits::{MethodProps, RotoType},
+    traits::RotoType,
 };
 
 use super::builtin::{
-    AsPath, Asn, IpAddress, Prefix, RawRouteWithDeltas, U32,
+    AsPath, Asn, Boolean, Community, HexLiteral, IntegerLiteral, IpAddress,
+    OriginType, Prefix, PrefixLength, RawRouteWithDeltas, StringLiteral, U32,
+    U8,
 };
 use super::collections::Record;
 use super::datasources::{Rib, Table};
@@ -161,42 +165,71 @@ impl TypeDef {
 
     pub(crate) fn get_props_for_method(
         &self,
-        method: &crate::ast::Identifier,
+        method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError> {
-        let parent_ty: TypeValue = self.into();
-        match parent_ty {
-            TypeValue::Record(rec_type) => {
-                rec_type.get_props_for_method(method)
+        match self {
+            TypeDef::Record(_) => {
+                Record::get_props_for_method(self.clone(), method_name)
             }
-            TypeValue::List(list) => list.get_props_for_method(method),
-            TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {
-                as_path.get_props_for_method(method)
+            TypeDef::Rib(_) => {
+                Rib::get_props_for_method(self.clone(), method_name)
             }
-            TypeValue::Builtin(BuiltinTypeValue::Prefix(prefix)) => {
-                prefix.get_props_for_method(method)
+            TypeDef::Table(_) => {
+                Table::get_props_for_method(self.clone(), method_name)
             }
-            TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(lit_int)) => {
-                lit_int.get_props_for_method(method)
+            TypeDef::List(_) => {
+                List::get_props_for_method(self.clone(), method_name)
             }
-            TypeValue::Builtin(BuiltinTypeValue::U32(u32)) => {
-                u32.get_props_for_method(method)
+            TypeDef::U32 => {
+                U32::get_props_for_method(self.clone(), method_name)
             }
-            TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) => {
-                asn.get_props_for_method(method)
+            TypeDef::U8 => {
+                U8::get_props_for_method(self.clone(), method_name)
             }
-            TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) => {
-                ip.get_props_for_method(method)
+            TypeDef::Boolean => {
+                Boolean::get_props_for_method(self.clone(), method_name)
             }
-            TypeValue::Builtin(BuiltinTypeValue::Route(_route)) => {
-                RawRouteWithDeltas::get_props_for_method_static(method)
+            TypeDef::String => {
+                StringLiteral::get_props_for_method(self.clone(), method_name)
             }
-            TypeValue::Rib(rib) => rib.get_props_for_method(method),
-            TypeValue::Table(table) => table.get_props_for_method(method),
-            _ => Err(format!(
-                "No method named '{}' found for {}.",
-                method.ident, parent_ty
-            )
-            .into()),
+            TypeDef::Prefix => {
+                Prefix::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::PrefixLength => {
+                PrefixLength::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::IpAddress => {
+                IpAddress::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::Asn => {
+                Asn::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::AsPath => {
+                AsPath::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::Community => {
+                Community::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::OriginType => {
+                OriginType::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::Route => RawRouteWithDeltas::get_props_for_method(
+                self.clone(),
+                method_name,
+            ),
+            TypeDef::RouteStatus => {
+                RouteStatus::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::HexLiteral => {
+                HexLiteral::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::IntegerLiteral => IntegerLiteral::get_props_for_method(
+                self.clone(),
+                method_name,
+            ),
+            TypeDef::StringLiteral => todo!(),
+            TypeDef::AcceptReject(_) => todo!(),
+            TypeDef::Unknown => todo!(),
         }
     }
 
@@ -251,6 +284,33 @@ impl TypeDef {
             }
             _ => panic!("No corresponding Type method found for {:?}.", self),
         }
+    }
+}
+
+pub struct MethodProps {
+    pub(crate) return_type_value: TypeDef,
+    pub(crate) method_token: Token,
+    pub(crate) arg_types: Vec<TypeDef>,
+    pub(crate) consume: bool,
+}
+
+impl MethodProps {
+    pub(crate) fn new(
+        return_type_value: TypeDef,
+        method_token: usize,
+        arg_types: Vec<TypeDef>,
+    ) -> Self {
+        MethodProps {
+            return_type_value,
+            method_token: Token::Method(method_token),
+            arg_types,
+            consume: false,
+        }
+    }
+
+    pub(crate) fn consume_value(mut self) -> Self {
+        self.consume = true;
+        self
     }
 }
 

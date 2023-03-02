@@ -759,7 +759,7 @@ impl ast::MethodComputeExpr {
         // the supplied method call in the source code.
         let props = method_call_type.get_props_for_method(&self.ident)?;
 
-        // If this is a "regular" method call, then we set use the `consume` flag
+        // If this is a "regular" method call, then we set the `consume` flag
         // from the props we retrieved to set the right MethodCall kind.
         if method_kind == SymbolKind::MethodCallbyRef {
             method_kind = match props.consume {
@@ -774,7 +774,7 @@ impl ast::MethodComputeExpr {
             return Ok(symbols::Symbol::new_with_value(
                 self.ident.clone().ident,
                 method_kind,
-                props.return_type_value,
+                (&props.return_type_value).into(),
                 vec![],
                 props.method_token,
             ));
@@ -814,7 +814,7 @@ impl ast::MethodComputeExpr {
         Ok(symbols::Symbol::new_with_value(
             self.ident.clone().ident,
             method_kind,
-            props.return_type_value,
+            (&props.return_type_value).into(),
             args,
             props.method_token,
         ))

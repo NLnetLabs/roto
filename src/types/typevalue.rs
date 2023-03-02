@@ -131,9 +131,7 @@ impl TypeValue {
                 TypeValue::List(list) => {
                     list.set_field_for_index(index as usize, value)?
                 }
-                _ => {
-                    return Err(VmError::InvalidWrite)
-                },
+                _ => return Err(VmError::InvalidWrite),
             };
         } else {
             return Err(VmError::InvalidWrite);
@@ -145,7 +143,7 @@ impl TypeValue {
     pub(crate) fn set_field(
         mut self,
         field_index: usize,
-        value: TypeValue
+        value: TypeValue,
     ) -> Result<Self, VmError> {
         match self {
             TypeValue::Record(ref mut rec) => {
@@ -154,9 +152,7 @@ impl TypeValue {
             TypeValue::List(ref mut list) => {
                 list.set_field_for_index(field_index, value)?;
             }
-            _ => {
-                return Err(VmError::InvalidWrite)
-            },
+            _ => return Err(VmError::InvalidWrite),
         };
         Ok(self)
     }
@@ -244,89 +240,104 @@ impl TypeValue {
         }
     }
 
-
-pub(crate) fn exec_consume_value_method<'a>(
-    self,
-    method_token: usize,
-    args: Vec<TypeValue>,
-    return_type: TypeDef,
-    field_index: Option<usize>
-) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
-    match self {
-        TypeValue::Record(rec_type) => {
-            rec_type.exec_consume_value_method(method_token, args, return_type)
-        }
-        TypeValue::List(list) => {
-            list.exec_consume_value_method(method_token, args, return_type)
-        }
-        TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {
-            as_path.exec_consume_value_method(method_token, args, return_type)
-        }
-        TypeValue::Builtin(BuiltinTypeValue::Prefix(prefix)) => {
-            prefix.exec_consume_value_method(method_token, args, return_type)
-        }
-        TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(lit_int)) => {
-            lit_int.exec_consume_value_method(method_token, args, return_type)
-        }
-        TypeValue::Builtin(BuiltinTypeValue::StringLiteral(lit_str)) => {
-            lit_str.exec_consume_value_method(method_token, args, return_type)
-        }
-        TypeValue::Builtin(BuiltinTypeValue::HexLiteral(lit_hex)) => {
-            lit_hex.exec_consume_value_method(method_token, args, return_type)
-        }
-        TypeValue::Builtin(BuiltinTypeValue::U32(u32)) => {
-            u32.exec_consume_value_method(method_token, args, return_type)
-        }
-        TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) => {
-            asn.exec_consume_value_method(method_token, args, return_type)
-        }
-        TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) => {
-            ip.exec_consume_value_method(method_token, args, return_type)
-        }
-        TypeValue::Builtin(BuiltinTypeValue::Route(Some(route))) => {
-            route.exec_consume_value_method(method_token, args, return_type)
-        }
-        TypeValue::Builtin(BuiltinTypeValue::Route(None)) => {
-            Err(VmError::InvalidValueType)
-        }
-        TypeValue::Builtin(BuiltinTypeValue::Community(community)) => {
-            community.exec_consume_value_method(method_token, args, return_type)
-        }
-        TypeValue::Builtin(BuiltinTypeValue::OriginType(origin)) => {
-            origin.exec_consume_value_method(method_token, args, return_type)
-        }
-        TypeValue::Builtin(BuiltinTypeValue::U8(u8_lit)) => {
-            u8_lit.exec_consume_value_method(method_token, args, return_type)
-        }
-        TypeValue::Builtin(BuiltinTypeValue::Boolean(boolean)) => {
-            boolean.exec_consume_value_method(method_token, args, return_type)
-        }
-        TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
-            prefix_length,
-        )) => prefix_length.exec_consume_value_method(
-            method_token,
-            args,
-            return_type,
-        ),
-        TypeValue::Builtin(BuiltinTypeValue::RouteStatus(
-            route_status,
-        )) => route_status.exec_consume_value_method(
-            method_token,
-            args,
-            return_type,
-        ),
-        TypeValue::Rib(rib) => {
-            rib.exec_consume_value_method(method_token, args, return_type)
-        }
-        TypeValue::Table(rec) => {
-            rec.exec_consume_value_method(method_token, args, return_type)
-        }
-        TypeValue::Unknown => Ok(Box::new(|| TypeValue::Unknown)),
-        TypeValue::UnInit => {
-            panic!("Unitialized memory cannot be read. That's fatal.");
+    pub(crate) fn exec_consume_value_method<'a>(
+        self,
+        method_token: usize,
+        args: Vec<TypeValue>,
+        return_type: TypeDef,
+        field_index: Option<usize>,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        match self {
+            TypeValue::Record(rec_type) => rec_type
+                .exec_consume_value_method(method_token, args, return_type),
+            TypeValue::List(list) => list.exec_consume_value_method(
+                method_token,
+                args,
+                return_type,
+            ),
+            TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => as_path
+                .exec_consume_value_method(method_token, args, return_type),
+            TypeValue::Builtin(BuiltinTypeValue::Prefix(prefix)) => prefix
+                .exec_consume_value_method(method_token, args, return_type),
+            TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(lit_int)) => {
+                lit_int.exec_consume_value_method(
+                    method_token,
+                    args,
+                    return_type,
+                )
+            }
+            TypeValue::Builtin(BuiltinTypeValue::StringLiteral(lit_str)) => {
+                lit_str.exec_consume_value_method(
+                    method_token,
+                    args,
+                    return_type,
+                )
+            }
+            TypeValue::Builtin(BuiltinTypeValue::HexLiteral(lit_hex)) => {
+                lit_hex.exec_consume_value_method(
+                    method_token,
+                    args,
+                    return_type,
+                )
+            }
+            TypeValue::Builtin(BuiltinTypeValue::U32(u32)) => {
+                u32.exec_consume_value_method(method_token, args, return_type)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) => {
+                asn.exec_consume_value_method(method_token, args, return_type)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) => {
+                ip.exec_consume_value_method(method_token, args, return_type)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::Route(Some(route))) => route
+                .exec_consume_value_method(method_token, args, return_type),
+            TypeValue::Builtin(BuiltinTypeValue::Route(None)) => {
+                Err(VmError::InvalidValueType)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::Community(community)) => {
+                community.exec_consume_value_method(
+                    method_token,
+                    args,
+                    return_type,
+                )
+            }
+            TypeValue::Builtin(BuiltinTypeValue::OriginType(origin)) => {
+                origin.exec_consume_value_method(
+                    method_token,
+                    args,
+                    return_type,
+                )
+            }
+            TypeValue::Builtin(BuiltinTypeValue::U8(u8_lit)) => u8_lit
+                .exec_consume_value_method(method_token, args, return_type),
+            TypeValue::Builtin(BuiltinTypeValue::Boolean(boolean)) => boolean
+                .exec_consume_value_method(method_token, args, return_type),
+            TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
+                prefix_length,
+            )) => prefix_length.exec_consume_value_method(
+                method_token,
+                args,
+                return_type,
+            ),
+            TypeValue::Builtin(BuiltinTypeValue::RouteStatus(
+                route_status,
+            )) => route_status.exec_consume_value_method(
+                method_token,
+                args,
+                return_type,
+            ),
+            TypeValue::Rib(rib) => {
+                rib.exec_consume_value_method(method_token, args, return_type)
+            }
+            TypeValue::Table(rec) => {
+                rec.exec_consume_value_method(method_token, args, return_type)
+            }
+            TypeValue::Unknown => Ok(Box::new(|| TypeValue::Unknown)),
+            TypeValue::UnInit => {
+                panic!("Unitialized memory cannot be read. That's fatal.");
+            }
         }
     }
-}
 }
 
 impl Display for TypeValue {
@@ -535,7 +546,6 @@ impl<'a> TryFrom<&'a str> for TypeValue {
     }
 }
 
-
 impl<'a> From<&'a TypeDef> for Box<TypeValue> {
     fn from(t: &'a TypeDef) -> Self {
         match t {
@@ -677,7 +687,12 @@ impl<'a> From<&'a TypeDef> for TypeValue {
             TypeDef::HexLiteral => TypeValue::Builtin(
                 BuiltinTypeValue::HexLiteral(HexLiteral(None)),
             ),
-            _ => panic!("Unknown type {:?}", t),
+            TypeDef::Unknown => TypeValue::Unknown,
+            TypeDef::String => todo!(),
+            TypeDef::OriginType => todo!(),
+            TypeDef::RouteStatus => todo!(),
+            TypeDef::StringLiteral => todo!(),
+            TypeDef::AcceptReject(_) => todo!(),
         }
     }
 }
