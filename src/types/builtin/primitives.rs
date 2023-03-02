@@ -1840,6 +1840,28 @@ impl RotoType for OriginType {
     }
 }
 
+impl From<OriginType> for TypeValue {
+    fn from(value: OriginType) -> Self {
+        value.0.map(|t| TypeValue::Builtin(BuiltinTypeValue::OriginType(t.into()))).unwrap_or(TypeValue::Unknown)
+    }
+}
+
+impl From<routecore::bgp::types::OriginType> for OriginType {
+    fn from(value: routecore::bgp::types::OriginType) -> Self {
+        Self(Some(value))
+    }
+}
+
+impl Display for OriginType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(or) = &self.0 {
+            write!(f, "{}", or)
+        } else {
+            write!(f, "None")
+        }
+    }
+}
+
 //------------ NextHop type -------------------------------------------------
 
 #[derive(Debug, Clone, Eq, PartialEq)]

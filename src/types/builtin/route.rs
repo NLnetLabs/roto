@@ -420,6 +420,11 @@ impl RotoType for RawRouteWithDeltas {
                 RouteToken::AsPath.into(),
                 vec![],
             )),
+            "origin" => Ok(MethodProps::new(
+                TypeValue::Builtin(BuiltinTypeValue::OriginType(OriginType(None))),
+                RouteToken::OriginType.into(),
+                vec![]
+            )),
             "communities" => Ok(MethodProps::new(
                 TypeValue::Builtin(BuiltinTypeValue::Community(Community(
                     None,
@@ -505,6 +510,7 @@ pub enum RouteToken {
     Prefix,
     AsPath,
     Communities,
+    OriginType,
     Status,
 }
 
@@ -516,7 +522,8 @@ impl From<usize> for RouteToken {
             1 => RouteToken::Prefix,
             2 => RouteToken::AsPath,
             3 => RouteToken::Communities,
-            4 => RouteToken::Status,
+            4 => RouteToken::OriginType,
+            5 => RouteToken::Status,
             _ => panic!("Unknown RouteToken value: {}", value),
         }
     }

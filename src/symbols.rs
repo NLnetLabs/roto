@@ -259,6 +259,9 @@ impl Symbol {
             TypeValue::Builtin(BuiltinTypeValue::Route(Some(route))) => {
                 self.value = route.into_type(type_def)?;
             }
+            TypeValue::Builtin(BuiltinTypeValue::OriginType(origin)) => {
+                self.value = origin.into_type(type_def)?;
+            }
             TypeValue::Builtin(BuiltinTypeValue::Route(None)) => {
                 return Err(CompileError::new("No route found to convert.".into()))   
             }

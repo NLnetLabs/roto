@@ -25,6 +25,7 @@ pub enum BuiltinTypeValue {
     IpAddress(IpAddress), // scalar
     Asn(Asn), // scalar 
     AsPath(AsPath), // vector
+    OriginType(OriginType), // scalar
     Route(Option<RawRouteWithDeltas>), // vector
     RouteStatus(RouteStatus), // scalar
     Boolean(Boolean), // scalar
@@ -125,47 +126,6 @@ impl BuiltinTypeValue {
         };
         Ok(TypeValue::Builtin(var))
     }
-
-    // pub(crate) fn exec_value_method(
-    //     &self,
-    //     method_token: usize,
-    //     args: &[&TypeValue],
-    //     return_type: TypeDef,
-    // ) -> TypeValue {
-    //     match self {
-    //         BuiltinTypeValue::AsPath(as_path) => as_path
-    //             .exec_value_method(method_token, args, return_type)
-    //             .unwrap()(),
-    //         BuiltinTypeValue::Prefix(prefix) => prefix
-    //             .exec_value_method(method_token, args, return_type)
-    //             .unwrap()(),
-    //         BuiltinTypeValue::IntegerLiteral(lit_int) => lit_int
-    //             .exec_value_method(method_token, args, return_type)
-    //             .unwrap()(
-    //         ),
-    //         BuiltinTypeValue::StringLiteral(lit_str) => lit_str
-    //             .exec_value_method(method_token, args, return_type)
-    //             .unwrap()(),
-    //         BuiltinTypeValue::U32(u32) => u32
-    //             .exec_value_method(method_token, args, return_type)
-    //             .unwrap()(),
-    //         BuiltinTypeValue::Asn(asn) => asn
-    //             .exec_value_method(method_token, args, return_type)
-    //             .unwrap()(),
-    //         BuiltinTypeValue::IpAddress(ip) => ip
-    //             .exec_value_method(method_token, args, return_type)
-    //             .unwrap()(),
-    //         BuiltinTypeValue::Route(route) => route
-    //             .exec_value_method(method_token, args, return_type)
-    //             .unwrap()(),
-    //         BuiltinTypeValue::U8(_) => todo!(),
-    //         BuiltinTypeValue::PrefixLength(_) => todo!(),
-    //         BuiltinTypeValue::Community(_) => todo!(),
-    //         BuiltinTypeValue::RouteStatus(_) => todo!(),
-    //         BuiltinTypeValue::Boolean(_) => todo!(),
-    //         BuiltinTypeValue::HexLiteral(_) => todo!(),
-    //     }
-    // }
 }
 
 // These From impls allow the user to use the create_instance function with
@@ -284,6 +244,9 @@ impl Display for BuiltinTypeValue {
             BuiltinTypeValue::Asn(v) => write!(f, "{} (ASN)", v),
             BuiltinTypeValue::AsPath(v) => {
                 write!(f, "{} (AS Path)", v)
+            }
+            BuiltinTypeValue::OriginType(v) => {
+                write!(f, "{} (Origin Type)", v)
             }
             BuiltinTypeValue::Route(v) => write!(f, "{} (Route)", if let Some(v) = v { v.to_string() } else { "None".to_string() }),
             BuiltinTypeValue::RouteStatus(v) => {
