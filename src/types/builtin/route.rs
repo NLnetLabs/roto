@@ -146,7 +146,7 @@ impl RawRouteWithDeltas {
         if let Some(attr_set) = self.attribute_deltas.deltas.last() {
             attr_set.attributes.clone()
         } else {
-            self.raw_message.changeset_from_raw()
+            self.raw_message.raw_message.create_changeset()
         }
     }
 
@@ -170,7 +170,7 @@ impl RawRouteWithDeltas {
     // deltas.
     pub fn take_latest_attrs(mut self) -> AttrChangeSet {
         if self.attribute_deltas.deltas.is_empty() {
-            return self.raw_message.changeset_from_raw();
+            return self.raw_message.raw_message.create_changeset();
         }
 
         self.attribute_deltas
@@ -189,7 +189,7 @@ impl RawRouteWithDeltas {
                 .store_delta(AttributeDelta::new(
                     self.raw_message.message_id,
                     0,
-                    self.raw_message.changeset_from_raw(),
+                    self.raw_message.raw_message.create_changeset(),
                 ))
                 .unwrap();
         }
@@ -348,102 +348,6 @@ impl RawBgpMessage {
         Self {
             message_id,
             raw_message,
-        }
-    }
-
-    // Synthesize a ChangeSet from the raw message.
-    fn changeset_from_raw(&self) -> AttrChangeSet {
-        AttrChangeSet {
-            as_path: ChangedOption {
-                value: self.raw_message.aspath().map(|p| p.into()),
-                changed: false,
-            },
-            origin_type: ChangedOption {
-                value: self.raw_message.origin(),
-                changed: false,
-            },
-            next_hop: ChangedOption {
-                value: self.raw_message.next_hop(),
-                changed: false,
-            },
-            multi_exit_discriminator: ChangedOption {
-                value: self.raw_message.multi_exit_desc(),
-                changed: false,
-            },
-            local_pref: ChangedOption {
-                value: self.raw_message.local_pref(),
-                changed: false,
-            },
-            atomic_aggregate: ChangedOption {
-                value: Some(self.raw_message.is_atomic_aggregate()),
-                changed: false,
-            },
-            aggregator: ChangedOption {
-                value: self.raw_message.aggregator(),
-                changed: false,
-            },
-            communities: ChangedOption {
-                value: self.raw_message.all_communities(),
-                changed: false,
-            },
-            originator_id: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            cluster_list: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            extended_communities: ChangedOption {
-                value: self
-                    .raw_message
-                    .ext_communities()
-                    .map(|c| c.collect::<Vec<ExtendedCommunity>>()),
-                changed: false,
-            },
-            as4_path: ChangedOption {
-                value: self.raw_message.as4path(),
-                changed: false,
-            },
-            as4_aggregator: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            connector: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            as_path_limit: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            pmsi_tunnel: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            ipv6_extended_communities: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            large_communities: ChangedOption {
-                value: self
-                    .raw_message
-                    .large_communities()
-                    .map(|c| c.collect::<Vec<LargeCommunity>>()),
-                changed: false,
-            },
-            bgpsec_as_path: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            attr_set: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            rsrvd_development: ChangedOption {
-                value: None,
-                changed: false,
-            },
         }
     }
 }
