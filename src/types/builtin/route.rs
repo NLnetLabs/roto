@@ -405,7 +405,7 @@ impl RotoType for RawRouteWithDeltas {
     ) -> Result<TypeValue, CompileError> {
         match type_def {
             TypeDef::Route => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::Route(Some(self))))
+                Ok(TypeValue::Builtin(BuiltinTypeValue::Route(self)))
             }
             _ => Err(format!(
                 "Cannot convert type Route to type {:?}",
@@ -444,7 +444,7 @@ impl RotoType for RawRouteWithDeltas {
 
 impl From<RawRouteWithDeltas> for TypeValue {
     fn from(val: RawRouteWithDeltas) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Route(Some(val)))
+        TypeValue::Builtin(BuiltinTypeValue::Route(val))
     }
 }
 
@@ -569,9 +569,9 @@ impl RotoType for RouteStatus {
     }
 
     fn exec_type_method<'a>(
-        method_token: usize,
-        args: &[&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }

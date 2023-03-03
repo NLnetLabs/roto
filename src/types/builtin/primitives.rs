@@ -15,11 +15,11 @@ use super::builtin_type_value::BuiltinTypeValue;
 // ----------- A simple u32 type --------------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub struct U32(pub(crate) Option<u32>);
+pub struct U32(pub(crate) u32);
 
 impl U32 {
     pub fn new(val: u32) -> Self {
-        U32(Some(val))
+        U32(val)
     }
 }
 
@@ -96,11 +96,7 @@ impl RotoType for U32 {
 
 impl Display for U32 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let v = match self.0 {
-            Some(v) => v.to_string(),
-            None => "None".to_string(),
-        };
-        write!(f, "{}", v)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -197,7 +193,7 @@ impl RotoType for U8 {
             TypeDef::U8 => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(self))),
             TypeDef::U32 => match self.0 {
                 Some(value) => Ok(TypeValue::Builtin(BuiltinTypeValue::U32(
-                    U32(Some(value as u32)),
+                    U32(value as u32),
                 ))),
                 None => Err("Cannot convert None to U32".into()),
             },

@@ -831,32 +831,32 @@ impl ast::AccessReceiver {
     ) -> Result<symbols::Symbol, CompileError> {
         println!("AccessReceiver {:#?}", self);
         let _symbols = symbols.clone();
-        let search_var = self.get_ident().ident.clone();
+        let search_var = self.get_ident(); //.ident.clone();
 
         // Is it the name of a builtin type?
-        if let Ok(TypeValue::Builtin(prim_ty)) =
-            search_var.as_str().try_into()
-        {
-            let ty: TypeDef = prim_ty.into();
-
-            return Ok(symbols::Symbol::new(
-                search_var.as_str().into(),
-                symbols::SymbolKind::AccessReceiver,
-                ty,
-                vec![],
-                Some(Token::BuiltinType(0)),
-            ));
-        };
+        if let Ok(prim_ty) = TypeDef::try_from(search_var.clone()) { 
+            if prim_ty.is_builtin() {
+                {
+                    return Ok(symbols::Symbol::new(
+                        search_var.ident.clone(),
+                        symbols::SymbolKind::AccessReceiver,
+                        prim_ty,
+                        vec![],
+                        Some(Token::BuiltinType(0)),
+                    ));
+                };
+            }
+        }    
 
         // is it an argument?
         if let Some(Ok(arg)) = _symbols
             .borrow()
             .get(&scope)
-            .map(|s| s.get_argument(&search_var))
+            .map(|s| s.get_argument(&search_var.ident))
         {
             let (_, type_def, token) = arg.get_kind_type_and_token()?;
             return Ok(symbols::Symbol::new(
-                search_var.as_str().into(),
+                search_var.ident.clone(),
                 symbols::SymbolKind::AccessReceiver,
                 type_def,
                 vec![],
@@ -878,7 +878,7 @@ impl ast::AccessReceiver {
             // It's a Constant, clone the (builtin-typed) value into the the
             // symbol.
             Some(val) => Ok(symbols::Symbol::new_with_value(
-                search_var.as_str().into(),
+                search_var.ident.clone(),
                 SymbolKind::AccessReceiver,
                 val,
                 vec![],
@@ -886,7 +886,7 @@ impl ast::AccessReceiver {
             )),
             // It's a Variable, create a symbol with an empty value.
             None => Ok(symbols::Symbol::new(
-                search_var.as_str().into(),
+                search_var.ident.clone(),
                 SymbolKind::AccessReceiver,
                 ty,
                 vec![],
@@ -913,21 +913,18 @@ impl ast::ValueExpr {
             ),
             ast::ValueExpr::BuiltinMethodCallExpr(builtin_call_expr) => {
                 let name: ShortString = builtin_call_expr.ident.clone().ident;
-                let mut ty = TypeDef::Unknown;
-                if let Ok(TypeValue::Builtin(prim_ty)) =
-                    name.as_str().try_into()
-                {
-                    ty = prim_ty.into();
-                } else {
-                    Err(format!("Unknown built-in method call: {}", name))?;
-                }
+                let prim_ty = TypeDef::try_from(builtin_call_expr.ident.clone())?;
 
-                builtin_call_expr.eval(
-                    symbols::SymbolKind::BuiltInTypeMethodCall,
-                    ty,
-                    symbols,
-                    scope,
-                )
+                if prim_ty.is_builtin() {
+                    builtin_call_expr.eval(
+                        symbols::SymbolKind::BuiltInTypeMethodCall,
+                        prim_ty,
+                        symbols,
+                        scope,
+                    )    
+                } else {
+                    return Err(format!("Unknown built-in method call: {}", name))?;
+                }
             }
             ast::ValueExpr::StringLiteral(str_lit) => {
                 Ok(symbols::Symbol::new_with_value(
@@ -1303,10 +1300,9 @@ fn check_type_identifier(
 ) -> Result<TypeDef, CompileError> {
     let symbols = symbols.borrow();
     // is it a builtin type?
-    let builtin_ty = TypeDef::try_from(ty.clone());
-    if BuiltinTypeValue::try_from(ty.ident.as_str()).is_ok() {
-        return Ok(builtin_ty.unwrap());
-    };
+    if let Ok(builtin_ty) = TypeDef::try_from(ty.clone()) { 
+        return Ok(builtin_ty)
+    }
 
     // is it in the global table?
     let global_ty = symbols.get(&symbols::Scope::Global).and_then(|gt| {

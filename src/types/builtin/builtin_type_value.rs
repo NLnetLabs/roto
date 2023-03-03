@@ -26,7 +26,7 @@ pub enum BuiltinTypeValue {
     Asn(Asn), // scalar 
     AsPath(AsPath), // vector
     OriginType(OriginType), // scalar
-    Route(Option<RawRouteWithDeltas>), // vector
+    Route(RawRouteWithDeltas), // vector
     RouteStatus(RouteStatus), // scalar
     Boolean(Boolean), // scalar
     HexLiteral(HexLiteral), // scalar
@@ -139,7 +139,7 @@ impl From<Asn> for BuiltinTypeValue {
 
 impl From<u32> for BuiltinTypeValue {
     fn from(val: u32) -> Self {
-        BuiltinTypeValue::U32(U32(Some(val)))
+        BuiltinTypeValue::U32(U32(val))
     }
 }
 
@@ -161,68 +161,68 @@ impl From<routecore::addr::Prefix> for BuiltinTypeValue {
     }
 }
 
-impl TryFrom<&'_ str> for BuiltinTypeValue {
-    type Error = CompileError;
+// impl TryFrom<&'_ str> for BuiltinTypeValue {
+//     type Error = CompileError;
 
-    fn try_from(val: &'_ str) -> Result<Self, Self::Error> {
-        match val {
-            "U32" => Ok(BuiltinTypeValue::U32(U32(None))),
-            "U8" => Ok(BuiltinTypeValue::U8(U8(None))),
-            "IntegerLiteral" => {
-                Ok(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(None)))
-            }
-            "PrefixLengthLiteral" => {
-                Ok(BuiltinTypeValue::PrefixLength(PrefixLength(None)))
-            }
-            "Boolean" => Ok(BuiltinTypeValue::Boolean(Boolean(None))),
-            "Prefix" => Ok(BuiltinTypeValue::Prefix(Prefix(None))),
-            "PrefixLength" => {
-                Ok(BuiltinTypeValue::PrefixLength(PrefixLength(None)))
-            }
-            "Community" => Ok(BuiltinTypeValue::Community(Community(None))),
-            "IpAddress" => Ok(BuiltinTypeValue::IpAddress(IpAddress(None))),
-            "Asn" => Ok(BuiltinTypeValue::Asn(Asn(None))),
-            "AsPath" => Ok(BuiltinTypeValue::AsPath(AsPath(None))),
-            "Route" => Ok(BuiltinTypeValue::Route(None)),
-            "RouteStatus" => {
-                Ok(BuiltinTypeValue::RouteStatus(RouteStatus::Empty))
-            }
-            _ => Err(format!("Unknown type: {}", val).into()),
-        }
-    }
-}
+//     fn try_from(val: &'_ str) -> Result<Self, Self::Error> {
+//         match val {
+//             "U32" => Ok(BuiltinTypeValue::U32(U32(None))),
+//             "U8" => Ok(BuiltinTypeValue::U8(U8(None))),
+//             "IntegerLiteral" => {
+//                 Ok(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(None)))
+//             }
+//             "PrefixLengthLiteral" => {
+//                 Ok(BuiltinTypeValue::PrefixLength(PrefixLength(None)))
+//             }
+//             "Boolean" => Ok(BuiltinTypeValue::Boolean(Boolean(None))),
+//             "Prefix" => Ok(BuiltinTypeValue::Prefix(Prefix(None))),
+//             "PrefixLength" => {
+//                 Ok(BuiltinTypeValue::PrefixLength(PrefixLength(None)))
+//             }
+//             "Community" => Ok(BuiltinTypeValue::Community(Community(None))),
+//             "IpAddress" => Ok(BuiltinTypeValue::IpAddress(IpAddress(None))),
+//             "Asn" => Ok(BuiltinTypeValue::Asn(Asn(None))),
+//             "AsPath" => Ok(BuiltinTypeValue::AsPath(AsPath(None))),
+//             "Route" => Ok(BuiltinTypeValue::Route(None)),
+//             "RouteStatus" => {
+//                 Ok(BuiltinTypeValue::RouteStatus(RouteStatus::Empty))
+//             }
+//             _ => Err(format!("Unknown type: {}", val).into()),
+//         }
+//     }
+// }
 
-impl TryFrom<&TypeDef> for BuiltinTypeValue {
-    type Error = CompileError;
+// impl TryFrom<&TypeDef> for BuiltinTypeValue {
+//     type Error = CompileError;
 
-    fn try_from(ty: &TypeDef) -> Result<Self, Self::Error> {
-        match ty {
-            TypeDef::U32 => Ok(BuiltinTypeValue::U32(U32(None))),
-            TypeDef::U8 => Ok(BuiltinTypeValue::U8(U8(None))),
-            TypeDef::IntegerLiteral => {
-                Ok(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(None)))
-            }
-            TypeDef::Boolean => Ok(BuiltinTypeValue::Boolean(Boolean(None))),
-            TypeDef::Prefix => Ok(BuiltinTypeValue::Prefix(Prefix(None))),
-            TypeDef::PrefixLength => {
-                Ok(BuiltinTypeValue::PrefixLength(PrefixLength(None)))
-            }
-            TypeDef::Community => {
-                Ok(BuiltinTypeValue::Community(Community(None)))
-            }
-            TypeDef::IpAddress => {
-                Ok(BuiltinTypeValue::IpAddress(IpAddress(None)))
-            }
-            TypeDef::Asn => Ok(BuiltinTypeValue::Asn(Asn(None))),
-            TypeDef::AsPath => Ok(BuiltinTypeValue::AsPath(AsPath(None))),
-            TypeDef::Route => Ok(BuiltinTypeValue::Route(None)),
-            TypeDef::RouteStatus => {
-                Ok(BuiltinTypeValue::RouteStatus(RouteStatus::Empty))
-            }
-            _ => Err(format!("Unknown type: {:?}", ty).into()),
-        }
-    }
-}
+//     fn try_from(ty: &TypeDef) -> Result<Self, Self::Error> {
+//         match ty {
+//             TypeDef::U32 => Ok(BuiltinTypeValue::U32(U32(None))),
+//             TypeDef::U8 => Ok(BuiltinTypeValue::U8(U8(None))),
+//             TypeDef::IntegerLiteral => {
+//                 Ok(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(None)))
+//             }
+//             TypeDef::Boolean => Ok(BuiltinTypeValue::Boolean(Boolean(None))),
+//             TypeDef::Prefix => Ok(BuiltinTypeValue::Prefix(Prefix(None))),
+//             TypeDef::PrefixLength => {
+//                 Ok(BuiltinTypeValue::PrefixLength(PrefixLength(None)))
+//             }
+//             TypeDef::Community => {
+//                 Ok(BuiltinTypeValue::Community(Community(None)))
+//             }
+//             TypeDef::IpAddress => {
+//                 Ok(BuiltinTypeValue::IpAddress(IpAddress(None)))
+//             }
+//             TypeDef::Asn => Ok(BuiltinTypeValue::Asn(Asn(None))),
+//             TypeDef::AsPath => Ok(BuiltinTypeValue::AsPath(AsPath(None))),
+//             TypeDef::Route => Ok(BuiltinTypeValue::Route(None)),
+//             TypeDef::RouteStatus => {
+//                 Ok(BuiltinTypeValue::RouteStatus(RouteStatus::Empty))
+//             }
+//             _ => Err(format!("Unknown type: {:?}", ty).into()),
+//         }
+//     }
+// }
 
 impl Display for BuiltinTypeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -248,7 +248,7 @@ impl Display for BuiltinTypeValue {
             BuiltinTypeValue::OriginType(v) => {
                 write!(f, "{} (Origin Type)", v)
             }
-            BuiltinTypeValue::Route(v) => write!(f, "{} (Route)", if let Some(v) = v { v.to_string() } else { "None".to_string() }),
+            BuiltinTypeValue::Route(r) => write!(f, "{} (Route)", r),
             BuiltinTypeValue::RouteStatus(v) => {
                 write!(f, "{} (Route Status)", v)
             }

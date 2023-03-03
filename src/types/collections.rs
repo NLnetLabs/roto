@@ -29,7 +29,7 @@ pub enum ElementTypeValue {
 impl<'a> From<&'a TypeDef> for ElementTypeValue {
     fn from(t: &'a TypeDef) -> Self {
         match t {
-            TypeDef::U32 => ElementTypeValue::Primitive(U32(None).into()),
+            TypeDef::U32 => ElementTypeValue::Primitive(TypeValue::Unknown),
             TypeDef::U8 => ElementTypeValue::Primitive(U8(None).into()),
             TypeDef::Prefix => {
                 ElementTypeValue::Primitive(Prefix(None).into())
@@ -200,7 +200,7 @@ impl List {
 
 impl<'a> From<&'a TypeDef> for List {
     fn from(t: &'a TypeDef) -> Self {
-        List::new(vec![t.into()])
+        List::new(vec![ElementTypeValue::Primitive(TypeValue::Unknown)])
     }
 }
 
@@ -279,9 +279,9 @@ impl RotoType for List {
     {
         match method.into() {
             ListToken::Len => Ok(Box::new(move || {
-                TypeValue::Builtin(BuiltinTypeValue::U32(U32(Some(
+                TypeValue::Builtin(BuiltinTypeValue::U32(U32(
                     self.0.len() as u32,
-                ))))
+                )))
             })),
             ListToken::Contains => {
                 Ok(Box::new(move || self.iter().any(|e| e == args[0]).into()))
@@ -405,6 +405,7 @@ impl<'a> Record {
     ) -> Result<Record, CompileError> {
         if kvs.is_empty() {
             return Self::create_empty_instance(ty);
+            // return Err(CompileError::new("Can't create empty instance.".into()));
         }
 
         let shortstring_vec = kvs

@@ -72,6 +72,10 @@ impl TypeDef {
         }
     }
 
+    pub fn is_builtin(&self) -> bool {
+        !matches!(self, TypeDef::Rib(_) | TypeDef::Table(_) | TypeDef::List(_) | TypeDef::Record(_) | TypeDef::Unknown )
+    }
+
     pub fn new_record_type(
         type_ident_pairs: Vec<(&str, Box<TypeDef>)>,
     ) -> Result<TypeDef, CompileError> {
@@ -438,6 +442,30 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
         }
     }
 }
+
+impl TryFrom<crate::ast::Identifier> for TypeDef {
+    type Error = CompileError;
+    fn try_from(
+        ty: crate::ast::Identifier,
+    ) -> Result<TypeDef, CompileError> {
+        match ty.ident.as_str() {
+            "U32" => Ok(TypeDef::U32),
+            "U8" => Ok(TypeDef::U8),
+            "IntegerLiteral" => Ok(TypeDef::IntegerLiteral),
+            "Prefix" => Ok(TypeDef::Prefix),
+            "PrefixLength" => Ok(TypeDef::PrefixLength),
+            "IpAddress" => Ok(TypeDef::IpAddress),
+            "Asn" => Ok(TypeDef::Asn),
+            "AsPath" => Ok(TypeDef::AsPath),
+            "Community" => Ok(TypeDef::Community),
+            "Route" => Ok(TypeDef::Route),
+            "RouteStatus" => Ok(TypeDef::RouteStatus),
+            "HexLiteral" => Ok(TypeDef::HexLiteral),
+            _ => Err(format!("Undefined type: {}", ty.ident).into()),
+        }
+    }
+}
+
 
 impl From<&BuiltinTypeValue> for TypeDef {
     fn from(ty: &BuiltinTypeValue) -> TypeDef {

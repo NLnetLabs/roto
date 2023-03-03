@@ -56,9 +56,7 @@ impl Symbol {
                 | TypeDef::Record(_)
                 | TypeDef::Unknown
         ) {
-            (&self.ty).try_into().map(|tv: BuiltinTypeValue| tv.into())
-        } else if let TypeValue::Builtin(ty) = &self.value {
-            Ok(ty.into())
+            Ok(self.ty.clone())
         } else {
             Err(format!("Type '{:?}' is not a builtin type", self).into())
         }
@@ -292,7 +290,7 @@ impl Symbol {
             },
             TypeDef::Route => {
                 if let TypeValue::Builtin(BuiltinTypeValue::Route(r)) = self.value {
-                    self.value = r.unwrap().into_type(&type_def)?;
+                    self.value = r.into_type(&type_def)?;
                 }
             },
             TypeDef::RouteStatus => {

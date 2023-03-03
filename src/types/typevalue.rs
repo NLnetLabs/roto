@@ -198,11 +198,8 @@ impl TypeValue {
             TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) => {
                 ip.exec_value_method(method_token, args, return_type)
             }
-            TypeValue::Builtin(BuiltinTypeValue::Route(Some(route))) => {
+            TypeValue::Builtin(BuiltinTypeValue::Route(route)) => {
                 route.exec_value_method(method_token, args, return_type)
-            }
-            TypeValue::Builtin(BuiltinTypeValue::Route(None)) => {
-                Err(VmError::InvalidValueType)
             }
             TypeValue::Builtin(BuiltinTypeValue::Community(community)) => {
                 community.exec_value_method(method_token, args, return_type)
@@ -294,11 +291,8 @@ impl TypeValue {
             TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) => {
                 ip.exec_consume_value_method(method_token, args, return_type)
             }
-            TypeValue::Builtin(BuiltinTypeValue::Route(Some(route))) => route
+            TypeValue::Builtin(BuiltinTypeValue::Route(route)) => route
                 .exec_consume_value_method(method_token, args, return_type),
-            TypeValue::Builtin(BuiltinTypeValue::Route(None)) => {
-                Err(VmError::InvalidValueType)
-            }
             TypeValue::Builtin(BuiltinTypeValue::Community(community)) => {
                 community.exec_consume_value_method(
                     method_token,
@@ -375,8 +369,8 @@ impl PartialOrd for &TypeValue {
                 TypeValue::Builtin(BuiltinTypeValue::U8(U8(Some(v)))),
             ) => Some(u.cmp(v)),
             (
-                TypeValue::Builtin(BuiltinTypeValue::U32(U32(Some(u)))),
-                TypeValue::Builtin(BuiltinTypeValue::U32(U32(Some(v)))),
+                TypeValue::Builtin(BuiltinTypeValue::U32(U32(u))),
+                TypeValue::Builtin(BuiltinTypeValue::U32(U32(v))),
             ) => Some(u.cmp(v)),
             (
                 TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
@@ -528,33 +522,33 @@ impl<'a> TryFrom<&'a TypeValue> for bool {
     }
 }
 
-impl<'a> TryFrom<&'a str> for TypeValue {
-    type Error = CompileError;
+// impl<'a> TryFrom<&'a str> for TypeValue {
+//     type Error = CompileError;
 
-    fn try_from(s: &'a str) -> Result<Self, Self::Error> {
-        match s {
-            "U32" => Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(None)))),
-            "U8" => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(None)))),
-            "Prefix" => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None))))
-            }
-            "IpAddress" => Ok(TypeValue::Builtin(
-                BuiltinTypeValue::IpAddress(IpAddress(None)),
-            )),
-            "Asn" => Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(None)))),
-            "AsPath" => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))))
-            }
-            "Community" => Ok(TypeValue::Builtin(
-                BuiltinTypeValue::Community(Community(None)),
-            )),
-            "Boolean" => Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(
-                Boolean(None),
-            ))),
-            _ => Err(CompileError::new(format!("Unknown type: {}", s))),
-        }
-    }
-}
+//     fn try_from(s: &'a str) -> Result<Self, Self::Error> {
+//         match s {
+//             "U32" => Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(None)))),
+//             "U8" => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(None)))),
+//             "Prefix" => {
+//                 Ok(TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None))))
+//             }
+//             "IpAddress" => Ok(TypeValue::Builtin(
+//                 BuiltinTypeValue::IpAddress(IpAddress(None)),
+//             )),
+//             "Asn" => Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(None)))),
+//             "AsPath" => {
+//                 Ok(TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))))
+//             }
+//             "Community" => Ok(TypeValue::Builtin(
+//                 BuiltinTypeValue::Community(Community(None)),
+//             )),
+//             "Boolean" => Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(
+//                 Boolean(None),
+//             ))),
+//             _ => Err(CompileError::new(format!("Unknown type: {}", s))),
+//         }
+//     }
+// }
 
 // impl<'a> From<&'a TypeDef> for Box<TypeValue> {
 //     fn from(t: &'a TypeDef) -> Self {
