@@ -147,21 +147,21 @@ fn test_data(
     let mut module_arguments = ArgumentsMap::new();
 
     module_arguments.insert(
-        2,
+        1,
         TypeValue::Builtin(BuiltinTypeValue::Asn(Asn::new(65534.into()))),
     );
 
     let ds_ref = roto_pack.data_sources.iter().collect::<Vec<_>>();
 
     let mut vm = vm::VmBuilder::new()
-        .with_arguments(module_arguments)
+        //.with_arguments(module_arguments)
         .with_data_sources(ds_ref.as_slice())
         .build();
 
     let res = vm.exec(
         my_payload,
         None::<Record>,
-        None,
+        Some(module_arguments),
         RefCell::new(mem),
         roto_pack.mir,
     )
@@ -192,7 +192,7 @@ fn main() {
                     use rib rib-rov;
 
                     // assignments
-                    extra_in_table = source_asns.contains(extra_asn); // 0
+                    extra_in_table = source_asns.contains(my_asn); // 0
                     route_in_table = source_asns.contains(route.as-path.origin()); // 1
                     
                     // this is aliasing, kinda' useless, but hey, it's allowed
@@ -237,6 +237,7 @@ fn main() {
                     match {
                         found_prefix_pref == route.local-pref;
                         my_route_path.origin() == found_prefix.as-path.origin();
+                        extra_in_table;
                         fixed_len_prefix.len() == prefix_len;
                         route.origin == found_prefix.as-path.origin();
                         (found_prefix.prefix.exists() && found_prefix.prefix.exists()) || route_in_table;
