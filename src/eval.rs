@@ -771,12 +771,12 @@ impl ast::MethodComputeExpr {
         let parsed_args = arguments;
 
         if parsed_args.is_empty() && props.arg_types.is_empty() {
-            return Ok(symbols::Symbol::new_with_value(
+            return Ok(symbols::Symbol::new(
                 self.ident.clone().ident,
                 method_kind,
-                (&props.return_type_value).into(),
+                props.return_type,
                 vec![],
-                props.method_token,
+                Some(props.method_token),
             ));
         }
 
@@ -807,16 +807,16 @@ impl ast::MethodComputeExpr {
             // can be converted to the expected type, e.g. an IntegerLiteral
             // can be converted into a U8, I64, etc (as long as it fits).
             args.push(
-                parsed_arg_type.try_convert_value_into(expected_arg_type)?,
+                parsed_arg_type.try_convert_value_into(expected_arg_type.clone())?,
             );
         }
 
-        Ok(symbols::Symbol::new_with_value(
+        Ok(symbols::Symbol::new(
             self.ident.clone().ident,
             method_kind,
-            (&props.return_type_value).into(),
+            props.return_type,
             args,
-            props.method_token,
+            Some(props.method_token),
         ))
     }
 }
@@ -1164,7 +1164,7 @@ impl ast::CompareExpr {
         // NOT reversed, i.e. `32 == prefix.len();` is INVALID.
         println!("left_type {:#?} <-> right_type {:#?}", left_s, right_s);
         if left_type != right_type {
-            right_s = right_s.try_convert_value_into(&left_type)?;
+            right_s = right_s.try_convert_value_into(left_type.clone())?;
         }
         println!("after conversion {} <-> {:?}", left_type, right_s);
 

@@ -149,7 +149,7 @@ impl TypeDef {
 
     pub(crate) fn _check_record_fields_for_ref(
         &self,
-        fields: &[(ShortString, TypeValue)],
+        fields: &[(ShortString, TypeDef)],
     ) -> bool {
         if let TypeDef::Record(rec) = self {
             for (name, ty) in fields {
@@ -288,7 +288,7 @@ impl TypeDef {
 }
 
 pub struct MethodProps {
-    pub(crate) return_type_value: TypeDef,
+    pub(crate) return_type: TypeDef,
     pub(crate) method_token: Token,
     pub(crate) arg_types: Vec<TypeDef>,
     pub(crate) consume: bool,
@@ -301,7 +301,7 @@ impl MethodProps {
         arg_types: Vec<TypeDef>,
     ) -> Self {
         MethodProps {
-            return_type_value,
+            return_type: return_type_value,
             method_token: Token::Method(method_token),
             arg_types,
             consume: false,
@@ -405,7 +405,7 @@ impl PartialEq<TypeValue> for TypeDef {
             (TypeDef::Record(a), TypeValue::Record(_b)) => self
                 ._check_record_fields_for_ref(
                     a.iter()
-                        .map(|ty| (ty.0.clone(), ty.1.as_ref().into()))
+                        .map(|ty| (ty.0.clone(), *ty.1.clone()))
                         .collect::<Vec<_>>()
                         .as_slice(),
                 ),
@@ -514,6 +514,7 @@ impl From<&TypeValue> for TypeDef {
             TypeValue::Rib(r) => r.ty.clone(),
             TypeValue::Table(t) => t.ty.clone(),
             TypeValue::Unknown => TypeDef::Unknown,
+            TypeValue::Empty => TypeDef::Unknown,
             TypeValue::UnInit => TypeDef::Unknown,
         }
     }

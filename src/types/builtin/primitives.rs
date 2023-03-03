@@ -995,7 +995,7 @@ impl PrefixLength {
 
 impl RotoType for PrefixLength {
     fn get_props_for_method(
-        ty: TypeDef,
+        _ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
@@ -1585,24 +1585,6 @@ impl AsPath {
             as_path.iter().any(|a| a.elements().contains(&asn))
         } else {
             false
-        }
-    }
-
-    fn inner_from_typevalue(
-        type_value: TypeValue,
-    ) -> Result<routecore::asn::AsPath<Vec<routecore::asn::Asn>>, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        match type_value {
-            TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {
-                if let Some(as_path) = as_path.0 {
-                    Ok(as_path)
-                } else {
-                    Err("Invalid AsPath".into())
-                }
-            }
-            _ => Err("Not an AsPath type".into()),
         }
     }
 }

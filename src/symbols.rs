@@ -219,80 +219,106 @@ impl Symbol {
     // If these two steps fail, return an error.
     pub fn try_convert_value_into(
         mut self,
-        type_def: &TypeDef,
+        type_def: TypeDef,
     ) -> Result<Self, CompileError> {
         println!("CONVERT {:#?} -> {}", self, type_def);
-        match self.value {
-            TypeValue::Builtin(BuiltinTypeValue::U32(int)) => {
-                self.value = int.into_type(type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::U8(int)) => {
-                self.value = int.into_type(type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(int)) => {
-                self.value = int.into_type(type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::StringLiteral(str)) => {
-                self.value = str.into_type(type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::HexLiteral(hex)) => {
-                self.value = hex.into_type(type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::PrefixLength(pl)) => {
-                self.value = pl.into_type(type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) => {
-                self.value = asn.into_type(type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::Prefix(prefix)) => {
-                self.value = prefix.into_type(type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) => {
-                self.value = ip.into_type(type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::Community(com)) => {
-                self.value = com.into_type(type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::Boolean(bool)) => {
-                self.value = bool.into_type(type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::Route(Some(route))) => {
-                self.value = route.into_type(type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::OriginType(origin)) => {
-                self.value = origin.into_type(type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::Route(None)) => {
-                return Err(CompileError::new("No route found to convert.".into()))   
-            }
-            TypeValue::Builtin(BuiltinTypeValue::RouteStatus(status)) => {
-                self.value = status.into_type(type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {
-                self.value = as_path.into_type(type_def)?;
-            }
-            TypeValue::List(list) => {
-                self.value = list.into_type(type_def)?;
-            }
-            TypeValue::Record(rec) => {
-                self.value = rec.into_type(type_def)?;
-            }
-            TypeValue::Rib(rib) => {
-                self.value = rib.into_type(type_def)?;
-            }
-            TypeValue::Table(table) => {
-                self.value = table.into_type(type_def)?;
-            }
-            TypeValue::Unknown => {
-                self.value = (&self.ty).into();
-                self = self.try_convert_value_into(type_def)?;
-            }
-            TypeValue::UnInit => {
-                return Err(CompileError::new(
-                    "Unitialized Memory conversion.".into(),
-                ));
-            }
-        };
+        match self.ty {
+            TypeDef::Rib(_) => { return Err(CompileError::new("RIB can't be converted.".into())) },
+            TypeDef::Table(_) => {return Err(CompileError::new("Table can't be converted.".into()))},
+            TypeDef::List(_) => {
+                if let TypeValue::List(list) = self.value {
+                    self.value = list.into_type(&type_def)?;
+                }
+            },
+            TypeDef::Record(_) => {
+                if let TypeValue::Record(rec) = self.value {
+                    self.value = rec.into_type(&type_def)?;
+                }
+            },
+            TypeDef::U32 => {
+                if let TypeValue::Builtin(BuiltinTypeValue::U32(int)) = self.value {
+                    self.value = int.into_type(&type_def)?;
+                }
+            },
+            TypeDef::U8 => {
+                if let TypeValue::Builtin(BuiltinTypeValue::U8(int)) = self.value {
+                    self.value = int.into_type(&type_def)?;
+                }
+            },
+            TypeDef::Boolean => {
+                if let TypeValue::Builtin(BuiltinTypeValue::Boolean(int)) = self.value {
+                    self.value = int.into_type(&type_def)?;
+                }
+            },
+            TypeDef::String => {
+                if let TypeValue::Builtin(BuiltinTypeValue::StringLiteral(str)) = self.value {
+                    self.value = str.into_type(&type_def)?;
+                }
+            },
+            TypeDef::Prefix => {
+                if let TypeValue::Builtin(BuiltinTypeValue::Prefix(pfx)) = self.value {
+                    self.value = pfx.into_type(&type_def)?;
+                }
+            },
+            TypeDef::PrefixLength => {
+                if let TypeValue::Builtin(BuiltinTypeValue::PrefixLength(pl)) = self.value {
+                    self.value = pl.into_type(&type_def)?;
+                }
+            },
+            TypeDef::IpAddress => {
+                if let TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) = self.value {
+                    self.value = ip.into_type(&type_def)?;
+                }
+            },
+            TypeDef::Asn => {
+                if let TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) = self.value {
+                    self.value = asn.into_type(&type_def)?;
+                }
+            },
+            TypeDef::AsPath => {
+                if let TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) = self.value {
+                    self.value = as_path.into_type(&type_def)?;
+                }
+            },
+            TypeDef::Community => {
+                if let TypeValue::Builtin(BuiltinTypeValue::Community(int)) = self.value {
+                    self.value = int.into_type(&type_def)?;
+                }
+            },
+            TypeDef::OriginType => {
+                if let TypeValue::Builtin(BuiltinTypeValue::OriginType(ot)) = self.value {
+                    self.value = ot.into_type(&type_def)?;
+                }
+            },
+            TypeDef::Route => {
+                if let TypeValue::Builtin(BuiltinTypeValue::Route(r)) = self.value {
+                    self.value = r.unwrap().into_type(&type_def)?;
+                }
+            },
+            TypeDef::RouteStatus => {
+                if let TypeValue::Builtin(BuiltinTypeValue::RouteStatus(rs)) = self.value {
+                    self.value = rs.into_type(&type_def)?;
+                }
+            },
+            TypeDef::HexLiteral => {
+                if let TypeValue::Builtin(BuiltinTypeValue::HexLiteral(hex)) = self.value {
+                    self.value = hex.into_type(&type_def)?;
+                }
+            },
+            TypeDef::IntegerLiteral => {
+                if let TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(int)) = self.value {
+                    self.value = int.into_type(&type_def)?;
+                }
+            },
+            TypeDef::StringLiteral => {
+                if let TypeValue::Builtin(BuiltinTypeValue::StringLiteral(str)) = self.value {
+                    self.value = str.into_type(&type_def)?;
+                }
+            },
+            TypeDef::AcceptReject(_) => { return Err(CompileError::new("AcceptReject value can't be converted.".into())) },
+            TypeDef::Unknown => { return Err(CompileError::new("Value from unknown type can't be converted.".into())) },
+        }
+
         Ok(self)
     }
 
