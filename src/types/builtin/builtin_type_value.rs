@@ -145,19 +145,19 @@ impl From<u32> for BuiltinTypeValue {
 
 impl From<i64> for BuiltinTypeValue {
     fn from(val: i64) -> Self {
-        BuiltinTypeValue::IntegerLiteral(IntegerLiteral(Some(val)))
+        BuiltinTypeValue::IntegerLiteral(IntegerLiteral(val))
     }
 }
 
 impl From<std::net::IpAddr> for BuiltinTypeValue {
     fn from(val: std::net::IpAddr) -> Self {
-        BuiltinTypeValue::IpAddress(IpAddress(Some(val)))
+        BuiltinTypeValue::IpAddress(IpAddress(val))
     }
 }
 
 impl From<routecore::addr::Prefix> for BuiltinTypeValue {
     fn from(val: routecore::addr::Prefix) -> Self {
-        BuiltinTypeValue::Prefix(Prefix(Some(val)))
+        BuiltinTypeValue::Prefix(Prefix(val))
     }
 }
 

@@ -1091,7 +1091,7 @@ impl ast::BooleanExpr {
                     "boolean_constant".into(),
                     symbols::SymbolKind::Constant,
                     TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
-                        Some(bool_lit.0),
+                        bool_lit.0,
                     ))),
                     vec![],
                     Token::Constant(None),

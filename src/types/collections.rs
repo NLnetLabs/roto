@@ -5,10 +5,7 @@ use crate::compile::CompileError;
 use crate::traits::{RotoType, TokenConvert};
 use crate::vm::VmError;
 
-use super::builtin::{
-    AsPath, Asn, BuiltinTypeValue, Community, IpAddress, OriginType, Prefix,
-    PrefixLength, U32, U8,
-};
+use super::builtin::{BuiltinTypeValue, U32};
 use super::typedef::{MethodProps, TypeDef};
 use super::typevalue::TypeValue;
 
@@ -30,25 +27,25 @@ impl<'a> From<&'a TypeDef> for ElementTypeValue {
     fn from(t: &'a TypeDef) -> Self {
         match t {
             TypeDef::U32 => ElementTypeValue::Primitive(TypeValue::Unknown),
-            TypeDef::U8 => ElementTypeValue::Primitive(U8(None).into()),
+            TypeDef::U8 => ElementTypeValue::Primitive(TypeValue::Unknown),
             TypeDef::Prefix => {
-                ElementTypeValue::Primitive(Prefix(None).into())
+                ElementTypeValue::Primitive(TypeValue::Unknown)
             }
             TypeDef::PrefixLength => {
-                ElementTypeValue::Primitive(PrefixLength(None).into())
+                ElementTypeValue::Primitive(TypeValue::Unknown)
             }
             TypeDef::IpAddress => {
-                ElementTypeValue::Primitive(IpAddress(None).into())
+                ElementTypeValue::Primitive(TypeValue::Unknown)
             }
-            TypeDef::Asn => ElementTypeValue::Primitive(Asn(None).into()),
+            TypeDef::Asn => ElementTypeValue::Primitive(TypeValue::Unknown),
             TypeDef::AsPath => {
-                ElementTypeValue::Primitive(AsPath(None).into())
+                ElementTypeValue::Primitive(TypeValue::Unknown)
             }
             TypeDef::Community => {
-                ElementTypeValue::Primitive(Community(None).into())
+                ElementTypeValue::Primitive(TypeValue::Unknown)
             }
             TypeDef::OriginType => {
-                ElementTypeValue::Primitive(OriginType(None).into())
+                ElementTypeValue::Primitive(TypeValue::Unknown)
             }
             TypeDef::List(ty) => ElementTypeValue::Nested(Box::new(
                 TypeValue::List(ty.as_ref().into()),

@@ -45,7 +45,7 @@ fn main() {
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            Community::new().into()
+            Community::new(routecore::bgp::communities::Community::from([127, 12, 13, 12])).into(),
         )]));
 
     let my_comms_type =

@@ -407,7 +407,7 @@ impl<'a> VirtualMachine<'a> {
                                     0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
-                                            Some(res),
+                                            res,
                                         )),
                                     ),
                                 );
@@ -421,7 +421,7 @@ impl<'a> VirtualMachine<'a> {
                                     0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
-                                            Some(res),
+                                            res,
                                         )),
                                     ),
                                 );
@@ -435,7 +435,7 @@ impl<'a> VirtualMachine<'a> {
                                     0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
-                                            Some(res),
+                                            res,
                                         )),
                                     ),
                                 );
@@ -449,7 +449,7 @@ impl<'a> VirtualMachine<'a> {
                                     0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
-                                            Some(res),
+                                            res,
                                         )),
                                     ),
                                 );
@@ -463,7 +463,7 @@ impl<'a> VirtualMachine<'a> {
                                     0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
-                                            Some(res),
+                                            res,
                                         )),
                                     ),
                                 );
@@ -477,7 +477,7 @@ impl<'a> VirtualMachine<'a> {
                                     0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
-                                            Some(res),
+                                            res,
                                         )),
                                     ),
                                 );
@@ -493,7 +493,7 @@ impl<'a> VirtualMachine<'a> {
                                     0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
-                                            Some(res),
+                                            res,
                                         )),
                                     ),
                                 );
@@ -508,7 +508,7 @@ impl<'a> VirtualMachine<'a> {
                                     0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
-                                            Some(res),
+                                            res,
                                         )),
                                     ),
                                 );

@@ -23,20 +23,11 @@ pub struct Rib {
 }
 
 impl Rib {
-    fn inner_from_typevalue(
-        type_value: TypeValue,
-    ) -> Result<Rib, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        todo!()
-    }
-
     pub(crate) fn exec_ref_value_method<'a>(
         &'a self,
         method: usize,
         args: &'a [&'a TypeValue],
-        res_type: TypeDef,
+        _res_type: TypeDef,
     ) -> Box<dyn FnOnce() -> DataSourceMethodValue + 'a> {
         match RibToken::from(method) {
             RibToken::Match => {
@@ -65,6 +56,7 @@ impl Rib {
                         // because we would erase the type then. Since this
                         // method can be in the middle of a chain we need to
                         // pass on the type
+                        
                         let rec =
                             Record::create_empty_instance(&self.ty).unwrap();
                         DataSourceMethodValue::TypeValue(TypeValue::Record(
@@ -275,12 +267,12 @@ impl Table {
                     })
                     .map(|_v| {
                         DataSourceMethodValue::TypeValue(TypeValue::Builtin(
-                            BuiltinTypeValue::Boolean(Boolean(Some(true))),
+                            BuiltinTypeValue::Boolean(Boolean(true)),
                         ))
                     })
                     .unwrap_or_else(|| {
                         DataSourceMethodValue::TypeValue(TypeValue::Builtin(
-                            BuiltinTypeValue::Boolean(Boolean(Some(false))),
+                            BuiltinTypeValue::Boolean(Boolean(false)),
                         ))
                     })
             }),

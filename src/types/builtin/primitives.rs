@@ -127,11 +127,11 @@ impl From<U32Token> for usize {
 // ----------- A simple u8 type ---------------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub struct U8(pub(crate) Option<u8>);
+pub struct U8(pub(crate) u8);
 
 impl U8 {
     pub fn new(val: u8) -> Self {
-        U8(Some(val))
+        U8(val)
     }
 }
 
@@ -191,45 +191,39 @@ impl RotoType for U8 {
         match type_def {
             // Self
             TypeDef::U8 => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(self))),
-            TypeDef::U32 => match self.0 {
-                Some(value) => Ok(TypeValue::Builtin(BuiltinTypeValue::U32(
-                    U32(value as u32),
-                ))),
-                None => Err("Cannot convert None to U32".into()),
+            TypeDef::U32 => {
+                let value = self.0;
+                Ok(TypeValue::Builtin(BuiltinTypeValue::U32(
+                U32(value as u32),
+            )))
             },
-            TypeDef::PrefixLength => match self.0 {
-                Some(value) => match value {
-                    0..=128 => Ok(TypeValue::Builtin(
-                        BuiltinTypeValue::PrefixLength(PrefixLength(Some(
-                            value,
-                        ))),
+            TypeDef::PrefixLength => {
+                match self.0 {
+                0..=128 => Ok(TypeValue::Builtin(
+                    BuiltinTypeValue::PrefixLength(PrefixLength(
+                        self.0,
                     )),
-                    _ => Err(format!(
-                        "Prefix length must be between 0 and 128, not {}",
-                        value
-                    )
-                    .into()),
-                },
-                None => Ok(TypeValue::Builtin(
-                    BuiltinTypeValue::PrefixLength(PrefixLength(None)),
                 )),
+                _ => Err(format!(
+                    "Prefix length must be between 0 and 128, not {}",
+                    self.0
+                )
+                .into()),
+            }
             },
-            TypeDef::IntegerLiteral => match self.0 {
-                Some(value) => match value {
-                    0..=128 => Ok(TypeValue::Builtin(
-                        BuiltinTypeValue::PrefixLength(PrefixLength(Some(
-                            value,
-                        ))),
+            TypeDef::IntegerLiteral => {
+                match self.0 {
+                0..=128 => Ok(TypeValue::Builtin(
+                    BuiltinTypeValue::PrefixLength(PrefixLength(
+                        self.0,
                     )),
-                    _ => Err(format!(
-                        "Prefix length must be between 0 and 128, not {}",
-                        value
-                    )
-                    .into()),
-                },
-                None => Ok(TypeValue::Builtin(
-                    BuiltinTypeValue::PrefixLength(PrefixLength(None)),
                 )),
+                _ => Err(format!(
+                    "Prefix length must be between 0 and 128, not {}",
+                    self.0
+                )
+                .into()),
+            }
             },
             _ => {
                 Err(format!("Cannot convert type U8 to type {:?}", type_def)
@@ -241,11 +235,7 @@ impl RotoType for U8 {
 
 impl Display for U8 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let v = match self.0 {
-            Some(v) => v.to_string(),
-            None => "None".to_string(),
-        };
-        write!(f, "{}", v)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -282,18 +272,14 @@ impl From<U8Token> for usize {
 // ----------- Boolean type -------------------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub struct Boolean(pub(crate) Option<bool>);
+pub struct Boolean(pub(crate) bool);
 impl Boolean {
     pub fn new(val: bool) -> Self {
-        Boolean(Some(val))
+        Boolean(val)
     }
 
-    pub fn is_false(&self) -> Result<bool, VmError> {
-        if let Boolean(Some(bool_val)) = self {
-            Ok(!*bool_val)
-        } else {
-            Err(VmError::InvalidValueType)
-        }
+    pub fn is_false(&self) -> bool {
+        !self.0
     }
 }
 
@@ -371,11 +357,7 @@ impl From<Boolean> for TypeValue {
 
 impl Display for Boolean {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let v = match self.0 {
-            Some(v) => v.to_string(),
-            None => "None".to_string(),
-        };
-        write!(f, "{}", v)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -404,10 +386,10 @@ impl From<BooleanToken> for usize {
 //------------ StringLiteral type -------------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct StringLiteral(pub(crate) Option<ShortString>);
+pub struct StringLiteral(pub(crate) ShortString);
 impl StringLiteral {
     pub fn new(val: ShortString) -> Self {
-        StringLiteral(Some(val))
+        StringLiteral(val)
     }
 }
 
@@ -481,11 +463,7 @@ impl From<StringLiteral> for TypeValue {
 
 impl Display for StringLiteral {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let v = match &self.0 {
-            Some(v) => v.to_string(),
-            None => "None".to_string(),
-        };
-        write!(f, "{}", v)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -514,10 +492,10 @@ impl From<StringLiteralToken> for usize {
 //------------ IntegerLiteral type ------------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub struct IntegerLiteral(pub(crate) Option<i64>);
+pub struct IntegerLiteral(pub(crate) i64);
 impl IntegerLiteral {
     pub fn new(val: i64) -> Self {
-        IntegerLiteral(Some(val))
+        IntegerLiteral(val)
     }
 }
 
@@ -548,22 +526,18 @@ impl RotoType for IntegerLiteral {
             TypeDef::IntegerLiteral => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(self)))
             }
-            TypeDef::PrefixLength => match self.0 {
-                Some(value) => match value {
-                    0..=128 => Ok(TypeValue::Builtin(
-                        BuiltinTypeValue::PrefixLength(PrefixLength(Some(
-                            value as u8,
-                        ))),
-                    )),
-                    _ => Err(format!(
-                        "Prefix length must be between 0 and 128, not {}",
-                        value
-                    )
-                    .into()),
-                },
-                None => Ok(TypeValue::Builtin(
-                    BuiltinTypeValue::PrefixLength(PrefixLength(None)),
-                )),
+            TypeDef::PrefixLength => {
+                match self.0 {
+                0..=128 => Ok(TypeValue::Builtin(
+                    BuiltinTypeValue::PrefixLength(PrefixLength(
+                        self.0 as u8,
+                    )))),
+                _ => Err(format!(
+                    "Prefix length must be between 0 and 128, not {}",
+                    self.0
+                )
+                .into()),
+            }
             },
             _ => Err(format!(
                 "Cannot convert type IntegerLiteral to type {:?}",
@@ -608,11 +582,7 @@ impl From<IntegerLiteral> for TypeValue {
 
 impl Display for IntegerLiteral {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let v = match self.0 {
-            Some(v) => v.to_string(),
-            None => "None".to_string(),
-        };
-        write!(f, "{}", v)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -641,10 +611,10 @@ impl From<IntegerLiteralToken> for usize {
 //------------ HexLiteral type ----------------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub struct HexLiteral(pub(crate) Option<u64>);
+pub struct HexLiteral(pub(crate) u64);
 impl HexLiteral {
     pub fn new(val: u64) -> Self {
-        HexLiteral(Some(val))
+        HexLiteral(val)
     }
 }
 
@@ -677,8 +647,8 @@ impl RotoType for HexLiteral {
             }
             TypeDef::Community => {
                 // still bogus, but at least it should convert from the hexliteral type.
-                let c = Community::new();
-                Ok(TypeValue::Builtin(BuiltinTypeValue::Community(c)))
+                let c = routecore::bgp::communities::Community::from(self.0.to_be_bytes());
+                Ok(TypeValue::Builtin(BuiltinTypeValue::Community(Community(c))))
             }
             _ => Err(format!(
                 "Cannot convert type HexLiteral to type {:?}",
@@ -723,11 +693,7 @@ impl From<HexLiteral> for TypeValue {
 
 impl Display for HexLiteral {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let v = match self.0 {
-            Some(v) => format!("0x{:x}", v),
-            None => "None".to_string(),
-        };
-        write!(f, "{}", v)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -756,15 +722,11 @@ impl From<HexLiteralToken> for usize {
 // ----------- Prefix type --------------------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub struct Prefix(pub(crate) Option<routecore::addr::Prefix>);
+pub struct Prefix(pub(crate) routecore::addr::Prefix);
 
 impl Prefix {
     pub fn new(prefix: routecore::addr::Prefix) -> Self {
-        Self(Some(prefix))
-    }
-
-    pub fn empty() -> Self {
-        Self(None)
+        Self(prefix)
     }
 
     pub fn exec_method(
@@ -844,31 +806,24 @@ impl RotoType for Prefix {
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         match method_token.into() {
             PrefixToken::Address => {
-                let prefix = self.0.ok_or(VmError::InvalidConversion)?;
+                let prefix = self.0;
                 Ok(Box::new(move || {
                     TypeValue::Builtin(BuiltinTypeValue::IpAddress(
-                        IpAddress(Some(prefix.addr())),
+                        IpAddress(prefix.addr()),
                     ))
                 }))
             }
             PrefixToken::Len => {
-                if let Prefix(Some(pfx)) = self {
-                    Ok(Box::new(move || {
-                        TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
-                            PrefixLength(Some(pfx.len())),
-                        ))
-                    }))
-                } else {
-                    Err(VmError::ArgumentNotFound)
-                }
+                let Prefix(pfx) = self;
+                Ok(Box::new(move || {
+                    TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
+                        PrefixLength(pfx.len()),
+                    ))
+                }))
             }
             PrefixToken::From => unimplemented!(),
             PrefixToken::Exists => {
-                if self.0.is_some() {
-                    Ok(Box::new(move || true.into()))
-                } else {
-                    Ok(Box::new(move || false.into()))
-                }
+                Ok(Box::new(move || true.into()))  
             }
             PrefixToken::Matches => todo!(),
         }
@@ -897,8 +852,8 @@ impl RotoType for Prefix {
                         .try_into()
                         .map_err(|_e| VmError::InvalidConversion)?;
                     let ip =
-                        ip.0.ok_or("Cannot convert empty IP address")
-                            .map_err(|_e| VmError::InvalidConversion)?;
+                        ip.0; //.ok_or("Cannot convert empty IP address")
+                            // .map_err(|_e| VmError::InvalidConversion)?;
                     Ok(Box::new(move || {
                         TypeValue::Builtin(BuiltinTypeValue::Prefix(
                             Prefix::new(
@@ -933,17 +888,13 @@ impl From<Prefix> for TypeValue {
 
 impl From<routecore::addr::Prefix> for Prefix {
     fn from(val: routecore::addr::Prefix) -> Self {
-        Prefix(Some(val))
+        Prefix(val)
     }
 }
 
 impl Display for Prefix {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Some(prefix) = &self.0 {
-            write!(f, "{}", prefix)
-        } else {
-            write!(f, "empty")
-        }
+        write!(f, "{}", self.0)
     }
 }
 
@@ -981,11 +932,11 @@ impl From<PrefixToken> for usize {
 //------------ PrefixLengthLiteral type -------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub struct PrefixLength(pub(crate) Option<u8>);
+pub struct PrefixLength(pub(crate) u8);
 
 impl PrefixLength {
     pub fn new(val: u8) -> Self {
-        PrefixLength(Some(val))
+        PrefixLength(val)
     }
 }
 
@@ -1062,11 +1013,7 @@ impl From<PrefixLength> for TypeValue {
 
 impl Display for PrefixLength {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Some(len) = &self.0 {
-            write!(f, "/{}", len)
-        } else {
-            write!(f, "None")
-        }
+        write!(f, "/{}", self.0)
     }
 }
 
@@ -1123,7 +1070,7 @@ impl TryFrom<&TypeValue> for PrefixLength {
 
 impl From<PrefixLength> for u8 {
     fn from(val: PrefixLength) -> Self {
-        val.0.unwrap()
+        val.0
     }
 }
 
@@ -1131,12 +1078,12 @@ impl From<PrefixLength> for u8 {
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub struct Community(
-    pub(crate) Option<routecore::bgp::communities::Community>,
+    pub(crate) routecore::bgp::communities::Community,
 );
 
 impl Community {
-    pub fn new() -> Self {
-        Self(None)
+    pub fn new(com: routecore::bgp::communities::Community) -> Self {
+        Self(com)
     }
 }
 
@@ -1283,7 +1230,7 @@ impl From<CommunityToken> for usize {
 
 //------------ Communities --------------------------------------------------
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Communities(pub(crate) Option<Vec<Community>>);
+pub struct Communities(pub(crate) routecore::bgp::communities::MaterializedCommunities);
 
 //------------ MatchType ----------------------------------------------------
 
@@ -1297,11 +1244,11 @@ pub enum MatchType {
 // ----------- IpAddress type -----------------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub struct IpAddress(pub(crate) Option<std::net::IpAddr>);
+pub struct IpAddress(pub(crate) std::net::IpAddr);
 
 impl IpAddress {
     pub fn new(addr: std::net::IpAddr) -> Self {
-        IpAddress(Some(addr))
+        IpAddress(addr)
     }
 }
 
@@ -1383,11 +1330,7 @@ impl From<IpAddress> for TypeValue {
 
 impl Display for IpAddress {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Some(addr) = self.0 {
-            write!(f, "{}", addr)
-        } else {
-            write!(f, "None")
-        }
+        write!(f, "{}", self.0)
     }
 }
 
@@ -1418,19 +1361,19 @@ impl From<IpAddressToken> for usize {
 // ----------- Asn type -----------------------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub struct Asn(pub(crate) Option<routecore::asn::Asn>);
+pub struct Asn(pub(crate) routecore::asn::Asn);
 
 impl Asn {
     pub fn new(asn: routecore::asn::Asn) -> Self {
-        Asn(Some(asn))
+        Asn(asn)
     }
 
     pub fn from_u32(asn: u32) -> Self {
-        Asn(Some(routecore::asn::Asn::from(asn)))
+        Asn(routecore::asn::Asn::from(asn))
     }
 
     pub fn get_asn(&self) -> routecore::asn::Asn {
-        self.0.unwrap()
+        self.0
     }
 }
 
@@ -1484,7 +1427,7 @@ impl RotoType for Asn {
                     args[0]
                 {
                     Ok(Box::new(move || {
-                        TypeValue::from(Asn::new(asn.0.unwrap()))
+                        TypeValue::from(Asn::new(asn.0))
                     }))
                 } else {
                     Err(VmError::ArgumentNotFound)
@@ -1519,11 +1462,7 @@ impl From<Asn> for TypeValue {
 
 impl Display for Asn {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Some(asn) = self.0 {
-            write!(f, "{}", asn)
-        } else {
-            write!(f, "None")
-        }
+        write!(f, "{}", self.0)
     }
 }
 
@@ -1553,7 +1492,7 @@ impl From<AsnToken> for usize {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct AsPath(
-    pub(crate) Option<routecore::asn::AsPath<Vec<routecore::asn::Asn>>>,
+    pub(crate) routecore::asn::AsPath<Vec<routecore::asn::Asn>>,
 );
 
 impl AsPath {
@@ -1565,7 +1504,7 @@ impl AsPath {
             new_as_path.push(asn)?;
         }
         let new_as_path = new_as_path.finalize();
-        Ok(AsPath(Some(new_as_path)))
+        Ok(AsPath(new_as_path))
     }
 
     pub fn from_vec_u32(as_path: Vec<u32>) -> Result<Self, LongSegmentError> {
@@ -1577,11 +1516,7 @@ impl AsPath {
     }
 
     pub fn contains(&self, asn: routecore::asn::Asn) -> bool {
-        if let Some(as_path) = &self.0 {
-            as_path.iter().any(|a| a.elements().contains(&asn))
-        } else {
-            false
-        }
+        self.0.iter().any(|a| a.elements().contains(&asn))   
     }
 }
 
@@ -1641,56 +1576,39 @@ impl RotoType for AsPath {
     ) -> Result<Box<(dyn FnOnce() -> TypeValue + 'a)>, VmError> {
         match method.into() {
             AsPathToken::Origin => {
-                if let Some(rc_as_path) = &self.0 {
-                    Ok(Box::new(move || {
-                        let origin: routecore::asn::Asn =
-                            rc_as_path.iter().next().unwrap().elements()[0];
+                let rc_as_path = &self.0;
+                Ok(Box::new(move || {
+                    let origin: routecore::asn::Asn =
+                        rc_as_path.iter().next().unwrap().elements()[0];
 
-                        TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(Some(
-                            origin,
-                        ))))
-                    }))
-                } else {
-                    Ok(Box::new(move || {
-                        TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(None)))
-                    }))
-                }
+                    TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(
+                        origin,
+                    )))
+                }))
             }
             AsPathToken::Contains => {
-                if let Some(rc_as_path) = &self.0 {
+                Ok(Box::new(move || {
+                    if let TypeValue::Builtin(
+                        BuiltinTypeValue::Asn(Asn(search_asn)),
+                    ) = args[0]
                     {
-                        Ok(Box::new(move || {
-                            if let TypeValue::Builtin(
-                                BuiltinTypeValue::Asn(Asn(search_asn)),
-                            ) = args[0]
-                            {
-                                let contains =
-                                    rc_as_path.contains(search_asn.unwrap());
-                                TypeValue::Builtin(BuiltinTypeValue::Boolean(
-                                    Boolean(Some(contains)),
-                                ))
-                            } else {
-                                TypeValue::Unknown
-                            }
-                        }))
+                        let contains =
+                            self.0.contains(*search_asn);
+                        TypeValue::Builtin(BuiltinTypeValue::Boolean(
+                            Boolean(contains),
+                        ))
+                    } else {
+                        TypeValue::Unknown
                     }
-                } else {
-                    Ok(Box::new(|| TypeValue::Unknown))
-                }
+                }))       
             }
             AsPathToken::Len => {
-                if let Some(rc_as_path) = &self.0 {
-                    Ok(Box::new(|| {
-                        let len = rc_as_path.iter().count();
-                        TypeValue::Builtin(BuiltinTypeValue::U8(U8(Some(
-                            len as u8,
-                        ))))
-                    }))
-                } else {
-                    Ok(Box::new(|| {
-                        TypeValue::Builtin(BuiltinTypeValue::U8(U8(None)))
-                    }))
-                }
+                Ok(Box::new(|| {
+                    let len = self.0.iter().count();
+                    TypeValue::Builtin(BuiltinTypeValue::U8(U8(
+                        len as u8,
+                    )))
+                }))  
             }
         }
     }
@@ -1721,11 +1639,7 @@ impl From<AsPath> for TypeValue {
 
 impl Display for AsPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Some(rc_as_path) = &self.0 {
-            write!(f, "{}", rc_as_path)
-        } else {
-            write!(f, "None")
-        }
+        write!(f, "{}", self.0)
     }
 }
 
@@ -1759,7 +1673,7 @@ impl From<AsPathToken> for usize {
 //------------ OriginType type ----------------------------------------------
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct OriginType(pub(crate) Option<routecore::bgp::types::OriginType>);
+pub struct OriginType(pub(crate) routecore::bgp::types::OriginType);
 
 impl RotoType for OriginType {
     fn get_props_for_method(
@@ -1810,52 +1724,43 @@ impl RotoType for OriginType {
 }
 
 impl From<OriginType> for TypeValue {
-    fn from(value: OriginType) -> Self {
-        value
-            .0
-            .map(|t| {
-                TypeValue::Builtin(BuiltinTypeValue::OriginType(t.into()))
-            })
-            .unwrap_or(TypeValue::Unknown)
+    fn from(value: OriginType) -> Self {    
+        TypeValue::Builtin(BuiltinTypeValue::OriginType(value))
     }
 }
 
 impl From<routecore::bgp::types::OriginType> for OriginType {
     fn from(value: routecore::bgp::types::OriginType) -> Self {
-        Self(Some(value))
+        Self(value)
     }
 }
 
 impl Display for OriginType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Some(or) = &self.0 {
-            write!(f, "{}", or)
-        } else {
-            write!(f, "None")
-        }
+        write!(f, "{}", self.0)
     }
 }
 
 //------------ NextHop type -------------------------------------------------
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct NextHop(pub(crate) Option<routecore::bgp::types::NextHop>);
+pub struct NextHop(pub(crate) routecore::bgp::types::NextHop);
 
 //------------ Multi Exit Discriminator type --------------------------------
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct MultiExitDisc(
-    pub(crate) Option<routecore::bgp::types::MultiExitDisc>,
+    pub(crate) routecore::bgp::types::MultiExitDisc,
 );
 
 //------------ Local Preference type ----------------------------------------
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct LocalPref(pub(crate) Option<routecore::bgp::types::LocalPref>);
+pub struct LocalPref(pub(crate) routecore::bgp::types::LocalPref);
 
 //------------ Aggregator type ----------------------------------------------
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Aggregator(
-    pub(crate) Option<routecore::bgp::message::update::Aggregator>,
+    pub(crate) routecore::bgp::message::update::Aggregator,
 );

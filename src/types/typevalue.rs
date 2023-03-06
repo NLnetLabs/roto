@@ -73,7 +73,7 @@ impl TypeValue {
     pub fn is_false(&self) -> Result<bool, VmError> {
         if let TypeValue::Builtin(BuiltinTypeValue::Boolean(bool_val)) = self
         {
-            bool_val.is_false()
+            Ok(bool_val.is_false())
         } else {
             Err(VmError::InvalidValueType)
         }
@@ -365,8 +365,8 @@ impl PartialOrd for &TypeValue {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
             (
-                TypeValue::Builtin(BuiltinTypeValue::U8(U8(Some(u)))),
-                TypeValue::Builtin(BuiltinTypeValue::U8(U8(Some(v)))),
+                TypeValue::Builtin(BuiltinTypeValue::U8(U8(u))),
+                TypeValue::Builtin(BuiltinTypeValue::U8(U8(v))),
             ) => Some(u.cmp(v)),
             (
                 TypeValue::Builtin(BuiltinTypeValue::U32(U32(u))),
@@ -374,10 +374,10 @@ impl PartialOrd for &TypeValue {
             ) => Some(u.cmp(v)),
             (
                 TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
-                    IntegerLiteral(Some(u)),
+                    IntegerLiteral(u),
                 )),
                 TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
-                    IntegerLiteral(Some(v)),
+                    IntegerLiteral(v),
                 )),
             ) => Some(u.cmp(v)),
             (
@@ -470,8 +470,8 @@ impl Ord for &TypeValue {
     fn cmp(&self, other: &Self) -> Ordering {
         match (self, other) {
             (
-                TypeValue::Builtin(BuiltinTypeValue::U8(U8(Some(u1)))),
-                TypeValue::Builtin(BuiltinTypeValue::U8(U8(Some(u2)))),
+                TypeValue::Builtin(BuiltinTypeValue::U8(U8(u1))),
+                TypeValue::Builtin(BuiltinTypeValue::U8(U8(u2))),
             ) => u1.cmp(u2),
             (TypeValue::List(_l1), TypeValue::List(_l2)) => {
                 panic!("Lists are not comparable.")
@@ -515,7 +515,7 @@ impl<'a> TryFrom<&'a TypeValue> for bool {
     fn try_from(t: &'a TypeValue) -> Result<Self, Self::Error> {
         match t {
             TypeValue::Builtin(BuiltinTypeValue::Boolean(b)) => {
-                b.0.ok_or(VmError::ImpossibleComparison)
+                Ok(b.0) //.ok_or(VmError::ImpossibleComparison)
             }
             _ => Err(VmError::ImpossibleComparison),
         }
@@ -708,6 +708,6 @@ impl From<BuiltinTypeValue> for TypeValue {
 
 impl From<bool> for TypeValue {
     fn from(val: bool) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(Some(val))))
+        TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(val)))
     }
 }

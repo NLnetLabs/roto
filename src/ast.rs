@@ -1341,7 +1341,7 @@ impl From<&'_ BooleanLiteral> for ShortString {
 
 impl From<&'_ BooleanLiteral> for Boolean {
     fn from(literal: &BooleanLiteral) -> Self {
-        Boolean(Some(literal.0))
+        Boolean(literal.0)
     }
 }
 
