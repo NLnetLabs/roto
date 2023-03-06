@@ -10,7 +10,11 @@ use crate::{
     },
     traits::Token,
     types::typedef::TypeDef,
-    vm::{Arg, Command, ExtDataSource, OpCode, StackRefPos, VariablesMap},
+    types::typevalue::TypeValue,
+    vm::{
+        Arg, ArgumentsMap, Command, ExtDataSource, OpCode, StackRefPos,
+        VariablesMap, VmError,
+    },
 };
 
 //============ The Compiler (Filter creation time) ==========================
@@ -64,7 +68,7 @@ pub struct RotoPack {
     pub mir: Vec<MirBlock>,
     pub rx_type: TypeDef,
     pub tx_type: Option<TypeDef>,
-    pub arguments: Vec<(usize, TypeDef)>,
+    pub arguments: Vec<(ShortString, usize, TypeDef)>,
     pub data_sources: Vec<ExtDataSource>,
 }
 
@@ -73,7 +77,7 @@ impl RotoPack {
         mir: Vec<MirBlock>,
         rx_type: TypeDef,
         tx_type: Option<TypeDef>,
-        arguments: Vec<(usize, TypeDef)>,
+        arguments: Vec<(ShortString, usize, TypeDef)>,
         data_sources: Vec<ExtDataSource>,
     ) -> Self {
         RotoPack {
@@ -83,6 +87,38 @@ impl RotoPack {
             arguments,
             data_sources,
         }
+    }
+
+    pub fn compile_arguments(
+        &self,
+        args: Vec<(ShortString, TypeValue)>,
+    ) -> Result<ArgumentsMap, VmError> {
+        // Walk over all the module arguments that were supplied and see if
+        // they match up with the ones in the source code.
+        let mut arguments_map = ArgumentsMap::new();
+        let len = args.len();
+        for arg in args {
+            match self
+                .arguments
+                .iter()
+                .find(|a| a.0 == &arg.0)
+                .map(|a| a.1)
+            {
+                // The argument is in the source code
+                Some(token) => arguments_map.insert(token, arg.1),
+                // The supplied argument is not in the source code.
+                None => return Err(VmError::ArgumentNotFound(arg.0)),
+            }
+        }
+
+        // See if we got all the required arguments in the source code
+        // covered.
+        if arguments_map.len() != len {
+            self.arguments.clone().retain(|a| arguments_map.get_by_token_value(a.1).is_none());
+            return Err(VmError::ArgumentsMissing(self.arguments.iter().map(|a| a.0.clone()).collect::<Vec<_>>()));
+        }
+
+        Ok(arguments_map)
     }
 }
 
@@ -174,10 +210,8 @@ impl<'a> Compiler {
 
         // get all symbols that are used in the filter terms.
         let mut _global = self.symbols.borrow_mut();
-        let (_global_mod, modules) = Some::<(Vec<Scope>, Vec<Scope>)>(
-            _global.keys().cloned().partition(|m| *m == Scope::Global),
-        )
-        .unwrap();
+        let (_global_mod, modules): (Vec<Scope>, Vec<Scope>) =
+            _global.keys().cloned().partition(|m| *m == Scope::Global);
 
         drop(_global);
         let mut _global = self.symbols.borrow_mut();
@@ -357,15 +391,13 @@ fn compile_module(
 ) -> Result<RotoPack, CompileError> {
     println!("SYMBOL MAP\n{:#?}", module);
 
-    let
-        DepsGraph {
-            rx_type,
-            tx_type,
-            used_arguments,
-            used_variables,
-            used_data_sources,
-        }
-     = module.create_deps_graph()?;
+    let DepsGraph {
+        rx_type,
+        tx_type,
+        used_arguments,
+        used_variables,
+        used_data_sources,
+    } = module.create_deps_graph()?;
 
     let mut state = CompilerState {
         cur_module: module,
@@ -429,6 +461,7 @@ fn compile_module(
         .iter()
         .map(|a| {
             (
+                a.1.get_name(),
                 a.1.get_token()
                     .unwrap_or_else(|_| {
                         panic!("Fatal: Cannot find Token for Argument.");
@@ -466,7 +499,7 @@ fn compile_module(
 fn compile_compute_expr<'a>(
     symbol: &'a Symbol,
     mut state: CompilerState<'a>,
-    // the token of the parent (the holder of the `args` field), 
+    // the token of the parent (the holder of the `args` field),
     // needed to retrieve methods from.
     mut parent_token: Option<Token>,
 ) -> Result<CompilerState<'a>, CompileError> {
@@ -534,7 +567,6 @@ fn compile_compute_expr<'a>(
         }
         // a constant value (not a reference!)
         Token::Constant(_) => {
-
             let val = symbol.get_value();
 
             state.cur_mir_block.command_stack.push(Command::new(
@@ -553,15 +585,14 @@ fn compile_compute_expr<'a>(
         Token::Table(_) | Token::Rib(_) => {
             assert!(is_ar);
         }
-        Token::BuiltinType(_) => {
-        }
+        Token::BuiltinType(_) => {}
 
         // ARGUMENTS ON ACCESS RECEIVERS
 
         // Non-builtin methods can't be access receivers
         Token::Method(m_to) if !is_ar => {
-            // First retrieve all arguments and the recursively compile 
-            // them. The result of each of them will end up on the stack 
+            // First retrieve all arguments and the recursively compile
+            // them. The result of each of them will end up on the stack
             // (when executed in the vm).
             //
             // The arguments will start out as a fresh recursion, that is to
@@ -572,11 +603,7 @@ fn compile_compute_expr<'a>(
             // (token(arg2), arg3), etc.
             let mut arg_parent_token = None;
             for arg in symbol.get_args() {
-                state = compile_compute_expr(
-                    arg,
-                    state,
-                    arg_parent_token,
-                )?;
+                state = compile_compute_expr(arg, state, arg_parent_token)?;
                 arg_parent_token = arg.get_token().ok();
             }
 
@@ -619,7 +646,7 @@ fn compile_compute_expr<'a>(
                         ],
                     ));
                 }
-                // The parent is a built-tin method, so this symbol is a 
+                // The parent is a built-tin method, so this symbol is a
                 // method on a built-in method.
                 Token::BuiltinType(_b_to) => {
                     state.cur_mir_block.command_stack.push(Command::new(
@@ -642,15 +669,19 @@ fn compile_compute_expr<'a>(
                 //
                 // a Field Access, e.g. `my_field.method()`
                 // a Method on a method, `my_method().my_method2()`
-                // a method a user-defined var, or argument, or rxtype, 
+                // a method a user-defined var, or argument, or rxtype,
                 // or txtype, e.g. `my_var.method()`
                 // a method on a constant, e.g. `24.to_prefix_length()`
-                Token::FieldAccess(_) | Token::Method(_) | Token::Variable(_) |
-                Token::Argument(_) | Token::RxType | Token::TxType | 
-                Token::Constant(_) => {
+                Token::FieldAccess(_)
+                | Token::Method(_)
+                | Token::Variable(_)
+                | Token::Argument(_)
+                | Token::RxType
+                | Token::TxType
+                | Token::Constant(_) => {
                     match kind {
                         SymbolKind::MethodCallbyRef => {
-                            // args: [ method_call, type, arguments, 
+                            // args: [ method_call, type, arguments,
                             //         return_type ]
                             state.cur_mir_block.command_stack.push(
                                 Command::new(
@@ -697,14 +728,14 @@ fn compile_compute_expr<'a>(
                             panic!("PANIC!");
                         }
                     };
-                },
-                Token::Term(parent_to) |
-                Token::Action(parent_to) |
-                Token::MatchAction(parent_to) => {
+                }
+                Token::Term(parent_to)
+                | Token::Action(parent_to)
+                | Token::MatchAction(parent_to) => {
                     return Err(CompileError::new(format!(
                         "Invalid data source: {:?} {:?}",
                         token, parent_to
-                    ))); 
+                    )));
                 }
             };
 
@@ -764,8 +795,11 @@ fn compile_compute_expr<'a>(
     // (parent, argument)  : (parent token, arg1), (Token(arg1), arg2) ->
     // (token(arg2), arg3), etc.
 
-
-    parent_token = if parent_token.is_some() { parent_token } else { symbol.get_token().ok() };
+    parent_token = if parent_token.is_some() {
+        parent_token
+    } else {
+        symbol.get_token().ok()
+    };
     for arg in symbol.get_args() {
         state = compile_compute_expr(arg, state, parent_token)?;
         parent_token = arg.get_token().ok();

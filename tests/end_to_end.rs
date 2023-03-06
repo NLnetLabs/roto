@@ -143,17 +143,17 @@ fn test_data(
     println!("Used Data Sources");
     println!("{:#?}", &roto_pack.data_sources);
 
-    let mut module_arguments = ArgumentsMap::new();
-
-    module_arguments.insert(
-        2,
+    let module_arguments = vec![(
+        "extra_asn".into(),
         TypeValue::Builtin(BuiltinTypeValue::Asn(Asn::new(65534.into()))),
-    );
+    )];
+
+    let args = roto_pack.compile_arguments(module_arguments)?;
 
     let ds_ref = roto_pack.data_sources.iter().collect::<Vec<_>>();
 
     let mut vm = vm::VmBuilder::new()
-        .with_arguments(module_arguments)
+        .with_arguments(args)
         .with_data_sources(ds_ref.as_slice())
         .build();
 

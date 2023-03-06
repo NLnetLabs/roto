@@ -866,7 +866,7 @@ impl RotoType for Prefix {
                         ))
                     }))
                 } else {
-                    Err(VmError::ArgumentNotFound)
+                    Err(VmError::AnonymousArgumentNotFound)
                 }
             }
             PrefixToken::Exists => unimplemented!(),
@@ -1430,7 +1430,7 @@ impl RotoType for Asn {
                         TypeValue::from(Asn::new(asn.0))
                     }))
                 } else {
-                    Err(VmError::ArgumentNotFound)
+                    Err(VmError::AnonymousArgumentNotFound)
                 }
             }
         }

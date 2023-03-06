@@ -222,10 +222,10 @@ impl ArgumentsMap {
             .iter_mut()
             .find(move |(t, _)| *t == index)
             .map(std::mem::take)
-            .ok_or(VmError::ArgumentNotFound)
+            .ok_or(VmError::AnonymousArgumentNotFound)
     }
 
-    fn _get_by_token_value(&self, index: usize) -> Option<&TypeValue> {
+    pub fn get_by_token_value(&self, index: usize) -> Option<&TypeValue> {
         self.0.iter().find(|(t, _)| *t == index).map(|(_, v)| v)
     }
 
@@ -235,6 +235,14 @@ impl ArgumentsMap {
 
     pub fn new() -> Self {
         ArgumentsMap(Vec::new())
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
     pub fn insert(&mut self, index: usize, value: TypeValue) {
@@ -292,6 +300,7 @@ pub struct VirtualMachine<'a> {
     // _rx_type: TypeDef,
     // _tx_type: Option<TypeDef>,
     data_sources: &'a [&'a ExtDataSource],
+    arguments: ArgumentsMap,
     stack: RefCell<Stack>,
 }
 
@@ -367,6 +376,7 @@ impl<'a> VirtualMachine<'a> {
         &'a mut self,
         rx: impl RotoType,
         tx: Option<impl RotoType>,
+        // define level arguments, not used yet! Todo
         mut arguments: Option<ArgumentsMap>,
         mem: RefCell<LinearMemory>,
         mir_code: Vec<MirBlock>,
@@ -376,7 +386,6 @@ impl<'a> VirtualMachine<'a> {
         let mut commands_num: usize = 0;
 
         self._move_rx_tx_to_mem(rx, tx, &mem);
-        let mut arguments = arguments.take().unwrap_or_default();
 
         for MirBlock {
             command_stack,
@@ -845,7 +854,7 @@ impl<'a> VirtualMachine<'a> {
                         if let Arg::MemPos(pos) = args[1] {
                             match args[0] {
                                 Arg::Argument(token_value) => {
-                                    let (_arg_index, arg_value) = arguments
+                                    let (_arg_index, arg_value) = self.arguments
                                         .take_by_token_value(token_value)?;
 
                                     let mut m = mem.borrow_mut();
@@ -1008,6 +1017,7 @@ impl<'a> VmBuilder<'a> {
             // rx_type: self.rx_type,
             // tx_type: self.tx_type,
             data_sources: self.data_sources,
+            arguments: self.arguments,
             stack: RefCell::new(Stack::new()),
         }
     }
@@ -1019,7 +1029,9 @@ pub enum VmError {
     StackOverflow,
     MemOutOfBounds,
     InvalidMemoryAccess(usize, Option<usize>),
-    ArgumentNotFound,
+    AnonymousArgumentNotFound,
+    ArgumentNotFound(ShortString),
+    ArgumentsMissing(Vec<ShortString>),
     InvalidValueType,
     InvalidPayload,
     InvalidVariableAccess,
@@ -1032,6 +1044,12 @@ pub enum VmError {
     UnexpectedTermination,
     AsPathTooLong,
     DeltaLocked
+}
+
+impl From<VmError> for Box<dyn std::error::Error> {
+    fn from(value: VmError) -> Self {
+        format!("A VM Error occured: {:?}", value).into()
+    }
 }
 
 #[derive(Debug, Clone)]

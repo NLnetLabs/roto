@@ -8,7 +8,6 @@ use roto::types::builtin::{
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
-use roto::vm::ArgumentsMap;
 use roto::vm;
 
 fn test_data(
@@ -105,38 +104,6 @@ fn test_data(
     )
     .unwrap();
 
-    // rib rib-rov contains StreamRoute {
-    //     prefix: Prefix, // this is shit: it's the key
-    //     as-path: AsPath,
-    //     origin: Asn,
-    //     next-hop: IpAddress,
-    //     med: U32,
-    //     local-pref: U32,
-    //     community: [Community]
-    // }
-
-    // let payload_as_path = builtin::AsPath::new(vec![
-    //     routecore::asn::Asn::from_u32(1),
-    //     routecore::asn::Asn::from_u32(10),
-    //     routecore::asn::Asn::from_u32(32455),
-    // ])
-    // .unwrap();
-    // let payload_communities =
-    //     vec![builtin::Community::new(builtin::CommunityType::Standard)];
-
-    // let payload: Route = Route {
-    //     prefix: Some(
-    //         routecore::addr::Prefix::new("83.24.10.0".parse().unwrap(), 24)
-    //             .unwrap()
-    //             .into(),
-    //     ),
-    //     bgp: Some(BgpAttributes {
-    //         as_path: payload_as_path,
-    //         communities: payload_communities,
-    //     }),
-    //     status: builtin::RouteStatus::Empty,
-    // };
-
     let mem = vm::LinearMemory::uninit();
 
     println!("Used Arguments");
@@ -144,24 +111,24 @@ fn test_data(
     println!("Used Data Sources");
     println!("{:#?}", &roto_pack.data_sources);
 
-    let mut module_arguments = ArgumentsMap::new();
-
-    module_arguments.insert(
-        1,
+    let module_arguments = vec![(
+        "extra_asn".into(),
         TypeValue::Builtin(BuiltinTypeValue::Asn(Asn::new(65534.into()))),
-    );
+    )];
 
     let ds_ref = roto_pack.data_sources.iter().collect::<Vec<_>>();
+    let args = roto_pack.compile_arguments(module_arguments)?;
 
     let mut vm = vm::VmBuilder::new()
-        //.with_arguments(module_arguments)
+        .with_arguments(args)
         .with_data_sources(ds_ref.as_slice())
         .build();
 
     let res = vm.exec(
         my_payload,
         None::<Record>,
-        Some(module_arguments),
+        // Some(module_arguments),
+        None,
         RefCell::new(mem),
         roto_pack.mir,
     )
@@ -192,7 +159,7 @@ fn main() {
                     use rib rib-rov;
 
                     // assignments
-                    extra_in_table = source_asns.contains(my_asn); // 0
+                    extra_in_table = source_asns.contains(extra_asn); // 0
                     route_in_table = source_asns.contains(route.as-path.origin()); // 1
                     
                     // this is aliasing, kinda' useless, but hey, it's allowed
