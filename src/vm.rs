@@ -780,7 +780,7 @@ impl<'a> VirtualMachine<'a> {
                                 DataSourceMethodValue::TypeValue(tv) => {
                                     m.set_mem_pos(mem_pos, tv);
                                 }
-                                DataSourceMethodValue::Empty(ty) => {
+                                DataSourceMethodValue::Empty(_ty) => {
                                     m.set_mem_pos(mem_pos, TypeValue::Unknown);
                                 }
                             }

@@ -1,7 +1,5 @@
 use std::{cmp::Ordering, fmt::Display};
 
-use nom::Or;
-
 //============ TypeValue ====================================================
 use crate::{
     ast::ShortString,
@@ -12,7 +10,7 @@ use crate::{
 
 use super::{
     builtin::{
-        AsPath, Asn, Boolean, BuiltinTypeValue, Community, HexLiteral,
+        Asn, Boolean, BuiltinTypeValue, HexLiteral,
         IntegerLiteral, IpAddress, Prefix, PrefixLength, StringLiteral, U32,
         U8,
     },

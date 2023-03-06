@@ -23,59 +23,6 @@ pub enum ElementTypeValue {
     Nested(Box<TypeValue>),
 }
 
-// impl<'a> From<&'a TypeDef> for ElementTypeValue {
-//     fn from(t: &'a TypeDef) -> Self {
-//         match t {
-//             TypeDef::U32 => ElementTypeValue::Primitive(TypeValue::Unknown),
-//             TypeDef::U8 => ElementTypeValue::Primitive(TypeValue::Unknown),
-//             TypeDef::Prefix => {
-//                 ElementTypeValue::Primitive(TypeValue::Unknown)
-//             }
-//             TypeDef::PrefixLength => {
-//                 ElementTypeValue::Primitive(TypeValue::Unknown)
-//             }
-//             TypeDef::IpAddress => {
-//                 ElementTypeValue::Primitive(TypeValue::Unknown)
-//             }
-//             TypeDef::Asn => ElementTypeValue::Primitive(TypeValue::Unknown),
-//             TypeDef::AsPath => {
-//                 ElementTypeValue::Primitive(TypeValue::Unknown)
-//             }
-//             TypeDef::Community => {
-//                 ElementTypeValue::Primitive(TypeValue::Unknown)
-//             }
-//             TypeDef::OriginType => {
-//                 ElementTypeValue::Primitive(TypeValue::Unknown)
-//             }
-//             TypeDef::List(ty) => ElementTypeValue::Nested(Box::new(
-//                 TypeValue::List(ty.as_ref().into()),
-//             )),
-//             TypeDef::Record(kv_list) => {
-//                 let def_ = kv_list
-//                     .iter()
-//                     .map(|(ident, ty)| (ident.clone(), ty.as_ref().into()))
-//                     .collect::<Vec<_>>();
-//                 ElementTypeValue::Nested(Box::new(TypeValue::Record(
-//                     Record::new(def_).unwrap(),
-//                 )))
-//             }
-//             TypeDef::Rib(_) => todo!(),
-//             TypeDef::Table(_) => todo!(),
-//             TypeDef::Boolean => todo!(),
-//             TypeDef::String => todo!(),
-//             TypeDef::Route => todo!(),
-//             TypeDef::RouteStatus => todo!(),
-//             TypeDef::HexLiteral => todo!(),
-//             TypeDef::IntegerLiteral => todo!(),
-//             TypeDef::StringLiteral => todo!(),
-//             TypeDef::AcceptReject(_) => todo!(),
-//             TypeDef::Unknown => {
-//                 ElementTypeValue::Primitive(TypeValue::Unknown)
-//             }
-//         }
-//     }
-// }
-
 impl From<TypeValue> for ElementTypeValue {
     fn from(t: TypeValue) -> Self {
         match t {
@@ -382,26 +329,11 @@ impl<'a> Record {
         Ok(Self(elems))
     }
 
-    // pub fn create_empty_instance(
-    //     ty: &TypeDef,
-    // ) -> Result<Record, CompileError> {
-    //     if let TypeDef::Record(_rec) = ty {
-    //         let empty_instance = _rec
-    //             .iter()
-    //             .map(|(name, ty)| (name.clone(), ty.clone()))
-    //             .collect::<Vec<(ShortString, Box<TypeDef>)>>();
-    //         Ok(empty_instance.into())
-    //     } else {
-    //         Err(CompileError::new("Not a record type".into()))
-    //     }
-    // }
-
     pub fn create_instance(
         ty: &TypeDef,
         kvs: Vec<(&str, TypeValue)>,
     ) -> Result<Record, CompileError> {
         if kvs.is_empty() {
-            // return Self::create_empty_instance(ty);
             return Err(CompileError::new("Can't create empty instance.".into()));
         }
 
