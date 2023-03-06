@@ -170,8 +170,8 @@ impl LinearMemory {
                         _ => None,
                     }
                 }
-                // This might be a type with fields, but its value is Unknown
-                // ,return that so the caller can short-cut its chain.
+                // This may be a type with fields, but its value is Unknown.
+                // Return that so the caller can short-cut its chain.
                 Some(TypeValue::Unknown) => {
                     Some(&TypeValue::Unknown)
                 }

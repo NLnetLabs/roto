@@ -542,7 +542,6 @@ impl From<&TypeValue> for TypeDef {
             TypeValue::Rib(r) => r.ty.clone(),
             TypeValue::Table(t) => t.ty.clone(),
             TypeValue::Unknown => TypeDef::Unknown,
-            TypeValue::Empty => TypeDef::Unknown,
             TypeValue::UnInit => TypeDef::Unknown,
         }
     }

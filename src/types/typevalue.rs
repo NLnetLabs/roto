@@ -40,14 +40,13 @@ pub enum TypeValue {
     // Another collections of Records, but in a tabular format without any
     // key, e.g. parsed csv files.
     Table(Table),
-    // No value has been stored yet, it does have a type, though.
-    Empty,
-    #[default]
     // Unknown is NOT EQUAL to empty or unitialized, e.g. it may be the
     // result of a search. A ternary logic value, if you will.
     Unknown,
-    // Used for LinearMemory online, it's the initial state of all positions
-    // except the first two positions (rx and tx)
+    // Used for LinearMemory only, it's the initial state of all positions
+    // except the first two positions (rx and tx). Taking a typevalue in the
+    // vm runtime, also puts this value in its place.
+    #[default]
     UnInit,
 }
 
@@ -235,7 +234,6 @@ impl TypeValue {
                 rec.exec_value_method(method_token, args, return_type)
             }
             TypeValue::Unknown => Ok(Box::new(|| TypeValue::Unknown)),
-            TypeValue::Empty => Ok(Box::new(|| TypeValue::Empty)),
             TypeValue::UnInit => {
                 panic!("Unitialized memory cannot be read. That's fatal.");
             }
@@ -332,7 +330,6 @@ impl TypeValue {
                 rec.exec_consume_value_method(method_token, args, return_type)
             }
             TypeValue::Unknown => Ok(Box::new(|| TypeValue::Unknown)),
-            TypeValue::Empty => Ok(Box::new(|| TypeValue::Empty)),
             TypeValue::UnInit => {
                 panic!("Unitialized memory cannot be read. That's fatal.");
             }
@@ -355,7 +352,6 @@ impl Display for TypeValue {
                 write!(f, "{} (Table Entry)", r)
             }
             TypeValue::Unknown => write!(f, "Unknown"),
-            TypeValue::Empty => write!(f, "Empty"),
             TypeValue::UnInit => write!(f, "Uninitialized"),
         }
     }
@@ -502,9 +498,6 @@ impl Ord for &TypeValue {
             (TypeValue::UnInit, _) => {
                 panic!("comparing with uninitialized memory.")
             }
-            (TypeValue::Empty, TypeValue::Empty) => Ordering::Equal,
-            (TypeValue::Empty, TypeValue::Unknown) => Ordering::Equal,
-            (TypeValue::Unknown, TypeValue::Empty) => Ordering::Equal,
         }
     }
 }
@@ -521,184 +514,6 @@ impl<'a> TryFrom<&'a TypeValue> for bool {
         }
     }
 }
-
-// impl<'a> TryFrom<&'a str> for TypeValue {
-//     type Error = CompileError;
-
-//     fn try_from(s: &'a str) -> Result<Self, Self::Error> {
-//         match s {
-//             "U32" => Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(None)))),
-//             "U8" => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(None)))),
-//             "Prefix" => {
-//                 Ok(TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None))))
-//             }
-//             "IpAddress" => Ok(TypeValue::Builtin(
-//                 BuiltinTypeValue::IpAddress(IpAddress(None)),
-//             )),
-//             "Asn" => Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(None)))),
-//             "AsPath" => {
-//                 Ok(TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))))
-//             }
-//             "Community" => Ok(TypeValue::Builtin(
-//                 BuiltinTypeValue::Community(Community(None)),
-//             )),
-//             "Boolean" => Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(
-//                 Boolean(None),
-//             ))),
-//             _ => Err(CompileError::new(format!("Unknown type: {}", s))),
-//         }
-//     }
-// }
-
-// impl<'a> From<&'a TypeDef> for Box<TypeValue> {
-//     fn from(t: &'a TypeDef) -> Self {
-//         match t {
-//             TypeDef::U32 => {
-//                 Box::new(TypeValue::Builtin(BuiltinTypeValue::U32(U32(None))))
-//             }
-//             TypeDef::U8 => {
-//                 Box::new(TypeValue::Builtin(BuiltinTypeValue::U8(U8(None))))
-//             }
-//             TypeDef::PrefixLength => Box::new(TypeValue::Builtin(
-//                 BuiltinTypeValue::PrefixLength(PrefixLength(None)),
-//             )),
-//             TypeDef::Prefix => Box::new(TypeValue::Builtin(
-//                 BuiltinTypeValue::Prefix(Prefix(None)),
-//             )),
-//             TypeDef::IpAddress => Box::new(TypeValue::Builtin(
-//                 BuiltinTypeValue::IpAddress(IpAddress(None)),
-//             )),
-//             TypeDef::Asn => {
-//                 Box::new(TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(None))))
-//             }
-//             TypeDef::AsPath => Box::new(TypeValue::Builtin(
-//                 BuiltinTypeValue::AsPath(AsPath(None)),
-//             )),
-//             TypeDef::Community => Box::new(TypeValue::Builtin(
-//                 BuiltinTypeValue::Community(Community(None)),
-//             )),
-//             TypeDef::List(ty) => {
-//                 Box::new(TypeValue::List(ty.as_ref().into()))
-//             }
-//             TypeDef::Record(kv_list) => {
-//                 let def_ = kv_list
-//                     .iter()
-//                     .map(|(ident, ty)| (ident.clone(), ty.as_ref().into()))
-//                     .collect::<Vec<_>>();
-//                 Box::new(TypeValue::Record(Record::new(def_).unwrap()))
-//             }
-//             // Literals
-//             // They have no business here, but IntegerLiteral and HexLiteral
-//             // are special, since they can be converted into different types
-//             // based on who's using them as arguments.
-
-//             // IntegerLiteral can be converted into U32, U8, I64.
-//             TypeDef::IntegerLiteral => Box::new(TypeValue::Builtin(
-//                 BuiltinTypeValue::IntegerLiteral(IntegerLiteral(None)),
-//             )),
-//             // HexLiteral can be converted into different community types
-//             // (standard, extended, large, etc.)
-//             TypeDef::HexLiteral => Box::new(TypeValue::Builtin(
-//                 BuiltinTypeValue::HexLiteral(HexLiteral(None)),
-//             )),
-
-//             _ => {
-//                 panic!("panic on unknown type {:?}", t);
-//             }
-//         }
-//     }
-// }
-
-// impl<'a> From<&'a TypeDef> for TypeValue {
-//     fn from(t: &'a TypeDef) -> Self {
-//         match t {
-//             TypeDef::U32 => {
-//                 TypeValue::Builtin(BuiltinTypeValue::U32(U32(None)))
-//             }
-//             TypeDef::U8 => TypeValue::Builtin(BuiltinTypeValue::U8(U8(None))),
-//             TypeDef::Prefix => {
-//                 TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None)))
-//             }
-//             TypeDef::PrefixLength => TypeValue::Builtin(
-//                 BuiltinTypeValue::PrefixLength(PrefixLength(None)),
-//             ),
-//             TypeDef::IpAddress => TypeValue::Builtin(
-//                 BuiltinTypeValue::IpAddress(IpAddress(None)),
-//             ),
-//             TypeDef::Asn => {
-//                 TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(None)))
-//             }
-//             TypeDef::AsPath => {
-//                 TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None)))
-//             }
-//             TypeDef::Community => TypeValue::Builtin(
-//                 BuiltinTypeValue::Community(Community(None)),
-//             ),
-//             TypeDef::Boolean => {
-//                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None)))
-//             }
-//             TypeDef::Route => {
-//                 TypeValue::Builtin(BuiltinTypeValue::Route(None))
-//             }
-//             TypeDef::List(ty) => TypeValue::List(ty.as_ref().into()),
-//             TypeDef::Record(kv_list) => {
-//                 let def_ = kv_list
-//                     .iter()
-//                     .map(|(ident, ty)| (ident.clone(), ty.as_ref().into()))
-//                     .collect::<Vec<_>>();
-//                 TypeValue::Record(Record::new(def_).unwrap())
-//             }
-//             TypeDef::Rib(rec) => {
-//                 if let TypeDef::Record(kv_list) = rec.as_ref() {
-//                     let def_ = kv_list
-//                         .iter()
-//                         .map(|(ident, ty)| (ident.clone(), ty.clone()))
-//                         .collect::<Vec<_>>();
-//                     TypeValue::Rib(Rib {
-//                         ty: TypeDef::Record(def_),
-//                         records: vec![],
-//                     })
-//                 } else {
-//                     panic!("Rib must contains records")
-//                 }
-//             }
-//             TypeDef::Table(rec) => {
-//                 if let TypeDef::Record(kv_list) = rec.as_ref() {
-//                     let def_ = kv_list
-//                         .iter()
-//                         .map(|(ident, ty)| (ident.clone(), ty.clone()))
-//                         .collect::<Vec<_>>();
-//                     TypeValue::Table(Table {
-//                         ty: TypeDef::Record(def_),
-//                         records: vec![],
-//                     })
-//                 } else {
-//                     panic!("Table must contain records")
-//                 }
-//             }
-//             // Literals
-//             // They have no business here, but IntegerLiteral and HexLiteral
-//             // are special, since they can be converted into different types
-//             // based on who's using them as arguments.
-
-//             // IntegerLiteral can be converted into U32, U8, I64.
-//             TypeDef::IntegerLiteral => TypeValue::Builtin(
-//                 BuiltinTypeValue::IntegerLiteral(IntegerLiteral(None)),
-//             ),
-//             // HexLiteral can be converted into different community types
-//             // (standard, extended, large, etc.)
-//             TypeDef::HexLiteral => TypeValue::Builtin(
-//                 BuiltinTypeValue::HexLiteral(HexLiteral(None)),
-//             ),
-//             TypeDef::Unknown => TypeValue::Unknown,
-//             TypeDef::String => todo!(),
-//             TypeDef::OriginType => todo!(),
-//             TypeDef::RouteStatus => todo!(),
-//             TypeDef::StringLiteral => todo!(),
-//             TypeDef::AcceptReject(_) => todo!(),
-//         }
-//     }
-// }
 
 impl From<BuiltinTypeValue> for TypeValue {
     fn from(t: BuiltinTypeValue) -> Self {
