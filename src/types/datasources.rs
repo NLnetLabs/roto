@@ -27,7 +27,7 @@ impl Rib {
         &'a self,
         method: usize,
         args: &'a [&'a TypeValue],
-        _res_type: TypeDef,
+        res_type: TypeDef,
     ) -> Box<dyn FnOnce() -> DataSourceMethodValue + 'a> {
         match RibToken::from(method) {
             RibToken::Match => {
@@ -56,12 +56,7 @@ impl Rib {
                         // because we would erase the type then. Since this
                         // method can be in the middle of a chain we need to
                         // pass on the type
-                        
-                        let rec =
-                            Record::create_empty_instance(&self.ty).unwrap();
-                        DataSourceMethodValue::TypeValue(TypeValue::Record(
-                            rec,
-                        ))
+                        DataSourceMethodValue::Empty(res_type)
                     })
             }),
             RibToken::Contains => {
@@ -185,6 +180,7 @@ pub type NamedTypeDef = (ShortString, Box<TypeDef>);
 pub(crate) enum DataSourceMethodValue {
     Ref(StackRefPos),
     TypeValue(TypeValue),
+    Empty(TypeDef)
 }
 
 #[derive(Debug, PartialEq, Eq)]

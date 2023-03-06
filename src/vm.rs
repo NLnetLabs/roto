@@ -170,9 +170,10 @@ impl LinearMemory {
                         _ => None,
                     }
                 }
-                // This is a serious logical error, Unknown should not happen at this point.
+                // This might be a type with fields, but its value is Unknown
+                // ,return that so the caller can short-cut its chain.
                 Some(TypeValue::Unknown) => {
-                    panic!("Unknown value has erased type, cannot continue.")
+                    Some(&TypeValue::Unknown)
                 }
                 // This is apparently a type that does not have fields
                 _ => None,
@@ -778,6 +779,9 @@ impl<'a> VirtualMachine<'a> {
                                 }
                                 DataSourceMethodValue::TypeValue(tv) => {
                                     m.set_mem_pos(mem_pos, tv);
+                                }
+                                DataSourceMethodValue::Empty(ty) => {
+                                    m.set_mem_pos(mem_pos, TypeValue::Unknown);
                                 }
                             }
                         }
