@@ -577,12 +577,6 @@ impl RotoType for RouteStatus {
     }
 }
 
-impl From<RouteStatus> for TypeValue {
-    fn from(val: RouteStatus) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::RouteStatus(val))
-    }
-}
-
 #[derive(Debug)]
 pub enum RouteStatusToken {
     IsInConvergence = 1,

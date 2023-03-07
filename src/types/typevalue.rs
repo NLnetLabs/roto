@@ -1,5 +1,7 @@
 use std::{cmp::Ordering, fmt::Display};
 
+use routecore::bgp::route::RouteStatus;
+
 //============ TypeValue ====================================================
 use crate::{
     ast::ShortString,
@@ -12,7 +14,7 @@ use super::{
     builtin::{
         Asn, Boolean, BuiltinTypeValue, HexLiteral,
         IntegerLiteral, IpAddress, Prefix, PrefixLength, StringLiteral, U32,
-        U8,
+        U8, primitives,
     },
     collections::{ElementTypeValue, List, Record},
     datasources::{Rib, Table},
@@ -529,8 +531,44 @@ impl From<BuiltinTypeValue> for TypeValue {
     }
 }
 
+//------------ Client-side From implementations -----------------------------
+
+// These are the impl's for the end-users sake, so they can use:
+// `TypeValue::from(my_value)`, where `my_value` is the Rust primitive type
+// (u, u32, bool, etc.) or the routecore type (Prefix, Asn, etc.)
+
 impl From<bool> for TypeValue {
     fn from(val: bool) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(val)))
+    }
+}
+
+impl From<&'_ str> for TypeValue {
+    fn from(value: &str) -> Self {
+        StringLiteral(ShortString::from(value)).into()
+    }
+}
+
+impl From<RouteStatus> for TypeValue {
+    fn from(val: RouteStatus) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::RouteStatus(val))
+    }
+}
+
+impl From<routecore::addr::Prefix> for TypeValue {
+    fn from(value: routecore::addr::Prefix) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::Prefix(primitives::Prefix(value)))
+    }
+}
+
+impl From<std::net::IpAddr> for TypeValue {
+    fn from(ip_addr: std::net::IpAddr) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::IpAddress(primitives::IpAddress(ip_addr)))
+    }
+}
+
+impl From<routecore::asn::AsPath<Vec<routecore::asn::Asn>>> for TypeValue {
+    fn from(as_path: routecore::asn::AsPath<Vec<routecore::asn::Asn>>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::AsPath(primitives::AsPath(as_path)))
     }
 }

@@ -462,12 +462,6 @@ impl Display for StringLiteral {
     }
 }
 
-impl From<&'_ str> for TypeValue {
-    fn from(value: &str) -> Self {
-        StringLiteral(ShortString::from(value)).into()
-    }
-}
-
 #[derive(Debug)]
 pub enum StringLiteralToken {
     Cmp,

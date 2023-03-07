@@ -1,5 +1,5 @@
-use std::cell::RefCell;
 use roto::compile::Compiler;
+use std::cell::RefCell;
 
 use roto::types::builtin::{
     self, AsPath, Asn, BuiltinTypeValue, Community, U32,
@@ -23,37 +23,26 @@ fn test_data(
     let _count =
         BuiltinTypeValue::create_instance(TypeDef::U32, 1_u32).unwrap();
 
-    let prefix = BuiltinTypeValue::create_instance(
-        TypeDef::Prefix,
-        routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)
-            .unwrap(),
-    )
-    .unwrap();
+    let prefix: TypeValue =
+        routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?
+            .into();
+    let next_hop: TypeValue =
+        std::net::IpAddr::V4(std::net::Ipv4Addr::new(193, 0, 0, 23)).into();
 
-    let ip_address = BuiltinTypeValue::create_instance(
-        TypeDef::IpAddress,
-        std::net::IpAddr::V4(std::net::Ipv4Addr::new(193, 0, 0, 23)),
-    )
-    .unwrap();
+    let as_path = AsPath::new(vec![routecore::asn::Asn::from_u32(1)])
+        .unwrap()
+        .into();
 
-    let as_path = BuiltinTypeValue::create_instance(
-        TypeDef::AsPath,
-        BuiltinTypeValue::AsPath(
-            AsPath::new(vec![routecore::asn::Asn::from_u32(1)]).unwrap(),
-        ),
-    )
-    .unwrap();
+    let asn: TypeValue = Asn::from_u32(211321).into();
 
-    let asn = BuiltinTypeValue::create_instance(
-        TypeDef::Asn,
-        Asn::from_u32(211321),
-    )
-    .unwrap();
     println!("{:?}", asn);
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            Community::new(routecore::bgp::communities::Community::from([127, 12, 13, 12])).into(),
+            Community::new(routecore::bgp::communities::Community::from([
+                127, 12, 13, 12,
+            ]))
+            .into(),
         )]));
 
     let my_comms_type =
@@ -89,7 +78,7 @@ fn test_data(
             ("prefix", prefix),
             ("as-path", as_path),
             ("origin", asn),
-            ("next-hop", ip_address),
+            ("next-hop", next_hop),
             (
                 "med",
                 builtin::BuiltinTypeValue::U32(builtin::U32::new(80)).into(),
@@ -155,16 +144,17 @@ fn test_data(
     let mut vm = vm::VmBuilder::new()
         .with_arguments(args)
         .with_data_sources(ds_ref.as_slice())
+        .with_mir_code(roto_pack.mir)
         .build();
 
-    let res = vm.exec(
-        my_payload,
-        None::<Record>,
-        None,
-        RefCell::new(mem),
-        roto_pack.mir,
-    )
-    .unwrap();
+    let res = vm
+        .exec(
+            my_payload,
+            None::<Record>,
+            None,
+            RefCell::new(mem),
+        )
+        .unwrap();
 
     println!("\nRESULT");
     println!("action: {}", res.0);
@@ -241,6 +231,7 @@ fn test_module_1() {
                         route.origin == found_prefix.as-path.origin();
                         (found_prefix.prefix.exists() && found_prefix.prefix.exists()) || route_in_table;
                         found_prefix.prefix.len() == 24;
+                        extra_in_table;
                         route_in_table;
                         route.prefix.len() <= found_prefix.prefix.len();
                     }
