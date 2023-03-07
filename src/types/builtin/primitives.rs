@@ -526,18 +526,17 @@ impl RotoType for IntegerLiteral {
             TypeDef::IntegerLiteral => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(self)))
             }
-            TypeDef::PrefixLength => {
-                match self.0 {
-                0..=128 => Ok(TypeValue::Builtin(
-                    BuiltinTypeValue::PrefixLength(PrefixLength(
-                        self.0 as u8,
-                    )))),
+            TypeDef::PrefixLength => match self.0 {
+                0..=128 => {
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
+                        PrefixLength(self.0 as u8),
+                    )))
+                }
                 _ => Err(format!(
                     "Prefix length must be between 0 and 128, not {}",
                     self.0
                 )
                 .into()),
-            }
             },
             _ => Err(format!(
                 "Cannot convert type IntegerLiteral to type {:?}",
@@ -647,8 +646,12 @@ impl RotoType for HexLiteral {
             }
             TypeDef::Community => {
                 // still bogus, but at least it should convert from the hexliteral type.
-                let c = routecore::bgp::communities::Community::from(self.0.to_be_bytes());
-                Ok(TypeValue::Builtin(BuiltinTypeValue::Community(Community(c))))
+                let c = routecore::bgp::communities::Community::from(
+                    self.0.to_be_bytes(),
+                );
+                Ok(TypeValue::Builtin(BuiltinTypeValue::Community(
+                    Community(c),
+                )))
             }
             _ => Err(format!(
                 "Cannot convert type HexLiteral to type {:?}",
@@ -822,9 +825,7 @@ impl RotoType for Prefix {
                 }))
             }
             PrefixToken::From => unimplemented!(),
-            PrefixToken::Exists => {
-                Ok(Box::new(move || true.into()))  
-            }
+            PrefixToken::Exists => Ok(Box::new(move || true.into())),
             PrefixToken::Matches => todo!(),
         }
     }
@@ -851,9 +852,8 @@ impl RotoType for Prefix {
                     let len: PrefixLength = args[1]
                         .try_into()
                         .map_err(|_e| VmError::InvalidConversion)?;
-                    let ip =
-                        ip.0; //.ok_or("Cannot convert empty IP address")
-                            // .map_err(|_e| VmError::InvalidConversion)?;
+                    let ip = ip.0; //.ok_or("Cannot convert empty IP address")
+                                   // .map_err(|_e| VmError::InvalidConversion)?;
                     Ok(Box::new(move || {
                         TypeValue::Builtin(BuiltinTypeValue::Prefix(
                             Prefix::new(
@@ -1077,9 +1077,7 @@ impl From<PrefixLength> for u8 {
 // ----------- Community ----------------------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub struct Community(
-    pub(crate) routecore::bgp::communities::Community,
-);
+pub struct Community(pub(crate) routecore::bgp::communities::Community);
 
 impl Community {
     pub fn new(com: routecore::bgp::communities::Community) -> Self {
@@ -1230,7 +1228,9 @@ impl From<CommunityToken> for usize {
 
 //------------ Communities --------------------------------------------------
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Communities(pub(crate) routecore::bgp::communities::MaterializedCommunities);
+pub struct Communities(
+    pub(crate) routecore::bgp::communities::MaterializedCommunities,
+);
 
 //------------ MatchType ----------------------------------------------------
 
@@ -1426,9 +1426,7 @@ impl RotoType for Asn {
                 if let TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) =
                     args[0]
                 {
-                    Ok(Box::new(move || {
-                        TypeValue::from(Asn::new(asn.0))
-                    }))
+                    Ok(Box::new(move || TypeValue::from(Asn::new(asn.0))))
                 } else {
                     Err(VmError::AnonymousArgumentNotFound)
                 }
@@ -1516,7 +1514,7 @@ impl AsPath {
     }
 
     pub fn contains(&self, asn: routecore::asn::Asn) -> bool {
-        self.0.iter().any(|a| a.elements().contains(&asn))   
+        self.0.iter().any(|a| a.elements().contains(&asn))
     }
 }
 
@@ -1581,35 +1579,26 @@ impl RotoType for AsPath {
                     let origin: routecore::asn::Asn =
                         rc_as_path.iter().next().unwrap().elements()[0];
 
-                    TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(
-                        origin,
-                    )))
+                    TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(origin)))
                 }))
             }
-            AsPathToken::Contains => {
-                Ok(Box::new(move || {
-                    if let TypeValue::Builtin(
-                        BuiltinTypeValue::Asn(Asn(search_asn)),
-                    ) = args[0]
-                    {
-                        let contains =
-                            self.0.contains(*search_asn);
-                        TypeValue::Builtin(BuiltinTypeValue::Boolean(
-                            Boolean(contains),
-                        ))
-                    } else {
-                        TypeValue::Unknown
-                    }
-                }))       
-            }
-            AsPathToken::Len => {
-                Ok(Box::new(|| {
-                    let len = self.0.iter().count();
-                    TypeValue::Builtin(BuiltinTypeValue::U8(U8(
-                        len as u8,
+            AsPathToken::Contains => Ok(Box::new(move || {
+                if let TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(
+                    search_asn,
+                ))) = args[0]
+                {
+                    let contains = self.0.contains(*search_asn);
+                    TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
+                        contains,
                     )))
-                }))  
-            }
+                } else {
+                    TypeValue::Unknown
+                }
+            })),
+            AsPathToken::Len => Ok(Box::new(|| {
+                let len = self.0.iter().count();
+                TypeValue::Builtin(BuiltinTypeValue::U8(U8(len as u8)))
+            })),
         }
     }
 
@@ -1724,7 +1713,7 @@ impl RotoType for OriginType {
 }
 
 impl From<OriginType> for TypeValue {
-    fn from(value: OriginType) -> Self {    
+    fn from(value: OriginType) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::OriginType(value))
     }
 }
@@ -1749,9 +1738,7 @@ pub struct NextHop(pub(crate) routecore::bgp::types::NextHop);
 //------------ Multi Exit Discriminator type --------------------------------
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct MultiExitDisc(
-    pub(crate) routecore::bgp::types::MultiExitDisc,
-);
+pub struct MultiExitDisc(pub(crate) routecore::bgp::types::MultiExitDisc);
 
 //------------ Local Preference type ----------------------------------------
 
@@ -1761,6 +1748,4 @@ pub struct LocalPref(pub(crate) routecore::bgp::types::LocalPref);
 //------------ Aggregator type ----------------------------------------------
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Aggregator(
-    pub(crate) routecore::bgp::message::update::Aggregator,
-);
+pub struct Aggregator(pub(crate) routecore::bgp::message::update::Aggregator);
