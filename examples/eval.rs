@@ -17,39 +17,24 @@ fn test_data(
     println!("Evaluate module {}...", name);
 
     // println!("{:#?}", symbols);
-
     let mut _packs = Compiler::build(source_code);
     let roto_pack = std::mem::take(_packs[0].as_mut().unwrap());
 
     let _count =
         BuiltinTypeValue::create_instance(TypeDef::U32, 1_u32).unwrap();
 
-    let prefix = BuiltinTypeValue::create_instance(
-        TypeDef::Prefix,
-        routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)
-            .unwrap(),
-    )
-    .unwrap();
+    let prefix: TypeValue =
+        routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?
+            .into();
+    let next_hop: TypeValue =
+        std::net::IpAddr::V4(std::net::Ipv4Addr::new(193, 0, 0, 23)).into();
 
-    let ip_address = BuiltinTypeValue::create_instance(
-        TypeDef::IpAddress,
-        std::net::IpAddr::V4(std::net::Ipv4Addr::new(193, 0, 0, 23)),
-    )
-    .unwrap();
+    let as_path = AsPath::new(vec![routecore::asn::Asn::from_u32(1)])
+        .unwrap()
+        .into();
 
-    let as_path = BuiltinTypeValue::create_instance(
-        TypeDef::AsPath,
-        BuiltinTypeValue::AsPath(
-            AsPath::new(vec![routecore::asn::Asn::from_u32(1)]).unwrap(),
-        ),
-    )
-    .unwrap();
+    let asn: TypeValue = Asn::from_u32(211321).into();
 
-    let asn = BuiltinTypeValue::create_instance(
-        TypeDef::Asn,
-        Asn::from_u32(211321),
-    )
-    .unwrap();
     println!("{:?}", asn);
 
     let comms =
@@ -90,7 +75,7 @@ fn test_data(
             ("prefix", prefix),
             ("as-path", as_path),
             ("origin", asn),
-            ("next-hop", ip_address),
+            ("next-hop", next_hop),
             (
                 "med",
                 builtin::BuiltinTypeValue::U32(builtin::U32::new(80)).into(),
@@ -124,6 +109,7 @@ fn test_data(
     let mut vm = vm::VmBuilder::new()
         .with_arguments(args)
         .with_data_sources(ds_ref.as_slice())
+        .with_mir_code(roto_pack.mir)
         .build();
 
     let res = vm.exec(
@@ -132,7 +118,6 @@ fn test_data(
         // Some(module_arguments),
         None,
         RefCell::new(mem),
-        roto_pack.mir,
     )
     .unwrap();
 

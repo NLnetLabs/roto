@@ -335,11 +335,11 @@ impl MirBlock {
             .into_iter()
             .filter_map(|mut c| match c.op {
                 OpCode::PushStack if !method_encountered => {
-                    mem_pos = c.args.first().unwrap().clone().into();
+                    mem_pos = c.args.first().unwrap().into();
                     None
                 }
                 OpCode::StackOffset if !method_encountered => {
-                    field_indexes.push(c.args[0].clone().into());
+                    field_indexes.push((&c.args[0]).into());
                     None
                 }
                 OpCode::ExecuteValueMethod
