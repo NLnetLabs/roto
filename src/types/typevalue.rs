@@ -537,6 +537,12 @@ impl From<BuiltinTypeValue> for TypeValue {
 // `TypeValue::from(my_value)`, where `my_value` is the Rust primitive type
 // (u, u32, bool, etc.) or the routecore type (Prefix, Asn, etc.)
 
+impl From<u32> for TypeValue {
+    fn from(value: u32) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::U32(U32(value)))
+    }
+}
+
 impl From<bool> for TypeValue {
     fn from(val: bool) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(val)))
@@ -570,5 +576,12 @@ impl From<std::net::IpAddr> for TypeValue {
 impl From<routecore::asn::AsPath<Vec<routecore::asn::Asn>>> for TypeValue {
     fn from(as_path: routecore::asn::AsPath<Vec<routecore::asn::Asn>>) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::AsPath(primitives::AsPath(as_path)))
+    }
+}
+
+impl From<Vec<routecore::asn::Asn>> for TypeValue {
+    fn from(as_path: Vec<routecore::asn::Asn>) -> Self {
+        let as_path = crate::types::builtin::AsPath::new(as_path).unwrap();
+        TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path))
     }
 }

@@ -304,13 +304,13 @@ impl MirBlock {
 
     // Post-process this block to filter out any PushStack and StackOffset
     // commands beyond the last *MethodCall command and to change the memory
-    // position the result of the last *MethodCall command into the position
-    // that was passed in as an argument.
+    // position to the result of the last *MethodCall command into the 
+    // position that was passed in as an argument.
     //
     // This is used by a block that computes a variable and needs to store it
     // in a memory position. Only newly created values can be stored in a
-    // memory postion, and those can only be the result of a method. Field
-    // indexes do *not* create new values. This, we store only the result of
+    // memory position, and those can only be the result of a method. Field
+    // indexes do *not* create new values. Thus, we store only the result of
     // the last MethodCall command and we the consumer of `into_assign_block`
     // will have to keep a map of field indexes for each variable to insert
     // those when reading a variable.

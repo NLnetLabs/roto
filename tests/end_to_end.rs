@@ -15,13 +15,10 @@ fn test_data(
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Evaluate module {}...", name);
 
-    // println!("{:#?}", symbols);
-
     let mut _packs = Compiler::build(source_code);
     let roto_pack = std::mem::take(_packs[0].as_mut().unwrap());
 
-    let _count =
-        BuiltinTypeValue::create_instance(TypeDef::U32, 1_u32).unwrap();
+    let _count: TypeValue = 1_u32.into();
 
     let prefix: TypeValue =
         routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?
@@ -29,9 +26,7 @@ fn test_data(
     let next_hop: TypeValue =
         std::net::IpAddr::V4(std::net::Ipv4Addr::new(193, 0, 0, 23)).into();
 
-    let as_path = AsPath::new(vec![routecore::asn::Asn::from_u32(1)])
-        .unwrap()
-        .into();
+    let as_path = vec![routecore::asn::Asn::from_u32(1)].into();
 
     let asn: TypeValue = Asn::from_u32(211321).into();
 
@@ -56,7 +51,7 @@ fn test_data(
         &my_nested_rec_type,
         vec![(
             "counter",
-            TypeValue::Builtin(BuiltinTypeValue::U32(U32::new(1))),
+            1.into(),
         )],
     )
     .unwrap();
@@ -79,50 +74,12 @@ fn test_data(
             ("as-path", as_path),
             ("origin", asn),
             ("next-hop", next_hop),
-            (
-                "med",
-                builtin::BuiltinTypeValue::U32(builtin::U32::new(80)).into(),
-            ),
-            (
-                "local-pref",
-                builtin::BuiltinTypeValue::U32(builtin::U32::new(20)).into(),
-            ),
+            ("med", 80_u32.into()),
+            ("local-pref", 20_u32.into()),
             ("communities", comms),
         ],
     )
     .unwrap();
-
-    // rib rib-rov contains StreamRoute {
-    //     prefix: Prefix, // this is shit: it's the key
-    //     as-path: AsPath,
-    //     origin: Asn,
-    //     next-hop: IpAddress,
-    //     med: U32,
-    //     local-pref: U32,
-    //     community: [Community]
-    // }
-
-    // let payload_as_path = builtin::AsPath::new(vec![
-    //     routecore::asn::Asn::from_u32(1),
-    //     routecore::asn::Asn::from_u32(10),
-    //     routecore::asn::Asn::from_u32(32455),
-    // ])
-    // .unwrap();
-    // let payload_communities =
-    //     vec![builtin::Community::new(builtin::CommunityType::Standard)];
-
-    // let payload: Route = Route {
-    //     prefix: Some(
-    //         routecore::addr::Prefix::new("83.24.10.0".parse().unwrap(), 24)
-    //             .unwrap()
-    //             .into(),
-    //     ),
-    //     bgp: Some(BgpAttributes {
-    //         as_path: payload_as_path,
-    //         communities: payload_communities,
-    //     }),
-    //     status: builtin::RouteStatus::Empty,
-    // };
 
     let mem = vm::LinearMemory::uninit();
 
@@ -133,8 +90,8 @@ fn test_data(
 
     let module_arguments = vec![(
         "extra_asn".into(),
-        TypeValue::Builtin(BuiltinTypeValue::Asn(Asn::new(65534.into()))),
-        // TypeValue::from("some_asn")
+        // use Roto type coercion
+        TypeValue::from(65534_u32)
     )];
 
     let args = roto_pack.compile_arguments(module_arguments)?;
@@ -148,12 +105,7 @@ fn test_data(
         .build();
 
     let res = vm
-        .exec(
-            my_payload,
-            None::<Record>,
-            None,
-            RefCell::new(mem),
-        )
+        .exec(my_payload, None::<Record>, None, RefCell::new(mem))
         .unwrap();
 
     println!("\nRESULT");

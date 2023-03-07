@@ -20,8 +20,7 @@ fn test_data(
     let mut _packs = Compiler::build(source_code);
     let roto_pack = std::mem::take(_packs[0].as_mut().unwrap());
 
-    let _count =
-        BuiltinTypeValue::create_instance(TypeDef::U32, 1_u32).unwrap();
+    let _count: TypeValue = 1_u32.into();
 
     let prefix: TypeValue =
         routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?
@@ -29,11 +28,8 @@ fn test_data(
     let next_hop: TypeValue =
         std::net::IpAddr::V4(std::net::Ipv4Addr::new(193, 0, 0, 23)).into();
 
-    let as_path = AsPath::new(vec![routecore::asn::Asn::from_u32(1)])
-        .unwrap()
-        .into();
-
-    let asn: TypeValue = Asn::from_u32(211321).into();
+    let as_path = vec![routecore::asn::Asn::from_u32(1)].into();
+    let asn = Asn::from_u32(211321).into();
 
     println!("{:?}", asn);
 
@@ -98,9 +94,8 @@ fn test_data(
 
     let module_arguments = vec![(
         "extra_asn".into(),
-        // TypeValue::Builtin(BuiltinTypeValue::Asn(Asn::new(65534.into()))),
-        TypeValue::Builtin(BuiltinTypeValue::U32(U32::new(65534_u32))),
-        // TypeValue::from("some_asn")
+        // use Roto type coercion
+        TypeValue::from(65534_u32)
     )];
 
     let ds_ref = roto_pack.data_sources.iter().collect::<Vec<_>>();
