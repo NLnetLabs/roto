@@ -7,6 +7,7 @@ use std::fmt::Display;
 use routecore::bgp::route::RouteStatus;
 
 use crate::compile::CompileError;
+use crate::traits::RotoType;
 
 use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
@@ -125,6 +126,29 @@ impl BuiltinTypeValue {
             _ => return Err("Not a primitive type".into()),
         };
         Ok(TypeValue::Builtin(var))
+    }
+
+    pub(crate) fn try_into_type(self, ty: &TypeDef) -> Result<TypeValue, CompileError> {
+        match self {
+            BuiltinTypeValue::U32(v) => v.into_type(ty),
+            BuiltinTypeValue::U8(v) => v.into_type(ty),
+            BuiltinTypeValue::IntegerLiteral(v) => 
+                v.into_type(ty),
+            BuiltinTypeValue::StringLiteral(v) =>
+                v.into_type(ty),
+            BuiltinTypeValue::Prefix(v) => v.into_type(ty),
+            BuiltinTypeValue::PrefixLength(v) => 
+                v.into_type(ty),
+            BuiltinTypeValue::Community(v) => v.into_type(ty),
+            BuiltinTypeValue::IpAddress(v) => v.into_type(ty),
+            BuiltinTypeValue::AsPath(v) => v.into_type(ty),
+            BuiltinTypeValue::OriginType(v) => v.into_type(ty),
+            BuiltinTypeValue::Route(r) => r.into_type(ty),
+            BuiltinTypeValue::RouteStatus(v) => v.into_type(ty),
+            BuiltinTypeValue::Boolean(v) => v.into_type(ty),
+            BuiltinTypeValue::HexLiteral(v) => v.into_type(ty),
+            BuiltinTypeValue::Asn(v) => v.into_type(ty),
+        }
     }
 }
 

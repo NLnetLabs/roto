@@ -1195,7 +1195,7 @@ impl From<crate::traits::Token> for Vec<Arg> {
 impl Clone for Arg {
     fn clone(&self) -> Self {
         match self {
-            Arg::Constant(c) => Arg::Constant(c.as_cloned_builtin().unwrap()),
+            Arg::Constant(c) => Arg::Constant(c.builtin_as_cloned_type_value().unwrap()),
             Arg::Variable(v) => Arg::Variable(*v),
             Arg::Argument(a) => Arg::Argument(*a),
             Arg::RxValue => Arg::RxValue,

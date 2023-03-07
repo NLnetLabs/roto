@@ -43,7 +43,7 @@ impl Symbol {
             self.kind,
             self.ty.clone(),
             token,
-            self.get_value().as_cloned_builtin().ok(),
+            self.get_value().builtin_as_cloned_type_value().ok(),
         ))
     }
 

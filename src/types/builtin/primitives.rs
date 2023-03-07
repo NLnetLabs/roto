@@ -86,6 +86,9 @@ impl RotoType for U32 {
             TypeDef::U32 => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::U32(self)))
             }
+            TypeDef::Asn => Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(
+                Asn(routecore::asn::Asn::from(self.0)),
+            ))),
             _ => {
                 Err(format!("Cannot convert type U32 to type {:?}", type_def)
                     .into())
@@ -193,37 +196,29 @@ impl RotoType for U8 {
             TypeDef::U8 => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(self))),
             TypeDef::U32 => {
                 let value = self.0;
-                Ok(TypeValue::Builtin(BuiltinTypeValue::U32(
-                U32(value as u32),
-            )))
-            },
-            TypeDef::PrefixLength => {
-                match self.0 {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(
+                    value as u32
+                ))))
+            }
+            TypeDef::PrefixLength => match self.0 {
                 0..=128 => Ok(TypeValue::Builtin(
-                    BuiltinTypeValue::PrefixLength(PrefixLength(
-                        self.0,
-                    )),
+                    BuiltinTypeValue::PrefixLength(PrefixLength(self.0)),
                 )),
                 _ => Err(format!(
                     "Prefix length must be between 0 and 128, not {}",
                     self.0
                 )
                 .into()),
-            }
             },
-            TypeDef::IntegerLiteral => {
-                match self.0 {
+            TypeDef::IntegerLiteral => match self.0 {
                 0..=128 => Ok(TypeValue::Builtin(
-                    BuiltinTypeValue::PrefixLength(PrefixLength(
-                        self.0,
-                    )),
+                    BuiltinTypeValue::PrefixLength(PrefixLength(self.0)),
                 )),
                 _ => Err(format!(
                     "Prefix length must be between 0 and 128, not {}",
                     self.0
                 )
                 .into()),
-            }
             },
             _ => {
                 Err(format!("Cannot convert type U8 to type {:?}", type_def)
@@ -464,6 +459,12 @@ impl From<StringLiteral> for TypeValue {
 impl Display for StringLiteral {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+impl From<&'_ str> for TypeValue {
+    fn from(value: &str) -> Self {
+        StringLiteral(ShortString::from(value)).into()
     }
 }
 

@@ -25,7 +25,7 @@ use super::{
 
 #[derive(Debug, PartialEq, Eq, Default)]
 pub enum TypeValue {
-    // All the built-in scalars
+    // All the built-in scalars and vectors
     Builtin(BuiltinTypeValue),
     // An ordered list of one user-defined type
     List(List),
@@ -76,11 +76,21 @@ impl TypeValue {
         }
     }
 
-    pub(crate) fn as_cloned_builtin(
+    pub(crate) fn builtin_as_cloned_type_value(
         &self,
     ) -> Result<TypeValue, CompileError> {
         match self {
             TypeValue::Builtin(b) => Ok(TypeValue::Builtin(b.clone())),
+            _ => {
+                Err(format!("Type '{:?}' is not a builtin type.", self)
+                    .into())
+            }
+        }
+    }
+
+    pub(crate) fn into_builtin(self) -> Result<BuiltinTypeValue, CompileError> {
+        match self {
+            TypeValue::Builtin(b) => Ok(b),
             _ => {
                 Err(format!("Type '{:?}' is not a builtin type.", self)
                     .into())

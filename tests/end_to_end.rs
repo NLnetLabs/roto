@@ -7,7 +7,6 @@ use roto::types::builtin::{
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
-use roto::vm::ArgumentsMap;
 use roto::vm;
 
 fn test_data(
@@ -146,6 +145,7 @@ fn test_data(
     let module_arguments = vec![(
         "extra_asn".into(),
         TypeValue::Builtin(BuiltinTypeValue::Asn(Asn::new(65534.into()))),
+        // TypeValue::from("some_asn")
     )];
 
     let args = roto_pack.compile_arguments(module_arguments)?;

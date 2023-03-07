@@ -573,7 +573,7 @@ fn compile_compute_expr<'a>(
                 OpCode::MemPosSet,
                 vec![
                     Arg::MemPos(state.cur_mem_pos),
-                    Arg::Constant(val.as_cloned_builtin()?),
+                    Arg::Constant(val.builtin_as_cloned_type_value()?),
                 ],
             ));
             state.cur_mir_block.command_stack.push(Command::new(

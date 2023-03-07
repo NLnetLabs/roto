@@ -113,7 +113,9 @@ fn test_data(
 
     let module_arguments = vec![(
         "extra_asn".into(),
-        TypeValue::Builtin(BuiltinTypeValue::Asn(Asn::new(65534.into()))),
+        // TypeValue::Builtin(BuiltinTypeValue::Asn(Asn::new(65534.into()))),
+        TypeValue::Builtin(BuiltinTypeValue::U32(U32::new(65534_u32))),
+        // TypeValue::from("some_asn")
     )];
 
     let ds_ref = roto_pack.data_sources.iter().collect::<Vec<_>>();
