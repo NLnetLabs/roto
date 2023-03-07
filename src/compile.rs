@@ -98,14 +98,27 @@ impl RotoPack {
         let mut arguments_map = ArgumentsMap::new();
         let len = args.len();
         for arg in args {
-            match self
-                .arguments
-                .iter()
-                .find(|a| a.0 == &arg.0)
-                .map(|a| a.1)
-            {
+            match self.arguments.iter().find(|a| a.0 == arg.0) {
                 // The argument is in the source code
-                Some(token) => arguments_map.insert(token, arg.1),
+                Some((_name, token, ty)) => {
+                    // nice, but do the types match
+                    if *ty == arg.1 {
+                        arguments_map.insert(*token, arg.1)
+                    } else {
+                        // Ok, but maybe we an convert into the type we need?
+                        // We can only try to convert if it's a builtin type.
+                        match arg
+                            .1
+                            .into_builtin()
+                            .and_then(|t| t.try_into_type(ty))
+                        {
+                            Ok(arg) => arguments_map.insert(*token, arg),
+                            Err(_) => {
+                                return Err(VmError::InvalidValueType);
+                            }
+                        };
+                    }
+                }
                 // The supplied argument is not in the source code.
                 None => return Err(VmError::ArgumentNotFound(arg.0)),
             }
@@ -114,8 +127,15 @@ impl RotoPack {
         // See if we got all the required arguments in the source code
         // covered.
         if arguments_map.len() != len {
-            self.arguments.clone().retain(|a| arguments_map.get_by_token_value(a.1).is_none());
-            return Err(VmError::ArgumentsMissing(self.arguments.iter().map(|a| a.0.clone()).collect::<Vec<_>>()));
+            self.arguments
+                .clone()
+                .retain(|a| arguments_map.get_by_token_value(a.1).is_none());
+            return Err(VmError::ArgumentsMissing(
+                self.arguments
+                    .iter()
+                    .map(|a| a.0.clone())
+                    .collect::<Vec<_>>(),
+            ));
         }
 
         Ok(arguments_map)
