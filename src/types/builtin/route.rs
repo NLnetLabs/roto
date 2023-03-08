@@ -13,9 +13,8 @@
 
 use routecore::{
     bgp::{
-        communities::{ExtendedCommunity, LargeCommunity},
         message::UpdateMessage,
-        route::RouteStatus,
+        route::{AttrChangeSet, RouteStatus},
     },
     record::LogicalTime,
 };
@@ -23,18 +22,15 @@ use std::sync::Arc;
 
 use crate::{
     compile::CompileError,
-    traits::{MethodProps, RotoType, TokenConvert},
+    traits::{RotoType, TokenConvert},
     types::{
-        builtin::attributes::AttrChangeSet, typedef::TypeDef,
+        typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
     },
-    vm::{Payload, VmError},
+    vm::VmError,
 };
 
-use super::{
-    attributes::{ChangedOption, AsPathModifier}, AsPath, Boolean, BuiltinTypeValue, Community,
-    Prefix,
-};
+use super::{BuiltinTypeValue, Prefix};
 
 //============ Route ========================================================
 
@@ -70,7 +66,7 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
 
         MaterializedRoute {
             prefix: raw_route.prefix.into(), // The roto prefix type
-            path_attributes: raw_route.attribute_deltas.take_latest_attrs(),
+            path_attributes: raw_route.take_latest_attrs(),
             status,
         }
     }
@@ -84,8 +80,13 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
 //
 // It will be stored as a array of bytes, its BGP path attributes can be
 // extracted from the original bytes on the fly (with routecore).
-// Additionally it features a data-structure that stores the changes made by
-// the transformers (filters, etc.) along the way.
+// Additionally it features a data-structure (AttributesDeltaList) that
+// stores the changes made by the transformers (filters, etc.) along the way.
+//
+// Each Delta describes the complete state of all the attributes at the time it
+// was stored in the RawRouteWithDeltas instance. So it reflects both the
+// original attributes from the raw message, their modifications and the
+// newly set attributes.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct RawRouteWithDeltas {
     pub prefix: routecore::addr::Prefix,
@@ -104,11 +105,17 @@ impl RawRouteWithDeltas {
         raw_message: UpdateMessage<bytes::Bytes>,
     ) -> Self {
         let raw_message = RawBgpMessage::new(delta_id, raw_message);
+        let attribute_deltas = AttributeDeltaList::new();
+        // This would store the attributes in the raw message as the first delta.
+        // attribute_deltas.add_new_delta(AttributeDelta::new(
+        //     delta_id,
+        //     raw_message.changeset_from_raw(),
+        // ));
 
         Self {
             prefix,
             raw_message: Arc::new(raw_message),
-            attribute_deltas: AttributeDeltaList::new(),
+            attribute_deltas,
             status_deltas: RouteStatusDeltaList(vec![RouteStatusDelta::new(
                 delta_id,
             )]),
@@ -130,131 +137,80 @@ impl RawRouteWithDeltas {
         }
     }
 
-    pub fn new_delta(&self) -> AttrChangeSet {
+    // Get a clone of the latest delta, or of the original attributes from
+    // the raw message, if no delta has been added (yet).
+    fn clone_latest_attrs(&self) -> AttrChangeSet {
         if let Some(attr_set) = self.attribute_deltas.deltas.last() {
-            attr_set.attributes.copy_change_set()
+            attr_set.attributes.clone()
         } else {
-            self.changeset_from_raw()
+            self.raw_message.raw_message.create_changeset()
         }
     }
 
-    pub fn add_delta(
+    // Return a clone of the latest attribute set, so that changes can be
+    // made to it by the caller.
+    pub fn open_new_delta(
         &mut self,
         delta_id: (RotondaId, LogicalTime),
-        attributes_list: AttrChangeSet,
-    ) {
-        self.attribute_deltas
-            .add_new_delta(AttributeDelta::new(delta_id, attributes_list));
+    ) -> Result<AttributeDelta, VmError> {
+        let delta_index = self.attribute_deltas.acquire_new_delta()?;
+
+        Ok(AttributeDelta {
+            attributes: self.clone_latest_attrs(),
+            delta_id,
+            delta_index,
+        })
     }
 
-    pub fn get_latest_attrs(&self) -> AttrChangeSet {
-        self.attribute_deltas
-            .get_latest_attrs().cloned()
-            .unwrap_or_else(|| self.changeset_from_raw())
-    }
-
-    fn changeset_from_raw(&self) -> AttrChangeSet {
-        AttrChangeSet {
-            as_path: AsPathModifier::new(self.raw_message.raw_message.aspath_as_slice().unwrap_or_else(|| routecore::asn::AsPath { segments: vec![].into() })),
-            origin_type: ChangedOption {
-                value: self.raw_message.raw_message.origin(),
-                changed: false,
-            },
-            next_hop: ChangedOption {
-                value: self.raw_message.raw_message.next_hop(),
-                changed: false,
-            },
-            multi_exit_discriminator: ChangedOption {
-                value: self.raw_message.raw_message.multi_exit_desc(),
-                changed: false,
-            },
-            local_pref: ChangedOption {
-                value: self.raw_message.raw_message.local_pref(),
-                changed: false,
-            },
-            atomic_aggregate: ChangedOption {
-                value: Some(
-                    self.raw_message.raw_message.is_atomic_aggregate(),
-                ),
-                changed: false,
-            },
-            aggregator: ChangedOption {
-                value: self.raw_message.raw_message.aggregator(),
-                changed: false,
-            },
-            communities: ChangedOption {
-                value: self
-                    .raw_message
-                    .raw_message
-                    .all_communities()
-                    .map(|c| c.as_slice().into()),
-                changed: false,
-            },
-            originator_id: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            cluster_list: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            extended_communities: ChangedOption {
-                value: self.raw_message.raw_message.ext_communities().map(
-                    |c| {
-                        c.collect::<Vec<ExtendedCommunity>>()
-                            .as_slice()
-                            .into()
-                    },
-                ),
-                changed: false,
-            },
-            as4_path: ChangedOption {
-                value: self.raw_message.raw_message.as4path_as_slice(),
-                changed: false,
-            },
-            as4_aggregator: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            connector: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            as_path_limit: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            pmsi_tunnel: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            ipv6_extended_communities: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            large_communities: ChangedOption {
-                value: self.raw_message.raw_message.large_communities().map(
-                    |c| c.collect::<Vec<LargeCommunity>>().as_slice().into(),
-                ),
-                changed: false,
-            },
-            bgpsec_as_path: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            attr_set: ChangedOption {
-                value: None,
-                changed: false,
-            },
-            rsrvd_development: ChangedOption {
-                value: None,
-                changed: false,
-            },
+    // Get either the moved last delta (it is removed from the Delta list), or
+    // get a freshly rolled ChangeSet from the raw message, if there are no
+    // deltas.
+    pub fn take_latest_attrs(mut self) -> AttrChangeSet {
+        if self.attribute_deltas.deltas.is_empty() {
+            return self.raw_message.raw_message.create_changeset();
         }
+
+        self.attribute_deltas
+            .deltas
+            .remove(self.attribute_deltas.deltas.len() - 1)
+            .attributes
     }
 
-    pub fn materialize(self) -> MaterializedRoute {
-        self.into()
+    // Get a reference to the current state of the attributes, including the
+    // original raw message. In the latter case it will copy the raw message
+    // attributes into the attribute deltas, and return a reference from that,
+    // hence the `&mut self`.
+    pub fn get_latest_attrs(&mut self) -> &AttrChangeSet {
+        if self.attribute_deltas.deltas.is_empty() {
+            self.attribute_deltas
+                .store_delta(AttributeDelta::new(
+                    self.raw_message.message_id,
+                    0,
+                    self.raw_message.raw_message.create_changeset(),
+                ))
+                .unwrap();
+        }
+        self.attribute_deltas.get_latest_change_set().unwrap()
+    }
+
+    // Get a ChangeSet that was added by a specific unit, e.g. a filter.
+    pub fn get_delta_for_rotonda_id(
+        &self,
+        rotonda_id: RotondaId,
+    ) -> Option<&AttrChangeSet> {
+        self.attribute_deltas
+            .deltas
+            .iter()
+            .find(|d| d.delta_id.0 == rotonda_id)
+            .map(|d| &d.attributes)
+    }
+
+    // Add a ChangeSet with some metadata to this RawRouteWithDelta.
+    pub fn store_delta(
+        &mut self,
+        attr_delta: AttributeDelta,
+    ) -> Result<(), VmError> {
+        self.attribute_deltas.store_delta(attr_delta)
     }
 
     pub fn iter_deltas(&self) -> impl Iterator<Item = &AttributeDelta> + '_ {
@@ -264,60 +220,79 @@ impl RawRouteWithDeltas {
 
 //------------ RouteDeltas --------------------------------------------------
 
-// The history of changes to the route in the form of a list of lists. The
-// inner lists hold the all the attributes that were changed by a Rotonda
-// writer in in one go (so with one logical timestamp). The outer list holds
-// those attribute lists in chronological order, with newest first.
+// The history of changes to this route. Each Delta holds the attributes that
+// were originally present in the raw message, their modifications and newly
+// created ones.
+//
+// The list of deltas describes the changes that were made by one Rotonda
+// unit along the way.
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 struct AttributeDeltaList {
     deltas: Vec<AttributeDelta>,
+    // The delta that was handed out the most recently. This is the only
+    // delta that can be written back!
+    locked_delta: Option<usize>,
 }
 
 impl AttributeDeltaList {
     fn new() -> Self {
-        Self { deltas: vec![] }
+        Self {
+            deltas: vec![],
+            locked_delta: None,
+        }
     }
 
-    // Gets the most recently added value for this Path Attribute.
-    fn get_latest_attrs(&self) -> Option<&AttrChangeSet> {
+    // Gets the most recently added delta in this list.
+    fn get_latest_change_set(&self) -> Option<&AttrChangeSet> {
         self.deltas.last().map(|d| &d.attributes)
     }
 
-    fn take_latest_attrs(&self) -> AttrChangeSet {
-        self.deltas
-            .last()
-            .map(|d| d.attributes.clone())
-            .unwrap_or_else(|| {
-                panic!("No AttributeDeltaList available");
-            })
+    // Adds a new delta to the list.
+    fn store_delta(&mut self, delta: AttributeDelta) -> Result<(), VmError> {
+        if let Some(locked_delta) = self.locked_delta {
+            if locked_delta != delta.delta_index {
+                println!("{:?} {}", self.locked_delta, delta.delta_index);
+                return Err(VmError::DeltaLocked);
+            }
+        }
+
+        self.deltas.push(delta);
+        self.locked_delta = None;
+
+        Ok(())
     }
 
-    // Adds a new delta and returns the whole RouteDeltas instance.
-    fn add_new_delta(&mut self, delta: AttributeDelta) {
-        let mut res = Vec::with_capacity(self.deltas.len() + 1);
-        res.push(delta);
-        res.extend_from_slice(self.deltas.as_slice());
-        self.deltas = res;
+    fn acquire_new_delta(&mut self) -> Result<usize, VmError> {
+        if self.locked_delta.is_none() {
+            let delta_index = self.deltas.len();
+            self.locked_delta = Some(delta_index);
+            Ok(delta_index)
+        } else {
+            Err(VmError::DeltaLocked)
+        }
     }
 }
 
 //------------ AttributeDelta ----------------------------------------------
 
 // A set of attribute changes that were atomically created by a Rotonda
-// writer in one go (with one logical timestamp).
+// unit in one go (with one logical timestamp).
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct AttributeDelta {
     delta_id: (RotondaId, LogicalTime),
-    attributes: AttrChangeSet,
+    delta_index: usize,
+    pub attributes: AttrChangeSet,
 }
 
 impl AttributeDelta {
-    pub fn new(
+    fn new(
         delta_id: (RotondaId, LogicalTime),
+        delta_index: usize,
         attributes: AttrChangeSet,
     ) -> Self {
         Self {
             delta_id,
+            delta_index,
             attributes,
         }
     }
@@ -360,7 +335,6 @@ impl RouteStatusDeltaList {
 pub struct RawBgpMessage {
     message_id: (RotondaId, LogicalTime),
     raw_message: UpdateMessage<bytes::Bytes>,
-    // attr_cache: AttrChangeSet
 }
 
 impl RawBgpMessage {
@@ -383,50 +357,9 @@ impl PartialEq for RawBgpMessage {
 
 impl Eq for RawBgpMessage {}
 
-impl RawRouteWithDeltas {
-    pub(crate) fn get_props_for_method_static(
-        method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        match method_name.ident.as_str() {
-            "prefix" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None))),
-                RouteToken::Prefix.into(),
-                vec![],
-            )),
-            "as_path" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))),
-                RouteToken::AsPath.into(),
-                vec![],
-            )),
-            "communities" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Community(Community(
-                    None,
-                ))),
-                RouteToken::Communities.into(),
-                vec![],
-            )),
-            "status" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::RouteStatus(
-                    RouteStatus::Empty,
-                )),
-                RouteToken::Status.into(),
-                vec![],
-            )),
-            _ => Err(format!(
-                "Unknown method '{}' for type Route",
-                method_name.ident
-            )
-            .into()),
-        }
-    }
-}
-
 impl RotoType for RawRouteWithDeltas {
     fn get_props_for_method(
-        self,
+        _ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
@@ -434,26 +367,27 @@ impl RotoType for RawRouteWithDeltas {
     {
         match method_name.ident.as_str() {
             "prefix" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(None))),
+                TypeDef::Prefix,
                 RouteToken::Prefix.into(),
                 vec![],
             )),
             "as_path" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(None))),
+                TypeDef::AsPath,
                 RouteToken::AsPath.into(),
                 vec![],
             )),
+            "origin" => Ok(MethodProps::new(
+                TypeDef::OriginType,
+                RouteToken::OriginType.into(),
+                vec![],
+            )),
             "communities" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Community(Community(
-                    None,
-                ))),
+                TypeDef::Community,
                 RouteToken::Communities.into(),
                 vec![],
             )),
             "status" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::RouteStatus(
-                    RouteStatus::Empty,
-                )),
+                TypeDef::RouteStatus,
                 RouteToken::Status.into(),
                 vec![],
             )),
@@ -471,7 +405,7 @@ impl RotoType for RawRouteWithDeltas {
     ) -> Result<TypeValue, CompileError> {
         match type_def {
             TypeDef::Route => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::Route(Some(self))))
+                Ok(TypeValue::Builtin(BuiltinTypeValue::Route(self)))
             }
             _ => Err(format!(
                 "Cannot convert type Route to type {:?}",
@@ -510,7 +444,7 @@ impl RotoType for RawRouteWithDeltas {
 
 impl From<RawRouteWithDeltas> for TypeValue {
     fn from(val: RawRouteWithDeltas) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Route(Some(val)))
+        TypeValue::Builtin(BuiltinTypeValue::Route(val))
     }
 }
 
@@ -528,6 +462,7 @@ pub enum RouteToken {
     Prefix,
     AsPath,
     Communities,
+    OriginType,
     Status,
 }
 
@@ -539,7 +474,8 @@ impl From<usize> for RouteToken {
             1 => RouteToken::Prefix,
             2 => RouteToken::AsPath,
             3 => RouteToken::Communities,
-            4 => RouteToken::Status,
+            4 => RouteToken::OriginType,
+            5 => RouteToken::Status,
             _ => panic!("Unknown RouteToken value: {}", value),
         }
     }
@@ -551,27 +487,9 @@ impl From<RouteToken> for usize {
     }
 }
 
-impl Payload for RawRouteWithDeltas {
-    fn set_field(
-        &mut self,
-        field: crate::ast::ShortString,
-        value: TypeValue,
-    ) {
-        todo!()
-    }
-
-    fn get(&self, field: crate::ast::ShortString) -> Option<&TypeValue> {
-        todo!()
-    }
-
-    fn take_value(self) -> TypeValue {
-        TypeValue::Builtin(BuiltinTypeValue::Route(Some(self)))
-    }
-}
-
 impl RotoType for RouteStatus {
     fn get_props_for_method(
-        self,
+        _ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
@@ -579,32 +497,32 @@ impl RotoType for RouteStatus {
     {
         match method_name.ident.as_str() {
             "is_in_convergence" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                TypeDef::Boolean,
                 RouteStatusToken::IsInConvergence.into(),
                 vec![],
             )),
             "is_up_to_date" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                TypeDef::Boolean,
                 RouteStatusToken::IsUpToDate.into(),
                 vec![],
             )),
             "is_stale" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                TypeDef::Boolean,
                 RouteStatusToken::IsStale.into(),
                 vec![],
             )),
             "is_start_of_route_refresh" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                TypeDef::Boolean,
                 RouteStatusToken::IsStartOfRouteRefresh.into(),
                 vec![],
             )),
             "is_withdrawn" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                TypeDef::Boolean,
                 RouteStatusToken::IsWithdrawn.into(),
                 vec![],
             )),
             "is_empty" => Ok(MethodProps::new(
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(None))),
+                TypeDef::Boolean,
                 RouteStatusToken::IsEmpty.into(),
                 vec![],
             )),
@@ -651,17 +569,11 @@ impl RotoType for RouteStatus {
     }
 
     fn exec_type_method<'a>(
-        method_token: usize,
-        args: &[&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
-    }
-}
-
-impl From<RouteStatus> for TypeValue {
-    fn from(val: RouteStatus) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::RouteStatus(val))
     }
 }
 

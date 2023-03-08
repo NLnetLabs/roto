@@ -2,13 +2,11 @@ use std::fmt::{Display, Formatter};
 
 use crate::ast::ShortString;
 use crate::compile::CompileError;
-use crate::traits::{MethodProps, RotoType, TokenConvert};
-use crate::vm::{Payload, VmError};
+use crate::traits::{RotoType, TokenConvert};
+use crate::vm::VmError;
 
-use super::builtin::{
-    AsPath, Asn, Community, IpAddress, Prefix, PrefixLength, U32, U8, BuiltinTypeValue,
-};
-use super::typedef::TypeDef;
+use super::builtin::{BuiltinTypeValue, U32};
+use super::typedef::{MethodProps, TypeDef};
 use super::typevalue::TypeValue;
 
 //============ Collections ==================================================
@@ -23,56 +21,6 @@ use super::typevalue::TypeValue;
 pub enum ElementTypeValue {
     Primitive(TypeValue),
     Nested(Box<TypeValue>),
-}
-
-impl<'a> From<&'a TypeDef> for ElementTypeValue {
-    fn from(t: &'a TypeDef) -> Self {
-        match t {
-            TypeDef::U32 => ElementTypeValue::Primitive(U32(None).into()),
-            TypeDef::U8 => ElementTypeValue::Primitive(U8(None).into()),
-            TypeDef::Prefix => {
-                ElementTypeValue::Primitive(Prefix(None).into())
-            }
-            TypeDef::PrefixLength => {
-                ElementTypeValue::Primitive(PrefixLength(None).into())
-            }
-            TypeDef::IpAddress => {
-                ElementTypeValue::Primitive(IpAddress(None).into())
-            }
-            TypeDef::Asn => ElementTypeValue::Primitive(Asn(None).into()),
-            TypeDef::AsPath => {
-                ElementTypeValue::Primitive(AsPath(None).into())
-            }
-            TypeDef::Community => {
-                ElementTypeValue::Primitive(Community(None).into())
-            }
-            TypeDef::List(ty) => ElementTypeValue::Nested(Box::new(
-                TypeValue::List(ty.as_ref().into()),
-            )),
-            TypeDef::Record(kv_list) => {
-                let def_ = kv_list
-                    .iter()
-                    .map(|(ident, ty)| (ident.clone(), ty.as_ref().into()))
-                    .collect::<Vec<_>>();
-                ElementTypeValue::Nested(Box::new(TypeValue::Record(
-                    Record::new(def_).unwrap(),
-                )))
-            }
-            TypeDef::Rib(_) => todo!(),
-            TypeDef::Table(_) => todo!(),
-            TypeDef::Boolean => todo!(),
-            TypeDef::String => todo!(),
-            TypeDef::Route => todo!(),
-            TypeDef::RouteStatus => todo!(),
-            TypeDef::HexLiteral => todo!(),
-            TypeDef::IntegerLiteral => todo!(),
-            TypeDef::StringLiteral => todo!(),
-            TypeDef::AcceptReject(_) => todo!(),
-            TypeDef::Unknown => {
-                ElementTypeValue::Primitive(TypeValue::Unknown)
-            }
-        }
-    }
 }
 
 impl From<TypeValue> for ElementTypeValue {
@@ -196,7 +144,7 @@ impl List {
 
 impl<'a> From<&'a TypeDef> for List {
     fn from(t: &'a TypeDef) -> Self {
-        List::new(vec![t.into()])
+        List::new(vec![ElementTypeValue::Primitive(TypeValue::Unknown)])
     }
 }
 
@@ -218,38 +166,44 @@ impl std::fmt::Display for List {
 
 impl RotoType for List {
     fn get_props_for_method(
-        self,
+        ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
     {
-        match method_name.ident.as_str() {
-            "get" => Ok(MethodProps::new(
-                TypeValue::List(self),
-                ListToken::Get.into(),
-                vec![TypeDef::U32],
-            )),
-            "remove" => Ok(MethodProps::new(
-                TypeValue::List(self),
-                ListToken::Remove.into(),
-                vec![TypeDef::U32],
-            ).consume_value()),
-            "push" => Ok(MethodProps::new(
-                (&TypeDef::U32).into(),
-                ListToken::Push.into(),
-                vec![TypeDef::from(&self.0[0])],
-            ).consume_value()),
-            "contains" => Ok(MethodProps::new(
-                (&TypeDef::Boolean).into(),
-                ListToken::Contains.into(),
-                vec![],
-            )),
-            _ => Err(format!(
-                "Unknown method '{}' for list",
-                method_name.ident
-            )
-            .into()),
+        if let TypeDef::List(ref list_ty_def) = ty {
+            match method_name.ident.as_str() {
+                "get" => Ok(MethodProps::new(
+                    ty.clone(),
+                    ListToken::Get.into(),
+                    vec![TypeDef::U32],
+                )),
+                "remove" => Ok(MethodProps::new(
+                    ty.clone(),
+                    ListToken::Remove.into(),
+                    vec![TypeDef::U32],
+                )
+                .consume_value()),
+                "push" => Ok(MethodProps::new(
+                    TypeDef::U32,
+                    ListToken::Push.into(),
+                    vec![*list_ty_def.clone()],
+                )
+                .consume_value()),
+                "contains" => Ok(MethodProps::new(
+                    TypeDef::Boolean,
+                    ListToken::Contains.into(),
+                    vec![],
+                )),
+                _ => Err(format!(
+                    "Unknown method '{}' for list",
+                    method_name.ident
+                )
+                .into()),
+            }
+        } else {
+            Err(CompileError::new("Invalid list item type.".into()))
         }
     }
 
@@ -268,16 +222,14 @@ impl RotoType for List {
     ) -> Result<std::boxed::Box<(dyn FnOnce() -> TypeValue + '_)>, VmError>
     {
         match method.into() {
-            ListToken::Len => {
-                Ok(Box::new(move || {
-                    TypeValue::Builtin(BuiltinTypeValue::U32(U32(Some(self.0.len() as u32))))
-                }))                
-            }
+            ListToken::Len => Ok(Box::new(move || {
+                TypeValue::Builtin(BuiltinTypeValue::U32(U32(
+                    self.0.len() as u32,
+                )))
+            })),
             ListToken::Contains => {
-                Ok(Box::new(move || {
-                    self.iter().any(|e| e == args[0]).into()
-                }))
-            },
+                Ok(Box::new(move || self.iter().any(|e| e == args[0]).into()))
+            }
             _ => {
                 println!("can't exec method on {}", method);
                 Err(VmError::InvalidMethodCall)
@@ -292,20 +244,16 @@ impl RotoType for List {
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         match method.into() {
-            ListToken::Get => {
-               Ok(Box::new(move || {
-                    match self.0.into_iter().find(|e| *e == args[0]) {
-                        Some(e) => e.into(),
-                        None => TypeValue::Unknown
-                    }
-               }))
-            }
-            ListToken::Push => {
-                Ok(Box::new(move || {
-                    self.0.push((args.remove(0)).into());
-                    TypeValue::List(self)
-                }))
-            },
+            ListToken::Get => Ok(Box::new(move || {
+                match self.0.into_iter().find(|e| *e == args[0]) {
+                    Some(e) => e.into(),
+                    None => TypeValue::Unknown,
+                }
+            })),
+            ListToken::Push => Ok(Box::new(move || {
+                self.0.push((args.remove(0)).into());
+                TypeValue::List(self)
+            })),
             ListToken::Pop => todo!(),
             ListToken::Remove => todo!(),
             ListToken::Insert => todo!(),
@@ -323,6 +271,12 @@ impl RotoType for List {
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
+    }
+}
+
+impl From<List> for TypeValue {
+    fn from(value: List) -> Self {
+        TypeValue::List(value)
     }
 }
 
@@ -375,26 +329,12 @@ impl<'a> Record {
         Ok(Self(elems))
     }
 
-    pub fn create_empty_instance(
-        ty: &TypeDef,
-    ) -> Result<Record, CompileError> {
-        if let TypeDef::Record(_rec) = ty {
-            let empty_instance = _rec
-                .iter()
-                .map(|(name, ty)| (name.clone(), ty.clone()))
-                .collect::<Vec<(ShortString, Box<TypeDef>)>>();
-            Ok(empty_instance.into())
-        } else {
-            Err(CompileError::new("Not a record type".into()))
-        }
-    }
-
     pub fn create_instance(
         ty: &TypeDef,
         kvs: Vec<(&str, TypeValue)>,
     ) -> Result<Record, CompileError> {
         if kvs.is_empty() {
-            return Self::create_empty_instance(ty);
+            return Err(CompileError::new("Can't create empty instance.".into()));
         }
 
         let shortstring_vec = kvs
@@ -479,7 +419,7 @@ impl Display for Record {
 
 impl RotoType for Record {
     fn get_props_for_method(
-        self,
+        ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
@@ -487,23 +427,21 @@ impl RotoType for Record {
     {
         match method_name.ident.as_str() {
             "get" => Ok(MethodProps::new(
-                TypeValue::Record(self),
+                ty,
                 RecordToken::Get.into(),
                 vec![TypeDef::U32],
             )),
-            "get_all" => Ok(MethodProps::new(
-                TypeValue::Record(self),
-                RecordToken::GetAll.into(),
-                vec![],
-            )),
+            "get_all" => {
+                Ok(MethodProps::new(ty, RecordToken::GetAll.into(), vec![]))
+            }
             "contains" => Ok(MethodProps::new(
-                (&TypeDef::Boolean).into(),
+                TypeDef::Boolean,
                 RecordToken::Contains.into(),
-                vec![(&TypeValue::Record(self)).into()],
+                vec![ty],
             )),
             _ => Err(format!(
                 "Unknown method '{}' for Record type with fields {:?}",
-                method_name.ident, self
+                method_name.ident, ty
             )
             .into()),
         }
@@ -538,7 +476,7 @@ impl RotoType for Record {
     ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         todo!()
     }
-    
+
     fn exec_type_method<'a>(
         _method_token: usize,
         _args: &[&'a TypeValue],
@@ -548,14 +486,20 @@ impl RotoType for Record {
     }
 }
 
-impl From<Vec<(ShortString, Box<TypeDef>)>> for Record {
-    fn from(st_vec: Vec<(ShortString, Box<TypeDef>)>) -> Self {
-        Record(
-            st_vec
-                .iter()
-                .map(|(s, t)| (s.clone(), t.as_ref().into()))
-                .collect::<Vec<_>>(),
-        )
+// impl From<Vec<(ShortString, Box<TypeDef>)>> for Record {
+//     fn from(st_vec: Vec<(ShortString, Box<TypeDef>)>) -> Self {
+//         Record(
+//             st_vec
+//                 .iter()
+//                 .map(|(s, t)| (s.clone(), t.as_ref().into()))
+//                 .collect::<Vec<_>>(),
+//         )
+//     }
+// }
+
+impl From<Record> for TypeValue {
+    fn from(value: Record) -> Self {
+        TypeValue::Record(value)
     }
 }
 
@@ -584,20 +528,5 @@ impl From<usize> for RecordToken {
 impl From<RecordToken> for usize {
     fn from(t: RecordToken) -> Self {
         t as usize
-    }
-}
-
-impl Payload for Record {
-    fn set_field(&mut self, field: ShortString, value: TypeValue) {
-        todo!()
-    }
-
-    fn get(&self, field: ShortString) -> Option<&TypeValue> {
-        todo!()
-    }
-
-    fn take_value(self) -> TypeValue {
-        // let v = std::mem::take(self);
-        TypeValue::Record(self)
     }
 }

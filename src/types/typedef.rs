@@ -3,17 +3,21 @@
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 
+use routecore::bgp::route::RouteStatus;
+
 use crate::compile::CompileError;
 use crate::traits::Token;
 use crate::types::collections::ElementTypeValue;
 use crate::types::datasources::NamedTypeDef;
 use crate::{
     ast::{AcceptReject, ShortString},
-    traits::{MethodProps, RotoType},
+    traits::RotoType,
 };
 
 use super::builtin::{
-    AsPath, Asn, IpAddress, Prefix, RawRouteWithDeltas, U32,
+    AsPath, Asn, Boolean, Community, HexLiteral, IntegerLiteral, IpAddress,
+    OriginType, Prefix, PrefixLength, RawRouteWithDeltas, StringLiteral, U32,
+    U8,
 };
 use super::collections::Record;
 use super::datasources::{Rib, Table};
@@ -40,6 +44,7 @@ pub enum TypeDef {
     Asn,
     AsPath,
     Community,
+    OriginType,
     Route,
     RouteStatus,
     // Literals
@@ -65,6 +70,10 @@ impl TypeDef {
             }
             _ => false,
         }
+    }
+
+    pub fn is_builtin(&self) -> bool {
+        !matches!(self, TypeDef::Rib(_) | TypeDef::Table(_) | TypeDef::List(_) | TypeDef::Record(_) | TypeDef::Unknown )
     }
 
     pub fn new_record_type(
@@ -144,7 +153,7 @@ impl TypeDef {
 
     pub(crate) fn _check_record_fields_for_ref(
         &self,
-        fields: &[(ShortString, TypeValue)],
+        fields: &[(ShortString, TypeDef)],
     ) -> bool {
         if let TypeDef::Record(rec) = self {
             for (name, ty) in fields {
@@ -160,42 +169,71 @@ impl TypeDef {
 
     pub(crate) fn get_props_for_method(
         &self,
-        method: &crate::ast::Identifier,
+        method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError> {
-        let parent_ty: TypeValue = self.into();
-        match parent_ty {
-            TypeValue::Record(rec_type) => {
-                rec_type.get_props_for_method(method)
+        match self {
+            TypeDef::Record(_) => {
+                Record::get_props_for_method(self.clone(), method_name)
             }
-            TypeValue::List(list) => list.get_props_for_method(method),
-            TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {
-                as_path.get_props_for_method(method)
+            TypeDef::Rib(_) => {
+                Rib::get_props_for_method(self.clone(), method_name)
             }
-            TypeValue::Builtin(BuiltinTypeValue::Prefix(prefix)) => {
-                prefix.get_props_for_method(method)
+            TypeDef::Table(_) => {
+                Table::get_props_for_method(self.clone(), method_name)
             }
-            TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(lit_int)) => {
-                lit_int.get_props_for_method(method)
+            TypeDef::List(_) => {
+                List::get_props_for_method(self.clone(), method_name)
             }
-            TypeValue::Builtin(BuiltinTypeValue::U32(u32)) => {
-                u32.get_props_for_method(method)
+            TypeDef::U32 => {
+                U32::get_props_for_method(self.clone(), method_name)
             }
-            TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) => {
-                asn.get_props_for_method(method)
+            TypeDef::U8 => {
+                U8::get_props_for_method(self.clone(), method_name)
             }
-            TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) => {
-                ip.get_props_for_method(method)
+            TypeDef::Boolean => {
+                Boolean::get_props_for_method(self.clone(), method_name)
             }
-            TypeValue::Builtin(BuiltinTypeValue::Route(_route)) => {
-                RawRouteWithDeltas::get_props_for_method_static(method)
+            TypeDef::String => {
+                StringLiteral::get_props_for_method(self.clone(), method_name)
             }
-            TypeValue::Rib(rib) => rib.get_props_for_method(method),
-            TypeValue::Table(table) => table.get_props_for_method(method),
-            _ => Err(format!(
-                "No method named '{}' found for {}.",
-                method.ident, parent_ty
-            )
-            .into()),
+            TypeDef::Prefix => {
+                Prefix::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::PrefixLength => {
+                PrefixLength::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::IpAddress => {
+                IpAddress::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::Asn => {
+                Asn::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::AsPath => {
+                AsPath::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::Community => {
+                Community::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::OriginType => {
+                OriginType::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::Route => RawRouteWithDeltas::get_props_for_method(
+                self.clone(),
+                method_name,
+            ),
+            TypeDef::RouteStatus => {
+                RouteStatus::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::HexLiteral => {
+                HexLiteral::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::IntegerLiteral => IntegerLiteral::get_props_for_method(
+                self.clone(),
+                method_name,
+            ),
+            TypeDef::StringLiteral => todo!(),
+            TypeDef::AcceptReject(_) => todo!(),
+            TypeDef::Unknown => todo!(),
         }
     }
 
@@ -253,6 +291,33 @@ impl TypeDef {
     }
 }
 
+pub struct MethodProps {
+    pub(crate) return_type: TypeDef,
+    pub(crate) method_token: Token,
+    pub(crate) arg_types: Vec<TypeDef>,
+    pub(crate) consume: bool,
+}
+
+impl MethodProps {
+    pub(crate) fn new(
+        return_type_value: TypeDef,
+        method_token: usize,
+        arg_types: Vec<TypeDef>,
+    ) -> Self {
+        MethodProps {
+            return_type: return_type_value,
+            method_token: Token::Method(method_token),
+            arg_types,
+            consume: false,
+        }
+    }
+
+    pub(crate) fn consume_value(mut self) -> Self {
+        self.consume = true;
+        self
+    }
+}
+
 impl std::fmt::Display for TypeDef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -278,6 +343,7 @@ impl std::fmt::Display for TypeDef {
             TypeDef::Boolean => write!(f, "Boolean"),
             TypeDef::String => write!(f, "String"),
             TypeDef::Community => write!(f, "Community"),
+            TypeDef::OriginType => write!(f, "OriginType"),
             TypeDef::RouteStatus => write!(f, "RouteStatus"),
             TypeDef::HexLiteral => write!(f, "HexLiteral"),
             TypeDef::StringLiteral => write!(f, "StringLiteral"),
@@ -343,7 +409,7 @@ impl PartialEq<TypeValue> for TypeDef {
             (TypeDef::Record(a), TypeValue::Record(_b)) => self
                 ._check_record_fields_for_ref(
                     a.iter()
-                        .map(|ty| (ty.0.clone(), ty.1.as_ref().into()))
+                        .map(|ty| (ty.0.clone(), *ty.1.clone()))
                         .collect::<Vec<_>>()
                         .as_slice(),
                 ),
@@ -377,6 +443,30 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
     }
 }
 
+impl TryFrom<crate::ast::Identifier> for TypeDef {
+    type Error = CompileError;
+    fn try_from(
+        ty: crate::ast::Identifier,
+    ) -> Result<TypeDef, CompileError> {
+        match ty.ident.as_str() {
+            "U32" => Ok(TypeDef::U32),
+            "U8" => Ok(TypeDef::U8),
+            "IntegerLiteral" => Ok(TypeDef::IntegerLiteral),
+            "Prefix" => Ok(TypeDef::Prefix),
+            "PrefixLength" => Ok(TypeDef::PrefixLength),
+            "IpAddress" => Ok(TypeDef::IpAddress),
+            "Asn" => Ok(TypeDef::Asn),
+            "AsPath" => Ok(TypeDef::AsPath),
+            "Community" => Ok(TypeDef::Community),
+            "Route" => Ok(TypeDef::Route),
+            "RouteStatus" => Ok(TypeDef::RouteStatus),
+            "HexLiteral" => Ok(TypeDef::HexLiteral),
+            _ => Err(format!("Undefined type: {}", ty.ident).into()),
+        }
+    }
+}
+
+
 impl From<&BuiltinTypeValue> for TypeDef {
     fn from(ty: &BuiltinTypeValue) -> TypeDef {
         match ty {
@@ -389,6 +479,7 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::PrefixLength(_) => TypeDef::PrefixLength,
             BuiltinTypeValue::IpAddress(_) => TypeDef::IpAddress,
             BuiltinTypeValue::Asn(_) => TypeDef::Asn,
+            BuiltinTypeValue::OriginType(_) => TypeDef::OriginType,
             BuiltinTypeValue::AsPath(_) => TypeDef::AsPath,
             BuiltinTypeValue::Community(_) => TypeDef::Community,
             BuiltinTypeValue::Route(_) => TypeDef::Route,
@@ -412,6 +503,7 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::Asn(_) => TypeDef::Asn,
             BuiltinTypeValue::AsPath(_) => TypeDef::AsPath,
             BuiltinTypeValue::Community(_) => TypeDef::Community,
+            BuiltinTypeValue::OriginType(_) => TypeDef::OriginType,
             BuiltinTypeValue::Route(_) => TypeDef::Route,
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,

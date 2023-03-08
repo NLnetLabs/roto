@@ -1,6 +1,9 @@
 #[cfg(test)]
 use nom::error::convert_error;
-use roto::compile::{CompileError, Compiler, RotoPack};
+use roto::{
+    ast::ShortString,
+    compile::{CompileError, Compiler},
+};
 
 pub struct TestCompiler<'a> {
     name: &'a str,
@@ -42,7 +45,7 @@ impl<'a> TestCompiler<'a> {
         if let Err(e) = &eval_res {
             println!("Error: {}", e);
         }
-        
+
         match expect_success {
             false => assert!(eval_res.is_err()),
             true => assert!(eval_res.is_ok()),
@@ -54,18 +57,22 @@ impl<'a> TestCompiler<'a> {
     pub(crate) fn test_compile(
         self,
         expect_success: bool,
-    ) -> Vec<Result<RotoPack, CompileError>> {
+    ) -> Result<(), Vec<(ShortString, CompileError)>> {
         println!("compile eval {}", self.name);
         let compile_res = self.compiler.compile();
 
-        for compiled_mod in &compile_res {
-            match expect_success {
-                false => assert!(compiled_mod.is_err()),
-                true => assert!(compiled_mod.is_ok()),
-            };
-        }
+        let res = if compile_res.is_success() {
+            Ok(())
+        } else {
+            Err(compile_res.get_mis_compilations().to_vec())
+        };
 
-        compile_res
+        match expect_success {
+            false => assert!(res.is_err()),
+            true => assert!(res.is_ok()),
+        };
+
+        res
     }
 }
 

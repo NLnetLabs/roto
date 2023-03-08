@@ -1,7 +1,7 @@
 // =========== RotoFilter trait ============================================
 
 use crate::{types::{
-    typedef::TypeDef, typevalue::TypeValue,
+    typedef::{TypeDef, MethodProps}, typevalue::TypeValue,
 }, compile::CompileError, vm::VmError};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
@@ -75,40 +75,14 @@ impl From<Token> for usize {
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct MethodProps {
-    pub(crate) return_type_value: TypeValue,
-    pub(crate) method_token: Token,
-    pub(crate) arg_types: Vec<TypeDef>,
-    pub(crate) consume: bool
-}
-
-impl MethodProps {
-    pub(crate) fn new(
-        return_type_value: TypeValue,
-        method_token: usize,
-        arg_types: Vec<TypeDef>,
-    ) -> Self {
-        MethodProps {
-            return_type_value,
-            method_token: Token::Method(method_token),
-            arg_types,
-            consume: false
-        }
-    }
-
-    pub(crate) fn consume_value(mut self) -> Self {
-        self.consume = true;
-        self
-    }
-}
-
-pub(crate) trait RotoType
+pub trait RotoType: Into<TypeValue>
 where
-    Self: std::fmt::Debug,
+    Self: std::fmt::Debug + Sized,
 {
+    fn take_value(self) -> Self { self }
+
     fn get_props_for_method(
-        self,
+        ty: TypeDef,
         method_name: &super::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where

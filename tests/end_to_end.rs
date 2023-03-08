@@ -1,13 +1,12 @@
-use std::cell::RefCell;
 use roto::compile::Compiler;
+use std::cell::RefCell;
 
 use roto::types::builtin::{
-    self, AsPath, Asn, BuiltinTypeValue, Community, U32,
+    Asn, Community,
 };
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
-use roto::vm::ArgumentsMap;
 use roto::vm;
 
 fn test_data(
@@ -16,45 +15,26 @@ fn test_data(
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Evaluate module {}...", name);
 
-    // println!("{:#?}", symbols);
+    let roto_packs = Compiler::build(source_code);
 
-    let mut _packs = Compiler::build(source_code);
-    let roto_pack = std::mem::take(_packs[0].as_mut().unwrap());
+    let roto_pack = roto_packs.inspect_pack(name)?;
+    let _count: TypeValue = 1_u32.into();
+    let prefix: TypeValue =
+        routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?
+            .into();
+    let next_hop: TypeValue =
+        std::net::IpAddr::V4(std::net::Ipv4Addr::new(193, 0, 0, 23)).into();
+    let as_path = vec![routecore::asn::Asn::from_u32(1)].into();
+    let asn: TypeValue = Asn::from_u32(211321).into();
 
-    let _count =
-        BuiltinTypeValue::create_instance(TypeDef::U32, 1_u32).unwrap();
-
-    let prefix = BuiltinTypeValue::create_instance(
-        TypeDef::Prefix,
-        routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)
-            .unwrap(),
-    )
-    .unwrap();
-
-    let ip_address = BuiltinTypeValue::create_instance(
-        TypeDef::IpAddress,
-        std::net::IpAddr::V4(std::net::Ipv4Addr::new(193, 0, 0, 23)),
-    )
-    .unwrap();
-
-    let as_path = BuiltinTypeValue::create_instance(
-        TypeDef::AsPath,
-        BuiltinTypeValue::AsPath(
-            AsPath::new(vec![routecore::asn::Asn::from_u32(1)]).unwrap(),
-        ),
-    )
-    .unwrap();
-
-    let asn = BuiltinTypeValue::create_instance(
-        TypeDef::Asn,
-        Asn::from_u32(211321),
-    )
-    .unwrap();
     println!("{:?}", asn);
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            Community::new().into(),
+            Community::new(routecore::bgp::communities::Community::from([
+                127, 12, 13, 12,
+            ]))
+            .into(),
         )]));
 
     let my_comms_type =
@@ -68,7 +48,7 @@ fn test_data(
         &my_nested_rec_type,
         vec![(
             "counter",
-            TypeValue::Builtin(BuiltinTypeValue::U32(U32::new(1))),
+            1.into(),
         )],
     )
     .unwrap();
@@ -90,51 +70,13 @@ fn test_data(
             ("prefix", prefix),
             ("as-path", as_path),
             ("origin", asn),
-            ("next-hop", ip_address),
-            (
-                "med",
-                builtin::BuiltinTypeValue::U32(builtin::U32::new(80)).into(),
-            ),
-            (
-                "local-pref",
-                builtin::BuiltinTypeValue::U32(builtin::U32::new(20)).into(),
-            ),
+            ("next-hop", next_hop),
+            ("med", 80_u32.into()),
+            ("local-pref", 20_u32.into()),
             ("communities", comms),
         ],
     )
     .unwrap();
-
-    // rib rib-rov contains StreamRoute {
-    //     prefix: Prefix, // this is shit: it's the key
-    //     as-path: AsPath,
-    //     origin: Asn,
-    //     next-hop: IpAddress,
-    //     med: U32,
-    //     local-pref: U32,
-    //     community: [Community]
-    // }
-
-    // let payload_as_path = builtin::AsPath::new(vec![
-    //     routecore::asn::Asn::from_u32(1),
-    //     routecore::asn::Asn::from_u32(10),
-    //     routecore::asn::Asn::from_u32(32455),
-    // ])
-    // .unwrap();
-    // let payload_communities =
-    //     vec![builtin::Community::new(builtin::CommunityType::Standard)];
-
-    // let payload: Route = Route {
-    //     prefix: Some(
-    //         routecore::addr::Prefix::new("83.24.10.0".parse().unwrap(), 24)
-    //             .unwrap()
-    //             .into(),
-    //     ),
-    //     bgp: Some(BgpAttributes {
-    //         as_path: payload_as_path,
-    //         communities: payload_communities,
-    //     }),
-    //     status: builtin::RouteStatus::Empty,
-    // };
 
     let mem = vm::LinearMemory::uninit();
 
@@ -143,32 +85,29 @@ fn test_data(
     println!("Used Data Sources");
     println!("{:#?}", &roto_pack.data_sources);
 
-    let mut module_arguments = ArgumentsMap::new();
+    let module_arguments = vec![(
+        "extra_asn".into(),
+        // use Roto type coercion
+        TypeValue::from(65534_u32)
+    )];
 
-    module_arguments.insert(
-        2,
-        TypeValue::Builtin(BuiltinTypeValue::Asn(Asn::new(65534.into()))),
-    );
+    let args = roto_packs.compile_arguments(name, module_arguments)?;
 
     let ds_ref = roto_pack.data_sources.iter().collect::<Vec<_>>();
 
     let mut vm = vm::VmBuilder::new()
-        .with_arguments(module_arguments)
+        .with_arguments(args)
         .with_data_sources(ds_ref.as_slice())
+        .with_mir_code(roto_pack.mir)
         .build();
 
-    let res = vm.exec(
-        my_payload,
-        None::<Record>,
-        None,
-        RefCell::new(mem),
-        roto_pack.mir,
-    )
-    .unwrap();
+    let res = vm
+        .exec(my_payload, None::<Record>, None, RefCell::new(mem))
+        .unwrap();
 
     println!("\nRESULT");
     println!("action: {}", res.0);
-    println!("rx    : {}", res.1);
+    println!("rx    : {:?}", res.1);
     println!("tx    : {:?}", res.2);
 
     Ok(())
@@ -177,7 +116,7 @@ fn test_data(
 #[test]
 fn test_module_1() {
     test_data(
-        "module_1",
+        "in-module",
         r###"
             module in-module with my_asn: Asn {
                 define for ext_r: ExtRoute with extra_asn: Asn {
@@ -241,6 +180,7 @@ fn test_module_1() {
                         route.origin == found_prefix.as-path.origin();
                         (found_prefix.prefix.exists() && found_prefix.prefix.exists()) || route_in_table;
                         found_prefix.prefix.len() == 24;
+                        extra_in_table;
                         route_in_table;
                         route.prefix.len() <= found_prefix.prefix.len();
                     }
