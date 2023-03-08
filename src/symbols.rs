@@ -127,6 +127,10 @@ impl Symbol {
         self.value
     }
 
+    pub fn _take_value(&mut self) -> TypeValue {
+        std::mem::take(&mut self.value)
+    }
+
     pub fn get_args_owned(self) -> Vec<Symbol> {
         self.args
     }
@@ -492,6 +496,16 @@ pub enum Scope {
     Module(ShortString),
 }
 
+impl Scope {
+    pub(crate) fn get_name(&self) -> ShortString {
+        if let Scope::Module(name) = self {
+            name.clone()
+        } else {
+            "global".into()
+        }
+    }
+}
+
 impl Display for Scope {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -598,6 +612,10 @@ impl SymbolTable {
             match_actions: vec![],
             default_action: crate::ast::AcceptReject::Accept,
         }
+    }
+
+    pub(crate) fn get_name(&self) -> ShortString {
+        self.scope.get_name()
     }
 
     pub(crate) fn move_var_const_into(

@@ -287,27 +287,74 @@ impl<'a> From<&'a Vec<Arg>> for CommandArgsStack<'a> {
     }
 }
 
+#[derive(Debug)]
+pub struct Argument {
+    name: ShortString,
+    index: usize,
+    ty: TypeDef,
+    value: TypeValue,
+}
+
+impl Argument {
+    pub fn get_value(&self) -> &TypeValue {
+        &self.value
+    }
+
+    pub fn take_value(&mut self) -> TypeValue {
+        std::mem::take(&mut self.value)
+    }
+
+    pub fn get_name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    pub fn get_type(&self) -> TypeDef {
+        self.ty.clone()
+    }
+
+    pub fn get_index(&self) -> usize {
+        self.index
+    }
+
+    pub(crate) fn new(
+        name: ShortString,
+        index: usize,
+        ty: TypeDef,
+        value: TypeValue,
+    ) -> Self {
+        Self {
+            name,
+            index,
+            ty,
+            value,
+        }
+    }
+}
+
 #[derive(Default, Debug)]
-pub struct ArgumentsMap(Vec<(usize, TypeValue)>);
+pub struct ArgumentsMap(Vec<Argument>);
 
 impl ArgumentsMap {
-    fn take_by_token_value(
+    pub fn take_value_by_token(
         &mut self,
         index: usize,
-    ) -> Result<(usize, TypeValue), VmError> {
+    ) -> Result<TypeValue, VmError> {
         self.0
             .iter_mut()
-            .find(move |(t, _)| *t == index)
-            .map(std::mem::take)
+            .find(|a| a.get_index() == index)
+            .map(|a| a.take_value())
             .ok_or(VmError::AnonymousArgumentNotFound)
     }
 
     pub fn get_by_token_value(&self, index: usize) -> Option<&TypeValue> {
-        self.0.iter().find(|(t, _)| *t == index).map(|(_, v)| v)
+        self.0
+            .iter()
+            .find(|a| a.get_index() == index)
+            .map(|a| a.get_value())
     }
 
     fn _take_by_index(mut self, index: usize) -> Option<TypeValue> {
-        self.0.get_mut(index).map(std::mem::take).map(|(_, v)| v)
+        self.0.get_mut(index).map(|a| a.take_value())
     }
 
     pub fn new() -> Self {
@@ -322,8 +369,19 @@ impl ArgumentsMap {
         self.0.is_empty()
     }
 
-    pub fn insert(&mut self, index: usize, value: TypeValue) {
-        self.0.push((index, value));
+    pub fn insert(
+        &mut self,
+        name: &str,
+        index: usize,
+        ty: TypeDef,
+        value: TypeValue,
+    ) {
+        self.0.push(Argument {
+            name: name.into(),
+            index,
+            ty,
+            value,
+        });
     }
 
     pub fn last_index(&self) -> Option<usize> {
@@ -332,6 +390,25 @@ impl ArgumentsMap {
         } else {
             None
         }
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, Argument> {
+        self.0.iter()
+    }
+}
+
+impl IntoIterator for ArgumentsMap {
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+    type Item = Argument;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl From<Vec<Argument>> for ArgumentsMap {
+    fn from(value: Vec<Argument>) -> Self {
+        Self(value)
     }
 }
 
@@ -376,7 +453,7 @@ impl VariablesMap {
 pub struct VirtualMachine<'a> {
     // _rx_type: TypeDef,
     // _tx_type: Option<TypeDef>,
-    mir_code: Vec<MirBlock>,
+    mir_code: &'a [MirBlock],
     data_sources: &'a [&'a ExtDataSource],
     arguments: ArgumentsMap,
     stack: RefCell<Stack>,
@@ -465,7 +542,7 @@ impl<'a> VirtualMachine<'a> {
         for MirBlock {
             command_stack,
             ty: _,
-        } in &self.mir_code
+        } in self.mir_code
         {
             println!("\n\n--mirblock------------------");
 
@@ -923,9 +1000,9 @@ impl<'a> VirtualMachine<'a> {
                         if let Arg::MemPos(pos) = args[1] {
                             match args[0] {
                                 Arg::Argument(token_value) => {
-                                    let (_arg_index, arg_value) = self
+                                    let arg_value = self
                                         .arguments
-                                        .take_by_token_value(token_value)?;
+                                        .take_value_by_token(token_value)?;
 
                                     let mut m = mem.borrow_mut();
                                     m.set_mem_pos(pos as usize, arg_value);
@@ -1044,21 +1121,26 @@ impl<'a> VirtualMachine<'a> {
     }
 }
 
-#[derive(Default)]
 pub struct VmBuilder<'a> {
     rx_type: TypeDef,
     tx_type: Option<TypeDef>,
-    mir_code: Vec<MirBlock>,
+    mir_code: &'a [MirBlock],
     arguments: ArgumentsMap,
     data_sources: &'a [&'a ExtDataSource],
 }
 
 impl<'a> VmBuilder<'a> {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            rx_type: TypeDef::default(),
+            tx_type: None,
+            mir_code: &[],
+            arguments: ArgumentsMap::default(),
+            data_sources: &[],
+        }
     }
 
-    pub fn with_mir_code(mut self, mir_code: Vec<MirBlock>) -> Self {
+    pub fn with_mir_code(mut self, mir_code: &'a [MirBlock]) -> Self {
         self.mir_code = mir_code;
         self
     }
@@ -1095,6 +1177,12 @@ impl<'a> VmBuilder<'a> {
             arguments: self.arguments,
             stack: RefCell::new(Stack::new()),
         }
+    }
+}
+
+impl<'a> Default for VmBuilder<'a> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -2,7 +2,7 @@ use roto::compile::Compiler;
 use std::cell::RefCell;
 
 use roto::types::builtin::{
-    self, AsPath, Asn, BuiltinTypeValue, Community, U32,
+    Asn, Community,
 };
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
@@ -15,19 +15,16 @@ fn test_data(
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Evaluate module {}...", name);
 
-    let mut _packs = Compiler::build(source_code);
-    let roto_pack = std::mem::take(_packs[0].as_mut().unwrap());
+    let roto_packs = Compiler::build(source_code);
 
+    let roto_pack = roto_packs.inspect_pack(name)?;
     let _count: TypeValue = 1_u32.into();
-
     let prefix: TypeValue =
         routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?
             .into();
     let next_hop: TypeValue =
         std::net::IpAddr::V4(std::net::Ipv4Addr::new(193, 0, 0, 23)).into();
-
     let as_path = vec![routecore::asn::Asn::from_u32(1)].into();
-
     let asn: TypeValue = Asn::from_u32(211321).into();
 
     println!("{:?}", asn);
@@ -94,7 +91,7 @@ fn test_data(
         TypeValue::from(65534_u32)
     )];
 
-    let args = roto_pack.compile_arguments(module_arguments)?;
+    let args = roto_packs.compile_arguments(name, module_arguments)?;
 
     let ds_ref = roto_pack.data_sources.iter().collect::<Vec<_>>();
 
@@ -119,7 +116,7 @@ fn test_data(
 #[test]
 fn test_module_1() {
     test_data(
-        "module_1",
+        "in-module",
         r###"
             module in-module with my_asn: Asn {
                 define for ext_r: ExtRoute with extra_asn: Asn {

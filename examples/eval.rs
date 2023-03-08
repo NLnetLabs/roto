@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use roto::compile::Compiler;
 
 use roto::types::builtin::{
-    self, AsPath, Asn, BuiltinTypeValue, Community, U32,
+    self, Asn, BuiltinTypeValue, Community, U32,
 };
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
@@ -16,28 +16,23 @@ fn test_data(
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Evaluate module {}...", name);
 
-    // println!("{:#?}", symbols);
-    let mut _packs = Compiler::build(source_code);
-    let roto_pack = std::mem::take(_packs[0].as_mut().unwrap());
+    // Compile the source code in this example
+    let rotolo = Compiler::build(source_code);
+    let roto_pack = rotolo.inspect_pack(name)?;
 
+    // Create a payload type and instance to feed into a VM.
     let _count: TypeValue = 1_u32.into();
-
     let prefix: TypeValue =
         routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?
             .into();
     let next_hop: TypeValue =
         std::net::IpAddr::V4(std::net::Ipv4Addr::new(193, 0, 0, 23)).into();
-
     let as_path = vec![routecore::asn::Asn::from_u32(1)].into();
     let asn = Asn::from_u32(211321).into();
-
-    println!("{:?}", asn);
-
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
             Community::new(routecore::bgp::communities::Community::from([127, 12, 13, 12])).into(),
         )]));
-
     let my_comms_type =
         TypeDef::List(Box::new(TypeDef::List(Box::new(TypeDef::Community))));
 
@@ -85,8 +80,8 @@ fn test_data(
     )
     .unwrap();
 
-    let mem = vm::LinearMemory::uninit();
 
+    // Create the VM
     println!("Used Arguments");
     println!("{:#?}", &roto_pack.arguments);
     println!("Used Data Sources");
@@ -99,7 +94,7 @@ fn test_data(
     )];
 
     let ds_ref = roto_pack.data_sources.iter().collect::<Vec<_>>();
-    let args = roto_pack.compile_arguments(module_arguments)?;
+    let args = rotolo.compile_arguments(name, module_arguments)?;
 
     let mut vm = vm::VmBuilder::new()
         .with_arguments(args)
@@ -107,6 +102,7 @@ fn test_data(
         .with_mir_code(roto_pack.mir)
         .build();
 
+    let mem = vm::LinearMemory::uninit();
     let res = vm.exec(
         my_payload,
         None::<Record>,
@@ -126,7 +122,7 @@ fn test_data(
 
 fn main() {
     test_data(
-        "module_1",
+        "in-module",
         r###"
             module in-module with my_asn: Asn {
                 define for ext_r: ExtRoute with extra_asn: Asn {
