@@ -297,6 +297,26 @@ impl Symbol {
                     self.value = r.into_type(&type_def)?;
                 }
             },
+            TypeDef::LocalPref => {
+                if let TypeValue::Builtin(BuiltinTypeValue::LocalPref(r)) = self.value {
+                    self.value = r.into_type(&type_def)?;
+                }
+            },
+            TypeDef::MultiExitDisc => {
+                if let TypeValue::Builtin(BuiltinTypeValue::MultiExitDisc(r)) = self.value {
+                    self.value = r.into_type(&type_def)?;
+                }
+            },
+            TypeDef::NextHop => {
+                if let TypeValue::Builtin(BuiltinTypeValue::NextHop(r)) = self.value {
+                    self.value = r.into_type(&type_def)?;
+                }
+            },
+            TypeDef::AtomicAggregator => {
+                if let TypeValue::Builtin(BuiltinTypeValue::AtomicAggregator(r)) = self.value {
+                    self.value = r.into_type(&type_def)?;
+                }
+            },
             TypeDef::RouteStatus => {
                 if let TypeValue::Builtin(BuiltinTypeValue::RouteStatus(rs)) = self.value {
                     self.value = rs.into_type(&type_def)?;
@@ -319,6 +339,7 @@ impl Symbol {
             },
             TypeDef::AcceptReject(_) => { return Err(CompileError::new("AcceptReject value can't be converted.".into())) },
             TypeDef::Unknown => { return Err(CompileError::new("Value from unknown type can't be converted.".into())) },
+  
         }
 
         Ok(self)

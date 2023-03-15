@@ -4,13 +4,13 @@
 
 use std::fmt::Display;
 
-use routecore::bgp::route::RouteStatus;
-
+use crate::attr_change_set::RouteStatus;
 use crate::compile::CompileError;
 use crate::traits::RotoType;
 
 use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
+use super::super::collections::{List, ElementTypeValue};
 
 use super::*;
 
@@ -22,12 +22,17 @@ pub enum BuiltinTypeValue {
     StringLiteral(StringLiteral), // scalar
     Prefix(Prefix), // scalar
     PrefixLength(PrefixLength), // scalar
-    Community(Community), // vector
+    Community(Community), // scalar
+    Communities(List), // vector
     IpAddress(IpAddress), // scalar
     Asn(Asn), // scalar 
     AsPath(AsPath), // vector
     OriginType(OriginType), // scalar
     Route(RawRouteWithDeltas), // vector
+    LocalPref(LocalPref), // scalar
+    AtomicAggregator(AtomicAggregator), // scalar
+    NextHop(NextHop), // scalar
+    MultiExitDisc(MultiExitDisc),
     RouteStatus(RouteStatus), // scalar
     Boolean(Boolean), // scalar
     HexLiteral(HexLiteral), // scalar
@@ -140,6 +145,7 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::PrefixLength(v) => 
                 v.into_type(ty),
             BuiltinTypeValue::Community(v) => v.into_type(ty),
+            BuiltinTypeValue::Communities(v) => Err("Can't convert from communities list".into()),
             BuiltinTypeValue::IpAddress(v) => v.into_type(ty),
             BuiltinTypeValue::AsPath(v) => v.into_type(ty),
             BuiltinTypeValue::OriginType(v) => v.into_type(ty),
@@ -148,6 +154,10 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::Boolean(v) => v.into_type(ty),
             BuiltinTypeValue::HexLiteral(v) => v.into_type(ty),
             BuiltinTypeValue::Asn(v) => v.into_type(ty),
+            BuiltinTypeValue::LocalPref(v) => v.into_type(ty),
+            BuiltinTypeValue::AtomicAggregator(v) => v.into_type(ty),
+            BuiltinTypeValue::NextHop(v) => v.into_type(ty),
+            BuiltinTypeValue::MultiExitDisc(v) => v.into_type(ty),
         }
     }
 }
@@ -264,6 +274,7 @@ impl Display for BuiltinTypeValue {
                 write!(f, "{} (Prefix Length)", v)
             }
             BuiltinTypeValue::Community(v) => write!(f, "{} (Community)", v),
+            BuiltinTypeValue::Communities(v) => write!(f, "{:?} (Communities)", v),
             BuiltinTypeValue::IpAddress(v) => write!(f, "{} (IP Address)", v),
             BuiltinTypeValue::Asn(v) => write!(f, "{} (ASN)", v),
             BuiltinTypeValue::AsPath(v) => {
@@ -280,6 +291,10 @@ impl Display for BuiltinTypeValue {
             BuiltinTypeValue::HexLiteral(v) => {
                 write!(f, "{} (Hex)", v)
             }
+            BuiltinTypeValue::LocalPref(v) => write!(f, "{} (Local Preference)", v),
+            BuiltinTypeValue::AtomicAggregator(v) => write!(f, "{} (Atomic Aggregator)", v),
+            BuiltinTypeValue::NextHop(v) => write!(f, "{} (Next Hop)", v),
+            BuiltinTypeValue::MultiExitDisc(v) => write!(f, "{} (Multi Exit Discriminator)", v)
         }
     }
 }

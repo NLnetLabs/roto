@@ -190,18 +190,18 @@ pub struct Table {
 }
 
 impl Table {
-    fn inner_from_typevalue(
-        type_value: TypeValue,
-    ) -> Result<Table, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        if let TypeValue::Table(t) = type_value {
-            Ok(t)
-        } else {
-            Err("Not a table type".into())
-        }
-    }
+    // fn inner_from_typevalue(
+    //     type_value: TypeValue,
+    // ) -> Result<Table, CompileError>
+    // where
+    //     Self: std::marker::Sized,
+    // {
+    //     if let TypeValue::Table(t) = type_value {
+    //         Ok(t)
+    //     } else {
+    //         Err("Not a table type".into())
+    //     }
+    // }
 
     pub fn get_at_field_index(
         &self,

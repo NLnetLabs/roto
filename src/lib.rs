@@ -5,3 +5,4 @@ pub mod symbols;
 pub mod traits;
 pub mod types;
 pub mod vm;
+mod attr_change_set;

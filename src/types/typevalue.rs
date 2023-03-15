@@ -1,20 +1,18 @@
-use std::{cmp::Ordering, fmt::Display};
-
-use routecore::bgp::route::RouteStatus;
+use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
 //============ TypeValue ====================================================
 use crate::{
     ast::ShortString,
     compile::CompileError,
     traits::RotoType,
-    vm::{StackRef, StackRefPos, VmError},
+    vm::{StackRef, StackRefPos, VmError}, attr_change_set::{ScalarValue, VectorValue, RouteStatus},
 };
 
 use super::{
     builtin::{
         Asn, Boolean, BuiltinTypeValue, HexLiteral,
         IntegerLiteral, IpAddress, Prefix, PrefixLength, StringLiteral, U32,
-        U8, primitives,
+        U8, primitives
     },
     collections::{ElementTypeValue, List, Record},
     datasources::{Rib, Table},
@@ -25,7 +23,7 @@ use super::{
 /// holds both the type-level information and the value. The collection
 /// variants can hold multiple values recursively, e.g. a List of Records.
 
-#[derive(Debug, PartialEq, Eq, Default)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub enum TypeValue {
     // All the built-in scalars and vectors
     Builtin(BuiltinTypeValue),
@@ -36,10 +34,10 @@ pub enum TypeValue {
     Record(Record),
     // A collection of Records, keyed on Prefix and with special methods for
     // matching prefixes.
-    Rib(Rib),
+    Rib(Arc<Rib>),
     // Another collections of Records, but in a tabular format without any
     // key, e.g. parsed csv files.
-    Table(Table),
+    Table(Arc<Table>),
     // Unknown is NOT EQUAL to empty or unitialized, e.g. it may be the
     // result of a search. A ternary logic value, if you will.
     Unknown,
@@ -213,8 +211,23 @@ impl TypeValue {
             TypeValue::Builtin(BuiltinTypeValue::Community(community)) => {
                 community.exec_value_method(method_token, args, return_type)
             }
+            TypeValue::Builtin(BuiltinTypeValue::Communities(communities)) => {
+                communities.exec_value_method(method_token, args, return_type)
+            }
             TypeValue::Builtin(BuiltinTypeValue::OriginType(origin)) => {
                 origin.exec_value_method(method_token, args, return_type)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::LocalPref(local_pref)) => {
+                local_pref.exec_value_method(method_token, args, return_type)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::NextHop(next_hop)) => {
+                next_hop.exec_value_method(method_token, args, return_type)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::AtomicAggregator(aggregator)) => {
+                aggregator.exec_value_method(method_token, args, return_type)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::MultiExitDisc(med)) => {
+                med.exec_value_method(method_token, args, return_type)
             }
             TypeValue::Builtin(BuiltinTypeValue::U8(u8_lit)) => {
                 u8_lit.exec_value_method(method_token, args, return_type)
@@ -301,6 +314,14 @@ impl TypeValue {
             }
             TypeValue::Builtin(BuiltinTypeValue::Route(route)) => route
                 .exec_consume_value_method(method_token, args, return_type),
+            TypeValue::Builtin(BuiltinTypeValue::Communities(communities)) => {
+                // let l = communities.into_iter().map(|c| ElementTypeValue::Primitive(c.into())).collect::<Vec<_>>();
+                communities.exec_consume_value_method(
+                    method_token,
+                    args,
+                    return_type,
+                )
+            }
             TypeValue::Builtin(BuiltinTypeValue::Community(community)) => {
                 community.exec_consume_value_method(
                     method_token,
@@ -326,6 +347,34 @@ impl TypeValue {
                 args,
                 return_type,
             ),
+            TypeValue::Builtin(BuiltinTypeValue::LocalPref(
+                local_pref,
+            )) => local_pref.exec_consume_value_method(
+                method_token,
+                args,
+                return_type,
+            ),
+            TypeValue::Builtin(BuiltinTypeValue::AtomicAggregator(
+                aggregator,
+            )) => aggregator.exec_consume_value_method(
+                method_token,
+                args,
+                return_type,
+            ),
+            TypeValue::Builtin(BuiltinTypeValue::NextHop(
+                next_hop,
+            )) => next_hop.exec_consume_value_method(
+                method_token,
+                args,
+                return_type,
+            ),
+            TypeValue::Builtin(BuiltinTypeValue::MultiExitDisc(
+                med,
+            )) => med.exec_consume_value_method(
+                method_token,
+                args,
+                return_type,
+            ),
             TypeValue::Builtin(BuiltinTypeValue::RouteStatus(
                 route_status,
             )) => route_status.exec_consume_value_method(
@@ -333,17 +382,27 @@ impl TypeValue {
                 args,
                 return_type,
             ),
-            TypeValue::Rib(rib) => {
-                rib.exec_consume_value_method(method_token, args, return_type)
+            TypeValue::Rib(_rib) => {
+                Err(VmError::InvalidMethodCall)
+                // rib.exec_consume_value_method(method_token, args, return_type)
             }
-            TypeValue::Table(rec) => {
-                rec.exec_consume_value_method(method_token, args, return_type)
+            TypeValue::Table(_rec) => {
+                Err(VmError::InvalidMethodCall)
+                // rec.exec_consume_value_method(method_token, args, return_type)
             }
             TypeValue::Unknown => Ok(Box::new(|| TypeValue::Unknown)),
             TypeValue::UnInit => {
                 panic!("Unitialized memory cannot be read. That's fatal.");
             }
         }
+    }
+}
+
+impl std::ops::Index<usize> for TypeValue {
+    type Output = TypeValue;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        todo!()
     }
 }
 
@@ -573,9 +632,21 @@ impl From<std::net::IpAddr> for TypeValue {
     }
 }
 
-impl From<routecore::asn::AsPath<Vec<routecore::asn::Asn>>> for TypeValue {
-    fn from(as_path: routecore::asn::AsPath<Vec<routecore::asn::Asn>>) -> Self {
+impl From<routecore::asn::Asn> for TypeValue {
+    fn from(value: routecore::asn::Asn) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(value)))
+    }
+}
+
+impl From<routecore::asn::AsPath<Vec<u8>>> for TypeValue {
+    fn from(as_path: routecore::asn::AsPath<Vec<u8>>) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::AsPath(primitives::AsPath(as_path)))
+    }
+}
+
+impl From<routecore::asn::AsPath<Vec<u8>>> for BuiltinTypeValue {
+    fn from(as_path: routecore::asn::AsPath<Vec<u8>>) -> Self {
+        BuiltinTypeValue::AsPath(primitives::AsPath(as_path))
     }
 }
 
@@ -585,3 +656,69 @@ impl From<Vec<routecore::asn::Asn>> for TypeValue {
         TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path))
     }
 }
+
+// impl From<routecore::bgp::communities::Communities> for TypeValue {
+//     fn from(value: routecore::bgp::communities::Communities) -> Self {
+//         let list = List(value.communities.iter().map(|c| ElementTypeValue::Primitive((*c).into())).collect()); 
+//         TypeValue::Builtin(BuiltinTypeValue::Communities(list))
+//     }
+// }
+
+impl From<Vec<crate::types::builtin::Community>> for TypeValue {
+    fn from(value: Vec<crate::types::builtin::Community>) -> Self {
+        TypeValue::List(List::new(value.iter().map(|v| ElementTypeValue::Primitive((*v).into())).collect::<Vec<_>>()))
+    }
+}
+
+impl From<Vec<TypeValue>> for TypeValue {
+    fn from(value: Vec<TypeValue>) -> Self {
+        TypeValue::List(List::new(value.iter().map(|v| ElementTypeValue::Primitive((*v).clone())).collect::<Vec<_>>()))
+    }
+}
+
+impl VectorValue for TypeValue {
+    type WriteItem = TypeValue;
+    type ReadItem = TypeValue;
+
+    fn prepend_vec(
+        &mut self,
+        vector: Vec<Self::WriteItem>,
+    ) -> Result<(), routecore::asn::LongSegmentError> {
+        todo!()
+    }
+
+    fn append_vec(
+        &mut self,
+        vector: Vec<Self::WriteItem>,
+    ) -> Result<(), routecore::asn::LongSegmentError> {
+        todo!()
+    }
+
+    fn insert_vec(
+        &mut self,
+        pos: u8,
+        vector: Vec<Self::WriteItem>,
+    ) -> Result<(), routecore::asn::LongSegmentError> {
+        todo!()
+    }
+
+    fn vec_len(&self) -> Option<usize> {
+        todo!()
+    }
+
+    fn vec_is_empty(&self) -> bool {
+        todo!()
+    }
+
+    fn into_vec(self) -> Vec<Self> {
+        todo!()
+    }
+}
+
+// impl<'a> AsRef<&'a [u8]> for TypeValue {
+//     fn as_ref(&self) -> &&'a [u8] {
+//         todo!()
+//     }
+// }
+
+impl ScalarValue for TypeValue {}

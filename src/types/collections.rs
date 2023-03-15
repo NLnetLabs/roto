@@ -17,7 +17,7 @@ use super::typevalue::TypeValue;
 // collections (that only contain primitive types). The latter do not need to
 // be boxed, while the former do.
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ElementTypeValue {
     Primitive(TypeValue),
     Nested(Box<TypeValue>),
@@ -81,7 +81,7 @@ impl Default for ElementTypeValue {
 
 //------------ List type ----------------------------------------------------
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct List(pub(crate) Vec<ElementTypeValue>);
 
 impl List {
@@ -319,7 +319,7 @@ impl From<ListToken> for usize {
 
 //---------------- Record type ----------------------------------------------
 
-#[derive(Debug, PartialEq, Eq, Default)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct Record(pub(crate) Vec<(ShortString, ElementTypeValue)>);
 
 impl<'a> Record {

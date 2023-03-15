@@ -1,10 +1,11 @@
 use std::fmt::{Display, Formatter};
 
-use routecore::asn::LongSegmentError;
+use routecore::asn::{LongSegmentError, OwnedPathSegment2};
 
 use crate::ast::ShortString;
 use crate::compile::CompileError;
 use crate::traits::{RotoType, TokenConvert};
+use crate::types::collections::{ElementTypeValue, List};
 use crate::types::typedef::MethodProps;
 use crate::vm::VmError;
 
@@ -347,6 +348,18 @@ impl RotoType for Boolean {
 impl From<Boolean> for TypeValue {
     fn from(val: Boolean) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::Boolean(val))
+    }
+}
+
+impl From<Boolean> for BuiltinTypeValue {
+    fn from(val: Boolean) -> Self {
+        BuiltinTypeValue::Boolean(val)
+    }
+}
+
+impl From<bool> for BuiltinTypeValue {
+    fn from(value: bool) -> Self {
+        BuiltinTypeValue::Boolean(Boolean(value))
     }
 }
 
@@ -1181,6 +1194,39 @@ impl From<Community> for TypeValue {
     }
 }
 
+impl From<routecore::bgp::communities::Community> for TypeValue {
+    fn from(val: routecore::bgp::communities::Community) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::Community(Community(val)))
+    }
+}
+
+impl From<routecore::bgp::communities::Community> for BuiltinTypeValue {
+    fn from(value: routecore::bgp::communities::Community) -> Self {
+        BuiltinTypeValue::Community(Community(value))
+    }
+}
+
+impl From<Vec<routecore::bgp::communities::Community>> for TypeValue {
+    fn from(value: Vec<routecore::bgp::communities::Community>) -> Self {
+        let list: Vec<ElementTypeValue> = value
+            .iter()
+            .map(|c| ElementTypeValue::Primitive(TypeValue::from(*c)))
+            .collect::<Vec<_>>();
+        TypeValue::List(crate::types::collections::List(list))
+    }
+}
+
+impl From<Vec<routecore::bgp::communities::Community>> for BuiltinTypeValue {
+    fn from(value: Vec<routecore::bgp::communities::Community>) -> Self {
+        let list: Vec<ElementTypeValue> = value
+            .iter()
+            .map(|c| ElementTypeValue::Primitive(TypeValue::from(*c)))
+            .collect::<Vec<_>>();
+        BuiltinTypeValue::Communities(List(list))
+    }
+}
+
+
 impl Display for Community {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.0)
@@ -1221,11 +1267,6 @@ impl From<CommunityToken> for usize {
     }
 }
 
-//------------ Communities --------------------------------------------------
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Communities(
-    pub(crate) routecore::bgp::communities::MaterializedCommunities,
-);
 
 //------------ MatchType ----------------------------------------------------
 
@@ -1485,18 +1526,16 @@ impl From<AsnToken> for usize {
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct AsPath(
-    pub(crate) routecore::asn::AsPath<Vec<routecore::asn::Asn>>,
+    pub(crate) routecore::asn::AsPath<Vec<u8>>,
 );
 
 impl AsPath {
     pub fn new(
         as_path: Vec<routecore::asn::Asn>,
     ) -> Result<Self, LongSegmentError> {
-        let mut new_as_path = routecore::asn::AsPathBuilder::new();
-        for asn in as_path {
-            new_as_path.push(asn)?;
-        }
-        let new_as_path = new_as_path.finalize();
+        let mut new_as_path = routecore::asn::AsPathBuilder::from_target(vec![]);
+        new_as_path.append_as_sequence(as_path.as_slice());
+        let new_as_path = new_as_path.finalize().map_err(|_| LongSegmentError)?;
         Ok(AsPath(new_as_path))
     }
 
@@ -1509,7 +1548,7 @@ impl AsPath {
     }
 
     pub fn contains(&self, asn: routecore::asn::Asn) -> bool {
-        self.0.iter().any(|a| a.elements().contains(&asn))
+        self.0.contains(asn)
     }
 }
 
@@ -1569,13 +1608,15 @@ impl RotoType for AsPath {
     ) -> Result<Box<(dyn FnOnce() -> TypeValue + 'a)>, VmError> {
         match method.into() {
             AsPathToken::Origin => {
-                let rc_as_path = &self.0;
+                match self.0.origin() {
+                    Some(origin_asn) => {
+        
                 Ok(Box::new(move || {
-                    let origin: routecore::asn::Asn =
-                        rc_as_path.iter().next().unwrap().elements()[0];
-
-                    TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(origin)))
+                    TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(origin_asn)))
                 }))
+                    },
+                    None => Err(VmError::InvalidPayload)
+                }
             }
             AsPathToken::Contains => Ok(Box::new(move || {
                 if let TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(
@@ -1620,6 +1661,18 @@ impl From<AsPath> for TypeValue {
         TypeValue::Builtin(BuiltinTypeValue::AsPath(val))
     }
 }
+
+// impl From<routecore::asn::AsPath<Vec<u8>>> for AsPath {
+//     fn from(value: routecore::asn::AsPath<Vec<u8>>) -> Self {
+//         AsPath(value.into())
+//     }
+// }
+
+// impl From<Vec<u8>> for Asn {
+//     fn from(value: Vec<u8>) -> Self {
+//         Asn::from_u32(value.elements[0].into())
+//     }
+// }
 
 impl Display for AsPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -1713,9 +1766,15 @@ impl From<OriginType> for TypeValue {
     }
 }
 
-impl From<routecore::bgp::types::OriginType> for OriginType {
+impl From<routecore::bgp::types::OriginType> for TypeValue {
     fn from(value: routecore::bgp::types::OriginType) -> Self {
-        Self(value)
+        TypeValue::Builtin(BuiltinTypeValue::OriginType(OriginType(value)))
+    }
+}
+
+impl From<routecore::bgp::types::OriginType> for BuiltinTypeValue {
+    fn from(value: routecore::bgp::types::OriginType) -> Self {
+        BuiltinTypeValue::OriginType(OriginType(value))
     }
 }
 
@@ -1730,17 +1789,356 @@ impl Display for OriginType {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct NextHop(pub(crate) routecore::bgp::types::NextHop);
 
+impl RotoType for NextHop {
+    fn get_props_for_method(
+        ty: TypeDef,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, CompileError>
+    where
+        Self: std::marker::Sized,
+    {
+        todo!()
+    }
+
+    fn into_type(
+        self,
+        type_value: &TypeDef,
+    ) -> Result<TypeValue, CompileError>
+    where
+        Self: std::marker::Sized,
+    {
+        todo!()
+    }
+
+    fn exec_value_method<'a>(
+        &'a self,
+        method_token: usize,
+        args: &'a [&'a TypeValue],
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+
+    fn exec_consume_value_method(
+        self,
+        method_token: usize,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+        todo!()
+    }
+
+    fn exec_type_method<'a>(
+        method_token: usize,
+        args: &[&'a TypeValue],
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+}
+
+impl From<NextHop> for TypeValue {
+    fn from(value: NextHop) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::NextHop(value))
+    }
+}
+
+impl From<routecore::bgp::types::NextHop> for TypeValue {
+    fn from(value: routecore::bgp::types::NextHop) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::NextHop(NextHop(value)))
+    }
+}
+
+impl From<routecore::bgp::types::NextHop> for BuiltinTypeValue {
+    fn from(value: routecore::bgp::types::NextHop) -> Self {
+        BuiltinTypeValue::NextHop(NextHop(value))
+    }
+}
+
+impl Display for NextHop {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 //------------ Multi Exit Discriminator type --------------------------------
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct MultiExitDisc(pub(crate) routecore::bgp::types::MultiExitDisc);
 
+impl RotoType for MultiExitDisc {
+    fn get_props_for_method(
+        ty: TypeDef,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, CompileError>
+    where
+        Self: std::marker::Sized,
+    {
+        todo!()
+    }
+
+    fn into_type(
+        self,
+        type_value: &TypeDef,
+    ) -> Result<TypeValue, CompileError>
+    where
+        Self: std::marker::Sized,
+    {
+        todo!()
+    }
+
+    fn exec_value_method<'a>(
+        &'a self,
+        method_token: usize,
+        args: &'a [&'a TypeValue],
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+
+    fn exec_consume_value_method(
+        self,
+        method_token: usize,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+        todo!()
+    }
+
+    fn exec_type_method<'a>(
+        method_token: usize,
+        args: &[&'a TypeValue],
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+}
+
+impl From<MultiExitDisc> for TypeValue {
+    fn from(value: MultiExitDisc) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::MultiExitDisc(value))
+    }
+}
+
+impl From<routecore::bgp::types::MultiExitDisc> for TypeValue {
+    fn from(value: routecore::bgp::types::MultiExitDisc) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::MultiExitDisc(MultiExitDisc(
+            value,
+        )))
+    }
+}
+
+impl From<routecore::bgp::types::MultiExitDisc> for BuiltinTypeValue {
+    fn from(value: routecore::bgp::types::MultiExitDisc) -> Self {
+        BuiltinTypeValue::MultiExitDisc(MultiExitDisc(
+            value,
+        ))
+    }
+}
+
+impl Display for MultiExitDisc {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 //------------ Local Preference type ----------------------------------------
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct LocalPref(pub(crate) routecore::bgp::types::LocalPref);
+
+impl RotoType for LocalPref {
+    fn get_props_for_method(
+        _ty: TypeDef,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, CompileError>
+    where
+        Self: std::marker::Sized,
+    {
+        match method_name.ident.as_str() {
+            "set" => Ok(MethodProps::new(
+                TypeDef::Unknown,
+                LocalPrefToken::Set.into(),
+                vec![TypeDef::IntegerLiteral],
+            )
+            .consume_value()),
+            _ => Err(format!(
+                "Unknown method: '{}' for type U8",
+                method_name.ident
+            )
+            .into()),
+        }
+    }
+
+    fn into_type(
+        self,
+        type_value: &TypeDef,
+    ) -> Result<TypeValue, CompileError>
+    where
+        Self: std::marker::Sized,
+    {
+        todo!()
+    }
+
+    fn exec_value_method<'a>(
+        &'a self,
+        method_token: usize,
+        args: &'a [&'a TypeValue],
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+
+    fn exec_consume_value_method(
+        self,
+        method_token: usize,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+        todo!()
+    }
+
+    fn exec_type_method<'a>(
+        method_token: usize,
+        args: &[&'a TypeValue],
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+}
+
+impl From<LocalPref> for TypeValue {
+    fn from(value: LocalPref) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::LocalPref(value))
+    }
+}
+
+impl From<routecore::bgp::types::LocalPref> for TypeValue {
+    fn from(value: routecore::bgp::types::LocalPref) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::LocalPref(LocalPref(value)))
+    }
+}
+
+impl From<routecore::bgp::types::LocalPref> for BuiltinTypeValue {
+    fn from(value: routecore::bgp::types::LocalPref) -> Self {
+        BuiltinTypeValue::LocalPref(LocalPref(value))
+    }
+}
+
+impl Display for LocalPref {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug)]
+pub enum LocalPrefToken {
+    Set,
+}
+
+impl TokenConvert for LocalPrefToken {}
+
+impl From<usize> for LocalPrefToken {
+    fn from(val: usize) -> Self {
+        match val {
+            0 => LocalPrefToken::Set,
+            _ => panic!("Unknown token value: {}", val),
+        }
+    }
+}
+
+impl From<LocalPrefToken> for usize {
+    fn from(val: LocalPrefToken) -> Self {
+        match val {
+            LocalPrefToken::Set => 0,
+        }
+    }
+}
 
 //------------ Aggregator type ----------------------------------------------
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Aggregator(pub(crate) routecore::bgp::message::update::Aggregator);
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct AtomicAggregator(
+    pub(crate) routecore::bgp::message::update::Aggregator,
+);
+
+impl RotoType for AtomicAggregator {
+    fn get_props_for_method(
+        ty: TypeDef,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, CompileError>
+    where
+        Self: std::marker::Sized,
+    {
+        todo!()
+    }
+
+    fn into_type(
+        self,
+        type_value: &TypeDef,
+    ) -> Result<TypeValue, CompileError>
+    where
+        Self: std::marker::Sized,
+    {
+        todo!()
+    }
+
+    fn exec_value_method<'a>(
+        &'a self,
+        method_token: usize,
+        args: &'a [&'a TypeValue],
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+
+    fn exec_consume_value_method(
+        self,
+        method_token: usize,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+        todo!()
+    }
+
+    fn exec_type_method<'a>(
+        method_token: usize,
+        args: &[&'a TypeValue],
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+}
+
+impl From<AtomicAggregator> for TypeValue {
+    fn from(value: AtomicAggregator) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::AtomicAggregator(value))
+    }
+}
+
+impl From<AtomicAggregator> for BuiltinTypeValue {
+    fn from(value: AtomicAggregator) -> Self {
+        BuiltinTypeValue::AtomicAggregator(value)
+    }
+}
+
+impl From<routecore::bgp::message::update::Aggregator> for TypeValue {
+    fn from(value: routecore::bgp::message::update::Aggregator) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::AtomicAggregator(
+            AtomicAggregator(value),
+        ))
+    }
+}
+
+impl From<routecore::bgp::message::update::Aggregator> for BuiltinTypeValue {
+    fn from(value: routecore::bgp::message::update::Aggregator) -> Self {
+        BuiltinTypeValue::AtomicAggregator(
+            AtomicAggregator(value),
+        )
+    }
+}
+
+impl std::fmt::Display for AtomicAggregator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}

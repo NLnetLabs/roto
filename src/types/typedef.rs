@@ -3,8 +3,8 @@
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 
-use routecore::bgp::route::RouteStatus;
 
+use crate::attr_change_set::RouteStatus;
 use crate::compile::CompileError;
 use crate::traits::Token;
 use crate::types::collections::ElementTypeValue;
@@ -17,7 +17,7 @@ use crate::{
 use super::builtin::{
     AsPath, Asn, Boolean, Community, HexLiteral, IntegerLiteral, IpAddress,
     OriginType, Prefix, PrefixLength, RawRouteWithDeltas, StringLiteral, U32,
-    U8,
+    U8, LocalPref, NextHop, AtomicAggregator, MultiExitDisc
 };
 use super::collections::Record;
 use super::datasources::{Rib, Table};
@@ -42,10 +42,14 @@ pub enum TypeDef {
     PrefixLength, // A u8 prefixes by a /
     IpAddress,
     Asn,
+    Route, // BGP Update path attributes
     AsPath,
     Community,
     OriginType,
-    Route,
+    LocalPref,
+    MultiExitDisc,
+    NextHop,
+    AtomicAggregator,
     RouteStatus,
     // Literals
     HexLiteral,
@@ -73,7 +77,14 @@ impl TypeDef {
     }
 
     pub fn is_builtin(&self) -> bool {
-        !matches!(self, TypeDef::Rib(_) | TypeDef::Table(_) | TypeDef::List(_) | TypeDef::Record(_) | TypeDef::Unknown )
+        !matches!(
+            self,
+            TypeDef::Rib(_)
+                | TypeDef::Table(_)
+                | TypeDef::List(_)
+                | TypeDef::Record(_)
+                | TypeDef::Unknown
+        )
     }
 
     pub fn new_record_type(
@@ -97,40 +108,79 @@ impl TypeDef {
         // Data sources (rib and table) are special cases, because they have
         // their methods on the container (the datasource) and not on the
         // contained type. They don't have field access.
-        let mut current_type_token = (
+        let mut current_type_token: (TypeDef, Token) = (
             if let TypeDef::Table(rec) | TypeDef::Rib(rec) = self {
-                rec
+                *rec.clone()
             } else {
-                self
+                self.clone()
             },
             Token::FieldAccess(vec![]),
         );
         for field in fields {
             let mut index = 0;
-            if let (TypeDef::Record(_fields), _) = current_type_token {
-                if let Some((_, (_, ty))) =
-                    _fields.iter().enumerate().find(|(i, (ident, _))| {
-                        index = *i;
-                        ident == &field.ident.as_str()
-                    })
-                {
-                    // recurse into the TypeDef of self.
-                    current_type_token = (ty, current_type_token.1);
-                    current_type_token.1.push(index as u8);
-                } else {
+            match current_type_token {
+                (TypeDef::Record(_fields), _) => {
+                    if let Some((_, (_, ty))) =
+                        _fields.iter().enumerate().find(|(i, (ident, _))| {
+                            index = *i;
+                            ident == &field.ident.as_str()
+                        })
+                    {
+                        // recurse into the TypeDef of self.
+                        current_type_token =
+                            (*ty.clone(), current_type_token.1);
+                        current_type_token.1.push(index as u8);
+                    } else {
+                        return Err(format!(
+                            "No field named '{}'",
+                            field.ident.as_str()
+                        )
+                        .into());
+                    }
+                }
+                // Route is alos special since it doesn't actually have
+                // fields access (it is backed by the raw bytes of the
+                // update message), but we want to create the illusion
+                // that it does have them.
+                (TypeDef::Route, _) => {
+                    current_type_token =
+                        RawRouteWithDeltas::get_props_for_field(
+                            field,
+                        )?;
+                }
+                _ => {
                     return Err(format!(
                         "No field named '{}'",
                         field.ident.as_str()
                     )
                     .into());
                 }
-            } else {
-                return Err(format!(
-                    "No field named '{}'",
-                    field.ident.as_str()
-                )
-                .into());
-            }
+            };
+
+            // if let (TypeDef::Record(_fields), _) = current_type_token {
+            //     if let Some((_, (_, ty))) =
+            //         _fields.iter().enumerate().find(|(i, (ident, _))| {
+            //             index = *i;
+            //             ident == &field.ident.as_str()
+            //         })
+            //     {
+            //         // recurse into the TypeDef of self.
+            //         current_type_token = (ty, current_type_token.1);
+            //         current_type_token.1.push(index as u8);
+            //     } else {
+            //         return Err(format!(
+            //             "No field named '{}'",
+            //             field.ident.as_str()
+            //         )
+            //         .into());
+            //     }
+            // } else {
+            //     return Err(format!(
+            //         "No field named '{}'",
+            //         field.ident.as_str()
+            //     )
+            //     .into());
+            // }
         }
         Ok((current_type_token.0.clone(), current_type_token.1))
     }
@@ -234,6 +284,10 @@ impl TypeDef {
             TypeDef::StringLiteral => todo!(),
             TypeDef::AcceptReject(_) => todo!(),
             TypeDef::Unknown => todo!(),
+            TypeDef::LocalPref => LocalPref::get_props_for_method(self.clone(), method_name),
+            TypeDef::MultiExitDisc => MultiExitDisc::get_props_for_method(self.clone(), method_name),
+            TypeDef::NextHop => NextHop::get_props_for_method(self.clone(), method_name),
+            TypeDef::AtomicAggregator => AtomicAggregator::get_props_for_method(self.clone(), method_name),
         }
     }
 
@@ -349,6 +403,10 @@ impl std::fmt::Display for TypeDef {
             TypeDef::StringLiteral => write!(f, "StringLiteral"),
             TypeDef::AcceptReject(_) => write!(f, "AcceptReject"),
             TypeDef::Unknown => write!(f, "None"),
+            TypeDef::LocalPref => write!(f, "Local Preference"),
+            TypeDef::MultiExitDisc => write!(f, "Multi Exit Discriminator"),
+            TypeDef::NextHop => write!(f, "Next Hop"),
+            TypeDef::AtomicAggregator => write!(f, "Atomic Aggregator"),
         }
     }
 }
@@ -445,9 +503,7 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
 
 impl TryFrom<crate::ast::Identifier> for TypeDef {
     type Error = CompileError;
-    fn try_from(
-        ty: crate::ast::Identifier,
-    ) -> Result<TypeDef, CompileError> {
+    fn try_from(ty: crate::ast::Identifier) -> Result<TypeDef, CompileError> {
         match ty.ident.as_str() {
             "U32" => Ok(TypeDef::U32),
             "U8" => Ok(TypeDef::U8),
@@ -466,7 +522,6 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
     }
 }
 
-
 impl From<&BuiltinTypeValue> for TypeDef {
     fn from(ty: &BuiltinTypeValue) -> TypeDef {
         match ty {
@@ -482,9 +537,14 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::OriginType(_) => TypeDef::OriginType,
             BuiltinTypeValue::AsPath(_) => TypeDef::AsPath,
             BuiltinTypeValue::Community(_) => TypeDef::Community,
+            BuiltinTypeValue::Communities(_) =>  TypeDef::List(Box::new(TypeDef::Community)),
             BuiltinTypeValue::Route(_) => TypeDef::Route,
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
+            BuiltinTypeValue::LocalPref(_) => TypeDef::LocalPref,
+            BuiltinTypeValue::AtomicAggregator(_) => TypeDef::AtomicAggregator,
+            BuiltinTypeValue::NextHop(_) => TypeDef::NextHop,
+            BuiltinTypeValue::MultiExitDisc(_) => TypeDef::MultiExitDisc,
         }
     }
 }
@@ -503,10 +563,15 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::Asn(_) => TypeDef::Asn,
             BuiltinTypeValue::AsPath(_) => TypeDef::AsPath,
             BuiltinTypeValue::Community(_) => TypeDef::Community,
+            BuiltinTypeValue::Communities(_) => TypeDef::List(Box::new(TypeDef::Community)),
             BuiltinTypeValue::OriginType(_) => TypeDef::OriginType,
             BuiltinTypeValue::Route(_) => TypeDef::Route,
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
+            BuiltinTypeValue::LocalPref(_) => TypeDef::LocalPref,
+            BuiltinTypeValue::AtomicAggregator(_) => TypeDef::AtomicAggregator,
+            BuiltinTypeValue::NextHop(_) => TypeDef::NextHop,
+            BuiltinTypeValue::MultiExitDisc(_) => TypeDef::MultiExitDisc
         }
     }
 }

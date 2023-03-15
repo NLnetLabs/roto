@@ -150,8 +150,8 @@ impl LinearMemory {
         match field_index {
             None => self.get_mem_pos(index),
             Some(field_index) => match self.get_mem_pos(index) {
-                Some(TypeValue::Record(r)) => {
-                    let field = r.get_field_by_index(field_index);
+                Some(TypeValue::Record(rec)) => {
+                    let field = rec.get_field_by_index(field_index);
                     match field {
                         Some(ElementTypeValue::Nested(nested)) => {
                             Some(nested)
@@ -169,6 +169,12 @@ impl LinearMemory {
                         Some(ElementTypeValue::Primitive(b)) => Some(b),
                         _ => None,
                     }
+                }
+                Some(TypeValue::Builtin(BuiltinTypeValue::Route(route))) => {
+                    println!("A ROUTE: RUN TO THE HILLS!");
+                    if let Some(v) = route.get_value_ref_for_field(field_index) {
+                       Some(v)
+                    } else { None }
                 }
                 // This may be a type with fields, but its value is Unknown.
                 // Return that so the caller can short-cut its chain.
