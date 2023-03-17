@@ -9,7 +9,7 @@ use crate::{
     compile::{CompileError, MirBlock},
     traits::{RotoType, Token},
     types::{
-        builtin::{Boolean, BuiltinTypeValue},
+        builtin::{Boolean, BuiltinTypeValue, RawRouteWithDeltas},
         collections::{ElementTypeValue, Record},
         datasources::{DataSourceMethodValue, Rib, Table},
         typedef::TypeDef,
@@ -173,8 +173,12 @@ impl LinearMemory {
                 Some(TypeValue::Builtin(BuiltinTypeValue::Route(route))) => {
                     println!("A ROUTE: RUN TO THE HILLS!");
                     if let Some(v) = route.get_value_ref_for_field(field_index) {
+                        println!("field {} in route: {}", field_index, route);
                        Some(v)
-                    } else { None }
+                    } else { 
+                        println!("no field {} for route {}", field_index, route);
+                        Some(&TypeValue::Unknown)
+                    }
                 }
                 // This may be a type with fields, but its value is Unknown.
                 // Return that so the caller can short-cut its chain.
@@ -538,7 +542,7 @@ impl<'a> VirtualMachine<'a> {
         // define level arguments, not used yet! Todo
         mut _arguments: Option<ArgumentsMap>,
         mem: RefCell<LinearMemory>,
-    ) -> Result<(AcceptReject, impl RotoType, Option<impl RotoType>), VmError>
+    ) -> Result<(AcceptReject, TypeValue, Option<TypeValue>), VmError>
     {
         println!("\nstart executing vm...");
         let mut commands_num: usize = 0;
@@ -1058,13 +1062,15 @@ impl<'a> VirtualMachine<'a> {
                     // stack args: [exit value]
                     OpCode::Exit(accept_reject) => {
                         let mut m = mem.borrow_mut();
-                        let rx = match m.get_mem_pos_as_owned(0) {
-                            Some(TypeValue::Record(rec)) => rec,
+
+                        let rx: TypeValue = match m.get_mem_pos_as_owned(0) {
+                            Some(TypeValue::Record(rec)) => rec.into(),
+                            Some(TypeValue::Builtin(BuiltinTypeValue::Route(route))) => route.into(),
                             _ => return Err(VmError::InvalidPayload),
                         };
 
                         let tx = match m.get_mem_pos_as_owned(1) {
-                            Some(TypeValue::Record(rec)) => Some(rec),
+                            Some(TypeValue::Record(rec)) => Some(rec.into()),
                             _ => None,
                         };
 

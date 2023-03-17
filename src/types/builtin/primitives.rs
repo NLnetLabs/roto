@@ -860,18 +860,10 @@ impl RotoType for Prefix {
                     let len: PrefixLength = args[1]
                         .try_into()
                         .map_err(|_e| VmError::InvalidConversion)?;
-                    let ip = ip.0; //.ok_or("Cannot convert empty IP address")
-                                   // .map_err(|_e| VmError::InvalidConversion)?;
+                    let ip = ip.0;
                     Ok(Box::new(move || {
-                        TypeValue::Builtin(BuiltinTypeValue::Prefix(
-                            Prefix::new(
-                                routecore::addr::Prefix::new(ip, len.into())
-                                    .map_err(|e| {
-                                        format!("Invalid prefix: {}", e)
-                                    })
-                                    .unwrap(),
-                            ),
-                        ))
+                        routecore::addr::Prefix::new(ip, len.into())
+                            .map_or_else(|_| TypeValue::Unknown, |p| p.into())
                     }))
                 } else {
                     Err(VmError::AnonymousArgumentNotFound)
@@ -881,9 +873,6 @@ impl RotoType for Prefix {
             PrefixToken::Address => unimplemented!(),
             PrefixToken::Len => unimplemented!(),
             PrefixToken::Matches => unimplemented!(),
-            // _ => {
-            //     Err(VmError::InvalidMethodCall)
-            // }
         }
     }
 }
@@ -1226,7 +1215,6 @@ impl From<Vec<routecore::bgp::communities::Community>> for BuiltinTypeValue {
     }
 }
 
-
 impl Display for Community {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.0)
@@ -1266,7 +1254,6 @@ impl From<CommunityToken> for usize {
         val as usize
     }
 }
-
 
 //------------ MatchType ----------------------------------------------------
 
@@ -1525,17 +1512,17 @@ impl From<AsnToken> for usize {
 // ----------- AsPath type --------------------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct AsPath(
-    pub(crate) routecore::asn::AsPath<Vec<u8>>,
-);
+pub struct AsPath(pub(crate) routecore::asn::AsPath<Vec<u8>>);
 
 impl AsPath {
     pub fn new(
         as_path: Vec<routecore::asn::Asn>,
     ) -> Result<Self, LongSegmentError> {
-        let mut new_as_path = routecore::asn::AsPathBuilder::from_target(vec![]);
+        let mut new_as_path =
+            routecore::asn::AsPathBuilder::from_target(vec![]);
         new_as_path.append_as_sequence(as_path.as_slice());
-        let new_as_path = new_as_path.finalize().map_err(|_| LongSegmentError)?;
+        let new_as_path =
+            new_as_path.finalize().map_err(|_| LongSegmentError)?;
         Ok(AsPath(new_as_path))
     }
 
@@ -1607,17 +1594,12 @@ impl RotoType for AsPath {
         _res_type: TypeDef,
     ) -> Result<Box<(dyn FnOnce() -> TypeValue + 'a)>, VmError> {
         match method.into() {
-            AsPathToken::Origin => {
-                match self.0.origin() {
-                    Some(origin_asn) => {
-        
-                Ok(Box::new(move || {
+            AsPathToken::Origin => match self.0.origin() {
+                Some(origin_asn) => Ok(Box::new(move || {
                     TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(origin_asn)))
-                }))
-                    },
-                    None => Err(VmError::InvalidPayload)
-                }
-            }
+                })),
+                None => Err(VmError::InvalidPayload),
+            },
             AsPathToken::Contains => Ok(Box::new(move || {
                 if let TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(
                     search_asn,
@@ -1930,9 +1912,7 @@ impl From<routecore::bgp::types::MultiExitDisc> for TypeValue {
 
 impl From<routecore::bgp::types::MultiExitDisc> for BuiltinTypeValue {
     fn from(value: routecore::bgp::types::MultiExitDisc) -> Self {
-        BuiltinTypeValue::MultiExitDisc(MultiExitDisc(
-            value,
-        ))
+        BuiltinTypeValue::MultiExitDisc(MultiExitDisc(value))
     }
 }
 
@@ -2131,9 +2111,7 @@ impl From<routecore::bgp::message::update::Aggregator> for TypeValue {
 
 impl From<routecore::bgp::message::update::Aggregator> for BuiltinTypeValue {
     fn from(value: routecore::bgp::message::update::Aggregator) -> Self {
-        BuiltinTypeValue::AtomicAggregator(
-            AtomicAggregator(value),
-        )
+        BuiltinTypeValue::AtomicAggregator(AtomicAggregator(value))
     }
 }
 

@@ -1,5 +1,8 @@
 use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
+use primitives::AsPath;
+use routecore::asn::LongSegmentError;
+
 //============ TypeValue ====================================================
 use crate::{
     ast::ShortString,
@@ -402,7 +405,12 @@ impl std::ops::Index<usize> for TypeValue {
     type Output = TypeValue;
 
     fn index(&self, index: usize) -> &Self::Output {
-        todo!()
+        match self {
+            TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => todo!(), // as_path.index(index),
+            TypeValue::Builtin(BuiltinTypeValue::Communities(List(list))) => list.index(index).into(),
+            TypeValue::List(list) => list.0.index(index).into(),
+            _ => { panic!("Not an indexable typevalue.")}
+        }
     }
 }
 
@@ -684,14 +692,28 @@ impl VectorValue for TypeValue {
         &mut self,
         vector: Vec<Self::WriteItem>,
     ) -> Result<(), routecore::asn::LongSegmentError> {
-        todo!()
+        match self {
+            TypeValue::List(list) | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
+                list.prepend_vec(vector).map_err(|_| LongSegmentError)?;
+            },
+            _ => {}
+        }
+
+        Ok(())
     }
 
     fn append_vec(
         &mut self,
         vector: Vec<Self::WriteItem>,
     ) -> Result<(), routecore::asn::LongSegmentError> {
-        todo!()
+        match self {
+            TypeValue::List(list) | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
+                list.append_vec(vector).map_err(|_| LongSegmentError)?;
+            },
+            _ => {}
+        }
+
+        Ok(())
     }
 
     fn insert_vec(
@@ -699,19 +721,44 @@ impl VectorValue for TypeValue {
         pos: u8,
         vector: Vec<Self::WriteItem>,
     ) -> Result<(), routecore::asn::LongSegmentError> {
-        todo!()
+        match self {
+            TypeValue::List(list) | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
+                list.insert_vec(pos as usize, vector).map_err(|_| LongSegmentError)?;
+            },
+            _ => {}
+        }
+
+        Ok(())
     }
 
     fn vec_len(&self) -> Option<usize> {
-        todo!()
+        match self {
+            TypeValue::List(list) | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
+                Some(list.len())
+            },
+            TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(as_path))) => {
+                Some(as_path.path_len())
+            }
+            _ => None
+        }
     }
 
     fn vec_is_empty(&self) -> bool {
-        todo!()
+        match self {
+            TypeValue::List(list) | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
+                list.is_empty()
+            },
+            _ => true
+        }
     }
 
-    fn into_vec(self) -> Vec<Self> {
-        todo!()
+    fn into_vec(self) -> Vec<Self::ReadItem> {
+        match self {
+            TypeValue::List(list) | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
+                list.into_iter().map(|e| e.into()).collect::<Vec<_>>()
+            },
+            _ => vec![]
+        }
     }
 }
 

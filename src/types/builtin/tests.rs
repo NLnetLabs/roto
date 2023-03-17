@@ -2,12 +2,12 @@
 mod route {
     use routecore::{
         bgp::{
-            message::{Message, SessionConfig},
+            message::SessionConfig,
             types::{OriginType, NextHop},
         }, asn::Asn
     };
 
-    use crate::{types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage}, vm::VmError};
+    use crate::{types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage, Prefix}, vm::VmError};
 
     #[test]
     fn create_update_msg() -> Result<(), VmError> {
@@ -32,8 +32,8 @@ mod route {
         let update: UpdateMessage =
             UpdateMessage::new(buf, SessionConfig::modern());
 
-        let prefixes: Vec<routecore::addr::Prefix> =
-            update.0.nlris().iter().filter_map(|n| n.prefix()).collect();
+        let prefixes: Vec<Prefix> =
+            update.0.nlris().iter().filter_map(|n| n.prefix().map(|p| p.into())).collect();
         let msg_id = (RotondaId(0), 0);
 
         let mut roto_msgs = vec![];
@@ -68,7 +68,7 @@ mod route {
         let delta_id = (RotondaId(0), 1);
 
         let mut delta = roto_msgs[0].open_new_delta(delta_id)?;
-        if let std::net::IpAddr::V6(v6) = prefixes[0].addr() {
+        if let std::net::IpAddr::V6(v6) = prefixes[0].0.addr() {
             delta
                 .attributes.next_hop.set(NextHop::Ipv6(v6));
         }
@@ -121,8 +121,8 @@ mod route {
         let update: UpdateMessage =
             UpdateMessage::new(buf, SessionConfig::modern());
 
-        let prefixes: Vec<routecore::addr::Prefix> =
-            update.0.nlris().iter().filter_map(|n| n.prefix()).collect();
+        let prefixes: Vec<Prefix> =
+            update.0.nlris().iter().filter_map(|n| n.prefix().map(|p| p.into())).collect();
         let msg_id = (RotondaId(0), 0);
 
         let mut roto_msgs = vec![];
@@ -154,7 +154,7 @@ mod route {
         let mut new_change_set1 = roto_msgs[2].open_new_delta(delta_id)?;
 
         println!("change set {:#?}", new_change_set1);
-        if let std::net::IpAddr::V6(v6) = prefixes[2].addr() {
+        if let std::net::IpAddr::V6(v6) = prefixes[2].0.addr() {
             new_change_set1.
                 attributes.next_hop.set(NextHop::Ipv6(v6));
         }

@@ -11,21 +11,25 @@
 //               └─▶ Withdrawals │──change ──────┘
 //                 └─────────────┘  status
 
-use routecore::{record::LogicalTime, bgp::message::SessionConfig};
+use routecore::{bgp::message::SessionConfig, record::LogicalTime};
 use std::sync::Arc;
 
 use crate::{
+    attr_change_set::{ReadOnlyScalarOption, Todo},
     compile::CompileError,
-    traits::{RotoType, TokenConvert, Token},
+    traits::{RotoType, Token, TokenConvert},
     types::{
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
     },
-    vm::VmError, attr_change_set::Todo,
+    vm::VmError,
 };
 
-use super::{BuiltinTypeValue, Prefix, AsPath, NextHop, OriginType};
-use crate::attr_change_set::{AttrChangeSet, RouteStatus, VectorOption, VectorValue, ScalarOption, ScalarValue};
+use super::{AsPath, BuiltinTypeValue, NextHop, OriginType, Prefix};
+use crate::attr_change_set::{
+    AttrChangeSet, RouteStatus, ScalarOption, ScalarValue, VectorOption,
+    VectorValue,
+};
 
 //============ Route ========================================================
 
@@ -60,9 +64,9 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
         let status = raw_route.status_deltas.current();
 
         MaterializedRoute {
-            prefix: raw_route.prefix.into(), // The roto prefix type
+            prefix: raw_route.prefix, // The roto prefix type
             path_attributes: raw_route.take_latest_attrs(),
-            status,
+            status: status.into(),
         }
     }
 }
@@ -84,7 +88,7 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
 // newly set attributes.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct RawRouteWithDeltas {
-    pub prefix: routecore::addr::Prefix,
+    pub prefix: Prefix,
     // Arc'ed BGP message
     pub raw_message: Arc<RawBgpMessage>,
     // history of recorded changes to the route
@@ -96,16 +100,19 @@ pub struct RawRouteWithDeltas {
 impl RawRouteWithDeltas {
     pub fn new_with_message(
         delta_id: (RotondaId, LogicalTime),
-        prefix: routecore::addr::Prefix,
+        prefix: Prefix,
         raw_message: UpdateMessage,
     ) -> Self {
         let raw_message = RawBgpMessage::new(delta_id, raw_message);
-        let attribute_deltas = AttributeDeltaList::new();
-        // This would store the attributes in the raw message as the first delta.
-        // attribute_deltas.add_new_delta(AttributeDelta::new(
-        //     delta_id,
-        //     raw_message.changeset_from_raw(),
-        // ));
+        let mut attribute_deltas = AttributeDeltaList::new();
+        // This stores the attributes in the raw message as the first delta.
+        attribute_deltas
+            .store_delta(AttributeDelta::new(
+                delta_id,
+                0,
+                raw_message.raw_message.create_changeset(prefix),
+            ))
+            .unwrap();
 
         Self {
             prefix,
@@ -119,7 +126,7 @@ impl RawRouteWithDeltas {
 
     pub fn new_with_message_ref(
         delta_id: (RotondaId, LogicalTime),
-        prefix: routecore::addr::Prefix,
+        prefix: Prefix,
         raw_message: &Arc<RawBgpMessage>,
     ) -> Self {
         Self {
@@ -138,7 +145,7 @@ impl RawRouteWithDeltas {
         if let Some(attr_set) = self.attribute_deltas.deltas.last() {
             attr_set.attributes.clone()
         } else {
-            self.raw_message.raw_message.create_changeset()
+            self.raw_message.raw_message.create_changeset(self.prefix)
         }
     }
 
@@ -162,7 +169,10 @@ impl RawRouteWithDeltas {
     // deltas.
     pub fn take_latest_attrs(mut self) -> AttrChangeSet {
         if self.attribute_deltas.deltas.is_empty() {
-            return self.raw_message.raw_message.create_changeset();
+            return self
+                .raw_message
+                .raw_message
+                .create_changeset(self.prefix);
         }
 
         self.attribute_deltas
@@ -181,7 +191,9 @@ impl RawRouteWithDeltas {
                 .store_delta(AttributeDelta::new(
                     self.raw_message.message_id,
                     0,
-                    self.raw_message.raw_message.create_changeset(),
+                    self.raw_message
+                        .raw_message
+                        .create_changeset(self.prefix),
                 ))
                 .unwrap();
         }
@@ -219,26 +231,46 @@ impl RawRouteWithDeltas {
         Self: std::marker::Sized,
     {
         match field_name.ident.as_str() {
-            "prefix" => Ok((TypeDef::Prefix,
-                Token::FieldAccess(vec![RouteToken::Prefix.into()]))),
-            "as-path" => Ok((TypeDef::AsPath,
-                Token::FieldAccess(vec![RouteToken::AsPath.into()]))),
-            "origin-type" => Ok((TypeDef::OriginType,
-                Token::FieldAccess(vec![RouteToken::OriginType.into()]))),
-            "next-hop" => Ok((TypeDef::NextHop,
-                Token::FieldAccess(vec![RouteToken::NextHop.into()]))),
-            "multi-exit-disc" => Ok((TypeDef::MultiExitDisc,
-                Token::FieldAccess(vec![RouteToken::MultiExitDisc.into()]))),
-            "local-pref" => Ok((TypeDef::LocalPref,
-                Token::FieldAccess(vec![RouteToken::LocalPref.into()]))),
-            "atomic-aggregate" => Ok((TypeDef::Boolean,
-                Token::FieldAccess(vec![RouteToken::AtomicAggregate.into()]))),
-            "aggregator" => Ok((TypeDef::AtomicAggregator,
-                Token::FieldAccess(vec![RouteToken::AtomicAggregator.into()]))),
-            "communities" => Ok((TypeDef::List(Box::new(TypeDef::Community)),
-                Token::FieldAccess(vec![RouteToken::Communities.into()]))),
-            "status" => Ok((TypeDef::RouteStatus,
-                Token::FieldAccess(vec![RouteToken::Status.into()]))),
+            "prefix" => Ok((
+                TypeDef::Prefix,
+                Token::FieldAccess(vec![RouteToken::Prefix.into()]),
+            )),
+            "as-path" => Ok((
+                TypeDef::AsPath,
+                Token::FieldAccess(vec![RouteToken::AsPath.into()]),
+            )),
+            "origin-type" => Ok((
+                TypeDef::OriginType,
+                Token::FieldAccess(vec![RouteToken::OriginType.into()]),
+            )),
+            "next-hop" => Ok((
+                TypeDef::NextHop,
+                Token::FieldAccess(vec![RouteToken::NextHop.into()]),
+            )),
+            "multi-exit-disc" => Ok((
+                TypeDef::MultiExitDisc,
+                Token::FieldAccess(vec![RouteToken::MultiExitDisc.into()]),
+            )),
+            "local-pref" => Ok((
+                TypeDef::LocalPref,
+                Token::FieldAccess(vec![RouteToken::LocalPref.into()]),
+            )),
+            "atomic-aggregate" => Ok((
+                TypeDef::Boolean,
+                Token::FieldAccess(vec![RouteToken::AtomicAggregate.into()]),
+            )),
+            "aggregator" => Ok((
+                TypeDef::AtomicAggregator,
+                Token::FieldAccess(vec![RouteToken::AtomicAggregator.into()]),
+            )),
+            "communities" => Ok((
+                TypeDef::List(Box::new(TypeDef::Community)),
+                Token::FieldAccess(vec![RouteToken::Communities.into()]),
+            )),
+            "status" => Ok((
+                TypeDef::RouteStatus,
+                Token::FieldAccess(vec![RouteToken::Status.into()]),
+            )),
             _ => Err(format!(
                 "Unknown method '{}' for type Route",
                 field_name.ident
@@ -247,25 +279,35 @@ impl RawRouteWithDeltas {
         }
     }
 
-    pub(crate) fn get_value_ref_for_field(&self, field_token: usize) -> Option<&TypeValue> {
-            let current = self.attribute_deltas.get_latest_change_set()?;
-            // let p = self.attribute_deltas.get_as_path()?; //?.as_path.as_ref();
-            match field_token.into() {
-                RouteToken::AsPath => current.as_path.as_ref(),
-                RouteToken::Prefix => todo!(),
-                RouteToken::OriginType => todo!(),
-                RouteToken::NextHop => todo!(),
-                RouteToken::MultiExitDisc => todo!(),
-                RouteToken::LocalPref => todo!(),
-                RouteToken::AtomicAggregate => todo!(),
-                RouteToken::AtomicAggregator => todo!(),
-                RouteToken::Communities => todo!(),
-                RouteToken::Status => todo!(),
+    pub(crate) fn get_value_ref_for_field(
+        &self,
+        field_token: usize,
+    ) -> Option<&TypeValue> {
+        let current = self.attribute_deltas.get_latest_change_set()?;
+        // let p = self.attribute_deltas.get_as_path()?; //?.as_path.as_ref();
+        match field_token.into() {
+            RouteToken::Prefix => current.prefix.value.as_ref(),
+            RouteToken::AsPath => current.as_path.value.as_ref(),
+            RouteToken::OriginType => current.origin_type.value.as_ref(),
+            RouteToken::NextHop => current.next_hop.value.as_ref(),
+            RouteToken::MultiExitDisc => {
+                current.multi_exit_discriminator.value.as_ref()
             }
+            RouteToken::LocalPref => current.local_pref.value.as_ref(),
+            RouteToken::AtomicAggregate => {
+                current.atomic_aggregate.value.as_ref()
+            }
+            RouteToken::AtomicAggregator => current.aggregator.value.as_ref(),
+            RouteToken::Communities => current.communities.value.as_ref(),
+            RouteToken::Status => self.status_deltas.current_as_ref(),
+        }
     }
 
-    pub(crate) fn get_field_by_index(&self, field_token: usize) -> Option<TypeValue> {
-            match field_token.into() {
+    pub(crate) fn get_field_by_index(
+        &self,
+        field_token: usize,
+    ) -> Option<TypeValue> {
+        match field_token.into() {
                 RouteToken::AsPath => self.raw_message.raw_message.0.aspath().map(TypeValue::from),
                 RouteToken::OriginType => self.raw_message.raw_message.0.origin().map(TypeValue::from),
                 RouteToken::NextHop => self.raw_message.raw_message.0.next_hop().map(TypeValue::from),
@@ -357,7 +399,10 @@ impl AttributeDeltaList {
     }
 
     fn get_as_path(&self) -> Option<&TypeValue> {
-        self.deltas.last().map(|d| d.attributes.as_path.as_ref()).unwrap()
+        self.deltas
+            .last()
+            .map(|d| d.attributes.as_path.value.as_ref())
+            .unwrap()
     }
 
     // Adds a new delta to the list.
@@ -414,14 +459,14 @@ impl AttributeDelta {
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct RouteStatusDelta {
     delta_id: (RotondaId, LogicalTime),
-    status: RouteStatus,
+    status: TypeValue,
 }
 
 impl RouteStatusDelta {
     pub fn new(delta_id: (RotondaId, LogicalTime)) -> Self {
         Self {
             delta_id,
-            status: RouteStatus::Empty,
+            status: TypeValue::UnInit,
         }
     }
 }
@@ -430,8 +475,12 @@ impl RouteStatusDelta {
 struct RouteStatusDeltaList(Vec<RouteStatusDelta>);
 
 impl RouteStatusDeltaList {
-    pub fn current(&self) -> RouteStatus {
-        self.0.iter().last().unwrap().status
+    pub fn current(&self) -> TypeValue {
+        self.0.iter().last().unwrap().status.clone()
+    }
+
+    pub fn current_as_ref(&self) -> Option<&TypeValue> {
+        self.0.iter().last().map(|s| &s.status)
     }
 }
 
@@ -451,10 +500,7 @@ pub struct RawBgpMessage {
 }
 
 impl RawBgpMessage {
-    fn new(
-        message_id: (RotondaId, u64),
-        raw_message: UpdateMessage,
-    ) -> Self {
+    fn new(message_id: (RotondaId, u64), raw_message: UpdateMessage) -> Self {
         Self {
             message_id,
             raw_message,
@@ -493,7 +539,6 @@ impl Eq for RawBgpMessage {}
 //     pub bgpsec_as_path: ChangedOption<Todo>, // BgpsecAsPath,
 //     pub attr_set: ChangedOption<Todo>,       // AttrSet,
 //     pub rsrvd_development: ChangedOption<Todo>
-
 
 impl RotoType for RawRouteWithDeltas {
     fn get_props_for_method(
@@ -794,7 +839,9 @@ pub struct RotondaId(pub usize);
 //------------ Modification & Creation of new Updates -----------------------
 
 #[derive(Debug)]
-pub struct UpdateMessage(pub routecore::bgp::message::UpdateMessage<bytes::Bytes>);
+pub struct UpdateMessage(
+    pub routecore::bgp::message::UpdateMessage<bytes::Bytes>,
+);
 
 impl UpdateMessage {
     pub fn new(bytes: bytes::Bytes, config: SessionConfig) -> Self {
@@ -804,46 +851,36 @@ impl UpdateMessage {
     // Materialize a ChangeSet from the Update message. The materialized
     // Change set is completely self-contained (no references of any kind) &
     // holds all the attributes of the current BGP Update message.
-    // pub fn create_changeset<T: VectorValue + ScalarValue>(&self) -> AttrChangeSet
-        // where T:
-            // ScalarValue +
-            // From<routecore::asn::AsPath<Vec<u8>>> +
-            // From<routecore::bgp::types::NextHop> + 
-            // From<routecore::bgp::types::OriginType> +
-            // From<routecore::bgp::types::MultiExitDisc> +
-            // From<routecore::bgp::types::LocalPref> +
-            // From<routecore::bgp::message::update::Aggregator> +
-            // From<bool> +
-            // From<Vec<routecore::bgp::communities::Community>> +
-            // V:  
-            // VectorValue + 
-            // From<routecore::asn::AsPath<Vec<u8>>> +
-            // From<Vec<routecore::bgp::communities::Community>> {
-    pub fn create_changeset(&self) -> AttrChangeSet {
+    pub fn create_changeset(&self, prefix: Prefix) -> AttrChangeSet {
         AttrChangeSet {
+            prefix: ReadOnlyScalarOption::<Prefix>::new(prefix.into()),
             as_path: VectorOption::<AsPath>::from(self.0.aspath()),
             origin_type: ScalarOption::<OriginType>::from(self.0.origin()),
             next_hop: ScalarOption::<NextHop>::from(self.0.next_hop()),
-            multi_exit_discriminator: ScalarOption::from(self.0.multi_exit_desc()),
+            multi_exit_discriminator: ScalarOption::from(
+                self.0.multi_exit_desc(),
+            ),
             local_pref: ScalarOption::from(self.0.local_pref()),
-            atomic_aggregate: ScalarOption::from(Some(self.0.is_atomic_aggregate())),
+            atomic_aggregate: ScalarOption::from(Some(
+                self.0.is_atomic_aggregate(),
+            )),
             aggregator: ScalarOption::from(self.0.aggregator()),
             communities: VectorOption::from(self.0.all_communities()),
             originator_id: Todo,
             cluster_list: Todo,
             extended_communities: Todo,
-                // value: self
-                //     .ext_communities()
-                //     .map(|c| c.collect::<Vec<ExtendedCommunity>>()),
+            // value: self
+            //     .ext_communities()
+            //     .map(|c| c.collect::<Vec<ExtendedCommunity>>()),
             as4_path: VectorOption::from(self.0.as4path()),
             connector: Todo,
             as_path_limit: Todo,
             pmsi_tunnel: Todo,
             ipv6_extended_communities: Todo,
             large_communities: Todo,
-                // value: T::try_from(self
-                //     .large_communities()
-                //     .map(|c| c.collect::<Vec<LargeCommunity>>())),
+            // value: T::try_from(self
+            //     .large_communities()
+            //     .map(|c| c.collect::<Vec<LargeCommunity>>())),
             bgpsec_as_path: Todo,
             attr_set: Todo,
             rsrvd_development: Todo,
@@ -853,7 +890,9 @@ impl UpdateMessage {
 
     // Create a new BGP Update message by applying the attributes changes
     // in the supplied change set to our current Update message.
-    pub fn create_update_from_changeset<T: ScalarValue, V: VectorValue>(_change_set: &AttrChangeSet) -> Self {
+    pub fn create_update_from_changeset<T: ScalarValue, V: VectorValue>(
+        _change_set: &AttrChangeSet,
+    ) -> Self {
         todo!()
     }
 }

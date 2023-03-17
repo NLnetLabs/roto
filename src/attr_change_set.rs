@@ -2,16 +2,9 @@
 
 use std::marker::PhantomData;
 use std::ops::Index;
-use routecore::asn::{LongSegmentError, OwnedPathSegment, AsPathBuilder};
+use routecore::asn::{LongSegmentError, OwnedPathSegment};
 
-// use routecore::bgp::communities::{Communities, Community};
-// use routecore::{
-//     bgp::message::update::{
-//         Aggregator, LocalPref, MultiExitDisc, NextHop, OriginType,
-//     },
-// };
-
-use crate::types::builtin::{NextHop, OriginType, MultiExitDisc, LocalPref, AtomicAggregator, AsPath, Community};
+use crate::types::builtin::{NextHop, OriginType, MultiExitDisc, LocalPref, AtomicAggregator, AsPath, Community, BuiltinTypeValue, Prefix};
 use crate::types::typevalue::TypeValue;
 
 // The values that live in a BGP Update message can be either Scalars or
@@ -51,11 +44,12 @@ pub trait ScalarValue: Clone + Into<TypeValue> {}
 
 impl ScalarValue for NextHop {}
 impl ScalarValue for OriginType {}
-impl ScalarValue for routecore::bgp::types::OriginType {}
 impl ScalarValue for bool {}
 impl ScalarValue for MultiExitDisc {}
 impl ScalarValue for LocalPref {}
 impl ScalarValue for AtomicAggregator {}
+impl ScalarValue for Community {}
+impl ScalarValue for Prefix {}
 // impl ScalarValue for (u8, u32) {}
 
 //------------ Attributes Change Set ----------------------------------------
@@ -64,6 +58,7 @@ impl ScalarValue for AtomicAggregator {}
 // existing (raw) BGP Update message.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct AttrChangeSet {
+    pub prefix: ReadOnlyScalarOption<Prefix>, // Read-only prefix typevalue, for referencing it.
     pub as_path: VectorOption<AsPath>,
     pub origin_type: ScalarOption<OriginType>,
     pub next_hop: ScalarOption<NextHop>,
@@ -88,7 +83,6 @@ pub struct AttrChangeSet {
     pub attr_set: Todo,       // AttrSet,
     pub rsrvd_development: Todo, // RsrvdDevelopment,
 }
-
 
 //------------ ScalarOption ------------------------------------------------
 
@@ -176,6 +170,26 @@ impl<S1: Into<TypeValue>, S2: ScalarValue + Into<TypeValue>> From<Option<S1>> fo
 //     }
 // }
 
+//------------ ReadOnlyScalarOption -----------------------------------------
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ReadOnlyScalarOption<T: ScalarValue + Into<TypeValue>> { 
+    pub value: Option<TypeValue>,
+    _pd: PhantomData<T>
+}
+
+impl<T: ScalarValue + Into<TypeValue>> ReadOnlyScalarOption<T> {
+    pub fn new(value: TypeValue) -> Self {
+        Self {
+            value: Some(value),
+            _pd: PhantomData
+        }
+    }
+
+    pub fn as_ref(&self) -> Option<&TypeValue> {
+        self.value.as_ref()
+    }
+}
 
 //------------ TodoOption ---------------------------------------------------
 
@@ -191,17 +205,13 @@ pub struct VectorOption<V: VectorValue + Into<TypeValue>> {
     _pd: PhantomData<V>
 }
 
-impl<V: VectorValue + Into<TypeValue> + std::ops::Index<usize>> VectorOption<V> {
+impl<V: VectorValue + Into<TypeValue>> VectorOption<V> {
     pub fn new(vector: V) -> Self {
         Self {
             value: Some(vector.into()),
             changed: false,
             _pd: PhantomData
         }
-    }
-
-    pub fn as_ref(&self) -> Option<&TypeValue> {
-        self.value.as_ref()
     }
 
     pub fn get_from_vec(&self, pos: u8) -> Option<TypeValue> {
@@ -360,45 +370,11 @@ impl std::ops::Index<usize> for AsPath {
     type Output = OwnedPathSegment;
 
     fn index(&self, index: usize) -> &Self::Output {
-        todo!()
+        unimplemented!()
     }
 }
 
-// impl VectorValue for Vec<Community> {
-//     type Item = Community;
-
-//     fn prepend_vec(
-//         &mut self,
-//         vector: Vec<Self::Item>,
-//     ) -> Result<(), LongSegmentError> {
-//         todo!()
-//     }
-
-//     fn append_vec(
-//         &mut self,
-//         vector: Vec<Self::Item>,
-//     ) -> Result<(), LongSegmentError> {
-//         todo!()
-//     }
-
-//     fn insert_vec(
-//         &mut self,
-//         pos: u8,
-//         vector: Vec<Self::Item>,
-//     ) -> Result<(), LongSegmentError> {
-//         todo!()
-//     }
-
-//     fn vec_len(&self) -> u8 {
-//         todo!()
-//     }
-
-//     fn vec_is_empty(&self) -> bool {
-//         todo!()
-//     }
-// }
-
-impl<T: Clone> VectorValue for Vec<T> {
+impl<T: ScalarValue> VectorValue for Vec<T> {
     type WriteItem = T;
     type ReadItem = T;
 
@@ -448,81 +424,6 @@ impl<T: Clone> VectorValue for Vec<T> {
 }
 
 
-// // impl VectorOption<AsPath<Vec<u8>>> {
-
-//     pub fn new(vector: Vec<Asn>) -> Self {
-//         Self { value: vector.as_slice().try_into().ok(), changed: false } 
-//     }
-
-//     pub fn get_from_vec(&self, pos: u8) -> Option<OwnedPathSegment2> {
-//         self.value.as_ref()?.iter().nth(pos as usize).map(|s| s.into_owned2())
-//     }
-
-//     pub fn replace(
-//         &mut self,
-//         vector: Vec<Asn>,
-//     ) -> Result<(), LongSegmentError> {
-//         self.value = AsPath::<Vec<u8>>::try_from(vector.as_slice()).ok();
-//         self.changed = true;
-//         Ok(())
-//     }
-
-//     pub fn prepend(
-//         &mut self,
-//         asn: Asn,
-//     ) -> Result<(), LongSegmentError> {
-//         if let Some(v) = self.value.as_mut() {
-//             v.prepend_n::<1>(asn).map_err(|_| LongSegmentError)?;
-//         }
-//         self.changed = true;
-
-//         Ok(())
-//     }
-
-//     pub fn append(
-//         &mut self,
-//         asn: Asn,
-//     ) -> Result<(), LongSegmentError> {
-//         if let Some(v) = self.value.as_mut() {
-//             let v = std::mem::take(v);
-//             let mut aspb = v.into_builder();
-//             aspb.append(asn);
-//             self.value = aspb.finalize().ok();
-//         }
-//         self.changed = true;
-
-//         Ok(())
-//     }
-
-//     pub fn as_ref(&self) -> Option<&T> {
-//         self.value.as_ref()
-//     }
-
-//     // pub fn insert(
-//     //     &mut self,
-//     //     pos: u8,
-//     //     vector: Vec<Asn>,
-//     // ) -> Result<(), LongSegmentError> {
-//     //     if let Some(v) = self.value.as_mut() {
-//     //         v.insert_vec(pos, vector)?
-//     //     }
-//     //     self.changed = true;
-
-//     //     Ok(())
-//     // }
-
-//     pub fn len(&self) -> Option<usize> {
-//         self.value.as_ref().map(|v| v.path_len())
-//     }
-
-//     // pub fn is_empty(&self) -> bool {
-//     //     self.value
-//     //         .as_ref()
-//     //         .map_or_else(|| true, |v| v.is_empty())
-//     // }
-// }
-
-
 // Status is piece of metadata that writes some (hopefully) relevant state of
 // per-peer BGP session into every route. The goal is to be able to enable
 // the logic in `rib-units` to decide whether routes should be send to its
@@ -559,6 +460,16 @@ impl std::fmt::Display for RouteStatus {
             }
             RouteStatus::Withdrawn => write!(f, "withdrawn"),
             RouteStatus::Empty => write!(f, "empty"),
+        }
+    }
+}
+
+impl From<TypeValue> for RouteStatus {
+    fn from(value: TypeValue) -> Self {
+        if let TypeValue::Builtin(BuiltinTypeValue::RouteStatus(value)) = value {
+            value
+        } else {
+            panic!("invalid something");
         }
     }
 }

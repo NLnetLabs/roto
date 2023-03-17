@@ -2,7 +2,7 @@ use std::cell::RefCell;
 
 use roto::compile::Compiler;
 
-use roto::types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage};
+use roto::types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage, Prefix};
 use roto::types::collections::Record;
 use roto::types::typevalue::TypeValue;
 use roto::vm;
@@ -38,8 +38,8 @@ fn test_data(
 
     let update: UpdateMessage =
         UpdateMessage::new(buf, SessionConfig::modern());
-    let prefixes: Vec<routecore::addr::Prefix> =
-            update.0.nlris().iter().filter_map(|n| n.prefix()).collect();
+    let prefixes: Vec<Prefix> =
+            update.0.nlris().iter().filter_map(|n| n.prefix().map(|p| p.into())).collect();
     let msg_id = (RotondaId(0), 0);
 
     let payload: RawRouteWithDeltas = RawRouteWithDeltas::new_with_message(

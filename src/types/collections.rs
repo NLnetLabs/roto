@@ -89,8 +89,20 @@ impl List {
         List(elem_type)
     }
 
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     pub(crate) fn iter(&self) -> std::slice::Iter<ElementTypeValue> {
         self.0.iter()
+    }
+
+    pub(crate) fn into_iter(self) -> std::vec::IntoIter<ElementTypeValue> {
+        self.0.into_iter()
     }
 
     fn inner_from_typevalue(
@@ -138,6 +150,64 @@ impl List {
         let e_tv = self.0.get_mut(index).ok_or(VmError::MemOutOfBounds)?;
         let new_field = &mut ElementTypeValue::from(value);
         std::mem::swap(e_tv, new_field);
+        Ok(())
+    }
+
+    pub fn prepend_value(
+        &mut self,
+        value: TypeValue
+    ) -> Result<(), VmError> {
+        let exist_v = std::mem::take(&mut self.0);
+        let mut new_v = Vec::with_capacity(exist_v.len() + 1);
+        new_v.push(ElementTypeValue::from(value));
+        new_v.extend(exist_v);
+        self.0 = new_v;
+
+        Ok(())
+    }
+
+    pub fn append_value(
+        &mut self,
+        value: TypeValue) -> Result<(), VmError> {
+            self.0.push(ElementTypeValue::from(value));
+            Ok(())
+        }
+
+    pub fn insert_value(&mut self, index: usize, value: TypeValue) -> Result<(), VmError> {
+        let mut new_v = Vec::with_capacity(self.0.len() + 1);
+
+        new_v.extend_from_slice(&self.0[..index]);
+        new_v.push(ElementTypeValue::from(value));
+        new_v.extend_from_slice(&self.0[index..]);
+        self.0 = new_v;
+        
+        Ok(())
+    }
+
+    pub fn prepend_vec(&mut self, value: Vec<TypeValue>) -> Result<(), VmError> {
+        let exist_v = std::mem::take(&mut self.0);
+        let mut new_v = Vec::with_capacity(exist_v.len() + value.len());
+        new_v.extend(value.into_iter().map(ElementTypeValue::from).collect::<Vec<_>>());
+        new_v.extend(exist_v);
+        self.0 = new_v;
+
+        Ok(()) 
+    }
+
+    pub fn append_vec(&mut self, value: Vec<TypeValue>) -> Result<(), VmError> {
+        self.0.extend(value.into_iter().map(ElementTypeValue::from).collect::<Vec<_>>());
+
+        Ok(())
+    }
+
+    pub fn insert_vec(&mut self, index: usize, value: Vec<TypeValue>) -> Result<(), VmError> {
+        let mut new_v = Vec::with_capacity(self.0.len() + value.len());
+
+        new_v.extend_from_slice(&self.0[..index]);
+        new_v.extend(value.into_iter().map(ElementTypeValue::from).collect::<Vec<_>>());
+        new_v.extend_from_slice(&self.0[index..]);
+        self.0 = new_v;
+        
         Ok(())
     }
 }
