@@ -1,10 +1,13 @@
 //------------ Route Status -------------------------------------------------
 
+use routecore::asn::{LongSegmentError, OwnedPathSegment};
 use std::marker::PhantomData;
 use std::ops::Index;
-use routecore::asn::{LongSegmentError, OwnedPathSegment};
 
-use crate::types::builtin::{NextHop, OriginType, MultiExitDisc, LocalPref, AtomicAggregator, AsPath, Community, BuiltinTypeValue, Prefix};
+use crate::types::builtin::{
+    AsPath, Asn, AtomicAggregator, BuiltinTypeValue, Community, LocalPref,
+    MultiExitDisc, NextHop, OriginType, Prefix,
+};
 use crate::types::typevalue::TypeValue;
 
 // The values that live in a BGP Update message can be either Scalars or
@@ -79,8 +82,8 @@ pub struct AttrChangeSet {
     pub pmsi_tunnel: Todo, // PmsiTunnel,
     pub ipv6_extended_communities: Todo,
     pub large_communities: Todo,
-    pub bgpsec_as_path: Todo, // BgpsecAsPath,
-    pub attr_set: Todo,       // AttrSet,
+    pub bgpsec_as_path: Todo,    // BgpsecAsPath,
+    pub attr_set: Todo,          // AttrSet,
     pub rsrvd_development: Todo, // RsrvdDevelopment,
 }
 
@@ -90,7 +93,7 @@ pub struct AttrChangeSet {
 pub struct ScalarOption<T: ScalarValue> {
     pub value: Option<TypeValue>,
     pub changed: bool,
-    _pd: PhantomData<T>
+    _pd: PhantomData<T>,
 }
 
 impl<T: ScalarValue> ScalarOption<T> {
@@ -105,23 +108,23 @@ impl<T: ScalarValue> ScalarOption<T> {
         self.value.as_ref()
     }
 
-    pub fn changed(&self) -> bool {
+    pub fn is_changed(&self) -> bool {
         self.changed
     }
 
-    pub fn empty() -> ScalarOption<TypeValue> {
+    pub fn new() -> ScalarOption<TypeValue> {
         ScalarOption {
             value: None,
             changed: false,
-            _pd: PhantomData
+            _pd: PhantomData,
         }
     }
 
-    pub fn cleared() -> ScalarOption<TypeValue> {
+    pub fn set_cleared() -> ScalarOption<TypeValue> {
         ScalarOption {
             value: None,
             changed: true,
-            _pd: PhantomData
+            _pd: PhantomData,
         }
     }
 
@@ -133,56 +136,38 @@ impl<T: ScalarValue> ScalarOption<T> {
     }
 }
 
-impl<S1: Into<TypeValue>, S2: ScalarValue + Into<TypeValue>> From<Option<S1>> for ScalarOption<S2> {
+impl<S1: Into<TypeValue>, S2: ScalarValue + Into<TypeValue>> From<Option<S1>>
+    for ScalarOption<S2>
+{
     fn from(value: Option<S1>) -> Self {
         match value {
-            Some(v) => ScalarOption { value: Some(v.into()), changed: false, _pd: PhantomData },
-            None => ScalarOption { value: None, changed: false, _pd: PhantomData }
+            Some(v) => ScalarOption {
+                value: Some(v.into()),
+                changed: false,
+                _pd: PhantomData,
+            },
+            None => ScalarOption {
+                value: None,
+                changed: false,
+                _pd: PhantomData,
+            },
         }
     }
 }
-// impl<V1: Into<TypeValue>, V2: VectorValue + Into<TypeValue>> From<Option<V1>> for VectorOption<V2> {
-//     fn from(value: Option<V1>) -> Self {
-//         match value {
-//             Some(v) => VectorOption { value: Some(v.into()), changed: false, _pd: PhantomData },
-//             None => VectorOption { value: None, changed: false, _pd: PhantomData }
-//         }
-//     }
-// }
-
-// impl ScalarOption<TypeValue> {
-//     pub fn get(&self) -> Option<TypeValue> {
-//         self.value.clone()
-//     }
-
-//     // Sets the scalar and returns the current value
-//     pub fn set<V: Into<TypeValue>>(&mut self, value: V) -> Option<TypeValue> {
-//         let val = &mut Some(value.into());
-//         std::mem::swap(&mut self.value, val);
-//         self.changed = true;
-//         val.clone()
-//     }
-
-//     // Clears and sets the changed bool, so this is
-//     // a deliberate wipe of the value.
-//     pub fn clear(&mut self) {
-//         *self = ScalarOption::<TypeValue>::cleared()
-//     }
-// }
 
 //------------ ReadOnlyScalarOption -----------------------------------------
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct ReadOnlyScalarOption<T: ScalarValue + Into<TypeValue>> { 
+pub struct ReadOnlyScalarOption<T: ScalarValue + Into<TypeValue>> {
     pub value: Option<TypeValue>,
-    _pd: PhantomData<T>
+    _pd: PhantomData<T>,
 }
 
 impl<T: ScalarValue + Into<TypeValue>> ReadOnlyScalarOption<T> {
     pub fn new(value: TypeValue) -> Self {
         Self {
             value: Some(value),
-            _pd: PhantomData
+            _pd: PhantomData,
         }
     }
 
@@ -202,7 +187,7 @@ pub struct Todo;
 pub struct VectorOption<V: VectorValue + Into<TypeValue>> {
     pub value: Option<TypeValue>,
     pub changed: bool,
-    _pd: PhantomData<V>
+    _pd: PhantomData<V>,
 }
 
 impl<V: VectorValue + Into<TypeValue>> VectorOption<V> {
@@ -210,7 +195,7 @@ impl<V: VectorValue + Into<TypeValue>> VectorOption<V> {
         Self {
             value: Some(vector.into()),
             changed: false,
-            _pd: PhantomData
+            _pd: PhantomData,
         }
     }
 
@@ -218,33 +203,64 @@ impl<V: VectorValue + Into<TypeValue>> VectorOption<V> {
         self.value.as_ref().map(|c| c[pos as usize].clone())
     }
 
-    pub fn replace(
-        &mut self,
-        vector: V,
-    ) -> Result<(), LongSegmentError> {
+    pub fn replace(&mut self, vector: V) -> Result<(), LongSegmentError> {
         self.value = Some(vector.into());
         self.changed = true;
         Ok(())
     }
 
-    pub fn prepend(
-        &mut self,
-        value: V,
-    ) -> Result<(), LongSegmentError> {
-        if let Some(v) = self.value.as_mut() {
-            v.prepend_vec(vec![value.into()])?
+    pub fn prepend(&mut self, value: V) -> Result<(), LongSegmentError> {
+        if let Some(tv) = self.value.as_mut() {
+            match tv {
+                TypeValue::List(list)
+                | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
+                    list.prepend_vec(vec![value.into()])
+                        .map_err(|_| LongSegmentError)?;
+                }
+                TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {
+                    let asn_vec = if let TypeValue::Builtin(
+                        BuiltinTypeValue::Asn(Asn(asn)),
+                    ) = value.into()
+                    {
+                        vec![asn]
+                    } else {
+                        vec![]
+                    };
+                    as_path
+                        .prepend_vec(asn_vec)
+                        .map_err(|_| LongSegmentError)?;
+                }
+                _ => {}
+            }
         }
         self.changed = true;
 
         Ok(())
     }
 
-    pub fn append(
-        &mut self,
-        vector: V,
-    ) -> Result<(), LongSegmentError> {
-        if let Some(v) = self.value.as_mut() {
-            v.append_vec(vec![vector.into()])?
+    pub fn append(&mut self, value: V) -> Result<(), LongSegmentError> {
+        if let Some(tv) = self.value.as_mut() {
+            match tv {
+                TypeValue::List(list)
+                | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
+                    list.append_vec(vec![value.into()])
+                        .map_err(|_| LongSegmentError)?;
+                }
+                TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {
+                    let asn_vec = if let TypeValue::Builtin(
+                        BuiltinTypeValue::Asn(Asn(asn)),
+                    ) = value.into()
+                    {
+                        vec![asn]
+                    } else {
+                        vec![]
+                    };
+                    as_path
+                        .append_vec(asn_vec)
+                        .map_err(|_| LongSegmentError)?;
+                }
+                _ => {}
+            }
         }
         self.changed = true;
 
@@ -254,10 +270,30 @@ impl<V: VectorValue + Into<TypeValue>> VectorOption<V> {
     pub fn insert(
         &mut self,
         pos: u8,
-        vector: V
+        value: V,
     ) -> Result<(), LongSegmentError> {
-        if let Some(v) = self.value.as_mut() {
-            v.insert_vec(pos, vec![vector.into()])?
+        if let Some(tv) = self.value.as_mut() {
+            match tv {
+                TypeValue::List(list)
+                | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
+                    list.insert_vec(pos as usize, vec![value.into()])
+                        .map_err(|_| LongSegmentError)?;
+                }
+                TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {
+                    let asn_vec = if let TypeValue::Builtin(
+                        BuiltinTypeValue::Asn(Asn(asn)),
+                    ) = value.into()
+                    {
+                        vec![asn]
+                    } else {
+                        vec![]
+                    };
+                    as_path
+                        .insert_vec(pos, asn_vec)
+                        .map_err(|_| LongSegmentError)?;
+                }
+                _ => {}
+            }
         }
         self.changed = true;
 
@@ -265,89 +301,52 @@ impl<V: VectorValue + Into<TypeValue>> VectorOption<V> {
     }
 
     pub fn len(&self) -> Option<usize> {
-        self.value.as_ref().and_then(|v| v.vec_len())
+        self.value.as_ref().and_then(|tv| match tv {
+            TypeValue::List(list)
+            | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
+                Some(list.len())
+            }
+            TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {
+                as_path.vec_len()
+            }
+            _ => None,
+        })
     }
 
     pub fn is_empty(&self) -> bool {
-        self.value
-            .as_ref()
-            .map_or_else(|| true, |v| v.vec_is_empty())
+        self.value.as_ref().map_or_else(
+            || true,
+            |tv| match tv {
+                TypeValue::List(list)
+                | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
+                    list.is_empty()
+                }
+                TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {
+                    as_path.vec_is_empty()
+                }
+                _ => true,
+            },
+        )
     }
 }
-
 
 //------------ VectorValue --------------------------------------------------
 
-
-impl VectorValue for crate::types::builtin::AsPath {
-    type ReadItem = routecore::asn::OwnedPathSegment;
-    type WriteItem = routecore::asn::Asn;
-
-    fn prepend_vec(
-        &mut self,
-        vector: Vec<routecore::asn::Asn>,
-    ) -> Result<(), LongSegmentError> {
-        let mut as_path = std::mem::take(&mut self.0).into_builder();
-        for asn in vector { as_path.prepend(asn) }
-        let as_path = as_path.finalize().map_err(|_| LongSegmentError)?;
-        *self = AsPath(as_path);
-        Ok(())
-    }
-
-    fn append_vec(
-        &mut self,
-        vector: Vec<Self::WriteItem>,
-    ) -> Result<(), LongSegmentError> {
-        let mut as_path = std::mem::take(&mut self.0).into_builder();
-        for asn in vector { as_path.append(asn) }
-        let as_path = as_path.finalize().map_err(|_| LongSegmentError)?;
-        *self = AsPath(as_path);
-        Ok(())
-    }
-
-    // Naieve insert that will try to append to the segment that is already
-    // in place at the specified position. Fancier, more conditional ways are
-    // available to the roto user, but those methods are implemented directly
-    // on builtin::AsPath.
-    fn insert_vec(
-        &mut self,
-        pos: u8,
-        vector: Vec<Self::WriteItem>,
-    ) -> Result<(), LongSegmentError> {
-        let as_path = std::mem::take(&mut self.0);
-        let mut new_path = vec![];
-        for (i, seg) in as_path.into_iter().enumerate() {
-            if i == pos as usize {
-                let mut seg = seg.into_owned();
-                for asn in vector.into_iter() {
-                    seg.append(asn)?;
-                }
-                new_path.push(seg);
-                break;
-            }
-        }
-        *self = AsPath(as_path);
-        Ok(())
-    }
-
-    fn vec_len(&self) -> Option<usize> {
-        if self.0.is_single_sequence() { Some(self.0.path_len()) } else { None }
-    }
-
-    fn vec_is_empty(&self) -> bool {
-        self.0.path_len() == 0
-    }
-
-    fn into_vec(self) -> Vec<OwnedPathSegment> {
-        self.0.into_iter().collect::<Vec<_>>()
-    }
-}
-
-impl<V1: Into<TypeValue>, V2: VectorValue + Into<TypeValue>> From<Option<V1>> for VectorOption<V2> {
+impl<V1: Into<TypeValue>, V2: VectorValue + Into<TypeValue>> From<Option<V1>>
+    for VectorOption<V2>
+{
     fn from(value: Option<V1>) -> Self {
         match value {
-            Some(v) => VectorOption { value: Some(v.into()), changed: false, _pd: PhantomData },
-            None => VectorOption { value: None, changed: false, _pd: PhantomData }
+            Some(v) => VectorOption {
+                value: Some(v.into()),
+                changed: false,
+                _pd: PhantomData,
+            },
+            None => VectorOption {
+                value: None,
+                changed: false,
+                _pd: PhantomData,
+            },
         }
     }
 }
@@ -361,7 +360,9 @@ impl From<Vec<OwnedPathSegment>> for AsPath {
 impl TryFrom<Vec<routecore::asn::Asn>> for AsPath {
     type Error = LongSegmentError;
 
-    fn try_from(value: Vec<routecore::asn::Asn>) -> Result<Self, LongSegmentError> {
+    fn try_from(
+        value: Vec<routecore::asn::Asn>,
+    ) -> Result<Self, LongSegmentError> {
         routecore::asn::AsPath::try_from(value.as_slice()).map(AsPath)
     }
 }
@@ -423,7 +424,6 @@ impl<T: ScalarValue> VectorValue for Vec<T> {
     }
 }
 
-
 // Status is piece of metadata that writes some (hopefully) relevant state of
 // per-peer BGP session into every route. The goal is to be able to enable
 // the logic in `rib-units` to decide whether routes should be send to its
@@ -466,7 +466,9 @@ impl std::fmt::Display for RouteStatus {
 
 impl From<TypeValue> for RouteStatus {
     fn from(value: TypeValue) -> Self {
-        if let TypeValue::Builtin(BuiltinTypeValue::RouteStatus(value)) = value {
+        if let TypeValue::Builtin(BuiltinTypeValue::RouteStatus(value)) =
+            value
+        {
             value
         } else {
             panic!("invalid something");

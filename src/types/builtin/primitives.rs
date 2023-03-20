@@ -1,8 +1,9 @@
 use std::fmt::{Display, Formatter};
 
-use routecore::asn::{LongSegmentError, OwnedPathSegment2};
+use routecore::asn::{LongSegmentError, OwnedPathSegment};
 
 use crate::ast::ShortString;
+use crate::attr_change_set::VectorValue;
 use crate::compile::CompileError;
 use crate::traits::{RotoType, TokenConvert};
 use crate::types::collections::{ElementTypeValue, List};
@@ -1638,6 +1639,70 @@ impl RotoType for AsPath {
     }
 }
 
+impl VectorValue for crate::types::builtin::AsPath {
+    type ReadItem = routecore::asn::OwnedPathSegment;
+    type WriteItem = routecore::asn::Asn;
+
+    fn prepend_vec(
+        &mut self,
+        vector: Vec<routecore::asn::Asn>,
+    ) -> Result<(), LongSegmentError> {
+        let mut as_path = std::mem::take(&mut self.0).into_builder();
+        for asn in vector { as_path.prepend(asn) }
+        let as_path = as_path.finalize().map_err(|_| LongSegmentError)?;
+        *self = AsPath(as_path);
+        Ok(())
+    }
+
+    fn append_vec(
+        &mut self,
+        vector: Vec<Self::WriteItem>,
+    ) -> Result<(), LongSegmentError> {
+        let mut as_path = std::mem::take(&mut self.0).into_builder();
+        for asn in vector { as_path.append(asn) }
+        let as_path = as_path.finalize().map_err(|_| LongSegmentError)?;
+        *self = AsPath(as_path);
+        Ok(())
+    }
+
+    // Naieve insert that will try to append to the segment that is already
+    // in place at the specified position. Fancier, more conditional ways are
+    // available to the roto user, but those methods are implemented directly
+    // on builtin::AsPath.
+    fn insert_vec(
+        &mut self,
+        pos: u8,
+        vector: Vec<Self::WriteItem>,
+    ) -> Result<(), LongSegmentError> {
+        let as_path = std::mem::take(&mut self.0);
+        let mut new_path = vec![];
+        for (i, seg) in as_path.into_iter().enumerate() {
+            if i == pos as usize {
+                let mut seg = seg.into_owned();
+                for asn in vector.into_iter() {
+                    seg.append(asn)?;
+                }
+                new_path.push(seg);
+                break;
+            }
+        }
+        *self = AsPath(as_path);
+        Ok(())
+    }
+
+    fn vec_len(&self) -> Option<usize> {
+        if self.0.is_single_sequence() { Some(self.0.path_len()) } else { None }
+    }
+
+    fn vec_is_empty(&self) -> bool {
+        self.0.path_len() == 0
+    }
+
+    fn into_vec(self) -> Vec<OwnedPathSegment> {
+        self.0.into_iter().collect::<Vec<_>>()
+    }
+}
+
 impl From<AsPath> for TypeValue {
     fn from(val: AsPath) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::AsPath(val))
@@ -1921,6 +1986,7 @@ impl Display for MultiExitDisc {
         write!(f, "{}", self.0)
     }
 }
+
 //------------ Local Preference type ----------------------------------------
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]

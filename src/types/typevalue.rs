@@ -1,14 +1,11 @@
 use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
-use primitives::AsPath;
-use routecore::asn::LongSegmentError;
-
 //============ TypeValue ====================================================
 use crate::{
     ast::ShortString,
     compile::CompileError,
     traits::RotoType,
-    vm::{StackRef, StackRefPos, VmError}, attr_change_set::{ScalarValue, VectorValue, RouteStatus},
+    vm::{StackRef, StackRefPos, VmError}, attr_change_set::{ScalarValue, RouteStatus},
 };
 
 use super::{
@@ -683,89 +680,5 @@ impl From<Vec<TypeValue>> for TypeValue {
         TypeValue::List(List::new(value.iter().map(|v| ElementTypeValue::Primitive((*v).clone())).collect::<Vec<_>>()))
     }
 }
-
-impl VectorValue for TypeValue {
-    type WriteItem = TypeValue;
-    type ReadItem = TypeValue;
-
-    fn prepend_vec(
-        &mut self,
-        vector: Vec<Self::WriteItem>,
-    ) -> Result<(), routecore::asn::LongSegmentError> {
-        match self {
-            TypeValue::List(list) | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
-                list.prepend_vec(vector).map_err(|_| LongSegmentError)?;
-            },
-            _ => {}
-        }
-
-        Ok(())
-    }
-
-    fn append_vec(
-        &mut self,
-        vector: Vec<Self::WriteItem>,
-    ) -> Result<(), routecore::asn::LongSegmentError> {
-        match self {
-            TypeValue::List(list) | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
-                list.append_vec(vector).map_err(|_| LongSegmentError)?;
-            },
-            _ => {}
-        }
-
-        Ok(())
-    }
-
-    fn insert_vec(
-        &mut self,
-        pos: u8,
-        vector: Vec<Self::WriteItem>,
-    ) -> Result<(), routecore::asn::LongSegmentError> {
-        match self {
-            TypeValue::List(list) | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
-                list.insert_vec(pos as usize, vector).map_err(|_| LongSegmentError)?;
-            },
-            _ => {}
-        }
-
-        Ok(())
-    }
-
-    fn vec_len(&self) -> Option<usize> {
-        match self {
-            TypeValue::List(list) | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
-                Some(list.len())
-            },
-            TypeValue::Builtin(BuiltinTypeValue::AsPath(AsPath(as_path))) => {
-                Some(as_path.path_len())
-            }
-            _ => None
-        }
-    }
-
-    fn vec_is_empty(&self) -> bool {
-        match self {
-            TypeValue::List(list) | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
-                list.is_empty()
-            },
-            _ => true
-        }
-    }
-
-    fn into_vec(self) -> Vec<Self::ReadItem> {
-        match self {
-            TypeValue::List(list) | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
-                list.into_iter().map(|e| e.into()).collect::<Vec<_>>()
-            },
-            _ => vec![]
-        }
-    }
-}
-
-// impl<'a> AsRef<&'a [u8]> for TypeValue {
-//     fn as_ref(&self) -> &&'a [u8] {
-//         todo!()
-//     }
-// }
 
 impl ScalarValue for TypeValue {}
