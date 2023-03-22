@@ -282,6 +282,11 @@ impl Symbol {
                     self.value = as_path.into_type(&type_def)?;
                 }
             },
+            TypeDef::Hop => {
+                if let TypeValue::Builtin(BuiltinTypeValue::Hop(hop)) = self.value {
+                    self.value = hop.into_type(&type_def)?;
+                }
+            }
             TypeDef::Community => {
                 if let TypeValue::Builtin(BuiltinTypeValue::Community(int)) = self.value {
                     self.value = int.into_type(&type_def)?;

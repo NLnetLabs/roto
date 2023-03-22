@@ -4,7 +4,6 @@
 
 use std::fmt::Display;
 
-use crate::attr_change_set::RouteStatus;
 use crate::compile::CompileError;
 use crate::traits::RotoType;
 
@@ -13,9 +12,9 @@ use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 
 use super::{
-    AsPath, Asn, AtomicAggregator, Boolean, Community, HexLiteral,
+    AsPath, Asn, AtomicAggregator, Boolean, Community, HexLiteral, Hop,
     IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, NextHop, OriginType,
-    Prefix, PrefixLength, RawRouteWithDeltas, StringLiteral, U32, U8,
+    Prefix, PrefixLength, RawRouteWithDeltas, StringLiteral, U32, U8, RouteStatus
 };
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -31,6 +30,7 @@ pub enum BuiltinTypeValue {
     IpAddress(IpAddress),               // scalar
     Asn(Asn),                           // scalar
     AsPath(AsPath),                     // vector
+    Hop(Hop),                           // read-only scalar
     OriginType(OriginType),             // scalar
     Route(RawRouteWithDeltas),          // vector
     LocalPref(LocalPref),               // scalar
@@ -154,6 +154,7 @@ impl BuiltinTypeValue {
             }
             BuiltinTypeValue::IpAddress(v) => v.into_type(ty),
             BuiltinTypeValue::AsPath(v) => v.into_type(ty),
+            BuiltinTypeValue::Hop(h) => h.into_type(ty),
             BuiltinTypeValue::OriginType(v) => v.into_type(ty),
             BuiltinTypeValue::Route(r) => r.into_type(ty),
             BuiltinTypeValue::RouteStatus(v) => v.into_type(ty),
@@ -287,6 +288,9 @@ impl Display for BuiltinTypeValue {
             BuiltinTypeValue::Asn(v) => write!(f, "{} (ASN)", v),
             BuiltinTypeValue::AsPath(v) => {
                 write!(f, "{} (AS Path)", v)
+            }
+            BuiltinTypeValue::Hop(h) => {
+                write!(f, "{} (Hop)", h)
             }
             BuiltinTypeValue::OriginType(v) => {
                 write!(f, "{} (Origin Type)", v)

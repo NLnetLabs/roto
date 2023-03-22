@@ -3,8 +3,6 @@
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 
-
-use crate::attr_change_set::RouteStatus;
 use crate::compile::CompileError;
 use crate::traits::Token;
 use crate::types::collections::ElementTypeValue;
@@ -17,7 +15,7 @@ use crate::{
 use super::builtin::{
     AsPath, Asn, Boolean, Community, HexLiteral, IntegerLiteral, IpAddress,
     OriginType, Prefix, PrefixLength, RawRouteWithDeltas, StringLiteral, U32,
-    U8, LocalPref, NextHop, AtomicAggregator, MultiExitDisc
+    U8, LocalPref, NextHop, AtomicAggregator, MultiExitDisc, Hop, RouteStatus
 };
 use super::collections::Record;
 use super::datasources::{Rib, Table};
@@ -44,6 +42,7 @@ pub enum TypeDef {
     Asn,
     Route, // BGP Update path attributes
     AsPath,
+    Hop,
     Community,
     OriginType,
     LocalPref,
@@ -261,6 +260,9 @@ impl TypeDef {
             TypeDef::AsPath => {
                 AsPath::get_props_for_method(self.clone(), method_name)
             }
+            TypeDef::Hop => {
+                Hop::get_props_for_method(self.clone(), method_name)
+            }
             TypeDef::Community => {
                 Community::get_props_for_method(self.clone(), method_name)
             }
@@ -384,6 +386,7 @@ impl std::fmt::Display for TypeDef {
             }
             TypeDef::List(list) => write!(f, "List of {}", list),
             TypeDef::AsPath => write!(f, "AsPath"),
+            TypeDef::Hop => write!(f, "Hop"),
             TypeDef::Prefix => write!(f, "Prefix"),
             TypeDef::U32 => write!(f, "U32"),
             TypeDef::Asn => write!(f, "Asn"),
@@ -534,6 +537,7 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::PrefixLength(_) => TypeDef::PrefixLength,
             BuiltinTypeValue::IpAddress(_) => TypeDef::IpAddress,
             BuiltinTypeValue::Asn(_) => TypeDef::Asn,
+            BuiltinTypeValue::Hop(_) => TypeDef::Hop,
             BuiltinTypeValue::OriginType(_) => TypeDef::OriginType,
             BuiltinTypeValue::AsPath(_) => TypeDef::AsPath,
             BuiltinTypeValue::Community(_) => TypeDef::Community,
@@ -561,6 +565,7 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::PrefixLength(_) => TypeDef::PrefixLength,
             BuiltinTypeValue::IpAddress(_) => TypeDef::IpAddress,
             BuiltinTypeValue::Asn(_) => TypeDef::Asn,
+            BuiltinTypeValue::Hop(_) => TypeDef::Hop,
             BuiltinTypeValue::AsPath(_) => TypeDef::AsPath,
             BuiltinTypeValue::Community(_) => TypeDef::Community,
             BuiltinTypeValue::Communities(_) => TypeDef::List(Box::new(TypeDef::Community)),

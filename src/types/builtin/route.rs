@@ -25,9 +25,9 @@ use crate::{
     vm::VmError,
 };
 
-use super::{AsPath, BuiltinTypeValue, NextHop, OriginType, Prefix};
+use super::{AsPath, BuiltinTypeValue, RouteStatus, NextHop, OriginType, Prefix};
 use crate::attr_change_set::{
-    AttrChangeSet, RouteStatus, ScalarOption, ScalarValue, VectorOption,
+    AttrChangeSet, ScalarOption, ScalarValue, VectorOption,
     VectorValue,
 };
 
@@ -308,17 +308,17 @@ impl RawRouteWithDeltas {
         field_token: usize,
     ) -> Option<TypeValue> {
         match field_token.into() {
-                RouteToken::AsPath => self.raw_message.raw_message.0.aspath().map(TypeValue::from),
+                RouteToken::AsPath => self.raw_message.raw_message.0.hop_path().map(TypeValue::from),
                 RouteToken::OriginType => self.raw_message.raw_message.0.origin().map(TypeValue::from),
                 RouteToken::NextHop => self.raw_message.raw_message.0.next_hop().map(TypeValue::from),
                 RouteToken::MultiExitDisc => self.raw_message.raw_message.0.multi_exit_desc().map(TypeValue::from),
                 RouteToken::LocalPref => self.raw_message.raw_message.0.local_pref().map(TypeValue::from),
                 RouteToken::AtomicAggregate => Some(TypeValue::from(self.raw_message.raw_message.0.is_atomic_aggregate())),
                 RouteToken::AtomicAggregator => self.raw_message.raw_message.0.aggregator().map(TypeValue::from),
-                _ => None
-                // RouteToken::Communities => self.raw_message.raw_message.all_communities().map(BuiltinTypeValue::from),
-                // RouteToken::Prefix => Some(self.prefix.into()),
-                // RouteToken::Status => Some(self.status_deltas.current().into()),
+                RouteToken::Communities => self.raw_message.raw_message.0.all_communities().map(TypeValue::from),
+                RouteToken::Prefix => Some(self.prefix.into()),
+                RouteToken::Status => Some(self.status_deltas.current().into()),
+                _ => None,
                 // originator_id: ChangedOption {
                 //     value: None,
                 //     changed: false,
@@ -854,7 +854,7 @@ impl UpdateMessage {
     pub fn create_changeset(&self, prefix: Prefix) -> AttrChangeSet {
         AttrChangeSet {
             prefix: ReadOnlyScalarOption::<Prefix>::new(prefix.into()),
-            as_path: VectorOption::<AsPath>::from(self.0.aspath()),
+            as_path: VectorOption::<AsPath>::from(self.0.hop_path()),
             origin_type: ScalarOption::<OriginType>::from(self.0.origin()),
             next_hop: ScalarOption::<NextHop>::from(self.0.next_hop()),
             multi_exit_discriminator: ScalarOption::from(
@@ -872,7 +872,7 @@ impl UpdateMessage {
             // value: self
             //     .ext_communities()
             //     .map(|c| c.collect::<Vec<ExtendedCommunity>>()),
-            as4_path: VectorOption::from(self.0.as4path()),
+            as4_path: VectorOption::from(self.0.as4_hop_path()),
             connector: Todo,
             as_path_limit: Todo,
             pmsi_tunnel: Todo,

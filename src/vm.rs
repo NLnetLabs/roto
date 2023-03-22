@@ -9,7 +9,7 @@ use crate::{
     compile::{CompileError, MirBlock},
     traits::{RotoType, Token},
     types::{
-        builtin::{Boolean, BuiltinTypeValue, RawRouteWithDeltas},
+        builtin::{Boolean, BuiltinTypeValue},
         collections::{ElementTypeValue, Record},
         datasources::{DataSourceMethodValue, Rib, Table},
         typedef::TypeDef,

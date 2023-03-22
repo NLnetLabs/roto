@@ -1,12 +1,13 @@
 //------------ Route Status -------------------------------------------------
 
-use routecore::asn::{LongSegmentError, OwnedPathSegment};
+use routecore::asn::LongSegmentError;
+use routecore::aspath::Hop;
 use std::marker::PhantomData;
 use std::ops::Index;
 
 use crate::types::builtin::{
     AsPath, Asn, AtomicAggregator, BuiltinTypeValue, Community, LocalPref,
-    MultiExitDisc, NextHop, OriginType, Prefix,
+    MultiExitDisc, NextHop, OriginType, Prefix, RouteStatus
 };
 use crate::types::typevalue::TypeValue;
 
@@ -53,6 +54,7 @@ impl ScalarValue for LocalPref {}
 impl ScalarValue for AtomicAggregator {}
 impl ScalarValue for Community {}
 impl ScalarValue for Prefix {}
+impl ScalarValue for RouteStatus {}
 // impl ScalarValue for (u8, u32) {}
 
 //------------ Attributes Change Set ----------------------------------------
@@ -351,24 +353,24 @@ impl<V1: Into<TypeValue>, V2: VectorValue + Into<TypeValue>> From<Option<V1>>
     }
 }
 
-impl From<Vec<OwnedPathSegment>> for AsPath {
-    fn from(value: Vec<OwnedPathSegment>) -> Self {
-        todo!()
-    }
-}
-
 impl TryFrom<Vec<routecore::asn::Asn>> for AsPath {
     type Error = LongSegmentError;
 
     fn try_from(
         value: Vec<routecore::asn::Asn>,
     ) -> Result<Self, LongSegmentError> {
-        routecore::asn::AsPath::try_from(value.as_slice()).map(AsPath)
+        routecore::aspath::HopPath::try_from(value.as_slice()).map(AsPath).map_err(|_| LongSegmentError)
+    }
+}
+
+impl From<Vec<routecore::aspath::Hop<Vec<u8>>>> for AsPath {
+    fn from(value: Vec<routecore::aspath::Hop<Vec<u8>>>) -> Self {
+        AsPath(value.into())
     }
 }
 
 impl std::ops::Index<usize> for AsPath {
-    type Output = OwnedPathSegment;
+    type Output = Hop<Vec<u8>>;
 
     fn index(&self, index: usize) -> &Self::Output {
         unimplemented!()
@@ -421,57 +423,5 @@ impl<T: ScalarValue> VectorValue for Vec<T> {
 
     fn into_vec(self) -> Vec<T> {
         self
-    }
-}
-
-// Status is piece of metadata that writes some (hopefully) relevant state of
-// per-peer BGP session into every route. The goal is to be able to enable
-// the logic in `rib-units` to decide whether routes should be send to its
-// output and to be able output this information to API clients, without
-// having to go back to the units that keep the per-peer session state.
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
-pub enum RouteStatus {
-    // Between start and EOR on a BGP peer-session
-    InConvergence,
-    // After EOR for a BGP peer-session, either `Graceful Restart` or EOR
-    UpToDate,
-    // After hold-timer expiry
-    Stale,
-    // After the request for a Route Refresh to a peer and the reception of a
-    // new route
-    StartOfRouteRefresh,
-    // After the reception of a withdrawal
-    Withdrawn,
-    // Status not relevant, e.g. a RIB that holds archived routes.
-    #[default]
-    Empty,
-}
-
-impl ScalarValue for RouteStatus {}
-
-impl std::fmt::Display for RouteStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            RouteStatus::InConvergence => write!(f, "in convergence"),
-            RouteStatus::UpToDate => write!(f, "up to date"),
-            RouteStatus::Stale => write!(f, "stale"),
-            RouteStatus::StartOfRouteRefresh => {
-                write!(f, "start of route refresh")
-            }
-            RouteStatus::Withdrawn => write!(f, "withdrawn"),
-            RouteStatus::Empty => write!(f, "empty"),
-        }
-    }
-}
-
-impl From<TypeValue> for RouteStatus {
-    fn from(value: TypeValue) -> Self {
-        if let TypeValue::Builtin(BuiltinTypeValue::RouteStatus(value)) =
-            value
-        {
-            value
-        } else {
-            panic!("invalid something");
-        }
     }
 }

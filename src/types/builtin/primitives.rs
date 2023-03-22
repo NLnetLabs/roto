@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-use routecore::asn::{LongSegmentError, OwnedPathSegment};
+use routecore::asn::LongSegmentError;
 
 use crate::ast::ShortString;
 use crate::attr_change_set::VectorValue;
@@ -1512,19 +1512,16 @@ impl From<AsnToken> for usize {
 
 // ----------- AsPath type --------------------------------------------------
 
+type RoutecoreHop = routecore::aspath::Hop<Vec<u8>>;
+
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct AsPath(pub(crate) routecore::asn::AsPath<Vec<u8>>);
+pub struct AsPath(pub(crate) routecore::aspath::HopPath);
 
 impl AsPath {
     pub fn new(
         as_path: Vec<routecore::asn::Asn>,
     ) -> Result<Self, LongSegmentError> {
-        let mut new_as_path =
-            routecore::asn::AsPathBuilder::from_target(vec![]);
-        new_as_path.append_as_sequence(as_path.as_slice());
-        let new_as_path =
-            new_as_path.finalize().map_err(|_| LongSegmentError)?;
-        Ok(AsPath(new_as_path))
+        AsPath::try_from(as_path)
     }
 
     pub fn from_vec_u32(as_path: Vec<u32>) -> Result<Self, LongSegmentError> {
@@ -1535,8 +1532,8 @@ impl AsPath {
         AsPath::new(as_path)
     }
 
-    pub fn contains(&self, asn: routecore::asn::Asn) -> bool {
-        self.0.contains(asn)
+    pub fn contains(&self, hop: &Hop) -> bool {
+        self.0.contains(&hop.0)
     }
 }
 
@@ -1597,7 +1594,7 @@ impl RotoType for AsPath {
         match method.into() {
             AsPathToken::Origin => match self.0.origin() {
                 Some(origin_asn) => Ok(Box::new(move || {
-                    TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(origin_asn)))
+                    TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(origin_asn.clone().try_into_asn().unwrap())))
                 })),
                 None => Err(VmError::InvalidPayload),
             },
@@ -1606,7 +1603,7 @@ impl RotoType for AsPath {
                     search_asn,
                 ))) = args[0]
                 {
-                    let contains = self.0.contains(*search_asn);
+                    let contains = self.contains(&Hop(RoutecoreHop::from(*search_asn)));
                     TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
                         contains,
                     )))
@@ -1640,17 +1637,17 @@ impl RotoType for AsPath {
 }
 
 impl VectorValue for crate::types::builtin::AsPath {
-    type ReadItem = routecore::asn::OwnedPathSegment;
+    type ReadItem = RoutecoreHop;
     type WriteItem = routecore::asn::Asn;
 
     fn prepend_vec(
         &mut self,
-        vector: Vec<routecore::asn::Asn>,
+        vector: Vec<Self::WriteItem>,
     ) -> Result<(), LongSegmentError> {
-        let mut as_path = std::mem::take(&mut self.0).into_builder();
-        for asn in vector { as_path.prepend(asn) }
-        let as_path = as_path.finalize().map_err(|_| LongSegmentError)?;
-        *self = AsPath(as_path);
+        let mut as_path = vector.iter().map(|a| RoutecoreHop::from(*a)).collect::<Vec<_>>();
+        as_path.extend_from_slice(&self.0[..]);
+        *self = as_path.into();
+
         Ok(())
     }
 
@@ -1658,10 +1655,10 @@ impl VectorValue for crate::types::builtin::AsPath {
         &mut self,
         vector: Vec<Self::WriteItem>,
     ) -> Result<(), LongSegmentError> {
-        let mut as_path = std::mem::take(&mut self.0).into_builder();
-        for asn in vector { as_path.append(asn) }
-        let as_path = as_path.finalize().map_err(|_| LongSegmentError)?;
-        *self = AsPath(as_path);
+        let mut as_path = std::mem::take(&mut self.0)[..].to_vec();
+        as_path.extend_from_slice(&vector.iter().map(|a| RoutecoreHop::from(*a)).collect::<Vec<_>>());
+        *self = as_path.into();
+
         Ok(())
     }
 
@@ -1674,31 +1671,24 @@ impl VectorValue for crate::types::builtin::AsPath {
         pos: u8,
         vector: Vec<Self::WriteItem>,
     ) -> Result<(), LongSegmentError> {
-        let as_path = std::mem::take(&mut self.0);
-        let mut new_path = vec![];
-        for (i, seg) in as_path.into_iter().enumerate() {
-            if i == pos as usize {
-                let mut seg = seg.into_owned();
-                for asn in vector.into_iter() {
-                    seg.append(asn)?;
-                }
-                new_path.push(seg);
-                break;
-            }
-        }
-        *self = AsPath(as_path);
+        let as_path: routecore::aspath::HopPath = std::mem::take(&mut self.0);
+        let mut left_path = as_path[..pos as usize].to_vec();
+        left_path.extend_from_slice(vector.into_iter().map(|a| a.into()).collect::<Vec<_>>().as_slice());
+        left_path.extend_from_slice(&self.0[pos as usize..]);
+        *self = left_path.to_vec().into();
+
         Ok(())
     }
 
     fn vec_len(&self) -> Option<usize> {
-        if self.0.is_single_sequence() { Some(self.0.path_len()) } else { None }
+        Some(self.0.hop_count())
     }
 
     fn vec_is_empty(&self) -> bool {
-        self.0.path_len() == 0
+        self.0.hop_count() == 0
     }
 
-    fn into_vec(self) -> Vec<OwnedPathSegment> {
+    fn into_vec(self) -> Vec<RoutecoreHop> {
         self.0.into_iter().collect::<Vec<_>>()
     }
 }
@@ -1706,6 +1696,12 @@ impl VectorValue for crate::types::builtin::AsPath {
 impl From<AsPath> for TypeValue {
     fn from(val: AsPath) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::AsPath(val))
+    }
+}
+
+impl From<routecore::aspath::HopPath> for AsPath {
+    fn from(value: routecore::aspath::HopPath) -> Self {
+        AsPath(value)
     }
 }
 
@@ -1753,6 +1749,73 @@ impl From<AsPathToken> for usize {
         val as usize
     }
 }
+
+//------------ Hop type -----------------------------------------------------
+
+// A read-only type that contains an ASN or a more complex segment of a AS
+// PATH, e.g. an AS_SET.
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Hop(pub(crate) routecore::aspath::Hop<Vec<u8>>);
+
+impl RotoType for Hop {
+    fn get_props_for_method(
+        ty: TypeDef,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, CompileError>
+    where
+        Self: std::marker::Sized {
+        todo!()
+    }
+
+    fn into_type(
+        self,
+        type_value: &TypeDef,
+    ) -> Result<TypeValue, CompileError>
+    where
+        Self: std::marker::Sized {
+        todo!()
+    }
+
+    fn exec_value_method<'a>(
+        &'a self,
+        method_token: usize,
+        args: &'a [&'a TypeValue],
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+
+    fn exec_consume_value_method(
+        self,
+        method_token: usize,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+        todo!()
+    }
+
+    fn exec_type_method<'a>(
+        method_token: usize,
+        args: &[&'a TypeValue],
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+}
+
+impl Display for Hop {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<Asn> for Hop {
+    fn from(value: Asn) -> Self {
+        Hop(value.0.into())
+    }
+}
+
 
 //------------ OriginType type ----------------------------------------------
 
@@ -2184,5 +2247,55 @@ impl From<routecore::bgp::message::update::Aggregator> for BuiltinTypeValue {
 impl std::fmt::Display for AtomicAggregator {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+// Status is piece of metadata that writes some (hopefully) relevant state of
+// per-peer BGP session into every route. The goal is to be able to enable
+// the logic in `rib-units` to decide whether routes should be send to its
+// output and to be able output this information to API clients, without
+// having to go back to the units that keep the per-peer session state.
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
+pub enum RouteStatus {
+    // Between start and EOR on a BGP peer-session
+    InConvergence,
+    // After EOR for a BGP peer-session, either `Graceful Restart` or EOR
+    UpToDate,
+    // After hold-timer expiry
+    Stale,
+    // After the request for a Route Refresh to a peer and the reception of a
+    // new route
+    StartOfRouteRefresh,
+    // After the reception of a withdrawal
+    Withdrawn,
+    // Status not relevant, e.g. a RIB that holds archived routes.
+    #[default]
+    Empty,
+}
+
+impl std::fmt::Display for RouteStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RouteStatus::InConvergence => write!(f, "in convergence"),
+            RouteStatus::UpToDate => write!(f, "up to date"),
+            RouteStatus::Stale => write!(f, "stale"),
+            RouteStatus::StartOfRouteRefresh => {
+                write!(f, "start of route refresh")
+            }
+            RouteStatus::Withdrawn => write!(f, "withdrawn"),
+            RouteStatus::Empty => write!(f, "empty"),
+        }
+    }
+}
+
+impl From<TypeValue> for RouteStatus {
+    fn from(value: TypeValue) -> Self {
+        if let TypeValue::Builtin(BuiltinTypeValue::RouteStatus(value)) =
+            value
+        {
+            value
+        } else {
+            panic!("invalid something");
+        }
     }
 }

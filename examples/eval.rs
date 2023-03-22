@@ -27,7 +27,7 @@ fn test_data(
             .into();
     let next_hop: TypeValue =
         std::net::IpAddr::V4(std::net::Ipv4Addr::new(193, 0, 0, 23)).into();
-    let as_path = vec![routecore::asn::Asn::from_u32(1)].into();
+    let as_path = vec![Asn::from_u32(1)].into();
     let asn = Asn::from_u32(211321).into();
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
