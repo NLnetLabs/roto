@@ -411,10 +411,10 @@ impl std::ops::Index<usize> for TypeValue {
 
     fn index(&self, index: usize) -> &Self::Output {
         match self {
-            TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => todo!(), // as_path.index(index),
+            TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => as_path.index(index),
             TypeValue::Builtin(BuiltinTypeValue::Communities(List(list))) => list.index(index).into(),
             TypeValue::List(list) => list.0.index(index).into(),
-            _ => { panic!("Not an indexable typevalue.")}
+            _ => { panic!("Not an indexable typevalue: {}", self)}
         }
     }
 }
@@ -651,21 +651,15 @@ impl From<routecore::asn::Asn> for TypeValue {
     }
 }
 
-// impl From<routecore::asn::AsPath<Vec<u8>>> for TypeValue {
-//     fn from(as_path: routecore::asn::AsPath<Vec<u8>>) -> Self {
-//         TypeValue::Builtin(BuiltinTypeValue::AsPath(primitives::AsPath(as_path)))
-//     }
-// }
-
-impl From<routecore::aspath::HopPath> for TypeValue {
-    fn from(value: routecore::aspath::HopPath) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::AsPath(primitives::AsPath(value)))
+impl From<routecore::bgp::aspath::HopPath> for TypeValue {
+    fn from(value: routecore::bgp::aspath::HopPath) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::AsPath(primitives::AsPath::from(value)))
     }
 }
 
-impl From<routecore::aspath::HopPath> for BuiltinTypeValue {
-    fn from(as_path: routecore::aspath::HopPath) -> Self {
-        BuiltinTypeValue::AsPath(primitives::AsPath(as_path))
+impl From<routecore::bgp::aspath::HopPath> for BuiltinTypeValue {
+    fn from(as_path: routecore::bgp::aspath::HopPath) -> Self {
+        BuiltinTypeValue::AsPath(primitives::AsPath::from(as_path))
     }
 }
 
@@ -675,18 +669,12 @@ impl From<Hop> for TypeValue {
     }
 }
 
-impl From<routecore::aspath::Hop<Vec<u8>>> for BuiltinTypeValue {
-    fn from(hop: routecore::aspath::Hop<Vec<u8>>) -> Self {
+impl From<routecore::bgp::aspath::Hop<Vec<u8>>> for BuiltinTypeValue {
+    fn from(hop: routecore::bgp::aspath::Hop<Vec<u8>>) -> Self {
         BuiltinTypeValue::Hop(primitives::Hop(hop))
     }
 }
 
-// impl From<Vec<routecore::asn::Asn>> for TypeValue {
-//     fn from(as_path: Vec<routecore::asn::Asn>) -> Self {
-//         let as_path = crate::types::builtin::AsPath::new(as_path).unwrap();
-//         TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path))
-//     }
-// }
 
 // impl From<routecore::bgp::communities::Communities> for TypeValue {
 //     fn from(value: routecore::bgp::communities::Communities) -> Self {
@@ -697,16 +685,15 @@ impl From<routecore::aspath::Hop<Vec<u8>>> for BuiltinTypeValue {
 
 impl From<Vec<Asn>> for TypeValue {
     fn from(as_path: Vec<Asn>) -> Self {
-        let as_path: Vec<routecore::asn::Asn> = as_path.iter().map(|p| p.0).collect();
-        let as_path = crate::types::builtin::AsPath(as_path.into());
+        let as_path: Vec<routecore::bgp::aspath::Hop<Vec<u8>>> = as_path.iter().map(|p| p.0.into()).collect();
+        let as_path = crate::types::builtin::AsPath::from(as_path);
         TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path))
     }
 }
 
-impl From<Vec<routecore::aspath::Hop<Vec<u8>>>> for TypeValue {
-    fn from(as_path: Vec<routecore::aspath::Hop<Vec<u8>>>) -> Self {
-        let as_path = crate::types::builtin::AsPath(as_path.into());
-        TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path))
+impl From<Vec<routecore::bgp::aspath::Hop<Vec<u8>>>> for TypeValue {
+    fn from(as_path: Vec<routecore::bgp::aspath::Hop<Vec<u8>>>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path.into()))
     }
 }
 

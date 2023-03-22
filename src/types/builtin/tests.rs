@@ -4,10 +4,10 @@ mod route {
         bgp::{
             message::SessionConfig,
             types::{OriginType, NextHop},
-        }, asn::Asn
+        }
     };
 
-    use crate::{types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage, Prefix}, vm::VmError};
+    use crate::{types::builtin::{Asn, RawRouteWithDeltas, RotondaId, UpdateMessage, Prefix, Hop}, vm::VmError};
 
     #[test]
     fn create_update_msg() -> Result<(), VmError> {
@@ -73,7 +73,7 @@ mod route {
                 .attributes.next_hop.set(NextHop::Ipv6(v6));
         }
 
-        let res = delta.attributes.as_path.prepend(vec![Asn::from(211321)].try_into().unwrap());
+        let res = delta.attributes.as_path.prepend(crate::types::builtin::primitives::Asn::from(211321));
         assert!(res.is_ok());
 
         let res = delta.attributes.origin_type.set(OriginType::Incomplete);
@@ -92,9 +92,8 @@ mod route {
 
         let attr_set = roto_msgs[2].get_latest_attrs();
         assert_eq!(attr_set.as_path.len(), Some(2));
-        assert_eq!(attr_set.as_path.get_from_vec(0).map(|s| s[0].clone()), Asn::try_from(211321).ok().map(|a| a.into()));
-        assert_eq!(attr_set.as_path.get_from_vec(0).map(|s| s[1].clone()), Asn::try_from(200).ok().map(|a| a.into()));
-
+        assert_eq!(attr_set.as_path.get_from_vec(0), Asn::try_from(211321).ok().map(|a| Hop::from(a).into()));
+        assert_eq!(attr_set.as_path.get_from_vec(1), Asn::try_from(200).ok().map(|a| Hop::from(a).into()));
         Ok(())
     }
 
@@ -159,7 +158,7 @@ mod route {
                 attributes.next_hop.set(NextHop::Ipv6(v6));
         }
 
-        let res = new_change_set1.attributes.as_path.prepend(vec![Asn::from(211321)].try_into().unwrap());
+        let res = new_change_set1.attributes.as_path.prepend(211321); //].try_into().unwrap());
         assert!(res.is_ok());
 
         let res = new_change_set1.attributes.origin_type.set(OriginType::Incomplete);
@@ -170,12 +169,12 @@ mod route {
 
         let attr_set = roto_msgs[2].get_latest_attrs();
         assert_eq!(attr_set.as_path.len(), Some(2));
-        assert_eq!(attr_set.as_path.get_from_vec(0).map(|s| s[0].clone()), Some(Asn::from(211321).into()));
-        assert_eq!(attr_set.as_path.get_from_vec(0).map(|s| s[1].clone()), Some(Asn::from(200).into()));
+        assert_eq!(attr_set.as_path.get_from_vec(0), Asn::try_from(211321).ok().map(|a| Hop::from(a).into()));
+        assert_eq!(attr_set.as_path.get_from_vec(1), Asn::try_from(200).ok().map(|a| Hop::from(a).into()));
 
         // Change Set 2
         let mut new_change_set2 = roto_msgs[2].open_new_delta(delta_id)?;
-        let res = new_change_set2.attributes.as_path.prepend(vec![Asn::from(211322)].try_into().unwrap());
+        let res = new_change_set2.attributes.as_path.prepend(211322); //.try_into().unwrap());
         assert!(res.is_ok());
 
         let res = roto_msgs[2].store_delta(new_change_set2);
@@ -183,9 +182,9 @@ mod route {
 
         let attr_set = roto_msgs[2].get_latest_attrs();
         assert_eq!(attr_set.as_path.len(), Some(3));
-        assert_eq!(attr_set.as_path.get_from_vec(0).map(|s| s[0].clone()), Some(Asn::from(211322).into()));
-        assert_eq!(attr_set.as_path.get_from_vec(0).map(|s| s[1].clone()), Some(Asn::from(211321).into()));
-        assert_eq!(attr_set.as_path.get_from_vec(0).map(|s| s[2].clone()), Some(Asn::from(200).into()));
+        assert_eq!(attr_set.as_path.get_from_vec(0), Asn::try_from(211322).ok().map(|a| Hop::from(a).into()));
+        assert_eq!(attr_set.as_path.get_from_vec(1), Asn::try_from(211321).ok().map(|a| Hop::from(a).into()));
+        assert_eq!(attr_set.as_path.get_from_vec(2), Asn::try_from(200).ok().map(|a| Hop::from(a).into()));
 
         println!("Before changeset3 {:#?}", &attr_set);
 

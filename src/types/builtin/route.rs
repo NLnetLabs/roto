@@ -283,22 +283,22 @@ impl RawRouteWithDeltas {
         &self,
         field_token: usize,
     ) -> Option<&TypeValue> {
-        let current = self.attribute_deltas.get_latest_change_set()?;
-        // let p = self.attribute_deltas.get_as_path()?; //?.as_path.as_ref();
+        let current_set = self.attribute_deltas.get_latest_change_set()?;
+
         match field_token.into() {
-            RouteToken::Prefix => current.prefix.value.as_ref(),
-            RouteToken::AsPath => current.as_path.value.as_ref(),
-            RouteToken::OriginType => current.origin_type.value.as_ref(),
-            RouteToken::NextHop => current.next_hop.value.as_ref(),
+            RouteToken::Prefix => current_set.prefix.as_ref(),
+            RouteToken::AsPath => current_set.as_path.as_ref(),
+            RouteToken::OriginType => current_set.origin_type.as_ref(),
+            RouteToken::NextHop => current_set.next_hop.as_ref(),
             RouteToken::MultiExitDisc => {
-                current.multi_exit_discriminator.value.as_ref()
+                current_set.multi_exit_discriminator.as_ref()
             }
-            RouteToken::LocalPref => current.local_pref.value.as_ref(),
+            RouteToken::LocalPref => current_set.local_pref.as_ref(),
             RouteToken::AtomicAggregate => {
-                current.atomic_aggregate.value.as_ref()
+                current_set.atomic_aggregate.as_ref()
             }
-            RouteToken::AtomicAggregator => current.aggregator.value.as_ref(),
-            RouteToken::Communities => current.communities.value.as_ref(),
+            RouteToken::AtomicAggregator => current_set.aggregator.as_ref(),
+            RouteToken::Communities => current_set.communities.as_ref(),
             RouteToken::Status => self.status_deltas.current_as_ref(),
         }
     }
@@ -307,8 +307,10 @@ impl RawRouteWithDeltas {
         &self,
         field_token: usize,
     ) -> Option<TypeValue> {
+        let current_set = self.attribute_deltas.get_latest_change_set()?;
+
         match field_token.into() {
-                RouteToken::AsPath => self.raw_message.raw_message.0.hop_path().map(TypeValue::from),
+                RouteToken::AsPath => current_set.as_path.clone().into_opt(),
                 RouteToken::OriginType => self.raw_message.raw_message.0.origin().map(TypeValue::from),
                 RouteToken::NextHop => self.raw_message.raw_message.0.next_hop().map(TypeValue::from),
                 RouteToken::MultiExitDisc => self.raw_message.raw_message.0.multi_exit_desc().map(TypeValue::from),
@@ -317,7 +319,7 @@ impl RawRouteWithDeltas {
                 RouteToken::AtomicAggregator => self.raw_message.raw_message.0.aggregator().map(TypeValue::from),
                 RouteToken::Communities => self.raw_message.raw_message.0.all_communities().map(TypeValue::from),
                 RouteToken::Prefix => Some(self.prefix.into()),
-                RouteToken::Status => Some(self.status_deltas.current().into()),
+                RouteToken::Status => Some(self.status_deltas.current()),
                 _ => None,
                 // originator_id: ChangedOption {
                 //     value: None,
@@ -396,13 +398,6 @@ impl AttributeDeltaList {
     // Gets the most recently added delta in this list.
     fn get_latest_change_set(&self) -> Option<&AttrChangeSet> {
         self.deltas.last().map(|d| &d.attributes)
-    }
-
-    fn get_as_path(&self) -> Option<&TypeValue> {
-        self.deltas
-            .last()
-            .map(|d| d.attributes.as_path.value.as_ref())
-            .unwrap()
     }
 
     // Adds a new delta to the list.
@@ -854,7 +849,7 @@ impl UpdateMessage {
     pub fn create_changeset(&self, prefix: Prefix) -> AttrChangeSet {
         AttrChangeSet {
             prefix: ReadOnlyScalarOption::<Prefix>::new(prefix.into()),
-            as_path: VectorOption::<AsPath>::from(self.0.hop_path()),
+            as_path: VectorOption::<AsPath>::from(self.0.aspath().map(|p| p.to_hop_path())),
             origin_type: ScalarOption::<OriginType>::from(self.0.origin()),
             next_hop: ScalarOption::<NextHop>::from(self.0.next_hop()),
             multi_exit_discriminator: ScalarOption::from(
@@ -872,7 +867,7 @@ impl UpdateMessage {
             // value: self
             //     .ext_communities()
             //     .map(|c| c.collect::<Vec<ExtendedCommunity>>()),
-            as4_path: VectorOption::from(self.0.as4_hop_path()),
+            as4_path: VectorOption::from(self.0.as4path().map(|p| p.to_hop_path())),
             connector: Todo,
             as_path_limit: Todo,
             pmsi_tunnel: Todo,

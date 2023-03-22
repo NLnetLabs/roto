@@ -106,7 +106,7 @@ fn test_module_00() {
 
             term on-my-terms {
                 match {
-                    route.as_path().origin() == AS211321;
+                    route.as-path.origin() == AS211321;
                 }
             }
         }

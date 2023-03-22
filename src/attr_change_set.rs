@@ -1,13 +1,12 @@
 //------------ Route Status -------------------------------------------------
 
 use routecore::asn::LongSegmentError;
-use routecore::aspath::Hop;
 use std::marker::PhantomData;
 use std::ops::Index;
 
 use crate::types::builtin::{
-    AsPath, Asn, AtomicAggregator, BuiltinTypeValue, Community, LocalPref,
-    MultiExitDisc, NextHop, OriginType, Prefix, RouteStatus
+    AsPath, Asn, AtomicAggregator, BuiltinTypeValue, Community, Hop,
+    LocalPref, MultiExitDisc, NextHop, OriginType, Prefix, RouteStatus,
 };
 use crate::types::typevalue::TypeValue;
 
@@ -93,8 +92,8 @@ pub struct AttrChangeSet {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ScalarOption<T: ScalarValue> {
-    pub value: Option<TypeValue>,
-    pub changed: bool,
+    value: Option<TypeValue>,
+    changed: bool,
     _pd: PhantomData<T>,
 }
 
@@ -161,7 +160,7 @@ impl<S1: Into<TypeValue>, S2: ScalarValue + Into<TypeValue>> From<Option<S1>>
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ReadOnlyScalarOption<T: ScalarValue + Into<TypeValue>> {
-    pub value: Option<TypeValue>,
+    value: Option<TypeValue>,
     _pd: PhantomData<T>,
 }
 
@@ -187,18 +186,26 @@ pub struct Todo;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VectorOption<V: VectorValue + Into<TypeValue>> {
-    pub value: Option<TypeValue>,
-    pub changed: bool,
+    value: Option<TypeValue>,
+    changed: bool,
     _pd: PhantomData<V>,
 }
 
-impl<V: VectorValue + Into<TypeValue>> VectorOption<V> {
+impl<V: VectorValue + Into<TypeValue> + std::fmt::Debug> VectorOption<V> {
     pub fn new(vector: V) -> Self {
         Self {
             value: Some(vector.into()),
             changed: false,
             _pd: PhantomData,
         }
+    }
+
+    pub fn into_opt(self) -> Option<TypeValue> {
+        self.value
+    }
+
+    pub fn as_ref(&self) -> Option<&TypeValue> {
+        self.value.as_ref()
     }
 
     pub fn get_from_vec(&self, pos: u8) -> Option<TypeValue> {
@@ -211,7 +218,10 @@ impl<V: VectorValue + Into<TypeValue>> VectorOption<V> {
         Ok(())
     }
 
-    pub fn prepend(&mut self, value: V) -> Result<(), LongSegmentError> {
+    pub fn prepend<T: Into<TypeValue> + std::fmt::Debug>(
+        &mut self,
+        value: T,
+    ) -> Result<(), LongSegmentError> {
         if let Some(tv) = self.value.as_mut() {
             match tv {
                 TypeValue::List(list)
@@ -220,13 +230,23 @@ impl<V: VectorValue + Into<TypeValue>> VectorOption<V> {
                         .map_err(|_| LongSegmentError)?;
                 }
                 TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {
-                    let asn_vec = if let TypeValue::Builtin(
-                        BuiltinTypeValue::Asn(Asn(asn)),
-                    ) = value.into()
-                    {
-                        vec![asn]
-                    } else {
-                        vec![]
+                    let asn_vec = match value.into() {
+                        TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) => {
+                            vec![asn]
+                        }
+                        TypeValue::Builtin(BuiltinTypeValue::Hop(hop)) => {
+                            let asn: routecore::asn::Asn = hop
+                                .0
+                                .try_into_asn()
+                                .map_err(|_| LongSegmentError)?;
+                            vec![Asn(asn)]
+                        }
+                        TypeValue::Builtin(BuiltinTypeValue::U32(int)) => {
+                            vec![Asn::from_u32(int.0)]
+                        }
+                        _ => {
+                            return Err(LongSegmentError);
+                        }
                     };
                     as_path
                         .prepend_vec(asn_vec)
@@ -250,7 +270,7 @@ impl<V: VectorValue + Into<TypeValue>> VectorOption<V> {
                 }
                 TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {
                     let asn_vec = if let TypeValue::Builtin(
-                        BuiltinTypeValue::Asn(Asn(asn)),
+                        BuiltinTypeValue::Asn(asn),
                     ) = value.into()
                     {
                         vec![asn]
@@ -283,7 +303,7 @@ impl<V: VectorValue + Into<TypeValue>> VectorOption<V> {
                 }
                 TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {
                     let asn_vec = if let TypeValue::Builtin(
-                        BuiltinTypeValue::Asn(Asn(asn)),
+                        BuiltinTypeValue::Asn(asn),
                     ) = value.into()
                     {
                         vec![asn]
@@ -359,21 +379,28 @@ impl TryFrom<Vec<routecore::asn::Asn>> for AsPath {
     fn try_from(
         value: Vec<routecore::asn::Asn>,
     ) -> Result<Self, LongSegmentError> {
-        routecore::aspath::HopPath::try_from(value.as_slice()).map(AsPath).map_err(|_| LongSegmentError)
+        routecore::bgp::aspath::HopPath::try_from(value.as_slice())
+            .map(AsPath::from)
+            .map_err(|_| LongSegmentError)
     }
 }
 
-impl From<Vec<routecore::aspath::Hop<Vec<u8>>>> for AsPath {
-    fn from(value: Vec<routecore::aspath::Hop<Vec<u8>>>) -> Self {
-        AsPath(value.into())
+impl From<Vec<routecore::bgp::aspath::Hop<Vec<u8>>>> for AsPath {
+    fn from(value: Vec<routecore::bgp::aspath::Hop<Vec<u8>>>) -> Self {
+        AsPath {
+            hops: value
+                .into_iter()
+                .map(|a| Hop(a).into())
+                .collect::<Vec<_>>(),
+        }
     }
 }
 
 impl std::ops::Index<usize> for AsPath {
-    type Output = Hop<Vec<u8>>;
+    type Output = TypeValue;
 
     fn index(&self, index: usize) -> &Self::Output {
-        unimplemented!()
+        self.hops.index(index)
     }
 }
 

@@ -149,7 +149,7 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::Prefix(v) => v.into_type(ty),
             BuiltinTypeValue::PrefixLength(v) => v.into_type(ty),
             BuiltinTypeValue::Community(v) => v.into_type(ty),
-            BuiltinTypeValue::Communities(v) => {
+            BuiltinTypeValue::Communities(_v) => {
                 Err("Can't convert from communities list".into())
             }
             BuiltinTypeValue::IpAddress(v) => v.into_type(ty),
