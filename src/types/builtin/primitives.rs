@@ -1521,14 +1521,15 @@ impl From<AsnToken> for usize {
 type RoutecoreHop = routecore::bgp::aspath::Hop<Vec<u8>>;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct AsPath { pub(crate) hops: Vec<TypeValue> }
+pub struct AsPath(pub(crate) routecore::bgp::aspath::HopPath);
 
 impl AsPath {
     pub fn new(
         as_path: Vec<routecore::asn::Asn>,
     ) -> Result<Self, LongSegmentError> {
-        let path = routecore::bgp::aspath::HopPath::try_from(as_path).map_err(|_| LongSegmentError)?;
-        Ok(Self { hops: path.iter().map(|a| Hop(a.clone()).into()).collect::<Vec<_>>() })
+        let path = routecore::bgp::aspath::HopPath::try_from(as_path)
+            .map_err(|_| LongSegmentError)?;
+        Ok(AsPath(path))
     }
 
     pub fn from_vec_u32(as_path: Vec<u32>) -> Result<Self, LongSegmentError> {
@@ -1539,32 +1540,20 @@ impl AsPath {
         AsPath::new(as_path)
     }
 
-    pub fn into_hop_path(&self) -> routecore::bgp::aspath::HopPath {
-        routecore::bgp::aspath::HopPath::from(self.as_routecore_hops())
+    pub fn into_hops(self) -> Vec<Hop> {
+        self.0.into_iter().map(Hop).collect::<Vec<_>>()
     }
 
-    pub fn into_hops(&self) -> Vec<Hop> {
-        self.hops.iter().map(|h| { 
-            if let TypeValue::Builtin(BuiltinTypeValue::Hop(hop)) = h {
-                    hop.clone()
-                } else { 
-                    panic!(""); 
-                }
-            }).collect::<Vec<_>>()
+    fn into_routecore_hops(self) -> Vec<routecore::bgp::aspath::Hop<Vec<u8>>> {
+        self.0.into_iter().collect::<Vec<_>>()
     }
 
-    fn as_routecore_hops(&self) -> Vec<routecore::bgp::aspath::Hop<Vec<u8>>> {
-        self.hops.iter().map(|h| { 
-            if let TypeValue::Builtin(BuiltinTypeValue::Hop(hop)) = h {
-                    hop.0.clone()
-                } else { 
-                    panic!(""); 
-                }
-            }).collect::<Vec<_>>()
+    fn as_routecore_hops(&self) -> Vec<&routecore::bgp::aspath::Hop<Vec<u8>>> {
+        self.0.iter().collect::<Vec<_>>()
     }
 
     pub fn contains(&self, hop: &Hop) -> bool {
-        self.into_hop_path().contains(&hop.0)
+        self.0.contains(&hop.0)
     }
 }
 
@@ -1623,9 +1612,11 @@ impl RotoType for AsPath {
         _res_type: TypeDef,
     ) -> Result<Box<(dyn FnOnce() -> TypeValue + 'a)>, VmError> {
         match method.into() {
-            AsPathToken::Origin => match self.into_hop_path().origin().cloned() {
+            AsPathToken::Origin => match self.0.origin().cloned() {
                 Some(origin_asn) => Ok(Box::new(move || {
-                    TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(origin_asn.try_into_asn().unwrap())))
+                    TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(origin_asn
+                        .try_into_asn()
+                        .unwrap())))
                 })),
                 None => Err(VmError::InvalidPayload),
             },
@@ -1634,7 +1625,8 @@ impl RotoType for AsPath {
                     search_asn,
                 ))) = args[0]
                 {
-                    let contains = self.contains(&Hop(RoutecoreHop::from(*search_asn)));
+                    let contains =
+                        self.contains(&Hop(RoutecoreHop::from(*search_asn)));
                     TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
                         contains,
                     )))
@@ -1643,7 +1635,7 @@ impl RotoType for AsPath {
                 }
             })),
             AsPathToken::Len => Ok(Box::new(|| {
-                let len = self.hops.len();
+                let len = self.0.hop_count();
                 TypeValue::Builtin(BuiltinTypeValue::U8(U8(len as u8)))
             })),
         }
@@ -1675,14 +1667,13 @@ impl VectorValue for crate::types::builtin::AsPath {
         &mut self,
         vector: Vec<Self::WriteItem>,
     ) -> Result<(), LongSegmentError> {
+        let mut as_path = vector
+            .iter()
+            .map(|a| routecore::bgp::aspath::Hop::from(a.0))
+            .collect::<Vec<_>>();
+        as_path.extend_from_slice(self.clone().into_routecore_hops().as_slice());
 
-
-        println!("ADD VECTOR {:?}", vector);
-        let mut as_path = vector.iter().map(|a| Hop(a.0.into())).collect::<Vec<_>>();
-        as_path.extend_from_slice(self.into_hops().as_slice());
-        println!("PREPENDED VEC = {:?}", &as_path);
-
-        self.hops = as_path.into_iter().map(TypeValue::from).collect::<Vec<_>>();
+        self.0 = as_path.into();
 
         Ok(())
     }
@@ -1691,10 +1682,16 @@ impl VectorValue for crate::types::builtin::AsPath {
         &mut self,
         vector: Vec<Self::WriteItem>,
     ) -> Result<(), LongSegmentError> {
-        let mut as_path = std::mem::take(&mut self.into_hops());
-        as_path.extend_from_slice(vector.iter().map(|a| Hop(a.0.into())).collect::<Vec<_>>().as_slice());
-        
-        self.hops = as_path.into_iter().map(TypeValue::from).collect::<Vec<_>>();
+        let mut as_path = self.clone().into_routecore_hops();
+        as_path.extend_from_slice(
+            vector
+                .iter()
+                .map(|a| a.0.into())
+                .collect::<Vec<_>>()
+                .as_slice(),
+        );
+
+        self.0 = as_path.into();
 
         Ok(())
     }
@@ -1708,21 +1705,29 @@ impl VectorValue for crate::types::builtin::AsPath {
         pos: u8,
         vector: Vec<Self::WriteItem>,
     ) -> Result<(), LongSegmentError> {
-        let as_path: Vec<Hop> = std::mem::take(&mut self.into_hops());
+        let as_path = self.clone().into_routecore_hops();
         let mut left_path = as_path[..pos as usize].to_vec();
-        left_path.extend_from_slice(vector.into_iter().map(|a| Hop(a.0.into())).collect::<Vec<_>>().as_slice());
-        left_path.extend_from_slice(&self.into_hops()[pos as usize..]);
+        left_path.extend_from_slice(
+            vector
+                .into_iter()
+                .map(|a| a.0.into())
+                .collect::<Vec<_>>()
+                .as_slice(),
+        );
+        left_path
+            .extend_from_slice(&self.0[pos as usize..]);
 
-        self.hops = as_path.into_iter().map(TypeValue::from).collect::<Vec<_>>();
+        self.0 = as_path.into();
+        
         Ok(())
     }
 
     fn vec_len(&self) -> Option<usize> {
-        Some(self.hops.len())
+        Some(self.0.hop_count())
     }
 
     fn vec_is_empty(&self) -> bool {
-        self.hops.is_empty()
+        self.0.hop_count() == 0
     }
 
     fn into_vec(self) -> Vec<Self::ReadItem> {
@@ -1738,25 +1743,13 @@ impl From<AsPath> for TypeValue {
 
 impl From<routecore::bgp::aspath::HopPath> for AsPath {
     fn from(value: routecore::bgp::aspath::HopPath) -> Self {
-        AsPath { hops: value.iter().map(|a| TypeValue::from(Hop(a.clone()))).collect::<Vec<_>>() }
+        AsPath(value)
     }
 }
 
-// impl From<routecore::asn::AsPath<Vec<u8>>> for AsPath {
-//     fn from(value: routecore::asn::AsPath<Vec<u8>>) -> Self {
-//         AsPath(value.into())
-//     }
-// }
-
-// impl From<Vec<u8>> for Asn {
-//     fn from(value: Vec<u8>) -> Self {
-//         Asn::from_u32(value.elements[0].into())
-//     }
-// }
-
 impl Display for AsPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.hops)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -1789,7 +1782,7 @@ impl From<AsPathToken> for usize {
 
 impl From<Vec<Hop>> for AsPath {
     fn from(value: Vec<Hop>) -> Self {
-        AsPath { hops: value.into_iter().map(TypeValue::from).collect::<Vec<_>>() }
+        AsPath(value.into_iter().map(|h| h.0).collect::<Vec<_>>().into())
     }
 }
 
@@ -1807,7 +1800,8 @@ impl RotoType for Hop {
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
-        Self: std::marker::Sized {
+        Self: std::marker::Sized,
+    {
         todo!()
     }
 
@@ -1816,7 +1810,8 @@ impl RotoType for Hop {
         type_value: &TypeDef,
     ) -> Result<TypeValue, CompileError>
     where
-        Self: std::marker::Sized {
+        Self: std::marker::Sized,
+    {
         todo!()
     }
 

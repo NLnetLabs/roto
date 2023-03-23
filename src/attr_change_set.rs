@@ -8,6 +8,7 @@ use crate::types::builtin::{
     AsPath, Asn, AtomicAggregator, BuiltinTypeValue, Community, Hop,
     LocalPref, MultiExitDisc, NextHop, OriginType, Prefix, RouteStatus,
 };
+use crate::types::collections::{List, ElementTypeValue};
 use crate::types::typevalue::TypeValue;
 
 // The values that live in a BGP Update message can be either Scalars or
@@ -208,8 +209,19 @@ impl<V: VectorValue + Into<TypeValue> + std::fmt::Debug> VectorOption<V> {
         self.value.as_ref()
     }
 
-    pub fn get_from_vec(&self, pos: u8) -> Option<TypeValue> {
-        self.value.as_ref().map(|c| c[pos as usize].clone())
+    // Only generic lists can iterator into a vector. There are specialized
+    // builtin vector values, but they have their own methods for iterating
+    // over them, e.g. AsPath.
+    pub fn as_vec(&self) -> Vec<&ElementTypeValue> {
+        if let Some(TypeValue::List(list)) = &self.value {
+            list.0.iter().collect::<Vec<_>>()
+        } else { vec![] }
+    }
+
+    pub fn into_vec(self) -> Vec<ElementTypeValue> {
+        if let Some(TypeValue::List(list)) = self.value {
+            list.0.into_iter().collect::<Vec<_>>()
+        } else { vec![] }
     }
 
     pub fn replace(&mut self, vector: V) -> Result<(), LongSegmentError> {
@@ -352,6 +364,24 @@ impl<V: VectorValue + Into<TypeValue> + std::fmt::Debug> VectorOption<V> {
     }
 }
 
+impl VectorOption<AsPath> {
+    pub fn as_routecore_hops_vec(&self) -> Vec<&routecore::bgp::aspath::Hop<Vec<u8>>> {
+        if let Some(TypeValue::Builtin(BuiltinTypeValue::AsPath(hop_path))) = &self.value {
+            hop_path.0.iter().collect::<Vec<_>>()
+        } else {
+            vec![]
+        }
+    }
+
+    pub fn into_routecore_hops_vec(self) -> Vec<routecore::bgp::aspath::Hop<Vec<u8>>> {
+        if let Some(TypeValue::Builtin(BuiltinTypeValue::AsPath(hop_path))) = self.value {
+            hop_path.0.into_iter().collect::<Vec<_>>()
+        } else {
+            vec![]
+        }
+    }
+}
+
 //------------ VectorValue --------------------------------------------------
 
 impl<V1: Into<TypeValue>, V2: VectorValue + Into<TypeValue>> From<Option<V1>>
@@ -387,20 +417,15 @@ impl TryFrom<Vec<routecore::asn::Asn>> for AsPath {
 
 impl From<Vec<routecore::bgp::aspath::Hop<Vec<u8>>>> for AsPath {
     fn from(value: Vec<routecore::bgp::aspath::Hop<Vec<u8>>>) -> Self {
-        AsPath {
-            hops: value
-                .into_iter()
-                .map(|a| Hop(a).into())
-                .collect::<Vec<_>>(),
-        }
+        AsPath(routecore::bgp::aspath::HopPath::from(value))
     }
 }
 
 impl std::ops::Index<usize> for AsPath {
-    type Output = TypeValue;
+    type Output = routecore::bgp::aspath::Hop<std::vec::Vec<u8>>;
 
     fn index(&self, index: usize) -> &Self::Output {
-        self.hops.index(index)
+        self.0.index(index)
     }
 }
 

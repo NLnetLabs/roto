@@ -406,18 +406,6 @@ impl TypeValue {
     }
 }
 
-impl std::ops::Index<usize> for TypeValue {
-    type Output = TypeValue;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        match self {
-            TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => as_path.index(index),
-            TypeValue::Builtin(BuiltinTypeValue::Communities(List(list))) => list.index(index).into(),
-            TypeValue::List(list) => list.0.index(index).into(),
-            _ => { panic!("Not an indexable typevalue: {}", self)}
-        }
-    }
-}
 
 impl Display for TypeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {

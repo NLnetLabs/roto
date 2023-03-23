@@ -1,13 +1,19 @@
 #[cfg(test)]
 mod route {
-    use routecore::{
-        bgp::{
-            message::SessionConfig,
-            types::{OriginType, NextHop},
-        }
+    use routecore::bgp::{
+        message::SessionConfig,
+        types::{NextHop, OriginType},
     };
 
-    use crate::{types::builtin::{Asn, RawRouteWithDeltas, RotondaId, UpdateMessage, Prefix, Hop}, vm::VmError};
+    use crate::{
+        types::{
+            builtin::{
+                Asn, Hop, Prefix, RawRouteWithDeltas, RotondaId,
+                UpdateMessage,
+            },
+        },
+        vm::VmError,
+    };
 
     #[test]
     fn create_update_msg() -> Result<(), VmError> {
@@ -32,8 +38,12 @@ mod route {
         let update: UpdateMessage =
             UpdateMessage::new(buf, SessionConfig::modern());
 
-        let prefixes: Vec<Prefix> =
-            update.0.nlris().iter().filter_map(|n| n.prefix().map(|p| p.into())).collect();
+        let prefixes: Vec<Prefix> = update
+            .0
+            .nlris()
+            .iter()
+            .filter_map(|n| n.prefix().map(|p| p.into()))
+            .collect();
         let msg_id = (RotondaId(0), 0);
 
         let mut roto_msgs = vec![];
@@ -53,10 +63,7 @@ mod route {
         }
 
         println!("{:?}", roto_msgs);
-        println!(
-            "{:#?}",
-            roto_msgs[2].get_latest_attrs()
-        );
+        println!("{:#?}", roto_msgs[2].get_latest_attrs());
 
         assert_eq!(roto_msgs[0].prefix, prefixes[0]);
         assert_eq!(roto_msgs[1].prefix, prefixes[1]);
@@ -69,11 +76,13 @@ mod route {
 
         let mut delta = roto_msgs[0].open_new_delta(delta_id)?;
         if let std::net::IpAddr::V6(v6) = prefixes[0].0.addr() {
-            delta
-                .attributes.next_hop.set(NextHop::Ipv6(v6));
+            delta.attributes.next_hop.set(NextHop::Ipv6(v6));
         }
 
-        let res = delta.attributes.as_path.prepend(crate::types::builtin::primitives::Asn::from(211321));
+        let res = delta
+            .attributes
+            .as_path
+            .prepend(crate::types::builtin::primitives::Asn::from(211321));
         assert!(res.is_ok());
 
         let res = delta.attributes.origin_type.set(OriginType::Incomplete);
@@ -85,15 +94,28 @@ mod route {
         let res = roto_msgs[2].store_delta(delta);
         assert!(res.is_ok());
 
-        println!(
-            "materialize! {:#?}",
-            roto_msgs[2].get_latest_attrs()
-        );
+        println!("materialize! {:#?}", roto_msgs[2].get_latest_attrs());
 
         let attr_set = roto_msgs[2].get_latest_attrs();
         assert_eq!(attr_set.as_path.len(), Some(2));
-        assert_eq!(attr_set.as_path.get_from_vec(0), Asn::try_from(211321).ok().map(|a| Hop::from(a).into()));
-        assert_eq!(attr_set.as_path.get_from_vec(1), Asn::try_from(200).ok().map(|a| Hop::from(a).into()));
+
+        println!("ATTR_SET_AS_PATH {:?}", attr_set.as_path.as_routecore_hops_vec());
+        assert_eq!(
+            attr_set.as_path.as_routecore_hops_vec().get(0),
+            Asn::try_from(211321)
+                .ok()
+                .map(move |a| routecore::bgp::aspath::Hop::from(a.0))
+                .as_ref()
+                .as_ref()
+        );
+        assert_eq!(
+            attr_set.as_path.as_routecore_hops_vec().get(1),
+            Asn::try_from(200)
+                .ok()
+                .map(move |a| routecore::bgp::aspath::Hop::from(a.0))
+                .as_ref()
+                .as_ref()
+        );
         Ok(())
     }
 
@@ -120,8 +142,12 @@ mod route {
         let update: UpdateMessage =
             UpdateMessage::new(buf, SessionConfig::modern());
 
-        let prefixes: Vec<Prefix> =
-            update.0.nlris().iter().filter_map(|n| n.prefix().map(|p| p.into())).collect();
+        let prefixes: Vec<Prefix> = update
+            .0
+            .nlris()
+            .iter()
+            .filter_map(|n| n.prefix().map(|p| p.into()))
+            .collect();
         let msg_id = (RotondaId(0), 0);
 
         let mut roto_msgs = vec![];
@@ -154,14 +180,16 @@ mod route {
 
         println!("change set {:#?}", new_change_set1);
         if let std::net::IpAddr::V6(v6) = prefixes[2].0.addr() {
-            new_change_set1.
-                attributes.next_hop.set(NextHop::Ipv6(v6));
+            new_change_set1.attributes.next_hop.set(NextHop::Ipv6(v6));
         }
 
         let res = new_change_set1.attributes.as_path.prepend(211321); //].try_into().unwrap());
         assert!(res.is_ok());
 
-        let res = new_change_set1.attributes.origin_type.set(OriginType::Incomplete);
+        let res = new_change_set1
+            .attributes
+            .origin_type
+            .set(OriginType::Incomplete);
         assert_eq!(res, Some(OriginType::Igp.into()));
 
         let res = roto_msgs[2].store_delta(new_change_set1);
@@ -169,8 +197,19 @@ mod route {
 
         let attr_set = roto_msgs[2].get_latest_attrs();
         assert_eq!(attr_set.as_path.len(), Some(2));
-        assert_eq!(attr_set.as_path.get_from_vec(0), Asn::try_from(211321).ok().map(|a| Hop::from(a).into()));
-        assert_eq!(attr_set.as_path.get_from_vec(1), Asn::try_from(200).ok().map(|a| Hop::from(a).into()));
+        assert_eq!(
+            *attr_set.as_path.as_routecore_hops_vec()[0],
+            routecore::bgp::aspath::Hop::from(Asn::try_from(211321)
+                .unwrap().0)
+        );
+        assert_eq!(
+            attr_set.as_path.as_routecore_hops_vec().get(1),
+            Asn::try_from(200)
+                .ok()
+                .map(move |a| routecore::bgp::aspath::Hop::from(a.0))
+                .as_ref()
+                .as_ref()
+        );
 
         // Change Set 2
         let mut new_change_set2 = roto_msgs[2].open_new_delta(delta_id)?;
@@ -182,10 +221,30 @@ mod route {
 
         let attr_set = roto_msgs[2].get_latest_attrs();
         assert_eq!(attr_set.as_path.len(), Some(3));
-        assert_eq!(attr_set.as_path.get_from_vec(0), Asn::try_from(211322).ok().map(|a| Hop::from(a).into()));
-        assert_eq!(attr_set.as_path.get_from_vec(1), Asn::try_from(211321).ok().map(|a| Hop::from(a).into()));
-        assert_eq!(attr_set.as_path.get_from_vec(2), Asn::try_from(200).ok().map(|a| Hop::from(a).into()));
-
+        assert_eq!(
+            attr_set.as_path.as_routecore_hops_vec().get(0),
+            Asn::try_from(211322)
+                .ok()
+                .map(move |a| routecore::bgp::aspath::Hop::from(a.0))
+                .as_ref()
+                .as_ref()
+        );
+        assert_eq!(
+            attr_set.as_path.as_routecore_hops_vec().get(1),
+            Asn::try_from(211321)
+                .ok()
+                .map(move |a| routecore::bgp::aspath::Hop::from(a.0))
+                .as_ref()
+                .as_ref()
+        );
+        assert_eq!(
+            attr_set.as_path.as_routecore_hops_vec().get(2),
+            Asn::try_from(200)
+                .ok()
+                .map(move |a| routecore::bgp::aspath::Hop::from(a.0))
+                .as_ref()
+                .as_ref()
+        );
         println!("Before changeset3 {:#?}", &attr_set);
 
         // Change Set 3
