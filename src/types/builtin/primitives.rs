@@ -1520,7 +1520,7 @@ impl From<AsnToken> for usize {
 
 type RoutecoreHop = routecore::bgp::aspath::Hop<Vec<u8>>;
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone, Default)]
 pub struct AsPath(pub(crate) routecore::bgp::aspath::HopPath);
 
 impl AsPath {
@@ -1544,12 +1544,10 @@ impl AsPath {
         self.0.into_iter().map(Hop).collect::<Vec<_>>()
     }
 
-    fn into_routecore_hops(self) -> Vec<routecore::bgp::aspath::Hop<Vec<u8>>> {
+    fn into_routecore_hops(
+        self,
+    ) -> Vec<routecore::bgp::aspath::Hop<Vec<u8>>> {
         self.0.into_iter().collect::<Vec<_>>()
-    }
-
-    fn as_routecore_hops(&self) -> Vec<&routecore::bgp::aspath::Hop<Vec<u8>>> {
-        self.0.iter().collect::<Vec<_>>()
     }
 
     pub fn contains(&self, hop: &Hop) -> bool {
@@ -1671,7 +1669,9 @@ impl VectorValue for crate::types::builtin::AsPath {
             .iter()
             .map(|a| routecore::bgp::aspath::Hop::from(a.0))
             .collect::<Vec<_>>();
-        as_path.extend_from_slice(self.clone().into_routecore_hops().as_slice());
+        as_path.extend_from_slice(
+            std::mem::take(self).into_routecore_hops().as_slice(),
+        );
 
         self.0 = as_path.into();
 
@@ -1682,7 +1682,7 @@ impl VectorValue for crate::types::builtin::AsPath {
         &mut self,
         vector: Vec<Self::WriteItem>,
     ) -> Result<(), LongSegmentError> {
-        let mut as_path = self.clone().into_routecore_hops();
+        let mut as_path = std::mem::take(self).into_routecore_hops();
         as_path.extend_from_slice(
             vector
                 .iter()
@@ -1705,7 +1705,7 @@ impl VectorValue for crate::types::builtin::AsPath {
         pos: u8,
         vector: Vec<Self::WriteItem>,
     ) -> Result<(), LongSegmentError> {
-        let as_path = self.clone().into_routecore_hops();
+        let as_path = std::mem::take(self).into_routecore_hops();
         let mut left_path = as_path[..pos as usize].to_vec();
         left_path.extend_from_slice(
             vector
@@ -1714,11 +1714,10 @@ impl VectorValue for crate::types::builtin::AsPath {
                 .collect::<Vec<_>>()
                 .as_slice(),
         );
-        left_path
-            .extend_from_slice(&self.0[pos as usize..]);
+        left_path.extend_from_slice(&self.0[pos as usize..]);
 
         self.0 = as_path.into();
-        
+
         Ok(())
     }
 
