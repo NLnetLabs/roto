@@ -173,3 +173,124 @@ fn test_module_30() {
     .test_eval(true)
     .test_compile(true);
 }
+
+#[test]
+fn test_module_31() {
+    let _compiler = TestCompiler::create(
+        "module_1",
+        r###"
+        module module_1 {
+            define {
+                // specify the types of that this filter receives
+                // and sends.
+                // rx_tx route: StreamRoute;
+                rx pph_asn: MyRec;
+                tx out: Asn;
+            }
+
+            term peer-asn-matches {
+                match {
+                    pph_asn.asn == AS1299;
+                }
+            }
+
+            action set-asn {
+                pph_asn.asn.set(AS200);
+            }
+
+            apply {
+                use my-module;
+                filter match peer-asn-matches matching { set-asn; return accept; };
+                return reject;
+            }
+        }
+
+        type MyRec {
+            asn: Asn
+        }
+        "###,
+    )
+    .test_parse(true)
+    .test_eval(true)
+    .test_compile(true);
+}
+
+#[test]
+fn test_module_32() {
+    let _compiler = TestCompiler::create(
+        "module_1",
+        r###"
+        module module_1 {
+            define {
+                // specify the types of that this filter receives
+                // and sends.
+                // rx_tx route: StreamRoute;
+                rx pph_asn: MyRec;
+                tx out: Asn;
+            }
+
+            term peer-asn-matches {
+                match {
+                    pph_asn.i_dont_exist == AS1299;
+                }
+            }
+
+            action set-asn {
+                pph_asn.asn.set(AS200);
+            }
+
+            apply {
+                use my-module;
+                filter match peer-asn-matches matching { set-asn; return accept; };
+                return reject;
+            }
+        }
+
+        type MyRec {
+            asn: Asn
+        }
+        "###,
+    )
+    .test_parse(true)
+    .test_eval(false);
+}
+
+#[test]
+fn test_module_33() {
+    let _compiler = TestCompiler::create(
+        "module_1",
+        r###"
+        module module_1 {
+            define {
+                // specify the types of that this filter receives
+                // and sends.
+                // rx_tx route: StreamRoute;
+                rx pph_asn: MyRec;
+                tx out: Asn;
+            }
+
+            term peer-asn-matches {
+                match {
+                    pph_asn.asn == AS1299;
+                }
+            }
+
+            action set-asn {
+                pph_asn.asn.set(AS200);
+            }
+
+            apply {
+                use my-module;
+                filter match peer-asn-matches matching { set-asn; return accept; };
+                return reject;
+            }
+        }
+
+        type IamNotUsed {
+            asn: Asn
+        }
+        "###,
+    )
+    .test_parse(true)
+    .test_eval(false);
+}

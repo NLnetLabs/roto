@@ -1,0 +1,130 @@
+use std::cell::RefCell;
+
+use roto::compile::Compiler;
+
+use roto::types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage, Prefix, Asn};
+use roto::types::collections::Record;
+use roto::types::typedef::TypeDef;
+use roto::types::typevalue::TypeValue;
+use roto::vm;
+use routecore::bgp::message::SessionConfig;
+
+fn test_data(
+    name: &str,
+    source_code: &'static str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("Evaluate module {}...", name);
+
+    // Compile the source code in this example
+    let rotolo = Compiler::build(source_code);
+    let roto_pack = rotolo.inspect_pack(name)?;
+
+    // BGP UPDATE message containing MP_REACH_NLRI path attribute,
+    // comprising 5 IPv6 NLRIs
+    let buf = bytes::Bytes::from(vec![
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x88, 0x02, 0x00, 0x00, 0x00,
+        0x71, 0x80, 0x0e, 0x5a, 0x00, 0x02, 0x01, 0x20, 0xfc, 0x00, 0x00,
+        0x10, 0x00, 0x01, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x10, 0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x80, 0xfc, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x10, 0x40, 0x20, 0x01, 0x0d, 0xb8, 0xff, 0xff, 0x00,
+        0x00, 0x40, 0x20, 0x01, 0x0d, 0xb8, 0xff, 0xff, 0x00, 0x01, 0x40,
+        0x20, 0x01, 0x0d, 0xb8, 0xff, 0xff, 0x00, 0x02, 0x40, 0x20, 0x01,
+        0x0d, 0xb8, 0xff, 0xff, 0x00, 0x03, 0x40, 0x01, 0x01, 0x00, 0x40,
+        0x02, 0x06, 0x02, 0x01, 0x00, 0x00, 0x00, 0xc8, 0x80, 0x04, 0x04,
+        0x00, 0x00, 0x00, 0x00,
+    ]);
+
+    let update: UpdateMessage =
+        UpdateMessage::new(buf, SessionConfig::modern());
+    let prefixes: Vec<Prefix> =
+            update.0.nlris().iter().filter_map(|n| n.prefix().map(|p| p.into())).collect();
+    let msg_id = (RotondaId(0), 0);
+
+    let payload: RawRouteWithDeltas = RawRouteWithDeltas::new_with_message(
+        msg_id,
+        prefixes[0],
+        update,
+    );
+
+
+    let payload_type = TypeDef::new_record_type(vec![("asn", Box::new(TypeDef::Asn))])?;
+    
+    let payload = Record::create_instance(&payload_type, vec![("asn", Asn::from(1299).into())])?;
+    // Create the VM
+    println!("Used Arguments");
+    println!("{:#?}", &roto_pack.arguments);
+    println!("Used Data Sources");
+    println!("{:#?}", &roto_pack.data_sources);
+
+    // let module_arguments = vec![(
+    //     "extra_asn".into(),
+    //     // use Roto type coercion
+    //     TypeValue::from(65534_u32)
+    // )];
+
+    let ds_ref = roto_pack.data_sources.iter().collect::<Vec<_>>();
+    // let args = rotolo.compile_arguments(name, module_arguments)?;
+
+    let mut vm = vm::VmBuilder::new()
+        // .with_arguments(args)
+        .with_data_sources(ds_ref.as_slice())
+        .with_mir_code(roto_pack.mir)
+        .build();
+
+    let mem = vm::LinearMemory::uninit();
+    let res = vm.exec(
+        payload,
+        None::<Record>,
+        // Some(module_arguments),
+        None,
+        RefCell::new(mem),
+    )
+    .unwrap();
+
+    println!("\nRESULT");
+    println!("action: {}", res.0);
+    println!("rx    : {:?}", res.1);
+    println!("tx    : {:?}", res.2);
+
+    Ok(())
+}
+
+fn main() {
+    test_data(
+        "my-module",
+        r###"
+            module my-module {
+                define {
+                    // specify the types of that this filter receives
+                    // and sends.
+                    // rx_tx route: StreamRoute;
+                    rx pph_asn: MyRec;
+                    tx out: Asn;
+                }
+
+                term peer-asn-matches {
+                    match {
+                        pph_asn.asn == AS1299;
+                    }
+                }
+
+                action set-asn {
+                    pph_asn.asn.set(AS200);
+                }
+
+                apply {
+                    use my-module;
+                    filter match peer-asn-matches matching { set-asn; return accept; };
+                    return reject;
+                }
+            }
+
+            type MyRec {
+                asn: Asn
+            }
+        "###,
+    ).unwrap();
+}

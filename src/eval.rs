@@ -51,13 +51,12 @@ impl<'a> ast::SyntaxTree {
         };
 
         for expr in &global {
-            if let ast::RootExpr::Rib(rib) = expr {
-                rib.eval(global_symbols)?;
-            }
-
-            if let ast::RootExpr::Table(table) = expr {
-                table.eval(global_symbols)?;
-            }
+            match expr {
+                ast::RootExpr::Rib(rib) => rib.eval(global_symbols)?,
+                ast::RootExpr::Table(table) => table.eval(global_symbols)?,
+                ast::RootExpr::Ty(rt_assign) => rt_assign.eval(global_symbols)?,
+                _ => {}
+            };
         }
 
         // For each module, create a new symbol table if it does not exist.
@@ -163,6 +162,17 @@ impl<'a> ast::Table {
             vec![],
             TypeValue::Unknown,
         )?;
+
+        Ok(())
+    }
+}
+
+impl<'a> ast::RecordTypeAssignment {
+    fn eval(
+        &'a self,
+        symbols: &'_ mut symbols::SymbolTable,
+    ) -> Result<(), CompileError> {
+        self.record_type.eval(self.ident.ident.clone(), symbols::SymbolKind::NamedType, symbols)?;
 
         Ok(())
     }

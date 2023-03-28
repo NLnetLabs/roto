@@ -57,6 +57,7 @@ impl SyntaxTree {
 //     "view" Identifier 'contains' TypeIdentifier '{' RibBody '}' |
 //     "prefix-list" Identifier '{' PrefixListbody '}' |
 //     "table" Identifier '{' TableBody '}' |
+//     "type" '{' RecordTypeIdenfifier '}' |
 //     Comment
 
 #[derive(Debug, Clone)]
@@ -65,6 +66,7 @@ pub enum RootExpr {
     Rib(Rib),
     // PrefixList(PrefixListExpr),
     Table(Table),
+    Ty(RecordTypeAssignment),
 }
 
 impl RootExpr {
@@ -75,6 +77,7 @@ impl RootExpr {
                 map(Rib::parse, Self::Rib),
                 map(Table::parse, Self::Table),
                 map(Module::parse, |m| Self::Module(Box::new(m))),
+                map(RecordTypeAssignment::parse, Self::Ty)
             )),
         )(input)?;
         Ok((input, expressions))
@@ -88,7 +91,48 @@ impl RootExpr {
     }
 }
 
-//------------ Module --------------------------------------------------------
+//------------ RecordTypeAssignment -----------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct RecordTypeAssignment {
+    pub ident: TypeIdentifier,
+    pub record_type: RecordTypeIdentifier
+}
+
+impl RecordTypeAssignment {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (ident, record_type)) = context(
+            "record type definition",
+            tuple((
+                context(
+                    "record type name",
+                    preceded(
+                        opt_ws(tag("type")),
+                        opt_ws(TypeIdentifier::parse),
+                    )
+                ),
+                context(
+                    "type definition",
+                    delimited(
+                        opt_ws(char('{')),
+                        cut(RecordTypeIdentifier::parse),
+                        opt_ws(char('}')),
+                    ),
+                )
+            ))
+        )(input)?;
+
+        Ok((
+            input,
+            RecordTypeAssignment {
+                ident,
+                record_type
+            }
+        ))
+    }
+}
+
+//------------ Module -------------------------------------------------------
 
 // Module ::= "module" Identifier "for" Identifier WithStatement  '{' ModuleBody '}'
 
@@ -914,6 +958,7 @@ impl Identifier {
                     tag("false"),
                     tag("apply"),
                     tag("use"),
+                    tag("type"),
                 )),
                 multispace1,
             )),
@@ -973,7 +1018,7 @@ impl fmt::Display for Identifier {
 
 //------------ TypeIdentifier -----------------------------------------------
 
-/// An identifier is the uniqur name of all expressions that we allow to be
+/// An identifier is the unique name of all expressions that we allow to be
 /// named.
 ///
 /// It is a word composed of a leading alphabetic Unicode character or an
