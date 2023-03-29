@@ -72,7 +72,7 @@ impl<'a> Stack {
     }
 
     fn unwind(&mut self) -> Vec<StackRef> {
-        self.0.drain(..).collect()
+        std::mem::take(&mut self.0)
     }
 
     fn clear(&mut self) {
@@ -489,18 +489,18 @@ impl<'a> VirtualMachine<'a> {
         &'a self,
         mem: &'a LinearMemory,
     ) -> Vec<&'a TypeValue> {
-        let mut stack = self.stack.borrow_mut();
-        let mut unwind_stack = vec![];
-        for sr in stack.unwind().into_iter() {
+        let stack = self.stack.borrow_mut().unwind();
+        let mut unwind_stack = Vec::with_capacity(stack.len());
+        for sr in stack.into_iter() {
             match sr.pos {
                 StackRefPos::MemPos(pos) => {
                     let v = mem
                         .get_mp_field_by_index(pos as usize, sr.field_index)
                         .unwrap_or_else(|| {
-                            if log_enabled!(Level::Debug) {
-                                debug!("\nstack: {:?}", stack);
-                                debug!("mem: {:#?}", mem.0);
-                            }
+                            // if log_enabled!(Level::Debug) {
+                            //     debug!("\nstack: {:?}", stack);
+                            //     debug!("mem: {:#?}", mem.0);
+                            // }
                             panic!(
                                 "Uninitialized memory in position {}",
                                 pos
@@ -522,7 +522,7 @@ impl<'a> VirtualMachine<'a> {
 
     fn as_vec(&'a self) -> Vec<StackRef> {
         let mut stack = self.stack.borrow_mut();
-        stack.unwind().into_iter().collect::<Vec<_>>()
+        stack.unwind()
     }
 
     fn get_data_source(
