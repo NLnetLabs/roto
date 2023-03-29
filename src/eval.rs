@@ -598,7 +598,7 @@ impl ast::ApplyScope {
 
         // not doing anything with the actual ApplyScope (the use statement),
         // not sure whether it is going to be needed.
-        let _s_name = self.scope.clone().ident;
+        let _s_name = self.scope.clone().map(|s| s.ident);
 
         let term = self.filter_ident.eval(symbols.clone(), scope.clone())?;
         let (_ty, token) = module_symbols.get_term(&term.get_name())?;

@@ -649,7 +649,7 @@ impl ApplyScope {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, (scope, operator, (filter_ident, negate, action_exprs))) =
             tuple((
-                opt_ws(context(
+                opt_ws(opt(context(
                     "use scope",
                     preceded(
                         opt_ws(tag("use")),
@@ -659,7 +659,7 @@ impl ApplyScope {
                             opt_ws(char(';')),
                         ),
                     ),
-                )),
+                ))),
                 preceded(opt_ws(tag("filter")), opt_ws(MatchOperator::parse)),
                 context(
                     "action expressions",
