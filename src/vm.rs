@@ -17,6 +17,8 @@ use crate::{
     },
 };
 
+use log::{trace, debug, log_enabled, Level};
+
 #[derive(Debug, Clone)]
 pub(crate) enum StackRefPos {
     // index into LinearMemory
@@ -171,12 +173,9 @@ impl LinearMemory {
                     }
                 }
                 Some(TypeValue::Builtin(BuiltinTypeValue::Route(route))) => {
-                    println!("A ROUTE: RUN TO THE HILLS!");
                     if let Some(v) = route.get_value_ref_for_field(field_index) {
-                        println!("field {} in route: {}", field_index, route);
                        Some(v)
                     } else { 
-                        println!("no field {} for route {}", field_index, route);
                         Some(&TypeValue::Unknown)
                     }
                 }
@@ -498,8 +497,10 @@ impl<'a> VirtualMachine<'a> {
                     let v = mem
                         .get_mp_field_by_index(pos as usize, sr.field_index)
                         .unwrap_or_else(|| {
-                            println!("\nstack: {:?}", stack);
-                            println!("mem: {:#?}", mem.0);
+                            if log_enabled!(Level::Debug) {
+                                debug!("\nstack: {:?}", stack);
+                                debug!("mem: {:#?}", mem.0);
+                            }
                             panic!(
                                 "Uninitialized memory in position {}",
                                 pos
@@ -544,7 +545,9 @@ impl<'a> VirtualMachine<'a> {
         mem: RefCell<LinearMemory>,
     ) -> Result<(AcceptReject, TypeValue, Option<TypeValue>), VmError>
     {
-        println!("\nstart executing vm...");
+        if log_enabled!(Level::Debug) {
+            debug!("\nstart executing vm...");
+        }
         let mut commands_num: usize = 0;
 
         self._move_rx_tx_to_mem(rx, tx, &mem);
@@ -554,14 +557,18 @@ impl<'a> VirtualMachine<'a> {
             ty: _,
         } in self.mir_code
         {
-            println!("\n\n--mirblock------------------");
+            if log_enabled!(Level::Trace) {
+                trace!("\n\n--mirblock------------------");
+                trace!("stack: {:?}", self.stack);
+            }
 
-            println!("stack: {:?}", self.stack);
             for (pc, Command { op, args }) in command_stack.iter().enumerate()
             {
                 commands_num += 1;
                 let mut args = CommandArgsStack::new(args);
-                print!("\n{:3} -> {:?} {:?} ", pc, op, args);
+                if log_enabled!(Level::Trace) {
+                    trace!("\n{:3} -> {:?} {:?} ", pc, op, args);
+                }
                 match op {
                     OpCode::Cmp => {
                         let mut m = mem.borrow_mut();
@@ -569,8 +576,10 @@ impl<'a> VirtualMachine<'a> {
                             self._unwind_resolved_stack_into_vec(&m);
                         let left = stack_args[0];
                         let right = stack_args[1];
-
-                        print!(" {:?} <-> {:?}", left, right);
+                        
+                        if log_enabled!(Level::Trace) {
+                            trace!(" {:?} <-> {:?}", left, right);
+                        }
 
                         match args[0] {
                             Arg::CompareOp(CompareOp::Eq) => {
@@ -693,8 +702,10 @@ impl<'a> VirtualMachine<'a> {
                     }
                     // stack args: [type, method_token, args, return memory position]
                     OpCode::ExecuteTypeMethod => {
-                        println!("Stack {:?}", self.stack);
-                        println!("Args {:?}", args);
+                        if log_enabled!(Level::Trace) {
+                            trace!("Stack {:?}", self.stack);
+                            trace!("Args {:?}", args);
+                        }
                         let mut m = mem.borrow_mut();
 
                         let mem_pos =
@@ -754,8 +765,10 @@ impl<'a> VirtualMachine<'a> {
                                     let v = m
                                         .get_mp_field_by_index(pos as usize, sr.field_index)
                                         .unwrap_or_else(|| {
-                                            println!("\nstack: {:?}", stack);
-                                            println!("mem: {:#?}", m.0);
+                                            if log_enabled!(Level::Debug) {
+                                                debug!("\nstack: {:?}", stack);
+                                                debug!("mem: {:#?}", m.0);
+                                            }
                                             panic!("Uninitialized memory in position {}", pos);
                                         });
                                     v
@@ -804,7 +817,9 @@ impl<'a> VirtualMachine<'a> {
                                 0
                             };
 
-                        println!("Args {:?}", args);
+                        if log_enabled!(Level::Trace) {
+                            trace!("Args {:?}", args);
+                        }
                         let (return_type, method_token) = args.pop_2();
 
                         // pop as many refs from the stack as we have
@@ -818,8 +833,10 @@ impl<'a> VirtualMachine<'a> {
                         // later on.
                         let mut target_field_index = None;
 
-                        println!("\nargs_len {}", args_len);
-                        println!("Stack {:?}", stack);
+                        if log_enabled!(Level::Trace) {
+                            trace!("\nargs_len {}", args_len);
+                            trace!("Stack {:?}", stack);
+                        }
                         let mut stack_args = (0..args_len).into_iter().map(|_i| {
                             let sr = stack.pop().unwrap();
 
@@ -834,8 +851,10 @@ impl<'a> VirtualMachine<'a> {
                                     m
                                         .get_mem_pos_as_owned(pos as usize)
                                         .unwrap_or_else(|| {
-                                            println!("\nstack: {:?}", stack);
-                                            println!("mem: {:#?}", m.0);
+                                            if log_enabled!(Level::Debug) {
+                                                debug!("\nstack: {:?}", stack);
+                                                debug!("mem: {:#?}", m.0);
+                                            }
                                             panic!(r#"Uninitialized memory in 
                                                 pos {}. That's fatal"#, pos);
                                         })
@@ -958,14 +977,18 @@ impl<'a> VirtualMachine<'a> {
                     // stack args: [mem_pos, constant_value]
                     OpCode::PushStack => match args[0] {
                         Arg::MemPos(pos) => {
-                            print!(
-                                " content: {:?}",
-                                mem.borrow().get_mem_pos(pos as usize)
-                            );
+                            if log_enabled!(Level::Trace) {
+                                trace!(
+                                    " content: {:?}",
+                                    mem.borrow().get_mem_pos(pos as usize)
+                                );
+                            }
 
                             let mut s = self.stack.borrow_mut();
                             s.push(StackRefPos::MemPos(pos))?;
-                            println!(" stack {:?}", s);
+                            if log_enabled!(Level::Trace) {
+                                trace!(" stack {:?}", s);
+                            }
                         }
                         _ => return Err(VmError::InvalidValueType),
                     },
@@ -999,7 +1022,9 @@ impl<'a> VirtualMachine<'a> {
                             if let Arg::FieldAccess(field) = arg {
                                 let mut s = self.stack.borrow_mut();
                                 s.set_field_index(*field)?;
-                                print!(" -> stack {:?}", s);
+                                if log_enabled!(Level::Trace) {
+                                    trace!(" -> stack {:?}", s);
+                                }
                             } else {
                                 return Err(VmError::InvalidValueType);
                             }
@@ -1036,12 +1061,15 @@ impl<'a> VirtualMachine<'a> {
                         let stack_ref = s.get_top_value()?;
                         let bool_val =
                             m.get_mp_field_by_stack_ref(stack_ref).unwrap();
-                        if bool_val.is_false()? {
-                            print!(" skip to end of block");
-                            break;
-                        } else {
-                            print!(" continue");
-                            continue;
+
+                        if log_enabled!(Level::Trace) {
+                            if bool_val.is_false()? {
+                                trace!(" skip to end of block");
+                                break;
+                            } else {
+                                trace!(" continue");
+                                continue;
+                            }
                         }
                     }
                     // stack args ignored
@@ -1051,12 +1079,14 @@ impl<'a> VirtualMachine<'a> {
                         let stack_ref = s.get_top_value()?;
                         let bool_val =
                             m.get_mp_field_by_stack_ref(stack_ref).unwrap();
-                        if bool_val.is_false()? {
-                            print!(" continue");
-                            continue;
-                        } else {
-                            print!(" skip to end of block");
-                            break;
+                        if log_enabled!(Level::Trace) {
+                            if bool_val.is_false()? {
+                                trace!(" continue");
+                                continue;
+                            } else {
+                                trace!(" skip to end of block");
+                                break;
+                            }
                         }
                     }
                     // stack args: [exit value]
@@ -1075,18 +1105,22 @@ impl<'a> VirtualMachine<'a> {
                         };
 
                         if *accept_reject != AcceptReject::NoReturn {
-                            println!("\n\nINITIALIZED MEMORY POSITIONS");
+                            if log_enabled!(Level::Trace) {
+                                trace!("\n\nINITIALIZED MEMORY POSITIONS");
+                            }
                             for (i, addr) in m.0.as_slice().iter().enumerate()
                             {
-                                if !addr.is_unitialized() {
-                                    println!("{}: {}", i, addr);
+                                if log_enabled!(Level::Trace) && !addr.is_unitialized() {
+                                    trace!("{}: {}", i, addr);
                                 }
                             }
 
-                            println!(
-                                "\n🍺 Done! Successfully executed {} instructions.",
-                                commands_num
-                            );
+                            if log_enabled!(Level::Debug) {
+                                debug!(
+                                    "\n🍺 Done! Successfully executed {} instructions.",
+                                    commands_num
+                                );
+                            }
 
                             return Ok((*accept_reject, rx, tx));
                         }
@@ -1120,11 +1154,15 @@ impl<'a> VirtualMachine<'a> {
                     }
                 };
             }
-            println!("\n\n(end) stack: {:?}", self.stack);
-            println!("\nINITIALIZED MEMORY POSITIONS");
+
+            if log_enabled!(Level::Trace) {
+                trace!("\n\n(end) stack: {:?}", self.stack);
+                trace!("\nINITIALIZED MEMORY POSITIONS");
+            }
+
             for (i, addr) in mem.borrow().0.as_slice().iter().enumerate() {
-                if !addr.is_unitialized() {
-                    println!("{}: {}", i, addr);
+                if log_enabled!(Level::Trace) && !addr.is_unitialized() {
+                    trace!("{}: {}", i, addr);
                 }
             }
         }
