@@ -53,11 +53,10 @@ impl SyntaxTree {
 //------------ RootExpr -----------------------------------------------------
 
 // RootExpr ::= Module |
+//     "module" Identifier ForStatement WithStatement '{' Module '}' |
 //     "rib" Identifier 'contains' TypeIdentifier '{' RibBody '}' |
-//     "view" Identifier 'contains' TypeIdentifier '{' RibBody '}' |
-//     "prefix-list" Identifier '{' PrefixListbody '}' |
 //     "table" Identifier '{' TableBody '}' |
-//     "type" '{' RecordTypeIdenfifier '}' |
+//     RecordTypeAssignment |
 //     Comment
 
 #[derive(Debug, Clone)]
@@ -92,6 +91,8 @@ impl RootExpr {
 }
 
 //------------ RecordTypeAssignment -----------------------------------------
+
+// RecordTypeAssignment ::= "type" Identifier '{' RecordTypeIdentifier '}'
 
 #[derive(Clone, Debug)]
 pub struct RecordTypeAssignment {
@@ -134,7 +135,8 @@ impl RecordTypeAssignment {
 
 //------------ Module -------------------------------------------------------
 
-// Module ::= "module" Identifier "for" Identifier WithStatement  '{' ModuleBody '}'
+// Module ::= "module" Identifier "for" Identifier WithStatement 
+//              WithStatement '{' ModuleBody '}'
 
 #[derive(Clone, Debug)]
 pub struct Module {
@@ -638,7 +640,7 @@ impl ApplyBody {
 
 #[derive(Clone, Debug)]
 pub struct ApplyScope {
-    pub scope: Identifier,
+    pub scope: Option<Identifier>,
     pub operator: MatchOperator,
     pub filter_ident: ValueExpr,
     pub negate: bool,
