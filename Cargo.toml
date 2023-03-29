@@ -12,6 +12,8 @@ categories = ["network-programming"]
 license = "BSD-3-Clause"
 
 [dependencies]
+log = "0.4"
+env_logger = "0.10"
 # use branch aspath-with-hops
 routecore = { path = "../../routecore", features = [ "bgp" ]}
 bytes = "1"
