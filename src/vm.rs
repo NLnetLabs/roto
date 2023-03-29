@@ -1061,15 +1061,17 @@ impl<'a> VirtualMachine<'a> {
                         let stack_ref = s.get_top_value()?;
                         let bool_val =
                             m.get_mp_field_by_stack_ref(stack_ref).unwrap();
-
-                        if log_enabled!(Level::Trace) {
-                            if bool_val.is_false()? {
+                        if bool_val.is_false()? {
+                            if log_enabled!(Level::Trace) {
                                 trace!(" skip to end of block");
-                                break;
-                            } else {
-                                trace!(" continue");
-                                continue;
                             }
+                            break;
+                        } else {
+                            if log_enabled!(Level::Trace) {
+                                trace!(" continue");
+
+                            }
+                            continue;
                         }
                     }
                     // stack args ignored
@@ -1079,14 +1081,16 @@ impl<'a> VirtualMachine<'a> {
                         let stack_ref = s.get_top_value()?;
                         let bool_val =
                             m.get_mp_field_by_stack_ref(stack_ref).unwrap();
-                        if log_enabled!(Level::Trace) {
-                            if bool_val.is_false()? {
+                        if bool_val.is_false()? {
+                            if log_enabled!(Level::Trace) {
                                 trace!(" continue");
-                                continue;
-                            } else {
-                                trace!(" skip to end of block");
-                                break;
                             }
+                            continue;
+                        } else {
+                            if log_enabled!(Level::Trace) {
+                                trace!(" skip to end of block");
+                            }
+                            break;
                         }
                     }
                     // stack args: [exit value]
