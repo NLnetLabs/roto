@@ -15,6 +15,8 @@ fn test_data(
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Evaluate module {}...", name);
 
+    env_logger::init();
+
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code);
     let roto_pack = rotolo.inspect_pack(name)?;
@@ -52,7 +54,7 @@ fn test_data(
 
     let payload_type = TypeDef::new_record_type(vec![("asn", Box::new(TypeDef::Asn))])?;
     
-    let payload = Record::create_instance(&payload_type, vec![("asn", Asn::from(1299).into())])?;
+    let payload = Record::create_instance(&payload_type, vec![("asn", Asn::from(65534).into())])?;
     // Create the VM
     println!("Used Arguments");
     println!("{:#?}", &roto_pack.arguments);
@@ -107,17 +109,12 @@ fn main() {
 
                 term peer-asn-matches {
                     match {
-                        pph_asn.asn == AS1299;
+                        pph_asn.asn == AS65534;
                     }
                 }
 
-                action set-asn {
-                    pph_asn.asn.set(AS200);
-                }
-
                 apply {
-                    use my-module;
-                    filter match peer-asn-matches matching { set-asn; return accept; };
+                    filter match peer-asn-matches matching { return accept; };
                     return reject;
                 }
             }
