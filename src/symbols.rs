@@ -499,6 +499,7 @@ pub enum MatchActionQuantifier {
 pub enum MatchActionType {
     MatchAction,
     NegateMatchAction,
+    EmptyAction, // An MatchAction without an action, just a accept or reject
 }
 
 impl TryFrom<SymbolKind> for MatchActionType {

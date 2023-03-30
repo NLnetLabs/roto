@@ -190,7 +190,7 @@ fn test_module_31() {
 
             term peer-asn-matches {
                 match {
-                    pph_asn.asn == AS1299;
+                    pph_asn.asn == AS65534;
                 }
             }
 
@@ -231,7 +231,7 @@ fn test_module_32() {
 
             term peer-asn-matches {
                 match {
-                    pph_asn.i_dont_exist == AS1299;
+                    pph_asn.i_dont_exist == AS65534;
                 }
             }
 
@@ -271,7 +271,7 @@ fn test_module_33() {
 
             term peer-asn-matches {
                 match {
-                    pph_asn.asn == AS1299;
+                    pph_asn.asn == AS65534;
                 }
             }
 

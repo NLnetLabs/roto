@@ -3,6 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
+use log::{log_enabled, debug, Level, trace, info};
 use nom::error::VerboseError;
 
 use crate::{
@@ -385,7 +386,10 @@ impl<'a> Compiler {
     }
 
     pub fn compile(self) -> Rotolo {
-        println!("Start compiling...");
+
+        if log_enabled!(Level::Info) {
+            info!("Start compiling...");
+        }
 
         // get all symbols that are used in the filter terms.
         let mut _global = self.symbols.borrow_mut();
@@ -1128,7 +1132,7 @@ fn compile_apply(
 
         if let SymbolKind::MatchAction(ma) = match_action.get_kind() {
             match ma {
-                MatchActionType::MatchAction => {
+                MatchActionType::MatchAction | MatchActionType::EmptyAction => {
                     state.cur_mir_block.command_stack.extend([
                         Command::new(
                             OpCode::Label,
@@ -1179,12 +1183,11 @@ fn compile_apply(
                 panic!("NO ACCEPT REJECT {:?}", action);
             };
             let actions = _module.get_actions();
-            let action = actions
+            if let Some(action) = actions
                 .iter()
-                .find(|t| t.get_name() == action_name)
-                .unwrap();
-
-            state = compile_action(action, state)?;
+                .find(|t| t.get_name() == action_name) {
+                state = compile_action(action, state)?;
+            }
 
             // Add an early return if the type of the match action is either `Reject` or
             // `Accept`.

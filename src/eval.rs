@@ -605,22 +605,36 @@ impl ast::ApplyScope {
 
         let mut args_vec = vec![];
         for action in &self.actions {
-            let match_action =
-                action.0.eval(symbols.clone(), scope.clone())?;
+            if let Some(match_action) =
+                action.0.clone() { 
+                    let match_action_name = match_action.eval(symbols.clone(), scope.clone())?.get_name();
 
-            let (_ty, token) =
-                module_symbols.get_action(&match_action.get_name())?;
+                    let (_ty, token) =
+                        module_symbols.get_action(&match_action_name)?;
 
-            let s = symbols::Symbol::new(
-                match_action.get_name(),
-                symbols::SymbolKind::Action,
-                TypeDef::AcceptReject(
-                    action.1.unwrap_or(ast::AcceptReject::NoReturn),
-                ),
-                vec![],
-                Some(token),
-            );
-            args_vec.push(s);
+                    let s = symbols::Symbol::new(
+                        match_action_name,
+                        symbols::SymbolKind::Action,
+                        TypeDef::AcceptReject(
+                            action.1.unwrap_or(ast::AcceptReject::NoReturn),
+                        ),
+                        vec![],
+                        Some(token),
+                    );
+                    args_vec.push(s);
+                }
+            else {
+                let s = symbols::Symbol::new(
+                    term.get_name(),
+                    symbols::SymbolKind::MatchAction(MatchActionType::EmptyAction),
+                    TypeDef::AcceptReject(
+                        action.1.ok_or_else(|| CompileError::from("Encountered MatchAction without Action or Accept Reject statement."))?,
+                    ),
+                    vec![],
+                    None
+                );
+                args_vec.push(s);
+            }
         }
         let s = symbols::Symbol::new(
             term.get_name(),

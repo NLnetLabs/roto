@@ -76,7 +76,7 @@ impl RootExpr {
                 map(Rib::parse, Self::Rib),
                 map(Table::parse, Self::Table),
                 map(Module::parse, |m| Self::Module(Box::new(m))),
-                map(RecordTypeAssignment::parse, Self::Ty)
+                map(RecordTypeAssignment::parse, Self::Ty),
             )),
         )(input)?;
         Ok((input, expressions))
@@ -97,7 +97,7 @@ impl RootExpr {
 #[derive(Clone, Debug)]
 pub struct RecordTypeAssignment {
     pub ident: TypeIdentifier,
-    pub record_type: RecordTypeIdentifier
+    pub record_type: RecordTypeIdentifier,
 }
 
 impl RecordTypeAssignment {
@@ -110,7 +110,7 @@ impl RecordTypeAssignment {
                     preceded(
                         opt_ws(tag("type")),
                         opt_ws(TypeIdentifier::parse),
-                    )
+                    ),
                 ),
                 context(
                     "type definition",
@@ -119,23 +119,17 @@ impl RecordTypeAssignment {
                         cut(RecordTypeIdentifier::parse),
                         opt_ws(char('}')),
                     ),
-                )
-            ))
+                ),
+            )),
         )(input)?;
 
-        Ok((
-            input,
-            RecordTypeAssignment {
-                ident,
-                record_type
-            }
-        ))
+        Ok((input, RecordTypeAssignment { ident, record_type }))
     }
 }
 
 //------------ Module -------------------------------------------------------
 
-// Module ::= "module" Identifier "for" Identifier WithStatement 
+// Module ::= "module" Identifier "for" Identifier WithStatement
 //              WithStatement '{' ModuleBody '}'
 
 #[derive(Clone, Debug)]
@@ -292,8 +286,8 @@ pub enum RxTxType {
 //------------ DefineBody ---------------------------------------------------
 
 // DefineBody ::=
-//     (( 'use' Identifier ';' )? 
-//     (('rx' Identifier ':' TypeIdentifier ';') ('tx' Identifier ':' TypeIdentifier ';')) | 
+//     (( 'use' Identifier ';' )?
+//     (('rx' Identifier ':' TypeIdentifier ';') ('tx' Identifier ':' TypeIdentifier ';')) |
 //     ( 'rx_tx' Identifier ':' TypeIdentifier ';' ))?
 //     ( Identifier '=' ComputeExpr ';' )+ )+
 
@@ -314,7 +308,7 @@ impl DefineBody {
                         opt_ws(TypeIdentField::parse),
                         opt_ws(char(';')),
                     ),
-                RxTxType::PassThrough,
+                    RxTxType::PassThrough,
                 ),
                 map(
                     permutation((
@@ -330,7 +324,7 @@ impl DefineBody {
                         ),
                     )),
                     |t| RxTxType::Split(t.0, t.1),
-                )
+                ),
             )),
             many0(delimited(
                 opt_ws(tag("use")),
@@ -644,7 +638,7 @@ pub struct ApplyScope {
     pub operator: MatchOperator,
     pub filter_ident: ValueExpr,
     pub negate: bool,
-    pub actions: Vec<(ValueExpr, Option<AcceptReject>)>,
+    pub actions: Vec<(Option<ValueExpr>, Option<AcceptReject>)>,
 }
 
 impl ApplyScope {
@@ -673,15 +667,23 @@ impl ApplyScope {
                         )),
                         delimited(
                             opt_ws(char('{')),
-                            many1(context(
-                                "Call Expression",
-                                tuple((
-                                    opt_ws(terminated(
-                                        ValueExpr::parse,
-                                        opt_ws(char(';')),
+                            alt((
+                                many1(context(
+                                    "Call Expression",
+                                    tuple((
+                                        map(opt_ws(terminated(
+                                            ValueExpr::parse,
+                                            opt_ws(char(';')),
+                                        )), Some),
+                                        opt(opt_ws(accept_reject)),
                                     )),
-                                    opt(opt_ws(accept_reject)),
                                 )),
+                                map(opt_ws(accept_reject), |ar| {
+                                    vec![(
+                                        None,
+                                        Some(ar),
+                                    )]
+                                }),
                             )),
                             terminated(opt_ws(char('}')), opt_ws(char(';'))),
                         ),
