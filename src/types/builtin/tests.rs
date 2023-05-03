@@ -8,7 +8,7 @@ mod route {
     use crate::{
         types::{
             builtin::{
-                Asn, Hop, Prefix, RawRouteWithDeltas, RotondaId,
+                Asn, Prefix, RawRouteWithDeltas, RotondaId,
                 UpdateMessage,
             },
         },

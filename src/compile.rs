@@ -3,7 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use log::{log_enabled, debug, Level, trace, info};
+use log::{log_enabled, Level, info};
 use nom::error::VerboseError;
 
 use crate::{

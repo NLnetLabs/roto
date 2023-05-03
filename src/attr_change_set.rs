@@ -5,10 +5,10 @@ use std::marker::PhantomData;
 use std::ops::Index;
 
 use crate::types::builtin::{
-    AsPath, Asn, AtomicAggregator, BuiltinTypeValue, Community, Hop,
+    AsPath, Asn, AtomicAggregator, BuiltinTypeValue, Community,
     LocalPref, MultiExitDisc, NextHop, OriginType, Prefix, RouteStatus,
 };
-use crate::types::collections::{List, ElementTypeValue};
+use crate::types::collections::ElementTypeValue;
 use crate::types::typevalue::TypeValue;
 
 // The values that live in a BGP Update message can be either Scalars or

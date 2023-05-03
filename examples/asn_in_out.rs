@@ -5,7 +5,6 @@ use roto::compile::Compiler;
 use roto::types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage, Prefix, Asn};
 use roto::types::collections::Record;
 use roto::types::typedef::TypeDef;
-use roto::types::typevalue::TypeValue;
 use roto::vm;
 use routecore::bgp::message::SessionConfig;
 

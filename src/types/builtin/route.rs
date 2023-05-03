@@ -11,7 +11,7 @@
 //               └─▶ Withdrawals │──change ──────┘
 //                 └─────────────┘  status
 
-use routecore::{bgp::message::SessionConfig, record::LogicalTime};
+use routecore::bgp::message::SessionConfig;
 use std::sync::Arc;
 
 use crate::{
