@@ -14,6 +14,9 @@
 use routecore::bgp::message::SessionConfig;
 use std::sync::Arc;
 
+/// Lamport Timestamp. Used to order messages between units/systems.
+pub type LogicalTime = u64;
+
 use crate::{
     attr_change_set::{ReadOnlyScalarOption, Todo},
     compile::CompileError,
@@ -303,7 +306,7 @@ impl RawRouteWithDeltas {
         }
     }
 
-    pub(crate) fn get_field_by_index(
+    pub(crate) fn _get_field_by_index(
         &self,
         field_token: usize,
     ) -> Option<TypeValue> {
@@ -320,7 +323,7 @@ impl RawRouteWithDeltas {
                 RouteToken::Communities => self.raw_message.raw_message.0.all_communities().map(TypeValue::from),
                 RouteToken::Prefix => Some(self.prefix.into()),
                 RouteToken::Status => Some(self.status_deltas.current()),
-                _ => None,
+                // _ => None,
                 // originator_id: ChangedOption {
                 //     value: None,
                 //     changed: false,

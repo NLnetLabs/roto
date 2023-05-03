@@ -101,9 +101,7 @@ fn main() {
                 define {
                     // specify the types of that this filter receives
                     // and sends.
-                    // rx_tx route: StreamRoute;
-                    rx pph_asn: MyRec;
-                    tx out: Asn;
+                    rx_tx pph_asn: MyRec;
                 }
 
                 term peer-asn-matches {

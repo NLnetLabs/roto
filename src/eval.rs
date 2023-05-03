@@ -607,6 +607,8 @@ impl ast::ApplyScope {
         for action in &self.actions {
             if let Some(match_action) =
                 action.0.clone() { 
+                    // If there's one or more actions in the filter block we
+                    // will store them as args in the vector.
                     let match_action_name = match_action.eval(symbols.clone(), scope.clone())?.get_name();
 
                     let (_ty, token) =
@@ -624,6 +626,11 @@ impl ast::ApplyScope {
                     args_vec.push(s);
                 }
             else {
+                // If there's no Action mentioned in a filter block, we will
+                // create a MatchAction of type Empty, so that the compiler
+                // can invoke the right accept/reject commands. The action
+                // symbol gets to have the name of the term, but it is never
+                // inspected, since it doesn't exist in any symbol map.
                 let s = symbols::Symbol::new(
                     term.get_name(),
                     symbols::SymbolKind::MatchAction(MatchActionType::EmptyAction),
