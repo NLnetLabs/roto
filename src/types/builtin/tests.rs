@@ -183,7 +183,7 @@ mod route {
             new_change_set1.attributes.next_hop.set(NextHop::Ipv6(v6));
         }
 
-        let res = new_change_set1.attributes.as_path.prepend(211321); //].try_into().unwrap());
+        let res = new_change_set1.attributes.as_path.prepend(211321_u32); //].try_into().unwrap());
         assert!(res.is_ok());
 
         let res = new_change_set1
@@ -213,7 +213,7 @@ mod route {
 
         // Change Set 2
         let mut new_change_set2 = roto_msgs[2].open_new_delta(delta_id)?;
-        let res = new_change_set2.attributes.as_path.prepend(211322); //.try_into().unwrap());
+        let res = new_change_set2.attributes.as_path.prepend(211322_u32); //.try_into().unwrap());
         assert!(res.is_ok());
 
         let res = roto_msgs[2].store_delta(new_change_set2);

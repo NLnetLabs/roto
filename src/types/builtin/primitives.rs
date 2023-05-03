@@ -91,8 +91,23 @@ impl RotoType for U32 {
             TypeDef::Asn => Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(
                 Asn(routecore::asn::Asn::from(self.0)),
             ))),
+            TypeDef::PrefixLength => {
+                match self.0 {
+                    0..=128 => Ok(TypeValue::Builtin(BuiltinTypeValue::PrefixLength(PrefixLength(self.0 as u8)))),
+                    _ =>
+                    Err(format!("Cannot convert an instance of type U32 with a value greater than 128 into type {:?}", type_def)
+                    .into())
+                }
+            },
+            TypeDef::U8 => {
+                match self.0 {
+                    0..=255 => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(self.0 as u8)))),
+                    _ => Err(format!("Cannot convert an instance of type U32 with a value greater than 128 into type {:?}", type_def)
+                    .into())
+                }
+            }
             _ => {
-                Err(format!("Cannot convert type U32 to type {:?}", type_def)
+                Err(format!("Cannot convert type U32 into type {:?}", type_def)
                     .into())
             }
         }
@@ -203,16 +218,6 @@ impl RotoType for U8 {
                 ))))
             }
             TypeDef::PrefixLength => match self.0 {
-                0..=128 => Ok(TypeValue::Builtin(
-                    BuiltinTypeValue::PrefixLength(PrefixLength(self.0)),
-                )),
-                _ => Err(format!(
-                    "Prefix length must be between 0 and 128, not {}",
-                    self.0
-                )
-                .into()),
-            },
-            TypeDef::IntegerLiteral => match self.0 {
                 0..=128 => Ok(TypeValue::Builtin(
                     BuiltinTypeValue::PrefixLength(PrefixLength(self.0)),
                 )),
@@ -547,6 +552,22 @@ impl RotoType for IntegerLiteral {
                 )
                 .into()),
             },
+            TypeDef::U32 => u32::try_from(self.0)
+                .map(|v| TypeValue::Builtin(BuiltinTypeValue::U32(U32(v))))
+                .map_err(|_| {
+                    CompileError::from(format!(
+                        "Cannot convert type IntegerLiteral with {} into U32",
+                        self.0
+                    ))
+                }),
+            TypeDef::U8 => u8::try_from(self.0)
+                .map(|v| TypeValue::Builtin(BuiltinTypeValue::U8(U8(v))))
+                .map_err(|_| {
+                    CompileError::from(format!(
+                        "Cannot convert type IntegerLiteral with {} into U8",
+                        self.0
+                    ))
+                }),
             _ => Err(format!(
                 "Cannot convert type IntegerLiteral to type {:?}",
                 type_def
@@ -662,6 +683,22 @@ impl RotoType for HexLiteral {
                     Community(c),
                 )))
             }
+            TypeDef::U8 => u8::try_from(self.0)
+                .map(|v| TypeValue::Builtin(BuiltinTypeValue::U8(U8(v))))
+                .map_err(|_| {
+                    CompileError::from(format!(
+                        "Cannot convert type IntegerLiteral with {} into U8",
+                        self.0
+                    ))
+            }),
+            TypeDef::U32 => u32::try_from(self.0)
+                .map(|v| TypeValue::Builtin(BuiltinTypeValue::U32(U32(v))))
+                .map_err(|_| {
+                    CompileError::from(format!(
+                        "Cannot convert type IntegerLiteral with {} into U8",
+                        self.0
+                    ))
+            }),
             _ => Err(format!(
                 "Cannot convert type HexLiteral to type {:?}",
                 type_def

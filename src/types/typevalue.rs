@@ -603,6 +603,12 @@ impl From<u32> for TypeValue {
     }
 }
 
+impl From<u8> for TypeValue {
+    fn from(value: u8) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::U8(U8(value)))
+    }
+}
+
 impl From<bool> for TypeValue {
     fn from(val: bool) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(val)))

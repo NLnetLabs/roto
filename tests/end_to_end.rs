@@ -48,7 +48,7 @@ fn test_data(
         &my_nested_rec_type,
         vec![(
             "counter",
-            1.into(),
+            1_u32.into(),
         )],
     )
     .unwrap();
