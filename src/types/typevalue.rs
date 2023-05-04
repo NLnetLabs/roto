@@ -131,7 +131,7 @@ impl TypeValue {
         }
     }
 
-    pub(crate) fn set_field_by_stack_ref(
+    pub(crate) fn _set_field_by_stack_ref(
         &mut self,
         stack_ref: &StackRef,
         value: TypeValue,
@@ -153,7 +153,7 @@ impl TypeValue {
         Ok(())
     }
 
-    pub(crate) fn set_field(
+    pub(crate) fn _set_field(
         mut self,
         field_index: usize,
         value: TypeValue,
@@ -273,7 +273,7 @@ impl TypeValue {
         method_token: usize,
         args: Vec<TypeValue>,
         return_type: TypeDef,
-        field_index: Option<usize>,
+        _field_index: Option<usize>,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         match self {
             TypeValue::Record(rec_type) => rec_type

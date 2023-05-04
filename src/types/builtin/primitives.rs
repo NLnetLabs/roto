@@ -1832,8 +1832,8 @@ pub struct Hop(pub(crate) routecore::bgp::aspath::Hop<Vec<u8>>);
 
 impl RotoType for Hop {
     fn get_props_for_method(
-        ty: TypeDef,
-        method_name: &crate::ast::Identifier,
+        _ty: TypeDef,
+        _method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
@@ -1843,7 +1843,7 @@ impl RotoType for Hop {
 
     fn into_type(
         self,
-        type_value: &TypeDef,
+        _type_value: &TypeDef,
     ) -> Result<TypeValue, CompileError>
     where
         Self: std::marker::Sized,
@@ -1853,26 +1853,26 @@ impl RotoType for Hop {
 
     fn exec_value_method<'a>(
         &'a self,
-        method_token: usize,
-        args: &'a [&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &'a [&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 
     fn exec_consume_value_method(
         self,
-        method_token: usize,
-        args: Vec<TypeValue>,
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         todo!()
     }
 
     fn exec_type_method<'a>(
-        method_token: usize,
-        args: &[&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
@@ -1974,8 +1974,8 @@ pub struct NextHop(pub(crate) routecore::bgp::types::NextHop);
 
 impl RotoType for NextHop {
     fn get_props_for_method(
-        ty: TypeDef,
-        method_name: &crate::ast::Identifier,
+        _ty: TypeDef,
+        _method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
@@ -1985,7 +1985,7 @@ impl RotoType for NextHop {
 
     fn into_type(
         self,
-        type_value: &TypeDef,
+        _type_value: &TypeDef,
     ) -> Result<TypeValue, CompileError>
     where
         Self: std::marker::Sized,
@@ -1995,26 +1995,26 @@ impl RotoType for NextHop {
 
     fn exec_value_method<'a>(
         &'a self,
-        method_token: usize,
-        args: &'a [&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &'a [&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 
     fn exec_consume_value_method(
         self,
-        method_token: usize,
-        args: Vec<TypeValue>,
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         todo!()
     }
 
     fn exec_type_method<'a>(
-        method_token: usize,
-        args: &[&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
@@ -2051,8 +2051,8 @@ pub struct MultiExitDisc(pub(crate) routecore::bgp::types::MultiExitDisc);
 
 impl RotoType for MultiExitDisc {
     fn get_props_for_method(
-        ty: TypeDef,
-        method_name: &crate::ast::Identifier,
+        _ty: TypeDef,
+        _method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
@@ -2062,7 +2062,7 @@ impl RotoType for MultiExitDisc {
 
     fn into_type(
         self,
-        type_value: &TypeDef,
+        _type_value: &TypeDef,
     ) -> Result<TypeValue, CompileError>
     where
         Self: std::marker::Sized,
@@ -2072,26 +2072,26 @@ impl RotoType for MultiExitDisc {
 
     fn exec_value_method<'a>(
         &'a self,
-        method_token: usize,
-        args: &'a [&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &'a [&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 
     fn exec_consume_value_method(
         self,
-        method_token: usize,
-        args: Vec<TypeValue>,
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         todo!()
     }
 
     fn exec_type_method<'a>(
-        method_token: usize,
-        args: &[&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
@@ -2153,7 +2153,7 @@ impl RotoType for LocalPref {
 
     fn into_type(
         self,
-        type_value: &TypeDef,
+        _type_value: &TypeDef,
     ) -> Result<TypeValue, CompileError>
     where
         Self: std::marker::Sized,
@@ -2163,26 +2163,26 @@ impl RotoType for LocalPref {
 
     fn exec_value_method<'a>(
         &'a self,
-        method_token: usize,
-        args: &'a [&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &'a [&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 
     fn exec_consume_value_method(
         self,
-        method_token: usize,
-        args: Vec<TypeValue>,
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         todo!()
     }
 
     fn exec_type_method<'a>(
-        method_token: usize,
-        args: &[&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
@@ -2245,8 +2245,8 @@ pub struct AtomicAggregator(
 
 impl RotoType for AtomicAggregator {
     fn get_props_for_method(
-        ty: TypeDef,
-        method_name: &crate::ast::Identifier,
+        _ty: TypeDef,
+        _method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
@@ -2256,7 +2256,7 @@ impl RotoType for AtomicAggregator {
 
     fn into_type(
         self,
-        type_value: &TypeDef,
+        _type_value: &TypeDef,
     ) -> Result<TypeValue, CompileError>
     where
         Self: std::marker::Sized,
@@ -2266,26 +2266,26 @@ impl RotoType for AtomicAggregator {
 
     fn exec_value_method<'a>(
         &'a self,
-        method_token: usize,
-        args: &'a [&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &'a [&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 
     fn exec_consume_value_method(
         self,
-        method_token: usize,
-        args: Vec<TypeValue>,
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         todo!()
     }
 
     fn exec_type_method<'a>(
-        method_token: usize,
-        args: &[&'a TypeValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[&'a TypeValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }

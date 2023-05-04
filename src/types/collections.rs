@@ -101,22 +101,6 @@ impl List {
         self.0.iter()
     }
 
-    pub(crate) fn into_iter(self) -> std::vec::IntoIter<ElementTypeValue> {
-        self.0.into_iter()
-    }
-
-    fn inner_from_typevalue(
-        type_value: TypeValue,
-    ) -> std::result::Result<Vec<ElementTypeValue>, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        match type_value {
-            TypeValue::List(list) => Ok(list.0),
-            _ => Err("Not a List type".into()),
-        }
-    }
-
     pub fn exec_method(
         &self,
         _method_token: usize,
@@ -213,7 +197,7 @@ impl List {
 }
 
 impl<'a> From<&'a TypeDef> for List {
-    fn from(t: &'a TypeDef) -> Self {
+    fn from(_t: &'a TypeDef) -> Self {
         List::new(vec![ElementTypeValue::Primitive(TypeValue::Unknown)])
     }
 }
@@ -458,16 +442,6 @@ impl<'a> Record {
         std::mem::swap(e_tv, new_field);
         Ok(())
     }
-
-    fn inner_from_typevalue(
-        ty: TypeValue,
-    ) -> std::result::Result<Vec<(ShortString, ElementTypeValue)>, CompileError>
-    {
-        match ty {
-            TypeValue::Record(r) => Ok(r.0),
-            _ => Err("Not a record type".into()),
-        }
-    }
 }
 
 impl Display for Record {
@@ -539,10 +513,10 @@ impl RotoType for Record {
     }
 
     fn exec_consume_value_method(
-        mut self,
-        method: usize,
-        args: Vec<TypeValue>,
-        res_type: TypeDef,
+        self,
+        _method: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         todo!()
     }

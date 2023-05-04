@@ -22,7 +22,7 @@ fn test_data(
 
     // BGP UPDATE message containing MP_REACH_NLRI path attribute,
     // comprising 5 IPv6 NLRIs
-    let buf = bytes::Bytes::from(vec![
+    let _buf = bytes::Bytes::from(vec![
         0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
         0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x88, 0x02, 0x00, 0x00, 0x00,
         0x71, 0x80, 0x0e, 0x5a, 0x00, 0x02, 0x01, 0x20, 0xfc, 0x00, 0x00,
@@ -38,21 +38,18 @@ fn test_data(
         0x00, 0x00, 0x00, 0x00,
     ]);
 
-    let update: UpdateMessage =
-        UpdateMessage::new(buf, SessionConfig::modern());
-    let prefixes: Vec<Prefix> =
-            update.0.nlris().iter().filter_map(|n| n.prefix().map(|p| p.into())).collect();
-    let msg_id = (RotondaId(0), 0);
-
-    let payload: RawRouteWithDeltas = RawRouteWithDeltas::new_with_message(
-        msg_id,
-        prefixes[0],
-        update,
+    let _update: UpdateMessage =
+        UpdateMessage::new(_buf, SessionConfig::modern());
+    let _prefixes: Vec<Prefix> =
+            _update.0.nlris().iter().filter_map(|n| n.prefix().map(|p| p.into())).collect();
+    let _payload: RawRouteWithDeltas = RawRouteWithDeltas::new_with_message(
+        (RotondaId(0), 0),
+        _prefixes[0],
+        _update,
     );
 
 
     let payload_type = TypeDef::new_record_type(vec![("asn", Box::new(TypeDef::Asn))])?;
-    
     let payload = Record::create_instance(&payload_type, vec![("asn", Asn::from(65534).into())])?;
     // Create the VM
     println!("Used Arguments");
