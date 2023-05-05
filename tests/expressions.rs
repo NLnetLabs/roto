@@ -85,6 +85,44 @@ fn test_compute_expr_2() {
     }
 }
 
+#[test]
+fn test_compute_expr_3() {
+    let r = OptionalGlobalComputeExpr::parse("send-to(a, b)");
+    assert!(r.is_ok());
+    if let Ok(expr) = r {
+        assert_eq!(expr.0, "");
+    }
+}
+
+#[test]
+fn test_compute_expr_4() {
+    let r = OptionalGlobalComputeExpr::parse("global_record.field");
+    assert!(r.is_ok());
+    if let Ok(expr) = r {
+        assert_eq!(expr.0, "");
+    }
+}
+
+#[test]
+fn test_compute_expr_5() {
+    let r = OptionalGlobalComputeExpr::parse("pph_asn.asn.set(AS200)");
+    assert!(r.is_ok());
+    if let Ok(expr) = r {
+        assert_eq!(expr.0, "");
+    }
+}
+
+#[test]
+fn test_action_body() {
+    let r = ActionBody::parse(r###"
+        send_to(a,b);
+        pph_asn.asn.set(AS200);"###);
+    assert!(r.is_ok());
+    if let Ok(expr) = r {
+        assert_eq!(expr.0, "");
+    }
+}
+
 //------------ Other Expressions --------------------------------------------
 
 #[test]
@@ -148,4 +186,3 @@ fn test_prefix_expr_3() {
         assert_eq!(expr.0, "");
     }
 }
-

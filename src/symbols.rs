@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    ast::{AcceptReject, CompareOp, ShortString},
+    ast::{AcceptReject, CompareOp, ShortString, Identifier},
     compile::CompileError,
     traits::{RotoType, Token},
     types::{
@@ -835,7 +835,8 @@ impl SymbolTable {
         Ok(())
     }
 
-    pub(crate) fn get_symbol(&self, name: &ShortString) -> Option<&Symbol> {
+    pub(crate) fn get_symbol(&self, name: &Identifier) -> Option<&Symbol> {
+        let name = &name.ident;
         if let Some(symbol) = self.rx_type.has_name(name) {
             return Some(symbol);
         }

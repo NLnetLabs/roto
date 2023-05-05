@@ -294,3 +294,49 @@ fn test_module_33() {
     .test_parse(true)
     .test_eval(false);
 }
+
+#[test]
+fn test_module_34() {
+    let _compiler = TestCompiler::create(
+        "module_34",
+        r###"
+        module module_1 {
+            define {
+                // specify the types of that this filter receives
+                // and sends.
+                // rx_tx route: StreamRoute;
+                rx pph_asn: PerPeerHeader;
+                tx out: PerPeerHeader;
+            }
+
+            term peer-asn-matches {
+                match {
+                    pph_asn.asn == AS65534;
+                }
+            }
+
+            action set-asn {
+                pph_asn.asn.set(AS200);
+                // send-to(mqtt, pph_asn);
+            }
+
+            apply {
+                use my-module;
+                filter match peer-asn-matches matching { set-asn; return accept; };
+                return reject;
+            }
+        }
+
+        type PerPeerHeader {
+            asn: Asn
+        }
+        
+        type BmpMsg {
+            type: U8,
+            header: { asn: Asn }
+        }
+        "###,
+    )
+    .test_parse(true)
+    .test_eval(true);
+}

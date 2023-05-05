@@ -182,6 +182,9 @@ fn test_module_1() {
                         found_prefix.prefix.len() == 24;
                         extra_in_table;
                         route_in_table;
+                        // global-truth-method();
+                        // last.truth();
+                        // last();
                         route.prefix.len() <= found_prefix.prefix.len();
                     }
                 }

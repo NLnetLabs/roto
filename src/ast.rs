@@ -530,7 +530,7 @@ impl Action {
 
 //------------ ActionBody -----------------------------------------------------
 
-// ActionBody ::= (ComputeExpr ';')+
+// ActionBody ::= (ActionExpr ';')+
 
 #[derive(Clone, Debug)]
 pub struct ActionBody {
@@ -538,12 +538,68 @@ pub struct ActionBody {
 }
 
 impl ActionBody {
-    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, expressions) = context(
             "action body",
-            many1(opt_ws(terminated(ComputeExpr::parse, opt_ws(char(';'))))),
+            many1(opt_ws(terminated(
+                OptionalGlobalComputeExpr::parse,
+                opt_ws(char(';')),
+            ))),
         )(input)?;
         Ok((input, Self { expressions }))
+    }
+}
+
+//------------ OptionalGlobalComputeExpr ------------------------------------
+
+// ActionExpr ::= ComputeExpr | GlobalMethodExpr
+
+// An Optional Gloval Compute Expressions can be either an ordinary Compute
+// Expression, or a global method call, i.e. 'some-global-method(a, b)', so
+// an expression without any dots in it ending in a method call.
+
+// Action Expressions are always turned into regular Compute Expressions at
+// parse time (so: here), consequently there's no `eval()` for an Optional
+// GlobalComputeExpr.
+
+#[derive(Clone, Debug)]
+pub enum OptionalGlobalComputeExpr {
+    GlobalMethodExpr(MethodComputeExpr),
+    ComputeExpr(ComputeExpr),
+}
+
+impl OptionalGlobalComputeExpr {
+    pub fn parse(
+        input: &str,
+    ) -> IResult<&str, ComputeExpr, VerboseError<&str>> {
+        map(
+            context(
+                "action expression",
+                alt((
+                    map(
+                        MethodComputeExpr::parse,
+                        OptionalGlobalComputeExpr::GlobalMethodExpr,
+                    ),
+                    map(
+                        ComputeExpr::parse,
+                        OptionalGlobalComputeExpr::ComputeExpr,
+                    ),
+                )),
+            ),
+            |expr| expr.into_compute_expr(),
+        )(input)
+    }
+
+    pub(crate) fn into_compute_expr(self) -> ComputeExpr {
+        match self {
+            Self::ComputeExpr(compute_expr) => compute_expr,
+            Self::GlobalMethodExpr(ref access_expr) => ComputeExpr {
+                access_expr: vec![AccessExpr::MethodComputeExpr(
+                    access_expr.clone(),
+                )],
+                receiver: AccessReceiver::GlobalScope,
+            },
+        }
     }
 }
 
@@ -671,18 +727,18 @@ impl ApplyScope {
                                 many1(context(
                                     "Call Expression",
                                     tuple((
-                                        map(opt_ws(terminated(
-                                            ValueExpr::parse,
-                                            opt_ws(char(';')),
-                                        )), Some),
+                                        map(
+                                            opt_ws(terminated(
+                                                ValueExpr::parse,
+                                                opt_ws(char(';')),
+                                            )),
+                                            Some,
+                                        ),
                                         opt(opt_ws(accept_reject)),
                                     )),
                                 )),
                                 map(opt_ws(accept_reject), |ar| {
-                                    vec![(
-                                        None,
-                                        Some(ar),
-                                    )]
+                                    vec![(None, Some(ar))]
                                 }),
                             )),
                             terminated(opt_ws(char('}')), opt_ws(char(';'))),
@@ -1589,14 +1645,21 @@ impl AccessExpr {
             map(FieldAccessExpr::parse, AccessExpr::FieldAccessExpr),
         ))(input)
     }
+
+    pub fn get_ident(&self) -> &ShortString {
+        match self {
+            AccessExpr::MethodComputeExpr(expr) => &expr.ident.ident,
+            AccessExpr::FieldAccessExpr(expr) => &expr.field_names[0].ident,
+        }
+    }
 }
 
 //------------- ComputeExpr ----------------------------------------------------
 
 // It's complete EBNF would be:
-// CompoundExpr ::= AccessReceiver?(.MethodComputeExpr)? | AccessReceiver
+// CompoundExpr ::= AccessReceiver(.MethodComputeExpr)? | AccessReceiver
 
-// A ComputeExpr is an expression that starts with a Sub Call Expression,
+// A ComputeExpr is an expression that starts with an access receiver,
 // optionally followed by one or more method calls, and/or access receivers,
 // e.g. 'rib-rov.longest_match(route.prefix).prefix.len()`.
 //
@@ -1624,23 +1687,38 @@ impl ComputeExpr {
         ))
     }
 
-    pub fn get_receiver(&self) -> AccessReceiver {
-        self.receiver.clone()
+    pub fn get_receiver(&self) -> &AccessReceiver {
+        &self.receiver
+    }
+
+    // An Access Receiver always exists, but it might not have an identifier,
+    // currently that can only mean that it is a global method being called,
+    // but that's up to the caller to figure out.
+    pub fn get_receiver_ident(&self) -> Result<ShortString, CompileError> {
+        self.get_receiver()
+            .get_ident()
+            .ok_or_else(|| {
+                CompileError::from("Missing identifier in Expression.")
+            })
+            .map(|ar| ar.ident.clone())
     }
 }
 
 //------------- AccessReceiver ------------------------------------------------
 
 // The AccessReceiver is the specifier of a data structure that is being called
-// (used as part of a ComputeExpr) or used to retrieve one of its fields. Can also
-// be a stand-alone specifier.
+// (used as part of a ComputeExpr) or used to retrieve one of its fields. Can
+// also be a stand-alone specifier.
 
-// CallReceiver ::= Identifier
+// AccessReceiver ::= Identifier | GlobalScope
 
 #[derive(Clone, Debug)]
-pub struct AccessReceiver {
+pub enum AccessReceiver {
     // The identifier of the data structure.
-    pub ident: Identifier,
+    Ident(Identifier),
+    // or it can only be in the Global Scope (for global methods), it doesn't
+    // have a string as identifier then.
+    GlobalScope,
 }
 
 impl AccessReceiver {
@@ -1648,13 +1726,26 @@ impl AccessReceiver {
         let (input, receiver) =
             context("access receiver", Identifier::parse)(input)?;
 
-        Ok((input, Self { ident: receiver }))
+        Ok((input, Self::Ident(receiver)))
     }
 }
 
 impl AccessReceiver {
-    pub fn get_ident(&self) -> &Identifier {
-        &self.ident
+    pub fn get_ident(&self) -> Option<&Identifier> {
+        if let Self::Ident(ident) = &self {
+            Some(ident)
+        } else {
+            None
+        }
+    }
+}
+
+impl std::fmt::Display for AccessReceiver {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Ident(ident) => write!(f, "{}", ident),
+            Self::GlobalScope => write!(f, "GLOBAL SCOPE"),
+        }
     }
 }
 
@@ -1685,7 +1776,7 @@ impl FieldAccessExpr {
     }
 }
 
-//------------- MethodComputeExpr  ---------------------------------------------
+//------------- MethodComputeExpr  ------------------------------------------
 
 // The method that is being called on the data structure (directly or on one
 // of its fields).
@@ -1871,7 +1962,7 @@ impl BooleanExpr {
             map(CompareExpr::parse, |e| {
                 BooleanExpr::CompareExpr(Box::new(e))
             }),
-            map(ComputeExpr::parse, BooleanExpr::ComputeExpr),
+            map(OptionalGlobalComputeExpr::parse, BooleanExpr::ComputeExpr),
             map(SetCompareExpr::parse, |e| {
                 BooleanExpr::SetCompareExpr(Box::new(e))
             }),

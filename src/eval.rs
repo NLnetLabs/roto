@@ -1,4 +1,7 @@
+use log::trace;
+
 use crate::ast::AcceptReject;
+use crate::ast::Identifier;
 use crate::ast::LogicalExpr;
 use crate::ast::ShortString;
 use crate::compile::CompileError;
@@ -54,7 +57,9 @@ impl<'a> ast::SyntaxTree {
             match expr {
                 ast::RootExpr::Rib(rib) => rib.eval(global_symbols)?,
                 ast::RootExpr::Table(table) => table.eval(global_symbols)?,
-                ast::RootExpr::Ty(rt_assign) => rt_assign.eval(global_symbols)?,
+                ast::RootExpr::Ty(rt_assign) => {
+                    rt_assign.eval(global_symbols)?
+                }
                 _ => {}
             };
         }
@@ -172,7 +177,11 @@ impl<'a> ast::RecordTypeAssignment {
         &'a self,
         symbols: &'_ mut symbols::SymbolTable,
     ) -> Result<(), CompileError> {
-        self.record_type.eval(self.ident.ident.clone(), symbols::SymbolKind::NamedType, symbols)?;
+        self.record_type.eval(
+            self.ident.ident.clone(),
+            symbols::SymbolKind::NamedType,
+            symbols,
+        )?;
 
         Ok(())
     }
@@ -490,46 +499,62 @@ impl ast::Action {
     ) -> Result<(), CompileError> {
         let _symbols = symbols.borrow();
         let module_symbols = _symbols.get(&scope).ok_or_else(|| {
-            format!("no symbols found for module {}", scope)
+            format!("Cannot find symbols for module {}", scope)
         })?;
 
-        let mut sub_actions_vec = vec![];
+        let mut action_exprs = vec![];
 
-        for call_expr in &self.body.expressions {
-            // The incoming payload variable is the only variable that can be
-            // used in the 'action' section. The incoming payload variable has
-            // either SymolKind::SplitRxType/SplitTxType OR PassthroughRxTxType.
-            let payload_var_name = call_expr.get_receiver().clone().ident;
+        for compute_expr in &self.body.expressions {
+            // The Access Receiver may have an identifier, in which case it
+            // may be the incoming or outgoing variable name.
+            //
+            // The incoming/outgoing payload variables are the only
+            // variables that can be used in the 'action' section. The
+            // incoming payload variable has either
+            // SymolKind::SplitRxType/SplitTxType OR PassthroughRxTxType as
+            // type.
+            //
+            // If the Access Receiver does not have an identifier it is
+            // something global, in the context of an actions this can obly
+            // be a global method call.
+            let ar_name = match compute_expr.get_receiver_ident() {
+                Ok(name) => {
+                    let s = module_symbols
+                        .get_symbol(&Identifier {
+                            ident: name.clone(),
+                        })
+                        .ok_or_else(|| {
+                            CompileError::from(format!(
+                                "Cannot find '{}' in {}",
+                                name, scope
+                            ))
+                        })?;
 
-            let s = module_symbols
-                .get_symbol(&payload_var_name.ident)
-                .ok_or_else(|| {
-                    format!(
-                        "for action: no variable '{}' found in {}",
-                        payload_var_name.ident, scope
-                    )
-                })?;
-
-            if !(s.get_kind() == symbols::SymbolKind::SplitRxType)
-                && !(s.get_kind() == symbols::SymbolKind::SplitTxType)
-                && !(s.get_kind() == symbols::SymbolKind::PassThroughRxTxType)
-            {
-                return Err(format!(
-                    "variable '{}' is not the rx type of {}",
-                    payload_var_name.ident, scope
-                )
-                .into());
+                    if !(s.get_kind() == symbols::SymbolKind::SplitRxType)
+                        && !(s.get_kind() == symbols::SymbolKind::SplitTxType)
+                        && !(s.get_kind()
+                            == symbols::SymbolKind::PassThroughRxTxType)
+                    {
+                        return Err(format!(
+                            "Variable '{}' is not the rx or tx type of {}",
+                            name, scope
+                        )
+                        .into());
+                    };
+                    name
+                }
+                Err(_) => compute_expr.access_expr[0].get_ident().clone(),
             };
 
-            let mut s = call_expr.eval(
-                format!("sub-action-{}", s.get_name()).as_str().into(),
+            let mut s = compute_expr.eval(
+                Some(format!("sub-action-{}", ar_name).as_str().into()),
                 symbols.clone(),
                 scope.clone(),
             )?;
 
             s = s.set_kind(SymbolKind::AccessReceiver);
 
-            sub_actions_vec.push(s);
+            action_exprs.push(s);
         }
 
         drop(_symbols);
@@ -538,7 +563,7 @@ impl ast::Action {
             self.ident.ident.clone(),
             symbols::SymbolKind::Action,
             TypeDef::Unknown,
-            sub_actions_vec,
+            action_exprs,
             None,
         );
 
@@ -605,27 +630,27 @@ impl ast::ApplyScope {
 
         let mut args_vec = vec![];
         for action in &self.actions {
-            if let Some(match_action) =
-                action.0.clone() { 
-                    // If there's one or more actions in the filter block we
-                    // will store them as args in the vector.
-                    let match_action_name = match_action.eval(symbols.clone(), scope.clone())?.get_name();
+            if let Some(match_action) = action.0.clone() {
+                // If there's one or more actions in the filter block we
+                // will store them as args in the vector.
+                let match_action_name = match_action
+                    .eval(symbols.clone(), scope.clone())?
+                    .get_name();
 
-                    let (_ty, token) =
-                        module_symbols.get_action(&match_action_name)?;
+                let (_ty, token) =
+                    module_symbols.get_action(&match_action_name)?;
 
-                    let s = symbols::Symbol::new(
-                        match_action_name,
-                        symbols::SymbolKind::Action,
-                        TypeDef::AcceptReject(
-                            action.1.unwrap_or(ast::AcceptReject::NoReturn),
-                        ),
-                        vec![],
-                        Some(token),
-                    );
-                    args_vec.push(s);
-                }
-            else {
+                let s = symbols::Symbol::new(
+                    match_action_name,
+                    symbols::SymbolKind::Action,
+                    TypeDef::AcceptReject(
+                        action.1.unwrap_or(ast::AcceptReject::NoReturn),
+                    ),
+                    vec![],
+                    Some(token),
+                );
+                args_vec.push(s);
+            } else {
                 // If there's no Action mentioned in a filter block, we will
                 // create a MatchAction of type Empty, so that the compiler
                 // can invoke the right accept/reject commands. The action
@@ -635,7 +660,11 @@ impl ast::ApplyScope {
                     term.get_name(),
                     symbols::SymbolKind::MatchAction(MatchActionType::EmptyAction),
                     TypeDef::AcceptReject(
-                        action.1.ok_or_else(|| CompileError::from("Encountered MatchAction without Action or Accept Reject statement."))?,
+                        action.1.ok_or_else(
+                            || CompileError::from(
+                                "Encountered MatchAction without Action or Accept Reject statement."
+                            )
+                        )?,
                     ),
                     vec![],
                     None
@@ -711,12 +740,34 @@ impl ast::ApplyScope {
 impl ast::ComputeExpr {
     pub(crate) fn eval(
         &self,
-        name: ShortString,
+        // If no name is provided we use the ident of the access receiver
+        name: Option<ShortString>,
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, CompileError> {
-        let mut ar_symbol =
-            self.get_receiver().eval(symbols.clone(), scope.clone())?;
+        let ar_name = self.get_receiver_ident().or_else(|_| {
+                Ok::<ShortString, CompileError>(
+                    self.access_expr[0].get_ident().clone(),
+                )
+            })?;
+
+        let mut ar_symbol = self
+            .get_receiver()
+            .eval(symbols.clone(), scope.clone())
+            .map_err(|ar_err| match ar_err {
+                AccessReceiverError::Var => CompileError::from(format!(
+                    "Cannot find variable '{}' in {}",
+                    ar_name, scope
+                )),
+                AccessReceiverError::Global => CompileError::from(format!(
+                    "Cannot find global method '{}'",
+                    ar_name
+                )),
+                AccessReceiverError::Arg => CompileError::from(format!(
+                    "Cannot find Argument '{}' for scope {}",
+                    ar_name, scope
+                )),
+            })?;
 
         let ar_token = ar_symbol.get_token().unwrap();
         let mut s = &mut ar_symbol;
@@ -731,11 +782,13 @@ impl ast::ComputeExpr {
         };
 
         for a_e in &self.access_expr {
-
             match a_e {
                 ast::AccessExpr::MethodComputeExpr(method_call) => {
                     println!("MC symbol (s) {:#?}", s);
-                    println!("All Symbols {:#?}", symbols.borrow().get(&scope));
+                    println!(
+                        "All Symbols {:#?}",
+                        symbols.borrow().get(&scope)
+                    );
                     println!("method call {:?} on type {}", method_call, ty);
                     let arg_s = method_call.eval(
                         // At this stage we don't know really whether the
@@ -752,7 +805,10 @@ impl ast::ComputeExpr {
                 }
                 ast::AccessExpr::FieldAccessExpr(field_access) => {
                     println!("FA symbol (s) {:#?}", s);
-                    println!("all symbols in module table {:#?}", symbols.borrow().get(&scope));
+                    println!(
+                        "all symbols in module table {:#?}",
+                        symbols.borrow().get(&scope)
+                    );
                     let arg_s = field_access.eval(ty)?;
                     // propagate the type of this argument to a possible next one
                     ty = arg_s.get_type();
@@ -765,8 +821,14 @@ impl ast::ComputeExpr {
 
         // The return type of a compute expression is propagated from the
         // last argument to its parent, the access receiver symbol.
+        ar_symbol = ar_symbol.set_type(ty).set_token(ar_token);
 
-        ar_symbol = ar_symbol.set_type(ty).set_name(name).set_token(ar_token);
+        if let Some(name) = name {
+            ar_symbol = ar_symbol.set_name(name);
+        } else {
+            ar_symbol = ar_symbol.set_name(self.get_receiver_ident()?);
+        }
+
         Ok(ar_symbol)
     }
 }
@@ -838,7 +900,8 @@ impl ast::MethodComputeExpr {
             // can be converted to the expected type, e.g. an IntegerLiteral
             // can be converted into a U8, I64, etc (as long as it fits).
             args.push(
-                parsed_arg_type.try_convert_value_into(expected_arg_type.clone())?,
+                parsed_arg_type
+                    .try_convert_value_into(expected_arg_type.clone())?,
             );
         }
 
@@ -852,77 +915,91 @@ impl ast::MethodComputeExpr {
     }
 }
 
+pub enum AccessReceiverError {
+    Var,
+    Global,
+    Arg,
+}
+
 // This is a simple identifier, it may refer to a data source, a variable,
-// a record field, or the name of a type.
+// a record field, the name of a type, or the name of a global method.
 impl ast::AccessReceiver {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
-    ) -> Result<symbols::Symbol, CompileError> {
-        println!("AccessReceiver {:#?}", self);
+    ) -> Result<symbols::Symbol, AccessReceiverError> {
+        trace!("AccessReceiver {:#?}", self);
         let _symbols = symbols.clone();
-        let search_var = self.get_ident(); //.ident.clone();
-
-        // Is it the name of a builtin type?
-        if let Ok(prim_ty) = TypeDef::try_from(search_var.clone()) { 
-            if prim_ty.is_builtin() {
-                {
-                    return Ok(symbols::Symbol::new(
-                        search_var.ident.clone(),
-                        symbols::SymbolKind::AccessReceiver,
-                        prim_ty,
-                        vec![],
-                        Some(Token::BuiltinType(0)),
-                    ));
-                };
+        if let Some(search_var) = self.get_ident() {
+            // Is it the name of a builtin type?
+            if let Ok(prim_ty) = TypeDef::try_from(search_var.clone()) {
+                if prim_ty.is_builtin() {
+                    {
+                        return Ok(symbols::Symbol::new(
+                            search_var.ident.clone(),
+                            symbols::SymbolKind::AccessReceiver,
+                            prim_ty,
+                            vec![],
+                            Some(Token::BuiltinType(0)),
+                        ));
+                    };
+                }
             }
-        }    
 
-        // is it an argument?
-        if let Some(Ok(arg)) = _symbols
-            .borrow()
-            .get(&scope)
-            .map(|s| s.get_argument(&search_var.ident))
-        {
-            let (_, type_def, token) = arg.get_kind_type_and_token()?;
-            return Ok(symbols::Symbol::new(
-                search_var.ident.clone(),
-                symbols::SymbolKind::AccessReceiver,
-                type_def,
-                vec![],
-                Some(token),
-            ));
-        }
+            // is it an argument?
+            if let Some(Ok(arg)) = _symbols
+                .borrow()
+                .get(&scope)
+                .map(|s| s.get_argument(&search_var.ident))
+            {
+                let (_, type_def, token) = arg
+                    .get_kind_type_and_token()
+                    .map_err(|_| AccessReceiverError::Arg)?;
+                return Ok(symbols::Symbol::new(
+                    search_var.ident.clone(),
+                    symbols::SymbolKind::AccessReceiver,
+                    type_def,
+                    vec![],
+                    Some(token),
+                ));
+            }
 
-        // Is it one of:
-        // - a name of a data source
-        // - the name of a built-in constant
-        // - variable name thas was defined in the `with` statement or
-        //   earlier on in the same define section.
-        let ident = &[self.get_ident().clone()];
-        let (_kind, ty, to, val) =
-            get_props_for_scoped_variable(ident, symbols, scope)?;
-        // Additionally check if this is a Variable or a Constant.
-        // Constants need their values to be preserved.
-        match val {
-            // It's a Constant, clone the (builtin-typed) value into the the
-            // symbol.
-            Some(val) => Ok(symbols::Symbol::new_with_value(
-                search_var.ident.clone(),
-                SymbolKind::AccessReceiver,
-                val,
-                vec![],
-                to,
-            )),
-            // It's a Variable, create a symbol with an empty value.
-            None => Ok(symbols::Symbol::new(
-                search_var.ident.clone(),
-                SymbolKind::AccessReceiver,
-                ty,
-                vec![],
-                Some(to),
-            )),
+            // Is it one of:
+            // - a name of a data source
+            // - the name of a built-in constant
+            // - variable name thas was defined in the `with` statement or
+            //   earlier on in the same define section.
+            let ident = &[search_var.clone()];
+            let (_kind, ty, to, val) =
+                get_props_for_scoped_variable(ident, symbols, scope)
+                    .map_err(|_| AccessReceiverError::Var)?;
+            // Additionally check if this is a Variable or a Constant.
+            // Constants need their values to be preserved.
+            match val {
+                // It's a Constant, clone the (builtin-typed) value into the
+                // symbol.
+                Some(val) => Ok(symbols::Symbol::new_with_value(
+                    search_var.ident.clone(),
+                    SymbolKind::AccessReceiver,
+                    val,
+                    vec![],
+                    to,
+                )),
+                // It's a Variable, create a symbol with an empty value.
+                None => Ok(symbols::Symbol::new(
+                    search_var.ident.clone(),
+                    SymbolKind::AccessReceiver,
+                    ty,
+                    vec![],
+                    Some(to),
+                )),
+            }
+        } else {
+            // No Identifier, no AccessReceiver, this is for a globally
+            // scoped, which is None of our business anyway (it's the
+            // caller's business).
+            Err(AccessReceiverError::Global)
         }
     }
 }
@@ -937,14 +1014,13 @@ impl ast::ValueExpr {
             // an expression ending in a a method call (e.g. `foo.bar()`).
             // Note that the evaluation of the method call will check for
             // the existence of the method.
-            ast::ValueExpr::ComputeExpr(compute_expr) => compute_expr.eval(
-                compute_expr.get_receiver().ident.ident,
-                symbols,
-                scope,
-            ),
+            ast::ValueExpr::ComputeExpr(compute_expr) => {
+                compute_expr.eval(None, symbols, scope)
+            }
             ast::ValueExpr::BuiltinMethodCallExpr(builtin_call_expr) => {
                 let name: ShortString = builtin_call_expr.ident.clone().ident;
-                let prim_ty = TypeDef::try_from(builtin_call_expr.ident.clone())?;
+                let prim_ty =
+                    TypeDef::try_from(builtin_call_expr.ident.clone())?;
 
                 if prim_ty.is_builtin() {
                     builtin_call_expr.eval(
@@ -952,9 +1028,12 @@ impl ast::ValueExpr {
                         prim_ty,
                         symbols,
                         scope,
-                    )    
+                    )
                 } else {
-                    return Err(format!("Unknown built-in method call: {}", name))?;
+                    return Err(format!(
+                        "Unknown built-in method call: {}",
+                        name
+                    ))?;
                 }
             }
             ast::ValueExpr::StringLiteral(str_lit) => {
@@ -1138,7 +1217,8 @@ impl ast::BooleanExpr {
                 // Checking this can therefore not be done by the Call
                 // Expression check here.
                 let s = call_expr.eval(
-                    call_expr.get_receiver().ident.ident,
+                    // call_expr.get_receiver_ident()?,
+                    None,
                     symbols,
                     scope.clone(),
                 )?;
@@ -1331,8 +1411,8 @@ fn check_type_identifier(
 ) -> Result<TypeDef, CompileError> {
     let symbols = symbols.borrow();
     // is it a builtin type?
-    if let Ok(builtin_ty) = TypeDef::try_from(ty.clone()) { 
-        return Ok(builtin_ty)
+    if let Ok(builtin_ty) = TypeDef::try_from(ty.clone()) {
+        return Ok(builtin_ty);
     }
 
     // is it in the global table?
@@ -1412,8 +1492,7 @@ fn get_props_for_scoped_variable(
     // done, and there's nothing here.
     let first_field_name = &fields
         .first()
-        .ok_or_else(|| "No name found for variable reference".to_string())?
-        .ident;
+        .ok_or_else(|| "No name found for variable reference".to_string())?;
 
     let symbols = symbols.borrow();
     let search_str = fields.join(".");
