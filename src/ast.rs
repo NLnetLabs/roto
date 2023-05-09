@@ -21,6 +21,7 @@ use nom::{
 use smallvec::SmallVec;
 
 use crate::compile::CompileError;
+use crate::parse_string;
 use crate::types::builtin::{Asn, Boolean};
 
 /// ======== Root ===========================================================
@@ -1231,18 +1232,16 @@ impl ListTypeIdentifier {
 
 // StringLiteral ::= '"' Identifier '"'
 #[derive(Clone, Debug)]
-pub struct StringLiteral(ShortString);
+pub struct StringLiteral(String);
 
 impl StringLiteral {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, ident) =
-            delimited(char('"'), Identifier::parse, char('"'))(input)?;
-
-        Ok((input, Self(ident.ident)))
+        let (input, string) = parse_string::parse_string(input)?;
+        Ok((input, Self(string)))
     }
 }
 
-impl From<&'_ StringLiteral> for ShortString {
+impl From<&'_ StringLiteral> for String {
     fn from(literal: &StringLiteral) -> Self {
         literal.0.clone()
     }

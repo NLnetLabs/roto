@@ -426,6 +426,9 @@ impl PartialEq<BuiltinTypeValue> for TypeDef {
             TypeDef::IntegerLiteral => {
                 matches!(other, BuiltinTypeValue::IntegerLiteral(_))
             }
+            TypeDef::StringLiteral => {
+                matches!(other, BuiltinTypeValue::StringLiteral(_))
+            }
             TypeDef::Prefix => {
                 matches!(other, BuiltinTypeValue::Prefix(_))
             }
@@ -490,6 +493,10 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             "U32" => Ok(TypeDef::U32),
             "U8" => Ok(TypeDef::U8),
             "IntegerLiteral" => Ok(TypeDef::IntegerLiteral),
+            // StringLiterals are referred to as 'String' in roto. To avond
+            // confusion with the Rust `String` it called `StringLiteral`
+            // internally
+            "String" => Ok(TypeDef::StringLiteral),
             "Prefix" => Ok(TypeDef::Prefix),
             "PrefixLength" => Ok(TypeDef::PrefixLength),
             "IpAddress" => Ok(TypeDef::IpAddress),
@@ -511,6 +518,10 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
             "U32" => Ok(TypeDef::U32),
             "U8" => Ok(TypeDef::U8),
             "IntegerLiteral" => Ok(TypeDef::IntegerLiteral),
+            // StringLiterals are referred to as 'String' in roto. To avond
+            // confusion with the Rust `String` it called `StringLiteral`
+            // internally
+            "String" => Ok(TypeDef::StringLiteral),
             "Prefix" => Ok(TypeDef::Prefix),
             "PrefixLength" => Ok(TypeDef::PrefixLength),
             "IpAddress" => Ok(TypeDef::IpAddress),

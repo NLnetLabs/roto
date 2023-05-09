@@ -1,3 +1,4 @@
+pub mod parse_string;
 pub mod ast;
 pub mod compile;
 mod eval;

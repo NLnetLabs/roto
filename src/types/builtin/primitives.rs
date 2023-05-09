@@ -400,9 +400,9 @@ impl From<BooleanToken> for usize {
 //------------ StringLiteral type -------------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct StringLiteral(pub(crate) ShortString);
+pub struct StringLiteral(pub(crate) String);
 impl StringLiteral {
-    pub fn new(val: ShortString) -> Self {
+    pub fn new(val: String) -> Self {
         StringLiteral(val)
     }
 }

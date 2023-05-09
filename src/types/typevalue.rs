@@ -617,7 +617,7 @@ impl From<bool> for TypeValue {
 
 impl From<&'_ str> for TypeValue {
     fn from(value: &str) -> Self {
-        StringLiteral(ShortString::from(value)).into()
+        StringLiteral(String::from(value)).into()
     }
 }
 

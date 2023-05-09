@@ -69,6 +69,13 @@ impl BuiltinTypeValue {
                     return Err("Not an IntegerLiteral".into());
                 }
             }
+            TypeDef::StringLiteral => {
+                if let BuiltinTypeValue::StringLiteral(v) = value.into() {
+                    BuiltinTypeValue::StringLiteral(v)
+                } else {
+                    return Err("Not a StringLiteral".into())
+                }
+            }
             TypeDef::PrefixLength => {
                 if let BuiltinTypeValue::PrefixLength(v) = value.into() {
                     BuiltinTypeValue::PrefixLength(v)
