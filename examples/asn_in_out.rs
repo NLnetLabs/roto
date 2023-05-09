@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-
 use roto::compile::Compiler;
 
 use roto::types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage, Prefix, Asn};
@@ -17,7 +15,7 @@ fn test_data(
     env_logger::init();
 
     // Compile the source code in this example
-    let rotolo = Compiler::build(source_code);
+    let rotolo = Compiler::build(source_code)?;
     let roto_pack = rotolo.inspect_pack(name)?;
 
     // BGP UPDATE message containing MP_REACH_NLRI path attribute,
@@ -72,13 +70,13 @@ fn test_data(
         .with_mir_code(roto_pack.mir)
         .build();
 
-    let mem = vm::LinearMemory::uninit();
+    let mem = &mut vm::LinearMemory::uninit();
     let res = vm.exec(
         payload,
         None::<Record>,
         // Some(module_arguments),
         None,
-        RefCell::new(mem),
+        mem,
     )
     .unwrap();
 

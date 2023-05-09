@@ -15,7 +15,7 @@ fn test_data(
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Evaluate module {}...", name);
 
-    let roto_packs = Compiler::build(source_code);
+    let roto_packs = Compiler::build(source_code)?;
 
     let roto_pack = roto_packs.inspect_pack(name)?;
     let _count: TypeValue = 1_u32.into();
@@ -78,7 +78,7 @@ fn test_data(
     )
     .unwrap();
 
-    let mem = vm::LinearMemory::uninit();
+    let mem = &mut vm::LinearMemory::uninit();
 
     println!("Used Arguments");
     println!("{:#?}", &roto_pack.arguments);
@@ -102,7 +102,7 @@ fn test_data(
         .build();
 
     let res = vm
-        .exec(my_payload, None::<Record>, None, RefCell::new(mem))
+        .exec(my_payload, None::<Record>, None, mem)
         .unwrap();
 
     println!("\nRESULT");
@@ -183,7 +183,7 @@ fn test_module_1() {
                         extra_in_table;
                         route_in_table;
                         // global-truth-method();
-                        // last.truth();
+                        // last.truth;
                         // last();
                         route.prefix.len() <= found_prefix.prefix.len();
                     }

@@ -473,15 +473,14 @@ impl<'a> VirtualMachine<'a> {
         &mut self,
         rx: impl RotoType,
         tx: Option<impl RotoType>,
-        mem: &RefCell<LinearMemory>,
+        mem: &mut LinearMemory,
     ) {
-        let mut m = mem.borrow_mut();
         let rx = rx.take_value();
-        m.set_mem_pos(0, rx.into());
+        mem.set_mem_pos(0, rx.into());
 
         if let Some(tx) = tx {
             let tx = tx.take_value();
-            m.set_mem_pos(1, tx.into());
+            mem.set_mem_pos(1, tx.into());
         }
     }
 
@@ -525,6 +524,10 @@ impl<'a> VirtualMachine<'a> {
         stack.unwind()
     }
 
+    pub fn reset(&self) {
+        self.stack.borrow_mut().clear();
+    }
+
     fn get_data_source(
         &self,
         token: usize,
@@ -542,7 +545,7 @@ impl<'a> VirtualMachine<'a> {
         tx: Option<impl RotoType>,
         // define level arguments, not used yet! Todo
         mut _arguments: Option<ArgumentsMap>,
-        mem: RefCell<LinearMemory>,
+        mem: &mut LinearMemory,
     ) -> Result<(AcceptReject, TypeValue, Option<TypeValue>), VmError>
     {
         if log_enabled!(Level::Debug) {
@@ -550,7 +553,7 @@ impl<'a> VirtualMachine<'a> {
         }
         let mut commands_num: usize = 0;
 
-        self._move_rx_tx_to_mem(rx, tx, &mem);
+        self._move_rx_tx_to_mem(rx, tx, mem);
 
         for MirBlock {
             command_stack,
@@ -571,9 +574,8 @@ impl<'a> VirtualMachine<'a> {
                 }
                 match op {
                     OpCode::Cmp => {
-                        let mut m = mem.borrow_mut();
                         let stack_args =
-                            self._unwind_resolved_stack_into_vec(&m);
+                            self._unwind_resolved_stack_into_vec(mem);
                         let left = stack_args[0];
                         let right = stack_args[1];
                         
@@ -584,7 +586,7 @@ impl<'a> VirtualMachine<'a> {
                         match args[0] {
                             Arg::CompareOp(CompareOp::Eq) => {
                                 let res = left == right;
-                                m.set_mem_pos(
+                                mem.set_mem_pos(
                                     0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
@@ -598,7 +600,7 @@ impl<'a> VirtualMachine<'a> {
                             }
                             Arg::CompareOp(CompareOp::Ne) => {
                                 let res = left != right;
-                                m.set_mem_pos(
+                                mem.set_mem_pos(
                                     0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
@@ -612,7 +614,7 @@ impl<'a> VirtualMachine<'a> {
                             }
                             Arg::CompareOp(CompareOp::Lt) => {
                                 let res = left < right;
-                                m.set_mem_pos(
+                                mem.set_mem_pos(
                                     0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
@@ -626,7 +628,7 @@ impl<'a> VirtualMachine<'a> {
                             }
                             Arg::CompareOp(CompareOp::Le) => {
                                 let res = left <= right;
-                                m.set_mem_pos(
+                                mem.set_mem_pos(
                                     0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
@@ -640,7 +642,7 @@ impl<'a> VirtualMachine<'a> {
                             }
                             Arg::CompareOp(CompareOp::Gt) => {
                                 let res = left > right;
-                                m.set_mem_pos(
+                                mem.set_mem_pos(
                                     0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
@@ -654,7 +656,7 @@ impl<'a> VirtualMachine<'a> {
                             }
                             Arg::CompareOp(CompareOp::Ge) => {
                                 let res = left >= right;
-                                m.set_mem_pos(
+                                mem.set_mem_pos(
                                     0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
@@ -670,7 +672,7 @@ impl<'a> VirtualMachine<'a> {
                                 let l = left.try_into()?;
                                 let r = right.try_into()?;
                                 let res = l || r;
-                                m.set_mem_pos(
+                                mem.set_mem_pos(
                                     0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
@@ -685,7 +687,7 @@ impl<'a> VirtualMachine<'a> {
                             Arg::CompareOp(CompareOp::And) => {
                                 let res =
                                     left.try_into()? && right.try_into()?;
-                                m.set_mem_pos(
+                                mem.set_mem_pos(
                                     0xff,
                                     TypeValue::Builtin(
                                         BuiltinTypeValue::Boolean(Boolean(
@@ -706,8 +708,6 @@ impl<'a> VirtualMachine<'a> {
                             trace!("Stack {:?}", self.stack);
                             trace!("Args {:?}", args);
                         }
-                        let mut m = mem.borrow_mut();
-
                         let mem_pos =
                             if let Arg::MemPos(pos) = args.pop().unwrap() {
                                 *pos as usize
@@ -717,7 +717,7 @@ impl<'a> VirtualMachine<'a> {
                         let (_args, method_t, return_type) = args.pop_3();
 
                         let stack_args =
-                            self._unwind_resolved_stack_into_vec(&m);
+                            self._unwind_resolved_stack_into_vec(mem);
 
                         // We are going to call a method on a type, so we
                         // extract the type from the first argument on the
@@ -728,15 +728,13 @@ impl<'a> VirtualMachine<'a> {
                                 &stack_args,
                                 return_type.into(),
                             );
-                            m.set_mem_pos(mem_pos, val);
+                            mem.set_mem_pos(mem_pos, val);
                         }
                     }
                     // stack args: [method_token, return_type,
                     //      arguments, result memory position
                     // ]
                     OpCode::ExecuteValueMethod => {
-                        let mut m = mem.borrow_mut();
-
                         let mem_pos =
                             if let Arg::MemPos(pos) = args.pop().unwrap() {
                                 *pos as usize
@@ -762,12 +760,12 @@ impl<'a> VirtualMachine<'a> {
                             let sr = stack.pop().unwrap();
                             match sr.pos {
                                 StackRefPos::MemPos(pos) => {
-                                    let v = m
+                                    let v = mem
                                         .get_mp_field_by_index(pos as usize, sr.field_index)
                                         .unwrap_or_else(|| {
                                             if log_enabled!(Level::Debug) {
                                                 debug!("\nstack: {:?}", stack);
-                                                debug!("mem: {:#?}", m.0);
+                                                debug!("mem: {:#?}", mem.0);
                                             }
                                             panic!("Uninitialized memory in position {}", pos);
                                         });
@@ -793,7 +791,7 @@ impl<'a> VirtualMachine<'a> {
                             return_type.into(),
                         )?();
 
-                        m.set_mem_pos(mem_pos, v);
+                        mem.set_mem_pos(mem_pos, v);
                     }
                     // stack args: [
                     //      method_token, return_type,
@@ -801,8 +799,6 @@ impl<'a> VirtualMachine<'a> {
                     // ]
                     // pops arguments from the stack
                     OpCode::ExecuteConsumeValueMethod => {
-                        let mut m = mem.borrow_mut();
-
                         let mem_pos =
                             if let Arg::MemPos(pos) = args.pop().unwrap() {
                                 *pos as usize
@@ -848,12 +844,12 @@ impl<'a> VirtualMachine<'a> {
 
                             match sr.pos {
                                 StackRefPos::MemPos(pos) => {
-                                    m
+                                    mem
                                         .get_mem_pos_as_owned(pos as usize)
                                         .unwrap_or_else(|| {
                                             if log_enabled!(Level::Debug) {
                                                 debug!("\nstack: {:?}", stack);
-                                                debug!("mem: {:#?}", m.0);
+                                                debug!("mem: {:#?}", mem.0);
                                             }
                                             panic!(r#"Uninitialized memory in 
                                                 pos {}. That's fatal"#, pos);
@@ -922,13 +918,11 @@ impl<'a> VirtualMachine<'a> {
                             _ => collection_value,
                         };
 
-                        m.set_mem_pos(mem_pos, result_value);
+                        mem.set_mem_pos(mem_pos, result_value);
                     }
                     // args: [data_source_token, method_token, arguments,
                     //       return memory position]
                     OpCode::ExecuteDataStoreMethod => {
-                        let mut m = mem.borrow_mut();
-
                         let mem_pos =
                             if let Arg::MemPos(pos) = args.pop().unwrap() {
                                 *pos as usize
@@ -950,7 +944,7 @@ impl<'a> VirtualMachine<'a> {
                         {
                             let ds = self.get_data_source(*ds_s).unwrap();
                             let stack_args =
-                                self._unwind_resolved_stack_into_vec(&m);
+                                self._unwind_resolved_stack_into_vec(mem);
 
                             let v = ds.exec_method(
                                 method_token.into(),
@@ -963,10 +957,10 @@ impl<'a> VirtualMachine<'a> {
                                     s.push(sr_pos)?;
                                 }
                                 DataSourceMethodValue::TypeValue(tv) => {
-                                    m.set_mem_pos(mem_pos, tv);
+                                    mem.set_mem_pos(mem_pos, tv);
                                 }
                                 DataSourceMethodValue::Empty(_ty) => {
-                                    m.set_mem_pos(
+                                    mem.set_mem_pos(
                                         mem_pos,
                                         TypeValue::Unknown,
                                     );
@@ -980,7 +974,7 @@ impl<'a> VirtualMachine<'a> {
                             if log_enabled!(Level::Trace) {
                                 trace!(
                                     " content: {:?}",
-                                    mem.borrow().get_mem_pos(pos as usize)
+                                    mem.get_mem_pos(pos as usize)
                                 );
                             }
 
@@ -1010,8 +1004,7 @@ impl<'a> VirtualMachine<'a> {
                     OpCode::MemPosSet => {
                         if let Arg::MemPos(pos) = args[0] {
                             let v = args.take_arg_as_constant()?;
-                            let mut m = mem.borrow_mut();
-                            m.set_mem_pos(pos as usize, v);
+                            mem.set_mem_pos(pos as usize, v);
                         } else {
                             return Err(VmError::InvalidValueType);
                         }
@@ -1038,9 +1031,7 @@ impl<'a> VirtualMachine<'a> {
                                     let arg_value = self
                                         .arguments
                                         .take_value_by_token(token_value)?;
-
-                                    let mut m = mem.borrow_mut();
-                                    m.set_mem_pos(pos as usize, arg_value);
+                                    mem.set_mem_pos(pos as usize, arg_value);
                                 }
                                 _ => {
                                     return Err(VmError::InvalidValueType);
@@ -1056,11 +1047,10 @@ impl<'a> VirtualMachine<'a> {
                     // Term procedures
                     // stack args ignored
                     OpCode::CondFalseSkipToEOB => {
-                        let m = mem.borrow();
                         let s = self.stack.borrow();
                         let stack_ref = s.get_top_value()?;
                         let bool_val =
-                            m.get_mp_field_by_stack_ref(stack_ref).unwrap();
+                            mem.get_mp_field_by_stack_ref(stack_ref).unwrap();
                         if bool_val.is_false()? {
                             if log_enabled!(Level::Trace) {
                                 trace!(" skip to end of block");
@@ -1076,11 +1066,10 @@ impl<'a> VirtualMachine<'a> {
                     }
                     // stack args ignored
                     OpCode::CondTrueSkipToEOB => {
-                        let m = mem.borrow();
                         let s = self.stack.borrow();
                         let stack_ref = s.get_top_value()?;
                         let bool_val =
-                            m.get_mp_field_by_stack_ref(stack_ref).unwrap();
+                            mem.get_mp_field_by_stack_ref(stack_ref).unwrap();
                         if bool_val.is_false()? {
                             if log_enabled!(Level::Trace) {
                                 trace!(" continue");
@@ -1095,15 +1084,13 @@ impl<'a> VirtualMachine<'a> {
                     }
                     // stack args: [exit value]
                     OpCode::Exit(accept_reject) => {
-                        let mut m = mem.borrow_mut();
-
-                        let rx: TypeValue = match m.get_mem_pos_as_owned(0) {
+                        let rx: TypeValue = match mem.get_mem_pos_as_owned(0) {
                             Some(TypeValue::Record(rec)) => rec.into(),
                             Some(TypeValue::Builtin(BuiltinTypeValue::Route(route))) => route.into(),
                             _ => return Err(VmError::InvalidPayload),
                         };
 
-                        let tx = match m.get_mem_pos_as_owned(1) {
+                        let tx = match mem.get_mem_pos_as_owned(1) {
                             Some(TypeValue::Record(rec)) => Some(rec.into()),
                             _ => None,
                         };
@@ -1112,7 +1099,7 @@ impl<'a> VirtualMachine<'a> {
                             if log_enabled!(Level::Trace) {
                                 trace!("\n\nINITIALIZED MEMORY POSITIONS");
                             }
-                            for (i, addr) in m.0.as_slice().iter().enumerate()
+                            for (i, addr) in mem.0.as_slice().iter().enumerate()
                             {
                                 if log_enabled!(Level::Trace) && !addr.is_unitialized() {
                                     trace!("{}: {}", i, addr);
@@ -1136,13 +1123,12 @@ impl<'a> VirtualMachine<'a> {
 
                     // stack args: [new value]
                     OpCode::SetRxField => {
-                        let mut m = mem.borrow_mut();
                         // pop all refs from the stack and resolve them to
                         // their values.
                         let stack_args = self.as_vec();
 
                         // swap out the new value from memory
-                        let val = m
+                        let val = mem
                             .get_mp_field_by_stack_ref_owned(
                                 stack_args.last().unwrap(),
                             )
@@ -1150,7 +1136,7 @@ impl<'a> VirtualMachine<'a> {
 
                         // save the value in memory position 0 (rx instance
                         // by definition).
-                        m.set_mem_pos(0, val);
+                        mem.set_mem_pos(0, val);
                     }
                     // stack args: [tx type instance field, new value]
                     OpCode::SetTxField => {
@@ -1164,7 +1150,7 @@ impl<'a> VirtualMachine<'a> {
                 trace!("\nINITIALIZED MEMORY POSITIONS");
             }
 
-            for (i, addr) in mem.borrow().0.as_slice().iter().enumerate() {
+            for (i, addr) in mem.0.as_slice().iter().enumerate() {
                 if log_enabled!(Level::Trace) && !addr.is_unitialized() {
                     trace!("{}: {}", i, addr);
                 }

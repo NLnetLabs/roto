@@ -3,7 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use log::{log_enabled, Level, info};
+use log::{debug, log_enabled, Level};
 use nom::error::VerboseError;
 
 use crate::{
@@ -100,12 +100,7 @@ impl Rotolo {
     }
 
     fn _take_pack_by_name(&mut self, name: &str) -> Option<RotoPack> {
-        let idx = self
-            .packs
-            .iter()
-            .enumerate()
-            .find(|(_idx, p)| p.module_name == name)
-            .map(|(idx, _p)| idx);
+        let idx = self.packs.iter().position(|p| p.module_name == name);
         if let Some(idx) = idx {
             let p = self.packs.remove(idx);
             Some(p)
@@ -118,16 +113,24 @@ impl Rotolo {
         &self,
         name: &str,
     ) -> Result<PublicRotoPack, CompileError> {
-        self.packs.iter().find(|p| p.module_name == name).map(|p| {
-            PublicRotoPack {
+        self.packs
+            .iter()
+            .find(|p| p.module_name == name)
+            .map(|p| PublicRotoPack {
                 module_name: p.module_name.as_str(),
                 arguments: p.inspect_arguments(),
                 rx_type: p.rx_type.clone(),
                 tx_type: p.tx_type.clone(),
                 data_sources: p.data_sources.as_slice(),
-                mir: p.mir.as_slice()
-            }
-        }).ok_or_else(|| format!("Can't find module with specified name in this pack: {}", name).into())
+                mir: p.mir.as_slice(),
+            })
+            .ok_or_else(|| {
+                format!(
+                    "Can't find module with specified name in this pack: {}",
+                    name
+                )
+                .into()
+            })
     }
 
     pub fn compile_all_arguments(
@@ -150,21 +153,21 @@ impl Rotolo {
     pub fn compile_arguments(
         &self,
         name: &str,
-        args: Vec<(ShortString, TypeValue)>
+        args: Vec<(ShortString, TypeValue)>,
     ) -> Result<ArgumentsMap, CompileError> {
+        let pack = self.packs.iter().find(|p| p.module_name == name);
+        if let Some(pack) = pack {
+            let cp = pack.compile_arguments(args);
 
-            let pack = self.packs.iter().find(|p| p.module_name == name);
-            if let Some(pack) = pack {
-                let cp = pack.compile_arguments(args);
-                
-                match cp {
-                    Ok(map) => Ok(map),
-                    Err(err) => Err(err)
-                }
-            } else {
-                Err(format!("Can't find with specified module name: {}", name).into())
+            match cp {
+                Ok(map) => Ok(map),
+                Err(err) => Err(err),
             }
+        } else {
+            Err(format!("Can't find with specified module name: {}", name)
+                .into())
         }
+    }
 }
 
 pub struct PublicRotoPack<'a> {
@@ -173,9 +176,8 @@ pub struct PublicRotoPack<'a> {
     pub rx_type: TypeDef,
     pub tx_type: Option<TypeDef>,
     pub arguments: Vec<(&'a str, TypeDef)>,
-    pub data_sources: &'a [ExtDataSource]
+    pub data_sources: &'a [ExtDataSource],
 }
-
 
 #[derive(Debug)]
 struct RotoPack {
@@ -252,7 +254,11 @@ impl RotoPack {
                 }
                 // The supplied argument is not in the source code.
                 None => {
-                    return Err(format!("Can't find argument in source: {}",supplied_arg.0).into())
+                    return Err(format!(
+                        "Can't find argument in source: {}",
+                        supplied_arg.0
+                    )
+                    .into())
                 }
             }
         }
@@ -269,7 +275,11 @@ impl RotoPack {
                 .map(|a| a.get_name())
                 .collect::<Vec<&str>>();
 
-            return Err(format!("Some arguments are missing: {:?}", missing_args).into());
+            return Err(format!(
+                "Some arguments are missing: {:?}",
+                missing_args
+            )
+            .into());
         }
 
         Ok(arguments_map)
@@ -386,9 +396,8 @@ impl<'a> Compiler {
     }
 
     pub fn compile(self) -> Rotolo {
-
-        if log_enabled!(Level::Info) {
-            info!("Start compiling...");
+        if log_enabled!(Level::Debug) {
+            debug!("Start compiling...");
         }
 
         // get all symbols that are used in the filter terms.
@@ -425,11 +434,15 @@ impl<'a> Compiler {
         }
     }
 
-    pub fn build(source_code: &'a str) -> Rotolo {
+    pub fn build(source_code: &'a str) -> Result<Rotolo, String> {
         let mut compiler = Compiler::new();
-        compiler.parse_source_code(source_code).unwrap();
-        compiler.eval_ast().unwrap();
-        compiler.compile()
+        compiler
+            .parse_source_code(source_code)
+            .map_err(|err| format!("Parse error: {err}"))?;
+        compiler
+            .eval_ast()
+            .map_err(|err| format!("Eval error: {err}"))?;
+        Ok(compiler.compile())
     }
 }
 
@@ -1132,7 +1145,8 @@ fn compile_apply(
 
         if let SymbolKind::MatchAction(ma) = match_action.get_kind() {
             match ma {
-                MatchActionType::MatchAction | MatchActionType::EmptyAction => {
+                MatchActionType::MatchAction
+                | MatchActionType::EmptyAction => {
                     state.cur_mir_block.command_stack.extend([
                         Command::new(
                             OpCode::Label,
@@ -1183,9 +1197,9 @@ fn compile_apply(
                 panic!("NO ACCEPT REJECT {:?}", action);
             };
             let actions = _module.get_actions();
-            if let Some(action) = actions
-                .iter()
-                .find(|t| t.get_name() == action_name) {
+            if let Some(action) =
+                actions.iter().find(|t| t.get_name() == action_name)
+            {
                 state = compile_action(action, state)?;
             }
 

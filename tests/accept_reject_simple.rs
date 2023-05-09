@@ -19,7 +19,7 @@ fn test_data(
     println!("Evaluate module {}...", name);
 
     // Compile the source code in this example
-    let rotolo = Compiler::build(source_code);
+    let rotolo = Compiler::build(source_code)?;
     let roto_pack = rotolo.inspect_pack(name)?;
 
     let payload_type =
@@ -36,8 +36,8 @@ fn test_data(
         .with_mir_code(roto_pack.mir)
         .build();
 
-    let mem = vm::LinearMemory::uninit();
-    let res = vm.exec(payload, None::<Record>, None, RefCell::new(mem))?;
+    let mem = &mut vm::LinearMemory::uninit();
+    let res = vm.exec(payload, None::<Record>, None, mem)?;
 
     println!("\nRESULT");
     println!("action: {}", res.0);
