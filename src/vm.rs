@@ -1263,6 +1263,32 @@ pub enum VmError {
     DeltaLocked,
 }
 
+impl Display for VmError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VmError::StackUnderflow => f.write_str("StackUnderflow"),
+            VmError::StackOverflow => f.write_str("StackOverflow"),
+            VmError::MemOutOfBounds => f.write_str("MemOutOfBounds"),
+            VmError::InvalidMemoryAccess(_, _) => f.write_str("InvalidMemoryAccess"),
+            VmError::AnonymousArgumentNotFound => f.write_str("AnonymousArgumentNotFound"),
+            VmError::ArgumentNotFound(_) => f.write_str("ArgumentNotFound"),
+            VmError::ArgumentsMissing(_) => f.write_str("ArgumentsMissing"),
+            VmError::InvalidValueType => f.write_str("InvalidValueType"),
+            VmError::InvalidPayload => f.write_str("InvalidPayload"),
+            VmError::InvalidVariableAccess => f.write_str("InvalidVariableAccess"),
+            VmError::InvalidFieldAccess(_) => f.write_str("InvalidFieldAccess"),
+            VmError::InvalidMethodCall => f.write_str("InvalidMethodCall"),
+            VmError::DataSourceNotFound(_) => f.write_str("DataSourceNotFound"),
+            VmError::ImpossibleComparison => f.write_str("ImpossibleComparison"),
+            VmError::InvalidWrite => f.write_str("InvalidWrite"),
+            VmError::InvalidConversion => f.write_str("InvalidConversion"),
+            VmError::UnexpectedTermination => f.write_str("UnexpectedTermination"),
+            VmError::AsPathTooLong => f.write_str("AsPathTooLong"),
+            VmError::DeltaLocked => f.write_str("DeltaLocked"),
+        }
+    }
+}
+
 impl From<VmError> for Box<dyn std::error::Error> {
     fn from(value: VmError) -> Self {
         format!("A VM Error occured: {:?}", value).into()
