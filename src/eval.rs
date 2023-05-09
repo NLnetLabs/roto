@@ -7,6 +7,7 @@ use crate::ast::ShortString;
 use crate::compile::CompileError;
 use crate::symbols::GlobalSymbolTable;
 use crate::symbols::MatchActionType;
+use crate::symbols::Scope;
 use crate::symbols::Symbol;
 use crate::symbols::SymbolKind;
 use crate::traits::Token;
@@ -745,29 +746,35 @@ impl ast::ComputeExpr {
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, CompileError> {
-        let ar_name = self.get_receiver_ident().or_else(|_| {
-                Ok::<ShortString, CompileError>(
-                    self.access_expr[0].get_ident().clone(),
-                )
-            })?;
 
-        let mut ar_symbol = self
-            .get_receiver()
-            .eval(symbols.clone(), scope.clone())
-            .map_err(|ar_err| match ar_err {
-                AccessReceiverError::Var => CompileError::from(format!(
-                    "Cannot find variable '{}' in {}",
-                    ar_name, scope
-                )),
-                AccessReceiverError::Global => CompileError::from(format!(
-                    "Cannot find global method '{}'",
-                    ar_name
-                )),
-                AccessReceiverError::Arg => CompileError::from(format!(
-                    "Cannot find Argument '{}' for scope {}",
-                    ar_name, scope
-                )),
-            })?;
+        // this ar_name is only for use in error messages, the actual name
+        // for the symbol that will be created can be slightly different,
+        // e.g. having a prefix 'sub-action-'.
+        let ar_name = self.get_receiver_ident().or_else(|_| {
+            Ok::<ShortString, CompileError>(
+                self.access_expr[0].get_ident().clone(),
+            )
+        })?;
+
+        let ar_s = self.get_receiver();
+        // The evaluation of the Access Receiver
+        let mut ar_symbol =
+            ar_s
+                .eval(symbols.clone(), scope.clone())
+                .or_else(|_| ar_s.eval(symbols.clone(), Scope::Global))
+                .map_err(|ar_err| match ar_err {
+                    AccessReceiverError::Var => CompileError::from(format!(
+                        "Cannot find variable '{}' in {} or in the global scope.",
+                        ar_name, scope
+                    )),
+                    AccessReceiverError::Global => CompileError::from(
+                        format!("Cannot find global method '{}'", ar_name),
+                    ),
+                    AccessReceiverError::Arg => CompileError::from(format!(
+                        "Cannot find Argument '{}' for scope {}",
+                        ar_name, scope
+                    )),
+                })?;
 
         let ar_token = ar_symbol.get_token().unwrap();
         let mut s = &mut ar_symbol;
@@ -997,7 +1004,7 @@ impl ast::AccessReceiver {
             }
         } else {
             // No Identifier, no AccessReceiver, this is for a globally
-            // scoped, which is None of our business anyway (it's the
+            // scoped method, which is None of our business anyway (it's the
             // caller's business).
             Err(AccessReceiverError::Global)
         }
@@ -1038,7 +1045,7 @@ impl ast::ValueExpr {
             }
             ast::ValueExpr::StringLiteral(str_lit) => {
                 Ok(symbols::Symbol::new_with_value(
-                    str_lit.into(),
+                    "string_lit".into(),
                     symbols::SymbolKind::Constant,
                     TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
                         StringLiteral::new(str_lit.into()),
