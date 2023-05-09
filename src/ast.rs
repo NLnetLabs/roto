@@ -90,6 +90,45 @@ impl RootExpr {
     }
 }
 
+//------------ RecordAssignment --------------------------------------
+
+// RecordAssignment := '{' RecordIdentifier '}'
+
+// The value of a record, mainly used as anonymous records as a method
+// argument.
+
+#[derive(Clone, Debug)]
+pub struct RecordAssignment {
+    pub key_values: Vec<(Identifier, ValueExpr)>,
+}
+
+impl RecordAssignment {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, key_values) = context(
+            "record value",
+            delimited(
+                opt_ws(char('{')),
+                context(
+                    "Record Value",
+                    separated_list1(
+                        char(','),
+                        opt_ws(tuple((
+                            terminated(
+                                opt_ws(Identifier::parse),
+                                opt_ws(char(':')),
+                            ),
+                            opt_ws(ValueExpr::parse),
+                        ))),
+                    ),
+                ),
+                opt_ws(char('}')),
+            ),
+        )(input)?;
+
+        Ok((input, RecordAssignment { key_values }))
+    }
+}
+
 //------------ RecordTypeAssignment -----------------------------------------
 
 // RecordTypeAssignment ::= "type" Identifier '{' RecordTypeIdentifier '}'
@@ -1211,12 +1250,12 @@ impl From<&'_ StringLiteral> for ShortString {
 
 //------------ RecordTypeIdentifier -----------------------------------------
 
-// The value of a record. It's very similar to a RibBody (in EBNF it's the
-// same), but it simplifies creating the SymbolTable, because they're
+// The user-defined type of a record. It's very similar to a RibBody (in EBNF
+// it's the same), but it simplifies creating the SymbolTable, because they're
 // semantically different.
 
-// RecordIdentifier ::= '{' ( Identifier ':'
-//                          TypeIdentifier | '{' RecordTypeIdentifier '}'
+// RecordTypeIdentifier ::= '{' ( Identifier ':'
+//                          RecordTypeIdentifier | '{' RecordBody '}'
 //                      ','? )+ '}'
 
 #[derive(Clone, Debug)]
@@ -1546,6 +1585,7 @@ pub enum ValueExpr {
     PrefixMatchExpr(PrefixMatchExpr),
     ComputeExpr(ComputeExpr),
     BuiltinMethodCallExpr(MethodComputeExpr),
+    RecordExpr(RecordAssignment),
 }
 
 impl ValueExpr {
@@ -1560,6 +1600,7 @@ impl ValueExpr {
             map(tag("false"), |_| {
                 ValueExpr::BooleanLit(BooleanLiteral(false))
             }),
+            map(RecordAssignment::parse, ValueExpr::RecordExpr),
             map(PrefixMatchExpr::parse, ValueExpr::PrefixMatchExpr),
             map(MethodComputeExpr::parse, ValueExpr::BuiltinMethodCallExpr),
             map(ComputeExpr::parse, ValueExpr::ComputeExpr),
