@@ -1,5 +1,4 @@
 use roto::compile::Compiler;
-use std::cell::RefCell;
 
 use roto::types::builtin::{
     Asn, Community,
@@ -9,13 +8,23 @@ use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
 use roto::vm;
 
+mod common;
+
 fn test_data(
     name: &str,
     source_code: &'static str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Evaluate module {}...", name);
 
-    let roto_packs = Compiler::build(source_code)?;
+    // Type coercion doesn't work here...
+    let module_arguments = vec![(
+        "extra_asn",
+        TypeValue::from(Asn::from(65534_u32))
+    )];
+
+    let mut c = Compiler::new();
+    c.with_arguments(name, module_arguments)?;
+    let roto_packs = c.build_from_compiler(source_code)?;
 
     let roto_pack = roto_packs.inspect_pack(name)?;
     let _count: TypeValue = 1_u32.into();
@@ -85,18 +94,10 @@ fn test_data(
     println!("Used Data Sources");
     println!("{:#?}", &roto_pack.data_sources);
 
-    let module_arguments = vec![(
-        "extra_asn".into(),
-        // use Roto type coercion
-        TypeValue::from(65534_u32)
-    )];
-
-    let args = roto_packs.compile_arguments(name, module_arguments)?;
-
     let ds_ref = roto_pack.data_sources.iter().collect::<Vec<_>>();
 
     let mut vm = vm::VmBuilder::new()
-        .with_arguments(args)
+        // .with_arguments(args)
         .with_data_sources(ds_ref.as_slice())
         .with_mir_code(roto_pack.mir)
         .build();
@@ -115,6 +116,8 @@ fn test_data(
 
 #[test]
 fn test_module_1() {
+    common::init();
+
     test_data(
         "in-module",
         r###"
@@ -157,7 +160,6 @@ fn test_module_1() {
                     
                     // prefix_len triggers a type conversion from IntegerLiteral to PrefixLength
                     fixed_len_prefix = Prefix.from(route.prefix.address(), prefix_len); // 10
-
 
                     my_my_route_path = my_route_path;
 

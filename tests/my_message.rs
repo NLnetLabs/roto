@@ -7,13 +7,8 @@ use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
 use roto::vm;
-use std::io::Write;
 
-fn init() {
-    let _ = env_logger::builder().format(|buf, record| {
-        writeln!(buf, "{}", record.args())
-    }).is_test(true).try_init();
-}
+mod common;
 
 fn test_data(
     name: &str,
@@ -29,7 +24,6 @@ fn test_data(
     let mut c = Compiler::new();
     c.with_arguments(name, module_arguments)?;
     let roto_packs = c.build_from_compiler(source_code)?;
-    // roto_packs.compile_arguments(name,module_arguments);
 
     println!("miscompilations");
     println!("{:?}", roto_packs.get_mis_compilations());
@@ -125,7 +119,7 @@ fn test_data(
 
 #[test]
 fn test_module_message() {
-    init();
+    common::init();
     test_data(
         "my-message-module",
         r###"

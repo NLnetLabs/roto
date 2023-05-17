@@ -1,4 +1,3 @@
-#[cfg(test)]
 use nom::error::convert_error;
 use roto::{
     ast::ShortString,
@@ -20,7 +19,7 @@ impl<'a> TestCompiler<'a> {
         }
     }
 
-    pub(crate) fn test_parse(mut self, expect_success: bool) -> Self {
+    pub(crate) fn test_parse(mut self, expect_success: bool) -> Self {        
         println!("test parse {}", self.name);
 
         let parse_res = self.compiler.parse_source_code(self.source_code);

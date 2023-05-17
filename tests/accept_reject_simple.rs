@@ -1,5 +1,4 @@
-use std::cell::RefCell;
-
+use log::{trace, info};
 use roto::ast::AcceptReject;
 use roto::compile::Compiler;
 
@@ -9,6 +8,8 @@ use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
 use roto::vm;
 
+mod common;
+
 fn test_data(
     name: &str,
     source_code: &str,
@@ -16,7 +17,7 @@ fn test_data(
     (AcceptReject, TypeValue, std::option::Option<TypeValue>),
     Box<dyn std::error::Error>,
 > {
-    println!("Evaluate module {}...", name);
+    info!("Evaluate module {}...", name);
 
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code)?;
@@ -39,10 +40,10 @@ fn test_data(
     let mem = &mut vm::LinearMemory::uninit();
     let res = vm.exec(payload, None::<Record>, None, mem)?;
 
-    println!("\nRESULT");
-    println!("action: {}", res.0);
-    println!("rx    : {:?}", res.1);
-    println!("tx    : {:?}", res.2);
+    trace!("\nRESULT");
+    trace!("action: {}", res.0);
+    trace!("rx    : {:?}", res.1);
+    trace!("tx    : {:?}", res.2);
 
     Ok(res)
 }
@@ -91,6 +92,7 @@ fn src_code(code_line: &str, asn: &str, end_accept_reject: &str) -> String {
 
 #[test]
 fn test_module_10() {
+    common::init();
     let src_line = &src_code(
         "filter match peer-asn-matches matching { return accept; };",
         "AS65534",
@@ -106,6 +108,7 @@ fn test_module_10() {
 
 #[test]
 fn test_module_11() {
+    common::init();
     let src_line = &src_code(
         "filter match peer-asn-matches matching { return accept; };",
         "AS0",
@@ -121,6 +124,7 @@ fn test_module_11() {
 
 #[test]
 fn test_module_12() {
+    common::init();
     let src_line = &src_code(
         "filter match peer-asn-matches matching { return reject; };",
         "AS0",
@@ -136,6 +140,7 @@ fn test_module_12() {
 
 #[test]
 fn test_module_20() {
+    common::init();
     let src_line = &src_code(
         "filter match peer-asn-matches matching { return reject; };",
         "AS65534",
@@ -400,6 +405,8 @@ fn test_module_71() {
 
 #[test]
 fn test_module_72() {
+    common::init();
+
     let src_line = &src_code(
         r#"filter match peer-asn-matches matching { 
             set-asn; 
@@ -411,6 +418,7 @@ fn test_module_72() {
     );
     let test_run = test_data("my-module", src_line);
 
+    trace!("{:?}", test_run);
     assert!(test_run.is_ok());
 
     let (ar, _rx, _tx) = test_run.unwrap();
@@ -419,6 +427,7 @@ fn test_module_72() {
 
 #[test]
 fn test_module_80() {
+    common::init();
     let src_line = &src_code(
         r#"filter match peer-asn-matches matching { 
         set-asn; 
@@ -437,6 +446,7 @@ fn test_module_80() {
 
 #[test]
 fn test_module_81() {
+    common::init();
     let src_line = &src_code(
         r#"filter match peer-asn-matches matching { 
         set-asn; 
@@ -448,6 +458,7 @@ fn test_module_81() {
     );
     let test_run = test_data("my-module", src_line);
 
+    println!("test run {:?}", test_run);
     assert!(test_run.is_ok());
 
     let (ar, _rx, _tx) = test_run.unwrap();
@@ -456,6 +467,7 @@ fn test_module_81() {
 
 #[test]
 fn test_module_82() {
+    common::init();
     let src_line = &src_code(
         r#"filter match peer-asn-matches matching { 
         set-asn; 

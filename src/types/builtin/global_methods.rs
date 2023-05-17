@@ -1,6 +1,14 @@
 //------------ Global Methods type ----------------------------------------------
 
-use crate::{traits::{TokenConvert, RotoType}, types::{typedef::{TypeDef, MethodProps}, typevalue::TypeValue}, compile::CompileError, vm::VmError, ast::ShortString};
+use crate::{
+    compile::CompileError,
+    traits::{RotoType, TokenConvert},
+    types::{
+        typedef::{MethodProps, TypeDef},
+        typevalue::TypeValue,
+    },
+    vm::VmError,
+};
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
 pub struct GlobalMethods;
@@ -31,7 +39,7 @@ impl RotoType for GlobalMethods {
 
     fn into_type(
         self,
-        type_def: &TypeDef,
+        _type_def: &TypeDef,
     ) -> Result<TypeValue, CompileError> {
         unimplemented!();
     }

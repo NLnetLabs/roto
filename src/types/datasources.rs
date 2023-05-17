@@ -2,6 +2,8 @@
 
 // ----------- Rib Type ----------------------------------------------------
 
+use log::info;
+
 use crate::{
     ast::ShortString,
     compile::CompileError,
@@ -51,7 +53,7 @@ impl Rib {
                         ))
                     })
                     .unwrap_or_else(|| {
-                        println!("WRITING Empty record INTO RIB FIELD");
+                        info!("WRITING Empty record INTO RIB FIELD");
                         // We can't write TypeValue::Unknown directly in here
                         // because we would erase the type then. Since this
                         // method can be in the middle of a chain we need to

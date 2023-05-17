@@ -1,10 +1,12 @@
 mod modules;
-
+mod common;
 
 //------------ RIB parse ----------------------------------------------------
 
 #[test]
 fn test_rib_invalid_1() {
+    common::init();
+
     let compiler = modules::TestCompiler::create(
         "test_rib_invalid_1",
         r###"
@@ -20,6 +22,8 @@ fn test_rib_invalid_1() {
 
 #[test]
 fn test_rib_invalid_2() {
+    common::init();
+
     let compiler = modules::TestCompiler::create(
         "invalid-rib-with-comment-2",
         r###"
@@ -35,6 +39,8 @@ fn test_rib_invalid_2() {
 
 #[test]
 fn test_rib_without_name_1() {
+    common::init();
+    
     let compiler = modules::TestCompiler::create(
         "rib-without-a-name",
         r###"
@@ -46,6 +52,8 @@ fn test_rib_without_name_1() {
 
 #[test]
 fn test_empty() {
+    common::init();
+    
     let compiler = modules::TestCompiler::create(
         "invalid-rib-without-name-2",
         r###"
@@ -59,6 +67,8 @@ fn test_empty() {
 
 #[test]
 fn test_interspersed_comments() {
+    common::init();
+    
     let compiler = modules::TestCompiler::create(
         "interspersed-comments",
         r###"
@@ -75,6 +85,8 @@ fn test_interspersed_comments() {
 
 #[test]
 fn test_stream_1() {
+    common::init();
+    
     let compiler = modules::TestCompiler::create(
         "stream_1",
         r###"
