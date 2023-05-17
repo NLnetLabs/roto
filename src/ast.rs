@@ -94,9 +94,9 @@ impl RootExpr {
     }
 }
 
-//------------ RecordAssignment --------------------------------------
+//------------ RecordValueExpr --------------------------------------
 
-// RecordAssignment := '{' RecordIdentifier '}'
+// RecordValueExpr ::= '{' (Identifier ':' ValueExpr, )+ '}'
 
 // The value of a (anonnymous) record, as a method argument.
 
