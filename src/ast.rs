@@ -95,15 +95,14 @@ impl RootExpr {
 
 // RecordAssignment := '{' RecordIdentifier '}'
 
-// The value of a record, mainly used as anonymous records as a method
-// argument.
+// The value of a (anonnymous) record, as a method argument.
 
 #[derive(Clone, Debug)]
-pub struct RecordAssignment {
+pub struct RecordValueExpr {
     pub key_values: Vec<(Identifier, ValueExpr)>,
 }
 
-impl RecordAssignment {
+impl RecordValueExpr {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, key_values) = context(
             "record value",
@@ -126,7 +125,7 @@ impl RecordAssignment {
             ),
         )(input)?;
 
-        Ok((input, RecordAssignment { key_values }))
+        Ok((input, RecordValueExpr { key_values }))
     }
 }
 
@@ -1584,7 +1583,7 @@ pub enum ValueExpr {
     PrefixMatchExpr(PrefixMatchExpr),
     ComputeExpr(ComputeExpr),
     BuiltinMethodCallExpr(MethodComputeExpr),
-    RecordExpr(RecordAssignment),
+    RecordExpr(RecordValueExpr),
 }
 
 impl ValueExpr {
@@ -1599,7 +1598,7 @@ impl ValueExpr {
             map(tag("false"), |_| {
                 ValueExpr::BooleanLit(BooleanLiteral(false))
             }),
-            map(RecordAssignment::parse, ValueExpr::RecordExpr),
+            map(RecordValueExpr::parse, ValueExpr::RecordExpr),
             map(PrefixMatchExpr::parse, ValueExpr::PrefixMatchExpr),
             map(MethodComputeExpr::parse, ValueExpr::BuiltinMethodCallExpr),
             map(ComputeExpr::parse, ValueExpr::ComputeExpr),

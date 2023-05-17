@@ -79,6 +79,25 @@ impl Default for ElementTypeValue {
     }
 }
 
+// Conversion for Records. Records hold `ElementTypeValue`s, the literals
+// provided by the user in a a Roto script need to be converted.
+impl From<ValueExpr> for ElementTypeValue {
+    fn from(value: ValueExpr) -> Self {
+        match value {
+            ValueExpr::StringLiteral(s_lit) => ElementTypeValue::Primitive(s_lit.into()),
+            ValueExpr::IntegerLiteral(i_lit) => ElementTypeValue::Primitive(i_lit.into()),
+            ValueExpr::PrefixLengthLiteral(pl_lit) => ElementTypeValue::Primitive(pl_lit.into()),
+            ValueExpr::AsnLiteral(asn_lit) => ElementTypeValue::Primitive(asn_lit.into()),
+            ValueExpr::HexLiteral(hex_lit) => ElementTypeValue::Primitive(hex_lit.into()),
+            ValueExpr::BooleanLit(bool_lit) => ElementTypeValue::Primitive(bool_lit.into()),
+            ValueExpr::PrefixMatchExpr(_) => todo!(),
+            ValueExpr::ComputeExpr(_) => todo!(),
+            ValueExpr::BuiltinMethodCallExpr(_) => todo!(),
+            ValueExpr::RecordExpr(rec) => ElementTypeValue::Nested(Box::new(rec.into())),
+        }
+    }
+}
+
 //------------ List type ----------------------------------------------------
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -530,16 +549,20 @@ impl RotoType for Record {
     }
 }
 
-// impl From<Vec<(ShortString, Box<TypeDef>)>> for Record {
-//     fn from(st_vec: Vec<(ShortString, Box<TypeDef>)>) -> Self {
-//         Record(
-//             st_vec
-//                 .iter()
-//                 .map(|(s, t)| (s.clone(), t.as_ref().into()))
-//                 .collect::<Vec<_>>(),
-//         )
-//     }
-// }
+// When an argument in an argument list is specified by a Roto script,
+// it's initially a variant fof RecordValueExpr, we need it to be a
+// record, though, for most forms of processing.
+impl From<RecordValueExpr> for Record {
+    fn from(value: RecordValueExpr) -> Self {
+        Record(
+            value
+                .key_values
+                .iter()
+                .map(|(s, t)| (s.ident.clone(), t.clone().into()))
+                .collect::<Vec<_>>(),
+        )
+    }
+}
 
 impl From<Record> for TypeValue {
     fn from(value: Record) -> Self {

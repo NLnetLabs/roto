@@ -4,7 +4,7 @@ use primitives::Hop;
 
 //============ TypeValue ====================================================
 use crate::{
-    ast::ShortString,
+    ast::{ShortString, RecordValueExpr},
     compile::CompileError,
     traits::RotoType,
     vm::{StackRef, StackRefPos, VmError}, attr_change_set::ScalarValue,
@@ -704,3 +704,51 @@ impl From<Vec<TypeValue>> for TypeValue {
 }
 
 impl ScalarValue for TypeValue {}
+
+// Type conversions for Records
+
+// Records do not know how their literals are going to be used/converted, so
+// they store them as actual TypeValue::*Literal variants
+
+
+impl From<crate::ast::StringLiteral> for TypeValue {
+   fn from(value: crate::ast::StringLiteral) -> Self {
+       TypeValue::Builtin(BuiltinTypeValue::StringLiteral(StringLiteral(value.0)))
+   }
+}
+
+impl From<crate::ast::IntegerLiteral> for TypeValue {
+    fn from(value: crate::ast::IntegerLiteral) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(value.0)))
+    }
+}
+
+impl From<crate::ast::PrefixLengthLiteral> for TypeValue {
+    fn from(value: crate::ast::PrefixLengthLiteral) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::PrefixLength(PrefixLength(value.0 as u8)))
+    }
+}
+
+impl From<crate::ast::AsnLiteral> for TypeValue {
+    fn from(value: crate::ast::AsnLiteral) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(value.0.into())))
+    }
+}
+
+impl From<crate::ast::HexLiteral> for TypeValue {
+    fn from(value: crate::ast::HexLiteral) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::HexLiteral(HexLiteral(value.0)))
+    }
+}
+
+impl From<crate::ast::BooleanLiteral> for TypeValue {
+    fn from(value: crate::ast::BooleanLiteral) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(value.0)))
+    }
+}
+
+impl From<RecordValueExpr> for TypeValue {
+    fn from(value: RecordValueExpr) -> Self {
+        TypeValue::Record(value.into())
+    }
+}
