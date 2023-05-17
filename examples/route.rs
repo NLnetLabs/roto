@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-
 use roto::compile::Compiler;
 
 use roto::types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage, Prefix};
@@ -55,7 +53,7 @@ fn test_data(
     println!("{:#?}", &roto_pack.data_sources);
 
     let module_arguments = vec![(
-        "extra_asn".into(),
+        "extra_asn",
         // use Roto type coercion
         TypeValue::from(65534_u32)
     )];

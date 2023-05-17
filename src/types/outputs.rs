@@ -30,7 +30,7 @@ impl RotoType for OutputStream {
 
     fn into_type(
         self,
-        type_def: &TypeDef,
+        _type_def: &TypeDef,
     ) -> Result<TypeValue, CompileError> {
         unimplemented!();
     }
