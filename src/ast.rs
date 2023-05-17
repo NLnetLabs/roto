@@ -1296,7 +1296,7 @@ impl ListTypeIdentifier {
 
 // StringLiteral ::= '"' Identifier '"'
 #[derive(Clone, Debug)]
-pub struct StringLiteral(String);
+pub struct StringLiteral(pub(crate) String);
 
 impl StringLiteral {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {

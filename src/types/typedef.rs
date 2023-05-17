@@ -37,7 +37,6 @@ pub enum TypeDef {
     U32,
     U8,
     Boolean,
-    String, // used for fieldname in method calls
     Prefix,
     PrefixLength, // A u8 prefixes by a /
     IpAddress,
@@ -247,9 +246,6 @@ impl TypeDef {
             TypeDef::Boolean => {
                 Boolean::get_props_for_method(self.clone(), method_name)
             }
-            TypeDef::String => {
-                StringLiteral::get_props_for_method(self.clone(), method_name)
-            }
             TypeDef::Prefix => {
                 Prefix::get_props_for_method(self.clone(), method_name)
             }
@@ -288,7 +284,7 @@ impl TypeDef {
                 self.clone(),
                 method_name,
             ),
-            TypeDef::StringLiteral => todo!(),
+            TypeDef::StringLiteral => StringLiteral::get_props_for_method(self.clone(), method_name),
             TypeDef::AcceptReject(_) => todo!(),
             TypeDef::Unknown => todo!(),
             TypeDef::LocalPref => LocalPref::get_props_for_method(self.clone(), method_name),
@@ -323,6 +319,10 @@ impl TypeDef {
             }
             TypeDef::U32 => {
                 U32::exec_type_method(method_token, args, return_type)
+                    .unwrap()()
+            }
+            TypeDef::StringLiteral => {
+                StringLiteral::exec_type_method(method_token, args, return_type)
                     .unwrap()()
             }
             TypeDef::Asn => {
@@ -408,7 +408,7 @@ impl std::fmt::Display for TypeDef {
             TypeDef::OriginType => write!(f, "OriginType"),
             TypeDef::RouteStatus => write!(f, "RouteStatus"),
             TypeDef::HexLiteral => write!(f, "HexLiteral"),
-            TypeDef::StringLiteral => write!(f, "StringLiteral"),
+            TypeDef::StringLiteral => write!(f, "String"),
             TypeDef::AcceptReject(_) => write!(f, "AcceptReject"),
             TypeDef::Unknown => write!(f, "None"),
             TypeDef::LocalPref => write!(f, "Local Preference"),
@@ -627,6 +627,7 @@ impl From<&TypeValue> for TypeDef {
             ),
             TypeValue::Rib(r) => r.ty.clone(),
             TypeValue::Table(t) => t.ty.clone(),
+            TypeValue::OutputStream(m) => m.record_type.clone(),
             TypeValue::Unknown => TypeDef::Unknown,
             TypeValue::UnInit => TypeDef::Unknown,
         }

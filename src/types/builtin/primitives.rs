@@ -1,8 +1,8 @@
-use std::fmt::{Display, Formatter};
+use std::fmt::{Display, Formatter, Write};
 
+use log::trace;
 use routecore::asn::LongSegmentError;
 
-use crate::ast::ShortString;
 use crate::attr_change_set::VectorValue;
 use crate::compile::CompileError;
 use crate::traits::{RotoType, TokenConvert};
@@ -418,6 +418,11 @@ impl RotoType for StringLiteral {
                 StringLiteralToken::Cmp.into(),
                 vec![TypeDef::StringLiteral, TypeDef::StringLiteral],
             )),
+            "format" => Ok(MethodProps::new(
+                TypeDef::StringLiteral,
+                StringLiteralToken::Format.into(),
+                vec![TypeDef::StringLiteral, TypeDef::StringLiteral],
+            )),
             _ => Err(format!(
                 "Unknown method: '{}' for type StringLiteral",
                 method_name.ident
@@ -445,11 +450,39 @@ impl RotoType for StringLiteral {
     }
 
     fn exec_type_method<'a>(
-        _method_token: usize,
-        _args: &[&'a TypeValue],
+        method_token: usize,
+        args: &[&'a TypeValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
-        todo!()
+        match method_token.into() {
+            StringLiteralToken::Format => {
+                trace!("string arguments {:?}", args);
+
+                let format_str = if let TypeValue::Builtin(
+                    BuiltinTypeValue::StringLiteral(StringLiteral(str)),
+                ) = args[0]
+                {
+                    str
+                } else {
+                    return Err(VmError::AnonymousArgumentNotFound);
+                };
+
+                let sub_str = format_str.splitn(2, "{}").collect::<Vec<_>>();
+
+                let new_string = String::from_iter(vec![
+                    sub_str[0],
+                    &args[1].to_string(),
+                    sub_str[1],
+                ]);
+
+                Ok(Box::new(|| {
+                    TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
+                        StringLiteral(new_string),
+                    ))
+                }))
+            }
+            StringLiteralToken::Cmp => unimplemented!(),
+        }
     }
 
     fn into_type(
@@ -484,6 +517,7 @@ impl Display for StringLiteral {
 #[derive(Debug)]
 pub enum StringLiteralToken {
     Cmp,
+    Format,
 }
 
 impl TokenConvert for StringLiteralToken {}
@@ -492,6 +526,7 @@ impl From<usize> for StringLiteralToken {
     fn from(val: usize) -> Self {
         match val {
             0 => StringLiteralToken::Cmp,
+            1 => StringLiteralToken::Format,
             _ => panic!("Unknown token value: {}", val),
         }
     }
@@ -690,7 +725,7 @@ impl RotoType for HexLiteral {
                         "Cannot convert type IntegerLiteral with {} into U8",
                         self.0
                     ))
-            }),
+                }),
             TypeDef::U32 => u32::try_from(self.0)
                 .map(|v| TypeValue::Builtin(BuiltinTypeValue::U32(U32(v))))
                 .map_err(|_| {
@@ -698,7 +733,7 @@ impl RotoType for HexLiteral {
                         "Cannot convert type IntegerLiteral with {} into U8",
                         self.0
                     ))
-            }),
+                }),
             _ => Err(format!(
                 "Cannot convert type HexLiteral to type {:?}",
                 type_def
@@ -1325,7 +1360,7 @@ impl RotoType for IpAddress {
             "from" => Ok(MethodProps::new(
                 TypeDef::IpAddress,
                 IpAddressToken::From.into(),
-                vec![TypeDef::String],
+                vec![TypeDef::StringLiteral],
             )),
             "matches" => Ok(MethodProps::new(
                 TypeDef::Boolean,
@@ -1542,7 +1577,7 @@ impl From<usize> for AsnToken {
     fn from(val: usize) -> Self {
         match val {
             0 => AsnToken::Set,
-            _ => panic!("Unknown token value: {}", val),
+            _ => panic!("Unknown token value: {} for Asn", val),
         }
     }
 }

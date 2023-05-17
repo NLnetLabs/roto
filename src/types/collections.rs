@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-use crate::ast::ShortString;
+use crate::ast::{RecordValueExpr, ShortString, ValueExpr};
 use crate::compile::CompileError;
 use crate::traits::{RotoType, TokenConvert};
 use crate::vm::VmError;
@@ -156,10 +156,7 @@ impl List {
         Ok(())
     }
 
-    pub fn prepend_value(
-        &mut self,
-        value: TypeValue
-    ) -> Result<(), VmError> {
+    pub fn prepend_value(&mut self, value: TypeValue) -> Result<(), VmError> {
         let exist_v = std::mem::take(&mut self.0);
         let mut new_v = Vec::with_capacity(exist_v.len() + 1);
         new_v.push(ElementTypeValue::from(value));
@@ -169,48 +166,75 @@ impl List {
         Ok(())
     }
 
-    pub fn append_value(
-        &mut self,
-        value: TypeValue) -> Result<(), VmError> {
-            self.0.push(ElementTypeValue::from(value));
-            Ok(())
-        }
+    pub fn append_value(&mut self, value: TypeValue) -> Result<(), VmError> {
+        self.0.push(ElementTypeValue::from(value));
+        Ok(())
+    }
 
-    pub fn insert_value(&mut self, index: usize, value: TypeValue) -> Result<(), VmError> {
+    pub fn insert_value(
+        &mut self,
+        index: usize,
+        value: TypeValue,
+    ) -> Result<(), VmError> {
         let mut new_v = Vec::with_capacity(self.0.len() + 1);
 
         new_v.extend_from_slice(&self.0[..index]);
         new_v.push(ElementTypeValue::from(value));
         new_v.extend_from_slice(&self.0[index..]);
         self.0 = new_v;
-        
+
         Ok(())
     }
 
-    pub fn prepend_vec(&mut self, value: Vec<TypeValue>) -> Result<(), VmError> {
+    pub fn prepend_vec(
+        &mut self,
+        value: Vec<TypeValue>,
+    ) -> Result<(), VmError> {
         let exist_v = std::mem::take(&mut self.0);
         let mut new_v = Vec::with_capacity(exist_v.len() + value.len());
-        new_v.extend(value.into_iter().map(ElementTypeValue::from).collect::<Vec<_>>());
+        new_v.extend(
+            value
+                .into_iter()
+                .map(ElementTypeValue::from)
+                .collect::<Vec<_>>(),
+        );
         new_v.extend(exist_v);
         self.0 = new_v;
 
-        Ok(()) 
+        Ok(())
     }
 
-    pub fn append_vec(&mut self, value: Vec<TypeValue>) -> Result<(), VmError> {
-        self.0.extend(value.into_iter().map(ElementTypeValue::from).collect::<Vec<_>>());
+    pub fn append_vec(
+        &mut self,
+        value: Vec<TypeValue>,
+    ) -> Result<(), VmError> {
+        self.0.extend(
+            value
+                .into_iter()
+                .map(ElementTypeValue::from)
+                .collect::<Vec<_>>(),
+        );
 
         Ok(())
     }
 
-    pub fn insert_vec(&mut self, index: usize, value: Vec<TypeValue>) -> Result<(), VmError> {
+    pub fn insert_vec(
+        &mut self,
+        index: usize,
+        value: Vec<TypeValue>,
+    ) -> Result<(), VmError> {
         let mut new_v = Vec::with_capacity(self.0.len() + value.len());
 
         new_v.extend_from_slice(&self.0[..index]);
-        new_v.extend(value.into_iter().map(ElementTypeValue::from).collect::<Vec<_>>());
+        new_v.extend(
+            value
+                .into_iter()
+                .map(ElementTypeValue::from)
+                .collect::<Vec<_>>(),
+        );
         new_v.extend_from_slice(&self.0[index..]);
         self.0 = new_v;
-        
+
         Ok(())
     }
 }
@@ -297,7 +321,7 @@ impl RotoType for List {
         match method.into() {
             ListToken::Len => Ok(Box::new(move || {
                 TypeValue::Builtin(BuiltinTypeValue::U32(U32(
-                    self.0.len() as u32,
+                    self.0.len() as u32
                 )))
             })),
             ListToken::Contains => {
@@ -407,7 +431,9 @@ impl<'a> Record {
         kvs: Vec<(&str, TypeValue)>,
     ) -> Result<Record, CompileError> {
         if kvs.is_empty() {
-            return Err(CompileError::new("Can't create empty instance.".into()));
+            return Err(CompileError::new(
+                "Can't create empty instance.".into(),
+            ));
         }
 
         let shortstring_vec = kvs

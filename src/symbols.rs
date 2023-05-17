@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    ast::{AcceptReject, CompareOp, ShortString, Identifier},
+    ast::{AcceptReject, CompareOp, ShortString, Identifier, AccessReceiver},
     compile::CompileError,
     traits::{RotoType, Token},
     types::{
@@ -131,6 +131,10 @@ impl Symbol {
         std::mem::take(&mut self.value)
     }
 
+    pub fn set_value(&mut self, value: TypeValue) {
+        self.value = value;
+    }
+
     pub fn get_args_owned(self) -> Vec<Symbol> {
         self.args
     }
@@ -251,11 +255,6 @@ impl Symbol {
             TypeDef::Boolean => {
                 if let TypeValue::Builtin(BuiltinTypeValue::Boolean(int)) = self.value {
                     self.value = int.into_type(&type_def)?;
-                }
-            },
-            TypeDef::String => {
-                if let TypeValue::Builtin(BuiltinTypeValue::StringLiteral(str)) = self.value {
-                    self.value = str.into_type(&type_def)?;
                 }
             },
             TypeDef::Prefix => {
@@ -544,6 +543,15 @@ impl Display for Scope {
     }
 }
 
+impl From<AccessReceiver> for Scope {
+    fn from(value: AccessReceiver) -> Self {
+        match value {
+            AccessReceiver::Ident(ident) => Scope::Module(ident.ident),
+            AccessReceiver::GlobalScope => Scope::Global
+        }
+    }
+}
+
 // A per-module symbol table.
 #[derive(Debug)]
 pub struct SymbolTable {
@@ -629,9 +637,9 @@ pub(crate) struct DepsGraph<'a> {
 // }
 
 impl SymbolTable {
-    pub(crate) fn new(module: ShortString) -> Self {
+    pub(crate) fn new(module: &Scope) -> Self {
         SymbolTable {
-            scope: Scope::Module(module),
+            scope: module.clone(),
             rx_type: Symbol::empty(),
             tx_type: None,
             arguments: HashMap::new(),
@@ -708,6 +716,7 @@ impl SymbolTable {
             SymbolKind::Table | SymbolKind::PrefixList => {
                 Token::Table(token_int)
             }
+            SymbolKind::OutputStream => Token::OutputStream(token_int),
             _ => Token::Variable(token_int),
         });
 
@@ -898,6 +907,15 @@ impl SymbolTable {
         name: &ShortString,
     ) -> Result<&Symbol, CompileError> {
         self.arguments.get(name).ok_or_else(|| {
+            format!("Symbol of type Argument '{}' not found", name).into()
+        })
+    }
+
+    pub(crate) fn get_argument_mut(
+        &mut self,
+        name: &ShortString,
+    ) -> Result<&mut Symbol, CompileError> {
+        self.arguments.get_mut(name).ok_or_else(|| {
             format!("Symbol of type Argument '{}' not found", name).into()
         })
     }
@@ -1097,5 +1115,9 @@ impl SymbolTable {
             used_variables: vars_vec,
             used_data_sources: data_sources_vec,
         })
+    }
+
+    pub(crate) fn create_global_methods(&mut self) {
+        // self.add_variable(key, name, kind, ty, args, value);
     }
 }
