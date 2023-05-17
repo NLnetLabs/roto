@@ -226,7 +226,8 @@ impl Symbol {
         println!("CONVERT {:#?} -> {}", self, type_def);
         match self.ty {
             TypeDef::Rib(_) => { return Err(CompileError::new("RIB can't be converted.".into())) },
-            TypeDef::Table(_) => {return Err(CompileError::new("Table can't be converted.".into()))},
+            TypeDef::Table(_) => { return Err(CompileError::new("Table can't be converted.".into()))},
+            TypeDef::OutputStream(_) => { return Err(CompileError::new("Output Stream can't be converted".into()))}
             TypeDef::List(_) => {
                 if let TypeValue::List(list) = self.value {
                     self.value = list.into_type(&type_def)?;
@@ -420,6 +421,7 @@ pub enum SymbolKind {
     // data sources access receivers
     Rib,
     Table,
+    OutputStream,
     PrefixList,
 
     // access receiver symbols

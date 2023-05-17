@@ -14,10 +14,11 @@ use super::{
     builtin::{
         Asn, Boolean, BuiltinTypeValue, HexLiteral,
         IntegerLiteral, IpAddress, Prefix, PrefixLength, StringLiteral, U32,
-        U8, primitives
+        U8, primitives,
     },
     collections::{ElementTypeValue, List, Record},
     datasources::{Rib, Table},
+    outputs::OutputStream,
     typedef::TypeDef,
 };
 
@@ -40,6 +41,8 @@ pub enum TypeValue {
     // Another collections of Records, but in a tabular format without any
     // key, e.g. parsed csv files.
     Table(Arc<Table>),
+    // A Record meant to be handled by this Output stream.
+    OutputStream(Arc<OutputStream>),
     // Unknown is NOT EQUAL to empty or unitialized, e.g. it may be the
     // result of a search. A ternary logic value, if you will.
     Unknown,
@@ -261,6 +264,9 @@ impl TypeValue {
             TypeValue::Table(rec) => {
                 rec.exec_value_method(method_token, args, return_type)
             }
+            TypeValue::OutputStream(stream) => {
+                stream.exec_value_method(method_token, args, return_type)
+            }
             TypeValue::Unknown => Ok(Box::new(|| TypeValue::Unknown)),
             TypeValue::UnInit => {
                 panic!("Unitialized memory cannot be read. That's fatal.");
@@ -398,6 +404,9 @@ impl TypeValue {
                 Err(VmError::InvalidMethodCall)
                 // rec.exec_consume_value_method(method_token, args, return_type)
             }
+            TypeValue::OutputStream(_stream) => {
+                Err(VmError::InvalidMethodCall)
+            }
             TypeValue::Unknown => Ok(Box::new(|| TypeValue::Unknown)),
             TypeValue::UnInit => {
                 panic!("Unitialized memory cannot be read. That's fatal.");
@@ -420,6 +429,9 @@ impl Display for TypeValue {
             }
             TypeValue::Table(r) => {
                 write!(f, "{} (Table Entry)", r)
+            }
+            TypeValue::OutputStream(m) => {
+                write!(f, "{} (Stream message)", m)
             }
             TypeValue::Unknown => write!(f, "Unknown"),
             TypeValue::UnInit => write!(f, "Uninitialized"),
@@ -568,6 +580,8 @@ impl Ord for &TypeValue {
             (TypeValue::UnInit, _) => {
                 panic!("comparing with uninitialized memory.")
             }
+            (TypeValue::OutputStream(_), _) => todo!(),
+            (_, TypeValue::OutputStream(_)) => todo!()
         }
     }
 }

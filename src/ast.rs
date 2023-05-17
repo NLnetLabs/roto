@@ -57,6 +57,7 @@ impl SyntaxTree {
 //     "module" Identifier ForStatement WithStatement '{' Module '}' |
 //     "rib" Identifier 'contains' TypeIdentifier '{' RibBody '}' |
 //     "table" Identifier '{' TableBody '}' |
+//     "output-stream" Identifier '{' StreamBody '}' |
 //     RecordTypeAssignment |
 //     Comment
 
@@ -66,6 +67,7 @@ pub enum RootExpr {
     Rib(Rib),
     // PrefixList(PrefixListExpr),
     Table(Table),
+    OutputStream(OutputStream),
     Ty(RecordTypeAssignment),
 }
 
@@ -76,6 +78,7 @@ impl RootExpr {
             alt((
                 map(Rib::parse, Self::Rib),
                 map(Table::parse, Self::Table),
+                map(OutputStream::parse, Self::OutputStream),
                 map(Module::parse, |m| Self::Module(Box::new(m))),
                 map(RecordTypeAssignment::parse, Self::Ty),
             )),
@@ -989,6 +992,68 @@ impl Table {
         ))
     }
 }
+
+//------------ OutputStream -------------------------------------------------
+
+// Table ::= "table" Identifier 'contains' TypeIdentifier '{' TableBody '}'
+
+#[derive(Clone, Debug)]
+pub struct OutputStream {
+    pub ident: Identifier,
+    pub contain_ty: TypeIdentifier,
+    pub body: RibBody,
+}
+
+impl OutputStream {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (ident, contain_ty, body, _)) = context(
+            "output-stream definition",
+            tuple((
+                preceded(
+                    opt_ws(tag("output-stream")),
+                    context(
+                        "output-stream name",
+                        delimited(
+                            multispace1,
+                            Identifier::parse,
+                            multispace1,
+                        ),
+                    ),
+                ),
+                context(
+                    "contains",
+                    preceded(
+                        opt_ws(tag("contains")),
+                        delimited(
+                            multispace1,
+                            TypeIdentifier::parse,
+                            multispace1,
+                        ),
+                    ),
+                ),
+                context(
+                    "output-stream block",
+                    cut(delimited(
+                        opt_ws(char('{')),
+                        RibBody::parse,
+                        opt_ws(char('}')),
+                    )),
+                ),
+                map(skip_opt_ws, |_| ()),
+            )),
+        )(input)?;
+
+        Ok((
+            input,
+            OutputStream {
+                ident,
+                contain_ty,
+                body,
+            },
+        ))
+    }
+}
+
 
 //============ Separators ====================================================
 

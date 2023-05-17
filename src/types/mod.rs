@@ -3,3 +3,4 @@ pub mod collections;
 pub mod datasources;
 pub mod typedef;
 pub mod typevalue;
+pub mod outputs;

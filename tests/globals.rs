@@ -71,3 +71,20 @@ fn test_interspersed_comments() {
     let _p = compiler.test_parse(true);
     let _e = _p.test_eval(true);
 }
+
+
+#[test]
+fn test_stream_1() {
+    let compiler = modules::TestCompiler::create(
+        "stream_1",
+        r###"
+        output-stream mqtt contains Message {
+            message: String,
+            asn: Asn
+        }
+        "###,
+    );
+
+    let _p = compiler.test_parse(true);
+    let _e = _p.test_eval(true);
+}

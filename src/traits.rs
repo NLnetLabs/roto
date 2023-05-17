@@ -16,6 +16,9 @@ pub enum Token {
     // External Data Sources
     Table(usize),
     Rib(usize),
+    // A generic stream that can be used by Roto to send messages to and that
+    // can be configured through a Roto script, e.g. a Kafka or a MQTT stream.
+    OutputStream(usize),
     FieldAccess(Vec<u8>),
     Term(u8),
     Action(u8),
@@ -23,6 +26,9 @@ pub enum Token {
     // None as data indicates a constant that wasn't stored (yet) in the
     // symbol table.
     Constant(Option<usize>),
+    // An anonymous record, the fields live in the `args` vec of the
+    // symbol.
+    Record,
     BuiltinType(u8),
 }
 

@@ -3,7 +3,7 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use log::{debug, log_enabled, Level};
+use log::{debug, log_enabled, Level, trace};
 use nom::error::VerboseError;
 
 use crate::{
@@ -113,29 +113,43 @@ impl Rotolo {
         &self,
         name: &str,
     ) -> Result<PublicRotoPack, CompileError> {
-        self.packs
+        let mp = self
+            .get_mis_compilations()
             .iter()
-            .find(|p| p.module_name == name)
-            .map(|p| PublicRotoPack {
-                module_name: p.module_name.as_str(),
-                arguments: p.inspect_arguments(),
-                rx_type: p.rx_type.clone(),
-                tx_type: p.tx_type.clone(),
-                data_sources: p.data_sources.as_slice(),
-                mir: p.mir.as_slice(),
+            .map(|mp| (mp.0.clone(), Err(mp.1.clone())));
+        let mut p = self
+            .packs
+            .iter()
+            .map(|p| {
+                (p.module_name.clone(), Ok::<&RotoPack, CompileError>(p))
             })
+            .chain(mp);
+        p.find(|p| p.0 == name)
             .ok_or_else(|| {
-                format!(
+                CompileError::from(format!(
                     "Can't find module with specified name in this pack: {}",
                     name
-                )
-                .into()
+                ))
+            })
+            .and_then(|p| {
+                if let Ok(p) = p.1 {
+                    Ok(PublicRotoPack {
+                        module_name: p.module_name.as_str(),
+                        arguments: p.inspect_arguments(),
+                        rx_type: p.rx_type.clone(),
+                        tx_type: p.tx_type.clone(),
+                        data_sources: p.data_sources.as_slice(),
+                        mir: p.mir.as_slice(),
+                    })
+                } else {
+                    Err(p.1.err().unwrap())
+                }
             })
     }
 
     pub fn compile_all_arguments(
         &self,
-        mut args: HashMap<ShortString, Vec<(ShortString, TypeValue)>>,
+        mut args: HashMap<ShortString, Vec<(&str, TypeValue)>>,
     ) -> HashMap<ShortString, ArgumentsMap> {
         let mut res = HashMap::<ShortString, ArgumentsMap>::new();
         for pack in self.packs.iter() {
@@ -153,7 +167,7 @@ impl Rotolo {
     pub fn compile_arguments(
         &self,
         name: &str,
-        args: Vec<(ShortString, TypeValue)>,
+        args: Vec<(&str, TypeValue)>,
     ) -> Result<ArgumentsMap, CompileError> {
         let pack = self.packs.iter().find(|p| p.module_name == name);
         if let Some(pack) = pack {
@@ -210,7 +224,7 @@ impl RotoPack {
 
     fn compile_arguments(
         &self,
-        args: Vec<(ShortString, TypeValue)>,
+        args: Vec<(&str, TypeValue)>,
     ) -> Result<ArgumentsMap, CompileError> {
         // Walk over all the module arguments that were supplied and see if
         // they match up with the ones in the source code.
@@ -371,6 +385,8 @@ struct CompilerState<'a> {
 pub struct Compiler {
     pub ast: SyntaxTree,
     symbols: GlobalSymbolTable,
+    // Compile time arguments
+    arguments: Vec<(ShortString, Vec<(ShortString, TypeValue)>)>,
 }
 
 impl<'a> Compiler {
@@ -378,6 +394,7 @@ impl<'a> Compiler {
         Compiler {
             ast: SyntaxTree::default(),
             symbols: GlobalSymbolTable::new(),
+            arguments: vec![],
         }
     }
 
@@ -392,6 +409,50 @@ impl<'a> Compiler {
 
     pub fn eval_ast(&mut self) -> Result<(), CompileError> {
         self.ast.eval(self.symbols.clone())?;
+        Ok(())
+    }
+
+    pub fn inject_compile_time_arguments(
+        &mut self,
+    ) -> Result<(), CompileError> {
+        println!("compile time arguments: {:?}", self.arguments);
+        let mut module = self.symbols.borrow_mut();
+        for (module_name, args) in self.arguments.iter() {
+            let _module = module
+                .get_mut(&crate::symbols::Scope::Module(module_name.clone()))
+                .ok_or_else(|| {
+                    CompileError::from(format!(
+                        "Cannot find module with name '{}'",
+                        module_name
+                    ))
+                })?;
+            for arg in args {
+                let mut _arg =
+                    _module.get_argument_mut(&arg.0.clone()).map_err(|_| CompileError::from(
+                        format!(
+                            "Cannot find argument with name '{}' for module '{}'",
+                            arg.0,
+                            module_name
+                        )
+                    ))?;
+
+                if _arg.get_type() == arg.1 {
+                    _arg.set_value(arg.1.clone());
+                } else {
+                    return Err(
+                        CompileError::from(
+                            format!(
+                                "Argument '{}' has the wrong type, expected '{}', got '{}'",
+                                arg.0,
+                                _arg.get_type(),
+                                TypeDef::from(&arg.1),
+                            )
+                        )
+                    );
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -434,6 +495,29 @@ impl<'a> Compiler {
         }
     }
 
+    pub fn with_arguments(
+        &mut self,
+        module_name: &str,
+        args: Vec<(&str, TypeValue)>,
+    ) -> Result<(), CompileError> {
+        self.arguments.push((
+            module_name.into(),
+            args.into_iter().map(|a| (a.0.into(), a.1)).collect(),
+        ));
+        // let mut module = self.symbols.borrow_mut();
+
+        // for arg in args.into_iter() {
+        //     let _module = module
+        //         .get_mut(&crate::symbols::Scope::Module(module_name.into()))
+        //         .ok_or_else(|| CompileError::from(format!("Cannot find module with name '{}'", module_name)))?;
+
+        //     let mut _arg = _module.get_argument_mut(&arg.0.into()).unwrap();
+
+        //     _arg.set_value(arg.1);
+        // }
+        Ok(())
+    }
+
     pub fn build(source_code: &'a str) -> Result<Rotolo, String> {
         let mut compiler = Compiler::new();
         compiler
@@ -442,7 +526,23 @@ impl<'a> Compiler {
         compiler
             .eval_ast()
             .map_err(|err| format!("Eval error: {err}"))?;
+        compiler
+            .inject_compile_time_arguments()
+            .map_err(|op| format!("Argument error: {}", op))?;
         Ok(compiler.compile())
+    }
+
+    pub fn build_from_compiler(
+        mut self,
+        source_code: &'a str,
+    ) -> Result<Rotolo, String> {
+        self.parse_source_code(source_code)
+            .map_err(|err| format!("Parse error: {err}"))?;
+        self.eval_ast()
+            .map_err(|err| format!("Eval error: {err}"))?;
+        self.inject_compile_time_arguments()
+            .map_err(|op| format!("Argument error: {}", op))?;
+        Ok(self.compile())
     }
 }
 
@@ -496,7 +596,7 @@ impl MirBlock {
     // in a memory position. Only newly created values can be stored in a
     // memory position, and those can only be the result of a method. Field
     // indexes do *not* create new values. Thus, we store only the result of
-    // the last MethodCall command and we the consumer of `into_assign_block`
+    // the last MethodCall command and the consumer of `into_assign_block`
     // will have to keep a map of field indexes for each variable to insert
     // those when reading a variable.
     //
@@ -666,7 +766,7 @@ fn compile_module(
         .iter_mut()
         .map(|a| {
             Argument::new(
-                a.1.get_name(),
+                &a.1.get_name(),
                 a.1.get_token()
                     .unwrap_or_else(|_| {
                         panic!("Fatal: Cannot find Token for Argument.");
@@ -710,6 +810,7 @@ fn compile_compute_expr<'a>(
     // the token of the parent (the holder of the `args` field),
     // needed to retrieve methods from.
     mut parent_token: Option<Token>,
+    inc_mem_pos: bool
 ) -> Result<CompilerState<'a>, CompileError> {
     // Compute expression trees always should have the form:
     //
@@ -745,15 +846,45 @@ fn compile_compute_expr<'a>(
                     vec![Arg::FieldAccess(*field_index)],
                 ));
             }
+
+            if inc_mem_pos { state.cur_mem_pos += 1; }
         }
         // a user-defined argument (module or term)
         Token::Argument(arg_to) => {
             assert!(is_ar);
 
+            // if the Argument has a value, then it was set by the argument
+            // injection after eval(), that means that we can just store
+            // the (literal) value in the mem pos
+            if let Some(arg) = state
+                .used_arguments
+                .iter()
+                .find(|a| a.1.get_token().unwrap() == Token::Argument(arg_to) && a.1.has_value())
+            {
+                state.cur_mir_block.command_stack.push(Command::new(
+                    OpCode::MemPosSet,
+                    vec![
+                        Arg::MemPos(state.cur_mem_pos),
+                        Arg::Constant(arg.1.get_value().clone())
+                    ],
+                ));
+
+            } else {
+                state.cur_mir_block.command_stack.push(Command::new(
+                    OpCode::ArgToMemPos,
+                    vec![
+                        Arg::Argument(arg_to),
+                        Arg::MemPos(state.cur_mem_pos),
+                    ],
+                ));
+            }
+
             state.cur_mir_block.command_stack.push(Command::new(
-                OpCode::ArgToMemPos,
-                vec![Arg::Argument(arg_to), Arg::MemPos(state.cur_mem_pos)],
+                OpCode::PushStack,
+                vec![Arg::MemPos(state.cur_mem_pos)],
             ));
+
+            if inc_mem_pos { state.cur_mem_pos += 1; }
         }
         // rx instance reference
         Token::RxType => {
@@ -784,16 +915,22 @@ fn compile_compute_expr<'a>(
                     Arg::Constant(val.builtin_as_cloned_type_value()?),
                 ],
             ));
+
             state.cur_mir_block.command_stack.push(Command::new(
                 OpCode::PushStack,
                 vec![Arg::MemPos(state.cur_mem_pos)],
             ));
+
+            if inc_mem_pos { state.cur_mem_pos += 1; }
         }
         // Data sources
-        Token::Table(_) | Token::Rib(_) => {
+        Token::Table(_) | Token::Rib(_) | Token::OutputStream(_) => {
             assert!(is_ar);
         }
-        Token::BuiltinType(_) => {}
+        // The AccessReceiver is a Built-in Type
+        Token::BuiltinType(_b_to) => {
+            assert!(is_ar);
+        }
 
         // ARGUMENTS ON ACCESS RECEIVERS
 
@@ -811,7 +948,7 @@ fn compile_compute_expr<'a>(
             // (token(arg2), arg3), etc.
             let mut arg_parent_token = None;
             for arg in symbol.get_args() {
-                state = compile_compute_expr(arg, state, arg_parent_token)?;
+                state = compile_compute_expr(arg, state, arg_parent_token, inc_mem_pos)?;
                 arg_parent_token = arg.get_token().ok();
             }
 
@@ -854,7 +991,26 @@ fn compile_compute_expr<'a>(
                         ],
                     ));
                 }
-                // The parent is a built-tin method, so this symbol is a
+                // The parent is a OutputStream, so this symbol is a
+                // method on the OutputStream type
+                Token::OutputStream(o_s) => {
+                    state.cur_mir_block.command_stack.push(Command::new(
+                        OpCode::ExecuteDataStoreMethod,
+                        vec![
+                            Arg::OutputStream(o_s),
+                            Arg::Method(o_s),
+                            Arg::Arguments(
+                                symbol
+                                    .get_args()
+                                    .iter()
+                                    .map(|s| s.get_type())
+                                    .collect::<Vec<_>>(),
+                            ), // argument types and number
+                            Arg::MemPos(state.cur_mem_pos),
+                        ],
+                    ));
+                }
+                // The parent is a built-in method, so this symbol is a
                 // method on a built-in method.
                 Token::BuiltinType(_b_to) => {
                     state.cur_mir_block.command_stack.push(Command::new(
@@ -872,6 +1028,11 @@ fn compile_compute_expr<'a>(
                             Arg::MemPos(state.cur_mem_pos),
                         ],
                     ));
+                }
+                // The parent is a Record
+                Token::Record => {
+                    println!("RECORD PARENT ARGS {:#?}", symbol.get_args());
+                    // assert!(is_ar);
                 }
                 // The parent is a Field Access, this symbol is one of:
                 //
@@ -966,6 +1127,7 @@ fn compile_compute_expr<'a>(
         }
         Token::FieldAccess(ref fa) => {
             assert!(!is_ar);
+            trace!("FieldAccess {:?}", fa);
 
             let mut args = vec![];
             args.extend(
@@ -984,6 +1146,16 @@ fn compile_compute_expr<'a>(
                 "Invalid Token encountered in compute expression: {}",
                 to
             )));
+        }
+        // This is a record, so its `args` field contains the fields
+        Token::Record => {
+            assert!(!is_ar);
+
+            trace!("ARGS {:#?}", symbol.get_args());
+            for arg in symbol.get_args() {
+                state = compile_compute_expr(arg, state, None, true)?;
+            }
+            return Ok(state)
         }
     };
 
@@ -1009,7 +1181,7 @@ fn compile_compute_expr<'a>(
         symbol.get_token().ok()
     };
     for arg in symbol.get_args() {
-        state = compile_compute_expr(arg, state, parent_token)?;
+        state = compile_compute_expr(arg, state, parent_token, inc_mem_pos)?;
         parent_token = arg.get_token().ok();
     }
 
@@ -1053,7 +1225,7 @@ fn compile_assignments(
         ));
 
         state =
-            compile_compute_expr(s.get_args().get(0).unwrap(), state, None)?;
+            compile_compute_expr(s.get_args().get(0).unwrap(), state, None, false)?;
 
         state
             .cur_mir_block
@@ -1241,7 +1413,7 @@ fn compile_sub_action<'a>(
     match sub_action.get_kind() {
         // A symbol with an RxType token, should be an access receiver.
         SymbolKind::AccessReceiver => {
-            state = compile_compute_expr(sub_action, state, None)?;
+            state = compile_compute_expr(sub_action, state, None, false)?;
             state.cur_mem_pos += 1;
         }
         _ => {
@@ -1301,9 +1473,9 @@ fn compile_sub_term<'a>(
     match sub_term.get_kind() {
         SymbolKind::CompareExpr(op) => {
             let args = sub_term.get_args();
-            state = compile_compute_expr(&args[0], state, None)?;
+            state = compile_compute_expr(&args[0], state, None, false)?;
             state.cur_mem_pos += 1;
-            state = compile_compute_expr(&args[1], state, None)?;
+            state = compile_compute_expr(&args[1], state, None, false)?;
 
             state
                 .cur_mir_block
@@ -1337,7 +1509,7 @@ fn compile_sub_term<'a>(
         }
         _ => {
             // let start_pos = state.cur_mem_pos;
-            state = compile_compute_expr(sub_term, state, None)?;
+            state = compile_compute_expr(sub_term, state, None, false)?;
         }
     };
 

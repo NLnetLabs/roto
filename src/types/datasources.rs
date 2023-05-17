@@ -92,7 +92,7 @@ impl RotoType for Rib {
                 vec![TypeDef::Prefix],
             )),
             _ => Err(format!(
-                "Unknown method '{}' for data source",
+                "Unknown method '{}' for data source of type Rib",
                 method_name.ident
             )
             .into()),

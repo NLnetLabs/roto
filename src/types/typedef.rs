@@ -15,10 +15,11 @@ use crate::{
 use super::builtin::{
     AsPath, Asn, Boolean, Community, HexLiteral, IntegerLiteral, IpAddress,
     OriginType, Prefix, PrefixLength, RawRouteWithDeltas, StringLiteral, U32,
-    U8, LocalPref, NextHop, AtomicAggregator, MultiExitDisc, Hop, RouteStatus
+    U8, LocalPref, NextHop, AtomicAggregator, MultiExitDisc, Hop, RouteStatus,
 };
 use super::collections::Record;
 use super::datasources::{Rib, Table};
+use super::outputs::OutputStream;
 use super::{
     builtin::BuiltinTypeValue, collections::List, typevalue::TypeValue,
 };
@@ -28,6 +29,7 @@ pub enum TypeDef {
     // Data Sources
     Rib(Box<TypeDef>),
     Table(Box<TypeDef>),
+    OutputStream(Box<TypeDef>),
     // Collection Types
     List(Box<TypeDef>),
     Record(Vec<NamedTypeDef>),
@@ -108,7 +110,7 @@ impl TypeDef {
         // their methods on the container (the datasource) and not on the
         // contained type. They don't have field access.
         let mut current_type_token: (TypeDef, Token) = (
-            if let TypeDef::Table(rec) | TypeDef::Rib(rec) = self {
+            if let TypeDef::Table(rec) | TypeDef::Rib(rec) | TypeDef::OutputStream(rec) = self {
                 *rec.clone()
             } else {
                 self.clone()
@@ -137,7 +139,7 @@ impl TypeDef {
                         .into());
                     }
                 }
-                // Route is alos special since it doesn't actually have
+                // Route is also special since it doesn't actually have
                 // fields access (it is backed by the raw bytes of the
                 // update message), but we want to create the illusion
                 // that it does have them.
@@ -229,6 +231,9 @@ impl TypeDef {
             }
             TypeDef::Table(_) => {
                 Table::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::OutputStream(_) => {
+                OutputStream::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::List(_) => {
                 List::get_props_for_method(self.clone(), method_name)
@@ -394,11 +399,11 @@ impl std::fmt::Display for TypeDef {
             TypeDef::Route => write!(f, "Route"),
             TypeDef::Rib(rib) => write!(f, "Rib of {}", rib),
             TypeDef::Table(table) => write!(f, "Table of {}", table),
+            TypeDef::OutputStream(stream) => write!(f, "Output Stream of {}", stream),
             TypeDef::PrefixLength => write!(f, "PrefixLength"),
             TypeDef::IntegerLiteral => write!(f, "IntegerLiteral"),
             TypeDef::U8 => write!(f, "U8"),
             TypeDef::Boolean => write!(f, "Boolean"),
-            TypeDef::String => write!(f, "String"),
             TypeDef::Community => write!(f, "Community"),
             TypeDef::OriginType => write!(f, "OriginType"),
             TypeDef::RouteStatus => write!(f, "RouteStatus"),
