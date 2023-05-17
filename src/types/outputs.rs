@@ -1,4 +1,13 @@
-use crate::{traits::{TokenConvert, RotoType}, types::{typedef::{TypeDef, MethodProps}, typevalue::TypeValue}, compile::CompileError, vm::VmError, ast::ShortString};
+use crate::{
+    ast::ShortString,
+    compile::CompileError,
+    traits::{RotoType, TokenConvert},
+    types::{
+        typedef::{MethodProps, TypeDef},
+        typevalue::TypeValue,
+    },
+    vm::VmError,
+};
 
 impl RotoType for OutputStream {
     fn get_props_for_method(
@@ -86,7 +95,7 @@ pub struct OutputStream {
     pub(crate) name: ShortString,
     pub(crate) topic: String,
     pub(crate) record_type: TypeDef,
-    pub(crate) record: TypeValue
+    pub(crate) record: TypeValue,
 }
 
 impl From<OutputStream> for TypeValue {

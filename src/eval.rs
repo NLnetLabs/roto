@@ -1,7 +1,7 @@
+use log::info;
 use log::trace;
 
 use crate::ast::AcceptReject;
-use crate::ast::Identifier;
 use crate::ast::LogicalExpr;
 use crate::ast::ShortString;
 use crate::compile::CompileError;
@@ -47,10 +47,10 @@ impl<'a> ast::SyntaxTree {
         let global_symbols = if symbols_mut.contains_key(&global_scope) {
             symbols_mut.get_mut(&global_scope).unwrap()
         } else {
-            symbols_mut.insert(
-                global_scope.clone(),
-                symbols::SymbolTable::new("global".into()),
-            );
+            let mut global_table = symbols::SymbolTable::new(&global_scope);
+            global_table.create_global_methods();
+
+            symbols_mut.insert(global_scope.clone(), global_table);
             symbols_mut.get_mut(&global_scope).unwrap()
         };
 
@@ -58,6 +58,9 @@ impl<'a> ast::SyntaxTree {
             match expr {
                 ast::RootExpr::Rib(rib) => rib.eval(global_symbols)?,
                 ast::RootExpr::Table(table) => table.eval(global_symbols)?,
+                ast::RootExpr::OutputStream(stream) => {
+                    stream.eval(global_symbols)?
+                }
                 ast::RootExpr::Ty(rt_assign) => {
                     rt_assign.eval(global_symbols)?
                 }
@@ -73,7 +76,9 @@ impl<'a> ast::SyntaxTree {
             if let std::collections::hash_map::Entry::Vacant(e) =
                 symbols_mut.entry(module_scope.clone())
             {
-                e.insert(symbols::SymbolTable::new(module_name.clone()));
+                e.insert(symbols::SymbolTable::new(&Scope::Module(
+                    module_name.clone(),
+                )));
                 symbols_mut.get_mut(&global_scope).unwrap()
             } else {
                 symbols_mut.get_mut(&module_scope).unwrap()
@@ -95,7 +100,7 @@ impl<'a> ast::SyntaxTree {
                 m.eval(symbols.clone())?;
             }
         }
-        println!("Evaluated successfully");
+        info!("Evaluated successfully");
 
         Ok(())
     }
@@ -164,6 +169,42 @@ impl<'a> ast::Table {
             self.ident.ident.clone(),
             None,
             symbols::SymbolKind::Table,
+            rec_type,
+            vec![],
+            TypeValue::Unknown,
+        )?;
+
+        Ok(())
+    }
+}
+
+impl<'a> ast::OutputStream {
+    fn eval(
+        &'a self,
+        symbols: &'_ mut symbols::SymbolTable,
+    ) -> Result<(), CompileError> {
+        let child_kvs = self.body.eval(self.ident.clone().ident, symbols)?;
+
+        // create a new user-defined type for the record type in the table
+        let rec_type = TypeDef::new_record_type_from_short_string(child_kvs)?;
+
+        // add a symbol for the user-defined type, the name is derived from
+        // the 'contains' clause
+        symbols.add_variable(
+            self.contain_ty.ident.clone(),
+            None,
+            symbols::SymbolKind::NamedType,
+            rec_type.clone(),
+            vec![],
+            TypeValue::Unknown,
+        )?;
+
+        // add a symbol for the RIB itself, using the newly created record
+        // type
+        symbols.add_variable(
+            self.ident.ident.clone(),
+            None,
+            symbols::SymbolKind::OutputStream,
             rec_type,
             vec![],
             TypeValue::Unknown,
@@ -441,7 +482,7 @@ impl ast::Define {
                 scope.clone(),
             )?;
 
-            println!("DECLARE VAR {} = {:#?}", assignment.0.ident, s);
+            trace!("DECLARE VAR {} = {:#?}", assignment.0.ident, s);
             // lhs of the assignment represents the name of the variable or
             // constant.
             declare_variable_from_symbol(
@@ -499,9 +540,6 @@ impl ast::Action {
         scope: symbols::Scope,
     ) -> Result<(), CompileError> {
         let _symbols = symbols.borrow();
-        let module_symbols = _symbols.get(&scope).ok_or_else(|| {
-            format!("Cannot find symbols for module {}", scope)
-        })?;
 
         let mut action_exprs = vec![];
 
@@ -516,34 +554,13 @@ impl ast::Action {
             // type.
             //
             // If the Access Receiver does not have an identifier it is
-            // something global, in the context of an actions this can obly
+            // something global, in the context of an actions this can only
             // be a global method call.
+            //
+            // Method Calls on Roto Types are also allowed, e.g.
+            // `String.format(..)`
             let ar_name = match compute_expr.get_receiver_ident() {
-                Ok(name) => {
-                    let s = module_symbols
-                        .get_symbol(&Identifier {
-                            ident: name.clone(),
-                        })
-                        .ok_or_else(|| {
-                            CompileError::from(format!(
-                                "Cannot find '{}' in {}",
-                                name, scope
-                            ))
-                        })?;
-
-                    if !(s.get_kind() == symbols::SymbolKind::SplitRxType)
-                        && !(s.get_kind() == symbols::SymbolKind::SplitTxType)
-                        && !(s.get_kind()
-                            == symbols::SymbolKind::PassThroughRxTxType)
-                    {
-                        return Err(format!(
-                            "Variable '{}' is not the rx or tx type of {}",
-                            name, scope
-                        )
-                        .into());
-                    };
-                    name
-                }
+                Ok(name) => name,
                 Err(_) => compute_expr.access_expr[0].get_ident().clone(),
             };
 
@@ -746,7 +763,6 @@ impl ast::ComputeExpr {
         symbols: symbols::GlobalSymbolTable,
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, CompileError> {
-
         // this ar_name is only for use in error messages, the actual name
         // for the symbol that will be created can be slightly different,
         // e.g. having a prefix 'sub-action-'.
@@ -759,14 +775,13 @@ impl ast::ComputeExpr {
         let ar_s = self.get_receiver();
         // The evaluation of the Access Receiver
         let mut ar_symbol =
-            ar_s
-                .eval(symbols.clone(), scope.clone())
+            ar_s.eval(symbols.clone(), scope.clone())
                 .or_else(|_| ar_s.eval(symbols.clone(), Scope::Global))
                 .map_err(|ar_err| match ar_err {
                     AccessReceiverError::Var => CompileError::from(format!(
-                        "Cannot find variable '{}' in {} or in the global scope.",
-                        ar_name, scope
-                    )),
+                    "Cannot find variable '{}' in {} or in the global scope.",
+                    ar_name, scope
+                )),
                     AccessReceiverError::Global => CompileError::from(
                         format!("Cannot find global method '{}'", ar_name),
                     ),
@@ -779,24 +794,27 @@ impl ast::ComputeExpr {
         let ar_token = ar_symbol.get_token().unwrap();
         let mut s = &mut ar_symbol;
 
-        println!("ACCESS EXPRESSION {:#?}", self.access_expr);
+        trace!("ACCESS EXPRESSION {:#?}", self.access_expr);
 
         // Use the type the access receiver to put on the arguments.
         let mut ty = match ar_token {
             Token::Table(_) => TypeDef::Table(Box::new(s.get_type())),
             Token::Rib(_) => TypeDef::Rib(Box::new(s.get_type())),
+            Token::OutputStream(_) => {
+                TypeDef::OutputStream(Box::new(s.get_type()))
+            }
             _ => s.get_type(),
         };
 
         for a_e in &self.access_expr {
             match a_e {
                 ast::AccessExpr::MethodComputeExpr(method_call) => {
-                    println!("MC symbol (s) {:#?}", s);
-                    println!(
+                    trace!("MC symbol (s) {:#?}", s);
+                    trace!(
                         "All Symbols {:#?}",
                         symbols.borrow().get(&scope)
                     );
-                    println!("method call {:?} on type {}", method_call, ty);
+                    trace!("method call {:?} on type {}", method_call, ty);
                     let arg_s = method_call.eval(
                         // At this stage we don't know really whether the
                         // method call will be mutating or not, but we're
@@ -811,8 +829,8 @@ impl ast::ComputeExpr {
                     s.add_arg(arg_s);
                 }
                 ast::AccessExpr::FieldAccessExpr(field_access) => {
-                    println!("FA symbol (s) {:#?}", s);
-                    println!(
+                    trace!("FA symbol (s) {:#?}", s);
+                    trace!(
                         "all symbols in module table {:#?}",
                         symbols.borrow().get(&scope)
                     );
@@ -820,7 +838,7 @@ impl ast::ComputeExpr {
                     // propagate the type of this argument to a possible next one
                     ty = arg_s.get_type();
                     let i = s.add_arg(arg_s);
-                    println!("symbol -> {:#?}", s);
+                    trace!("symbol -> {:#?}", s);
                     s = &mut s.get_args_mut()[i];
                 }
             };
@@ -836,6 +854,10 @@ impl ast::ComputeExpr {
             ar_symbol = ar_symbol.set_name(self.get_receiver_ident()?);
         }
 
+        trace!(
+            "finished eval compute expression {:?}",
+            ar_symbol.get_name()
+        );
         Ok(ar_symbol)
     }
 }
@@ -1109,10 +1131,21 @@ impl ast::ValueExpr {
                     Token::Constant(None),
                 ))
             }
-            _ => {
-                Err(format!("xx Invalid argument expression {:?}", self)
-                    .into())
+            ast::ValueExpr::RecordExpr(rec) => {
+                let rec_value = rec.eval(symbols, scope)?;
+                let type_def: Vec<_> = rec_value
+                    .iter()
+                    .map(|v| (v.get_name(), Box::new(v.get_type())))
+                    .collect();
+                Ok(symbols::Symbol::new(
+                    "anonymous_record".into(),
+                    symbols::SymbolKind::AnonymousType,
+                    TypeDef::Record(type_def),
+                    rec_value,
+                    Some(Token::Record),
+                ))
             }
+            ast::ValueExpr::PrefixMatchExpr(_) => todo!(),
         }
     }
 }
@@ -1137,8 +1170,10 @@ impl ast::FieldAccessExpr {
         &self,
         field_type: TypeDef,
     ) -> Result<symbols::Symbol, CompileError> {
-        println!("yolo field access {}", field_type);
+        trace!("field access on field type {:?}", field_type);
+        trace!("self field names {:?}", self.field_names);
         if let Ok((ty, to)) = field_type.has_fields_chain(&self.field_names) {
+            trace!("token {:?}", to);
             let name = self.field_names.join(".");
 
             return Ok(symbols::Symbol::new(
@@ -1151,6 +1186,23 @@ impl ast::FieldAccessExpr {
         } else {
             Err(format!("Invalid field access expression: {:?}", self).into())
         }
+    }
+}
+
+impl ast::RecordValueExpr {
+    fn eval(
+        &self,
+        symbols: symbols::GlobalSymbolTable,
+        scope: symbols::Scope,
+    ) -> Result<Vec<symbols::Symbol>, CompileError> {
+        trace!("anonymous record");
+        let mut s: Vec<symbols::Symbol> = vec![];
+        for (key, value) in &self.key_values {
+            let arg = value.eval(symbols.clone(), scope.clone())?;
+            s.push(arg.set_name(key.ident.clone()));
+        }
+
+        Ok(s)
     }
 }
 
@@ -1277,11 +1329,11 @@ impl ast::CompareExpr {
         // hand side. For example, a comparison of PrefixLength and
         // IntegerLiteral will work in the form of `prefix.len() == 32;`, but
         // NOT reversed, i.e. `32 == prefix.len();` is INVALID.
-        println!("left_type {:#?} <-> right_type {:#?}", left_s, right_s);
+        trace!("left_type {:#?} <-> right_type {:#?}", left_s, right_s);
         if left_type != right_type {
             right_s = right_s.try_convert_value_into(left_type.clone())?;
         }
-        println!("after conversion {} <-> {:?}", left_type, right_s);
+        trace!("after conversion {} <-> {:?}", left_type, right_s);
 
         Ok(symbols::Symbol::new(
             "compare_expr".into(),
@@ -1314,7 +1366,7 @@ impl ast::CompareArg {
             }
             ast::CompareArg::ValueExpr(expr) => {
                 // A simple operator.
-                println!("COMPARE VALUE EXPRESSION {:#?}", expr);
+                trace!("COMPARE VALUE EXPRESSION {:#?}", expr);
                 expr.eval(symbols, scope.clone())
             }
         }

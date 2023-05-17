@@ -248,10 +248,13 @@ impl<'a> CommandArgsStack<'a> {
         self.args.is_empty()
     }
 
-    // Interpret the whole stack as a constant value.
+    // Interpret the last stack entry as a constant value.
     pub(crate) fn take_arg_as_constant(
         &mut self,
     ) -> Result<TypeValue, VmError> {
+        // the first arg is the memory position index,
+        // the second arg is the value to set on the
+        // memory position.
         if let Some(Arg::Constant(v)) = self.args.get(1).cloned() {
             Ok(v)
         } else {
@@ -298,7 +301,7 @@ impl<'a> From<&'a Vec<Arg>> for CommandArgsStack<'a> {
 
 #[derive(Debug)]
 pub struct Argument {
-    name: ShortString,
+    pub(crate) name: ShortString,
     index: usize,
     ty: TypeDef,
     value: TypeValue,
@@ -326,13 +329,13 @@ impl Argument {
     }
 
     pub(crate) fn new(
-        name: ShortString,
+        name: &str,
         index: usize,
         ty: TypeDef,
         value: TypeValue,
     ) -> Self {
         Self {
-            name,
+            name: name.into(),
             index,
             ty,
             value,
@@ -517,6 +520,47 @@ impl<'a> VirtualMachine<'a> {
             }
         }
         unwind_stack
+    }
+
+    // Take a `elem_num` elements on the stack and flush the rest, so we'll
+    // end up with an empty stack.
+    fn _take_resolved_and_flush(
+        &'a self,
+        elem_num: u32, // number of elements to take
+        mem: &'a LinearMemory,
+    ) -> Vec<&'a TypeValue> {
+        let mut stack = self.stack.borrow_mut();
+
+        // Do not bother to write the vec, it'll be fine at the end of the
+        // method.
+        let mut take_elms = Vec::with_capacity(elem_num as usize);
+        unsafe { Vec::set_len(&mut take_elms, elem_num as usize) };
+
+        for count in 0..elem_num {
+            let sr = stack.pop().unwrap();
+            match sr.pos {
+                StackRefPos::MemPos(pos) => {
+                    let v = mem
+                        .get_mp_field_by_index(pos as usize, sr.field_index)
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "Uninitialized memory in position {}",
+                                pos
+                            );
+                        });
+                    take_elms[(elem_num - count - 1) as usize] = v;
+                }
+                StackRefPos::TablePos(token, pos) => {
+                    let ds = &self.data_sources[token];
+                    let v = ds.get_at_field_index(pos, sr.field_index);
+                    if let Some(v) = v {
+                        take_elms[(elem_num - count - 1) as usize] = v;
+                    }
+                }
+            }
+        }
+        stack.clear();
+        take_elms
     }
 
     fn as_vec(&'a self) -> Vec<StackRef> {
@@ -717,7 +761,7 @@ impl<'a> VirtualMachine<'a> {
                         let (_args, method_t, return_type) = args.pop_3();
 
                         let stack_args =
-                            self._unwind_resolved_stack_into_vec(mem);
+                            self._take_resolved_and_flush(_args.get_args_len() as u32, mem);
 
                         // We are going to call a method on a type, so we
                         // extract the type from the first argument on the
@@ -735,6 +779,7 @@ impl<'a> VirtualMachine<'a> {
                     //      arguments, result memory position
                     // ]
                     OpCode::ExecuteValueMethod => {
+                        trace!("execute value method");
                         let mem_pos =
                             if let Arg::MemPos(pos) = args.pop().unwrap() {
                                 *pos as usize
@@ -750,6 +795,7 @@ impl<'a> VirtualMachine<'a> {
                             };
 
                         let (return_type, method_token) = args.pop_2();
+                        trace!("return_type {:?}, method_token {:?}", return_type, method_token);
 
                         // pop as many refs from the stack as we have
                         // arguments for this method and resolve them  to
@@ -780,6 +826,7 @@ impl<'a> VirtualMachine<'a> {
                                 }
                             }
                         }).collect::<Vec<_>>();
+                        trace!("stack_args {:?}", stack_args);
 
                         // The first value on the stack is the value which we
                         // are going to call a method with.
@@ -1002,6 +1049,8 @@ impl<'a> VirtualMachine<'a> {
                     }
                     // stack args: [mem_pos, constant_value]
                     OpCode::MemPosSet => {
+                        trace!("memposset value: {:?}", args);
+
                         if let Arg::MemPos(pos) = args[0] {
                             let v = args.take_arg_as_constant()?;
                             mem.set_mem_pos(pos as usize, v);
@@ -1014,6 +1063,8 @@ impl<'a> VirtualMachine<'a> {
                         for arg in args.args.iter() {
                             if let Arg::FieldAccess(field) = arg {
                                 let mut s = self.stack.borrow_mut();
+                                trace!(" -> stack {:?}", s);
+                                trace!("mem_pos 0 {:?}", mem.0[0]);
                                 s.set_field_index(*field)?;
                                 if log_enabled!(Level::Trace) {
                                     trace!(" -> stack {:?}", s);
@@ -1332,6 +1383,7 @@ pub enum Arg {
     Method(usize), // method token value
     DataSourceTable(usize), // data source: table token value
     DataSourceRib(usize), // data source: rib token value
+    OutputStream(usize), // ouput stream value
     FieldAccess(usize), // field access token value
     BuiltinMethod(usize), // builtin method token value
     MemPos(u32), // memory position
@@ -1352,6 +1404,15 @@ impl Arg {
             _ => {
                 panic!("Cannot get token value from this arg: {:?} and that's fatal", self);
             }
+        }
+    }
+
+    pub fn get_args_len(&self) -> usize {
+        if let Arg::Arguments(args) = self {
+            args.len()
+        }
+        else {
+            1
         }
     }
 }
@@ -1433,6 +1494,7 @@ impl Clone for Arg {
             Arg::Method(m) => Arg::Method(*m),
             Arg::DataSourceTable(ds) => Arg::DataSourceTable(*ds),
             Arg::DataSourceRib(ds) => Arg::DataSourceTable(*ds),
+            Arg::OutputStream(os) => Arg::OutputStream(*os),
             Arg::FieldAccess(fa) => Arg::FieldAccess(*fa),
             Arg::BuiltinMethod(bim) => Arg::BuiltinMethod(*bim),
             Arg::MemPos(mp) => Arg::MemPos(*mp),
