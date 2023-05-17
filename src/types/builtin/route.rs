@@ -665,16 +665,16 @@ impl std::fmt::Display for RawRouteWithDeltas {
 
 #[derive(Debug)]
 pub enum RouteToken {
-    Prefix = 1,
-    AsPath = 2,
-    OriginType = 3,
-    NextHop = 4,
-    MultiExitDisc = 5,
-    LocalPref = 6,
-    AtomicAggregate = 7,
-    AtomicAggregator = 8,
-    Communities = 9,
-    Status = 10,
+    Prefix = 0,
+    AsPath = 1,
+    OriginType = 2,
+    NextHop = 3,
+    MultiExitDisc = 4,
+    LocalPref = 5,
+    AtomicAggregate = 6,
+    AtomicAggregator = 7,
+    Communities = 8,
+    Status = 9,
 }
 
 impl TokenConvert for RouteToken {}
@@ -682,16 +682,16 @@ impl TokenConvert for RouteToken {}
 impl From<usize> for RouteToken {
     fn from(value: usize) -> Self {
         match value {
-            1 => RouteToken::Prefix,
-            2 => RouteToken::AsPath,
-            3 => RouteToken::OriginType,
-            4 => RouteToken::NextHop,
-            5 => RouteToken::MultiExitDisc,
-            6 => RouteToken::LocalPref,
-            7 => RouteToken::AtomicAggregate,
-            8 => RouteToken::AtomicAggregator,
-            9 => RouteToken::Communities,
-            10 => RouteToken::Status,
+            0 => RouteToken::Prefix,
+            1 => RouteToken::AsPath,
+            2 => RouteToken::OriginType,
+            3 => RouteToken::NextHop,
+            4 => RouteToken::MultiExitDisc,
+            5 => RouteToken::LocalPref,
+            6 => RouteToken::AtomicAggregate,
+            7 => RouteToken::AtomicAggregator,
+            8 => RouteToken::Communities,
+            9 => RouteToken::Status,
             _ => panic!("Unknown RouteToken value: {}", value),
         }
     }
