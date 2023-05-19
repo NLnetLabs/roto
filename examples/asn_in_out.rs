@@ -51,9 +51,9 @@ fn test_data(
     let payload = Record::create_instance(&payload_type, vec![("asn", Asn::from(65534).into())])?;
     // Create the VM
     println!("Used Arguments");
-    println!("{:#?}", &roto_pack.arguments);
+    println!("{:#?}", &roto_pack.get_arguments());
     println!("Used Data Sources");
-    println!("{:#?}", &roto_pack.data_sources);
+    println!("{:#?}", &roto_pack.get_data_sources());
 
     // let module_arguments = vec![(
     //     "extra_asn".into(),
@@ -61,13 +61,13 @@ fn test_data(
     //     TypeValue::from(65534_u32)
     // )];
 
-    let ds_ref = roto_pack.data_sources.iter().collect::<Vec<_>>();
+    let ds_ref = roto_pack.get_data_sources();
     // let args = rotolo.compile_arguments(name, module_arguments)?;
 
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
-        .with_data_sources(ds_ref.as_slice())
-        .with_mir_code(roto_pack.mir)
+        .with_data_sources(ds_ref)
+        .with_mir_code(roto_pack.get_mir())
         .build();
 
     let mem = &mut vm::LinearMemory::uninit();

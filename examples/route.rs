@@ -63,7 +63,7 @@ fn test_data(
 
     let mut vm = vm::VmBuilder::new()
         .with_arguments(args)
-        .with_data_sources(ds_ref.as_slice())
+        .with_data_sources(ds_ref)
         .with_mir_code(roto_pack.mir)
         .build();
 

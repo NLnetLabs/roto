@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use roto::compile::Compiler;
 
 use roto::types::builtin::{
@@ -94,11 +96,11 @@ fn test_data(
     println!("Used Data Sources");
     println!("{:#?}", &roto_pack.data_sources);
 
-    let ds_ref = roto_pack.data_sources.iter().collect::<Vec<_>>();
+    let ds_ref = roto_pack.data_sources.iter().map(Arc::clone).collect::<Vec<_>>();
 
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
-        .with_data_sources(ds_ref.as_slice())
+        .with_data_sources(ds_ref)
         .with_mir_code(roto_pack.mir)
         .build();
 

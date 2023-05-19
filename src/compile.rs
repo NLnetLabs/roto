@@ -1,9 +1,10 @@
 use std::{
     collections::HashMap,
     fmt::{Display, Formatter},
+    sync::Arc,
 };
 
-use log::{debug, log_enabled, Level, trace};
+use log::{debug, log_enabled, trace, Level};
 use nom::error::VerboseError;
 
 use crate::{
@@ -16,7 +17,7 @@ use crate::{
     types::typedef::TypeDef,
     types::typevalue::TypeValue,
     vm::{
-        Arg, Argument, ArgumentsMap, Command, ExtDataSource, OpCode,
+        Command, CommandArg, ExtDataSource, ModuleArg, ModuleArgsMap, OpCode,
         StackRefPos, VariablesMap,
     },
 };
@@ -112,7 +113,7 @@ impl Rotolo {
     pub fn inspect_pack(
         &self,
         name: &str,
-    ) -> Result<PublicRotoPack, CompileError> {
+    ) -> Result<RotoPackArc, CompileError> {
         let mp = self
             .get_mis_compilations()
             .iter()
@@ -133,13 +134,17 @@ impl Rotolo {
             })
             .and_then(|p| {
                 if let Ok(p) = p.1 {
-                    Ok(PublicRotoPack {
+                    Ok(RotoPackArc {
                         module_name: p.module_name.as_str(),
                         arguments: p.inspect_arguments(),
                         rx_type: p.rx_type.clone(),
                         tx_type: p.tx_type.clone(),
-                        data_sources: p.data_sources.as_slice(),
-                        mir: p.mir.as_slice(),
+                        data_sources: p
+                            .data_sources
+                            .iter()
+                            .map(Arc::clone)
+                            .collect::<Vec<_>>(),
+                        mir: Arc::clone(&p.mir),
                     })
                 } else {
                     Err(p.1.err().unwrap())
@@ -150,8 +155,8 @@ impl Rotolo {
     pub fn compile_all_arguments(
         &self,
         mut args: HashMap<ShortString, Vec<(&str, TypeValue)>>,
-    ) -> HashMap<ShortString, ArgumentsMap> {
-        let mut res = HashMap::<ShortString, ArgumentsMap>::new();
+    ) -> HashMap<ShortString, ModuleArgsMap> {
+        let mut res = HashMap::<ShortString, ModuleArgsMap>::new();
         for pack in self.packs.iter() {
             let args =
                 std::mem::take(args.get_mut(&pack.module_name).unwrap());
@@ -168,7 +173,7 @@ impl Rotolo {
         &self,
         name: &str,
         args: Vec<(&str, TypeValue)>,
-    ) -> Result<ArgumentsMap, CompileError> {
+    ) -> Result<ModuleArgsMap, CompileError> {
         let pack = self.packs.iter().find(|p| p.module_name == name);
         if let Some(pack) = pack {
             let cp = pack.compile_arguments(args);
@@ -184,23 +189,38 @@ impl Rotolo {
     }
 }
 
-pub struct PublicRotoPack<'a> {
+#[derive(Debug)]
+pub struct RotoPackArc<'a> {
     pub module_name: &'a str,
-    pub mir: &'a [MirBlock],
+    pub mir: Arc<Vec<MirBlock>>,
     pub rx_type: TypeDef,
     pub tx_type: Option<TypeDef>,
-    pub arguments: Vec<(&'a str, TypeDef)>,
-    pub data_sources: &'a [ExtDataSource],
+    pub arguments: Arc<Vec<(&'a str, TypeDef)>>,
+    pub data_sources: Vec<Arc<ExtDataSource>>,
+}
+
+impl RotoPackArc<'_> {
+    pub fn get_arguments(&self) -> Arc<Vec<(&'_ str, TypeDef)>> {
+        Arc::clone(&self.arguments)
+    }
+
+    pub fn get_mir(&self) -> Arc<Vec<MirBlock>> {
+        Arc::clone(&self.mir)
+    }
+
+    pub fn get_data_sources(&self) -> Vec<Arc<ExtDataSource>> {
+        self.data_sources.clone()
+    }
 }
 
 #[derive(Debug)]
 struct RotoPack {
     module_name: ShortString,
-    mir: Vec<MirBlock>,
+    mir: Arc<Vec<MirBlock>>,
     rx_type: TypeDef,
     tx_type: Option<TypeDef>,
-    arguments: ArgumentsMap,
-    data_sources: Vec<ExtDataSource>,
+    arguments: ModuleArgsMap,
+    data_sources: Vec<Arc<ExtDataSource>>,
 }
 
 impl RotoPack {
@@ -209,26 +229,29 @@ impl RotoPack {
         mir: Vec<MirBlock>,
         rx_type: TypeDef,
         tx_type: Option<TypeDef>,
-        arguments: ArgumentsMap,
+        arguments: ModuleArgsMap,
         data_sources: Vec<ExtDataSource>,
     ) -> Self {
         RotoPack {
             module_name,
-            mir,
+            mir: Arc::new(mir),
             rx_type,
             tx_type,
             arguments,
-            data_sources,
+            data_sources: data_sources
+                .into_iter()
+                .map(|ds| ds.into())
+                .collect::<Vec<_>>(),
         }
     }
 
     fn compile_arguments(
         &self,
         args: Vec<(&str, TypeValue)>,
-    ) -> Result<ArgumentsMap, CompileError> {
+    ) -> Result<ModuleArgsMap, CompileError> {
         // Walk over all the module arguments that were supplied and see if
         // they match up with the ones in the source code.
-        let mut arguments_map = ArgumentsMap::new();
+        let mut arguments_map = ModuleArgsMap::new();
         let len = args.len();
         for supplied_arg in args {
             match self
@@ -299,23 +322,25 @@ impl RotoPack {
         Ok(arguments_map)
     }
 
-    fn inspect_arguments(&self) -> Vec<(&str, TypeDef)> {
-        self.arguments
-            .iter()
-            .map(|a| (a.get_name(), a.get_type()))
-            .collect::<Vec<_>>()
+    fn inspect_arguments(&self) -> Arc<Vec<(&str, TypeDef)>> {
+        Arc::new(
+            self.arguments
+                .iter()
+                .map(|a| (a.get_name(), a.get_type()))
+                .collect::<Vec<_>>(),
+        )
     }
 }
 
-impl<'a> From<&'a RotoPack> for PublicRotoPack<'a> {
-    fn from(value: &'a RotoPack) -> Self {
-        PublicRotoPack {
-            module_name: value.module_name.as_str(),
-            mir: value.mir.as_slice(),
-            rx_type: value.rx_type.clone(),
-            tx_type: value.tx_type.clone(),
-            arguments: value.inspect_arguments(),
-            data_sources: value.data_sources.as_slice(),
+impl<'a> From<&'a RotoPack> for RotoPackArc<'a> {
+    fn from(rp: &'a RotoPack) -> Self {
+        RotoPackArc {
+            module_name: rp.module_name.as_str(),
+            mir: Arc::clone(&rp.mir),
+            rx_type: rp.rx_type.clone(),
+            tx_type: rp.tx_type.clone(),
+            arguments: Arc::clone(&rp.inspect_arguments()),
+            data_sources: rp.data_sources.clone(),
         }
     }
 }
@@ -546,6 +571,11 @@ impl<'a> Compiler {
     }
 }
 
+//------------ MirBlock & Mir -----------------------------------------------
+
+#[derive(Debug)]
+pub struct MirRef<MB: AsRef<Vec<MirBlock>>>(pub MB);
+
 #[derive(Debug, PartialEq)]
 pub enum MirBlockType {
     // A block that contains a variable assignment in the `define` section
@@ -635,7 +665,8 @@ impl MirBlock {
                     // MethodCall we've encountered.
                     if !method_encountered {
                         let last_i = c.args.len() - 1;
-                        c.args[last_i] = Arg::MemPos(var_mem_pos as u32);
+                        c.args[last_i] =
+                            CommandArg::MemPos(var_mem_pos as u32);
                     }
 
                     method_encountered = true;
@@ -765,7 +796,7 @@ fn compile_module(
         .used_arguments
         .iter_mut()
         .map(|a| {
-            Argument::new(
+            ModuleArg::new(
                 &a.1.get_name(),
                 a.1.get_token()
                     .unwrap_or_else(|_| {
@@ -810,7 +841,7 @@ fn compile_compute_expr<'a>(
     // the token of the parent (the holder of the `args` field),
     // needed to retrieve methods from.
     mut parent_token: Option<Token>,
-    inc_mem_pos: bool
+    inc_mem_pos: bool,
 ) -> Result<CompilerState<'a>, CompileError> {
     // Compute expression trees always should have the form:
     //
@@ -837,17 +868,19 @@ fn compile_compute_expr<'a>(
             // be different!
             state.cur_mir_block.command_stack.push(Command::new(
                 OpCode::PushStack,
-                vec![Arg::MemPos(var_ref.mem_pos)],
+                vec![CommandArg::MemPos(var_ref.mem_pos)],
             ));
 
             for field_index in &var_ref.field_index {
                 state.cur_mir_block.command_stack.push(Command::new(
                     OpCode::StackOffset,
-                    vec![Arg::FieldAccess(*field_index)],
+                    vec![CommandArg::FieldAccess(*field_index)],
                 ));
             }
 
-            if inc_mem_pos { state.cur_mem_pos += 1; }
+            if inc_mem_pos {
+                state.cur_mem_pos += 1;
+            }
         }
         // a user-defined argument (module or term)
         Token::Argument(arg_to) => {
@@ -856,53 +889,53 @@ fn compile_compute_expr<'a>(
             // if the Argument has a value, then it was set by the argument
             // injection after eval(), that means that we can just store
             // the (literal) value in the mem pos
-            if let Some(arg) = state
-                .used_arguments
-                .iter()
-                .find(|a| a.1.get_token().unwrap() == Token::Argument(arg_to) && a.1.has_value())
-            {
+            if let Some(arg) = state.used_arguments.iter().find(|a| {
+                a.1.get_token().unwrap() == Token::Argument(arg_to)
+                    && a.1.has_value()
+            }) {
                 state.cur_mir_block.command_stack.push(Command::new(
                     OpCode::MemPosSet,
                     vec![
-                        Arg::MemPos(state.cur_mem_pos),
-                        Arg::Constant(arg.1.get_value().clone())
+                        CommandArg::MemPos(state.cur_mem_pos),
+                        CommandArg::Constant(arg.1.get_value().clone()),
                     ],
                 ));
-
             } else {
                 state.cur_mir_block.command_stack.push(Command::new(
                     OpCode::ArgToMemPos,
                     vec![
-                        Arg::Argument(arg_to),
-                        Arg::MemPos(state.cur_mem_pos),
+                        CommandArg::Argument(arg_to),
+                        CommandArg::MemPos(state.cur_mem_pos),
                     ],
                 ));
             }
 
             state.cur_mir_block.command_stack.push(Command::new(
                 OpCode::PushStack,
-                vec![Arg::MemPos(state.cur_mem_pos)],
+                vec![CommandArg::MemPos(state.cur_mem_pos)],
             ));
 
-            if inc_mem_pos { state.cur_mem_pos += 1; }
+            if inc_mem_pos {
+                state.cur_mem_pos += 1;
+            }
         }
         // rx instance reference
         Token::RxType => {
             assert!(is_ar);
 
-            state
-                .cur_mir_block
-                .command_stack
-                .push(Command::new(OpCode::PushStack, vec![Arg::MemPos(0)]));
+            state.cur_mir_block.command_stack.push(Command::new(
+                OpCode::PushStack,
+                vec![CommandArg::MemPos(0)],
+            ));
         }
         // tx instance reference
         Token::TxType => {
             assert!(is_ar);
 
-            state
-                .cur_mir_block
-                .command_stack
-                .push(Command::new(OpCode::PushStack, vec![Arg::MemPos(1)]));
+            state.cur_mir_block.command_stack.push(Command::new(
+                OpCode::PushStack,
+                vec![CommandArg::MemPos(1)],
+            ));
         }
         // a constant value (not a reference!)
         Token::Constant(_) => {
@@ -911,17 +944,19 @@ fn compile_compute_expr<'a>(
             state.cur_mir_block.command_stack.push(Command::new(
                 OpCode::MemPosSet,
                 vec![
-                    Arg::MemPos(state.cur_mem_pos),
-                    Arg::Constant(val.builtin_as_cloned_type_value()?),
+                    CommandArg::MemPos(state.cur_mem_pos),
+                    CommandArg::Constant(val.builtin_as_cloned_type_value()?),
                 ],
             ));
 
             state.cur_mir_block.command_stack.push(Command::new(
                 OpCode::PushStack,
-                vec![Arg::MemPos(state.cur_mem_pos)],
+                vec![CommandArg::MemPos(state.cur_mem_pos)],
             ));
 
-            if inc_mem_pos { state.cur_mem_pos += 1; }
+            if inc_mem_pos {
+                state.cur_mem_pos += 1;
+            }
         }
         // Data sources
         Token::Table(_) | Token::Rib(_) | Token::OutputStream(_) => {
@@ -948,7 +983,12 @@ fn compile_compute_expr<'a>(
             // (token(arg2), arg3), etc.
             let mut arg_parent_token = None;
             for arg in symbol.get_args() {
-                state = compile_compute_expr(arg, state, arg_parent_token, inc_mem_pos)?;
+                state = compile_compute_expr(
+                    arg,
+                    state,
+                    arg_parent_token,
+                    inc_mem_pos,
+                )?;
                 arg_parent_token = arg.get_token().ok();
             }
 
@@ -960,16 +1000,16 @@ fn compile_compute_expr<'a>(
                     state.cur_mir_block.command_stack.push(Command::new(
                         OpCode::ExecuteDataStoreMethod,
                         vec![
-                            Arg::DataSourceTable(t_to),
-                            Arg::Method(m_to),
-                            Arg::Arguments(
+                            CommandArg::DataSourceTable(t_to),
+                            CommandArg::Method(m_to),
+                            CommandArg::Arguments(
                                 symbol
                                     .get_args()
                                     .iter()
                                     .map(|s| s.get_type())
                                     .collect::<Vec<_>>(),
                             ), // argument types and number
-                            Arg::MemPos(state.cur_mem_pos),
+                            CommandArg::MemPos(state.cur_mem_pos),
                         ],
                     ));
                 }
@@ -978,16 +1018,16 @@ fn compile_compute_expr<'a>(
                     state.cur_mir_block.command_stack.push(Command::new(
                         OpCode::ExecuteDataStoreMethod,
                         vec![
-                            Arg::DataSourceRib(r_to),
-                            Arg::Method(m_to),
-                            Arg::Arguments(
+                            CommandArg::DataSourceRib(r_to),
+                            CommandArg::Method(m_to),
+                            CommandArg::Arguments(
                                 symbol
                                     .get_args()
                                     .iter()
                                     .map(|s| s.get_type())
                                     .collect::<Vec<_>>(),
                             ), // argument types and number
-                            Arg::MemPos(state.cur_mem_pos),
+                            CommandArg::MemPos(state.cur_mem_pos),
                         ],
                     ));
                 }
@@ -997,16 +1037,16 @@ fn compile_compute_expr<'a>(
                     state.cur_mir_block.command_stack.push(Command::new(
                         OpCode::ExecuteDataStoreMethod,
                         vec![
-                            Arg::OutputStream(o_s),
-                            Arg::Method(o_s),
-                            Arg::Arguments(
+                            CommandArg::OutputStream(o_s),
+                            CommandArg::Method(o_s),
+                            CommandArg::Arguments(
                                 symbol
                                     .get_args()
                                     .iter()
                                     .map(|s| s.get_type())
                                     .collect::<Vec<_>>(),
                             ), // argument types and number
-                            Arg::MemPos(state.cur_mem_pos),
+                            CommandArg::MemPos(state.cur_mem_pos),
                         ],
                     ));
                 }
@@ -1016,16 +1056,16 @@ fn compile_compute_expr<'a>(
                     state.cur_mir_block.command_stack.push(Command::new(
                         OpCode::ExecuteTypeMethod,
                         vec![
-                            Arg::Type(symbol.get_type()), // return type
-                            Arg::Method(token.into()),    // method token
-                            Arg::Arguments(
+                            CommandArg::Type(symbol.get_type()), // return type
+                            CommandArg::Method(token.into()), // method token
+                            CommandArg::Arguments(
                                 symbol
                                     .get_args()
                                     .iter()
                                     .map(|s| s.get_type())
                                     .collect::<Vec<_>>(),
                             ), // argument types and number
-                            Arg::MemPos(state.cur_mem_pos),
+                            CommandArg::MemPos(state.cur_mem_pos),
                         ],
                     ));
                 }
@@ -1056,9 +1096,9 @@ fn compile_compute_expr<'a>(
                                 Command::new(
                                     OpCode::ExecuteValueMethod,
                                     vec![
-                                        Arg::Method(token.into()),
-                                        Arg::Type(symbol.get_type()),
-                                        Arg::Arguments(
+                                        CommandArg::Method(token.into()),
+                                        CommandArg::Type(symbol.get_type()),
+                                        CommandArg::Arguments(
                                             symbol
                                                 .get_args()
                                                 .iter()
@@ -1066,7 +1106,7 @@ fn compile_compute_expr<'a>(
                                                 .collect::<Vec<_>>(),
                                         ),
                                         // argument types and number
-                                        Arg::MemPos(state.cur_mem_pos),
+                                        CommandArg::MemPos(state.cur_mem_pos),
                                     ],
                                 ),
                             );
@@ -1078,9 +1118,9 @@ fn compile_compute_expr<'a>(
                                 Command::new(
                                     OpCode::ExecuteConsumeValueMethod,
                                     vec![
-                                        Arg::Method(token.into()),
-                                        Arg::Type(symbol.get_type()),
-                                        Arg::Arguments(
+                                        CommandArg::Method(token.into()),
+                                        CommandArg::Type(symbol.get_type()),
+                                        CommandArg::Arguments(
                                             symbol
                                                 .get_args()
                                                 .iter()
@@ -1088,7 +1128,7 @@ fn compile_compute_expr<'a>(
                                                 .collect::<Vec<_>>(),
                                         ),
                                         // argument types and number
-                                        Arg::MemPos(state.cur_mem_pos),
+                                        CommandArg::MemPos(state.cur_mem_pos),
                                     ],
                                 ),
                             );
@@ -1112,7 +1152,7 @@ fn compile_compute_expr<'a>(
             // to be used.
             state.cur_mir_block.command_stack.push(Command::new(
                 OpCode::PushStack,
-                vec![Arg::MemPos(state.cur_mem_pos)],
+                vec![CommandArg::MemPos(state.cur_mem_pos)],
             ));
 
             state.cur_mem_pos += 1;
@@ -1132,7 +1172,7 @@ fn compile_compute_expr<'a>(
             let mut args = vec![];
             args.extend(
                 fa.iter()
-                    .map(|t| Arg::FieldAccess(*t as usize))
+                    .map(|t| CommandArg::FieldAccess(*t as usize))
                     .collect::<Vec<_>>(),
             );
 
@@ -1155,7 +1195,7 @@ fn compile_compute_expr<'a>(
             for arg in symbol.get_args() {
                 state = compile_compute_expr(arg, state, None, true)?;
             }
-            return Ok(state)
+            return Ok(state);
         }
     };
 
@@ -1221,11 +1261,15 @@ fn compile_assignments(
 
         state.cur_mir_block.command_stack.push(Command::new(
             OpCode::Label,
-            vec![Arg::Label(format!("VAR {}", var.0).as_str().into())],
+            vec![CommandArg::Label(format!("VAR {}", var.0).as_str().into())],
         ));
 
-        state =
-            compile_compute_expr(s.get_args().get(0).unwrap(), state, None, false)?;
+        state = compile_compute_expr(
+            s.get_args().get(0).unwrap(),
+            state,
+            None,
+            false,
+        )?;
 
         state
             .cur_mir_block
@@ -1274,7 +1318,7 @@ fn compile_apply(
                     state.cur_mir_block.command_stack.extend(vec![
                         Command::new(
                             OpCode::Label,
-                            vec![Arg::Label(
+                            vec![CommandArg::Label(
                                 format!(
                                     "COPY TERM RESULT {}",
                                     term_name.clone()
@@ -1285,7 +1329,7 @@ fn compile_apply(
                         ),
                         Command::new(
                             OpCode::PushStack,
-                            vec![Arg::MemPos(*mem_pos)],
+                            vec![CommandArg::MemPos(*mem_pos)],
                         ),
                     ]);
                 };
@@ -1322,7 +1366,7 @@ fn compile_apply(
                     state.cur_mir_block.command_stack.extend([
                         Command::new(
                             OpCode::Label,
-                            vec![Arg::Label(
+                            vec![CommandArg::Label(
                                 format!(
                                     "MATCH ACTION {}-{:?}",
                                     term_name.clone(),
@@ -1339,7 +1383,7 @@ fn compile_apply(
                     state.cur_mir_block.command_stack.extend(vec![
                         Command::new(
                             OpCode::Label,
-                            vec![Arg::Label(
+                            vec![CommandArg::Label(
                                 format!(
                                     "MATCH ACTION NEGATE {}-{:?}",
                                     term_name,
@@ -1439,7 +1483,7 @@ fn compile_term<'a>(
     // Set a Label so that each term block is identifiable for humans.
     state.cur_mir_block.command_stack.push(Command::new(
         OpCode::Label,
-        vec![Arg::Label(
+        vec![CommandArg::Label(
             format!("TERM {}", term.get_name()).as_str().into(),
         )],
     ));
@@ -1490,7 +1534,7 @@ fn compile_sub_term<'a>(
 
             state.cur_mir_block.command_stack.push(Command::new(
                 OpCode::Cmp,
-                vec![Arg::CompareOp(ast::CompareOp::Or)],
+                vec![CommandArg::CompareOp(ast::CompareOp::Or)],
             ));
         }
         SymbolKind::AndExpr => {
@@ -1501,7 +1545,7 @@ fn compile_sub_term<'a>(
 
             state.cur_mir_block.command_stack.push(Command::new(
                 OpCode::Cmp,
-                vec![Arg::CompareOp(ast::CompareOp::And)],
+                vec![CommandArg::CompareOp(ast::CompareOp::And)],
             ));
         }
         SymbolKind::NotExpr => {

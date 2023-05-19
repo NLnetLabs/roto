@@ -33,7 +33,7 @@ fn test_data(
     let ds_ref = roto_pack.data_sources.iter().collect::<Vec<_>>();
 
     let mut vm = vm::VmBuilder::new()
-        .with_data_sources(ds_ref.as_slice())
+        .with_data_sources(ds_ref)
         .with_mir_code(roto_pack.mir)
         .build();
 
