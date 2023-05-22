@@ -28,7 +28,7 @@ fn test_data(
     c.with_arguments(name, module_arguments)?;
     let roto_packs = c.build_from_compiler(source_code)?;
 
-    let roto_pack = roto_packs.retrieve_pack_as_arc(name)?;
+    let roto_pack = roto_packs.retrieve_public_as_arcs(name)?;
     let _count: TypeValue = 1_u32.into();
     let prefix: TypeValue =
         routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?

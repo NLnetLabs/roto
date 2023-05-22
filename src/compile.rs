@@ -52,12 +52,12 @@ use crate::{
 //========================== Compiler ========================================
 
 #[derive(Debug)]
-pub struct Rotolo<M: AsRef<Vec<MirBlock>>> {
-    packs: Vec<RotoPack<M>>,
+pub struct Rotolo {
+    packs: Vec<RotoPack>,
     mis_compilations: Vec<(ShortString, CompileError)>,
 }
 
-impl Rotolo<Arc<Vec<MirBlock>>> {
+impl Rotolo {
     pub fn inspect_all_arguments(
         &self,
     ) -> HashMap<ShortString, Vec<(&str, TypeDef)>> {
@@ -83,7 +83,7 @@ impl Rotolo<Arc<Vec<MirBlock>>> {
         &self.mis_compilations
     }
 
-    fn _take_pack_by_name(&mut self, name: &str) -> Option<RotoPack<Arc<Vec<MirBlock>>>> {
+    fn _take_pack_by_name(&mut self, name: &str) -> Option<RotoPack> {
         let idx = self.packs.iter().position(|p| p.module_name == name);
         if let Some(idx) = idx {
             let p = self.packs.remove(idx);
@@ -93,10 +93,10 @@ impl Rotolo<Arc<Vec<MirBlock>>> {
         }
     }
 
-    pub fn retrieve_pack_as_arc(
+    pub fn retrieve_public_as_arcs(
         &self,
         name: &str,
-    ) -> Result<RotoPackArc, CompileError> {
+    ) -> Result<PublicRotoPack<Arc<[MirBlock]>>, CompileError> {
         let mp = self
             .get_mis_compilations()
             .iter()
@@ -105,7 +105,7 @@ impl Rotolo<Arc<Vec<MirBlock>>> {
             .packs
             .iter()
             .map(|p| {
-                (p.module_name.clone(), Ok::<&RotoPack<Arc<Vec<MirBlock>>>, CompileError>(p))
+                (p.module_name.clone(), Ok::<&RotoPack, CompileError>(p))
             })
             .chain(mp);
         p.find(|p| p.0 == name)
@@ -117,7 +117,7 @@ impl Rotolo<Arc<Vec<MirBlock>>> {
             })
             .and_then(|p| {
                 if let Ok(p) = p.1 {
-                    Ok(RotoPackArc {
+                    Ok(PublicRotoPack::<Arc<[MirBlock]>> {
                         module_name: p.module_name.as_str(),
                         arguments: p.arguments.inspect_arguments(),
                         rx_type: p.rx_type.clone(),
@@ -127,7 +127,49 @@ impl Rotolo<Arc<Vec<MirBlock>>> {
                             .iter()
                             .map(Arc::clone)
                             .collect::<Vec<_>>(),
-                        mir: Arc::clone(&p.mir),
+                        mir: p.mir.clone().into()
+                    })
+                } else {
+                    Err(p.1.err().unwrap())
+                }
+            })
+    }
+
+    pub fn retrieve_public_as_refs(
+        &self,
+        name: &str,
+    ) -> Result<PublicRotoPack<&[MirBlock]>, CompileError> {
+        let mp = self
+            .get_mis_compilations()
+            .iter()
+            .map(|mp| (mp.0.clone(), Err(mp.1.clone())));
+        let mut p = self
+            .packs
+            .iter()
+            .map(|p| {
+                (p.module_name.clone(), Ok::<&RotoPack, CompileError>(p))
+            })
+            .chain(mp);
+        p.find(|p| p.0 == name)
+            .ok_or_else(|| {
+                CompileError::from(format!(
+                    "Can't find module with specified name in this pack: {}",
+                    name
+                ))
+            })
+            .and_then(|p| {
+                if let Ok(p) = p.1 {
+                    Ok(PublicRotoPack::<&[MirBlock]> {
+                        module_name: p.module_name.as_str(),
+                        arguments: p.arguments.inspect_arguments(),
+                        rx_type: p.rx_type.clone(),
+                        tx_type: p.tx_type.clone(),
+                        data_sources: p
+                            .data_sources
+                            .iter()
+                            .map(Arc::clone)
+                            .collect::<Vec<_>>(),
+                        mir: p.mir.as_slice()
                     })
                 } else {
                     Err(p.1.err().unwrap())
@@ -172,44 +214,49 @@ impl Rotolo<Arc<Vec<MirBlock>>> {
     }
 }
 
+pub type RotoPackArc<'a> = PublicRotoPack<'a, Arc<Vec<MirBlock>>>;
+pub type RotoPackRef<'a> = PublicRotoPack<'a, &'a Vec<MirBlock>>;
+
+// pub type RotoloArc = Rotolo<Arc<Vec<MirBlock>>>;
+// pub type RotoloRef<'a> = Rotolo<[&'a MirBlock]>;
 #[derive(Debug)]
-pub struct RotoPackArc<'a> {
+pub struct PublicRotoPack<'a, M: AsRef<[MirBlock]>> {
     pub module_name: &'a str,
-    pub mir: Arc<Vec<MirBlock>>,
+    pub mir: M,
     pub rx_type: TypeDef,
     pub tx_type: Option<TypeDef>,
     pub arguments: Arc<Vec<(&'a str, TypeDef)>>,
     pub data_sources: Vec<Arc<ExtDataSource>>,
 }
 
-impl RotoPackArc<'_> {
-    pub fn get_arguments(&self) -> Arc<Vec<(&'_ str, TypeDef)>> {
+impl<'a, M: AsRef<[MirBlock]>> PublicRotoPack<'a, M> {
+    pub fn get_arguments(&'a self) -> Arc<Vec<(&'a str, TypeDef)>> {
         Arc::clone(&self.arguments)
     }
 
-    pub fn get_mir(&self) -> Arc<Vec<MirBlock>> {
-        Arc::clone(&self.mir)
+    pub fn get_mir(&'a self) -> &'a [MirBlock] {
+        self.mir.as_ref()
     }
 
-    pub fn get_data_sources(&self) -> Vec<Arc<ExtDataSource>> {
+    pub fn get_data_sources(&'a self) -> Vec<Arc<ExtDataSource>> {
         self.data_sources.clone()
     }
 }
 
 #[derive(Debug)]
-struct RotoPack<M: AsRef<Vec<MirBlock>>> {
+struct RotoPack {
     module_name: ShortString,
-    mir: M,
+    mir: Vec<MirBlock>,
     rx_type: TypeDef,
     tx_type: Option<TypeDef>,
     arguments: ModuleArgsMap,
     data_sources: Vec<Arc<ExtDataSource>>,
 }
 
-impl<M: AsRef<Vec<MirBlock>>> RotoPack<M> {
+impl RotoPack {
     fn new(
         module_name: ShortString,
-        mir: M,
+        mir: Vec<MirBlock>,
         rx_type: TypeDef,
         tx_type: Option<TypeDef>,
         arguments: ModuleArgsMap,
@@ -315,18 +362,31 @@ impl<M: AsRef<Vec<MirBlock>>> RotoPack<M> {
     // }
 }
 
-impl<'a> From<&'a RotoPack<Arc<Vec<MirBlock>>>> for RotoPackArc<'a> {
-    fn from(rp: &'a RotoPack<Arc<Vec<MirBlock>>>) -> Self {
-        RotoPackArc {
-            module_name: rp.module_name.as_str(),
-            mir: Arc::clone(&rp.mir),
-            rx_type: rp.rx_type.clone(),
-            tx_type: rp.tx_type.clone(),
-            arguments: Arc::clone(&rp.arguments.inspect_arguments()),
-            data_sources: rp.data_sources.clone(),
-        }
-    }
-}
+// impl<'a> From<&'a RotoPack for PublicRotoPack<'a, Arc<Vec<MirBlock>>> {
+//     fn from(rp: &'a RotoPack<Arc<Vec<MirBlock>>>) -> Self {
+//         PublicRotoPack {
+//             module_name: rp.module_name.as_str(),
+//             mir: Arc::clone(&rp.mir),
+//             rx_type: rp.rx_type.clone(),
+//             tx_type: rp.tx_type.clone(),
+//             arguments: Arc::clone(&rp.arguments.inspect_arguments()),
+//             data_sources: rp.data_sources.clone(),
+//         }
+//     }
+// }
+
+// impl<'a> From<&'a RotoPack<&'a Vec<MirBlock>>> for PublicRotoPack<'a, &'a Vec<MirBlock>> {
+//     fn from(rp: &'a RotoPack<&'a Vec<MirBlock>>) -> Self {
+//         PublicRotoPack {
+//             module_name: rp.module_name.as_str(),
+//             mir: rp.mir,
+//             rx_type: rp.rx_type.clone(),
+//             tx_type: rp.tx_type.clone(),
+//             arguments: Arc::clone(&rp.arguments.inspect_arguments()),
+//             data_sources: rp.data_sources.clone(),
+//         }
+//     }
+// }
 
 #[derive(Debug, Default, Clone)]
 pub struct CompileError {
@@ -464,7 +524,7 @@ impl<'a> Compiler {
         Ok(())
     }
 
-    pub fn compile<M: AsRef<Vec<MirBlock>> + From<Vec<MirBlock>>>(self) -> Rotolo<M> {
+    pub fn compile(self) -> Rotolo {
         if log_enabled!(Level::Debug) {
             debug!("Start compiling...");
         }
@@ -526,7 +586,7 @@ impl<'a> Compiler {
         Ok(())
     }
 
-    pub fn build<M: AsRef<Vec<MirBlock>> + From<Vec<MirBlock>>>(source_code: &'a str) -> Result<Rotolo<M>, String> {
+    pub fn build(source_code: &'a str) -> Result<Rotolo, String> {
         let mut compiler = Compiler::new();
         compiler
             .parse_source_code(source_code)
@@ -540,10 +600,10 @@ impl<'a> Compiler {
         Ok(compiler.compile())
     }
 
-    pub fn build_from_compiler<M: AsRef<Vec<MirBlock>> + From<Vec<MirBlock>>>(
+    pub fn build_from_compiler(
         mut self,
         source_code: &'a str,
-    ) -> Result<Rotolo<M>, String> {
+    ) -> Result<Rotolo, String> {
         self.parse_source_code(source_code)
             .map_err(|err| format!("Parse error: {err}"))?;
         self.eval_ast()
@@ -757,10 +817,10 @@ impl Clone for MirBlock {
     }
 }
 
-fn compile_module<M: AsRef<Vec<MirBlock>> + From<Vec<MirBlock>>>(
+fn compile_module(
     module: &SymbolTable,
     global_table: &SymbolTable,
-) -> Result<RotoPack<M>, CompileError> {
+) -> Result<RotoPack, CompileError> {
     println!("SYMBOL MAP\n{:#?}", module);
 
     let DepsGraph {
@@ -863,7 +923,7 @@ fn compile_module<M: AsRef<Vec<MirBlock>> + From<Vec<MirBlock>>>(
 
     Ok(RotoPack::new(
         module.get_name(),
-        mir.into(),
+        mir,
         TypeDef::Unknown,
         None,
         args,

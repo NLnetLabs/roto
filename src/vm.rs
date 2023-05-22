@@ -559,7 +559,7 @@ impl VariablesMap {
 
 //------------ Virtual Machine ----------------------------------------------
 
-pub struct VirtualMachine<DS: AsRef<ExtDataSource>, MB: AsRef<Vec<MirBlock>>> {
+pub struct VirtualMachine<DS: AsRef<ExtDataSource>, MB: AsRef<[MirBlock]>> {
     // _rx_type: TypeDef,
     // _tx_type: Option<TypeDef>,
     mir_code: MB,
@@ -568,9 +568,9 @@ pub struct VirtualMachine<DS: AsRef<ExtDataSource>, MB: AsRef<Vec<MirBlock>>> {
     stack: RefCell<Stack>,
 }
 
-impl<'a, DS: AsRef<ExtDataSource>, MB: AsRef<Vec<MirBlock>>> VirtualMachine<DS, MB> {
+impl<'a, DS: AsRef<ExtDataSource>, MB: AsRef<[MirBlock]>> VirtualMachine<DS, MB> {
     fn _move_rx_tx_to_mem(
-        &mut self,
+        &'a mut self,
         rx: impl RotoType,
         tx: Option<impl RotoType>,
         mem: &mut LinearMemory,
@@ -1309,7 +1309,7 @@ impl<'a, DS: AsRef<ExtDataSource>, MB: AsRef<Vec<MirBlock>>> VirtualMachine<DS, 
     }
 }
 
-pub struct VmBuilder<DS: AsRef<ExtDataSource>, MB: AsRef<Vec<MirBlock>>> {
+pub struct VmBuilder<DS: AsRef<ExtDataSource>, MB: AsRef<[MirBlock]>> {
     rx_type: TypeDef,
     tx_type: Option<TypeDef>,
     mir_code: Option<MB>,
@@ -1317,7 +1317,7 @@ pub struct VmBuilder<DS: AsRef<ExtDataSource>, MB: AsRef<Vec<MirBlock>>> {
     data_sources: Vec<DS>,
 }
 
-impl<DS: AsRef<ExtDataSource>, MB: AsRef<Vec<MirBlock>>> VmBuilder<DS, MB> {
+impl<DS: AsRef<ExtDataSource>, MB: AsRef<[MirBlock]>> VmBuilder<DS, MB> {
     pub fn new() -> Self {
         Self {
             rx_type: TypeDef::default(),
@@ -1372,7 +1372,7 @@ impl<DS: AsRef<ExtDataSource>, MB: AsRef<Vec<MirBlock>>> VmBuilder<DS, MB> {
     }
 }
 
-impl<DS: AsRef<ExtDataSource>, MB: AsRef<Vec<MirBlock>>> Default for VmBuilder<DS, MB> {
+impl<DS: AsRef<ExtDataSource>, MB: AsRef<[MirBlock]>> Default for VmBuilder<DS, MB> {
     fn default() -> Self {
         Self::new()
     }

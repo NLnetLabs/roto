@@ -1,4 +1,4 @@
-use roto::compile::Compiler;
+use roto::compile::{Compiler};
 
 use roto::types::builtin::{
     self, Asn, BuiltinTypeValue, Community, U32,
@@ -16,7 +16,7 @@ fn test_data(
 
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code)?;
-    let roto_pack = rotolo.retrieve_pack_as_arc(name)?;
+    let roto_pack = rotolo.retrieve_public_as_arcs(name)?;
 
     // Create a payload type and instance to feed into a VM.
     let _count: TypeValue = 1_u32.into();
