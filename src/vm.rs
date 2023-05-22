@@ -1,12 +1,12 @@
 use std::{
     cell::RefCell,
     fmt::{Display, Formatter},
-    ops::{Index, IndexMut},
+    ops::{Index, IndexMut}, sync::Arc,
 };
 
 use crate::{
     ast::{self, AcceptReject, CompareOp, ShortString},
-    compile::{CompileError, MirBlock, MirRef},
+    compile::{CompileError, MirBlock},
     traits::{RotoType, Token},
     types::{
         builtin::{Boolean, BuiltinTypeValue},
@@ -357,6 +357,90 @@ impl ModuleArg {
 pub struct ModuleArgsMap(Vec<ModuleArg>);
 
 impl ModuleArgsMap {
+    pub fn compile_arguments(
+        &self,
+        args: Vec<(&str, TypeValue)>,
+    ) -> Result<ModuleArgsMap, CompileError> {
+        // Walk over all the module arguments that were supplied and see if
+        // they match up with the ones in the source code.
+        let mut arguments_map = ModuleArgsMap::new();
+        let len = args.len();
+        for supplied_arg in args {
+            match self
+                .iter()
+                .find(|a| supplied_arg.0 == a.get_name())
+            {
+                // The argument is in the source code
+                Some(found_arg) => {
+                    // nice, but do the types match?
+                    if found_arg.get_type() == supplied_arg.1 {
+                        // yes, they match
+                        arguments_map.insert(
+                            found_arg.get_name(),
+                            found_arg.get_index(),
+                            found_arg.get_type(),
+                            supplied_arg.1,
+                        )
+                    } else {
+                        // Ok, but maybe we can convert into the type we
+                        // need? Note that we can only try to convert if
+                        // it's a builtin type.
+                        match supplied_arg.1.into_builtin().and_then(|t| {
+                            t.try_into_type(&found_arg.get_type())
+                        }) {
+                            Ok(arg) => arguments_map.insert(
+                                found_arg.get_name(),
+                                found_arg.get_index(),
+                                found_arg.get_type(),
+                                arg,
+                            ),
+                            Err(_) => {
+                                return Err(format!("An invalid type was specified for argument: {}", supplied_arg.0).into());
+                            }
+                        };
+                    }
+                }
+                // The supplied argument is not in the source code.
+                None => {
+                    return Err(format!(
+                        "Can't find argument in source: {}",
+                        supplied_arg.0
+                    )
+                    .into())
+                }
+            }
+        }
+
+        // See if we got all the required arguments in the source code
+        // covered.
+        if arguments_map.len() != len {
+            let missing_args = self
+                .iter()
+                .filter(|a| {
+                    arguments_map.get_by_token_value(a.get_index()).is_none()
+                })
+                .map(|a| a.get_name())
+                .collect::<Vec<&str>>();
+
+            return Err(format!(
+                "Some arguments are missing: {:?}",
+                missing_args
+            )
+            .into());
+        }
+
+        Ok(arguments_map)
+    }
+
+    pub fn inspect_arguments(&self) -> Arc<Vec<(&str, TypeDef)>> {
+        Arc::new(
+            self
+                .iter()
+                .map(|a| (a.get_name(), a.get_type()))
+                .collect::<Vec<_>>(),
+        )
+    }
+
     pub fn take_value_by_token(
         &mut self,
         index: usize,
@@ -478,7 +562,7 @@ impl VariablesMap {
 pub struct VirtualMachine<DS: AsRef<ExtDataSource>, MB: AsRef<Vec<MirBlock>>> {
     // _rx_type: TypeDef,
     // _tx_type: Option<TypeDef>,
-    mir_code: MirRef<MB>,
+    mir_code: MB,
     data_sources: Vec<DS>,
     arguments: ModuleArgsMap,
     stack: RefCell<Stack>,
@@ -615,7 +699,7 @@ impl<'a, DS: AsRef<ExtDataSource>, MB: AsRef<Vec<MirBlock>>> VirtualMachine<DS, 
         for MirBlock {
             command_stack,
             ty: _,
-        } in self.mir_code.0.as_ref()
+        } in self.mir_code.as_ref()
         {
             if log_enabled!(Level::Trace) {
                 trace!("\n\n--mirblock------------------");
@@ -1228,7 +1312,7 @@ impl<'a, DS: AsRef<ExtDataSource>, MB: AsRef<Vec<MirBlock>>> VirtualMachine<DS, 
 pub struct VmBuilder<DS: AsRef<ExtDataSource>, MB: AsRef<Vec<MirBlock>>> {
     rx_type: TypeDef,
     tx_type: Option<TypeDef>,
-    mir_code: Option<MirRef<MB>>,
+    mir_code: Option<MB>,
     arguments: ModuleArgsMap,
     data_sources: Vec<DS>,
 }
@@ -1245,7 +1329,7 @@ impl<DS: AsRef<ExtDataSource>, MB: AsRef<Vec<MirBlock>>> VmBuilder<DS, MB> {
     }
 
     pub fn with_mir_code(mut self, mir_code: MB) -> Self {
-        self.mir_code = Some(MirRef(mir_code));
+        self.mir_code = Some(mir_code);
         self
     }
 

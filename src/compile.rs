@@ -51,30 +51,13 @@ use crate::{
 
 //========================== Compiler ========================================
 
-// create MIR
-
-//
-// Apply section:
-// - go over all match_actions
-//    - evalulate the referenced term
-//        - evaluate all sub-terms
-//            - CompareExpr
-//            - LogicalExpr (BooleanExpr/NotExpr/AndExpr/OrExpr)
-//            - evaluate the left side
-//                - FieldAccess -> Data source -> lookup field
-//                              -> Variable -> lookup variable -> ...
-//                              -> Argument -> lookup argument -> ...
-//                - Constant -> has value -> load the constant
-//                - Variable -> load the variable from the symbol table
-//            - evaluate the right side
-
 #[derive(Debug)]
-pub struct Rotolo {
-    packs: Vec<RotoPack>,
+pub struct Rotolo<M: AsRef<Vec<MirBlock>>> {
+    packs: Vec<RotoPack<M>>,
     mis_compilations: Vec<(ShortString, CompileError)>,
 }
 
-impl Rotolo {
+impl Rotolo<Arc<Vec<MirBlock>>> {
     pub fn inspect_all_arguments(
         &self,
     ) -> HashMap<ShortString, Vec<(&str, TypeDef)>> {
@@ -100,7 +83,7 @@ impl Rotolo {
         &self.mis_compilations
     }
 
-    fn _take_pack_by_name(&mut self, name: &str) -> Option<RotoPack> {
+    fn _take_pack_by_name(&mut self, name: &str) -> Option<RotoPack<Arc<Vec<MirBlock>>>> {
         let idx = self.packs.iter().position(|p| p.module_name == name);
         if let Some(idx) = idx {
             let p = self.packs.remove(idx);
@@ -110,7 +93,7 @@ impl Rotolo {
         }
     }
 
-    pub fn inspect_pack(
+    pub fn retrieve_pack_as_arc(
         &self,
         name: &str,
     ) -> Result<RotoPackArc, CompileError> {
@@ -122,7 +105,7 @@ impl Rotolo {
             .packs
             .iter()
             .map(|p| {
-                (p.module_name.clone(), Ok::<&RotoPack, CompileError>(p))
+                (p.module_name.clone(), Ok::<&RotoPack<Arc<Vec<MirBlock>>>, CompileError>(p))
             })
             .chain(mp);
         p.find(|p| p.0 == name)
@@ -136,7 +119,7 @@ impl Rotolo {
                 if let Ok(p) = p.1 {
                     Ok(RotoPackArc {
                         module_name: p.module_name.as_str(),
-                        arguments: p.inspect_arguments(),
+                        arguments: p.arguments.inspect_arguments(),
                         rx_type: p.rx_type.clone(),
                         tx_type: p.tx_type.clone(),
                         data_sources: p
@@ -160,7 +143,7 @@ impl Rotolo {
         for pack in self.packs.iter() {
             let args =
                 std::mem::take(args.get_mut(&pack.module_name).unwrap());
-            let cp = pack.compile_arguments(args);
+            let cp = pack.arguments.compile_arguments(args);
             if let Ok(map) = cp {
                 res.insert(pack.module_name.clone(), map);
             }
@@ -176,7 +159,7 @@ impl Rotolo {
     ) -> Result<ModuleArgsMap, CompileError> {
         let pack = self.packs.iter().find(|p| p.module_name == name);
         if let Some(pack) = pack {
-            let cp = pack.compile_arguments(args);
+            let cp = pack.arguments.compile_arguments(args);
 
             match cp {
                 Ok(map) => Ok(map),
@@ -214,19 +197,19 @@ impl RotoPackArc<'_> {
 }
 
 #[derive(Debug)]
-struct RotoPack {
+struct RotoPack<M: AsRef<Vec<MirBlock>>> {
     module_name: ShortString,
-    mir: Arc<Vec<MirBlock>>,
+    mir: M,
     rx_type: TypeDef,
     tx_type: Option<TypeDef>,
     arguments: ModuleArgsMap,
     data_sources: Vec<Arc<ExtDataSource>>,
 }
 
-impl RotoPack {
+impl<M: AsRef<Vec<MirBlock>>> RotoPack<M> {
     fn new(
         module_name: ShortString,
-        mir: Vec<MirBlock>,
+        mir: M,
         rx_type: TypeDef,
         tx_type: Option<TypeDef>,
         arguments: ModuleArgsMap,
@@ -234,7 +217,7 @@ impl RotoPack {
     ) -> Self {
         RotoPack {
             module_name,
-            mir: Arc::new(mir),
+            mir,
             rx_type,
             tx_type,
             arguments,
@@ -245,101 +228,101 @@ impl RotoPack {
         }
     }
 
-    fn compile_arguments(
-        &self,
-        args: Vec<(&str, TypeValue)>,
-    ) -> Result<ModuleArgsMap, CompileError> {
-        // Walk over all the module arguments that were supplied and see if
-        // they match up with the ones in the source code.
-        let mut arguments_map = ModuleArgsMap::new();
-        let len = args.len();
-        for supplied_arg in args {
-            match self
-                .arguments
-                .iter()
-                .find(|a| supplied_arg.0 == a.get_name())
-            {
-                // The argument is in the source code
-                Some(found_arg) => {
-                    // nice, but do the types match?
-                    if found_arg.get_type() == supplied_arg.1 {
-                        // yes, they match
-                        arguments_map.insert(
-                            found_arg.get_name(),
-                            found_arg.get_index(),
-                            found_arg.get_type(),
-                            supplied_arg.1,
-                        )
-                    } else {
-                        // Ok, but maybe we can convert into the type we
-                        // need? Note that we can only try to convert if
-                        // it's a builtin type.
-                        match supplied_arg.1.into_builtin().and_then(|t| {
-                            t.try_into_type(&found_arg.get_type())
-                        }) {
-                            Ok(arg) => arguments_map.insert(
-                                found_arg.get_name(),
-                                found_arg.get_index(),
-                                found_arg.get_type(),
-                                arg,
-                            ),
-                            Err(_) => {
-                                return Err(format!("An invalid type was specified for argument: {}", supplied_arg.0).into());
-                            }
-                        };
-                    }
-                }
-                // The supplied argument is not in the source code.
-                None => {
-                    return Err(format!(
-                        "Can't find argument in source: {}",
-                        supplied_arg.0
-                    )
-                    .into())
-                }
-            }
-        }
+    // fn compile_arguments(
+    //     &self,
+    //     args: Vec<(&str, TypeValue)>,
+    // ) -> Result<ModuleArgsMap, CompileError> {
+    //     // Walk over all the module arguments that were supplied and see if
+    //     // they match up with the ones in the source code.
+    //     let mut arguments_map = ModuleArgsMap::new();
+    //     let len = args.len();
+    //     for supplied_arg in args {
+    //         match self
+    //             .arguments
+    //             .iter()
+    //             .find(|a| supplied_arg.0 == a.get_name())
+    //         {
+    //             // The argument is in the source code
+    //             Some(found_arg) => {
+    //                 // nice, but do the types match?
+    //                 if found_arg.get_type() == supplied_arg.1 {
+    //                     // yes, they match
+    //                     arguments_map.insert(
+    //                         found_arg.get_name(),
+    //                         found_arg.get_index(),
+    //                         found_arg.get_type(),
+    //                         supplied_arg.1,
+    //                     )
+    //                 } else {
+    //                     // Ok, but maybe we can convert into the type we
+    //                     // need? Note that we can only try to convert if
+    //                     // it's a builtin type.
+    //                     match supplied_arg.1.into_builtin().and_then(|t| {
+    //                         t.try_into_type(&found_arg.get_type())
+    //                     }) {
+    //                         Ok(arg) => arguments_map.insert(
+    //                             found_arg.get_name(),
+    //                             found_arg.get_index(),
+    //                             found_arg.get_type(),
+    //                             arg,
+    //                         ),
+    //                         Err(_) => {
+    //                             return Err(format!("An invalid type was specified for argument: {}", supplied_arg.0).into());
+    //                         }
+    //                     };
+    //                 }
+    //             }
+    //             // The supplied argument is not in the source code.
+    //             None => {
+    //                 return Err(format!(
+    //                     "Can't find argument in source: {}",
+    //                     supplied_arg.0
+    //                 )
+    //                 .into())
+    //             }
+    //         }
+    //     }
 
-        // See if we got all the required arguments in the source code
-        // covered.
-        if arguments_map.len() != len {
-            let missing_args = self
-                .arguments
-                .iter()
-                .filter(|a| {
-                    arguments_map.get_by_token_value(a.get_index()).is_none()
-                })
-                .map(|a| a.get_name())
-                .collect::<Vec<&str>>();
+    //     // See if we got all the required arguments in the source code
+    //     // covered.
+    //     if arguments_map.len() != len {
+    //         let missing_args = self
+    //             .arguments
+    //             .iter()
+    //             .filter(|a| {
+    //                 arguments_map.get_by_token_value(a.get_index()).is_none()
+    //             })
+    //             .map(|a| a.get_name())
+    //             .collect::<Vec<&str>>();
 
-            return Err(format!(
-                "Some arguments are missing: {:?}",
-                missing_args
-            )
-            .into());
-        }
+    //         return Err(format!(
+    //             "Some arguments are missing: {:?}",
+    //             missing_args
+    //         )
+    //         .into());
+    //     }
 
-        Ok(arguments_map)
-    }
+    //     Ok(arguments_map)
+    // }
 
-    fn inspect_arguments(&self) -> Arc<Vec<(&str, TypeDef)>> {
-        Arc::new(
-            self.arguments
-                .iter()
-                .map(|a| (a.get_name(), a.get_type()))
-                .collect::<Vec<_>>(),
-        )
-    }
+    // fn inspect_arguments(&self) -> Arc<Vec<(&str, TypeDef)>> {
+    //     Arc::new(
+    //         self.arguments
+    //             .iter()
+    //             .map(|a| (a.get_name(), a.get_type()))
+    //             .collect::<Vec<_>>(),
+    //     )
+    // }
 }
 
-impl<'a> From<&'a RotoPack> for RotoPackArc<'a> {
-    fn from(rp: &'a RotoPack) -> Self {
+impl<'a> From<&'a RotoPack<Arc<Vec<MirBlock>>>> for RotoPackArc<'a> {
+    fn from(rp: &'a RotoPack<Arc<Vec<MirBlock>>>) -> Self {
         RotoPackArc {
             module_name: rp.module_name.as_str(),
             mir: Arc::clone(&rp.mir),
             rx_type: rp.rx_type.clone(),
             tx_type: rp.tx_type.clone(),
-            arguments: Arc::clone(&rp.inspect_arguments()),
+            arguments: Arc::clone(&rp.arguments.inspect_arguments()),
             data_sources: rp.data_sources.clone(),
         }
     }
@@ -481,7 +464,7 @@ impl<'a> Compiler {
         Ok(())
     }
 
-    pub fn compile(self) -> Rotolo {
+    pub fn compile<M: AsRef<Vec<MirBlock>> + From<Vec<MirBlock>>>(self) -> Rotolo<M> {
         if log_enabled!(Level::Debug) {
             debug!("Start compiling...");
         }
@@ -543,7 +526,7 @@ impl<'a> Compiler {
         Ok(())
     }
 
-    pub fn build(source_code: &'a str) -> Result<Rotolo, String> {
+    pub fn build<M: AsRef<Vec<MirBlock>> + From<Vec<MirBlock>>>(source_code: &'a str) -> Result<Rotolo<M>, String> {
         let mut compiler = Compiler::new();
         compiler
             .parse_source_code(source_code)
@@ -557,10 +540,10 @@ impl<'a> Compiler {
         Ok(compiler.compile())
     }
 
-    pub fn build_from_compiler(
+    pub fn build_from_compiler<M: AsRef<Vec<MirBlock>> + From<Vec<MirBlock>>>(
         mut self,
         source_code: &'a str,
-    ) -> Result<Rotolo, String> {
+    ) -> Result<Rotolo<M>, String> {
         self.parse_source_code(source_code)
             .map_err(|err| format!("Parse error: {err}"))?;
         self.eval_ast()
@@ -573,8 +556,8 @@ impl<'a> Compiler {
 
 //------------ MirBlock & Mir -----------------------------------------------
 
-#[derive(Debug)]
-pub struct MirRef<MB: AsRef<Vec<MirBlock>>>(pub MB);
+// #[derive(Debug)]
+// pub struct MirRef<MB: AsRef<Vec<MirBlock>>>(pub MB);
 
 #[derive(Debug, PartialEq)]
 pub enum MirBlockType {
@@ -590,6 +573,59 @@ pub enum MirBlockType {
     // Exit statements
     Terminator,
 }
+
+// pub trait Mir: AsRef<Vec<MirBlock>> {
+//     fn new() -> Self;
+//     fn from_vec(mb: Vec<MirBlock>) -> Self;
+// }
+
+// impl Mir for MirRef<Arc<Vec<MirBlock>>> {
+//     fn new() -> Self {
+//         MirRef(Arc::new(vec![]))
+//     }
+
+//     fn from_vec(mb: Vec<MirBlock>) -> Self {
+//         MirRef(Arc::new(mb))
+//     }
+// }
+
+// impl AsRef<Vec<MirBlock>> for MirRef<Arc<Vec<MirBlock>>> {
+//     fn as_ref(&self) -> &Vec<MirBlock> {
+//         self.0.as_ref()
+//     }
+// }
+
+// impl Iterator for MirRef<Arc<Vec<MirBlock>>> {
+//     type Item = MirBlock;
+
+//     fn next(&mut self) -> Option<Self::Item> {
+//         todo!()
+//     }
+// }
+
+// impl Mir for MirRef<&Vec<MirBlock>> {
+//     fn new() -> Self {
+//         todo!()
+//     }
+
+//     fn from_vec(_mb: Vec<MirBlock>) -> Self {
+//         todo!()
+//     }
+// }
+
+// impl AsRef<Vec<MirBlock>> for MirRef<&'_ Vec<MirBlock>> {
+//     fn as_ref(&self) -> &'_ Vec<MirBlock> {
+//         self.0
+//     }
+// }
+
+// impl Iterator for MirRef<&'_ Vec<MirBlock>> {
+//     type Item = MirBlock;
+
+//     fn next(&mut self) -> Option<Self::Item> {
+//         todo!()
+//     }
+// }
 
 #[derive(Debug)]
 pub struct MirBlock {
@@ -721,10 +757,10 @@ impl Clone for MirBlock {
     }
 }
 
-fn compile_module(
+fn compile_module<M: AsRef<Vec<MirBlock>> + From<Vec<MirBlock>>>(
     module: &SymbolTable,
     global_table: &SymbolTable,
-) -> Result<RotoPack, CompileError> {
+) -> Result<RotoPack<M>, CompileError> {
     println!("SYMBOL MAP\n{:#?}", module);
 
     let DepsGraph {
@@ -748,7 +784,7 @@ fn compile_module(
     };
 
     // initialize the command stack
-    let mut mir: Vec<MirBlock> = vec![];
+    let mut mir = vec![];
 
     println!("___used args");
     state
@@ -788,9 +824,9 @@ fn compile_module(
     mir.push(state.cur_mir_block);
 
     println!("\n");
-    for m in &mir {
-        println!("MIR_block ({:?}): \n{}", m.ty, m);
-    }
+    // for m in mir {
+    //     println!("MIR_block ({:?}): \n{}", m.ty, m);
+    // }
 
     let args = state
         .used_arguments
@@ -827,7 +863,7 @@ fn compile_module(
 
     Ok(RotoPack::new(
         module.get_name(),
-        mir,
+        mir.into(),
         TypeDef::Unknown,
         None,
         args,
