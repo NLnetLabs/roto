@@ -96,7 +96,7 @@ fn test_data(
     println!("Used Data Sources");
     println!("{:#?}", &roto_pack.data_sources);
 
-    let ds_ref = roto_pack.data_sources.iter().collect::<Vec<_>>();
+    let ds_ref = roto_pack.data_sources;
 
     println!("Start vm...");
     let mut vm = vm::VmBuilder::new()

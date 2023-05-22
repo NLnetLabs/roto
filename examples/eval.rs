@@ -91,7 +91,7 @@ fn test_data(
         TypeValue::from(65534_u32)
     )];
 
-    let ds_ref = roto_pack.data_sources.iter().collect::<Vec<_>>();
+    let ds_ref = roto_pack.data_sources;
     let args = rotolo.compile_arguments(name, module_arguments)?;
 
     let mut vm = vm::VmBuilder::new()

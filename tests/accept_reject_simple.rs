@@ -30,7 +30,7 @@ fn test_data(
         &payload_type,
         vec![("asn", Asn::from(65534).into())],
     )?;
-    let ds_ref = roto_pack.data_sources.iter().collect::<Vec<_>>();
+    let ds_ref = roto_pack.data_sources;
 
     let mut vm = vm::VmBuilder::new()
         .with_data_sources(ds_ref)

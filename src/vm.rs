@@ -432,13 +432,11 @@ impl ModuleArgsMap {
         Ok(arguments_map)
     }
 
-    pub fn inspect_arguments(&self) -> Arc<Vec<(&str, TypeDef)>> {
-        Arc::new(
-            self
-                .iter()
-                .map(|a| (a.get_name(), a.get_type()))
-                .collect::<Vec<_>>(),
-        )
+    pub fn inspect_arguments(&self) -> Vec<(&str, TypeDef)> {
+        self
+            .iter()
+            .map(|a| (a.get_name(), a.get_type()))
+                .collect::<Vec<_>>()
     }
 
     pub fn take_value_by_token(
@@ -559,16 +557,16 @@ impl VariablesMap {
 
 //------------ Virtual Machine ----------------------------------------------
 
-pub struct VirtualMachine<DS: AsRef<ExtDataSource>, MB: AsRef<[MirBlock]>> {
+pub struct VirtualMachine<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> {
     // _rx_type: TypeDef,
     // _tx_type: Option<TypeDef>,
     mir_code: MB,
-    data_sources: Vec<DS>,
+    data_sources: EDS,
     arguments: ModuleArgsMap,
     stack: RefCell<Stack>,
 }
 
-impl<'a, DS: AsRef<ExtDataSource>, MB: AsRef<[MirBlock]>> VirtualMachine<DS, MB> {
+impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> VirtualMachine<MB, EDS> {
     fn _move_rx_tx_to_mem(
         &'a mut self,
         rx: impl RotoType,
@@ -608,8 +606,8 @@ impl<'a, DS: AsRef<ExtDataSource>, MB: AsRef<[MirBlock]>> VirtualMachine<DS, MB>
                     unwind_stack.push(v);
                 }
                 StackRefPos::TablePos(token, pos) => {
-                    let ds = &self.data_sources[token];
-                    let v = ds.as_ref().get_at_field_index(pos, sr.field_index);
+                    let ds = &self.data_sources.as_ref()[token];
+                    let v = ds.get_at_field_index(pos, sr.field_index);
                     if let Some(v) = v {
                         unwind_stack.push(v);
                     }
@@ -648,8 +646,8 @@ impl<'a, DS: AsRef<ExtDataSource>, MB: AsRef<[MirBlock]>> VirtualMachine<DS, MB>
                     take_elms[(elem_num - count - 1) as usize] = v;
                 }
                 StackRefPos::TablePos(token, pos) => {
-                    let ds = &self.data_sources[token];
-                    let v = ds.as_ref().get_at_field_index(pos, sr.field_index);
+                    let ds = &self.data_sources.as_ref()[token];
+                    let v = ds.get_at_field_index(pos, sr.field_index);
                     if let Some(v) = v {
                         take_elms[(elem_num - count - 1) as usize] = v;
                     }
@@ -672,11 +670,11 @@ impl<'a, DS: AsRef<ExtDataSource>, MB: AsRef<[MirBlock]>> VirtualMachine<DS, MB>
     fn get_data_source(
         &self,
         token: usize,
-    ) -> Result<&DS, VmError> {
-        self.data_sources
+    ) -> Result<Arc<DataSource>, VmError> {
+        self.data_sources.as_ref()
             .iter()
-            .find(|ds| ds.as_ref().token == token)
-            // .copied()
+            .find(|ds| ds.token == token)
+            .map(|ds| Arc::clone(&ds.source))
             .ok_or(VmError::DataSourceNotFound(token))
     }
 
@@ -915,8 +913,8 @@ impl<'a, DS: AsRef<ExtDataSource>, MB: AsRef<[MirBlock]>> VirtualMachine<DS, MB>
                                     v
                                 }
                                 StackRefPos::TablePos(token, pos) => {
-                                    let ds = &self.data_sources[token];
-                                    let v = ds.as_ref().get_at_field_index(pos, sr.field_index);
+                                    let ds = &self.data_sources.as_ref()[token];
+                                    let v = ds.get_at_field_index(pos, sr.field_index);
                                     if let Some(v) = v {
                                         v
                                     } else { &TypeValue::Unknown }
@@ -1309,22 +1307,22 @@ impl<'a, DS: AsRef<ExtDataSource>, MB: AsRef<[MirBlock]>> VirtualMachine<DS, MB>
     }
 }
 
-pub struct VmBuilder<DS: AsRef<ExtDataSource>, MB: AsRef<[MirBlock]>> {
+pub struct VmBuilder<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> {
     rx_type: TypeDef,
     tx_type: Option<TypeDef>,
     mir_code: Option<MB>,
     arguments: ModuleArgsMap,
-    data_sources: Vec<DS>,
+    data_sources: Option<EDS>,
 }
 
-impl<DS: AsRef<ExtDataSource>, MB: AsRef<[MirBlock]>> VmBuilder<DS, MB> {
+impl<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> VmBuilder<MB, EDS> {
     pub fn new() -> Self {
         Self {
             rx_type: TypeDef::default(),
             tx_type: None,
             mir_code: None,
             arguments: ModuleArgsMap::default(),
-            data_sources: vec![],
+            data_sources: None,
         }
     }
 
@@ -1340,9 +1338,9 @@ impl<DS: AsRef<ExtDataSource>, MB: AsRef<[MirBlock]>> VmBuilder<DS, MB> {
 
     pub fn with_data_sources(
         mut self,
-        data_sources: Vec<DS>,
+        data_sources: EDS,
     ) -> Self {
-        self.data_sources = data_sources;
+        self.data_sources = Some(data_sources);
         self
     }
 
@@ -1356,13 +1354,13 @@ impl<DS: AsRef<ExtDataSource>, MB: AsRef<[MirBlock]>> VmBuilder<DS, MB> {
         self
     }
 
-    pub fn build(self) -> VirtualMachine<DS, MB> {
+    pub fn build(self) -> VirtualMachine<MB, EDS> {
         if let Some(mir_code) = self.mir_code {
             VirtualMachine {
                 // rx_type: self.rx_type,
                 // tx_type: self.tx_type,
                 mir_code,
-                data_sources: self.data_sources,
+                data_sources: self.data_sources.unwrap(),
                 arguments: self.arguments,
                 stack: RefCell::new(Stack::new()),
             }
@@ -1372,7 +1370,7 @@ impl<DS: AsRef<ExtDataSource>, MB: AsRef<[MirBlock]>> VmBuilder<DS, MB> {
     }
 }
 
-impl<DS: AsRef<ExtDataSource>, MB: AsRef<[MirBlock]>> Default for VmBuilder<DS, MB> {
+impl<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> Default for VmBuilder<MB, EDS> {
     fn default() -> Self {
         Self::new()
     }
@@ -1669,62 +1667,13 @@ pub enum DataSource {
     Rib(Rib),
 }
 
-trait Source {
-    fn new(name: &str, token: usize, ty: TypeDef) -> Self;
-    fn get_by_key<'a>(&'a self, key: &str) -> Option<&'a Record>;
-    fn exec_ref_value_method<'a>(
-        &self,
-        method_token: usize,
-        args: &[&'a TypeValue],
-        res_type: TypeDef,
-    ) -> DataSourceMethodValue;
-}
-
-#[derive(Debug)]
-pub struct ExtDataSource {
-    _name: ShortString,
-    token: usize,
-    source: DataSource,
-}
-
-impl ExtDataSource {
-    pub fn new(name: &str, token: Token, ty: TypeDef) -> ExtDataSource {
-        ExtDataSource {
-            _name: name.into(),
-            source: match &token {
-                Token::Table(_) => DataSource::Table(Table {
-                    ty,
-                    records: vec![],
-                }),
-                Token::Rib(_) => DataSource::Rib(Rib {
-                    ty,
-                    records: vec![],
-                }),
-                _ => {
-                    panic!("Invalid data source type: {:?}", ty);
-                }
-            },
-            token: token.into(),
-        }
-    }
-
-    // pub fn get_by_key<'a>(&'a self, key: &str) -> Option<&'a Record> {
-    //     match self.source {
-    //         DataSource::Table(ref t) => t.records.iter().find(|v| {
-    //             v.get_field_by_index(0).map(|v| v.0.as_str()) == Some(key)
-    //         }),
-    //         DataSource::Rib(ref r) => {
-    //             todo!()
-    //         }
-    //     }
-    // }
-
+impl DataSource {
     pub fn get_at_field_index(
         &self,
         index: usize,
         field_index: Option<usize>,
     ) -> Option<&TypeValue> {
-        match self.source {
+        match self {
             DataSource::Table(ref t) => {
                 t.get_at_field_index(index, field_index)
             }
@@ -1743,8 +1692,8 @@ impl ExtDataSource {
         args: &[&'a TypeValue],
         res_type: TypeDef,
     ) -> DataSourceMethodValue {
-        match self.source {
-            DataSource::Table(ref t) => {
+        match self {
+            DataSource::Table(t) => {
                 t.exec_ref_value_method(method_token, args, res_type)()
             }
             DataSource::Rib(ref r) => {
@@ -1754,13 +1703,67 @@ impl ExtDataSource {
     }
 }
 
-impl<DS: AsRef<ExtDataSource>> Index<Token> for Vec<DS> {
-    type Output = DS;
+trait Source {
+    fn new(name: &str, token: usize, ty: TypeDef) -> Self;
+    fn get_by_key<'a>(&'a self, key: &str) -> Option<&'a Record>;
+    fn exec_ref_value_method<'a>(
+        &self,
+        method_token: usize,
+        args: &[&'a TypeValue],
+        res_type: TypeDef,
+    ) -> DataSourceMethodValue;
+}
+
+#[derive(Debug)]
+pub struct ExtDataSource {
+    name: ShortString,
+    token: usize,
+    source: Arc<DataSource>,
+}
+
+impl Clone for ExtDataSource {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            token: self.token,
+            source: Arc::clone(&self.source)
+        }
+    }
+}
+
+impl ExtDataSource {
+    pub fn new(name: &str, token: Token, ty: TypeDef, source: Arc<DataSource>) -> ExtDataSource {
+        ExtDataSource {
+            name: name.into(),
+            source: match *source {
+                DataSource::Table(ref t) => DataSource::Table(Table {
+                    ty,
+                    records: t.records.clone(),
+                }).into(),
+                DataSource::Rib(ref r) => DataSource::Rib(Rib {
+                    ty,
+                    records: r.records.clone(),
+                }).into(),
+                // _ => {
+                //     panic!("Invalid data source type: {:?}", ty);
+                // }
+            },
+            token: token.into(),
+        }
+    }
+
+    pub fn get_name(&self) -> ShortString {
+        self.name.clone()
+    }
+}
+
+impl Index<Token> for [ExtDataSource] {
+    type Output = DataSource;
 
     fn index(&self, index: Token) -> &Self::Output {
         match index {
             Token::Table(token) => {
-                &self[token]
+                &self[token].source
             },
             _ => {
                 panic!("Cannot with {:?}", index);

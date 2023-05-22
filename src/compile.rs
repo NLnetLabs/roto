@@ -17,8 +17,8 @@ use crate::{
     types::typedef::TypeDef,
     types::typevalue::TypeValue,
     vm::{
-        Command, CommandArg, ExtDataSource, ModuleArg, ModuleArgsMap, OpCode,
-        StackRefPos, VariablesMap,
+        Command, CommandArg, DataSource, ExtDataSource, ModuleArg,
+        ModuleArgsMap, OpCode, StackRefPos, VariablesMap,
     },
 };
 
@@ -96,7 +96,7 @@ impl Rotolo {
     pub fn retrieve_public_as_arcs(
         &self,
         name: &str,
-    ) -> Result<PublicRotoPack<Arc<[MirBlock]>>, CompileError> {
+    ) -> Result<RotoPackArc, CompileError> {
         let mp = self
             .get_mis_compilations()
             .iter()
@@ -104,9 +104,7 @@ impl Rotolo {
         let mut p = self
             .packs
             .iter()
-            .map(|p| {
-                (p.module_name.clone(), Ok::<&RotoPack, CompileError>(p))
-            })
+            .map(|p| (p.module_name.clone(), Ok(p)))
             .chain(mp);
         p.find(|p| p.0 == name)
             .ok_or_else(|| {
@@ -117,17 +115,24 @@ impl Rotolo {
             })
             .and_then(|p| {
                 if let Ok(p) = p.1 {
-                    Ok(PublicRotoPack::<Arc<[MirBlock]>> {
+                    Ok(PublicRotoPack::<
+                        Arc<[MirBlock]>,
+                        Arc<[(&str, TypeDef)]>,
+                        Arc<[ExtDataSource]>,
+                    > {
                         module_name: p.module_name.as_str(),
-                        arguments: p.arguments.inspect_arguments(),
+                        arguments: p
+                            .arguments
+                            .inspect_arguments()
+                            .clone()
+                            .into(),
                         rx_type: p.rx_type.clone(),
                         tx_type: p.tx_type.clone(),
                         data_sources: p
                             .data_sources
-                            .iter()
-                            .map(Arc::clone)
-                            .collect::<Vec<_>>(),
-                        mir: p.mir.clone().into()
+                            .as_slice()
+                            .into(),
+                        mir: p.mir.clone().into(),
                     })
                 } else {
                     Err(p.1.err().unwrap())
@@ -138,7 +143,7 @@ impl Rotolo {
     pub fn retrieve_public_as_refs(
         &self,
         name: &str,
-    ) -> Result<PublicRotoPack<&[MirBlock]>, CompileError> {
+    ) -> Result<RotoPackRef, CompileError> {
         let mp = self
             .get_mis_compilations()
             .iter()
@@ -146,9 +151,7 @@ impl Rotolo {
         let mut p = self
             .packs
             .iter()
-            .map(|p| {
-                (p.module_name.clone(), Ok::<&RotoPack, CompileError>(p))
-            })
+            .map(|p| (p.module_name.clone(), Ok(p)))
             .chain(mp);
         p.find(|p| p.0 == name)
             .ok_or_else(|| {
@@ -159,17 +162,13 @@ impl Rotolo {
             })
             .and_then(|p| {
                 if let Ok(p) = p.1 {
-                    Ok(PublicRotoPack::<&[MirBlock]> {
+                    Ok(PublicRotoPack {
                         module_name: p.module_name.as_str(),
                         arguments: p.arguments.inspect_arguments(),
                         rx_type: p.rx_type.clone(),
                         tx_type: p.tx_type.clone(),
-                        data_sources: p
-                            .data_sources
-                            .iter()
-                            .map(Arc::clone)
-                            .collect::<Vec<_>>(),
-                        mir: p.mir.as_slice()
+                        data_sources: p.data_sources.clone(),
+                        mir: p.mir.as_slice(),
                     })
                 } else {
                     Err(p.1.err().unwrap())
@@ -214,32 +213,54 @@ impl Rotolo {
     }
 }
 
-pub type RotoPackArc<'a> = PublicRotoPack<'a, Arc<Vec<MirBlock>>>;
-pub type RotoPackRef<'a> = PublicRotoPack<'a, &'a Vec<MirBlock>>;
-
 // pub type RotoloArc = Rotolo<Arc<Vec<MirBlock>>>;
 // pub type RotoloRef<'a> = Rotolo<[&'a MirBlock]>;
 #[derive(Debug)]
-pub struct PublicRotoPack<'a, M: AsRef<[MirBlock]>> {
+pub struct PublicRotoPack<
+    'a,
+    M: AsRef<[MirBlock]>,
+    A: AsRef<[(&'a str, TypeDef)]>,
+    EDS: AsRef<[ExtDataSource]>,
+> {
     pub module_name: &'a str,
     pub mir: M,
     pub rx_type: TypeDef,
     pub tx_type: Option<TypeDef>,
-    pub arguments: Arc<Vec<(&'a str, TypeDef)>>,
-    pub data_sources: Vec<Arc<ExtDataSource>>,
+    pub arguments: A,
+    pub data_sources: EDS,
 }
 
-impl<'a, M: AsRef<[MirBlock]>> PublicRotoPack<'a, M> {
-    pub fn get_arguments(&'a self) -> Arc<Vec<(&'a str, TypeDef)>> {
-        Arc::clone(&self.arguments)
+type RotoPackArc<'a> = PublicRotoPack<
+    'a,
+    Arc<[MirBlock]>,
+    Arc<[(&'a str, TypeDef)]>,
+    Arc<[ExtDataSource]>,
+>;
+
+type RotoPackRef<'a> = PublicRotoPack<
+    'a,
+    &'a [MirBlock],
+    Vec<(&'a str, TypeDef)>,
+    Vec<ExtDataSource>,
+>;
+
+impl<
+        'a,
+        M: AsRef<[MirBlock]>,
+        A: AsRef<[(&'a str, TypeDef)]>,
+        EDS: AsRef<[ExtDataSource]>,
+    > PublicRotoPack<'a, M, A, EDS>
+{
+    pub fn get_arguments(&'a self) -> &'a [(&str, TypeDef)] {
+        self.arguments.as_ref()
     }
 
     pub fn get_mir(&'a self) -> &'a [MirBlock] {
         self.mir.as_ref()
     }
 
-    pub fn get_data_sources(&'a self) -> Vec<Arc<ExtDataSource>> {
-        self.data_sources.clone()
+    pub fn get_data_sources(&'a self) -> &[ExtDataSource] {
+        self.data_sources.as_ref()
     }
 }
 
@@ -250,7 +271,7 @@ struct RotoPack {
     rx_type: TypeDef,
     tx_type: Option<TypeDef>,
     arguments: ModuleArgsMap,
-    data_sources: Vec<Arc<ExtDataSource>>,
+    data_sources: Vec<ExtDataSource>,
 }
 
 impl RotoPack {
@@ -268,10 +289,7 @@ impl RotoPack {
             rx_type,
             tx_type,
             arguments,
-            data_sources: data_sources
-                .into_iter()
-                .map(|ds| ds.into())
-                .collect::<Vec<_>>(),
+            data_sources,
         }
     }
 
@@ -450,19 +468,21 @@ struct CompilerState<'a> {
 }
 
 #[derive(Debug, Default)]
-pub struct Compiler {
+pub struct Compiler<'a> {
     pub ast: SyntaxTree,
     symbols: GlobalSymbolTable,
     // Compile time arguments
     arguments: Vec<(ShortString, Vec<(ShortString, TypeValue)>)>,
+    data_sources: Vec<(&'a str, Arc<DataSource>)>,
 }
 
-impl<'a> Compiler {
+impl<'a> Compiler<'a> {
     pub fn new() -> Self {
         Compiler {
             ast: SyntaxTree::default(),
             symbols: GlobalSymbolTable::new(),
             arguments: vec![],
+            data_sources: vec![],
         }
     }
 
@@ -544,8 +564,14 @@ impl<'a> Compiler {
 
         for module in modules {
             let _module = _global.get(&module).unwrap();
-            let compile_result =
-                compile_module(_module, _global.get(&Scope::Global).unwrap());
+            let compile_result = compile_module(
+                _module,
+                _global.get(&Scope::Global).unwrap(),
+                self.data_sources
+                    .iter()
+                    .map(|ds| (ds.0, Arc::clone(&ds.1)))
+                    .collect::<Vec<_>>(),
+            );
 
             match compile_result {
                 Ok(pack) => {
@@ -556,6 +582,8 @@ impl<'a> Compiler {
                 }
             }
         }
+
+        drop(_global);
 
         Rotolo {
             packs,
@@ -587,7 +615,7 @@ impl<'a> Compiler {
     }
 
     pub fn build(source_code: &'a str) -> Result<Rotolo, String> {
-        let mut compiler = Compiler::new();
+        let mut compiler: Compiler = Compiler::new();
         compiler
             .parse_source_code(source_code)
             .map_err(|err| format!("Parse error: {err}"))?;
@@ -820,6 +848,7 @@ impl Clone for MirBlock {
 fn compile_module(
     module: &SymbolTable,
     global_table: &SymbolTable,
+    data_sources: Vec<(&str, Arc<DataSource>)>,
 ) -> Result<RotoPack, CompileError> {
     println!("SYMBOL MAP\n{:#?}", module);
 
@@ -917,7 +946,16 @@ fn compile_module(
                 global_table.get_data_source(&name).unwrap_or_else(|_| {
                     panic!("Fatal: Cannot find Token for data source.");
                 });
-            ExtDataSource::new(&name, resolved_ds.1, resolved_ds.0)
+            let ds = data_sources
+                .iter()
+                .find(|ds| ds.0 == name.as_str())
+                .unwrap();
+            ExtDataSource::new(
+                &name,
+                resolved_ds.1,
+                resolved_ds.0,
+                Arc::clone(&ds.1),
+            )
         })
         .collect::<Vec<_>>();
 

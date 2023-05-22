@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use roto::compile::Compiler;
 
 use roto::types::builtin::{
@@ -28,7 +26,7 @@ fn test_data(
     c.with_arguments(name, module_arguments)?;
     let roto_packs = c.build_from_compiler(source_code)?;
 
-    let roto_pack = roto_packs.retrieve_public_as_arcs(name)?;
+    let roto_pack = roto_packs.retrieve_public_as_refs(name)?;
     let _count: TypeValue = 1_u32.into();
     let prefix: TypeValue =
         routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?
@@ -96,7 +94,7 @@ fn test_data(
     println!("Used Data Sources");
     println!("{:#?}", &roto_pack.data_sources);
 
-    let ds_ref = roto_pack.data_sources.iter().map(Arc::clone).collect::<Vec<_>>();
+    let ds_ref = roto_pack.data_sources;
 
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
