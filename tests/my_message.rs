@@ -118,12 +118,12 @@ fn test_data(
 }
 
 #[test]
-fn test_module_message() {
+fn test_module_message_1() {
     common::init();
     test_data(
-        "my-message-module",
+        "my-message-module-1",
         r###"
-        module my-message-module with my_asn: Asn {
+        module my-message-module-1 with my_asn: Asn {
             define {
                 // specify the types of that this filter receives
                 // and sends.
@@ -140,7 +140,50 @@ fn test_module_message() {
             
             action send-message {
                 mqtt.send({ 
-                    message: String.format("🤭 I encountered {}", my_asn),  
+                    message: String.format("🤭 I encountered ", my_asn),
+                    my_asn: my_asn
+                });
+            }
+
+            apply {
+                filter match rov-valid not matching {  
+                    send-message;
+                };
+            }
+        }
+
+        output-stream mqtt contains Message {
+             message: String,
+             asn: Asn
+        }
+        "###,
+    ).unwrap();
+}
+
+#[test]
+fn test_module_message_2() {
+    common::init();
+    test_data(
+        "my-message-module-2",
+        r###"
+        module my-message-module-2 with my_asn: Asn {
+            define {
+                // specify the types of that this filter receives
+                // and sends.
+                // rx_tx route: StreamRoute;
+                rx route: Route;
+                tx out: Route;
+            }
+
+            term rov-valid for route: Route {
+                match {
+                    route.as-path.origin() == my_asn;
+                }
+            }
+            
+            action send-message {
+                mqtt.send({ 
+                    message: String.format("🤭 I, the messager, saw {} in a BGP update.", my_asn),
                     my_asn: my_asn
                 });
             }

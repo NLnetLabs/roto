@@ -467,12 +467,12 @@ impl RotoType for StringLiteral {
                     return Err(VmError::AnonymousArgumentNotFound);
                 };
 
-                let sub_str = format_str.splitn(2, "{}").collect::<Vec<_>>();
+                let mut sub_str = format_str.splitn(2, "{}");
 
-                let new_string = String::from_iter(vec![
-                    sub_str[0],
+                let new_string = String::from_iter([
+                    sub_str.next().unwrap(),
                     &args[1].to_string(),
-                    sub_str[1],
+                    if let Some(s) = sub_str.next() { s } else { "" }
                 ]);
 
                 Ok(Box::new(|| {
