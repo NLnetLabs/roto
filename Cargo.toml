@@ -14,7 +14,7 @@ license = "BSD-3-Clause"
 [dependencies]
 log = "0.4"
 # use branch aspath-with-hops
-routecore = { path = "../../routecore", features = [ "bgp" ]}
+routecore = { version = "0.4.0-dev", features = ["bgp"], git = "https://github.com/NLnetLabs/routecore.git" }
 bytes = "1"
 nom = "7.1"
 smallvec = { version = "1.8", features = [ "const_generics" ] }
