@@ -17,7 +17,6 @@ use super::{
         U8, primitives,
     },
     collections::{ElementTypeValue, List, Record},
-    datasources::{Rib, Table},
     outputs::OutputStream,
     typedef::TypeDef,
 };
@@ -37,10 +36,10 @@ pub enum TypeValue {
     Record(Record),
     // A collection of Records, keyed on Prefix and with special methods for
     // matching prefixes.
-    Rib(Arc<Rib>),
+    // Rib(Arc<Rib>),
     // Another collections of Records, but in a tabular format without any
     // key, e.g. parsed csv files.
-    Table(Arc<Table>),
+    // Table(Arc<Table>),
     // A Record meant to be handled by this Output stream.
     OutputStream(Arc<OutputStream>),
     // A wrapper around an immutable value that lives in an external
@@ -261,12 +260,12 @@ impl TypeValue {
                 args,
                 return_type,
             ),
-            TypeValue::Rib(rib) => {
-                rib.exec_value_method(method_token, args, return_type)
-            }
-            TypeValue::Table(rec) => {
-                rec.exec_value_method(method_token, args, return_type)
-            }
+            // TypeValue::Rib(rib) => {
+            //     rib.exec_value_method(method_token, args, return_type)
+            // }
+            // TypeValue::Table(rec) => {
+            //     rec.exec_value_method(method_token, args, return_type)
+            // }
             TypeValue::OutputStream(stream) => {
                 stream.exec_value_method(method_token, args, return_type)
             }
@@ -400,14 +399,14 @@ impl TypeValue {
                 args,
                 return_type,
             ),
-            TypeValue::Rib(_rib) => {
-                Err(VmError::InvalidMethodCall)
-                // rib.exec_consume_value_method(method_token, args, return_type)
-            }
-            TypeValue::Table(_rec) => {
-                Err(VmError::InvalidMethodCall)
-                // rec.exec_consume_value_method(method_token, args, return_type)
-            }
+            // TypeValue::Rib(_rib) => {
+            //     Err(VmError::InvalidMethodCall)
+            //     // rib.exec_consume_value_method(method_token, args, return_type)
+            // }
+            // TypeValue::Table(_rec) => {
+            //     Err(VmError::InvalidMethodCall)
+            //     // rec.exec_consume_value_method(method_token, args, return_type)
+            // }
             TypeValue::OutputStream(_stream) => {
                 Err(VmError::InvalidMethodCall)
             }
@@ -429,12 +428,12 @@ impl Display for TypeValue {
             TypeValue::Record(r) => {
                 write!(f, "{} (Record)", r)
             }
-            TypeValue::Rib(r) => {
-                write!(f, "{} (Rib Record)", r)
-            }
-            TypeValue::Table(r) => {
-                write!(f, "{} (Table Entry)", r)
-            }
+            // TypeValue::Rib(r) => {
+            //     write!(f, "{} (Rib Record)", r)
+            // }
+            // TypeValue::Table(r) => {
+            //     write!(f, "{} (Table Entry)", r)
+            // }
             TypeValue::OutputStream(m) => {
                 write!(f, "{} (Stream message)", m)
             }
@@ -534,12 +533,12 @@ impl PartialOrd for TypeValue {
             (TypeValue::Record(_), TypeValue::Record(_)) => {
                 panic!("Records are not comparable.")
             }
-            (TypeValue::Rib(_), TypeValue::Rib(_)) => {
-                panic!("Ribs are not comparable.")
-            }
-            (TypeValue::Table(_), TypeValue::Table(_)) => {
-                panic!("Tables are not comparable.")
-            }
+            // (TypeValue::Rib(_), TypeValue::Rib(_)) => {
+            //     panic!("Ribs are not comparable.")
+            // }
+            // (TypeValue::Table(_), TypeValue::Table(_)) => {
+            //     panic!("Tables are not comparable.")
+            // }
             (TypeValue::Unknown, TypeValue::Unknown) => {
                 panic!("Unknown is unsortable.")
             }
@@ -563,12 +562,12 @@ impl Ord for TypeValue {
             (TypeValue::Record(_r1), TypeValue::Record(_r2)) => {
                 panic!("Records are not comparable.")
             }
-            (TypeValue::Rib(_r1), TypeValue::Rib(_r2)) => {
-                panic!("Ribs are not comparable.")
-            }
-            (TypeValue::Table(_r1), TypeValue::Table(_r2)) => {
-                panic!("Tables are not comparable.")
-            }
+            // (TypeValue::Rib(_r1), TypeValue::Rib(_r2)) => {
+            //     panic!("Ribs are not comparable.")
+            // }
+            // (TypeValue::Table(_r1), TypeValue::Table(_r2)) => {
+            //     panic!("Tables are not comparable.")
+            // }
             (TypeValue::Unknown, TypeValue::Unknown) => Ordering::Equal,
             (TypeValue::Builtin(_), _) => Ordering::Less,
             (_, TypeValue::Builtin(_)) => Ordering::Greater,
@@ -576,10 +575,10 @@ impl Ord for TypeValue {
             (_, TypeValue::List(_)) => Ordering::Greater,
             (TypeValue::Record(_), _) => Ordering::Less,
             (_, TypeValue::Record(_)) => Ordering::Greater,
-            (TypeValue::Rib(_), _) => Ordering::Less,
-            (_, TypeValue::Rib(_)) => Ordering::Greater,
-            (TypeValue::Table(_), _) => Ordering::Less,
-            (_, TypeValue::Table(_)) => Ordering::Greater,
+            // (TypeValue::Rib(_), _) => Ordering::Less,
+            // (_, TypeValue::Rib(_)) => Ordering::Greater,
+            // (TypeValue::Table(_), _) => Ordering::Less,
+            // (_, TypeValue::Table(_)) => Ordering::Greater,
             (_, TypeValue::UnInit) => {
                 panic!("comparing with uninitialized memory.")
             }

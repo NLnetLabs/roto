@@ -626,8 +626,8 @@ impl From<&TypeValue> for TypeDef {
                     .map(|(k, v)| (k.clone(), Box::new(v.into())))
                     .collect(),
             ),
-            TypeValue::Rib(r) => r.ty.clone(),
-            TypeValue::Table(t) => t.ty.clone(),
+            // TypeValue::Rib(r) => r.ty.clone(),
+            // TypeValue::Table(t) => t.ty.clone(),
             TypeValue::OutputStream(m) => m.record_type.clone(),
             TypeValue::SharedValue(sv) => TypeDef::from(sv.as_ref()),
             TypeValue::Unknown => TypeDef::Unknown,
