@@ -20,7 +20,7 @@ use super::builtin::{
 };
 use super::collections::Record;
 use super::datasources::{Rib, Table};
-use super::outputs::OutputStream;
+use super::outputs::OutputStreamMessage;
 use super::{
     builtin::BuiltinTypeValue, collections::List, typevalue::TypeValue,
 };
@@ -233,7 +233,7 @@ impl TypeDef {
                 Table::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::OutputStream(_) => {
-                OutputStream::get_props_for_method(self.clone(), method_name)
+                OutputStreamMessage::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::List(_) => {
                 List::get_props_for_method(self.clone(), method_name)
@@ -628,7 +628,7 @@ impl From<&TypeValue> for TypeDef {
             ),
             // TypeValue::Rib(r) => r.ty.clone(),
             // TypeValue::Table(t) => t.ty.clone(),
-            TypeValue::OutputStream(m) => m.record_type.clone(),
+            TypeValue::OutputStreamMessage(m) => m.record_type.clone(),
             TypeValue::SharedValue(sv) => TypeDef::from(sv.as_ref()),
             TypeValue::Unknown => TypeDef::Unknown,
             TypeValue::UnInit => TypeDef::Unknown,

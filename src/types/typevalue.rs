@@ -17,7 +17,7 @@ use super::{
         U8, primitives,
     },
     collections::{ElementTypeValue, List, Record},
-    outputs::OutputStream,
+    outputs::OutputStreamMessage,
     typedef::TypeDef,
 };
 
@@ -40,8 +40,8 @@ pub enum TypeValue {
     // Another collections of Records, but in a tabular format without any
     // key, e.g. parsed csv files.
     // Table(Arc<Table>),
-    // A Record meant to be handled by this Output stream.
-    OutputStream(Arc<OutputStream>),
+    // A Record meant to be handled by an Output stream.
+    OutputStreamMessage(Arc<OutputStreamMessage>),
     // A wrapper around an immutable value that lives in an external
     // datasource, i.e. a table or a rib
     SharedValue(Arc<TypeValue>),
@@ -266,7 +266,7 @@ impl TypeValue {
             // TypeValue::Table(rec) => {
             //     rec.exec_value_method(method_token, args, return_type)
             // }
-            TypeValue::OutputStream(stream) => {
+            TypeValue::OutputStreamMessage(stream) => {
                 stream.exec_value_method(method_token, args, return_type)
             }
             TypeValue::SharedValue(sv) => sv.exec_value_method(method_token, args, return_type),
@@ -407,7 +407,7 @@ impl TypeValue {
             //     Err(VmError::InvalidMethodCall)
             //     // rec.exec_consume_value_method(method_token, args, return_type)
             // }
-            TypeValue::OutputStream(_stream) => {
+            TypeValue::OutputStreamMessage(_stream) => {
                 Err(VmError::InvalidMethodCall)
             }
             TypeValue::SharedValue(_sv) => panic!("Shared values cannot be consumed. They're read-only."),
@@ -434,7 +434,7 @@ impl Display for TypeValue {
             // TypeValue::Table(r) => {
             //     write!(f, "{} (Table Entry)", r)
             // }
-            TypeValue::OutputStream(m) => {
+            TypeValue::OutputStreamMessage(m) => {
                 write!(f, "{} (Stream message)", m)
             }
             TypeValue::SharedValue(sv) => write!(f, "{} Shared Value", sv),
@@ -585,8 +585,8 @@ impl Ord for TypeValue {
             (TypeValue::UnInit, _) => {
                 panic!("comparing with uninitialized memory.")
             }
-            (TypeValue::OutputStream(_), _) => todo!(),
-            (_, TypeValue::OutputStream(_)) => todo!(),
+            (TypeValue::OutputStreamMessage(_), _) => todo!(),
+            (_, TypeValue::OutputStreamMessage(_)) => todo!(),
             (TypeValue::SharedValue(_), _) => Ordering::Less,
             (_, TypeValue::SharedValue(_)) => Ordering::Greater,
         }
