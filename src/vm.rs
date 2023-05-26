@@ -85,17 +85,18 @@ impl<'a> Stack {
 }
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
-pub enum StackValueRef<'a> {
+pub enum StackValue<'a> {
     Ref(&'a TypeValue),
-    // The actual Arc is a variant of TypeValue
-    Arc(TypeValue),
+    Arc(Arc<TypeValue>),
+    Owned(TypeValue)
 }
 
-impl<'a> AsRef<TypeValue> for StackValueRef<'a> {
+impl<'a> AsRef<TypeValue> for StackValue<'a> {
     fn as_ref(&self) -> &TypeValue {
         match self {
-            StackValueRef::Ref(r) => r,
-            StackValueRef::Arc(r) => r,
+            StackValue::Ref(r) => r,
+            StackValue::Arc(r) => r,
+            StackValue::Owned(r) => r
         }
     }
 }
@@ -609,9 +610,9 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
     fn _unwind_resolved_stack_into_vec(
         &'a self,
         mem: &'a LinearMemory,
-    ) -> Vec<StackValueRef> {
+    ) -> Vec<StackValue> {
         let stack = self.stack.borrow_mut().unwind();
-        let mut unwind_stack: Vec<StackValueRef> =
+        let mut unwind_stack: Vec<StackValue> =
             Vec::with_capacity(stack.len());
         for sr in stack.into_iter() {
             match sr.pos {
@@ -628,13 +629,13 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                 pos
                             );
                         });
-                    unwind_stack.push(StackValueRef::Ref(v));
+                    unwind_stack.push(StackValue::Ref(v));
                 }
                 StackRefPos::TablePos(token, pos) => {
                     let ds = &self.data_sources.as_ref()[token];
                     match ds.get_at_field_index(pos, sr.field_index) {
-                        Some(v) => unwind_stack.push(StackValueRef::Arc(v)),
-                        None => unwind_stack.push(StackValueRef::Arc(TypeValue::Unknown))
+                        Some(v) => unwind_stack.push(StackValue::Arc(v.into())),
+                        None => unwind_stack.push(StackValue::Owned(TypeValue::Unknown))
                     }
                 }
             }
@@ -648,7 +649,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
         &'a self,
         elem_num: u32, // number of elements to take
         mem: &'a LinearMemory,
-    ) -> Vec<StackValueRef> {
+    ) -> Vec<StackValue> {
         let mut stack = self.stack.borrow_mut();
 
         let len = stack.0.len();
@@ -664,15 +665,15 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                             pos
                         );
                     });
-                StackValueRef::Ref(v)
+                StackValue::Ref(v)
             }
             StackRefPos::TablePos(token, pos) => {
                 let ds = &self.data_sources.as_ref()[token];
                 let v = ds.get_at_field_index(pos, sr.field_index);
                 if let Some(v) = v {
-                    StackValueRef::Arc(v)
+                    StackValue::Arc(v.into())
                 } else {
-                    StackValueRef::Arc(TypeValue::Unknown)
+                    StackValue::Owned(TypeValue::Unknown)
                 }
             }
         }).collect();
@@ -945,14 +946,14 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                             }
                                             panic!("Uninitialized memory in position {}", pos);
                                         });
-                                    StackValueRef::Ref(v)
+                                    StackValue::Ref(v)
                                 }
                                 StackRefPos::TablePos(token, pos) => {
                                     let ds = &self.data_sources.as_ref()[token];
                                     let v = ds.get_at_field_index(pos, sr.field_index);
                                     if let Some(v) = v {
-                                        StackValueRef::Arc(v)
-                                    } else { StackValueRef::Arc(TypeValue::Unknown) }
+                                        StackValue::Arc(v.into())
+                                    } else { StackValue::Owned(TypeValue::Unknown) }
                                 }
                             }
                         }).collect::<Vec<_>>();
@@ -1785,7 +1786,7 @@ impl DataSource {
     pub(crate) fn exec_method(
         &self,
         method_token: usize,
-        args: &[StackValueRef],
+        args: &[StackValue],
         res_type: TypeDef,
     ) -> DataSourceMethodValue {
         match self {

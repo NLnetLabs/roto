@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use crate::ast::{RecordValueExpr, ShortString, ValueExpr};
 use crate::compile::CompileError;
 use crate::traits::{RotoType, TokenConvert};
-use crate::vm::{VmError, StackValueRef};
+use crate::vm::{VmError, StackValue};
 
 use super::builtin::{BuiltinTypeValue, U32};
 use super::typedef::{MethodProps, TypeDef};
@@ -73,16 +73,22 @@ impl PartialEq<TypeValue> for ElementTypeValue {
     }
 }
 
-impl PartialEq<StackValueRef<'_>> for &'_ ElementTypeValue {
-    fn eq(&self, other: &StackValueRef) -> bool {
+impl PartialEq<StackValue<'_>> for &'_ ElementTypeValue {
+    fn eq(&self, other: &StackValue) -> bool {
         match other {
-            StackValueRef::Ref(v) => {
+            StackValue::Ref(v) => {
                 match self {
                     ElementTypeValue::Primitive(ov) => *v == ov,
                     _ => false,
                 }
             }
-            StackValueRef::Arc(v) => {
+            StackValue::Arc(v) => {
+                match self {
+                    ElementTypeValue::Primitive(ov) => **v == *ov,
+                    _ => false,
+                }
+            }
+            StackValue::Owned(v) => {
                 match self {
                     ElementTypeValue::Primitive(ov) => v == ov,
                     _ => false,
@@ -333,7 +339,7 @@ impl RotoType for List {
     fn exec_value_method<'a>(
         &'a self,
         method: usize,
-        args: &'a [StackValueRef],
+        args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<std::boxed::Box<(dyn FnOnce() -> TypeValue + '_)>, VmError>
     {
@@ -383,7 +389,7 @@ impl RotoType for List {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -570,7 +576,7 @@ impl RotoType for Record {
     fn exec_value_method(
         &self,
         _method: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + '_>, VmError> {
         todo!()
@@ -587,7 +593,7 @@ impl RotoType for Record {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()

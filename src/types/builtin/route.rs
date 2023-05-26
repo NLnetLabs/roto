@@ -25,7 +25,7 @@ use crate::{
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
     },
-    vm::{VmError, StackValueRef},
+    vm::{VmError, StackValue},
 };
 
 use super::{AsPath, BuiltinTypeValue, RouteStatus, NextHop, OriginType, Prefix};
@@ -624,7 +624,7 @@ impl RotoType for RawRouteWithDeltas {
     fn exec_value_method<'a>(
         &'a self,
         _method: usize,
-        _args: &'a [StackValueRef],
+        _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<(dyn FnOnce() -> TypeValue + 'a)>, VmError> {
         todo!()
@@ -641,7 +641,7 @@ impl RotoType for RawRouteWithDeltas {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -775,7 +775,7 @@ impl RotoType for RouteStatus {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _args: &'a [StackValueRef],
+        _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -792,7 +792,7 @@ impl RotoType for RouteStatus {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()

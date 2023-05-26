@@ -8,7 +8,7 @@ use crate::compile::CompileError;
 use crate::traits::{RotoType, TokenConvert};
 use crate::types::collections::{ElementTypeValue, List};
 use crate::types::typedef::MethodProps;
-use crate::vm::{VmError, StackValueRef};
+use crate::vm::{VmError, StackValue};
 
 use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
@@ -57,7 +57,7 @@ impl RotoType for U32 {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -74,7 +74,7 @@ impl RotoType for U32 {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -181,7 +181,7 @@ impl RotoType for U8 {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -198,7 +198,7 @@ impl RotoType for U8 {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -311,7 +311,7 @@ impl RotoType for Boolean {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -328,7 +328,7 @@ impl RotoType for Boolean {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -434,7 +434,7 @@ impl RotoType for StringLiteral {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -451,7 +451,7 @@ impl RotoType for StringLiteral {
 
     fn exec_type_method<'a>(
         method_token: usize,
-        args: &[StackValueRef],
+        args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         match method_token.into() {
@@ -614,7 +614,7 @@ impl RotoType for IntegerLiteral {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -631,7 +631,7 @@ impl RotoType for IntegerLiteral {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -745,7 +745,7 @@ impl RotoType for HexLiteral {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -762,7 +762,7 @@ impl RotoType for HexLiteral {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -885,7 +885,7 @@ impl RotoType for Prefix {
     fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         match method_token.into() {
@@ -922,7 +922,7 @@ impl RotoType for Prefix {
 
     fn exec_type_method<'a>(
         method_token: usize,
-        args: &[StackValueRef],
+        args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         match method_token.into() {
@@ -1051,7 +1051,7 @@ impl RotoType for PrefixLength {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -1068,7 +1068,7 @@ impl RotoType for PrefixLength {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -1226,7 +1226,7 @@ impl RotoType for Community {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -1243,7 +1243,7 @@ impl RotoType for Community {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -1394,7 +1394,7 @@ impl RotoType for IpAddress {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!();
@@ -1411,7 +1411,7 @@ impl RotoType for IpAddress {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -1514,7 +1514,7 @@ impl RotoType for Asn {
     fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        args: &'a [StackValueRef],
+        args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         match method_token.into() {
@@ -1541,7 +1541,7 @@ impl RotoType for Asn {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -1678,7 +1678,7 @@ impl RotoType for AsPath {
     fn exec_value_method<'a>(
         &'a self,
         method: usize,
-        args: &'a [StackValueRef],
+        args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<(dyn FnOnce() -> TypeValue + 'a)>, VmError> {
         match method.into() {
@@ -1722,7 +1722,7 @@ impl RotoType for AsPath {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -1889,7 +1889,7 @@ impl RotoType for Hop {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _args: &'a [StackValueRef],
+        _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -1906,7 +1906,7 @@ impl RotoType for Hop {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -1954,7 +1954,7 @@ impl RotoType for OriginType {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _args: &'a [StackValueRef],
+        _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -1971,7 +1971,7 @@ impl RotoType for OriginType {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -2031,7 +2031,7 @@ impl RotoType for NextHop {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _args: &'a [StackValueRef],
+        _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -2048,7 +2048,7 @@ impl RotoType for NextHop {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -2108,7 +2108,7 @@ impl RotoType for MultiExitDisc {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _args: &'a [StackValueRef],
+        _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -2125,7 +2125,7 @@ impl RotoType for MultiExitDisc {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -2199,7 +2199,7 @@ impl RotoType for LocalPref {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _args: &'a [StackValueRef],
+        _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -2216,7 +2216,7 @@ impl RotoType for LocalPref {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -2302,7 +2302,7 @@ impl RotoType for AtomicAggregator {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _args: &'a [StackValueRef],
+        _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -2319,7 +2319,7 @@ impl RotoType for AtomicAggregator {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()

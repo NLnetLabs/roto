@@ -6,7 +6,7 @@ use crate::{
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
     },
-    vm::{VmError, StackValueRef},
+    vm::{VmError, StackValue},
 };
 
 impl RotoType for OutputStream {
@@ -38,7 +38,7 @@ impl RotoType for OutputStream {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -55,7 +55,7 @@ impl RotoType for OutputStream {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[StackValueRef],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()

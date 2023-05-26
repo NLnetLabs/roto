@@ -7,7 +7,7 @@ use crate::{
     ast::{ShortString, RecordValueExpr},
     compile::CompileError,
     traits::RotoType,
-    vm::{StackRef, StackRefPos, VmError, StackValueRef}, attr_change_set::ScalarValue,
+    vm::{StackRef, StackRefPos, VmError, StackValue}, attr_change_set::ScalarValue,
 };
 
 use super::{
@@ -179,7 +179,7 @@ impl TypeValue {
     pub(crate) fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        args: &'a [StackValueRef],
+        args: &'a [StackValue],
         return_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + '_>, VmError> {
         match self {
@@ -594,16 +594,16 @@ impl Ord for TypeValue {
     }
 }
 
-impl<'a> TryFrom<StackValueRef<'a>> for bool {
+impl<'a> TryFrom<StackValue<'a>> for bool {
     type Error = VmError;
 
-    fn try_from(t: StackValueRef) -> Result<Self, Self::Error> {
+    fn try_from(t: StackValue) -> Result<Self, Self::Error> {
         match t {
-            StackValueRef::Ref(TypeValue::Builtin(BuiltinTypeValue::Boolean(ref b))) => {
+            StackValue::Ref(TypeValue::Builtin(BuiltinTypeValue::Boolean(ref b))) => {
                 Ok(b.0) //.ok_or(VmError::ImpossibleComparison)
             }
-            StackValueRef::Arc(bv) => {
-                if let TypeValue::Builtin(BuiltinTypeValue::Boolean(ref b)) = bv {
+            StackValue::Arc(bv) => {
+                if let TypeValue::Builtin(BuiltinTypeValue::Boolean(ref b)) = *bv {
                     Ok(b.0)
                 } else {
                     Err(VmError::ImpossibleComparison)
