@@ -68,7 +68,7 @@ fn test_data(
         // .with_arguments(args)
         .with_data_sources(ds_ref)
         .with_mir_code(roto_pack.get_mir())
-        .build();
+        .build()?;
 
     let mem = &mut vm::LinearMemory::uninit();
     let res = vm.exec(

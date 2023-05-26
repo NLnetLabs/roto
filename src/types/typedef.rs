@@ -7,6 +7,7 @@ use crate::compile::CompileError;
 use crate::traits::Token;
 use crate::types::collections::ElementTypeValue;
 use crate::types::datasources::NamedTypeDef;
+use crate::vm::StackValueRef;
 use crate::{
     ast::{AcceptReject, ShortString},
     traits::RotoType,
@@ -297,7 +298,7 @@ impl TypeDef {
     pub(crate) fn exec_type_method<'a>(
         &'a self,
         method_token: usize,
-        args: &[&'a TypeValue],
+        args: &[StackValueRef],
         return_type: TypeDef,
     ) -> TypeValue {
         match self {
@@ -628,6 +629,7 @@ impl From<&TypeValue> for TypeDef {
             TypeValue::Rib(r) => r.ty.clone(),
             TypeValue::Table(t) => t.ty.clone(),
             TypeValue::OutputStream(m) => m.record_type.clone(),
+            TypeValue::SharedValue(sv) => TypeDef::from(sv.as_ref()),
             TypeValue::Unknown => TypeDef::Unknown,
             TypeValue::UnInit => TypeDef::Unknown,
         }

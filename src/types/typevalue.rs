@@ -7,7 +7,7 @@ use crate::{
     ast::{ShortString, RecordValueExpr},
     compile::CompileError,
     traits::RotoType,
-    vm::{StackRef, StackRefPos, VmError}, attr_change_set::ScalarValue,
+    vm::{StackRef, StackRefPos, VmError, StackValueRef}, attr_change_set::ScalarValue,
 };
 
 use super::{
@@ -43,6 +43,9 @@ pub enum TypeValue {
     Table(Arc<Table>),
     // A Record meant to be handled by this Output stream.
     OutputStream(Arc<OutputStream>),
+    // A wrapper around an immutable value that lives in an external
+    // datasource, i.e. a table or a rib
+    SharedValue(Arc<TypeValue>),
     // Unknown is NOT EQUAL to empty or unitialized, e.g. it may be the
     // result of a search. A ternary logic value, if you will.
     Unknown,
@@ -176,7 +179,7 @@ impl TypeValue {
     pub(crate) fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        args: &'a [&TypeValue],
+        args: &'a [StackValueRef],
         return_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + '_>, VmError> {
         match self {
@@ -267,6 +270,7 @@ impl TypeValue {
             TypeValue::OutputStream(stream) => {
                 stream.exec_value_method(method_token, args, return_type)
             }
+            TypeValue::SharedValue(sv) => sv.exec_value_method(method_token, args, return_type),
             TypeValue::Unknown => Ok(Box::new(|| TypeValue::Unknown)),
             TypeValue::UnInit => {
                 panic!("Unitialized memory cannot be read. That's fatal.");
@@ -407,6 +411,7 @@ impl TypeValue {
             TypeValue::OutputStream(_stream) => {
                 Err(VmError::InvalidMethodCall)
             }
+            TypeValue::SharedValue(_sv) => panic!("Shared values cannot be consumed. They're read-only."),
             TypeValue::Unknown => Ok(Box::new(|| TypeValue::Unknown)),
             TypeValue::UnInit => {
                 panic!("Unitialized memory cannot be read. That's fatal.");
@@ -433,13 +438,14 @@ impl Display for TypeValue {
             TypeValue::OutputStream(m) => {
                 write!(f, "{} (Stream message)", m)
             }
+            TypeValue::SharedValue(sv) => write!(f, "{} Shared Value", sv),
             TypeValue::Unknown => write!(f, "Unknown"),
             TypeValue::UnInit => write!(f, "Uninitialized"),
         }
     }
 }
 
-impl PartialOrd for &TypeValue {
+impl PartialOrd for TypeValue {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
             (
@@ -544,7 +550,7 @@ impl PartialOrd for &TypeValue {
     }
 }
 
-impl Ord for &TypeValue {
+impl Ord for TypeValue {
     fn cmp(&self, other: &Self) -> Ordering {
         match (self, other) {
             (
@@ -581,7 +587,29 @@ impl Ord for &TypeValue {
                 panic!("comparing with uninitialized memory.")
             }
             (TypeValue::OutputStream(_), _) => todo!(),
-            (_, TypeValue::OutputStream(_)) => todo!()
+            (_, TypeValue::OutputStream(_)) => todo!(),
+            (TypeValue::SharedValue(_), _) => Ordering::Less,
+            (_, TypeValue::SharedValue(_)) => Ordering::Greater,
+        }
+    }
+}
+
+impl<'a> TryFrom<StackValueRef<'a>> for bool {
+    type Error = VmError;
+
+    fn try_from(t: StackValueRef) -> Result<Self, Self::Error> {
+        match t {
+            StackValueRef::Ref(TypeValue::Builtin(BuiltinTypeValue::Boolean(ref b))) => {
+                Ok(b.0) //.ok_or(VmError::ImpossibleComparison)
+            }
+            StackValueRef::Arc(bv) => {
+                if let TypeValue::Builtin(BuiltinTypeValue::Boolean(ref b)) = bv {
+                    Ok(b.0)
+                } else {
+                    Err(VmError::ImpossibleComparison)
+                }
+            }
+            _ => Err(VmError::ImpossibleComparison),
         }
     }
 }
@@ -589,9 +617,9 @@ impl Ord for &TypeValue {
 impl<'a> TryFrom<&'a TypeValue> for bool {
     type Error = VmError;
 
-    fn try_from(t: &'a TypeValue) -> Result<Self, Self::Error> {
+    fn try_from(t: &TypeValue) -> Result<Self, Self::Error> {
         match t {
-            TypeValue::Builtin(BuiltinTypeValue::Boolean(b)) => {
+            TypeValue::Builtin(BuiltinTypeValue::Boolean(ref b)) => {
                 Ok(b.0) //.ok_or(VmError::ImpossibleComparison)
             }
             _ => Err(VmError::ImpossibleComparison),

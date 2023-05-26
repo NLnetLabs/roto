@@ -135,40 +135,35 @@ fn test_module_1() {
                     // specify the types of that this filter receives
                     // and sends.
                     // rx_tx route: StreamRoute;
-                    rx route: StreamRoute;
-                    tx ext_route: ExtRoute;
+                    rx route: Route;
+                    tx ext_route: Route;
 
                     // specify additional external data sets that will be consulted.
                     use table source_asns;
-                    use rib rib-rov;
 
                     // assignments
                     extra_in_table = source_asns.contains(extra_asn); // 0
                     route_in_table = source_asns.contains(route.as-path.origin()); // 1
                     
                     // this is aliasing, kinda' useless, but hey, it's allowed
-                    extra_extra = rib-extra.blixer.bla; // 2
-                    my_source = source_asns; // 3
+                    my_source = source_asns; // 2
 
                     // Some literals. Literals are turned into constants, but
                     // they can be converted to other types.
-                    prefix_len = 24; // 4
-                    ROV_INVALID_AS = 0xFFFFFF010; // 5
-                    some_bool = false; // 6
-
-                    // also supported is calling a field beyond a method call:
-                    found_prefix_pref = rib-rov.longest_match(route.prefix).local-pref; // 7
-
-                    found_prefix = rib-rov.longest_match(route.prefix); // 8
+                    prefix_len = 24; // 3
+                    ROV_INVALID_AS = 0xFFFFFF010; // 4
+                    some_bool = false; // 5
                     
                     // syntactically valid, but doesn't exist.
                     // my_basic_call = builtin_func();
 
                     // assignment to a field from an argument
-                    my_route_path = route.as-path; // 9
+                    my_route_path = route.as-path; // 6
                     
                     // prefix_len triggers a type conversion from IntegerLiteral to PrefixLength
-                    fixed_len_prefix = Prefix.from(route.prefix.address(), prefix_len); // 10
+                    fixed_len_prefix = Prefix.from(route.prefix.address(), prefix_len); // 7
+
+                    found_prefix_pref = 100;
 
                     my_my_route_path = my_route_path;
 
@@ -186,17 +181,9 @@ fn test_module_1() {
                 term rov-valid for route: Route {
                     match {
                         found_prefix_pref == route.local-pref;
-                        my_route_path.origin() == found_prefix.as-path.origin();
                         fixed_len_prefix.len() == prefix_len;
-                        route.origin == found_prefix.as-path.origin();
-                        (found_prefix.prefix.exists() && found_prefix.prefix.exists()) || route_in_table;
-                        found_prefix.prefix.len() == 24;
                         extra_in_table;
                         route_in_table;
-                        // global-truth-method();
-                        // last.truth;
-                        // last();
-                        route.prefix.len() <= found_prefix.prefix.len();
                     }
                 }
 
@@ -212,24 +199,23 @@ fn test_module_1() {
                         my_false;
                         //  rib-extra.contains(route.as-path.origin());
                         route.prefix.len() == 24;
-                        route.as-path.origin() == found_prefix.as-path.origin();
                     }
                 }
                
                 action set-best {
                    // This shouldn't be allowed, a filter does not get to
                    // decide where to write.
-                   // rib-rov.set-best(route);
                    // Doesn't work either, users can only modify the rx type of a module.
                    // route_in_table.set(true); 
                    // This should work. The filter is allowed to modify the
                    // route that flows through it.
                    route.local-pref.set(200);
-                   route.origin.set(AS300);
+                //    route.origin.set(AS300);
                 }
 
                 action set-rov-invalid-asn-community {
-                    route.community.push(ROV_INVALID_AS);
+                    // route.communities.push(ROV_INVALID_AS);
+                    route.local-pref.set(50);
                 }
 
                 apply {
@@ -250,32 +236,10 @@ fn test_module_1() {
                 }
             }
 
-            // comment
-            rib rib-extra contains ExtRoute { 
-                blaffer: U32, 
-                blooper: Prefix,
-                blixer: { 
-                    bla: U8, 
-                    salt: { 
-                        pp: Prefix 
-                    } 
-                }  
-            }
-
             table source_asns contains AsnLines { 
                 asn: Asn
             }
 
-            // yo, rib
-            rib rib-rov contains StreamRoute {
-                prefix: Prefix,
-                as-path: AsPath,
-                origin: Asn,
-                next-hop: IpAddress,
-                med: U32,
-                local-pref: U32,
-                community: [Community]
-            }
         "###,
     ).unwrap();
 }

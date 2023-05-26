@@ -14,11 +14,11 @@ use crate::{
         SymbolKind, SymbolTable,
     },
     traits::Token,
-    types::typedef::TypeDef,
+    types::{typedef::TypeDef, datasources::{Table, Rib}},
     types::typevalue::TypeValue,
     vm::{
-        Command, CommandArg, DataSource, ExtDataSource, ModuleArg,
-        ModuleArgsMap, OpCode, StackRefPos, VariablesMap,
+        Command, CommandArg, ExtDataSource, ModuleArg,
+        ModuleArgsMap, OpCode, StackRefPos, VariablesMap, DataSource,
     },
 };
 
@@ -262,6 +262,53 @@ impl<
     pub fn get_data_sources(&'a self) -> &[ExtDataSource] {
         self.data_sources.as_ref()
     }
+
+    pub fn set_source(
+        &mut self,
+        name: &str,
+        source: Arc<DataSource>,
+    ) -> Result<(), CompileError> {
+        let f_ds = self.data_sources.as_ref().iter().find(|ds| ds.get_name() == name);
+        let s_ty = source.get_type();
+
+        let f_ds = if let Some(ds) = f_ds {
+            if ds.get_type() != &s_ty {
+                return Err(CompileError::from(
+                    format!(
+                        "Fatal: Data source with name {} has the wrong content type, expected {}, but found {}",
+                        name,
+                        s_ty,
+                        ds.get_type(),
+                    )
+                ));
+            }
+            ds
+        } else {
+            return Err(CompileError::from(format!(
+                "Fatal: Cannot find data source with name: {} in source code",
+                name
+            )));
+        };
+
+        f_ds.get_source().store(match *source {
+            DataSource::Table(ref t) => Some(
+                DataSource::Table(Table {
+                    ty: s_ty,
+                    records: t.records.clone(),
+                })
+                .into(),
+            ),
+            DataSource::Rib(ref r) => Some(
+                DataSource::Rib(Rib {
+                    ty: s_ty,
+                    records: r.records.clone(),
+                })
+                .into(),
+            ),
+        });
+
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
@@ -468,21 +515,21 @@ struct CompilerState<'a> {
 }
 
 #[derive(Debug, Default)]
-pub struct Compiler<'a> {
+pub struct Compiler {
     pub ast: SyntaxTree,
     symbols: GlobalSymbolTable,
     // Compile time arguments
     arguments: Vec<(ShortString, Vec<(ShortString, TypeValue)>)>,
-    data_sources: Vec<(&'a str, Arc<DataSource>)>,
+    // data_sources: Vec<(&'a str, Arc<DataSource>)>,
 }
 
-impl<'a> Compiler<'a> {
+impl<'a> Compiler {
     pub fn new() -> Self {
         Compiler {
             ast: SyntaxTree::default(),
             symbols: GlobalSymbolTable::new(),
             arguments: vec![],
-            data_sources: vec![],
+            // data_sources: vec![],
         }
     }
 
@@ -567,10 +614,10 @@ impl<'a> Compiler<'a> {
             let compile_result = compile_module(
                 _module,
                 _global.get(&Scope::Global).unwrap(),
-                self.data_sources
-                    .iter()
-                    .map(|ds| (ds.0, Arc::clone(&ds.1)))
-                    .collect::<Vec<_>>(),
+                // self.data_sources
+                //     .iter()
+                //     .map(|ds| (ds.0, Arc::clone(&ds.1)))
+                //     .collect::<Vec<_>>(),
             );
 
             match compile_result {
@@ -848,7 +895,7 @@ impl Clone for MirBlock {
 fn compile_module(
     module: &SymbolTable,
     global_table: &SymbolTable,
-    data_sources: Vec<(&str, Arc<DataSource>)>,
+    // data_sources: Vec<(&str, Arc<DataSource>)>,
 ) -> Result<RotoPack, CompileError> {
     println!("SYMBOL MAP\n{:#?}", module);
 
@@ -946,16 +993,16 @@ fn compile_module(
                 global_table.get_data_source(&name).unwrap_or_else(|_| {
                     panic!("Fatal: Cannot find Token for data source.");
                 });
-            let ds = data_sources
-                .iter()
-                .find(|ds| ds.0 == name.as_str())
-                .unwrap();
+            
+            // W're only creating a data source with the name and token found
+            // in the declaration in the source code. he actual source data
+            // will only be needed at run-time
             ExtDataSource::new(
                 &name,
                 resolved_ds.1,
                 resolved_ds.0,
-                Arc::clone(&ds.1),
             )
+            
         })
         .collect::<Vec<_>>();
 

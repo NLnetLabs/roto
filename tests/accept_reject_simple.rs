@@ -35,7 +35,7 @@ fn test_data(
     let mut vm = vm::VmBuilder::new()
         .with_data_sources(ds_ref)
         .with_mir_code(roto_pack.mir)
-        .build();
+        .build()?;
 
     let mem = &mut vm::LinearMemory::uninit();
     let res = vm.exec(payload, None::<Record>, None, mem)?;

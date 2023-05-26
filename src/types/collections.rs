@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use crate::ast::{RecordValueExpr, ShortString, ValueExpr};
 use crate::compile::CompileError;
 use crate::traits::{RotoType, TokenConvert};
-use crate::vm::VmError;
+use crate::vm::{VmError, StackValueRef};
 
 use super::builtin::{BuiltinTypeValue, U32};
 use super::typedef::{MethodProps, TypeDef};
@@ -69,6 +69,25 @@ impl PartialEq<TypeValue> for ElementTypeValue {
         match self {
             ElementTypeValue::Primitive(v) => v == other,
             _ => false,
+        }
+    }
+}
+
+impl PartialEq<StackValueRef<'_>> for &'_ ElementTypeValue {
+    fn eq(&self, other: &StackValueRef) -> bool {
+        match other {
+            StackValueRef::Ref(v) => {
+                match self {
+                    ElementTypeValue::Primitive(ov) => *v == ov,
+                    _ => false,
+                }
+            }
+            StackValueRef::Arc(v) => {
+                match self {
+                    ElementTypeValue::Primitive(ov) => v == ov,
+                    _ => false,
+                }
+            }
         }
     }
 }
@@ -314,7 +333,7 @@ impl RotoType for List {
     fn exec_value_method<'a>(
         &'a self,
         method: usize,
-        args: &'a [&TypeValue],
+        args: &'a [StackValueRef],
         _res_type: TypeDef,
     ) -> Result<std::boxed::Box<(dyn FnOnce() -> TypeValue + '_)>, VmError>
     {
@@ -364,7 +383,7 @@ impl RotoType for List {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[&'a TypeValue],
+        _args: &[StackValueRef],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -551,7 +570,7 @@ impl RotoType for Record {
     fn exec_value_method(
         &self,
         _method: usize,
-        _args: &[&TypeValue],
+        _args: &[StackValueRef],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + '_>, VmError> {
         todo!()
@@ -568,7 +587,7 @@ impl RotoType for Record {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[&'a TypeValue],
+        _args: &[StackValueRef],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()

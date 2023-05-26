@@ -103,7 +103,7 @@ fn test_data(
         // .with_arguments(args)
         .with_data_sources(ds_ref)
         .with_mir_code(roto_pack.mir)
-        .build();
+        .build()?;
 
     let res = vm
         .exec(my_payload, None::<Record>, None, mem)

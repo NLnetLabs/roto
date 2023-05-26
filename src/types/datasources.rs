@@ -8,7 +8,7 @@ use crate::{
     ast::ShortString,
     compile::CompileError,
     traits::{RotoType, Token, TokenConvert},
-    vm::{StackRefPos, VmError},
+    vm::{StackRefPos, VmError, StackValueRef},
 };
 
 use super::{
@@ -28,7 +28,7 @@ impl Rib {
     pub(crate) fn exec_ref_value_method<'a>(
         &'a self,
         method: usize,
-        args: &'a [&'a TypeValue],
+        args: &'a [StackValueRef],
         res_type: TypeDef,
     ) -> Box<dyn FnOnce() -> DataSourceMethodValue + 'a> {
         match RibToken::from(method) {
@@ -111,7 +111,7 @@ impl RotoType for Rib {
     fn exec_value_method<'a>(
         &'a self,
         _method: usize,
-        _args: &[&TypeValue],
+        _args: &[StackValueRef],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         unimplemented!()
@@ -128,7 +128,7 @@ impl RotoType for Rib {
 
     fn exec_type_method<'a>(
         _method: usize,
-        _args: &[&'a TypeValue],
+        _args: &[StackValueRef],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         unimplemented!()
@@ -227,7 +227,7 @@ impl Table {
     pub(crate) fn exec_ref_value_method<'a>(
         &'a self,
         method_token: usize,
-        args: &'a [&'a TypeValue],
+        args: &'a [StackValueRef],
         _res_type: TypeDef,
     ) -> Box<dyn FnOnce() -> DataSourceMethodValue + 'a> {
         match method_token.into() {
@@ -315,7 +315,7 @@ impl RotoType for Table {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _args: &[&TypeValue],
+        _args: &[StackValueRef],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         unimplemented!()
@@ -332,7 +332,7 @@ impl RotoType for Table {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[&'a TypeValue],
+        _args: &[StackValueRef],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         unimplemented!()

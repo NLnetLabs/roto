@@ -2,7 +2,7 @@
 
 use crate::{types::{
     typedef::{TypeDef, MethodProps}, typevalue::TypeValue,
-}, compile::CompileError, vm::VmError};
+}, compile::CompileError, vm::{VmError, StackValueRef}};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub enum Token {
@@ -104,7 +104,7 @@ where
     fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        args: &'a [&'a TypeValue],
+        args: &'a [StackValueRef],
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError>;
 
@@ -117,7 +117,7 @@ where
 
     fn exec_type_method<'a>(
         method_token: usize,
-        args: &[&'a TypeValue],
+        args: &[StackValueRef],
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError>;
 }
