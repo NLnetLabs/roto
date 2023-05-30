@@ -702,7 +702,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
             .and_then(|ds| {
                 ds.source.load_full().as_ref().map(Arc::clone)
             })
-            .ok_or(VmError::DataSourceNotFound(token))
+            .ok_or(VmError::DataSourceTokenNotFound(token))
     }
 
     pub fn exec(
@@ -1405,10 +1405,11 @@ impl<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> VmBuilder<MB, EDS> {
         let data_sources = if let Some(data_sources) = self.data_sources {
             for ds in data_sources.as_ref().iter() {
                 println!("{:?}", ds);
-                println!("{}", ds.is_empty());
-                if ds.is_empty() {
-                    return Err(VmError::DataSourceEmpty(ds.get_name()))
-                }
+                println!("{}", ds.exists_and_is_empty());
+                match ds.exists_and_is_empty() {
+                    ExistsAndEmpty(Some(_)) => {},
+                    ExistsAndEmpty(None) => { return Err(VmError::DataSourceNotInBuild(ds.get_name()))}
+                };
             }
             data_sources
         } else {
@@ -1450,7 +1451,8 @@ pub enum VmError {
     InvalidVariableAccess,
     InvalidFieldAccess(usize),
     InvalidMethodCall,
-    DataSourceNotFound(usize),
+    DataSourceTokenNotFound(usize),
+    DataSourceNotInBuild(ShortString),
     DataSourceEmpty(ShortString),
     DataSourcesNotReady,
     ImpossibleComparison,
@@ -1485,8 +1487,11 @@ impl Display for VmError {
                 f.write_str("InvalidFieldAccess")
             }
             VmError::InvalidMethodCall => f.write_str("InvalidMethodCall"),
-            VmError::DataSourceNotFound(_) => {
-                f.write_str("DataSourceNotFound")
+            VmError::DataSourceTokenNotFound(_) => {
+                f.write_str("DataSourceTokenNotFound")
+            }
+            VmError::DataSourceNotInBuild(ds_name) => {
+                write!(f, "Data source '{}' was not in the build arguments.", ds_name)
             }
             VmError::DataSourceEmpty(name) => {
                 write!(f, "DataSourceEmpty {}", name)
@@ -1511,7 +1516,7 @@ impl Display for VmError {
 
 impl From<VmError> for Box<dyn std::error::Error> {
     fn from(value: VmError) -> Self {
-        format!("A VM Error occured: {:?}", value).into()
+        format!("A fatal VM Error occured: {}", value).into()
     }
 }
 
@@ -1852,6 +1857,18 @@ pub struct ExtDataSource {
     source: ArcSwapOption<DataSource>,
 }
 
+pub struct ExistsAndEmpty(Option<bool>);
+
+impl Display for ExistsAndEmpty {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            ExistsAndEmpty(Some(true)) =>  write!(f, "source exists and has values"),
+            ExistsAndEmpty(Some(false)) => write!(f, "source exists, but is empty"),
+            ExistsAndEmpty(None) => write!(f, "source does not exist")
+        }
+    }
+}
+
 impl Clone for ExtDataSource {
     fn clone(&self) -> Self {
         Self {
@@ -1889,11 +1906,11 @@ impl ExtDataSource {
         &self.ty
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub fn exists_and_is_empty(&self) -> ExistsAndEmpty {
         if let Some(source) = self.source.load().as_ref() {
-            source.as_ref().is_empty()
+            ExistsAndEmpty(Some(source.as_ref().is_empty()))
         } else {
-            true
+            ExistsAndEmpty(None)
         }
     }
 
