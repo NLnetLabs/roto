@@ -302,6 +302,9 @@ impl Symbol {
                     self.value = r.into_type(&type_def)?;
                 }
             },
+            TypeDef::RawBgpMessage => { 
+                return Err(CompileError::new("Raw BGP message value can't be converted.".into())) 
+            },
             TypeDef::LocalPref => {
                 if let TypeValue::Builtin(BuiltinTypeValue::LocalPref(r)) = self.value {
                     self.value = r.into_type(&type_def)?;

@@ -514,6 +514,58 @@ impl PartialEq for RawBgpMessage {
 
 impl Eq for RawBgpMessage {}
 
+impl RotoType for RawBgpMessage {
+    fn get_props_for_method(
+        _ty: TypeDef,
+        _method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, CompileError>
+    where
+        Self: std::marker::Sized {
+        todo!()
+    }
+
+    fn into_type(
+        self,
+        _type_value: &TypeDef,
+    ) -> Result<TypeValue, CompileError>
+    where
+        Self: std::marker::Sized {
+        todo!()
+    }
+
+    fn exec_value_method<'a>(
+        &'a self,
+        _method_token: usize,
+        _args: &'a [StackValue],
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+
+    fn exec_consume_value_method(
+        self,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+        todo!()
+    }
+
+    fn exec_type_method<'a>(
+        _method_token: usize,
+        _args: &[StackValue],
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+}
+
+impl From<RawBgpMessage> for TypeValue {
+    fn from(raw: RawBgpMessage) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::RawBgpMessage(Arc::new(raw)))
+    }
+}
+
 // pub as_path: ChangedOption<AsPath<Vec<MaterializedPathSegment>>>,
 //     pub origin_type: ChangedOption<OriginType>,
 //     pub next_hop: ChangedOption<NextHop>,

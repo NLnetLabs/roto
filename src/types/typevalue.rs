@@ -218,6 +218,9 @@ impl TypeValue {
             TypeValue::Builtin(BuiltinTypeValue::Route(route)) => {
                 route.exec_value_method(method_token, args, return_type)
             }
+            TypeValue::Builtin(BuiltinTypeValue::RawBgpMessage(raw)) => {
+                raw.exec_value_method(method_token, args, return_type)
+            }
             TypeValue::Builtin(BuiltinTypeValue::Community(community)) => {
                 community.exec_value_method(method_token, args, return_type)
             }
@@ -331,6 +334,8 @@ impl TypeValue {
             }
             TypeValue::Builtin(BuiltinTypeValue::Route(route)) => route
                 .exec_consume_value_method(method_token, args, return_type),
+            TypeValue::Builtin(BuiltinTypeValue::RawBgpMessage(_raw)) => 
+                Err(VmError::InvalidMethodCall),
             TypeValue::Builtin(BuiltinTypeValue::Communities(communities)) => {
                 // let l = communities.into_iter().map(|c| ElementTypeValue::Primitive(c.into())).collect::<Vec<_>>();
                 communities.exec_consume_value_method(

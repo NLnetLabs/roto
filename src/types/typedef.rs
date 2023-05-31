@@ -34,6 +34,8 @@ pub enum TypeDef {
     // Collection Types
     List(Box<TypeDef>),
     Record(Vec<NamedTypeDef>),
+    // A raw BGP message as bytes
+    RawBgpMessage,
     // Builtin Types
     U32,
     U8,
@@ -238,6 +240,9 @@ impl TypeDef {
             TypeDef::List(_) => {
                 List::get_props_for_method(self.clone(), method_name)
             }
+            TypeDef::RawBgpMessage => {
+                RawRouteWithDeltas::get_props_for_method(self.clone(), method_name)
+            }
             TypeDef::U32 => {
                 U32::get_props_for_method(self.clone(), method_name)
             }
@@ -398,6 +403,7 @@ impl std::fmt::Display for TypeDef {
             TypeDef::Asn => write!(f, "Asn"),
             TypeDef::IpAddress => write!(f, "IpAddress"),
             TypeDef::Route => write!(f, "Route"),
+            TypeDef::RawBgpMessage => write!(f, "RawBgpMessage"),
             TypeDef::Rib(rib) => write!(f, "Rib of {}", rib),
             TypeDef::Table(table) => write!(f, "Table of {}", table),
             TypeDef::OutputStream(stream) => write!(f, "Output Stream of {}", stream),
@@ -560,6 +566,7 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::Community(_) => TypeDef::Community,
             BuiltinTypeValue::Communities(_) =>  TypeDef::List(Box::new(TypeDef::Community)),
             BuiltinTypeValue::Route(_) => TypeDef::Route,
+            BuiltinTypeValue::RawBgpMessage(_) => TypeDef::RawBgpMessage,
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
             BuiltinTypeValue::LocalPref(_) => TypeDef::LocalPref,
@@ -588,6 +595,7 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::Communities(_) => TypeDef::List(Box::new(TypeDef::Community)),
             BuiltinTypeValue::OriginType(_) => TypeDef::OriginType,
             BuiltinTypeValue::Route(_) => TypeDef::Route,
+            BuiltinTypeValue::RawBgpMessage(_) => TypeDef::RawBgpMessage,
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
             BuiltinTypeValue::LocalPref(_) => TypeDef::LocalPref,
