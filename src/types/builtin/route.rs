@@ -498,7 +498,7 @@ pub struct RawBgpMessage {
 }
 
 impl RawBgpMessage {
-    fn new(message_id: (RotondaId, u64), raw_message: UpdateMessage) -> Self {
+    pub fn new(message_id: (RotondaId, u64), raw_message: UpdateMessage) -> Self {
         Self {
             message_id,
             raw_message,
