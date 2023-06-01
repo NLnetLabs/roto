@@ -8,11 +8,11 @@ use std::{
 use crate::{
     ast::{self, AcceptReject, CompareOp, ShortString},
     compile::{CompileError, MirBlock},
-    traits::{RotoType, Token},
+    traits::{RotoRib, RotoType, Token},
     types::{
         builtin::{Boolean, BuiltinTypeValue},
         collections::{ElementTypeValue, Record},
-        datasources::{DataSourceMethodValue, Rib, Table},
+        datasources::{DataSourceMethodValue, Table},
         typedef::TypeDef,
         typevalue::TypeValue,
     },
@@ -24,7 +24,7 @@ use log::{debug, log_enabled, trace, Level};
 //------------ Stack --------------------------------------------------------
 
 #[derive(Debug, Clone)]
-pub(crate) enum StackRefPos {
+pub enum StackRefPos {
     // index into LinearMemory
     MemPos(u32),
     // index into a Table (which is a vec of shared Records)
@@ -88,7 +88,7 @@ impl<'a> Stack {
 pub enum StackValue<'a> {
     Ref(&'a TypeValue),
     Arc(Arc<TypeValue>),
-    Owned(TypeValue)
+    Owned(TypeValue),
 }
 
 impl<'a> AsRef<TypeValue> for StackValue<'a> {
@@ -96,7 +96,7 @@ impl<'a> AsRef<TypeValue> for StackValue<'a> {
         match self {
             StackValue::Ref(r) => r,
             StackValue::Arc(r) => r,
-            StackValue::Owned(r) => r
+            StackValue::Owned(r) => r,
         }
     }
 }
@@ -634,8 +634,11 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                 StackRefPos::TablePos(token, pos) => {
                     let ds = &self.data_sources.as_ref()[token];
                     match ds.get_at_field_index(pos, sr.field_index) {
-                        Some(v) => unwind_stack.push(StackValue::Arc(v.into())),
-                        None => unwind_stack.push(StackValue::Owned(TypeValue::Unknown))
+                        Some(v) => {
+                            unwind_stack.push(StackValue::Arc(v.into()))
+                        }
+                        None => unwind_stack
+                            .push(StackValue::Owned(TypeValue::Unknown)),
                     }
                 }
             }
@@ -655,28 +658,31 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
         let len = stack.0.len();
         let stack_part = stack.0.split_off(len - elem_num as usize);
 
-        let take_vec = stack_part.iter().map(|sr| match sr.pos.clone() {
-            StackRefPos::MemPos(pos) => {
-                let v = mem
-                    .get_mp_field_by_index(pos as usize, sr.field_index)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "Uninitialized memory in position {}",
-                            pos
-                        );
-                    });
-                StackValue::Ref(v)
-            }
-            StackRefPos::TablePos(token, pos) => {
-                let ds = &self.data_sources.as_ref()[token];
-                let v = ds.get_at_field_index(pos, sr.field_index);
-                if let Some(v) = v {
-                    StackValue::Arc(v.into())
-                } else {
-                    StackValue::Owned(TypeValue::Unknown)
+        let take_vec = stack_part
+            .iter()
+            .map(|sr| match sr.pos.clone() {
+                StackRefPos::MemPos(pos) => {
+                    let v = mem
+                        .get_mp_field_by_index(pos as usize, sr.field_index)
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "Uninitialized memory in position {}",
+                                pos
+                            );
+                        });
+                    StackValue::Ref(v)
                 }
-            }
-        }).collect();
+                StackRefPos::TablePos(token, pos) => {
+                    let ds = &self.data_sources.as_ref()[token];
+                    let v = ds.get_at_field_index(pos, sr.field_index);
+                    if let Some(v) = v {
+                        StackValue::Arc(v.into())
+                    } else {
+                        StackValue::Owned(TypeValue::Unknown)
+                    }
+                }
+            })
+            .collect();
 
         stack.clear();
         take_vec
@@ -699,9 +705,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
             .as_ref()
             .iter()
             .find(|ds| ds.token == token)
-            .and_then(|ds| {
-                ds.source.load_full().as_ref().map(Arc::clone)
-            })
+            .and_then(|ds| ds.source.load_full().as_ref().map(Arc::clone))
             .ok_or(VmError::DataSourceTokenNotFound(token))
     }
 
@@ -1131,7 +1135,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                             let stack_args =
                                 self._unwind_resolved_stack_into_vec(mem);
 
-                            let v = ds.as_ref().exec_method(
+                            let v = ds.exec_method(
                                 method_token.into(),
                                 &stack_args[..],
                                 TypeDef::Unknown,
@@ -1401,21 +1405,24 @@ impl<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> VmBuilder<MB, EDS> {
 
     pub fn build(self) -> Result<VirtualMachine<MB, EDS>, VmError> {
         // data sources need to be complete. Check that.
-        println!("data sources in builder");
+        debug!("data sources in builder");
         let data_sources = if let Some(data_sources) = self.data_sources {
             for ds in data_sources.as_ref().iter() {
-                println!("{:?}", ds);
-                println!("{}", ds.exists_and_is_empty());
+                trace!("{}", ds.exists_and_is_empty());
                 match ds.exists_and_is_empty() {
-                    ExistsAndEmpty(Some(_)) => {},
-                    ExistsAndEmpty(None) => { return Err(VmError::DataSourceNotInBuild(ds.get_name()))}
+                    ExistsAndEmpty(Some(_)) => {}
+                    ExistsAndEmpty(None) => {
+                        return Err(VmError::DataSourceNotInBuild(
+                            ds.get_name(),
+                        ))
+                    }
                 };
             }
             data_sources
         } else {
-            return Err(VmError::DataSourcesNotReady)
+            return Err(VmError::DataSourcesNotReady);
         };
-        
+
         if let Some(mir_code) = self.mir_code {
             Ok(VirtualMachine {
                 mir_code,
@@ -1461,7 +1468,7 @@ pub enum VmError {
     UnexpectedTermination,
     AsPathTooLong,
     DeltaLocked,
-    NoMir
+    NoMir,
 }
 
 impl Display for VmError {
@@ -1491,7 +1498,11 @@ impl Display for VmError {
                 f.write_str("DataSourceTokenNotFound")
             }
             VmError::DataSourceNotInBuild(ds_name) => {
-                write!(f, "Data source '{}' was not in the build arguments.", ds_name)
+                write!(
+                    f,
+                    "Data source '{}' was not in the build arguments.",
+                    ds_name
+                )
             }
             VmError::DataSourceEmpty(name) => {
                 write!(f, "DataSourceEmpty {}", name)
@@ -1509,7 +1520,7 @@ impl Display for VmError {
             }
             VmError::AsPathTooLong => f.write_str("AsPathTooLong"),
             VmError::DeltaLocked => f.write_str("DeltaLocked"),
-            VmError::NoMir => f.write_str("NoMir")
+            VmError::NoMir => f.write_str("NoMir"),
         }
     }
 }
@@ -1726,46 +1737,21 @@ pub enum OpCode {
     Exit(AcceptReject),
 }
 
-// struct VecPayload(Vec<(ShortString, TypeValue)>);
-
-// impl Payload for VecPayload {
-//     fn set(&mut self, field: ShortString, data: TypeValue) {
-//         let field = &mut self.0.iter().find(|k| k.0 == field);
-//         let key = field.unwrap().0.clone();
-//         let _old = std::mem::replace(field, Some(&(key, data)));
-//     }
-
-//     fn get(&self, field: ShortString) -> Option<&TypeValue> {
-//         self.0.iter().find(|k| k.0 == field).map(|kv| &kv.1)
-//     }
-
-//     fn take_value(self) -> TypeValue {
-//         self
-//     }
-// }
-
-// pub trait Payload
-// where
-//     Self: std::fmt::Debug + std::fmt::Display,
-// {
-//     fn set_field(&mut self, field: ShortString, value: TypeValue);
-//     fn get(&self, field: ShortString) -> Option<&TypeValue>;
-//     fn take_value(self) -> TypeValue;
-// }
-
-#[derive(Debug)]
 pub enum DataSource {
     Table(Table),
-    Rib(Rib),
+    Rib(Arc<dyn RotoRib>),
 }
 
 impl DataSource {
-    pub fn table_from_records(name: &str, records: Vec<Record>) -> Result<Self, VmError> {
+    pub fn table_from_records(
+        name: &str,
+        records: Vec<Record>,
+    ) -> Result<Self, VmError> {
         match records.get(0) {
             Some(rec) => {
                 let ty = TypeDef::from(&TypeValue::Record(rec.clone()));
-                Ok(Self::Table(Table {ty, records}))
-            },
+                Ok(Self::Table(Table { ty, records }))
+            }
             None => Err(VmError::DataSourceEmpty(name.into())),
         }
     }
@@ -1799,57 +1785,26 @@ impl DataSource {
                 t.exec_ref_value_method(method_token, args, res_type)()
             }
             DataSource::Rib(ref r) => {
-                r.exec_ref_value_method(method_token, args, res_type)()
+                r.exec_ref_value_method(method_token, args, res_type)
             }
         }
     }
 
     pub fn get_type(&self) -> TypeDef {
         match &self {
-            DataSource::Table(t) => {
-                TypeDef::Table(Box::new(t.ty.clone()))
-            }
-            DataSource::Rib(r) => {
-                TypeDef::Rib(Box::new(r.ty.clone()))
-            }
-        }
-    }
-
-    pub fn get_len(&self) -> usize {
-        match &self {
-            DataSource::Table(t) => {
-                t.records.len()
-            }
-            DataSource::Rib(r) => {
-                r.records.len()
-            }
+            DataSource::Table(t) => t.ty.clone(),
+            DataSource::Rib(r) => r.get_type(),
         }
     }
 
     pub fn is_empty(&self) -> bool {
         match &self {
-            DataSource::Table(t) => {
-                t.records.is_empty()
-            }
-            DataSource::Rib(r) => {
-                r.records.is_empty()
-            }
+            DataSource::Table(t) => t.records.is_empty(),
+            DataSource::Rib(r) => r.is_empty(),
         }
     }
 }
 
-trait Source {
-    fn new(name: &str, token: usize, ty: TypeDef) -> Self;
-    fn get_by_key<'a>(&'a self, key: &str) -> Option<&'a Record>;
-    fn exec_ref_value_method<'a>(
-        &self,
-        method_token: usize,
-        args: &[&'a TypeValue],
-        res_type: TypeDef,
-    ) -> DataSourceMethodValue;
-}
-
-#[derive(Debug)]
 pub struct ExtDataSource {
     name: ShortString,
     token: usize,
@@ -1857,14 +1812,24 @@ pub struct ExtDataSource {
     source: ArcSwapOption<DataSource>,
 }
 
+impl std::fmt::Debug for ExtDataSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
 pub struct ExistsAndEmpty(Option<bool>);
 
 impl Display for ExistsAndEmpty {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self {
-            ExistsAndEmpty(Some(true)) =>  write!(f, "source exists and has values"),
-            ExistsAndEmpty(Some(false)) => write!(f, "source exists, but is empty"),
-            ExistsAndEmpty(None) => write!(f, "source does not exist")
+            ExistsAndEmpty(Some(true)) => {
+                write!(f, "source exists and has values")
+            }
+            ExistsAndEmpty(Some(false)) => {
+                write!(f, "source exists, but is empty")
+            }
+            ExistsAndEmpty(None) => write!(f, "source does not exist"),
         }
     }
 }
@@ -1875,7 +1840,7 @@ impl Clone for ExtDataSource {
             name: self.name.clone(),
             token: self.token,
             ty: self.ty.clone(),
-            source: if let Some(s) = &self.source.load_full() {
+            source: if let Some(s) = self.source.load().as_ref() {
                 ArcSwapOption::from(Some(Arc::clone(s)))
             } else {
                 ArcSwapOption::from(None)
@@ -1898,12 +1863,21 @@ impl ExtDataSource {
         self.name.clone()
     }
 
-    pub fn get_source(&self) -> &ArcSwapOption<DataSource> {
+    pub(crate) fn get_source(&self) -> &ArcSwapOption<DataSource> {
         &self.source
     }
 
     pub fn get_type(&self) -> &TypeDef {
         &self.ty
+    }
+
+    pub fn get_value_type(&self) -> TypeDef {
+        match &self.ty {
+            TypeDef::Table(t) => *t.clone(),
+            TypeDef::Rib(rec) => *rec.clone(),
+            TypeDef::OutputStream(s) => *s.clone(),
+            _ => self.ty.clone(),
+        }
     }
 
     pub fn exists_and_is_empty(&self) -> ExistsAndEmpty {

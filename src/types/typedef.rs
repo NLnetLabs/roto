@@ -3,6 +3,8 @@
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 
+use log::{debug, trace};
+
 use crate::compile::CompileError;
 use crate::traits::Token;
 use crate::types::collections::ElementTypeValue;
@@ -14,9 +16,10 @@ use crate::{
 };
 
 use super::builtin::{
-    AsPath, Asn, Boolean, Community, HexLiteral, IntegerLiteral, IpAddress,
-    OriginType, Prefix, PrefixLength, RawRouteWithDeltas, StringLiteral, U32,
-    U8, LocalPref, NextHop, AtomicAggregator, MultiExitDisc, Hop, RouteStatus,
+    AsPath, Asn, AtomicAggregator, Boolean, Community, HexLiteral, Hop,
+    IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, NextHop, OriginType,
+    Prefix, PrefixLength, RawRouteWithDeltas, RouteStatus, StringLiteral,
+    U32, U8,
 };
 use super::collections::Record;
 use super::datasources::{Rib, Table};
@@ -112,7 +115,10 @@ impl TypeDef {
         // their methods on the container (the datasource) and not on the
         // contained type. They don't have field access.
         let mut current_type_token: (TypeDef, Token) = (
-            if let TypeDef::Table(rec) | TypeDef::Rib(rec) | TypeDef::OutputStream(rec) = self {
+            if let TypeDef::Table(rec)
+            | TypeDef::Rib(rec)
+            | TypeDef::OutputStream(rec) = self
+            {
                 *rec.clone()
             } else {
                 self.clone()
@@ -147,9 +153,7 @@ impl TypeDef {
                 // that it does have them.
                 (TypeDef::Route, _) => {
                     current_type_token =
-                        RawRouteWithDeltas::get_props_for_field(
-                            field,
-                        )?;
+                        RawRouteWithDeltas::get_props_for_field(field)?;
                 }
                 _ => {
                     return Err(format!(
@@ -194,12 +198,21 @@ impl TypeDef {
     ) -> bool {
         if let TypeDef::Record(rec) = self {
             for (name, ty) in fields {
-                if !rec.iter().any(|(k, v)| k == name && v.as_ref() == *ty) {
+                if !rec
+                    .iter()
+                    .any(|(k, v)| k == name && v.as_ref() == *ty)
+                {
+                    debug!(
+                        "Error in field instance '{}' of type {}",
+                        name, ty
+                    );
+                    trace!("record {:?}", rec);
                     return false;
                 }
             }
             true
         } else {
+            trace!("no record, return false for type {}", self);
             false
         }
     }
@@ -211,11 +224,17 @@ impl TypeDef {
         if let TypeDef::Record(rec) = self {
             for (name, ty) in fields {
                 if !rec.iter().any(|(k, v)| k == name && v.as_ref() == ty) {
+                    debug!(
+                        "Error in field instance '{}' of type {}",
+                        name, ty
+                    );
+                    trace!("record {:?}", rec);
                     return false;
                 }
             }
             true
         } else {
+            debug!("no record, return false for type {}", self);
             false
         }
     }
@@ -228,20 +247,24 @@ impl TypeDef {
             TypeDef::Record(_) => {
                 Record::get_props_for_method(self.clone(), method_name)
             }
-            TypeDef::Rib(_) => {
-                Rib::get_props_for_method(self.clone(), method_name)
-            }
+            TypeDef::Rib(_) => Rib::get_props_for_method(self, method_name),
             TypeDef::Table(_) => {
                 Table::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::OutputStream(_) => {
-                OutputStreamMessage::get_props_for_method(self.clone(), method_name)
+                OutputStreamMessage::get_props_for_method(
+                    self.clone(),
+                    method_name,
+                )
             }
             TypeDef::List(_) => {
                 List::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::RawBgpMessage => {
-                RawRouteWithDeltas::get_props_for_method(self.clone(), method_name)
+                RawRouteWithDeltas::get_props_for_method(
+                    self.clone(),
+                    method_name,
+                )
             }
             TypeDef::U32 => {
                 U32::get_props_for_method(self.clone(), method_name)
@@ -290,13 +313,26 @@ impl TypeDef {
                 self.clone(),
                 method_name,
             ),
-            TypeDef::StringLiteral => StringLiteral::get_props_for_method(self.clone(), method_name),
+            TypeDef::StringLiteral => {
+                StringLiteral::get_props_for_method(self.clone(), method_name)
+            }
             TypeDef::AcceptReject(_) => todo!(),
             TypeDef::Unknown => todo!(),
-            TypeDef::LocalPref => LocalPref::get_props_for_method(self.clone(), method_name),
-            TypeDef::MultiExitDisc => MultiExitDisc::get_props_for_method(self.clone(), method_name),
-            TypeDef::NextHop => NextHop::get_props_for_method(self.clone(), method_name),
-            TypeDef::AtomicAggregator => AtomicAggregator::get_props_for_method(self.clone(), method_name),
+            TypeDef::LocalPref => {
+                LocalPref::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::MultiExitDisc => {
+                MultiExitDisc::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::NextHop => {
+                NextHop::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::AtomicAggregator => {
+                AtomicAggregator::get_props_for_method(
+                    self.clone(),
+                    method_name,
+                )
+            }
         }
     }
 
@@ -327,10 +363,12 @@ impl TypeDef {
                 U32::exec_type_method(method_token, args, return_type)
                     .unwrap()()
             }
-            TypeDef::StringLiteral => {
-                StringLiteral::exec_type_method(method_token, args, return_type)
-                    .unwrap()()
-            }
+            TypeDef::StringLiteral => StringLiteral::exec_type_method(
+                method_token,
+                args,
+                return_type,
+            )
+            .unwrap()(),
             TypeDef::Asn => {
                 Asn::exec_type_method(method_token, args, return_type)
                     .unwrap()()
@@ -406,7 +444,9 @@ impl std::fmt::Display for TypeDef {
             TypeDef::RawBgpMessage => write!(f, "RawBgpMessage"),
             TypeDef::Rib(rib) => write!(f, "Rib of {}", rib),
             TypeDef::Table(table) => write!(f, "Table of {}", table),
-            TypeDef::OutputStream(stream) => write!(f, "Output Stream of {}", stream),
+            TypeDef::OutputStream(stream) => {
+                write!(f, "Output Stream of {}", stream)
+            }
             TypeDef::PrefixLength => write!(f, "PrefixLength"),
             TypeDef::IntegerLiteral => write!(f, "IntegerLiteral"),
             TypeDef::U8 => write!(f, "U8"),
@@ -471,16 +511,21 @@ impl PartialEq<TypeValue> for TypeDef {
     fn eq(&self, other: &TypeValue) -> bool {
         match (self, other) {
             (a, TypeValue::Builtin(b)) => a == b,
-            (TypeDef::List(a), TypeValue::List(b)) => match (a.as_ref(), b) {
+            (a, TypeValue::List(b)) => match (a, b) {
                 (TypeDef::List(aa), List(bb)) => match &bb[0] {
                     ElementTypeValue::Nested(bb) => {
-                        return aa.as_ref() == bb.as_ref()
+                        trace!("element type value nested {}", bb);
+                        return aa.as_ref() == bb.as_ref();
                     }
                     ElementTypeValue::Primitive(bb) => {
-                        return aa.as_ref() == bb
+                        trace!("compare {} with primitive type value nested {}; result {}", aa, bb, aa.as_ref() == bb);
+                        return aa.as_ref() == bb;
                     }
                 },
-                _ => false,
+                _ => {
+                    trace!("False: {:?} <-> {:?}", a, b);
+                    false
+                }
             },
             (TypeDef::Record(a), TypeValue::Record(_b)) => self
                 ._check_record_fields_for_ref(
@@ -564,13 +609,17 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::OriginType(_) => TypeDef::OriginType,
             BuiltinTypeValue::AsPath(_) => TypeDef::AsPath,
             BuiltinTypeValue::Community(_) => TypeDef::Community,
-            BuiltinTypeValue::Communities(_) =>  TypeDef::List(Box::new(TypeDef::Community)),
+            BuiltinTypeValue::Communities(_) => {
+                TypeDef::List(Box::new(TypeDef::Community))
+            }
             BuiltinTypeValue::Route(_) => TypeDef::Route,
             BuiltinTypeValue::RawBgpMessage(_) => TypeDef::RawBgpMessage,
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
             BuiltinTypeValue::LocalPref(_) => TypeDef::LocalPref,
-            BuiltinTypeValue::AtomicAggregator(_) => TypeDef::AtomicAggregator,
+            BuiltinTypeValue::AtomicAggregator(_) => {
+                TypeDef::AtomicAggregator
+            }
             BuiltinTypeValue::NextHop(_) => TypeDef::NextHop,
             BuiltinTypeValue::MultiExitDisc(_) => TypeDef::MultiExitDisc,
         }
@@ -592,16 +641,20 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::Hop(_) => TypeDef::Hop,
             BuiltinTypeValue::AsPath(_) => TypeDef::AsPath,
             BuiltinTypeValue::Community(_) => TypeDef::Community,
-            BuiltinTypeValue::Communities(_) => TypeDef::List(Box::new(TypeDef::Community)),
+            BuiltinTypeValue::Communities(_) => {
+                TypeDef::List(Box::new(TypeDef::Community))
+            }
             BuiltinTypeValue::OriginType(_) => TypeDef::OriginType,
             BuiltinTypeValue::Route(_) => TypeDef::Route,
             BuiltinTypeValue::RawBgpMessage(_) => TypeDef::RawBgpMessage,
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
             BuiltinTypeValue::LocalPref(_) => TypeDef::LocalPref,
-            BuiltinTypeValue::AtomicAggregator(_) => TypeDef::AtomicAggregator,
+            BuiltinTypeValue::AtomicAggregator(_) => {
+                TypeDef::AtomicAggregator
+            }
             BuiltinTypeValue::NextHop(_) => TypeDef::NextHop,
-            BuiltinTypeValue::MultiExitDisc(_) => TypeDef::MultiExitDisc
+            BuiltinTypeValue::MultiExitDisc(_) => TypeDef::MultiExitDisc,
         }
     }
 }

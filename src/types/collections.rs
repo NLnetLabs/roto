@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use crate::ast::{RecordValueExpr, ShortString, ValueExpr};
 use crate::compile::CompileError;
 use crate::traits::{RotoType, TokenConvert};
-use crate::vm::{VmError, StackValue};
+use crate::vm::{StackValue, VmError};
 
 use super::builtin::{BuiltinTypeValue, U32};
 use super::typedef::{MethodProps, TypeDef};
@@ -76,24 +76,18 @@ impl PartialEq<TypeValue> for ElementTypeValue {
 impl PartialEq<StackValue<'_>> for &'_ ElementTypeValue {
     fn eq(&self, other: &StackValue) -> bool {
         match other {
-            StackValue::Ref(v) => {
-                match self {
-                    ElementTypeValue::Primitive(ov) => *v == ov,
-                    _ => false,
-                }
-            }
-            StackValue::Arc(v) => {
-                match self {
-                    ElementTypeValue::Primitive(ov) => **v == *ov,
-                    _ => false,
-                }
-            }
-            StackValue::Owned(v) => {
-                match self {
-                    ElementTypeValue::Primitive(ov) => v == ov,
-                    _ => false,
-                }
-            }
+            StackValue::Ref(v) => match self {
+                ElementTypeValue::Primitive(ov) => *v == ov,
+                _ => false,
+            },
+            StackValue::Arc(v) => match self {
+                ElementTypeValue::Primitive(ov) => **v == *ov,
+                _ => false,
+            },
+            StackValue::Owned(v) => match self {
+                ElementTypeValue::Primitive(ov) => v == ov,
+                _ => false,
+            },
         }
     }
 }
@@ -109,16 +103,30 @@ impl Default for ElementTypeValue {
 impl From<ValueExpr> for ElementTypeValue {
     fn from(value: ValueExpr) -> Self {
         match value {
-            ValueExpr::StringLiteral(s_lit) => ElementTypeValue::Primitive(s_lit.into()),
-            ValueExpr::IntegerLiteral(i_lit) => ElementTypeValue::Primitive(i_lit.into()),
-            ValueExpr::PrefixLengthLiteral(pl_lit) => ElementTypeValue::Primitive(pl_lit.into()),
-            ValueExpr::AsnLiteral(asn_lit) => ElementTypeValue::Primitive(asn_lit.into()),
-            ValueExpr::HexLiteral(hex_lit) => ElementTypeValue::Primitive(hex_lit.into()),
-            ValueExpr::BooleanLit(bool_lit) => ElementTypeValue::Primitive(bool_lit.into()),
+            ValueExpr::StringLiteral(s_lit) => {
+                ElementTypeValue::Primitive(s_lit.into())
+            }
+            ValueExpr::IntegerLiteral(i_lit) => {
+                ElementTypeValue::Primitive(i_lit.into())
+            }
+            ValueExpr::PrefixLengthLiteral(pl_lit) => {
+                ElementTypeValue::Primitive(pl_lit.into())
+            }
+            ValueExpr::AsnLiteral(asn_lit) => {
+                ElementTypeValue::Primitive(asn_lit.into())
+            }
+            ValueExpr::HexLiteral(hex_lit) => {
+                ElementTypeValue::Primitive(hex_lit.into())
+            }
+            ValueExpr::BooleanLit(bool_lit) => {
+                ElementTypeValue::Primitive(bool_lit.into())
+            }
             ValueExpr::PrefixMatchExpr(_) => todo!(),
             ValueExpr::ComputeExpr(_) => todo!(),
             ValueExpr::BuiltinMethodCallExpr(_) => todo!(),
-            ValueExpr::RecordExpr(rec) => ElementTypeValue::Nested(Box::new(rec.into())),
+            ValueExpr::RecordExpr(rec) => {
+                ElementTypeValue::Nested(Box::new(rec.into()))
+            }
         }
     }
 }
@@ -470,7 +478,7 @@ impl<'a> Record {
                 TypeValue::create_record(kvs)
             } else {
                 Err(CompileError::new(
-                    "Record fields do not match record type".into(),
+                    format!("Record fields do not match record type, expected instance of type {}, but got {:?}", ty, shortstring_vec)
                 ))
             }
         } else {

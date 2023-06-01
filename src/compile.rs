@@ -14,11 +14,14 @@ use crate::{
         SymbolKind, SymbolTable,
     },
     traits::Token,
-    types::{typedef::TypeDef, datasources::{Table, Rib}},
     types::typevalue::TypeValue,
+    types::{
+        datasources::Table,
+        typedef::TypeDef,
+    },
     vm::{
-        Command, CommandArg, ExtDataSource, ModuleArg,
-        ModuleArgsMap, OpCode, StackRefPos, VariablesMap, DataSource,
+        Command, CommandArg, DataSource, ExtDataSource, ModuleArg,
+        ModuleArgsMap, OpCode, StackRefPos, VariablesMap,
     },
 };
 
@@ -128,10 +131,7 @@ impl Rotolo {
                             .into(),
                         rx_type: p.rx_type.clone(),
                         tx_type: p.tx_type.clone(),
-                        data_sources: p
-                            .data_sources
-                            .as_slice()
-                            .into(),
+                        data_sources: p.data_sources.as_slice().into(),
                         mir: p.mir.clone().into(),
                     })
                 } else {
@@ -268,17 +268,22 @@ impl<
         name: &str,
         source: Arc<DataSource>,
     ) -> Result<(), CompileError> {
-        let f_ds = self.data_sources.as_ref().iter().find(|ds| ds.get_name() == name);
+        let f_ds = self
+            .data_sources
+            .as_ref()
+            .iter()
+            .find(|ds| ds.get_name() == name);
         let s_ty = source.get_type();
 
         let f_ds = if let Some(ds) = f_ds {
-            if ds.get_type() != &s_ty {
+            if ds.get_value_type() != s_ty {
+                trace!("{:?} != {:?}", ds.get_value_type(), s_ty);
                 return Err(CompileError::from(
                     format!(
                         "Fatal: Data source with name {} has the wrong content type, expected {}, but found {}",
                         name,
                         s_ty,
-                        ds.get_type(),
+                        ds.get_value_type(),
                     )
                 ));
             }
@@ -298,13 +303,7 @@ impl<
                 })
                 .into(),
             ),
-            DataSource::Rib(ref r) => Some(
-                DataSource::Rib(Rib {
-                    ty: s_ty,
-                    records: r.records.clone(),
-                })
-                .into(),
-            ),
+            DataSource::Rib(ref r) => Some(DataSource::Rib(r.clone()).into()),
         });
 
         Ok(())
@@ -993,16 +992,11 @@ fn compile_module(
                 global_table.get_data_source(&name).unwrap_or_else(|_| {
                     panic!("Fatal: Cannot find Token for data source.");
                 });
-            
+
             // W're only creating a data source with the name and token found
             // in the declaration in the source code. he actual source data
             // will only be needed at run-time
-            ExtDataSource::new(
-                &name,
-                resolved_ds.1,
-                resolved_ds.0,
-            )
-            
+            ExtDataSource::new(&name, resolved_ds.1, resolved_ds.0)
         })
         .collect::<Vec<_>>();
 

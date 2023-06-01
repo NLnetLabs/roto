@@ -48,8 +48,7 @@ fn test_data(
             .into(),
         )]));
 
-    let my_comms_type =
-        TypeDef::List(Box::new(TypeDef::List(Box::new(TypeDef::Community))));
+    let my_comms_type = (&comms).into();
 
     let my_nested_rec_type =
         TypeDef::new_record_type(vec![("counter", Box::new(TypeDef::U32))])
@@ -71,7 +70,7 @@ fn test_data(
         ("next-hop", Box::new(TypeDef::IpAddress)),
         ("med", Box::new(TypeDef::U32)),
         ("local-pref", Box::new(TypeDef::U32)),
-        ("communities", Box::new(my_comms_type)),
+        ("community", Box::new(my_comms_type)),
     ])
     .unwrap();
 
@@ -84,7 +83,7 @@ fn test_data(
             ("next-hop", next_hop),
             ("med", 80_u32.into()),
             ("local-pref", 20_u32.into()),
-            ("communities", comms),
+            ("community", comms),
         ],
     )
     .unwrap();

@@ -169,7 +169,7 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::Hop(h) => h.into_type(ty),
             BuiltinTypeValue::OriginType(v) => v.into_type(ty),
             BuiltinTypeValue::Route(r) => r.into_type(ty),
-            BuiltinTypeValue::RawBgpMessage(raw) => Err(CompileError::from(
+            BuiltinTypeValue::RawBgpMessage(_raw) => Err(CompileError::from(
                 "Cannot convert raw BGP message into any other type.",
             )),
             BuiltinTypeValue::RouteStatus(v) => v.into_type(ty),

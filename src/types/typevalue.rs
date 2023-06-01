@@ -429,20 +429,14 @@ impl Display for TypeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             TypeValue::Builtin(p) => write!(f, "{}", p),
-            TypeValue::List(l) => write!(f, "{} (List Element)", l),
+            TypeValue::List(l) => write!(f, "{} (List)", l),
             TypeValue::Record(r) => {
                 write!(f, "{} (Record)", r)
             }
-            // TypeValue::Rib(r) => {
-            //     write!(f, "{} (Rib Record)", r)
-            // }
-            // TypeValue::Table(r) => {
-            //     write!(f, "{} (Table Entry)", r)
-            // }
             TypeValue::OutputStreamMessage(m) => {
                 write!(f, "{} (Stream message)", m)
             }
-            TypeValue::SharedValue(sv) => write!(f, "{} Shared Value", sv),
+            TypeValue::SharedValue(sv) => write!(f, "{} (Shared Value)", sv),
             TypeValue::Unknown => write!(f, "Unknown"),
             TypeValue::UnInit => write!(f, "Uninitialized"),
         }
@@ -676,6 +670,18 @@ impl From<primitives::RouteStatus> for TypeValue {
 impl From<routecore::addr::Prefix> for TypeValue {
     fn from(value: routecore::addr::Prefix) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::Prefix(primitives::Prefix(value)))
+    }
+}
+
+impl TryFrom<&TypeValue> for routecore::addr::Prefix {
+    type Error = VmError;
+
+    fn try_from(value: &TypeValue) -> Result<Self, Self::Error> {
+        if let TypeValue::Builtin(BuiltinTypeValue::Prefix(primitives::Prefix(pfx))) = value {
+            Ok(*pfx)
+        } else {
+            Err(VmError::InvalidConversion)
+        }
     }
 }
 

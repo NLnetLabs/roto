@@ -46,8 +46,10 @@ fn test_data(
             .into(),
         )]));
 
-    let my_comms_type =
-        TypeDef::List(Box::new(TypeDef::List(Box::new(TypeDef::Community))));
+    // let my_comms_type =
+    //     TypeDef::List(Box::new(TypeDef::List(Box::new(TypeDef::Community))));
+
+    let my_comms_type = (&comms).into();
 
     let my_nested_rec_type =
         TypeDef::new_record_type(vec![("counter", Box::new(TypeDef::U32))])

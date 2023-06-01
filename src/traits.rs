@@ -1,8 +1,15 @@
 // =========== RotoFilter trait ============================================
 
-use crate::{types::{
-    typedef::{TypeDef, MethodProps}, typevalue::TypeValue,
-}, compile::CompileError, vm::{VmError, StackValue}};
+use crate::{
+    compile::CompileError,
+    types::{
+        collections::Record,
+        datasources::DataSourceMethodValue,
+        typedef::{MethodProps, TypeDef},
+        typevalue::TypeValue,
+    },
+    vm::{StackValue, VmError},
+};
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub enum Token {
@@ -73,7 +80,8 @@ impl From<Token> for usize {
             Token::TxType => 1,
             Token::Term(v) => v as usize,
             _ => {
-                panic!("Cannot convert {:?} to usize, and that's fatal.", 
+                panic!(
+                    "Cannot convert {:?} to usize, and that's fatal.",
                     token
                 );
             }
@@ -85,7 +93,9 @@ pub trait RotoType: Into<TypeValue>
 where
     Self: std::fmt::Debug + Sized,
 {
-    fn take_value(self) -> Self { self }
+    fn take_value(self) -> Self {
+        self
+    }
 
     fn get_props_for_method(
         ty: TypeDef,
@@ -129,4 +139,28 @@ where
     fn to_u8(&self) -> u8 {
         std::mem::size_of_val(self) as u8
     }
+}
+
+pub trait RotoRib {
+    fn exec_value_method<'a>(
+        &'a self,
+        method_token: usize,
+        args: &'a [StackValue],
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError>;
+
+    fn exec_ref_value_method<'a>(
+        &self,
+        method_token: usize,
+        args: &'a [StackValue],
+        res_type: TypeDef,
+    ) -> DataSourceMethodValue;
+
+    fn get_by_key<'a>(&'a self, key: &str) -> Option<&'a Record>;
+
+    fn len(&self) -> usize;
+
+    fn is_empty(&self) -> bool;
+
+    fn get_type(&self) -> TypeDef;
 }

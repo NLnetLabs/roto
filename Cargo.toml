@@ -22,3 +22,4 @@ smallvec = { version = "1.8", features = [ "const_generics" ] }
 
 [dev-dependencies]
 env_logger = "0.10"
+rotonda-store      = { version = "0.3.0-pre.2", git = "https://github.com/NLnetLabs/rotonda-store.git" }

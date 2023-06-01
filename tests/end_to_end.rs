@@ -1,14 +1,124 @@
+use std::sync::Arc;
+
+use log::debug;
 use roto::compile::Compiler;
 
-use roto::types::builtin::{
-    Asn, Community,
-};
+use roto::traits::RotoRib;
+use roto::types::builtin::{Asn, Community};
 use roto::types::collections::{ElementTypeValue, List, Record};
+use roto::types::datasources::{DataSourceMethodValue, RibToken};
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
-use roto::vm::{self, DataSource};
+use roto::vm::{self, DataSource, StackValue};
+use rotonda_store::prelude::MergeUpdate;
+use rotonda_store::{epoch, MatchOptions, MatchType};
 
 mod common;
+
+#[derive(Debug, Clone)]
+struct RibValue(Vec<TypeValue>);
+
+struct DataSourceRib {
+    store: rotonda_store::MultiThreadedStore<RibValue>,
+    ty: TypeDef,
+}
+
+impl MergeUpdate for RibValue {
+    fn merge_update(
+        &mut self,
+        update_record: RibValue,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.0 = update_record.0;
+        Ok(())
+    }
+
+    fn clone_merge_update(
+        &self,
+        update_meta: &Self,
+    ) -> Result<Self, Box<dyn std::error::Error>>
+    where
+        Self: std::marker::Sized,
+    {
+        let mut new_meta = update_meta.0.clone();
+        new_meta.push(self.0[0].clone());
+        Ok(RibValue(new_meta))
+    }
+}
+
+impl std::fmt::Display for RibValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
+
+impl RotoRib for DataSourceRib {
+    fn exec_value_method<'a>(
+        &'a self,
+        _method_token: usize,
+        _args: &'a [vm::StackValue],
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, vm::VmError> {
+        todo!()
+    }
+
+    fn exec_ref_value_method<'a>(
+        &'a self,
+        method: usize,
+        args: &'a [StackValue],
+        _res_type: TypeDef,
+    ) -> DataSourceMethodValue {
+        match RibToken::from(method) {
+            RibToken::Match => {
+                todo!()
+            }
+            RibToken::LongestMatch => {
+                debug!("longest match on rib");
+                let guard = epoch::pin();
+                self.store
+                    .match_prefix(
+                        &routecore::addr::Prefix::try_from(args[0].as_ref())
+                            .unwrap(),
+                        &MatchOptions {
+                            match_type: MatchType::LongestMatch,
+                            include_all_records: false,
+                            include_less_specifics: false,
+                            include_more_specifics: false,
+                        },
+                        &guard,
+                    )
+                    .prefix
+                    .map(|v| DataSourceMethodValue::TypeValue(v.into()))
+                    .unwrap_or_else(|| {
+                        DataSourceMethodValue::TypeValue(TypeValue::Unknown)
+                    })
+            }
+            RibToken::Contains => {
+                debug!("contains on rib");
+                todo!()
+            }
+            RibToken::Get => {
+                debug!("get on rib");
+                todo!()
+            }
+        }
+    }
+
+    fn get_by_key<'a>(&'a self, _key: &str) -> Option<&'a Record> {
+        todo!()
+    }
+
+    fn len(&self) -> usize {
+        todo!()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.store.prefixes_count() == 0
+    }
+
+    fn get_type(&self) -> TypeDef {
+        self.ty.clone()
+    }
+}
 
 fn test_data(
     name: &str,
@@ -17,10 +127,8 @@ fn test_data(
     println!("Evaluate module {}...", name);
 
     // Type coercion doesn't work here...
-    let module_arguments = vec![(
-        "extra_asn",
-        TypeValue::from(Asn::from(65534_u32))
-    )];
+    let module_arguments =
+        vec![("extra_asn", TypeValue::from(Asn::from(65534_u32)))];
 
     let mut c = Compiler::new();
     c.with_arguments(name, module_arguments)?;
@@ -36,7 +144,20 @@ fn test_data(
     let as_path = vec![Asn::from_u32(1)].into();
     let asn: TypeValue = Asn::from_u32(211321).into();
 
-    println!("{:?}", asn);
+    println!("ASN {:?}", asn);
+
+    let comms_list = List::new(vec![ElementTypeValue::Primitive(
+        Community::new(routecore::bgp::communities::Community::from([
+            127, 12, 13, 12,
+        ]))
+        .into(),
+    )]);
+
+    println!("comms list {}", comms_list);
+
+    // For some reason absolute type definitions don't work properly
+    // let my_comms_type =
+    //     TypeDef::List(Box::new(TypeDef::Community));
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
@@ -46,8 +167,11 @@ fn test_data(
             .into(),
         )]));
 
-    let my_comms_type =
-        TypeDef::List(Box::new(TypeDef::List(Box::new(TypeDef::Community))));
+    println!("comms instance {}", comms);
+
+    let my_comms_type: TypeDef = (&comms).into();
+
+    println!("comms type {}", my_comms_type);
 
     let my_nested_rec_type =
         TypeDef::new_record_type(vec![("counter", Box::new(TypeDef::U32))])
@@ -55,10 +179,7 @@ fn test_data(
 
     let _my_nested_rec_instance = Record::create_instance(
         &my_nested_rec_type,
-        vec![(
-            "counter",
-            1_u32.into(),
-        )],
+        vec![("counter", 1_u32.into())],
     )
     .unwrap();
 
@@ -69,7 +190,7 @@ fn test_data(
         ("next-hop", Box::new(TypeDef::IpAddress)),
         ("med", Box::new(TypeDef::U32)),
         ("local-pref", Box::new(TypeDef::U32)),
-        ("communities", Box::new(my_comms_type)),
+        ("community", Box::new(my_comms_type)),
     ])
     .unwrap();
 
@@ -82,15 +203,24 @@ fn test_data(
             ("next-hop", next_hop),
             ("med", 80_u32.into()),
             ("local-pref", 20_u32.into()),
-            ("communities", comms),
+            ("community", comms),
         ],
     )
     .unwrap();
 
-    let source_asns_type = TypeDef::new_record_type(vec![("asn", Box::new(TypeDef::Asn))])?;
-    let new_sa_rec = Record::create_instance(&source_asns_type, vec![
-        ("asn", Asn::from_u32(300).into())
-        ])?;
+    let source_asns_type =
+        TypeDef::new_record_type(vec![("asn", Box::new(TypeDef::Asn))])?;
+    let new_sa_rec = Record::create_instance(
+        &source_asns_type,
+        vec![("asn", Asn::from_u32(300).into())],
+    )?;
+
+    // external rib
+    let rib_rov = DataSourceRib {
+        store: rotonda_store::MultiThreadedStore::<RibValue>::new()?,
+        ty: my_rec_type,
+    };
+    let rib_rov_source = DataSource::Rib(Arc::new(rib_rov));
 
     let mem = &mut vm::LinearMemory::uninit();
 
@@ -99,11 +229,15 @@ fn test_data(
     println!("Used Data Sources");
     println!("{:#?}", &roto_pack.data_sources);
 
-    // table source_asns contains AsnLines { 
+    // table source_asns contains AsnLines {
     //     asn: Asn
     // }
-    let sources_asns = DataSource::table_from_records("source_asns", vec![new_sa_rec])?;
+    let sources_asns =
+        DataSource::table_from_records("source_asns", vec![new_sa_rec])?;
     roto_pack.set_source("source_asns", sources_asns.into())?;
+
+    println!("insert source rib-rov");
+    roto_pack.set_source("rib-rov", rib_rov_source.into())?;
 
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
@@ -111,9 +245,7 @@ fn test_data(
         .with_mir_code(roto_pack.mir)
         .build()?;
 
-    let res = vm
-        .exec(my_payload, None::<Record>, None, mem)
-        .unwrap();
+    let res = vm.exec(my_payload, None::<Record>, None, mem).unwrap();
 
     println!("\nRESULT");
     println!("action: {}", res.0);
