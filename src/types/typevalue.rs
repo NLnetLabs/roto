@@ -34,12 +34,6 @@ pub enum TypeValue {
     // A map of (key, value) pairs, where value can be any of the other types.
     // Always user-defined.
     Record(Record),
-    // A collection of Records, keyed on Prefix and with special methods for
-    // matching prefixes.
-    // Rib(Arc<Rib>),
-    // Another collections of Records, but in a tabular format without any
-    // key, e.g. parsed csv files.
-    // Table(Arc<Table>),
     // A Record meant to be handled by an Output stream.
     OutputStreamMessage(Arc<OutputStreamMessage>),
     // A wrapper around an immutable value that lives in an external
@@ -404,14 +398,6 @@ impl TypeValue {
                 args,
                 return_type,
             ),
-            // TypeValue::Rib(_rib) => {
-            //     Err(VmError::InvalidMethodCall)
-            //     // rib.exec_consume_value_method(method_token, args, return_type)
-            // }
-            // TypeValue::Table(_rec) => {
-            //     Err(VmError::InvalidMethodCall)
-            //     // rec.exec_consume_value_method(method_token, args, return_type)
-            // }
             TypeValue::OutputStreamMessage(_stream) => {
                 Err(VmError::InvalidMethodCall)
             }
