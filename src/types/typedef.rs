@@ -22,7 +22,7 @@ use super::builtin::{
     U32, U8,
 };
 use super::collections::Record;
-use super::datasources::{Rib, Table};
+use super::datasources::{RibType, Table};
 use super::outputs::OutputStreamMessage;
 use super::{
     builtin::BuiltinTypeValue, collections::List, typevalue::TypeValue,
@@ -30,7 +30,8 @@ use super::{
 
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub enum TypeDef {
-    // Data Sources
+    // Data Sources, the data field in the enum represents the contained
+    // type.
     Rib(Box<TypeDef>),
     Table(Box<TypeDef>),
     OutputStream(Box<TypeDef>),
@@ -163,31 +164,6 @@ impl TypeDef {
                     .into());
                 }
             };
-
-            // if let (TypeDef::Record(_fields), _) = current_type_token {
-            //     if let Some((_, (_, ty))) =
-            //         _fields.iter().enumerate().find(|(i, (ident, _))| {
-            //             index = *i;
-            //             ident == &field.ident.as_str()
-            //         })
-            //     {
-            //         // recurse into the TypeDef of self.
-            //         current_type_token = (ty, current_type_token.1);
-            //         current_type_token.1.push(index as u8);
-            //     } else {
-            //         return Err(format!(
-            //             "No field named '{}'",
-            //             field.ident.as_str()
-            //         )
-            //         .into());
-            //     }
-            // } else {
-            //     return Err(format!(
-            //         "No field named '{}'",
-            //         field.ident.as_str()
-            //     )
-            //     .into());
-            // }
         }
         Ok((current_type_token.0.clone(), current_type_token.1))
     }
@@ -247,7 +223,7 @@ impl TypeDef {
             TypeDef::Record(_) => {
                 Record::get_props_for_method(self.clone(), method_name)
             }
-            TypeDef::Rib(_) => Rib::get_props_for_method(self, method_name),
+            TypeDef::Rib(_) => RibType::get_props_for_method(self, method_name),
             TypeDef::Table(_) => {
                 Table::get_props_for_method(self.clone(), method_name)
             }
@@ -384,7 +360,7 @@ impl TypeDef {
             )
             .unwrap()(),
             TypeDef::Rib(_rib) => {
-                Rib::exec_type_method(method_token, args, return_type)
+                RibType::exec_type_method(method_token, args, return_type)
                     .unwrap()()
             }
             TypeDef::Table(_rec) => {
