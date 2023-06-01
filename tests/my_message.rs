@@ -27,7 +27,7 @@ fn test_data(
 
     println!("miscompilations");
     println!("{:?}", roto_packs.get_mis_compilations());
-    let roto_pack = roto_packs.inspect_pack(name)?;
+    let roto_pack = roto_packs.retrieve_public_as_arcs(name)?;
 
     let _count: TypeValue = 1_u32.into();
     let prefix: TypeValue =
@@ -48,8 +48,7 @@ fn test_data(
             .into(),
         )]));
 
-    let my_comms_type =
-        TypeDef::List(Box::new(TypeDef::List(Box::new(TypeDef::Community))));
+    let my_comms_type = (&comms).into();
 
     let my_nested_rec_type =
         TypeDef::new_record_type(vec![("counter", Box::new(TypeDef::U32))])
@@ -71,7 +70,7 @@ fn test_data(
         ("next-hop", Box::new(TypeDef::IpAddress)),
         ("med", Box::new(TypeDef::U32)),
         ("local-pref", Box::new(TypeDef::U32)),
-        ("communities", Box::new(my_comms_type)),
+        ("community", Box::new(my_comms_type)),
     ])
     .unwrap();
 
@@ -84,7 +83,7 @@ fn test_data(
             ("next-hop", next_hop),
             ("med", 80_u32.into()),
             ("local-pref", 20_u32.into()),
-            ("communities", comms),
+            ("community", comms),
         ],
     )
     .unwrap();
@@ -96,14 +95,14 @@ fn test_data(
     println!("Used Data Sources");
     println!("{:#?}", &roto_pack.data_sources);
 
-    let ds_ref = roto_pack.data_sources.iter().collect::<Vec<_>>();
+    let ds_ref = roto_pack.data_sources;
 
     println!("Start vm...");
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
-        .with_data_sources(ds_ref.as_slice())
+        .with_data_sources(ds_ref)
         .with_mir_code(roto_pack.mir)
-        .build();
+        .build()?;
 
     let res = vm
         .exec(my_payload, None::<Record>, None, mem)
@@ -118,12 +117,12 @@ fn test_data(
 }
 
 #[test]
-fn test_module_message() {
+fn test_module_message_1() {
     common::init();
     test_data(
-        "my-message-module",
+        "my-message-module-1",
         r###"
-        module my-message-module with my_asn: Asn {
+        module my-message-module-1 with my_asn: Asn {
             define {
                 // specify the types of that this filter receives
                 // and sends.
@@ -140,7 +139,50 @@ fn test_module_message() {
             
             action send-message {
                 mqtt.send({ 
-                    message: String.format("🤭 I encountered {}", my_asn),  
+                    message: String.format("🤭 I encountered ", my_asn),
+                    my_asn: my_asn
+                });
+            }
+
+            apply {
+                filter match rov-valid not matching {  
+                    send-message;
+                };
+            }
+        }
+
+        output-stream mqtt contains Message {
+             message: String,
+             asn: Asn
+        }
+        "###,
+    ).unwrap();
+}
+
+#[test]
+fn test_module_message_2() {
+    common::init();
+    test_data(
+        "my-message-module-2",
+        r###"
+        module my-message-module-2 with my_asn: Asn {
+            define {
+                // specify the types of that this filter receives
+                // and sends.
+                // rx_tx route: StreamRoute;
+                rx route: Route;
+                tx out: Route;
+            }
+
+            term rov-valid for route: Route {
+                match {
+                    route.as-path.origin() == my_asn;
+                }
+            }
+            
+            action send-message {
+                mqtt.send({ 
+                    message: String.format("🤭 I, the messager, saw {} in a BGP update.", my_asn),
                     my_asn: my_asn
                 });
             }

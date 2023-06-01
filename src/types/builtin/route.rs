@@ -25,7 +25,7 @@ use crate::{
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
     },
-    vm::VmError,
+    vm::{VmError, StackValue},
 };
 
 use super::{AsPath, BuiltinTypeValue, RouteStatus, NextHop, OriginType, Prefix};
@@ -498,7 +498,7 @@ pub struct RawBgpMessage {
 }
 
 impl RawBgpMessage {
-    fn new(message_id: (RotondaId, u64), raw_message: UpdateMessage) -> Self {
+    pub fn new(message_id: (RotondaId, u64), raw_message: UpdateMessage) -> Self {
         Self {
             message_id,
             raw_message,
@@ -513,6 +513,58 @@ impl PartialEq for RawBgpMessage {
 }
 
 impl Eq for RawBgpMessage {}
+
+impl RotoType for RawBgpMessage {
+    fn get_props_for_method(
+        _ty: TypeDef,
+        _method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, CompileError>
+    where
+        Self: std::marker::Sized {
+        todo!()
+    }
+
+    fn into_type(
+        self,
+        _type_value: &TypeDef,
+    ) -> Result<TypeValue, CompileError>
+    where
+        Self: std::marker::Sized {
+        todo!()
+    }
+
+    fn exec_value_method<'a>(
+        &'a self,
+        _method_token: usize,
+        _args: &'a [StackValue],
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+
+    fn exec_consume_value_method(
+        self,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+        todo!()
+    }
+
+    fn exec_type_method<'a>(
+        _method_token: usize,
+        _args: &[StackValue],
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+}
+
+impl From<RawBgpMessage> for TypeValue {
+    fn from(raw: RawBgpMessage) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::RawBgpMessage(Arc::new(raw)))
+    }
+}
 
 // pub as_path: ChangedOption<AsPath<Vec<MaterializedPathSegment>>>,
 //     pub origin_type: ChangedOption<OriginType>,
@@ -624,7 +676,7 @@ impl RotoType for RawRouteWithDeltas {
     fn exec_value_method<'a>(
         &'a self,
         _method: usize,
-        _args: &[&TypeValue],
+        _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<(dyn FnOnce() -> TypeValue + 'a)>, VmError> {
         todo!()
@@ -641,7 +693,7 @@ impl RotoType for RawRouteWithDeltas {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[&'a TypeValue],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -775,7 +827,7 @@ impl RotoType for RouteStatus {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _args: &[&TypeValue],
+        _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -792,7 +844,7 @@ impl RotoType for RouteStatus {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[&'a TypeValue],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()

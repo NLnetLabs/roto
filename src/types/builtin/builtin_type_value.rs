@@ -3,6 +3,7 @@
 // The built-in types
 
 use std::fmt::Display;
+use std::sync::Arc;
 
 use crate::compile::CompileError;
 use crate::traits::RotoType;
@@ -14,32 +15,36 @@ use super::super::typevalue::TypeValue;
 use super::{
     AsPath, Asn, AtomicAggregator, Boolean, Community, HexLiteral, Hop,
     IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, NextHop, OriginType,
-    Prefix, PrefixLength, RawRouteWithDeltas, StringLiteral, U32, U8, RouteStatus
+    Prefix, PrefixLength, RawBgpMessage, RawRouteWithDeltas, RouteStatus,
+    StringLiteral, U32, U8,
 };
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum BuiltinTypeValue {
-    U32(U32),                           // scalar
-    U8(U8),                             // scalar
-    IntegerLiteral(IntegerLiteral),     // scalar
-    StringLiteral(StringLiteral),       // scalar
-    Prefix(Prefix),                     // scalar
-    PrefixLength(PrefixLength),         // scalar
-    Community(Community),               // scalar
-    Communities(List),                  // vector
-    IpAddress(IpAddress),               // scalar
-    Asn(Asn),                           // scalar
-    AsPath(AsPath),                     // vector
-    Hop(Hop),                           // read-only scalar
-    OriginType(OriginType),             // scalar
-    Route(RawRouteWithDeltas),          // vector
+    U32(U32),                       // scalar
+    U8(U8),                         // scalar
+    IntegerLiteral(IntegerLiteral), // scalar
+    StringLiteral(StringLiteral),   // scalar
+    Prefix(Prefix),                 // scalar
+    PrefixLength(PrefixLength),     // scalar
+    Community(Community),           // scalar
+    Communities(List),              // vector
+    IpAddress(IpAddress),           // scalar
+    Asn(Asn),                       // scalar
+    AsPath(AsPath),                 // vector
+    Hop(Hop),                       // read-only scalar
+    OriginType(OriginType),         // scalar
+    Route(RawRouteWithDeltas),      // vector
+    // Used for filtering on the properties of the whole message,
+    // not taking into account any individual prefixes.
+    RawBgpMessage(Arc<RawBgpMessage>),  // ?
     LocalPref(LocalPref),               // scalar
     AtomicAggregator(AtomicAggregator), // scalar
     NextHop(NextHop),                   // scalar
     MultiExitDisc(MultiExitDisc),       // scalar
-    RouteStatus(RouteStatus), // scalar
-    Boolean(Boolean),         // scalar
-    HexLiteral(HexLiteral),   // scalar
+    RouteStatus(RouteStatus),           // scalar
+    Boolean(Boolean),                   // scalar
+    HexLiteral(HexLiteral),             // scalar
 }
 
 impl BuiltinTypeValue {
@@ -73,7 +78,7 @@ impl BuiltinTypeValue {
                 if let BuiltinTypeValue::StringLiteral(v) = value.into() {
                     BuiltinTypeValue::StringLiteral(v)
                 } else {
-                    return Err("Not a StringLiteral".into())
+                    return Err("Not a StringLiteral".into());
                 }
             }
             TypeDef::PrefixLength => {
@@ -164,6 +169,9 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::Hop(h) => h.into_type(ty),
             BuiltinTypeValue::OriginType(v) => v.into_type(ty),
             BuiltinTypeValue::Route(r) => r.into_type(ty),
+            BuiltinTypeValue::RawBgpMessage(_raw) => Err(CompileError::from(
+                "Cannot convert raw BGP message into any other type.",
+            )),
             BuiltinTypeValue::RouteStatus(v) => v.into_type(ty),
             BuiltinTypeValue::Boolean(v) => v.into_type(ty),
             BuiltinTypeValue::HexLiteral(v) => v.into_type(ty),
@@ -303,6 +311,9 @@ impl Display for BuiltinTypeValue {
                 write!(f, "{} (Origin Type)", v)
             }
             BuiltinTypeValue::Route(r) => write!(f, "{} (Route)", r),
+            BuiltinTypeValue::RawBgpMessage(raw) => {
+                write!(f, "{:X?} (RawBgpMesage)", **raw)
+            }
             BuiltinTypeValue::RouteStatus(v) => {
                 write!(f, "{} (Route Status)", v)
             }

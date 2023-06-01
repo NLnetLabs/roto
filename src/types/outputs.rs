@@ -6,10 +6,10 @@ use crate::{
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
     },
-    vm::VmError,
+    vm::{VmError, StackValue},
 };
 
-impl RotoType for OutputStream {
+impl RotoType for OutputStreamMessage {
     fn get_props_for_method(
         ty: TypeDef,
         method_name: &crate::ast::Identifier,
@@ -38,7 +38,7 @@ impl RotoType for OutputStream {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _args: &[&TypeValue],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
@@ -55,14 +55,14 @@ impl RotoType for OutputStream {
 
     fn exec_type_method<'a>(
         _method_token: usize,
-        _args: &[&'a TypeValue],
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 }
 
-impl std::fmt::Display for OutputStream {
+impl std::fmt::Display for OutputStreamMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Output stream with record type {:#?}", self.record_type)
     }
@@ -73,7 +73,7 @@ pub(crate) enum OutputStreamToken {
     Send,
 }
 
-impl TokenConvert for OutputStream {}
+impl TokenConvert for OutputStreamMessage {}
 
 impl From<usize> for OutputStreamToken {
     fn from(val: usize) -> Self {
@@ -91,15 +91,15 @@ impl From<OutputStreamToken> for usize {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct OutputStream {
+pub struct OutputStreamMessage {
     pub(crate) name: ShortString,
     pub(crate) topic: String,
     pub(crate) record_type: TypeDef,
     pub(crate) record: TypeValue,
 }
 
-impl From<OutputStream> for TypeValue {
-    fn from(_value: OutputStream) -> Self {
-        unimplemented!()
+impl From<OutputStreamMessage> for TypeValue {
+    fn from(msg: OutputStreamMessage) -> Self {
+        TypeValue::OutputStreamMessage(msg.into())
     }
 }

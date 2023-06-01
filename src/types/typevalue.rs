@@ -7,7 +7,7 @@ use crate::{
     ast::{ShortString, RecordValueExpr},
     compile::CompileError,
     traits::RotoType,
-    vm::{StackRef, StackRefPos, VmError}, attr_change_set::ScalarValue,
+    vm::{StackRef, StackRefPos, VmError, StackValue}, attr_change_set::ScalarValue,
 };
 
 use super::{
@@ -17,8 +17,7 @@ use super::{
         U8, primitives,
     },
     collections::{ElementTypeValue, List, Record},
-    datasources::{Rib, Table},
-    outputs::OutputStream,
+    outputs::OutputStreamMessage,
     typedef::TypeDef,
 };
 
@@ -37,12 +36,15 @@ pub enum TypeValue {
     Record(Record),
     // A collection of Records, keyed on Prefix and with special methods for
     // matching prefixes.
-    Rib(Arc<Rib>),
+    // Rib(Arc<Rib>),
     // Another collections of Records, but in a tabular format without any
     // key, e.g. parsed csv files.
-    Table(Arc<Table>),
-    // A Record meant to be handled by this Output stream.
-    OutputStream(Arc<OutputStream>),
+    // Table(Arc<Table>),
+    // A Record meant to be handled by an Output stream.
+    OutputStreamMessage(Arc<OutputStreamMessage>),
+    // A wrapper around an immutable value that lives in an external
+    // datasource, i.e. a table or a rib
+    SharedValue(Arc<TypeValue>),
     // Unknown is NOT EQUAL to empty or unitialized, e.g. it may be the
     // result of a search. A ternary logic value, if you will.
     Unknown,
@@ -176,7 +178,7 @@ impl TypeValue {
     pub(crate) fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        args: &'a [&TypeValue],
+        args: &'a [StackValue],
         return_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + '_>, VmError> {
         match self {
@@ -215,6 +217,9 @@ impl TypeValue {
             }
             TypeValue::Builtin(BuiltinTypeValue::Route(route)) => {
                 route.exec_value_method(method_token, args, return_type)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::RawBgpMessage(raw)) => {
+                raw.exec_value_method(method_token, args, return_type)
             }
             TypeValue::Builtin(BuiltinTypeValue::Community(community)) => {
                 community.exec_value_method(method_token, args, return_type)
@@ -258,15 +263,16 @@ impl TypeValue {
                 args,
                 return_type,
             ),
-            TypeValue::Rib(rib) => {
-                rib.exec_value_method(method_token, args, return_type)
-            }
-            TypeValue::Table(rec) => {
-                rec.exec_value_method(method_token, args, return_type)
-            }
-            TypeValue::OutputStream(stream) => {
+            // TypeValue::Rib(rib) => {
+            //     rib.exec_value_method(method_token, args, return_type)
+            // }
+            // TypeValue::Table(rec) => {
+            //     rec.exec_value_method(method_token, args, return_type)
+            // }
+            TypeValue::OutputStreamMessage(stream) => {
                 stream.exec_value_method(method_token, args, return_type)
             }
+            TypeValue::SharedValue(sv) => sv.exec_value_method(method_token, args, return_type),
             TypeValue::Unknown => Ok(Box::new(|| TypeValue::Unknown)),
             TypeValue::UnInit => {
                 panic!("Unitialized memory cannot be read. That's fatal.");
@@ -328,6 +334,8 @@ impl TypeValue {
             }
             TypeValue::Builtin(BuiltinTypeValue::Route(route)) => route
                 .exec_consume_value_method(method_token, args, return_type),
+            TypeValue::Builtin(BuiltinTypeValue::RawBgpMessage(_raw)) => 
+                Err(VmError::InvalidMethodCall),
             TypeValue::Builtin(BuiltinTypeValue::Communities(communities)) => {
                 // let l = communities.into_iter().map(|c| ElementTypeValue::Primitive(c.into())).collect::<Vec<_>>();
                 communities.exec_consume_value_method(
@@ -396,17 +404,18 @@ impl TypeValue {
                 args,
                 return_type,
             ),
-            TypeValue::Rib(_rib) => {
+            // TypeValue::Rib(_rib) => {
+            //     Err(VmError::InvalidMethodCall)
+            //     // rib.exec_consume_value_method(method_token, args, return_type)
+            // }
+            // TypeValue::Table(_rec) => {
+            //     Err(VmError::InvalidMethodCall)
+            //     // rec.exec_consume_value_method(method_token, args, return_type)
+            // }
+            TypeValue::OutputStreamMessage(_stream) => {
                 Err(VmError::InvalidMethodCall)
-                // rib.exec_consume_value_method(method_token, args, return_type)
             }
-            TypeValue::Table(_rec) => {
-                Err(VmError::InvalidMethodCall)
-                // rec.exec_consume_value_method(method_token, args, return_type)
-            }
-            TypeValue::OutputStream(_stream) => {
-                Err(VmError::InvalidMethodCall)
-            }
+            TypeValue::SharedValue(_sv) => panic!("Shared values cannot be consumed. They're read-only."),
             TypeValue::Unknown => Ok(Box::new(|| TypeValue::Unknown)),
             TypeValue::UnInit => {
                 panic!("Unitialized memory cannot be read. That's fatal.");
@@ -420,26 +429,21 @@ impl Display for TypeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             TypeValue::Builtin(p) => write!(f, "{}", p),
-            TypeValue::List(l) => write!(f, "{} (List Element)", l),
+            TypeValue::List(l) => write!(f, "{} (List)", l),
             TypeValue::Record(r) => {
                 write!(f, "{} (Record)", r)
             }
-            TypeValue::Rib(r) => {
-                write!(f, "{} (Rib Record)", r)
-            }
-            TypeValue::Table(r) => {
-                write!(f, "{} (Table Entry)", r)
-            }
-            TypeValue::OutputStream(m) => {
+            TypeValue::OutputStreamMessage(m) => {
                 write!(f, "{} (Stream message)", m)
             }
+            TypeValue::SharedValue(sv) => write!(f, "{} (Shared Value)", sv),
             TypeValue::Unknown => write!(f, "Unknown"),
             TypeValue::UnInit => write!(f, "Uninitialized"),
         }
     }
 }
 
-impl PartialOrd for &TypeValue {
+impl PartialOrd for TypeValue {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
             (
@@ -528,12 +532,12 @@ impl PartialOrd for &TypeValue {
             (TypeValue::Record(_), TypeValue::Record(_)) => {
                 panic!("Records are not comparable.")
             }
-            (TypeValue::Rib(_), TypeValue::Rib(_)) => {
-                panic!("Ribs are not comparable.")
-            }
-            (TypeValue::Table(_), TypeValue::Table(_)) => {
-                panic!("Tables are not comparable.")
-            }
+            // (TypeValue::Rib(_), TypeValue::Rib(_)) => {
+            //     panic!("Ribs are not comparable.")
+            // }
+            // (TypeValue::Table(_), TypeValue::Table(_)) => {
+            //     panic!("Tables are not comparable.")
+            // }
             (TypeValue::Unknown, TypeValue::Unknown) => {
                 panic!("Unknown is unsortable.")
             }
@@ -544,7 +548,7 @@ impl PartialOrd for &TypeValue {
     }
 }
 
-impl Ord for &TypeValue {
+impl Ord for TypeValue {
     fn cmp(&self, other: &Self) -> Ordering {
         match (self, other) {
             (
@@ -557,12 +561,12 @@ impl Ord for &TypeValue {
             (TypeValue::Record(_r1), TypeValue::Record(_r2)) => {
                 panic!("Records are not comparable.")
             }
-            (TypeValue::Rib(_r1), TypeValue::Rib(_r2)) => {
-                panic!("Ribs are not comparable.")
-            }
-            (TypeValue::Table(_r1), TypeValue::Table(_r2)) => {
-                panic!("Tables are not comparable.")
-            }
+            // (TypeValue::Rib(_r1), TypeValue::Rib(_r2)) => {
+            //     panic!("Ribs are not comparable.")
+            // }
+            // (TypeValue::Table(_r1), TypeValue::Table(_r2)) => {
+            //     panic!("Tables are not comparable.")
+            // }
             (TypeValue::Unknown, TypeValue::Unknown) => Ordering::Equal,
             (TypeValue::Builtin(_), _) => Ordering::Less,
             (_, TypeValue::Builtin(_)) => Ordering::Greater,
@@ -570,18 +574,40 @@ impl Ord for &TypeValue {
             (_, TypeValue::List(_)) => Ordering::Greater,
             (TypeValue::Record(_), _) => Ordering::Less,
             (_, TypeValue::Record(_)) => Ordering::Greater,
-            (TypeValue::Rib(_), _) => Ordering::Less,
-            (_, TypeValue::Rib(_)) => Ordering::Greater,
-            (TypeValue::Table(_), _) => Ordering::Less,
-            (_, TypeValue::Table(_)) => Ordering::Greater,
+            // (TypeValue::Rib(_), _) => Ordering::Less,
+            // (_, TypeValue::Rib(_)) => Ordering::Greater,
+            // (TypeValue::Table(_), _) => Ordering::Less,
+            // (_, TypeValue::Table(_)) => Ordering::Greater,
             (_, TypeValue::UnInit) => {
                 panic!("comparing with uninitialized memory.")
             }
             (TypeValue::UnInit, _) => {
                 panic!("comparing with uninitialized memory.")
             }
-            (TypeValue::OutputStream(_), _) => todo!(),
-            (_, TypeValue::OutputStream(_)) => todo!()
+            (TypeValue::OutputStreamMessage(_), _) => todo!(),
+            (_, TypeValue::OutputStreamMessage(_)) => todo!(),
+            (TypeValue::SharedValue(_), _) => Ordering::Less,
+            (_, TypeValue::SharedValue(_)) => Ordering::Greater,
+        }
+    }
+}
+
+impl<'a> TryFrom<StackValue<'a>> for bool {
+    type Error = VmError;
+
+    fn try_from(t: StackValue) -> Result<Self, Self::Error> {
+        match t {
+            StackValue::Ref(TypeValue::Builtin(BuiltinTypeValue::Boolean(ref b))) => {
+                Ok(b.0) //.ok_or(VmError::ImpossibleComparison)
+            }
+            StackValue::Arc(bv) => {
+                if let TypeValue::Builtin(BuiltinTypeValue::Boolean(ref b)) = *bv {
+                    Ok(b.0)
+                } else {
+                    Err(VmError::ImpossibleComparison)
+                }
+            }
+            _ => Err(VmError::ImpossibleComparison),
         }
     }
 }
@@ -589,9 +615,9 @@ impl Ord for &TypeValue {
 impl<'a> TryFrom<&'a TypeValue> for bool {
     type Error = VmError;
 
-    fn try_from(t: &'a TypeValue) -> Result<Self, Self::Error> {
+    fn try_from(t: &TypeValue) -> Result<Self, Self::Error> {
         match t {
-            TypeValue::Builtin(BuiltinTypeValue::Boolean(b)) => {
+            TypeValue::Builtin(BuiltinTypeValue::Boolean(ref b)) => {
                 Ok(b.0) //.ok_or(VmError::ImpossibleComparison)
             }
             _ => Err(VmError::ImpossibleComparison),
@@ -644,6 +670,18 @@ impl From<primitives::RouteStatus> for TypeValue {
 impl From<routecore::addr::Prefix> for TypeValue {
     fn from(value: routecore::addr::Prefix) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::Prefix(primitives::Prefix(value)))
+    }
+}
+
+impl TryFrom<&TypeValue> for routecore::addr::Prefix {
+    type Error = VmError;
+
+    fn try_from(value: &TypeValue) -> Result<Self, Self::Error> {
+        if let TypeValue::Builtin(BuiltinTypeValue::Prefix(primitives::Prefix(pfx))) = value {
+            Ok(*pfx)
+        } else {
+            Err(VmError::InvalidConversion)
+        }
     }
 }
 

@@ -1,10 +1,14 @@
 use roto::compile::Compiler;
 
-use roto::types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage, Prefix};
-use roto::types::collections::Record;
+use roto::types::builtin::{
+    Asn, Community,
+};
+use roto::types::collections::{ElementTypeValue, List, Record};
+use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
-use roto::vm;
-use routecore::bgp::message::SessionConfig;
+use roto::vm::{self, DataSource};
+
+mod common;
 
 fn test_data(
     name: &str,
@@ -12,70 +16,106 @@ fn test_data(
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Evaluate module {}...", name);
 
-    // Compile the source code in this example
-    let rotolo = Compiler::build(source_code)?;
-    let roto_pack = rotolo.retrieve_public_as_arcs(name)?;
+    // Type coercion doesn't work here...
+    let module_arguments = vec![(
+        "extra_asn",
+        TypeValue::from(Asn::from(65534_u32))
+    )];
 
-    // BGP UPDATE message containing MP_REACH_NLRI path attribute,
-    // comprising 5 IPv6 NLRIs
-    let buf = bytes::Bytes::from(vec![
-        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-        0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x88, 0x02, 0x00, 0x00, 0x00,
-        0x71, 0x80, 0x0e, 0x5a, 0x00, 0x02, 0x01, 0x20, 0xfc, 0x00, 0x00,
-        0x10, 0x00, 0x01, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x10, 0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x80, 0xfc, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x10, 0x40, 0x20, 0x01, 0x0d, 0xb8, 0xff, 0xff, 0x00,
-        0x00, 0x40, 0x20, 0x01, 0x0d, 0xb8, 0xff, 0xff, 0x00, 0x01, 0x40,
-        0x20, 0x01, 0x0d, 0xb8, 0xff, 0xff, 0x00, 0x02, 0x40, 0x20, 0x01,
-        0x0d, 0xb8, 0xff, 0xff, 0x00, 0x03, 0x40, 0x01, 0x01, 0x00, 0x40,
-        0x02, 0x06, 0x02, 0x01, 0x00, 0x00, 0x00, 0xc8, 0x80, 0x04, 0x04,
-        0x00, 0x00, 0x00, 0x00,
-    ]);
+    let mut c = Compiler::new();
+    c.with_arguments(name, module_arguments)?;
+    let roto_packs = c.build_from_compiler(source_code)?;
 
-    let update: UpdateMessage =
-        UpdateMessage::new(buf, SessionConfig::modern());
-    let prefixes: Vec<Prefix> =
-            update.0.nlris().iter().filter_map(|n| n.prefix().map(|p| p.into())).collect();
-    let msg_id = (RotondaId(0), 0);
+    let mut roto_pack = roto_packs.retrieve_public_as_refs(name)?;
+    let _count: TypeValue = 1_u32.into();
+    let prefix: TypeValue =
+        routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?
+            .into();
+    let next_hop: TypeValue =
+        std::net::IpAddr::V4(std::net::Ipv4Addr::new(193, 0, 0, 23)).into();
+    let as_path = vec![Asn::from_u32(1)].into();
+    let asn: TypeValue = Asn::from_u32(211321).into();
 
-    let payload: RawRouteWithDeltas = RawRouteWithDeltas::new_with_message(
-        msg_id,
-        prefixes[0],
-        update,
-    );
+    println!("{:?}", asn);
 
-    // Create the VM
+    let comms =
+        TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
+            Community::new(routecore::bgp::communities::Community::from([
+                127, 12, 13, 12,
+            ]))
+            .into(),
+        )]));
+
+    // let my_comms_type =
+    //     TypeDef::List(Box::new(TypeDef::List(Box::new(TypeDef::Community))));
+
+    let my_comms_type = (&comms).into();
+
+    let my_nested_rec_type =
+        TypeDef::new_record_type(vec![("counter", Box::new(TypeDef::U32))])
+            .unwrap();
+
+    let _my_nested_rec_instance = Record::create_instance(
+        &my_nested_rec_type,
+        vec![(
+            "counter",
+            1_u32.into(),
+        )],
+    )
+    .unwrap();
+
+    let my_rec_type = TypeDef::new_record_type(vec![
+        ("prefix", Box::new(TypeDef::Prefix)),
+        ("as-path", Box::new(TypeDef::AsPath)),
+        ("origin", Box::new(TypeDef::Asn)),
+        ("next-hop", Box::new(TypeDef::IpAddress)),
+        ("med", Box::new(TypeDef::U32)),
+        ("local-pref", Box::new(TypeDef::U32)),
+        ("communities", Box::new(my_comms_type)),
+    ])
+    .unwrap();
+
+    let my_payload = Record::create_instance(
+        &my_rec_type,
+        vec![
+            ("prefix", prefix),
+            ("as-path", as_path),
+            ("origin", asn),
+            ("next-hop", next_hop),
+            ("med", 80_u32.into()),
+            ("local-pref", 20_u32.into()),
+            ("communities", comms),
+        ],
+    )
+    .unwrap();
+
+    let source_asns_type = TypeDef::new_record_type(vec![("asn", Box::new(TypeDef::Asn))])?;
+    let new_sa_rec = Record::create_instance(&source_asns_type, vec![
+        ("asn", Asn::from_u32(300).into())
+        ])?;
+
+    let mem = &mut vm::LinearMemory::uninit();
+
     println!("Used Arguments");
     println!("{:#?}", &roto_pack.arguments);
     println!("Used Data Sources");
     println!("{:#?}", &roto_pack.data_sources);
 
-    let module_arguments = vec![(
-        "extra_asn",
-        // use Roto type coercion
-        TypeValue::from(65534_u32)
-    )];
-
-    let ds_ref = roto_pack.data_sources;
-    let args = rotolo.compile_arguments(name, module_arguments)?;
+    // table source_asns contains AsnLines { 
+    //     asn: Asn
+    // }
+    let sources_asns = DataSource::table_from_records("source_asns", vec![new_sa_rec])?;
+    roto_pack.set_source("source_asns", sources_asns.into())?;
 
     let mut vm = vm::VmBuilder::new()
-        .with_arguments(args)
-        .with_data_sources(ds_ref)
+        // .with_arguments(args)
+        .with_data_sources(roto_pack.data_sources)
         .with_mir_code(roto_pack.mir)
         .build()?;
 
-    let mem = &mut vm::LinearMemory::uninit();
-    let res = vm.exec(
-        payload,
-        None::<Record>,
-        // Some(module_arguments),
-        None,
-        mem,
-    )
-    .unwrap();
+    let res = vm
+        .exec(my_payload, None::<Record>, None, mem)
+        .unwrap();
 
     println!("\nRESULT");
     println!("action: {}", res.0);
@@ -85,7 +125,10 @@ fn test_data(
     Ok(())
 }
 
-fn main() {
+#[test]
+fn test_module_1() {
+    common::init();
+
     test_data(
         "in-module",
         r###"
@@ -95,39 +138,34 @@ fn main() {
                     // and sends.
                     // rx_tx route: StreamRoute;
                     rx route: Route;
-                    tx ext_route: ExtRoute;
+                    tx ext_route: Route;
 
                     // specify additional external data sets that will be consulted.
                     use table source_asns;
-                    use rib rib-rov;
 
                     // assignments
                     extra_in_table = source_asns.contains(extra_asn); // 0
                     route_in_table = source_asns.contains(route.as-path.origin()); // 1
                     
                     // this is aliasing, kinda' useless, but hey, it's allowed
-                    extra_extra = rib-extra.blixer.bla; // 2
-                    my_source = source_asns; // 3
+                    my_source = source_asns; // 2
 
                     // Some literals. Literals are turned into constants, but
                     // they can be converted to other types.
-                    prefix_len = 24; // 4
-                    ROV_INVALID_AS = 0xFFFFFF010; // 5
-                    some_bool = false; // 6
-
-                    // also supported is calling a field beyond a method call:
-                    found_prefix_pref = rib-rov.longest_match(route.prefix).local-pref; // 7
-
-                    found_prefix = rib-rov.longest_match(route.prefix); // 8
+                    prefix_len = 24; // 3
+                    ROV_INVALID_AS = 0xFFFFFF010; // 4
+                    some_bool = false; // 5
                     
                     // syntactically valid, but doesn't exist.
                     // my_basic_call = builtin_func();
 
                     // assignment to a field from an argument
-                    my_route_path = route.as-path; // 9
+                    my_route_path = route.as-path; // 6
                     
                     // prefix_len triggers a type conversion from IntegerLiteral to PrefixLength
-                    fixed_len_prefix = Prefix.from(route.prefix.address(), prefix_len); // 10
+                    fixed_len_prefix = Prefix.from(route.prefix.address(), prefix_len); // 7
+
+                    found_prefix_pref = 100;
 
                     my_my_route_path = my_route_path;
 
@@ -145,14 +183,9 @@ fn main() {
                 term rov-valid for route: Route {
                     match {
                         found_prefix_pref == route.local-pref;
-                        my_route_path.origin() == found_prefix.as-path.origin();
-                        extra_in_table;
                         fixed_len_prefix.len() == prefix_len;
-                        route.as-path.origin() == found_prefix.as-path.origin();
-                        (found_prefix.prefix.exists() && found_prefix.prefix.exists()) || route_in_table;
-                        found_prefix.prefix.len() == 24;
+                        extra_in_table;
                         route_in_table;
-                        route.prefix.len() <= found_prefix.prefix.len();
                     }
                 }
 
@@ -168,24 +201,23 @@ fn main() {
                         my_false;
                         //  rib-extra.contains(route.as-path.origin());
                         route.prefix.len() == 24;
-                        route.as-path.origin() == found_prefix.as-path.origin();
                     }
                 }
                
                 action set-best {
                    // This shouldn't be allowed, a filter does not get to
                    // decide where to write.
-                   // rib-rov.set-best(route);
                    // Doesn't work either, users can only modify the rx type of a module.
                    // route_in_table.set(true); 
                    // This should work. The filter is allowed to modify the
                    // route that flows through it.
                    route.local-pref.set(200);
-                   // route.origin.set(AS300);
+                //    route.origin.set(AS300);
                 }
 
                 action set-rov-invalid-asn-community {
-                    route.communities.push(ROV_INVALID_AS);
+                    // route.communities.push(ROV_INVALID_AS);
+                    route.local-pref.set(50);
                 }
 
                 apply {
@@ -206,32 +238,10 @@ fn main() {
                 }
             }
 
-            // comment
-            rib rib-extra contains ExtRoute { 
-                blaffer: U32, 
-                blooper: Prefix,
-                blixer: { 
-                    bla: U8, 
-                    salt: { 
-                        pp: Prefix 
-                    } 
-                }  
-            }
-
             table source_asns contains AsnLines { 
                 asn: Asn
             }
 
-            // yo, rib
-            rib rib-rov contains StreamRoute {
-                prefix: Prefix, // this is shit: it's the key
-                as-path: AsPath,
-                origin: Asn,
-                next-hop: IpAddress,
-                med: U32,
-                local-pref: U32,
-                community: [Community]
-            }
         "###,
     ).unwrap();
 }

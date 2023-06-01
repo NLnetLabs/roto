@@ -2,28 +2,32 @@ use std::{
     cell::RefCell,
     fmt::{Display, Formatter},
     ops::{Index, IndexMut},
+    sync::Arc,
 };
 
 use crate::{
     ast::{self, AcceptReject, CompareOp, ShortString},
     compile::{CompileError, MirBlock},
-    traits::{RotoType, Token},
+    traits::{RotoRib, RotoType, Token},
     types::{
         builtin::{Boolean, BuiltinTypeValue},
         collections::{ElementTypeValue, Record},
-        datasources::{DataSourceMethodValue, Rib, Table},
+        datasources::{DataSourceMethodValue, Table},
         typedef::TypeDef,
         typevalue::TypeValue,
     },
 };
 
-use log::{trace, debug, log_enabled, Level};
+use arc_swap::ArcSwapOption;
+use log::{debug, log_enabled, trace, Level};
+
+//------------ Stack --------------------------------------------------------
 
 #[derive(Debug, Clone)]
-pub(crate) enum StackRefPos {
+pub enum StackRefPos {
     // index into LinearMemory
     MemPos(u32),
-    // index into a Table (which is a vec of Records)
+    // index into a Table (which is a vec of shared Records)
     TablePos(Token, usize),
 }
 
@@ -79,6 +83,28 @@ impl<'a> Stack {
         self.0.clear();
     }
 }
+
+#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub enum StackValue<'a> {
+    Ref(&'a TypeValue),
+    Arc(Arc<TypeValue>),
+    Owned(TypeValue),
+}
+
+impl<'a> AsRef<TypeValue> for StackValue<'a> {
+    fn as_ref(&self) -> &TypeValue {
+        match self {
+            StackValue::Ref(r) => r,
+            StackValue::Arc(r) => r,
+            StackValue::Owned(r) => r,
+        }
+    }
+}
+
+// #[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
+// pub struct StackValueRef<SV>(SV);
+
+//------------ LinearMemory -------------------------------------------------
 
 #[derive(Debug)]
 pub struct LinearMemory([TypeValue; 512]);
@@ -173,9 +199,11 @@ impl LinearMemory {
                     }
                 }
                 Some(TypeValue::Builtin(BuiltinTypeValue::Route(route))) => {
-                    if let Some(v) = route.get_value_ref_for_field(field_index) {
-                       Some(v)
-                    } else { 
+                    if let Some(v) =
+                        route.get_value_ref_for_field(field_index)
+                    {
+                        Some(v)
+                    } else {
                         Some(&TypeValue::Unknown)
                     }
                 }
@@ -225,13 +253,13 @@ impl Display for LinearMemory {
 
 #[derive(Debug)]
 pub(crate) struct CommandArgsStack<'a> {
-    args: &'a Vec<Arg>,
+    args: &'a Vec<CommandArg>,
     args_counter: usize,
 }
 
 impl<'a> CommandArgsStack<'a> {
     // The counter counts down from the last element + 1.
-    fn new(args: &'a Vec<Arg>) -> Self {
+    fn new(args: &'a Vec<CommandArg>) -> Self {
         Self {
             args,
             args_counter: args.len(),
@@ -239,7 +267,7 @@ impl<'a> CommandArgsStack<'a> {
     }
 
     // Return the last item and decrement the counter.
-    fn pop(&mut self) -> Option<&'_ Arg> {
+    fn pop(&mut self) -> Option<&'_ CommandArg> {
         self.args_counter -= 1;
         self.args.get(self.args_counter)
     }
@@ -255,7 +283,7 @@ impl<'a> CommandArgsStack<'a> {
         // the first arg is the memory position index,
         // the second arg is the value to set on the
         // memory position.
-        if let Some(Arg::Constant(v)) = self.args.get(1).cloned() {
+        if let Some(CommandArg::Constant(v)) = self.args.get(1).cloned() {
             Ok(v)
         } else {
             Err(VmError::InvalidValueType)
@@ -263,7 +291,7 @@ impl<'a> CommandArgsStack<'a> {
     }
 
     // Pop two arguments, the stack is gone after this.
-    pub(crate) fn pop_2(mut self) -> (&'a Arg, &'a Arg) {
+    pub(crate) fn pop_2(mut self) -> (&'a CommandArg, &'a CommandArg) {
         self.args_counter -= 2;
         (
             self.args.get(self.args_counter + 1).unwrap(),
@@ -272,7 +300,9 @@ impl<'a> CommandArgsStack<'a> {
     }
 
     // Pop three arguments, the stack is gone after this.
-    pub(crate) fn pop_3(mut self) -> (&'a Arg, &'a Arg, &'a Arg) {
+    pub(crate) fn pop_3(
+        mut self,
+    ) -> (&'a CommandArg, &'a CommandArg, &'a CommandArg) {
         self.args_counter -= 3;
         (
             self.args.get(self.args_counter + 2).unwrap(),
@@ -283,15 +313,15 @@ impl<'a> CommandArgsStack<'a> {
 }
 
 impl<'a> Index<usize> for CommandArgsStack<'a> {
-    type Output = Arg;
+    type Output = CommandArg;
 
     fn index(&self, index: usize) -> &Self::Output {
         self.args.index(index)
     }
 }
 
-impl<'a> From<&'a Vec<Arg>> for CommandArgsStack<'a> {
-    fn from(value: &'a Vec<Arg>) -> Self {
+impl<'a> From<&'a Vec<CommandArg>> for CommandArgsStack<'a> {
+    fn from(value: &'a Vec<CommandArg>) -> Self {
         Self {
             args: value,
             args_counter: 0,
@@ -299,15 +329,21 @@ impl<'a> From<&'a Vec<Arg>> for CommandArgsStack<'a> {
     }
 }
 
+//------------ Argument -----------------------------------------------------
+
+// These are the module-level arguments, they can be compiled in when passed
+// in before compiling (`with_arguments()`), or they can be provided at run-
+// time.
+
 #[derive(Debug)]
-pub struct Argument {
+pub struct ModuleArg {
     pub(crate) name: ShortString,
     index: usize,
     ty: TypeDef,
     value: TypeValue,
 }
 
-impl Argument {
+impl ModuleArg {
     pub fn get_value(&self) -> &TypeValue {
         &self.value
     }
@@ -344,9 +380,87 @@ impl Argument {
 }
 
 #[derive(Default, Debug)]
-pub struct ArgumentsMap(Vec<Argument>);
+pub struct ModuleArgsMap(Vec<ModuleArg>);
 
-impl ArgumentsMap {
+impl ModuleArgsMap {
+    pub fn compile_arguments(
+        &self,
+        args: Vec<(&str, TypeValue)>,
+    ) -> Result<ModuleArgsMap, CompileError> {
+        // Walk over all the module arguments that were supplied and see if
+        // they match up with the ones in the source code.
+        let mut arguments_map = ModuleArgsMap::new();
+        let len = args.len();
+        for supplied_arg in args {
+            match self.iter().find(|a| supplied_arg.0 == a.get_name()) {
+                // The argument is in the source code
+                Some(found_arg) => {
+                    // nice, but do the types match?
+                    if found_arg.get_type() == supplied_arg.1 {
+                        // yes, they match
+                        arguments_map.insert(
+                            found_arg.get_name(),
+                            found_arg.get_index(),
+                            found_arg.get_type(),
+                            supplied_arg.1,
+                        )
+                    } else {
+                        // Ok, but maybe we can convert into the type we
+                        // need? Note that we can only try to convert if
+                        // it's a builtin type.
+                        match supplied_arg.1.into_builtin().and_then(|t| {
+                            t.try_into_type(&found_arg.get_type())
+                        }) {
+                            Ok(arg) => arguments_map.insert(
+                                found_arg.get_name(),
+                                found_arg.get_index(),
+                                found_arg.get_type(),
+                                arg,
+                            ),
+                            Err(_) => {
+                                return Err(format!("An invalid type was specified for argument: {}", supplied_arg.0).into());
+                            }
+                        };
+                    }
+                }
+                // The supplied argument is not in the source code.
+                None => {
+                    return Err(format!(
+                        "Can't find argument in source: {}",
+                        supplied_arg.0
+                    )
+                    .into())
+                }
+            }
+        }
+
+        // See if we got all the required arguments in the source code
+        // covered.
+        if arguments_map.len() != len {
+            let missing_args = self
+                .iter()
+                .filter(|a| {
+                    arguments_map.get_by_token_value(a.get_index()).is_none()
+                })
+                .map(|a| a.get_name())
+                .collect::<Vec<&str>>();
+
+            return Err(format!(
+                "Some arguments are missing: {:?}",
+                missing_args
+            )
+            .into());
+        }
+
+        Ok(arguments_map)
+    }
+
+    pub fn inspect_arguments(&self) -> Vec<(&str, TypeDef)> {
+        self.iter()
+            .map(|a| (a.get_name(), a.get_type()))
+            .collect::<Vec<_>>()
+    }
+
     pub fn take_value_by_token(
         &mut self,
         index: usize,
@@ -370,7 +484,7 @@ impl ArgumentsMap {
     }
 
     pub fn new() -> Self {
-        ArgumentsMap(Vec::new())
+        ModuleArgsMap(Vec::new())
     }
 
     pub fn len(&self) -> usize {
@@ -388,7 +502,7 @@ impl ArgumentsMap {
         ty: TypeDef,
         value: TypeValue,
     ) {
-        self.0.push(Argument {
+        self.0.push(ModuleArg {
             name: name.into(),
             index,
             ty,
@@ -404,26 +518,27 @@ impl ArgumentsMap {
         }
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, Argument> {
+    pub fn iter(&self) -> std::slice::Iter<'_, ModuleArg> {
         self.0.iter()
     }
 }
 
-impl IntoIterator for ArgumentsMap {
+impl IntoIterator for ModuleArgsMap {
     type IntoIter = std::vec::IntoIter<Self::Item>;
-    type Item = Argument;
+    type Item = ModuleArg;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }
 
-impl From<Vec<Argument>> for ArgumentsMap {
-    fn from(value: Vec<Argument>) -> Self {
+impl From<Vec<ModuleArg>> for ModuleArgsMap {
+    fn from(value: Vec<ModuleArg>) -> Self {
         Self(value)
     }
 }
 
+//------------ Variables ----------------------------------------------------
 #[derive(Debug)]
 pub struct VariableRef {
     pub var_token_value: usize,
@@ -462,18 +577,23 @@ impl VariablesMap {
     }
 }
 
-pub struct VirtualMachine<'a> {
+//------------ Virtual Machine ----------------------------------------------
+
+pub struct VirtualMachine<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
+{
     // _rx_type: TypeDef,
     // _tx_type: Option<TypeDef>,
-    mir_code: &'a [MirBlock],
-    data_sources: &'a [&'a ExtDataSource],
-    arguments: ArgumentsMap,
+    mir_code: MB,
+    data_sources: EDS,
+    arguments: ModuleArgsMap,
     stack: RefCell<Stack>,
 }
 
-impl<'a> VirtualMachine<'a> {
+impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
+    VirtualMachine<MB, EDS>
+{
     fn _move_rx_tx_to_mem(
-        &mut self,
+        &'a mut self,
         rx: impl RotoType,
         tx: Option<impl RotoType>,
         mem: &mut LinearMemory,
@@ -490,9 +610,10 @@ impl<'a> VirtualMachine<'a> {
     fn _unwind_resolved_stack_into_vec(
         &'a self,
         mem: &'a LinearMemory,
-    ) -> Vec<&'a TypeValue> {
+    ) -> Vec<StackValue> {
         let stack = self.stack.borrow_mut().unwind();
-        let mut unwind_stack = Vec::with_capacity(stack.len());
+        let mut unwind_stack: Vec<StackValue> =
+            Vec::with_capacity(stack.len());
         for sr in stack.into_iter() {
             match sr.pos {
                 StackRefPos::MemPos(pos) => {
@@ -508,13 +629,16 @@ impl<'a> VirtualMachine<'a> {
                                 pos
                             );
                         });
-                    unwind_stack.push(v);
+                    unwind_stack.push(StackValue::Ref(v));
                 }
                 StackRefPos::TablePos(token, pos) => {
-                    let ds = &self.data_sources[token];
-                    let v = ds.get_at_field_index(pos, sr.field_index);
-                    if let Some(v) = v {
-                        unwind_stack.push(v);
+                    let ds = &self.data_sources.as_ref()[token];
+                    match ds.get_at_field_index(pos, sr.field_index) {
+                        Some(v) => {
+                            unwind_stack.push(StackValue::Arc(v.into()))
+                        }
+                        None => unwind_stack
+                            .push(StackValue::Owned(TypeValue::Unknown)),
                     }
                 }
             }
@@ -528,17 +652,15 @@ impl<'a> VirtualMachine<'a> {
         &'a self,
         elem_num: u32, // number of elements to take
         mem: &'a LinearMemory,
-    ) -> Vec<&'a TypeValue> {
+    ) -> Vec<StackValue> {
         let mut stack = self.stack.borrow_mut();
 
-        // Do not bother to write the vec, it'll be fine at the end of the
-        // method.
-        let mut take_elms = Vec::with_capacity(elem_num as usize);
-        unsafe { Vec::set_len(&mut take_elms, elem_num as usize) };
+        let len = stack.0.len();
+        let stack_part = stack.0.split_off(len - elem_num as usize);
 
-        for count in 0..elem_num {
-            let sr = stack.pop().unwrap();
-            match sr.pos {
+        let take_vec = stack_part
+            .iter()
+            .map(|sr| match sr.pos.clone() {
                 StackRefPos::MemPos(pos) => {
                     let v = mem
                         .get_mp_field_by_index(pos as usize, sr.field_index)
@@ -548,19 +670,22 @@ impl<'a> VirtualMachine<'a> {
                                 pos
                             );
                         });
-                    take_elms[(elem_num - count - 1) as usize] = v;
+                    StackValue::Ref(v)
                 }
                 StackRefPos::TablePos(token, pos) => {
-                    let ds = &self.data_sources[token];
+                    let ds = &self.data_sources.as_ref()[token];
                     let v = ds.get_at_field_index(pos, sr.field_index);
                     if let Some(v) = v {
-                        take_elms[(elem_num - count - 1) as usize] = v;
+                        StackValue::Arc(v.into())
+                    } else {
+                        StackValue::Owned(TypeValue::Unknown)
                     }
                 }
-            }
-        }
+            })
+            .collect();
+
         stack.clear();
-        take_elms
+        take_vec
     }
 
     fn as_vec(&'a self) -> Vec<StackRef> {
@@ -575,23 +700,23 @@ impl<'a> VirtualMachine<'a> {
     fn get_data_source(
         &self,
         token: usize,
-    ) -> Result<&ExtDataSource, VmError> {
+    ) -> Result<Arc<DataSource>, VmError> {
         self.data_sources
+            .as_ref()
             .iter()
             .find(|ds| ds.token == token)
-            .copied()
-            .ok_or(VmError::DataSourceNotFound(token))
+            .and_then(|ds| ds.source.load_full().as_ref().map(Arc::clone))
+            .ok_or(VmError::DataSourceTokenNotFound(token))
     }
 
     pub fn exec(
         &'a mut self,
         rx: impl RotoType,
         tx: Option<impl RotoType>,
-        // define level arguments, not used yet! Todo
-        mut _arguments: Option<ArgumentsMap>,
+        // define module-level arguments, not used yet! Todo
+        mut _arguments: Option<ModuleArgsMap>,
         mem: &mut LinearMemory,
-    ) -> Result<(AcceptReject, TypeValue, Option<TypeValue>), VmError>
-    {
+    ) -> Result<(AcceptReject, TypeValue, Option<TypeValue>), VmError> {
         if log_enabled!(Level::Debug) {
             debug!("\nstart executing vm...");
         }
@@ -602,7 +727,7 @@ impl<'a> VirtualMachine<'a> {
         for MirBlock {
             command_stack,
             ty: _,
-        } in self.mir_code
+        } in self.mir_code.as_ref()
         {
             if log_enabled!(Level::Trace) {
                 trace!("\n\n--mirblock------------------");
@@ -620,15 +745,15 @@ impl<'a> VirtualMachine<'a> {
                     OpCode::Cmp => {
                         let stack_args =
                             self._unwind_resolved_stack_into_vec(mem);
-                        let left = stack_args[0];
-                        let right = stack_args[1];
-                        
+                        let left = stack_args[0].as_ref();
+                        let right = stack_args[1].as_ref();
+
                         if log_enabled!(Level::Trace) {
                             trace!(" {:?} <-> {:?}", left, right);
                         }
 
                         match args[0] {
-                            Arg::CompareOp(CompareOp::Eq) => {
+                            CommandArg::CompareOp(CompareOp::Eq) => {
                                 let res = left == right;
                                 mem.set_mem_pos(
                                     0xff,
@@ -642,7 +767,7 @@ impl<'a> VirtualMachine<'a> {
                                     .borrow_mut()
                                     .push(StackRefPos::MemPos(0xff))?;
                             }
-                            Arg::CompareOp(CompareOp::Ne) => {
+                            CommandArg::CompareOp(CompareOp::Ne) => {
                                 let res = left != right;
                                 mem.set_mem_pos(
                                     0xff,
@@ -656,7 +781,7 @@ impl<'a> VirtualMachine<'a> {
                                     .borrow_mut()
                                     .push(StackRefPos::MemPos(0xff))?;
                             }
-                            Arg::CompareOp(CompareOp::Lt) => {
+                            CommandArg::CompareOp(CompareOp::Lt) => {
                                 let res = left < right;
                                 mem.set_mem_pos(
                                     0xff,
@@ -670,7 +795,7 @@ impl<'a> VirtualMachine<'a> {
                                     .borrow_mut()
                                     .push(StackRefPos::MemPos(0xff))?;
                             }
-                            Arg::CompareOp(CompareOp::Le) => {
+                            CommandArg::CompareOp(CompareOp::Le) => {
                                 let res = left <= right;
                                 mem.set_mem_pos(
                                     0xff,
@@ -684,7 +809,7 @@ impl<'a> VirtualMachine<'a> {
                                     .borrow_mut()
                                     .push(StackRefPos::MemPos(0xff))?;
                             }
-                            Arg::CompareOp(CompareOp::Gt) => {
+                            CommandArg::CompareOp(CompareOp::Gt) => {
                                 let res = left > right;
                                 mem.set_mem_pos(
                                     0xff,
@@ -698,7 +823,7 @@ impl<'a> VirtualMachine<'a> {
                                     .borrow_mut()
                                     .push(StackRefPos::MemPos(0xff))?;
                             }
-                            Arg::CompareOp(CompareOp::Ge) => {
+                            CommandArg::CompareOp(CompareOp::Ge) => {
                                 let res = left >= right;
                                 mem.set_mem_pos(
                                     0xff,
@@ -712,7 +837,7 @@ impl<'a> VirtualMachine<'a> {
                                     .borrow_mut()
                                     .push(StackRefPos::MemPos(0xff))?;
                             }
-                            Arg::CompareOp(CompareOp::Or) => {
+                            CommandArg::CompareOp(CompareOp::Or) => {
                                 let l = left.try_into()?;
                                 let r = right.try_into()?;
                                 let res = l || r;
@@ -728,7 +853,7 @@ impl<'a> VirtualMachine<'a> {
                                     .borrow_mut()
                                     .push(StackRefPos::MemPos(0xff))?;
                             }
-                            Arg::CompareOp(CompareOp::And) => {
+                            CommandArg::CompareOp(CompareOp::And) => {
                                 let res =
                                     left.try_into()? && right.try_into()?;
                                 mem.set_mem_pos(
@@ -752,21 +877,24 @@ impl<'a> VirtualMachine<'a> {
                             trace!("Stack {:?}", self.stack);
                             trace!("Args {:?}", args);
                         }
-                        let mem_pos =
-                            if let Arg::MemPos(pos) = args.pop().unwrap() {
-                                *pos as usize
-                            } else {
-                                return Err(VmError::InvalidValueType);
-                            };
+                        let mem_pos = if let CommandArg::MemPos(pos) =
+                            args.pop().unwrap()
+                        {
+                            *pos as usize
+                        } else {
+                            return Err(VmError::InvalidValueType);
+                        };
                         let (_args, method_t, return_type) = args.pop_3();
 
-                        let stack_args =
-                            self._take_resolved_and_flush(_args.get_args_len() as u32, mem);
+                        let stack_args = self._take_resolved_and_flush(
+                            _args.get_args_len() as u32,
+                            mem,
+                        );
 
                         // We are going to call a method on a type, so we
                         // extract the type from the first argument on the
                         // stack.
-                        if let Arg::Type(t) = return_type {
+                        if let CommandArg::Type(t) = return_type {
                             let val = t.exec_type_method(
                                 method_t.into(),
                                 &stack_args,
@@ -780,22 +908,29 @@ impl<'a> VirtualMachine<'a> {
                     // ]
                     OpCode::ExecuteValueMethod => {
                         trace!("execute value method");
-                        let mem_pos =
-                            if let Arg::MemPos(pos) = args.pop().unwrap() {
-                                *pos as usize
-                            } else {
-                                return Err(VmError::InvalidValueType);
-                            };
+                        let mem_pos = if let CommandArg::MemPos(pos) =
+                            args.pop().unwrap()
+                        {
+                            *pos as usize
+                        } else {
+                            return Err(VmError::InvalidValueType);
+                        };
 
                         let args_len: usize =
-                            if let Some(Arg::Arguments(args)) = args.pop() {
+                            if let Some(CommandArg::Arguments(args)) =
+                                args.pop()
+                            {
                                 args.len()
                             } else {
                                 0
                             };
 
                         let (return_type, method_token) = args.pop_2();
-                        trace!("return_type {:?}, method_token {:?}", return_type, method_token);
+                        trace!(
+                            "return_type {:?}, method_token {:?}",
+                            return_type,
+                            method_token
+                        );
 
                         // pop as many refs from the stack as we have
                         // arguments for this method and resolve them  to
@@ -815,14 +950,14 @@ impl<'a> VirtualMachine<'a> {
                                             }
                                             panic!("Uninitialized memory in position {}", pos);
                                         });
-                                    v
+                                    StackValue::Ref(v)
                                 }
                                 StackRefPos::TablePos(token, pos) => {
-                                    let ds = &self.data_sources[token];
+                                    let ds = &self.data_sources.as_ref()[token];
                                     let v = ds.get_at_field_index(pos, sr.field_index);
                                     if let Some(v) = v {
-                                        v
-                                    } else { &TypeValue::Unknown }
+                                        StackValue::Arc(v.into())
+                                    } else { StackValue::Owned(TypeValue::Unknown) }
                                 }
                             }
                         }).collect::<Vec<_>>();
@@ -830,7 +965,7 @@ impl<'a> VirtualMachine<'a> {
 
                         // The first value on the stack is the value which we
                         // are going to call a method with.
-                        let call_value = *stack_args.get(0).unwrap();
+                        let call_value = stack_args.get(0).unwrap().as_ref();
 
                         let v = call_value.exec_value_method(
                             method_token.into(),
@@ -846,15 +981,18 @@ impl<'a> VirtualMachine<'a> {
                     // ]
                     // pops arguments from the stack
                     OpCode::ExecuteConsumeValueMethod => {
-                        let mem_pos =
-                            if let Arg::MemPos(pos) = args.pop().unwrap() {
-                                *pos as usize
-                            } else {
-                                return Err(VmError::InvalidValueType);
-                            };
+                        let mem_pos = if let CommandArg::MemPos(pos) =
+                            args.pop().unwrap()
+                        {
+                            *pos as usize
+                        } else {
+                            return Err(VmError::InvalidValueType);
+                        };
 
                         let args_len: usize =
-                            if let Some(Arg::Arguments(args)) = args.pop() {
+                            if let Some(CommandArg::Arguments(args)) =
+                                args.pop()
+                            {
                                 args.len()
                             } else {
                                 0
@@ -970,15 +1108,18 @@ impl<'a> VirtualMachine<'a> {
                     // args: [data_source_token, method_token, arguments,
                     //       return memory position]
                     OpCode::ExecuteDataStoreMethod => {
-                        let mem_pos =
-                            if let Arg::MemPos(pos) = args.pop().unwrap() {
-                                *pos as usize
-                            } else {
-                                return Err(VmError::InvalidValueType);
-                            };
+                        let mem_pos = if let CommandArg::MemPos(pos) =
+                            args.pop().unwrap()
+                        {
+                            *pos as usize
+                        } else {
+                            return Err(VmError::InvalidValueType);
+                        };
 
                         let _args_len: usize =
-                            if let Some(Arg::Arguments(args)) = args.pop() {
+                            if let Some(CommandArg::Arguments(args)) =
+                                args.pop()
+                            {
                                 args.len()
                             } else {
                                 0
@@ -986,8 +1127,9 @@ impl<'a> VirtualMachine<'a> {
 
                         let (method_token, data_source_token) = args.pop_2();
 
-                        if let Arg::DataSourceTable(ds_s)
-                        | Arg::DataSourceRib(ds_s) = data_source_token
+                        if let CommandArg::DataSourceTable(ds_s)
+                        | CommandArg::DataSourceRib(ds_s) =
+                            data_source_token
                         {
                             let ds = self.get_data_source(*ds_s).unwrap();
                             let stack_args =
@@ -1017,7 +1159,7 @@ impl<'a> VirtualMachine<'a> {
                     }
                     // stack args: [mem_pos, constant_value]
                     OpCode::PushStack => match args[0] {
-                        Arg::MemPos(pos) => {
+                        CommandArg::MemPos(pos) => {
                             if log_enabled!(Level::Trace) {
                                 trace!(
                                     " content: {:?}",
@@ -1051,7 +1193,7 @@ impl<'a> VirtualMachine<'a> {
                     OpCode::MemPosSet => {
                         trace!("memposset value: {:?}", args);
 
-                        if let Arg::MemPos(pos) = args[0] {
+                        if let CommandArg::MemPos(pos) = args[0] {
                             let v = args.take_arg_as_constant()?;
                             mem.set_mem_pos(pos as usize, v);
                         } else {
@@ -1061,7 +1203,7 @@ impl<'a> VirtualMachine<'a> {
                     // stack args: [field_index]
                     OpCode::StackOffset => {
                         for arg in args.args.iter() {
-                            if let Arg::FieldAccess(field) = arg {
+                            if let CommandArg::FieldAccess(field) = arg {
                                 let mut s = self.stack.borrow_mut();
                                 trace!(" -> stack {:?}", s);
                                 trace!("mem_pos 0 {:?}", mem.0[0]);
@@ -1076,9 +1218,9 @@ impl<'a> VirtualMachine<'a> {
                     }
                     // stack args: [arg_token_value, mem_pos]
                     OpCode::ArgToMemPos => {
-                        if let Arg::MemPos(pos) = args[1] {
+                        if let CommandArg::MemPos(pos) = args[1] {
                             match args[0] {
-                                Arg::Argument(token_value) => {
+                                CommandArg::Argument(token_value) => {
                                     let arg_value = self
                                         .arguments
                                         .take_value_by_token(token_value)?;
@@ -1110,7 +1252,6 @@ impl<'a> VirtualMachine<'a> {
                         } else {
                             if log_enabled!(Level::Trace) {
                                 trace!(" continue");
-
                             }
                             continue;
                         }
@@ -1135,9 +1276,12 @@ impl<'a> VirtualMachine<'a> {
                     }
                     // stack args: [exit value]
                     OpCode::Exit(accept_reject) => {
-                        let rx: TypeValue = match mem.get_mem_pos_as_owned(0) {
+                        let rx: TypeValue = match mem.get_mem_pos_as_owned(0)
+                        {
                             Some(TypeValue::Record(rec)) => rec.into(),
-                            Some(TypeValue::Builtin(BuiltinTypeValue::Route(route))) => route.into(),
+                            Some(TypeValue::Builtin(
+                                BuiltinTypeValue::Route(route),
+                            )) => route.into(),
                             _ => return Err(VmError::InvalidPayload),
                         };
 
@@ -1150,9 +1294,12 @@ impl<'a> VirtualMachine<'a> {
                             if log_enabled!(Level::Trace) {
                                 trace!("\n\nINITIALIZED MEMORY POSITIONS");
                             }
-                            for (i, addr) in mem.0.as_slice().iter().enumerate()
+                            for (i, addr) in
+                                mem.0.as_slice().iter().enumerate()
                             {
-                                if log_enabled!(Level::Trace) && !addr.is_unitialized() {
+                                if log_enabled!(Level::Trace)
+                                    && !addr.is_unitialized()
+                                {
                                     trace!("{}: {}", i, addr);
                                 }
                             }
@@ -1212,40 +1359,37 @@ impl<'a> VirtualMachine<'a> {
     }
 }
 
-pub struct VmBuilder<'a> {
+pub struct VmBuilder<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> {
     rx_type: TypeDef,
     tx_type: Option<TypeDef>,
-    mir_code: &'a [MirBlock],
-    arguments: ArgumentsMap,
-    data_sources: &'a [&'a ExtDataSource],
+    mir_code: Option<MB>,
+    arguments: ModuleArgsMap,
+    data_sources: Option<EDS>,
 }
 
-impl<'a> VmBuilder<'a> {
+impl<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> VmBuilder<MB, EDS> {
     pub fn new() -> Self {
         Self {
             rx_type: TypeDef::default(),
             tx_type: None,
-            mir_code: &[],
-            arguments: ArgumentsMap::default(),
-            data_sources: &[],
+            mir_code: None,
+            arguments: ModuleArgsMap::default(),
+            data_sources: None,
         }
     }
 
-    pub fn with_mir_code(mut self, mir_code: &'a [MirBlock]) -> Self {
-        self.mir_code = mir_code;
+    pub fn with_mir_code(mut self, mir_code: MB) -> Self {
+        self.mir_code = Some(mir_code);
         self
     }
 
-    pub fn with_arguments(mut self, args: ArgumentsMap) -> Self {
+    pub fn with_arguments(mut self, args: ModuleArgsMap) -> Self {
         self.arguments = args;
         self
     }
 
-    pub fn with_data_sources(
-        mut self,
-        data_sources: &'a [&ExtDataSource],
-    ) -> Self {
-        self.data_sources = data_sources;
+    pub fn with_data_sources(mut self, data_sources: EDS) -> Self {
+        self.data_sources = Some(data_sources);
         self
     }
 
@@ -1259,19 +1403,42 @@ impl<'a> VmBuilder<'a> {
         self
     }
 
-    pub fn build(self) -> VirtualMachine<'a> {
-        VirtualMachine {
-            // rx_type: self.rx_type,
-            // tx_type: self.tx_type,
-            mir_code: self.mir_code,
-            data_sources: self.data_sources,
-            arguments: self.arguments,
-            stack: RefCell::new(Stack::new()),
+    pub fn build(self) -> Result<VirtualMachine<MB, EDS>, VmError> {
+        // data sources need to be complete. Check that.
+        debug!("data sources in builder");
+        let data_sources = if let Some(data_sources) = self.data_sources {
+            for ds in data_sources.as_ref().iter() {
+                trace!("{}", ds.exists_and_is_empty());
+                match ds.exists_and_is_empty() {
+                    ExistsAndEmpty(Some(_)) => {}
+                    ExistsAndEmpty(None) => {
+                        return Err(VmError::DataSourceNotInBuild(
+                            ds.get_name(),
+                        ))
+                    }
+                };
+            }
+            data_sources
+        } else {
+            return Err(VmError::DataSourcesNotReady);
+        };
+
+        if let Some(mir_code) = self.mir_code {
+            Ok(VirtualMachine {
+                mir_code,
+                data_sources,
+                arguments: self.arguments,
+                stack: RefCell::new(Stack::new()),
+            })
+        } else {
+            Err(VmError::NoMir)
         }
     }
 }
 
-impl<'a> Default for VmBuilder<'a> {
+impl<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> Default
+    for VmBuilder<MB, EDS>
+{
     fn default() -> Self {
         Self::new()
     }
@@ -1291,13 +1458,17 @@ pub enum VmError {
     InvalidVariableAccess,
     InvalidFieldAccess(usize),
     InvalidMethodCall,
-    DataSourceNotFound(usize),
+    DataSourceTokenNotFound(usize),
+    DataSourceNotInBuild(ShortString),
+    DataSourceEmpty(ShortString),
+    DataSourcesNotReady,
     ImpossibleComparison,
     InvalidWrite,
     InvalidConversion,
     UnexpectedTermination,
     AsPathTooLong,
     DeltaLocked,
+    NoMir,
 }
 
 impl Display for VmError {
@@ -1306,40 +1477,68 @@ impl Display for VmError {
             VmError::StackUnderflow => f.write_str("StackUnderflow"),
             VmError::StackOverflow => f.write_str("StackOverflow"),
             VmError::MemOutOfBounds => f.write_str("MemOutOfBounds"),
-            VmError::InvalidMemoryAccess(_, _) => f.write_str("InvalidMemoryAccess"),
-            VmError::AnonymousArgumentNotFound => f.write_str("AnonymousArgumentNotFound"),
+            VmError::InvalidMemoryAccess(_, _) => {
+                f.write_str("InvalidMemoryAccess")
+            }
+            VmError::AnonymousArgumentNotFound => {
+                f.write_str("AnonymousArgumentNotFound")
+            }
             VmError::ArgumentNotFound(_) => f.write_str("ArgumentNotFound"),
             VmError::ArgumentsMissing(_) => f.write_str("ArgumentsMissing"),
             VmError::InvalidValueType => f.write_str("InvalidValueType"),
             VmError::InvalidPayload => f.write_str("InvalidPayload"),
-            VmError::InvalidVariableAccess => f.write_str("InvalidVariableAccess"),
-            VmError::InvalidFieldAccess(_) => f.write_str("InvalidFieldAccess"),
+            VmError::InvalidVariableAccess => {
+                f.write_str("InvalidVariableAccess")
+            }
+            VmError::InvalidFieldAccess(_) => {
+                f.write_str("InvalidFieldAccess")
+            }
             VmError::InvalidMethodCall => f.write_str("InvalidMethodCall"),
-            VmError::DataSourceNotFound(_) => f.write_str("DataSourceNotFound"),
-            VmError::ImpossibleComparison => f.write_str("ImpossibleComparison"),
+            VmError::DataSourceTokenNotFound(_) => {
+                f.write_str("DataSourceTokenNotFound")
+            }
+            VmError::DataSourceNotInBuild(ds_name) => {
+                write!(
+                    f,
+                    "Data source '{}' was not in the build arguments.",
+                    ds_name
+                )
+            }
+            VmError::DataSourceEmpty(name) => {
+                write!(f, "DataSourceEmpty {}", name)
+            }
+            VmError::DataSourcesNotReady => {
+                write!(f, "DataSourceNotReady")
+            }
+            VmError::ImpossibleComparison => {
+                f.write_str("ImpossibleComparison")
+            }
             VmError::InvalidWrite => f.write_str("InvalidWrite"),
             VmError::InvalidConversion => f.write_str("InvalidConversion"),
-            VmError::UnexpectedTermination => f.write_str("UnexpectedTermination"),
+            VmError::UnexpectedTermination => {
+                f.write_str("UnexpectedTermination")
+            }
             VmError::AsPathTooLong => f.write_str("AsPathTooLong"),
             VmError::DeltaLocked => f.write_str("DeltaLocked"),
+            VmError::NoMir => f.write_str("NoMir"),
         }
     }
 }
 
 impl From<VmError> for Box<dyn std::error::Error> {
     fn from(value: VmError) -> Self {
-        format!("A VM Error occured: {:?}", value).into()
+        format!("A fatal VM Error occured: {}", value).into()
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Command {
     pub(crate) op: OpCode,
-    pub(crate) args: Vec<Arg>,
+    pub(crate) args: Vec<CommandArg>,
 }
 
 impl Command {
-    pub fn new(op: OpCode, args: Vec<Arg>) -> Self {
+    pub fn new(op: OpCode, args: Vec<CommandArg>) -> Self {
         Command { op, args }
     }
 }
@@ -1374,7 +1573,7 @@ impl Display for Command {
 }
 
 #[derive(Debug)]
-pub enum Arg {
+pub enum CommandArg {
     Constant(TypeValue),        // Constant value
     Variable(usize),            // Variable with token value
     Argument(usize),            // extra runtime argument for module & term
@@ -1396,11 +1595,11 @@ pub enum Arg {
     AcceptReject(AcceptReject), // argument tell what should happen after
 }
 
-impl Arg {
+impl CommandArg {
     pub fn as_token_value(&self) -> usize {
         match self {
-            Arg::Argument(v) => *v,
-            Arg::Variable(v) => *v,
+            CommandArg::Argument(v) => *v,
+            CommandArg::Variable(v) => *v,
             _ => {
                 panic!("Cannot get token value from this arg: {:?} and that's fatal", self);
             }
@@ -1408,28 +1607,27 @@ impl Arg {
     }
 
     pub fn get_args_len(&self) -> usize {
-        if let Arg::Arguments(args) = self {
+        if let CommandArg::Arguments(args) = self {
             args.len()
-        }
-        else {
+        } else {
             1
         }
     }
 }
 
-impl Display for Arg {
+impl Display for CommandArg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Arg::Label(v) => write!(f, "{}", v),
+            CommandArg::Label(v) => write!(f, "{}", v),
             _ => write!(f, ""),
         }
     }
 }
 
-impl From<&Arg> for TypeDef {
-    fn from(value: &Arg) -> Self {
+impl From<&CommandArg> for TypeDef {
+    fn from(value: &CommandArg) -> Self {
         match value {
-            Arg::Type(t) => t.clone(),
+            CommandArg::Type(t) => t.clone(),
             _ => {
                 panic!(
                     "Cannot convert to TypeDef: {:?} and that's fatal.",
@@ -1441,16 +1639,16 @@ impl From<&Arg> for TypeDef {
 }
 
 // extract the token value from an argument
-impl From<&Arg> for usize {
-    fn from(value: &Arg) -> Self {
+impl From<&CommandArg> for usize {
+    fn from(value: &CommandArg) -> Self {
         match value {
-            Arg::Method(m) => *m,
-            Arg::DataSourceTable(d) => *d,
-            Arg::DataSourceRib(d) => *d,
-            Arg::FieldAccess(f) => *f,
-            Arg::BuiltinMethod(b) => *b,
-            Arg::Variable(v) => *v,
-            Arg::MemPos(m) => *m as usize,
+            CommandArg::Method(m) => *m,
+            CommandArg::DataSourceTable(d) => *d,
+            CommandArg::DataSourceRib(d) => *d,
+            CommandArg::FieldAccess(f) => *f,
+            CommandArg::BuiltinMethod(b) => *b,
+            CommandArg::Variable(v) => *v,
+            CommandArg::MemPos(m) => *m as usize,
             _ => {
                 panic!(
                     "Cannot convert to usize {:?} and that's fatal.",
@@ -1461,17 +1659,17 @@ impl From<&Arg> for usize {
     }
 }
 
-impl From<ast::CompareOp> for Arg {
+impl From<ast::CompareOp> for CommandArg {
     fn from(op: ast::CompareOp) -> Self {
-        Arg::CompareOp(op)
+        CommandArg::CompareOp(op)
     }
 }
 
-impl From<crate::traits::Token> for Vec<Arg> {
+impl From<crate::traits::Token> for Vec<CommandArg> {
     fn from(to: crate::traits::Token) -> Self {
         if let Token::FieldAccess(v) = to {
             v.iter()
-                .map(|f| Arg::FieldAccess(*f as usize))
+                .map(|f| CommandArg::FieldAccess(*f as usize))
                 .collect::<Vec<_>>()
         } else {
             panic!("PANIC")
@@ -1481,30 +1679,34 @@ impl From<crate::traits::Token> for Vec<Arg> {
 
 // Cloning an Arg works only it Arg::Constants does NOT contain a
 // (used-defined) Record or List
-impl Clone for Arg {
+impl Clone for CommandArg {
     fn clone(&self) -> Self {
         match self {
-            Arg::Constant(c) => {
-                Arg::Constant(c.builtin_as_cloned_type_value().unwrap())
+            CommandArg::Constant(c) => CommandArg::Constant(
+                c.builtin_as_cloned_type_value().unwrap(),
+            ),
+            CommandArg::Variable(v) => CommandArg::Variable(*v),
+            CommandArg::Argument(a) => CommandArg::Argument(*a),
+            CommandArg::RxValue => CommandArg::RxValue,
+            CommandArg::TxValue => CommandArg::TxValue,
+            CommandArg::Method(m) => CommandArg::Method(*m),
+            CommandArg::DataSourceTable(ds) => {
+                CommandArg::DataSourceTable(*ds)
             }
-            Arg::Variable(v) => Arg::Variable(*v),
-            Arg::Argument(a) => Arg::Argument(*a),
-            Arg::RxValue => Arg::RxValue,
-            Arg::TxValue => Arg::TxValue,
-            Arg::Method(m) => Arg::Method(*m),
-            Arg::DataSourceTable(ds) => Arg::DataSourceTable(*ds),
-            Arg::DataSourceRib(ds) => Arg::DataSourceTable(*ds),
-            Arg::OutputStream(os) => Arg::OutputStream(*os),
-            Arg::FieldAccess(fa) => Arg::FieldAccess(*fa),
-            Arg::BuiltinMethod(bim) => Arg::BuiltinMethod(*bim),
-            Arg::MemPos(mp) => Arg::MemPos(*mp),
-            Arg::Type(ty) => Arg::Type(ty.clone()),
-            Arg::Arguments(args) => Arg::Arguments(args.to_vec()),
-            Arg::Boolean(b) => Arg::Boolean(*b),
-            Arg::Term(t) => Arg::Term(*t),
-            Arg::CompareOp(op) => Arg::CompareOp(*op),
-            Arg::Label(l) => Arg::Label(l.clone()),
-            Arg::AcceptReject(ar) => Arg::AcceptReject(*ar),
+            CommandArg::DataSourceRib(ds) => CommandArg::DataSourceTable(*ds),
+            CommandArg::OutputStream(os) => CommandArg::OutputStream(*os),
+            CommandArg::FieldAccess(fa) => CommandArg::FieldAccess(*fa),
+            CommandArg::BuiltinMethod(bim) => CommandArg::BuiltinMethod(*bim),
+            CommandArg::MemPos(mp) => CommandArg::MemPos(*mp),
+            CommandArg::Type(ty) => CommandArg::Type(ty.clone()),
+            CommandArg::Arguments(args) => {
+                CommandArg::Arguments(args.to_vec())
+            }
+            CommandArg::Boolean(b) => CommandArg::Boolean(*b),
+            CommandArg::Term(t) => CommandArg::Term(*t),
+            CommandArg::CompareOp(op) => CommandArg::CompareOp(*op),
+            CommandArg::Label(l) => CommandArg::Label(l.clone()),
+            CommandArg::AcceptReject(ar) => CommandArg::AcceptReject(*ar),
         }
     }
 }
@@ -1535,95 +1737,31 @@ pub enum OpCode {
     Exit(AcceptReject),
 }
 
-// struct VecPayload(Vec<(ShortString, TypeValue)>);
-
-// impl Payload for VecPayload {
-//     fn set(&mut self, field: ShortString, data: TypeValue) {
-//         let field = &mut self.0.iter().find(|k| k.0 == field);
-//         let key = field.unwrap().0.clone();
-//         let _old = std::mem::replace(field, Some(&(key, data)));
-//     }
-
-//     fn get(&self, field: ShortString) -> Option<&TypeValue> {
-//         self.0.iter().find(|k| k.0 == field).map(|kv| &kv.1)
-//     }
-
-//     fn take_value(self) -> TypeValue {
-//         self
-//     }
-// }
-
-// pub trait Payload
-// where
-//     Self: std::fmt::Debug + std::fmt::Display,
-// {
-//     fn set_field(&mut self, field: ShortString, value: TypeValue);
-//     fn get(&self, field: ShortString) -> Option<&TypeValue>;
-//     fn take_value(self) -> TypeValue;
-// }
-
-#[derive(Debug)]
 pub enum DataSource {
     Table(Table),
-    Rib(Rib),
+    Rib(Arc<dyn RotoRib>),
 }
 
-trait Source {
-    fn new(name: &str, token: usize, ty: TypeDef) -> Self;
-    fn get_by_key<'a>(&'a self, key: &str) -> Option<&'a Record>;
-    fn exec_ref_value_method<'a>(
-        &self,
-        method_token: usize,
-        args: &[&'a TypeValue],
-        res_type: TypeDef,
-    ) -> DataSourceMethodValue;
-}
-
-#[derive(Debug)]
-pub struct ExtDataSource {
-    _name: ShortString,
-    token: usize,
-    source: DataSource,
-}
-
-impl ExtDataSource {
-    pub fn new(name: &str, token: Token, ty: TypeDef) -> Self {
-        ExtDataSource {
-            _name: name.into(),
-            source: match &token {
-                Token::Table(_) => DataSource::Table(Table {
-                    ty,
-                    records: vec![],
-                }),
-                Token::Rib(_) => DataSource::Rib(Rib {
-                    ty,
-                    records: vec![],
-                }),
-                _ => {
-                    panic!("Invalid data source type: {:?}", ty);
-                }
-            },
-            token: token.into(),
+impl DataSource {
+    pub fn table_from_records(
+        name: &str,
+        records: Vec<Record>,
+    ) -> Result<Self, VmError> {
+        match records.get(0) {
+            Some(rec) => {
+                let ty = TypeDef::from(&TypeValue::Record(rec.clone()));
+                Ok(Self::Table(Table { ty, records }))
+            }
+            None => Err(VmError::DataSourceEmpty(name.into())),
         }
     }
-
-    // pub fn get_by_key<'a>(&'a self, key: &str) -> Option<&'a Record> {
-    //     match self.source {
-    //         DataSource::Table(ref t) => t.records.iter().find(|v| {
-    //             v.get_field_by_index(0).map(|v| v.0.as_str()) == Some(key)
-    //         }),
-    //         DataSource::Rib(ref r) => {
-    //             todo!()
-    //         }
-    //     }
-    // }
 
     pub fn get_at_field_index(
         &self,
         index: usize,
         field_index: Option<usize>,
     ) -> Option<&TypeValue> {
-        match self.source {
+        match self {
             DataSource::Table(ref t) => {
                 t.get_at_field_index(index, field_index)
             }
@@ -1636,47 +1774,158 @@ impl ExtDataSource {
     // methods on a data source can indicate whether they are returning a
     // value created by the method or a reference to a value in the data
     // source itself, through the TableMethodValue enum.
-    pub(crate) fn exec_method<'a>(
+    pub(crate) fn exec_method(
         &self,
         method_token: usize,
-        args: &[&'a TypeValue],
+        args: &[StackValue],
         res_type: TypeDef,
     ) -> DataSourceMethodValue {
-        match self.source {
-            DataSource::Table(ref t) => {
+        match self {
+            DataSource::Table(t) => {
                 t.exec_ref_value_method(method_token, args, res_type)()
             }
             DataSource::Rib(ref r) => {
-                r.exec_ref_value_method(method_token, args, res_type)()
+                r.exec_ref_value_method(method_token, args, res_type)
+            }
+        }
+    }
+
+    pub fn get_type(&self) -> TypeDef {
+        match &self {
+            DataSource::Table(t) => t.ty.clone(),
+            DataSource::Rib(r) => r.get_type(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match &self {
+            DataSource::Table(t) => t.records.is_empty(),
+            DataSource::Rib(r) => r.is_empty(),
+        }
+    }
+}
+
+pub struct ExtDataSource {
+    name: ShortString,
+    token: usize,
+    ty: TypeDef,
+    source: ArcSwapOption<DataSource>,
+}
+
+impl std::fmt::Debug for ExtDataSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+pub struct ExistsAndEmpty(Option<bool>);
+
+impl Display for ExistsAndEmpty {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            ExistsAndEmpty(Some(true)) => {
+                write!(f, "source exists and has values")
+            }
+            ExistsAndEmpty(Some(false)) => {
+                write!(f, "source exists, but is empty")
+            }
+            ExistsAndEmpty(None) => write!(f, "source does not exist"),
+        }
+    }
+}
+
+impl Clone for ExtDataSource {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            token: self.token,
+            ty: self.ty.clone(),
+            source: if let Some(s) = self.source.load().as_ref() {
+                ArcSwapOption::from(Some(Arc::clone(s)))
+            } else {
+                ArcSwapOption::from(None)
+            },
+        }
+    }
+}
+
+impl ExtDataSource {
+    pub fn new(name: &str, token: Token, ty: TypeDef) -> ExtDataSource {
+        ExtDataSource {
+            name: name.into(),
+            token: token.into(),
+            source: ArcSwapOption::from(None),
+            ty,
+        }
+    }
+
+    pub fn get_name(&self) -> ShortString {
+        self.name.clone()
+    }
+
+    pub(crate) fn get_source(&self) -> &ArcSwapOption<DataSource> {
+        &self.source
+    }
+
+    pub fn get_type(&self) -> &TypeDef {
+        &self.ty
+    }
+
+    pub fn get_value_type(&self) -> TypeDef {
+        match &self.ty {
+            TypeDef::Table(t) => *t.clone(),
+            TypeDef::Rib(rec) => *rec.clone(),
+            TypeDef::OutputStream(s) => *s.clone(),
+            _ => self.ty.clone(),
+        }
+    }
+
+    pub fn exists_and_is_empty(&self) -> ExistsAndEmpty {
+        if let Some(source) = self.source.load().as_ref() {
+            ExistsAndEmpty(Some(source.as_ref().is_empty()))
+        } else {
+            ExistsAndEmpty(None)
+        }
+    }
+
+    pub fn get_at_field_index(
+        &self,
+        pos: usize,
+        field_index: Option<usize>,
+    ) -> Option<TypeValue> {
+        self.source.load().as_ref().map(|ds| {
+            match ds.get_at_field_index(pos, field_index) {
+                Some(&TypeValue::SharedValue(ref sv)) => {
+                    TypeValue::SharedValue(Arc::clone(sv))
+                }
+                Some(_) => panic!("Fatal: Table contains non-shared value."),
+                None => TypeValue::Unknown,
+            }
+        })
+    }
+}
+
+impl Index<Token> for [ExtDataSource] {
+    type Output = ExtDataSource;
+
+    fn index(&self, index: Token) -> &ExtDataSource {
+        match index {
+            Token::Table(token) => {
+                if let Some(s) = self.get(token) {
+                    s
+                } else {
+                    panic!("No source for {:?}", index);
+                }
+            }
+            _ => {
+                panic!("Cannot with {:?}", index);
             }
         }
     }
 }
 
-impl Index<Token> for [&'_ ExtDataSource] {
-    type Output = ExtDataSource;
-
-    fn index(&self, index: Token) -> &Self::Output {
-        if let Token::Table(token) = index {
-            self[token]
-        } else {
-            panic!("Cannot index with {:?}", index);
-        }
+impl AsRef<ExtDataSource> for &ExtDataSource {
+    fn as_ref(&self) -> &ExtDataSource {
+        self
     }
 }
-
-// pub fn compile_filter<'a, I: Payload, O: Payload>(
-//     symbols: &mut SymbolTable,
-//     available_sources: ExtSources,
-// ) -> impl Fn(&mut I, &mut O) -> Result<AcceptReject, Box<dyn std::error::Error>> + 'a
-// {
-//     let _used_source = available_sources.0[0].clone();
-
-//     move |input: &mut I,
-//           output: &mut O|
-//           -> Result<AcceptReject, Box<dyn std::error::Error>> {
-//         input.set("bla".into(), TypeValue::try_from("blub").unwrap());
-//         output.set("bla".into(), TypeValue::try_from("blub").unwrap());
-//         Ok(AcceptReject::Accept)
-//     }
-// }

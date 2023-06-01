@@ -21,7 +21,7 @@ fn test_data(
 
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code)?;
-    let roto_pack = rotolo.inspect_pack(name)?;
+    let roto_pack = rotolo.retrieve_public_as_arcs(name)?;
 
     let payload_type =
         TypeDef::new_record_type(vec![("asn", Box::new(TypeDef::Asn))])?;
@@ -30,12 +30,12 @@ fn test_data(
         &payload_type,
         vec![("asn", Asn::from(65534).into())],
     )?;
-    let ds_ref = roto_pack.data_sources.iter().collect::<Vec<_>>();
+    let ds_ref = roto_pack.data_sources;
 
     let mut vm = vm::VmBuilder::new()
-        .with_data_sources(ds_ref.as_slice())
+        .with_data_sources(ds_ref)
         .with_mir_code(roto_pack.mir)
-        .build();
+        .build()?;
 
     let mem = &mut vm::LinearMemory::uninit();
     let res = vm.exec(payload, None::<Record>, None, mem)?;

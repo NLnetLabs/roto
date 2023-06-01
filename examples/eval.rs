@@ -1,4 +1,4 @@
-use roto::compile::Compiler;
+use roto::compile::{Compiler};
 
 use roto::types::builtin::{
     self, Asn, BuiltinTypeValue, Community, U32,
@@ -16,7 +16,7 @@ fn test_data(
 
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code)?;
-    let roto_pack = rotolo.inspect_pack(name)?;
+    let roto_pack = rotolo.retrieve_public_as_arcs(name)?;
 
     // Create a payload type and instance to feed into a VM.
     let _count: TypeValue = 1_u32.into();
@@ -91,14 +91,14 @@ fn test_data(
         TypeValue::from(65534_u32)
     )];
 
-    let ds_ref = roto_pack.data_sources.iter().collect::<Vec<_>>();
+    let ds_ref = roto_pack.data_sources;
     let args = rotolo.compile_arguments(name, module_arguments)?;
 
     let mut vm = vm::VmBuilder::new()
         .with_arguments(args)
-        .with_data_sources(ds_ref.as_slice())
+        .with_data_sources(ds_ref)
         .with_mir_code(roto_pack.mir)
-        .build();
+        .build()?;
 
     let mem = &mut vm::LinearMemory::uninit();
     let res = vm.exec(
