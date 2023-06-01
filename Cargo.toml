@@ -13,13 +13,15 @@ license = "BSD-3-Clause"
 
 [dependencies]
 log = "0.4"
-# use branch aspath-with-hops
-routecore = { version = "0.4.0-dev", features = ["bgp"], git = "https://github.com/NLnetLabs/routecore.git" }
+
 arc-swap = "^1.5"
 bytes = "1"
 nom = "7.1"
 smallvec = { version = "1.8", features = [ "const_generics" ] }
 
+# use branch aspath-with-hops
+routecore = { version = "0.4.0-dev", features = ["bgp"], git = "https://github.com/NLnetLabs/routecore.git" }
+rotonda-store      = { version = "0.3.0-pre.2", git = "https://github.com/NLnetLabs/rotonda-store.git" }
+
 [dev-dependencies]
 env_logger = "0.10"
-rotonda-store      = { version = "0.3.0-pre.2", git = "https://github.com/NLnetLabs/rotonda-store.git" }

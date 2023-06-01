@@ -8,7 +8,7 @@ use crate::{
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
     },
-    vm::{StackValue, VmError},
+    vm::{StackValue, VmError}, ast::ShortString,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
@@ -161,6 +161,8 @@ pub trait RotoRib {
     fn len(&self) -> usize;
 
     fn is_empty(&self) -> bool;
+
+    fn get_name(&self) -> ShortString;
 
     fn get_type(&self) -> TypeDef;
 }

@@ -14,13 +14,13 @@ use crate::{
         SymbolKind, SymbolTable,
     },
     traits::Token,
-    types::typevalue::TypeValue,
+    types::{typevalue::TypeValue, datasources::DataSource},
     types::{
         datasources::Table,
         typedef::TypeDef,
     },
     vm::{
-        Command, CommandArg, DataSource, ExtDataSource, ModuleArg,
+        Command, CommandArg, ExtDataSource, ModuleArg,
         ModuleArgsMap, OpCode, StackRefPos, VariablesMap,
     },
 };
@@ -265,9 +265,10 @@ impl<
 
     pub fn set_source(
         &mut self,
-        name: &str,
-        source: Arc<DataSource>,
+        source: DataSource,
     ) -> Result<(), CompileError> {
+        let name = source.get_name();
+
         let f_ds = self
             .data_sources
             .as_ref()
@@ -295,9 +296,10 @@ impl<
             )));
         };
 
-        f_ds.get_source().store(match *source {
+        f_ds.get_source().store(match source {
             DataSource::Table(ref t) => Some(
                 DataSource::Table(Table {
+                    name,
                     ty: s_ty,
                     records: t.records.clone(),
                 })

@@ -8,11 +8,11 @@ use std::{
 use crate::{
     ast::{self, AcceptReject, CompareOp, ShortString},
     compile::{CompileError, MirBlock},
-    traits::{RotoRib, RotoType, Token},
+    traits::{RotoType, Token},
     types::{
         builtin::{Boolean, BuiltinTypeValue},
-        collections::{ElementTypeValue, Record},
-        datasources::{DataSourceMethodValue, Table},
+        collections::ElementTypeValue,
+        datasources::{DataSourceMethodValue, DataSource},
         typedef::TypeDef,
         typevalue::TypeValue,
     },
@@ -1735,74 +1735,6 @@ pub enum OpCode {
     SetRxField,
     SetTxField,
     Exit(AcceptReject),
-}
-
-pub enum DataSource {
-    Table(Table),
-    Rib(Arc<dyn RotoRib>),
-}
-
-impl DataSource {
-    pub fn table_from_records(
-        name: &str,
-        records: Vec<Record>,
-    ) -> Result<Self, VmError> {
-        match records.get(0) {
-            Some(rec) => {
-                let ty = TypeDef::from(&TypeValue::Record(rec.clone()));
-                Ok(Self::Table(Table { ty, records }))
-            }
-            None => Err(VmError::DataSourceEmpty(name.into())),
-        }
-    }
-
-    pub fn get_at_field_index(
-        &self,
-        index: usize,
-        field_index: Option<usize>,
-    ) -> Option<&TypeValue> {
-        match self {
-            DataSource::Table(ref t) => {
-                t.get_at_field_index(index, field_index)
-            }
-            DataSource::Rib(ref _r) => {
-                todo!()
-            }
-        }
-    }
-
-    // methods on a data source can indicate whether they are returning a
-    // value created by the method or a reference to a value in the data
-    // source itself, through the TableMethodValue enum.
-    pub(crate) fn exec_method(
-        &self,
-        method_token: usize,
-        args: &[StackValue],
-        res_type: TypeDef,
-    ) -> DataSourceMethodValue {
-        match self {
-            DataSource::Table(t) => {
-                t.exec_ref_value_method(method_token, args, res_type)()
-            }
-            DataSource::Rib(ref r) => {
-                r.exec_ref_value_method(method_token, args, res_type)
-            }
-        }
-    }
-
-    pub fn get_type(&self) -> TypeDef {
-        match &self {
-            DataSource::Table(t) => t.ty.clone(),
-            DataSource::Rib(r) => r.get_type(),
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        match &self {
-            DataSource::Table(t) => t.records.is_empty(),
-            DataSource::Rib(r) => r.is_empty(),
-        }
-    }
 }
 
 pub struct ExtDataSource {

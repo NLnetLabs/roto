@@ -4,9 +4,10 @@ use roto::types::builtin::{
     Asn, Community,
 };
 use roto::types::collections::{ElementTypeValue, List, Record};
+use roto::types::datasources::DataSource;
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
-use roto::vm::{self, DataSource};
+use roto::vm;
 
 mod common;
 
@@ -105,7 +106,7 @@ fn test_data(
     //     asn: Asn
     // }
     let sources_asns = DataSource::table_from_records("source_asns", vec![new_sa_rec])?;
-    roto_pack.set_source("source_asns", sources_asns.into())?;
+    roto_pack.set_source(sources_asns)?;
 
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)

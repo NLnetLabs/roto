@@ -1,27 +1,17 @@
-use std::sync::Arc;
-
-use log::debug;
 use roto::compile::Compiler;
 
-use roto::traits::RotoRib;
 use roto::types::builtin::{Asn, Community};
 use roto::types::collections::{ElementTypeValue, List, Record};
-use roto::types::datasources::{DataSourceMethodValue, RibToken};
+use roto::types::datasources::{DataSource, Rib};
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
-use roto::vm::{self, DataSource, StackValue};
+use roto::vm;
 use rotonda_store::prelude::MergeUpdate;
-use rotonda_store::{epoch, MatchOptions, MatchType};
 
 mod common;
 
 #[derive(Debug, Clone)]
 struct RibValue(Vec<TypeValue>);
-
-struct DataSourceRib {
-    store: rotonda_store::MultiThreadedStore<RibValue>,
-    ty: TypeDef,
-}
 
 impl MergeUpdate for RibValue {
     fn merge_update(
@@ -48,75 +38,6 @@ impl MergeUpdate for RibValue {
 impl std::fmt::Display for RibValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.0)
-    }
-}
-
-impl RotoRib for DataSourceRib {
-    fn exec_value_method<'a>(
-        &'a self,
-        _method_token: usize,
-        _args: &'a [vm::StackValue],
-        _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, vm::VmError> {
-        todo!()
-    }
-
-    fn exec_ref_value_method<'a>(
-        &'a self,
-        method: usize,
-        args: &'a [StackValue],
-        _res_type: TypeDef,
-    ) -> DataSourceMethodValue {
-        match RibToken::from(method) {
-            RibToken::Match => {
-                todo!()
-            }
-            RibToken::LongestMatch => {
-                debug!("longest match on rib");
-                let guard = epoch::pin();
-                self.store
-                    .match_prefix(
-                        &routecore::addr::Prefix::try_from(args[0].as_ref())
-                            .unwrap(),
-                        &MatchOptions {
-                            match_type: MatchType::LongestMatch,
-                            include_all_records: false,
-                            include_less_specifics: false,
-                            include_more_specifics: false,
-                        },
-                        &guard,
-                    )
-                    .prefix
-                    .map(|v| DataSourceMethodValue::TypeValue(v.into()))
-                    .unwrap_or_else(|| {
-                        DataSourceMethodValue::TypeValue(TypeValue::Unknown)
-                    })
-            }
-            RibToken::Contains => {
-                debug!("contains on rib");
-                todo!()
-            }
-            RibToken::Get => {
-                debug!("get on rib");
-                todo!()
-            }
-        }
-    }
-
-    fn get_by_key<'a>(&'a self, _key: &str) -> Option<&'a Record> {
-        todo!()
-    }
-
-    fn len(&self) -> usize {
-        todo!()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.store.prefixes_count() == 0
-    }
-
-    fn get_type(&self) -> TypeDef {
-        self.ty.clone()
     }
 }
 
@@ -216,12 +137,15 @@ fn test_data(
     )?;
 
     // external rib
-    let rib_rov = DataSourceRib {
-        store: rotonda_store::MultiThreadedStore::<RibValue>::new()?,
-        ty: my_rec_type,
-    };
-    let rib_rov_source = DataSource::Rib(Arc::new(rib_rov));
+    let rib_rov = Rib::new(
+        "rib-rov",
+        my_rec_type,
+        rotonda_store::MultiThreadedStore::<RibValue>::new()?,
+    );
 
+    // Turn it into a DataSource.
+    // let rib_rov_source: DataSource = rib_rov.into();
+    
     let mem = &mut vm::LinearMemory::uninit();
 
     println!("Used Arguments");
@@ -234,10 +158,10 @@ fn test_data(
     // }
     let sources_asns =
         DataSource::table_from_records("source_asns", vec![new_sa_rec])?;
-    roto_pack.set_source("source_asns", sources_asns.into())?;
+    roto_pack.set_source(sources_asns)?;
 
     println!("insert source rib-rov");
-    roto_pack.set_source("rib-rov", rib_rov_source.into())?;
+    roto_pack.set_source(rib_rov.into())?;
 
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
