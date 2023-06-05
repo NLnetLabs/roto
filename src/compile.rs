@@ -14,14 +14,11 @@ use crate::{
         SymbolKind, SymbolTable,
     },
     traits::Token,
-    types::{typevalue::TypeValue, datasources::DataSource},
-    types::{
-        datasources::Table,
-        typedef::TypeDef,
-    },
+    types::{datasources::DataSource, typevalue::TypeValue},
+    types::{datasources::Table, typedef::TypeDef},
     vm::{
-        Command, CommandArg, ExtDataSource, ModuleArg,
-        ModuleArgsMap, OpCode, StackRefPos, VariablesMap,
+        Command, CommandArg, ExtDataSource, ModuleArg, ModuleArgsMap, OpCode,
+        StackRefPos, VariablesMap,
     },
 };
 

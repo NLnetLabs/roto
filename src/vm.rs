@@ -12,7 +12,7 @@ use crate::{
     types::{
         builtin::{Boolean, BuiltinTypeValue},
         collections::ElementTypeValue,
-        datasources::{DataSourceMethodValue, DataSource},
+        datasources::{DataSource, DataSourceMethodValue},
         typedef::TypeDef,
         typevalue::TypeValue,
     },
@@ -29,6 +29,9 @@ pub enum StackRefPos {
     MemPos(u32),
     // index into a Table (which is a vec of shared Records)
     TablePos(Token, usize),
+    // CompareResult, which is not a Ref at all, but hey,
+    // it's smaller that a ref, so who cares
+    CompareResult(bool),
 }
 
 impl From<u32> for StackRefPos {
@@ -122,10 +125,33 @@ impl LinearMemory {
         &self,
         stack_ref: &StackRef,
     ) -> Option<&TypeValue> {
-        if let StackRefPos::MemPos(pos) = stack_ref.pos {
-            self.get_mp_field_by_index(pos as usize, stack_ref.field_index)
-        } else {
-            None
+        match stack_ref.pos {
+            StackRefPos::MemPos(pos) => self
+                .get_mp_field_by_index(pos as usize, stack_ref.field_index),
+            StackRefPos::CompareResult(_res) => None,
+            _ => None,
+        }
+    }
+
+    pub(crate) fn get_mp_field_as_bool(&self, stack_ref: &StackRef) -> bool {
+        match stack_ref.pos {
+            StackRefPos::MemPos(pos) => {
+                if let TypeValue::Builtin(BuiltinTypeValue::Boolean(
+                    Boolean(b),
+                )) = self
+                    .get_mp_field_by_index(
+                        pos as usize,
+                        stack_ref.field_index,
+                    )
+                    .unwrap()
+                {
+                    *b
+                } else {
+                    false
+                }
+            }
+            StackRefPos::CompareResult(res) => res,
+            _ => false,
         }
     }
 
@@ -166,6 +192,7 @@ impl LinearMemory {
                     _ => Err(VmError::MemOutOfBounds),
                 },
             },
+            StackRefPos::CompareResult(res) => Ok((*res).into()),
             _ => Err(VmError::MemOutOfBounds),
         }
     }
@@ -641,6 +668,9 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                             .push(StackValue::Owned(TypeValue::Unknown)),
                     }
                 }
+                StackRefPos::CompareResult(res) => {
+                    unwind_stack.push(StackValue::Owned(res.into()))
+                }
             }
         }
         unwind_stack
@@ -681,10 +711,56 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                         StackValue::Owned(TypeValue::Unknown)
                     }
                 }
+                StackRefPos::CompareResult(res) => {
+                    StackValue::Owned(res.into())
+                }
             })
             .collect();
 
         stack.clear();
+        take_vec
+    }
+
+    // Take a `elem_num` elements on the stack, leaving the rest of the stack in place.
+    fn _take_resolved(
+        &'a self,
+        elem_num: u32, // number of elements to take
+        mem: &'a LinearMemory,
+    ) -> Vec<StackValue> {
+        let mut stack = self.stack.borrow_mut();
+
+        let len = stack.0.len();
+        let stack_part = stack.0.split_off(len - elem_num as usize);
+
+        let take_vec = stack_part
+            .iter()
+            .map(|sr| match sr.pos.clone() {
+                StackRefPos::MemPos(pos) => {
+                    let v = mem
+                        .get_mp_field_by_index(pos as usize, sr.field_index)
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "Uninitialized memory in position {}",
+                                pos
+                            );
+                        });
+                    StackValue::Ref(v)
+                }
+                StackRefPos::TablePos(token, pos) => {
+                    let ds = &self.data_sources.as_ref()[token];
+                    let v = ds.get_at_field_index(pos, sr.field_index);
+                    if let Some(v) = v {
+                        StackValue::Arc(v.into())
+                    } else {
+                        StackValue::Owned(TypeValue::Unknown)
+                    }
+                }
+                StackRefPos::CompareResult(res) => {
+                    StackValue::Owned(res.into())
+                }
+            })
+            .collect();
+
         take_vec
     }
 
@@ -742,9 +818,14 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                     trace!("\n{:3} -> {:?} {:?} ", pc, op, args);
                 }
                 match op {
+                    // args: [CompareOperator]
+                    // stack args: [cmp1, cmp2]
                     OpCode::Cmp => {
-                        let stack_args =
-                            self._unwind_resolved_stack_into_vec(mem);
+                        let stack_args = self._take_resolved(2, mem);
+
+                        if log_enabled!(Level::Trace) {
+                            trace!("raw stack args {:#?}", stack_args);
+                        }
                         let left = stack_args[0].as_ref();
                         let right = stack_args[1].as_ref();
 
@@ -755,118 +836,54 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                         match args[0] {
                             CommandArg::CompareOp(CompareOp::Eq) => {
                                 let res = left == right;
-                                mem.set_mem_pos(
-                                    0xff,
-                                    TypeValue::Builtin(
-                                        BuiltinTypeValue::Boolean(Boolean(
-                                            res,
-                                        )),
-                                    ),
-                                );
                                 self.stack
                                     .borrow_mut()
-                                    .push(StackRefPos::MemPos(0xff))?;
+                                    .push(StackRefPos::CompareResult(res))?;
                             }
                             CommandArg::CompareOp(CompareOp::Ne) => {
                                 let res = left != right;
-                                mem.set_mem_pos(
-                                    0xff,
-                                    TypeValue::Builtin(
-                                        BuiltinTypeValue::Boolean(Boolean(
-                                            res,
-                                        )),
-                                    ),
-                                );
                                 self.stack
                                     .borrow_mut()
-                                    .push(StackRefPos::MemPos(0xff))?;
+                                    .push(StackRefPos::CompareResult(res))?;
                             }
                             CommandArg::CompareOp(CompareOp::Lt) => {
                                 let res = left < right;
-                                mem.set_mem_pos(
-                                    0xff,
-                                    TypeValue::Builtin(
-                                        BuiltinTypeValue::Boolean(Boolean(
-                                            res,
-                                        )),
-                                    ),
-                                );
                                 self.stack
                                     .borrow_mut()
-                                    .push(StackRefPos::MemPos(0xff))?;
+                                    .push(StackRefPos::CompareResult(res))?;
                             }
                             CommandArg::CompareOp(CompareOp::Le) => {
                                 let res = left <= right;
-                                mem.set_mem_pos(
-                                    0xff,
-                                    TypeValue::Builtin(
-                                        BuiltinTypeValue::Boolean(Boolean(
-                                            res,
-                                        )),
-                                    ),
-                                );
                                 self.stack
                                     .borrow_mut()
-                                    .push(StackRefPos::MemPos(0xff))?;
+                                    .push(StackRefPos::CompareResult(res))?;
                             }
                             CommandArg::CompareOp(CompareOp::Gt) => {
                                 let res = left > right;
-                                mem.set_mem_pos(
-                                    0xff,
-                                    TypeValue::Builtin(
-                                        BuiltinTypeValue::Boolean(Boolean(
-                                            res,
-                                        )),
-                                    ),
-                                );
                                 self.stack
                                     .borrow_mut()
-                                    .push(StackRefPos::MemPos(0xff))?;
+                                    .push(StackRefPos::CompareResult(res))?;
                             }
                             CommandArg::CompareOp(CompareOp::Ge) => {
                                 let res = left >= right;
-                                mem.set_mem_pos(
-                                    0xff,
-                                    TypeValue::Builtin(
-                                        BuiltinTypeValue::Boolean(Boolean(
-                                            res,
-                                        )),
-                                    ),
-                                );
                                 self.stack
                                     .borrow_mut()
-                                    .push(StackRefPos::MemPos(0xff))?;
+                                    .push(StackRefPos::CompareResult(res))?;
                             }
                             CommandArg::CompareOp(CompareOp::Or) => {
                                 let l = left.try_into()?;
                                 let r = right.try_into()?;
                                 let res = l || r;
-                                mem.set_mem_pos(
-                                    0xff,
-                                    TypeValue::Builtin(
-                                        BuiltinTypeValue::Boolean(Boolean(
-                                            res,
-                                        )),
-                                    ),
-                                );
                                 self.stack
                                     .borrow_mut()
-                                    .push(StackRefPos::MemPos(0xff))?;
+                                    .push(StackRefPos::CompareResult(res))?;
                             }
                             CommandArg::CompareOp(CompareOp::And) => {
                                 let res =
                                     left.try_into()? && right.try_into()?;
-                                mem.set_mem_pos(
-                                    0xff,
-                                    TypeValue::Builtin(
-                                        BuiltinTypeValue::Boolean(Boolean(
-                                            res,
-                                        )),
-                                    ),
-                                );
                                 self.stack
                                     .borrow_mut()
-                                    .push(StackRefPos::MemPos(0xff))?;
+                                    .push(StackRefPos::CompareResult(res))?;
                             }
                             _ => panic!("{:3} -> invalid compare op", pc),
                         }
@@ -959,6 +976,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                         StackValue::Arc(v.into())
                                     } else { StackValue::Owned(TypeValue::Unknown) }
                                 }
+                                StackRefPos::CompareResult(res) => StackValue::Owned(res.into())
                             }
                         }).collect::<Vec<_>>();
                         trace!("stack_args {:?}", stack_args);
@@ -1043,6 +1061,9 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                 StackRefPos::TablePos(_token, _pos) => {
                                     panic!(r#"Can't mutate data in a data source. 
                                     That's fatal."#);
+                                }
+                                StackRefPos::CompareResult(res) => {
+                                    panic!("Fatal: Can't mutate a compare result.");
                                 }
                             }
                         }).collect::<Vec<_>>();
@@ -1242,9 +1263,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                     OpCode::CondFalseSkipToEOB => {
                         let s = self.stack.borrow();
                         let stack_ref = s.get_top_value()?;
-                        let bool_val =
-                            mem.get_mp_field_by_stack_ref(stack_ref).unwrap();
-                        if bool_val.is_false()? {
+                        if !mem.get_mp_field_as_bool(stack_ref) {
                             if log_enabled!(Level::Trace) {
                                 trace!(" skip to end of block");
                             }
@@ -1260,9 +1279,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                     OpCode::CondTrueSkipToEOB => {
                         let s = self.stack.borrow();
                         let stack_ref = s.get_top_value()?;
-                        let bool_val =
-                            mem.get_mp_field_by_stack_ref(stack_ref).unwrap();
-                        if bool_val.is_false()? {
+                        if !mem.get_mp_field_as_bool(stack_ref) {
                             if log_enabled!(Level::Trace) {
                                 trace!(" continue");
                             }
