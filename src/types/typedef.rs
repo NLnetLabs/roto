@@ -3,7 +3,7 @@
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 
-use log::{debug, trace};
+use log::trace;
 
 use crate::compile::CompileError;
 use crate::traits::Token;
@@ -178,7 +178,7 @@ impl TypeDef {
                     .iter()
                     .any(|(k, v)| k == name && v.as_ref() == *ty)
                 {
-                    debug!(
+                    trace!(
                         "Error in field instance '{}' of type {}",
                         name, ty
                     );
@@ -200,7 +200,7 @@ impl TypeDef {
         if let TypeDef::Record(rec) = self {
             for (name, ty) in fields {
                 if !rec.iter().any(|(k, v)| k == name && v.as_ref() == ty) {
-                    debug!(
+                    trace!(
                         "Error in field instance '{}' of type {}",
                         name, ty
                     );
@@ -210,7 +210,7 @@ impl TypeDef {
             }
             true
         } else {
-            debug!("no record, return false for type {}", self);
+            trace!("no record, return false for type {}", self);
             false
         }
     }

@@ -95,7 +95,7 @@ impl<M: Meta + 'static> From<Rib<M>> for DataSource {
 
 use std::sync::Arc;
 
-use log::debug;
+use log::trace;
 use rotonda_store::{prelude::Meta, epoch, MatchOptions, MatchType};
 
 use crate::{
@@ -224,7 +224,7 @@ impl<M: Meta> RotoRib for Rib<M> {
                 todo!()
             }
             RibToken::LongestMatch => {
-                debug!("longest match on rib");
+                trace!("longest match on rib");
                 let guard = epoch::pin();
                 self
                     .store
@@ -246,11 +246,11 @@ impl<M: Meta> RotoRib for Rib<M> {
                     })
             }
             RibToken::Contains => {
-                debug!("contains on rib");
+                trace!("contains on rib");
                 todo!()
             }
             RibToken::Get => {
-                debug!("get on rib");
+                trace!("get on rib");
                 todo!()
             }
         }

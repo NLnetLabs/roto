@@ -1,4 +1,3 @@
-use log::info;
 use log::trace;
 
 use crate::ast::AcceptReject;
@@ -100,7 +99,7 @@ impl<'a> ast::SyntaxTree {
                 m.eval(symbols.clone())?;
             }
         }
-        info!("Evaluated successfully");
+        trace!("Evaluated successfully");
 
         Ok(())
     }

@@ -4,7 +4,7 @@ use std::{
     sync::Arc,
 };
 
-use log::{debug, log_enabled, trace, Level};
+use log::trace;
 use nom::error::VerboseError;
 
 use crate::{
@@ -590,9 +590,7 @@ impl<'a> Compiler {
     }
 
     pub fn compile(self) -> Rotolo {
-        if log_enabled!(Level::Debug) {
-            debug!("Start compiling...");
-        }
+        trace!("Start compiling...");
 
         // get all symbols that are used in the filter terms.
         let mut _global = self.symbols.borrow_mut();

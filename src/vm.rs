@@ -19,7 +19,7 @@ use crate::{
 };
 
 use arc_swap::ArcSwapOption;
-use log::{debug, log_enabled, trace, Level};
+use log::{log_enabled, trace, Level};
 
 //------------ Stack --------------------------------------------------------
 
@@ -119,18 +119,6 @@ impl LinearMemory {
 
     pub fn get_mem_pos(&self, index: usize) -> Option<&TypeValue> {
         self.0.get(index)
-    }
-
-    pub(crate) fn get_mp_field_by_stack_ref(
-        &self,
-        stack_ref: &StackRef,
-    ) -> Option<&TypeValue> {
-        match stack_ref.pos {
-            StackRefPos::MemPos(pos) => self
-                .get_mp_field_by_index(pos as usize, stack_ref.field_index),
-            StackRefPos::CompareResult(_res) => None,
-            _ => None,
-        }
     }
 
     pub(crate) fn get_mp_field_as_bool(&self, stack_ref: &StackRef) -> bool {
@@ -647,10 +635,6 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                     let v = mem
                         .get_mp_field_by_index(pos as usize, sr.field_index)
                         .unwrap_or_else(|| {
-                            // if log_enabled!(Level::Debug) {
-                            //     debug!("\nstack: {:?}", stack);
-                            //     debug!("mem: {:#?}", mem.0);
-                            // }
                             panic!(
                                 "Uninitialized memory in position {}",
                                 pos
@@ -793,9 +777,8 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
         mut _arguments: Option<ModuleArgsMap>,
         mem: &mut LinearMemory,
     ) -> Result<(AcceptReject, TypeValue, Option<TypeValue>), VmError> {
-        if log_enabled!(Level::Debug) {
-            debug!("\nstart executing vm...");
-        }
+        trace!("\nstart executing vm...");
+
         let mut commands_num: usize = 0;
 
         self._move_rx_tx_to_mem(rx, tx, mem);
@@ -805,27 +788,21 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
             ty: _,
         } in self.mir_code.as_ref()
         {
-            if log_enabled!(Level::Trace) {
-                trace!("\n\n--mirblock------------------");
-                trace!("stack: {:?}", self.stack);
-            }
+            trace!("\n\n--mirblock------------------");
+            trace!("stack: {:?}", self.stack);
 
             for (pc, Command { op, args }) in command_stack.iter().enumerate()
             {
                 commands_num += 1;
                 let mut args = CommandArgsStack::new(args);
-                if log_enabled!(Level::Trace) {
-                    trace!("\n{:3} -> {:?} {:?} ", pc, op, args);
-                }
+                trace!("\n{:3} -> {:?} {:?} ", pc, op, args);
                 match op {
                     // args: [CompareOperator]
                     // stack args: [cmp1, cmp2]
                     OpCode::Cmp => {
                         let stack_args = self._take_resolved(2, mem);
 
-                        if log_enabled!(Level::Trace) {
-                            trace!("raw stack args {:#?}", stack_args);
-                        }
+                        trace!("raw stack args {:#?}", stack_args);
                         let left = stack_args[0].as_ref();
                         let right = stack_args[1].as_ref();
 
@@ -961,10 +938,8 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                     let v = mem
                                         .get_mp_field_by_index(pos as usize, sr.field_index)
                                         .unwrap_or_else(|| {
-                                            if log_enabled!(Level::Debug) {
-                                                debug!("\nstack: {:?}", stack);
-                                                debug!("mem: {:#?}", mem.0);
-                                            }
+                                            trace!("\nstack: {:?}", stack);
+                                            trace!("mem: {:#?}", mem.0);
                                             panic!("Uninitialized memory in position {}", pos);
                                         });
                                     StackValue::Ref(v)
@@ -1032,10 +1007,9 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                         // later on.
                         let mut target_field_index = None;
 
-                        if log_enabled!(Level::Trace) {
-                            trace!("\nargs_len {}", args_len);
-                            trace!("Stack {:?}", stack);
-                        }
+                        trace!("\nargs_len {}", args_len);
+                        trace!("Stack {:?}", stack);
+                        
                         let mut stack_args = (0..args_len).into_iter().map(|_i| {
                             let sr = stack.pop().unwrap();
 
@@ -1050,10 +1024,8 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                     mem
                                         .get_mem_pos_as_owned(pos as usize)
                                         .unwrap_or_else(|| {
-                                            if log_enabled!(Level::Debug) {
-                                                debug!("\nstack: {:?}", stack);
-                                                debug!("mem: {:#?}", mem.0);
-                                            }
+                                            trace!("\nstack: {:?}", stack);
+                                            trace!("mem: {:#?}", mem.0);
                                             panic!(r#"Uninitialized memory in 
                                                 pos {}. That's fatal"#, pos);
                                         })
@@ -1062,7 +1034,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                     panic!(r#"Can't mutate data in a data source. 
                                     That's fatal."#);
                                 }
-                                StackRefPos::CompareResult(res) => {
+                                StackRefPos::CompareResult(_res) => {
                                     panic!("Fatal: Can't mutate a compare result.");
                                 }
                             }
@@ -1321,12 +1293,10 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                 }
                             }
 
-                            if log_enabled!(Level::Debug) {
-                                debug!(
-                                    "\n🍺 Done! Successfully executed {} instructions.",
-                                    commands_num
-                                );
-                            }
+                            trace!(
+                                "\n🍺 Done! Successfully executed {} instructions.",
+                                commands_num
+                            );
 
                             return Ok((*accept_reject, rx, tx));
                         }
@@ -1422,7 +1392,7 @@ impl<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> VmBuilder<MB, EDS> {
 
     pub fn build(self) -> Result<VirtualMachine<MB, EDS>, VmError> {
         // data sources need to be complete. Check that.
-        debug!("data sources in builder");
+        trace!("data sources in builder");
         let data_sources = if let Some(data_sources) = self.data_sources {
             for ds in data_sources.as_ref().iter() {
                 trace!("{}", ds.exists_and_is_empty());
