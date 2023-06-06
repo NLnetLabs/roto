@@ -4,7 +4,7 @@ use std::{
     sync::Arc,
 };
 
-use log::trace;
+use log::{trace, log_enabled, Level};
 use nom::error::VerboseError;
 
 use crate::{
@@ -548,7 +548,7 @@ impl<'a> Compiler {
     pub fn inject_compile_time_arguments(
         &mut self,
     ) -> Result<(), CompileError> {
-        println!("compile time arguments: {:?}", self.arguments);
+        trace!("compile time arguments: {:?}", self.arguments);
         let mut module = self.symbols.borrow_mut();
         for (module_name, args) in self.arguments.iter() {
             let _module = module
@@ -705,59 +705,6 @@ pub enum MirBlockType {
     Terminator,
 }
 
-// pub trait Mir: AsRef<Vec<MirBlock>> {
-//     fn new() -> Self;
-//     fn from_vec(mb: Vec<MirBlock>) -> Self;
-// }
-
-// impl Mir for MirRef<Arc<Vec<MirBlock>>> {
-//     fn new() -> Self {
-//         MirRef(Arc::new(vec![]))
-//     }
-
-//     fn from_vec(mb: Vec<MirBlock>) -> Self {
-//         MirRef(Arc::new(mb))
-//     }
-// }
-
-// impl AsRef<Vec<MirBlock>> for MirRef<Arc<Vec<MirBlock>>> {
-//     fn as_ref(&self) -> &Vec<MirBlock> {
-//         self.0.as_ref()
-//     }
-// }
-
-// impl Iterator for MirRef<Arc<Vec<MirBlock>>> {
-//     type Item = MirBlock;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         todo!()
-//     }
-// }
-
-// impl Mir for MirRef<&Vec<MirBlock>> {
-//     fn new() -> Self {
-//         todo!()
-//     }
-
-//     fn from_vec(_mb: Vec<MirBlock>) -> Self {
-//         todo!()
-//     }
-// }
-
-// impl AsRef<Vec<MirBlock>> for MirRef<&'_ Vec<MirBlock>> {
-//     fn as_ref(&self) -> &'_ Vec<MirBlock> {
-//         self.0
-//     }
-// }
-
-// impl Iterator for MirRef<&'_ Vec<MirBlock>> {
-//     type Item = MirBlock;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         todo!()
-//     }
-// }
-
 #[derive(Debug)]
 pub struct MirBlock {
     pub command_stack: Vec<Command>,
@@ -893,7 +840,7 @@ fn compile_module(
     global_table: &SymbolTable,
     // data_sources: Vec<(&str, Arc<DataSource>)>,
 ) -> Result<RotoPack, CompileError> {
-    println!("SYMBOL MAP\n{:#?}", module);
+    trace!("SYMBOL MAP\n{:#?}", module);
 
     let DepsGraph {
         rx_type,
@@ -917,30 +864,31 @@ fn compile_module(
 
     // initialize the command stack
     let mut mir = vec![];
+    if log_enabled!(Level::Trace) {
+        trace!("___used args");
+        state
+            .used_arguments
+            .iter()
+            .for_each(|s| trace!("{:?}: {:?}", s.1.get_token().unwrap(), s.0));
 
-    println!("___used args");
-    state
-        .used_arguments
-        .iter()
-        .for_each(|s| println!("{:?}: {:?}", s.1.get_token().unwrap(), s.0));
+        trace!("___used vars");
 
-    println!("___used vars");
+        state.used_variables.iter().for_each(|s| {
+            trace!("{:?} {:?}", s.1.get_token().unwrap(), s.0);
+        });
 
-    state.used_variables.iter().for_each(|s| {
-        println!("{:?} {:?}", s.1.get_token().unwrap(), s.0);
-    });
+        trace!("___used data_sources");
 
-    println!("___used data_sources");
+        state.used_data_sources.iter().for_each(|t| {
+            trace!("{:?} {:?}", t.1.get_token().unwrap(), t.0);
+        });
 
-    state.used_data_sources.iter().for_each(|t| {
-        println!("{:?} {:?}", t.1.get_token().unwrap(), t.0);
-    });
+        trace!("___rx tx types");
+        trace!("Rx {:?}", rx_type);
+        trace!("Tx {:?}", tx_type);
 
-    println!("___rx tx types");
-    println!("Rx {:?}", rx_type);
-    println!("Tx {:?}", tx_type);
-
-    println!("=================================================");
+        trace!("=================================================");
+    }
 
     // compile the variables used in the terms
     (mir, state) = compile_assignments(mir, state)?;
@@ -955,11 +903,7 @@ fn compile_module(
 
     mir.push(state.cur_mir_block);
 
-    println!("\n");
-    // for m in mir {
-    //     println!("MIR_block ({:?}): \n{}", m.ty, m);
-    // }
-
+    trace!("\n");
     let args = state
         .used_arguments
         .iter_mut()
@@ -1243,8 +1187,7 @@ fn compile_compute_expr<'a>(
                 }
                 // The parent is a Record
                 Token::Record => {
-                    println!("RECORD PARENT ARGS {:#?}", symbol.get_args());
-                    // assert!(is_ar);
+                    trace!("RECORD PARENT ARGS {:#?}", symbol.get_args());
                 }
                 // The parent is a Field Access, this symbol is one of:
                 //
@@ -1422,7 +1365,7 @@ fn compile_assignments(
         // argument variables.
         // state.cur_mem_pos = mem_pos;
         state.cur_mem_pos = 2 + state.used_variables.len() as u32;
-        println!(
+        trace!(
             "VAR {:?} MEM POS {} TEMP POS START {}",
             var.0,
             var_mem_pos + 2,
@@ -1462,8 +1405,8 @@ fn compile_assignments(
     }
 
     state.cur_mem_pos = 2 + state.used_variables.len() as u32;
-    println!("local variables map");
-    println!("{:#?}", state.local_variables);
+    trace!("local variables map");
+    trace!("{:#?}", state.local_variables);
 
     Ok((mir, state))
 }

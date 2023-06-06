@@ -547,12 +547,6 @@ impl Ord for TypeValue {
             (TypeValue::Record(_r1), TypeValue::Record(_r2)) => {
                 panic!("Records are not comparable.")
             }
-            // (TypeValue::Rib(_r1), TypeValue::Rib(_r2)) => {
-            //     panic!("Ribs are not comparable.")
-            // }
-            // (TypeValue::Table(_r1), TypeValue::Table(_r2)) => {
-            //     panic!("Tables are not comparable.")
-            // }
             (TypeValue::Unknown, TypeValue::Unknown) => Ordering::Equal,
             (TypeValue::Builtin(_), _) => Ordering::Less,
             (_, TypeValue::Builtin(_)) => Ordering::Greater,
@@ -560,10 +554,6 @@ impl Ord for TypeValue {
             (_, TypeValue::List(_)) => Ordering::Greater,
             (TypeValue::Record(_), _) => Ordering::Less,
             (_, TypeValue::Record(_)) => Ordering::Greater,
-            // (TypeValue::Rib(_), _) => Ordering::Less,
-            // (_, TypeValue::Rib(_)) => Ordering::Greater,
-            // (TypeValue::Table(_), _) => Ordering::Less,
-            // (_, TypeValue::Table(_)) => Ordering::Greater,
             (_, TypeValue::UnInit) => {
                 panic!("comparing with uninitialized memory.")
             }
@@ -584,7 +574,7 @@ impl<'a> TryFrom<StackValue<'a>> for bool {
     fn try_from(t: StackValue) -> Result<Self, Self::Error> {
         match t {
             StackValue::Ref(TypeValue::Builtin(BuiltinTypeValue::Boolean(ref b))) => {
-                Ok(b.0) //.ok_or(VmError::ImpossibleComparison)
+                Ok(b.0)
             }
             StackValue::Arc(bv) => {
                 if let TypeValue::Builtin(BuiltinTypeValue::Boolean(ref b)) = *bv {
@@ -604,7 +594,7 @@ impl<'a> TryFrom<&'a TypeValue> for bool {
     fn try_from(t: &TypeValue) -> Result<Self, Self::Error> {
         match t {
             TypeValue::Builtin(BuiltinTypeValue::Boolean(ref b)) => {
-                Ok(b.0) //.ok_or(VmError::ImpossibleComparison)
+                Ok(b.0)
             }
             _ => Err(VmError::ImpossibleComparison),
         }

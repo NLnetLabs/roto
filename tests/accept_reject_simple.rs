@@ -458,7 +458,7 @@ fn test_module_81() {
     );
     let test_run = test_data("my-module", src_line);
 
-    println!("test run {:?}", test_run);
+    trace!("test run {:?}", test_run);
     assert!(test_run.is_ok());
 
     let (ar, _rx, _tx) = test_run.unwrap();
