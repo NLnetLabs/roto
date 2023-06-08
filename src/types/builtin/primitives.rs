@@ -968,6 +968,12 @@ impl Display for Prefix {
     }
 }
 
+impl From<Prefix> for routecore::addr::Prefix {
+    fn from(val: Prefix) -> Self {
+        val.0
+    }
+}
+
 #[derive(Debug)]
 #[repr(u8)]
 pub(crate) enum PrefixToken {
