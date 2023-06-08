@@ -453,6 +453,9 @@ pub enum SymbolKind {
     LogicalExpr,
     BooleanExpr,
     CompareExpr(CompareOp),
+    // The comparison of the one value against a list with, i.e. 'in'
+    // or 'not in'
+    ListCompareExpr(CompareOp),
     AndExpr,
     OrExpr,
     NotExpr,

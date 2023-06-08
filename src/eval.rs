@@ -1145,6 +1145,18 @@ impl ast::ValueExpr {
                 ))
             }
             ast::ValueExpr::PrefixMatchExpr(_) => todo!(),
+            ast::ValueExpr::ListExpr(list_elm) => {
+                let list_value = list_elm.eval(symbols, scope)?;
+                let type_def = list_value[0].get_type();
+
+                Ok(symbols::Symbol::new(
+                    "anonymous_list".into(),
+                    symbols::SymbolKind::AnonymousType,
+                    TypeDef::List(Box::new(type_def)),
+                    list_value,
+                    Some(Token::List)
+                ))
+            },
         }
     }
 }
@@ -1185,6 +1197,23 @@ impl ast::FieldAccessExpr {
         } else {
             Err(format!("Invalid field access expression: {:?}", self).into())
         }
+    }
+}
+
+impl ast::ListValueExpr {
+    fn eval(
+        &self,
+        symbols: symbols::GlobalSymbolTable,
+        scope: symbols::Scope,
+    ) -> Result<Vec<symbols::Symbol>, CompileError> {
+        trace!("anonymous list");
+        let mut s: Vec<symbols::Symbol> = vec![];
+        for value in &self.values {
+            let arg = value.eval(symbols.clone(), scope.clone())?;
+            s.push(arg);
+        }
+
+        Ok(s)
     }
 }
 
@@ -1282,7 +1311,13 @@ impl ast::BooleanExpr {
                 )?;
                 Ok(s)
             }
-            ast::BooleanExpr::SetCompareExpr(_) => todo!(),
+            ast::BooleanExpr::ListCompareExpr(set_compare_expr) => {
+                let s = set_compare_expr.as_ref().eval(
+                    symbols,
+                    scope
+                )?;
+                Ok(s)
+            },
             ast::BooleanExpr::PrefixMatchExpr(_) => todo!(),
         }
     }
@@ -1457,6 +1492,58 @@ impl ast::GroupedLogicalExpr {
         scope: &symbols::Scope,
     ) -> Result<symbols::Symbol, CompileError> {
         self.expr.eval(symbols, scope.clone())
+    }
+}
+
+impl ast::ListCompareExpr {
+    fn eval(
+        &self,
+        symbols: symbols::GlobalSymbolTable,
+        scope: &symbols::Scope
+    ) -> Result<symbols::Symbol, CompileError> {
+        let _symbols = symbols.clone();
+
+        // Proces the left hand side of the compare expression. This is a
+        // Compare Argument. It has to end in a leaf node, otherwise it's
+        // an error.
+        let left_s = self.left.eval(_symbols, scope.clone())?;
+        let left_type = left_s.get_type();
+
+        let right_s = self.right.eval(symbols, scope.clone())?;
+
+        let mut l_args = vec![];
+        if let TypeDef::List(_) = right_s.get_type() {
+            l_args = right_s.get_args_owned();
+            trace!("list args {:?}", l_args);
+        } else {
+            l_args.push(right_s);
+        }
+
+        let mut args = vec![left_s];
+
+        for s in l_args {
+            let right_type = s.get_type();
+            // Either the left and right hand sides are of the same type OR the
+            // right hand side value can be converted into a type of the left
+            // hand side. For example, a comparison of PrefixLength and
+            // IntegerLiteral will work in the form of `prefix.len() == 32;`, but
+            // NOT reversed, i.e. `32 == prefix.len();` is INVALID.
+            // trace!("left_type {:#?} <-> right_type {:#?}", left_s, right_s);
+            if left_type != right_type {
+                args.push(s.try_convert_value_into(left_type.clone())?);
+            } else {
+                args.push(s);
+            }
+        }
+        trace!("after conversion {} <-> {:?}", left_type, &args);
+
+        Ok(symbols::Symbol::new(
+            "set_compare_expr".into(),
+            symbols::SymbolKind::ListCompareExpr(self.op),
+            TypeDef::Boolean,
+            args,
+            None,
+        ))
     }
 }
 

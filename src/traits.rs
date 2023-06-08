@@ -36,6 +36,7 @@ pub enum Token {
     // An anonymous record, the fields live in the `args` vec of the
     // symbol.
     Record,
+    List,
     BuiltinType(u8),
 }
 

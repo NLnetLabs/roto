@@ -4,7 +4,7 @@ use std::{
     sync::Arc,
 };
 
-use log::{trace, log_enabled, Level};
+use log::{log_enabled, trace, Level};
 use nom::error::VerboseError;
 
 use crate::{
@@ -14,7 +14,11 @@ use crate::{
         SymbolKind, SymbolTable,
     },
     traits::Token,
-    types::{datasources::DataSource, typevalue::TypeValue},
+    types::{
+        collections::{ElementTypeValue, List},
+        datasources::DataSource,
+        typevalue::TypeValue,
+    },
     types::{datasources::Table, typedef::TypeDef},
     vm::{
         Command, CommandArg, ExtDataSource, ModuleArg, ModuleArgsMap, OpCode,
@@ -866,10 +870,9 @@ fn compile_module(
     let mut mir = vec![];
     if log_enabled!(Level::Trace) {
         trace!("___used args");
-        state
-            .used_arguments
-            .iter()
-            .for_each(|s| trace!("{:?}: {:?}", s.1.get_token().unwrap(), s.0));
+        state.used_arguments.iter().for_each(|s| {
+            trace!("{:?}: {:?}", s.1.get_token().unwrap(), s.0)
+        });
 
         trace!("___used vars");
 
@@ -1185,6 +1188,10 @@ fn compile_compute_expr<'a>(
                         ],
                     ));
                 }
+                // The parent is a List
+                Token::List => {
+                    trace!("LIST PARENT ARGS {:#?}", symbol.get_args());
+                }
                 // The parent is a Record
                 Token::Record => {
                     trace!("RECORD PARENT ARGS {:#?}", symbol.get_args());
@@ -1306,10 +1313,35 @@ fn compile_compute_expr<'a>(
         Token::Record => {
             assert!(!is_ar);
 
-            trace!("ARGS {:#?}", symbol.get_args());
+            trace!("RECORD FIELDS {:#?}", symbol.get_args());
             for arg in symbol.get_args() {
                 state = compile_compute_expr(arg, state, None, true)?;
             }
+            return Ok(state);
+        }
+        // This is used in variable assignments, where a var is assigned to
+        // a list, on arrival here all the elements of the list will be
+        // in the `args` fields. We are wrapping them all up in an actual
+        // `List` and storing that in *one* memory position. Note that
+        // anonymous lists (directly defined and used outside the `Define`
+        // section) don't take this code path.
+        Token::List => {
+            assert!(!is_ar);
+
+            trace!("LIST VALUES {:?}", symbol.get_args());
+            let values = symbol
+                .get_args()
+                .iter()
+                .map(|v| v.get_value().clone().into())
+                .collect::<Vec<ElementTypeValue>>();
+            state.cur_mir_block.command_stack.push(Command::new(
+                OpCode::MemPosSet,
+                vec![
+                    CommandArg::MemPos(state.cur_mem_pos),
+                    CommandArg::List(List(values)),
+                ],
+            ));
+
             return Ok(state);
         }
     };
@@ -1364,7 +1396,7 @@ fn compile_assignments(
         // `compile_expr` may increase state.mem_pos to temporarily store
         // argument variables.
         // state.cur_mem_pos = mem_pos;
-        state.cur_mem_pos = 2 + state.used_variables.len() as u32;
+        state.cur_mem_pos = 1 + state.used_variables.len() as u32;
         trace!(
             "VAR {:?} MEM POS {} TEMP POS START {}",
             var.0,
@@ -1404,7 +1436,7 @@ fn compile_assignments(
         state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
     }
 
-    state.cur_mem_pos = 2 + state.used_variables.len() as u32;
+    state.cur_mem_pos = 1 + state.used_variables.len() as u32;
     trace!("local variables map");
     trace!("{:#?}", state.local_variables);
 
@@ -1666,8 +1698,34 @@ fn compile_sub_term<'a>(
         SymbolKind::NotExpr => {
             panic!("NOT NOT!");
         }
+        SymbolKind::ListCompareExpr(op) => {
+            let args = sub_term.get_args();
+            state.cur_mem_pos += 1;
+            let orig_mem_pos = state.cur_mem_pos;
+
+            for arg in &args[1..] {
+                // retrieve the left hand assignment and put it on the stack
+                state = compile_compute_expr(&args[0], state, None, false)?;
+                state.cur_mem_pos += 1;
+
+                // retrieve the next value from the right hand list
+                state = compile_compute_expr(arg, state, None, false)?;
+
+                state.cur_mir_block.command_stack.push(Command::new(
+                    OpCode::Cmp,
+                    vec![CommandArg::CompareOp(op)],
+                ));
+
+                state
+                    .cur_mir_block
+                    .command_stack
+                    .push(Command::new(OpCode::CondTrueSkipToEOB, vec![]));
+
+                // restore old mem_pos, let's not waste memory
+                state.cur_mem_pos = orig_mem_pos;
+            }
+        }
         _ => {
-            // let start_pos = state.cur_mem_pos;
             state = compile_compute_expr(sub_term, state, None, false)?;
         }
     };

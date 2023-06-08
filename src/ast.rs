@@ -1,5 +1,6 @@
 use std::{borrow, cmp, fmt, hash, ops, str};
 
+use log::trace;
 use nom::branch::{alt, permutation};
 use nom::bytes::complete::{is_not, take, take_while, take_while1};
 use nom::character::complete::{char, digit1, multispace0, multispace1};
@@ -94,7 +95,37 @@ impl RootExpr {
     }
 }
 
-//------------ RecordValueExpr --------------------------------------
+//------------ ListValueExpr ------------------------------------------------
+
+// ListValueExpr ::= '[' ValueExpr+ ']'
+
+// A list of values of the same type or a list where all the values can be
+// converted to the same type
+
+#[derive(Clone, Debug)]
+pub struct ListValueExpr {
+    pub values: Vec<ValueExpr>,
+}
+
+impl ListValueExpr {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, values) = context(
+            "list value",
+            delimited(
+                opt_ws(char('[')),
+                context(
+                    "List Value",
+                    separated_list1(char(','), opt_ws(ValueExpr::parse)),
+                ),
+                opt_ws(char(']')),
+            ),
+        )(input)?;
+
+        Ok((input, ListValueExpr { values }))
+    }
+}
+
+//------------ RecordValueExpr ----------------------------------------------
 
 // RecordValueExpr ::= '{' (Identifier ':' ValueExpr, )+ '}'
 
@@ -1054,7 +1085,6 @@ impl OutputStream {
     }
 }
 
-
 //============ Separators ====================================================
 
 /// Parses something preceded by optional white space.
@@ -1108,6 +1138,7 @@ impl Identifier {
                     tag("type"),
                     tag("with"),
                     tag("in"),
+                    tag("not"),
                     tag("define"),
                     tag("module"),
                     tag("import"),
@@ -1649,6 +1680,7 @@ pub enum ValueExpr {
     ComputeExpr(ComputeExpr),
     BuiltinMethodCallExpr(MethodComputeExpr),
     RecordExpr(RecordValueExpr),
+    ListExpr(ListValueExpr),
 }
 
 impl ValueExpr {
@@ -1663,6 +1695,7 @@ impl ValueExpr {
             map(tag("false"), |_| {
                 ValueExpr::BooleanLit(BooleanLiteral(false))
             }),
+            map(ListValueExpr::parse, ValueExpr::ListExpr),
             map(RecordValueExpr::parse, ValueExpr::RecordExpr),
             map(PrefixMatchExpr::parse, ValueExpr::PrefixMatchExpr),
             map(MethodComputeExpr::parse, ValueExpr::BuiltinMethodCallExpr),
@@ -2035,8 +2068,7 @@ impl CompareArg {
 //   ">=", "<="
 
 // BooleanExpr ::= BooleanLiteral | ComputeExpr | CompareExpr
-//          | AccessReceiver | SetcompareExpr | PrefixMatchExpr
-//          | Identifier
+//          | ListCompareExpr | AccessReceiver | PrefixMatchExpr | Identifier
 
 #[derive(Clone, Debug)]
 pub enum BooleanExpr {
@@ -2053,7 +2085,7 @@ pub enum BooleanExpr {
     // Set Compare expression, will *always* result in a boolean-valued
     // function. Syntactic sugar for a truth-function that performs
     // fn : a -> {a} ∩ B
-    SetCompareExpr(Box<SetCompareExpr>),
+    ListCompareExpr(Box<ListCompareExpr>),
     // syntactic sugar for a method on a prefix function that returns a
     // boolean.
     PrefixMatchExpr(PrefixMatchExpr),
@@ -2063,13 +2095,13 @@ impl BooleanExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         alt((
             map(GroupedLogicalExpr::parse, BooleanExpr::GroupedLogicalExpr),
+            map(ListCompareExpr::parse, |e| {
+                BooleanExpr::ListCompareExpr(Box::new(e))
+            }),
             map(CompareExpr::parse, |e| {
                 BooleanExpr::CompareExpr(Box::new(e))
             }),
             map(OptionalGlobalComputeExpr::parse, BooleanExpr::ComputeExpr),
-            map(SetCompareExpr::parse, |e| {
-                BooleanExpr::SetCompareExpr(Box::new(e))
-            }),
             map(PrefixMatchExpr::parse, BooleanExpr::PrefixMatchExpr),
             map(BooleanLiteral::parse, BooleanExpr::BooleanLiteral),
         ))(input)
@@ -2078,7 +2110,7 @@ impl BooleanExpr {
 
 //------------ CompareExpr --------------------------------------------------
 
-// CompareExpr ::= ValueExpr CompareOp ValueExpr
+// CompareExpr ::= CompareArg CompareOp CompareArg
 
 #[derive(Clone, Debug)]
 pub struct CompareExpr {
@@ -2089,6 +2121,7 @@ pub struct CompareExpr {
 
 impl CompareExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        trace!("compare expr");
         let (input, (left, op, right)) = context(
             "Compare Expression",
             tuple((
@@ -2123,6 +2156,8 @@ pub enum CompareOp {
     Ge,
     Or,
     And,
+    In,
+    NotIn,
 }
 
 //------------ AndExpr ------------------------------------------------------
@@ -2183,40 +2218,31 @@ impl NotExpr {
     }
 }
 
-//------------ SetCompareExpr -----------------------------------------------
+//------------ ListCompareExpr -----------------------------------------------
 
-// SetCompareExpr ::= ( ValueExpr ( 'in' | 'not in' ) ValueExpr )+
+// ListCompareExpr ::= ( ValueExpr ( 'in' | 'not in' ) ValueExpr )+
 
 #[derive(Clone, Debug)]
-pub struct SetCompareExpr {
-    pub left: CompareArg,
-    pub op: SetCompareOp,
-    pub right: CompareArg,
+pub struct ListCompareExpr {
+    pub left: ValueExpr,
+    pub op: CompareOp,
+    pub right: ValueExpr,
 }
 
-impl SetCompareExpr {
+impl ListCompareExpr {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, (left, op, right)) = tuple((
-            opt_ws(CompareArg::parse),
+            opt_ws(ValueExpr::parse),
             alt((
-                map(opt_ws(tag("in")), |_| SetCompareOp::In),
-                map(opt_ws(tag("not in")), |_| SetCompareOp::NotIn),
+                map(opt_ws(tag("in")), |_| CompareOp::In),
+                map(opt_ws(tag("not in")), |_| CompareOp::NotIn),
             )),
-            opt_ws(CompareArg::parse),
+            opt_ws(ValueExpr::parse),
         ))(input)?;
 
+        trace!("ListCompareExpr {:?} {:?} {:?}", left, op, right);
         Ok((input, Self { left, op, right }))
     }
-}
-
-//------------ SetCompareOp -------------------------------------------------
-
-// SetCompareOp ::= 'in' | 'not in'
-
-#[derive(Clone, Debug)]
-pub enum SetCompareOp {
-    In,
-    NotIn,
 }
 
 //------------- GroupedFormulaExpr ------------------------------------------

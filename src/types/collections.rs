@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-use crate::ast::{RecordValueExpr, ShortString, ValueExpr};
+use crate::ast::{ListValueExpr, RecordValueExpr, ShortString, ValueExpr};
 use crate::compile::CompileError;
 use crate::traits::{RotoType, TokenConvert};
 use crate::vm::{StackValue, VmError};
@@ -126,6 +126,9 @@ impl From<ValueExpr> for ElementTypeValue {
             ValueExpr::BuiltinMethodCallExpr(_) => todo!(),
             ValueExpr::RecordExpr(rec) => {
                 ElementTypeValue::Nested(Box::new(rec.into()))
+            }
+            ValueExpr::ListExpr(list) => {
+                ElementTypeValue::Nested(Box::new(list.into()))
             }
         }
     }
@@ -401,6 +404,18 @@ impl RotoType for List {
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
+    }
+}
+
+impl From<ListValueExpr> for List {
+    fn from(value: ListValueExpr) -> Self {
+        List(
+            value
+                .values
+                .iter()
+                .map(|v| v.clone().into())
+                .collect::<Vec<_>>(),
+        )
     }
 }
 

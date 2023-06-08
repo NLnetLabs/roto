@@ -4,17 +4,18 @@ use primitives::Hop;
 
 //============ TypeValue ====================================================
 use crate::{
-    ast::{ShortString, RecordValueExpr},
+    ast::{ListValueExpr, RecordValueExpr, ShortString},
+    attr_change_set::ScalarValue,
     compile::CompileError,
     traits::RotoType,
-    vm::{StackRef, StackRefPos, VmError, StackValue}, attr_change_set::ScalarValue,
+    vm::{StackRef, StackRefPos, StackValue, VmError},
 };
 
 use super::{
     builtin::{
-        Asn, Boolean, BuiltinTypeValue, HexLiteral,
+        primitives, Asn, Boolean, BuiltinTypeValue, HexLiteral,
         IntegerLiteral, IpAddress, Prefix, PrefixLength, StringLiteral, U32,
-        U8, primitives,
+        U8,
     },
     collections::{ElementTypeValue, List, Record},
     outputs::OutputStreamMessage,
@@ -25,7 +26,7 @@ use super::{
 /// holds both the type-level information and the value. The collection
 /// variants can hold multiple values recursively, e.g. a List of Records.
 
-#[derive(Debug, PartialEq, Eq, Default, Clone)]
+#[derive(Debug, Eq, PartialEq, Default, Clone)]
 pub enum TypeValue {
     // All the built-in scalars and vectors
     Builtin(BuiltinTypeValue),
@@ -89,7 +90,9 @@ impl TypeValue {
         }
     }
 
-    pub(crate) fn into_builtin(self) -> Result<BuiltinTypeValue, CompileError> {
+    pub(crate) fn into_builtin(
+        self,
+    ) -> Result<BuiltinTypeValue, CompileError> {
         match self {
             TypeValue::Builtin(b) => Ok(b),
             _ => {
@@ -218,7 +221,9 @@ impl TypeValue {
             TypeValue::Builtin(BuiltinTypeValue::Community(community)) => {
                 community.exec_value_method(method_token, args, return_type)
             }
-            TypeValue::Builtin(BuiltinTypeValue::Communities(communities)) => {
+            TypeValue::Builtin(BuiltinTypeValue::Communities(
+                communities,
+            )) => {
                 communities.exec_value_method(method_token, args, return_type)
             }
             TypeValue::Builtin(BuiltinTypeValue::OriginType(origin)) => {
@@ -230,7 +235,9 @@ impl TypeValue {
             TypeValue::Builtin(BuiltinTypeValue::NextHop(next_hop)) => {
                 next_hop.exec_value_method(method_token, args, return_type)
             }
-            TypeValue::Builtin(BuiltinTypeValue::AtomicAggregator(aggregator)) => {
+            TypeValue::Builtin(BuiltinTypeValue::AtomicAggregator(
+                aggregator,
+            )) => {
                 aggregator.exec_value_method(method_token, args, return_type)
             }
             TypeValue::Builtin(BuiltinTypeValue::MultiExitDisc(med)) => {
@@ -266,7 +273,9 @@ impl TypeValue {
             TypeValue::OutputStreamMessage(stream) => {
                 stream.exec_value_method(method_token, args, return_type)
             }
-            TypeValue::SharedValue(sv) => sv.exec_value_method(method_token, args, return_type),
+            TypeValue::SharedValue(sv) => {
+                sv.exec_value_method(method_token, args, return_type)
+            }
             TypeValue::Unknown => Ok(Box::new(|| TypeValue::Unknown)),
             TypeValue::UnInit => {
                 panic!("Unitialized memory cannot be read. That's fatal.");
@@ -328,9 +337,12 @@ impl TypeValue {
             }
             TypeValue::Builtin(BuiltinTypeValue::Route(route)) => route
                 .exec_consume_value_method(method_token, args, return_type),
-            TypeValue::Builtin(BuiltinTypeValue::RawBgpMessage(_raw)) => 
-                Err(VmError::InvalidMethodCall),
-            TypeValue::Builtin(BuiltinTypeValue::Communities(communities)) => {
+            TypeValue::Builtin(BuiltinTypeValue::RawBgpMessage(_raw)) => {
+                Err(VmError::InvalidMethodCall)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::Communities(
+                communities,
+            )) => {
                 // let l = communities.into_iter().map(|c| ElementTypeValue::Primitive(c.into())).collect::<Vec<_>>();
                 communities.exec_consume_value_method(
                     method_token,
@@ -363,13 +375,13 @@ impl TypeValue {
                 args,
                 return_type,
             ),
-            TypeValue::Builtin(BuiltinTypeValue::LocalPref(
-                local_pref,
-            )) => local_pref.exec_consume_value_method(
-                method_token,
-                args,
-                return_type,
-            ),
+            TypeValue::Builtin(BuiltinTypeValue::LocalPref(local_pref)) => {
+                local_pref.exec_consume_value_method(
+                    method_token,
+                    args,
+                    return_type,
+                )
+            }
             TypeValue::Builtin(BuiltinTypeValue::AtomicAggregator(
                 aggregator,
             )) => aggregator.exec_consume_value_method(
@@ -377,20 +389,16 @@ impl TypeValue {
                 args,
                 return_type,
             ),
-            TypeValue::Builtin(BuiltinTypeValue::NextHop(
-                next_hop,
-            )) => next_hop.exec_consume_value_method(
-                method_token,
-                args,
-                return_type,
-            ),
-            TypeValue::Builtin(BuiltinTypeValue::MultiExitDisc(
-                med,
-            )) => med.exec_consume_value_method(
-                method_token,
-                args,
-                return_type,
-            ),
+            TypeValue::Builtin(BuiltinTypeValue::NextHop(next_hop)) => {
+                next_hop.exec_consume_value_method(
+                    method_token,
+                    args,
+                    return_type,
+                )
+            }
+            TypeValue::Builtin(BuiltinTypeValue::MultiExitDisc(med)) => {
+                med.exec_consume_value_method(method_token, args, return_type)
+            }
             TypeValue::Builtin(BuiltinTypeValue::RouteStatus(
                 route_status,
             )) => route_status.exec_consume_value_method(
@@ -401,7 +409,9 @@ impl TypeValue {
             TypeValue::OutputStreamMessage(_stream) => {
                 Err(VmError::InvalidMethodCall)
             }
-            TypeValue::SharedValue(_sv) => panic!("Shared values cannot be consumed. They're read-only."),
+            TypeValue::SharedValue(_sv) => {
+                panic!("Shared values cannot be consumed. They're read-only.")
+            }
             TypeValue::Unknown => Ok(Box::new(|| TypeValue::Unknown)),
             TypeValue::UnInit => {
                 panic!("Unitialized memory cannot be read. That's fatal.");
@@ -409,7 +419,6 @@ impl TypeValue {
         }
     }
 }
-
 
 impl Display for TypeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -573,11 +582,13 @@ impl<'a> TryFrom<StackValue<'a>> for bool {
 
     fn try_from(t: StackValue) -> Result<Self, Self::Error> {
         match t {
-            StackValue::Ref(TypeValue::Builtin(BuiltinTypeValue::Boolean(ref b))) => {
-                Ok(b.0)
-            }
+            StackValue::Ref(TypeValue::Builtin(
+                BuiltinTypeValue::Boolean(ref b),
+            )) => Ok(b.0),
             StackValue::Arc(bv) => {
-                if let TypeValue::Builtin(BuiltinTypeValue::Boolean(ref b)) = *bv {
+                if let TypeValue::Builtin(BuiltinTypeValue::Boolean(ref b)) =
+                    *bv
+                {
                     Ok(b.0)
                 } else {
                     Err(VmError::ImpossibleComparison)
@@ -593,9 +604,7 @@ impl<'a> TryFrom<&'a TypeValue> for bool {
 
     fn try_from(t: &TypeValue) -> Result<Self, Self::Error> {
         match t {
-            TypeValue::Builtin(BuiltinTypeValue::Boolean(ref b)) => {
-                Ok(b.0)
-            }
+            TypeValue::Builtin(BuiltinTypeValue::Boolean(ref b)) => Ok(b.0),
             _ => Err(VmError::ImpossibleComparison),
         }
     }
@@ -645,7 +654,9 @@ impl From<primitives::RouteStatus> for TypeValue {
 
 impl From<routecore::addr::Prefix> for TypeValue {
     fn from(value: routecore::addr::Prefix) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Prefix(primitives::Prefix(value)))
+        TypeValue::Builtin(BuiltinTypeValue::Prefix(primitives::Prefix(
+            value,
+        )))
     }
 }
 
@@ -653,7 +664,10 @@ impl TryFrom<&TypeValue> for routecore::addr::Prefix {
     type Error = VmError;
 
     fn try_from(value: &TypeValue) -> Result<Self, Self::Error> {
-        if let TypeValue::Builtin(BuiltinTypeValue::Prefix(primitives::Prefix(pfx))) = value {
+        if let TypeValue::Builtin(BuiltinTypeValue::Prefix(
+            primitives::Prefix(pfx),
+        )) = value
+        {
             Ok(*pfx)
         } else {
             Err(VmError::InvalidConversion)
@@ -663,7 +677,9 @@ impl TryFrom<&TypeValue> for routecore::addr::Prefix {
 
 impl From<std::net::IpAddr> for TypeValue {
     fn from(ip_addr: std::net::IpAddr) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::IpAddress(primitives::IpAddress(ip_addr)))
+        TypeValue::Builtin(BuiltinTypeValue::IpAddress(
+            primitives::IpAddress(ip_addr),
+        ))
     }
 }
 
@@ -675,7 +691,9 @@ impl From<routecore::asn::Asn> for TypeValue {
 
 impl From<routecore::bgp::aspath::HopPath> for TypeValue {
     fn from(value: routecore::bgp::aspath::HopPath) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::AsPath(primitives::AsPath::from(value)))
+        TypeValue::Builtin(BuiltinTypeValue::AsPath(
+            primitives::AsPath::from(value),
+        ))
     }
 }
 
@@ -697,17 +715,17 @@ impl From<routecore::bgp::aspath::Hop<Vec<u8>>> for BuiltinTypeValue {
     }
 }
 
-
 // impl From<routecore::bgp::communities::Communities> for TypeValue {
 //     fn from(value: routecore::bgp::communities::Communities) -> Self {
-//         let list = List(value.communities.iter().map(|c| ElementTypeValue::Primitive((*c).into())).collect()); 
+//         let list = List(value.communities.iter().map(|c| ElementTypeValue::Primitive((*c).into())).collect());
 //         TypeValue::Builtin(BuiltinTypeValue::Communities(list))
 //     }
 // }
 
 impl From<Vec<Asn>> for TypeValue {
     fn from(as_path: Vec<Asn>) -> Self {
-        let as_path: Vec<routecore::bgp::aspath::Hop<Vec<u8>>> = as_path.iter().map(|p| p.0.into()).collect();
+        let as_path: Vec<routecore::bgp::aspath::Hop<Vec<u8>>> =
+            as_path.iter().map(|p| p.0.into()).collect();
         let as_path = crate::types::builtin::AsPath::from(as_path);
         TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path))
     }
@@ -721,13 +739,23 @@ impl From<Vec<routecore::bgp::aspath::Hop<Vec<u8>>>> for TypeValue {
 
 impl From<Vec<crate::types::builtin::Community>> for TypeValue {
     fn from(value: Vec<crate::types::builtin::Community>) -> Self {
-        TypeValue::List(List::new(value.iter().map(|v| ElementTypeValue::Primitive((*v).into())).collect::<Vec<_>>()))
+        TypeValue::List(List::new(
+            value
+                .iter()
+                .map(|v| ElementTypeValue::Primitive((*v).into()))
+                .collect::<Vec<_>>(),
+        ))
     }
 }
 
 impl From<Vec<TypeValue>> for TypeValue {
     fn from(value: Vec<TypeValue>) -> Self {
-        TypeValue::List(List::new(value.iter().map(|v| ElementTypeValue::Primitive((*v).clone())).collect::<Vec<_>>()))
+        TypeValue::List(List::new(
+            value
+                .iter()
+                .map(|v| ElementTypeValue::Primitive((*v).clone()))
+                .collect::<Vec<_>>(),
+        ))
     }
 }
 
@@ -738,22 +766,27 @@ impl ScalarValue for TypeValue {}
 // Records do not know how their literals are going to be used/converted, so
 // they store them as actual TypeValue::*Literal variants
 
-
 impl From<crate::ast::StringLiteral> for TypeValue {
-   fn from(value: crate::ast::StringLiteral) -> Self {
-       TypeValue::Builtin(BuiltinTypeValue::StringLiteral(StringLiteral(value.0)))
-   }
+    fn from(value: crate::ast::StringLiteral) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::StringLiteral(StringLiteral(
+            value.0,
+        )))
+    }
 }
 
 impl From<crate::ast::IntegerLiteral> for TypeValue {
     fn from(value: crate::ast::IntegerLiteral) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(value.0)))
+        TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(
+            value.0,
+        )))
     }
 }
 
 impl From<crate::ast::PrefixLengthLiteral> for TypeValue {
     fn from(value: crate::ast::PrefixLengthLiteral) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::PrefixLength(PrefixLength(value.0 as u8)))
+        TypeValue::Builtin(BuiltinTypeValue::PrefixLength(PrefixLength(
+            value.0 as u8,
+        )))
     }
 }
 
@@ -772,6 +805,12 @@ impl From<crate::ast::HexLiteral> for TypeValue {
 impl From<crate::ast::BooleanLiteral> for TypeValue {
     fn from(value: crate::ast::BooleanLiteral) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(value.0)))
+    }
+}
+
+impl From<ListValueExpr> for TypeValue {
+    fn from(value: ListValueExpr) -> Self {
+        TypeValue::List(value.into())
     }
 }
 

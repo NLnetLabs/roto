@@ -47,6 +47,9 @@ fn src_code(code_line: &str, end_accept_reject: &str) -> String {
         module in-module {{
             define {{
                 rx_tx msg: BmpMsg;
+                a = 100;
+                b = [10,20,30,40];
+                c = 99;
             }}
 
             term peer-asn-matches {{
@@ -128,9 +131,9 @@ fn test_data(
 }
 
 #[test]
-fn test_compare_1() {
+fn test_list_compare_1() {
     common::init();
-    let src_line = src_code("msg.type == 2; // Peer Down", "reject");
+    let src_line = src_code("msg.type in [2,3,4,5]; // Peer Down", "reject");
     let test_run = test_data("in-module", &src_line);
 
     let (ar, _rx, _tx) = test_run.unwrap();
@@ -138,19 +141,10 @@ fn test_compare_1() {
 }
 
 #[test]
-fn test_compare_2() {
+fn test_list_compare_2() {
     common::init();
-    let src_line = src_code("msg.type == 2; // Peer Down", "accept");
-    let test_run = test_data("in-module", &src_line);
-
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
-}
-
-#[test]
-fn test_compare_3() {
-    common::init();
-    let src_line = src_code("msg.type == 1; // Peer Down", "reject");
+    let src_line =
+        src_code("msg.type in [1,2,3,4,5]; // Peer Down", "reject");
     let test_run = test_data("in-module", &src_line);
 
     let (ar, _rx, _tx) = test_run.unwrap();
@@ -158,60 +152,10 @@ fn test_compare_3() {
 }
 
 #[test]
-fn test_compare_4() {
+fn test_list_compare_3() {
     common::init();
     let src_line =
-        src_code("msg.type == 1 && msg.type == 2; // Peer Down", "accept");
-    let test_run = test_data("in-module", &src_line);
-
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
-}
-
-#[test]
-fn test_compare_5() {
-    common::init();
-    let src_line =
-        src_code("msg.type == 2 && msg.type == 2; // Peer Down", "reject");
-    let test_run = test_data("in-module", &src_line);
-
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
-}
-
-#[test]
-fn test_compare_6() {
-    common::init();
-    let src_line = src_code(
-        "(msg.type == 2) || (msg.type == 2); // Peer Down",
-        "reject",
-    );
-    let test_run = test_data("in-module", &src_line);
-
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
-}
-
-#[test]
-fn test_compare_7() {
-    common::init();
-    let src_line = src_code(
-        "( (msg.type == 2) || (msg.type == 2) ) && ( msg.type == 2 ); // Peer Down",
-        "reject",
-    );
-    let test_run = test_data("in-module", &src_line);
-
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
-}
-
-#[test]
-fn test_compare_8() {
-    common::init();
-    let src_line = src_code(
-        "( (msg.type == 2) || (msg.type == 2) ) || ( msg.type == 1 ); // Peer Down",
-        "reject",
-    );
+        src_code("msg.type in [1,2,3,4,5]; // Peer Down", "reject");
     let test_run = test_data("in-module", &src_line);
 
     let (ar, _rx, _tx) = test_run.unwrap();
@@ -219,11 +163,77 @@ fn test_compare_8() {
 }
 
 #[test]
-fn test_compare_9() {
+fn test_list_compare_4() {
     common::init();
-    let src_line = src_code("msg.type in [2,3,4,5]; // Peer Down", "accept");
+    let src_line =
+        src_code("msg.type in [2,3,4,5,1,9]; // Peer Down", "reject");
     let test_run = test_data("in-module", &src_line);
 
+    let (ar, _rx, _tx) = test_run.unwrap();
+    assert_eq!(ar, AcceptReject::Reject);
+}
+
+#[test]
+fn test_list_compare_5() {
+    common::init();
+    let src_line =
+        src_code(r#""stringetje" in [2,3,4,5,1]; // Peer Down"#, "reject");
+    let test_run = test_data("in-module", &src_line);
+
+    assert!(test_run.is_err());
+}
+
+#[test]
+fn test_list_compare_6() {
+    common::init();
+    let src_line =
+        src_code(r#"msg.type not in [2,3,4,5,1]; // Peer Down"#, "reject");
+    let test_run = test_data("in-module", &src_line);
+    let (ar, _rx, _tx) = test_run.unwrap();
+    assert_eq!(ar, AcceptReject::Reject);
+}
+
+#[test]
+fn test_list_compare_7() {
+    common::init();
+    let src_line = src_code(r#"a in [2,3,4,5,1]; // Peer Down"#, "reject");
+    let test_run = test_data("in-module", &src_line);
+    let (ar, _rx, _tx) = test_run.unwrap();
+    assert_eq!(ar, AcceptReject::Accept);
+}
+
+#[test]
+fn test_list_compare_8() {
+    common::init();
+    let src_line = src_code(r#"100 in [2,3,4,5,1]; // Peer Down"#, "reject");
+    let test_run = test_data("in-module", &src_line);
+    let (ar, _rx, _tx) = test_run.unwrap();
+    assert_eq!(ar, AcceptReject::Accept);
+}
+
+#[test]
+fn test_list_compare_9() {
+    common::init();
+    let src_line = src_code(r#"100 in b; // Peer Down"#, "reject");
+    let test_run = test_data("in-module", &src_line);
+    let (ar, _rx, _tx) = test_run.unwrap();
+    assert_eq!(ar, AcceptReject::Accept);
+}
+
+#[test]
+fn test_list_compare_10() {
+    common::init();
+    let src_line = src_code(r#"100 in [2,3,4,a]; // Peer Down"#, "reject");
+    let test_run = test_data("in-module", &src_line);
+    let (ar, _rx, _tx) = test_run.unwrap();
+    assert_eq!(ar, AcceptReject::Reject);
+}
+
+#[test]
+fn test_list_compare_11() {
+    common::init();
+    let src_line = src_code(r#"100 in [2,3,4,c]; // Peer Down"#, "reject");
+    let test_run = test_data("in-module", &src_line);
     let (ar, _rx, _tx) = test_run.unwrap();
     assert_eq!(ar, AcceptReject::Accept);
 }

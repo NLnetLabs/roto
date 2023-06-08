@@ -11,7 +11,7 @@ use crate::{
     traits::{RotoType, Token},
     types::{
         builtin::{Boolean, BuiltinTypeValue},
-        collections::ElementTypeValue,
+        collections::{ElementTypeValue, List, Record},
         datasources::{DataSource, DataSourceMethodValue},
         typedef::TypeDef,
         typevalue::TypeValue,
@@ -67,7 +67,7 @@ impl<'a> Stack {
     }
 
     fn get_top_value(&'a self) -> Result<&StackRef, VmError> {
-        self.0.get(0).ok_or(VmError::StackUnderflow)
+        self.0.last().ok_or(VmError::StackUnderflow)
     }
 
     fn set_field_index(&mut self, index: usize) -> Result<(), VmError> {
@@ -122,6 +122,7 @@ impl LinearMemory {
     }
 
     pub(crate) fn get_mp_field_as_bool(&self, stack_ref: &StackRef) -> bool {
+        println!("mp field: {:?}", stack_ref.pos);
         match stack_ref.pos {
             StackRefPos::MemPos(pos) => {
                 if let TypeValue::Builtin(BuiltinTypeValue::Boolean(
@@ -298,10 +299,11 @@ impl<'a> CommandArgsStack<'a> {
         // the first arg is the memory position index,
         // the second arg is the value to set on the
         // memory position.
-        if let Some(CommandArg::Constant(v)) = self.args.get(1).cloned() {
-            Ok(v)
-        } else {
-            Err(VmError::InvalidValueType)
+        match self.args.get(1) {
+            Some(CommandArg::Constant(c)) => Ok(c.clone()),
+            Some(CommandArg::List(l)) => Ok(TypeValue::List(l.clone())),
+            Some(CommandArg::Record(r)) => Ok(TypeValue::Record(r.clone())),
+            _ => Err(VmError::InvalidValueType),
         }
     }
 
@@ -862,6 +864,53 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                     .borrow_mut()
                                     .push(StackRefPos::CompareResult(res))?;
                             }
+                            // Two possibilities here:
+                            // - the right hand side is an actual TypeValue::List,
+                            //   we can compare the left hand to all the values in
+                            //   the right hand side list.
+                            // - the right hand side list consists of all the
+                            //   elements in stack_args, but for the first one
+                            //   (that's still the left hand side)
+                            CommandArg::CompareOp(CompareOp::In) => {
+                                let res = if let TypeValue::List(list) = right
+                                {
+                                    list.iter().any(|v| {
+                                        assert_ne!(v, &TypeValue::UnInit);
+                                        v == left
+                                    })
+                                } else {
+                                    stack_args[1..].iter().any(|v| {
+                                        assert_ne!(
+                                            v.as_ref(),
+                                            &TypeValue::UnInit
+                                        );
+                                        v.as_ref() == left
+                                    })
+                                };
+                                self.stack
+                                    .borrow_mut()
+                                    .push(StackRefPos::CompareResult(res))?;
+                            }
+                            CommandArg::CompareOp(CompareOp::NotIn) => {
+                                let res = if let TypeValue::List(list) = right
+                                {
+                                    !list.iter().any(|v| {
+                                        assert_ne!(v, &TypeValue::UnInit);
+                                        v == left
+                                    })
+                                } else {
+                                    !stack_args[1..].iter().any(|v| {
+                                        assert_ne!(
+                                            v.as_ref(),
+                                            &TypeValue::UnInit
+                                        );
+                                        v.as_ref() == left
+                                    })
+                                };
+                                self.stack
+                                    .borrow_mut()
+                                    .push(StackRefPos::CompareResult(res))?;
+                            }
                             _ => panic!("{:3} -> invalid compare op", pc),
                         }
                     }
@@ -1009,7 +1058,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
 
                         trace!("\nargs_len {}", args_len);
                         trace!("Stack {:?}", stack);
-                        
+
                         let mut stack_args = (0..args_len).into_iter().map(|_i| {
                             let sr = stack.pop().unwrap();
 
@@ -1564,8 +1613,10 @@ pub enum CommandArg {
     Constant(TypeValue),        // Constant value
     Variable(usize),            // Variable with token value
     Argument(usize),            // extra runtime argument for module & term
-    RxValue, // the placeholder for the value of the rx type at runtime
-    TxValue, // the placeholder for the value of the tx type at runtime
+    List(List), // a list that needs to be stored at a memory posision
+    Record(Record), // a record that needs to be stored at a mem posistion
+    RxValue,    // the placeholder for the value of the rx type at runtime
+    TxValue,    // the placeholder for the value of the tx type at runtime
     Method(usize), // method token value
     DataSourceTable(usize), // data source: table token value
     DataSourceRib(usize), // data source: rib token value
@@ -1676,6 +1727,8 @@ impl Clone for CommandArg {
             CommandArg::Argument(a) => CommandArg::Argument(*a),
             CommandArg::RxValue => CommandArg::RxValue,
             CommandArg::TxValue => CommandArg::TxValue,
+            CommandArg::List(l) => CommandArg::List(l.clone()),
+            CommandArg::Record(r) => CommandArg::Record(r.clone()),
             CommandArg::Method(m) => CommandArg::Method(*m),
             CommandArg::DataSourceTable(ds) => {
                 CommandArg::DataSourceTable(*ds)
