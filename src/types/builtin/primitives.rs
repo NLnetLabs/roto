@@ -587,6 +587,12 @@ impl RotoType for IntegerLiteral {
                 )
                 .into()),
             },
+            TypeDef::Asn => match self.0 {
+                0..=4294967295 => {
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(routecore::asn::Asn::from(self.0 as u32)))))
+                },
+                _ => Err(CompileError::from("Cannot convert type IntegerLiteral > 4294967295 into Asn".to_string()))
+            }
             TypeDef::U32 => u32::try_from(self.0)
                 .map(|v| TypeValue::Builtin(BuiltinTypeValue::U32(U32(v))))
                 .map_err(|_| {
