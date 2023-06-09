@@ -1,8 +1,10 @@
 use log::trace;
 
 use crate::ast::AcceptReject;
+use crate::ast::Identifier;
 use crate::ast::LogicalExpr;
 use crate::ast::ShortString;
+use crate::ast::TypeIdentifier;
 use crate::compile::CompileError;
 use crate::symbols::GlobalSymbolTable;
 use crate::symbols::MatchActionType;
@@ -481,6 +483,19 @@ impl ast::Define {
                 scope.clone(),
             )?;
 
+            // we only allow typed record instances, an anonymous type would
+            // be ambiguous, since we don't know the different contexts where
+            // it will be used: the type inferrence may lead to a different
+            // type in different contexts, and then the type woudln't be
+            // equal to itself, which doesn't sound good (pun!).
+            if let Ok(Token::AnonymousRecord) = s.get_token() {
+                return Err(CompileError::from(
+                    format!(
+                        "Assignment to Anonymous Record type not allowed in `define` section for variable '{}'.",
+                        assignment.0.ident
+                )));
+            }
+
             trace!("DECLARE VAR {} = {:#?}", assignment.0.ident, s);
             // lhs of the assignment represents the name of the variable or
             // constant.
@@ -809,10 +824,7 @@ impl ast::ComputeExpr {
             match a_e {
                 ast::AccessExpr::MethodComputeExpr(method_call) => {
                     trace!("MC symbol (s) {:#?}", s);
-                    trace!(
-                        "All Symbols {:#?}",
-                        symbols.borrow().get(&scope)
-                    );
+                    trace!("All Symbols {:#?}", symbols.borrow().get(&scope));
                     trace!("method call {:?} on type {}", method_call, ty);
                     let arg_s = method_call.eval(
                         // At this stage we don't know really whether the
@@ -1130,7 +1142,7 @@ impl ast::ValueExpr {
                     Token::Constant(None),
                 ))
             }
-            ast::ValueExpr::RecordExpr(rec) => {
+            ast::ValueExpr::AnonymousRecordExpr(rec) => {
                 let rec_value = rec.eval(symbols, scope)?;
                 let type_def: Vec<_> = rec_value
                     .iter()
@@ -1141,7 +1153,47 @@ impl ast::ValueExpr {
                     symbols::SymbolKind::AnonymousType,
                     TypeDef::Record(type_def),
                     rec_value,
-                    Some(Token::Record),
+                    Some(Token::AnonymousRecord),
+                ))
+            }
+            ast::ValueExpr::TypedRecordExpr(rec) => {
+                let (type_id, rec_value) =
+                    rec.eval(symbols.clone(), scope.clone())?;
+
+                // see if the type on the record was actually defined by the roto user
+                let checked_ty = if let TypeDef::Record(fields) =
+                    check_type_identifier(type_id.clone(), symbols, &scope)?
+                {
+                    fields
+                } else {
+                    vec![]
+                };
+
+                // now check all individual fields to see if they match up,
+                // meaning the (field_name, type) pairs match or can be made
+                // to match by trying a type conversion on each field untill
+                // we fail, or succeed for all fields. The type with the
+                // conversions is stored as the actual type.
+                let mut checked_values = vec![];
+                for field_s in rec_value {
+                    let cur_ty =
+                        checked_ty.iter().find(|v| v.0 == field_s.get_name());
+                    if let Some(cur_ty) = cur_ty {
+                        checked_values.push(
+                            field_s
+                                .try_convert_value_into(*cur_ty.1.clone())?,
+                        );
+                    } else { 
+                        return Err(CompileError::from(format!("The field name '{}' cannot be found in type '{}'", field_s.get_name(), type_id.ident)))
+                    }
+                }
+
+                Ok(symbols::Symbol::new(
+                    type_id.ident,
+                    symbols::SymbolKind::NamedType,
+                    TypeDef::Record(checked_ty),
+                    checked_values,
+                    Some(Token::TypedRecord),
                 ))
             }
             ast::ValueExpr::PrefixMatchExpr(_) => todo!(),
@@ -1154,9 +1206,9 @@ impl ast::ValueExpr {
                     symbols::SymbolKind::AnonymousType,
                     TypeDef::List(Box::new(type_def)),
                     list_value,
-                    Some(Token::List)
+                    Some(Token::List),
                 ))
-            },
+            }
         }
     }
 }
@@ -1195,7 +1247,8 @@ impl ast::FieldAccessExpr {
                 Some(to),
             ));
         } else {
-            Err(format!("Invalid field access expression: {:?}", self).into())
+            Err(format!("Invalid field access expression: {:?}.", self)
+                .into())
         }
     }
 }
@@ -1217,7 +1270,7 @@ impl ast::ListValueExpr {
     }
 }
 
-impl ast::RecordValueExpr {
+impl ast::AnonymousRecordValueExpr {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
@@ -1231,6 +1284,24 @@ impl ast::RecordValueExpr {
         }
 
         Ok(s)
+    }
+}
+
+impl ast::TypedRecordValueExpr {
+    fn eval(
+        &self,
+        symbols: symbols::GlobalSymbolTable,
+        scope: symbols::Scope,
+    ) -> Result<(ast::TypeIdentifier, Vec<symbols::Symbol>), CompileError>
+    {
+        trace!("typed record");
+        let mut s: Vec<symbols::Symbol> = vec![];
+        for (key, value) in &self.key_values {
+            let arg = value.eval(symbols.clone(), scope.clone())?;
+            s.push(arg.set_name(key.ident.clone()));
+        }
+
+        Ok((self.type_id.clone(), s))
     }
 }
 
@@ -1311,13 +1382,10 @@ impl ast::BooleanExpr {
                 )?;
                 Ok(s)
             }
-            ast::BooleanExpr::ListCompareExpr(set_compare_expr) => {
-                let s = set_compare_expr.as_ref().eval(
-                    symbols,
-                    scope
-                )?;
+            ast::BooleanExpr::ListCompareExpr(list_compare_expr) => {
+                let s = list_compare_expr.as_ref().eval(symbols, scope)?;
                 Ok(s)
-            },
+            }
             ast::BooleanExpr::PrefixMatchExpr(_) => todo!(),
         }
     }
@@ -1499,11 +1567,11 @@ impl ast::ListCompareExpr {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
-        scope: &symbols::Scope
+        scope: &symbols::Scope,
     ) -> Result<symbols::Symbol, CompileError> {
         let _symbols = symbols.clone();
 
-        // Proces the left hand side of the compare expression. This is a
+        // Process the left hand side of the compare expression. This is a
         // Compare Argument. It has to end in a leaf node, otherwise it's
         // an error.
         let left_s = self.left.eval(_symbols, scope.clone())?;
@@ -1514,7 +1582,6 @@ impl ast::ListCompareExpr {
         let mut l_args = vec![];
         if let TypeDef::List(_) = right_s.get_type() {
             l_args = right_s.get_args_owned();
-            trace!("list args {:?}", l_args);
         } else {
             l_args.push(right_s);
         }
@@ -1538,7 +1605,7 @@ impl ast::ListCompareExpr {
         trace!("after conversion {} <-> {:?}", left_type, &args);
 
         Ok(symbols::Symbol::new(
-            "set_compare_expr".into(),
+            "list_compare_expr".into(),
             symbols::SymbolKind::ListCompareExpr(self.op),
             TypeDef::Boolean,
             args,

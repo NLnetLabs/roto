@@ -35,7 +35,8 @@ pub enum Token {
     Constant(Option<usize>),
     // An anonymous record, the fields live in the `args` vec of the
     // symbol.
-    Record,
+    AnonymousRecord,
+    TypedRecord,
     List,
     BuiltinType(u8),
 }

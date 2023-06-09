@@ -203,16 +203,20 @@ impl Symbol {
         }
     }
 
-    // get the return from this symbol if it's a leaf node, otherwise return
-    // the type of the nested leaf node (in the 'args' field). Note that this
-    // method will have to change if we're going to allow method calls with
-    // trailing method calls/field accesses, like `d().e`. Currently the
-    // parser won't allow it.
+    // Return the type of:
+    // - this symbol if it represents a Record OR
+    // - this symbol if it's a leaf node (args are empty) OR
+    // - the last symbol of the args, if that's a leaf node OR
+    // Used to construct the return type of a variable that is being
+    // assigned.
     pub(crate) fn get_recursive_return_type(&self) -> TypeDef {
+        if let TypeDef::Record(_ty) = self.get_type() {
+            return self.ty.clone()
+        } 
         if self.args.is_empty() {
             self.ty.clone()
         } else if let Some(last_arg) = self.args.last() {
-            last_arg.get_type() // get_recursive_return_type()
+            last_arg.get_type()
         } else {
             unreachable!()
         }

@@ -1,6 +1,9 @@
 use std::fmt::{Display, Formatter};
 
-use crate::ast::{ListValueExpr, RecordValueExpr, ShortString, ValueExpr};
+use crate::ast::{
+    AnonymousRecordValueExpr, ListValueExpr, ShortString,
+    TypedRecordValueExpr, ValueExpr,
+};
 use crate::compile::CompileError;
 use crate::traits::{RotoType, TokenConvert};
 use crate::vm::{StackValue, VmError};
@@ -124,7 +127,10 @@ impl From<ValueExpr> for ElementTypeValue {
             ValueExpr::PrefixMatchExpr(_) => todo!(),
             ValueExpr::ComputeExpr(_) => todo!(),
             ValueExpr::BuiltinMethodCallExpr(_) => todo!(),
-            ValueExpr::RecordExpr(rec) => {
+            ValueExpr::AnonymousRecordExpr(rec) => {
+                ElementTypeValue::Nested(Box::new(rec.into()))
+            }
+            ValueExpr::TypedRecordExpr(rec) => {
                 ElementTypeValue::Nested(Box::new(rec.into()))
             }
             ValueExpr::ListExpr(list) => {
@@ -623,11 +629,22 @@ impl RotoType for Record {
     }
 }
 
-// When an argument in an argument list is specified by a Roto script,
-// it's initially a variant fof RecordValueExpr, we need it to be a
-// record, though, for most forms of processing.
-impl From<RecordValueExpr> for Record {
-    fn from(value: RecordValueExpr) -> Self {
+// Value Expressions that containt a Record parsed as a pair of
+// (field_name, value) pairs. This turns it into an actual Record.
+impl From<AnonymousRecordValueExpr> for Record {
+    fn from(value: AnonymousRecordValueExpr) -> Self {
+        Record(
+            value
+                .key_values
+                .iter()
+                .map(|(s, t)| (s.ident.clone(), t.clone().into()))
+                .collect::<Vec<_>>(),
+        )
+    }
+}
+
+impl From<TypedRecordValueExpr> for Record {
+    fn from(value: TypedRecordValueExpr) -> Self {
         Record(
             value
                 .key_values

@@ -4,7 +4,10 @@ use primitives::Hop;
 
 //============ TypeValue ====================================================
 use crate::{
-    ast::{ListValueExpr, RecordValueExpr, ShortString},
+    ast::{
+        AnonymousRecordValueExpr, ListValueExpr, ShortString,
+        TypedRecordValueExpr,
+    },
     attr_change_set::ScalarValue,
     compile::CompileError,
     traits::RotoType,
@@ -814,8 +817,14 @@ impl From<ListValueExpr> for TypeValue {
     }
 }
 
-impl From<RecordValueExpr> for TypeValue {
-    fn from(value: RecordValueExpr) -> Self {
+impl From<AnonymousRecordValueExpr> for TypeValue {
+    fn from(value: AnonymousRecordValueExpr) -> Self {
+        TypeValue::Record(value.into())
+    }
+}
+
+impl From<TypedRecordValueExpr> for TypeValue {
+    fn from(value: TypedRecordValueExpr) -> Self {
         TypeValue::Record(value.into())
     }
 }

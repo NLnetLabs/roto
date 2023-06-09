@@ -15,7 +15,7 @@ use crate::{
     },
     traits::Token,
     types::{
-        collections::{ElementTypeValue, List},
+        collections::{ElementTypeValue, List, Record},
         datasources::DataSource,
         typevalue::TypeValue,
     },
@@ -1193,8 +1193,11 @@ fn compile_compute_expr<'a>(
                     trace!("LIST PARENT ARGS {:#?}", symbol.get_args());
                 }
                 // The parent is a Record
-                Token::Record => {
-                    trace!("RECORD PARENT ARGS {:#?}", symbol.get_args());
+                Token::AnonymousRecord => {
+                    trace!("ANONYMOUS RECORD PARENT ARGS {:#?}", symbol.get_args());
+                }
+                Token::TypedRecord => {
+                    trace!("TYPED RECORD PARENT ARGS {:#?}", symbol.get_args());
                 }
                 // The parent is a Field Access, this symbol is one of:
                 //
@@ -1309,22 +1312,62 @@ fn compile_compute_expr<'a>(
                 to
             )));
         }
-        // This is a record, so its `args` field contains the fields
-        Token::Record => {
+        // This record is defined without a type and used direcly, mainly in
+        // as a n argument for a method. The inferred type is unambiguous.
+        Token::AnonymousRecord => {
             assert!(!is_ar);
 
-            trace!("RECORD FIELDS {:#?}", symbol.get_args());
+            trace!("ANONYMOUS RECORD FIELDS {:#?}", symbol.get_args());
             for arg in symbol.get_args() {
                 state = compile_compute_expr(arg, state, None, true)?;
             }
             return Ok(state);
         }
-        // This is used in variable assignments, where a var is assigned to
-        // a list, on arrival here all the elements of the list will be
-        // in the `args` fields. We are wrapping them all up in an actual
-        // `List` and storing that in *one* memory position. Note that
-        // anonymous lists (directly defined and used outside the `Define`
-        // section) don't take this code path.
+        // This is a record that appears in a variable assigment that creates
+        // a record in the `Define` section.
+        Token::TypedRecord => {
+            assert!(!is_ar);
+
+            trace!("TYPED RECORD FIELDS {:#?}", symbol.get_args());
+            trace!("Checked Type {:#?}", symbol.get_type());
+   
+            let values = symbol
+                .get_args()
+                .iter()
+                .map(|v| (v.get_name(), v.get_value().clone().into()))
+                .collect::<Vec<(ShortString, ElementTypeValue)>>();
+
+            // let value_type_def = TypeDef::Record(symbol.get_args().iter().map(|v| (v.get_name(), Box::new(v.get_type()))).collect::<Vec<_>>());
+            let value_type = Record(values);
+
+            trace!("Actual type from values {:#?}", value_type);
+
+            if symbol.get_type() != TypeValue::Record(value_type.clone()) {
+                return Err(CompileError::from(
+                    format!(
+                        "This record: {} is of type {}, but we got a record with type {}. It's not the same and cannot convert.",
+                        value_type,
+                        symbol.get_type(),
+                        TypeDef::Record(symbol.get_args().iter().map(|v| (v.get_name(), Box::new(v.get_type()))).collect::<Vec<_>>())
+                    )
+                ));
+            }
+            state.cur_mir_block.command_stack.push(Command::new(
+                OpCode::MemPosSet,
+                vec![
+                    CommandArg::MemPos(state.cur_mem_pos),
+                    CommandArg::Record(value_type),
+                ],
+            ));
+            return Ok(state);
+        }
+        // This is used in variable assignments where a var is assigned to
+        // a list. On arrival here all the elements of the defined list will
+        // be in the `args` fields. We are wrapping them all up in an actual
+        // `List` and storing that in *one* memory position. 
+        // Anonymous Lists (lists that are defined and used immediately
+        // outside of the `Define` section) don't take this code path. Those
+        // appear in a ListCompareExpr and are already packed as a List.
         Token::List => {
             assert!(!is_ar);
 

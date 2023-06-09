@@ -125,18 +125,20 @@ impl ListValueExpr {
     }
 }
 
-//------------ RecordValueExpr ----------------------------------------------
+//------------ AnonymousRecordValueExpr -------------------------------------
 
 // RecordValueExpr ::= '{' (Identifier ':' ValueExpr, )+ '}'
 
-// The value of a (anonnymous) record, as a method argument.
+// The value of a (anonnymous) record
+// Defined and directly used, mainly as an argument to a method, where the
+// actual type can be inferred unambiguously.
 
 #[derive(Clone, Debug)]
-pub struct RecordValueExpr {
+pub struct AnonymousRecordValueExpr {
     pub key_values: Vec<(Identifier, ValueExpr)>,
 }
 
-impl RecordValueExpr {
+impl AnonymousRecordValueExpr {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, key_values) = context(
             "record value",
@@ -159,9 +161,53 @@ impl RecordValueExpr {
             ),
         )(input)?;
 
-        Ok((input, RecordValueExpr { key_values }))
+        Ok((input, AnonymousRecordValueExpr { key_values }))
     }
 }
+
+//------------ TypedRecordValueExpr -----------------------------------------
+
+// RecordValueExpr ::= Identifier '{' (Identifier ':' ValueExpr, )+ '}'
+
+// Used in the 'Define' section to create variables to hold a record.
+
+#[derive(Clone, Debug)]
+pub struct TypedRecordValueExpr {
+    pub type_id: TypeIdentifier,
+    pub key_values: Vec<(Identifier, ValueExpr)>,
+}
+
+impl TypedRecordValueExpr {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (type_id, key_values)) = context(
+            "typed record value",
+            tuple((
+                opt_ws(TypeIdentifier::parse),
+                delimited(
+                    opt_ws(char('{')),
+                    context(
+                        "Record Value",
+                        separated_list1(
+                            char(','),
+                            opt_ws(tuple((
+                                terminated(
+                                    opt_ws(Identifier::parse),
+                                    opt_ws(char(':')),
+                                ),
+                                opt_ws(ValueExpr::parse),
+                            ))),
+                        ),
+                    ),
+                    opt_ws(char('}')),
+                ),
+            )),
+        )(input)?;
+
+        Ok((input, TypedRecordValueExpr { type_id, key_values }))
+    }
+}
+
+// The value of a typed record
 
 //------------ RecordTypeAssignment -----------------------------------------
 
@@ -1679,7 +1725,8 @@ pub enum ValueExpr {
     PrefixMatchExpr(PrefixMatchExpr),
     ComputeExpr(ComputeExpr),
     BuiltinMethodCallExpr(MethodComputeExpr),
-    RecordExpr(RecordValueExpr),
+    AnonymousRecordExpr(AnonymousRecordValueExpr),
+    TypedRecordExpr(TypedRecordValueExpr),
     ListExpr(ListValueExpr),
 }
 
@@ -1696,7 +1743,11 @@ impl ValueExpr {
                 ValueExpr::BooleanLit(BooleanLiteral(false))
             }),
             map(ListValueExpr::parse, ValueExpr::ListExpr),
-            map(RecordValueExpr::parse, ValueExpr::RecordExpr),
+            map(
+                AnonymousRecordValueExpr::parse,
+                ValueExpr::AnonymousRecordExpr,
+            ),
+            map(TypedRecordValueExpr::parse, ValueExpr::TypedRecordExpr),
             map(PrefixMatchExpr::parse, ValueExpr::PrefixMatchExpr),
             map(MethodComputeExpr::parse, ValueExpr::BuiltinMethodCallExpr),
             map(ComputeExpr::parse, ValueExpr::ComputeExpr),

@@ -168,45 +168,31 @@ impl TypeDef {
         Ok((current_type_token.0.clone(), current_type_token.1))
     }
 
+    // This does a strict check to see if all the names of the fields and
+    // their types match up. It does not take into account possible type
+    // conversions on fields.
     pub(crate) fn _check_record_fields(
         &self,
         fields: &[(ShortString, &TypeValue)],
     ) -> bool {
+        let mut field_count = 0;
         if let TypeDef::Record(rec) = self {
             for (name, ty) in fields {
-                if !rec
-                    .iter()
-                    .any(|(k, v)| k == name && v.as_ref() == *ty)
-                {
+                if !rec.iter().any(|(k, v)| k == name && v.as_ref() == *ty) {
                     trace!(
                         "Error in field instance '{}' of type {}",
-                        name, ty
+                        name,
+                        ty
                     );
                     trace!("record {:?}", rec);
                     return false;
                 }
+                field_count += 1;
             }
-            true
-        } else {
-            trace!("no record, return false for type {}", self);
-            false
-        }
-    }
 
-    pub(crate) fn _check_record_fields_for_ref(
-        &self,
-        fields: &[(ShortString, TypeDef)],
-    ) -> bool {
-        if let TypeDef::Record(rec) = self {
-            for (name, ty) in fields {
-                if !rec.iter().any(|(k, v)| k == name && v.as_ref() == ty) {
-                    trace!(
-                        "Error in field instance '{}' of type {}",
-                        name, ty
-                    );
-                    trace!("record {:?}", rec);
-                    return false;
-                }
+            if field_count != rec.len() {
+                trace!("Missing fields in record {:?}", self);
+                return false;
             }
             true
         } else {
@@ -223,7 +209,9 @@ impl TypeDef {
             TypeDef::Record(_) => {
                 Record::get_props_for_method(self.clone(), method_name)
             }
-            TypeDef::Rib(_) => RibType::get_props_for_method(self, method_name),
+            TypeDef::Rib(_) => {
+                RibType::get_props_for_method(self, method_name)
+            }
             TypeDef::Table(_) => {
                 Table::get_props_for_method(self.clone(), method_name)
             }
@@ -503,13 +491,33 @@ impl PartialEq<TypeValue> for TypeDef {
                     false
                 }
             },
-            (TypeDef::Record(a), TypeValue::Record(_b)) => self
-                ._check_record_fields_for_ref(
-                    a.iter()
-                        .map(|ty| (ty.0.clone(), *ty.1.clone()))
-                        .collect::<Vec<_>>()
-                        .as_slice(),
-                ),
+            (TypeDef::Record(rec), TypeValue::Record(_b)) => {
+                trace!("compare {:?} <-> {:?}", rec, _b);
+
+                let fields = _b.0.iter()
+                .map(|ty| (ty.0.clone(), (&ty.1).into()))
+                        .collect::<Vec<(_, TypeDef)>>();
+                let mut field_count = 0;
+
+                for (name, ty) in fields.as_slice() {
+                    if !rec.iter().any(|(k, v)| k == name && v.as_ref() == ty) {
+                        trace!(
+                            "Error in field instance '{}' of type {}",
+                            name,
+                            ty
+                        );
+                        trace!("record {:?}", rec);
+                        return false;
+                    }
+                    field_count += 1;
+                }
+    
+                if field_count != rec.len() {
+                    trace!("Missing fields in record {:?}", self);
+                    return false;
+                }
+                true
+            }
             _ => false,
         }
     }
