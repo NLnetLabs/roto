@@ -1,10 +1,8 @@
 use log::trace;
 
 use crate::ast::AcceptReject;
-use crate::ast::Identifier;
 use crate::ast::LogicalExpr;
 use crate::ast::ShortString;
-use crate::ast::TypeIdentifier;
 use crate::compile::CompileError;
 use crate::symbols::GlobalSymbolTable;
 use crate::symbols::MatchActionType;
