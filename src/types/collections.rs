@@ -1,5 +1,3 @@
-use std::fmt::{Display, Formatter};
-
 use crate::ast::{
     AnonymousRecordValueExpr, ListValueExpr, ShortString,
     TypedRecordValueExpr, ValueExpr,
@@ -7,6 +5,8 @@ use crate::ast::{
 use crate::compile::CompileError;
 use crate::traits::{RotoType, TokenConvert};
 use crate::vm::{StackValue, VmError};
+use std::fmt::{Display, Formatter};
+use std::sync::Arc;
 
 use super::builtin::{BuiltinTypeValue, U32};
 use super::typedef::{MethodProps, TypeDef};
@@ -36,7 +36,7 @@ impl From<TypeValue> for ElementTypeValue {
             TypeValue::Record(kv_list) => {
                 ElementTypeValue::Nested(Box::new(TypeValue::Record(kv_list)))
             }
-            _ => panic!("Unknown type"),
+            ty => panic!("1. Unknown type {}", ty),
         }
     }
 }
@@ -48,7 +48,7 @@ impl From<ElementTypeValue> for TypeValue {
             ElementTypeValue::Nested(ty) => match *ty {
                 TypeValue::List(ty) => TypeValue::List(ty),
                 TypeValue::Record(kv_list) => TypeValue::Record(kv_list),
-                _ => panic!("Unknown type"),
+                ty => panic!("2. Unknown type {}", ty),
             },
         }
     }
@@ -61,7 +61,7 @@ impl<'a> From<&'a ElementTypeValue> for &'a TypeValue {
             ElementTypeValue::Nested(ty) => match ty.as_ref() {
                 TypeValue::List(_li) => ty,
                 TypeValue::Record(_kv_list) => ty,
-                _ => panic!("Unknown type"),
+                ty => panic!("3. Unknown type {}", ty),
             },
         }
     }
@@ -592,10 +592,31 @@ impl RotoType for Record {
 
     fn into_type(
         self,
-        type_def: &TypeDef,
+        into_type: &TypeDef,
     ) -> Result<TypeValue, CompileError> {
-        match type_def {
-            TypeDef::Record(_) => Ok(TypeValue::Record(self)),
+        // Converting from a Record into a Record is not as straight-forward
+        // as it is for primitive types, since we have to check whether the
+        // fields in both completely match.
+        match into_type {
+            TypeDef::Record(_) => {
+                if into_type == &TypeValue::Record(self.clone()) {
+                    Ok(TypeValue::Record(self))
+                } else {
+                    match into_type {
+                        TypeDef::OutputStream(rec) => Ok(TypeValue::OutputStreamMessage(
+                            Arc::new(super::outputs::OutputStreamMessage {
+                                name: "".into(),
+                                topic: "".into(),
+                                record_type: (**rec).clone(),
+                                record: self.into(),
+                            }),
+                        )),
+                        _ => Err("Record type cannot be converted into another type"
+                        .to_string()
+                        .into())
+                    }
+                }
+            }
             _ => Err("Record type cannot be converted into another type"
                 .to_string()
                 .into()),

@@ -1194,10 +1194,16 @@ fn compile_compute_expr<'a>(
                 }
                 // The parent is a Record
                 Token::AnonymousRecord => {
-                    trace!("ANONYMOUS RECORD PARENT ARGS {:#?}", symbol.get_args());
+                    trace!(
+                        "ANONYMOUS RECORD PARENT ARGS {:#?}",
+                        symbol.get_args()
+                    );
                 }
                 Token::TypedRecord => {
-                    trace!("TYPED RECORD PARENT ARGS {:#?}", symbol.get_args());
+                    trace!(
+                        "TYPED RECORD PARENT ARGS {:#?}",
+                        symbol.get_args()
+                    );
                 }
                 // The parent is a Field Access, this symbol is one of:
                 //
@@ -1330,22 +1336,17 @@ fn compile_compute_expr<'a>(
 
             trace!("TYPED RECORD FIELDS {:#?}", symbol.get_args());
             trace!("Checked Type {:#?}", symbol.get_type());
-   
             let values = symbol
-                .get_args()
+                .get_recursive_values_primitive(symbol.get_type())?
                 .iter()
-                .map(|v| (v.get_name(), v.get_value().clone().into()))
-                .collect::<Vec<(ShortString, ElementTypeValue)>>();
+                .map(|v| (v.0.clone(), v.2.clone().into()))
+                .collect::<Vec<_>>();
 
-            // let value_type_def = TypeDef::Record(symbol.get_args().iter().map(|v| (v.get_name(), Box::new(v.get_type()))).collect::<Vec<_>>());
             let value_type = Record(values);
-
-            trace!("Actual type from values {:#?}", value_type);
-
             if symbol.get_type() != TypeValue::Record(value_type.clone()) {
                 return Err(CompileError::from(
                     format!(
-                        "This record: {} is of type {}, but we got a record with type {}. It's not the same and cannot convert.",
+                        "This record: {} is of type {}, but we got a record with type {}. It's not the same and cannot be converted.",
                         value_type,
                         symbol.get_type(),
                         TypeDef::Record(symbol.get_args().iter().map(|v| (v.get_name(), Box::new(v.get_type()))).collect::<Vec<_>>())
@@ -1364,7 +1365,7 @@ fn compile_compute_expr<'a>(
         // This is used in variable assignments where a var is assigned to
         // a list. On arrival here all the elements of the defined list will
         // be in the `args` fields. We are wrapping them all up in an actual
-        // `List` and storing that in *one* memory position. 
+        // `List` and storing that in *one* memory position.
         // Anonymous Lists (lists that are defined and used immediately
         // outside of the `Define` section) don't take this code path. Those
         // appear in a ListCompareExpr and are already packed as a List.

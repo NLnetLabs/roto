@@ -76,6 +76,12 @@ fn src_code(
             asn: Asn,
             i: U8
         }}
+
+        type C {{
+            asn: Asn,
+            i: {{ f: U8, g: Asn }},
+            d: U32
+        }}
     "###,
         record_assign, code_line, end_accept_reject
     );
@@ -220,7 +226,7 @@ fn test_records_compare_6() {
     let test_run = test_data("in-module", &src_line).unwrap_err().to_string();
     assert_eq!(
         test_run,
-        "This record: {\n\tasn: AS100 (ASN)\n   } is of type Record {asn: Asn, i: U8, }, but we got a record with type Record {asn: Asn, }. It's not the same and cannot convert."
+        "This record: {\n\tasn: AS100 (ASN)\n   } is of type Record {asn: Asn, i: U8, }, but we got a record with type Record {asn: Asn, }. It's not the same and cannot be converted."
     );
 }
 
@@ -236,5 +242,50 @@ fn test_records_compare_7() {
     assert_eq!(
         test_run,
         "Eval error: The field name 'd' cannot be found in type 'A'"
+    );
+}
+
+#[test]
+fn test_records_compare_8() {
+    common::init();
+    let src_line = src_code(
+        "C { asn: AS100, i: { f: 200, g: AS24 }, d: 400 }",
+        "100 in [a.i, 2,3,4,5]; // Peer Down",
+        "reject",
+    );
+    let test_run = test_data("in-module", &src_line).unwrap_err().to_string();
+    assert_eq!(
+        test_run,
+        "Eval error: A value of type Record {f: U8, g: Asn, } cannot be converted into type IntegerLiteral"
+    );
+}
+
+#[test]
+fn test_records_compare_9() {
+    common::init();
+    let src_line = src_code(
+        "C { asn: AS100, i: { f: 200, g: AS24, h: { k: U32, l: U8 } }, d: 400 }",
+        "100 in [a.i,2,3,4,5]; // Peer Down",
+        "reject",
+    );
+    let test_run = test_data("in-module", &src_line).unwrap_err().to_string();
+    assert_eq!(
+        test_run,
+        "Eval error: The sub-field name 'h' cannot be found in field 'i' in type 'C'"
+    );
+}
+
+#[test]
+fn test_records_compare_10() {
+    common::init();
+    let src_line = src_code(
+        "C { asn: AS100, i: { f: 200, g: AS24, h: { k: U32, l: U8 } }, d: 400 }",
+        "100 in [1,2,3,4,5]; // Peer Down",
+        "reject",
+    );
+    let test_run = test_data("in-module", &src_line).unwrap_err().to_string();
+    assert_eq!(
+        test_run,
+        "Eval error: The sub-field name 'h' cannot be found in field 'i' in type 'C'"
     );
 }

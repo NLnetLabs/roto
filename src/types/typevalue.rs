@@ -421,6 +421,135 @@ impl TypeValue {
             }
         }
     }
+
+    // try to return the converted type with its value, if it's set. This is
+    // basically only the case if the kin of self, is Constant.
+    // Otherwise create an empty value for the type of self, and recursively
+    // try to convert that into the desired type.
+    // If these two steps fail, return an error.
+    pub fn try_convert_into_variant(
+        mut self,
+        type_def: TypeDef,
+    ) -> Result<Self, CompileError> {
+        println!("CONVERT TYPEVALUE {:#?} -> {}", self, type_def);
+        match self {
+            TypeValue::List(list) => {
+                self = list.into_type(&type_def)?;
+            }
+            TypeValue::Record(_rec) => {
+                return Err(CompileError::new(
+                    format!("A value of type Record can't be converted into type {}.", type_def)
+                ))
+            }
+            TypeValue::Builtin(BuiltinTypeValue::U32(int_u32)) => {
+                self = int_u32.into_type(&type_def)?;
+            }
+            TypeValue::Builtin(BuiltinTypeValue::U8(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+            TypeValue::Builtin(BuiltinTypeValue::Boolean(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+
+            TypeValue::Builtin(BuiltinTypeValue::Prefix(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+
+            TypeValue::Builtin(BuiltinTypeValue::PrefixLength(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+
+            TypeValue::Builtin(BuiltinTypeValue::IpAddress(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+
+            TypeValue::Builtin(BuiltinTypeValue::Asn(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+
+            TypeValue::Builtin(BuiltinTypeValue::AsPath(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+
+            TypeValue::Builtin(BuiltinTypeValue::Hop(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+            TypeValue::Builtin(BuiltinTypeValue::Communities(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+            TypeValue::Builtin(BuiltinTypeValue::Community(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+
+            TypeValue::Builtin(BuiltinTypeValue::OriginType(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+
+            TypeValue::Builtin(BuiltinTypeValue::Route(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+
+            TypeValue::Builtin(BuiltinTypeValue::RawBgpMessage(_val)) => {
+                return Err(CompileError::new(
+                    "Raw BGP message value can't be converted.".into(),
+                ))
+            }
+            TypeValue::Builtin(BuiltinTypeValue::LocalPref(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+
+            TypeValue::Builtin(BuiltinTypeValue::MultiExitDisc(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+
+            TypeValue::Builtin(BuiltinTypeValue::NextHop(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+
+            TypeValue::Builtin(BuiltinTypeValue::AtomicAggregator(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+
+            TypeValue::Builtin(BuiltinTypeValue::RouteStatus(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+
+            TypeValue::Builtin(BuiltinTypeValue::HexLiteral(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+
+            TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+
+            TypeValue::Builtin(BuiltinTypeValue::StringLiteral(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+            TypeValue::OutputStreamMessage(_) => {
+                return Err(CompileError::new(
+                    "Value from type OutputStreamMessage can't be converted."
+                        .into(),
+                ))
+            }
+            TypeValue::SharedValue(_) => {
+                return Err(CompileError::new(
+                    "Value from SharedValue type can't be converted.".into(),
+                ))
+            }
+            TypeValue::UnInit => {
+                return Err(CompileError::new(
+                    "Fatal: An unitialized type can't be converted.".into(),
+                ))
+            }
+            TypeValue::Unknown => {
+                return Err(CompileError::new(
+                    "Value from unknown type can't be converted.".into(),
+                ))
+            }
+        }
+
+        Ok(self)
+    }
 }
 
 impl Display for TypeValue {

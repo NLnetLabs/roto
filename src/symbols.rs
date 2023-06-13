@@ -7,12 +7,17 @@ use std::{
     rc::Rc,
 };
 
+use log::trace;
+
 use crate::{
-    ast::{AcceptReject, CompareOp, ShortString, Identifier, AccessReceiver},
+    ast::{AcceptReject, AccessReceiver, CompareOp, Identifier, ShortString},
     compile::CompileError,
     traits::{RotoType, Token},
     types::{
-        builtin::BuiltinTypeValue, typedef::TypeDef, typevalue::TypeValue,
+        builtin::BuiltinTypeValue,
+        collections::{ElementTypeValue, Record},
+        typedef::TypeDef,
+        typevalue::TypeValue,
     },
 };
 
@@ -123,6 +128,90 @@ impl Symbol {
         &self.value
     }
 
+    fn _get_recursive_value(&self) -> TypeValue {
+        trace!("self {:?}", self);
+        if let TypeValue::Record(_) = self.get_value() {
+            trace!("already has value {:?}", self.value);
+            return self.value.clone();
+        }
+
+        let mut rec_values: Vec<(ShortString, ElementTypeValue)> = vec![];
+        for arg in self.get_args() {
+            trace!("Args {:?}", self.get_args());
+            if let TypeDef::Record(mut _rec) = arg.get_type() {
+                trace!("arg {}", arg.get_type());
+                let v = arg._get_recursive_value();
+                trace!("value {}: {:?}", arg.get_name(), v);
+                rec_values.push((arg.get_name(), v.into()));
+            } else {
+                trace!("non-record value {:?}", arg.get_value());
+                rec_values
+                    .push((arg.get_name(), arg.get_value().clone().into()));
+            }
+        }
+
+        match self.get_type() {
+            TypeDef::Record(_) => TypeValue::Record(Record(rec_values)),
+            _ => self.value.clone(),
+        }
+    }
+
+    // checks to see if the arguments (`args`) in this symbol match with the
+    // supplied `type_def` or if all the subtypes can be converted into the
+    // subtypes of `type_def`. It will recognize anonymous sub-records.
+    // It it can work this out it will return the a Vec with the name of the
+    // (sub)-field, its (converted) type and its (converted) typevalue.
+    pub fn get_recursive_values_primitive(
+        &self,
+        type_def: TypeDef,
+    ) -> Result<Vec<(ShortString, TypeDef, TypeValue)>, CompileError> {
+        let mut rec_values: Vec<(ShortString, TypeDef, TypeValue)> = vec![];
+        for arg in self.get_args() {
+            if let TypeDef::Record(_rec) = arg.get_type() {
+
+                if let Some(checked_type) =
+                    type_def.get_field(&arg.get_name())
+                {
+                    let checked_val = arg.get_recursive_values_primitive(
+                        checked_type.clone(),
+                    )?;
+                    rec_values.push((
+                        arg.get_name(),
+                        checked_type,
+                        TypeValue::Record(Record(
+                            checked_val
+                                .iter()
+                                .map(|cv| (cv.0.clone(), cv.2.clone().into()))
+                                .collect::<Vec<_>>(),
+                        )),
+                    ));
+                } else {
+                    return Err(
+                        CompileError::from(
+                            format!(
+                                "The sub-field name '{}' cannot be found in field '{}'", 
+                                &arg.get_name(),
+                                self.get_name()
+                            )
+                        )
+                    );
+                }
+            } else if let Some(checked_type) =
+                type_def.get_field(&arg.get_name())
+            {
+                let checked_val = arg
+                    .get_value()
+                    .clone()
+                    .try_convert_into_variant(checked_type.clone())?;
+                rec_values.push((arg.get_name(), checked_type, checked_val));
+            } else {
+                return Err(CompileError::from(format!("'{}' cannot be found in '{}'", arg.get_name(), type_def)));
+            }
+        }
+
+        Ok(rec_values)
+    }
+
     pub fn get_value_owned(self) -> TypeValue {
         self.value
     }
@@ -211,8 +300,8 @@ impl Symbol {
     // assigned.
     pub(crate) fn get_recursive_return_type(&self) -> TypeDef {
         if let TypeDef::Record(_ty) = self.get_type() {
-            return self.ty.clone()
-        } 
+            return self.ty.clone();
+        }
         if self.args.is_empty() {
             self.ty.clone()
         } else if let Some(last_arg) = self.args.last() {
@@ -229,129 +318,223 @@ impl Symbol {
     // If these two steps fail, return an error.
     pub fn try_convert_value_into(
         mut self,
-        type_def: TypeDef,
+        into_ty: TypeDef,
     ) -> Result<Self, CompileError> {
-        println!("CONVERT {:#?} -> {}", self, type_def);
+        println!("CONVERT {:#?} -> {}", self, into_ty);
         match self.ty {
-            TypeDef::Rib(_) => { return Err(CompileError::new("RIB can't be converted.".into())) },
-            TypeDef::Table(_) => { return Err(CompileError::new("Table can't be converted.".into()))},
-            TypeDef::OutputStream(_) => { return Err(CompileError::new("Output Stream can't be converted".into()))}
+            TypeDef::Rib(_) => {
+                return Err(CompileError::new(
+                    "RIB can't be converted.".into(),
+                ))
+            }
+            TypeDef::Table(_) => {
+                return Err(CompileError::new(
+                    "Table can't be converted.".into(),
+                ))
+            }
+            TypeDef::OutputStream(_) => {
+                return Err(CompileError::new(
+                    "Output Stream can't be converted".into(),
+                ))
+            }
             TypeDef::List(_) => {
                 if let TypeValue::List(list) = self.value {
-                    self.value = list.into_type(&type_def)?;
+                    self.value = list.into_type(&into_ty)?;
                 }
-            },
-            TypeDef::Record(_) => {
-                if let TypeValue::Record(rec) = self.value {
-                    self.value = rec.into_type(&type_def)?;
+            }
+            TypeDef::Record(ref r) => {
+                trace!("convert record {:?} ({:?}) to {:?}", r, self.value, into_ty);
+
+                match into_ty {
+                    TypeDef::Record(ref _rec) => {
+                        // An instance with a type of Record() doesn't have
+                        // to necessarily have a TypeValue of Record, it
+                        // can also be TypeValue::Unknown. Unknown should
+                        // not through an error, it just can't be evaluated
+                        // a this point, but it may be compiled into a
+                        // value in the next phase.
+                        if let TypeValue::Record(rec) = self.value {
+                            self.value = rec.into_type(&into_ty)?;
+                        }
+                    }
+                    TypeDef::OutputStream(ref _o) => {
+                        // idem
+                        if let TypeValue::Record(rec) = self.value {
+                            self.value = rec.into_type(&into_ty)?;
+                        }
+                    }
+                    _ => {
+                        return Err(
+                            CompileError::from(
+                                format!(
+                                    "A value of type {} cannot be converted into type {}", 
+                                        self.ty, into_ty
+                                )
+                            )
+                        );
+                    }
                 }
-            },
+            }
             TypeDef::U32 => {
-                if let TypeValue::Builtin(BuiltinTypeValue::U32(int)) = self.value {
-                    self.value = int.into_type(&type_def)?;
+                if let TypeValue::Builtin(BuiltinTypeValue::U32(int)) =
+                    self.value
+                {
+                    self.value = int.into_type(&into_ty)?;
                 }
-            },
+            }
             TypeDef::U8 => {
-                if let TypeValue::Builtin(BuiltinTypeValue::U8(int)) = self.value {
-                    self.value = int.into_type(&type_def)?;
+                if let TypeValue::Builtin(BuiltinTypeValue::U8(int)) =
+                    self.value
+                {
+                    self.value = int.into_type(&into_ty)?;
                 }
-            },
+            }
             TypeDef::Boolean => {
-                if let TypeValue::Builtin(BuiltinTypeValue::Boolean(int)) = self.value {
-                    self.value = int.into_type(&type_def)?;
+                if let TypeValue::Builtin(BuiltinTypeValue::Boolean(int)) =
+                    self.value
+                {
+                    self.value = int.into_type(&into_ty)?;
                 }
-            },
+            }
             TypeDef::Prefix => {
-                if let TypeValue::Builtin(BuiltinTypeValue::Prefix(pfx)) = self.value {
-                    self.value = pfx.into_type(&type_def)?;
+                if let TypeValue::Builtin(BuiltinTypeValue::Prefix(pfx)) =
+                    self.value
+                {
+                    self.value = pfx.into_type(&into_ty)?;
                 }
-            },
+            }
             TypeDef::PrefixLength => {
-                if let TypeValue::Builtin(BuiltinTypeValue::PrefixLength(pl)) = self.value {
-                    self.value = pl.into_type(&type_def)?;
+                if let TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
+                    pl,
+                )) = self.value
+                {
+                    self.value = pl.into_type(&into_ty)?;
                 }
-            },
+            }
             TypeDef::IpAddress => {
-                if let TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) = self.value {
-                    self.value = ip.into_type(&type_def)?;
+                if let TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) =
+                    self.value
+                {
+                    self.value = ip.into_type(&into_ty)?;
                 }
-            },
+            }
             TypeDef::Asn => {
-                if let TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) = self.value {
-                    self.value = asn.into_type(&type_def)?;
+                if let TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) =
+                    self.value
+                {
+                    self.value = asn.into_type(&into_ty)?;
                 }
-            },
+            }
             TypeDef::AsPath => {
-                if let TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) = self.value {
-                    self.value = as_path.into_type(&type_def)?;
+                if let TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) =
+                    self.value
+                {
+                    self.value = as_path.into_type(&into_ty)?;
                 }
-            },
+            }
             TypeDef::Hop => {
-                if let TypeValue::Builtin(BuiltinTypeValue::Hop(hop)) = self.value {
-                    self.value = hop.into_type(&type_def)?;
+                if let TypeValue::Builtin(BuiltinTypeValue::Hop(hop)) =
+                    self.value
+                {
+                    self.value = hop.into_type(&into_ty)?;
                 }
             }
             TypeDef::Community => {
-                if let TypeValue::Builtin(BuiltinTypeValue::Community(int)) = self.value {
-                    self.value = int.into_type(&type_def)?;
+                if let TypeValue::Builtin(BuiltinTypeValue::Community(int)) =
+                    self.value
+                {
+                    self.value = int.into_type(&into_ty)?;
                 }
-            },
+            }
             TypeDef::OriginType => {
-                if let TypeValue::Builtin(BuiltinTypeValue::OriginType(ot)) = self.value {
-                    self.value = ot.into_type(&type_def)?;
+                if let TypeValue::Builtin(BuiltinTypeValue::OriginType(ot)) =
+                    self.value
+                {
+                    self.value = ot.into_type(&into_ty)?;
                 }
-            },
+            }
             TypeDef::Route => {
-                if let TypeValue::Builtin(BuiltinTypeValue::Route(r)) = self.value {
-                    self.value = r.into_type(&type_def)?;
+                if let TypeValue::Builtin(BuiltinTypeValue::Route(r)) =
+                    self.value
+                {
+                    self.value = r.into_type(&into_ty)?;
                 }
-            },
-            TypeDef::RawBgpMessage => { 
-                return Err(CompileError::new("Raw BGP message value can't be converted.".into())) 
-            },
+            }
+            TypeDef::RawBgpMessage => {
+                return Err(CompileError::new(
+                    "Raw BGP message value can't be converted.".into(),
+                ))
+            }
             TypeDef::LocalPref => {
-                if let TypeValue::Builtin(BuiltinTypeValue::LocalPref(r)) = self.value {
-                    self.value = r.into_type(&type_def)?;
+                if let TypeValue::Builtin(BuiltinTypeValue::LocalPref(r)) =
+                    self.value
+                {
+                    self.value = r.into_type(&into_ty)?;
                 }
-            },
+            }
             TypeDef::MultiExitDisc => {
-                if let TypeValue::Builtin(BuiltinTypeValue::MultiExitDisc(r)) = self.value {
-                    self.value = r.into_type(&type_def)?;
+                if let TypeValue::Builtin(BuiltinTypeValue::MultiExitDisc(
+                    r,
+                )) = self.value
+                {
+                    self.value = r.into_type(&into_ty)?;
                 }
-            },
+            }
             TypeDef::NextHop => {
-                if let TypeValue::Builtin(BuiltinTypeValue::NextHop(r)) = self.value {
-                    self.value = r.into_type(&type_def)?;
+                if let TypeValue::Builtin(BuiltinTypeValue::NextHop(r)) =
+                    self.value
+                {
+                    self.value = r.into_type(&into_ty)?;
                 }
-            },
+            }
             TypeDef::AtomicAggregator => {
-                if let TypeValue::Builtin(BuiltinTypeValue::AtomicAggregator(r)) = self.value {
-                    self.value = r.into_type(&type_def)?;
+                if let TypeValue::Builtin(
+                    BuiltinTypeValue::AtomicAggregator(r),
+                ) = self.value
+                {
+                    self.value = r.into_type(&into_ty)?;
                 }
-            },
+            }
             TypeDef::RouteStatus => {
-                if let TypeValue::Builtin(BuiltinTypeValue::RouteStatus(rs)) = self.value {
-                    self.value = rs.into_type(&type_def)?;
+                if let TypeValue::Builtin(BuiltinTypeValue::RouteStatus(rs)) =
+                    self.value
+                {
+                    self.value = rs.into_type(&into_ty)?;
                 }
-            },
+            }
             TypeDef::HexLiteral => {
-                if let TypeValue::Builtin(BuiltinTypeValue::HexLiteral(hex)) = self.value {
-                    self.value = hex.into_type(&type_def)?;
+                if let TypeValue::Builtin(BuiltinTypeValue::HexLiteral(hex)) =
+                    self.value
+                {
+                    self.value = hex.into_type(&into_ty)?;
                 }
-            },
+            }
             TypeDef::IntegerLiteral => {
-                if let TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(int)) = self.value {
-                    self.value = int.into_type(&type_def)?;
+                if let TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
+                    int,
+                )) = self.value
+                {
+                    self.value = int.into_type(&into_ty)?;
                 }
-            },
+            }
             TypeDef::StringLiteral => {
-                if let TypeValue::Builtin(BuiltinTypeValue::StringLiteral(str)) = self.value {
-                    self.value = str.into_type(&type_def)?;
+                if let TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
+                    str,
+                )) = self.value
+                {
+                    self.value = str.into_type(&into_ty)?;
                 }
-            },
-            TypeDef::AcceptReject(_) => { return Err(CompileError::new("AcceptReject value can't be converted.".into())) },
-            TypeDef::Unknown => { return Err(CompileError::new("Value from unknown type can't be converted.".into())) },
-  
+            }
+            TypeDef::AcceptReject(_) => {
+                return Err(CompileError::new(
+                    "AcceptReject value can't be converted.".into(),
+                ))
+            }
+            TypeDef::Unknown => {
+                return Err(CompileError::new(
+                    "Value from unknown type can't be converted.".into(),
+                ))
+            }
         }
 
         Ok(self)
@@ -421,8 +604,8 @@ pub enum SymbolKind {
     // fields in the Route instance that are left alone by the filter will be
     // there unchanged in the outgoing payload. In the second case only the
     // fields that are filled by the filter will have a (non-default) value.
-    SplitRxType,   // type of the incoming payload
-    SplitTxType,   // type of the outgoing payload
+    SplitRxType, // type of the incoming payload
+    SplitTxType, // type of the outgoing payload
 
     // data sources access receivers
     Rib,
@@ -557,7 +740,7 @@ impl From<AccessReceiver> for Scope {
     fn from(value: AccessReceiver) -> Self {
         match value {
             AccessReceiver::Ident(ident) => Scope::Module(ident.ident),
-            AccessReceiver::GlobalScope => Scope::Global
+            AccessReceiver::GlobalScope => Scope::Global,
         }
     }
 }
@@ -759,8 +942,11 @@ impl SymbolTable {
             key.clone()
         };
 
-        if key.as_str() == "route" { 
-            println!("k {} n {} k {:?} t {} a {:?} v {} ", key, name, kind, ty, args, value);
+        if key.as_str() == "route" {
+            println!(
+                "k {} n {} k {:?} t {} a {:?} v {} ",
+                key, name, kind, ty, args, value
+            );
         }
 
         if self.arguments.contains_key(&name) {
@@ -1004,7 +1190,7 @@ impl SymbolTable {
     pub(crate) fn create_deps_graph(
         &self,
     ) -> Result<
-            DepsGraph, // (variables, arguments, data sources)
+        DepsGraph, // (variables, arguments, data sources)
         CompileError,
     > {
         // First, go over all the terms and see which variables, arguments
@@ -1061,15 +1247,16 @@ impl SymbolTable {
             col.dedup_by(|a, b| a.1.eq(b.1));
         }
 
-        Ok(
-            DepsGraph {
-                rx_type: Some((self.rx_type.get_name(), self.rx_type.get_type())),
-                tx_type: self.tx_type.as_ref().map(|s| (s.get_name(), s.get_type())),
-                used_variables,
-                used_arguments,
-                used_data_sources,
-            },
-        )
+        Ok(DepsGraph {
+            rx_type: Some((self.rx_type.get_name(), self.rx_type.get_type())),
+            tx_type: self
+                .tx_type
+                .as_ref()
+                .map(|s| (s.get_name(), s.get_type())),
+            used_variables,
+            used_arguments,
+            used_data_sources,
+        })
     }
 
     fn _partition_deps_graph<'a>(

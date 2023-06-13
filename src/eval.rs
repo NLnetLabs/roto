@@ -1181,8 +1181,8 @@ impl ast::ValueExpr {
                             field_s
                                 .try_convert_value_into(*cur_ty.1.clone())?,
                         );
-                    } else { 
-                        return Err(CompileError::from(format!("The field name '{}' cannot be found in type '{}'", field_s.get_name(), type_id.ident)))
+                    } else {
+                        return Err(CompileError::from(format!("The field name '{}' cannot be found in type '{}'", field_s.get_name(), type_id.ident)));
                     }
                 }
 
@@ -1692,7 +1692,7 @@ fn check_type_identifier(
 //
 // The last value in the return tuple is a builtin-typed value in case it's
 // present in the symbol, this should only be the case with a Constant,
-// containing a literral value.
+// containing a literal value.
 fn get_props_for_scoped_variable(
     fields: &[ast::Identifier],
     symbols: GlobalSymbolTable,
@@ -1736,12 +1736,22 @@ fn get_props_for_scoped_variable(
                             ))?;
 
                         let var_ty_to = var_ty_to?;
+                        // This checks if `field` is present in the type
+                        // variable rhs, if no field is present, it will
+                        // return the whole type definition and a token
+                        // FieldAcces([]).
+                        // Note that checking if the rhs of this
+                        // assignment completely matches the assigned
+                        // type is not done here.
                         let field_ty = var_ty_to
                             .1.has_fields_chain(&fields[1..])
-                            .map_err(|err| format!(
+                            .map_err(|err| {
+                            trace!(
                                 "{} on field '{}' for variable '{}' found in module '{}'",
                                 err, fields[1], fields[0].ident, module
-                            ))?;
+                            );
+                            err
+                        })?;
 
                         // return the type of the last field, but the token 
                         // of the var/constant/data-source
@@ -1760,22 +1770,6 @@ fn get_props_for_scoped_variable(
         .into()),
     }
 }
-
-// fn _get_data_source_for_ident(
-//     ident: ast::Identifier,
-//     symbols: symbols::GlobalSymbolTable,
-// ) -> Result<(TypeDef, Token), CompileError> {
-//     let _symbols = symbols.borrow();
-
-//     let src = _symbols
-//         .get(&symbols::Scope::Global)
-//         .ok_or("No global symbol table")?
-//         .get_data_source(&ident.ident);
-
-//     drop(_symbols);
-
-//     src
-// }
 
 fn _declare_variable(
     name: ShortString,
@@ -1886,10 +1880,25 @@ fn declare_variable_from_symbol(
             match arg_symbol.has_value() {
                 // This is a variable, create an empty value on the symbol.
                 false => {
+                    let type_def = arg_symbol.get_recursive_return_type();
+
+                    match arg_symbol.get_token()? {
+                        Token::TypedRecord | Token::AnonymousRecord => {
+                            let fields = 
+                                arg_symbol
+                                    .get_recursive_values_primitive(type_def.clone())
+                                    .map_err(
+                                        |e| format!("{} in type '{}'",e, arg_symbol.get_name())
+                                    )?;
+                            trace!("fields {:?}", fields);
+                        },
+                        _ => {}
+                    }
+
                     let symbol = symbols::Symbol::new(
                         key,
                         symbols::SymbolKind::VariableAssignment,
-                        arg_symbol.get_recursive_return_type(),
+                        type_def,
                         vec![arg_symbol],
                         None,
                     );

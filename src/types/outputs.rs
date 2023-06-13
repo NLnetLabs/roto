@@ -68,7 +68,7 @@ impl std::fmt::Display for OutputStreamMessage {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum OutputStreamToken {
     Send,
 }
@@ -90,7 +90,7 @@ impl From<OutputStreamToken> for usize {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct OutputStreamMessage {
     pub(crate) name: ShortString,
     pub(crate) topic: String,

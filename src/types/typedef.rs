@@ -74,12 +74,15 @@ impl TypeDef {
         Ok(TypeDef::Record(type_ident_pairs))
     }
 
-    pub fn has_field(&self, field: &str) -> bool {
+    // Gets the type of a field of a Record Type, which canbe a porimitive,
+    // but it can also be an anonymous record type.
+    pub fn get_field(&self, field: &str) -> Option<TypeDef> {
         match self {
-            TypeDef::Record(fields) => {
-                fields.iter().any(|(ident, _)| ident == &field)
-            }
-            _ => false,
+            TypeDef::Record(fields) => fields
+                .iter()
+                .find(|(ident, _)| ident == &field)
+                .map(|td| *td.1.clone()),
+            _ => None,
         }
     }
 
@@ -105,12 +108,12 @@ impl TypeDef {
         ))
     }
 
-    // this function checks that the that the `fields` vec describes the
-    // fields present in self. If so it returns the positions in the vec
-    // of the corresponding fields, to serve as the token for each field.
+    // this function checks that the `fields` vec describes the fields
+    // present in self. If so it returns the positions in the vec of the
+    // corresponding fields, to serve as the token for each field.
     pub(crate) fn has_fields_chain(
         &self,
-        fields: &[crate::ast::Identifier],
+        check_fields: &[crate::ast::Identifier],
     ) -> Result<(TypeDef, Token), CompileError> {
         // Data sources (rib and table) are special cases, because they have
         // their methods on the container (the datasource) and not on the
@@ -126,12 +129,12 @@ impl TypeDef {
             },
             Token::FieldAccess(vec![]),
         );
-        for field in fields {
+        for field in check_fields {
             let mut index = 0;
             match current_type_token {
-                (TypeDef::Record(_fields), _) => {
+                (TypeDef::Record(found_fields), _) => {
                     if let Some((_, (_, ty))) =
-                        _fields.iter().enumerate().find(|(i, (ident, _))| {
+                        found_fields.iter().enumerate().find(|(i, (ident, _))| {
                             index = *i;
                             ident == &field.ident.as_str()
                         })
@@ -165,6 +168,8 @@ impl TypeDef {
                 }
             };
         }
+
+        trace!("has_fields_chain {:?}", current_type_token);
         Ok((current_type_token.0.clone(), current_type_token.1))
     }
 
@@ -494,13 +499,15 @@ impl PartialEq<TypeValue> for TypeDef {
             (TypeDef::Record(rec), TypeValue::Record(_b)) => {
                 trace!("compare {:?} <-> {:?}", rec, _b);
 
-                let fields = _b.0.iter()
-                .map(|ty| (ty.0.clone(), (&ty.1).into()))
+                let fields =
+                    _b.0.iter()
+                        .map(|ty| (ty.0.clone(), (&ty.1).into()))
                         .collect::<Vec<(_, TypeDef)>>();
                 let mut field_count = 0;
 
                 for (name, ty) in fields.as_slice() {
-                    if !rec.iter().any(|(k, v)| k == name && v.as_ref() == ty) {
+                    if !rec.iter().any(|(k, v)| k == name && v.as_ref() == ty)
+                    {
                         trace!(
                             "Error in field instance '{}' of type {}",
                             name,
@@ -511,7 +518,7 @@ impl PartialEq<TypeValue> for TypeDef {
                     }
                     field_count += 1;
                 }
-    
+
                 if field_count != rec.len() {
                     trace!("Missing fields in record {:?}", self);
                     return false;
