@@ -87,7 +87,7 @@ impl<'a> Stack {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum StackValue<'a> {
     Ref(&'a TypeValue),
     Arc(Arc<TypeValue>),

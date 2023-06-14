@@ -29,7 +29,7 @@ use super::{
 /// holds both the type-level information and the value. The collection
 /// variants can hold multiple values recursively, e.g. a List of Records.
 
-#[derive(Debug, Eq, PartialEq, Default, Clone)]
+#[derive(Debug, Eq, Default, Clone)]
 pub enum TypeValue {
     // All the built-in scalars and vectors
     Builtin(BuiltinTypeValue),
@@ -543,7 +543,8 @@ impl TypeValue {
             }
             TypeValue::Unknown => {
                 return Err(CompileError::new(
-                    "Value from unknown type can't be converted.".into(),
+                format!(
+                    "An instance of an unknown type can't be converted into type {}", type_def),
                 ))
             }
         }
@@ -566,6 +567,115 @@ impl Display for TypeValue {
             TypeValue::SharedValue(sv) => write!(f, "{} (Shared Value)", sv),
             TypeValue::Unknown => write!(f, "Unknown"),
             TypeValue::UnInit => write!(f, "Uninitialized"),
+        }
+    }
+}
+
+impl PartialEq for TypeValue {
+    fn eq(&self, other: &Self) -> bool {
+        // trace!("EQEQEQEQ");
+        // trace!("cmp other {}", other);
+        // trace!("with self {}", self);
+        // if self.cmp(other) == Ordering::Equal {
+        //     true
+        // } else if let Ok(self_conv) = other.clone().try_convert_into_variant(self.into()) {
+        //     trace!("try convert self_conv {} other  {} {:?}", self_conv, other, self_conv.cmp(other));
+        //     self_conv.cmp(other) == Ordering::Equal
+        // } else {
+        //     trace!("no convert");
+        //     false
+        // }
+
+        match (self, other) {
+            (TypeValue::Builtin(b1), TypeValue::Builtin(b2)) => {
+                if b1 == b2 { return true; }
+                if let Ok(TypeValue::Builtin(b2_convert)) = b2.clone().try_into_type(&(self.into())).as_ref() {
+                    b1 == b2_convert
+                } else {
+                    false
+                }
+                    // || other
+                    //     .clone()
+                    //     .try_convert_into_variant(self.into())
+                    //     .as_ref()
+                    //     .ok()
+                    //     == Some(self)
+            }
+            (TypeValue::Builtin(_), TypeValue::List(_)) => todo!(),
+            (TypeValue::Builtin(_), TypeValue::Record(_)) => todo!(),
+            (TypeValue::Builtin(_), TypeValue::OutputStreamMessage(_)) => {
+                todo!()
+            }
+            (TypeValue::Builtin(_), TypeValue::SharedValue(_)) => todo!(),
+            (TypeValue::Builtin(_), TypeValue::Unknown) => false,
+            (TypeValue::Builtin(_), TypeValue::UnInit) => false,
+            (TypeValue::List(_), TypeValue::Builtin(_)) => todo!(),
+            (TypeValue::List(_), TypeValue::List(_)) => todo!(),
+            (TypeValue::List(_), TypeValue::Record(_)) => todo!(),
+            (TypeValue::List(_), TypeValue::OutputStreamMessage(_)) => {
+                todo!()
+            }
+            (TypeValue::List(_), TypeValue::SharedValue(_)) => todo!(),
+            (TypeValue::List(_), TypeValue::Unknown) => todo!(),
+            (TypeValue::List(_), TypeValue::UnInit) => todo!(),
+            (TypeValue::Record(_), TypeValue::Builtin(_)) => todo!(),
+            (TypeValue::Record(_), TypeValue::List(_)) => todo!(),
+            (TypeValue::Record(rec1), TypeValue::Record(rec2)) => {
+                rec1 == rec2
+            }
+            (TypeValue::Record(_), TypeValue::OutputStreamMessage(_)) => {
+                todo!()
+            }
+            (TypeValue::Record(_), TypeValue::SharedValue(_)) => todo!(),
+            (TypeValue::Record(_), TypeValue::Unknown) => todo!(),
+            (TypeValue::Record(_), TypeValue::UnInit) => todo!(),
+            (TypeValue::OutputStreamMessage(_), TypeValue::Builtin(_)) => {
+                todo!()
+            }
+            (TypeValue::OutputStreamMessage(_), TypeValue::List(_)) => {
+                todo!()
+            }
+            (TypeValue::OutputStreamMessage(_), TypeValue::Record(_)) => {
+                todo!()
+            }
+            (
+                TypeValue::OutputStreamMessage(_),
+                TypeValue::OutputStreamMessage(_),
+            ) => todo!(),
+            (
+                TypeValue::OutputStreamMessage(_),
+                TypeValue::SharedValue(_),
+            ) => todo!(),
+            (TypeValue::OutputStreamMessage(_), TypeValue::Unknown) => {
+                todo!()
+            }
+            (TypeValue::OutputStreamMessage(_), TypeValue::UnInit) => todo!(),
+            (TypeValue::SharedValue(_), TypeValue::Builtin(_)) => todo!(),
+            (TypeValue::SharedValue(_), TypeValue::List(_)) => todo!(),
+            (TypeValue::SharedValue(_), TypeValue::Record(_)) => todo!(),
+            (
+                TypeValue::SharedValue(_),
+                TypeValue::OutputStreamMessage(_),
+            ) => todo!(),
+            (TypeValue::SharedValue(_), TypeValue::SharedValue(_)) => todo!(),
+            (TypeValue::SharedValue(_), TypeValue::Unknown) => todo!(),
+            (TypeValue::SharedValue(_), TypeValue::UnInit) => todo!(),
+            (TypeValue::Unknown, TypeValue::Builtin(_)) => todo!(),
+            (TypeValue::Unknown, TypeValue::List(_)) => todo!(),
+            (TypeValue::Unknown, TypeValue::Record(_)) => todo!(),
+            (TypeValue::Unknown, TypeValue::OutputStreamMessage(_)) => {
+                todo!()
+            }
+            (TypeValue::Unknown, TypeValue::SharedValue(_)) => todo!(),
+            (TypeValue::Unknown, TypeValue::Unknown) => true,
+            (TypeValue::Unknown, TypeValue::UnInit) => todo!(),
+            (TypeValue::UnInit, TypeValue::Builtin(_)) => todo!(),
+            (TypeValue::UnInit, TypeValue::List(_)) => todo!(),
+            (TypeValue::UnInit, TypeValue::Record(_)) => todo!(),
+            (TypeValue::UnInit, TypeValue::OutputStreamMessage(_)) => todo!(),
+            (TypeValue::UnInit, TypeValue::SharedValue(_)) => todo!(),
+            (TypeValue::UnInit, TypeValue::Unknown) => todo!(),
+            (TypeValue::UnInit, TypeValue::UnInit) => todo!(),
         }
     }
 }
@@ -675,39 +785,43 @@ impl PartialOrd for TypeValue {
     }
 }
 
-impl Ord for TypeValue {
-    fn cmp(&self, other: &Self) -> Ordering {
-        match (self, other) {
-            (
-                TypeValue::Builtin(BuiltinTypeValue::U8(U8(u1))),
-                TypeValue::Builtin(BuiltinTypeValue::U8(U8(u2))),
-            ) => u1.cmp(u2),
-            (TypeValue::List(_l1), TypeValue::List(_l2)) => {
-                panic!("Lists are not comparable.")
-            }
-            (TypeValue::Record(_r1), TypeValue::Record(_r2)) => {
-                panic!("Records are not comparable.")
-            }
-            (TypeValue::Unknown, TypeValue::Unknown) => Ordering::Equal,
-            (TypeValue::Builtin(_), _) => Ordering::Less,
-            (_, TypeValue::Builtin(_)) => Ordering::Greater,
-            (TypeValue::List(_), _) => Ordering::Less,
-            (_, TypeValue::List(_)) => Ordering::Greater,
-            (TypeValue::Record(_), _) => Ordering::Less,
-            (_, TypeValue::Record(_)) => Ordering::Greater,
-            (_, TypeValue::UnInit) => {
-                panic!("comparing with uninitialized memory.")
-            }
-            (TypeValue::UnInit, _) => {
-                panic!("comparing with uninitialized memory.")
-            }
-            (TypeValue::OutputStreamMessage(_), _) => todo!(),
-            (_, TypeValue::OutputStreamMessage(_)) => todo!(),
-            (TypeValue::SharedValue(_), _) => Ordering::Less,
-            (_, TypeValue::SharedValue(_)) => Ordering::Greater,
-        }
-    }
-}
+// impl Ord for TypeValue {
+//     fn cmp(&self, other: &Self) -> Ordering {
+//         match (self, other) {
+//             (
+//                 TypeValue::Builtin(BuiltinTypeValue::U8(U8(u1))),
+//                 TypeValue::Builtin(BuiltinTypeValue::U8(U8(u2))),
+//             ) => u1.cmp(u2),
+//             (
+//                 TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(il1)),
+//                 TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(il2)),
+//             ) => il1.cmp(il2),
+//             (TypeValue::List(_l1), TypeValue::List(_l2)) => {
+//                 panic!("Lists are not comparable.")
+//             }
+//             (TypeValue::Record(_r1), TypeValue::Record(_r2)) => {
+//                 panic!("Records are not comparable.")
+//             }
+//             (TypeValue::Unknown, TypeValue::Unknown) => Ordering::Equal,
+//             (_, TypeValue::Builtin(_)) => Ordering::Greater,
+//             (TypeValue::Builtin(_), _) => Ordering::Greater,
+//             (TypeValue::List(_), _) => Ordering::Less,
+//             (_, TypeValue::List(_)) => Ordering::Greater,
+//             (TypeValue::Record(_), _) => Ordering::Less,
+//             (_, TypeValue::Record(_)) => Ordering::Greater,
+//             (_, TypeValue::UnInit) => {
+//                 panic!("comparing with uninitialized memory.")
+//             }
+//             (TypeValue::UnInit, _) => {
+//                 panic!("comparing with uninitialized memory.")
+//             }
+//             (TypeValue::OutputStreamMessage(_), _) => todo!(),
+//             (_, TypeValue::OutputStreamMessage(_)) => todo!(),
+//             (TypeValue::SharedValue(_), _) => Ordering::Less,
+//             (_, TypeValue::SharedValue(_)) => Ordering::Greater,
+//         }
+//     }
+// }
 
 impl<'a> TryFrom<StackValue<'a>> for bool {
     type Error = VmError;

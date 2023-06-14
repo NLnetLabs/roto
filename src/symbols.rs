@@ -531,9 +531,11 @@ impl Symbol {
                 ))
             }
             TypeDef::Unknown => {
-                return Err(CompileError::new(
-                    "Value from unknown type can't be converted.".into(),
-                ))
+                if self.value != TypeValue::Unknown {
+                    return Err(CompileError::new(
+                        "Unknown type can't be converted into any other".into()
+                    ));
+                }
             }
         }
 

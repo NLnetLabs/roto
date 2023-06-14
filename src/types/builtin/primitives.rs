@@ -146,7 +146,7 @@ impl From<U32Token> for usize {
 
 // ----------- A simple u8 type ---------------------------------------------
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, Copy, Clone)]
 pub struct U8(pub(crate) u8);
 
 impl U8 {
@@ -231,6 +231,16 @@ impl RotoType for U8 {
                 Err(format!("Cannot convert type U8 to type {:?}", type_def)
                     .into())
             }
+        }
+    }
+}
+
+impl PartialEq for U8 {
+    fn eq(&self, other: &Self) -> bool {
+        if let Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(o)))) = other.into_type(&TypeDef::U8) {
+            o == self.0
+        } else {
+            false
         }
     }
 }
@@ -540,7 +550,7 @@ impl From<StringLiteralToken> for usize {
 
 //------------ IntegerLiteral type ------------------------------------------
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, Ord, PartialOrd, Copy, Clone)]
 pub struct IntegerLiteral(pub(crate) i64);
 impl IntegerLiteral {
     pub fn new(val: i64) -> Self {
@@ -641,6 +651,17 @@ impl RotoType for IntegerLiteral {
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
+    }
+}
+
+impl PartialEq for IntegerLiteral {
+    fn eq(&self, other: &Self) -> bool {
+        trace!("EQ IntegerLiteral");
+        if let Ok(TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(o)))) = other.into_type(&TypeDef::IntegerLiteral) {
+            o == self.0
+        } else {
+            false
+        }
     }
 }
 
@@ -1559,6 +1580,17 @@ impl RotoType for Asn {
         todo!()
     }
 }
+
+// impl PartialEq for Asn {
+//     fn eq(&self, other: &Self) -> bool {
+//         trace!("EQ Asn");
+//         if let Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(o)))) = other.into_type(&TypeDef::Asn) {
+//             o == self.0
+//         } else {
+//             false
+//         }
+//     }
+// }
 
 impl From<Asn> for TypeValue {
     fn from(value: Asn) -> Self {
