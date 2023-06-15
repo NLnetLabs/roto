@@ -2244,7 +2244,7 @@ impl RotoType for Unknown {
 
     fn into_type(
         self,
-        type_value: &TypeDef,
+        _type_value: &TypeDef,
     ) -> Result<TypeValue, CompileError>
     where
         Self: std::marker::Sized,
@@ -2254,26 +2254,26 @@ impl RotoType for Unknown {
 
     fn exec_value_method<'a>(
         &'a self,
-        method_token: usize,
-        args: &'a [StackValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &'a [StackValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 
     fn exec_consume_value_method(
         self,
-        method_token: usize,
-        args: Vec<TypeValue>,
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         todo!()
     }
 
     fn exec_type_method<'a>(
-        method_token: usize,
-        args: &[StackValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[StackValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
