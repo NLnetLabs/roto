@@ -8,7 +8,7 @@ use crate::compile::CompileError;
 use crate::traits::{RotoType, TokenConvert};
 use crate::types::collections::{ElementTypeValue, List};
 use crate::types::typedef::MethodProps;
-use crate::vm::{VmError, StackValue};
+use crate::vm::{StackValue, VmError};
 
 use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
@@ -237,7 +237,9 @@ impl RotoType for U8 {
 
 impl PartialEq for U8 {
     fn eq(&self, other: &Self) -> bool {
-        if let Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(o)))) = other.into_type(&TypeDef::U8) {
+        if let Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(o)))) =
+            other.into_type(&TypeDef::U8)
+        {
             o == self.0
         } else {
             false
@@ -482,7 +484,7 @@ impl RotoType for StringLiteral {
                 let new_string = String::from_iter([
                     sub_str.next().unwrap(),
                     &args[1].as_ref().to_string(),
-                    if let Some(s) = sub_str.next() { s } else { "" }
+                    if let Some(s) = sub_str.next() { s } else { "" },
                 ]);
 
                 Ok(Box::new(|| {
@@ -657,7 +659,10 @@ impl RotoType for IntegerLiteral {
 impl PartialEq for IntegerLiteral {
     fn eq(&self, other: &Self) -> bool {
         trace!("EQ IntegerLiteral");
-        if let Ok(TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(o)))) = other.into_type(&TypeDef::IntegerLiteral) {
+        if let Ok(TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
+            IntegerLiteral(o),
+        ))) = other.into_type(&TypeDef::IntegerLiteral)
+        {
             o == self.0
         } else {
             false
@@ -957,7 +962,8 @@ impl RotoType for Prefix {
                 if let TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) =
                     args[0].as_ref()
                 {
-                    let len: PrefixLength = args[1].as_ref()
+                    let len: PrefixLength = args[1]
+                        .as_ref()
                         .try_into()
                         .map_err(|_e| VmError::InvalidConversion)?;
                     let ip = ip.0;
@@ -2241,7 +2247,8 @@ impl RotoType for Unknown {
         type_value: &TypeDef,
     ) -> Result<TypeValue, CompileError>
     where
-        Self: std::marker::Sized {
+        Self: std::marker::Sized,
+    {
         todo!()
     }
 
@@ -2274,7 +2281,7 @@ impl RotoType for Unknown {
 
 #[derive(Debug)]
 pub(crate) enum UnknownToken {
-    IsUnknown
+    IsUnknown,
 }
 
 impl TokenConvert for UnknownToken {}
@@ -2295,7 +2302,6 @@ impl From<UnknownToken> for usize {
         }
     }
 }
-
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct LocalPref(pub(crate) routecore::bgp::types::LocalPref);

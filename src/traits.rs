@@ -1,6 +1,7 @@
 // =========== RotoFilter trait ============================================
 
 use crate::{
+    ast::ShortString,
     compile::CompileError,
     types::{
         collections::Record,
@@ -8,7 +9,7 @@ use crate::{
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
     },
-    vm::{StackValue, VmError}, ast::ShortString,
+    vm::{StackValue, VmError},
 };
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]

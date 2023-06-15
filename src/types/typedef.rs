@@ -19,7 +19,7 @@ use super::builtin::{
     AsPath, Asn, AtomicAggregator, Boolean, Community, HexLiteral, Hop,
     IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, NextHop, OriginType,
     Prefix, PrefixLength, RawRouteWithDeltas, RouteStatus, StringLiteral,
-    U32, U8, Unknown,
+    Unknown, U32, U8,
 };
 use super::collections::Record;
 use super::datasources::{RibType, Table};
@@ -133,8 +133,10 @@ impl TypeDef {
             let mut index = 0;
             match current_type_token {
                 (TypeDef::Record(found_fields), _) => {
-                    if let Some((_, (_, ty))) =
-                        found_fields.iter().enumerate().find(|(i, (ident, _))| {
+                    if let Some((_, (_, ty))) = found_fields
+                        .iter()
+                        .enumerate()
+                        .find(|(i, (ident, _))| {
                             index = *i;
                             ident == &field.ident.as_str()
                         })
@@ -286,7 +288,9 @@ impl TypeDef {
                 StringLiteral::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::AcceptReject(_) => todo!(),
-            TypeDef::Unknown => Unknown::get_props_for_method(self.clone(), method_name),
+            TypeDef::Unknown => {
+                Unknown::get_props_for_method(self.clone(), method_name)
+            }
             TypeDef::LocalPref => {
                 LocalPref::get_props_for_method(self.clone(), method_name)
             }

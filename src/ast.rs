@@ -203,7 +203,13 @@ impl TypedRecordValueExpr {
             )),
         )(input)?;
 
-        Ok((input, TypedRecordValueExpr { type_id, key_values }))
+        Ok((
+            input,
+            TypedRecordValueExpr {
+                type_id,
+                key_values,
+            },
+        ))
     }
 }
 

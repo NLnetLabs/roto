@@ -25,13 +25,14 @@ use crate::{
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
     },
-    vm::{VmError, StackValue},
+    vm::{StackValue, VmError},
 };
 
-use super::{AsPath, BuiltinTypeValue, RouteStatus, NextHop, OriginType, Prefix};
+use super::{
+    AsPath, BuiltinTypeValue, NextHop, OriginType, Prefix, RouteStatus,
+};
 use crate::attr_change_set::{
-    AttrChangeSet, ScalarOption, ScalarValue, VectorOption,
-    VectorValue,
+    AttrChangeSet, ScalarOption, ScalarValue, VectorOption, VectorValue,
 };
 
 //============ Route ========================================================
@@ -313,63 +314,92 @@ impl RawRouteWithDeltas {
         let current_set = self.attribute_deltas.get_latest_change_set()?;
 
         match field_token.into() {
-                RouteToken::AsPath => current_set.as_path.clone().into_opt(),
-                RouteToken::OriginType => self.raw_message.raw_message.0.origin().map(TypeValue::from),
-                RouteToken::NextHop => self.raw_message.raw_message.0.next_hop().map(TypeValue::from),
-                RouteToken::MultiExitDisc => self.raw_message.raw_message.0.multi_exit_desc().map(TypeValue::from),
-                RouteToken::LocalPref => self.raw_message.raw_message.0.local_pref().map(TypeValue::from),
-                RouteToken::AtomicAggregate => Some(TypeValue::from(self.raw_message.raw_message.0.is_atomic_aggregate())),
-                RouteToken::AtomicAggregator => self.raw_message.raw_message.0.aggregator().map(TypeValue::from),
-                RouteToken::Communities => self.raw_message.raw_message.0.all_communities().map(TypeValue::from),
-                RouteToken::Prefix => Some(self.prefix.into()),
-                RouteToken::Status => Some(self.status_deltas.current()),
-                // _ => None,
-                // originator_id: ChangedOption {
-                //     value: None,
-                //     changed: false,
-                // },
-                // cluster_list: ChangedOption {
-                //     value: None,
-                //     changed: false,
-                // },
-                // RouteToken::ExtendedCommunities => self.raw_message.raw_message.ext_communities()
-                //         .map(|c| c.collect::<Vec<ExtendedCommunity>>()).into(),
-                // RouteToken::As4Path => self.raw_message.raw_message.as4path(),
-                // as4_aggregator: ChangedOption {
-                //     value: None,
-                //     changed: false,
-                // },
-                // connector: ChangedOption {
-                //     value: None,
-                //     changed: false,
-                // },
-                // as_path_limit: ChangedOption {
-                //     value: None,
-                //     changed: false,
-                // },
-                // pmsi_tunnel: ChangedOption {
-                //     value: None,
-                //     changed: false,
-                // },
-                // ipv6_extended_communities: ChangedOption {
-                //     value: None,
-                //     changed: false,
-                // },
-                // RouteToken::largeCommunities => self.raw_message.raw_message
-                //         .large_communities()
-                //         .map(|c| c.collect::<Vec<LargeCommunity>>()).into()
-                // bgpsec_as_path: ChangedOption {
-                //     value: None,
-                //     changed: false,
-                // },
-                // attr_set: ChangedOption {
-                //     value: None,
-                //     changed: false,
-                // },
-                // rsrvd_development: ChangedOption {
-                //     value: None,
-                //     changed: false,
-                // },
+            RouteToken::AsPath => current_set.as_path.clone().into_opt(),
+            RouteToken::OriginType => {
+                self.raw_message.raw_message.0.origin().map(TypeValue::from)
+            }
+            RouteToken::NextHop => self
+                .raw_message
+                .raw_message
+                .0
+                .next_hop()
+                .map(TypeValue::from),
+            RouteToken::MultiExitDisc => self
+                .raw_message
+                .raw_message
+                .0
+                .multi_exit_desc()
+                .map(TypeValue::from),
+            RouteToken::LocalPref => self
+                .raw_message
+                .raw_message
+                .0
+                .local_pref()
+                .map(TypeValue::from),
+            RouteToken::AtomicAggregate => Some(TypeValue::from(
+                self.raw_message.raw_message.0.is_atomic_aggregate(),
+            )),
+            RouteToken::AtomicAggregator => self
+                .raw_message
+                .raw_message
+                .0
+                .aggregator()
+                .map(TypeValue::from),
+            RouteToken::Communities => self
+                .raw_message
+                .raw_message
+                .0
+                .all_communities()
+                .map(TypeValue::from),
+            RouteToken::Prefix => Some(self.prefix.into()),
+            RouteToken::Status => Some(self.status_deltas.current()),
+            // _ => None,
+            // originator_id: ChangedOption {
+            //     value: None,
+            //     changed: false,
+            // },
+            // cluster_list: ChangedOption {
+            //     value: None,
+            //     changed: false,
+            // },
+            // RouteToken::ExtendedCommunities => self.raw_message.raw_message.ext_communities()
+            //         .map(|c| c.collect::<Vec<ExtendedCommunity>>()).into(),
+            // RouteToken::As4Path => self.raw_message.raw_message.as4path(),
+            // as4_aggregator: ChangedOption {
+            //     value: None,
+            //     changed: false,
+            // },
+            // connector: ChangedOption {
+            //     value: None,
+            //     changed: false,
+            // },
+            // as_path_limit: ChangedOption {
+            //     value: None,
+            //     changed: false,
+            // },
+            // pmsi_tunnel: ChangedOption {
+            //     value: None,
+            //     changed: false,
+            // },
+            // ipv6_extended_communities: ChangedOption {
+            //     value: None,
+            //     changed: false,
+            // },
+            // RouteToken::largeCommunities => self.raw_message.raw_message
+            //         .large_communities()
+            //         .map(|c| c.collect::<Vec<LargeCommunity>>()).into()
+            // bgpsec_as_path: ChangedOption {
+            //     value: None,
+            //     changed: false,
+            // },
+            // attr_set: ChangedOption {
+            //     value: None,
+            //     changed: false,
+            // },
+            // rsrvd_development: ChangedOption {
+            //     value: None,
+            //     changed: false,
+            // },
         }
     }
 }
@@ -498,7 +528,10 @@ pub struct RawBgpMessage {
 }
 
 impl RawBgpMessage {
-    pub fn new(message_id: (RotondaId, u64), raw_message: UpdateMessage) -> Self {
+    pub fn new(
+        message_id: (RotondaId, u64),
+        raw_message: UpdateMessage,
+    ) -> Self {
         Self {
             message_id,
             raw_message,
@@ -520,7 +553,8 @@ impl RotoType for RawBgpMessage {
         _method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
-        Self: std::marker::Sized {
+        Self: std::marker::Sized,
+    {
         todo!()
     }
 
@@ -529,7 +563,8 @@ impl RotoType for RawBgpMessage {
         _type_value: &TypeDef,
     ) -> Result<TypeValue, CompileError>
     where
-        Self: std::marker::Sized {
+        Self: std::marker::Sized,
+    {
         todo!()
     }
 
@@ -904,7 +939,9 @@ impl UpdateMessage {
     pub fn create_changeset(&self, prefix: Prefix) -> AttrChangeSet {
         AttrChangeSet {
             prefix: ReadOnlyScalarOption::<Prefix>::new(prefix.into()),
-            as_path: VectorOption::<AsPath>::from(self.0.aspath().map(|p| p.to_hop_path())),
+            as_path: VectorOption::<AsPath>::from(
+                self.0.aspath().map(|p| p.to_hop_path()),
+            ),
             origin_type: ScalarOption::<OriginType>::from(self.0.origin()),
             next_hop: ScalarOption::<NextHop>::from(self.0.next_hop()),
             multi_exit_discriminator: ScalarOption::from(
@@ -922,7 +959,9 @@ impl UpdateMessage {
             // value: self
             //     .ext_communities()
             //     .map(|c| c.collect::<Vec<ExtendedCommunity>>()),
-            as4_path: VectorOption::from(self.0.as4path().map(|p| p.to_hop_path())),
+            as4_path: VectorOption::from(
+                self.0.as4path().map(|p| p.to_hop_path()),
+            ),
             connector: Todo,
             as_path_limit: Todo,
             pmsi_tunnel: Todo,

@@ -30,12 +30,11 @@ pub enum ElementTypeValue {
 
 impl ElementTypeValue {
     fn into_record(self) -> Result<Record, VmError> {
-        if let ElementTypeValue::Primitive(
-            TypeValue::Record(rec)) = self {
-                Ok(rec)
-            } else {
-                Err(VmError::InvalidConversion)
-            }
+        if let ElementTypeValue::Primitive(TypeValue::Record(rec)) = self {
+            Ok(rec)
+        } else {
+            Err(VmError::InvalidConversion)
+        }
     }
 
     fn as_record(&self) -> Result<&Record, VmError> {
@@ -212,8 +211,13 @@ impl List {
         let mut elm = self.0.get(field_index[0]);
 
         for index in &field_index[1..] {
-            elm = elm.or(None)?.as_record().unwrap().0
-                .get(*index).map(|f| &f.1)
+            elm = elm
+                .or(None)?
+                .as_record()
+                .unwrap()
+                .0
+                .get(*index)
+                .map(|f| &f.1)
         }
 
         elm
@@ -223,12 +227,14 @@ impl List {
         &mut self,
         field_index: SmallVec<[usize; 8]>,
     ) -> Option<ElementTypeValue> {
-        let mut elm = self.0
+        let mut elm = self.0.get_mut(field_index[0]).map(std::mem::take);
 
-        .get_mut(field_index[0]).map(std::mem::take);
-       
         for index in &field_index[1..] {
-            elm = elm.or(None)?.into_record().unwrap().0
+            elm = elm
+                .or(None)?
+                .into_record()
+                .unwrap()
+                .0
                 .get_mut(*index)
                 .map(|f| std::mem::take(&mut f.1));
         }
@@ -240,12 +246,15 @@ impl List {
         field_index: SmallVec<[usize; 8]>,
         value: TypeValue,
     ) -> Result<(), VmError> {
-        let mut elm = self.0
-        .get_mut(field_index[0]);
-       
+        let mut elm = self.0.get_mut(field_index[0]);
+
         for index in &field_index[1..] {
-            elm = elm.ok_or(VmError::MemOutOfBounds)?.as_mut_record()?.0
-                .get_mut(*index).map(|f| &mut f.1)
+            elm = elm
+                .ok_or(VmError::MemOutOfBounds)?
+                .as_mut_record()?
+                .0
+                .get_mut(*index)
+                .map(|f| &mut f.1)
         }
 
         let e_tv = elm.ok_or(VmError::MemOutOfBounds)?;
@@ -574,13 +583,10 @@ impl<'a> Record {
         &'a self,
         field_index: SmallVec<[usize; 8]>,
     ) -> Option<&'a ElementTypeValue> {
-        let mut elm = self.0
-        .get(field_index[0]).map(|f| &f.1);
-       
+        let mut elm = self.0.get(field_index[0]).map(|f| &f.1);
+
         for index in &field_index[1..] {
-            elm = elm?.as_record().unwrap().0
-                .get(*index)
-                .map(|f| &f.1)
+            elm = elm?.as_record().unwrap().0.get(*index).map(|f| &f.1)
         }
         elm
     }
@@ -589,11 +595,18 @@ impl<'a> Record {
         &mut self,
         field_index: SmallVec<[usize; 8]>,
     ) -> ElementTypeValue {
-        let mut elm = self.0
-        .get_mut(field_index[0]).map(|f| std::mem::take(&mut f.1));
-       
+        let mut elm = self
+            .0
+            .get_mut(field_index[0])
+            .map(|f| std::mem::take(&mut f.1));
+
         for index in &field_index[1..] {
-            elm = elm.or(None).unwrap().into_record().unwrap().0
+            elm = elm
+                .or(None)
+                .unwrap()
+                .into_record()
+                .unwrap()
+                .0
                 .get_mut(*index)
                 .map(|f| std::mem::take(&mut f.1))
         }
@@ -606,18 +619,22 @@ impl<'a> Record {
         field_index: SmallVec<[usize; 8]>,
         value: TypeValue,
     ) -> Result<(), VmError> {
-        let mut elm = self.0
-        .get_mut(field_index[0]);
-       
+        let mut elm = self.0.get_mut(field_index[0]);
+
         for index in &field_index[1..] {
-            elm = elm.ok_or(VmError::MemOutOfBounds)?.1.as_mut_record().unwrap().0
+            elm = elm
+                .ok_or(VmError::MemOutOfBounds)?
+                .1
+                .as_mut_record()
+                .unwrap()
+                .0
                 .get_mut(*index)
         }
 
         let e_tv = elm.ok_or(VmError::MemOutOfBounds)?;
         let new_field = &mut (e_tv.0.clone(), ElementTypeValue::from(value));
         std::mem::swap(e_tv, new_field);
-        
+
         Ok(())
     }
 }

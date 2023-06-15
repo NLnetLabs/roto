@@ -7,7 +7,7 @@ use crate::{
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
     },
-    vm::{VmError, StackValue},
+    vm::{StackValue, VmError},
 };
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]

@@ -5,8 +5,8 @@ use std::marker::PhantomData;
 use std::ops::Index;
 
 use crate::types::builtin::{
-    AsPath, Asn, AtomicAggregator, BuiltinTypeValue, Community,
-    LocalPref, MultiExitDisc, NextHop, OriginType, Prefix, RouteStatus,
+    AsPath, Asn, AtomicAggregator, BuiltinTypeValue, Community, LocalPref,
+    MultiExitDisc, NextHop, OriginType, Prefix, RouteStatus,
 };
 use crate::types::collections::ElementTypeValue;
 use crate::types::typevalue::TypeValue;
@@ -215,13 +215,17 @@ impl<V: VectorValue + Into<TypeValue> + std::fmt::Debug> VectorOption<V> {
     pub fn as_vec(&self) -> Vec<&ElementTypeValue> {
         if let Some(TypeValue::List(list)) = &self.value {
             list.0.iter().collect::<Vec<_>>()
-        } else { vec![] }
+        } else {
+            vec![]
+        }
     }
 
     pub fn into_vec(self) -> Vec<ElementTypeValue> {
         if let Some(TypeValue::List(list)) = self.value {
             list.0.into_iter().collect::<Vec<_>>()
-        } else { vec![] }
+        } else {
+            vec![]
+        }
     }
 
     pub fn replace(&mut self, vector: V) -> Result<(), LongSegmentError> {
@@ -365,16 +369,24 @@ impl<V: VectorValue + Into<TypeValue> + std::fmt::Debug> VectorOption<V> {
 }
 
 impl VectorOption<AsPath> {
-    pub fn as_routecore_hops_vec(&self) -> Vec<&routecore::bgp::aspath::Hop<Vec<u8>>> {
-        if let Some(TypeValue::Builtin(BuiltinTypeValue::AsPath(hop_path))) = &self.value {
+    pub fn as_routecore_hops_vec(
+        &self,
+    ) -> Vec<&routecore::bgp::aspath::Hop<Vec<u8>>> {
+        if let Some(TypeValue::Builtin(BuiltinTypeValue::AsPath(hop_path))) =
+            &self.value
+        {
             hop_path.0.iter().collect::<Vec<_>>()
         } else {
             vec![]
         }
     }
 
-    pub fn into_routecore_hops_vec(self) -> Vec<routecore::bgp::aspath::Hop<Vec<u8>>> {
-        if let Some(TypeValue::Builtin(BuiltinTypeValue::AsPath(hop_path))) = self.value {
+    pub fn into_routecore_hops_vec(
+        self,
+    ) -> Vec<routecore::bgp::aspath::Hop<Vec<u8>>> {
+        if let Some(TypeValue::Builtin(BuiltinTypeValue::AsPath(hop_path))) =
+            self.value
+        {
             hop_path.0.into_iter().collect::<Vec<_>>()
         } else {
             vec![]

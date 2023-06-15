@@ -2,7 +2,7 @@ use std::{
     cell::RefCell,
     fmt::{Display, Formatter},
     ops::{Index, IndexMut},
-    sync::Arc
+    sync::Arc,
 };
 
 use crate::{
@@ -45,7 +45,7 @@ impl From<u32> for StackRefPos {
 pub(crate) struct StackRef {
     pub(crate) pos: StackRefPos,
     // nested field -> record.field sequences are expressed as a Vec of field
-    // indexes, e.g. [1,2] on 
+    // indexes, e.g. [1,2] on
     // Record { a: U8, b: Record { a: U8, b: U8, c: U8 }} would point to a.b
     field_index: SmallVec<[usize; 8]>,
 }
@@ -78,7 +78,8 @@ impl<'a> Stack {
         self.0
             .last_mut()
             .ok_or(VmError::StackUnderflow)?
-            .field_index.push(index);
+            .field_index
+            .push(index);
         Ok(())
     }
 
@@ -162,18 +163,19 @@ impl LinearMemory {
                 v if v.is_empty() => self
                     .get_mem_pos_as_owned(*pos as usize)
                     .ok_or(VmError::MemOutOfBounds),
-                field_index => match self
-                    .get_mem_pos_as_owned(*pos as usize)
+                field_index => match self.get_mem_pos_as_owned(*pos as usize)
                 {
                     Some(TypeValue::Record(mut r)) => {
-                        let field = r.get_field_by_index_owned(field_index.clone());
+                        let field =
+                            r.get_field_by_index_owned(field_index.clone());
                         match field {
                             ElementTypeValue::Nested(nested) => Ok(*nested),
                             ElementTypeValue::Primitive(b) => Ok(b),
                         }
                     }
                     Some(TypeValue::List(mut l)) => {
-                        let field = l.get_field_by_index_owned(field_index.clone());
+                        let field =
+                            l.get_field_by_index_owned(field_index.clone());
                         match field {
                             Some(ElementTypeValue::Nested(nested)) => {
                                 Ok(*nested)
@@ -197,7 +199,7 @@ impl LinearMemory {
     ) -> Option<&TypeValue> {
         match field_index {
             fi if fi.is_empty() => self.get_mem_pos(index),
-            field_index=> match self.get_mem_pos(index) {
+            field_index => match self.get_mem_pos(index) {
                 Some(TypeValue::Record(rec)) => {
                     match rec.get_field_by_index(field_index) {
                         Some(ElementTypeValue::Nested(nested)) => {
@@ -682,7 +684,10 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
             .map(|sr| match sr.pos.clone() {
                 StackRefPos::MemPos(pos) => {
                     let v = mem
-                        .get_mp_field_by_index(pos as usize, sr.field_index.clone())
+                        .get_mp_field_by_index(
+                            pos as usize,
+                            sr.field_index.clone(),
+                        )
                         .unwrap_or_else(|| {
                             panic!(
                                 "Uninitialized memory in position {}",
@@ -693,7 +698,8 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                 }
                 StackRefPos::TablePos(token, pos) => {
                     let ds = &self.data_sources.as_ref()[token];
-                    let v = ds.get_at_field_index(pos, sr.field_index.clone());
+                    let v =
+                        ds.get_at_field_index(pos, sr.field_index.clone());
                     if let Some(v) = v {
                         StackValue::Arc(v.into())
                     } else {
@@ -726,7 +732,10 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
             .map(|sr| match sr.pos.clone() {
                 StackRefPos::MemPos(pos) => {
                     let v = mem
-                        .get_mp_field_by_index(pos as usize, sr.field_index.clone())
+                        .get_mp_field_by_index(
+                            pos as usize,
+                            sr.field_index.clone(),
+                        )
                         .unwrap_or_else(|| {
                             panic!(
                                 "Uninitialized memory in position {}",
@@ -737,7 +746,8 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                 }
                 StackRefPos::TablePos(token, pos) => {
                     let ds = &self.data_sources.as_ref()[token];
-                    let v = ds.get_at_field_index(pos, sr.field_index.clone());
+                    let v =
+                        ds.get_at_field_index(pos, sr.field_index.clone());
                     if let Some(v) = v {
                         StackValue::Arc(v.into())
                     } else {

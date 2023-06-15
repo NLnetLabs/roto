@@ -561,8 +561,12 @@ impl PartialEq for TypeValue {
 
         match (self, other) {
             (TypeValue::Builtin(b1), TypeValue::Builtin(b2)) => {
-                if b1 == b2 { return true; }
-                if let Ok(TypeValue::Builtin(b2_convert)) = b2.clone().try_into_type(&(self.into())).as_ref() {
+                if b1 == b2 {
+                    return true;
+                }
+                if let Ok(TypeValue::Builtin(b2_convert)) =
+                    b2.clone().try_into_type(&(self.into())).as_ref()
+                {
                     b1 == b2_convert
                 } else {
                     false

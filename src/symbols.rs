@@ -172,7 +172,6 @@ impl Symbol {
         let mut rec_values: Vec<(ShortString, TypeDef, TypeValue)> = vec![];
         for arg in self.get_args() {
             if let TypeDef::Record(_rec) = arg.get_type() {
-
                 if let Some(checked_type) =
                     type_def.get_field(&arg.get_name())
                 {
@@ -209,7 +208,11 @@ impl Symbol {
                     .try_convert_into_variant(checked_type.clone())?;
                 rec_values.push((arg.get_name(), checked_type, checked_val));
             } else {
-                return Err(CompileError::from(format!("'{}' cannot be found in '{}'", arg.get_name(), type_def)));
+                return Err(CompileError::from(format!(
+                    "'{}' cannot be found in '{}'",
+                    arg.get_name(),
+                    type_def
+                )));
             }
         }
 
@@ -347,7 +350,12 @@ impl Symbol {
                 }
             }
             TypeDef::Record(ref r) => {
-                trace!("convert record {:?} ({:?}) to {:?}", r, self.value, into_ty);
+                trace!(
+                    "convert record {:?} ({:?}) to {:?}",
+                    r,
+                    self.value,
+                    into_ty
+                );
 
                 match into_ty {
                     TypeDef::Record(ref _rec) => {
@@ -537,7 +545,8 @@ impl Symbol {
             TypeDef::Unknown => {
                 if self.value != TypeValue::Unknown {
                     return Err(CompileError::new(
-                        "Unknown type can't be converted into any other".into()
+                        "Unknown type can't be converted into any other"
+                            .into(),
                     ));
                 }
             }

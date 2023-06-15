@@ -1,4 +1,3 @@
-
 // Rotonda types
 
 // THIS IS PSEUDO-CODE!
@@ -8,18 +7,16 @@
 // is to establish what the contact surface between the different parts of
 // Rotonda (including routecore) will (have to) be.
 
-
 // routcore/rotonda-runtime               roto
 //                                        ┌─────────────┐
 //                                        ├─────────────┤
 //                 ┌─────────────┐        ├─────────────┤
 //               ┌─▶   Updates   ├─write──▶    Route    │
 // ┌────────────┐│ └─────────────┘        └──────▲──────┘
-// │ BgpMessage ├┤                               │       
-// └────────────┘│ ┌─────────────┐               │       
-//               └─▶ Withdrawals │──change ──────┘       
-//                 └─────────────┘  status               
-                          
+// │ BgpMessage ├┤                               │
+// └────────────┘│ ┌─────────────┐               │
+//               └─▶ Withdrawals │──change ──────┘
+//                 └─────────────┘  status
 
 // BGP Message
 // rotonda-runtime -> routecore -> rotonda-runtime
@@ -37,7 +34,6 @@ impl Iterator for BgpMessage {
     }
 }
 
-
 // Update
 // routecore -> rotonda-runtime
 
@@ -51,7 +47,6 @@ pub struct Update {
     pub afi_safi: (u16, u8),
 }
 
-
 // Withdrawal
 // routecore -> rotonda-runtime
 
@@ -63,7 +58,6 @@ pub struct Withdrawal {
     pub nlri: Nlri,
     pub afi_safi: (u16, u8),
 }
-
 
 // Route
 // routecore -> rotonda-runtime -> roto
@@ -94,7 +88,6 @@ pub struct Route {
     pub status: Status,
 }
 
-
 // Status
 // routecore -> rotonda-runtime -> roto
 
@@ -105,17 +98,16 @@ pub struct Route {
 // go back to the units that keep the per-peer session state.
 #[derive(Debug, PartialEq)]
 pub enum Status {
-    InConvergence,       // Between start and EOR on a BGP peer-session
-    UpToDate,            // After EOR for a BGP peer-session, either 
-                         // `Graceful Restart` or EOR
+    InConvergence, // Between start and EOR on a BGP peer-session
+    UpToDate,      // After EOR for a BGP peer-session, either
+    // `Graceful Restart` or EOR
     Stale,               // After hold-timer expiry
     StartOfRouteRefresh, // After the request for a Route Refresh to a peer
-                         // and the reception of a new route
-    Withdrawn,           // After the reception of a withdrawal
-    Empty,               // Status not relevant, e.g. a RIB that holds
-                         // archived routes.
+    // and the reception of a new route
+    Withdrawn, // After the reception of a withdrawal
+    Empty,     // Status not relevant, e.g. a RIB that holds
+               // archived routes.
 }
-
 
 // RawRoute
 // rotonda-runtime
@@ -153,7 +145,6 @@ pub struct DeltaRawRoute {
 // well, but it should be usable by `octseq`.
 pub struct RawBgpMessage(Vec<u8>);
 
-
 // Nlri
 // routecore -> rotonda-runtime
 
@@ -166,12 +157,11 @@ pub enum Nlri {
     FlowSpec(Vec<FlowSpecRule>),
 }
 
-// routecore -> rotonda-runtime -> roto 
+// routecore -> rotonda-runtime -> roto
 pub struct FlowSpecRule {}
 
-
 // BgpAttributes
-// routecore -> rotonda-runtime -> roto 
+// routecore -> rotonda-runtime -> roto
 
 // The record that holds all the BGP attributes in a BGP message to be used
 // by roto and all other parts of Rotonda.
@@ -205,7 +195,7 @@ pub struct BgpAttributes {
 // roto -> routecore -> rotonda-runtime
 
 // A data-structure that stores the changes made by the transformers on a
-// BGP message.    
+// BGP message.
 #[derive(Debug, PartialEq)]
 pub struct DeltaBgpAttributes {
     pub as_path: Option<AsPath>,

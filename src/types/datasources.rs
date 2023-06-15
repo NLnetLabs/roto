@@ -1,6 +1,5 @@
 // =========== Data source Types ===========================================
 
-
 pub enum DataSource {
     Table(Table),
     Rib(Arc<dyn RotoRib>),
@@ -14,7 +13,11 @@ impl DataSource {
         match records.get(0) {
             Some(rec) => {
                 let ty = TypeDef::from(&TypeValue::Record(rec.clone()));
-                Ok(Self::Table(Table { name: name.into(), ty, records }))
+                Ok(Self::Table(Table {
+                    name: name.into(),
+                    ty,
+                    records,
+                }))
             }
             None => Err(VmError::DataSourceEmpty(name.into())),
         }
@@ -66,7 +69,7 @@ impl DataSource {
     pub fn get_name(&self) -> ShortString {
         match &self {
             DataSource::Table(t) => t.name.clone(),
-            DataSource::Rib(r) => (**r).get_name()
+            DataSource::Rib(r) => (**r).get_name(),
         }
     }
 
@@ -96,13 +99,13 @@ impl<M: Meta + 'static> From<Rib<M>> for DataSource {
 use std::sync::Arc;
 
 use log::trace;
-use rotonda_store::{prelude::Meta, epoch, MatchOptions, MatchType};
+use rotonda_store::{epoch, prelude::Meta, MatchOptions, MatchType};
 use smallvec::SmallVec;
 
 use crate::{
     ast::ShortString,
     compile::CompileError,
-    traits::{Token, TokenConvert, RotoRib},
+    traits::{RotoRib, Token, TokenConvert},
     vm::{StackRefPos, StackValue, VmError},
 };
 
@@ -195,12 +198,20 @@ pub struct Rib<M: Meta> {
     // the prefix store.
     pub name: ShortString,
     pub ty: TypeDef,
-    pub store: rotonda_store::MultiThreadedStore<M>
+    pub store: rotonda_store::MultiThreadedStore<M>,
 }
 
 impl<M: Meta> Rib<M> {
-    pub fn new(name: &str, ty: TypeDef, store: rotonda_store::MultiThreadedStore<M>) -> Self {
-        Self { name: name.into(), ty, store }
+    pub fn new(
+        name: &str,
+        ty: TypeDef,
+        store: rotonda_store::MultiThreadedStore<M>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            ty,
+            store,
+        }
     }
 }
 
@@ -227,8 +238,7 @@ impl<M: Meta> RotoRib for Rib<M> {
             RibToken::LongestMatch => {
                 trace!("longest match on rib");
                 let guard = epoch::pin();
-                self
-                    .store
+                self.store
                     .match_prefix(
                         &routecore::addr::Prefix::try_from(args[0].as_ref())
                             .unwrap(),
@@ -333,7 +343,9 @@ impl Table {
                     .iter()
                     .enumerate()
                     .find(|v| {
-                        if let Some(val) = v.1.get_field_by_index(smallvec::smallvec![0]) {
+                        if let Some(val) =
+                            v.1.get_field_by_index(smallvec::smallvec![0])
+                        {
                             val == args[0]
                         } else {
                             false
@@ -354,7 +366,9 @@ impl Table {
                     .iter()
                     .enumerate()
                     .find(|v| {
-                        if let Some(val) = v.1.get_field_by_index(smallvec::smallvec![0]) {
+                        if let Some(val) =
+                            v.1.get_field_by_index(smallvec::smallvec![0])
+                        {
                             val == args[0]
                         } else {
                             false

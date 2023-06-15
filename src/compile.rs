@@ -805,7 +805,7 @@ impl MirBlock {
         c_stack.reverse();
 
         self.command_stack = c_stack;
-        
+
         (self, mem_pos, field_indexes)
     }
 }

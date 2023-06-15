@@ -6,11 +6,8 @@ mod route {
     };
 
     use crate::{
-        types::{
-            builtin::{
-                Asn, Prefix, RawRouteWithDeltas, RotondaId,
-                UpdateMessage,
-            },
+        types::builtin::{
+            Asn, Prefix, RawRouteWithDeltas, RotondaId, UpdateMessage,
         },
         vm::VmError,
     };
@@ -99,7 +96,10 @@ mod route {
         let attr_set = roto_msgs[2].get_latest_attrs();
         assert_eq!(attr_set.as_path.len(), Some(2));
 
-        println!("ATTR_SET_AS_PATH {:?}", attr_set.as_path.as_routecore_hops_vec());
+        println!(
+            "ATTR_SET_AS_PATH {:?}",
+            attr_set.as_path.as_routecore_hops_vec()
+        );
         assert_eq!(
             attr_set.as_path.as_routecore_hops_vec().get(0),
             Asn::try_from(211321)
@@ -199,8 +199,9 @@ mod route {
         assert_eq!(attr_set.as_path.len(), Some(2));
         assert_eq!(
             *attr_set.as_path.as_routecore_hops_vec()[0],
-            routecore::bgp::aspath::Hop::from(Asn::try_from(211321)
-                .unwrap().0)
+            routecore::bgp::aspath::Hop::from(
+                Asn::try_from(211321).unwrap().0
+            )
         );
         assert_eq!(
             attr_set.as_path.as_routecore_hops_vec().get(1),

@@ -1884,7 +1884,7 @@ fn declare_variable_from_symbol(
 
                     match arg_symbol.get_token()? {
                         Token::TypedRecord | Token::AnonymousRecord => {
-                            let fields = 
+                            let fields =
                                 arg_symbol
                                     .get_recursive_values_primitive(type_def.clone())
                                     .map_err(
