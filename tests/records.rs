@@ -82,6 +82,12 @@ fn src_code(
             i: {{ f: U8, g: Asn }},
             d: U32
         }}
+
+        type D {{
+            asn: Asn,
+            i: {{ f: U8, g: Asn, h: {{ k: U32, l: U8 }} }},
+            d: U32
+        }}
     "###,
         record_assign, code_line, end_accept_reject
     );
@@ -288,4 +294,32 @@ fn test_records_compare_10() {
         test_run,
         "Eval error: The sub-field name 'h' cannot be found in field 'i' in type 'C'"
     );
+}
+
+#[test]
+fn test_records_compare_11() {
+    common::init();
+    let src_line = src_code(
+        "D { asn: AS100, i: { f: 200, g: AS24, h: { k: 86400, l: 2 } }, d: 400 }",
+        "100 in [a.i.f,2,3,4,5]; // Peer Down",
+        "reject",
+    );
+    let test_run = test_data("in-module", &src_line);
+
+    let (ar, _rx, _tx) = test_run.unwrap();
+    assert_eq!(ar, AcceptReject::Accept);
+}
+
+#[test]
+fn test_records_compare_12() {
+    common::init();
+    let src_line = src_code(
+        "D { asn: AS99, i: { f: 100, g: AS24, h: { k: 86400, l: 2 } }, d: 400 }",
+        "100 in [a.i.f,2,3,4,5]; // Peer Down",
+        "reject",
+    );
+    let test_run = test_data("in-module", &src_line);
+
+    let (ar, _rx, _tx) = test_run.unwrap();
+    assert_eq!(ar, AcceptReject::Reject);
 }

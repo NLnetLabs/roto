@@ -153,6 +153,10 @@ fn test_data(
     println!("Used Data Sources");
     println!("{:#?}", &roto_pack.data_sources);
 
+
+    for mb in roto_pack.get_mir().iter() {
+        println!("{}", mb);
+    }
     // table source_asns contains AsnLines {
     //     asn: Asn
     // }

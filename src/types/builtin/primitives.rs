@@ -2205,6 +2205,99 @@ impl Display for MultiExitDisc {
 //------------ Local Preference type ----------------------------------------
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct Unknown;
+
+impl From<Unknown> for TypeValue {
+    fn from(_value: Unknown) -> Self {
+        TypeValue::Unknown
+    }
+}
+
+impl RotoType for Unknown {
+    fn get_props_for_method(
+        _ty: TypeDef,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, CompileError>
+    where
+        Self: std::marker::Sized,
+    {
+        match method_name.ident.as_str() {
+            "is_unknown" => Ok(MethodProps::new(
+                TypeDef::Boolean,
+                UnknownToken::IsUnknown.into(),
+                vec![],
+            )
+            .consume_value()),
+            _ => Err(format!(
+                "Unknown method: '{}' for type Unknown",
+                method_name.ident
+            )
+            .into()),
+        }
+    }
+
+    fn into_type(
+        self,
+        type_value: &TypeDef,
+    ) -> Result<TypeValue, CompileError>
+    where
+        Self: std::marker::Sized {
+        todo!()
+    }
+
+    fn exec_value_method<'a>(
+        &'a self,
+        method_token: usize,
+        args: &'a [StackValue],
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+
+    fn exec_consume_value_method(
+        self,
+        method_token: usize,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+        todo!()
+    }
+
+    fn exec_type_method<'a>(
+        method_token: usize,
+        args: &[StackValue],
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+}
+
+#[derive(Debug)]
+pub(crate) enum UnknownToken {
+    IsUnknown
+}
+
+impl TokenConvert for UnknownToken {}
+
+impl From<usize> for UnknownToken {
+    fn from(val: usize) -> Self {
+        match val {
+            0 => UnknownToken::IsUnknown,
+            _ => panic!("Unknown token value: {}", val),
+        }
+    }
+}
+
+impl From<UnknownToken> for usize {
+    fn from(val: UnknownToken) -> Self {
+        match val {
+            UnknownToken::IsUnknown => 0,
+        }
+    }
+}
+
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct LocalPref(pub(crate) routecore::bgp::types::LocalPref);
 
 impl RotoType for LocalPref {
@@ -2223,7 +2316,7 @@ impl RotoType for LocalPref {
             )
             .consume_value()),
             _ => Err(format!(
-                "Unknown method: '{}' for type U8",
+                "Unknown method: '{}' for type LocalPref",
                 method_name.ident
             )
             .into()),

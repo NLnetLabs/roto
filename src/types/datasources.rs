@@ -32,7 +32,7 @@ impl DataSource {
     pub fn get_at_field_index(
         &self,
         index: usize,
-        field_index: Option<usize>,
+        field_index: SmallVec<[usize; 8]>,
     ) -> Option<&TypeValue> {
         match self {
             DataSource::Table(ref t) => {
@@ -97,6 +97,7 @@ use std::sync::Arc;
 
 use log::trace;
 use rotonda_store::{prelude::Meta, epoch, MatchOptions, MatchType};
+use smallvec::SmallVec;
 
 use crate::{
     ast::ShortString,
@@ -304,14 +305,14 @@ impl Table {
     pub fn get_at_field_index(
         &self,
         index: usize,
-        field_index: Option<usize>,
+        field_index: SmallVec<[usize; 8]>,
     ) -> Option<&TypeValue> {
         match field_index {
-            None => self
+            fi if fi.is_empty() => self
                 .records
                 .get(index)
                 .and_then(|r| r.0.get(index).map(|v| (&v.1).into())),
-            Some(field_index) => match self.records.get(index) {
+            field_index => match self.records.get(index) {
                 Some(r) => {
                     r.get_field_by_index(field_index).map(|v| v.into())
                 }
@@ -332,7 +333,7 @@ impl Table {
                     .iter()
                     .enumerate()
                     .find(|v| {
-                        if let Some(val) = v.1.get_field_by_index(0) {
+                        if let Some(val) = v.1.get_field_by_index(smallvec::smallvec![0]) {
                             val == args[0]
                         } else {
                             false
@@ -353,7 +354,7 @@ impl Table {
                     .iter()
                     .enumerate()
                     .find(|v| {
-                        if let Some(val) = v.1.get_field_by_index(0) {
+                        if let Some(val) = v.1.get_field_by_index(smallvec::smallvec![0]) {
                             val == args[0]
                         } else {
                             false

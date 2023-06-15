@@ -2,7 +2,7 @@ use std::{
     cell::RefCell,
     fmt::{Display, Formatter},
     ops::{Index, IndexMut},
-    sync::Arc,
+    sync::Arc
 };
 
 use crate::{
@@ -20,6 +20,7 @@ use crate::{
 
 use arc_swap::ArcSwapOption;
 use log::{log_enabled, trace, Level};
+use smallvec::SmallVec;
 
 //------------ Stack --------------------------------------------------------
 
@@ -43,7 +44,10 @@ impl From<u32> for StackRefPos {
 #[derive(Debug, Clone)]
 pub(crate) struct StackRef {
     pub(crate) pos: StackRefPos,
-    field_index: Option<usize>,
+    // nested field -> record.field sequences are expressed as a Vec of field
+    // indexes, e.g. [1,2] on 
+    // Record { a: U8, b: Record { a: U8, b: U8, c: U8 }} would point to a.b
+    field_index: SmallVec<[usize; 8]>,
 }
 
 #[derive(Debug)]
@@ -57,7 +61,7 @@ impl<'a> Stack {
     fn push(&'a mut self, pos: StackRefPos) -> Result<(), VmError> {
         self.0.push(StackRef {
             pos,
-            field_index: None,
+            field_index: smallvec::smallvec![],
         });
         Ok(())
     }
@@ -70,11 +74,11 @@ impl<'a> Stack {
         self.0.last().ok_or(VmError::StackUnderflow)
     }
 
-    fn set_field_index(&mut self, index: usize) -> Result<(), VmError> {
+    fn add_field_index(&mut self, index: usize) -> Result<(), VmError> {
         self.0
             .last_mut()
             .ok_or(VmError::StackUnderflow)?
-            .field_index = Some(index);
+            .field_index.push(index);
         Ok(())
     }
 
@@ -130,7 +134,7 @@ impl LinearMemory {
                 )) = self
                     .get_mp_field_by_index(
                         pos as usize,
-                        stack_ref.field_index,
+                        stack_ref.field_index.clone(),
                     )
                     .unwrap()
                 {
@@ -155,21 +159,21 @@ impl LinearMemory {
 
         match stack_ref_pos {
             StackRefPos::MemPos(pos) => match field_index {
-                None => self
+                v if v.is_empty() => self
                     .get_mem_pos_as_owned(*pos as usize)
                     .ok_or(VmError::MemOutOfBounds),
-                Some(field_index) => match self
+                field_index => match self
                     .get_mem_pos_as_owned(*pos as usize)
                 {
                     Some(TypeValue::Record(mut r)) => {
-                        let field = r.get_field_by_index_owned(*field_index);
+                        let field = r.get_field_by_index_owned(field_index.clone());
                         match field {
                             ElementTypeValue::Nested(nested) => Ok(*nested),
                             ElementTypeValue::Primitive(b) => Ok(b),
                         }
                     }
                     Some(TypeValue::List(mut l)) => {
-                        let field = l.get_field_by_index_owned(*field_index);
+                        let field = l.get_field_by_index_owned(field_index.clone());
                         match field {
                             Some(ElementTypeValue::Nested(nested)) => {
                                 Ok(*nested)
@@ -189,14 +193,13 @@ impl LinearMemory {
     pub fn get_mp_field_by_index(
         &self,
         index: usize,
-        field_index: Option<usize>,
+        field_index: SmallVec<[usize; 8]>,
     ) -> Option<&TypeValue> {
         match field_index {
-            None => self.get_mem_pos(index),
-            Some(field_index) => match self.get_mem_pos(index) {
+            fi if fi.is_empty() => self.get_mem_pos(index),
+            field_index=> match self.get_mem_pos(index) {
                 Some(TypeValue::Record(rec)) => {
-                    let field = rec.get_field_by_index(field_index);
-                    match field {
+                    match rec.get_field_by_index(field_index) {
                         Some(ElementTypeValue::Nested(nested)) => {
                             Some(nested)
                         }
@@ -216,7 +219,7 @@ impl LinearMemory {
                 }
                 Some(TypeValue::Builtin(BuiltinTypeValue::Route(route))) => {
                     if let Some(v) =
-                        route.get_value_ref_for_field(field_index)
+                        route.get_value_ref_for_field(field_index[0])
                     {
                         Some(v)
                     } else {
@@ -560,7 +563,7 @@ impl From<Vec<ModuleArg>> for ModuleArgsMap {
 pub struct VariableRef {
     pub var_token_value: usize,
     pub mem_pos: u32,
-    pub field_index: Vec<usize>,
+    pub field_index: SmallVec<[usize; 8]>,
 }
 
 #[derive(Debug, Default)]
@@ -579,7 +582,7 @@ impl VariablesMap {
         &mut self,
         var_token_value: usize,
         mem_pos: u32,
-        field_index: Vec<usize>,
+        field_index: SmallVec<[usize; 8]>,
     ) -> Result<(), CompileError> {
         self.0.push(VariableRef {
             var_token_value,
@@ -679,7 +682,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
             .map(|sr| match sr.pos.clone() {
                 StackRefPos::MemPos(pos) => {
                     let v = mem
-                        .get_mp_field_by_index(pos as usize, sr.field_index)
+                        .get_mp_field_by_index(pos as usize, sr.field_index.clone())
                         .unwrap_or_else(|| {
                             panic!(
                                 "Uninitialized memory in position {}",
@@ -690,7 +693,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                 }
                 StackRefPos::TablePos(token, pos) => {
                     let ds = &self.data_sources.as_ref()[token];
-                    let v = ds.get_at_field_index(pos, sr.field_index);
+                    let v = ds.get_at_field_index(pos, sr.field_index.clone());
                     if let Some(v) = v {
                         StackValue::Arc(v.into())
                     } else {
@@ -723,7 +726,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
             .map(|sr| match sr.pos.clone() {
                 StackRefPos::MemPos(pos) => {
                     let v = mem
-                        .get_mp_field_by_index(pos as usize, sr.field_index)
+                        .get_mp_field_by_index(pos as usize, sr.field_index.clone())
                         .unwrap_or_else(|| {
                             panic!(
                                 "Uninitialized memory in position {}",
@@ -734,7 +737,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                 }
                 StackRefPos::TablePos(token, pos) => {
                     let ds = &self.data_sources.as_ref()[token];
-                    let v = ds.get_at_field_index(pos, sr.field_index);
+                    let v = ds.get_at_field_index(pos, sr.field_index.clone());
                     if let Some(v) = v {
                         StackValue::Arc(v.into())
                     } else {
@@ -1054,7 +1057,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                         // stack, this is the field that will be consumed
                         // and returned by `exec_consume_value_method`
                         // later on.
-                        let mut target_field_index = None;
+                        let mut target_field_index = smallvec::smallvec![];
 
                         trace!("\nargs_len {}", args_len);
                         trace!("Stack {:?}", stack);
@@ -1062,10 +1065,10 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                         let mut stack_args = (0..args_len).into_iter().map(|_i| {
                             let sr = stack.pop().unwrap();
 
-                            target_field_index = if target_field_index.is_none() {
+                            target_field_index = if target_field_index.is_empty() {
                                 sr.field_index
                             } else {
-                                target_field_index
+                                target_field_index.clone()
                             };
 
                             match sr.pos {
@@ -1106,18 +1109,18 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                             TypeValue::Record(mut rec) => {
                                 let call_value = TypeValue::from(
                                     rec.get_field_by_index_owned(
-                                        target_field_index.unwrap(),
+                                        target_field_index.clone(),
                                     ),
                                 )
                                 .exec_consume_value_method(
                                     method_token.into(),
                                     stack_args,
                                     return_type.into(),
-                                    target_field_index,
+                                    target_field_index.clone(),
                                 )?(
                                 );
-                                rec.set_field_for_index(
-                                    target_field_index.unwrap(),
+                                rec.set_value_on_field_index(
+                                    target_field_index.clone(),
                                     call_value,
                                 )?;
                                 TypeValue::Record(rec)
@@ -1125,7 +1128,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                             TypeValue::List(mut list) => {
                                 let call_value = TypeValue::from(
                                     list.get_field_by_index_owned(
-                                        target_field_index.unwrap(),
+                                        target_field_index.clone(),
                                     )
                                     .unwrap(),
                                 )
@@ -1133,11 +1136,11 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                     method_token.into(),
                                     stack_args,
                                     return_type.into(),
-                                    target_field_index,
+                                    target_field_index.clone(),
                                 )?(
                                 );
                                 list.set_field_for_index(
-                                    target_field_index.unwrap(),
+                                    target_field_index,
                                     call_value,
                                 )?;
                                 TypeValue::List(list)
@@ -1249,7 +1252,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                 let mut s = self.stack.borrow_mut();
                                 trace!(" -> stack {:?}", s);
                                 trace!("mem_pos 0 {:?}", mem.0[0]);
-                                s.set_field_index(*field)?;
+                                s.add_field_index(*field)?;
                                 if log_enabled!(Level::Trace) {
                                     trace!(" -> stack {:?}", s);
                                 }
@@ -1863,7 +1866,7 @@ impl ExtDataSource {
     pub fn get_at_field_index(
         &self,
         pos: usize,
-        field_index: Option<usize>,
+        field_index: SmallVec<[usize; 8]>,
     ) -> Option<TypeValue> {
         self.source.load().as_ref().map(|ds| {
             match ds.get_at_field_index(pos, field_index) {

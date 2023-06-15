@@ -19,7 +19,7 @@ use super::builtin::{
     AsPath, Asn, AtomicAggregator, Boolean, Community, HexLiteral, Hop,
     IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, NextHop, OriginType,
     Prefix, PrefixLength, RawRouteWithDeltas, RouteStatus, StringLiteral,
-    U32, U8,
+    U32, U8, Unknown,
 };
 use super::collections::Record;
 use super::datasources::{RibType, Table};
@@ -286,7 +286,7 @@ impl TypeDef {
                 StringLiteral::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::AcceptReject(_) => todo!(),
-            TypeDef::Unknown => todo!(),
+            TypeDef::Unknown => Unknown::get_props_for_method(self.clone(), method_name),
             TypeDef::LocalPref => {
                 LocalPref::get_props_for_method(self.clone(), method_name)
             }

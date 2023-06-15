@@ -1877,9 +1877,9 @@ fn declare_variable_from_symbol(
                 .get_mut(scope)
                 .ok_or(format!("No module named '{}' found.", module))?;
 
-            match arg_symbol.has_value() {
+            match arg_symbol.is_unknown() {
                 // This is a variable, create an empty value on the symbol.
-                false => {
+                true => {
                     let type_def = arg_symbol.get_recursive_return_type();
 
                     match arg_symbol.get_token()? {
@@ -1909,7 +1909,7 @@ fn declare_variable_from_symbol(
                 }
                 // This is a constant, move the value into the symbol we're
                 // storing. This can only be a builtin-typed value.
-                true => {
+                false => {
                     let symbol = symbols::Symbol::new_with_value(
                         key,
                         symbols::SymbolKind::Constant,

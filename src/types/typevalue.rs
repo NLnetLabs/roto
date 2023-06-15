@@ -1,6 +1,7 @@
 use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
 use primitives::Hop;
+use smallvec::SmallVec;
 
 //============ TypeValue ====================================================
 use crate::{
@@ -11,7 +12,7 @@ use crate::{
     attr_change_set::ScalarValue,
     compile::CompileError,
     traits::RotoType,
-    vm::{StackRef, StackRefPos, StackValue, VmError},
+    vm::{StackValue, VmError},
 };
 
 use super::{
@@ -107,14 +108,14 @@ impl TypeValue {
 
     pub fn get_field_by_index(
         &self,
-        index: usize,
+        index: SmallVec<[usize; 8]>,
     ) -> Result<&ElementTypeValue, CompileError> {
         match self {
             TypeValue::Record(r) => {
-                let field = r.get_field_by_index(index);
+                let field = r.get_field_by_index(index.clone());
                 field.ok_or_else(|| {
                     format!(
-                        "Index {} out of bounds for record '{:?}'",
+                        "Index {:?} out of bounds for record '{:?}'",
                         index, self
                     )
                     .as_str()
@@ -122,10 +123,10 @@ impl TypeValue {
                 })
             }
             TypeValue::List(l) => {
-                let field = l.get_field_by_index(index);
+                let field = l.get_field_by_index(index.clone());
                 field.ok_or_else(|| {
                     format!(
-                        "Index {} out of bounds for list '{:?}'",
+                        "Index {:?} out of bounds for list '{:?}'",
                         index, self
                     )
                     .as_str()
@@ -136,36 +137,14 @@ impl TypeValue {
         }
     }
 
-    pub(crate) fn _set_field_by_stack_ref(
-        &mut self,
-        stack_ref: &StackRef,
-        value: TypeValue,
-    ) -> Result<(), VmError> {
-        if let StackRefPos::MemPos(index) = stack_ref.pos {
-            match self {
-                TypeValue::Record(rec) => {
-                    rec.set_field_for_index(index as usize, value)?
-                }
-                TypeValue::List(list) => {
-                    list.set_field_for_index(index as usize, value)?
-                }
-                _ => return Err(VmError::InvalidWrite),
-            };
-        } else {
-            return Err(VmError::InvalidWrite);
-        };
-
-        Ok(())
-    }
-
     pub(crate) fn _set_field(
         mut self,
-        field_index: usize,
+        field_index: SmallVec<[usize; 8]>,
         value: TypeValue,
     ) -> Result<Self, VmError> {
         match self {
             TypeValue::Record(ref mut rec) => {
-                rec.set_field_for_index(field_index, value)?;
+                rec.set_value_on_field_index(field_index, value)?;
             }
             TypeValue::List(ref mut list) => {
                 list.set_field_for_index(field_index, value)?;
@@ -267,12 +246,6 @@ impl TypeValue {
                 args,
                 return_type,
             ),
-            // TypeValue::Rib(rib) => {
-            //     rib.exec_value_method(method_token, args, return_type)
-            // }
-            // TypeValue::Table(rec) => {
-            //     rec.exec_value_method(method_token, args, return_type)
-            // }
             TypeValue::OutputStreamMessage(stream) => {
                 stream.exec_value_method(method_token, args, return_type)
             }
@@ -291,7 +264,7 @@ impl TypeValue {
         method_token: usize,
         args: Vec<TypeValue>,
         return_type: TypeDef,
-        _field_index: Option<usize>,
+        _field_index: SmallVec<[usize; 8]>,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         match self {
             TypeValue::Record(rec_type) => rec_type
@@ -594,12 +567,6 @@ impl PartialEq for TypeValue {
                 } else {
                     false
                 }
-                    // || other
-                    //     .clone()
-                    //     .try_convert_into_variant(self.into())
-                    //     .as_ref()
-                    //     .ok()
-                    //     == Some(self)
             }
             (TypeValue::Builtin(_), TypeValue::List(_)) => todo!(),
             (TypeValue::Builtin(_), TypeValue::Record(_)) => todo!(),
@@ -616,7 +583,7 @@ impl PartialEq for TypeValue {
                 todo!()
             }
             (TypeValue::List(_), TypeValue::SharedValue(_)) => todo!(),
-            (TypeValue::List(_), TypeValue::Unknown) => todo!(),
+            (TypeValue::List(_), TypeValue::Unknown) => false,
             (TypeValue::List(_), TypeValue::UnInit) => todo!(),
             (TypeValue::Record(_), TypeValue::Builtin(_)) => todo!(),
             (TypeValue::Record(_), TypeValue::List(_)) => todo!(),
@@ -627,7 +594,7 @@ impl PartialEq for TypeValue {
                 todo!()
             }
             (TypeValue::Record(_), TypeValue::SharedValue(_)) => todo!(),
-            (TypeValue::Record(_), TypeValue::Unknown) => todo!(),
+            (TypeValue::Record(_), TypeValue::Unknown) => false,
             (TypeValue::Record(_), TypeValue::UnInit) => todo!(),
             (TypeValue::OutputStreamMessage(_), TypeValue::Builtin(_)) => {
                 todo!()
@@ -658,16 +625,14 @@ impl PartialEq for TypeValue {
                 TypeValue::OutputStreamMessage(_),
             ) => todo!(),
             (TypeValue::SharedValue(_), TypeValue::SharedValue(_)) => todo!(),
-            (TypeValue::SharedValue(_), TypeValue::Unknown) => todo!(),
+            (TypeValue::SharedValue(_), TypeValue::Unknown) => false,
             (TypeValue::SharedValue(_), TypeValue::UnInit) => todo!(),
-            (TypeValue::Unknown, TypeValue::Builtin(_)) => todo!(),
-            (TypeValue::Unknown, TypeValue::List(_)) => todo!(),
-            (TypeValue::Unknown, TypeValue::Record(_)) => todo!(),
-            (TypeValue::Unknown, TypeValue::OutputStreamMessage(_)) => {
-                todo!()
-            }
-            (TypeValue::Unknown, TypeValue::SharedValue(_)) => todo!(),
-            (TypeValue::Unknown, TypeValue::Unknown) => true,
+            (TypeValue::Unknown, TypeValue::Builtin(_)) => false,
+            (TypeValue::Unknown, TypeValue::List(_)) => false,
+            (TypeValue::Unknown, TypeValue::Record(_)) => false,
+            (TypeValue::Unknown, TypeValue::OutputStreamMessage(_)) => false,
+            (TypeValue::Unknown, TypeValue::SharedValue(_)) => false,
+            (TypeValue::Unknown, TypeValue::Unknown) => false,
             (TypeValue::Unknown, TypeValue::UnInit) => todo!(),
             (TypeValue::UnInit, TypeValue::Builtin(_)) => todo!(),
             (TypeValue::UnInit, TypeValue::List(_)) => todo!(),

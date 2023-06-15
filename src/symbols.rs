@@ -59,6 +59,7 @@ impl Symbol {
                 | TypeDef::Table(_)
                 | TypeDef::List(_)
                 | TypeDef::Record(_)
+                | TypeDef::Route
                 | TypeDef::Unknown
         ) {
             Ok(self.ty.clone())
@@ -120,8 +121,11 @@ impl Symbol {
         self
     }
 
-    pub fn has_value(&self) -> bool {
-        self.value != TypeValue::Unknown
+    // This actually does NOT work with equality, since
+    // Unknown != Unknown accoring to the PartialEq
+    // impl, and that's correct!
+    pub fn is_unknown(&self) -> bool {
+        matches!(self.value, TypeValue::Unknown)
     }
 
     pub fn get_value(&self) -> &TypeValue {

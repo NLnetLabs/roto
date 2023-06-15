@@ -6,6 +6,7 @@ use std::{
 
 use log::{log_enabled, trace, Level};
 use nom::error::VerboseError;
+use smallvec::SmallVec;
 
 use crate::{
     ast::{self, AcceptReject, ShortString, SyntaxTree},
@@ -755,8 +756,8 @@ impl MirBlock {
     pub fn into_assign_block(
         mut self,
         var_mem_pos: usize,
-    ) -> (Self, usize, Vec<usize>) {
-        let mut field_indexes = vec![];
+    ) -> (Self, usize, SmallVec<[usize; 8]>) {
+        let mut field_indexes = smallvec::smallvec![];
 
         self.command_stack.reverse();
 
@@ -804,7 +805,7 @@ impl MirBlock {
         c_stack.reverse();
 
         self.command_stack = c_stack;
-
+        
         (self, mem_pos, field_indexes)
     }
 }
@@ -1010,7 +1011,7 @@ fn compile_compute_expr<'a>(
             // the (literal) value in the mem pos
             if let Some(arg) = state.used_arguments.iter().find(|a| {
                 a.1.get_token().unwrap() == Token::Argument(arg_to)
-                    && a.1.has_value()
+                    && !a.1.is_unknown()
             }) {
                 state.cur_mir_block.command_stack.push(Command::new(
                     OpCode::MemPosSet,
@@ -1419,6 +1420,12 @@ fn compile_compute_expr<'a>(
     Ok(state)
 }
 
+// Compiles the variable assigments, creates a MirBlock that retrieves and/or
+// computes the value of the variable and stores it in the `local_variables`
+// map. Note that in cases where the variables assignments points to a field
+// access, the access receiver of the assignment is stored together with the
+// field_index on the access receiver that points to the actual variable
+// assignment.
 fn compile_assignments(
     mut mir: Vec<MirBlock>,
     mut state: CompilerState<'_>,

@@ -1,3 +1,5 @@
+use smallvec::SmallVec;
+
 use crate::ast::{
     AnonymousRecordValueExpr, ListValueExpr, ShortString,
     TypedRecordValueExpr, ValueExpr,
@@ -24,6 +26,37 @@ use super::typevalue::TypeValue;
 pub enum ElementTypeValue {
     Primitive(TypeValue),
     Nested(Box<TypeValue>),
+}
+
+impl ElementTypeValue {
+    fn into_record(self) -> Result<Record, VmError> {
+        if let ElementTypeValue::Primitive(
+            TypeValue::Record(rec)) = self {
+                Ok(rec)
+            } else {
+                Err(VmError::InvalidConversion)
+            }
+    }
+
+    fn as_record(&self) -> Result<&Record, VmError> {
+        if let ElementTypeValue::Nested(rec) = self {
+            if let TypeValue::Record(rec2) = &**rec {
+                return Ok(rec2);
+            }
+        }
+
+        Err(VmError::InvalidValueType)
+    }
+
+    fn as_mut_record(&mut self) -> Result<&mut Record, VmError> {
+        if let ElementTypeValue::Nested(rec) = &mut *self {
+            if let TypeValue::Record(rec2) = &mut **rec {
+                return Ok(rec2);
+            }
+        }
+
+        Err(VmError::InvalidValueType)
+    }
 }
 
 impl From<TypeValue> for ElementTypeValue {
@@ -174,25 +207,48 @@ impl List {
 
     pub fn get_field_by_index(
         &self,
-        index: usize,
+        field_index: SmallVec<[usize; 8]>,
     ) -> Option<&ElementTypeValue> {
-        // self.0.get(index).ok_or("Index out of bounds".into())
-        self.0.get(index)
+        let mut elm = self.0.get(field_index[0]);
+
+        for index in &field_index[1..] {
+            elm = elm.or(None)?.as_record().unwrap().0
+                .get(*index).map(|f| &f.1)
+        }
+
+        elm
     }
 
     pub fn get_field_by_index_owned(
         &mut self,
-        index: usize,
+        field_index: SmallVec<[usize; 8]>,
     ) -> Option<ElementTypeValue> {
-        self.0.get_mut(index).map(std::mem::take)
+        let mut elm = self.0
+
+        .get_mut(field_index[0]).map(std::mem::take);
+       
+        for index in &field_index[1..] {
+            elm = elm.or(None)?.into_record().unwrap().0
+                .get_mut(*index)
+                .map(|f| std::mem::take(&mut f.1));
+        }
+        elm
     }
 
     pub fn set_field_for_index(
         &mut self,
-        index: usize,
+        field_index: SmallVec<[usize; 8]>,
         value: TypeValue,
     ) -> Result<(), VmError> {
-        let e_tv = self.0.get_mut(index).ok_or(VmError::MemOutOfBounds)?;
+        let mut elm = self.0
+        .get_mut(field_index[0]);
+       
+        for index in &field_index[1..] {
+            elm = elm.ok_or(VmError::MemOutOfBounds)?.as_mut_record()?.0
+                .get_mut(*index).map(|f| &mut f.1)
+        }
+
+        let e_tv = elm.ok_or(VmError::MemOutOfBounds)?;
         let new_field = &mut ElementTypeValue::from(value);
         std::mem::swap(e_tv, new_field);
         Ok(())
@@ -516,29 +572,52 @@ impl<'a> Record {
 
     pub fn get_field_by_index(
         &'a self,
-        index: usize,
+        field_index: SmallVec<[usize; 8]>,
     ) -> Option<&'a ElementTypeValue> {
-        self.0.get(index).map(|f| &f.1)
+        let mut elm = self.0
+        .get(field_index[0]).map(|f| &f.1);
+       
+        for index in &field_index[1..] {
+            elm = elm?.as_record().unwrap().0
+                .get(*index)
+                .map(|f| &f.1)
+        }
+        elm
     }
 
     pub fn get_field_by_index_owned(
         &mut self,
-        index: usize,
+        field_index: SmallVec<[usize; 8]>,
     ) -> ElementTypeValue {
-        self.0
-            .get_mut(index)
-            .map(|f| std::mem::take(&mut f.1))
-            .unwrap()
+        let mut elm = self.0
+        .get_mut(field_index[0]).map(|f| std::mem::take(&mut f.1));
+       
+        for index in &field_index[1..] {
+            elm = elm.or(None).unwrap().into_record().unwrap().0
+                .get_mut(*index)
+                .map(|f| std::mem::take(&mut f.1))
+        }
+
+        elm.unwrap()
     }
 
-    pub fn set_field_for_index(
+    pub fn set_value_on_field_index(
         &mut self,
-        index: usize,
+        field_index: SmallVec<[usize; 8]>,
         value: TypeValue,
     ) -> Result<(), VmError> {
-        let e_tv = self.0.get_mut(index).ok_or(VmError::MemOutOfBounds)?;
+        let mut elm = self.0
+        .get_mut(field_index[0]);
+       
+        for index in &field_index[1..] {
+            elm = elm.ok_or(VmError::MemOutOfBounds)?.1.as_mut_record().unwrap().0
+                .get_mut(*index)
+        }
+
+        let e_tv = elm.ok_or(VmError::MemOutOfBounds)?;
         let new_field = &mut (e_tv.0.clone(), ElementTypeValue::from(value));
         std::mem::swap(e_tv, new_field);
+        
         Ok(())
     }
 }
