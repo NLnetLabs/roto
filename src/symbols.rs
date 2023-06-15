@@ -327,7 +327,7 @@ impl Symbol {
         mut self,
         into_ty: TypeDef,
     ) -> Result<Self, CompileError> {
-        println!("CONVERT {:#?} -> {}", self, into_ty);
+        trace!("CONVERT {:#?} -> {}", self, into_ty);
         match self.ty {
             TypeDef::Rib(_) => {
                 return Err(CompileError::new(
@@ -958,7 +958,7 @@ impl SymbolTable {
         };
 
         if key.as_str() == "route" {
-            println!(
+            trace!(
                 "k {} n {} k {:?} t {} a {:?} v {} ",
                 key, name, kind, ty, args, value
             );

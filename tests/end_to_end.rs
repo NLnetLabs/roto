@@ -1,3 +1,4 @@
+use log::trace;
 use roto::compile::Compiler;
 
 use roto::types::builtin::{Asn, Community};
@@ -45,7 +46,7 @@ fn test_data(
     name: &str,
     source_code: &'static str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Evaluate module {}...", name);
+    trace!("Evaluate module {}...", name);
 
     // Type coercion doesn't work here...
     let module_arguments =
@@ -65,7 +66,7 @@ fn test_data(
     let as_path = vec![Asn::from_u32(1)].into();
     let asn: TypeValue = Asn::from_u32(211321).into();
 
-    println!("ASN {:?}", asn);
+    trace!("ASN {:?}", asn);
 
     let comms_list = List::new(vec![ElementTypeValue::Primitive(
         Community::new(routecore::bgp::communities::Community::from([
@@ -74,7 +75,7 @@ fn test_data(
         .into(),
     )]);
 
-    println!("comms list {}", comms_list);
+    trace!("comms list {}", comms_list);
 
     // For some reason absolute type definitions don't work properly
     // let my_comms_type =
@@ -88,11 +89,11 @@ fn test_data(
             .into(),
         )]));
 
-    println!("comms instance {}", comms);
+    trace!("comms instance {}", comms);
 
     let my_comms_type: TypeDef = (&comms).into();
 
-    println!("comms type {}", my_comms_type);
+    trace!("comms type {}", my_comms_type);
 
     let my_nested_rec_type =
         TypeDef::new_record_type(vec![("counter", Box::new(TypeDef::U32))])
@@ -148,14 +149,14 @@ fn test_data(
     
     let mem = &mut vm::LinearMemory::uninit();
 
-    println!("Used Arguments");
-    println!("{:#?}", &roto_pack.arguments);
-    println!("Used Data Sources");
-    println!("{:#?}", &roto_pack.data_sources);
+    trace!("Used Arguments");
+    trace!("{:#?}", &roto_pack.arguments);
+    trace!("Used Data Sources");
+    trace!("{:#?}", &roto_pack.data_sources);
 
 
     for mb in roto_pack.get_mir().iter() {
-        println!("{}", mb);
+        trace!("{}", mb);
     }
     // table source_asns contains AsnLines {
     //     asn: Asn
@@ -164,7 +165,7 @@ fn test_data(
         DataSource::table_from_records("source_asns", vec![new_sa_rec])?;
     roto_pack.set_source(sources_asns)?;
 
-    println!("insert source rib-rov");
+    trace!("insert source rib-rov");
     roto_pack.set_source(rib_rov.into())?;
 
     let mut vm = vm::VmBuilder::new()
@@ -175,10 +176,10 @@ fn test_data(
 
     let res = vm.exec(my_payload, None::<Record>, None, mem).unwrap();
 
-    println!("\nRESULT");
-    println!("action: {}", res.0);
-    println!("rx    : {:?}", res.1);
-    println!("tx    : {:?}", res.2);
+    trace!("\nRESULT");
+    trace!("action: {}", res.0);
+    trace!("rx    : {:?}", res.1);
+    trace!("tx    : {:?}", res.2);
 
     Ok(())
 }

@@ -435,7 +435,6 @@ impl RotoType for List {
                 Ok(Box::new(move || self.iter().any(|e| e == args[0]).into()))
             }
             _ => {
-                println!("can't exec method on {}", method);
                 Err(VmError::InvalidMethodCall)
             }
         }
@@ -463,7 +462,6 @@ impl RotoType for List {
             ListToken::Insert => todo!(),
             ListToken::Clear => todo!(),
             m => {
-                println!("Can't call method on {:?}", m);
                 Err(VmError::InvalidMethodCall)
             }
         }

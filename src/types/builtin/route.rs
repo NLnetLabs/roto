@@ -11,6 +11,7 @@
 //               └─▶ Withdrawals │──change ──────┘
 //                 └─────────────┘  status
 
+use log::trace;
 use routecore::bgp::message::SessionConfig;
 use std::sync::Arc;
 
@@ -437,7 +438,7 @@ impl AttributeDeltaList {
     fn store_delta(&mut self, delta: AttributeDelta) -> Result<(), VmError> {
         if let Some(locked_delta) = self.locked_delta {
             if locked_delta != delta.delta_index {
-                println!("{:?} {}", self.locked_delta, delta.delta_index);
+                trace!("{:?} {}", self.locked_delta, delta.delta_index);
                 return Err(VmError::DeltaLocked);
             }
         }

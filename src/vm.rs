@@ -127,7 +127,7 @@ impl LinearMemory {
     }
 
     pub(crate) fn get_mp_field_as_bool(&self, stack_ref: &StackRef) -> bool {
-        println!("mp field: {:?}", stack_ref.pos);
+        trace!("mp field: {:?}", stack_ref.pos);
         match stack_ref.pos {
             StackRefPos::MemPos(pos) => {
                 if let TypeValue::Builtin(BuiltinTypeValue::Boolean(

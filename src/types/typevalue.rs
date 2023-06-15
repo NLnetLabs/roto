@@ -1,5 +1,6 @@
 use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
+use log::trace;
 use primitives::Hop;
 use smallvec::SmallVec;
 
@@ -404,7 +405,7 @@ impl TypeValue {
         mut self,
         type_def: TypeDef,
     ) -> Result<Self, CompileError> {
-        println!("CONVERT TYPEVALUE {:#?} -> {}", self, type_def);
+        trace!("CONVERT TYPEVALUE {:#?} -> {}", self, type_def);
         match self {
             TypeValue::List(list) => {
                 self = list.into_type(&type_def)?;

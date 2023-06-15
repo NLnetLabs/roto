@@ -1,3 +1,4 @@
+use log::trace;
 use roto::ast::AcceptReject;
 use roto::compile::Compiler;
 
@@ -82,7 +83,7 @@ fn test_data(
     (AcceptReject, TypeValue, Option<TypeValue>),
     Box<dyn std::error::Error>,
 > {
-    println!("Evaluate module {}...", name);
+    trace!("Evaluate module {}...", name);
 
     let c = Compiler::new();
     let roto_packs = c.build_from_compiler(source_code)?;
