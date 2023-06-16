@@ -12,7 +12,7 @@
 //                 └─────────────┘  status
 
 use log::trace;
-use routecore::bgp::message::SessionConfig;
+use routecore::bgp::{message::{SessionConfig}, types::{AFI, SAFI}};
 use std::sync::Arc;
 
 /// Lamport Timestamp. Used to order messages between units/systems.
@@ -95,7 +95,7 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
 pub struct RawRouteWithDeltas {
     pub prefix: Prefix,
     // Arc'ed BGP message
-    pub raw_message: Arc<RawBgpMessage>,
+    pub raw_message: Arc<BgpUpdateMessage>,
     // history of recorded changes to the route
     attribute_deltas: AttributeDeltaList,
     // history of status changes to the route
@@ -108,7 +108,7 @@ impl RawRouteWithDeltas {
         prefix: Prefix,
         raw_message: UpdateMessage,
     ) -> Self {
-        let raw_message = RawBgpMessage::new(delta_id, raw_message);
+        let raw_message = BgpUpdateMessage::new(delta_id, raw_message);
         let mut attribute_deltas = AttributeDeltaList::new();
         // This stores the attributes in the raw message as the first delta.
         attribute_deltas
@@ -132,7 +132,7 @@ impl RawRouteWithDeltas {
     pub fn new_with_message_ref(
         delta_id: (RotondaId, LogicalTime),
         prefix: Prefix,
-        raw_message: &Arc<RawBgpMessage>,
+        raw_message: &Arc<BgpUpdateMessage>,
     ) -> Self {
         Self {
             prefix,
@@ -513,7 +513,7 @@ impl RouteStatusDeltaList {
     }
 }
 
-//------------ RawBgpMessage ------------------------------------------------
+//------------ BgpUpdateMessage ------------------------------------------------
 
 // A data-structure that stores the array of bytes of the incoming BGP Update
 // message, together with its logical timestamp and an ID of the instance
@@ -523,12 +523,12 @@ impl RouteStatusDeltaList {
 // attribute. This avoids having to clone from the AttributeLists in the
 // iterator over the latest attributes.
 #[derive(Debug)]
-pub struct RawBgpMessage {
+pub struct BgpUpdateMessage {
     message_id: (RotondaId, LogicalTime),
     raw_message: UpdateMessage,
 }
 
-impl RawBgpMessage {
+impl BgpUpdateMessage {
     pub fn new(
         message_id: (RotondaId, u64),
         raw_message: UpdateMessage,
@@ -540,23 +540,56 @@ impl RawBgpMessage {
     }
 }
 
-impl PartialEq for RawBgpMessage {
+impl PartialEq for BgpUpdateMessage {
     fn eq(&self, other: &Self) -> bool {
         self.message_id == other.message_id
     }
 }
 
-impl Eq for RawBgpMessage {}
+impl Eq for BgpUpdateMessage {}
 
-impl RotoType for RawBgpMessage {
+impl BgpUpdateMessage {
+    pub(crate) fn get_props_for_field(
+        field_name: &crate::ast::Identifier,
+    ) -> Result<(TypeDef, crate::traits::Token), CompileError>
+    where
+        Self: std::marker::Sized,
+    {
+        match field_name.ident.as_str() {
+            "nlris" => Ok((
+                TypeDef::Nlris,
+                Token::FieldAccess(vec![usize::from(BgpUpdateMessageToken::Nlris) as u8]),
+            )),
+            _ => Err(format!(
+                "Unknown field '{}' for type BgpUpdateMessage",
+                field_name.ident
+            )
+            .into()),
+        }
+    }
+}
+
+impl RotoType for BgpUpdateMessage {
     fn get_props_for_method(
         _ty: TypeDef,
-        _method_name: &crate::ast::Identifier,
+        method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
     {
-        todo!()
+        match method_name.ident.as_str() {
+            "set" => Ok(MethodProps::new(
+                TypeDef::Unknown,
+                BgpUpdateMessageToken::Nlris.into(),
+                vec![TypeDef::IntegerLiteral],
+            )
+            .consume_value()),
+            _ => Err(format!(
+                "Unknown method: '{}' for type BgpUpdateMessage",
+                method_name.ident
+            )
+            .into()),
+        }
     }
 
     fn into_type(
@@ -596,9 +629,33 @@ impl RotoType for RawBgpMessage {
     }
 }
 
-impl From<RawBgpMessage> for TypeValue {
-    fn from(raw: RawBgpMessage) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::RawBgpMessage(Arc::new(raw)))
+impl From<BgpUpdateMessage> for TypeValue {
+    fn from(raw: BgpUpdateMessage) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::BgpUpdateMessage(Arc::new(raw)))
+    }
+}
+
+#[derive(Debug)]
+enum BgpUpdateMessageToken {
+    Nlris
+}
+
+impl TokenConvert for BgpUpdateMessageToken {}
+
+impl From<usize> for BgpUpdateMessageToken {
+    fn from(val: usize) -> Self {
+        match val {
+            0 => BgpUpdateMessageToken::Nlris,
+            _ => panic!("Unknown token value: {}", val),
+        }
+    }
+}
+
+impl From<BgpUpdateMessageToken> for usize {
+    fn from(val: BgpUpdateMessageToken) -> Self {
+        match val {
+            BgpUpdateMessageToken::Nlris => 0,
+        }
     }
 }
 
@@ -922,6 +979,99 @@ impl From<RouteStatusToken> for usize {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct RotondaId(pub usize);
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Nlris {
+    afi: AFI,
+    safi: SAFI,
+    // session_config: SessionConfig
+}
+
+impl Nlris {
+    pub(crate) fn get_props_for_field(
+        field_name: &crate::ast::Identifier,
+    ) -> Result<(TypeDef, crate::traits::Token), CompileError>
+    where
+        Self: std::marker::Sized,
+    {
+        match field_name.ident.as_str() {
+            "afi" => Ok((
+                TypeDef::U8,
+                Token::FieldAccess(vec![RouteToken::Prefix.into()]),
+            )),
+            "safi" => Ok((
+                TypeDef::U8,
+                Token::FieldAccess(vec![RouteToken::AsPath.into()]),
+            )),
+            _ => Err(format!(
+                "Unknown method '{}' for type Route",
+                field_name.ident
+            )
+            .into()),
+        }
+    }
+}
+
+impl RotoType for Nlris {
+    fn get_props_for_method(
+        ty: TypeDef,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, CompileError>
+    where
+        Self: std::marker::Sized {
+        todo!()
+    }
+
+    fn into_type(
+        self,
+        type_value: &TypeDef,
+    ) -> Result<TypeValue, CompileError>
+    where
+        Self: std::marker::Sized {
+        todo!()
+    }
+
+    fn exec_value_method<'a>(
+        &'a self,
+        method_token: usize,
+        args: &'a [StackValue],
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+
+    fn exec_consume_value_method(
+        self,
+        method_token: usize,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+        todo!()
+    }
+
+    fn exec_type_method<'a>(
+        method_token: usize,
+        args: &[StackValue],
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
+    }
+}
+
+impl From<Nlris> for TypeValue {
+    fn from(value: Nlris) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::Nlris(value))
+    }
+}
+
+impl From<routecore::bgp::message::update::Nlris<'static, bytes::Bytes>> for Nlris {
+    fn from(value: routecore::bgp::message::update::Nlris<'static, bytes::Bytes>) -> Self {
+        Nlris {
+            afi: value.afi(),
+            safi: value.safi(),
+        }
+    }
+}
+
 //------------ Modification & Creation of new Updates -----------------------
 
 #[derive(Debug)]
@@ -984,5 +1134,13 @@ impl UpdateMessage {
         _change_set: &AttrChangeSet,
     ) -> Self {
         todo!()
+    }
+
+    pub fn nlris(&self) -> Nlris {
+        let nlris = self.0.nlris();
+        Nlris {
+            afi: nlris.afi(),
+            safi: nlris.safi(),
+        }
     }
 }

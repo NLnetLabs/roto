@@ -198,8 +198,11 @@ impl TypeValue {
             TypeValue::Builtin(BuiltinTypeValue::Route(route)) => {
                 route.exec_value_method(method_token, args, return_type)
             }
-            TypeValue::Builtin(BuiltinTypeValue::RawBgpMessage(raw)) => {
+            TypeValue::Builtin(BuiltinTypeValue::BgpUpdateMessage(raw)) => {
                 raw.exec_value_method(method_token, args, return_type)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::Nlris(nlris)) => {
+                nlris.exec_value_method(method_token, args, return_type)
             }
             TypeValue::Builtin(BuiltinTypeValue::Community(community)) => {
                 community.exec_value_method(method_token, args, return_type)
@@ -314,7 +317,10 @@ impl TypeValue {
             }
             TypeValue::Builtin(BuiltinTypeValue::Route(route)) => route
                 .exec_consume_value_method(method_token, args, return_type),
-            TypeValue::Builtin(BuiltinTypeValue::RawBgpMessage(_raw)) => {
+            TypeValue::Builtin(BuiltinTypeValue::BgpUpdateMessage(_raw)) => {
+                Err(VmError::InvalidMethodCall)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::Nlris(_nlris)) => {
                 Err(VmError::InvalidMethodCall)
             }
             TypeValue::Builtin(BuiltinTypeValue::Communities(
@@ -462,10 +468,14 @@ impl TypeValue {
             TypeValue::Builtin(BuiltinTypeValue::Route(val)) => {
                 self = val.into_type(&type_def)?;
             }
-
-            TypeValue::Builtin(BuiltinTypeValue::RawBgpMessage(_val)) => {
+            TypeValue::Builtin(BuiltinTypeValue::BgpUpdateMessage(_val)) => {
                 return Err(CompileError::new(
                     "Raw BGP message value can't be converted.".into(),
+                ))
+            }
+            TypeValue::Builtin(BuiltinTypeValue::Nlris(_val)) => {
+                return Err(CompileError::new(
+                    "A value of type 'Nlris' can't be converted.".into(),
                 ))
             }
             TypeValue::Builtin(BuiltinTypeValue::LocalPref(val)) => {

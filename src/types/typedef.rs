@@ -2,11 +2,11 @@
 
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
-
 use log::trace;
 
 use crate::compile::CompileError;
 use crate::traits::Token;
+use crate::types::builtin::BgpUpdateMessage;
 use crate::types::collections::ElementTypeValue;
 use crate::types::datasources::NamedTypeDef;
 use crate::vm::StackValue;
@@ -19,7 +19,7 @@ use super::builtin::{
     AsPath, Asn, AtomicAggregator, Boolean, Community, HexLiteral, Hop,
     IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, NextHop, OriginType,
     Prefix, PrefixLength, RawRouteWithDeltas, RouteStatus, StringLiteral,
-    Unknown, U32, U8,
+    Unknown, U32, U8, Nlris,
 };
 use super::collections::Record;
 use super::datasources::{RibType, Table};
@@ -39,7 +39,8 @@ pub enum TypeDef {
     List(Box<TypeDef>),
     Record(Vec<NamedTypeDef>),
     // A raw BGP message as bytes
-    RawBgpMessage,
+    BgpUpdateMessage,
+    Nlris,
     // Builtin Types
     U32,
     U8,
@@ -93,7 +94,6 @@ impl TypeDef {
                 | TypeDef::Table(_)
                 | TypeDef::List(_)
                 | TypeDef::Record(_)
-                | TypeDef::Unknown
         )
     }
 
@@ -160,6 +160,15 @@ impl TypeDef {
                 (TypeDef::Route, _) => {
                     current_type_token =
                         RawRouteWithDeltas::get_props_for_field(field)?;
+                }
+                (TypeDef::BgpUpdateMessage, _) => {
+                    trace!("BgpUpdateMessage w/ field '{}'", field);
+                    current_type_token = 
+                        BgpUpdateMessage::get_props_for_field(field)?;
+                }
+                (TypeDef::Nlris, _) => {
+                    current_type_token =
+                        Nlris::get_props_for_field(field)?;
                 }
                 _ => {
                     return Err(format!(
@@ -231,8 +240,14 @@ impl TypeDef {
             TypeDef::List(_) => {
                 List::get_props_for_method(self.clone(), method_name)
             }
-            TypeDef::RawBgpMessage => {
-                RawRouteWithDeltas::get_props_for_method(
+            TypeDef::BgpUpdateMessage => {
+                BgpUpdateMessage::get_props_for_method(
+                    self.clone(),
+                    method_name,
+                )
+            }
+            TypeDef::Nlris => {
+                Nlris::get_props_for_method(
                     self.clone(),
                     method_name,
                 )
@@ -414,7 +429,8 @@ impl std::fmt::Display for TypeDef {
             TypeDef::Asn => write!(f, "Asn"),
             TypeDef::IpAddress => write!(f, "IpAddress"),
             TypeDef::Route => write!(f, "Route"),
-            TypeDef::RawBgpMessage => write!(f, "RawBgpMessage"),
+            TypeDef::BgpUpdateMessage => write!(f, "BgpUpdateMessage"),
+            TypeDef::Nlris => write!(f, "Nlris"),
             TypeDef::Rib(rib) => write!(f, "Rib of {}", rib),
             TypeDef::Table(table) => write!(f, "Table of {}", table),
             TypeDef::OutputStream(stream) => {
@@ -557,6 +573,7 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             "Community" => Ok(TypeDef::Community),
             "Route" => Ok(TypeDef::Route),
             "RouteStatus" => Ok(TypeDef::RouteStatus),
+            "BgpUpdateMessage" => Ok(TypeDef::BgpUpdateMessage),
             "HexLiteral" => Ok(TypeDef::HexLiteral),
             _ => Err(format!("Undefined type: {}", ty.ident).into()),
         }
@@ -582,6 +599,7 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
             "Community" => Ok(TypeDef::Community),
             "Route" => Ok(TypeDef::Route),
             "RouteStatus" => Ok(TypeDef::RouteStatus),
+            "BgpUpdateMessage" => Ok(TypeDef::BgpUpdateMessage),
             "HexLiteral" => Ok(TypeDef::HexLiteral),
             _ => Err(format!("Undefined type: {}", ty.ident).into()),
         }
@@ -608,7 +626,8 @@ impl From<&BuiltinTypeValue> for TypeDef {
                 TypeDef::List(Box::new(TypeDef::Community))
             }
             BuiltinTypeValue::Route(_) => TypeDef::Route,
-            BuiltinTypeValue::RawBgpMessage(_) => TypeDef::RawBgpMessage,
+            BuiltinTypeValue::BgpUpdateMessage(_) => TypeDef::BgpUpdateMessage,
+            BuiltinTypeValue::Nlris(_) => TypeDef::Nlris,
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
             BuiltinTypeValue::LocalPref(_) => TypeDef::LocalPref,
@@ -641,7 +660,8 @@ impl From<BuiltinTypeValue> for TypeDef {
             }
             BuiltinTypeValue::OriginType(_) => TypeDef::OriginType,
             BuiltinTypeValue::Route(_) => TypeDef::Route,
-            BuiltinTypeValue::RawBgpMessage(_) => TypeDef::RawBgpMessage,
+            BuiltinTypeValue::BgpUpdateMessage(_) => TypeDef::BgpUpdateMessage,
+            BuiltinTypeValue::Nlris(_) => TypeDef::Nlris,
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
             BuiltinTypeValue::LocalPref(_) => TypeDef::LocalPref,

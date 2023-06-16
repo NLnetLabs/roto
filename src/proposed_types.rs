@@ -119,7 +119,7 @@ pub enum Status {
 // knowledge of this type.
 pub struct RawRoute {
     pub prefix: Option<Prefix>,
-    pub message: RawBgpMessage,
+    pub message: BgpUpdateMessage,
     pub status: Status,
 }
 
@@ -129,21 +129,21 @@ pub struct RawRoute {
 // A BGP message that will be stored in a RIB as a array of bytes like a
 // `RawRoute`, but with an data-structure that stores the changes made by
 // the transformers (filters, etc.) along the way. A few of the first 16
-// bytes of the RawBgpMessage are used to flag which BGP attributes have
+// bytes of the BgpUpdateMessage are used to flag which BGP attributes have
 // changed.
 pub struct DeltaRawRoute {
     pub prefix: Option<Prefix>,
-    pub message: RawBgpMessage,
+    pub message: BgpUpdateMessage,
     pub attributes_delta: AttributesDelta,
     pub status: Status,
 }
 
-// RawBgpMessage
+// BgpUpdateMessage
 // rotonda-runtime
 
 // A data-structure that stores the array of bytes. Could be somethin else as
 // well, but it should be usable by `octseq`.
-pub struct RawBgpMessage(Vec<u8>);
+pub struct BgpUpdateMessage(Vec<u8>);
 
 // Nlri
 // routecore -> rotonda-runtime
