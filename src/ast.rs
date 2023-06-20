@@ -19,6 +19,7 @@ use nom::{
     combinator::map,
     IResult,
 };
+use serde::Serialize;
 use smallvec::SmallVec;
 
 use crate::compile::CompileError;
@@ -1675,7 +1676,7 @@ impl<'a> ByteStringLiteral {
 
 // AcceptReject ::= 'return'? ( 'accept' | 'reject' ) ';'
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize)]
 pub enum AcceptReject {
     Accept,
     Reject,
@@ -2543,7 +2544,7 @@ impl PrefixLengthRange {
 
 //------------ ShortString ---------------------------------------------------
 
-#[derive(Clone)]
+#[derive(Clone, Serialize)]
 pub struct ShortString {
     bytes: SmallVec<[u8; 24]>,
 }

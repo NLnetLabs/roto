@@ -3,6 +3,7 @@
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 use log::trace;
+use serde::Serialize;
 
 use crate::compile::CompileError;
 use crate::traits::Token;
@@ -29,7 +30,7 @@ use super::{
     builtin::BuiltinTypeValue, collections::List, typevalue::TypeValue,
 };
 
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, Default, Serialize)]
 pub enum TypeDef {
     // Data Sources, the data field in the enum represents the contained
     // type.

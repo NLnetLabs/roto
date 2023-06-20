@@ -12,9 +12,8 @@
 //                 └─────────────┘  status
 
 use log::trace;
-use routecore::bgp::{
-    message::SessionConfig,
-};
+use routecore::bgp::message::SessionConfig;
+use serde::Serialize;
 use std::sync::Arc;
 
 /// Lamport Timestamp. Used to order messages between units/systems.
@@ -92,7 +91,7 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
 // was stored in the RawRouteWithDeltas instance. So it reflects both the
 // original attributes from the raw message, their modifications and the
 // newly set attributes.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub struct RawRouteWithDeltas {
     pub prefix: Prefix,
     // Arc'ed BGP message
@@ -414,7 +413,7 @@ impl RawRouteWithDeltas {
 //
 // The list of deltas describes the changes that were made by one Rotonda
 // unit along the way.
-#[derive(Debug, Clone, Eq, PartialEq, Default)]
+#[derive(Debug, Clone, Eq, PartialEq, Default, Serialize)]
 struct AttributeDeltaList {
     deltas: Vec<AttributeDelta>,
     // The delta that was handed out the most recently. This is the only
@@ -465,7 +464,7 @@ impl AttributeDeltaList {
 
 // A set of attribute changes that were atomically created by a Rotonda
 // unit in one go (with one logical timestamp).
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 pub struct AttributeDelta {
     delta_id: (RotondaId, LogicalTime),
     delta_index: usize,
@@ -486,7 +485,7 @@ impl AttributeDelta {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 struct RouteStatusDelta {
     delta_id: (RotondaId, LogicalTime),
     status: TypeValue,
@@ -501,7 +500,7 @@ impl RouteStatusDelta {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
 struct RouteStatusDeltaList(Vec<RouteStatusDelta>);
 
 impl RouteStatusDeltaList {
@@ -523,7 +522,7 @@ impl RouteStatusDeltaList {
 // The `attr_cache` AttributeList allows readers to get a reference to a path
 // attribute. This avoids having to clone from the AttributeLists in the
 // iterator over the latest attributes.
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct BgpUpdateMessage {
     message_id: (RotondaId, LogicalTime),
     // nlris: TypeValue,
@@ -1019,13 +1018,13 @@ impl From<RouteStatusToken> for usize {
     }
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize)]
 pub struct RotondaId(pub usize);
 
 
 //------------ Modification & Creation of new Updates -----------------------
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct UpdateMessage(
     pub routecore::bgp::message::UpdateMessage<bytes::Bytes>,
 );
