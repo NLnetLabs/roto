@@ -23,6 +23,7 @@ use super::{
 };
 
 #[derive(Debug, Eq, PartialEq, Clone, Serialize)]
+#[serde(untagged)]
 pub enum BuiltinTypeValue {
     U32(U32),                       // scalar
     U8(U8),                         // scalar

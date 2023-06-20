@@ -33,6 +33,7 @@ use super::{
 /// variants can hold multiple values recursively, e.g. a List of Records.
 
 #[derive(Debug, Eq, Default, Clone, Serialize)]
+#[serde(untagged)]
 pub enum TypeValue {
     // All the built-in scalars and vectors
     Builtin(BuiltinTypeValue),

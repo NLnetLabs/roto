@@ -162,6 +162,7 @@ impl<S1: Into<TypeValue>, S2: ScalarValue + Into<TypeValue>> From<Option<S1>>
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize)]
 pub struct ReadOnlyScalarOption<T: ScalarValue + Into<TypeValue>> {
+    #[serde(flatten)]
     value: Option<TypeValue>,
     _pd: PhantomData<T>,
 }
