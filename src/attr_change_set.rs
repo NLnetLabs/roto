@@ -95,6 +95,7 @@ pub struct AttrChangeSet {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 pub struct ScalarOption<T: ScalarValue> {
+    #[serde(skip_serializing_if = "Option::is_none")]
     value: Option<TypeValue>,
     #[serde(skip)]
     changed: bool,
@@ -166,6 +167,7 @@ impl<S1: Into<TypeValue>, S2: ScalarValue + Into<TypeValue>> From<Option<S1>>
 #[derive(Debug, PartialEq, Eq, Clone, Serialize)]
 #[serde(transparent)]
 pub struct ReadOnlyScalarOption<T: ScalarValue + Into<TypeValue>> {
+    #[serde(skip_serializing_if = "Option::is_none")]
     value: Option<TypeValue>,
     #[serde(skip)]
     _pd: PhantomData<T>,
@@ -194,6 +196,7 @@ pub struct Todo;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 pub struct VectorOption<V: VectorValue + Into<TypeValue>> {
+    #[serde(skip_serializing_if = "Option::is_none")]
     value: Option<TypeValue>,
     #[serde(skip)]
     changed: bool,
