@@ -93,9 +93,12 @@ pub struct AttrChangeSet {
 //------------ ScalarOption ------------------------------------------------
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
 pub struct ScalarOption<T: ScalarValue> {
     value: Option<TypeValue>,
+    #[serde(skip)]
     changed: bool,
+    #[serde(skip)]
     _pd: PhantomData<T>,
 }
 
@@ -189,9 +192,12 @@ pub struct Todo;
 //------------ VectorOption -------------------------------------------------
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
 pub struct VectorOption<V: VectorValue + Into<TypeValue>> {
     value: Option<TypeValue>,
+    #[serde(skip)]
     changed: bool,
+    #[serde(skip)]
     _pd: PhantomData<V>,
 }
 
