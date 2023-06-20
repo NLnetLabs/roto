@@ -12,7 +12,10 @@
 //                 └─────────────┘  status
 
 use log::trace;
-use routecore::bgp::{message::{SessionConfig}, types::{AFI, SAFI}};
+use routecore::bgp::{
+    message::SessionConfig,
+    types::{AFI, SAFI},
+};
 use std::sync::Arc;
 
 /// Lamport Timestamp. Used to order messages between units/systems.
@@ -23,6 +26,7 @@ use crate::{
     compile::CompileError,
     traits::{RotoType, Token, TokenConvert},
     types::{
+        constant_enum::EnumVariant,
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
     },
@@ -525,6 +529,7 @@ impl RouteStatusDeltaList {
 #[derive(Debug)]
 pub struct BgpUpdateMessage {
     message_id: (RotondaId, LogicalTime),
+    nlris: TypeValue,
     raw_message: UpdateMessage,
 }
 
@@ -535,6 +540,7 @@ impl BgpUpdateMessage {
     ) -> Self {
         Self {
             message_id,
+            nlris: TypeValue::from(raw_message.nlris()),
             raw_message,
         }
     }
@@ -558,13 +564,37 @@ impl BgpUpdateMessage {
         match field_name.ident.as_str() {
             "nlris" => Ok((
                 TypeDef::Nlris,
-                Token::FieldAccess(vec![usize::from(BgpUpdateMessageToken::Nlris) as u8]),
+                Token::FieldAccess(vec![usize::from(
+                    BgpUpdateMessageToken::Nlris,
+                ) as u8]),
+            )),
+            "afi" => Ok((
+                TypeDef::EnumVariant("AFI".into()),
+                Token::FieldAccess(vec![usize::from(
+                    BgpUpdateMessageToken::Afi,
+                ) as u8]),
+            )),
+            "safi" => Ok((
+                TypeDef::EnumVariant("SAFI".into()),
+                Token::FieldAccess(vec![usize::from(
+                    BgpUpdateMessageToken::Safi,
+                ) as u8]),
             )),
             _ => Err(format!(
                 "Unknown field '{}' for type BgpUpdateMessage",
                 field_name.ident
             )
             .into()),
+        }
+    }
+
+    pub(crate) fn get_value_ref_for_field(
+        &self,
+        field_token: usize,
+    ) -> Option<&TypeValue> {
+        match field_token.into() {
+            BgpUpdateMessageToken::Nlris => Some(&self.nlris),
+            _ => None
         }
     }
 }
@@ -604,11 +634,30 @@ impl RotoType for BgpUpdateMessage {
 
     fn exec_value_method<'a>(
         &'a self,
-        _method_token: usize,
+        method_token: usize,
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
-        todo!()
+        match method_token.into() {
+            BgpUpdateMessageToken::Afi => Ok(Box::new(move || {
+                TypeValue::Builtin(BuiltinTypeValue::EnumVariant(
+                    EnumVariant {
+                        enum_name: "AFI".into(),
+                        value: self.raw_message.0.nlris().afi().into(),
+                    },
+                ))
+            })),
+            BgpUpdateMessageToken::Safi => Ok(Box::new(move || {
+                TypeValue::Builtin(BuiltinTypeValue::EnumVariant(
+                    EnumVariant {
+                        enum_name: "SAFI".into(),
+                        value: u8::from(self.raw_message.0.nlris().safi())
+                            .into(),
+                    },
+                ))
+            })),
+            _ => Err(VmError::InvalidMethodCall),
+        }
     }
 
     fn exec_consume_value_method(
@@ -637,7 +686,9 @@ impl From<BgpUpdateMessage> for TypeValue {
 
 #[derive(Debug)]
 enum BgpUpdateMessageToken {
-    Nlris
+    Nlris = 0,
+    Afi = 1,
+    Safi = 2,
 }
 
 impl TokenConvert for BgpUpdateMessageToken {}
@@ -646,6 +697,8 @@ impl From<usize> for BgpUpdateMessageToken {
     fn from(val: usize) -> Self {
         match val {
             0 => BgpUpdateMessageToken::Nlris,
+            1 => BgpUpdateMessageToken::Afi,
+            2 => BgpUpdateMessageToken::Safi,
             _ => panic!("Unknown token value: {}", val),
         }
     }
@@ -655,6 +708,8 @@ impl From<BgpUpdateMessageToken> for usize {
     fn from(val: BgpUpdateMessageToken) -> Self {
         match val {
             BgpUpdateMessageToken::Nlris => 0,
+            BgpUpdateMessageToken::Afi => 1,
+            BgpUpdateMessageToken::Safi => 2
         }
     }
 }
@@ -987,7 +1042,7 @@ pub struct Nlris {
 }
 
 impl Nlris {
-    pub(crate) fn get_props_for_field(
+    pub(crate) fn _get_props_for_field(
         field_name: &crate::ast::Identifier,
     ) -> Result<(TypeDef, crate::traits::Token), CompileError>
     where
@@ -995,12 +1050,12 @@ impl Nlris {
     {
         match field_name.ident.as_str() {
             "afi" => Ok((
-                TypeDef::U8,
-                Token::FieldAccess(vec![RouteToken::Prefix.into()]),
+                TypeDef::EnumVariant("AFI".into()),
+                Token::FieldAccess(vec![NlriToken::Afi.into()]),
             )),
             "safi" => Ok((
-                TypeDef::U8,
-                Token::FieldAccess(vec![RouteToken::AsPath.into()]),
+                TypeDef::EnumVariant("SAFI".into()),
+                Token::FieldAccess(vec![NlriToken::Safi.into()]),
             )),
             _ => Err(format!(
                 "Unknown method '{}' for type Route",
@@ -1009,49 +1064,71 @@ impl Nlris {
             .into()),
         }
     }
+
+    // pub(crate) fn get_value_ref_for_field(
+    //     &self,
+    //     field_token: usize,
+    // ) -> Option<&TypeValue> {
+    //     match field_token.into() {
+    //         NlriToken::Afi => Some(TypeValue::Builtin(
+    //             BuiltinTypeValue::EnumVariant(EnumVariant::<u16> {
+    //                 enum_name: "_checked".into(),
+    //                 value: self.afi.into(),
+    //             }),
+    //         )),
+    //         NlriToken::Safi => Some(TypeValue::Builtin(
+    //             BuiltinTypeValue::EnumVariant(EnumVariant::<u16> {
+    //                 enum_name: "_checked".into(),
+    //                 value: u8::from(self.safi).into(),
+    //             }),
+    //         )),
+    //     }
+    // }
 }
 
 impl RotoType for Nlris {
     fn get_props_for_method(
-        ty: TypeDef,
-        method_name: &crate::ast::Identifier,
+        _ty: TypeDef,
+        _method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
-        Self: std::marker::Sized {
+        Self: std::marker::Sized,
+    {
         todo!()
     }
 
     fn into_type(
         self,
-        type_value: &TypeDef,
+        _type_value: &TypeDef,
     ) -> Result<TypeValue, CompileError>
     where
-        Self: std::marker::Sized {
+        Self: std::marker::Sized,
+    {
         todo!()
     }
 
     fn exec_value_method<'a>(
         &'a self,
-        method_token: usize,
-        args: &'a [StackValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &'a [StackValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
 
     fn exec_consume_value_method(
         self,
-        method_token: usize,
-        args: Vec<TypeValue>,
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
         todo!()
     }
 
     fn exec_type_method<'a>(
-        method_token: usize,
-        args: &[StackValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[StackValue],
+        _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         todo!()
     }
@@ -1063,12 +1140,46 @@ impl From<Nlris> for TypeValue {
     }
 }
 
-impl From<routecore::bgp::message::update::Nlris<'static, bytes::Bytes>> for Nlris {
-    fn from(value: routecore::bgp::message::update::Nlris<'static, bytes::Bytes>) -> Self {
+impl From<routecore::bgp::message::update::Nlris<'static, bytes::Bytes>>
+    for Nlris
+{
+    fn from(
+        value: routecore::bgp::message::update::Nlris<'static, bytes::Bytes>,
+    ) -> Self {
         Nlris {
             afi: value.afi(),
             safi: value.safi(),
         }
+    }
+}
+
+#[derive(Debug)]
+enum NlriToken {
+    Afi,
+    Safi,
+}
+
+impl TokenConvert for NlriToken {}
+
+impl From<usize> for NlriToken {
+    fn from(value: usize) -> Self {
+        match value {
+            0 => NlriToken::Afi,
+            1 => NlriToken::Safi,
+            _ => panic!("Unknown NlriToken value: {}", value),
+        }
+    }
+}
+
+impl From<NlriToken> for usize {
+    fn from(val: NlriToken) -> Self {
+        val as usize
+    }
+}
+
+impl From<NlriToken> for u8 {
+    fn from(val: NlriToken) -> Self {
+        val as u8
     }
 }
 

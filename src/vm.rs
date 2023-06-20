@@ -228,6 +228,17 @@ impl LinearMemory {
                         Some(&TypeValue::Unknown)
                     }
                 }
+                Some(TypeValue::Builtin(BuiltinTypeValue::BgpUpdateMessage(bgp_msg))) => {
+                    if let Some(v) = 
+                        (*bgp_msg.as_ref()).get_value_ref_for_field(field_index[0]) {
+                            Some(v)
+                        } else {
+                            Some(&TypeValue::Unknown)
+                        }
+                }
+                Some(TypeValue::Builtin(BuiltinTypeValue::Nlris(nlris))) => {
+                    panic!("Type NLRIs has no methods.");
+                }
                 // This may be a type with fields, but its value is Unknown.
                 // Return that so the caller can short-cut its chain.
                 Some(TypeValue::Unknown) => Some(&TypeValue::Unknown),
@@ -1327,14 +1338,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                     }
                     // stack args: [exit value]
                     OpCode::Exit(accept_reject) => {
-                        let rx: TypeValue = match mem.get_mem_pos_as_owned(0)
-                        {
-                            Some(TypeValue::Record(rec)) => rec.into(),
-                            Some(TypeValue::Builtin(
-                                BuiltinTypeValue::Route(route),
-                            )) => route.into(),
-                            _ => return Err(VmError::InvalidPayload),
-                        };
+                        let rx = mem.get_mem_pos_as_owned(0).ok_or(VmError::InvalidPayload)?;
 
                         let tx = match mem.get_mem_pos_as_owned(1) {
                             Some(TypeValue::Record(rec)) => Some(rec.into()),

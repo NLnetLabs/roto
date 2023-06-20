@@ -17,11 +17,12 @@ use crate::{
 
 use super::builtin::{
     AsPath, Asn, AtomicAggregator, Boolean, Community, HexLiteral, Hop,
-    IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, NextHop, OriginType,
-    Prefix, PrefixLength, RawRouteWithDeltas, RouteStatus, StringLiteral,
-    Unknown, U32, U8, Nlris,
+    IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, NextHop, Nlris,
+    OriginType, Prefix, PrefixLength, RawRouteWithDeltas, RouteStatus,
+    StringLiteral, Unknown, U32, U8,
 };
 use super::collections::Record;
+use super::constant_enum::{Enum, EnumVariant};
 use super::datasources::{RibType, Table};
 use super::outputs::OutputStreamMessage;
 use super::{
@@ -38,6 +39,9 @@ pub enum TypeDef {
     // Collection Types
     List(Box<TypeDef>),
     Record(Vec<NamedTypeDef>),
+    Enum(Box<TypeDef>),
+    // The data field holds the name of the enum this variant belongs to.
+    EnumVariant(ShortString),
     // A raw BGP message as bytes
     BgpUpdateMessage,
     Nlris,
@@ -129,9 +133,13 @@ impl TypeDef {
             },
             Token::FieldAccess(vec![]),
         );
+
+        let mut res = current_type_token.clone();
+
         for field in check_fields {
             let mut index = 0;
-            match current_type_token {
+
+            match &current_type_token {
                 (TypeDef::Record(found_fields), _) => {
                     if let Some((_, (_, ty))) = found_fields
                         .iter()
@@ -141,7 +149,8 @@ impl TypeDef {
                             ident == &field.ident.as_str()
                         })
                     {
-                        // recurse into the TypeDef of self.
+                        // Add up all the type defs in the data field
+                        // of self.
                         current_type_token =
                             (*ty.clone(), current_type_token.1);
                         current_type_token.1.push(index as u8);
@@ -152,23 +161,70 @@ impl TypeDef {
                         )
                         .into());
                     }
+
+                    res = current_type_token.clone();
                 }
                 // Route is also special since it doesn't actually have
                 // fields access (it is backed by the raw bytes of the
                 // update message), but we want to create the illusion
                 // that it does have them.
                 (TypeDef::Route, _) => {
+                    trace!("Route w/ field '{}'", field);
                     current_type_token =
                         RawRouteWithDeltas::get_props_for_field(field)?;
+
+                    // Add the token to the FieldAccess vec.
+                    res = if let Token::FieldAccess(to_f) = &res.1 {
+                        if let Token::FieldAccess(fa) = &current_type_token.1
+                        {
+                            let mut to_f1 = to_f.clone();
+                            to_f1.extend(fa);
+                            (
+                                current_type_token.0.clone(),
+                                Token::FieldAccess(to_f1),
+                            )
+                        } else {
+                            res
+                        }
+                    } else {
+                        res
+                    };
                 }
+                // Another special case: BgpUpdateMessage also doesn't have
+                // actual fields, they are all simulated
                 (TypeDef::BgpUpdateMessage, _) => {
                     trace!("BgpUpdateMessage w/ field '{}'", field);
-                    current_type_token = 
+                    current_type_token =
                         BgpUpdateMessage::get_props_for_field(field)?;
+
+                    // Add the token to the FieldAccess vec.
+                    res = if let Token::FieldAccess(to_f) = &res.1 {
+                        if let Token::FieldAccess(fa) = &current_type_token.1
+                        {
+                            let mut to_f1 = to_f.clone();
+                            to_f1.extend(fa);
+                            (
+                                current_type_token.0.clone(),
+                                Token::FieldAccess(to_f1),
+                            )
+                        } else {
+                            res
+                        }
+                    } else {
+                        res
+                    };
                 }
+                // The `nlris` on BgpUpdateMessage doesn't actually
+                // exist, we just pass the token to the
+                // corresponding BgpUpdateMessage fields, i.e.
+                // `afi` and `safi`
                 (TypeDef::Nlris, _) => {
                     current_type_token =
-                        Nlris::get_props_for_field(field)?;
+                        BgpUpdateMessage::get_props_for_field(field)?;
+
+                    // just overwrite the current result with the
+                    // current token.
+                    res = current_type_token.clone();
                 }
                 _ => {
                     return Err(format!(
@@ -181,7 +237,13 @@ impl TypeDef {
         }
 
         trace!("has_fields_chain {:?}", current_type_token);
-        Ok((current_type_token.0.clone(), current_type_token.1))
+        // Ok((current_type_token.0.clone(), current_type_token.1.clone()))
+        // if let Some(res) = res {
+        //     Ok(res)
+        // } else {
+        //     Ok(current_type_token)
+        // }
+        Ok(res)
     }
 
     // This does a strict check to see if all the names of the fields and
@@ -225,6 +287,12 @@ impl TypeDef {
             TypeDef::Record(_) => {
                 Record::get_props_for_method(self.clone(), method_name)
             }
+            TypeDef::Enum(_) => {
+                Enum::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::EnumVariant(_) => {
+                EnumVariant::get_props_for_method(self.clone(), method_name)
+            }
             TypeDef::Rib(_) => {
                 RibType::get_props_for_method(self, method_name)
             }
@@ -247,10 +315,7 @@ impl TypeDef {
                 )
             }
             TypeDef::Nlris => {
-                Nlris::get_props_for_method(
-                    self.clone(),
-                    method_name,
-                )
+                Nlris::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::U32 => {
                 U32::get_props_for_method(self.clone(), method_name)
@@ -422,6 +487,10 @@ impl std::fmt::Display for TypeDef {
                 write!(f, "}}")
             }
             TypeDef::List(list) => write!(f, "List of {}", list),
+            TypeDef::Enum(c_enum) => write!(f, "Enum of {}", c_enum),
+            TypeDef::EnumVariant(c_enum) => {
+                write!(f, "EnumVariant('{}')", c_enum)
+            }
             TypeDef::AsPath => write!(f, "AsPath"),
             TypeDef::Hop => write!(f, "Hop"),
             TypeDef::Prefix => write!(f, "Prefix"),
@@ -611,6 +680,9 @@ impl From<&BuiltinTypeValue> for TypeDef {
         match ty {
             BuiltinTypeValue::U32(_) => TypeDef::U32,
             BuiltinTypeValue::U8(_) => TypeDef::U8,
+            BuiltinTypeValue::EnumVariant(c_enum) => {
+                TypeDef::EnumVariant(c_enum.enum_name.clone())
+            }
             BuiltinTypeValue::IntegerLiteral(_) => TypeDef::IntegerLiteral,
             BuiltinTypeValue::StringLiteral(_) => TypeDef::StringLiteral,
             BuiltinTypeValue::Boolean(_) => TypeDef::Boolean,
@@ -626,7 +698,9 @@ impl From<&BuiltinTypeValue> for TypeDef {
                 TypeDef::List(Box::new(TypeDef::Community))
             }
             BuiltinTypeValue::Route(_) => TypeDef::Route,
-            BuiltinTypeValue::BgpUpdateMessage(_) => TypeDef::BgpUpdateMessage,
+            BuiltinTypeValue::BgpUpdateMessage(_) => {
+                TypeDef::BgpUpdateMessage
+            }
             BuiltinTypeValue::Nlris(_) => TypeDef::Nlris,
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
@@ -645,6 +719,9 @@ impl From<BuiltinTypeValue> for TypeDef {
         match ty {
             BuiltinTypeValue::U32(_) => TypeDef::U32,
             BuiltinTypeValue::U8(_) => TypeDef::U8,
+            BuiltinTypeValue::EnumVariant(c_enum) => {
+                TypeDef::EnumVariant(c_enum.enum_name)
+            }
             BuiltinTypeValue::IntegerLiteral(_) => TypeDef::IntegerLiteral,
             BuiltinTypeValue::StringLiteral(_) => TypeDef::StringLiteral,
             BuiltinTypeValue::Boolean(_) => TypeDef::Boolean,
@@ -660,7 +737,9 @@ impl From<BuiltinTypeValue> for TypeDef {
             }
             BuiltinTypeValue::OriginType(_) => TypeDef::OriginType,
             BuiltinTypeValue::Route(_) => TypeDef::Route,
-            BuiltinTypeValue::BgpUpdateMessage(_) => TypeDef::BgpUpdateMessage,
+            BuiltinTypeValue::BgpUpdateMessage(_) => {
+                TypeDef::BgpUpdateMessage
+            }
             BuiltinTypeValue::Nlris(_) => TypeDef::Nlris,
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
@@ -702,6 +781,7 @@ impl From<&TypeValue> for TypeDef {
                     .map(|(k, v)| (k.clone(), Box::new(v.into())))
                     .collect(),
             ),
+            TypeValue::Enum(e) => e.get_type(),
             // TypeValue::Rib(r) => r.ty.clone(),
             // TypeValue::Table(t) => t.ty.clone(),
             TypeValue::OutputStreamMessage(m) => m.record_type.clone(),

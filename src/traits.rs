@@ -40,6 +40,9 @@ pub enum Token {
     TypedRecord,
     List,
     BuiltinType(u8),
+    // Enum
+    Enum(u32),
+    EnumVariant(u8)
 }
 
 impl Token {

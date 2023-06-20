@@ -1011,7 +1011,7 @@ fn compile_compute_expr<'a>(
             // the (literal) value in the mem pos
             if let Some(arg) = state.used_arguments.iter().find(|a| {
                 a.1.get_token().unwrap() == Token::Argument(arg_to)
-                    && !a.1.is_unknown()
+                    && !a.1.has_unknown_value()
             }) {
                 state.cur_mir_block.command_stack.push(Command::new(
                     OpCode::MemPosSet,
@@ -1085,6 +1085,36 @@ fn compile_compute_expr<'a>(
         // The AccessReceiver is a Built-in Type
         Token::BuiltinType(_b_to) => {
             assert!(is_ar);
+        }
+        Token::Enum(_) => {
+            assert!(is_ar);
+            trace!("ENUM VALUES {:?}", symbol.get_args());
+
+            return Ok(state);
+        }
+        Token::EnumVariant(_) => {
+            assert!(is_ar);
+            trace!("ENUM VARIANT VALUE {:?}", symbol.get_value());
+
+            let val = symbol.get_value();
+
+            state.cur_mir_block.command_stack.push(Command::new(
+                OpCode::MemPosSet,
+                vec![
+                    CommandArg::MemPos(state.cur_mem_pos),
+                    CommandArg::Constant(val.builtin_as_cloned_type_value()?),
+                ],
+            ));
+
+            state.cur_mir_block.command_stack.push(Command::new(
+                OpCode::PushStack,
+                vec![CommandArg::MemPos(state.cur_mem_pos)],
+            ));
+
+            if inc_mem_pos {
+                state.cur_mem_pos += 1;
+            }
+
         }
 
         // ARGUMENTS ON ACCESS RECEIVERS
@@ -1203,6 +1233,18 @@ fn compile_compute_expr<'a>(
                 Token::TypedRecord => {
                     trace!(
                         "TYPED RECORD PARENT ARGS {:#?}",
+                        symbol.get_args()
+                    );
+                }
+                Token::Enum(_) => {
+                    trace!(
+                        "ENUM PARENT ARGS {:#?}",
+                        symbol.get_args()
+                    );
+                }
+                Token::EnumVariant(_) => {
+                    trace!(
+                        "ENUM VARIANT PARENT ARGS {:#?}",
                         symbol.get_args()
                     );
                 }

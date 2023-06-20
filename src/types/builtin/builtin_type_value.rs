@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use crate::compile::CompileError;
 use crate::traits::RotoType;
+use crate::types::constant_enum::EnumVariant;
 
 use super::super::collections::List;
 use super::super::typedef::TypeDef;
@@ -42,6 +43,8 @@ pub enum BuiltinTypeValue {
     Hop(Hop),                       // read-only scalar
     OriginType(OriginType),         // scalar
     Route(RawRouteWithDeltas),      // vector
+    // A read-only enum variant for capturing constants
+    EnumVariant(EnumVariant<u16>),
     // Used for filtering on the properties of the whole message,
     // not taking into account any individual prefixes.
     BgpUpdateMessage(Arc<BgpUpdateMessage>),  // scalar
@@ -157,6 +160,7 @@ impl BuiltinTypeValue {
         match self {
             BuiltinTypeValue::U32(v) => v.into_type(ty),
             BuiltinTypeValue::U8(v) => v.into_type(ty),
+            BuiltinTypeValue::EnumVariant(v) => v.into_type(ty),
             BuiltinTypeValue::IntegerLiteral(v) => v.into_type(ty),
             BuiltinTypeValue::StringLiteral(v) => v.into_type(ty),
             BuiltinTypeValue::Prefix(v) => v.into_type(ty),
@@ -292,6 +296,9 @@ impl Display for BuiltinTypeValue {
             }
             BuiltinTypeValue::StringLiteral(v) => {
                 write!(f, "{} (String)", v)
+            }
+            BuiltinTypeValue::EnumVariant(v) => {
+                write!(f, "{} (Enum Variant)", v)
             }
             BuiltinTypeValue::Prefix(v) => write!(f, "{} (Prefix)", v),
             BuiltinTypeValue::PrefixLength(v) => {

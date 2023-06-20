@@ -24,7 +24,7 @@ use super::{
     },
     collections::{ElementTypeValue, List, Record},
     outputs::OutputStreamMessage,
-    typedef::TypeDef,
+    typedef::TypeDef, constant_enum::Enum,
 };
 
 /// These are the actual types that are used in the Roto language. This enum
@@ -40,6 +40,7 @@ pub enum TypeValue {
     // A map of (key, value) pairs, where value can be any of the other types.
     // Always user-defined.
     Record(Record),
+    Enum(Enum),
     // A Record meant to be handled by an Output stream.
     OutputStreamMessage(Arc<OutputStreamMessage>),
     // A wrapper around an immutable value that lives in an external
@@ -165,6 +166,12 @@ impl TypeValue {
             TypeValue::Record(rec_type) => {
                 rec_type.exec_value_method(method_token, args, return_type)
             }
+            TypeValue::Enum(c_enum) => {
+                c_enum.exec_value_method(method_token, args, return_type)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::EnumVariant(enum_var)) => {
+                enum_var.exec_value_method(method_token, args, return_type)
+            }
             TypeValue::List(list) => {
                 list.exec_value_method(method_token, args, return_type)
             }
@@ -272,6 +279,9 @@ impl TypeValue {
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         match self {
             TypeValue::Record(rec_type) => rec_type
+                .exec_consume_value_method(method_token, args, return_type),
+            TypeValue::Enum(c_enum) => c_enum.exec_consume_value_method(method_token, args, return_type),
+            TypeValue::Builtin(BuiltinTypeValue::EnumVariant(enum_var)) => enum_var
                 .exec_consume_value_method(method_token, args, return_type),
             TypeValue::List(list) => list.exec_consume_value_method(
                 method_token,
@@ -421,6 +431,14 @@ impl TypeValue {
                     format!("A value of type Record can't be converted into type {}.", type_def)
                 ))
             }
+            TypeValue::Enum(_enum) => {
+                return Err(CompileError::new(
+                    format!("A value of type Enum can't be converted into type {}.", type_def)
+                ))
+            }
+            TypeValue::Builtin(BuiltinTypeValue::EnumVariant(val)) => {
+                self = val.into_type(&type_def)?;
+            }
             TypeValue::Builtin(BuiltinTypeValue::U32(int_u32)) => {
                 self = int_u32.into_type(&type_def)?;
             }
@@ -450,7 +468,6 @@ impl TypeValue {
             TypeValue::Builtin(BuiltinTypeValue::AsPath(val)) => {
                 self = val.into_type(&type_def)?;
             }
-
             TypeValue::Builtin(BuiltinTypeValue::Hop(val)) => {
                 self = val.into_type(&type_def)?;
             }
@@ -544,6 +561,9 @@ impl Display for TypeValue {
             TypeValue::List(l) => write!(f, "{} (List)", l),
             TypeValue::Record(r) => {
                 write!(f, "{} (Record)", r)
+            }
+            TypeValue::Enum(c_enum) => {
+                write!(f, "{} (Enum)", c_enum)
             }
             TypeValue::OutputStreamMessage(m) => {
                 write!(f, "{} (Stream message)", m)
@@ -656,6 +676,21 @@ impl PartialEq for TypeValue {
             (TypeValue::UnInit, TypeValue::SharedValue(_)) => todo!(),
             (TypeValue::UnInit, TypeValue::Unknown) => todo!(),
             (TypeValue::UnInit, TypeValue::UnInit) => todo!(),
+            (TypeValue::Builtin(_), TypeValue::Enum(_)) => todo!(),
+            (TypeValue::List(_), TypeValue::Enum(_)) => todo!(),
+            (TypeValue::Record(_), TypeValue::Enum(_)) => todo!(),
+            (TypeValue::Enum(_), TypeValue::Builtin(_)) => todo!(),
+            (TypeValue::Enum(_), TypeValue::List(_)) => todo!(),
+            (TypeValue::Enum(_), TypeValue::Record(_)) => todo!(),
+            (TypeValue::Enum(_), TypeValue::Enum(_)) => todo!(),
+            (TypeValue::Enum(_), TypeValue::OutputStreamMessage(_)) => todo!(),
+            (TypeValue::Enum(_), TypeValue::SharedValue(_)) => todo!(),
+            (TypeValue::Enum(_), TypeValue::Unknown) => todo!(),
+            (TypeValue::Enum(_), TypeValue::UnInit) => todo!(),
+            (TypeValue::OutputStreamMessage(_), TypeValue::Enum(_)) => todo!(),
+            (TypeValue::SharedValue(_), TypeValue::Enum(_)) => todo!(),
+            (TypeValue::Unknown, TypeValue::Enum(_)) => todo!(),
+            (TypeValue::UnInit, TypeValue::Enum(_)) => todo!(),
         }
     }
 }

@@ -1980,6 +1980,12 @@ impl From<Asn> for Hop {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct OriginType(pub(crate) routecore::bgp::types::OriginType);
 
+impl OriginType {
+    pub fn into_inner(self) -> routecore::bgp::types::OriginType {
+        self.0
+    }
+}
+
 impl RotoType for OriginType {
     fn get_props_for_method(
         _ty: TypeDef,

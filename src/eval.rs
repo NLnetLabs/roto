@@ -16,6 +16,7 @@ use crate::types::builtin::HexLiteral;
 use crate::types::builtin::IntegerLiteral;
 use crate::types::builtin::PrefixLength;
 use crate::types::builtin::StringLiteral;
+use crate::types::constant_enum::global_enums;
 use crate::types::datasources::NamedTypeDef;
 
 use super::ast;
@@ -785,10 +786,12 @@ impl ast::ComputeExpr {
         })?;
 
         let ar_s = self.get_receiver();
+
         // The evaluation of the Access Receiver
         let mut ar_symbol =
             ar_s.eval(symbols.clone(), scope.clone())
                 .or_else(|_| ar_s.eval(symbols.clone(), Scope::Global))
+                .or_else(|_| global_enums(&ar_s.get_ident().unwrap().ident))
                 .map_err(|ar_err| match ar_err {
                     AccessReceiverError::Var => CompileError::from(format!(
                     "Cannot find variable '{}' in {} or in the global scope.",
@@ -953,6 +956,7 @@ impl ast::MethodComputeExpr {
     }
 }
 
+#[derive(Debug)]
 pub enum AccessReceiverError {
     Var,
     Global,
@@ -969,13 +973,13 @@ impl ast::AccessReceiver {
     ) -> Result<symbols::Symbol, AccessReceiverError> {
         trace!("AccessReceiver {:#?}", self);
         let _symbols = symbols.clone();
-        if let Some(search_var) = self.get_ident() {
+        if let Some(search_ar) = self.get_ident() {
             // Is it the name of a builtin type?
-            if let Ok(prim_ty) = TypeDef::try_from(search_var.clone()) {
+            if let Ok(prim_ty) = TypeDef::try_from(search_ar.clone()) {
                 if prim_ty.is_builtin() {
                     {
                         return Ok(symbols::Symbol::new(
-                            search_var.ident.clone(),
+                            search_ar.ident.clone(),
                             symbols::SymbolKind::AccessReceiver,
                             prim_ty,
                             vec![],
@@ -985,17 +989,17 @@ impl ast::AccessReceiver {
                 }
             }
 
-            // is it an argument?
+            // is it an module-level argument?
             if let Some(Ok(arg)) = _symbols
                 .borrow()
                 .get(&scope)
-                .map(|s| s.get_argument(&search_var.ident))
+                .map(|s| s.get_argument(&search_ar.ident))
             {
                 let (_, type_def, token) = arg
                     .get_kind_type_and_token()
                     .map_err(|_| AccessReceiverError::Arg)?;
                 return Ok(symbols::Symbol::new(
-                    search_var.ident.clone(),
+                    search_ar.ident.clone(),
                     symbols::SymbolKind::AccessReceiver,
                     type_def,
                     vec![],
@@ -1008,7 +1012,7 @@ impl ast::AccessReceiver {
             // - the name of a built-in constant
             // - variable name thas was defined in the `with` statement or
             //   earlier on in the same define section.
-            let ident = &[search_var.clone()];
+            let ident = &[search_ar.clone()];
             let (_kind, ty, to, val) =
                 get_props_for_scoped_variable(ident, symbols, scope)
                     .map_err(|_| AccessReceiverError::Var)?;
@@ -1018,7 +1022,7 @@ impl ast::AccessReceiver {
                 // It's a Constant, clone the (builtin-typed) value into the
                 // symbol.
                 Some(val) => Ok(symbols::Symbol::new_with_value(
-                    search_var.ident.clone(),
+                    search_ar.ident.clone(),
                     SymbolKind::AccessReceiver,
                     val,
                     vec![],
@@ -1026,7 +1030,7 @@ impl ast::AccessReceiver {
                 )),
                 // It's a Variable, create a symbol with an empty value.
                 None => Ok(symbols::Symbol::new(
-                    search_var.ident.clone(),
+                    search_ar.ident.clone(),
                     SymbolKind::AccessReceiver,
                     ty,
                     vec![],
@@ -1053,6 +1057,7 @@ impl ast::ValueExpr {
             // Note that the evaluation of the method call will check for
             // the existence of the method.
             ast::ValueExpr::ComputeExpr(compute_expr) => {
+                trace!("compute expr {:?}", compute_expr);
                 compute_expr.eval(None, symbols, scope)
             }
             ast::ValueExpr::BuiltinMethodCallExpr(builtin_call_expr) => {
@@ -1415,7 +1420,7 @@ impl ast::CompareExpr {
     ) -> Result<symbols::Symbol, CompileError> {
         let _symbols = symbols.clone();
 
-        // Proces the left hand side of the compare expression. This is a
+        // Process the left hand side of the compare expression. This is a
         // Compare Argument. It has to end in a leaf node, otherwise it's
         // an error.
         let left_s = self.left.eval(_symbols, scope)?;
@@ -1855,7 +1860,7 @@ fn declare_argument(
     }
 }
 
-// This methods stores the variable in the right place in the specified
+// This method stores the variable in the right place in the specified
 // scope. The symbol that was passed in by the caller will be put in the
 // `args` field of a newly created symbol. The new symbol will get the
 // return type from the symbol that was passed in.
@@ -1877,7 +1882,7 @@ fn declare_variable_from_symbol(
                 .get_mut(scope)
                 .ok_or(format!("No module named '{}' found.", module))?;
 
-            match arg_symbol.is_unknown() {
+            match arg_symbol.has_unknown_value() {
                 // This is a variable, create an empty value on the symbol.
                 true => {
                     let type_def = arg_symbol.get_recursive_return_type();
@@ -1903,7 +1908,7 @@ fn declare_variable_from_symbol(
                         None,
                     );
 
-                    module.move_var_const_into(
+                    module.move_var_or_const_into(
                         symbol
                     )
                 }
@@ -1917,7 +1922,7 @@ fn declare_variable_from_symbol(
                         vec![],
                         Token::Constant(None),
                     );
-                    module.move_var_const_into(
+                    module.move_var_or_const_into(
                         symbol
                     )
                 }

@@ -17,7 +17,7 @@ use crate::{
         builtin::BuiltinTypeValue,
         collections::{ElementTypeValue, Record},
         typedef::TypeDef,
-        typevalue::TypeValue,
+        typevalue::TypeValue, constant_enum::global_enums,
     },
 };
 
@@ -124,7 +124,7 @@ impl Symbol {
     // This actually does NOT work with equality, since
     // Unknown != Unknown accoring to the PartialEq
     // impl, and that's correct!
-    pub fn is_unknown(&self) -> bool {
+    pub fn has_unknown_value(&self) -> bool {
         matches!(self.value, TypeValue::Unknown)
     }
 
@@ -384,6 +384,20 @@ impl Symbol {
                                 )
                             )
                         );
+                    }
+                }
+            }
+            TypeDef::Enum(_) => {
+                return Err(CompileError::new(
+                    "Enum type can't be converted".into(),
+                ))
+            }
+            TypeDef::EnumVariant(ref enum_name) => {
+                if let TypeValue::Builtin(BuiltinTypeValue::EnumVariant(c_enum)) = self.value {
+                    if c_enum.enum_name == enum_name {
+                        return Err(CompileError::from(format!("Enum variant from type {} cannot be converted into another enum variant.", c_enum.enum_name)));
+                    } else {
+                        self.value = c_enum.into_type(&into_ty)?;
                     }
                 }
             }
@@ -868,18 +882,31 @@ impl SymbolTable {
         self.scope.get_name()
     }
 
-    pub(crate) fn move_var_const_into(
-        &mut self,
-        mut symbol: Symbol,
-    ) -> Result<(), CompileError> {
-        let key = symbol.get_name();
-        if self.variables.contains_key(&key) {
+    pub(crate) fn validate_variable_name(&self, key: &ShortString) -> Result<(), CompileError> {
+        if self.variables.contains_key(key) {
             return Err(format!(
                 "Symbol {} already defined in scope {}",
                 key, self.scope
             )
             .into());
         }
+
+        let existing_enum_var = global_enums(key);
+
+        if existing_enum_var.is_ok() {
+            return Err(format!("Can't shadow existing enum variant: {:?} in enum {:?}", key, existing_enum_var.unwrap().get_name()).into());
+        } else {
+            Ok(())
+        }
+    }
+
+    pub(crate) fn move_var_or_const_into(
+        &mut self,
+        mut symbol: Symbol,
+    ) -> Result<(), CompileError> {
+        let key = symbol.get_name();
+
+        self.validate_variable_name(&key)?;
 
         symbol = match symbol.get_kind() {
             SymbolKind::VariableAssignment => {
@@ -913,13 +940,7 @@ impl SymbolTable {
             key.clone()
         };
 
-        if self.variables.contains_key(&name) {
-            return Err(format!(
-                "Symbol {} already defined in scope {}",
-                name, self.scope
-            )
-            .into());
-        }
+        self.validate_variable_name(&name)?;
 
         let token_int = self.variables.len();
 
