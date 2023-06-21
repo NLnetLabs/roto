@@ -68,6 +68,7 @@ pub struct AttrChangeSet {
     pub as_path: VectorOption<AsPath>,
     pub origin_type: ScalarOption<OriginType>,
     pub next_hop: ScalarOption<NextHop>,
+    #[serde(skip_serializing_if = "ScalarOption::is_none")]
     pub multi_exit_discriminator: ScalarOption<MultiExitDisc>,
     pub local_pref: ScalarOption<LocalPref>,
     pub atomic_aggregate: ScalarOption<bool>,
@@ -104,6 +105,10 @@ pub struct ScalarOption<T: ScalarValue> {
 }
 
 impl<T: ScalarValue> ScalarOption<T> {
+    pub fn is_none(&self) -> bool {
+        self.value.is_none()
+    }
+
     pub fn into_opt(self) -> Option<TypeValue>
     where
         T: Copy,
