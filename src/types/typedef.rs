@@ -122,7 +122,7 @@ impl TypeDef {
         // Data sources (rib and table) are special cases, because they have
         // their methods on the container (the datasource) and not on the
         // contained type. They don't have field access.
-        let mut current_type_token: (TypeDef, Token) = (
+        let mut parent_type: (TypeDef, Token) = (
             if let TypeDef::Table(rec)
             | TypeDef::Rib(rec)
             | TypeDef::OutputStream(rec) = self
@@ -134,13 +134,17 @@ impl TypeDef {
             Token::FieldAccess(vec![]),
         );
 
-        let mut res = current_type_token.clone();
+        let mut result_type = parent_type.clone();
 
         for field in check_fields {
             let mut index = 0;
 
-            match &current_type_token {
+            match &parent_type {
                 (TypeDef::Record(found_fields), _) => {
+                    trace!("Record w/ field '{}'", field);
+
+                    // Check if this field exists in the TypeDef of the
+                    // Record.
                     if let Some((_, (_, ty))) = found_fields
                         .iter()
                         .enumerate()
@@ -151,9 +155,9 @@ impl TypeDef {
                     {
                         // Add up all the type defs in the data field
                         // of self.
-                        current_type_token =
-                            (*ty.clone(), current_type_token.1);
-                        current_type_token.1.push(index as u8);
+                        parent_type =
+                            (*ty.clone(), parent_type.1);
+                        parent_type.1.push(index as u8);
                     } else {
                         return Err(format!(
                             "No field named '{}'",
@@ -162,7 +166,7 @@ impl TypeDef {
                         .into());
                     }
 
-                    res = current_type_token.clone();
+                    result_type = parent_type.clone();
                 }
                 // Route is also special since it doesn't actually have
                 // fields access (it is backed by the raw bytes of the
@@ -170,61 +174,49 @@ impl TypeDef {
                 // that it does have them.
                 (TypeDef::Route, _) => {
                     trace!("Route w/ field '{}'", field);
-                    current_type_token =
+                    let this_token =
                         RawRouteWithDeltas::get_props_for_field(field)?;
 
                     // Add the token to the FieldAccess vec.
-                    res = if let Token::FieldAccess(to_f) = &res.1 {
-                        if let Token::FieldAccess(fa) = &current_type_token.1
+                    result_type = if let Token::FieldAccess(to_f) = &result_type.1 {
+                        if let Token::FieldAccess(fa) = &this_token.1
                         {
                             let mut to_f1 = to_f.clone();
                             to_f1.extend(fa);
                             (
-                                current_type_token.0.clone(),
+                                this_token.0.clone(),
                                 Token::FieldAccess(to_f1),
                             )
                         } else {
-                            res
+                            result_type
                         }
                     } else {
-                        res
+                        result_type
                     };
                 }
                 // Another special case: BgpUpdateMessage also doesn't have
                 // actual fields, they are all simulated
                 (TypeDef::BgpUpdateMessage, _) => {
                     trace!("BgpUpdateMessage w/ field '{}'", field);
-                    current_type_token =
+                    parent_type =
                         BgpUpdateMessage::get_props_for_field(field)?;
 
                     // Add the token to the FieldAccess vec.
-                    res = if let Token::FieldAccess(to_f) = &res.1 {
-                        if let Token::FieldAccess(fa) = &current_type_token.1
+                    result_type = if let Token::FieldAccess(to_f) = &result_type.1 {
+                        if let Token::FieldAccess(fa) = &parent_type.1
                         {
                             let mut to_f1 = to_f.clone();
                             to_f1.extend(fa);
                             (
-                                current_type_token.0.clone(),
+                                parent_type.0.clone(),
                                 Token::FieldAccess(to_f1),
                             )
                         } else {
-                            res
+                            result_type
                         }
                     } else {
-                        res
+                        result_type
                     };
-                }
-                // The `nlris` on BgpUpdateMessage doesn't actually
-                // exist, we just pass the token to the
-                // corresponding BgpUpdateMessage fields, i.e.
-                // `afi` and `safi`
-                (TypeDef::Nlris, _) => {
-                    current_type_token =
-                        BgpUpdateMessage::get_props_for_field(field)?;
-
-                    // just overwrite the current result with the
-                    // current token.
-                    res = current_type_token.clone();
                 }
                 _ => {
                     return Err(format!(
