@@ -1,9 +1,8 @@
 use log::trace;
 use roto::compile::Compiler;
 
-use roto::types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage, Prefix, Asn, BgpUpdateMessage};
+use roto::types::builtin::{RotondaId, UpdateMessage, BgpUpdateMessage};
 use roto::types::collections::Record;
-use roto::types::typedef::TypeDef;
 use roto::vm;
 use routecore::bgp::message::SessionConfig;
 
@@ -122,7 +121,7 @@ fn test_bgp_update_1() {
                     // bgp_msg.nlris.afi in [AFI.Ipv4, AFI.Ipv6];
                     bgp_msg.nlris.afi in [IPV4, IPV6];
                     // bgp_msg.nlris.afi in [afi.IPV4, afi.IPV6];
-                    // bgp_msg.nlris.afi in IPV4 | IPV6;
+                    // bgp_msg.nlris.afi == IPV4 | IPV6;
                     bgp_msg.nlris.safi == UNICAST;
                     // IPV4 == 150;
                 }
