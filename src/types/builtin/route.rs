@@ -59,7 +59,7 @@ use crate::attr_change_set::{
 // a RIB (that is the RawRouteDelta down below), but the type that is used
 // serialize the data into on export and transport.
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone, Serialize)]
 pub struct MaterializedRoute {
     pub route: AttrChangeSet,
     pub status: RouteStatus,
@@ -92,6 +92,7 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
 // original attributes from the raw message, their modifications and the
 // newly set attributes.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+#[serde(into = "MaterializedRoute")]
 pub struct RawRouteWithDeltas {
     pub prefix: Prefix,
     // Arc'ed BGP message
