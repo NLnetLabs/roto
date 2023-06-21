@@ -39,7 +39,7 @@ use crate::attr_change_set::{
     AttrChangeSet, ScalarOption, ScalarValue, VectorOption, VectorValue,
 };
 
-//============ Route ========================================================
+//============ MaterializedRoute ============================================
 
 // An RFC 4271 Route. The RFC:
 
@@ -101,11 +101,13 @@ pub struct RawRouteWithDeltas {
     attribute_deltas: AttributeDeltaList,
     // history of status changes to the route
     status_deltas: RouteStatusDeltaList,
+    precomputed_hash: u64
 }
 
 impl RawRouteWithDeltas {
     pub fn new_with_message(
         delta_id: (RotondaId, LogicalTime),
+        precomputed_hash: u64,
         prefix: Prefix,
         raw_message: UpdateMessage,
     ) -> Self {
@@ -123,6 +125,7 @@ impl RawRouteWithDeltas {
         Self {
             prefix,
             raw_message: Arc::new(raw_message),
+            precomputed_hash,
             attribute_deltas,
             status_deltas: RouteStatusDeltaList(vec![RouteStatusDelta::new(
                 delta_id,
@@ -132,17 +135,27 @@ impl RawRouteWithDeltas {
 
     pub fn new_with_message_ref(
         delta_id: (RotondaId, LogicalTime),
+        precomputed_hash: u64,
         prefix: Prefix,
         raw_message: &Arc<BgpUpdateMessage>,
     ) -> Self {
         Self {
             prefix,
             raw_message: Arc::clone(raw_message),
+            precomputed_hash,
             attribute_deltas: AttributeDeltaList::new(),
             status_deltas: RouteStatusDeltaList(vec![RouteStatusDelta::new(
                 delta_id,
             )]),
         }
+    }
+
+    pub fn get_hash(&self) -> u64 {
+        self.precomputed_hash
+    }
+
+    pub fn set_hash(&mut self, hash: u64) {
+        self.precomputed_hash = hash;
     }
 
     // Get a clone of the latest delta, or of the original attributes from

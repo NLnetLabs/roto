@@ -42,6 +42,7 @@ fn test_data(
 
     let payload: RawRouteWithDeltas = RawRouteWithDeltas::new_with_message(
         msg_id,
+        0,
         prefixes[0],
         update,
     );

@@ -42,6 +42,7 @@ fn test_data(
             _update.0.nlris().iter().filter_map(|n| n.prefix().map(|p| p.into())).collect();
     let _payload: RawRouteWithDeltas = RawRouteWithDeltas::new_with_message(
         (RotondaId(0), 0),
+        0,
         _prefixes[0],
         _update,
     );
