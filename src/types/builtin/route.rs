@@ -62,8 +62,7 @@ use crate::attr_change_set::{
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct MaterializedRoute {
-    pub prefix: Prefix,
-    pub path_attributes: AttrChangeSet,
+    pub route: AttrChangeSet,
     pub status: RouteStatus,
 }
 
@@ -72,8 +71,7 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
         let status = raw_route.status_deltas.current();
 
         MaterializedRoute {
-            prefix: raw_route.prefix, // The roto prefix type
-            path_attributes: raw_route.take_latest_attrs(),
+            route: raw_route.take_latest_attrs(),
             status: status.into(),
         }
     }
