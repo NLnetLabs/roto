@@ -14,7 +14,6 @@
 use log::trace;
 use routecore::bgp::{
     message::SessionConfig,
-    types::{AFI, SAFI},
 };
 use std::sync::Arc;
 
@@ -529,7 +528,7 @@ impl RouteStatusDeltaList {
 #[derive(Debug)]
 pub struct BgpUpdateMessage {
     message_id: (RotondaId, LogicalTime),
-    nlris: TypeValue,
+    // nlris: TypeValue,
     raw_message: UpdateMessage,
 }
 
@@ -540,7 +539,7 @@ impl BgpUpdateMessage {
     ) -> Self {
         Self {
             message_id,
-            nlris: TypeValue::from(raw_message.nlris()),
+            // nlris: TypeValue::from(raw_message.0.nlris()),
             raw_message,
         }
     }
@@ -562,11 +561,11 @@ impl BgpUpdateMessage {
         Self: std::marker::Sized,
     {
         match field_name.ident.as_str() {
+            // `nlri` is a fake field (at least) for now, it just servers to
+            // host the `afi` and `safi` field.
             "nlris" => Ok((
-                TypeDef::Nlris,
-                Token::FieldAccess(vec![usize::from(
-                    BgpUpdateMessageToken::Nlris,
-                ) as u8]),
+                TypeDef::BgpUpdateMessage,
+                Token::FieldAccess(vec![]),
             )),
             "afi" => Ok((
                 TypeDef::EnumVariant("AFI".into()),
@@ -593,7 +592,7 @@ impl BgpUpdateMessage {
         field_token: usize,
     ) -> Option<&TypeValue> {
         match field_token.into() {
-            BgpUpdateMessageToken::Nlris => Some(&self.nlris),
+            BgpUpdateMessageToken::Nlris => Some(&TypeValue::Unknown),
             _ => None
         }
     }
@@ -607,19 +606,11 @@ impl RotoType for BgpUpdateMessage {
     where
         Self: std::marker::Sized,
     {
-        match method_name.ident.as_str() {
-            "set" => Ok(MethodProps::new(
-                TypeDef::Unknown,
-                BgpUpdateMessageToken::Nlris.into(),
-                vec![TypeDef::IntegerLiteral],
-            )
-            .consume_value()),
-            _ => Err(format!(
-                "Unknown method: '{}' for type BgpUpdateMessage",
-                method_name.ident
-            )
-            .into()),
-        }
+        Err(format!(
+            "Unknown method: '{}' for type BgpUpdateMessage",
+            method_name.ident
+        )
+        .into())
     }
 
     fn into_type(
@@ -1034,154 +1025,6 @@ impl From<RouteStatusToken> for usize {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct RotondaId(pub usize);
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Nlris {
-    afi: AFI,
-    safi: SAFI,
-    // session_config: SessionConfig
-}
-
-impl Nlris {
-    pub(crate) fn _get_props_for_field(
-        field_name: &crate::ast::Identifier,
-    ) -> Result<(TypeDef, crate::traits::Token), CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        match field_name.ident.as_str() {
-            "afi" => Ok((
-                TypeDef::EnumVariant("AFI".into()),
-                Token::FieldAccess(vec![NlriToken::Afi.into()]),
-            )),
-            "safi" => Ok((
-                TypeDef::EnumVariant("SAFI".into()),
-                Token::FieldAccess(vec![NlriToken::Safi.into()]),
-            )),
-            _ => Err(format!(
-                "Unknown method '{}' for type Route",
-                field_name.ident
-            )
-            .into()),
-        }
-    }
-
-    // pub(crate) fn get_value_ref_for_field(
-    //     &self,
-    //     field_token: usize,
-    // ) -> Option<&TypeValue> {
-    //     match field_token.into() {
-    //         NlriToken::Afi => Some(TypeValue::Builtin(
-    //             BuiltinTypeValue::EnumVariant(EnumVariant::<u16> {
-    //                 enum_name: "_checked".into(),
-    //                 value: self.afi.into(),
-    //             }),
-    //         )),
-    //         NlriToken::Safi => Some(TypeValue::Builtin(
-    //             BuiltinTypeValue::EnumVariant(EnumVariant::<u16> {
-    //                 enum_name: "_checked".into(),
-    //                 value: u8::from(self.safi).into(),
-    //             }),
-    //         )),
-    //     }
-    // }
-}
-
-impl RotoType for Nlris {
-    fn get_props_for_method(
-        _ty: TypeDef,
-        _method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        todo!()
-    }
-
-    fn into_type(
-        self,
-        _type_value: &TypeDef,
-    ) -> Result<TypeValue, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        todo!()
-    }
-
-    fn exec_value_method<'a>(
-        &'a self,
-        _method_token: usize,
-        _args: &'a [StackValue],
-        _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
-        todo!()
-    }
-
-    fn exec_consume_value_method(
-        self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
-        _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
-        todo!()
-    }
-
-    fn exec_type_method<'a>(
-        _method_token: usize,
-        _args: &[StackValue],
-        _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
-        todo!()
-    }
-}
-
-impl From<Nlris> for TypeValue {
-    fn from(value: Nlris) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Nlris(value))
-    }
-}
-
-impl From<routecore::bgp::message::update::Nlris<'static, bytes::Bytes>>
-    for Nlris
-{
-    fn from(
-        value: routecore::bgp::message::update::Nlris<'static, bytes::Bytes>,
-    ) -> Self {
-        Nlris {
-            afi: value.afi(),
-            safi: value.safi(),
-        }
-    }
-}
-
-#[derive(Debug)]
-enum NlriToken {
-    Afi,
-    Safi,
-}
-
-impl TokenConvert for NlriToken {}
-
-impl From<usize> for NlriToken {
-    fn from(value: usize) -> Self {
-        match value {
-            0 => NlriToken::Afi,
-            1 => NlriToken::Safi,
-            _ => panic!("Unknown NlriToken value: {}", value),
-        }
-    }
-}
-
-impl From<NlriToken> for usize {
-    fn from(val: NlriToken) -> Self {
-        val as usize
-    }
-}
-
-impl From<NlriToken> for u8 {
-    fn from(val: NlriToken) -> Self {
-        val as u8
-    }
-}
 
 //------------ Modification & Creation of new Updates -----------------------
 
@@ -1247,11 +1090,11 @@ impl UpdateMessage {
         todo!()
     }
 
-    pub fn nlris(&self) -> Nlris {
-        let nlris = self.0.nlris();
-        Nlris {
-            afi: nlris.afi(),
-            safi: nlris.safi(),
-        }
-    }
+    // pub fn nlris(&self) -> Nlris {
+    //     let nlris = self.0.nlris();
+    //     Nlris {
+    //         afi: nlris.afi(),
+    //         safi: nlris.safi(),
+    //     }
+    // }
 }

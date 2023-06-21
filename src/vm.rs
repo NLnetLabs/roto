@@ -236,9 +236,9 @@ impl LinearMemory {
                             Some(&TypeValue::Unknown)
                         }
                 }
-                Some(TypeValue::Builtin(BuiltinTypeValue::Nlris(nlris))) => {
-                    panic!("Type NLRIs has no methods.");
-                }
+                // Some(TypeValue::Builtin(BuiltinTypeValue::Nlris(_nlris))) => {
+                //     panic!("Type NLRIs has no methods.");
+                // }
                 // This may be a type with fields, but its value is Unknown.
                 // Return that so the caller can short-cut its chain.
                 Some(TypeValue::Unknown) => Some(&TypeValue::Unknown),

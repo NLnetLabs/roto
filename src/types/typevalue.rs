@@ -208,9 +208,6 @@ impl TypeValue {
             TypeValue::Builtin(BuiltinTypeValue::BgpUpdateMessage(raw)) => {
                 raw.exec_value_method(method_token, args, return_type)
             }
-            TypeValue::Builtin(BuiltinTypeValue::Nlris(nlris)) => {
-                nlris.exec_value_method(method_token, args, return_type)
-            }
             TypeValue::Builtin(BuiltinTypeValue::Community(community)) => {
                 community.exec_value_method(method_token, args, return_type)
             }
@@ -330,13 +327,9 @@ impl TypeValue {
             TypeValue::Builtin(BuiltinTypeValue::BgpUpdateMessage(_raw)) => {
                 Err(VmError::InvalidMethodCall)
             }
-            TypeValue::Builtin(BuiltinTypeValue::Nlris(_nlris)) => {
-                Err(VmError::InvalidMethodCall)
-            }
             TypeValue::Builtin(BuiltinTypeValue::Communities(
                 communities,
             )) => {
-                // let l = communities.into_iter().map(|c| ElementTypeValue::Primitive(c.into())).collect::<Vec<_>>();
                 communities.exec_consume_value_method(
                     method_token,
                     args,
@@ -488,11 +481,6 @@ impl TypeValue {
             TypeValue::Builtin(BuiltinTypeValue::BgpUpdateMessage(_val)) => {
                 return Err(CompileError::new(
                     "Raw BGP message value can't be converted.".into(),
-                ))
-            }
-            TypeValue::Builtin(BuiltinTypeValue::Nlris(_val)) => {
-                return Err(CompileError::new(
-                    "A value of type 'Nlris' can't be converted.".into(),
                 ))
             }
             TypeValue::Builtin(BuiltinTypeValue::LocalPref(val)) => {

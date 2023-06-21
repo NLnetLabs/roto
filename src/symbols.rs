@@ -491,11 +491,6 @@ impl Symbol {
                     "Raw BGP message value can't be converted.".into(),
                 ))
             }
-            TypeDef::Nlris => {
-                return Err(CompileError::new(
-                    "NLRis value cannot be converted.".into(),
-                ))
-            }
             TypeDef::LocalPref => {
                 if let TypeValue::Builtin(BuiltinTypeValue::LocalPref(r)) =
                     self.value

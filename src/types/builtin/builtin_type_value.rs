@@ -17,7 +17,7 @@ use super::{
     AsPath, Asn, AtomicAggregator, Boolean, Community, HexLiteral, Hop,
     IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, NextHop, OriginType,
     Prefix, PrefixLength, BgpUpdateMessage, RawRouteWithDeltas, RouteStatus,
-    StringLiteral, U32, U8, Nlris,
+    StringLiteral, U32, U8,
 };
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -48,7 +48,6 @@ pub enum BuiltinTypeValue {
     // Used for filtering on the properties of the whole message,
     // not taking into account any individual prefixes.
     BgpUpdateMessage(Arc<BgpUpdateMessage>),  // scalar
-    Nlris(Nlris),
 }
 
 impl BuiltinTypeValue {
@@ -177,7 +176,6 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::BgpUpdateMessage(_raw) => Err(CompileError::from(
                 "Cannot convert raw BGP message into any other type.",
             )),
-            BuiltinTypeValue::Nlris(n) => n.into_type(ty),
             BuiltinTypeValue::RouteStatus(v) => v.into_type(ty),
             BuiltinTypeValue::Boolean(v) => v.into_type(ty),
             BuiltinTypeValue::HexLiteral(v) => v.into_type(ty),
@@ -322,9 +320,6 @@ impl Display for BuiltinTypeValue {
             BuiltinTypeValue::Route(r) => write!(f, "{} (Route)", r),
             BuiltinTypeValue::BgpUpdateMessage(raw) => {
                 write!(f, "{:X?} (RawBgpMesage)", **raw)
-            }
-            BuiltinTypeValue::Nlris(nlris) => {
-                write!(f, "{:X?} (NLRIs)", *nlris)
             }
             BuiltinTypeValue::RouteStatus(v) => {
                 write!(f, "{} (Route Status)", v)
