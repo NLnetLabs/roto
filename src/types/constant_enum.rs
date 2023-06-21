@@ -1,6 +1,8 @@
 use std::fmt::{Debug, Display};
+use std::str::FromStr;
 
 use log::trace;
+use routecore::bgp::communities::Wellknown;
 use routecore::bgp::types::{AFI, SAFI};
 
 use crate::{
@@ -14,13 +16,32 @@ use super::{
     builtin::BuiltinTypeValue, typedef::TypeDef, typevalue::TypeValue,
 };
 
+//------------ EnumVariant --------------------------------------------------
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct EnumVariant<T> {
     pub(crate) enum_name: ShortString,
     pub(crate) value: T,
 }
 
-impl RotoType for EnumVariant<u16> {
+impl<T> Display for EnumVariant<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.enum_name)
+    }
+}
+
+impl<T: Copy> EnumVariant<T> {
+    fn get_value(&self) -> T {
+        self.value
+    }
+}
+
+//------------ EnumVariant---------------------------------------------------
+
+impl<T: Copy + Debug> RotoType for EnumVariant<T>
+where
+    BuiltinTypeValue: From<EnumVariant<T>>,
+{
     fn get_props_for_method(
         _ty: super::typedef::TypeDef,
         _method_name: &crate::ast::Identifier,
@@ -77,17 +98,34 @@ impl RotoType for EnumVariant<u16> {
     }
 }
 
-impl From<EnumVariant<u16>> for TypeValue {
-    fn from(value: EnumVariant<u16>) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::EnumVariant(value))
+impl<T: Copy + Debug> From<EnumVariant<T>> for TypeValue
+where
+    BuiltinTypeValue: From<EnumVariant<T>>,
+{
+    fn from(value: EnumVariant<T>) -> Self {
+        TypeValue::Builtin(value.into())
     }
 }
 
-impl<T> Display for EnumVariant<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.enum_name)
+impl From<EnumVariant<u8>> for BuiltinTypeValue {
+    fn from(value: EnumVariant<u8>) -> Self {
+        BuiltinTypeValue::ConstU8EnumVariant(value)
     }
 }
+
+impl From<EnumVariant<u16>> for BuiltinTypeValue {
+    fn from(value: EnumVariant<u16>) -> Self {
+        BuiltinTypeValue::ConstU16EnumVariant(value)
+    }
+}
+
+impl From<EnumVariant<u32>> for BuiltinTypeValue {
+    fn from(value: EnumVariant<u32>) -> Self {
+        BuiltinTypeValue::ConstU32EnumVariant(value)
+    }
+}
+
+//------------ Enum ---------------------------------------------------------
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Enum {
@@ -180,25 +218,57 @@ pub(crate) fn global_enums(
     let mut args = vec![];
 
     for enum_name in GLOBAL_ENUMS {
-        if let Ok(val) = match *enum_name {
-            "AFI" => match var {
-                "IPV4" => Ok(u16::from(AFI::Ipv4)),
-                "IPV6" => Ok(u16::from(AFI::Ipv6)),
+        if let Ok(val) =
+            match *enum_name {
+                "AFI" => match var {
+                    "IPV4" => Ok(BuiltinTypeValue::ConstU16EnumVariant(
+                        EnumVariant::<u16> {
+                            enum_name: (*enum_name).into(),
+                            value: AFI::Ipv4.into(),
+                        },
+                    )),
+                    "IPV6" => Ok(BuiltinTypeValue::ConstU16EnumVariant(
+                        EnumVariant::<u16> {
+                            enum_name: (*enum_name).into(),
+                            value: AFI::Ipv6.into(),
+                        },
+                    )),
+                    _ => Err(AccessReceiverError::Global),
+                },
+                "SAFI" => match var {
+                    "UNICAST" => Ok(BuiltinTypeValue::ConstU8EnumVariant(
+                        EnumVariant::<u8> {
+                            enum_name: (*enum_name).into(),
+                            value: SAFI::Unicast.into(),
+                        },
+                    )),
+                    "MULTICAST" => Ok(BuiltinTypeValue::ConstU8EnumVariant(
+                        EnumVariant::<u8> {
+                            enum_name: (*enum_name).into(),
+                            value: SAFI::Multicast.into(),
+                        },
+                    )),
+                    _ => Err(AccessReceiverError::Global),
+                },
+                "WELL_KNOWN_COMMUNITIES" => {
+                    Ok(BuiltinTypeValue::ConstU32EnumVariant(EnumVariant::<
+                        u32,
+                    > {
+                        enum_name: (*enum_name).into(),
+                        value: Wellknown::from_str(var)
+                            .map_err(|_| AccessReceiverError::Arg)?
+                            .to_u32(),
+                    }))
+                }
                 _ => Err(AccessReceiverError::Global),
-            },
-            "SAFI" => match var {
-                "UNICAST" => Ok(u8::from(SAFI::Unicast) as u16),
-                "MULTICAST" => Ok(u8::from(SAFI::Multicast) as u16),
-                _ => Err(AccessReceiverError::Global),
-            },
-            _ => Err(AccessReceiverError::Global),
-        } {
+            }
+        {
             args.push(symbols::Symbol::new_with_value(
                 (*enum_name).into(),
                 symbols::SymbolKind::AccessReceiver,
-                TypeValue::Builtin(BuiltinTypeValue::EnumVariant(EnumVariant::<u16> { enum_name: (*enum_name).into(), value: val })),
+                TypeValue::Builtin(val.clone()),
                 vec![],
-                Token::EnumVariant(val.try_into().unwrap()),
+                Token::ConstEnumVariant,
             ))
         }
     }

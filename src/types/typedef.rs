@@ -41,7 +41,10 @@ pub enum TypeDef {
     Record(Vec<NamedTypeDef>),
     Enum(Box<TypeDef>),
     // The data field holds the name of the enum this variant belongs to.
-    EnumVariant(ShortString),
+    ConstEnumVariant(ShortString),
+    // The data field holds the name of the enum this variant belongs to.
+    // ConstU16EnumVariant(ShortString),
+    // ConstU32EnumVariant(ShortString),
     // A raw BGP message as bytes
     BgpUpdateMessage,
     // Builtin Types
@@ -276,9 +279,15 @@ impl TypeDef {
             TypeDef::Enum(_) => {
                 Enum::get_props_for_method(self.clone(), method_name)
             }
-            TypeDef::EnumVariant(_) => {
-                EnumVariant::get_props_for_method(self.clone(), method_name)
+            TypeDef::ConstEnumVariant(_) => {
+                EnumVariant::<u8>::get_props_for_method(self.clone(), method_name)
             }
+            // TypeDef::ConstU16EnumVariant(_) => {
+            //     EnumVariant::<u16>::get_props_for_method(self.clone(), method_name)
+            // }
+            // TypeDef::ConstU32EnumVariant(_) => {
+            //     EnumVariant::<u32>::get_props_for_method(self.clone(), method_name)
+            // }
             TypeDef::Rib(_) => {
                 RibType::get_props_for_method(self, method_name)
             }
@@ -471,8 +480,8 @@ impl std::fmt::Display for TypeDef {
             }
             TypeDef::List(list) => write!(f, "List of {}", list),
             TypeDef::Enum(c_enum) => write!(f, "Enum of {}", c_enum),
-            TypeDef::EnumVariant(c_enum) => {
-                write!(f, "EnumVariant('{}')", c_enum)
+            TypeDef::ConstEnumVariant(c_enum) => {
+                write!(f, "ConsU8tEnumVariant('{}')", c_enum)
             }
             TypeDef::AsPath => write!(f, "AsPath"),
             TypeDef::Hop => write!(f, "Hop"),
@@ -662,8 +671,14 @@ impl From<&BuiltinTypeValue> for TypeDef {
         match ty {
             BuiltinTypeValue::U32(_) => TypeDef::U32,
             BuiltinTypeValue::U8(_) => TypeDef::U8,
-            BuiltinTypeValue::EnumVariant(c_enum) => {
-                TypeDef::EnumVariant(c_enum.enum_name.clone())
+            BuiltinTypeValue::ConstU8EnumVariant(c_enum) => {
+                TypeDef::ConstEnumVariant(c_enum.enum_name.clone())
+            }
+            BuiltinTypeValue::ConstU16EnumVariant(c_enum) => {
+                TypeDef::ConstEnumVariant(c_enum.enum_name.clone())
+            }
+            BuiltinTypeValue::ConstU32EnumVariant(c_enum) => {
+                TypeDef::ConstEnumVariant(c_enum.enum_name.clone())
             }
             BuiltinTypeValue::IntegerLiteral(_) => TypeDef::IntegerLiteral,
             BuiltinTypeValue::StringLiteral(_) => TypeDef::StringLiteral,
@@ -700,8 +715,14 @@ impl From<BuiltinTypeValue> for TypeDef {
         match ty {
             BuiltinTypeValue::U32(_) => TypeDef::U32,
             BuiltinTypeValue::U8(_) => TypeDef::U8,
-            BuiltinTypeValue::EnumVariant(c_enum) => {
-                TypeDef::EnumVariant(c_enum.enum_name)
+            BuiltinTypeValue::ConstU8EnumVariant(c_enum) => {
+                TypeDef::ConstEnumVariant(c_enum.enum_name)
+            },
+            BuiltinTypeValue::ConstU16EnumVariant(c_enum) => {
+                TypeDef::ConstEnumVariant(c_enum.enum_name)
+            }
+            BuiltinTypeValue::ConstU32EnumVariant(c_enum) => {
+                TypeDef::ConstEnumVariant(c_enum.enum_name)
             }
             BuiltinTypeValue::IntegerLiteral(_) => TypeDef::IntegerLiteral,
             BuiltinTypeValue::StringLiteral(_) => TypeDef::StringLiteral,

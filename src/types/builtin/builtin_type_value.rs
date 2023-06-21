@@ -6,7 +6,7 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use crate::compile::CompileError;
-use crate::traits::RotoType;
+use crate::traits::{RotoType, Token};
 use crate::types::constant_enum::EnumVariant;
 
 use super::super::collections::List;
@@ -44,7 +44,9 @@ pub enum BuiltinTypeValue {
     OriginType(OriginType),         // scalar
     Route(RawRouteWithDeltas),      // vector
     // A read-only enum variant for capturing constants
-    EnumVariant(EnumVariant<u16>),
+    ConstU8EnumVariant(EnumVariant<u8>),
+    ConstU16EnumVariant(EnumVariant<u16>),
+    ConstU32EnumVariant(EnumVariant<u32>),
     // Used for filtering on the properties of the whole message,
     // not taking into account any individual prefixes.
     BgpUpdateMessage(Arc<BgpUpdateMessage>),  // scalar
@@ -159,7 +161,9 @@ impl BuiltinTypeValue {
         match self {
             BuiltinTypeValue::U32(v) => v.into_type(ty),
             BuiltinTypeValue::U8(v) => v.into_type(ty),
-            BuiltinTypeValue::EnumVariant(v) => v.into_type(ty),
+            BuiltinTypeValue::ConstU8EnumVariant(v) => v.into_type(ty),
+            BuiltinTypeValue::ConstU16EnumVariant(v) => v.into_type(ty),
+            BuiltinTypeValue::ConstU32EnumVariant(v) => v.into_type(ty),
             BuiltinTypeValue::IntegerLiteral(v) => v.into_type(ty),
             BuiltinTypeValue::StringLiteral(v) => v.into_type(ty),
             BuiltinTypeValue::Prefix(v) => v.into_type(ty),
@@ -295,8 +299,14 @@ impl Display for BuiltinTypeValue {
             BuiltinTypeValue::StringLiteral(v) => {
                 write!(f, "{} (String)", v)
             }
-            BuiltinTypeValue::EnumVariant(v) => {
-                write!(f, "{} (Enum Variant)", v)
+            BuiltinTypeValue::ConstU8EnumVariant(v) => {
+                write!(f, "{} (Const U8 Enum Variant)", v)
+            }
+            BuiltinTypeValue::ConstU16EnumVariant(v) => {
+                write!(f, "{} (Const U16 Enum Variant)", v)
+            }
+            BuiltinTypeValue::ConstU32EnumVariant(v) => {
+                write!(f, "{} (Const U32 Enum Variant)", v)
             }
             BuiltinTypeValue::Prefix(v) => write!(f, "{} (Prefix)", v),
             BuiltinTypeValue::PrefixLength(v) => {

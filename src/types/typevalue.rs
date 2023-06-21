@@ -169,7 +169,13 @@ impl TypeValue {
             TypeValue::Enum(c_enum) => {
                 c_enum.exec_value_method(method_token, args, return_type)
             }
-            TypeValue::Builtin(BuiltinTypeValue::EnumVariant(enum_var)) => {
+            TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(enum_var)) => {
+                enum_var.exec_value_method(method_token, args, return_type)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(enum_var)) => {
+                enum_var.exec_value_method(method_token, args, return_type)
+            }
+            TypeValue::Builtin(BuiltinTypeValue::ConstU32EnumVariant(enum_var)) => {
                 enum_var.exec_value_method(method_token, args, return_type)
             }
             TypeValue::List(list) => {
@@ -278,7 +284,11 @@ impl TypeValue {
             TypeValue::Record(rec_type) => rec_type
                 .exec_consume_value_method(method_token, args, return_type),
             TypeValue::Enum(c_enum) => c_enum.exec_consume_value_method(method_token, args, return_type),
-            TypeValue::Builtin(BuiltinTypeValue::EnumVariant(enum_var)) => enum_var
+            TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(enum_var)) => enum_var
+                .exec_consume_value_method(method_token, args, return_type),
+            TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(enum_var)) => enum_var
+                .exec_consume_value_method(method_token, args, return_type),
+            TypeValue::Builtin(BuiltinTypeValue::ConstU32EnumVariant(enum_var)) => enum_var
                 .exec_consume_value_method(method_token, args, return_type),
             TypeValue::List(list) => list.exec_consume_value_method(
                 method_token,
@@ -429,7 +439,13 @@ impl TypeValue {
                     format!("A value of type Enum can't be converted into type {}.", type_def)
                 ))
             }
-            TypeValue::Builtin(BuiltinTypeValue::EnumVariant(val)) => {
+            TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+            TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(val)) => {
+                self = val.into_type(&type_def)?;
+            }
+            TypeValue::Builtin(BuiltinTypeValue::ConstU32EnumVariant(val)) => {
                 self = val.into_type(&type_def)?;
             }
             TypeValue::Builtin(BuiltinTypeValue::U32(int_u32)) => {

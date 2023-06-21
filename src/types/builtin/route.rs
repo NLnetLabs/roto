@@ -561,20 +561,20 @@ impl BgpUpdateMessage {
         Self: std::marker::Sized,
     {
         match field_name.ident.as_str() {
-            // `nlri` is a fake field (at least) for now, it just servers to
+            // `nlris` is a fake field (at least for now), it just serves to
             // host the `afi` and `safi` field.
             "nlris" => Ok((
                 TypeDef::BgpUpdateMessage,
                 Token::FieldAccess(vec![]),
             )),
             "afi" => Ok((
-                TypeDef::EnumVariant("AFI".into()),
+                TypeDef::ConstEnumVariant("AFI".into()),
                 Token::FieldAccess(vec![usize::from(
                     BgpUpdateMessageToken::Afi,
                 ) as u8]),
             )),
             "safi" => Ok((
-                TypeDef::EnumVariant("SAFI".into()),
+                TypeDef::ConstEnumVariant("SAFI".into()),
                 Token::FieldAccess(vec![usize::from(
                     BgpUpdateMessageToken::Safi,
                 ) as u8]),
@@ -631,7 +631,7 @@ impl RotoType for BgpUpdateMessage {
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
         match method_token.into() {
             BgpUpdateMessageToken::Afi => Ok(Box::new(move || {
-                TypeValue::Builtin(BuiltinTypeValue::EnumVariant(
+                TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(
                     EnumVariant {
                         enum_name: "AFI".into(),
                         value: self.raw_message.0.nlris().afi().into(),
@@ -639,11 +639,10 @@ impl RotoType for BgpUpdateMessage {
                 ))
             })),
             BgpUpdateMessageToken::Safi => Ok(Box::new(move || {
-                TypeValue::Builtin(BuiltinTypeValue::EnumVariant(
+                TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(
                     EnumVariant {
                         enum_name: "SAFI".into(),
-                        value: u8::from(self.raw_message.0.nlris().safi())
-                            .into(),
+                        value: self.raw_message.0.nlris().safi().into(),
                     },
                 ))
             })),
@@ -1089,12 +1088,4 @@ impl UpdateMessage {
     ) -> Self {
         todo!()
     }
-
-    // pub fn nlris(&self) -> Nlris {
-    //     let nlris = self.0.nlris();
-    //     Nlris {
-    //         afi: nlris.afi(),
-    //         safi: nlris.safi(),
-    //     }
-    // }
 }

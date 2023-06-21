@@ -42,7 +42,7 @@ pub enum Token {
     BuiltinType(u8),
     // Enum
     Enum(u32),
-    EnumVariant(u8)
+    ConstEnumVariant,
 }
 
 impl Token {

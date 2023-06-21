@@ -1092,7 +1092,7 @@ fn compile_compute_expr<'a>(
 
             return Ok(state);
         }
-        Token::EnumVariant(_) => {
+        Token::ConstEnumVariant => {
             assert!(is_ar);
             trace!("ENUM VARIANT VALUE {:?}", symbol.get_value());
 
@@ -1242,7 +1242,7 @@ fn compile_compute_expr<'a>(
                         symbol.get_args()
                     );
                 }
-                Token::EnumVariant(_) => {
+                Token::ConstEnumVariant => {
                     trace!(
                         "ENUM VARIANT PARENT ARGS {:#?}",
                         symbol.get_args()

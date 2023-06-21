@@ -392,8 +392,8 @@ impl Symbol {
                     "Enum type can't be converted".into(),
                 ))
             }
-            TypeDef::EnumVariant(ref enum_name) => {
-                if let TypeValue::Builtin(BuiltinTypeValue::EnumVariant(c_enum)) = self.value {
+            TypeDef::ConstEnumVariant(ref enum_name) => {
+                if let TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(c_enum)) = self.value {
                     if c_enum.enum_name == enum_name {
                         return Err(CompileError::from(format!("Enum variant from type {} cannot be converted into another enum variant.", c_enum.enum_name)));
                     } else {
@@ -401,6 +401,24 @@ impl Symbol {
                     }
                 }
             }
+            // TypeDef::ConstU16EnumVariant(ref enum_name) => {
+            //     if let TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(c_enum)) = self.value {
+            //         if c_enum.enum_name == enum_name {
+            //             return Err(CompileError::from(format!("Enum variant from type {} cannot be converted into another enum variant.", c_enum.enum_name)));
+            //         } else {
+            //             self.value = c_enum.into_type(&into_ty)?;
+            //         }
+            //     }
+            // }
+            // TypeDef::ConstU32EnumVariant(ref enum_name) => {
+            //     if let TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(c_enum)) = self.value {
+            //         if c_enum.enum_name == enum_name {
+            //             return Err(CompileError::from(format!("Enum variant from type {} cannot be converted into another enum variant.", c_enum.enum_name)));
+            //         } else {
+            //             self.value = c_enum.into_type(&into_ty)?;
+            //         }
+            //     }
+            // }
             TypeDef::U32 => {
                 if let TypeValue::Builtin(BuiltinTypeValue::U32(int)) =
                     self.value
