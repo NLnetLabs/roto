@@ -1,6 +1,6 @@
 use roto::compile::Compiler;
 
-use roto::types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage, Prefix, Asn};
+use roto::types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage, Prefix, Asn, RouteStatus};
 use roto::types::collections::Record;
 use roto::types::typedef::TypeDef;
 use roto::vm;
@@ -44,6 +44,7 @@ fn test_data(
         (RotondaId(0), 0),
         _prefixes[0],
         _update,
+        RouteStatus::InConvergence,
     );
 
 
