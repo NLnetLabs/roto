@@ -907,7 +907,7 @@ impl SymbolTable {
         let existing_enum_var = global_enums(key);
 
         if existing_enum_var.is_ok() {
-            return Err(format!("Can't shadow existing enum variant: {:?} in enum {:?}", key, existing_enum_var.unwrap().get_name()).into());
+            Err(format!("Can't shadow existing enum variant: {:?} in enum {:?}", key, existing_enum_var.unwrap().get_name()).into())
         } else {
             Ok(())
         }
@@ -1220,7 +1220,6 @@ impl SymbolTable {
         let src: Result<&Symbol, CompileError> = self
             .variables
             .values()
-            .into_iter()
             .find(|kv| kv.get_name() == name)
             .ok_or_else(|| format!("Symbol '{}' not found", name).into());
 

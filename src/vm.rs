@@ -1083,7 +1083,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                         trace!("\nargs_len {}", args_len);
                         trace!("Stack {:?}", stack);
 
-                        let mut stack_args = (0..args_len).into_iter().map(|_i| {
+                        let mut stack_args = (0..args_len).map(|_i| {
                             let sr = stack.pop().unwrap();
 
                             target_field_index = if target_field_index.is_empty() {
@@ -1884,7 +1884,7 @@ impl ExtDataSource {
     ) -> Option<TypeValue> {
         self.source.load().as_ref().map(|ds| {
             match ds.get_at_field_index(pos, field_index) {
-                Some(&TypeValue::SharedValue(ref sv)) => {
+                Some(TypeValue::SharedValue(sv)) => {
                     TypeValue::SharedValue(Arc::clone(sv))
                 }
                 Some(_) => panic!("Fatal: Table contains non-shared value."),

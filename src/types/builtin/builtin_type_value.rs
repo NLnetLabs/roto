@@ -6,7 +6,7 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use crate::compile::CompileError;
-use crate::traits::{RotoType, Token};
+use crate::traits::RotoType;
 use crate::types::constant_enum::EnumVariant;
 
 use super::super::collections::List;

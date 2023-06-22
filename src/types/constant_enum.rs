@@ -31,7 +31,7 @@ impl<T> Display for EnumVariant<T> {
 }
 
 impl<T: Copy> EnumVariant<T> {
-    fn get_value(&self) -> T {
+    fn _get_value(&self) -> T {
         self.value
     }
 }
