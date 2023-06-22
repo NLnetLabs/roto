@@ -1,6 +1,6 @@
 use roto::compile::Compiler;
 
-use roto::types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage, Prefix};
+use roto::types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage, Prefix, RouteStatus};
 use roto::types::collections::Record;
 use roto::types::typevalue::TypeValue;
 use roto::vm;
@@ -44,6 +44,7 @@ fn test_data(
         msg_id,
         prefixes[0],
         update,
+        RouteStatus::InConvergence,
     );
 
     // Create the VM
