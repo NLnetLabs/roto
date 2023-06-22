@@ -47,7 +47,6 @@ mod route {
 
         roto_msgs.push(RawRouteWithDeltas::new_with_message(
             msg_id,
-            0,
             prefixes[0],
             update,
         ));
@@ -55,7 +54,6 @@ mod route {
         for prefix in &prefixes[1..] {
             roto_msgs.push(RawRouteWithDeltas::new_with_message_ref(
                 msg_id,
-                0,
                 *prefix,
                 &roto_msgs[0].raw_message,
             ))
@@ -156,7 +154,6 @@ mod route {
 
         roto_msgs.push(RawRouteWithDeltas::new_with_message(
             msg_id,
-            0,
             prefixes[0],
             update,
         ));
@@ -164,7 +161,6 @@ mod route {
         for prefix in &prefixes[1..] {
             roto_msgs.push(RawRouteWithDeltas::new_with_message_ref(
                 msg_id,
-                0,
                 *prefix,
                 &roto_msgs[0].raw_message,
             ))

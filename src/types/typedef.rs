@@ -1,15 +1,18 @@
 //------------ TypeDef -----------------------------------------------------
 
+use std::hash::{Hash, Hasher};
+
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 use log::trace;
+use smallvec::SmallVec;
 
 use crate::compile::CompileError;
 use crate::traits::Token;
 use crate::types::builtin::BgpUpdateMessage;
 use crate::types::collections::ElementTypeValue;
 use crate::types::datasources::NamedTypeDef;
-use crate::vm::StackValue;
+use crate::vm::{StackValue, VmError};
 use crate::{
     ast::{AcceptReject, ShortString},
     traits::RotoType,
@@ -17,9 +20,9 @@ use crate::{
 
 use super::builtin::{
     AsPath, Asn, AtomicAggregator, Boolean, Community, HexLiteral, Hop,
-    IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, NextHop,
-    OriginType, Prefix, PrefixLength, RawRouteWithDeltas, RouteStatus,
-    StringLiteral, Unknown, U32, U8,
+    IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, NextHop, OriginType,
+    Prefix, PrefixLength, RawRouteWithDeltas, RouteStatus, StringLiteral,
+    Unknown, U32, U8,
 };
 use super::collections::Record;
 use super::constant_enum::{Enum, EnumVariant};
@@ -29,11 +32,14 @@ use super::{
     builtin::BuiltinTypeValue, collections::List, typevalue::TypeValue,
 };
 
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, Default, Hash)]
 pub enum TypeDef {
     // Data Sources, the data field in the enum represents the contained
     // type.
-    Rib(Box<TypeDef>),
+    // the type definition of the type that's stored in the RIB and the
+    // vec of field_indexes that are used in the hash to calculate
+    // uniqueness for an entry.
+    Rib((Box<TypeDef>, Option<Vec<SmallVec<[usize; 8]>>>)),
     Table(Box<TypeDef>),
     OutputStream(Box<TypeDef>),
     // Collection Types
@@ -126,7 +132,7 @@ impl TypeDef {
         // contained type. They don't have field access.
         let mut parent_type: (TypeDef, Token) = (
             if let TypeDef::Table(rec)
-            | TypeDef::Rib(rec)
+            | TypeDef::Rib((rec, None))
             | TypeDef::OutputStream(rec) = self
             {
                 *rec.clone()
@@ -157,8 +163,7 @@ impl TypeDef {
                     {
                         // Add up all the type defs in the data field
                         // of self.
-                        parent_type =
-                            (*ty.clone(), parent_type.1);
+                        parent_type = (*ty.clone(), parent_type.1);
                         parent_type.1.push(index as u8);
                     } else {
                         return Err(format!(
@@ -180,15 +185,13 @@ impl TypeDef {
                         RawRouteWithDeltas::get_props_for_field(field)?;
 
                     // Add the token to the FieldAccess vec.
-                    result_type = if let Token::FieldAccess(to_f) = &result_type.1 {
-                        if let Token::FieldAccess(fa) = &this_token.1
-                        {
+                    result_type = if let Token::FieldAccess(to_f) =
+                        &result_type.1
+                    {
+                        if let Token::FieldAccess(fa) = &this_token.1 {
                             let mut to_f1 = to_f.clone();
                             to_f1.extend(fa);
-                            (
-                                this_token.0.clone(),
-                                Token::FieldAccess(to_f1),
-                            )
+                            (this_token.0.clone(), Token::FieldAccess(to_f1))
                         } else {
                             result_type
                         }
@@ -204,15 +207,13 @@ impl TypeDef {
                         BgpUpdateMessage::get_props_for_field(field)?;
 
                     // Add the token to the FieldAccess vec.
-                    result_type = if let Token::FieldAccess(to_f) = &result_type.1 {
-                        if let Token::FieldAccess(fa) = &parent_type.1
-                        {
+                    result_type = if let Token::FieldAccess(to_f) =
+                        &result_type.1
+                    {
+                        if let Token::FieldAccess(fa) = &parent_type.1 {
                             let mut to_f1 = to_f.clone();
                             to_f1.extend(fa);
-                            (
-                                parent_type.0.clone(),
-                                Token::FieldAccess(to_f1),
-                            )
+                            (parent_type.0.clone(), Token::FieldAccess(to_f1))
                         } else {
                             result_type
                         }
@@ -280,7 +281,10 @@ impl TypeDef {
                 Enum::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::ConstEnumVariant(_) => {
-                EnumVariant::<u8>::get_props_for_method(self.clone(), method_name)
+                EnumVariant::<u8>::get_props_for_method(
+                    self.clone(),
+                    method_name,
+                )
             }
             // TypeDef::ConstU16EnumVariant(_) => {
             //     EnumVariant::<u16>::get_props_for_method(self.clone(), method_name)
@@ -359,7 +363,9 @@ impl TypeDef {
             TypeDef::StringLiteral => {
                 StringLiteral::get_props_for_method(self.clone(), method_name)
             }
-            TypeDef::AcceptReject(_) => todo!(),
+            TypeDef::AcceptReject(_) => {
+                Err(CompileError::from("AcceptReject type has no methods"))
+            }
             TypeDef::Unknown => {
                 Unknown::get_props_for_method(self.clone(), method_name)
             }
@@ -439,6 +445,45 @@ impl TypeDef {
             _ => panic!("No corresponding Type method found for {:?}.", self),
         }
     }
+
+    // Calculates the hash over the fields that are referenced in the unique
+    // field indexes vec  that lives on the Rib typedef.
+    // If there's no field indexes vec then simply calculate the hash over
+    // the (whole) typevalue that was passed in.
+    pub fn hash_store_value<'a, H: Hasher>(
+        &'a self,
+        state: &'a mut H,
+        value: &'a TypeValue,
+    ) -> Result<(), VmError> {
+        if let TypeDef::Rib((_ty, Some(uniq_field_indexes))) = self {
+            match value {
+                TypeValue::Record(rec) => {
+                    for field_index in uniq_field_indexes {
+                        rec.get_field_by_index(field_index.clone())
+                            .hash(state);
+                    }
+                }
+                TypeValue::Builtin(BuiltinTypeValue::Route(route)) => {
+                    for field_index in uniq_field_indexes {
+                        route.get_field_by_index(field_index[0])
+                            .hash(state);
+                    }
+                }
+                TypeValue::Builtin(btv) => {
+                    btv.hash(state);
+                }
+                TypeValue::List(l) => { l.hash(state); }
+                TypeValue::Enum(e) => { e.hash(state); }
+                TypeValue::SharedValue(sv) => { sv.hash(state); }
+                _ => {
+                    return Err(VmError::InvalidPayload);
+                }
+            }
+        } else {
+            return Err(VmError::InvalidWrite);
+        };
+        Ok(())
+    }
 }
 
 pub struct MethodProps {
@@ -491,7 +536,7 @@ impl std::fmt::Display for TypeDef {
             TypeDef::IpAddress => write!(f, "IpAddress"),
             TypeDef::Route => write!(f, "Route"),
             TypeDef::BgpUpdateMessage => write!(f, "BgpUpdateMessage"),
-            TypeDef::Rib(rib) => write!(f, "Rib of {}", rib),
+            TypeDef::Rib(rib) => write!(f, "Rib of {}", rib.0),
             TypeDef::Table(table) => write!(f, "Table of {}", table),
             TypeDef::OutputStream(stream) => {
                 write!(f, "Output Stream of {}", stream)
@@ -717,7 +762,7 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::U8(_) => TypeDef::U8,
             BuiltinTypeValue::ConstU8EnumVariant(c_enum) => {
                 TypeDef::ConstEnumVariant(c_enum.enum_name)
-            },
+            }
             BuiltinTypeValue::ConstU16EnumVariant(c_enum) => {
                 TypeDef::ConstEnumVariant(c_enum.enum_name)
             }

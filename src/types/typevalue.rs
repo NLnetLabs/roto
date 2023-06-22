@@ -699,6 +699,25 @@ impl PartialEq for TypeValue {
     }
 }
 
+impl std::hash::Hash for TypeValue {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            TypeValue::Builtin(bv) => { bv.hash(state); },
+            TypeValue::List(lv) => { lv.hash(state); },
+            TypeValue::Record(rec) => { rec.hash(state); },
+            TypeValue::Enum(e) => { e.hash(state); },
+            // Shouldn't appear in the payload out (tx)
+            TypeValue::OutputStreamMessage(_msg) => {},
+            TypeValue::SharedValue(sv) => { sv.hash(state); },
+            // Fields that can result in an unknown value Shouldn't be used
+            // in a hash calculation 
+            TypeValue::Unknown => {},
+            // Shouldn't appear here
+            TypeValue::UnInit => {},
+        }
+    }
+}
+
 impl PartialOrd for TypeValue {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {

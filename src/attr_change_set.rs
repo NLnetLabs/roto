@@ -61,7 +61,7 @@ impl ScalarValue for RouteStatus {}
 
 // A attributes Change Set allows a user to create a set of changes to an
 // existing (raw) BGP Update message.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct AttrChangeSet {
     pub prefix: ReadOnlyScalarOption<Prefix>, // Read-only prefix typevalue, for referencing it.
     pub as_path: VectorOption<AsPath>,
@@ -91,7 +91,7 @@ pub struct AttrChangeSet {
 
 //------------ ScalarOption ------------------------------------------------
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ScalarOption<T: ScalarValue> {
     value: Option<TypeValue>,
     changed: bool,
@@ -159,7 +159,7 @@ impl<S1: Into<TypeValue>, S2: ScalarValue + Into<TypeValue>> From<Option<S1>>
 
 //------------ ReadOnlyScalarOption -----------------------------------------
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct ReadOnlyScalarOption<T: ScalarValue + Into<TypeValue>> {
     value: Option<TypeValue>,
     _pd: PhantomData<T>,
@@ -180,12 +180,12 @@ impl<T: ScalarValue + Into<TypeValue>> ReadOnlyScalarOption<T> {
 
 //------------ TodoOption ---------------------------------------------------
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
 pub struct Todo;
 
 //------------ VectorOption -------------------------------------------------
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct VectorOption<V: VectorValue + Into<TypeValue>> {
     value: Option<TypeValue>,
     changed: bool,

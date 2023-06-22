@@ -6,7 +6,7 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use crate::compile::CompileError;
-use crate::traits::{RotoType, Token};
+use crate::traits::RotoType;
 use crate::types::constant_enum::EnumVariant;
 
 use super::super::collections::List;
@@ -20,7 +20,7 @@ use super::{
     StringLiteral, U32, U8,
 };
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub enum BuiltinTypeValue {
     U32(U32),                       // scalar
     U8(U8),                         // scalar

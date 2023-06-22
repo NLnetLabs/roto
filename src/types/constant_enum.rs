@@ -18,7 +18,7 @@ use super::{
 
 //------------ EnumVariant --------------------------------------------------
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct EnumVariant<T> {
     pub(crate) enum_name: ShortString,
     pub(crate) value: T,
@@ -27,12 +27,6 @@ pub struct EnumVariant<T> {
 impl<T> Display for EnumVariant<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.enum_name)
-    }
-}
-
-impl<T: Copy> EnumVariant<T> {
-    fn get_value(&self) -> T {
-        self.value
     }
 }
 
@@ -127,7 +121,7 @@ impl From<EnumVariant<u32>> for BuiltinTypeValue {
 
 //------------ Enum ---------------------------------------------------------
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Enum {
     ty: TypeDef,
     token: Token,
