@@ -31,7 +31,7 @@ impl<T> Display for EnumVariant<T> {
 }
 
 impl<T: Copy> EnumVariant<T> {
-    fn get_value(&self) -> T {
+    fn _get_value(&self) -> T {
         self.value
     }
 }
@@ -54,12 +54,21 @@ where
 
     fn into_type(
         self,
-        _type_value: &super::typedef::TypeDef,
+        type_def: &super::typedef::TypeDef,
     ) -> Result<super::typevalue::TypeValue, crate::compile::CompileError>
     where
         Self: std::marker::Sized,
     {
-        todo!()
+        match type_def {
+            TypeDef::ConstEnumVariant(_) => {
+                Ok(self.into())
+            }
+            _ => Err(format!(
+                "Cannot convert type EnumVariant to type {:?}",
+                type_def
+            )
+            .into()),
+        }
     }
 
     fn exec_value_method<'a>(

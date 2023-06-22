@@ -585,12 +585,28 @@ impl BgpUpdateMessage {
         }
     }
 
-    pub(crate) fn get_value_ref_for_field(
+    pub(crate) fn get_value_owned_for_field(
         &self,
         field_token: usize,
-    ) -> Option<&TypeValue> {
+    ) -> Option<TypeValue> {
         match field_token.into() {
-            BgpUpdateMessageToken::Nlris => Some(&TypeValue::Unknown),
+            BgpUpdateMessageToken::Nlris => Some(TypeValue::Unknown),
+            BgpUpdateMessageToken::Afi => Some(
+                TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(
+                    EnumVariant {
+                        enum_name: "AFI".into(),
+                        value: self.raw_message.0.nlris().afi().into(),
+                    },
+                ))
+            ),
+            BgpUpdateMessageToken::Safi => Some(
+                TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(
+                    EnumVariant {
+                        enum_name: "SAFI".into(),
+                        value: self.raw_message.0.nlris().safi().into(),
+                    },
+                ))
+            ),
             _ => None
         }
     }
