@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
 use log::trace;
-use primitives::Hop;
+use primitives::{Hop, AsPath, Community, OriginType, LocalPref, MultiExitDisc, NextHop, RouteStatus};
 use serde::Serialize;
 use smallvec::SmallVec;
 
@@ -21,7 +21,7 @@ use super::{
     builtin::{
         primitives, Asn, Boolean, BuiltinTypeValue, HexLiteral,
         IntegerLiteral, IpAddress, Prefix, PrefixLength, StringLiteral, U32,
-        U8,
+        U8, BgpUpdateMessage, RawRouteWithDeltas,
     },
     collections::{ElementTypeValue, List, Record},
     outputs::OutputStreamMessage,
@@ -557,6 +557,188 @@ impl TypeValue {
         }
 
         Ok(self)
+    }
+}
+
+impl RotoType for TypeValue {
+    fn get_props_for_method(
+        ty: TypeDef,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<super::typedef::MethodProps, CompileError>
+    where
+        Self: std::marker::Sized {
+        match ty {
+            TypeDef::AcceptReject(_) => Err(CompileError::new("Unsupported TypeDef::AcceptReject in TypeValue::get_props_for_method()".to_string())),
+            TypeDef::Asn => Asn::get_props_for_method(ty, method_name),
+            TypeDef::AsPath => AsPath::get_props_for_method(ty, method_name),
+            TypeDef::AtomicAggregator => Err(CompileError::new("Unsupported TypeDef::AtomicAggregator in TypeValue::get_props_for_method()".to_string())),
+            TypeDef::BgpUpdateMessage => BgpUpdateMessage::get_props_for_method(ty, method_name),
+            TypeDef::Boolean => Boolean::get_props_for_method(ty, method_name),
+            TypeDef::Community => Community::get_props_for_method(ty, method_name),
+            TypeDef::ConstEnumVariant(_) => Err(CompileError::new("Unsupported TypeDef::ConstEnumVariant in TypeValue::get_props_for_method()".to_string())),
+            TypeDef::Enum(ty) => Self::get_props_for_method(*ty, method_name),
+            TypeDef::HexLiteral => HexLiteral::get_props_for_method(ty, method_name),
+            TypeDef::Hop => Hop::get_props_for_method(ty, method_name),
+            TypeDef::IntegerLiteral => IntegerLiteral::get_props_for_method(ty, method_name),
+            TypeDef::IpAddress => IpAddress::get_props_for_method(ty, method_name),
+            TypeDef::List(ty) => Self::get_props_for_method(*ty, method_name),
+            TypeDef::LocalPref => LocalPref::get_props_for_method(ty, method_name),
+            TypeDef::MultiExitDisc => MultiExitDisc::get_props_for_method(ty, method_name),
+            TypeDef::NextHop => NextHop::get_props_for_method(ty, method_name),
+            TypeDef::OriginType => OriginType::get_props_for_method(ty, method_name),
+            TypeDef::OutputStream(ty) => Self::get_props_for_method(*ty, method_name),
+            TypeDef::Prefix => Prefix::get_props_for_method(ty, method_name),
+            TypeDef::PrefixLength => PrefixLength::get_props_for_method(ty, method_name),
+            TypeDef::Record(_) => Record::get_props_for_method(ty, method_name),
+            TypeDef::Rib(ty) => Self::get_props_for_method(*ty, method_name),
+            TypeDef::Route => RawRouteWithDeltas::get_props_for_method(ty, method_name),
+            TypeDef::RouteStatus => RouteStatus::get_props_for_method(ty, method_name),
+            TypeDef::StringLiteral => StringLiteral::get_props_for_method(ty, method_name),
+            TypeDef::Table(ty) => Self::get_props_for_method(*ty, method_name),
+            TypeDef::U32 => U32::get_props_for_method(ty, method_name),
+            TypeDef::U8 => U8::get_props_for_method(ty, method_name),
+            TypeDef::Unknown => Err(CompileError::new("Unsupported TypeDef::Unknown in TypeValue::get_props_for_method()".to_string())),
+        }
+    }
+
+    fn into_type(
+        self,
+        type_value: &TypeDef,
+    ) -> Result<TypeValue, CompileError>
+    where
+        Self: std::marker::Sized {
+        match self {
+            TypeValue::Builtin(builtin) => match builtin {
+                BuiltinTypeValue::Asn(v) => v.into_type(type_value),
+                BuiltinTypeValue::AsPath(v) => v.into_type(type_value),
+                BuiltinTypeValue::AtomicAggregator(v) => v.into_type(type_value),
+                BuiltinTypeValue::BgpUpdateMessage(_) => Err(CompileError::new("Unsupported TypeValue::BgpUpdateMessage in TypeValue::into_type()".to_string())),
+                BuiltinTypeValue::Boolean(v) => v.into_type(type_value),
+                BuiltinTypeValue::Communities(v) => v.into_type(type_value),
+                BuiltinTypeValue::Community(v) => v.into_type(type_value),
+                BuiltinTypeValue::ConstU16EnumVariant(v) => v.into_type(type_value),
+                BuiltinTypeValue::ConstU32EnumVariant(v) => v.into_type(type_value),
+                BuiltinTypeValue::ConstU8EnumVariant(v) => v.into_type(type_value),
+                BuiltinTypeValue::HexLiteral(v) => v.into_type(type_value),
+                BuiltinTypeValue::Hop(v) => v.into_type(type_value),
+                BuiltinTypeValue::IntegerLiteral(v) => v.into_type(type_value),
+                BuiltinTypeValue::IpAddress(v) => v.into_type(type_value),
+                BuiltinTypeValue::LocalPref(v) => v.into_type(type_value),
+                BuiltinTypeValue::MultiExitDisc(v) => v.into_type(type_value),
+                BuiltinTypeValue::NextHop(v) => v.into_type(type_value),
+                BuiltinTypeValue::OriginType(v) => v.into_type(type_value),
+                BuiltinTypeValue::Prefix(v) => v.into_type(type_value),
+                BuiltinTypeValue::PrefixLength(v) => v.into_type(type_value),
+                BuiltinTypeValue::Route(v) => v.into_type(type_value),
+                BuiltinTypeValue::RouteStatus(v) => v.into_type(type_value),
+                BuiltinTypeValue::StringLiteral(v) => v.into_type(type_value),
+                BuiltinTypeValue::U32(v) => v.into_type(type_value),
+                BuiltinTypeValue::U8(v) => v.into_type(type_value),
+            }
+            TypeValue::Enum(v) => v.into_type(type_value),
+            TypeValue::List(v) => v.into_type(type_value),
+            TypeValue::OutputStreamMessage(_) => Err(CompileError::new("Unsupported TypeValue::OutputStreamMessage in TypeValue::into_type()".to_string())),
+            TypeValue::Record(v) => v.into_type(type_value),
+            TypeValue::SharedValue(_) => Err(CompileError::new("Unsupported TypeValue::SharedValue in TypeValue::into_type()".to_string())),
+            TypeValue::UnInit => Err(CompileError::new("Unsupported TypeValue::UnInit in TypeValue::into_type()".to_string())),
+            TypeValue::Unknown => Err(CompileError::new("Unsupported TypeValue::Unknown in TypeValue::into_type()".to_string())),
+        }
+    }
+
+    fn exec_value_method<'a>(
+        &'a self,
+        method_token: usize,
+        args: &'a [StackValue],
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        match self {
+            TypeValue::Builtin(builtin) => match builtin {
+                BuiltinTypeValue::Asn(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::AsPath(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::AtomicAggregator(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::BgpUpdateMessage(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::Boolean(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::Communities(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::Community(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::ConstU16EnumVariant(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::ConstU32EnumVariant(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::ConstU8EnumVariant(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::HexLiteral(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::Hop(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::IntegerLiteral(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::IpAddress(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::LocalPref(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::MultiExitDisc(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::NextHop(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::OriginType(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::Prefix(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::PrefixLength(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::Route(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::RouteStatus(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::StringLiteral(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::U32(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::U8(v) => v.exec_value_method(method_token, args, res_type),
+            }
+            TypeValue::Enum(v) => v.exec_value_method(method_token, args, res_type),
+            TypeValue::List(v) => v.exec_value_method(method_token, args, res_type),
+            TypeValue::OutputStreamMessage(v) => v.exec_value_method(method_token, args, res_type),
+            TypeValue::Record(v) => v.exec_value_method(method_token, args, res_type),
+            TypeValue::SharedValue(v) => v.exec_value_method(method_token, args, res_type),
+            TypeValue::UnInit => Err(VmError::InvalidValueType),
+            TypeValue::Unknown => Err(VmError::InvalidValueType),
+        }
+    }
+
+    fn exec_consume_value_method(
+        self,
+        method_token: usize,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+        match self {
+            TypeValue::Builtin(builtin) => match builtin {
+                BuiltinTypeValue::Asn(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::AsPath(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::AtomicAggregator(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::BgpUpdateMessage(_) => Err(VmError::InvalidValueType),
+                BuiltinTypeValue::Boolean(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::Communities(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::Community(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::ConstU16EnumVariant(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::ConstU32EnumVariant(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::ConstU8EnumVariant(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::HexLiteral(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::Hop(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::IntegerLiteral(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::IpAddress(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::LocalPref(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::MultiExitDisc(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::NextHop(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::OriginType(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::Prefix(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::PrefixLength(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::Route(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::RouteStatus(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::StringLiteral(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::U32(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::U8(v) => v.exec_consume_value_method(method_token, args, res_type),
+            }
+            TypeValue::Enum(v) => v.exec_consume_value_method(method_token, args, res_type),
+            TypeValue::List(v) => v.exec_consume_value_method(method_token, args, res_type),
+            TypeValue::OutputStreamMessage(_) => Err(VmError::InvalidValueType),
+            TypeValue::Record(v) => v.exec_consume_value_method(method_token, args, res_type),
+            TypeValue::SharedValue(_) => Err(VmError::InvalidValueType),
+            TypeValue::UnInit => Err(VmError::InvalidValueType),
+            TypeValue::Unknown => Err(VmError::InvalidValueType),
+        }
+    }
+
+    fn exec_type_method<'a>(
+        _method_token: usize,
+        _args: &[StackValue],
+        _res_type: TypeDef,
+    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+        todo!()
     }
 }
 

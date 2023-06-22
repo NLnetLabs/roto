@@ -98,20 +98,26 @@ impl Rotolo {
         }
     }
 
-    pub fn retrieve_public_as_arcs(
+    fn iter_all_modules(
         &self,
-        name: &str,
-    ) -> Result<RotoPackArc, CompileError> {
+    ) -> impl Iterator<Item = (ShortString, Result<&RotoPack, CompileError>)>
+    {
         let mp = self
             .get_mis_compilations()
             .iter()
             .map(|mp| (mp.0.clone(), Err(mp.1.clone())));
-        let mut p = self
-            .packs
+        self.packs
             .iter()
             .map(|p| (p.module_name.clone(), Ok(p)))
-            .chain(mp);
-        p.find(|p| p.0 == name)
+            .chain(mp)
+    }
+
+    pub fn retrieve_public_as_arcs(
+        &self,
+        name: &str,
+    ) -> Result<RotoPackArc, CompileError> {
+        self.iter_all_modules()
+            .find(|p| p.0 == name)
             .ok_or_else(|| {
                 CompileError::from(format!(
                     "Can't find module with specified name in this pack: {}",
@@ -146,16 +152,8 @@ impl Rotolo {
         &self,
         name: &str,
     ) -> Result<RotoPackRef, CompileError> {
-        let mp = self
-            .get_mis_compilations()
-            .iter()
-            .map(|mp| (mp.0.clone(), Err(mp.1.clone())));
-        let mut p = self
-            .packs
-            .iter()
-            .map(|p| (p.module_name.clone(), Ok(p)))
-            .chain(mp);
-        p.find(|p| p.0 == name)
+        self.iter_all_modules()
+            .find(|p| p.0 == name)
             .ok_or_else(|| {
                 CompileError::from(format!(
                     "Can't find module with specified name in this pack: {}",
@@ -171,6 +169,39 @@ impl Rotolo {
                         tx_type: p.tx_type.clone(),
                         data_sources: p.data_sources.clone(),
                         mir: p.mir.as_slice(),
+                    })
+                } else {
+                    Err(p.1.err().unwrap())
+                }
+            })
+    }
+
+    pub fn retrieve_first_public_as_arcs(
+        &self,
+    ) -> Result<RotoPackArc, CompileError> {
+        self.iter_all_modules()
+            .take(1)
+            .next()
+            .ok_or_else(|| {
+                CompileError::from("No modules are available in this pack")
+            })
+            .and_then(|p| {
+                if let Ok(p) = p.1 {
+                    Ok(PublicRotoPack::<
+                        Arc<[MirBlock]>,
+                        Arc<[(&str, TypeDef)]>,
+                        Arc<[ExtDataSource]>,
+                    > {
+                        module_name: p.module_name.as_str(),
+                        arguments: p
+                            .arguments
+                            .inspect_arguments()
+                            .clone()
+                            .into(),
+                        rx_type: p.rx_type.clone(),
+                        tx_type: p.tx_type.clone(),
+                        data_sources: p.data_sources.as_slice().into(),
+                        mir: p.mir.clone().into(),
                     })
                 } else {
                     Err(p.1.err().unwrap())
@@ -1114,7 +1145,6 @@ fn compile_compute_expr<'a>(
             if inc_mem_pos {
                 state.cur_mem_pos += 1;
             }
-
         }
 
         // ARGUMENTS ON ACCESS RECEIVERS
@@ -1237,10 +1267,7 @@ fn compile_compute_expr<'a>(
                     );
                 }
                 Token::Enum(_) => {
-                    trace!(
-                        "ENUM PARENT ARGS {:#?}",
-                        symbol.get_args()
-                    );
+                    trace!("ENUM PARENT ARGS {:#?}", symbol.get_args());
                 }
                 Token::ConstEnumVariant => {
                     trace!(

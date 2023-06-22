@@ -157,10 +157,10 @@ pub trait RotoRib {
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError>;
 
-    fn exec_ref_value_method<'a>(
+    fn exec_ref_value_method(
         &self,
         method_token: usize,
-        args: &'a [StackValue],
+        args: &[StackValue],
         res_type: TypeDef,
     ) -> DataSourceMethodValue;
 

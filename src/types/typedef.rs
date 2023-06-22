@@ -382,8 +382,8 @@ impl TypeDef {
         }
     }
 
-    pub(crate) fn exec_type_method<'a>(
-        &'a self,
+    pub(crate) fn exec_type_method(
+        &self,
         method_token: usize,
         args: &[StackValue],
         return_type: TypeDef,

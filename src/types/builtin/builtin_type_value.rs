@@ -8,7 +8,7 @@ use std::sync::Arc;
 use serde::Serialize;
 
 use crate::compile::CompileError;
-use crate::traits::{RotoType, Token};
+use crate::traits::RotoType;
 use crate::types::constant_enum::EnumVariant;
 
 use super::super::collections::List;

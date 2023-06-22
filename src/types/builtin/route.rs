@@ -108,6 +108,7 @@ impl RawRouteWithDeltas {
         delta_id: (RotondaId, LogicalTime),
         prefix: Prefix,
         raw_message: UpdateMessage,
+        route_status: RouteStatus,
     ) -> Self {
         let raw_message = BgpUpdateMessage::new(delta_id, raw_message);
         let mut attribute_deltas = AttributeDeltaList::new();
@@ -125,7 +126,7 @@ impl RawRouteWithDeltas {
             raw_message: Arc::new(raw_message),
             attribute_deltas,
             status_deltas: RouteStatusDeltaList(vec![RouteStatusDelta::new(
-                delta_id,
+                delta_id, route_status.into(),
             )]),
         }
     }
@@ -134,13 +135,14 @@ impl RawRouteWithDeltas {
         delta_id: (RotondaId, LogicalTime),
         prefix: Prefix,
         raw_message: &Arc<BgpUpdateMessage>,
+        route_status: RouteStatus,
     ) -> Self {
         Self {
             prefix,
             raw_message: Arc::clone(raw_message),
             attribute_deltas: AttributeDeltaList::new(),
             status_deltas: RouteStatusDeltaList(vec![RouteStatusDelta::new(
-                delta_id,
+                delta_id, route_status.into(),
             )]),
         }
     }
@@ -493,10 +495,10 @@ struct RouteStatusDelta {
 }
 
 impl RouteStatusDelta {
-    pub fn new(delta_id: (RotondaId, LogicalTime)) -> Self {
+    pub fn new(delta_id: (RotondaId, LogicalTime), status: TypeValue) -> Self {
         Self {
             delta_id,
-            status: TypeValue::UnInit,
+            status,
         }
     }
 }
@@ -540,6 +542,14 @@ impl BgpUpdateMessage {
             // nlris: TypeValue::from(raw_message.0.nlris()),
             raw_message,
         }
+    }
+
+    pub fn message_id(&self) -> (RotondaId, u64) {
+        self.message_id
+    }
+
+    pub fn raw_message(&self) -> &UpdateMessage {
+        &self.raw_message
     }
 }
 
@@ -585,13 +595,28 @@ impl BgpUpdateMessage {
         }
     }
 
-    pub(crate) fn get_value_ref_for_field(
+    pub(crate) fn get_value_owned_for_field(
         &self,
         field_token: usize,
-    ) -> Option<&TypeValue> {
+    ) -> Option<TypeValue> {
         match field_token.into() {
-            BgpUpdateMessageToken::Nlris => Some(&TypeValue::Unknown),
-            _ => None
+            BgpUpdateMessageToken::Nlris => Some(TypeValue::Unknown),
+            BgpUpdateMessageToken::Afi => Some(
+                TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(
+                    EnumVariant {
+                        enum_name: "AFI".into(),
+                        value: self.raw_message.0.nlris().afi().into(),
+                    },
+                ))
+            ),
+            BgpUpdateMessageToken::Safi => Some(
+                TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(
+                    EnumVariant {
+                        enum_name: "SAFI".into(),
+                        value: self.raw_message.0.nlris().safi().into(),
+                    },
+                ))
+            ),
         }
     }
 }
