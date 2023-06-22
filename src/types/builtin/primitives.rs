@@ -1978,7 +1978,7 @@ impl From<Asn> for Hop {
 
 //------------ OriginType type ----------------------------------------------
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize)]
 pub struct OriginType(pub(crate) routecore::bgp::types::OriginType);
 
 impl OriginType {
@@ -2061,7 +2061,7 @@ impl Display for OriginType {
 
 //------------ NextHop type -------------------------------------------------
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize)]
 pub struct NextHop(pub(crate) routecore::bgp::types::NextHop);
 
 impl RotoType for NextHop {
@@ -2138,7 +2138,7 @@ impl Display for NextHop {
 
 //------------ Multi Exit Discriminator type --------------------------------
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize)]
 pub struct MultiExitDisc(pub(crate) routecore::bgp::types::MultiExitDisc);
 
 impl RotoType for MultiExitDisc {
