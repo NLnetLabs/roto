@@ -617,7 +617,6 @@ impl BgpUpdateMessage {
                     },
                 ))
             ),
-            _ => None
         }
     }
 }
