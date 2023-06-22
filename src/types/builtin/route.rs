@@ -541,6 +541,14 @@ impl BgpUpdateMessage {
             raw_message,
         }
     }
+
+    pub fn message_id(&self) -> (RotondaId, u64) {
+        self.message_id
+    }
+
+    pub fn raw_message(&self) -> &UpdateMessage {
+        &self.raw_message
+    }
 }
 
 impl PartialEq for BgpUpdateMessage {
