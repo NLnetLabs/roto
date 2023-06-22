@@ -2,6 +2,7 @@ use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
 use log::trace;
 use primitives::{Hop, AsPath, Community, OriginType, LocalPref, MultiExitDisc, NextHop, RouteStatus};
+use serde::Serialize;
 use smallvec::SmallVec;
 
 //============ TypeValue ====================================================
@@ -31,7 +32,8 @@ use super::{
 /// holds both the type-level information and the value. The collection
 /// variants can hold multiple values recursively, e.g. a List of Records.
 
-#[derive(Debug, Eq, Default, Clone)]
+#[derive(Debug, Eq, Default, Clone, Serialize)]
+#[serde(untagged)]
 pub enum TypeValue {
     // All the built-in scalars and vectors
     Builtin(BuiltinTypeValue),

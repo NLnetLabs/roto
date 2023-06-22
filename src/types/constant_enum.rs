@@ -4,6 +4,7 @@ use std::str::FromStr;
 use log::trace;
 use routecore::bgp::communities::Wellknown;
 use routecore::bgp::types::{AFI, SAFI};
+use serde::Serialize;
 
 use crate::{
     ast::ShortString,
@@ -18,7 +19,7 @@ use super::{
 
 //------------ EnumVariant --------------------------------------------------
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
 pub struct EnumVariant<T> {
     pub(crate) enum_name: ShortString,
     pub(crate) value: T,
@@ -136,7 +137,7 @@ impl From<EnumVariant<u32>> for BuiltinTypeValue {
 
 //------------ Enum ---------------------------------------------------------
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
 pub struct Enum {
     ty: TypeDef,
     token: Token,

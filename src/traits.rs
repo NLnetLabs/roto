@@ -1,5 +1,7 @@
 // =========== RotoFilter trait ============================================
 
+use serde::Serialize;
+
 use crate::{
     ast::ShortString,
     compile::CompileError,
@@ -12,7 +14,7 @@ use crate::{
     vm::{StackValue, VmError},
 };
 
-#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize)]
 pub enum Token {
     Variable(usize),
     Method(usize),

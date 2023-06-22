@@ -5,6 +5,8 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
+use serde::Serialize;
+
 use crate::compile::CompileError;
 use crate::traits::RotoType;
 use crate::types::constant_enum::EnumVariant;
@@ -20,7 +22,8 @@ use super::{
     StringLiteral, U32, U8,
 };
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone, Serialize)]
+#[serde(untagged)]
 pub enum BuiltinTypeValue {
     U32(U32),                       // scalar
     U8(U8),                         // scalar
