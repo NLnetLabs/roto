@@ -1676,7 +1676,7 @@ impl<'a> ByteStringLiteral {
 
 // AcceptReject ::= 'return'? ( 'accept' | 'reject' ) ';'
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Serialize)]
 pub enum AcceptReject {
     Accept,
     Reject,

@@ -62,7 +62,7 @@ impl ScalarValue for RouteStatus {}
 
 // A attributes Change Set allows a user to create a set of changes to an
 // existing (raw) BGP Update message.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Hash)]
 pub struct AttrChangeSet {
     #[serde(skip_serializing_if = "ReadOnlyScalarOption::is_none")]
     pub prefix: ReadOnlyScalarOption<Prefix>, // Read-only prefix typevalue, for referencing it.
@@ -114,7 +114,7 @@ pub struct AttrChangeSet {
 
 //------------ ScalarOption ------------------------------------------------
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 #[serde(transparent)]
 pub struct ScalarOption<T: ScalarValue> {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -190,7 +190,7 @@ impl<S1: Into<TypeValue>, S2: ScalarValue + Into<TypeValue>> From<Option<S1>>
 
 //------------ ReadOnlyScalarOption -----------------------------------------
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize)]
 #[serde(transparent)]
 pub struct ReadOnlyScalarOption<T: ScalarValue + Into<TypeValue>> {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -218,12 +218,12 @@ impl<T: ScalarValue + Into<TypeValue>> ReadOnlyScalarOption<T> {
 
 //------------ TodoOption ---------------------------------------------------
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Hash)]
 pub struct Todo;
 
 //------------ VectorOption -------------------------------------------------
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 #[serde(transparent)]
 pub struct VectorOption<V: VectorValue + Into<TypeValue>> {
     #[serde(skip_serializing_if = "Option::is_none")]

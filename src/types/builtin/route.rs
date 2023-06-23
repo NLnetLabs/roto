@@ -38,7 +38,7 @@ use crate::attr_change_set::{
     AttrChangeSet, ScalarOption, ScalarValue, VectorOption, VectorValue,
 };
 
-//============ Route ========================================================
+//============ MaterializedRoute ============================================
 
 // An RFC 4271 Route. The RFC:
 
@@ -59,19 +59,22 @@ use crate::attr_change_set::{
 // a RIB (that is the RawRouteDelta down below), but the type that is used
 // serialize the data into on export and transport.
 
-#[derive(Debug, Eq, PartialEq, Clone, Serialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Hash, Serialize)]
 pub struct MaterializedRoute {
     pub route: AttrChangeSet,
     pub status: RouteStatus,
+    route_id: (RotondaId, LogicalTime)
 }
 
 impl From<RawRouteWithDeltas> for MaterializedRoute {
     fn from(raw_route: RawRouteWithDeltas) -> Self {
         let status = raw_route.status_deltas.current();
+        let route_id = raw_route.raw_message.message_id;
 
         MaterializedRoute {
             route: raw_route.take_latest_attrs(),
             status: status.into(),
+            route_id
         }
     }
 }
@@ -91,7 +94,7 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
 // was stored in the RawRouteWithDeltas instance. So it reflects both the
 // original attributes from the raw message, their modifications and the
 // newly set attributes.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize)]
 #[serde(into = "MaterializedRoute")]
 pub struct RawRouteWithDeltas {
     pub prefix: Prefix,
@@ -311,7 +314,7 @@ impl RawRouteWithDeltas {
         }
     }
 
-    pub(crate) fn _get_field_by_index(
+    pub(crate) fn get_field_by_index(
         &self,
         field_token: usize,
     ) -> Option<TypeValue> {
@@ -416,7 +419,7 @@ impl RawRouteWithDeltas {
 //
 // The list of deltas describes the changes that were made by one Rotonda
 // unit along the way.
-#[derive(Debug, Clone, Eq, PartialEq, Default, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Default, Hash, Serialize)]
 struct AttributeDeltaList {
     deltas: Vec<AttributeDelta>,
     // The delta that was handed out the most recently. This is the only
@@ -467,7 +470,7 @@ impl AttributeDeltaList {
 
 // A set of attribute changes that were atomically created by a Rotonda
 // unit in one go (with one logical timestamp).
-#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize)]
 pub struct AttributeDelta {
     delta_id: (RotondaId, LogicalTime),
     delta_index: usize,
@@ -488,7 +491,7 @@ impl AttributeDelta {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize)]
 struct RouteStatusDelta {
     delta_id: (RotondaId, LogicalTime),
     status: TypeValue,
@@ -503,7 +506,7 @@ impl RouteStatusDelta {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize)]
 struct RouteStatusDeltaList(Vec<RouteStatusDelta>);
 
 impl RouteStatusDeltaList {
@@ -528,7 +531,6 @@ impl RouteStatusDeltaList {
 #[derive(Debug, Serialize)]
 pub struct BgpUpdateMessage {
     message_id: (RotondaId, LogicalTime),
-    // nlris: TypeValue,
     raw_message: UpdateMessage,
 }
 
@@ -539,7 +541,6 @@ impl BgpUpdateMessage {
     ) -> Self {
         Self {
             message_id,
-            // nlris: TypeValue::from(raw_message.0.nlris()),
             raw_message,
         }
     }
@@ -556,6 +557,12 @@ impl BgpUpdateMessage {
 impl PartialEq for BgpUpdateMessage {
     fn eq(&self, other: &Self) -> bool {
         self.message_id == other.message_id
+    }
+}
+
+impl std::hash::Hash for BgpUpdateMessage {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.raw_message.hash(state);
     }
 }
 
@@ -638,12 +645,16 @@ impl RotoType for BgpUpdateMessage {
 
     fn into_type(
         self,
-        _type_value: &TypeDef,
+        ty: &TypeDef,
     ) -> Result<TypeValue, CompileError>
     where
         Self: std::marker::Sized,
     {
-        todo!()
+        Err(format!(
+            "BgpUpdateMessage cannot be converted to type {} (or any other type)",
+            ty
+        )
+        .into())
     }
 
     fn exec_value_method<'a>(
@@ -679,7 +690,7 @@ impl RotoType for BgpUpdateMessage {
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
-        todo!()
+        Err(VmError::InvalidMethodCall)
     }
 
     fn exec_type_method<'a>(
@@ -687,7 +698,7 @@ impl RotoType for BgpUpdateMessage {
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
-        todo!()
+        Err(VmError::InvalidMethodCall)
     }
 }
 
@@ -840,7 +851,7 @@ impl RotoType for RawRouteWithDeltas {
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<(dyn FnOnce() -> TypeValue + 'a)>, VmError> {
-        todo!()
+        Err(VmError::InvalidMethodCall)
     }
 
     fn exec_consume_value_method(
@@ -849,7 +860,7 @@ impl RotoType for RawRouteWithDeltas {
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
-        todo!()
+        Err(VmError::InvalidMethodCall)
     }
 
     fn exec_type_method<'a>(
@@ -857,7 +868,7 @@ impl RotoType for RawRouteWithDeltas {
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
-        todo!()
+        Err(VmError::InvalidMethodCall)
     }
 }
 
@@ -991,7 +1002,7 @@ impl RotoType for RouteStatus {
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
-        todo!()
+        Err(VmError::InvalidMethodCall)
     }
 
     fn exec_consume_value_method(
@@ -1000,7 +1011,7 @@ impl RotoType for RouteStatus {
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
-        todo!()
+        Err(VmError::InvalidMethodCall)
     }
 
     fn exec_type_method<'a>(
@@ -1008,7 +1019,7 @@ impl RotoType for RouteStatus {
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
-        todo!()
+        Err(VmError::InvalidMethodCall)
     }
 }
 
@@ -1044,13 +1055,13 @@ impl From<RouteStatusToken> for usize {
     }
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize)]
 pub struct RotondaId(pub usize);
 
 
 //------------ Modification & Creation of new Updates -----------------------
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Hash, Serialize)]
 pub struct UpdateMessage(
     pub routecore::bgp::message::UpdateMessage<bytes::Bytes>,
 );

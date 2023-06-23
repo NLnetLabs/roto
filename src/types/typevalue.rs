@@ -590,7 +590,7 @@ impl RotoType for TypeValue {
             TypeDef::Prefix => Prefix::get_props_for_method(ty, method_name),
             TypeDef::PrefixLength => PrefixLength::get_props_for_method(ty, method_name),
             TypeDef::Record(_) => Record::get_props_for_method(ty, method_name),
-            TypeDef::Rib(ty) => Self::get_props_for_method(*ty, method_name),
+            TypeDef::Rib(ty) => Self::get_props_for_method(*ty.0, method_name),
             TypeDef::Route => RawRouteWithDeltas::get_props_for_method(ty, method_name),
             TypeDef::RouteStatus => RouteStatus::get_props_for_method(ty, method_name),
             TypeDef::StringLiteral => StringLiteral::get_props_for_method(ty, method_name),
@@ -879,6 +879,25 @@ impl PartialEq for TypeValue {
             (TypeValue::SharedValue(_), TypeValue::Enum(_)) => todo!(),
             (TypeValue::Unknown, TypeValue::Enum(_)) => todo!(),
             (TypeValue::UnInit, TypeValue::Enum(_)) => todo!(),
+        }
+    }
+}
+
+impl std::hash::Hash for TypeValue {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            TypeValue::Builtin(bv) => { bv.hash(state); },
+            TypeValue::List(lv) => { lv.hash(state); },
+            TypeValue::Record(rec) => { rec.hash(state); },
+            TypeValue::Enum(e) => { e.hash(state); },
+            // Shouldn't appear in the payload out (tx)
+            TypeValue::OutputStreamMessage(_msg) => {},
+            TypeValue::SharedValue(sv) => { sv.hash(state); },
+            // Fields that can result in an unknown value Shouldn't be used
+            // in a hash calculation 
+            TypeValue::Unknown => {},
+            // Shouldn't appear here
+            TypeValue::UnInit => {},
         }
     }
 }

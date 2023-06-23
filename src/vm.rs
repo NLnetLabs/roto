@@ -1866,7 +1866,7 @@ impl ExtDataSource {
     pub fn get_value_type(&self) -> TypeDef {
         match &self.ty {
             TypeDef::Table(t) => *t.clone(),
-            TypeDef::Rib(rec) => *rec.clone(),
+            TypeDef::Rib((rec, _)) => *rec.clone(),
             TypeDef::OutputStream(s) => *s.clone(),
             _ => self.ty.clone(),
         }

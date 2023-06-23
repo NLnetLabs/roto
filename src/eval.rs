@@ -814,7 +814,7 @@ impl ast::ComputeExpr {
         // Use the type of the access receiver to put on the arguments.
         let mut ty = match ar_token {
             Token::Table(_) => TypeDef::Table(Box::new(s.get_type())),
-            Token::Rib(_) => TypeDef::Rib(Box::new(s.get_type())),
+            Token::Rib(_) => TypeDef::Rib((Box::new(s.get_type()), None)),
             Token::OutputStream(_) => {
                 TypeDef::OutputStream(Box::new(s.get_type()))
             }

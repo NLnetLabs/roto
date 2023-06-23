@@ -22,7 +22,7 @@ use super::{
     StringLiteral, U32, U8,
 };
 
-#[derive(Debug, Eq, PartialEq, Clone, Serialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Hash, Serialize)]
 #[serde(untagged)]
 pub enum BuiltinTypeValue {
     U32(U32),                       // scalar

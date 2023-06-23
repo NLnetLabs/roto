@@ -17,7 +17,7 @@ use super::builtin_type_value::BuiltinTypeValue;
 
 // ----------- A simple u32 type --------------------------------------------
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize)]
+#[derive(Debug, Eq, Copy, Clone, Serialize)]
 pub struct U32(pub(crate) u32);
 
 impl U32 {
@@ -112,6 +112,24 @@ impl RotoType for U32 {
                     .into())
             }
         }
+    }
+}
+
+impl PartialEq for U32 {
+    fn eq(&self, other: &Self) -> bool {
+        if let Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(o)))) =
+            other.into_type(&TypeDef::U32)
+        {
+            o == self.0
+        } else {
+            false
+        }
+    }
+}
+
+impl std::hash::Hash for U32 {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
     }
 }
 
@@ -248,6 +266,12 @@ impl PartialEq for U8 {
     }
 }
 
+impl std::hash::Hash for U8 {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
 impl Display for U8 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
@@ -286,7 +310,7 @@ impl From<U8Token> for usize {
 
 // ----------- Boolean type -------------------------------------------------
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Serialize)]
 pub struct Boolean(pub(crate) bool);
 impl Boolean {
     pub fn new(val: bool) -> Self {
@@ -412,7 +436,7 @@ impl From<BooleanToken> for usize {
 
 //------------ StringLiteral type -------------------------------------------
 
-#[derive(Debug, Eq, PartialEq, Clone, Serialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Hash, Serialize)]
 pub struct StringLiteral(pub(crate) String);
 impl StringLiteral {
     pub fn new(val: String) -> Self {
@@ -671,6 +695,12 @@ impl PartialEq for IntegerLiteral {
     }
 }
 
+impl std::hash::Hash for IntegerLiteral {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
 impl From<IntegerLiteral> for TypeValue {
     fn from(val: IntegerLiteral) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(val))
@@ -707,7 +737,7 @@ impl From<IntegerLiteralToken> for usize {
 
 //------------ HexLiteral type ----------------------------------------------
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Serialize)]
 pub struct HexLiteral(pub(crate) u64);
 impl HexLiteral {
     pub fn new(val: u64) -> Self {
@@ -838,7 +868,7 @@ impl From<HexLiteralToken> for usize {
 
 // ----------- Prefix type --------------------------------------------------
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Serialize)]
 pub struct Prefix(pub(crate) routecore::addr::Prefix);
 
 impl Prefix {
@@ -1041,7 +1071,7 @@ impl From<PrefixToken> for usize {
 
 //------------ PrefixLengthLiteral type -------------------------------------
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Serialize)]
 pub struct PrefixLength(pub(crate) u8);
 
 impl PrefixLength {
@@ -1186,7 +1216,7 @@ impl From<PrefixLength> for u8 {
 
 // ----------- Community ----------------------------------------------------
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Serialize)]
 pub struct Community(pub(crate) routecore::bgp::communities::Community);
 
 impl Community {
@@ -1379,7 +1409,7 @@ pub enum MatchType {
 
 // ----------- IpAddress type -----------------------------------------------
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Serialize)]
 pub struct IpAddress(pub(crate) std::net::IpAddr);
 
 impl IpAddress {
@@ -1496,7 +1526,7 @@ impl From<IpAddressToken> for usize {
 
 // ----------- Asn type -----------------------------------------------------
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Serialize)]
 pub struct Asn(pub(crate) routecore::asn::Asn);
 
 impl Asn {
@@ -1643,7 +1673,7 @@ impl From<AsnToken> for usize {
 
 type RoutecoreHop = routecore::bgp::aspath::Hop<Vec<u8>>;
 
-#[derive(Debug, Eq, PartialEq, Clone, Default, Serialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Default, Hash, Serialize)]
 pub struct AsPath(pub(crate) routecore::bgp::aspath::HopPath);
 
 impl AsPath {
@@ -1913,7 +1943,7 @@ impl From<Vec<Hop>> for AsPath {
 // A read-only type that contains an ASN or a more complex segment of a AS
 // PATH, e.g. an AS_SET.
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize)]
 pub struct Hop(pub(crate) routecore::bgp::aspath::Hop<Vec<u8>>);
 
 impl RotoType for Hop {
@@ -1978,7 +2008,7 @@ impl From<Asn> for Hop {
 
 //------------ OriginType type ----------------------------------------------
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize)]
 pub struct OriginType(pub(crate) routecore::bgp::types::OriginType);
 
 impl OriginType {
@@ -2061,7 +2091,7 @@ impl Display for OriginType {
 
 //------------ NextHop type -------------------------------------------------
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize)]
 pub struct NextHop(pub(crate) routecore::bgp::types::NextHop);
 
 impl RotoType for NextHop {
@@ -2138,7 +2168,7 @@ impl Display for NextHop {
 
 //------------ Multi Exit Discriminator type --------------------------------
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize)]
 pub struct MultiExitDisc(pub(crate) routecore::bgp::types::MultiExitDisc);
 
 impl RotoType for MultiExitDisc {
@@ -2310,7 +2340,7 @@ impl From<UnknownToken> for usize {
     }
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize)]
 pub struct LocalPref(pub(crate) routecore::bgp::types::LocalPref);
 
 impl RotoType for LocalPref {
@@ -2423,7 +2453,7 @@ impl From<LocalPrefToken> for usize {
 
 //------------ Aggregator type ----------------------------------------------
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize)]
 pub struct AtomicAggregator(
     pub(crate) routecore::bgp::message::update::Aggregator,
 );
@@ -2513,7 +2543,7 @@ impl std::fmt::Display for AtomicAggregator {
 // the logic in `rib-units` to decide whether routes should be send to its
 // output and to be able output this information to API clients, without
 // having to go back to the units that keep the per-peer session state.
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default, Serialize)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Default, Hash, Serialize)]
 pub enum RouteStatus {
     // Between start and EOR on a BGP peer-session
     InConvergence,
