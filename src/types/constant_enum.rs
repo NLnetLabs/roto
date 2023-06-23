@@ -4,6 +4,7 @@ use std::str::FromStr;
 use log::trace;
 use routecore::bgp::communities::Wellknown;
 use routecore::bgp::types::{AFI, SAFI};
+use serde::Serialize;
 
 use crate::{
     ast::ShortString,
@@ -18,7 +19,7 @@ use super::{
 
 //------------ EnumVariant --------------------------------------------------
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize)]
 pub struct EnumVariant<T> {
     pub(crate) enum_name: ShortString,
     pub(crate) value: T,
@@ -27,6 +28,12 @@ pub struct EnumVariant<T> {
 impl<T> Display for EnumVariant<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.enum_name)
+    }
+}
+
+impl<T: Copy> EnumVariant<T> {
+    fn _get_value(&self) -> T {
+        self.value
     }
 }
 
@@ -48,12 +55,21 @@ where
 
     fn into_type(
         self,
-        _type_value: &super::typedef::TypeDef,
+        type_def: &super::typedef::TypeDef,
     ) -> Result<super::typevalue::TypeValue, crate::compile::CompileError>
     where
         Self: std::marker::Sized,
     {
-        todo!()
+        match type_def {
+            TypeDef::ConstEnumVariant(_) => {
+                Ok(self.into())
+            }
+            _ => Err(format!(
+                "Cannot convert type EnumVariant to type {:?}",
+                type_def
+            )
+            .into()),
+        }
     }
 
     fn exec_value_method<'a>(
@@ -121,7 +137,7 @@ impl From<EnumVariant<u32>> for BuiltinTypeValue {
 
 //------------ Enum ---------------------------------------------------------
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize)]
 pub struct Enum {
     ty: TypeDef,
     token: Token,

@@ -1073,10 +1073,10 @@ impl ast::ValueExpr {
                         scope,
                     )
                 } else {
-                    return Err(format!(
+                    Err(format!(
                         "Unknown built-in method call: {}",
                         name
-                    ))?;
+                    ))?
                 }
             }
             ast::ValueExpr::StringLiteral(str_lit) => {

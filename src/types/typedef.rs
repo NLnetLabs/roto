@@ -5,6 +5,7 @@ use std::hash::{Hash, Hasher};
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 use log::trace;
+use serde::Serialize;
 use smallvec::SmallVec;
 
 use crate::compile::CompileError;
@@ -37,7 +38,7 @@ use super::{
 // uniqueness for an entry.
 type RibTypeDef = (Box<TypeDef>, Option<Vec<SmallVec<[usize; 8]>>>);
 
-#[derive(Clone, Debug, Eq, PartialEq, Default, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Default, Hash, Serialize)]
 pub enum TypeDef {
     // Data Sources, the data field in the enum represents the contained
     // type.
@@ -389,8 +390,8 @@ impl TypeDef {
         }
     }
 
-    pub(crate) fn exec_type_method<'a>(
-        &'a self,
+    pub(crate) fn exec_type_method(
+        &self,
         method_token: usize,
         args: &[StackValue],
         return_type: TypeDef,

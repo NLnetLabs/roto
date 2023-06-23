@@ -1,3 +1,5 @@
+use serde::Serialize;
+
 use crate::{
     ast::ShortString,
     compile::CompileError,
@@ -90,7 +92,7 @@ impl From<OutputStreamToken> for usize {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
 pub struct OutputStreamMessage {
     pub(crate) name: ShortString,
     pub(crate) topic: String,

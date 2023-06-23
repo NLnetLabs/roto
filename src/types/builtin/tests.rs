@@ -7,7 +7,7 @@ mod route {
 
     use crate::{
         types::builtin::{
-            Asn, Prefix, RawRouteWithDeltas, RotondaId, UpdateMessage,
+            Asn, Prefix, RawRouteWithDeltas, RotondaId, UpdateMessage, RouteStatus,
         },
         vm::VmError,
     };
@@ -49,6 +49,7 @@ mod route {
             msg_id,
             prefixes[0],
             update,
+            RouteStatus::InConvergence,
         ));
 
         for prefix in &prefixes[1..] {
@@ -56,6 +57,7 @@ mod route {
                 msg_id,
                 *prefix,
                 &roto_msgs[0].raw_message,
+                RouteStatus::InConvergence,
             ))
         }
 
@@ -156,6 +158,7 @@ mod route {
             msg_id,
             prefixes[0],
             update,
+            RouteStatus::InConvergence,
         ));
 
         for prefix in &prefixes[1..] {
@@ -163,6 +166,7 @@ mod route {
                 msg_id,
                 *prefix,
                 &roto_msgs[0].raw_message,
+                RouteStatus::InConvergence,
             ))
         }
 

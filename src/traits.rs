@@ -1,5 +1,7 @@
 // =========== RotoFilter trait ============================================
 
+use serde::Serialize;
+
 use crate::{
     ast::ShortString,
     compile::CompileError,
@@ -12,7 +14,7 @@ use crate::{
     vm::{StackValue, VmError},
 };
 
-#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize)]
 pub enum Token {
     Variable(usize),
     Method(usize),
@@ -155,10 +157,10 @@ pub trait RotoRib {
         res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError>;
 
-    fn exec_ref_value_method<'a>(
+    fn exec_ref_value_method(
         &self,
         method_token: usize,
-        args: &'a [StackValue],
+        args: &[StackValue],
         res_type: TypeDef,
     ) -> DataSourceMethodValue;
 

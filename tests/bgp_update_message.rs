@@ -1,8 +1,10 @@
 use log::trace;
+use roto::ast::AcceptReject;
 use roto::compile::Compiler;
 
 use roto::types::builtin::{RotondaId, UpdateMessage, BgpUpdateMessage};
 use roto::types::collections::Record;
+use roto::types::typevalue::TypeValue;
 use roto::vm;
 use routecore::bgp::message::SessionConfig;
 
@@ -11,7 +13,7 @@ mod common;
 fn test_data(
     name: &str,
     source_code: &'static str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(AcceptReject, TypeValue, Option<TypeValue>), Box<dyn std::error::Error>> {
     println!("Evaluate module {}...", name);
 
     // Compile the source code in this example
@@ -82,14 +84,14 @@ fn test_data(
     trace!("rx    : {:?}", res.1);
     trace!("tx    : {:?}", res.2);
 
-    Ok(())
+    Ok(res)
 }
 
 #[test]
 fn test_bgp_update_1() {
     common::init();
 
-    test_data(
+    let res = test_data(
         "filter-unicast-v4-v6-only",
         r###"
         module filter-unicast-v4-v6-only {
@@ -136,4 +138,39 @@ fn test_bgp_update_1() {
         }
         "###,
     ).unwrap();
+
+    assert_eq!(res.0, AcceptReject::Accept);
+}
+
+#[test]
+fn test_bgp_update_2() {
+    common::init();
+
+    let res = test_data(
+        "filter-unicast-v4-v6-only",
+        r###"
+        module filter-unicast-v4-v6-only {
+            define {
+                rx_tx bgp_msg: BgpUpdateMessage;
+            }
+        
+
+            term afi-safi-unicast {
+                match {
+                    bgp_msg.nlris.afi in [IPV6, IPV4];
+                    bgp_msg.nlris.safi == UNICAST;
+                }
+            }
+        
+            apply {
+                filter match afi-safi-unicast matching {
+                    return accept;
+                };
+                reject;
+            }
+        }
+        "###,
+    ).unwrap();
+
+    assert_eq!(res.0, AcceptReject::Accept);
 }
