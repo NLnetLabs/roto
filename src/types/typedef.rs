@@ -32,14 +32,16 @@ use super::{
     builtin::BuiltinTypeValue, collections::List, typevalue::TypeValue,
 };
 
+// the type definition of the type that's stored in the RIB and the
+// vec of field_indexes that are used in the hash to calculate
+// uniqueness for an entry.
+type RibTypeDef = (Box<TypeDef>, Option<Vec<SmallVec<[usize; 8]>>>);
+
 #[derive(Clone, Debug, Eq, PartialEq, Default, Hash)]
 pub enum TypeDef {
     // Data Sources, the data field in the enum represents the contained
     // type.
-    // the type definition of the type that's stored in the RIB and the
-    // vec of field_indexes that are used in the hash to calculate
-    // uniqueness for an entry.
-    Rib((Box<TypeDef>, Option<Vec<SmallVec<[usize; 8]>>>)),
+    Rib(RibTypeDef),
     Table(Box<TypeDef>),
     OutputStream(Box<TypeDef>),
     // Collection Types

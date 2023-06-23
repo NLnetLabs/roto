@@ -16,7 +16,7 @@ use super::builtin_type_value::BuiltinTypeValue;
 
 // ----------- A simple u32 type --------------------------------------------
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash)]
+#[derive(Debug, Eq, Copy, Clone)]
 pub struct U32(pub(crate) u32);
 
 impl U32 {
@@ -111,6 +111,24 @@ impl RotoType for U32 {
                     .into())
             }
         }
+    }
+}
+
+impl PartialEq for U32 {
+    fn eq(&self, other: &Self) -> bool {
+        if let Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(o)))) =
+            other.into_type(&TypeDef::U32)
+        {
+            o == self.0
+        } else {
+            false
+        }
+    }
+}
+
+impl std::hash::Hash for U32 {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
     }
 }
 
@@ -249,13 +267,7 @@ impl PartialEq for U8 {
 
 impl std::hash::Hash for U8 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        todo!()
-    }
-
-    fn hash_slice<H: std::hash::Hasher>(data: &[Self], state: &mut H)
-        where
-            Self: Sized, {
-        todo!()
+        self.0.hash(state);
     }
 }
 
@@ -684,13 +696,7 @@ impl PartialEq for IntegerLiteral {
 
 impl std::hash::Hash for IntegerLiteral {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        todo!()
-    }
-
-    fn hash_slice<H: std::hash::Hasher>(data: &[Self], state: &mut H)
-        where
-            Self: Sized, {
-        todo!()
+        self.0.hash(state);
     }
 }
 

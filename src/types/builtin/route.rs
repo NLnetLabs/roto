@@ -552,13 +552,7 @@ impl PartialEq for BgpUpdateMessage {
 
 impl std::hash::Hash for BgpUpdateMessage {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        todo!()
-    }
-
-    fn hash_slice<H: std::hash::Hasher>(data: &[Self], state: &mut H)
-        where
-            Self: Sized, {
-        todo!()
+        self.raw_message.hash(state);
     }
 }
 
