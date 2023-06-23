@@ -590,7 +590,7 @@ impl RotoType for TypeValue {
             TypeDef::Prefix => Prefix::get_props_for_method(ty, method_name),
             TypeDef::PrefixLength => PrefixLength::get_props_for_method(ty, method_name),
             TypeDef::Record(_) => Record::get_props_for_method(ty, method_name),
-            TypeDef::Rib(ty) => Self::get_props_for_method(*ty, method_name),
+            TypeDef::Rib(ty) => Self::get_props_for_method(*ty.0, method_name),
             TypeDef::Route => RawRouteWithDeltas::get_props_for_method(ty, method_name),
             TypeDef::RouteStatus => RouteStatus::get_props_for_method(ty, method_name),
             TypeDef::StringLiteral => StringLiteral::get_props_for_method(ty, method_name),

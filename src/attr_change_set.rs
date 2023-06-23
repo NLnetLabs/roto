@@ -223,7 +223,7 @@ pub struct Todo;
 
 //------------ VectorOption -------------------------------------------------
 
-#[derive(Clone, Debug, PartialEq, Eq, HAsh, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 #[serde(transparent)]
 pub struct VectorOption<V: VectorValue + Into<TypeValue>> {
     #[serde(skip_serializing_if = "Option::is_none")]
