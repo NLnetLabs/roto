@@ -152,7 +152,7 @@ impl RibType {
         }
     }
 
-    pub(crate) fn exec_type_method<'a>(
+    pub(crate) fn exec_type_method(
         _method: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
@@ -414,7 +414,7 @@ impl Table {
         }
     }
 
-    pub(crate) fn exec_type_method<'a>(
+    pub(crate) fn exec_type_method(
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,

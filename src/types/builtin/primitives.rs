@@ -616,7 +616,7 @@ impl From<StringLiteralToken> for usize {
 
 //------------ IntegerLiteral type ------------------------------------------
 
-#[derive(Debug, Eq, Ord, PartialEq, PartialOrd, Copy, Clone, Serialize)]
+#[derive(Debug, Eq, Ord, PartialEq, PartialOrd, Copy, Clone, Hash, Serialize)]
 pub struct IntegerLiteral(pub(crate) i64);
 impl IntegerLiteral {
     pub fn new(val: i64) -> Self {
@@ -724,26 +724,6 @@ impl RotoType for IntegerLiteral {
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         Err(VmError::InvalidMethodCall)
-    }
-}
-
-// impl PartialEq for IntegerLiteral {
-//     fn eq(&self, other: &Self) -> bool {
-//         trace!("EQ IntegerLiteral");
-//         if let Ok(TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
-//             IntegerLiteral(o),
-//         ))) = other.into_type(&TypeDef::IntegerLiteral)
-//         {
-//             o == self.0
-//         } else {
-//             false
-//         }
-//     }
-// }
-
-impl std::hash::Hash for IntegerLiteral {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
     }
 }
 
@@ -1560,7 +1540,7 @@ impl From<IpAddressToken> for usize {
 
 // ----------- Asn type -----------------------------------------------------
 
-#[derive(Debug, Eq, Copy, Clone, Hash, Serialize)]
+#[derive(Debug, Eq, Copy, Clone, Hash, PartialEq, Serialize)]
 pub struct Asn(pub(crate) routecore::asn::Asn);
 
 impl Asn {
@@ -1651,23 +1631,6 @@ impl RotoType for Asn {
         todo!()
     }
 }
-
-impl PartialEq for Asn {
-    fn eq(&self, other: &Self) -> bool {
-        trace!("EQ Asn");
-        if let Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(o)))) = other.into_type(&TypeDef::Asn) {
-            o == self.0
-        } else {
-            false
-        }
-    }
-}
-
-// impl std::hash::Hash for Asn {
-//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-//         self.value.0.hash(state);
-//     }
-// }
 
 impl From<Asn> for TypeValue {
     fn from(value: Asn) -> Self {
@@ -2418,7 +2381,7 @@ impl RotoType for LocalPref {
         &'a self,
         method_token: usize,
         _args: &'a [StackValue],
-        res_type: TypeDef,
+        _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         match method_token.into() {
             LocalPrefToken::Set => {
