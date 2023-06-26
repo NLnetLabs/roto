@@ -1,7 +1,9 @@
 use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
-use log::trace;
-use primitives::{Hop, AsPath, Community, OriginType, LocalPref, MultiExitDisc, NextHop, RouteStatus};
+use primitives::{
+    AsPath, Community, Hop, LocalPref, MultiExitDisc, NextHop, OriginType,
+    RouteStatus,
+};
 use serde::Serialize;
 use smallvec::SmallVec;
 
@@ -19,13 +21,14 @@ use crate::{
 
 use super::{
     builtin::{
-        primitives, Asn, Boolean, BuiltinTypeValue, HexLiteral,
-        IntegerLiteral, IpAddress, Prefix, PrefixLength, StringLiteral, U32,
-        U8, BgpUpdateMessage, RawRouteWithDeltas,
+        primitives, Asn, BgpUpdateMessage, Boolean, BuiltinTypeValue,
+        HexLiteral, IntegerLiteral, IpAddress, Prefix, PrefixLength,
+        RawRouteWithDeltas, StringLiteral, U32, U8,
     },
     collections::{ElementTypeValue, List, Record},
+    constant_enum::Enum,
     outputs::OutputStreamMessage,
-    typedef::TypeDef, constant_enum::Enum,
+    typedef::TypeDef,
 };
 
 /// These are the actual types that are used in the Roto language. This enum
@@ -171,15 +174,15 @@ impl TypeValue {
             TypeValue::Enum(c_enum) => {
                 c_enum.exec_value_method(method_token, args, return_type)
             }
-            TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(enum_var)) => {
-                enum_var.exec_value_method(method_token, args, return_type)
-            }
-            TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(enum_var)) => {
-                enum_var.exec_value_method(method_token, args, return_type)
-            }
-            TypeValue::Builtin(BuiltinTypeValue::ConstU32EnumVariant(enum_var)) => {
-                enum_var.exec_value_method(method_token, args, return_type)
-            }
+            TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(
+                enum_var,
+            )) => enum_var.exec_value_method(method_token, args, return_type),
+            TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(
+                enum_var,
+            )) => enum_var.exec_value_method(method_token, args, return_type),
+            TypeValue::Builtin(BuiltinTypeValue::ConstU32EnumVariant(
+                enum_var,
+            )) => enum_var.exec_value_method(method_token, args, return_type),
             TypeValue::List(list) => {
                 list.exec_value_method(method_token, args, return_type)
             }
@@ -285,13 +288,32 @@ impl TypeValue {
         match self {
             TypeValue::Record(rec_type) => rec_type
                 .exec_consume_value_method(method_token, args, return_type),
-            TypeValue::Enum(c_enum) => c_enum.exec_consume_value_method(method_token, args, return_type),
-            TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(enum_var)) => enum_var
-                .exec_consume_value_method(method_token, args, return_type),
-            TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(enum_var)) => enum_var
-                .exec_consume_value_method(method_token, args, return_type),
-            TypeValue::Builtin(BuiltinTypeValue::ConstU32EnumVariant(enum_var)) => enum_var
-                .exec_consume_value_method(method_token, args, return_type),
+            TypeValue::Enum(c_enum) => c_enum.exec_consume_value_method(
+                method_token,
+                args,
+                return_type,
+            ),
+            TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(
+                enum_var,
+            )) => enum_var.exec_consume_value_method(
+                method_token,
+                args,
+                return_type,
+            ),
+            TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(
+                enum_var,
+            )) => enum_var.exec_consume_value_method(
+                method_token,
+                args,
+                return_type,
+            ),
+            TypeValue::Builtin(BuiltinTypeValue::ConstU32EnumVariant(
+                enum_var,
+            )) => enum_var.exec_consume_value_method(
+                method_token,
+                args,
+                return_type,
+            ),
             TypeValue::List(list) => list.exec_consume_value_method(
                 method_token,
                 args,
@@ -341,13 +363,11 @@ impl TypeValue {
             }
             TypeValue::Builtin(BuiltinTypeValue::Communities(
                 communities,
-            )) => {
-                communities.exec_consume_value_method(
-                    method_token,
-                    args,
-                    return_type,
-                )
-            }
+            )) => communities.exec_consume_value_method(
+                method_token,
+                args,
+                return_type,
+            ),
             TypeValue::Builtin(BuiltinTypeValue::Community(community)) => {
                 community.exec_consume_value_method(
                     method_token,
@@ -566,7 +586,8 @@ impl RotoType for TypeValue {
         method_name: &crate::ast::Identifier,
     ) -> Result<super::typedef::MethodProps, CompileError>
     where
-        Self: std::marker::Sized {
+        Self: std::marker::Sized,
+    {
         match ty {
             TypeDef::AcceptReject(_) => Err(CompileError::new("Unsupported TypeDef::AcceptReject in TypeValue::get_props_for_method()".to_string())),
             TypeDef::Asn => Asn::get_props_for_method(ty, method_name),
@@ -601,12 +622,10 @@ impl RotoType for TypeValue {
         }
     }
 
-    fn into_type(
-        self,
-        ty: &TypeDef,
-    ) -> Result<TypeValue, CompileError>
+    fn into_type(self, ty: &TypeDef) -> Result<TypeValue, CompileError>
     where
-        Self: std::marker::Sized {
+        Self: std::marker::Sized,
+    {
         match self {
             TypeValue::Builtin(builtin) => match builtin {
                 BuiltinTypeValue::Asn(v) => v.into_type(ty),
@@ -653,37 +672,97 @@ impl RotoType for TypeValue {
     ) -> Result<TypeValue, VmError> {
         match self {
             TypeValue::Builtin(builtin) => match builtin {
-                BuiltinTypeValue::Asn(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::AsPath(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::AtomicAggregator(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::BgpUpdateMessage(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::Boolean(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::Communities(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::Community(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::ConstU16EnumVariant(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::ConstU32EnumVariant(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::ConstU8EnumVariant(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::HexLiteral(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::Hop(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::IntegerLiteral(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::IpAddress(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::LocalPref(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::MultiExitDisc(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::NextHop(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::OriginType(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::Prefix(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::PrefixLength(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::Route(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::RouteStatus(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::StringLiteral(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::U32(v) => v.exec_value_method(method_token, args, res_type),
-                BuiltinTypeValue::U8(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::Asn(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::AsPath(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::AtomicAggregator(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::BgpUpdateMessage(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::Boolean(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::Communities(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::Community(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::ConstU16EnumVariant(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::ConstU32EnumVariant(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::ConstU8EnumVariant(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::HexLiteral(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::Hop(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::IntegerLiteral(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::IpAddress(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::LocalPref(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::MultiExitDisc(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::NextHop(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::OriginType(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::Prefix(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::PrefixLength(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::Route(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::RouteStatus(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::StringLiteral(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::U32(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::U8(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+            },
+            TypeValue::Enum(v) => {
+                v.exec_value_method(method_token, args, res_type)
             }
-            TypeValue::Enum(v) => v.exec_value_method(method_token, args, res_type),
-            TypeValue::List(v) => v.exec_value_method(method_token, args, res_type),
-            TypeValue::OutputStreamMessage(v) => v.exec_value_method(method_token, args, res_type),
-            TypeValue::Record(v) => v.exec_value_method(method_token, args, res_type),
-            TypeValue::SharedValue(v) => v.exec_value_method(method_token, args, res_type),
+            TypeValue::List(v) => {
+                v.exec_value_method(method_token, args, res_type)
+            }
+            TypeValue::OutputStreamMessage(v) => {
+                v.exec_value_method(method_token, args, res_type)
+            }
+            TypeValue::Record(v) => {
+                v.exec_value_method(method_token, args, res_type)
+            }
+            TypeValue::SharedValue(v) => {
+                v.exec_value_method(method_token, args, res_type)
+            }
             TypeValue::UnInit => Err(VmError::InvalidValueType),
             TypeValue::Unknown => Err(VmError::InvalidValueType),
         }
@@ -697,36 +776,94 @@ impl RotoType for TypeValue {
     ) -> Result<TypeValue, VmError> {
         match self {
             TypeValue::Builtin(builtin) => match builtin {
-                BuiltinTypeValue::Asn(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::AsPath(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::AtomicAggregator(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::BgpUpdateMessage(_) => Err(VmError::InvalidValueType),
-                BuiltinTypeValue::Boolean(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::Communities(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::Community(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::ConstU16EnumVariant(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::ConstU32EnumVariant(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::ConstU8EnumVariant(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::HexLiteral(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::Hop(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::IntegerLiteral(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::IpAddress(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::LocalPref(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::MultiExitDisc(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::NextHop(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::OriginType(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::Prefix(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::PrefixLength(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::Route(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::RouteStatus(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::StringLiteral(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::U32(v) => v.exec_consume_value_method(method_token, args, res_type),
-                BuiltinTypeValue::U8(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::Asn(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::AsPath(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::AtomicAggregator(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::BgpUpdateMessage(_) => {
+                    Err(VmError::InvalidValueType)
+                }
+                BuiltinTypeValue::Boolean(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::Communities(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::Community(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::ConstU16EnumVariant(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::ConstU32EnumVariant(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::ConstU8EnumVariant(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::HexLiteral(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::Hop(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::IntegerLiteral(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::IpAddress(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::LocalPref(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::MultiExitDisc(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::NextHop(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::OriginType(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::Prefix(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::PrefixLength(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::Route(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::RouteStatus(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::StringLiteral(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::U32(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::U8(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+            },
+            TypeValue::Enum(v) => {
+                v.exec_consume_value_method(method_token, args, res_type)
             }
-            TypeValue::Enum(v) => v.exec_consume_value_method(method_token, args, res_type),
-            TypeValue::List(v) => v.exec_consume_value_method(method_token, args, res_type),
-            TypeValue::OutputStreamMessage(_) => Err(VmError::InvalidValueType),
-            TypeValue::Record(v) => v.exec_consume_value_method(method_token, args, res_type),
+            TypeValue::List(v) => {
+                v.exec_consume_value_method(method_token, args, res_type)
+            }
+            TypeValue::OutputStreamMessage(_) => {
+                Err(VmError::InvalidValueType)
+            }
+            TypeValue::Record(v) => {
+                v.exec_consume_value_method(method_token, args, res_type)
+            }
             TypeValue::SharedValue(_) => Err(VmError::InvalidValueType),
             TypeValue::UnInit => Err(VmError::InvalidValueType),
             TypeValue::Unknown => Err(VmError::InvalidValueType),
@@ -763,9 +900,15 @@ impl Display for TypeValue {
     }
 }
 
+// This PartialEq is used at VM runtime to convert types when performing a
+// `Cmp` operation. The `Cmp` operation just performs a
+// `<TypeValue> == <TypeValue>` operation (in Rust), that comes here. Note
+// that at this point NO errors or panics are created for invalid type
+// comparisons.
 impl PartialEq for TypeValue {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
+            // Builtins to Builtins
             (TypeValue::Builtin(b1), TypeValue::Builtin(b2)) => {
                 if b1 == b2 {
                     return true;
@@ -778,21 +921,65 @@ impl PartialEq for TypeValue {
                     false
                 }
             }
-            (TypeValue::Builtin(BuiltinTypeValue::Communities(c)), TypeValue::List(l)) => {
+
+            // Builtins::Communities to Lists
+            (
+                TypeValue::Builtin(BuiltinTypeValue::Communities(c)),
+                TypeValue::List(l),
+            ) => {
                 if c == l {
                     return true;
                 }
-                if let Ok(TypeValue::List(l2)) = l.clone().into_type(&(self.into())).as_ref() {
+                if let Ok(TypeValue::List(l2)) =
+                    l.clone().into_type(&(self.into())).as_ref()
+                {
                     c == l2
                 } else {
                     false
                 }
-            },
-            (TypeValue::Builtin(BuiltinTypeValue::Communities(_)), _) => false,
-            (TypeValue::Builtin(_), TypeValue::Record(_)) => todo!(),
-            (TypeValue::Builtin(_), TypeValue::OutputStreamMessage(_)) => {
-                todo!()
             }
+            (TypeValue::Builtin(_), _) => false,
+
+            // Lists
+            (TypeValue::List(l1), TypeValue::List(l2)) => {
+                if l1 == l2 {
+                    return true;
+                } else {
+                    false
+                }
+            }
+            (
+                TypeValue::List(l),
+                TypeValue::Builtin(BuiltinTypeValue::Communities(c)),
+            ) => {
+                if c == l {
+                    return true;
+                }
+                if let Ok(TypeValue::List(l2)) =
+                    l.clone().into_type(&(self.into())).as_ref()
+                {
+                    c == l2
+                } else {
+                    false
+                }
+            }
+            (TypeValue::List(_), _) => false,
+
+            // Records
+            (TypeValue::Record(r1), TypeValue::Record(r2)) => r1 == r2,
+            (
+                TypeValue::Record(_),
+                TypeValue::Builtin(BuiltinTypeValue::Route(_r)),
+            ) => todo!(),
+            (TypeValue::Record(_), _) => false,
+
+            // SharedValues (coming out of data-sources)
+            (TypeValue::SharedValue(sv1), TypeValue::SharedValue(sv2)) => {
+                sv1.as_ref() == sv2.as_ref()
+            }
+            (TypeValue::SharedValue(sv1), tv) => sv1.as_ref() == tv,
+
+            // remaining TypeValues to SharedValues
             (tv, TypeValue::SharedValue(sv)) => {
                 if tv == sv.as_ref() {
                     return true;
@@ -804,97 +991,13 @@ impl PartialEq for TypeValue {
                 } else {
                     false
                 }
-            },
-            (TypeValue::Builtin(_), TypeValue::Unknown) => false,
-            (TypeValue::Builtin(_), TypeValue::UnInit) => false,
-            (TypeValue::List(_), _) => false,
-            (TypeValue::List(l1), TypeValue::List(l2)) => {
-                if l1 == l2 {
-                    return true;
-                } else {
-                    false
-                }
-            },
-            (TypeValue::List(_), TypeValue::Builtin(_)) => todo!(),
-            (TypeValue::List(_), TypeValue::Record(_)) => todo!(),
-            (TypeValue::List(_), TypeValue::OutputStreamMessage(_)) => {
-                todo!()
             }
-            // (TypeValue::List(_), TypeValue::SharedValue(_)) => todo!(),
-            (TypeValue::List(_), TypeValue::Unknown) => false,
-            (TypeValue::List(_), TypeValue::UnInit) => todo!(),
-            (_, TypeValue::List(_)) => false,
-            (TypeValue::Record(_), TypeValue::Builtin(_)) => todo!(),
-            (TypeValue::Record(_), TypeValue::List(_)) => todo!(),
-            (TypeValue::Record(rec1), TypeValue::Record(rec2)) => {
-                rec1 == rec2
-            }
-            (TypeValue::Record(_), TypeValue::OutputStreamMessage(_)) => {
-                todo!()
-            }
-            // (TypeValue::Record(_), TypeValue::SharedValue(_)) => todo!(),
-            (TypeValue::Record(_), TypeValue::Unknown) => false,
-            (TypeValue::Record(_), TypeValue::UnInit) => todo!(),
-            (TypeValue::OutputStreamMessage(_), TypeValue::Builtin(_)) => {
-                todo!()
-            }
-            (TypeValue::OutputStreamMessage(_), TypeValue::List(_)) => {
-                todo!()
-            }
-            (TypeValue::OutputStreamMessage(_), TypeValue::Record(_)) => {
-                todo!()
-            }
-            (
-                TypeValue::OutputStreamMessage(_),
-                TypeValue::OutputStreamMessage(_),
-            ) => todo!(),
-            // (
-            //     TypeValue::OutputStreamMessage(_),
-            //     TypeValue::SharedValue(_),
-            // ) => todo!(),
-            (TypeValue::OutputStreamMessage(_), TypeValue::Unknown) => {
-                todo!()
-            }
-            (TypeValue::OutputStreamMessage(_), TypeValue::UnInit) => todo!(),
-            (TypeValue::SharedValue(_), TypeValue::Builtin(_)) => todo!(),
-            (TypeValue::SharedValue(_), TypeValue::List(_)) => todo!(),
-            (TypeValue::SharedValue(_), TypeValue::Record(_)) => todo!(),
-            (
-                TypeValue::SharedValue(_),
-                TypeValue::OutputStreamMessage(_),
-            ) => todo!(),
-            // (TypeValue::SharedValue(_), TypeValue::SharedValue(_)) => todo!(),
-            (TypeValue::SharedValue(_), TypeValue::Unknown) => false,
-            (TypeValue::SharedValue(_), TypeValue::UnInit) => todo!(),
-            (TypeValue::Unknown, TypeValue::Builtin(_)) => false,
-            (TypeValue::Unknown, TypeValue::List(_)) => false,
-            (TypeValue::Unknown, TypeValue::Record(_)) => false,
-            (TypeValue::Unknown, TypeValue::OutputStreamMessage(_)) => false,
-            // (TypeValue::Unknown, TypeValue::SharedValue(_)) => false,
-            (TypeValue::Unknown, TypeValue::Unknown) => false,
-            (TypeValue::Unknown, TypeValue::UnInit) => todo!(),
-            (TypeValue::UnInit, TypeValue::Builtin(_)) => todo!(),
-            (TypeValue::UnInit, TypeValue::List(_)) => todo!(),
-            (TypeValue::UnInit, TypeValue::Record(_)) => todo!(),
-            (TypeValue::UnInit, TypeValue::OutputStreamMessage(_)) => todo!(),
-            // (TypeValue::UnInit, TypeValue::SharedValue(_)) => todo!(),
-            (TypeValue::UnInit, TypeValue::Unknown) => todo!(),
-            (TypeValue::UnInit, TypeValue::UnInit) => todo!(),
-            (TypeValue::Builtin(_), TypeValue::Enum(_)) => todo!(),
-            (TypeValue::List(_), TypeValue::Enum(_)) => todo!(),
-            (TypeValue::Record(_), TypeValue::Enum(_)) => todo!(),
-            (TypeValue::Enum(_), TypeValue::Builtin(_)) => todo!(),
-            (TypeValue::Enum(_), TypeValue::List(_)) => todo!(),
-            (TypeValue::Enum(_), TypeValue::Record(_)) => todo!(),
-            (TypeValue::Enum(_), TypeValue::Enum(_)) => todo!(),
-            (TypeValue::Enum(_), TypeValue::OutputStreamMessage(_)) => todo!(),
-            // (TypeValue::Enum(_), TypeValue::SharedValue(_)) => todo!(),
-            (TypeValue::Enum(_), TypeValue::Unknown) => todo!(),
-            (TypeValue::Enum(_), TypeValue::UnInit) => todo!(),
-            (TypeValue::OutputStreamMessage(_), TypeValue::Enum(_)) => todo!(),
-            (TypeValue::SharedValue(_), TypeValue::Enum(_)) => todo!(),
-            (TypeValue::Unknown, TypeValue::Enum(_)) => todo!(),
-            (TypeValue::UnInit, TypeValue::Enum(_)) => todo!(),
+
+            // Inconvertible & Incomparable types
+            (TypeValue::Unknown, _) => false,
+            (TypeValue::UnInit, _) => false,
+            (TypeValue::OutputStreamMessage(_), _) => false,
+            (TypeValue::Enum(_), _) => false,
         }
     }
 }
@@ -902,18 +1005,28 @@ impl PartialEq for TypeValue {
 impl std::hash::Hash for TypeValue {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
-            TypeValue::Builtin(bv) => { bv.hash(state); },
-            TypeValue::List(lv) => { lv.hash(state); },
-            TypeValue::Record(rec) => { rec.hash(state); },
-            TypeValue::Enum(e) => { e.hash(state); },
+            TypeValue::Builtin(bv) => {
+                bv.hash(state);
+            }
+            TypeValue::List(lv) => {
+                lv.hash(state);
+            }
+            TypeValue::Record(rec) => {
+                rec.hash(state);
+            }
+            TypeValue::Enum(e) => {
+                e.hash(state);
+            }
             // Shouldn't appear in the payload out (tx)
-            TypeValue::OutputStreamMessage(_msg) => {},
-            TypeValue::SharedValue(sv) => { sv.hash(state); },
+            TypeValue::OutputStreamMessage(_msg) => {}
+            TypeValue::SharedValue(sv) => {
+                sv.hash(state);
+            }
             // Fields that can result in an unknown value Shouldn't be used
-            // in a hash calculation 
-            TypeValue::Unknown => {},
+            // in a hash calculation
+            TypeValue::Unknown => {}
             // Shouldn't appear here
-            TypeValue::UnInit => {},
+            TypeValue::UnInit => {}
         }
     }
 }
