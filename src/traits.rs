@@ -133,7 +133,7 @@ where
         res_type: TypeDef,
     ) -> Result<TypeValue, VmError>;
 
-    fn exec_type_method<'a>(
+    fn exec_type_method(
         method_token: usize,
         args: &[StackValue],
         res_type: TypeDef,

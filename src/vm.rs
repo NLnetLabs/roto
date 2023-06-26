@@ -1140,7 +1140,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                     method_token.into(),
                                     stack_args,
                                     return_type.into(),
-                                    target_field_index.clone(),
+                                    // target_field_index.clone(),
                                 )?;
                                 rec.set_value_on_field_index(
                                     target_field_index.clone(),
@@ -1159,7 +1159,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                     method_token.into(),
                                     stack_args,
                                     return_type.into(),
-                                    target_field_index.clone(),
+                                    // target_field_index.clone(),
                                 )?;
                                 list.set_field_for_index(
                                     target_field_index,
