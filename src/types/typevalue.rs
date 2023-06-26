@@ -163,7 +163,7 @@ impl TypeValue {
         method_token: usize,
         args: &'a [StackValue],
         return_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + '_>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         match self {
             TypeValue::Record(rec_type) => {
                 rec_type.exec_value_method(method_token, args, return_type)
@@ -268,7 +268,7 @@ impl TypeValue {
             TypeValue::SharedValue(sv) => {
                 sv.exec_value_method(method_token, args, return_type)
             }
-            TypeValue::Unknown => Ok(Box::new(|| TypeValue::Unknown)),
+            TypeValue::Unknown => Ok(TypeValue::Unknown),
             TypeValue::UnInit => {
                 panic!("Unitialized memory cannot be read. That's fatal.");
             }
@@ -281,7 +281,7 @@ impl TypeValue {
         args: Vec<TypeValue>,
         return_type: TypeDef,
         _field_index: SmallVec<[usize; 8]>,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         match self {
             TypeValue::Record(rec_type) => rec_type
                 .exec_consume_value_method(method_token, args, return_type),
@@ -410,7 +410,7 @@ impl TypeValue {
             TypeValue::SharedValue(_sv) => {
                 panic!("Shared values cannot be consumed. They're read-only.")
             }
-            TypeValue::Unknown => Ok(Box::new(|| TypeValue::Unknown)),
+            TypeValue::Unknown => Ok(TypeValue::Unknown),
             TypeValue::UnInit => {
                 panic!("Unitialized memory cannot be read. That's fatal.");
             }
@@ -650,7 +650,7 @@ impl RotoType for TypeValue {
         method_token: usize,
         args: &'a [StackValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         match self {
             TypeValue::Builtin(builtin) => match builtin {
                 BuiltinTypeValue::Asn(v) => v.exec_value_method(method_token, args, res_type),
@@ -694,7 +694,7 @@ impl RotoType for TypeValue {
         method_token: usize,
         args: Vec<TypeValue>,
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         match self {
             TypeValue::Builtin(builtin) => match builtin {
                 BuiltinTypeValue::Asn(v) => v.exec_consume_value_method(method_token, args, res_type),
@@ -737,7 +737,7 @@ impl RotoType for TypeValue {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 }

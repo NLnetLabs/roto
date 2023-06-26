@@ -3,7 +3,7 @@ use serde::Serialize;
 use crate::{
     ast::ShortString,
     compile::CompileError,
-    traits::{RotoType, TokenConvert},
+    traits::RotoType,
     types::{
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
@@ -42,7 +42,7 @@ impl RotoType for OutputStreamMessage {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -51,7 +51,7 @@ impl RotoType for OutputStreamMessage {
         _method_token: usize,
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -59,7 +59,7 @@ impl RotoType for OutputStreamMessage {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 }
@@ -75,7 +75,7 @@ pub(crate) enum OutputStreamToken {
     Send,
 }
 
-impl TokenConvert for OutputStreamMessage {}
+
 
 impl From<usize> for OutputStreamToken {
     fn from(val: usize) -> Self {

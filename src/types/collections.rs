@@ -6,7 +6,7 @@ use crate::ast::{
     TypedRecordValueExpr, ValueExpr,
 };
 use crate::compile::CompileError;
-use crate::traits::{RotoType, TokenConvert};
+use crate::traits::RotoType;
 use crate::vm::{StackValue, VmError};
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
@@ -424,16 +424,15 @@ impl RotoType for List {
         method: usize,
         args: &'a [StackValue],
         _res_type: TypeDef,
-    ) -> Result<std::boxed::Box<(dyn FnOnce() -> TypeValue + '_)>, VmError>
+    ) -> Result<TypeValue, VmError>
     {
         match method.into() {
-            ListToken::Len => Ok(Box::new(move || {
-                TypeValue::Builtin(BuiltinTypeValue::U32(U32(
+            ListToken::Len => Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(
                     self.0.len() as u32
                 )))
-            })),
+            ),
             ListToken::Contains => {
-                Ok(Box::new(move || self.iter().any(|e| e == args[0]).into()))
+                Ok(self.iter().any(|e| e == args[0]).into())
             }
             _ => {
                 Err(VmError::InvalidMethodCall)
@@ -446,18 +445,18 @@ impl RotoType for List {
         method: usize,
         mut args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         match method.into() {
-            ListToken::Get => Ok(Box::new(move || {
+            ListToken::Get => Ok(
                 match self.0.into_iter().find(|e| *e == args[0]) {
                     Some(e) => e.into(),
                     None => TypeValue::Unknown,
                 }
-            })),
-            ListToken::Push => Ok(Box::new(move || {
+            ),
+            ListToken::Push => {
                 self.0.push((args.remove(0)).into());
-                TypeValue::List(self)
-            })),
+                Ok(TypeValue::List(self))
+            }
             ListToken::Pop => todo!(),
             ListToken::Remove => todo!(),
             ListToken::Insert => todo!(),
@@ -472,7 +471,7 @@ impl RotoType for List {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 }
@@ -508,7 +507,6 @@ pub enum ListToken {
     Clear,
 }
 
-impl TokenConvert for ListToken {}
 
 impl From<usize> for ListToken {
     fn from(i: usize) -> Self {
@@ -723,7 +721,7 @@ impl RotoType for Record {
         _method: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + '_>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -732,7 +730,7 @@ impl RotoType for Record {
         _method: usize,
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -740,7 +738,7 @@ impl RotoType for Record {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 }
@@ -786,7 +784,6 @@ pub enum RecordToken {
     Set = 3,
 }
 
-impl TokenConvert for RecordToken {}
 
 impl From<usize> for RecordToken {
     fn from(i: usize) -> Self {

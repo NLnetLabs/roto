@@ -124,29 +124,20 @@ where
         method_token: usize,
         args: &'a [StackValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError>;
+    ) -> Result<TypeValue, VmError>;
 
     fn exec_consume_value_method(
         self,
         method_token: usize,
         args: Vec<TypeValue>,
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError>;
+    ) -> Result<TypeValue, VmError>;
 
     fn exec_type_method<'a>(
         method_token: usize,
         args: &[StackValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError>;
-}
-
-pub(crate) trait TokenConvert
-where
-    Self: std::fmt::Debug + Sized,
-{
-    fn to_u8(&self) -> u8 {
-        std::mem::size_of_val(self) as u8
-    }
+    ) -> Result<TypeValue, VmError>;
 }
 
 pub trait RotoRib {
@@ -155,7 +146,7 @@ pub trait RotoRib {
         method_token: usize,
         args: &'a [StackValue],
         res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError>;
+    ) -> Result<TypeValue, VmError>;
 
     fn exec_ref_value_method(
         &self,

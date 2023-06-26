@@ -105,7 +105,7 @@ use smallvec::SmallVec;
 use crate::{
     ast::ShortString,
     compile::CompileError,
-    traits::{RotoRib, Token, TokenConvert},
+    traits::{RotoRib, Token},
     vm::{StackRefPos, StackValue, VmError},
 };
 
@@ -156,7 +156,7 @@ impl RibType {
         _method: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         unimplemented!()
     }
 }
@@ -169,7 +169,7 @@ pub enum RibToken {
     Contains,
 }
 
-impl TokenConvert for RibToken {}
+
 
 impl From<usize> for RibToken {
     fn from(token: usize) -> Self {
@@ -221,7 +221,7 @@ impl<M: Meta> RotoRib for Rib<M> {
         _method_token: usize,
         _args: &'a [StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -418,7 +418,7 @@ impl Table {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         unimplemented!()
     }
 }
@@ -429,7 +429,6 @@ pub enum TableToken {
     Contains,
 }
 
-impl TokenConvert for TableToken {}
 
 impl From<usize> for TableToken {
     fn from(token: usize) -> Self {

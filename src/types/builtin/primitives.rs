@@ -6,7 +6,7 @@ use serde::Serialize;
 
 use crate::attr_change_set::VectorValue;
 use crate::compile::CompileError;
-use crate::traits::{RotoType, TokenConvert};
+use crate::traits::RotoType;
 use crate::types::collections::{ElementTypeValue, List};
 use crate::types::typedef::MethodProps;
 use crate::vm::{StackValue, VmError};
@@ -57,28 +57,38 @@ impl RotoType for U32 {
 
     fn exec_value_method<'a>(
         &'a self,
-        _method_token: usize,
-        _args: &[StackValue],
+        method_token: usize,
+        args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
-        todo!()
+    ) -> Result<TypeValue, VmError> {
+        Err(VmError::InvalidMethodCall)
     }
 
     fn exec_consume_value_method(
         self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
+        method_token: usize,
+        mut args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
-        todo!()
+    ) -> Result<TypeValue, VmError> {
+        match method_token.into() {
+            U32Token::Set => {
+                if let Ok(TypeValue::Builtin(BuiltinTypeValue::U32(int_u32))) =
+                    args.remove(0).into_type(&TypeDef::U32)
+                {
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::U32(int_u32)))
+                } else {
+                    Err(VmError::InvalidValueType)
+                }
+            }
+        }
     }
 
-    fn exec_type_method<'a>(
+    fn exec_type_method<'a>(    
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
-        todo!()
+    ) -> Result<TypeValue, VmError> {
+        Err(VmError::InvalidMethodCall)
     }
 
     fn into_type(
@@ -144,7 +154,7 @@ pub enum U32Token {
     Set,
 }
 
-impl TokenConvert for U32Token {}
+
 
 impl From<usize> for U32Token {
     fn from(val: usize) -> Self {
@@ -202,25 +212,35 @@ impl RotoType for U8 {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
-        todo!()
+    ) -> Result<TypeValue, VmError> {
+        Err(VmError::InvalidMethodCall)
     }
 
     fn exec_consume_value_method(
         self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
+        method_token: usize,
+        mut args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
-        todo!()
+    ) -> Result<TypeValue, VmError> {
+        match method_token.into() {
+            U32Token::Set => {
+                if let Ok(TypeValue::Builtin(BuiltinTypeValue::U8(int_u8))) =
+                    args.remove(0).into_type(&TypeDef::U8)
+                {
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::U8(int_u8)))
+                } else {
+                    Err(VmError::InvalidValueType)
+                }
+            }
+        }
     }
 
     fn exec_type_method<'a>(
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
-        todo!()
+    ) -> Result<TypeValue, VmError> {
+        Err(VmError::InvalidMethodCall)
     }
 
     fn into_type(
@@ -289,8 +309,6 @@ pub enum U8Token {
     Set,
 }
 
-impl TokenConvert for U8Token {}
-
 impl From<usize> for U8Token {
     fn from(val: usize) -> Self {
         match val {
@@ -350,25 +368,35 @@ impl RotoType for Boolean {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
-        todo!()
+    ) -> Result<TypeValue, VmError> {
+        Err(VmError::InvalidMethodCall)
     }
 
     fn exec_consume_value_method(
         self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
+        method_token: usize,
+        mut args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
-        todo!()
+    ) -> Result<TypeValue, VmError> {
+        match method_token.into() {
+            BooleanToken::Set => {
+                if let Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(b))) =
+                    args.remove(0).into_type(&TypeDef::Boolean)
+                {
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(b)))
+                } else {
+                    Err(VmError::InvalidValueType)
+                }
+            }
+        }
     }
 
     fn exec_type_method<'a>(
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
-        todo!()
+    ) -> Result<TypeValue, VmError> {
+        Err(VmError::InvalidMethodCall)
     }
 
     fn into_type(
@@ -416,8 +444,6 @@ impl Display for Boolean {
 pub enum BooleanToken {
     Set,
 }
-
-impl TokenConvert for BooleanToken {}
 
 impl From<usize> for BooleanToken {
     fn from(val: usize) -> Self {
@@ -473,24 +499,36 @@ impl RotoType for StringLiteral {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
     fn exec_consume_value_method(
         self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
+        method_token: usize,
+        mut args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
-        todo!()
+    ) -> Result<TypeValue, VmError> {
+        match method_token.into() {
+            StringLiteralToken::Set => {
+                if let Ok(TypeValue::Builtin(BuiltinTypeValue::StringLiteral(str))) =
+                    args.remove(0).into_type(&TypeDef::StringLiteral)
+                {
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::StringLiteral(str)))
+                } else {
+                    Err(VmError::InvalidValueType)
+                }
+            }
+            StringLiteralToken::Cmp => Err(VmError::InvalidMethodCall),
+            StringLiteralToken::Format => Err(VmError::InvalidMethodCall),
+        }
     }
 
     fn exec_type_method<'a>(
         method_token: usize,
         args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         match method_token.into() {
             StringLiteralToken::Format => {
                 trace!("string arguments {:?}", args);
@@ -512,13 +550,14 @@ impl RotoType for StringLiteral {
                     if let Some(s) = sub_str.next() { s } else { "" },
                 ]);
 
-                Ok(Box::new(|| {
+                Ok(
                     TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
                         StringLiteral(new_string),
                     ))
-                }))
+                )
             }
             StringLiteralToken::Cmp => unimplemented!(),
+            StringLiteralToken::Set => Err(VmError::InvalidMethodCall),
         }
     }
 
@@ -553,17 +592,17 @@ impl Display for StringLiteral {
 
 #[derive(Debug)]
 pub enum StringLiteralToken {
-    Cmp,
-    Format,
+    Cmp = 0,
+    Format = 1,
+    Set = 2
 }
-
-impl TokenConvert for StringLiteralToken {}
 
 impl From<usize> for StringLiteralToken {
     fn from(val: usize) -> Self {
         match val {
             0 => StringLiteralToken::Cmp,
             1 => StringLiteralToken::Format,
+            2 => StringLiteralToken::Set,
             _ => panic!("Unknown token value: {}", val),
         }
     }
@@ -577,7 +616,7 @@ impl From<StringLiteralToken> for usize {
 
 //------------ IntegerLiteral type ------------------------------------------
 
-#[derive(Debug, Eq, Ord, PartialOrd, Copy, Clone, Serialize)]
+#[derive(Debug, Eq, Ord, PartialEq, PartialOrd, Copy, Clone, Serialize)]
 pub struct IntegerLiteral(pub(crate) i64);
 impl IntegerLiteral {
     pub fn new(val: i64) -> Self {
@@ -656,11 +695,15 @@ impl RotoType for IntegerLiteral {
 
     fn exec_value_method<'a>(
         &'a self,
-        _method_token: usize,
-        _args: &[StackValue],
+        method_token: usize,
+        args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
-        todo!()
+    ) -> Result<TypeValue, VmError> {
+        match method_token.into() {
+            IntegerLiteralToken::Cmp => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(args[0] == args[1]))))
+            }
+        }
     }
 
     fn exec_consume_value_method(
@@ -668,32 +711,35 @@ impl RotoType for IntegerLiteral {
         _method_token: usize,
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
-        todo!()
+    ) -> Result<TypeValue, VmError> {
+        // There is no 'set' method for an IntegerLiteral, this type should
+        // not be assigned to a Record or List (they should use the concrete
+        // type, e.g. U8).
+        Err(VmError::InvalidMethodCall)
     }
 
     fn exec_type_method<'a>(
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
-        todo!()
+    ) -> Result<TypeValue, VmError> {
+        Err(VmError::InvalidMethodCall)
     }
 }
 
-impl PartialEq for IntegerLiteral {
-    fn eq(&self, other: &Self) -> bool {
-        trace!("EQ IntegerLiteral");
-        if let Ok(TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
-            IntegerLiteral(o),
-        ))) = other.into_type(&TypeDef::IntegerLiteral)
-        {
-            o == self.0
-        } else {
-            false
-        }
-    }
-}
+// impl PartialEq for IntegerLiteral {
+//     fn eq(&self, other: &Self) -> bool {
+//         trace!("EQ IntegerLiteral");
+//         if let Ok(TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
+//             IntegerLiteral(o),
+//         ))) = other.into_type(&TypeDef::IntegerLiteral)
+//         {
+//             o == self.0
+//         } else {
+//             false
+//         }
+//     }
+// }
 
 impl std::hash::Hash for IntegerLiteral {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -717,8 +763,6 @@ impl Display for IntegerLiteral {
 pub(crate) enum IntegerLiteralToken {
     Cmp,
 }
-
-impl TokenConvert for IntegerLiteralToken {}
 
 impl From<usize> for IntegerLiteralToken {
     fn from(val: usize) -> Self {
@@ -810,7 +854,7 @@ impl RotoType for HexLiteral {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -819,7 +863,7 @@ impl RotoType for HexLiteral {
         _method_token: usize,
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -827,7 +871,7 @@ impl RotoType for HexLiteral {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 }
@@ -848,8 +892,6 @@ impl Display for HexLiteral {
 pub(crate) enum HexLiteralToken {
     Cmp,
 }
-
-impl TokenConvert for HexLiteralToken {}
 
 impl From<usize> for HexLiteralToken {
     fn from(val: usize) -> Self {
@@ -950,26 +992,26 @@ impl RotoType for Prefix {
         method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         match method_token.into() {
             PrefixToken::Address => {
                 let prefix = self.0;
-                Ok(Box::new(move || {
+                Ok(
                     TypeValue::Builtin(BuiltinTypeValue::IpAddress(
                         IpAddress(prefix.addr()),
                     ))
-                }))
+                )
             }
             PrefixToken::Len => {
                 let Prefix(pfx) = self;
-                Ok(Box::new(move || {
+                Ok(
                     TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
                         PrefixLength(pfx.len()),
                     ))
-                }))
+                )
             }
             PrefixToken::From => unimplemented!(),
-            PrefixToken::Exists => Ok(Box::new(move || true.into())),
+            PrefixToken::Exists => Ok(true.into()),
             PrefixToken::Matches => todo!(),
         }
     }
@@ -979,7 +1021,7 @@ impl RotoType for Prefix {
         _method_token: usize,
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -987,7 +1029,7 @@ impl RotoType for Prefix {
         method_token: usize,
         args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         match method_token.into() {
             PrefixToken::From => {
                 if let TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) =
@@ -998,10 +1040,10 @@ impl RotoType for Prefix {
                         .try_into()
                         .map_err(|_e| VmError::InvalidConversion)?;
                     let ip = ip.0;
-                    Ok(Box::new(move || {
+                    Ok(
                         routecore::addr::Prefix::new(ip, len.into())
                             .map_or_else(|_| TypeValue::Unknown, |p| p.into())
-                    }))
+                    )
                 } else {
                     Err(VmError::AnonymousArgumentNotFound)
                 }
@@ -1047,8 +1089,6 @@ pub(crate) enum PrefixToken {
     Len = 3,
     Matches = 4,
 }
-
-impl TokenConvert for PrefixToken {}
 
 impl From<usize> for PrefixToken {
     fn from(val: usize) -> Self {
@@ -1123,16 +1163,16 @@ impl RotoType for PrefixLength {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
     fn exec_consume_value_method(
         self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
-        _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+        method_token: usize,
+        args: Vec<TypeValue>,
+        type_def: TypeDef,
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -1140,7 +1180,7 @@ impl RotoType for PrefixLength {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 }
@@ -1161,8 +1201,6 @@ impl Display for PrefixLength {
 pub(crate) enum PrefixLengthToken {
     From,
 }
-
-impl TokenConvert for PrefixLengthToken {}
 
 impl From<usize> for PrefixLengthToken {
     fn from(val: usize) -> Self {
@@ -1298,7 +1336,7 @@ impl RotoType for Community {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -1307,7 +1345,7 @@ impl RotoType for Community {
         _method_token: usize,
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -1315,7 +1353,7 @@ impl RotoType for Community {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 }
@@ -1374,8 +1412,6 @@ pub enum CommunityToken {
     Value,
     Exists,
 }
-
-impl TokenConvert for CommunityToken {}
 
 impl From<usize> for CommunityToken {
     fn from(val: usize) -> Self {
@@ -1466,7 +1502,7 @@ impl RotoType for IpAddress {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!();
     }
 
@@ -1475,7 +1511,7 @@ impl RotoType for IpAddress {
         _method_token: usize,
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -1483,7 +1519,7 @@ impl RotoType for IpAddress {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 }
@@ -1506,8 +1542,6 @@ pub(crate) enum IpAddressToken {
     Matches,
 }
 
-impl TokenConvert for IpAddressToken {}
-
 impl From<usize> for IpAddressToken {
     fn from(val: usize) -> Self {
         match val {
@@ -1526,7 +1560,7 @@ impl From<IpAddressToken> for usize {
 
 // ----------- Asn type -----------------------------------------------------
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Serialize)]
+#[derive(Debug, Eq, Copy, Clone, Hash, Serialize)]
 pub struct Asn(pub(crate) routecore::asn::Asn);
 
 impl Asn {
@@ -1586,13 +1620,13 @@ impl RotoType for Asn {
         method_token: usize,
         args: &'a [StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         match method_token.into() {
             AsnToken::Set => {
                 if let TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) =
                     args[0].as_ref()
                 {
-                    Ok(Box::new(move || TypeValue::from(Asn::new(asn.0))))
+                    Ok(TypeValue::from(Asn::new(asn.0)))
                 } else {
                     Err(VmError::AnonymousArgumentNotFound)
                 }
@@ -1605,7 +1639,7 @@ impl RotoType for Asn {
         _method_token: usize,
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -1613,19 +1647,25 @@ impl RotoType for Asn {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 }
 
-// impl PartialEq for Asn {
-//     fn eq(&self, other: &Self) -> bool {
-//         trace!("EQ Asn");
-//         if let Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(o)))) = other.into_type(&TypeDef::Asn) {
-//             o == self.0
-//         } else {
-//             false
-//         }
+impl PartialEq for Asn {
+    fn eq(&self, other: &Self) -> bool {
+        trace!("EQ Asn");
+        if let Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(o)))) = other.into_type(&TypeDef::Asn) {
+            o == self.0
+        } else {
+            false
+        }
+    }
+}
+
+// impl std::hash::Hash for Asn {
+//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+//         self.value.0.hash(state);
 //     }
 // }
 
@@ -1651,8 +1691,6 @@ impl Display for Asn {
 pub enum AsnToken {
     Set,
 }
-
-impl TokenConvert for AsnToken {}
 
 impl From<usize> for AsnToken {
     fn from(val: usize) -> Self {
@@ -1761,34 +1799,34 @@ impl RotoType for AsPath {
         method: usize,
         args: &'a [StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<(dyn FnOnce() -> TypeValue + 'a)>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         match method.into() {
             AsPathToken::Origin => match self.0.origin().cloned() {
-                Some(origin_asn) => Ok(Box::new(move || {
+                Some(origin_asn) => Ok(
                     TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(origin_asn
                         .try_into_asn()
                         .unwrap())))
-                })),
+                ),
                 None => Err(VmError::InvalidPayload),
             },
-            AsPathToken::Contains => Ok(Box::new(move || {
+            AsPathToken::Contains => {
                 if let TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(
                     search_asn,
                 ))) = args[0].as_ref()
                 {
                     let contains =
                         self.contains(&Hop(RoutecoreHop::from(*search_asn)));
-                    TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
                         contains,
-                    )))
+                    ))))
                 } else {
-                    TypeValue::Unknown
+                    Ok(TypeValue::Unknown)
                 }
-            })),
-            AsPathToken::Len => Ok(Box::new(|| {
+            },
+            AsPathToken::Len => {
                 let len = self.0.hop_count();
-                TypeValue::Builtin(BuiltinTypeValue::U8(U8(len as u8)))
-            })),
+                Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(len as u8))))
+            }
         }
     }
 
@@ -1797,7 +1835,7 @@ impl RotoType for AsPath {
         _method_token: usize,
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -1805,7 +1843,7 @@ impl RotoType for AsPath {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 }
@@ -1913,8 +1951,6 @@ pub(crate) enum AsPathToken {
     Len = 3,
 }
 
-impl TokenConvert for AsPathToken {}
-
 impl From<usize> for AsPathToken {
     fn from(value: usize) -> Self {
         match value {
@@ -1972,7 +2008,7 @@ impl RotoType for Hop {
         _method_token: usize,
         _args: &'a [StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -1981,7 +2017,7 @@ impl RotoType for Hop {
         _method_token: usize,
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -1989,7 +2025,7 @@ impl RotoType for Hop {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 }
@@ -2043,7 +2079,7 @@ impl RotoType for OriginType {
         _method_token: usize,
         _args: &'a [StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -2052,7 +2088,7 @@ impl RotoType for OriginType {
         _method_token: usize,
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -2060,7 +2096,7 @@ impl RotoType for OriginType {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 }
@@ -2120,7 +2156,7 @@ impl RotoType for NextHop {
         _method_token: usize,
         _args: &'a [StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -2129,7 +2165,7 @@ impl RotoType for NextHop {
         _method_token: usize,
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -2137,7 +2173,7 @@ impl RotoType for NextHop {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 }
@@ -2197,7 +2233,7 @@ impl RotoType for MultiExitDisc {
         _method_token: usize,
         _args: &'a [StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -2206,7 +2242,7 @@ impl RotoType for MultiExitDisc {
         _method_token: usize,
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -2214,7 +2250,7 @@ impl RotoType for MultiExitDisc {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 }
@@ -2245,7 +2281,7 @@ impl Display for MultiExitDisc {
     }
 }
 
-//------------ Local Preference type ----------------------------------------
+//------------ Unknown type -------------------------------------------------
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Unknown;
@@ -2294,7 +2330,7 @@ impl RotoType for Unknown {
         _method_token: usize,
         _args: &'a [StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -2303,7 +2339,7 @@ impl RotoType for Unknown {
         _method_token: usize,
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -2311,7 +2347,7 @@ impl RotoType for Unknown {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 }
@@ -2320,8 +2356,6 @@ impl RotoType for Unknown {
 pub(crate) enum UnknownToken {
     IsUnknown,
 }
-
-impl TokenConvert for UnknownToken {}
 
 impl From<usize> for UnknownToken {
     fn from(val: usize) -> Self {
@@ -2339,6 +2373,10 @@ impl From<UnknownToken> for usize {
         }
     }
 }
+
+
+//------------ Local Preference type ----------------------------------------
+
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize)]
 pub struct LocalPref(pub(crate) routecore::bgp::types::LocalPref);
@@ -2378,11 +2416,16 @@ impl RotoType for LocalPref {
 
     fn exec_value_method<'a>(
         &'a self,
-        _method_token: usize,
+        method_token: usize,
         _args: &'a [StackValue],
-        _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
-        todo!()
+        res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        match method_token.into() {
+            LocalPrefToken::Set => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::LocalPref(*self)))
+            }
+            _ => Err(VmError::InvalidMethodCall),
+        }
     }
 
     fn exec_consume_value_method(
@@ -2390,7 +2433,7 @@ impl RotoType for LocalPref {
         _method_token: usize,
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -2398,7 +2441,7 @@ impl RotoType for LocalPref {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 }
@@ -2432,8 +2475,6 @@ pub enum LocalPrefToken {
     Set,
 }
 
-impl TokenConvert for LocalPrefToken {}
-
 impl From<usize> for LocalPrefToken {
     fn from(val: usize) -> Self {
         match val {
@@ -2461,12 +2502,24 @@ pub struct AtomicAggregator(
 impl RotoType for AtomicAggregator {
     fn get_props_for_method(
         _ty: TypeDef,
-        _method_name: &crate::ast::Identifier,
+        method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
     {
-        todo!()
+        match method_name.ident.as_str() {
+            "set" => Ok(MethodProps::new(
+                TypeDef::Unknown,
+                AtomicAggregatorToken::Set.into(),
+                vec![TypeDef::Asn, TypeDef::IpAddress],
+            )
+            .consume_value()),
+            _ => Err(format!(
+                "Unknown method: '{}' for type Atomic Aggregator",
+                method_name.ident
+            )
+            .into()),
+        }
     }
 
     fn into_type(
@@ -2484,7 +2537,7 @@ impl RotoType for AtomicAggregator {
         _method_token: usize,
         _args: &'a [StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -2493,7 +2546,7 @@ impl RotoType for AtomicAggregator {
         _method_token: usize,
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -2501,7 +2554,7 @@ impl RotoType for AtomicAggregator {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 }
@@ -2537,6 +2590,30 @@ impl std::fmt::Display for AtomicAggregator {
         write!(f, "{}", self.0)
     }
 }
+
+#[derive(Debug)]
+pub enum AtomicAggregatorToken {
+    Set,
+}
+
+impl From<usize> for AtomicAggregatorToken {
+    fn from(val: usize) -> Self {
+        match val {
+            0 => AtomicAggregatorToken::Set,
+            _ => panic!("Unknown token value: {}", val),
+        }
+    }
+}
+
+impl From<AtomicAggregatorToken> for usize {
+    fn from(val: AtomicAggregatorToken) -> Self {
+        match val {
+            AtomicAggregatorToken::Set => 0,
+        }
+    }
+}
+
+//------------ RouteStatus type ---------------------------------------------
 
 // Status is piece of metadata that writes some (hopefully) relevant state of
 // per-peer BGP session into every route. The goal is to be able to enable

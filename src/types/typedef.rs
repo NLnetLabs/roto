@@ -399,51 +399,51 @@ impl TypeDef {
         match self {
             TypeDef::Record(_rec_type) => {
                 Record::exec_type_method(method_token, args, return_type)
-                    .unwrap()()
+                    .unwrap()
             }
             TypeDef::List(_list) => {
                 List::exec_type_method(method_token, args, return_type)
-                    .unwrap()()
+                    .unwrap()
             }
             TypeDef::AsPath => {
                 AsPath::exec_type_method(method_token, args, return_type)
-                    .unwrap()()
+                    .unwrap()
             }
             TypeDef::Prefix => {
                 Prefix::exec_type_method(method_token, args, return_type)
-                    .unwrap()()
+                    .unwrap()
             }
             TypeDef::U32 => {
                 U32::exec_type_method(method_token, args, return_type)
-                    .unwrap()()
+                    .unwrap()
             }
             TypeDef::StringLiteral => StringLiteral::exec_type_method(
                 method_token,
                 args,
                 return_type,
             )
-            .unwrap()(),
+            .unwrap(),
             TypeDef::Asn => {
                 Asn::exec_type_method(method_token, args, return_type)
-                    .unwrap()()
+                    .unwrap()
             }
             TypeDef::IpAddress => {
                 IpAddress::exec_type_method(method_token, args, return_type)
-                    .unwrap()()
+                    .unwrap()
             }
             TypeDef::Route => RawRouteWithDeltas::exec_type_method(
                 method_token,
                 args,
                 return_type,
             )
-            .unwrap()(),
+            .unwrap(),
             TypeDef::Rib(_rib) => {
                 RibType::exec_type_method(method_token, args, return_type)
-                    .unwrap()()
+                    .unwrap()
             }
             TypeDef::Table(_rec) => {
                 Table::exec_type_method(method_token, args, return_type)
-                    .unwrap()()
+                    .unwrap()
             }
             _ => panic!("No corresponding Type method found for {:?}.", self),
         }

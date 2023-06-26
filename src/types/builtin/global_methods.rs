@@ -2,7 +2,7 @@
 
 use crate::{
     compile::CompileError,
-    traits::{RotoType, TokenConvert},
+    traits::RotoType,
     types::{
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
@@ -49,7 +49,7 @@ impl RotoType for GlobalMethods {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -58,7 +58,7 @@ impl RotoType for GlobalMethods {
         _method_token: usize,
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -66,7 +66,7 @@ impl RotoType for GlobalMethods {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 }
@@ -81,8 +81,6 @@ impl std::fmt::Display for GlobalMethods {
 pub(crate) enum GlobalMethodsToken {
     Send,
 }
-
-impl TokenConvert for GlobalMethods {}
 
 impl From<usize> for GlobalMethodsToken {
     fn from(val: usize) -> Self {

@@ -1040,7 +1040,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                             method_token.into(),
                             &stack_args[1..],
                             return_type.into(),
-                        )?();
+                        )?;
 
                         mem.set_mem_pos(mem_pos, v);
                     }
@@ -1141,8 +1141,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                     stack_args,
                                     return_type.into(),
                                     target_field_index.clone(),
-                                )?(
-                                );
+                                )?;
                                 rec.set_value_on_field_index(
                                     target_field_index.clone(),
                                     call_value,
@@ -1161,8 +1160,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                     stack_args,
                                     return_type.into(),
                                     target_field_index.clone(),
-                                )?(
-                                );
+                                )?;
                                 list.set_field_for_index(
                                     target_field_index,
                                     call_value,

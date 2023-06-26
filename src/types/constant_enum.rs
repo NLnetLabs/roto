@@ -6,6 +6,7 @@ use routecore::bgp::communities::Wellknown;
 use routecore::bgp::types::{AFI, SAFI};
 use serde::Serialize;
 
+use crate::vm::VmError;
 use crate::{
     ast::ShortString,
     eval::AccessReceiverError,
@@ -77,10 +78,7 @@ where
         _method_token: usize,
         _args: &'a [crate::vm::StackValue],
         _res_type: super::typedef::TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce() -> super::typevalue::TypeValue + 'a>,
-        crate::vm::VmError,
-    > {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -89,21 +87,15 @@ where
         _method_token: usize,
         _args: Vec<super::typevalue::TypeValue>,
         _res_type: super::typedef::TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce() -> super::typevalue::TypeValue>,
-        crate::vm::VmError,
-    > {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
-    fn exec_type_method<'a>(
+    fn exec_type_method(
         _method_token: usize,
         _args: &[crate::vm::StackValue],
         _res_type: super::typedef::TypeDef,
-    ) -> Result<
-        Box<dyn FnOnce() -> super::typevalue::TypeValue + 'a>,
-        crate::vm::VmError,
-    > {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 }
@@ -186,7 +178,7 @@ impl RotoType for Enum {
         _method_token: usize,
         _args: &'a [crate::vm::StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, crate::vm::VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
@@ -195,15 +187,15 @@ impl RotoType for Enum {
         _method_token: usize,
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, crate::vm::VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
-    fn exec_type_method<'a>(
+    fn exec_type_method(
         _method_token: usize,
         _args: &[crate::vm::StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, crate::vm::VmError> {
+    ) -> Result<TypeValue, VmError> {
         todo!()
     }
 }

@@ -22,7 +22,7 @@ pub type LogicalTime = u64;
 use crate::{
     attr_change_set::{ReadOnlyScalarOption, Todo},
     compile::CompileError,
-    traits::{RotoType, Token, TokenConvert},
+    traits::{RotoType, Token},
     types::{
         constant_enum::EnumVariant,
         typedef::{MethodProps, TypeDef},
@@ -662,24 +662,24 @@ impl RotoType for BgpUpdateMessage {
         method_token: usize,
         _args: &'a [StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         match method_token.into() {
-            BgpUpdateMessageToken::Afi => Ok(Box::new(move || {
+            BgpUpdateMessageToken::Afi => Ok(
                 TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(
                     EnumVariant {
                         enum_name: "AFI".into(),
                         value: self.raw_message.0.nlris().afi().into(),
                     },
                 ))
-            })),
-            BgpUpdateMessageToken::Safi => Ok(Box::new(move || {
+            ),
+            BgpUpdateMessageToken::Safi => Ok(
                 TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(
                     EnumVariant {
                         enum_name: "SAFI".into(),
                         value: self.raw_message.0.nlris().safi().into(),
                     },
                 ))
-            })),
+            ),
             _ => Err(VmError::InvalidMethodCall),
         }
     }
@@ -689,7 +689,7 @@ impl RotoType for BgpUpdateMessage {
         _method_token: usize,
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         Err(VmError::InvalidMethodCall)
     }
 
@@ -697,7 +697,7 @@ impl RotoType for BgpUpdateMessage {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         Err(VmError::InvalidMethodCall)
     }
 }
@@ -714,8 +714,6 @@ enum BgpUpdateMessageToken {
     Afi = 1,
     Safi = 2,
 }
-
-impl TokenConvert for BgpUpdateMessageToken {}
 
 impl From<usize> for BgpUpdateMessageToken {
     fn from(val: usize) -> Self {
@@ -850,7 +848,7 @@ impl RotoType for RawRouteWithDeltas {
         _method: usize,
         _args: &'a [StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<(dyn FnOnce() -> TypeValue + 'a)>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         Err(VmError::InvalidMethodCall)
     }
 
@@ -859,7 +857,7 @@ impl RotoType for RawRouteWithDeltas {
         _method_token: usize,
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         Err(VmError::InvalidMethodCall)
     }
 
@@ -867,7 +865,7 @@ impl RotoType for RawRouteWithDeltas {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         Err(VmError::InvalidMethodCall)
     }
 }
@@ -901,7 +899,7 @@ pub enum RouteToken {
     Status = 9,
 }
 
-impl TokenConvert for RouteToken {}
+
 
 impl From<usize> for RouteToken {
     fn from(value: usize) -> Self {
@@ -1001,7 +999,7 @@ impl RotoType for RouteStatus {
         _method_token: usize,
         _args: &'a [StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         Err(VmError::InvalidMethodCall)
     }
 
@@ -1010,7 +1008,7 @@ impl RotoType for RouteStatus {
         _method_token: usize,
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         Err(VmError::InvalidMethodCall)
     }
 
@@ -1018,7 +1016,7 @@ impl RotoType for RouteStatus {
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce() -> TypeValue + 'a>, VmError> {
+    ) -> Result<TypeValue, VmError> {
         Err(VmError::InvalidMethodCall)
     }
 }
@@ -1033,7 +1031,7 @@ pub enum RouteStatusToken {
     IsEmpty = 6,
 }
 
-impl TokenConvert for RouteStatusToken {}
+
 
 impl From<usize> for RouteStatusToken {
     fn from(value: usize) -> Self {
