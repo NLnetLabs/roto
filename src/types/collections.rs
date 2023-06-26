@@ -57,6 +57,13 @@ impl ElementTypeValue {
 
         Err(VmError::InvalidValueType)
     }
+
+    fn into_type(self, ty: &TypeDef) -> Result<TypeValue, CompileError> {
+        match self {
+            ElementTypeValue::Primitive(tv) => tv.clone().into_type(ty),
+            ElementTypeValue::Nested(elm) => elm.clone().into_type(ty),
+        }
+    }
 }
 
 impl From<TypeValue> for ElementTypeValue {
@@ -175,7 +182,7 @@ impl From<ValueExpr> for ElementTypeValue {
 
 //------------ List type ----------------------------------------------------
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize)]
+#[derive(Debug, Eq, Clone, Hash, Serialize)]
 pub struct List(pub(crate) Vec<ElementTypeValue>);
 
 impl List {
@@ -366,6 +373,24 @@ impl std::fmt::Display for List {
             }
         }
         write!(f, "]")
+    }
+}
+
+impl PartialEq for List {
+    fn eq(&self, other: &Self) -> bool {
+        if self.0[..] == other.0[..] {
+            true
+        } else if self.0.len() != other.0.len() {
+            false
+        } else {
+            self.0.iter().enumerate().all(|(i, elm)| {
+                if let Ok(ref tv) = other.0[i].clone().into_type(&(elm.into())) {
+                    true
+                } else {
+                    false
+                }
+            })
+        }
     }
 }
 

@@ -205,7 +205,7 @@ impl Symbol {
                 let checked_val = arg
                     .get_value()
                     .clone()
-                    .try_convert_into_variant(checked_type.clone())?;
+                    .into_type(&checked_type)?;
                 rec_values.push((arg.get_name(), checked_type, checked_val));
             } else {
                 return Err(CompileError::from(format!(

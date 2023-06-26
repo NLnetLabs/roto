@@ -422,142 +422,142 @@ impl TypeValue {
     // Otherwise create an empty value for the type of self, and recursively
     // try to convert that into the desired type.
     // If these two steps fail, return an error.
-    pub fn try_convert_into_variant(
-        mut self,
-        type_def: TypeDef,
-    ) -> Result<Self, CompileError> {
-        trace!("CONVERT TYPEVALUE {:#?} -> {}", self, type_def);
-        match self {
-            TypeValue::List(list) => {
-                self = list.into_type(&type_def)?;
-            }
-            TypeValue::Record(_rec) => {
-                return Err(CompileError::new(
-                    format!("A value of type Record can't be converted into type {}.", type_def)
-                ))
-            }
-            TypeValue::Enum(_enum) => {
-                return Err(CompileError::new(
-                    format!("A value of type Enum can't be converted into type {}.", type_def)
-                ))
-            }
-            TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(val)) => {
-                self = val.into_type(&type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(val)) => {
-                self = val.into_type(&type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::ConstU32EnumVariant(val)) => {
-                self = val.into_type(&type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::U32(int_u32)) => {
-                self = int_u32.into_type(&type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::U8(val)) => {
-                self = val.into_type(&type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::Boolean(val)) => {
-                self = val.into_type(&type_def)?;
-            }
+    // pub fn try_convert_into_variant(
+    //     mut self,
+    //     type_def: TypeDef,
+    // ) -> Result<Self, CompileError> {
+    //     trace!("CONVERT TYPEVALUE {:#?} -> {}", self, type_def);
+    //     match self {
+    //         TypeValue::List(list) => {
+    //             self = list.into_type(&type_def)?;
+    //         }
+    //         TypeValue::Record(_rec) => {
+    //             return Err(CompileError::new(
+    //                 format!("A value of type Record can't be converted into type {}.", type_def)
+    //             ))
+    //         }
+    //         TypeValue::Enum(_enum) => {
+    //             return Err(CompileError::new(
+    //                 format!("A value of type Enum can't be converted into type {}.", type_def)
+    //             ))
+    //         }
+    //         TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
+    //         TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
+    //         TypeValue::Builtin(BuiltinTypeValue::ConstU32EnumVariant(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
+    //         TypeValue::Builtin(BuiltinTypeValue::U32(int_u32)) => {
+    //             self = int_u32.into_type(&type_def)?;
+    //         }
+    //         TypeValue::Builtin(BuiltinTypeValue::U8(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
+    //         TypeValue::Builtin(BuiltinTypeValue::Boolean(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
 
-            TypeValue::Builtin(BuiltinTypeValue::Prefix(val)) => {
-                self = val.into_type(&type_def)?;
-            }
+    //         TypeValue::Builtin(BuiltinTypeValue::Prefix(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
 
-            TypeValue::Builtin(BuiltinTypeValue::PrefixLength(val)) => {
-                self = val.into_type(&type_def)?;
-            }
+    //         TypeValue::Builtin(BuiltinTypeValue::PrefixLength(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
 
-            TypeValue::Builtin(BuiltinTypeValue::IpAddress(val)) => {
-                self = val.into_type(&type_def)?;
-            }
+    //         TypeValue::Builtin(BuiltinTypeValue::IpAddress(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
 
-            TypeValue::Builtin(BuiltinTypeValue::Asn(val)) => {
-                self = val.into_type(&type_def)?;
-            }
+    //         TypeValue::Builtin(BuiltinTypeValue::Asn(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
 
-            TypeValue::Builtin(BuiltinTypeValue::AsPath(val)) => {
-                self = val.into_type(&type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::Hop(val)) => {
-                self = val.into_type(&type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::Communities(val)) => {
-                self = val.into_type(&type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::Community(val)) => {
-                self = val.into_type(&type_def)?;
-            }
+    //         TypeValue::Builtin(BuiltinTypeValue::AsPath(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
+    //         TypeValue::Builtin(BuiltinTypeValue::Hop(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
+    //         TypeValue::Builtin(BuiltinTypeValue::Communities(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
+    //         TypeValue::Builtin(BuiltinTypeValue::Community(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
 
-            TypeValue::Builtin(BuiltinTypeValue::OriginType(val)) => {
-                self = val.into_type(&type_def)?;
-            }
+    //         TypeValue::Builtin(BuiltinTypeValue::OriginType(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
 
-            TypeValue::Builtin(BuiltinTypeValue::Route(val)) => {
-                self = val.into_type(&type_def)?;
-            }
-            TypeValue::Builtin(BuiltinTypeValue::BgpUpdateMessage(_val)) => {
-                return Err(CompileError::new(
-                    "Raw BGP message value can't be converted.".into(),
-                ))
-            }
-            TypeValue::Builtin(BuiltinTypeValue::LocalPref(val)) => {
-                self = val.into_type(&type_def)?;
-            }
+    //         TypeValue::Builtin(BuiltinTypeValue::Route(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
+    //         TypeValue::Builtin(BuiltinTypeValue::BgpUpdateMessage(_val)) => {
+    //             return Err(CompileError::new(
+    //                 "Raw BGP message value can't be converted.".into(),
+    //             ))
+    //         }
+    //         TypeValue::Builtin(BuiltinTypeValue::LocalPref(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
 
-            TypeValue::Builtin(BuiltinTypeValue::MultiExitDisc(val)) => {
-                self = val.into_type(&type_def)?;
-            }
+    //         TypeValue::Builtin(BuiltinTypeValue::MultiExitDisc(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
 
-            TypeValue::Builtin(BuiltinTypeValue::NextHop(val)) => {
-                self = val.into_type(&type_def)?;
-            }
+    //         TypeValue::Builtin(BuiltinTypeValue::NextHop(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
 
-            TypeValue::Builtin(BuiltinTypeValue::AtomicAggregator(val)) => {
-                self = val.into_type(&type_def)?;
-            }
+    //         TypeValue::Builtin(BuiltinTypeValue::AtomicAggregator(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
 
-            TypeValue::Builtin(BuiltinTypeValue::RouteStatus(val)) => {
-                self = val.into_type(&type_def)?;
-            }
+    //         TypeValue::Builtin(BuiltinTypeValue::RouteStatus(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
 
-            TypeValue::Builtin(BuiltinTypeValue::HexLiteral(val)) => {
-                self = val.into_type(&type_def)?;
-            }
+    //         TypeValue::Builtin(BuiltinTypeValue::HexLiteral(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
 
-            TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(val)) => {
-                self = val.into_type(&type_def)?;
-            }
+    //         TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
 
-            TypeValue::Builtin(BuiltinTypeValue::StringLiteral(val)) => {
-                self = val.into_type(&type_def)?;
-            }
-            TypeValue::OutputStreamMessage(_) => {
-                return Err(CompileError::new(
-                    "Value from type OutputStreamMessage can't be converted."
-                        .into(),
-                ))
-            }
-            TypeValue::SharedValue(_) => {
-                return Err(CompileError::new(
-                    "Value from SharedValue type can't be converted.".into(),
-                ))
-            }
-            TypeValue::UnInit => {
-                return Err(CompileError::new(
-                    "Fatal: An unitialized type can't be converted.".into(),
-                ))
-            }
-            TypeValue::Unknown => {
-                return Err(CompileError::new(
-                format!(
-                    "An instance of an unknown type can't be converted into type {}", type_def),
-                ))
-            }
-        }
+    //         TypeValue::Builtin(BuiltinTypeValue::StringLiteral(val)) => {
+    //             self = val.into_type(&type_def)?;
+    //         }
+    //         TypeValue::OutputStreamMessage(_) => {
+    //             return Err(CompileError::new(
+    //                 "Value from type OutputStreamMessage can't be converted."
+    //                     .into(),
+    //             ))
+    //         }
+    //         TypeValue::SharedValue(_) => {
+    //             return Err(CompileError::new(
+    //                 "Value from SharedValue type can't be converted.".into(),
+    //             ))
+    //         }
+    //         TypeValue::UnInit => {
+    //             return Err(CompileError::new(
+    //                 "Fatal: An unitialized type can't be converted.".into(),
+    //             ))
+    //         }
+    //         TypeValue::Unknown => {
+    //             return Err(CompileError::new(
+    //             format!(
+    //                 "An instance of an unknown type can't be converted into type {}", type_def),
+    //             ))
+    //         }
+    //     }
 
-        Ok(self)
-    }
+    //     Ok(self)
+    // }
 }
 
 impl RotoType for TypeValue {
@@ -603,42 +603,42 @@ impl RotoType for TypeValue {
 
     fn into_type(
         self,
-        type_value: &TypeDef,
+        ty: &TypeDef,
     ) -> Result<TypeValue, CompileError>
     where
         Self: std::marker::Sized {
         match self {
             TypeValue::Builtin(builtin) => match builtin {
-                BuiltinTypeValue::Asn(v) => v.into_type(type_value),
-                BuiltinTypeValue::AsPath(v) => v.into_type(type_value),
-                BuiltinTypeValue::AtomicAggregator(v) => v.into_type(type_value),
+                BuiltinTypeValue::Asn(v) => v.into_type(ty),
+                BuiltinTypeValue::AsPath(v) => v.into_type(ty),
+                BuiltinTypeValue::AtomicAggregator(v) => v.into_type(ty),
                 BuiltinTypeValue::BgpUpdateMessage(_) => Err(CompileError::new("Unsupported TypeValue::BgpUpdateMessage in TypeValue::into_type()".to_string())),
-                BuiltinTypeValue::Boolean(v) => v.into_type(type_value),
-                BuiltinTypeValue::Communities(v) => v.into_type(type_value),
-                BuiltinTypeValue::Community(v) => v.into_type(type_value),
-                BuiltinTypeValue::ConstU16EnumVariant(v) => v.into_type(type_value),
-                BuiltinTypeValue::ConstU32EnumVariant(v) => v.into_type(type_value),
-                BuiltinTypeValue::ConstU8EnumVariant(v) => v.into_type(type_value),
-                BuiltinTypeValue::HexLiteral(v) => v.into_type(type_value),
-                BuiltinTypeValue::Hop(v) => v.into_type(type_value),
-                BuiltinTypeValue::IntegerLiteral(v) => v.into_type(type_value),
-                BuiltinTypeValue::IpAddress(v) => v.into_type(type_value),
-                BuiltinTypeValue::LocalPref(v) => v.into_type(type_value),
-                BuiltinTypeValue::MultiExitDisc(v) => v.into_type(type_value),
-                BuiltinTypeValue::NextHop(v) => v.into_type(type_value),
-                BuiltinTypeValue::OriginType(v) => v.into_type(type_value),
-                BuiltinTypeValue::Prefix(v) => v.into_type(type_value),
-                BuiltinTypeValue::PrefixLength(v) => v.into_type(type_value),
-                BuiltinTypeValue::Route(v) => v.into_type(type_value),
-                BuiltinTypeValue::RouteStatus(v) => v.into_type(type_value),
-                BuiltinTypeValue::StringLiteral(v) => v.into_type(type_value),
-                BuiltinTypeValue::U32(v) => v.into_type(type_value),
-                BuiltinTypeValue::U8(v) => v.into_type(type_value),
+                BuiltinTypeValue::Boolean(v) => v.into_type(ty),
+                BuiltinTypeValue::Communities(v) => v.into_type(ty),
+                BuiltinTypeValue::Community(v) => v.into_type(ty),
+                BuiltinTypeValue::ConstU16EnumVariant(v) => v.into_type(ty),
+                BuiltinTypeValue::ConstU32EnumVariant(v) => v.into_type(ty),
+                BuiltinTypeValue::ConstU8EnumVariant(v) => v.into_type(ty),
+                BuiltinTypeValue::HexLiteral(v) => v.into_type(ty),
+                BuiltinTypeValue::Hop(v) => v.into_type(ty),
+                BuiltinTypeValue::IntegerLiteral(v) => v.into_type(ty),
+                BuiltinTypeValue::IpAddress(v) => v.into_type(ty),
+                BuiltinTypeValue::LocalPref(v) => v.into_type(ty),
+                BuiltinTypeValue::MultiExitDisc(v) => v.into_type(ty),
+                BuiltinTypeValue::NextHop(v) => v.into_type(ty),
+                BuiltinTypeValue::OriginType(v) => v.into_type(ty),
+                BuiltinTypeValue::Prefix(v) => v.into_type(ty),
+                BuiltinTypeValue::PrefixLength(v) => v.into_type(ty),
+                BuiltinTypeValue::Route(v) => v.into_type(ty),
+                BuiltinTypeValue::RouteStatus(v) => v.into_type(ty),
+                BuiltinTypeValue::StringLiteral(v) => v.into_type(ty),
+                BuiltinTypeValue::U32(v) => v.into_type(ty),
+                BuiltinTypeValue::U8(v) => v.into_type(ty),
             }
-            TypeValue::Enum(v) => v.into_type(type_value),
-            TypeValue::List(v) => v.into_type(type_value),
+            TypeValue::Enum(v) => v.into_type(ty),
+            TypeValue::List(v) => v.into_type(ty),
             TypeValue::OutputStreamMessage(_) => Err(CompileError::new("Unsupported TypeValue::OutputStreamMessage in TypeValue::into_type()".to_string())),
-            TypeValue::Record(v) => v.into_type(type_value),
+            TypeValue::Record(v) => v.into_type(ty),
             TypeValue::SharedValue(_) => Err(CompileError::new("Unsupported TypeValue::SharedValue in TypeValue::into_type()".to_string())),
             TypeValue::UnInit => Err(CompileError::new("Unsupported TypeValue::UnInit in TypeValue::into_type()".to_string())),
             TypeValue::Unknown => Err(CompileError::new("Unsupported TypeValue::Unknown in TypeValue::into_type()".to_string())),
@@ -765,49 +765,65 @@ impl Display for TypeValue {
 
 impl PartialEq for TypeValue {
     fn eq(&self, other: &Self) -> bool {
-        // trace!("EQEQEQEQ");
-        // trace!("cmp other {}", other);
-        // trace!("with self {}", self);
-        // if self.cmp(other) == Ordering::Equal {
-        //     true
-        // } else if let Ok(self_conv) = other.clone().try_convert_into_variant(self.into()) {
-        //     trace!("try convert self_conv {} other  {} {:?}", self_conv, other, self_conv.cmp(other));
-        //     self_conv.cmp(other) == Ordering::Equal
-        // } else {
-        //     trace!("no convert");
-        //     false
-        // }
-
         match (self, other) {
             (TypeValue::Builtin(b1), TypeValue::Builtin(b2)) => {
                 if b1 == b2 {
                     return true;
                 }
                 if let Ok(TypeValue::Builtin(b2_convert)) =
-                    b2.clone().try_into_type(&(self.into())).as_ref()
+                    b2.clone().into_type(&(self.into())).as_ref()
                 {
                     b1 == b2_convert
                 } else {
                     false
                 }
             }
-            (TypeValue::Builtin(_), TypeValue::List(_)) => todo!(),
+            (TypeValue::Builtin(BuiltinTypeValue::Communities(c)), TypeValue::List(l)) => {
+                if c == l {
+                    return true;
+                }
+                if let Ok(TypeValue::List(l2)) = l.clone().into_type(&(self.into())).as_ref() {
+                    c == l2
+                } else {
+                    false
+                }
+            },
+            (TypeValue::Builtin(BuiltinTypeValue::Communities(_)), _) => false,
             (TypeValue::Builtin(_), TypeValue::Record(_)) => todo!(),
             (TypeValue::Builtin(_), TypeValue::OutputStreamMessage(_)) => {
                 todo!()
             }
-            (TypeValue::Builtin(_), TypeValue::SharedValue(_)) => todo!(),
+            (tv, TypeValue::SharedValue(sv)) => {
+                if tv == sv.as_ref() {
+                    return true;
+                }
+                if let Ok(ref sv_convert) =
+                    sv.as_ref().clone().into_type(&(self.into()))
+                {
+                    tv == sv_convert
+                } else {
+                    false
+                }
+            },
             (TypeValue::Builtin(_), TypeValue::Unknown) => false,
             (TypeValue::Builtin(_), TypeValue::UnInit) => false,
+            (TypeValue::List(_), _) => false,
+            (TypeValue::List(l1), TypeValue::List(l2)) => {
+                if l1 == l2 {
+                    return true;
+                } else {
+                    false
+                }
+            },
             (TypeValue::List(_), TypeValue::Builtin(_)) => todo!(),
-            (TypeValue::List(_), TypeValue::List(_)) => todo!(),
             (TypeValue::List(_), TypeValue::Record(_)) => todo!(),
             (TypeValue::List(_), TypeValue::OutputStreamMessage(_)) => {
                 todo!()
             }
-            (TypeValue::List(_), TypeValue::SharedValue(_)) => todo!(),
+            // (TypeValue::List(_), TypeValue::SharedValue(_)) => todo!(),
             (TypeValue::List(_), TypeValue::Unknown) => false,
             (TypeValue::List(_), TypeValue::UnInit) => todo!(),
+            (_, TypeValue::List(_)) => false,
             (TypeValue::Record(_), TypeValue::Builtin(_)) => todo!(),
             (TypeValue::Record(_), TypeValue::List(_)) => todo!(),
             (TypeValue::Record(rec1), TypeValue::Record(rec2)) => {
@@ -816,7 +832,7 @@ impl PartialEq for TypeValue {
             (TypeValue::Record(_), TypeValue::OutputStreamMessage(_)) => {
                 todo!()
             }
-            (TypeValue::Record(_), TypeValue::SharedValue(_)) => todo!(),
+            // (TypeValue::Record(_), TypeValue::SharedValue(_)) => todo!(),
             (TypeValue::Record(_), TypeValue::Unknown) => false,
             (TypeValue::Record(_), TypeValue::UnInit) => todo!(),
             (TypeValue::OutputStreamMessage(_), TypeValue::Builtin(_)) => {
@@ -832,10 +848,10 @@ impl PartialEq for TypeValue {
                 TypeValue::OutputStreamMessage(_),
                 TypeValue::OutputStreamMessage(_),
             ) => todo!(),
-            (
-                TypeValue::OutputStreamMessage(_),
-                TypeValue::SharedValue(_),
-            ) => todo!(),
+            // (
+            //     TypeValue::OutputStreamMessage(_),
+            //     TypeValue::SharedValue(_),
+            // ) => todo!(),
             (TypeValue::OutputStreamMessage(_), TypeValue::Unknown) => {
                 todo!()
             }
@@ -847,21 +863,21 @@ impl PartialEq for TypeValue {
                 TypeValue::SharedValue(_),
                 TypeValue::OutputStreamMessage(_),
             ) => todo!(),
-            (TypeValue::SharedValue(_), TypeValue::SharedValue(_)) => todo!(),
+            // (TypeValue::SharedValue(_), TypeValue::SharedValue(_)) => todo!(),
             (TypeValue::SharedValue(_), TypeValue::Unknown) => false,
             (TypeValue::SharedValue(_), TypeValue::UnInit) => todo!(),
             (TypeValue::Unknown, TypeValue::Builtin(_)) => false,
             (TypeValue::Unknown, TypeValue::List(_)) => false,
             (TypeValue::Unknown, TypeValue::Record(_)) => false,
             (TypeValue::Unknown, TypeValue::OutputStreamMessage(_)) => false,
-            (TypeValue::Unknown, TypeValue::SharedValue(_)) => false,
+            // (TypeValue::Unknown, TypeValue::SharedValue(_)) => false,
             (TypeValue::Unknown, TypeValue::Unknown) => false,
             (TypeValue::Unknown, TypeValue::UnInit) => todo!(),
             (TypeValue::UnInit, TypeValue::Builtin(_)) => todo!(),
             (TypeValue::UnInit, TypeValue::List(_)) => todo!(),
             (TypeValue::UnInit, TypeValue::Record(_)) => todo!(),
             (TypeValue::UnInit, TypeValue::OutputStreamMessage(_)) => todo!(),
-            (TypeValue::UnInit, TypeValue::SharedValue(_)) => todo!(),
+            // (TypeValue::UnInit, TypeValue::SharedValue(_)) => todo!(),
             (TypeValue::UnInit, TypeValue::Unknown) => todo!(),
             (TypeValue::UnInit, TypeValue::UnInit) => todo!(),
             (TypeValue::Builtin(_), TypeValue::Enum(_)) => todo!(),
@@ -872,7 +888,7 @@ impl PartialEq for TypeValue {
             (TypeValue::Enum(_), TypeValue::Record(_)) => todo!(),
             (TypeValue::Enum(_), TypeValue::Enum(_)) => todo!(),
             (TypeValue::Enum(_), TypeValue::OutputStreamMessage(_)) => todo!(),
-            (TypeValue::Enum(_), TypeValue::SharedValue(_)) => todo!(),
+            // (TypeValue::Enum(_), TypeValue::SharedValue(_)) => todo!(),
             (TypeValue::Enum(_), TypeValue::Unknown) => todo!(),
             (TypeValue::Enum(_), TypeValue::UnInit) => todo!(),
             (TypeValue::OutputStreamMessage(_), TypeValue::Enum(_)) => todo!(),

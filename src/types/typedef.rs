@@ -453,7 +453,7 @@ impl TypeDef {
     // field indexes vec  that lives on the Rib typedef.
     // If there's no field indexes vec then simply calculate the hash over
     // the (whole) typevalue that was passed in.
-    pub fn hash_store_value<'a, H: Hasher>(
+    pub fn hash_key_values<'a, H: Hasher>(
         &'a self,
         state: &'a mut H,
         value: &'a TypeValue,

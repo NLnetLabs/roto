@@ -447,7 +447,7 @@ impl ModuleArgsMap {
                         // need? Note that we can only try to convert if
                         // it's a builtin type.
                         match supplied_arg.1.into_builtin().and_then(|t| {
-                            t.try_into_type(&found_arg.get_type())
+                            t.into_type(&found_arg.get_type())
                         }) {
                             Ok(arg) => arguments_map.insert(
                                 found_arg.get_name(),

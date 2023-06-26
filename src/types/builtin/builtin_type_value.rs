@@ -157,7 +157,7 @@ impl BuiltinTypeValue {
         Ok(TypeValue::Builtin(var))
     }
 
-    pub(crate) fn try_into_type(
+    pub(crate) fn into_type(
         self,
         ty: &TypeDef,
     ) -> Result<TypeValue, CompileError> {
