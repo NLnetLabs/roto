@@ -36,7 +36,7 @@ use super::{
 // the type definition of the type that's stored in the RIB and the
 // vec of field_indexes that are used in the hash to calculate
 // uniqueness for an entry.
-type RibTypeDef = (Box<TypeDef>, Option<Vec<SmallVec<[usize; 8]>>>);
+pub type RibTypeDef = (Box<TypeDef>, Option<Vec<SmallVec<[usize; 8]>>>);
 
 #[derive(Clone, Debug, Eq, PartialEq, Default, Hash, Serialize)]
 pub enum TypeDef {
