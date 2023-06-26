@@ -658,7 +658,7 @@ impl RotoType for TypeValue {
             TypeValue::List(v) => v.into_type(ty),
             TypeValue::OutputStreamMessage(_) => Err(CompileError::new("Unsupported TypeValue::OutputStreamMessage in TypeValue::into_type()".to_string())),
             TypeValue::Record(v) => v.into_type(ty),
-            TypeValue::SharedValue(_) => Err(CompileError::new("Unsupported TypeValue::SharedValue in TypeValue::into_type()".to_string())),
+            TypeValue::SharedValue(v) => v.into_type(ty),
             TypeValue::UnInit => Err(CompileError::new("Unsupported TypeValue::UnInit in TypeValue::into_type()".to_string())),
             TypeValue::Unknown => Err(CompileError::new("Unsupported TypeValue::Unknown in TypeValue::into_type()".to_string())),
         }
