@@ -14,7 +14,7 @@
 use log::trace;
 use routecore::bgp::message::SessionConfig;
 use serde::Serialize;
-use std::sync::Arc;
+use std::{sync::Arc, net::IpAddr};
 
 /// Lamport Timestamp. Used to order messages between units/systems.
 pub type LogicalTime = u64;
@@ -32,7 +32,7 @@ use crate::{
 };
 
 use super::{
-    AsPath, BuiltinTypeValue, NextHop, OriginType, Prefix, RouteStatus,
+    AsPath, BuiltinTypeValue, NextHop, OriginType, Prefix, RouteStatus, IpAddress,
 };
 use crate::attr_change_set::{
     AttrChangeSet, ScalarOption, ScalarValue, VectorOption, VectorValue,
@@ -100,6 +100,8 @@ pub struct RawRouteWithDeltas {
     pub prefix: Prefix,
     // Arc'ed BGP message
     pub raw_message: Arc<BgpUpdateMessage>,
+    // The IP address of the BGP speaker that originated the route, if known.
+    peer_ip: Option<IpAddress>,
     // history of recorded changes to the route
     attribute_deltas: AttributeDeltaList,
     // history of status changes to the route
@@ -127,6 +129,7 @@ impl RawRouteWithDeltas {
         Self {
             prefix,
             raw_message: Arc::new(raw_message),
+            peer_ip: None,
             attribute_deltas,
             status_deltas: RouteStatusDeltaList(vec![RouteStatusDelta::new(
                 delta_id, route_status.into(),
@@ -143,11 +146,26 @@ impl RawRouteWithDeltas {
         Self {
             prefix,
             raw_message: Arc::clone(raw_message),
+            peer_ip: None,
             attribute_deltas: AttributeDeltaList::new(),
             status_deltas: RouteStatusDeltaList(vec![RouteStatusDelta::new(
                 delta_id, route_status.into(),
             )]),
         }
+    }
+
+    pub fn with_peer_ip(self, peer_ip: IpAddr) -> Self {
+        Self {
+            prefix: self.prefix,
+            raw_message: self.raw_message,
+            peer_ip: Some(IpAddress::new(peer_ip)),
+            attribute_deltas: self.attribute_deltas,
+            status_deltas: self.status_deltas,
+        }
+    }
+
+    pub fn peer_ip(&self) -> Option<IpAddr> {
+        self.peer_ip.map(|ip| ip.0)
     }
 
     // Get a clone of the latest delta, or of the original attributes from
@@ -282,6 +300,10 @@ impl RawRouteWithDeltas {
                 TypeDef::RouteStatus,
                 Token::FieldAccess(vec![RouteToken::Status.into()]),
             )),
+            "peer_ip" => Ok((
+                TypeDef::IpAddress,
+                Token::FieldAccess(vec![RouteToken::PeerIp.into()]),
+            )),
             _ => Err(format!(
                 "Unknown method '{}' for type Route",
                 field_name.ident
@@ -311,6 +333,7 @@ impl RawRouteWithDeltas {
             RouteToken::AtomicAggregator => current_set.aggregator.as_ref(),
             RouteToken::Communities => current_set.communities.as_ref(),
             RouteToken::Status => self.status_deltas.current_as_ref(),
+            RouteToken::PeerIp => current_set.peer_ip.as_ref(),
         }
     }
 
@@ -360,6 +383,7 @@ impl RawRouteWithDeltas {
                 .map(TypeValue::from),
             RouteToken::Prefix => Some(self.prefix.into()),
             RouteToken::Status => Some(self.status_deltas.current()),
+            RouteToken::PeerIp => self.peer_ip.map(TypeValue::from),
             // _ => None,
             // originator_id: ChangedOption {
             //     value: None,
@@ -907,9 +931,8 @@ pub enum RouteToken {
     AtomicAggregator = 7,
     Communities = 8,
     Status = 9,
+    PeerIp = 10,
 }
-
-
 
 impl From<usize> for RouteToken {
     fn from(value: usize) -> Self {
@@ -924,6 +947,7 @@ impl From<usize> for RouteToken {
             7 => RouteToken::AtomicAggregator,
             8 => RouteToken::Communities,
             9 => RouteToken::Status,
+            10 => RouteToken::PeerIp,
             _ => panic!("Unknown RouteToken value: {}", value),
         }
     }
@@ -1099,6 +1123,7 @@ impl UpdateMessage {
             )),
             aggregator: ScalarOption::from(self.0.aggregator()),
             communities: VectorOption::from(self.0.all_communities()),
+            peer_ip: Option::<IpAddress>::None.into(),
             originator_id: Todo,
             cluster_list: Todo,
             extended_communities: Todo,
