@@ -168,6 +168,11 @@ impl RawRouteWithDeltas {
         self.peer_ip.map(|ip| ip.0)
     }
 
+    pub fn update_status(&mut self, delta_id: (RotondaId, LogicalTime), new_status: RouteStatus) {
+        let delta = RouteStatusDelta::new(delta_id, new_status.into());
+        self.status_deltas.0.push(delta);
+    }
+
     // Get a clone of the latest delta, or of the original attributes from
     // the raw message, if no delta has been added (yet).
     fn clone_latest_attrs(&self) -> AttrChangeSet {
