@@ -409,6 +409,16 @@ impl RawRouteWithDeltas {
             // },
         }
     }
+
+    pub fn status(&self) -> RouteStatus {
+        if let TypeValue::Builtin(BuiltinTypeValue::RouteStatus(route_status)) = self.status_deltas.current() {
+            route_status
+        } else {
+            unreachable!() // When we were constructed a RouteStatus was passed in so we always have at least one, and
+                           // there shouldn't be a way to store something other than a RouteStatus as a subsequent item
+                           // in the route status delta list so it also shouldn't be that we matched a different type.
+        }
+    }
 }
 
 //------------ RouteDeltas --------------------------------------------------
