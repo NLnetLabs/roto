@@ -57,8 +57,8 @@ impl RotoType for U32 {
 
     fn exec_value_method<'a>(
         &'a self,
-        method_token: usize,
-        args: &[StackValue],
+        _method_token: usize,
+        _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         Err(VmError::InvalidMethodCall)
@@ -1149,9 +1149,9 @@ impl RotoType for PrefixLength {
 
     fn exec_consume_value_method(
         self,
-        method_token: usize,
-        args: Vec<TypeValue>,
-        type_def: TypeDef,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _type_def: TypeDef,
     ) -> Result<TypeValue, VmError> {
         todo!()
     }
@@ -2387,7 +2387,7 @@ impl RotoType for LocalPref {
             LocalPrefToken::Set => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::LocalPref(*self)))
             }
-            _ => Err(VmError::InvalidMethodCall),
+            // _ => Err(VmError::InvalidMethodCall),
         }
     }
 

@@ -1,5 +1,5 @@
 use roto::ast::AcceptReject;
-use roto::compile::Compiler;
+use roto::compile::{Compiler, CompileError};
 
 use roto::types::builtin::Asn;
 use roto::types::collections::Record;
@@ -47,6 +47,7 @@ fn src_code(code_line: &str, end_accept_reject: &str) -> String {
         module in-module {{
             define {{
                 rx_tx msg: BmpMsg;
+                a = [1,2,3];
             }}
 
             term peer-asn-matches {{
@@ -128,29 +129,9 @@ fn test_data(
 }
 
 #[test]
-fn test_compare_1() {
+fn test_eq_conversion_1() {
     common::init();
-    let src_line = src_code("msg.type == 2; // Peer Down", "reject");
-    let test_run = test_data("in-module", &src_line);
-
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
-}
-
-#[test]
-fn test_compare_2() {
-    common::init();
-    let src_line = src_code("msg.type == 2; // Peer Down", "accept");
-    let test_run = test_data("in-module", &src_line);
-
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
-}
-
-#[test]
-fn test_compare_3() {
-    common::init();
-    let src_line = src_code("msg.type == 1; // Peer Down", "reject");
+    let src_line = src_code(r#"1 in a;"#, "reject");
     let test_run = test_data("in-module", &src_line);
 
     let (ar, _rx, _tx) = test_run.unwrap();
@@ -158,80 +139,20 @@ fn test_compare_3() {
 }
 
 #[test]
-fn test_compare_4() {
+fn test_eq_conversion_2() {
     common::init();
-    let src_line =
-        src_code("msg.type == 1 && msg.type == 2; // Peer Down", "accept");
+    let src_line = src_code(r#""b" in a;"#, "reject");
     let test_run = test_data("in-module", &src_line);
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let err = "Eval error: IntegerLiteral cannot be converted into String".to_string();
+    let str = test_run.unwrap_err().to_string();
+    assert_eq!(str, err);
 }
 
 #[test]
-fn test_compare_5() {
+fn test_eq_conversion_3() {
     common::init();
-    let src_line =
-        src_code("msg.type == 2 && msg.type == 2; // Peer Down", "reject");
-    let test_run = test_data("in-module", &src_line);
-
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
-}
-
-#[test]
-fn test_compare_6() {
-    common::init();
-    let src_line = src_code(
-        "(msg.type == 2) || (msg.type == 2); // Peer Down",
-        "reject",
-    );
-    let test_run = test_data("in-module", &src_line);
-
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
-}
-
-#[test]
-fn test_compare_7() {
-    common::init();
-    let src_line = src_code(
-        "( (msg.type == 2) || (msg.type == 2) ) && ( msg.type == 2 ); // Peer Down",
-        "reject",
-    );
-    let test_run = test_data("in-module", &src_line);
-
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
-}
-
-#[test]
-fn test_compare_8() {
-    common::init();
-    let src_line = src_code(
-        "( (msg.type == 2) || (msg.type == 2) ) || ( msg.type == 1 ); // Peer Down",
-        "reject",
-    );
-    let test_run = test_data("in-module", &src_line);
-
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Reject);
-}
-
-#[test]
-fn test_compare_9() {
-    common::init();
-    let src_line = src_code("msg.type in [2,3,4,5]; // Peer Down", "accept");
-    let test_run = test_data("in-module", &src_line);
-
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
-}
-
-#[test]
-fn test_compare_10() {
-    common::init();
-    let src_line = src_code("msg.type in [20,30,40,50]; // Peer Down", "reject");
+    let src_line = src_code(r#"32768 in a;"#, "reject");
     let test_run = test_data("in-module", &src_line);
 
     let (ar, _rx, _tx) = test_run.unwrap();

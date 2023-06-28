@@ -942,7 +942,7 @@ impl ast::MethodComputeExpr {
             // can be converted into a U8, I64, etc (as long as it fits).
             args.push(
                 parsed_arg_type
-                    .try_convert_value_into(expected_arg_type.clone())?,
+                    .try_convert_type_value_into(expected_arg_type.clone())?,
             );
         }
 
@@ -1184,7 +1184,7 @@ impl ast::ValueExpr {
                     if let Some(cur_ty) = cur_ty {
                         checked_values.push(
                             field_s
-                                .try_convert_value_into(*cur_ty.1.clone())?,
+                                .try_convert_type_value_into(*cur_ty.1.clone())?,
                         );
                     } else {
                         return Err(CompileError::from(format!("The field name '{}' cannot be found in type '{}'", field_s.get_name(), type_id.ident)));
@@ -1436,7 +1436,7 @@ impl ast::CompareExpr {
         // NOT reversed, i.e. `32 == prefix.len();` is INVALID.
         trace!("left_type {:#?} <-> right_type {:#?}", left_s, right_s);
         if left_type != right_type {
-            right_s = right_s.try_convert_value_into(left_type.clone())?;
+            right_s = right_s.try_convert_type_value_into(left_type.clone())?;
         }
         trace!("after conversion {} <-> {:?}", left_type, right_s);
 
@@ -1600,7 +1600,7 @@ impl ast::ListCompareExpr {
             // NOT reversed, i.e. `32 == prefix.len();` is INVALID.
             // trace!("left_type {:#?} <-> right_type {:#?}", left_s, right_s);
             if left_type != right_type {
-                args.push(s.try_convert_value_into(left_type.clone())?);
+                args.push(s.try_convert_type_value_into(left_type.clone())?);
             } else {
                 args.push(s);
             }

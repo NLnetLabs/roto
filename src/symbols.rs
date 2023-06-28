@@ -14,10 +14,10 @@ use crate::{
     compile::CompileError,
     traits::{RotoType, Token},
     types::{
-        builtin::BuiltinTypeValue,
         collections::{ElementTypeValue, Record},
+        constant_enum::global_enums,
         typedef::TypeDef,
-        typevalue::TypeValue, constant_enum::global_enums,
+        typevalue::TypeValue,
     },
 };
 
@@ -202,10 +202,8 @@ impl Symbol {
             } else if let Some(checked_type) =
                 type_def.get_field(&arg.get_name())
             {
-                let checked_val = arg
-                    .get_value()
-                    .clone()
-                    .into_type(&checked_type)?;
+                let checked_val =
+                    arg.get_value().clone().into_type(&checked_type)?;
                 rec_values.push((arg.get_name(), checked_type, checked_val));
             } else {
                 return Err(CompileError::from(format!(
@@ -318,270 +316,30 @@ impl Symbol {
         }
     }
 
-    // try to return the converted type with its value, if it's set. This is
-    // basically only the case if the kin of self, is Constant.
-    // Otherwise create an empty value for the type of self, and recursively
-    // try to convert that into the desired type.
-    // If these two steps fail, return an error.
-    pub fn try_convert_value_into(
+    // This function tries to convert a symbol with a given type into a
+    // symbol with another type and set its value according to the new
+    // type, if it has a a value. If the conversion is not possible
+    // it returns an error. Used during the evaluation phase.
+    pub fn try_convert_type_value_into(
         mut self,
         into_ty: TypeDef,
     ) -> Result<Self, CompileError> {
-        trace!("CONVERT {:#?} -> {}", self, into_ty);
-        match self.ty {
-            TypeDef::Rib(_) => {
-                return Err(CompileError::new(
-                    "RIB can't be converted.".into(),
-                ))
-            }
-            TypeDef::Table(_) => {
-                return Err(CompileError::new(
-                    "Table can't be converted.".into(),
-                ))
-            }
-            TypeDef::OutputStream(_) => {
-                return Err(CompileError::new(
-                    "Output Stream can't be converted".into(),
-                ))
-            }
-            TypeDef::List(_) => {
-                if let TypeValue::List(list) = self.value {
-                    self.value = list.into_type(&into_ty)?;
-                }
-            }
-            TypeDef::Record(ref r) => {
-                trace!(
-                    "convert record {:?} ({:?}) to {:?}",
-                    r,
-                    self.value,
-                    into_ty
-                );
+        if self.ty == into_ty { return Ok(self); }
 
-                match into_ty {
-                    TypeDef::Record(ref _rec) => {
-                        // An instance with a type of Record() doesn't have
-                        // to necessarily have a TypeValue of Record, it
-                        // can also be TypeValue::Unknown. Unknown should
-                        // not through an error, it just can't be evaluated
-                        // a this point, but it may be compiled into a
-                        // value in the next phase.
-                        if let TypeValue::Record(rec) = self.value {
-                            self.value = rec.into_type(&into_ty)?;
-                        }
-                    }
-                    TypeDef::OutputStream(ref _o) => {
-                        // idem
-                        if let TypeValue::Record(rec) = self.value {
-                            self.value = rec.into_type(&into_ty)?;
-                        }
-                    }
-                    _ => {
-                        return Err(
-                            CompileError::from(
-                                format!(
-                                    "A value of type {} cannot be converted into type {}", 
-                                        self.ty, into_ty
-                                )
-                            )
-                        );
-                    }
-                }
+        if self.ty.clone().test_type_conversion(into_ty.clone())
+        {
+            self.ty = into_ty.clone();
+            if let TypeValue::Unknown = self.value {
+                trace!("UNKNOWN");
+            } else {
+                trace!("try conversion from value into value of other type");
+                self.value = self.value.into_type(&into_ty)?;
             }
-            TypeDef::Enum(_) => {
-                return Err(CompileError::new(
-                    "Enum type can't be converted".into(),
-                ))
-            }
-            TypeDef::ConstEnumVariant(ref enum_name) => {
-                if let TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(c_enum)) = self.value {
-                    if c_enum.enum_name == enum_name {
-                        return Err(CompileError::from(format!("Enum variant from type {} cannot be converted into another enum variant.", c_enum.enum_name)));
-                    } else {
-                        self.value = c_enum.into_type(&into_ty)?;
-                    }
-                }
-            }
-            // TypeDef::ConstU16EnumVariant(ref enum_name) => {
-            //     if let TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(c_enum)) = self.value {
-            //         if c_enum.enum_name == enum_name {
-            //             return Err(CompileError::from(format!("Enum variant from type {} cannot be converted into another enum variant.", c_enum.enum_name)));
-            //         } else {
-            //             self.value = c_enum.into_type(&into_ty)?;
-            //         }
-            //     }
-            // }
-            // TypeDef::ConstU32EnumVariant(ref enum_name) => {
-            //     if let TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(c_enum)) = self.value {
-            //         if c_enum.enum_name == enum_name {
-            //             return Err(CompileError::from(format!("Enum variant from type {} cannot be converted into another enum variant.", c_enum.enum_name)));
-            //         } else {
-            //             self.value = c_enum.into_type(&into_ty)?;
-            //         }
-            //     }
-            // }
-            TypeDef::U32 => {
-                if let TypeValue::Builtin(BuiltinTypeValue::U32(int)) =
-                    self.value
-                {
-                    self.value = int.into_type(&into_ty)?;
-                }
-            }
-            TypeDef::U8 => {
-                if let TypeValue::Builtin(BuiltinTypeValue::U8(int)) =
-                    self.value
-                {
-                    self.value = int.into_type(&into_ty)?;
-                }
-            }
-            TypeDef::Boolean => {
-                if let TypeValue::Builtin(BuiltinTypeValue::Boolean(int)) =
-                    self.value
-                {
-                    self.value = int.into_type(&into_ty)?;
-                }
-            }
-            TypeDef::Prefix => {
-                if let TypeValue::Builtin(BuiltinTypeValue::Prefix(pfx)) =
-                    self.value
-                {
-                    self.value = pfx.into_type(&into_ty)?;
-                }
-            }
-            TypeDef::PrefixLength => {
-                if let TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
-                    pl,
-                )) = self.value
-                {
-                    self.value = pl.into_type(&into_ty)?;
-                }
-            }
-            TypeDef::IpAddress => {
-                if let TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) =
-                    self.value
-                {
-                    self.value = ip.into_type(&into_ty)?;
-                }
-            }
-            TypeDef::Asn => {
-                if let TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) =
-                    self.value
-                {
-                    self.value = asn.into_type(&into_ty)?;
-                }
-            }
-            TypeDef::AsPath => {
-                if let TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) =
-                    self.value
-                {
-                    self.value = as_path.into_type(&into_ty)?;
-                }
-            }
-            TypeDef::Hop => {
-                if let TypeValue::Builtin(BuiltinTypeValue::Hop(hop)) =
-                    self.value
-                {
-                    self.value = hop.into_type(&into_ty)?;
-                }
-            }
-            TypeDef::Community => {
-                if let TypeValue::Builtin(BuiltinTypeValue::Community(int)) =
-                    self.value
-                {
-                    self.value = int.into_type(&into_ty)?;
-                }
-            }
-            TypeDef::OriginType => {
-                if let TypeValue::Builtin(BuiltinTypeValue::OriginType(ot)) =
-                    self.value
-                {
-                    self.value = ot.into_type(&into_ty)?;
-                }
-            }
-            TypeDef::Route => {
-                if let TypeValue::Builtin(BuiltinTypeValue::Route(r)) =
-                    self.value
-                {
-                    self.value = r.into_type(&into_ty)?;
-                }
-            }
-            TypeDef::BgpUpdateMessage => {
-                return Err(CompileError::new(
-                    "Raw BGP message value can't be converted.".into(),
-                ))
-            }
-            TypeDef::LocalPref => {
-                if let TypeValue::Builtin(BuiltinTypeValue::LocalPref(r)) =
-                    self.value
-                {
-                    self.value = r.into_type(&into_ty)?;
-                }
-            }
-            TypeDef::MultiExitDisc => {
-                if let TypeValue::Builtin(BuiltinTypeValue::MultiExitDisc(
-                    r,
-                )) = self.value
-                {
-                    self.value = r.into_type(&into_ty)?;
-                }
-            }
-            TypeDef::NextHop => {
-                if let TypeValue::Builtin(BuiltinTypeValue::NextHop(r)) =
-                    self.value
-                {
-                    self.value = r.into_type(&into_ty)?;
-                }
-            }
-            TypeDef::AtomicAggregator => {
-                if let TypeValue::Builtin(
-                    BuiltinTypeValue::AtomicAggregator(r),
-                ) = self.value
-                {
-                    self.value = r.into_type(&into_ty)?;
-                }
-            }
-            TypeDef::RouteStatus => {
-                if let TypeValue::Builtin(BuiltinTypeValue::RouteStatus(rs)) =
-                    self.value
-                {
-                    self.value = rs.into_type(&into_ty)?;
-                }
-            }
-            TypeDef::HexLiteral => {
-                if let TypeValue::Builtin(BuiltinTypeValue::HexLiteral(hex)) =
-                    self.value
-                {
-                    self.value = hex.into_type(&into_ty)?;
-                }
-            }
-            TypeDef::IntegerLiteral => {
-                if let TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
-                    int,
-                )) = self.value
-                {
-                    self.value = int.into_type(&into_ty)?;
-                }
-            }
-            TypeDef::StringLiteral => {
-                if let TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
-                    str,
-                )) = self.value
-                {
-                    self.value = str.into_type(&into_ty)?;
-                }
-            }
-            TypeDef::AcceptReject(_) => {
-                return Err(CompileError::new(
-                    "AcceptReject value can't be converted.".into(),
-                ))
-            }
-            TypeDef::Unknown => {
-                if self.value != TypeValue::Unknown {
-                    return Err(CompileError::new(
-                        "Unknown type can't be converted into any other"
-                            .into(),
-                    ));
-                }
-            }
+        } else {
+            return Err(CompileError::from(format!(
+                "{} cannot be converted into {}",
+                self.ty, into_ty
+            )));
         }
 
         Ok(self)
@@ -895,7 +653,10 @@ impl SymbolTable {
         self.scope.get_name()
     }
 
-    pub(crate) fn validate_variable_name(&self, key: &ShortString) -> Result<(), CompileError> {
+    pub(crate) fn validate_variable_name(
+        &self,
+        key: &ShortString,
+    ) -> Result<(), CompileError> {
         if self.variables.contains_key(key) {
             return Err(format!(
                 "Symbol {} already defined in scope {}",
@@ -907,7 +668,12 @@ impl SymbolTable {
         let existing_enum_var = global_enums(key);
 
         if existing_enum_var.is_ok() {
-            Err(format!("Can't shadow existing enum variant: {:?} in enum {:?}", key, existing_enum_var.unwrap().get_name()).into())
+            Err(format!(
+                "Can't shadow existing enum variant: {:?} in enum {:?}",
+                key,
+                existing_enum_var.unwrap().get_name()
+            )
+            .into())
         } else {
             Ok(())
         }
@@ -999,7 +765,12 @@ impl SymbolTable {
         if key.as_str() == "route" {
             trace!(
                 "k {} n {} k {:?} t {} a {:?} v {} ",
-                key, name, kind, ty, args, value
+                key,
+                name,
+                kind,
+                ty,
+                args,
+                value
             );
         }
 

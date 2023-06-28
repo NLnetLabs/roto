@@ -263,7 +263,7 @@ fn test_records_compare_8() {
     let test_run = test_data("in-module", &src_line).unwrap_err().to_string();
     assert_eq!(
         test_run,
-        "Eval error: A value of type Record {f: U8, g: Asn, } cannot be converted into type IntegerLiteral"
+        "Eval error: Record {f: U8, g: Asn, } cannot be converted into IntegerLiteral"
     );
 }
 

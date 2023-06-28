@@ -10,6 +10,7 @@ use smallvec::SmallVec;
 
 use crate::compile::CompileError;
 use crate::traits::Token;
+use crate::typedefconversion;
 use crate::types::builtin::BgpUpdateMessage;
 use crate::types::collections::ElementTypeValue;
 use crate::types::datasources::NamedTypeDef;
@@ -84,6 +85,62 @@ pub enum TypeDef {
 }
 
 impl TypeDef {
+    // The function defined by this macro called `can_convert_into_type()`
+    // indicates whether the self type can be converted into another
+    // specified type. This function is used during Evaluation.
+    // This happens ONLY ON THE UNBOUNDED TYPES, meaning that Type
+    // dependencies, e.g. a PrefixLength can't be converted from an U32 that
+    // holds a value bigger than 128, is NOT checked here. That check is done
+    // during compilation. 
+    
+    // Likewise for a Record, the only check is that it
+    // can be converted into another Record, not that the sub-types of the
+    // records match.
+
+    // The conversions indicated here is unidirectional, e.g. a line
+    // `U8(U32,PrefixLength,IntegerLiteral;),` means that an U8 can converted
+    // to U32, PrefixLength and IntegerLiteral, but not the other way around.
+    typedefconversion!(
+        // have conversions, no data field
+        // SOURCE TYPE(TARGET TYPE WITHOUT DATA FIELD, ..; 
+        // TARGET TYPE WITH DATA FIELD)
+        U8(U32,PrefixLength,IntegerLiteral;),
+        U32(StringLiteral,IntegerLiteral;),
+        Boolean(StringLiteral;),
+        IpAddress(StringLiteral;),
+        Prefix(StringLiteral;),
+        Hop(StringLiteral;),
+        Community(StringLiteral;),
+        OriginType(StringLiteral;),
+        NextHop(StringLiteral;),
+        RouteStatus(StringLiteral;),
+        IntegerLiteral(U8,U32,PrefixLength,LocalPref,Asn;),
+        StringLiteral(Asn;),
+        HexLiteral(U8,U32,Community;),
+        PrefixLength(U8,U32;),
+        Asn(U32,StringLiteral;),
+        AsPath(StringLiteral;List),
+        LocalPref(U8,IntegerLiteral,StringLiteral;),
+        MultiExitDisc(U8,IntegerLiteral,StringLiteral;),
+        AtomicAggregator(U8;);
+        // have conversions, have data field
+        Record(;Record,OutputStream),
+        AcceptReject(StringLiteral;);
+        // no conversions, no data field
+        // SOURCE TYPE
+        Route,
+        BgpUpdateMessage,
+        Unknown;
+        // no conversions, have data field
+        // SOURCE TYPE
+        List,
+        Enum,
+        Rib,
+        Table,
+        OutputStream,
+        ConstEnumVariant
+    );
+
     pub(crate) fn new_record_type_from_short_string(
         type_ident_pairs: Vec<NamedTypeDef>,
     ) -> Result<TypeDef, CompileError> {
