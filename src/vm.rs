@@ -119,7 +119,9 @@ pub struct LinearMemory([TypeValue; 512]);
 
 impl LinearMemory {
     pub fn uninit() -> Self {
-        LinearMemory(std::array::from_fn(|_| TypeValue::UnInit))
+        // LinearMemory(std::array::from_fn(|_| TypeValue::UnInit))
+        const V: TypeValue = TypeValue::UnInit;
+        LinearMemory([V; 512])
     }
 
     pub fn get_mem_pos(&self, index: usize) -> Option<&TypeValue> {

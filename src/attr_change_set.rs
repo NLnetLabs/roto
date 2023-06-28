@@ -7,7 +7,7 @@ use std::ops::Index;
 
 use crate::types::builtin::{
     AsPath, Asn, AtomicAggregator, BuiltinTypeValue, Community, LocalPref,
-    MultiExitDisc, NextHop, OriginType, Prefix, RouteStatus,
+    MultiExitDisc, NextHop, OriginType, Prefix, RouteStatus, IpAddress,
 };
 use crate::types::collections::ElementTypeValue;
 use crate::types::typevalue::TypeValue;
@@ -56,6 +56,8 @@ impl ScalarValue for AtomicAggregator {}
 impl ScalarValue for Community {}
 impl ScalarValue for Prefix {}
 impl ScalarValue for RouteStatus {}
+impl ScalarValue for IpAddress {}
+impl ScalarValue for Asn {}
 // impl ScalarValue for (u8, u32) {}
 
 //------------ Attributes Change Set ----------------------------------------
@@ -82,6 +84,10 @@ pub struct AttrChangeSet {
     pub aggregator: ScalarOption<AtomicAggregator>,
     #[serde(skip_serializing_if = "VectorOption::is_none")]
     pub communities: VectorOption<Vec<Community>>,
+    #[serde(skip_serializing_if = "ScalarOption::is_none")]
+    pub peer_ip: ScalarOption<IpAddress>,
+    #[serde(skip_serializing_if = "ScalarOption::is_none")]
+    pub peer_asn: ScalarOption<Asn>,
     // mp_reach_nlri: Vec<Prefix>,
     // mp_unreach_nlri: Vec<Prefix>,
     #[serde(skip)]
