@@ -14,6 +14,7 @@
 use log::trace;
 use routecore::bgp::message::SessionConfig;
 use serde::Serialize;
+use smallvec::SmallVec;
 use std::{sync::Arc, net::IpAddr};
 
 /// Lamport Timestamp. Used to order messages between units/systems.
@@ -134,9 +135,9 @@ impl RawRouteWithDeltas {
             peer_ip: None,
             peer_asn: None,
             attribute_deltas,
-            status_deltas: RouteStatusDeltaList(vec![RouteStatusDelta::new(
-                delta_id, route_status.into(),
-            )]),
+            status_deltas: RouteStatusDeltaList::new(RouteStatusDelta::new(
+                delta_id, route_status,
+            )),
         }
     }
 
@@ -152,9 +153,9 @@ impl RawRouteWithDeltas {
             peer_ip: None,
             peer_asn: None,
             attribute_deltas: AttributeDeltaList::new(),
-            status_deltas: RouteStatusDeltaList(vec![RouteStatusDelta::new(
-                delta_id, route_status.into(),
-            )]),
+            status_deltas: RouteStatusDeltaList::new(RouteStatusDelta::new(
+                delta_id, route_status,
+            )),
         }
     }
 
@@ -559,11 +560,11 @@ impl AttributeDelta {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize)]
 struct RouteStatusDelta {
     delta_id: (RotondaId, LogicalTime),
-    status: TypeValue,
+    status: RouteStatus,
 }
 
 impl RouteStatusDelta {
-    pub fn new(delta_id: (RotondaId, LogicalTime), status: TypeValue) -> Self {
+    pub fn new(delta_id: (RotondaId, LogicalTime), status: RouteStatus) -> Self {
         Self {
             delta_id,
             status,
@@ -572,15 +573,22 @@ impl RouteStatusDelta {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize)]
-struct RouteStatusDeltaList(Vec<RouteStatusDelta>);
+struct RouteStatusDeltaList(SmallVec<[RouteStatusDelta; 2]>);
 
 impl RouteStatusDeltaList {
+    pub fn new(delta: RouteStatusDelta) -> Self {
+        let mut v = SmallVec::with_capacity(1);
+        v.push(delta);
+        Self(v)
+    }
+
     pub fn current(&self) -> TypeValue {
-        self.0.iter().last().unwrap().status.clone()
+        self.0.iter().last().unwrap().status.into()
     }
 
     pub fn current_as_ref(&self) -> Option<&TypeValue> {
-        self.0.iter().last().map(|s| &s.status)
+        // self.0.iter().last().map(|s| &s.status)
+        None
     }
 }
 
