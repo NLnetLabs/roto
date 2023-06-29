@@ -587,7 +587,6 @@ impl RouteStatusDeltaList {
     }
 
     pub fn current_as_ref(&self) -> Option<&TypeValue> {
-        // self.0.iter().last().map(|s| &s.status)
         None
     }
 }
