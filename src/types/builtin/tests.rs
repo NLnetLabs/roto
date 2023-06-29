@@ -48,6 +48,8 @@ mod route {
         roto_msgs.push(RawRouteWithDeltas::new_with_message(
             msg_id,
             prefixes[0],
+            None,
+            None,
             update,
             RouteStatus::InConvergence,
         ));
@@ -157,6 +159,8 @@ mod route {
         roto_msgs.push(RawRouteWithDeltas::new_with_message(
             msg_id,
             prefixes[0],
+            None,
+            None,
             update,
             RouteStatus::InConvergence,
         ));

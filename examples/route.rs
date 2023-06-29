@@ -43,6 +43,8 @@ fn test_data(
     let payload: RawRouteWithDeltas = RawRouteWithDeltas::new_with_message(
         msg_id,
         prefixes[0],
+        None,
+        None,
         update,
         RouteStatus::InConvergence,
     );

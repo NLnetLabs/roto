@@ -14,7 +14,7 @@
 use log::trace;
 use routecore::bgp::message::SessionConfig;
 use serde::Serialize;
-use std::{sync::Arc, net::IpAddr};
+use std::{net::IpAddr, sync::Arc};
 
 /// Lamport Timestamp. Used to order messages between units/systems.
 pub type LogicalTime = u64;
@@ -32,7 +32,8 @@ use crate::{
 };
 
 use super::{
-    AsPath, BuiltinTypeValue, NextHop, OriginType, Prefix, RouteStatus, IpAddress, Asn,
+    AsPath, Asn, BuiltinTypeValue, IpAddress, NextHop, OriginType, Prefix,
+    RouteStatus,
 };
 use crate::attr_change_set::{
     AttrChangeSet, ScalarOption, ScalarValue, VectorOption, VectorValue,
@@ -63,7 +64,7 @@ use crate::attr_change_set::{
 pub struct MaterializedRoute {
     pub route: AttrChangeSet,
     pub status: RouteStatus,
-    route_id: (RotondaId, LogicalTime)
+    route_id: (RotondaId, LogicalTime),
 }
 
 impl From<RawRouteWithDeltas> for MaterializedRoute {
@@ -74,7 +75,7 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
         MaterializedRoute {
             route: raw_route.take_latest_attrs(),
             status: status.into(),
-            route_id
+            route_id,
         }
     }
 }
@@ -114,6 +115,8 @@ impl RawRouteWithDeltas {
     pub fn new_with_message(
         delta_id: (RotondaId, LogicalTime),
         prefix: Prefix,
+        peer_ip: Option<IpAddress>,
+        peer_asn: Option<Asn>,
         raw_message: UpdateMessage,
         route_status: RouteStatus,
     ) -> Self {
@@ -124,18 +127,21 @@ impl RawRouteWithDeltas {
             .store_delta(AttributeDelta::new(
                 delta_id,
                 0,
-                raw_message.raw_message.create_changeset(prefix),
+                raw_message
+                    .raw_message
+                    .create_changeset(prefix, peer_ip, peer_asn),
             ))
             .unwrap();
 
         Self {
             prefix,
             raw_message: Arc::new(raw_message),
-            peer_ip: None,
-            peer_asn: None,
+            peer_ip,
+            peer_asn,
             attribute_deltas,
             status_deltas: RouteStatusDeltaList(vec![RouteStatusDelta::new(
-                delta_id, route_status.into(),
+                delta_id,
+                route_status.into(),
             )]),
         }
     }
@@ -153,7 +159,8 @@ impl RawRouteWithDeltas {
             peer_asn: None,
             attribute_deltas: AttributeDeltaList::new(),
             status_deltas: RouteStatusDeltaList(vec![RouteStatusDelta::new(
-                delta_id, route_status.into(),
+                delta_id,
+                route_status.into(),
             )]),
         }
     }
@@ -188,7 +195,11 @@ impl RawRouteWithDeltas {
         self.peer_asn.map(|asn| asn.0)
     }
 
-    pub fn update_status(&mut self, delta_id: (RotondaId, LogicalTime), new_status: RouteStatus) {
+    pub fn update_status(
+        &mut self,
+        delta_id: (RotondaId, LogicalTime),
+        new_status: RouteStatus,
+    ) {
         let delta = RouteStatusDelta::new(delta_id, new_status.into());
         self.status_deltas.0.push(delta);
     }
@@ -199,7 +210,11 @@ impl RawRouteWithDeltas {
         if let Some(attr_set) = self.attribute_deltas.deltas.last() {
             attr_set.attributes.clone()
         } else {
-            self.raw_message.raw_message.create_changeset(self.prefix)
+            self.raw_message.raw_message.create_changeset(
+                self.prefix,
+                self.peer_ip,
+                self.peer_asn,
+            )
         }
     }
 
@@ -223,10 +238,11 @@ impl RawRouteWithDeltas {
     // deltas.
     pub fn take_latest_attrs(mut self) -> AttrChangeSet {
         if self.attribute_deltas.deltas.is_empty() {
-            return self
-                .raw_message
-                .raw_message
-                .create_changeset(self.prefix);
+            return self.raw_message.raw_message.create_changeset(
+                self.prefix,
+                self.peer_ip,
+                self.peer_asn,
+            );
         }
 
         self.attribute_deltas
@@ -245,9 +261,11 @@ impl RawRouteWithDeltas {
                 .store_delta(AttributeDelta::new(
                     self.raw_message.message_id,
                     0,
-                    self.raw_message
-                        .raw_message
-                        .create_changeset(self.prefix),
+                    self.raw_message.raw_message.create_changeset(
+                        self.prefix,
+                        self.peer_ip,
+                        self.peer_asn,
+                    ),
                 ))
                 .unwrap();
         }
@@ -466,7 +484,10 @@ impl RawRouteWithDeltas {
     }
 
     pub fn status(&self) -> RouteStatus {
-        if let TypeValue::Builtin(BuiltinTypeValue::RouteStatus(route_status)) = self.status_deltas.current() {
+        if let TypeValue::Builtin(BuiltinTypeValue::RouteStatus(
+            route_status,
+        )) = self.status_deltas.current()
+        {
             route_status
         } else {
             unreachable!() // When we were constructed a RouteStatus was passed in so we always have at least one, and
@@ -563,11 +584,11 @@ struct RouteStatusDelta {
 }
 
 impl RouteStatusDelta {
-    pub fn new(delta_id: (RotondaId, LogicalTime), status: TypeValue) -> Self {
-        Self {
-            delta_id,
-            status,
-        }
+    pub fn new(
+        delta_id: (RotondaId, LogicalTime),
+        status: TypeValue,
+    ) -> Self {
+        Self { delta_id, status }
     }
 }
 
@@ -643,10 +664,9 @@ impl BgpUpdateMessage {
         match field_name.ident.as_str() {
             // `nlris` is a fake field (at least for now), it just serves to
             // host the `afi` and `safi` field.
-            "nlris" => Ok((
-                TypeDef::BgpUpdateMessage,
-                Token::FieldAccess(vec![]),
-            )),
+            "nlris" => {
+                Ok((TypeDef::BgpUpdateMessage, Token::FieldAccess(vec![])))
+            }
             "afi" => Ok((
                 TypeDef::ConstEnumVariant("AFI".into()),
                 Token::FieldAccess(vec![usize::from(
@@ -673,22 +693,18 @@ impl BgpUpdateMessage {
     ) -> Option<TypeValue> {
         match field_token.into() {
             BgpUpdateMessageToken::Nlris => Some(TypeValue::Unknown),
-            BgpUpdateMessageToken::Afi => Some(
-                TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(
-                    EnumVariant {
-                        enum_name: "AFI".into(),
-                        value: self.raw_message.0.nlris().afi().into(),
-                    },
-                ))
-            ),
-            BgpUpdateMessageToken::Safi => Some(
-                TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(
-                    EnumVariant {
-                        enum_name: "SAFI".into(),
-                        value: self.raw_message.0.nlris().safi().into(),
-                    },
-                ))
-            ),
+            BgpUpdateMessageToken::Afi => Some(TypeValue::Builtin(
+                BuiltinTypeValue::ConstU16EnumVariant(EnumVariant {
+                    enum_name: "AFI".into(),
+                    value: self.raw_message.0.nlris().afi().into(),
+                }),
+            )),
+            BgpUpdateMessageToken::Safi => Some(TypeValue::Builtin(
+                BuiltinTypeValue::ConstU8EnumVariant(EnumVariant {
+                    enum_name: "SAFI".into(),
+                    value: self.raw_message.0.nlris().safi().into(),
+                }),
+            )),
         }
     }
 }
@@ -708,10 +724,7 @@ impl RotoType for BgpUpdateMessage {
         .into())
     }
 
-    fn into_type(
-        self,
-        ty: &TypeDef,
-    ) -> Result<TypeValue, CompileError>
+    fn into_type(self, ty: &TypeDef) -> Result<TypeValue, CompileError>
     where
         Self: std::marker::Sized,
     {
@@ -729,22 +742,18 @@ impl RotoType for BgpUpdateMessage {
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         match method_token.into() {
-            BgpUpdateMessageToken::Afi => Ok(
-                TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(
-                    EnumVariant {
-                        enum_name: "AFI".into(),
-                        value: self.raw_message.0.nlris().afi().into(),
-                    },
-                ))
-            ),
-            BgpUpdateMessageToken::Safi => Ok(
-                TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(
-                    EnumVariant {
-                        enum_name: "SAFI".into(),
-                        value: self.raw_message.0.nlris().safi().into(),
-                    },
-                ))
-            ),
+            BgpUpdateMessageToken::Afi => Ok(TypeValue::Builtin(
+                BuiltinTypeValue::ConstU16EnumVariant(EnumVariant {
+                    enum_name: "AFI".into(),
+                    value: self.raw_message.0.nlris().afi().into(),
+                }),
+            )),
+            BgpUpdateMessageToken::Safi => Ok(TypeValue::Builtin(
+                BuiltinTypeValue::ConstU8EnumVariant(EnumVariant {
+                    enum_name: "SAFI".into(),
+                    value: self.raw_message.0.nlris().safi().into(),
+                }),
+            )),
             _ => Err(VmError::InvalidMethodCall),
         }
     }
@@ -796,7 +805,7 @@ impl From<BgpUpdateMessageToken> for usize {
         match val {
             BgpUpdateMessageToken::Nlris => 0,
             BgpUpdateMessageToken::Afi => 1,
-            BgpUpdateMessageToken::Safi => 2
+            BgpUpdateMessageToken::Safi => 2,
         }
     }
 }
@@ -1098,8 +1107,6 @@ pub enum RouteStatusToken {
     IsEmpty = 6,
 }
 
-
-
 impl From<usize> for RouteStatusToken {
     fn from(value: usize) -> Self {
         match value {
@@ -1123,7 +1130,6 @@ impl From<RouteStatusToken> for usize {
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize)]
 pub struct RotondaId(pub usize);
 
-
 //------------ Modification & Creation of new Updates -----------------------
 
 #[derive(Debug, Hash, Serialize)]
@@ -1139,7 +1145,12 @@ impl UpdateMessage {
     // Materialize a ChangeSet from the Update message. The materialized
     // Change set is completely self-contained (no references of any kind) &
     // holds all the attributes of the current BGP Update message.
-    pub fn create_changeset(&self, prefix: Prefix) -> AttrChangeSet {
+    pub fn create_changeset(
+        &self,
+        prefix: Prefix,
+        peer_ip: Option<IpAddress>,
+        peer_asn: Option<Asn>,
+    ) -> AttrChangeSet {
         AttrChangeSet {
             prefix: ReadOnlyScalarOption::<Prefix>::new(prefix.into()),
             as_path: VectorOption::<AsPath>::from(
@@ -1156,8 +1167,8 @@ impl UpdateMessage {
             )),
             aggregator: ScalarOption::from(self.0.aggregator()),
             communities: VectorOption::from(self.0.all_communities()),
-            peer_ip: Option::<IpAddress>::None.into(),
-            peer_asn: Option::<Asn>::None.into(),
+            peer_ip: ScalarOption::from(peer_ip),
+            peer_asn: ScalarOption::from(peer_asn),
             originator_id: Todo,
             cluster_list: Todo,
             extended_communities: Todo,

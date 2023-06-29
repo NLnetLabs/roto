@@ -43,6 +43,8 @@ fn test_data(
     let _payload: RawRouteWithDeltas = RawRouteWithDeltas::new_with_message(
         (RotondaId(0), 0),
         _prefixes[0],
+        None,
+        None,
         _update,
         RouteStatus::InConvergence,
     );
