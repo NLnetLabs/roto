@@ -226,6 +226,8 @@ impl LinearMemory {
                         route.get_value_ref_for_field(field_index[0])
                     {
                         Some(StackValue::Ref(v))
+                    } else if let Some(v) = route.get_field_by_index(field_index[0]) {
+                        Some(StackValue::Owned(v))
                     } else {
                         Some(StackValue::Owned(TypeValue::Unknown))
                     }
