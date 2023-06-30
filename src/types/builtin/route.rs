@@ -389,10 +389,8 @@ impl RawRouteWithDeltas {
         &self,
         field_token: usize,
     ) -> Option<TypeValue> {
-        let current_set = self.attribute_deltas.get_latest_change_set()?;
-
         match field_token.into() {
-            RouteToken::AsPath => current_set.as_path.clone().into_opt(),
+            RouteToken::AsPath => self.raw_message.raw_message.0.aspath().map(|p| p.to_hop_path()).map(TypeValue::from),
             RouteToken::OriginType => {
                 self.raw_message.raw_message.0.origin().map(TypeValue::from)
             }
