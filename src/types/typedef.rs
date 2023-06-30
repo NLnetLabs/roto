@@ -11,9 +11,8 @@ use smallvec::SmallVec;
 use crate::compile::CompileError;
 use crate::traits::Token;
 use crate::typedefconversion;
-use crate::types::builtin::BgpUpdateMessage;
+use crate::types::builtin::{BgpUpdateMessage, BmpMessage};
 use crate::types::collections::ElementTypeValue;
-use crate::types::datasources::NamedTypeDef;
 use crate::vm::{StackValue, VmError};
 use crate::{
     ast::{AcceptReject, ShortString},
@@ -26,7 +25,7 @@ use super::builtin::{
     Prefix, PrefixLength, RawRouteWithDeltas, RouteStatus, StringLiteral,
     Unknown, U32, U8,
 };
-use super::collections::Record;
+use super::collections::{Record, LazyElementTypeValue};
 use super::constant_enum::{Enum, EnumVariant};
 use super::datasources::{RibType, Table};
 use super::outputs::OutputStreamMessage;
@@ -38,6 +37,8 @@ use super::{
 // vec of field_indexes that are used in the hash to calculate
 // uniqueness for an entry.
 pub type RibTypeDef = (Box<TypeDef>, Option<Vec<SmallVec<[usize; 8]>>>);
+pub type NamedTypeDef = (ShortString, Box<TypeDef>);
+pub type LazyNamedTypeDef<'a> = (ShortString, Box<TypeDef>, Box<dyn Fn() -> LazyElementTypeValue<'a> + 'a>);
 
 #[derive(Clone, Debug, Eq, PartialEq, Default, Hash, Serialize)]
 pub enum TypeDef {
@@ -57,6 +58,7 @@ pub enum TypeDef {
     // ConstU32EnumVariant(ShortString),
     // A raw BGP message as bytes
     BgpUpdateMessage,
+    BmpMessage,
     // Builtin Types
     U32,
     U8,
@@ -130,6 +132,7 @@ impl TypeDef {
         // SOURCE TYPE
         Route,
         BgpUpdateMessage,
+        BmpMessage,
         Unknown;
         // no conversions, have data field
         // SOURCE TYPE
@@ -281,6 +284,28 @@ impl TypeDef {
                         result_type
                     };
                 }
+                // Another special case: BgpUpdateMessage also doesn't have
+                // actual fields, they are all simulated
+                (TypeDef::BmpMessage, _) => {
+                    trace!("BmpMessage w/ field '{}'", field);
+                    parent_type =
+                        BmpMessage::get_props_for_field(field)?;
+
+                    // Add the token to the FieldAccess vec.
+                    result_type = if let Token::FieldAccess(to_f) =
+                        &result_type.1
+                    {
+                        if let Token::FieldAccess(fa) = &parent_type.1 {
+                            let mut to_f1 = to_f.clone();
+                            to_f1.extend(fa);
+                            (parent_type.0.clone(), Token::FieldAccess(to_f1))
+                        } else {
+                            result_type
+                        }
+                    } else {
+                        result_type
+                    };
+                }
                 _ => {
                     return Err(format!(
                         "No field named '{}'",
@@ -369,6 +394,12 @@ impl TypeDef {
             }
             TypeDef::BgpUpdateMessage => {
                 BgpUpdateMessage::get_props_for_method(
+                    self.clone(),
+                    method_name,
+                )
+            }
+            TypeDef::BmpMessage => {
+                BmpMessage::get_props_for_method(
                     self.clone(),
                     method_name,
                 )
@@ -596,6 +627,7 @@ impl std::fmt::Display for TypeDef {
             TypeDef::IpAddress => write!(f, "IpAddress"),
             TypeDef::Route => write!(f, "Route"),
             TypeDef::BgpUpdateMessage => write!(f, "BgpUpdateMessage"),
+            TypeDef::BmpMessage => write!(f, "BmpMessage"),
             TypeDef::Rib(rib) => write!(f, "Rib of {}", rib.0),
             TypeDef::Table(table) => write!(f, "Table of {}", table),
             TypeDef::OutputStream(stream) => {
@@ -803,6 +835,9 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::BgpUpdateMessage(_) => {
                 TypeDef::BgpUpdateMessage
             }
+            BuiltinTypeValue::BmpMessage(_) => {
+                TypeDef::BgpUpdateMessage
+            }
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
             BuiltinTypeValue::LocalPref(_) => TypeDef::LocalPref,
@@ -845,6 +880,9 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::OriginType(_) => TypeDef::OriginType,
             BuiltinTypeValue::Route(_) => TypeDef::Route,
             BuiltinTypeValue::BgpUpdateMessage(_) => {
+                TypeDef::BgpUpdateMessage
+            }
+            BuiltinTypeValue::BmpMessage(_) => {
                 TypeDef::BgpUpdateMessage
             }
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,

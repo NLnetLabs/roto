@@ -17,7 +17,7 @@ use crate::types::builtin::IntegerLiteral;
 use crate::types::builtin::PrefixLength;
 use crate::types::builtin::StringLiteral;
 use crate::types::constant_enum::global_enums;
-use crate::types::datasources::NamedTypeDef;
+use crate::types::typedef::NamedTypeDef;
 
 use super::ast;
 use super::symbols;

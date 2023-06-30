@@ -15,6 +15,7 @@ use super::super::collections::List;
 use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 
+use super::bmp_message::BmpMessage;
 use super::{
     AsPath, Asn, AtomicAggregator, Boolean, Community, HexLiteral, Hop,
     IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, NextHop, OriginType,
@@ -53,6 +54,7 @@ pub enum BuiltinTypeValue {
     // Used for filtering on the properties of the whole message,
     // not taking into account any individual prefixes.
     BgpUpdateMessage(Arc<BgpUpdateMessage>),  // scalar
+    BmpMessage(Arc<BmpMessage>) // scalar
 }
 
 impl BuiltinTypeValue {
@@ -154,7 +156,7 @@ impl BuiltinTypeValue {
             }
             _ => return Err("Not a primitive type".into()),
         };
-        Ok(TypeValue::Builtin(var))
+        Ok(var.into())
     }
 
     pub(crate) fn into_type(
@@ -182,6 +184,9 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::Route(r) => r.into_type(ty),
             BuiltinTypeValue::BgpUpdateMessage(_raw) => Err(CompileError::from(
                 "Cannot convert raw BGP message into any other type.",
+            )),
+            BuiltinTypeValue::BmpMessage(_raw) => Err(CompileError::from(
+                "Cannot convert raw BMP message into any other type.",
             )),
             BuiltinTypeValue::RouteStatus(v) => v.into_type(ty),
             BuiltinTypeValue::Boolean(v) => v.into_type(ty),
@@ -332,7 +337,10 @@ impl Display for BuiltinTypeValue {
             }
             BuiltinTypeValue::Route(r) => write!(f, "{} (Route)", r),
             BuiltinTypeValue::BgpUpdateMessage(raw) => {
-                write!(f, "{:X?} (RawBgpMesage)", **raw)
+                write!(f, "{:X?} (RawBgpMessage)", **raw)
+            }
+            BuiltinTypeValue::BmpMessage(raw) => {
+                write!(f, "{:X?} (BmpMessage)", **raw)
             }
             BuiltinTypeValue::RouteStatus(v) => {
                 write!(f, "{} (Route Status)", v)

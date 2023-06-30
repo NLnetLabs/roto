@@ -11,7 +11,7 @@ use crate::{
     traits::{RotoType, Token},
     types::{
         builtin::{Boolean, BuiltinTypeValue},
-        collections::{ElementTypeValue, List, Record},
+        collections::{ElementTypeValue, List, Record, LazyRecord},
         datasources::{DataSource, DataSourceMethodValue},
         typedef::TypeDef,
         typevalue::TypeValue,
@@ -238,6 +238,16 @@ impl LinearMemory {
                         (*bgp_msg.as_ref()).get_value_owned_for_field(field_index[0]) {
                             trace!("v {:?}", v);
                             Some(StackValue::Owned(v))
+                        } else {
+                            Some(StackValue::Owned(TypeValue::Unknown))
+                        }
+                }
+                Some(TypeValue::Builtin(BuiltinTypeValue::BmpMessage(bmp_msg))) => {
+                    trace!("get bmp_message get_value_owned_for_field {:?} {:?}", bmp_msg, field_index);
+                    if let Some(v) = 
+                        (*bmp_msg.as_ref()).get_value_owned_for_field_index(field_index) {
+                            trace!("v {:?}", v);
+                            Some(StackValue::Owned(v.into()))
                         } else {
                             Some(StackValue::Owned(TypeValue::Unknown))
                         }

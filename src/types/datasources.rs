@@ -296,8 +296,6 @@ impl std::fmt::Display for RibType {
 
 // ----------- Table Type --------------------------------------------------
 
-pub type NamedTypeDef = (ShortString, Box<TypeDef>);
-
 pub enum DataSourceMethodValue {
     Ref(StackRefPos),
     TypeValue(TypeValue),
