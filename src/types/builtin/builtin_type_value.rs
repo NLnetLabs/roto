@@ -5,22 +5,24 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
+use routecore::bgp::message::Message;
 use serde::Serialize;
 
 use crate::compile::CompileError;
 use crate::traits::RotoType;
+use crate::types::collections::LazyRecord;
 use crate::types::constant_enum::EnumVariant;
 
 use super::super::collections::List;
 use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 
-use super::bmp_message::BmpMessage;
+use super::bmp_message::LazyRecordType;
 use super::{
     AsPath, Asn, AtomicAggregator, Boolean, Community, HexLiteral, Hop,
     IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, NextHop, OriginType,
     Prefix, PrefixLength, BgpUpdateMessage, RawRouteWithDeltas, RouteStatus,
-    StringLiteral, U32, U8,
+    StringLiteral, U32, U8, BmpMsgTypeDef,
 };
 
 #[derive(Debug, Eq, Clone, Hash, PartialEq, Serialize)]
@@ -54,7 +56,7 @@ pub enum BuiltinTypeValue {
     // Used for filtering on the properties of the whole message,
     // not taking into account any individual prefixes.
     BgpUpdateMessage(Arc<BgpUpdateMessage>),  // scalar
-    BmpMessage(Arc<BmpMessage>) // scalar
+    BmpMessage(Arc<LazyRecord<routecore::bmp::message::Message<bytes::Bytes>>>)
 }
 
 impl BuiltinTypeValue {
@@ -184,9 +186,6 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::Route(r) => r.into_type(ty),
             BuiltinTypeValue::BgpUpdateMessage(_raw) => Err(CompileError::from(
                 "Cannot convert raw BGP message into any other type.",
-            )),
-            BuiltinTypeValue::BmpMessage(_raw) => Err(CompileError::from(
-                "Cannot convert raw BMP message into any other type.",
             )),
             BuiltinTypeValue::RouteStatus(v) => v.into_type(ty),
             BuiltinTypeValue::Boolean(v) => v.into_type(ty),
@@ -339,9 +338,9 @@ impl Display for BuiltinTypeValue {
             BuiltinTypeValue::BgpUpdateMessage(raw) => {
                 write!(f, "{:X?} (RawBgpMessage)", **raw)
             }
-            BuiltinTypeValue::BmpMessage(raw) => {
-                write!(f, "{:X?} (BmpMessage)", **raw)
-            }
+            // BuiltinTypeValue::BmpMessage(raw) => {
+            //     write!(f, "{:X?} (BmpMessage)", **raw)
+            // }
             BuiltinTypeValue::RouteStatus(v) => {
                 write!(f, "{} (Route Status)", v)
             }

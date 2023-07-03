@@ -5,14 +5,15 @@ use std::hash::{Hash, Hasher};
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 use log::trace;
+use routecore::bgp::message::Message;
 use serde::Serialize;
 use smallvec::SmallVec;
 
 use crate::compile::CompileError;
 use crate::traits::Token;
 use crate::typedefconversion;
-use crate::types::builtin::{BgpUpdateMessage, BmpMessage};
-use crate::types::collections::ElementTypeValue;
+use crate::types::builtin::{BgpUpdateMessage, LazyRecordType};
+use crate::types::collections::{ElementTypeValue, LazyRecord};
 use crate::vm::{StackValue, VmError};
 use crate::{
     ast::{AcceptReject, ShortString},
@@ -38,7 +39,7 @@ use super::{
 // uniqueness for an entry.
 pub type RibTypeDef = (Box<TypeDef>, Option<Vec<SmallVec<[usize; 8]>>>);
 pub type NamedTypeDef = (ShortString, Box<TypeDef>);
-pub type LazyNamedTypeDef<'a> = (ShortString, Box<TypeDef>, Box<dyn Fn() -> LazyElementTypeValue<'a> + 'a>);
+pub type LazyNamedTypeDef<'a, T> = (ShortString, Box<TypeDef>, LazyElementTypeValue<'a, T>);
 
 #[derive(Clone, Debug, Eq, PartialEq, Default, Hash, Serialize)]
 pub enum TypeDef {
@@ -289,7 +290,7 @@ impl TypeDef {
                 (TypeDef::BmpMessage, _) => {
                     trace!("BmpMessage w/ field '{}'", field);
                     parent_type =
-                        BmpMessage::get_props_for_field(field)?;
+                        LazyRecord::<routecore::bmp::message::Message<bytes::Bytes>>::get_props_for_field(field)?;
 
                     // Add the token to the FieldAccess vec.
                     result_type = if let Token::FieldAccess(to_f) =
@@ -399,7 +400,7 @@ impl TypeDef {
                 )
             }
             TypeDef::BmpMessage => {
-                BmpMessage::get_props_for_method(
+                LazyRecord::<routecore::bmp::message::Message<bytes::Bytes>>::get_props_for_method(
                     self.clone(),
                     method_name,
                 )
@@ -835,9 +836,9 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::BgpUpdateMessage(_) => {
                 TypeDef::BgpUpdateMessage
             }
-            BuiltinTypeValue::BmpMessage(_) => {
-                TypeDef::BgpUpdateMessage
-            }
+            // BuiltinTypeValue::BmpMessage(_) => {
+            //     TypeDef::BmpMessage
+            // }
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
             BuiltinTypeValue::LocalPref(_) => TypeDef::LocalPref,
@@ -882,9 +883,9 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::BgpUpdateMessage(_) => {
                 TypeDef::BgpUpdateMessage
             }
-            BuiltinTypeValue::BmpMessage(_) => {
-                TypeDef::BgpUpdateMessage
-            }
+            // BuiltinTypeValue::BmpMessage(_) => {
+            //     TypeDef::BgpUpdateMessage
+            // }
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
             BuiltinTypeValue::LocalPref(_) => TypeDef::LocalPref,

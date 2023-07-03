@@ -9,9 +9,10 @@ use crate::compile::CompileError;
 use crate::traits::RotoType;
 use crate::vm::{StackValue, VmError};
 use std::fmt::{Display, Formatter};
+use std::marker::PhantomData;
 use std::sync::Arc;
 
-use super::builtin::{BuiltinTypeValue, U32};
+use super::builtin::{BuiltinTypeValue, U32, RotondaId, LogicalTime};
 use super::typedef::{MethodProps, TypeDef};
 use super::typevalue::TypeValue;
 
@@ -814,13 +815,13 @@ impl From<RecordToken> for usize {
 }
 
 //------------- LazyElementTypeValue ----------------------------------------
-pub enum LazyElementTypeValue<'a> {
-    LazyRecord(LazyRecord<'a>),
+pub enum LazyElementTypeValue<'a, T> {
+    LazyRecord(LazyRecord<'a, T>),
     Lazy(Box<dyn Fn() -> ElementTypeValue + 'a>),
     Materialized(ElementTypeValue),
 }
 
-impl LazyElementTypeValue<'_> {
+impl<T> LazyElementTypeValue<'_, T> {
     fn into_materialized(self) -> Self {
         match self {
             LazyElementTypeValue::LazyRecord(rec) => {
@@ -842,13 +843,13 @@ impl LazyElementTypeValue<'_> {
         }
     }
 
-    fn as_mut_record(&mut self) -> Result<&mut LazyRecord, VmError> {
+    fn as_mut_record(&mut self) -> Result<&mut LazyRecord<T>, VmError> {
         todo!()
     }
 }
 
-impl From<LazyElementTypeValue<'_>> for ElementTypeValue {
-    fn from(value: LazyElementTypeValue) -> Self {
+impl<T> From<LazyElementTypeValue<'_, T>> for ElementTypeValue {
+    fn from(value: LazyElementTypeValue<T>) -> Self {
         match value {
             LazyElementTypeValue::LazyRecord(rec) => ElementTypeValue::from(TypeValue::Record(Record::from(&rec))),
             LazyElementTypeValue::Lazy(elm) => elm(),
@@ -857,8 +858,8 @@ impl From<LazyElementTypeValue<'_>> for ElementTypeValue {
     }
 }
 
-impl From<&LazyElementTypeValue<'_>> for ElementTypeValue {
-    fn from(value: &LazyElementTypeValue) -> Self {
+impl<T> From<&LazyElementTypeValue<'_, T>> for ElementTypeValue {
+    fn from(value: &LazyElementTypeValue<T>) -> Self {
         match value {
             LazyElementTypeValue::LazyRecord(rec) => ElementTypeValue::from(TypeValue::Record(Record::from(rec))),
             LazyElementTypeValue::Lazy(elm) => elm(),
@@ -867,7 +868,7 @@ impl From<&LazyElementTypeValue<'_>> for ElementTypeValue {
     }
 }
 
-impl Serialize for LazyElementTypeValue<'_> {
+impl<T> Serialize for LazyElementTypeValue<'_, T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -876,27 +877,27 @@ impl Serialize for LazyElementTypeValue<'_> {
     }
 }
 
-impl std::fmt::Debug for LazyElementTypeValue<'_> {
+impl<T> std::fmt::Debug for LazyElementTypeValue<'_, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", ElementTypeValue::from(self))
     }
 }
 
-impl std::fmt::Display for LazyElementTypeValue<'_> {
+impl<T> std::fmt::Display for LazyElementTypeValue<'_, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", ElementTypeValue::from(self))
     }
 }
 
-impl Eq for LazyElementTypeValue<'_> {}
+impl<T> Eq for LazyElementTypeValue<'_, T> {}
 
-impl PartialEq for LazyElementTypeValue<'_> {
+impl<T> PartialEq for LazyElementTypeValue<'_, T> {
     fn eq(&self, other: &Self) -> bool {
         ElementTypeValue::from(self) == ElementTypeValue::from(other)
     }
 }
 
-impl Clone for LazyElementTypeValue<'_> {
+impl<T> Clone for LazyElementTypeValue<'_, T> {
     fn clone(&self) -> Self {
         match self {
             LazyElementTypeValue::LazyRecord(elm) => LazyElementTypeValue::LazyRecord(elm.clone()),
@@ -910,25 +911,31 @@ impl Clone for LazyElementTypeValue<'_> {
     }
 }
 
-//------------ BytesRecord type ---------------------------------------------
+//------------ LazyRecord type ---------------------------------------------
 
 // A BytesRecord is a bunch of bytes that poses as a Record. In reality it
 // only holds methods that pose as field.
-#[derive(Debug, Eq, Serialize)]
-pub struct LazyRecord<'a> {
-    value: Vec<(ShortString, LazyElementTypeValue<'a>)>,
+#[derive(Debug, Serialize)]
+pub struct LazyRecord<'a, T> {
+    message_id: (RotondaId, LogicalTime),
+    value: Vec<(ShortString, LazyElementTypeValue<'a, T>)>,
     is_materialized: bool,
+    pub(crate) raw_message: T
 }
 
-// impl<'a> Eq for LazyRecord<'a> {}
+impl<'a, T> Eq for LazyRecord<'a, T> {}
 
-impl<'a> LazyRecord<'a> {
+impl<'a, T> LazyRecord<'a, T> {
     pub(crate) fn new(
-        value: Vec<(ShortString, LazyElementTypeValue<'a>)>,
+        message_id: (RotondaId, LogicalTime),
+        value: Vec<(ShortString, LazyElementTypeValue<'a, T>)>,
+        raw_message: T,
     ) -> Result<Self, CompileError> {
         Ok(LazyRecord {
             value,
             is_materialized: false,
+            raw_message,
+            message_id
         })
     }
 
@@ -950,8 +957,10 @@ impl<'a> LazyRecord<'a> {
         }
 
         Self {
+            message_id: self.message_id,
             value: s,
             is_materialized: true,
+            raw_message: self.raw_message
         }
     }
 
@@ -1055,7 +1064,7 @@ impl<'a> LazyRecord<'a> {
 
         // Ok(())
 
-        let mut elm: Option<&mut (ShortString, LazyElementTypeValue)> =
+        let mut elm: Option<&mut (ShortString, LazyElementTypeValue<T>)> =
             self.value.get_mut(field_index[0]).map(|f| {
                 f.1.materialize();
                 f
@@ -1082,7 +1091,7 @@ impl<'a> LazyRecord<'a> {
     }
 }
 
-impl PartialEq for LazyRecord<'_> {
+impl<T> PartialEq for LazyRecord<'_, T> {
     fn eq(&self, other: &Self) -> bool {
         Record::from(self) == Record::from(other)
     }
@@ -1090,19 +1099,19 @@ impl PartialEq for LazyRecord<'_> {
 
 // impl Eq for LazyRecord {}
 
-impl Clone for LazyRecord<'_> {
+impl<T> Clone for LazyRecord<'_, T> {
     fn clone(&self) -> Self {
         self.as_materialized_record()
     }
 }
 
-impl std::hash::Hash for LazyRecord<'_> {
+impl<T> std::hash::Hash for LazyRecord<'_, T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         todo!()
     }
 }
 
-impl Display for LazyRecord<'_> {
+impl<T> Display for LazyRecord<'_, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{{")?;
         for (i, (field, elm)) in self.value.iter().enumerate() {
@@ -1120,95 +1129,95 @@ impl Display for LazyRecord<'_> {
     }
 }
 
-impl RotoType for LazyRecord<'_> {
-    fn get_props_for_method(
-        ty: TypeDef,
-        method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        match method_name.ident.as_str() {
-            "get" => Ok(MethodProps::new(
-                ty,
-                RecordToken::Get.into(),
-                vec![TypeDef::U32],
-            )),
-            "get_all" => {
-                Ok(MethodProps::new(ty, RecordToken::GetAll.into(), vec![]))
-            }
-            "contains" => Ok(MethodProps::new(
-                TypeDef::Boolean,
-                RecordToken::Contains.into(),
-                vec![ty],
-            )),
-            _ => Err(format!(
-                "Unknown method '{}' for Record type with fields {:?}",
-                method_name.ident, ty
-            )
-            .into()),
-        }
-    }
+// impl<T: std::fmt::Debug> RotoType for LazyRecord<'_, T> {
+//     fn get_props_for_method(
+//         ty: TypeDef,
+//         method_name: &crate::ast::Identifier,
+//     ) -> Result<MethodProps, CompileError>
+//     where
+//         Self: std::marker::Sized,
+//     {
+//         match method_name.ident.as_str() {
+//             "get" => Ok(MethodProps::new(
+//                 ty,
+//                 RecordToken::Get.into(),
+//                 vec![TypeDef::U32],
+//             )),
+//             "get_all" => {
+//                 Ok(MethodProps::new(ty, RecordToken::GetAll.into(), vec![]))
+//             }
+//             "contains" => Ok(MethodProps::new(
+//                 TypeDef::Boolean,
+//                 RecordToken::Contains.into(),
+//                 vec![ty],
+//             )),
+//             _ => Err(format!(
+//                 "Unknown method '{}' for Record type with fields {:?}",
+//                 method_name.ident, ty
+//             )
+//             .into()),
+//         }
+//     }
 
-    fn into_type(
-        self,
-        into_type: &TypeDef,
-    ) -> Result<TypeValue, CompileError> {
-        // Converting from a Record into a Record is not as straight-forward
-        // as it is for primitive types, since we have to check whether the
-        // fields in both completely match.
-        match into_type {
-            TypeDef::Record(_) => {
-                if into_type == &TypeValue::Record((&self).into()) {
-                    Ok(self.into())
-                } else {
-                    match into_type {
-                        TypeDef::OutputStream(rec) => Ok(TypeValue::OutputStreamMessage(
-                            Arc::new(super::outputs::OutputStreamMessage {
-                                name: "".into(),
-                                topic: "".into(),
-                                record_type: (**rec).clone(),
-                                record: self.into(),
-                            }),
-                        )),
-                        _ => Err("Record type cannot be converted into another type"
-                        .to_string()
-                        .into())
-                    }
-                }
-            }
-            _ => Err("Record type cannot be converted into another type"
-                .to_string()
-                .into()),
-        }
-    }
+//     fn into_type(
+//         self,
+//         into_type: &TypeDef,
+//     ) -> Result<TypeValue, CompileError> {
+//         // Converting from a Record into a Record is not as straight-forward
+//         // as it is for primitive types, since we have to check whether the
+//         // fields in both completely match.
+//         match into_type {
+//             TypeDef::Record(_) => {
+//                 if into_type == &TypeValue::Record((&self).into()) {
+//                     Ok(self.into())
+//                 } else {
+//                     match into_type {
+//                         TypeDef::OutputStream(rec) => Ok(TypeValue::OutputStreamMessage(
+//                             Arc::new(super::outputs::OutputStreamMessage {
+//                                 name: "".into(),
+//                                 topic: "".into(),
+//                                 record_type: (**rec).clone(),
+//                                 record: self.into(),
+//                             }),
+//                         )),
+//                         _ => Err("Record type cannot be converted into another type"
+//                         .to_string()
+//                         .into())
+//                     }
+//                 }
+//             }
+//             _ => Err("Record type cannot be converted into another type"
+//                 .to_string()
+//                 .into()),
+//         }
+//     }
 
-    fn exec_value_method(
-        &self,
-        _method: usize,
-        _args: &[StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
+//     fn exec_value_method(
+//         &self,
+//         _method: usize,
+//         _args: &[StackValue],
+//         _res_type: TypeDef,
+//     ) -> Result<TypeValue, VmError> {
+//         todo!()
+//     }
 
-    fn exec_consume_value_method(
-        self,
-        _method: usize,
-        _args: Vec<TypeValue>,
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
+//     fn exec_consume_value_method(
+//         self,
+//         _method: usize,
+//         _args: Vec<TypeValue>,
+//         _res_type: TypeDef,
+//     ) -> Result<TypeValue, VmError> {
+//         todo!()
+//     }
 
-    fn exec_type_method(
-        _method_token: usize,
-        _args: &[StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
-}
+//     fn exec_type_method(
+//         _method_token: usize,
+//         _args: &[StackValue],
+//         _res_type: TypeDef,
+//     ) -> Result<TypeValue, VmError> {
+//         todo!()
+//     }
+// }
 
 // Value Expressions that contain a Record parsed as a pair of
 // (field_name, value) pairs. This turns it into an actual Record.
@@ -1236,8 +1245,8 @@ impl RotoType for LazyRecord<'_> {
 //     }
 // }
 
-impl From<&LazyRecord<'_>> for Record {
-    fn from(value: &LazyRecord) -> Self {
+impl<T> From<&LazyRecord<'_, T>> for Record {
+    fn from(value: &LazyRecord<T>) -> Self {
         let mut v = vec![];
         for field in &value.value {
             v.push((
@@ -1249,8 +1258,8 @@ impl From<&LazyRecord<'_>> for Record {
     }
 }
 
-impl From<LazyRecord<'_>> for TypeValue {
-    fn from(value: LazyRecord) -> Self {
+impl<T> From<LazyRecord<'_, T>> for TypeValue {
+    fn from(value: LazyRecord<T>) -> Self {
         let mut rec = vec![];
         for mut field in value.value {
             field.1.materialize();
