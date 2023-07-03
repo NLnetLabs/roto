@@ -815,13 +815,13 @@ impl From<RecordToken> for usize {
 }
 
 //------------- LazyElementTypeValue ----------------------------------------
-pub enum LazyElementTypeValue<'a, T> {
-    LazyRecord(LazyRecord<'a, T>),
-    Lazy(Box<dyn Fn() -> ElementTypeValue + 'a>),
+pub enum LazyElementTypeValue<T> {
+    LazyRecord(LazyRecord<T>),
+    Lazy(Box<dyn Fn() -> ElementTypeValue>),
     Materialized(ElementTypeValue),
 }
 
-impl<T> LazyElementTypeValue<'_, T> {
+impl<T> LazyElementTypeValue<T> {
     fn into_materialized(self) -> Self {
         match self {
             LazyElementTypeValue::LazyRecord(rec) => {
@@ -848,7 +848,7 @@ impl<T> LazyElementTypeValue<'_, T> {
     }
 }
 
-impl<T> From<LazyElementTypeValue<'_, T>> for ElementTypeValue {
+impl<T> From<LazyElementTypeValue<T>> for ElementTypeValue {
     fn from(value: LazyElementTypeValue<T>) -> Self {
         match value {
             LazyElementTypeValue::LazyRecord(rec) => ElementTypeValue::from(TypeValue::Record(Record::from(&rec))),
@@ -858,7 +858,7 @@ impl<T> From<LazyElementTypeValue<'_, T>> for ElementTypeValue {
     }
 }
 
-impl<T> From<&LazyElementTypeValue<'_, T>> for ElementTypeValue {
+impl<T> From<&LazyElementTypeValue<T>> for ElementTypeValue {
     fn from(value: &LazyElementTypeValue<T>) -> Self {
         match value {
             LazyElementTypeValue::LazyRecord(rec) => ElementTypeValue::from(TypeValue::Record(Record::from(rec))),
@@ -868,7 +868,7 @@ impl<T> From<&LazyElementTypeValue<'_, T>> for ElementTypeValue {
     }
 }
 
-impl<T> Serialize for LazyElementTypeValue<'_, T> {
+impl<T> Serialize for LazyElementTypeValue<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -877,27 +877,27 @@ impl<T> Serialize for LazyElementTypeValue<'_, T> {
     }
 }
 
-impl<T> std::fmt::Debug for LazyElementTypeValue<'_, T> {
+impl<T> std::fmt::Debug for LazyElementTypeValue<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", ElementTypeValue::from(self))
     }
 }
 
-impl<T> std::fmt::Display for LazyElementTypeValue<'_, T> {
+impl<T> std::fmt::Display for LazyElementTypeValue<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", ElementTypeValue::from(self))
     }
 }
 
-impl<T> Eq for LazyElementTypeValue<'_, T> {}
+impl<T> Eq for LazyElementTypeValue<T> {}
 
-impl<T> PartialEq for LazyElementTypeValue<'_, T> {
+impl<T> PartialEq for LazyElementTypeValue<T> {
     fn eq(&self, other: &Self) -> bool {
         ElementTypeValue::from(self) == ElementTypeValue::from(other)
     }
 }
 
-impl<T> Clone for LazyElementTypeValue<'_, T> {
+impl<T> Clone for LazyElementTypeValue<T> {
     fn clone(&self) -> Self {
         match self {
             LazyElementTypeValue::LazyRecord(elm) => LazyElementTypeValue::LazyRecord(elm.clone()),
@@ -916,19 +916,19 @@ impl<T> Clone for LazyElementTypeValue<'_, T> {
 // A BytesRecord is a bunch of bytes that poses as a Record. In reality it
 // only holds methods that pose as field.
 #[derive(Debug, Serialize)]
-pub struct LazyRecord<'a, T> {
+pub struct LazyRecord<T> {
     message_id: (RotondaId, LogicalTime),
-    value: Vec<(ShortString, LazyElementTypeValue<'a, T>)>,
+    value: Vec<(ShortString, LazyElementTypeValue<T>)>,
     is_materialized: bool,
-    pub(crate) raw_message: T
+    pub(crate) raw_message: T,
 }
 
-impl<'a, T> Eq for LazyRecord<'a, T> {}
+impl<T> Eq for LazyRecord<T> {}
 
-impl<'a, T> LazyRecord<'a, T> {
+impl<T> LazyRecord<T> {
     pub(crate) fn new(
         message_id: (RotondaId, LogicalTime),
-        value: Vec<(ShortString, LazyElementTypeValue<'a, T>)>,
+        value: Vec<(ShortString, LazyElementTypeValue<T>)>,
         raw_message: T,
     ) -> Result<Self, CompileError> {
         Ok(LazyRecord {
@@ -969,8 +969,8 @@ impl<'a, T> LazyRecord<'a, T> {
     }
 
     pub fn create_instance(
-        ty: &'a TypeDef,
-        kvs: Vec<(&'a str, TypeValue)>,
+        ty: &TypeDef,
+        kvs: Vec<(&str, TypeValue)>,
     ) -> Result<Record, CompileError> {
         if kvs.is_empty() {
             return Err(CompileError::new(
@@ -997,7 +997,7 @@ impl<'a, T> LazyRecord<'a, T> {
 
     pub fn get_value_for_field(
         &self,
-        field: &'a str,
+        field: &str,
     ) -> Option<ElementTypeValue> {
         self.value
             .iter()
@@ -1042,7 +1042,7 @@ impl<'a, T> LazyRecord<'a, T> {
     }
 
     pub fn set_value_on_field_index(
-        &'a mut self,
+        &mut self,
         field_index: SmallVec<[usize; 8]>,
         value: TypeValue,
     ) -> Result<(), VmError> {
@@ -1091,7 +1091,7 @@ impl<'a, T> LazyRecord<'a, T> {
     }
 }
 
-impl<T> PartialEq for LazyRecord<'_, T> {
+impl<T> PartialEq for LazyRecord<T> {
     fn eq(&self, other: &Self) -> bool {
         Record::from(self) == Record::from(other)
     }
@@ -1099,19 +1099,19 @@ impl<T> PartialEq for LazyRecord<'_, T> {
 
 // impl Eq for LazyRecord {}
 
-impl<T> Clone for LazyRecord<'_, T> {
+impl<T> Clone for LazyRecord<T> {
     fn clone(&self) -> Self {
         self.as_materialized_record()
     }
 }
 
-impl<T> std::hash::Hash for LazyRecord<'_, T> {
+impl<T> std::hash::Hash for LazyRecord<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         todo!()
     }
 }
 
-impl<T> Display for LazyRecord<'_, T> {
+impl<T> Display for LazyRecord<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{{")?;
         for (i, (field, elm)) in self.value.iter().enumerate() {
@@ -1129,7 +1129,7 @@ impl<T> Display for LazyRecord<'_, T> {
     }
 }
 
-// impl<T: std::fmt::Debug> RotoType for LazyRecord<'_, T> {
+// impl<T: std::fmt::Debug> RotoType for LazyRecord<T> {
 //     fn get_props_for_method(
 //         ty: TypeDef,
 //         method_name: &crate::ast::Identifier,
@@ -1245,7 +1245,7 @@ impl<T> Display for LazyRecord<'_, T> {
 //     }
 // }
 
-impl<T> From<&LazyRecord<'_, T>> for Record {
+impl<T> From<&LazyRecord<T>> for Record {
     fn from(value: &LazyRecord<T>) -> Self {
         let mut v = vec![];
         for field in &value.value {
@@ -1258,7 +1258,7 @@ impl<T> From<&LazyRecord<'_, T>> for Record {
     }
 }
 
-impl<T> From<LazyRecord<'_, T>> for TypeValue {
+impl<T> From<LazyRecord<T>> for TypeValue {
     fn from(value: LazyRecord<T>) -> Self {
         let mut rec = vec![];
         for mut field in value.value {

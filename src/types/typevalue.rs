@@ -24,7 +24,7 @@ use super::{
     builtin::{
         primitives, Asn, BgpUpdateMessage, Boolean, BuiltinTypeValue,
         HexLiteral, IntegerLiteral, IpAddress, Prefix, PrefixLength,
-        RawRouteWithDeltas, StringLiteral, U32, U8, LazyRecordType,
+        RawRouteWithDeltas, StringLiteral, U32, U8,
     },
     collections::{ElementTypeValue, List, Record, LazyRecord},
     constant_enum::Enum,
@@ -177,7 +177,7 @@ impl RotoType for TypeValue {
             TypeDef::AsPath => AsPath::get_props_for_method(ty, method_name),
             TypeDef::AtomicAggregator => Err(CompileError::new("Unsupported TypeDef::AtomicAggregator in TypeValue::get_props_for_method()".to_string())),
             TypeDef::BgpUpdateMessage => BgpUpdateMessage::get_props_for_method(ty, method_name),
-            TypeDef::BmpMessage => LazyRecord::get_props_for_method(ty, method_name),
+            TypeDef::LazyRecord => LazyRecord::get_props_for_method(ty, method_name),
             TypeDef::Boolean => Boolean::get_props_for_method(ty, method_name),
             TypeDef::Community => Community::get_props_for_method(ty, method_name),
             TypeDef::ConstEnumVariant(_) => Err(CompileError::new("Unsupported TypeDef::ConstEnumVariant in TypeValue::get_props_for_method()".to_string())),
@@ -237,6 +237,7 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::StringLiteral(v) => v.into_type(ty),
                 BuiltinTypeValue::U32(v) => v.into_type(ty),
                 BuiltinTypeValue::U8(v) => v.into_type(ty),
+                BuiltinTypeValue::BmpMessage(v) => Err(CompileError::new("Unsupported TypeValue::BmpMessage in TypeValue::into_type()".to_string())),
             }
             TypeValue::Enum(v) => v.into_type(ty),
             TypeValue::List(v) => v.into_type(ty),
@@ -266,6 +267,9 @@ impl RotoType for TypeValue {
                     v.exec_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::BgpUpdateMessage(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::BmpMessage(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::Boolean(v) => {
@@ -370,6 +374,9 @@ impl RotoType for TypeValue {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::BgpUpdateMessage(_) => {
+                    Err(VmError::InvalidValueType)
+                }
+                BuiltinTypeValue::BmpMessage(_) => {
                     Err(VmError::InvalidValueType)
                 }
                 BuiltinTypeValue::Boolean(v) => {

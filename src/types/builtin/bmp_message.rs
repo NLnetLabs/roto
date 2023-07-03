@@ -10,73 +10,19 @@ use crate::{
     compile::CompileError,
     traits::{RotoType, Token},
     types::{
-        builtin::Boolean,
-        collections::{LazyElementTypeValue, LazyRecord},
+        collections::LazyRecord,
         constant_enum::EnumVariant,
-        typedef::{MethodProps, TypeDef, NamedTypeDef},
+        typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
     },
     vm::{StackValue, VmError},
 };
 
-use super::{BuiltinTypeValue, LogicalTime, RotondaId};
+use super::BuiltinTypeValue;
 
 //------------ BmpUpdateMessage ------------------------------------------------
 
-// A data-structure that stores the array of bytes of the incoming BMP message,
-// together with its logical timestamp and an ID of the instance
-// and/or unit that received it originally.
-
-// pub enum Message<Octets: AsRef<[u8]>> {
-//     RouteMonitoring(RouteMonitoring<Octets>),
-//     StatisticsReport(StatisticsReport<Octets>),
-//     PeerDownNotification(PeerDownNotification<Octets>),
-//     PeerUpNotification(PeerUpNotification<Octets>),
-//     InitiationMessage(InitiationMessage<Octets>),
-//     TerminationMessage(TerminationMessage<Octets>),
-//     RouteMirroring(RouteMirroring<Octets>),
-// }
-#[derive(Debug, Serialize)]
-pub struct LazyRecordType<T> {
-    message_id: (RotondaId, LogicalTime),
-    // The TypeDef enum does *not* have an entry for LazyRecord, so we'll
-    // store the actual type definition here.
-    // type_def: TD,
-    _raw_message: T,
-}
-
-impl<T> std::hash::Hash for LazyRecordType<T> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.message_id.hash(state);
-    }
-}
-
-impl<T> LazyRecordType<T> {
-    pub fn message_id(&self) -> (RotondaId, u64) {
-        self.message_id
-    }
-}
-
-impl<T> PartialEq for LazyRecordType<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.message_id == other.message_id
-    }
-}
-
-// impl std::hash::Hash for BmpMessage {
-//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-//         self.raw_message.hash(state);
-//     }
-// }
-
-impl<T> Eq for LazyRecordType<T> {}
-
-#[derive(Debug)]
-pub(crate) struct BmpMsgTypeDef {
-    type_def: Vec<NamedTypeDef>
-}
-
-impl LazyRecord<'_, RouteCoreBmpMessage<bytes::Bytes>> {
+impl LazyRecord<RouteCoreBmpMessage<bytes::Bytes>> {
     pub(crate) fn get_props_for_field(
         field_name: &crate::ast::Identifier,
     ) -> Result<(TypeDef, crate::traits::Token), CompileError>
@@ -184,7 +130,7 @@ impl LazyRecord<'_, RouteCoreBmpMessage<bytes::Bytes>> {
     }
 }
 
-impl RotoType for LazyRecord<'_, RouteCoreBmpMessage<bytes::Bytes>> {
+impl RotoType for LazyRecord<RouteCoreBmpMessage<bytes::Bytes>> {
     fn get_props_for_method(
         _ty: TypeDef,
         method_name: &crate::ast::Identifier,
@@ -265,12 +211,6 @@ impl RotoType for LazyRecord<'_, RouteCoreBmpMessage<bytes::Bytes>> {
     }
 
 }
-
-// impl From<LazyRecord<'_, RouteCoreBmpMessage<bytes::Bytes>>> for TypeValue {
-//     fn from(raw: LazyRecordType<routecore::bmp::message::Message<bytes::Bytes>>) -> Self {
-//         TypeValue::Builtin(BuiltinTypeValue::BmpMessage(Arc::new(raw)))
-//     }
-// }
 
 #[derive(Debug)]
 enum BmpMessageToken {

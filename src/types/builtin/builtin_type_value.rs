@@ -17,12 +17,11 @@ use super::super::collections::List;
 use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 
-use super::bmp_message::LazyRecordType;
 use super::{
     AsPath, Asn, AtomicAggregator, Boolean, Community, HexLiteral, Hop,
     IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, NextHop, OriginType,
     Prefix, PrefixLength, BgpUpdateMessage, RawRouteWithDeltas, RouteStatus,
-    StringLiteral, U32, U8, BmpMsgTypeDef,
+    StringLiteral, U32, U8,
 };
 
 #[derive(Debug, Eq, Clone, Hash, PartialEq, Serialize)]
@@ -187,6 +186,9 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::BgpUpdateMessage(_raw) => Err(CompileError::from(
                 "Cannot convert raw BGP message into any other type.",
             )),
+            BuiltinTypeValue::BmpMessage(_raw) => Err(CompileError::from(
+                "Cannot convert raw BMP message into any other type.",
+            )),
             BuiltinTypeValue::RouteStatus(v) => v.into_type(ty),
             BuiltinTypeValue::Boolean(v) => v.into_type(ty),
             BuiltinTypeValue::HexLiteral(v) => v.into_type(ty),
@@ -338,9 +340,9 @@ impl Display for BuiltinTypeValue {
             BuiltinTypeValue::BgpUpdateMessage(raw) => {
                 write!(f, "{:X?} (RawBgpMessage)", **raw)
             }
-            // BuiltinTypeValue::BmpMessage(raw) => {
-            //     write!(f, "{:X?} (BmpMessage)", **raw)
-            // }
+            BuiltinTypeValue::BmpMessage(raw) => {
+                write!(f, "{:X?} (BmpMessage)", **raw)
+            }
             BuiltinTypeValue::RouteStatus(v) => {
                 write!(f, "{} (Route Status)", v)
             }

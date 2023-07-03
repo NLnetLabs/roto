@@ -247,7 +247,7 @@ impl LinearMemory {
                     if let Some(v) = 
                         (*bmp_msg.as_ref()).get_value_owned_for_field_index(field_index) {
                             trace!("v {:?}", v);
-                            Some(StackValue::Owned(v.into()))
+                            Some(StackValue::Owned(v))
                         } else {
                             Some(StackValue::Owned(TypeValue::Unknown))
                         }

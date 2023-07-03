@@ -5,14 +5,13 @@ use std::hash::{Hash, Hasher};
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 use log::trace;
-use routecore::bgp::message::Message;
 use serde::Serialize;
 use smallvec::SmallVec;
 
 use crate::compile::CompileError;
 use crate::traits::Token;
 use crate::typedefconversion;
-use crate::types::builtin::{BgpUpdateMessage, LazyRecordType};
+use crate::types::builtin::BgpUpdateMessage;
 use crate::types::collections::{ElementTypeValue, LazyRecord};
 use crate::vm::{StackValue, VmError};
 use crate::{
@@ -39,7 +38,7 @@ use super::{
 // uniqueness for an entry.
 pub type RibTypeDef = (Box<TypeDef>, Option<Vec<SmallVec<[usize; 8]>>>);
 pub type NamedTypeDef = (ShortString, Box<TypeDef>);
-pub type LazyNamedTypeDef<'a, T> = (ShortString, Box<TypeDef>, LazyElementTypeValue<'a, T>);
+pub type LazyNamedTypeDef<T> = (ShortString, Box<TypeDef>, LazyElementTypeValue<T>);
 
 #[derive(Clone, Debug, Eq, PartialEq, Default, Hash, Serialize)]
 pub enum TypeDef {
@@ -59,7 +58,7 @@ pub enum TypeDef {
     // ConstU32EnumVariant(ShortString),
     // A raw BGP message as bytes
     BgpUpdateMessage,
-    BmpMessage,
+    LazyRecord,
     // Builtin Types
     U32,
     U8,
@@ -133,7 +132,7 @@ impl TypeDef {
         // SOURCE TYPE
         Route,
         BgpUpdateMessage,
-        BmpMessage,
+        LazyRecord,
         Unknown;
         // no conversions, have data field
         // SOURCE TYPE
@@ -287,7 +286,7 @@ impl TypeDef {
                 }
                 // Another special case: BgpUpdateMessage also doesn't have
                 // actual fields, they are all simulated
-                (TypeDef::BmpMessage, _) => {
+                (TypeDef::LazyRecord, _) => {
                     trace!("BmpMessage w/ field '{}'", field);
                     parent_type =
                         LazyRecord::<routecore::bmp::message::Message<bytes::Bytes>>::get_props_for_field(field)?;
@@ -399,7 +398,7 @@ impl TypeDef {
                     method_name,
                 )
             }
-            TypeDef::BmpMessage => {
+            TypeDef::LazyRecord => {
                 LazyRecord::<routecore::bmp::message::Message<bytes::Bytes>>::get_props_for_method(
                     self.clone(),
                     method_name,
@@ -628,7 +627,7 @@ impl std::fmt::Display for TypeDef {
             TypeDef::IpAddress => write!(f, "IpAddress"),
             TypeDef::Route => write!(f, "Route"),
             TypeDef::BgpUpdateMessage => write!(f, "BgpUpdateMessage"),
-            TypeDef::BmpMessage => write!(f, "BmpMessage"),
+            TypeDef::LazyRecord => write!(f, "BmpMessage"),
             TypeDef::Rib(rib) => write!(f, "Rib of {}", rib.0),
             TypeDef::Table(table) => write!(f, "Table of {}", table),
             TypeDef::OutputStream(stream) => {
@@ -847,6 +846,7 @@ impl From<&BuiltinTypeValue> for TypeDef {
             }
             BuiltinTypeValue::NextHop(_) => TypeDef::NextHop,
             BuiltinTypeValue::MultiExitDisc(_) => TypeDef::MultiExitDisc,
+            BuiltinTypeValue::BmpMessage(_) => todo!(),
         }
     }
 }
@@ -894,6 +894,7 @@ impl From<BuiltinTypeValue> for TypeDef {
             }
             BuiltinTypeValue::NextHop(_) => TypeDef::NextHop,
             BuiltinTypeValue::MultiExitDisc(_) => TypeDef::MultiExitDisc,
+            BuiltinTypeValue::BmpMessage(_) => todo!(),
         }
     }
 }
