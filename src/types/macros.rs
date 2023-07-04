@@ -47,3 +47,33 @@ macro_rules! typedefconversion {
         }
     }
 }
+
+#[macro_export]
+macro_rules! createtoken {
+    (
+        $token_enum: ident;
+        $( $token: ident = $value: literal ),*
+    ) => {
+        #[derive(Debug)]
+        enum $token_enum {
+            $( $token = $value, )*
+        }
+
+        impl From<usize> for $token_enum {
+            fn from(val: usize) -> Self {
+                match val {
+                    $( $value => $token_enum::$token, )*
+                    _ => panic!("Unknown token value: {}", val),
+                }
+            }
+        }
+
+        impl From<$token_enum> for usize {
+            fn from(val: $token_enum) -> Self {
+                match val {
+                    $( $token_enum::$token => $value, )*
+                }
+            }
+        }
+    }
+}

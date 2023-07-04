@@ -190,7 +190,7 @@ impl RawRouteWithDeltas {
     }
 
     pub fn update_status(&mut self, delta_id: (RotondaId, LogicalTime), new_status: RouteStatus) {
-        let delta = RouteStatusDelta::new(delta_id, new_status.into());
+        let delta = RouteStatusDelta::new(delta_id, new_status);
         self.status_deltas.0.push(delta);
     }
 

@@ -25,7 +25,7 @@ use super::builtin::{
     Prefix, PrefixLength, RawRouteWithDeltas, RouteStatus, StringLiteral,
     Unknown, U32, U8,
 };
-use super::collections::{Record, LazyElementTypeValue};
+use super::collections::{LazyElementTypeValue, Record};
 use super::constant_enum::{Enum, EnumVariant};
 use super::datasources::{RibType, Table};
 use super::outputs::OutputStreamMessage;
@@ -38,7 +38,8 @@ use super::{
 // uniqueness for an entry.
 pub type RibTypeDef = (Box<TypeDef>, Option<Vec<SmallVec<[usize; 8]>>>);
 pub type NamedTypeDef = (ShortString, Box<TypeDef>);
-pub type LazyNamedTypeDef<T> = (ShortString, Box<TypeDef>, LazyElementTypeValue<T>);
+// pub type LazyNamedTypeDef<T> =
+//     (ShortString, Box<TypeDef>, LazyElementTypeValue<T>);
 
 #[derive(Clone, Debug, Eq, PartialEq, Default, Hash, Serialize)]
 pub enum TypeDef {
@@ -58,7 +59,7 @@ pub enum TypeDef {
     // ConstU32EnumVariant(ShortString),
     // A raw BGP message as bytes
     BgpUpdateMessage,
-    LazyRecord,
+    LazyRecord(Vec<NamedTypeDef>),
     // Builtin Types
     U32,
     U8,
@@ -93,8 +94,8 @@ impl TypeDef {
     // This happens ONLY ON THE UNBOUNDED TYPES, meaning that Type
     // dependencies, e.g. a PrefixLength can't be converted from an U32 that
     // holds a value bigger than 128, is NOT checked here. That check is done
-    // during compilation. 
-    
+    // during compilation.
+
     // Likewise for a Record, the only check is that it
     // can be converted into another Record, not that the sub-types of the
     // records match.
@@ -104,7 +105,7 @@ impl TypeDef {
     // to U32, PrefixLength and IntegerLiteral, but not the other way around.
     typedefconversion!(
         // have conversions, no data field
-        // SOURCE TYPE(TARGET TYPE WITHOUT DATA FIELD, ..; 
+        // SOURCE TYPE(TARGET TYPE WITHOUT DATA FIELD, ..;
         // TARGET TYPE WITH DATA FIELD)
         U8(U32,PrefixLength,IntegerLiteral;),
         U32(StringLiteral,IntegerLiteral;),
@@ -127,12 +128,12 @@ impl TypeDef {
         AtomicAggregator(U8;);
         // have conversions, have data field
         Record(;Record,OutputStream),
+        LazyRecord(;Record,OutputStream),
         AcceptReject(StringLiteral;);
         // no conversions, no data field
         // SOURCE TYPE
         Route,
         BgpUpdateMessage,
-        LazyRecord,
         Unknown;
         // no conversions, have data field
         // SOURCE TYPE
@@ -286,10 +287,12 @@ impl TypeDef {
                 }
                 // Another special case: BgpUpdateMessage also doesn't have
                 // actual fields, they are all simulated
-                (TypeDef::LazyRecord, _) => {
+                (TypeDef::LazyRecord(_fields), _) => {
                     trace!("BmpMessage w/ field '{}'", field);
                     parent_type =
-                        LazyRecord::<routecore::bmp::message::Message<bytes::Bytes>>::get_props_for_field(field)?;
+                        LazyRecord::<
+                            routecore::bmp::message::Message<bytes::Bytes>,
+                        >::get_props_for_field(field)?;
 
                     // Add the token to the FieldAccess vec.
                     result_type = if let Token::FieldAccess(to_f) =
@@ -306,6 +309,33 @@ impl TypeDef {
                         result_type
                     };
                 }
+                // (TypeDef::Record(found_fields), _) => {
+                //     trace!("Record w/ field '{}'", field);
+
+                //     // Check if this field exists in the TypeDef of the
+                //     // Record.
+                //     if let Some((_, (_, ty))) = found_fields
+                //         .iter()
+                //         .enumerate()
+                //         .find(|(i, (ident, _))| {
+                //             index = *i;
+                //             ident == &field.ident.as_str()
+                //         })
+                //     {
+                //         // Add up all the type defs in the data field
+                //         // of self.
+                //         parent_type = (*ty.clone(), parent_type.1);
+                //         parent_type.1.push(index as u8);
+                //     } else {
+                //         return Err(format!(
+                //             "No field named '{}'",
+                //             field.ident.as_str()
+                //         )
+                //         .into());
+                //     }
+
+                //     result_type = parent_type.clone();
+                // }
                 _ => {
                     return Err(format!(
                         "No field named '{}'",
@@ -398,12 +428,11 @@ impl TypeDef {
                     method_name,
                 )
             }
-            TypeDef::LazyRecord => {
-                LazyRecord::<routecore::bmp::message::Message<bytes::Bytes>>::get_props_for_method(
-                    self.clone(),
-                    method_name,
-                )
-            }
+            TypeDef::LazyRecord(_) => LazyRecord::<
+                routecore::bmp::message::Message<bytes::Bytes>,
+            >::get_props_for_method(
+                self.clone(), method_name
+            ),
             TypeDef::U32 => {
                 U32::get_props_for_method(self.clone(), method_name)
             }
@@ -556,16 +585,21 @@ impl TypeDef {
                 }
                 TypeValue::Builtin(BuiltinTypeValue::Route(route)) => {
                     for field_index in uniq_field_indexes {
-                        route.get_field_by_index(field_index[0])
-                            .hash(state);
+                        route.get_field_by_index(field_index[0]).hash(state);
                     }
                 }
                 TypeValue::Builtin(btv) => {
                     btv.hash(state);
                 }
-                TypeValue::List(l) => { l.hash(state); }
-                TypeValue::Enum(e) => { e.hash(state); }
-                TypeValue::SharedValue(sv) => { sv.hash(state); }
+                TypeValue::List(l) => {
+                    l.hash(state);
+                }
+                TypeValue::Enum(e) => {
+                    e.hash(state);
+                }
+                TypeValue::SharedValue(sv) => {
+                    sv.hash(state);
+                }
                 _ => {
                     return Err(VmError::InvalidPayload);
                 }
@@ -627,7 +661,13 @@ impl std::fmt::Display for TypeDef {
             TypeDef::IpAddress => write!(f, "IpAddress"),
             TypeDef::Route => write!(f, "Route"),
             TypeDef::BgpUpdateMessage => write!(f, "BgpUpdateMessage"),
-            TypeDef::LazyRecord => write!(f, "BmpMessage"),
+            TypeDef::LazyRecord(rec) => {
+                write!(f, "Lazy Record {{")?;
+                for (name, ty) in rec {
+                    write!(f, "{}: {}, ", name, ty)?;
+                }
+                write!(f, "}}")
+            },
             TypeDef::Rib(rib) => write!(f, "Rib of {}", rib.0),
             TypeDef::Table(table) => write!(f, "Table of {}", table),
             TypeDef::OutputStream(stream) => {
@@ -835,9 +875,9 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::BgpUpdateMessage(_) => {
                 TypeDef::BgpUpdateMessage
             }
-            // BuiltinTypeValue::BmpMessage(_) => {
-            //     TypeDef::BmpMessage
-            // }
+            BuiltinTypeValue::BmpMessage(_) => {
+                todo!()
+            }
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
             BuiltinTypeValue::LocalPref(_) => TypeDef::LocalPref,
@@ -883,9 +923,9 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::BgpUpdateMessage(_) => {
                 TypeDef::BgpUpdateMessage
             }
-            // BuiltinTypeValue::BmpMessage(_) => {
-            //     TypeDef::BgpUpdateMessage
-            // }
+            BuiltinTypeValue::BmpMessage(_) => {
+                todo!()
+            }
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
             BuiltinTypeValue::LocalPref(_) => TypeDef::LocalPref,
@@ -894,7 +934,7 @@ impl From<BuiltinTypeValue> for TypeDef {
             }
             BuiltinTypeValue::NextHop(_) => TypeDef::NextHop,
             BuiltinTypeValue::MultiExitDisc(_) => TypeDef::MultiExitDisc,
-            BuiltinTypeValue::BmpMessage(_) => todo!(),
+            // BuiltinTypeValue::BmpMessage(_) => todo!(),
         }
     }
 }

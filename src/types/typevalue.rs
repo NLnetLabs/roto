@@ -177,7 +177,7 @@ impl RotoType for TypeValue {
             TypeDef::AsPath => AsPath::get_props_for_method(ty, method_name),
             TypeDef::AtomicAggregator => Err(CompileError::new("Unsupported TypeDef::AtomicAggregator in TypeValue::get_props_for_method()".to_string())),
             TypeDef::BgpUpdateMessage => BgpUpdateMessage::get_props_for_method(ty, method_name),
-            TypeDef::LazyRecord => LazyRecord::get_props_for_method(ty, method_name),
+            TypeDef::LazyRecord(_) => LazyRecord::get_props_for_method(ty, method_name),
             TypeDef::Boolean => Boolean::get_props_for_method(ty, method_name),
             TypeDef::Community => Community::get_props_for_method(ty, method_name),
             TypeDef::ConstEnumVariant(_) => Err(CompileError::new("Unsupported TypeDef::ConstEnumVariant in TypeValue::get_props_for_method()".to_string())),
@@ -270,7 +270,8 @@ impl RotoType for TypeValue {
                     v.exec_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::BmpMessage(v) => {
-                    v.exec_value_method(method_token, args, res_type)
+                    // v.exec_value_method(method_token, args, res_type)
+                    todo!()
                 }
                 BuiltinTypeValue::Boolean(v) => {
                     v.exec_value_method(method_token, args, res_type)

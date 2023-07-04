@@ -5,12 +5,11 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
-use routecore::bgp::message::Message;
 use serde::Serialize;
 
 use crate::compile::CompileError;
 use crate::traits::RotoType;
-use crate::types::collections::LazyRecord;
+use crate::types::collections::RawBytes;
 use crate::types::constant_enum::EnumVariant;
 
 use super::super::collections::List;
@@ -55,7 +54,8 @@ pub enum BuiltinTypeValue {
     // Used for filtering on the properties of the whole message,
     // not taking into account any individual prefixes.
     BgpUpdateMessage(Arc<BgpUpdateMessage>),  // scalar
-    BmpMessage(Arc<LazyRecord<routecore::bmp::message::Message<bytes::Bytes>>>)
+    BmpMessage(Arc<RawBytes<routecore::bmp::message::Message<bytes::Bytes>>>),
+    // BmpMessage(Arc<LazyRecord<routecore::bmp::message::Message<bytes::Bytes>>>)
 }
 
 impl BuiltinTypeValue {

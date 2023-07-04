@@ -11,7 +11,7 @@ use crate::{
     traits::{RotoType, Token},
     types::{
         builtin::{Boolean, BuiltinTypeValue},
-        collections::{ElementTypeValue, List, Record, LazyRecord},
+        collections::{ElementTypeValue, LazyRecord, List, Record},
         datasources::{DataSource, DataSourceMethodValue},
         typedef::TypeDef,
         typevalue::TypeValue,
@@ -132,9 +132,9 @@ impl LinearMemory {
         trace!("mp field: {:?}", stack_ref.pos);
         match stack_ref.pos {
             StackRefPos::MemPos(pos) => {
-                if let StackValue::Owned(TypeValue::Builtin(BuiltinTypeValue::Boolean(
-                    Boolean(b),
-                ))) = self
+                if let StackValue::Owned(TypeValue::Builtin(
+                    BuiltinTypeValue::Boolean(Boolean(b)),
+                )) = self
                     .get_mp_field_by_index_as_stack_value(
                         pos as usize,
                         stack_ref.field_index.clone(),
@@ -200,70 +200,89 @@ impl LinearMemory {
         field_index: SmallVec<[usize; 8]>,
     ) -> Option<StackValue> {
         match field_index {
-            fi if fi.is_empty() => self.get_mem_pos(index).map(StackValue::Ref),
-            field_index => match self.get_mem_pos(index) {
-                Some(TypeValue::Record(rec)) => {
-                    match rec.get_field_by_index(field_index) {
-                        Some(ElementTypeValue::Nested(nested)) => {
-                            Some(StackValue::Ref(nested))
+            fi if fi.is_empty() => {
+                self.get_mem_pos(index).map(StackValue::Ref)
+            }
+            field_index => {
+                match self.get_mem_pos(index) {
+                    Some(TypeValue::Record(rec)) => {
+                        match rec.get_field_by_index(field_index) {
+                            Some(ElementTypeValue::Nested(nested)) => {
+                                Some(StackValue::Ref(nested))
+                            }
+                            Some(ElementTypeValue::Primitive(b)) => {
+                                Some(StackValue::Ref(b))
+                            }
+                            _ => None,
                         }
-                        Some(ElementTypeValue::Primitive(b)) => Some(StackValue::Ref(b)),
-                        _ => None,
                     }
-                }
-                Some(TypeValue::List(l)) => {
-                    let field = l.get_field_by_index(field_index);
-                    match field {
-                        Some(ElementTypeValue::Nested(nested)) => {
-                            Some(StackValue::Ref(nested))
+                    Some(TypeValue::List(l)) => {
+                        let field = l.get_field_by_index(field_index);
+                        match field {
+                            Some(ElementTypeValue::Nested(nested)) => {
+                                Some(StackValue::Ref(nested))
+                            }
+                            Some(ElementTypeValue::Primitive(b)) => {
+                                Some(StackValue::Ref(b))
+                            }
+                            _ => None,
                         }
-                        Some(ElementTypeValue::Primitive(b)) => Some(StackValue::Ref(b)),
-                        _ => None,
                     }
-                }
-                Some(TypeValue::Builtin(BuiltinTypeValue::Route(route))) => {
-                    if let Some(v) =
-                        route.get_value_ref_for_field(field_index[0])
-                    {
-                        Some(StackValue::Ref(v))
-                    } else if let Some(v) = route.get_field_by_index(field_index[0]) {
-                        Some(StackValue::Owned(v))
-                    } else {
-                        Some(StackValue::Owned(TypeValue::Unknown))
+                    Some(TypeValue::Builtin(BuiltinTypeValue::Route(
+                        route,
+                    ))) => {
+                        if let Some(v) =
+                            route.get_value_ref_for_field(field_index[0])
+                        {
+                            Some(StackValue::Ref(v))
+                        } else if let Some(v) =
+                            route.get_field_by_index(field_index[0])
+                        {
+                            Some(StackValue::Owned(v))
+                        } else {
+                            Some(StackValue::Owned(TypeValue::Unknown))
+                        }
                     }
-                }
-                Some(TypeValue::Builtin(BuiltinTypeValue::BgpUpdateMessage(bgp_msg))) => {
-                    trace!("get bgp_update_message get_value_owned_for_field {:?} {:?}", bgp_msg, field_index);
-                    if let Some(v) = 
-                        (*bgp_msg.as_ref()).get_value_owned_for_field(field_index[0]) {
+                    Some(TypeValue::Builtin(
+                        BuiltinTypeValue::BgpUpdateMessage(bgp_msg),
+                    )) => {
+                        trace!("get bgp_update_message get_value_owned_for_field {:?} {:?}", bgp_msg, field_index);
+                        if let Some(v) = (*bgp_msg.as_ref())
+                            .get_value_owned_for_field(field_index[0])
+                        {
                             trace!("v {:?}", v);
                             Some(StackValue::Owned(v))
                         } else {
                             Some(StackValue::Owned(TypeValue::Unknown))
                         }
-                }
-                Some(TypeValue::Builtin(BuiltinTypeValue::BmpMessage(bmp_msg))) => {
-                    trace!("get bmp_message get_value_owned_for_field {:?} {:?}", bmp_msg, field_index);
-                    if let Some(v) = 
-                        (*bmp_msg.as_ref()).get_value_owned_for_field_index(field_index) {
-                            trace!("v {:?}", v);
-                            Some(StackValue::Owned(v))
-                        } else {
-                            Some(StackValue::Owned(TypeValue::Unknown))
+                    }
+                    Some(TypeValue::Builtin(
+                        BuiltinTypeValue::BmpMessage(bmp_msg),
+                    )) => {
+                        trace!("get bmp_message get_value_owned_for_field {:?} {:?}", bmp_msg, field_index);
+                        LazyRecord::lazy_evaluator(bmp_msg.clone())
+                            .get_field_by_index(field_index)
+                            .map(|v| StackValue::Owned(v.into()))
+                    }
+                    Some(tv) => match tv {
+                        // Do not own AsPath and Communities, cloning is expensive!
+                        TypeValue::Builtin(BuiltinTypeValue::AsPath(_)) => {
+                            Some(StackValue::Ref(tv))
                         }
+                        TypeValue::Builtin(
+                            BuiltinTypeValue::Communities(_),
+                        ) => Some(StackValue::Ref(tv)),
+                        // Clone all other builtins, they're cheap to clone (all copy) and the
+                        // result is smaller than a pointer
+                        TypeValue::Builtin(_) => {
+                            Some(StackValue::Owned(tv.clone()))
+                        }
+                        _ => Some(StackValue::Ref(tv)),
+                    },
+                    // This is apparently a type that does not have fields
+                    None => None,
                 }
-                Some(tv) => match tv {
-                    // Do not own AsPath and Communities, cloning is expensive!
-                    TypeValue::Builtin(BuiltinTypeValue::AsPath(_)) => Some(StackValue::Ref(tv)),
-                    TypeValue::Builtin(BuiltinTypeValue::Communities(_)) => Some(StackValue::Ref(tv)),
-                    // Clone all other builtins, they're cheap to clone (all copy) and the
-                    // result is smaller than a pointer
-                    TypeValue::Builtin(_) => Some(StackValue::Owned(tv.clone())),
-                    _ => Some(StackValue::Ref(tv))
-                },
-                // This is apparently a type that does not have fields
-                None => None,
-            },
+            }
         }
     }
 
@@ -460,9 +479,11 @@ impl ModuleArgsMap {
                         // Ok, but maybe we can convert into the type we
                         // need? Note that we can only try to convert if
                         // it's a builtin type.
-                        match supplied_arg.1.into_builtin().and_then(|t| {
-                            t.into_type(&found_arg.get_type())
-                        }) {
+                        match supplied_arg
+                            .1
+                            .into_builtin()
+                            .and_then(|t| t.into_type(&found_arg.get_type()))
+                        {
                             Ok(arg) => arguments_map.insert(
                                 found_arg.get_name(),
                                 found_arg.get_index(),
@@ -670,7 +691,10 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
             match sr.pos {
                 StackRefPos::MemPos(pos) => {
                     let v = mem
-                        .get_mp_field_by_index_as_stack_value(pos as usize, sr.field_index)
+                        .get_mp_field_by_index_as_stack_value(
+                            pos as usize,
+                            sr.field_index,
+                        )
                         .unwrap_or_else(|| {
                             panic!(
                                 "Uninitialized memory in position {}",
@@ -712,19 +736,14 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
         let take_vec = stack_part
             .iter()
             .map(|sr| match sr.pos.clone() {
-                StackRefPos::MemPos(pos) => {
-                    mem
-                        .get_mp_field_by_index_as_stack_value(
-                            pos as usize,
-                            sr.field_index.clone(),
-                        )
-                        .unwrap_or_else(|| {
-                            panic!(
-                                "Uninitialized memory in position {}",
-                                pos
-                            );
-                        })
-                }
+                StackRefPos::MemPos(pos) => mem
+                    .get_mp_field_by_index_as_stack_value(
+                        pos as usize,
+                        sr.field_index.clone(),
+                    )
+                    .unwrap_or_else(|| {
+                        panic!("Uninitialized memory in position {}", pos);
+                    }),
                 StackRefPos::TablePos(token, pos) => {
                     let ds = &self.data_sources.as_ref()[token];
                     let v =
@@ -760,17 +779,13 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
             .iter()
             .map(|sr| match sr.pos.clone() {
                 StackRefPos::MemPos(pos) => {
-                    mem
-                        .get_mp_field_by_index_as_stack_value(
-                            pos as usize,
-                            sr.field_index.clone(),
-                        )
-                        .unwrap_or_else(|| {
-                            panic!(
-                                "Uninitialized memory in position {}",
-                                pos
-                            );
-                        })
+                    mem.get_mp_field_by_index_as_stack_value(
+                        pos as usize,
+                        sr.field_index.clone(),
+                    )
+                    .unwrap_or_else(|| {
+                        panic!("Uninitialized memory in position {}", pos);
+                    })
                     // StackValue::Ref(v)
                 }
                 StackRefPos::TablePos(token, pos) => {
@@ -1032,7 +1047,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                             trace!("\nstack: {:?}", stack);
                                             trace!("mem: {:#?}", mem.0);
                                             panic!("Uninitialized memory in position {}", pos);
-                                        })   
+                                        })
                                 }
                                 StackRefPos::TablePos(token, pos) => {
                                     let ds = &self.data_sources.as_ref()[token];
@@ -1353,7 +1368,9 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                     }
                     // stack args: [exit value]
                     OpCode::Exit(accept_reject) => {
-                        let rx = mem.get_mem_pos_as_owned(0).ok_or(VmError::InvalidPayload)?;
+                        let rx = mem
+                            .get_mem_pos_as_owned(0)
+                            .ok_or(VmError::InvalidPayload)?;
 
                         let tx = match mem.get_mem_pos_as_owned(1) {
                             Some(TypeValue::Record(rec)) => Some(rec.into()),

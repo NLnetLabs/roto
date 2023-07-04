@@ -1,16 +1,18 @@
-use std::{sync::Arc, marker::PhantomData};
+use std::sync::Arc;
 
 use routecore::bmp::message::{
     Message as RouteCoreBmpMessage, PeerDownNotification, PeerType,
+    PerPeerHeader, RouteMonitoring,
 };
-use serde::Serialize;
 use smallvec::SmallVec;
 
 use crate::{
     compile::CompileError,
+    createtoken,
     traits::{RotoType, Token},
     types::{
-        collections::LazyRecord,
+        builtin::RotondaId,
+        collections::{LazyElementTypeValue, LazyRecord, RawBytes},
         constant_enum::EnumVariant,
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
@@ -20,9 +22,11 @@ use crate::{
 
 use super::BuiltinTypeValue;
 
+
+
 //------------ BmpUpdateMessage ------------------------------------------------
 
-impl LazyRecord<RouteCoreBmpMessage<bytes::Bytes>> {
+impl LazyRecord<'_, routecore::bmp::message::Message<bytes::Bytes>> {
     pub(crate) fn get_props_for_field(
         field_name: &crate::ast::Identifier,
     ) -> Result<(TypeDef, crate::traits::Token), CompileError>
@@ -60,7 +64,7 @@ impl LazyRecord<RouteCoreBmpMessage<bytes::Bytes>> {
                     .into(),
                 )]),
                 Token::FieldAccess(vec![usize::from(
-                    BmpMessageToken::RouteMonitoringPerPeerHeaderPeerType,
+                    PerPeerHeaderToken::PeerType,
                 ) as u8]),
             )),
             // "statistics_report" => Ok((
@@ -77,8 +81,9 @@ impl LazyRecord<RouteCoreBmpMessage<bytes::Bytes>> {
         }
     }
 
-    pub(crate) fn get_value_owned_for_field_index(
+    pub(crate) fn lazy_field_for_field_index(
         &self,
+        raw_message: &routecore::bmp::message::Message<bytes::Bytes>,
         field_index: SmallVec<[usize; 8]>,
     ) -> Option<TypeValue> {
         let mut field_iter = field_index.into_iter();
@@ -86,12 +91,12 @@ impl LazyRecord<RouteCoreBmpMessage<bytes::Bytes>> {
             match field_token.into() {
                 BmpMessageToken::RouteMonitoring => {
                     if let RouteCoreBmpMessage::RouteMonitoring(rm_msg) =
-                        &self.raw_message
+                        raw_message
                     {
                         match field_iter.next().unwrap().into() {
-                            BmpMessageToken::RouteMonitoringPerPeerHeader => {
+                            RouteMonitoringToken::PerPeerHeader => {
                                 match field_iter.next().unwrap().into() {
-                                    BmpMessageToken::RouteMonitoringPerPeerHeaderPeerType => {
+                                    PerPeerHeaderToken::PeerType => {
                                         TypeValue::Builtin(
                                             BuiltinTypeValue::ConstU8EnumVariant(
                                                 EnumVariant::<u8> {
@@ -130,7 +135,7 @@ impl LazyRecord<RouteCoreBmpMessage<bytes::Bytes>> {
     }
 }
 
-impl RotoType for LazyRecord<RouteCoreBmpMessage<bytes::Bytes>> {
+impl RotoType for LazyRecord<'_, RouteCoreBmpMessage<bytes::Bytes>> {
     fn get_props_for_method(
         _ty: TypeDef,
         method_name: &crate::ast::Identifier,
@@ -209,346 +214,258 @@ impl RotoType for LazyRecord<RouteCoreBmpMessage<bytes::Bytes>> {
     ) -> Result<TypeValue, VmError> {
         Err(VmError::InvalidMethodCall)
     }
-
 }
 
-#[derive(Debug)]
-enum BmpMessageToken {
+createtoken!(
+    BmpMessageToken;
     GetType = 0,
     RouteMonitoring = 1,
-    RouteMonitoringPerPeerHeader = 2,
-    RouteMonitoringPerPeerHeaderPeerType = 3,
-    StatisticsReport = 4,
-    PeerDownNotification = 5,
-    PeerUpNotification = 6,
-    InitiationMessage = 7,
-    TerminationMessage = 8,
-    RouteMirroring = 9,
-}
+    StatisticsReport = 2,
+    PeerDownNotification = 3,
+    PeerUpNotification = 4,
+    InitiationMessage = 5,
+    TerminationMessage = 6,
+    RouteMirroring = 7
+);
 
-#[derive(Debug)]
-enum PerPeerHeaderToken {
+createtoken!(
+    RouteMonitoringToken;
+    PerPeerHeader = 0
+);
+
+createtoken!(
+    PerPeerHeaderToken;
     PeerType = 0
-}
+);
 
-impl From<usize> for BmpMessageToken {
-    fn from(val: usize) -> Self {
-        match val {
-            0 => BmpMessageToken::GetType,
-            1 => BmpMessageToken::RouteMonitoring,
-            2 => BmpMessageToken::RouteMonitoringPerPeerHeader,
-            3 => BmpMessageToken::RouteMonitoringPerPeerHeaderPeerType,
-            4 => BmpMessageToken::StatisticsReport,
-            5 => BmpMessageToken::PeerDownNotification,
-            6 => BmpMessageToken::PeerUpNotification,
-            7 => BmpMessageToken::InitiationMessage,
-            8 => BmpMessageToken::TerminationMessage,
-            9 => BmpMessageToken::RouteMirroring,
-            _ => panic!("Unknown token value: {}", val),
-        }
+impl<'a> LazyRecord<'a, RawBytes<routecore::bmp::message::Message<bytes::Bytes>>> {
+    pub(crate) fn lazy_evaluator(
+        raw_message: Arc<RawBytes<routecore::bmp::message::Message<bytes::Bytes>>>,
+    ) -> LazyRecord<'a, RawBytes<routecore::bmp::message::Message<bytes::Bytes>>> {
+        let peer_type = LazyElementTypeValue::Lazy(
+            Box::new(move || {
+                if let RouteCoreBmpMessage::RouteMonitoring(rm_msg) = raw_message.bytes() {
+                    TypeValue::Builtin(
+                        BuiltinTypeValue::ConstU8EnumVariant(
+                            EnumVariant::<u8> {
+                                enum_name: "BMP_PEER_TYPE"
+                                    .into(),
+                                value: rm_msg
+                                    .per_peer_header()
+                                    .peer_type()
+                                    .into(),
+                            },
+                        )
+                    ).into()
+                } else {
+                    TypeValue::Unknown.into()
+                }
+            })
+        );
+
+        let per_peer_header = LazyElementTypeValue::LazyRecord(
+            LazyRecord::new(
+                (RotondaId(0), 0),
+                vec![(
+                    "peer_type".into(),
+                    peer_type
+                )],
+            ).unwrap()
+        );
+
+        let peer_type = vec![(
+            "route_monitoring".into(),
+            LazyElementTypeValue::LazyRecord(
+                LazyRecord::new(
+                    (RotondaId(0), 0),
+                    vec![(
+                        "per_peer_header".into(),
+                        per_peer_header,
+                    )],
+                ).unwrap()
+            ),
+        )];
+
+        LazyRecord::new(
+            (RotondaId(0), 0),
+            peer_type,
+        ).unwrap()
     }
 }
 
-impl From<BmpMessageToken> for usize {
-    fn from(val: BmpMessageToken) -> Self {
-        match val {
-            BmpMessageToken::GetType => 0,
-            BmpMessageToken::RouteMonitoring => 1,
-            BmpMessageToken::RouteMonitoringPerPeerHeader => 2,
-            BmpMessageToken::RouteMonitoringPerPeerHeaderPeerType => 3,
-            BmpMessageToken::StatisticsReport => 4,
-            BmpMessageToken::PeerDownNotification => 5,
-            BmpMessageToken::PeerUpNotification => 6,
-            BmpMessageToken::InitiationMessage => 7,
-            BmpMessageToken::TerminationMessage => 8,
-            BmpMessageToken::RouteMirroring => 9,
-        }
-    }
-}
-
-// impl LazyRecordType<RouteCoreBmpMessage<bytes::Bytes>> {
+// impl LazyRecord<RouteCoreBmpMessage<bytes::Bytes>> {
 //     pub(crate) fn lazy_evaluator(
 //         &self,
-//     ) -> Box<dyn Fn(&RouteCoreBmpMessage<bytes::Bytes>) -> Vec<crate::types::typedef::LazyNamedTypeDef<'_, RouteCoreBmpMessage<bytes::Bytes>>>> {
-//         Box::new(|&raw_msg| vec![(
-//             "route_monitoring".into(),
-//             TypeDef::Record(vec![(
-//                 "per_peer_header".into(),
-//                 TypeDef::Record(vec![
-//                     (
-//                         "peer_type".into(),
-//                         TypeDef::ConstEnumVariant("BMP_PEER_TYPE".into())
+//     ) -> Box<
+//         dyn Fn() -> Vec<
+//             crate::types::typedef::LazyNamedTypeDef<
+//                 RouteMonitoring<bytes::Bytes>,
+//             >,
+//         >,
+//     > {
+//         Box::new(|| {
+//             vec![(
+//                 "route_monitoring".into(),
+//                 TypeDef::Record(vec![(
+//                     "per_peer_header".into(),
+//                     TypeDef::Record(vec![
+//                         (
+//                             "peer_type".into(),
+//                             TypeDef::ConstEnumVariant("BMP_PEER_TYPE".into())
+//                                 .into(),
+//                         ),
+//                         ("is_ipv4".into(), TypeDef::Boolean.into()),
+//                         ("is_ipv6".into(), TypeDef::Boolean.into()),
+//                         ("is_pre_policy".into(), TypeDef::Boolean.into()),
+//                         ("is_post_policy".into(), TypeDef::Boolean.into()),
+//                         ("is_legacy_format".into(), TypeDef::Boolean.into()),
+//                         (
+//                             "adj_rib_type".into(),
+//                             TypeDef::ConstEnumVariant(
+//                                 "BMP_ADJ_RIB_TYPE".into(),
+//                             )
 //                             .into(),
-//                     ),
-//                     ("is_ipv4".into(), TypeDef::Boolean.into()),
-//                     ("is_ipv6".into(), TypeDef::Boolean.into()),
-//                     ("is_pre_policy".into(), TypeDef::Boolean.into()),
-//                     ("is_post_policy".into(), TypeDef::Boolean.into()),
-//                     ("is_legacy_format".into(), TypeDef::Boolean.into()),
-//                     (
-//                         "adj_rib_type".into(),
-//                         TypeDef::ConstEnumVariant("BMP_ADJ_RIB_TYPE".into())
-//                             .into(),
-//                     ),
-//                     ("distinguisher".into(), TypeDef::HexLiteral.into()),
-//                     ("address".into(), TypeDef::IpAddress.into()),
-//                     ("asn".into(), TypeDef::Asn.into()),
-//                     ("bgp_id".into(), TypeDef::HexLiteral.into()),
-//                     ("ts_seconds".into(), TypeDef::U32.into()),
-//                 ])
+//                         ),
+//                         ("distinguisher".into(), TypeDef::HexLiteral.into()),
+//                         ("address".into(), TypeDef::IpAddress.into()),
+//                         ("asn".into(), TypeDef::Asn.into()),
+//                         ("bgp_id".into(), TypeDef::HexLiteral.into()),
+//                         ("ts_seconds".into(), TypeDef::U32.into()),
+//                     ])
+//                     .into(),
+//                 )])
 //                 .into(),
-//             )])
-//             .into(),
-            
-                // match raw_msg {
-                //     RouteCoreBmpMessage::RouteMonitoring(rm_msg) => {
-
-                //         let peer_type = LazyElementTypeValue::Lazy(
-                //             Box::new(|| { TypeValue::Builtin(
-                //                 BuiltinTypeValue::ConstU8EnumVariant(
-                //                     EnumVariant::<u8> {
-                //                         enum_name: "BMP_PEER_TYPE"
-                //                             .into(),
-                //                         value: rm_msg
-                //                             .per_peer_header()
-                //                             .peer_type()
-                //                             .into(),
-                //                     },
-                //                 )
-                //             ).into()}));
-                        
-                //         let per_peer_header = LazyElementTypeValue::LazyRecord::<routecore::bmp::message::PerPeerHeader<bytes::Bytes>>(LazyRecord::new(
-                //             rm_msg.per_peer_header().into(),
-                //             vec![
-                //                 (
-                //                     "peer_type".into(),
-                //                     LazyElementTypeValue::Lazy(
-                //                         Box::new(|| { TypeValue::Builtin(
-                //                             BuiltinTypeValue::ConstU8EnumVariant(
-                //                                 EnumVariant::<u8> {
-                //                                     enum_name: "BMP_PEER_TYPE"
-                //                                         .into(),
-                //                                     value: rm_msg
-                //                                         .per_peer_header()
-                //                                         .peer_type()
-                //                                         .into(),
-                //                                 },
-                //                             )
-                //                         ).into()}))
-                //                 ),
-                //                 (
-                //                     "is_ipv4".into(),
-                //                     LazyElementTypeValue::Lazy(Box::new(|| {
-                //                         TypeValue::Builtin(
-                //                             BuiltinTypeValue::from(
-                //                                 Boolean::new(
-                //                                     rm_msg.per_peer_header().is_ipv4()
-                //                                 )
-                //                             )
-                //                         ).into()
-                //                     }))
-                //                 ),
-                //                 (
-                //                     "is_ipv6".into(),
-                //                     LazyElementTypeValue::Lazy(Box::new(|| {
-                //                         TypeValue::Builtin(
-                //                             BuiltinTypeValue::from(
-                //                                 Boolean::new(
-                //                                     rm_msg.per_peer_header().is_ipv6()
-                //                                 )
-                //                             )
-                //                         ).into()
-                //                     }))
-                //                 ),
-                //                 (
-                //                     "is_pre_policy".into(),
-                //                     LazyElementTypeValue::Lazy(Box::new(|| {
-                //                         TypeValue::Builtin(
-                //                             BuiltinTypeValue::from(
-                //                                 Boolean::new(
-                //                                     rm_msg.per_peer_header().is_pre_policy()
-                //                                 )
-                //                             )
-                //                         ).into()
-                //                     }))
-                //                 ),
-                //                 (
-                //                     "is_post_policy".into(),
-                //                     LazyElementTypeValue::Lazy(Box::new(|| {
-                //                         TypeValue::Builtin(
-                //                             BuiltinTypeValue::from(
-                //                                 Boolean::new(
-                //                                     rm_msg.per_peer_header().is_post_policy()
-                //                                 )
-                //                             )
-                //                         ).into()
-                //                     }))
-                //                 ),
-                //                 (
-                //                     "is_legacy_format".into(),
-                //                     LazyElementTypeValue::Lazy(Box::new(|| {
-                //                         TypeValue::Builtin(
-                //                             BuiltinTypeValue::from(
-                //                                 Boolean::new(
-                //                                     rm_msg.per_peer_header().is_legacy_format()
-                //                                 )
-                //                             )
-                //                         ).into()
-                //                     }))
-                //                 ),
-                //                 (
-                //                     "adj_rib_type".into(),
-                //                     LazyElementTypeValue::Lazy(
-                //                         Box::new(|| { TypeValue::Builtin(
-                //                             BuiltinTypeValue::ConstU8EnumVariant(
-                //                                 EnumVariant::<u8> {
-                //                                     enum_name: "BMP_ADJ_RIB_TYPE"
-                //                                         .into(),
-                //                                     value: rm_msg
-                //                                         .per_peer_header()
-                //                                         .adj_rib_type()
-                //                                         .into(),
-                //                                 },
-                //                             )
-                //                         ).into()}))
-                //                 )
-                //             ]).unwrap());
-
-                //         let peer_type = LazyElementTypeValue::Lazy(
-                //             Box::new(|| { TypeValue::Builtin(
-                //                 BuiltinTypeValue::ConstU8EnumVariant(
-                //                     EnumVariant::<u8> {
-                //                         enum_name: "BMP_PEER_TYPE"
-                //                             .into(),
-                //                         value: rm_msg
-                //                             .per_peer_header()
-                //                             .peer_type()
-                //                             .into(),
-                //                     },
-                //                 )
-                //             ).into()}));
-                        
-                        // LazyElementTypeValue::LazyRecord(
-                        //     LazyRecord::new(
-                        //         raw_msg.into(),
-                        //         vec![("route_monitoring".into(), 
-                        //         LazyElementTypeValue::LazyRecord(
-                        //             LazyRecord::<routecore::bmp::message::RouteMonitoring<bytes::Bytes>>::new(
-                        //                 rm_msg.into(),
-                        //                 vec![("per_peer_header".into(), 
-                        //             LazyElementTypeValue::LazyRecord::<routecore::bmp::message::PerPeerHeader<bytes::Bytes>>(LazyRecord::new(
-                        //                 rm_msg.per_peer_header().into(),
-                        //                 vec![
-                        //                     (
-                        //                         "peer_type".into(),
-                        //                         LazyElementTypeValue::Lazy(
-                        //                             Box::new(|| { TypeValue::Builtin(
-                        //                                 BuiltinTypeValue::ConstU8EnumVariant(
-                        //                                     EnumVariant::<u8> {
-                        //                                         enum_name: "BMP_PEER_TYPE"
-                        //                                             .into(),
-                        //                                         value: rm_msg
-                        //                                             .per_peer_header()
-                        //                                             .peer_type()
-                        //                                             .into(),
-                        //                                     },
-                        //                                 )
-                        //                             ).into()}))
-                        //                     ),
-                        //                     (
-                        //                         "is_ipv4".into(),
-                        //                         LazyElementTypeValue::Lazy(Box::new(|| {
-                        //                             TypeValue::Builtin(
-                        //                                 BuiltinTypeValue::from(
-                        //                                     Boolean::new(
-                        //                                         rm_msg.per_peer_header().is_ipv4()
-                        //                                     )
-                        //                                 )
-                        //                             ).into()
-                        //                         }))
-                        //                     ),
-                        //                     (
-                        //                         "is_ipv6".into(),
-                        //                         LazyElementTypeValue::Lazy(Box::new(|| {
-                        //                             TypeValue::Builtin(
-                        //                                 BuiltinTypeValue::from(
-                        //                                     Boolean::new(
-                        //                                         rm_msg.per_peer_header().is_ipv6()
-                        //                                     )
-                        //                                 )
-                        //                             ).into()
-                        //                         }))
-                        //                     ),
-                        //                     (
-                        //                         "is_pre_policy".into(),
-                        //                         LazyElementTypeValue::Lazy(Box::new(|| {
-                        //                             TypeValue::Builtin(
-                        //                                 BuiltinTypeValue::from(
-                        //                                     Boolean::new(
-                        //                                         rm_msg.per_peer_header().is_pre_policy()
-                        //                                     )
-                        //                                 )
-                        //                             ).into()
-                        //                         }))
-                        //                     ),
-                        //                     (
-                        //                         "is_post_policy".into(),
-                        //                         LazyElementTypeValue::Lazy(Box::new(|| {
-                        //                             TypeValue::Builtin(
-                        //                                 BuiltinTypeValue::from(
-                        //                                     Boolean::new(
-                        //                                         rm_msg.per_peer_header().is_post_policy()
-                        //                                     )
-                        //                                 )
-                        //                             ).into()
-                        //                         }))
-                        //                     ),
-                        //                     (
-                        //                         "is_legacy_format".into(),
-                        //                         LazyElementTypeValue::Lazy(Box::new(|| {
-                        //                             TypeValue::Builtin(
-                        //                                 BuiltinTypeValue::from(
-                        //                                     Boolean::new(
-                        //                                         rm_msg.per_peer_header().is_legacy_format()
-                        //                                     )
-                        //                                 )
-                        //                             ).into()
-                        //                         }))
-                        //                     ),
-                        //                     (
-                        //                         "adj_rib_type".into(),
-                        //                         LazyElementTypeValue::Lazy(
-                        //                             Box::new(|| { TypeValue::Builtin(
-                        //                                 BuiltinTypeValue::ConstU8EnumVariant(
-                        //                                     EnumVariant::<u8> {
-                        //                                         enum_name: "BMP_ADJ_RIB_TYPE"
-                        //                                             .into(),
-                        //                                         value: rm_msg
-                        //                                             .per_peer_header()
-                        //                                             .adj_rib_type()
-                        //                                             .into(),
-                        //                                     },
-                        //                                 )
-                        //                             ).into()}))
-                        //                     )
-                        //                 ]).unwrap())
-                        //             )]).unwrap()
-                        //         )
-                        //     )].into()).unwrap()
-                        // )
-                    // },
-                //     RouteCoreBmpMessage::StatisticsReport(_) => todo!(),
-                //     RouteCoreBmpMessage::PeerDownNotification(_) => todo!(),
-                //     RouteCoreBmpMessage::PeerUpNotification(_) => todo!(),
-                //     RouteCoreBmpMessage::InitiationMessage(_) => todo!(),
-                //     RouteCoreBmpMessage::TerminationMessage(_) => todo!(),
-                //     RouteCoreBmpMessage::RouteMirroring(_) => todo!(),
-                // }
+//                 // LazyElementTypeValue::LazyRecord(
+//                 //     LazyRecord::new(
+//                         LazyElementTypeValue::LazyRecord(
+//                             LazyRecord::new(
+//                                 (RotondaId(0),0).into(),
+//                                 vec![("route_monitoring".into(),
+//                                 LazyElementTypeValue::LazyRecord(
+//                                     LazyRecord::<routecore::bmp::message::PerPeerHeader<bytes::Bytes>>::new(
+//                                         rm_msg.into(),
+//                                         vec![("per_peer_header".into(),
+//                                     LazyElementTypeValue::LazyRecord::<routecore::bmp::message::PerPeerHeader<bytes::Bytes>>(LazyRecord::new(
+//                                         rm_msg.per_peer_header().into(),
+//                                         vec![
+//                                             (
+//                                                 "peer_type".into(),
+//                                                 LazyElementTypeValue::Lazy(
+//                                                     Box::new(|| { TypeValue::Builtin(
+//                                                         BuiltinTypeValue::ConstU8EnumVariant(
+//                                                             EnumVariant::<u8> {
+//                                                                 enum_name: "BMP_PEER_TYPE"
+//                                                                     .into(),
+//                                                                 value: rm_msg
+//                                                                     .per_peer_header()
+//                                                                     .peer_type()
+//                                                                     .into(),
+//                                                             },
+//                                                         )
+//                                                     ).into()}))
+//                                             ),
+//                                             (
+//                                                 "is_ipv4".into(),
+//                                                 LazyElementTypeValue::Lazy(Box::new(|| {
+//                                                     TypeValue::Builtin(
+//                                                         BuiltinTypeValue::from(
+//                                                             Boolean::new(
+//                                                                 rm_msg.per_peer_header().is_ipv4()
+//                                                             )
+//                                                         )
+//                                                     ).into()
+//                                                 }))
+//                                             ),
+//                                             (
+//                                                 "is_ipv6".into(),
+//                                                 LazyElementTypeValue::Lazy(Box::new(|| {
+//                                                     TypeValue::Builtin(
+//                                                         BuiltinTypeValue::from(
+//                                                             Boolean::new(
+//                                                                 rm_msg.per_peer_header().is_ipv6()
+//                                                             )
+//                                                         )
+//                                                     ).into()
+//                                                 }))
+//                                             ),
+//                                             (
+//                                                 "is_pre_policy".into(),
+//                                                 LazyElementTypeValue::Lazy(Box::new(|| {
+//                                                     TypeValue::Builtin(
+//                                                         BuiltinTypeValue::from(
+//                                                             Boolean::new(
+//                                                                 rm_msg.per_peer_header().is_pre_policy()
+//                                                             )
+//                                                         )
+//                                                     ).into()
+//                                                 }))
+//                                             ),
+//                                             (
+//                                                 "is_post_policy".into(),
+//                                                 LazyElementTypeValue::Lazy(Box::new(|| {
+//                                                     TypeValue::Builtin(
+//                                                         BuiltinTypeValue::from(
+//                                                             Boolean::new(
+//                                                                 rm_msg.per_peer_header().is_post_policy()
+//                                                             )
+//                                                         )
+//                                                     ).into()
+//                                                 }))
+//                                             ),
+//                                             (
+//                                                 "is_legacy_format".into(),
+//                                                 LazyElementTypeValue::Lazy(Box::new(|| {
+//                                                     TypeValue::Builtin(
+//                                                         BuiltinTypeValue::from(
+//                                                             Boolean::new(
+//                                                                 rm_msg.per_peer_header().is_legacy_format()
+//                                                             )
+//                                                         )
+//                                                     ).into()
+//                                                 }))
+//                                             ),
+//                                             (
+//                                                 "adj_rib_type".into(),
+//                                                 LazyElementTypeValue::Lazy(
+//                                                     Box::new(|| { TypeValue::Builtin(
+//                                                         BuiltinTypeValue::ConstU8EnumVariant(
+//                                                             EnumVariant::<u8> {
+//                                                                 enum_name: "BMP_ADJ_RIB_TYPE"
+//                                                                     .into(),
+//                                                                 value: rm_msg
+//                                                                     .per_peer_header()
+//                                                                     .adj_rib_type()
+//                                                                     .into(),
+//                                                             },
+//                                                         )
+//                                                     ).into()}))
+//                                             )
+//                                         ]).unwrap())
+//                                     )]).unwrap()
+//                                 )
+//                             )].into()).unwrap()
+//                         )
+//                         // ,
+//                         //     RouteCoreBmpMessage::StatisticsReport(_) => todo!(),
+//                         //     RouteCoreBmpMessage::PeerDownNotification(_) => todo!(),
+//                         //     RouteCoreBmpMessage::PeerUpNotification(_) => todo!(),
+//                         //     RouteCoreBmpMessage::InitiationMessage(_) => todo!(),
+//                         //     RouteCoreBmpMessage::TerminationMessage(_) => todo!(),
+//                         //     RouteCoreBmpMessage::RouteMirroring(_) => todo!(),
+//                     )]
+//         })
+//         // )]
+//         // )
+//     }
+//                         }
+//                         // peer_type
+//                     }
+//                 },
 //             )]
-//         )
+//         })
 //     }
 // }
-
+// }
 //------------ Modification & Creation of new Updates -----------------------
 
 // #[derive(Debug, Hash, Serialize)]
@@ -613,4 +530,5 @@ impl From<BmpMessageToken> for usize {
 //     ) -> Self {
 //         todo!()
 //     }
+// }
 // }
