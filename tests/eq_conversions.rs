@@ -14,11 +14,13 @@ mod common;
 struct RibValue(Vec<TypeValue>);
 
 impl MergeUpdate for RibValue {
+    type UserDataIn = ();
     type UserDataOut = ();
 
     fn merge_update(
         &mut self,
         update_record: RibValue,
+        _: Self::UserDataIn,
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.0 = update_record.0;
         Ok(())
@@ -27,6 +29,7 @@ impl MergeUpdate for RibValue {
     fn clone_merge_update(
         &self,
         update_meta: &Self,
+        _: &Self::UserDataIn,
     ) -> Result<(Self, Self::UserDataOut), Box<dyn std::error::Error>>
     where
         Self: std::marker::Sized,
