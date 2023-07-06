@@ -237,7 +237,7 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::StringLiteral(v) => v.into_type(ty),
                 BuiltinTypeValue::U32(v) => v.into_type(ty),
                 BuiltinTypeValue::U8(v) => v.into_type(ty),
-                BuiltinTypeValue::BmpMessage(v) => Err(CompileError::new("Unsupported TypeValue::BmpMessage in TypeValue::into_type()".to_string())),
+                BuiltinTypeValue::BmpRouteMonitoringMessage(v) => Err(CompileError::new("Unsupported TypeValue::BmpMessage in TypeValue::into_type()".to_string())),
             }
             TypeValue::Enum(v) => v.into_type(ty),
             TypeValue::List(v) => v.into_type(ty),
@@ -269,7 +269,7 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::BgpUpdateMessage(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::BmpMessage(v) => {
+                BuiltinTypeValue::BmpRouteMonitoringMessage(v) => {
                     // v.exec_value_method(method_token, args, res_type)
                     todo!()
                 }
@@ -377,7 +377,7 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::BgpUpdateMessage(_) => {
                     Err(VmError::InvalidValueType)
                 }
-                BuiltinTypeValue::BmpMessage(_) => {
+                BuiltinTypeValue::BmpRouteMonitoringMessage(_) => {
                     Err(VmError::InvalidValueType)
                 }
                 BuiltinTypeValue::Boolean(v) => {

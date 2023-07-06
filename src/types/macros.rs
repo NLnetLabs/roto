@@ -77,3 +77,94 @@ macro_rules! createtoken {
         }
     }
 }
+
+#[macro_export]
+macro_rules! lazyelmtypevalue {
+    (
+        $raw_bytes: ident;
+        $lazy_fn_body: expr
+    ) => {
+        LazyElementTypeValue::Lazy(
+            Box::new(move |$raw_bytes| { $lazy_fn_body })
+        )
+    }
+}
+
+#[macro_export]
+macro_rules! lazyrecord {
+    (
+        $lazy_record_vec: expr
+    ) => {    
+        LazyRecord::new(
+            $lazy_record_vec
+        ).unwrap()
+    }
+}
+
+#[macro_export]
+macro_rules! lazyfield {
+    (
+        $field_name: literal,
+        $ty: ident,
+        $base_call: ident
+        $( .$method_call: ident )+
+    ) => {(
+        ShortString::from($field_name),
+        lazyelmtypevalue!(
+            raw_bytes;
+            TypeValue::Builtin(
+                BuiltinTypeValue::from(
+                    $ty::new(
+                        raw_bytes.bytes().$base_call()$(.$method_call())+
+                    )
+                )
+            ).into()
+        )
+        // LazyElementTypeValue::Lazy(
+        //     Box::new(move |$raw_bytes: &BytesRecord<routecore::bmp::message::RouteMonitoring<bytes::Bytes>>| { 
+        //         TypeValue::Builtin(
+        //             $ty::new(
+        //                 $method_call
+        //             ).into()
+        //     ).into()
+        //      })
+        // )
+    )}
+}
+
+#[macro_export]
+macro_rules! lazyenum {
+    (
+        $field_name: literal,
+        $enum_ty: path = $enum_name: literal,
+        $raw_ty: path,
+        $base_call: ident
+        $( .$method_call: ident )+
+    ) => {(
+        ShortString::from($field_name),
+        LazyElementTypeValue::Lazy(Box::new( 
+            |raw_bytes: &BytesRecord<routecore::bmp::message::RouteMonitoring<bytes::Bytes>>| {
+            TypeValue::Builtin(
+                EnumVariant::<u8>::new((
+                    $enum_name.into(),
+                    raw_bytes.bytes().$base_call()$(.$method_call())+.into(),
+                )).into(),
+        ).into() }))
+        // (
+        //     "peer_type".into(),
+        //     LazyElementTypeValue::Lazy(Box::new( 
+        //         |raw_message: &BytesRecord<routecore::bmp::message::RouteMonitoring<bytes::Bytes>>| {
+        //         TypeValue::Builtin(
+        //         // BuiltinTypeValue::ConstU8EnumVariant(
+        //             EnumVariant::<u8>::new(
+        //                 "BMP_PEER_TYPE".into(),
+        //                 raw_message.bytes()
+        //                     .per_peer_header()
+        //                     .peer_type()
+        //                     .into(),
+        //         ).into(),
+        //         // )
+        //     ).into() }))
+        // ),
+    )}
+}

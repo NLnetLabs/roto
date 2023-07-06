@@ -257,12 +257,18 @@ impl LinearMemory {
                         }
                     }
                     Some(TypeValue::Builtin(
-                        BuiltinTypeValue::BmpMessage(bmp_msg),
+                        BuiltinTypeValue::BmpRouteMonitoringMessage(bmp_msg),
                     )) => {
                         trace!("get bmp_message get_value_owned_for_field {:?} {:?}", bmp_msg, field_index);
-                        LazyRecord::lazy_evaluator(bmp_msg.clone())
-                            .get_field_by_index(field_index)
-                            .map(|v| StackValue::Owned(v.into()))
+                        LazyRecord::from_type_def(LazyRecord::<
+                            '_,
+                            routecore::bmp::message::RouteMonitoring<
+                                bytes::Bytes,
+                            >,
+                        >::type_def(
+                        ))
+                        .get_field_by_index(field_index, bmp_msg)
+                        .map(|elm| StackValue::Owned(elm.into()))
                     }
                     Some(tv) => match tv {
                         // Do not own AsPath and Communities, cloning is expensive!

@@ -9,7 +9,7 @@ use serde::Serialize;
 
 use crate::compile::CompileError;
 use crate::traits::RotoType;
-use crate::types::collections::RawBytes;
+use crate::types::collections::BytesRecord;
 use crate::types::constant_enum::EnumVariant;
 
 use super::super::collections::List;
@@ -54,7 +54,7 @@ pub enum BuiltinTypeValue {
     // Used for filtering on the properties of the whole message,
     // not taking into account any individual prefixes.
     BgpUpdateMessage(Arc<BgpUpdateMessage>),  // scalar
-    BmpMessage(Arc<RawBytes<routecore::bmp::message::Message<bytes::Bytes>>>),
+    BmpRouteMonitoringMessage(Arc<BytesRecord<routecore::bmp::message::RouteMonitoring<bytes::Bytes>>>),
     // BmpMessage(Arc<LazyRecord<routecore::bmp::message::Message<bytes::Bytes>>>)
 }
 
@@ -186,7 +186,7 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::BgpUpdateMessage(_raw) => Err(CompileError::from(
                 "Cannot convert raw BGP message into any other type.",
             )),
-            BuiltinTypeValue::BmpMessage(_raw) => Err(CompileError::from(
+            BuiltinTypeValue::BmpRouteMonitoringMessage(_raw) => Err(CompileError::from(
                 "Cannot convert raw BMP message into any other type.",
             )),
             BuiltinTypeValue::RouteStatus(v) => v.into_type(ty),
@@ -340,7 +340,7 @@ impl Display for BuiltinTypeValue {
             BuiltinTypeValue::BgpUpdateMessage(raw) => {
                 write!(f, "{:X?} (RawBgpMessage)", **raw)
             }
-            BuiltinTypeValue::BmpMessage(raw) => {
+            BuiltinTypeValue::BmpRouteMonitoringMessage(raw) => {
                 write!(f, "{:X?} (BmpMessage)", **raw)
             }
             BuiltinTypeValue::RouteStatus(v) => {

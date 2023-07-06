@@ -38,8 +38,8 @@ use super::{
 // uniqueness for an entry.
 pub type RibTypeDef = (Box<TypeDef>, Option<Vec<SmallVec<[usize; 8]>>>);
 pub type NamedTypeDef = (ShortString, Box<TypeDef>);
-// pub type LazyNamedTypeDef<T> =
-//     (ShortString, Box<TypeDef>, LazyElementTypeValue<T>);
+pub type LazyNamedTypeDef<'a, T> =
+    Vec<(ShortString, LazyElementTypeValue<'a, T>)>;
 
 #[derive(Clone, Debug, Eq, PartialEq, Default, Hash, Serialize)]
 pub enum TypeDef {
@@ -291,7 +291,7 @@ impl TypeDef {
                     trace!("BmpMessage w/ field '{}'", field);
                     parent_type =
                         LazyRecord::<
-                            routecore::bmp::message::Message<bytes::Bytes>,
+                            routecore::bmp::message::RouteMonitoring<bytes::Bytes>,
                         >::get_props_for_field(field)?;
 
                     // Add the token to the FieldAccess vec.
@@ -429,7 +429,7 @@ impl TypeDef {
                 )
             }
             TypeDef::LazyRecord(_) => LazyRecord::<
-                routecore::bmp::message::Message<bytes::Bytes>,
+                routecore::bmp::message::RouteMonitoring<bytes::Bytes>,
             >::get_props_for_method(
                 self.clone(), method_name
             ),
@@ -875,7 +875,7 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::BgpUpdateMessage(_) => {
                 TypeDef::BgpUpdateMessage
             }
-            BuiltinTypeValue::BmpMessage(_) => {
+            BuiltinTypeValue::BmpRouteMonitoringMessage(_) => {
                 todo!()
             }
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
@@ -886,7 +886,6 @@ impl From<&BuiltinTypeValue> for TypeDef {
             }
             BuiltinTypeValue::NextHop(_) => TypeDef::NextHop,
             BuiltinTypeValue::MultiExitDisc(_) => TypeDef::MultiExitDisc,
-            BuiltinTypeValue::BmpMessage(_) => todo!(),
         }
     }
 }
@@ -923,7 +922,7 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::BgpUpdateMessage(_) => {
                 TypeDef::BgpUpdateMessage
             }
-            BuiltinTypeValue::BmpMessage(_) => {
+            BuiltinTypeValue::BmpRouteMonitoringMessage(_) => {
                 todo!()
             }
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,

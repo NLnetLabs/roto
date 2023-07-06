@@ -1,32 +1,191 @@
-use std::sync::Arc;
-
-use routecore::bmp::message::{
-    Message as RouteCoreBmpMessage, PeerDownNotification, PeerType,
-    PerPeerHeader, RouteMonitoring,
-};
-use smallvec::SmallVec;
-
 use crate::{
+    ast::ShortString,
     compile::CompileError,
-    createtoken,
-    traits::{RotoType, Token},
+    createtoken, lazyelmtypevalue, lazyenum, lazyfield, lazyrecord,
+    traits::Token,
     types::{
-        builtin::RotondaId,
-        collections::{LazyElementTypeValue, LazyRecord, RawBytes},
+        collections::{BytesRecord, LazyElementTypeValue, LazyRecord},
         constant_enum::EnumVariant,
-        typedef::{MethodProps, TypeDef},
+        typedef::{LazyNamedTypeDef, MethodProps, TypeDef},
         typevalue::TypeValue,
     },
-    vm::{StackValue, VmError},
 };
 
-use super::BuiltinTypeValue;
+use super::{Boolean, BuiltinTypeValue};
 
+//------------ BmpRouteMonitoringMessage ------------------------------------
+impl LazyRecord<'_, routecore::bmp::message::RouteMonitoring<bytes::Bytes>> {
+    pub(crate) fn type_def<'a>() -> LazyNamedTypeDef<
+        'a,
+        routecore::bmp::message::RouteMonitoring<bytes::Bytes>,
+    > {
+        vec![(
+            "route_monitoring".into(),
+            LazyElementTypeValue::LazyRecord(lazyrecord!(vec![(
+                "per_peer_header".into(),
+                LazyElementTypeValue::LazyRecord(lazyrecord!(vec![
+                    // (
+                    //     "peer_type".into(),
+                    //     LazyElementTypeValue::Lazy(Box::new(
+                    //         |raw_message: &BytesRecord<routecore::bmp::message::RouteMonitoring<bytes::Bytes>>| {
+                    //         TypeValue::Builtin(
+                    //         // BuiltinTypeValue::ConstU8EnumVariant(
+                    //             EnumVariant::<u8>::new(
+                    //                 "BMP_PEER_TYPE".into(),
+                    //                 raw_message.bytes()
+                    //                     .per_peer_header()
+                    //                     .peer_type()
+                    //                     .into(),
+                    //         ).into(),
+                    //         // )
+                    //     ).into() }))
+                    // ),
+                    lazyenum!(
+                        "peer_type",
+                        EnumVariant<U8> = "BMP_PEER_TYPE",
+                        routecore::bmp::message::RouteMonitoring<bytes::Bytes>,
+                        per_peer_header.peer_type
+                    ),
+                    // (
+                    //     "is_ipv4".into(),
+                    //     lazyelmtypevalue!(
+                    //         raw_message;
+                    //         TypeValue::Builtin(
+                    //             // BuiltinTypeValue::from(
+                    //                 Boolean::new(
+                    //                     raw_message.bytes().per_peer_header().is_ipv4()
+                    //                 ).into()
+                    //             // )
+                    //         ).into()
+                    //     )
+                    // ),
+                    // lazyfield!("is_ipv4";Boolean;raw_message;raw_message.bytes().per_peer_header().is_ipv4()),
+                    lazyfield!("is_ipv4", Boolean, per_peer_header.is_ipv4),
+                    // (
+                    //     "is_ipv6".into(),
+                    //     lazyelmtypevalue!(
+                    //         raw_message;
+                    //         TypeValue::Builtin(
+                    //             // BuiltinTypeValue::from(
+                    //                 Boolean::new(
+                    //                     raw_message.bytes().per_peer_header().is_ipv6()
+                    //                 ).into()
+                    //             // )
+                    //         ).into()
+                    //     )
+                    // ),
+                    lazyfield!("is_ipv6", Boolean, per_peer_header.is_ipv6),
+                    // (
+                    //     "is_pre_policy".into(),
+                    //     lazyelmtypevalue!(
+                    //         raw_message;
+                    //         TypeValue::Builtin(
+                    //             // BuiltinTypeValue::from(
+                    //                 Boolean::new(
+                    //                     raw_message.bytes().per_peer_header().is_pre_policy()
+                    //                 ).into()
+                    //             // )
+                    //         ).into()
+                    //     )
+                    // ),
+                    lazyfield!(
+                        "is_pre_policy",
+                        Boolean,
+                        per_peer_header.is_pre_policy
+                    ),
+                    // (
+                    //     "is_post_policy".into(),
+                    //     lazyelmtypevalue!(
+                    //         raw_message;
+                    //         TypeValue::Builtin(
+                    //             // BuiltinTypeValue::from(
+                    //                 Boolean::new(
+                    //                     raw_message.bytes().per_peer_header().is_post_policy()
+                    //                 ).into()
+                    //             // )
+                    //         ).into()
+                    //     )
+                    // ),
+                    lazyfield!(
+                        "is_post_policy",
+                        Boolean,
+                        per_peer_header.is_post_policy
+                    ),
+                    // (
+                    //     "is_legacy_format".into(),
+                    //     lazyelmtypevalue!(
+                    //         raw_message;
+                    //         TypeValue::Builtin(
+                    //             BuiltinTypeValue::from(
+                    //                 Boolean::new(
+                    //                     raw_message.bytes().per_peer_header().is_legacy_format()
+                    //                 )
+                    //             )
+                    //         ).into()
+                    //     )
+                    // ),
+                    lazyfield!(
+                        "is_legacy_format",
+                        Boolean,
+                        per_peer_header.is_legacy_format
+                    ),
+                    // (
+                    //     "adj_rib_type".into(),
+                    //     lazyelmtypevalue!(
+                    //         raw_message;
+                    //         TypeValue::Builtin(
+                    //             BuiltinTypeValue::ConstU8EnumVariant(
+                    //                 EnumVariant::<u8> {
+                    //                     enum_name: "BMP_ADJ_RIB_TYPE"
+                    //                         .into(),
+                    //                     value: raw_message
+                    //                         .bytes()
+                    //                         .per_peer_header()
+                    //                         .adj_rib_type()
+                    //                         .into(),
+                    //                 },
+                    //             )
+                    //         ).into()
+                    //     )
+                    // )
+                    lazyenum!(
+                        "adj_rib_type",
+                        EnumVariant<U8> = "BMP_ADJ_RIB_TYPE",
+                        routecore::bmp::message::RouteMonitoring<bytes::Bytes>,
+                        per_peer_header.adj_rib_type
+                    )
+                ]))
+            )])),
+        )]
+    }
 
+    pub(crate) fn get_props_for_method(
+        _ty: TypeDef,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, CompileError>
+    where
+        Self: std::marker::Sized,
+    {
+        match method_name.ident.as_str() {
+            "get_type" => Ok(MethodProps::new(
+                TypeDef::ConstEnumVariant("BMP_MESSAGE_TYPES".into()),
+                BmpMessageToken::GetType.into(),
+                vec![],
+            )),
 
-//------------ BmpUpdateMessage ------------------------------------------------
+            // "cmp" => Ok(MethodProps::new(
+            //     TypeDef::IntegerLiteral,
+            //     StringLiteralToken::Cmp.into(),
+            //     vec![TypeDef::StringLiteral, TypeDef::StringLiteral],
+            // )),
+            _ => Err(format!(
+                "Unknown method: '{}' for type BgpUpdateMessage",
+                method_name.ident
+            )
+            .into()),
+        }
+    }
 
-impl LazyRecord<'_, routecore::bmp::message::Message<bytes::Bytes>> {
     pub(crate) fn get_props_for_field(
         field_name: &crate::ast::Identifier,
     ) -> Result<(TypeDef, crate::traits::Token), CompileError>
@@ -81,140 +240,149 @@ impl LazyRecord<'_, routecore::bmp::message::Message<bytes::Bytes>> {
         }
     }
 
-    pub(crate) fn lazy_field_for_field_index(
-        &self,
-        raw_message: &routecore::bmp::message::Message<bytes::Bytes>,
-        field_index: SmallVec<[usize; 8]>,
-    ) -> Option<TypeValue> {
-        let mut field_iter = field_index.into_iter();
-        if let Some(field_token) = field_iter.next() {
-            match field_token.into() {
-                BmpMessageToken::RouteMonitoring => {
-                    if let RouteCoreBmpMessage::RouteMonitoring(rm_msg) =
-                        raw_message
-                    {
-                        match field_iter.next().unwrap().into() {
-                            RouteMonitoringToken::PerPeerHeader => {
-                                match field_iter.next().unwrap().into() {
-                                    PerPeerHeaderToken::PeerType => {
-                                        TypeValue::Builtin(
-                                            BuiltinTypeValue::ConstU8EnumVariant(
-                                                EnumVariant::<u8> {
-                                                    enum_name: "BMP_PEER_TYPE"
-                                                        .into(),
-                                                    value: rm_msg
-                                                        .per_peer_header()
-                                                        .peer_type()
-                                                        .into(),
-                                                },
-                                            )
-                                        )
-                                        .into()
-                                    },
-                                    _ => None
-                                }
-                            },
-                            _ => None
-                        }
-                    } else {
-                        None
-                    }
-                }
-                BmpMessageToken::GetType => todo!(),
-                BmpMessageToken::StatisticsReport => todo!(),
-                BmpMessageToken::PeerDownNotification => todo!(),
-                BmpMessageToken::PeerUpNotification => todo!(),
-                BmpMessageToken::InitiationMessage => todo!(),
-                BmpMessageToken::TerminationMessage => todo!(),
-                BmpMessageToken::RouteMirroring => todo!(),
-                _ => None,
-            }
-        } else {
-            None
-        }
-    }
+    // pub(crate) fn lazy_field_for_field_index(
+    //     // &self,
+    //     raw_message: &routecore::bmp::message::Message<bytes::Bytes>,
+    //     field_index: SmallVec<[usize; 8]>,
+    // ) -> Option<TypeValue> {
+    //     let mut field_iter = field_index.into_iter();
+    //     if let Some(field_token) = field_iter.next() {
+    //         match field_token.into() {
+    //             BmpMessageToken::RouteMonitoring => {
+    //                 if let routecore::bmp::message::Message::RouteMonitoring(
+    //                     rm_msg,
+    //                 ) = raw_message
+    //                 {
+    //                     match field_iter.next().unwrap().into() {
+    //                         RouteMonitoringToken::PerPeerHeader => {
+    //                             match field_iter.next().unwrap().into() {
+    //                                 PerPeerHeaderToken::PeerType => {
+    //                                     TypeValue::Builtin(
+    //                                         BuiltinTypeValue::ConstU8EnumVariant(
+    //                                             EnumVariant::<u8> {
+    //                                                 enum_name: "BMP_PEER_TYPE"
+    //                                                     .into(),
+    //                                                 value: rm_msg
+    //                                                     .per_peer_header()
+    //                                                     .peer_type()
+    //                                                     .into(),
+    //                                             },
+    //                                         )
+    //                                     )
+    //                                     .into()
+    //                                 },
+    //                                 PerPeerHeaderToken::IsIpV4 =>
+    //                                         TypeValue::Builtin(
+    //                                             BuiltinTypeValue::from(
+    //                                                 Boolean::new(
+    //                                                     rm_msg.per_peer_header().is_ipv6()
+    //                                                 )
+    //                                             )
+    //                                         ).into(),
+    //                                 _ => None
+    //                             }
+    //                         },
+    //                         _ => None
+    //                     }
+    //                 } else {
+    //                     None
+    //                 }
+    //             }
+    //             BmpMessageToken::GetType => todo!(),
+    //             BmpMessageToken::StatisticsReport => todo!(),
+    //             BmpMessageToken::PeerDownNotification => todo!(),
+    //             BmpMessageToken::PeerUpNotification => todo!(),
+    //             BmpMessageToken::InitiationMessage => todo!(),
+    //             BmpMessageToken::TerminationMessage => todo!(),
+    //             BmpMessageToken::RouteMirroring => todo!(),
+    //             _ => None,
+    //         }
+    //     } else {
+    //         None
+    //     }
+    // }
 }
 
-impl RotoType for LazyRecord<'_, RouteCoreBmpMessage<bytes::Bytes>> {
-    fn get_props_for_method(
-        _ty: TypeDef,
-        method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        match method_name.ident.as_str() {
-            "get_type" => Ok(MethodProps::new(
-                TypeDef::ConstEnumVariant("BMP_MESSAGE_TYPES".into()),
-                BmpMessageToken::GetType.into(),
-                vec![],
-            )),
+// impl RotoType for LazyRecord<'_, RouteCoreBmpMessage<bytes::Bytes>> {
+//     fn get_props_for_method(
+//         _ty: TypeDef,
+//         method_name: &crate::ast::Identifier,
+//     ) -> Result<MethodProps, CompileError>
+//     where
+//         Self: std::marker::Sized,
+//     {
+//         match method_name.ident.as_str() {
+//             "get_type" => Ok(MethodProps::new(
+//                 TypeDef::ConstEnumVariant("BMP_MESSAGE_TYPES".into()),
+//                 BmpMessageToken::GetType.into(),
+//                 vec![],
+//             )),
 
-            // "cmp" => Ok(MethodProps::new(
-            //     TypeDef::IntegerLiteral,
-            //     StringLiteralToken::Cmp.into(),
-            //     vec![TypeDef::StringLiteral, TypeDef::StringLiteral],
-            // )),
-            _ => Err(format!(
-                "Unknown method: '{}' for type BgpUpdateMessage",
-                method_name.ident
-            )
-            .into()),
-        }
-    }
+//             // "cmp" => Ok(MethodProps::new(
+//             //     TypeDef::IntegerLiteral,
+//             //     StringLiteralToken::Cmp.into(),
+//             //     vec![TypeDef::StringLiteral, TypeDef::StringLiteral],
+//             // )),
+//             _ => Err(format!(
+//                 "Unknown method: '{}' for type BgpUpdateMessage",
+//                 method_name.ident
+//             )
+//             .into()),
+//         }
+//     }
 
-    fn into_type(self, ty: &TypeDef) -> Result<TypeValue, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        Err(format!(
-            "BgpUpdateMessage cannot be converted to type {} (or any other type)",
-            ty
-        )
-        .into())
-    }
+//     fn into_type(self, ty: &TypeDef) -> Result<TypeValue, CompileError>
+//     where
+//         Self: std::marker::Sized,
+//     {
+//         Err(format!(
+//             "BgpUpdateMessage cannot be converted to type {} (or any other type)",
+//             ty
+//         )
+//         .into())
+//     }
 
-    fn exec_value_method<'a>(
-        &'a self,
-        _method_token: usize,
-        _args: &'a [StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        // match method_token.into() {
-        //     // BmpMessageToken::GetType => Ok(TypeValue::Builtin(
-        //     //     BuiltinTypeValue::ConstU16EnumVariant(EnumVariant {
-        //     //         enum_name: "BMP_MESSAGE_TYPES".into(),
-        //     //         value: self.raw_message.0.nlris().afi().into(),
-        //     //     }),
-        //     // )),
-        //     // BmpMessageToken::Safi => Ok(TypeValue::Builtin(
-        //     //     BuiltinTypeValue::ConstU8EnumVariant(EnumVariant {
-        //     //         enum_name: "SAFI".into(),
-        //     //         value: self.raw_message.0.nlris().safi().into(),
-        //     //     }),
-        //     // )),
-        //     _ => Err(VmError::InvalidMethodCall),
-        // }
-        todo!()
-    }
+//     fn exec_value_method<'a>(
+//         &'a self,
+//         _method_token: usize,
+//         _args: &'a [StackValue],
+//         _res_type: TypeDef,
+//     ) -> Result<TypeValue, VmError> {
+//         // match method_token.into() {
+//         //     // BmpMessageToken::GetType => Ok(TypeValue::Builtin(
+//         //     //     BuiltinTypeValue::ConstU16EnumVariant(EnumVariant {
+//         //     //         enum_name: "BMP_MESSAGE_TYPES".into(),
+//         //     //         value: self.raw_message.0.nlris().afi().into(),
+//         //     //     }),
+//         //     // )),
+//         //     // BmpMessageToken::Safi => Ok(TypeValue::Builtin(
+//         //     //     BuiltinTypeValue::ConstU8EnumVariant(EnumVariant {
+//         //     //         enum_name: "SAFI".into(),
+//         //     //         value: self.raw_message.0.nlris().safi().into(),
+//         //     //     }),
+//         //     // )),
+//         //     _ => Err(VmError::InvalidMethodCall),
+//         // }
+//         todo!()
+//     }
 
-    fn exec_consume_value_method(
-        self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        Err(VmError::InvalidMethodCall)
-    }
+//     fn exec_consume_value_method(
+//         self,
+//         _method_token: usize,
+//         _args: Vec<TypeValue>,
+//         _res_type: TypeDef,
+//     ) -> Result<TypeValue, VmError> {
+//         Err(VmError::InvalidMethodCall)
+//     }
 
-    fn exec_type_method(
-        _method_token: usize,
-        _args: &[StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        Err(VmError::InvalidMethodCall)
-    }
-}
+//     fn exec_type_method(
+//         _method_token: usize,
+//         _args: &[StackValue],
+//         _res_type: TypeDef,
+//     ) -> Result<TypeValue, VmError> {
+//         Err(VmError::InvalidMethodCall)
+//     }
+// }
 
 createtoken!(
     BmpMessageToken;
@@ -235,63 +403,189 @@ createtoken!(
 
 createtoken!(
     PerPeerHeaderToken;
-    PeerType = 0
+    PeerType = 0,
+    IsIpV4 = 1,
+    IsIpV6 = 2
 );
 
-impl<'a> LazyRecord<'a, RawBytes<routecore::bmp::message::Message<bytes::Bytes>>> {
-    pub(crate) fn lazy_evaluator(
-        raw_message: Arc<RawBytes<routecore::bmp::message::Message<bytes::Bytes>>>,
-    ) -> LazyRecord<'a, RawBytes<routecore::bmp::message::Message<bytes::Bytes>>> {
-        let peer_type = LazyElementTypeValue::Lazy(
-            Box::new(move || {
-                if let RouteCoreBmpMessage::RouteMonitoring(rm_msg) = raw_message.bytes() {
-                    TypeValue::Builtin(
-                        BuiltinTypeValue::ConstU8EnumVariant(
-                            EnumVariant::<u8> {
-                                enum_name: "BMP_PEER_TYPE"
-                                    .into(),
-                                value: rm_msg
-                                    .per_peer_header()
-                                    .peer_type()
-                                    .into(),
-                            },
-                        )
-                    ).into()
-                } else {
-                    TypeValue::Unknown.into()
-                }
-            })
-        );
+// impl<'a>
+//     LazyRecord<'a, RawBytes<routecore::bmp::message::Message<bytes::Bytes>>>
+// {
+//     pub(crate) fn lazy_evaluator<T>(
+//         raw_message: Arc<
+//             RawBytes<routecore::bmp::message::Message<bytes::Bytes>>,
+//         >,
+//     ) -> LazyRecord<
+//         'a,
+//         RawBytes<T>,
+//     > {
+//         let peer_type = lazyelmtypevalue!(
+//             raw_message;
+//             {
+//             if let RouteCoreBmpMessage::RouteMonitoring(rm_msg) =
+//                 raw_message.bytes()
+//             {
+//                 TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(
+//                     EnumVariant::<u8> {
+//                         enum_name: "BMP_PEER_TYPE".into(),
+//                         value: rm_msg.per_peer_header().peer_type().into(),
+//                     },
+//                 ))
+//                 .into()
+//             } else {
+//                 TypeValue::Unknown.into()
+//             }
+//         });
 
-        let per_peer_header = LazyElementTypeValue::LazyRecord(
-            LazyRecord::new(
-                (RotondaId(0), 0),
-                vec![(
-                    "peer_type".into(),
-                    peer_type
-                )],
-            ).unwrap()
-        );
+//         let per_peer_header = LazyElementTypeValue::LazyRecord(
+//             LazyRecord::new(
+//                 (RotondaId(0), 0),
+//                 vec![("peer_type".into(), peer_type)],
+//             )
+//             .unwrap(),
+//         );
 
-        let peer_type = vec![(
-            "route_monitoring".into(),
-            LazyElementTypeValue::LazyRecord(
-                LazyRecord::new(
-                    (RotondaId(0), 0),
-                    vec![(
-                        "per_peer_header".into(),
-                        per_peer_header,
-                    )],
-                ).unwrap()
-            ),
-        )];
+//         let r_m = vec![(
+//             "route_monitoring".into(),
+//             LazyElementTypeValue::LazyRecord(
+//                 LazyRecord::new(
+//                     (RotondaId(0), 0),
+//                     vec![("per_peer_header".into(), per_peer_header)],
+//                 )
+//                 .unwrap(),
+//             ),
+//         )];
 
-        LazyRecord::new(
-            (RotondaId(0), 0),
-            peer_type,
-        ).unwrap()
-    }
-}
+//         LazyRecord::new((RotondaId(0), 0), r_m).unwrap()
+//     }
+// }
+
+// impl<'a>
+//     LazyRecord<
+//         'a,
+//         BytesRecord<routecore::bmp::message::RouteMonitoring<bytes::Bytes>>,
+//     >
+// {
+//     pub(crate) fn lazy_evaluator2(
+//         raw_message: BytesRecord<
+//             routecore::bmp::message::RouteMonitoring<bytes::Bytes>,
+//         >,
+//     ) -> LazyRecord<'a, routecore::bmp::message::RouteMonitoring<bytes::Bytes>>
+//     {
+//         {
+//             lazyrecord!(vec![(
+//                 "route_monitoring".into(),
+//                 LazyElementTypeValue::LazyRecord(lazyrecord!(vec![(
+//                     "per_peer_header".into(),
+//                     LazyElementTypeValue::LazyRecord(lazyrecord!(vec![
+//                         (
+//                             "peer_type".into(),
+//                             LazyElementTypeValue::Lazy(Box::new(
+//                                 |raw_message: &BytesRecord<
+//                                     routecore::bmp::message::RouteMonitoring<
+//                                         bytes::Bytes,
+//                                     >,
+//                                 >| {
+//                                     TypeValue::Builtin(
+//                                         BuiltinTypeValue::ConstU8EnumVariant(
+//                                             EnumVariant::<u8> {
+//                                                 enum_name: "BMP_PEER_TYPE"
+//                                                     .into(),
+//                                                 value: raw_message
+//                                                     .bytes()
+//                                                     .per_peer_header()
+//                                                     .peer_type()
+//                                                     .into(),
+//                                             },
+//                                         ),
+//                                     )
+//                                     .into()
+//                                 }
+//                             )) // .into())
+//                         ),
+//                         (
+//                             "is_ipv4".into(),
+//                             lazyelmtypevalue!(
+//                                 raw_message;
+//                                 TypeValue::Builtin(
+//                                     BuiltinTypeValue::from(
+//                                         Boolean::new(
+//                                             raw_message.bytes().per_peer_header().is_ipv4()
+//                                         )
+//                                     )
+//                                 ).into()
+//                             )
+//                         ),
+//                         // (
+//                         //     "is_ipv6".into(),
+//                         //     lazyelmtypevalue!(
+//                         //         TypeValue::Builtin(
+//                         //             BuiltinTypeValue::from(
+//                         //                 Boolean::new(
+//                         //                     rm_msg.per_peer_header().is_ipv6()
+//                         //                 )
+//                         //             )
+//                         //         ).into()
+//                         //     )
+//                         // ),
+//                         // (
+//                         //     "is_pre_policy".into(),
+//                         //     lazyelmtypevalue!(
+//                         //         TypeValue::Builtin(
+//                         //             BuiltinTypeValue::from(
+//                         //                 Boolean::new(
+//                         //                     rm_msg.per_peer_header().is_pre_policy()
+//                         //                 )
+//                         //             )
+//                         //         ).into()
+//                         //     )
+//                         // ),
+//                         // (
+//                         //     "is_post_policy".into(),
+//                         //     lazyelmtypevalue!(
+//                         //         TypeValue::Builtin(
+//                         //             BuiltinTypeValue::from(
+//                         //                 Boolean::new(
+//                         //                     rm_msg.per_peer_header().is_post_policy()
+//                         //                 )
+//                         //             )
+//                         //         ).into()
+//                         //     )
+//                         // ),
+//                         // (
+//                         //     "is_legacy_format".into(),
+//                         //     lazyelmtypevalue!(
+//                         //         TypeValue::Builtin(
+//                         //             BuiltinTypeValue::from(
+//                         //                 Boolean::new(
+//                         //                     rm_msg.per_peer_header().is_legacy_format()
+//                         //                 )
+//                         //             )
+//                         //         ).into()
+//                         //     )
+//                         // ),
+//                         // (
+//                         //     "adj_rib_type".into(),
+//                         //     lazyelmtypevalue!(TypeValue::Builtin(
+//                         //             BuiltinTypeValue::ConstU8EnumVariant(
+//                         //                 EnumVariant::<u8> {
+//                         //                     enum_name: "BMP_ADJ_RIB_TYPE"
+//                         //                         .into(),
+//                         //                     value: rm_msg
+//                         //                         .per_peer_header()
+//                         //                         .adj_rib_type()
+//                         //                         .into(),
+//                         //                 },
+//                         //             )
+//                         //         ).into()
+//                         //     )
+//                         // )
+//                     ]))
+//                 )]))
+//             )])
+//         }
+//     }
+// }
 
 // impl LazyRecord<RouteCoreBmpMessage<bytes::Bytes>> {
 //     pub(crate) fn lazy_evaluator(
