@@ -3,7 +3,7 @@ use smallvec::SmallVec;
 
 use crate::ast::{
     AnonymousRecordValueExpr, ListValueExpr, ShortString,
-    TypedRecordValueExpr, ValueExpr,
+    TypedRecordValueExpr, ValueExpr, Identifier,
 };
 use crate::compile::CompileError;
 use crate::traits::RotoType;
@@ -820,17 +820,18 @@ impl From<RecordToken> for usize {
 pub struct BytesRecord<T>(T);
 
 impl<T: AsRef<[u8]>> BytesRecord<T> {
-    pub(crate) fn bytes(&self) -> &T {
+    pub(crate) fn bytes_parser(&self) -> &T {
         &self.0
     }
 
-    pub(crate) fn into_bytes(self) -> T {
-        self.0
+    pub(crate) fn get_props_for_method(
+        _ty: TypeDef,
+        _method_name: &Identifier,
+    ) -> Result<MethodProps, CompileError>
+    where
+        Self: std::marker::Sized {
+            todo!()
     }
-
-    // pub(crate) fn into_lazy_record(self, ty: &LazyNamedTypeDef<'_, T>) -> LazyRecord<'_, T> {
-    //     LazyRecord::from_type_def(ty)
-    // }
 }
 
 impl<T: AsRef<[u8]>> Eq for BytesRecord<T> {}
@@ -863,7 +864,6 @@ impl<T> LazyElementTypeValue<'_, T> {
                 LazyElementTypeValue::Materialized(
                     ElementTypeValue::Primitive(rec.into()),
                 )
-                // LazyElementTypeValue::Materialized(elm())
             }
             LazyElementTypeValue::Lazy(elm) => {
                 LazyElementTypeValue::Materialized(elm(raw_bytes))
@@ -973,7 +973,7 @@ impl<T> std::fmt::Display for LazyElementTypeValue<'_, T> {
 // The LazyRecord is a Chimaera
 #[derive(Debug)]
 pub struct LazyRecord<'a, T> {
-    value: Vec<(ShortString, LazyElementTypeValue<'a, T>)>,
+    value: LazyNamedTypeDef<'a, T>,
     is_materialized: bool,
     _raw_message: PhantomData<T>,
 }
@@ -982,9 +982,9 @@ pub struct LazyRecord<'a, T> {
 
 impl<'a, T> LazyRecord<'a, T> {
     pub(crate) fn new(
-        value: Vec<(ShortString, LazyElementTypeValue<'a, T>)>,
+        value: LazyNamedTypeDef<'a, T>,
         // raw_message: Arc<T>,
-    ) -> Result<Self, CompileError> {
+    ) -> Result<Self, VmError> {
         Ok(LazyRecord {
             value,
             is_materialized: false,
@@ -1002,12 +1002,12 @@ impl<'a, T> LazyRecord<'a, T> {
         }
     }
 
-    pub(crate) fn materialize_record(&mut self, raw_bytes: &BytesRecord<T>) {
-        for field in &mut self.value {
-            field.1.materialize(raw_bytes);
-        }
-        self.is_materialized = true;
-    }
+    // pub(crate) fn materialize_record(&mut self, raw_bytes: &BytesRecord<T>) {
+    //     for field in &mut self.value {
+    //         field.1.materialize(raw_bytes);
+    //     }
+    //     self.is_materialized = true;
+    // }
 
     // pub(crate) fn into_materialized_record(self, raw_bytes: &BytesRecord<T>) -> Self {
     //     if self.is_materialized {
@@ -1030,32 +1030,32 @@ impl<'a, T> LazyRecord<'a, T> {
     //     self.clone().into_materialized_record(raw_bytes)
     // }
 
-    pub fn create_instance(
-        ty: &TypeDef,
-        kvs: Vec<(&str, TypeValue)>,
-    ) -> Result<Record, CompileError> {
-        if kvs.is_empty() {
-            return Err(CompileError::new(
-                "Can't create empty instance.".into(),
-            ));
-        }
+    // pub fn create_instance(
+    //     ty: &TypeDef,
+    //     kvs: Vec<(&str, TypeValue)>,
+    // ) -> Result<Record, CompileError> {
+    //     if kvs.is_empty() {
+    //         return Err(CompileError::new(
+    //             "Can't create empty instance.".into(),
+    //         ));
+    //     }
 
-        let shortstring_vec = kvs
-            .iter()
-            .map(|(name, ty)| (ShortString::from(*name), ty))
-            .collect::<Vec<_>>();
-        if let TypeDef::Record(_rec) = ty {
-            if ty._check_record_fields(shortstring_vec.as_slice()) {
-                TypeValue::create_record(kvs)
-            } else {
-                Err(CompileError::new(
-                    format!("Record fields do not match record type, expected instance of type {}, but got {:?}", ty, shortstring_vec)
-                ))
-            }
-        } else {
-            Err(CompileError::new("Not a record type".into()))
-        }
-    }
+    //     let shortstring_vec = kvs
+    //         .iter()
+    //         .map(|(name, ty)| (ShortString::from(*name), ty))
+    //         .collect::<Vec<_>>();
+    //     if let TypeDef::Record(_rec) = ty {
+    //         if ty._check_record_fields(shortstring_vec.as_slice()) {
+    //             TypeValue::create_record(kvs)
+    //         } else {
+    //             Err(CompileError::new(
+    //                 format!("Record fields do not match record type, expected instance of type {}, but got {:?}", ty, shortstring_vec)
+    //             ))
+    //         }
+    //     } else {
+    //         Err(CompileError::new("Not a record type".into()))
+    //     }
+    // }
 
     // pub fn get_value_for_field(
     //     &self,
@@ -1081,6 +1081,16 @@ impl<'a, T> LazyRecord<'a, T> {
             elm = elm?.as_record().unwrap().0.get(*index).map(|f| f.1.clone())
         }
         elm
+    }
+
+    pub fn exec_value_method(
+        &self,
+        _method: usize,
+        _args: &[StackValue],
+        _res_type: TypeDef,
+        raw_bytes: impl AsRef<[u8]>,
+    ) -> Result<TypeValue, VmError> {
+        todo!()
     }
 
     // pub fn get_field_by_index_owned(

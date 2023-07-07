@@ -12,7 +12,7 @@ use crate::compile::CompileError;
 use crate::traits::Token;
 use crate::typedefconversion;
 use crate::types::builtin::BgpUpdateMessage;
-use crate::types::collections::{ElementTypeValue, LazyRecord};
+use crate::types::collections::{ElementTypeValue};
 use crate::vm::{StackValue, VmError};
 use crate::{
     ast::{AcceptReject, ShortString},
@@ -28,6 +28,7 @@ use super::builtin::{
 use super::collections::{LazyElementTypeValue, Record};
 use super::constant_enum::{Enum, EnumVariant};
 use super::datasources::{RibType, Table};
+use super::lazytypedef::LazyTypeDef;
 use super::outputs::OutputStreamMessage;
 use super::{
     builtin::BuiltinTypeValue, collections::List, typevalue::TypeValue,
@@ -59,7 +60,7 @@ pub enum TypeDef {
     // ConstU32EnumVariant(ShortString),
     // A raw BGP message as bytes
     BgpUpdateMessage,
-    LazyRecord(Vec<NamedTypeDef>),
+    LazyRecord(LazyTypeDef),
     // Builtin Types
     U32,
     U8,
@@ -287,13 +288,9 @@ impl TypeDef {
                 }
                 // Another special case: BgpUpdateMessage also doesn't have
                 // actual fields, they are all simulated
-                (TypeDef::LazyRecord(_fields), _) => {
-                    trace!("BmpMessage w/ field '{}'", field);
+                (TypeDef::LazyRecord(lazy_type_def), _) => {
                     parent_type =
-                        LazyRecord::<
-                            routecore::bmp::message::RouteMonitoring<bytes::Bytes>,
-                        >::get_props_for_field(field)?;
-
+                        lazy_type_def.get_props_for_field(field)?;
                     // Add the token to the FieldAccess vec.
                     result_type = if let Token::FieldAccess(to_f) =
                         &result_type.1
@@ -309,33 +306,6 @@ impl TypeDef {
                         result_type
                     };
                 }
-                // (TypeDef::Record(found_fields), _) => {
-                //     trace!("Record w/ field '{}'", field);
-
-                //     // Check if this field exists in the TypeDef of the
-                //     // Record.
-                //     if let Some((_, (_, ty))) = found_fields
-                //         .iter()
-                //         .enumerate()
-                //         .find(|(i, (ident, _))| {
-                //             index = *i;
-                //             ident == &field.ident.as_str()
-                //         })
-                //     {
-                //         // Add up all the type defs in the data field
-                //         // of self.
-                //         parent_type = (*ty.clone(), parent_type.1);
-                //         parent_type.1.push(index as u8);
-                //     } else {
-                //         return Err(format!(
-                //             "No field named '{}'",
-                //             field.ident.as_str()
-                //         )
-                //         .into());
-                //     }
-
-                //     result_type = parent_type.clone();
-                // }
                 _ => {
                     return Err(format!(
                         "No field named '{}'",
@@ -428,11 +398,11 @@ impl TypeDef {
                     method_name,
                 )
             }
-            TypeDef::LazyRecord(_) => LazyRecord::<
-                routecore::bmp::message::RouteMonitoring<bytes::Bytes>,
-            >::get_props_for_method(
-                self.clone(), method_name
-            ),
+            TypeDef::LazyRecord(lazy_type_def) => 
+                lazy_type_def.get_props_for_method(
+                    self.clone(), method_name
+                )
+            ,
             TypeDef::U32 => {
                 U32::get_props_for_method(self.clone(), method_name)
             }
@@ -661,9 +631,9 @@ impl std::fmt::Display for TypeDef {
             TypeDef::IpAddress => write!(f, "IpAddress"),
             TypeDef::Route => write!(f, "Route"),
             TypeDef::BgpUpdateMessage => write!(f, "BgpUpdateMessage"),
-            TypeDef::LazyRecord(rec) => {
+            TypeDef::LazyRecord(lazy_type_def) => {
                 write!(f, "Lazy Record {{")?;
-                for (name, ty) in rec {
+                for (name, ty) in lazy_type_def.type_def() {
                     write!(f, "{}: {}, ", name, ty)?;
                 }
                 write!(f, "}}")
@@ -876,7 +846,10 @@ impl From<&BuiltinTypeValue> for TypeDef {
                 TypeDef::BgpUpdateMessage
             }
             BuiltinTypeValue::BmpRouteMonitoringMessage(_) => {
-                todo!()
+                TypeDef::LazyRecord(LazyTypeDef::BmpRouteMonitoringMessage)
+            }
+            BuiltinTypeValue::BmpPeerUpNotificationMessage(_) => {
+                TypeDef::LazyRecord(LazyTypeDef::BmpPeerUpNotificationMessage)
             }
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
@@ -923,7 +896,10 @@ impl From<BuiltinTypeValue> for TypeDef {
                 TypeDef::BgpUpdateMessage
             }
             BuiltinTypeValue::BmpRouteMonitoringMessage(_) => {
-                todo!()
+                TypeDef::LazyRecord(LazyTypeDef::BmpRouteMonitoringMessage)
+            }
+            BuiltinTypeValue::BmpPeerUpNotificationMessage(_) => {
+                TypeDef::LazyRecord(LazyTypeDef::BmpPeerUpNotificationMessage)
             }
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,

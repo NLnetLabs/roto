@@ -4,7 +4,6 @@ use primitives::{
     AsPath, Community, Hop, LocalPref, MultiExitDisc, NextHop, OriginType,
     RouteStatus,
 };
-use routecore::bgp::message::Message;
 use serde::Serialize;
 use smallvec::SmallVec;
 
@@ -26,10 +25,10 @@ use super::{
         HexLiteral, IntegerLiteral, IpAddress, Prefix, PrefixLength,
         RawRouteWithDeltas, StringLiteral, U32, U8,
     },
-    collections::{ElementTypeValue, List, Record, LazyRecord},
+    collections::{ElementTypeValue, List, Record, LazyRecord, BytesRecord},
     constant_enum::Enum,
     outputs::OutputStreamMessage,
-    typedef::TypeDef,
+    typedef::TypeDef
 };
 
 /// These are the actual types that are used in the Roto language. This enum
@@ -177,7 +176,7 @@ impl RotoType for TypeValue {
             TypeDef::AsPath => AsPath::get_props_for_method(ty, method_name),
             TypeDef::AtomicAggregator => Err(CompileError::new("Unsupported TypeDef::AtomicAggregator in TypeValue::get_props_for_method()".to_string())),
             TypeDef::BgpUpdateMessage => BgpUpdateMessage::get_props_for_method(ty, method_name),
-            TypeDef::LazyRecord(_) => LazyRecord::get_props_for_method(ty, method_name),
+            TypeDef::LazyRecord(ref bytes_parser) => bytes_parser.get_props_for_method(ty.clone(), method_name),
             TypeDef::Boolean => Boolean::get_props_for_method(ty, method_name),
             TypeDef::Community => Community::get_props_for_method(ty, method_name),
             TypeDef::ConstEnumVariant(_) => Err(CompileError::new("Unsupported TypeDef::ConstEnumVariant in TypeValue::get_props_for_method()".to_string())),
@@ -237,8 +236,10 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::StringLiteral(v) => v.into_type(ty),
                 BuiltinTypeValue::U32(v) => v.into_type(ty),
                 BuiltinTypeValue::U8(v) => v.into_type(ty),
-                BuiltinTypeValue::BmpRouteMonitoringMessage(v) => Err(CompileError::new("Unsupported TypeValue::BmpMessage in TypeValue::into_type()".to_string())),
+                BuiltinTypeValue::BmpRouteMonitoringMessage(v) => Err(CompileError::new("Unsupported TypeValue::BmpRouteMonitoringMessage in TypeValue::into_type()".to_string())),
+                BuiltinTypeValue::BmpPeerUpNotificationMessage(v) => Err(CompileError::new("Unsupported TypeValue::BmpPeerUpNotificationMessage in TypeValue::into_type()".to_string())),
             }
+            
             TypeValue::Enum(v) => v.into_type(ty),
             TypeValue::List(v) => v.into_type(ty),
             TypeValue::OutputStreamMessage(_) => Err(CompileError::new("Unsupported TypeValue::OutputStreamMessage in TypeValue::into_type()".to_string())),
@@ -269,9 +270,15 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::BgpUpdateMessage(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::BmpRouteMonitoringMessage(v) => {
-                    // v.exec_value_method(method_token, args, res_type)
-                    todo!()
+                BuiltinTypeValue::BmpRouteMonitoringMessage(bytes_rec) => {
+                    LazyRecord::new(
+                        BytesRecord::<routecore::bmp::message::RouteMonitoring<bytes::Bytes>>::lazy_type_def()
+                    )?.exec_value_method(method_token, args, res_type, bytes_rec.bytes_parser())
+                }
+                BuiltinTypeValue::BmpPeerUpNotificationMessage(bytes_rec) => {
+                    LazyRecord::new(
+                        BytesRecord::<routecore::bmp::message::PeerUpNotification<bytes::Bytes>>::lazy_type_def()
+                    )?.exec_value_method(method_token, args, res_type, bytes_rec.bytes_parser())
                 }
                 BuiltinTypeValue::Boolean(v) => {
                     v.exec_value_method(method_token, args, res_type)
@@ -378,6 +385,9 @@ impl RotoType for TypeValue {
                     Err(VmError::InvalidValueType)
                 }
                 BuiltinTypeValue::BmpRouteMonitoringMessage(_) => {
+                    Err(VmError::InvalidValueType)
+                }
+                BuiltinTypeValue::BmpPeerUpNotificationMessage(_) => {
                     Err(VmError::InvalidValueType)
                 }
                 BuiltinTypeValue::Boolean(v) => {

@@ -115,7 +115,7 @@ macro_rules! lazyfield {
             TypeValue::Builtin(
                 BuiltinTypeValue::from(
                     $ty::new(
-                        raw_bytes.bytes().$base_call()$(.$method_call())+
+                        raw_bytes.bytes_parser().$base_call()$(.$method_call())+
                     )
                 )
             ).into()
@@ -143,11 +143,11 @@ macro_rules! lazyenum {
     ) => {(
         ShortString::from($field_name),
         LazyElementTypeValue::Lazy(Box::new( 
-            |raw_bytes: &BytesRecord<routecore::bmp::message::RouteMonitoring<bytes::Bytes>>| {
+            |raw_bytes: &$raw_ty| {
             TypeValue::Builtin(
                 EnumVariant::<u8>::new((
                     $enum_name.into(),
-                    raw_bytes.bytes().$base_call()$(.$method_call())+.into(),
+                    raw_bytes.bytes_parser().$base_call()$(.$method_call())+.into(),
                 )).into(),
         ).into() }))
         // (

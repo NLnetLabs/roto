@@ -55,7 +55,7 @@ pub enum BuiltinTypeValue {
     // not taking into account any individual prefixes.
     BgpUpdateMessage(Arc<BgpUpdateMessage>),  // scalar
     BmpRouteMonitoringMessage(Arc<BytesRecord<routecore::bmp::message::RouteMonitoring<bytes::Bytes>>>),
-    // BmpMessage(Arc<LazyRecord<routecore::bmp::message::Message<bytes::Bytes>>>)
+    BmpPeerUpNotificationMessage(Arc<BytesRecord<routecore::bmp::message::PeerUpNotification<bytes::Bytes>>>)
 }
 
 impl BuiltinTypeValue {
@@ -189,6 +189,9 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::BmpRouteMonitoringMessage(_raw) => Err(CompileError::from(
                 "Cannot convert raw BMP message into any other type.",
             )),
+            BuiltinTypeValue::BmpPeerUpNotificationMessage(_raw) => Err(CompileError::from(
+                "Cannot convert raw BMP message into any other type.",
+            )),
             BuiltinTypeValue::RouteStatus(v) => v.into_type(ty),
             BuiltinTypeValue::Boolean(v) => v.into_type(ty),
             BuiltinTypeValue::HexLiteral(v) => v.into_type(ty),
@@ -231,6 +234,12 @@ impl From<std::net::IpAddr> for BuiltinTypeValue {
 impl From<routecore::addr::Prefix> for BuiltinTypeValue {
     fn from(val: routecore::addr::Prefix) -> Self {
         BuiltinTypeValue::Prefix(Prefix(val))
+    }
+}
+
+impl From<crate::types::builtin::primitives::IpAddress> for BuiltinTypeValue {
+    fn from(value: crate::types::builtin::primitives::IpAddress) -> Self {
+        BuiltinTypeValue::IpAddress(value)
     }
 }
 
@@ -341,7 +350,10 @@ impl Display for BuiltinTypeValue {
                 write!(f, "{:X?} (RawBgpMessage)", **raw)
             }
             BuiltinTypeValue::BmpRouteMonitoringMessage(raw) => {
-                write!(f, "{:X?} (BmpMessage)", **raw)
+                write!(f, "{:X?} (BmpRouteMonitoringMessage)", **raw)
+            }
+            BuiltinTypeValue::BmpPeerUpNotificationMessage(raw) => {
+                write!(f, "{:X?} (BmpPeerUpNotificationMessage)", **raw)
             }
             BuiltinTypeValue::RouteStatus(v) => {
                 write!(f, "{} (Route Status)", v)

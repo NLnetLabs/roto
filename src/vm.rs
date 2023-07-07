@@ -11,7 +11,7 @@ use crate::{
     traits::{RotoType, Token},
     types::{
         builtin::{Boolean, BuiltinTypeValue},
-        collections::{ElementTypeValue, LazyRecord, List, Record},
+        collections::{ElementTypeValue, LazyRecord, List, Record, BytesRecord},
         datasources::{DataSource, DataSourceMethodValue},
         typedef::TypeDef,
         typevalue::TypeValue,
@@ -260,13 +260,9 @@ impl LinearMemory {
                         BuiltinTypeValue::BmpRouteMonitoringMessage(bmp_msg),
                     )) => {
                         trace!("get bmp_message get_value_owned_for_field {:?} {:?}", bmp_msg, field_index);
-                        LazyRecord::from_type_def(LazyRecord::<
-                            '_,
-                            routecore::bmp::message::RouteMonitoring<
-                                bytes::Bytes,
-                            >,
-                        >::type_def(
-                        ))
+                        
+                        LazyRecord::from_type_def(BytesRecord::<routecore::bmp::message::RouteMonitoring<
+                            bytes::Bytes>>::lazy_type_def())
                         .get_field_by_index(field_index, bmp_msg)
                         .map(|elm| StackValue::Owned(elm.into()))
                     }
