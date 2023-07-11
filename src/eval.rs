@@ -520,7 +520,23 @@ impl ast::Term {
         for term in term_scopes[0].match_exprs.iter().enumerate() {
             let logical_formula = match &term.1 {
                 LogicalExpr::BooleanExpr(expr) => {
-                    ast::BooleanExpr::eval(expr, symbols.clone(), &scope)?
+                    // Boolean expressions may actually be a (sub)term that
+                    // isn't a boolean at this stage. We should be able to
+                    // convert it into one, though, otherwise it's an
+                    // error (and not false!).
+                    let expr = ast::BooleanExpr::eval(
+                        expr,
+                        symbols.clone(),
+                        &scope,
+                    )?;
+                    if expr.get_type() == TypeDef::Boolean || expr.get_type().test_type_conversion(TypeDef::Boolean)
+                    {
+                        expr
+                    } else {
+                        return Err(CompileError::from(
+                            format!("Cannot convert value with type {} into Boolean",expr.get_type())
+                        ));
+                    }
                 }
                 LogicalExpr::OrExpr(or_expr) => {
                     ast::OrExpr::eval(or_expr, symbols.clone(), &scope)?
