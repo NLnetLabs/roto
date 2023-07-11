@@ -781,6 +781,7 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             "Route" => Ok(TypeDef::Route),
             "RouteStatus" => Ok(TypeDef::RouteStatus),
             "BgpUpdateMessage" => Ok(TypeDef::BgpUpdateMessage),
+            "BmpRouteMonitoringMessage" => Ok(TypeDef::LazyRecord(LazyTypeDef::BmpRouteMonitoringMessage)),
             "HexLiteral" => Ok(TypeDef::HexLiteral),
             _ => Err(format!("Undefined type: {}", ty.ident).into()),
         }
@@ -807,6 +808,7 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
             "Route" => Ok(TypeDef::Route),
             "RouteStatus" => Ok(TypeDef::RouteStatus),
             "BgpUpdateMessage" => Ok(TypeDef::BgpUpdateMessage),
+            "BmpRouteMonitoringMessage" => Ok(TypeDef::LazyRecord(LazyTypeDef::BmpRouteMonitoringMessage)),
             "HexLiteral" => Ok(TypeDef::HexLiteral),
             _ => Err(format!("Undefined type: {}", ty.ident).into()),
         }

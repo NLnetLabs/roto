@@ -1,8 +1,9 @@
 use log::trace;
+use routecore::bmp::message::PerPeerHeader;
 use serde::Serialize;
 
 use super::{
-    typedef::{MethodProps, NamedTypeDef, TypeDef},
+    typedef::{MethodProps, NamedTypeDef, TypeDef}
 };
 use crate::{
     ast::Identifier, compile::CompileError, traits::Token, types::builtin::BytesRecord,
@@ -19,6 +20,7 @@ pub enum LazyTypeDef {
     BmpPeerDownNotificationMessage,
     BmpStatisticsReport,
     BmpRouteMirroringMessage,
+    BmpPerPeerHeader
 }
 
 impl LazyTypeDef {
@@ -31,6 +33,7 @@ impl LazyTypeDef {
             LazyTypeDef::BmpPeerDownNotificationMessage => todo!(),
             LazyTypeDef::BmpStatisticsReport => todo!(),
             LazyTypeDef::BmpRouteMirroringMessage => todo!(),
+            LazyTypeDef::BmpPerPeerHeader => BytesRecord::<PerPeerHeader<bytes::Bytes>>::type_def()
         }
     }
 
@@ -49,6 +52,7 @@ impl LazyTypeDef {
             LazyTypeDef::BmpPeerDownNotificationMessage => todo!(),
             LazyTypeDef::BmpStatisticsReport => todo!(),
             LazyTypeDef::BmpRouteMirroringMessage => todo!(),
+            LazyTypeDef::BmpPerPeerHeader => Err(CompileError::from("Record 'PerPeerHeader' doesn't have methods"))
         }
     }
 
@@ -68,6 +72,10 @@ impl LazyTypeDef {
             LazyTypeDef::BmpPeerDownNotificationMessage => todo!(),
             LazyTypeDef::BmpStatisticsReport => todo!(),
             LazyTypeDef::BmpRouteMirroringMessage => todo!(),
-        }
+            LazyTypeDef::BmpPerPeerHeader => {
+                trace!("BmpPerPeerHeader w/ field '{}'", field);
+                BytesRecord::<PerPeerHeader<bytes::Bytes>>::get_props_for_field(field)
+            }
+       }
     }
 }

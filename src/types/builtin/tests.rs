@@ -7,7 +7,8 @@ mod route {
 
     use crate::{
         types::builtin::{
-            Asn, Prefix, RawRouteWithDeltas, RotondaId, UpdateMessage, RouteStatus,
+            Asn, Prefix, RawRouteWithDeltas, RotondaId, RouteStatus,
+            UpdateMessage,
         },
         vm::VmError,
     };

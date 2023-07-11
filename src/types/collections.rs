@@ -1,3 +1,4 @@
+use log::trace;
 use serde::Serialize;
 use smallvec::SmallVec;
 
@@ -817,7 +818,7 @@ impl From<RecordToken> for usize {
 //------------ bytesRecord --------------------------------------------------
 
 #[derive(Debug, Serialize)]
-pub struct BytesRecord<T>(T);
+pub struct BytesRecord<T>(pub(crate) T);
 
 impl<T: AsRef<[u8]>> BytesRecord<T> {
     pub(crate) fn bytes_parser(&self) -> &T {
@@ -1069,7 +1070,7 @@ impl<'a, T> LazyRecord<'a, T> {
 
     pub fn get_field_by_index(
         &self,
-        field_index: SmallVec<[usize; 8]>,
+        field_index: &[usize],
         raw_bytes: &BytesRecord<T>,
     ) -> Option<ElementTypeValue> {
         let mut elm = self
@@ -1077,6 +1078,7 @@ impl<'a, T> LazyRecord<'a, T> {
             .get(field_index[0])
             .map(|f| ElementTypeValue::from((&f.1, raw_bytes)));
 
+        trace!("get_field_by_index {:?} on {}", &field_index[1..], self);
         for index in &field_index[1..] {
             elm = elm?.as_record().unwrap().0.get(*index).map(|f| f.1.clone())
         }

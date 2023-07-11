@@ -263,7 +263,7 @@ impl LinearMemory {
                         
                         LazyRecord::from_type_def(BytesRecord::<routecore::bmp::message::RouteMonitoring<
                             bytes::Bytes>>::lazy_type_def())
-                        .get_field_by_index(field_index, bmp_msg)
+                        .get_field_by_index(&field_index, bmp_msg)
                         .map(|elm| StackValue::Owned(elm.into()))
                     }
                     Some(tv) => match tv {
@@ -1552,6 +1552,7 @@ pub enum VmError {
     ImpossibleComparison,
     InvalidWrite,
     InvalidConversion,
+    InvalidMsgType,
     UnexpectedTermination,
     AsPathTooLong,
     DeltaLocked,
@@ -1604,6 +1605,9 @@ impl Display for VmError {
             VmError::InvalidConversion => f.write_str("InvalidConversion"),
             VmError::UnexpectedTermination => {
                 f.write_str("UnexpectedTermination")
+            }
+            VmError::InvalidMsgType => {
+                f.write_str("InvalidMessageType")
             }
             VmError::AsPathTooLong => f.write_str("AsPathTooLong"),
             VmError::DeltaLocked => f.write_str("DeltaLocked"),
