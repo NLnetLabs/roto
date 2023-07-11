@@ -25,6 +25,7 @@ use super::typevalue::TypeValue;
 // be boxed, while the former do.
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize)]
+#[serde(untagged)]
 pub enum ElementTypeValue {
     Primitive(TypeValue),
     Nested(Box<TypeValue>),

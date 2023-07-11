@@ -2,7 +2,8 @@ use std::fmt::{Display, Formatter};
 
 use log::trace;
 use routecore::asn::LongSegmentError;
-use serde::Serialize;
+use routecore::bgp::communities::{StandardCommunity, Wellknown};
+use serde::{Serialize, Serializer};
 
 use crate::attr_change_set::VectorValue;
 use crate::compile::CompileError;
@@ -1390,12 +1391,220 @@ impl From<PrefixLength> for u8 {
 
 // ----------- Community ----------------------------------------------------
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Serialize)]
+/// A BGP community.
+///
+/// # Serialization
+/// 
+/// The routecore types implement the Serialize trait but do so in a way
+/// suitable for machine <-> machine interaction where the consuming code is
+/// also routecore, i.e. the details of how (de)serialization is done are not
+/// important to nor intended to be visible to anyone except routecore itself.
+/// 
+/// In roto however, a TypeValue (which may contain a Community) can be
+/// serialized in order to render it to consumers outside the application,
+/// e.g. as JSON served by a HTTP API or contained in an MQTT payload. The
+/// operators of the deployed application can be expected to be familiar with
+/// details of BGP and it is more useful to them if the rendered form of a BGP
+/// community is somewhat relatable to the way commnities are defined by and
+/// refered to in BGP RFCs and not exposing internally structural details of
+/// how routecore stores communities (e.g. as raw byte vectors for example).
+///
+/// We therefore provide our Serialize impl which will be used by callers when
+/// serializing our Community type and in turn the contained routecore
+/// Community type and its children.
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash)]
 pub struct Community(pub(crate) routecore::bgp::communities::Community);
 
 impl Community {
     pub fn new(com: routecore::bgp::communities::Community) -> Self {
         Self(com)
+    }
+}
+
+pub trait SerializeForOperators: Serialize {
+    fn serialize_for_operator<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer;
+}
+
+impl Serialize for Community {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match &self.0 {
+            routecore::bgp::communities::Community::Standard(c) => {
+                c.serialize_for_operator(serializer)
+            }
+            routecore::bgp::communities::Community::Large(c) => {
+                c.serialize_for_operator(serializer)
+            }
+            routecore::bgp::communities::Community::Extended(c) => {
+                c.serialize(serializer)
+            }
+            routecore::bgp::communities::Community::Ipv6Extended(c) => {
+                c.serialize(serializer)
+            }
+        }
+    }
+}
+
+impl SerializeForOperators for StandardCommunity {
+    fn serialize_for_operator<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self.to_wellknown() {
+            Some(Wellknown::Unrecognized(_)) => ser::Community {
+                raw_fields: vec![format!("{:#010X}", self.to_u32())],
+                r#type: "standard",
+                parsed: ser::Parsed {
+                    value: ser::Value::PlainValue(ser::PlainValue {
+                        r#type: "well-known-unrecognised",
+                    }),
+                },
+            }
+            .serialize(serializer),
+
+            Some(wk) => ser::Community {
+                raw_fields: vec![format!("{:#010X}", self.to_u32())],
+                r#type: "standard",
+                parsed: ser::Parsed {
+                    value: ser::Value::AttributeValue(ser::AttributeValue {
+                        r#type: "well-known",
+                        attribute: format!("{}", wk),
+                    }),
+                },
+            }
+            .serialize(serializer),
+
+            None if self.is_reserved() => ser::Community {
+                raw_fields: vec![format!("{:#010X}", self.to_u32())],
+                r#type: "standard",
+                parsed: ser::Parsed {
+                    value: ser::Value::PlainValue(ser::PlainValue {
+                        r#type: "reserved",
+                    }),
+                },
+            }
+            .serialize(serializer),
+
+            None if self.is_private() => {
+                let asn: u16 =
+                    self.asn().unwrap().into_u32().try_into().unwrap();
+                let tag: u16 = self.tag().unwrap().value();
+                let formatted_asn = format!("AS{}", asn); // to match Routinator JSON style
+                ser::Community {
+                    raw_fields: vec![
+                        format!("{:#06X}", asn),
+                        format!("{:#06X}", tag),
+                    ],
+                    r#type: "standard",
+                    parsed: ser::Parsed {
+                        value: ser::Value::AsnTagValue(ser::AsnTagValue {
+                            r#type: "private",
+                            asn: formatted_asn,
+                            tag,
+                        }),
+                    },
+                }
+                .serialize(serializer)
+            }
+
+            _ => serializer.serialize_none(),
+        }
+    }
+}
+
+impl SerializeForOperators for routecore::bgp::communities::LargeCommunity {
+    fn serialize_for_operator<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let asn = format!("AS{}", self.global());
+
+        ser::Community {
+            raw_fields: vec![
+                format!("{:#06X}", self.global()),
+                format!("{:#06X}", self.local1()),
+                format!("{:#06X}", self.local2()),
+            ],
+            r#type: "large",
+            parsed: ser::Parsed {
+                value: ser::Value::GlobalLocalDataPartsValue(
+                    ser::GlobalLocalDataPartsValue {
+                        globalAdmin: ser::GlobalAdmin { r#type: "asn", asn },
+                        localDataPart1: self.local1(),
+                        localDataPart2: self.local2(),
+                    },
+                ),
+            },
+        }
+        .serialize(serializer)
+    }
+}
+
+// Types used only by our own Serialize implementation to structure the serialized output differently than is done by
+// routecore.
+mod ser {
+    #[derive(serde::Serialize)]
+    #[serde(rename = "value")]
+    pub struct PlainValue {
+        pub r#type: &'static str,
+    }
+
+    #[derive(serde::Serialize)]
+    #[serde(rename = "value")]
+    pub struct AsnTagValue {
+        pub r#type: &'static str,
+        pub asn: String,
+        pub tag: u16,
+    }
+
+    #[derive(serde::Serialize)]
+    #[serde(rename = "value")]
+    pub struct AttributeValue {
+        pub r#type: &'static str,
+        pub attribute: String,
+    }
+
+    #[derive(serde::Serialize)]
+    #[serde(rename = "value")]
+    pub struct GlobalAdmin {
+        pub r#type: &'static str,
+        pub asn: String,
+    }
+
+    #[derive(serde::Serialize)]
+    #[serde(rename = "value")]
+    pub struct GlobalLocalDataPartsValue {
+        pub globalAdmin: GlobalAdmin,
+        pub localDataPart1: u32,
+        pub localDataPart2: u32,
+    }
+
+    #[derive(serde::Serialize)]
+    #[serde(untagged)]
+    pub enum Value {
+        AsnTagValue(AsnTagValue),
+        AttributeValue(AttributeValue),
+        GlobalLocalDataPartsValue(GlobalLocalDataPartsValue),
+        PlainValue(PlainValue),
+    }
+
+    #[derive(serde::Serialize)]
+    #[serde(rename = "parsed")]
+    pub struct Parsed {
+        pub value: Value,
+    }
+
+    #[derive(serde::Serialize)]
+    #[serde(rename = "Community")]
+    pub struct Community {
+        #[serde(rename = "rawFields")]
+        pub raw_fields: Vec<String>,
+        pub r#type: &'static str,
+        pub parsed: Parsed,
     }
 }
 
