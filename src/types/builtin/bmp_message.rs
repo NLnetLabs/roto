@@ -9,7 +9,7 @@ use crate::{
     traits::Token,
     types::{
         builtin::{
-            Asn, Boolean, BuiltinTypeValue, HexLiteral, IpAddress, U32,
+            Asn, Boolean, BuiltinTypeValue, IpAddress, U16,
         },
         collections::{LazyElementTypeValue, LazyRecord},
         constant_enum::EnumVariant,
@@ -28,53 +28,55 @@ pub use crate::types::collections::BytesRecord;
 
 createtoken!(
     BmpMessageToken;
-    "route_monitoring" = 0,
-    "statistics_report" = 1,
-    "peer_down_notification" = 2,
-    "peer_up_notification" = 3,
-    "initiation_message" = 4,
-    "termination_message" = 5,
+    "route_monitoring" = 0
+    "statistics_report" = 1
+    "peer_down_notification" = 2
+    "peer_up_notification" = 3
+    "initiation_message" = 4
+    "termination_message" = 5
     "route_mirroring" = 6
 );
 
 bytes_record_impl!(
     RouteMonitoring,
-    ("per_peer_header"; 0,
-    {
-        ("is_ipv4"; 1, Boolean, per_peer_header.is_ipv4),
-        ("is_ipv6"; 2, Boolean, per_peer_header.is_ipv6),
-        (
-            "is_pre_policy"; 3,
-            Boolean,
-            per_peer_header.is_pre_policy
-        ),
-        (
-            "is_post_policy"; 4,
-            Boolean,
-            per_peer_header.is_post_policy
-        ),
-        (
-            "is_legacy_format"; 5,
-            Boolean,
-            per_peer_header.is_legacy_format
-        ),
-        ("address"; 6, IpAddress, per_peer_header.address),
-        ("asn"; 7, Asn, per_peer_header.asn),
-    },
-    {
-        (
-            "peer_type"; 8,
-            EnumVariant<U8> = "BMP_PEER_TYPE",
-            BytesRecord<RouteMonitoring>,
-            per_peer_header.peer_type
-        ),
-        (
-            "adj_rib_type"; 9,
-            EnumVariant<U8> = "BMP_ADJ_RIB_TYPE",
-            BytesRecord<RouteMonitoring>,
-            per_peer_header.adj_rib_type
-        ),
-    })
+    record(
+        "per_peer_header"; 0,
+        {
+            ("is_ipv4"; 1, Boolean, per_peer_header.is_ipv4),
+            ("is_ipv6"; 2, Boolean, per_peer_header.is_ipv6),
+            (
+                "is_pre_policy"; 3,
+                Boolean,
+                per_peer_header.is_pre_policy
+            ),
+            (
+                "is_post_policy"; 4,
+                Boolean,
+                per_peer_header.is_post_policy
+            ),
+            (
+                "is_legacy_format"; 5,
+                Boolean,
+                per_peer_header.is_legacy_format
+            ),
+            ("address"; 6, IpAddress, per_peer_header.address),
+            ("asn"; 7, Asn, per_peer_header.asn),
+        },
+        {
+            (
+                "peer_type"; 8,
+                EnumVariant<U8> = "BMP_PEER_TYPE",
+                BytesRecord<RouteMonitoring>,
+                per_peer_header.peer_type
+            ),
+            (
+                "adj_rib_type"; 9,
+                EnumVariant<U8> = "BMP_ADJ_RIB_TYPE",
+                BytesRecord<RouteMonitoring>,
+                per_peer_header.adj_rib_type
+            ),
+        },
+    ),
 );
 
 impl BytesRecord<RouteMonitoring> {
@@ -96,41 +98,57 @@ impl BytesRecord<RouteMonitoring> {
 
 bytes_record_impl!(
     PeerUpNotification,
-    ("per_peer_header"; 0,
-    {
-        ("is_ipv4"; 1, Boolean, per_peer_header.is_ipv4),
-        ("is_ipv6"; 2, Boolean, per_peer_header.is_ipv6),
-        (
-            "is_pre_policy"; 3,
-            Boolean,
-            per_peer_header.is_pre_policy
-        ),
-        (
-            "is_post_policy"; 4,
-            Boolean,
-            per_peer_header.is_post_policy
-        ),
-        (
-            "is_legacy_format"; 5,
-            Boolean,
-            per_peer_header.is_legacy_format
-        ),
-        ("address"; 6, IpAddress, per_peer_header.address),
-    },
-    {
-        (
-            "peer_type"; 7,
-            EnumVariant<U8> = "BMP_PEER_TYPE",
-            BytesRecord<PeerUpNotification>,
-            per_peer_header.peer_type
-        ),
-        (
-            "adj_rib_type"; 8,
-            EnumVariant<U8> = "BMP_ADJ_RIB_TYPE",
-            BytesRecord<PeerUpNotification>,
-            per_peer_header.adj_rib_type
-        ),
-    })
+    record(
+        "per_peer_header"; 0,
+        {
+            ("is_ipv4"; 1, Boolean, per_peer_header.is_ipv4),
+            ("is_ipv6"; 2, Boolean, per_peer_header.is_ipv6),
+            (
+                "is_pre_policy"; 3,
+                Boolean,
+                per_peer_header.is_pre_policy
+            ),
+            (
+                "is_post_policy"; 4,
+                Boolean,
+                per_peer_header.is_post_policy
+            ),
+            (
+                "is_legacy_format"; 5,
+                Boolean,
+                per_peer_header.is_legacy_format
+            ),
+            ("address"; 6, IpAddress, per_peer_header.address),
+        },
+        {
+            (
+                "peer_type"; 7,
+                EnumVariant<U8> = "BMP_PEER_TYPE",
+                BytesRecord<PeerUpNotification>,
+                per_peer_header.peer_type
+            ),
+            (
+                "adj_rib_type"; 8,
+                EnumVariant<U8> = "BMP_ADJ_RIB_TYPE",
+                BytesRecord<PeerUpNotification>,
+                per_peer_header.adj_rib_type
+            ),
+        },
+    ),
+    field(    
+        "local_address"; 9,
+        {
+            IpAddress,
+            local_address
+        }
+    ),
+    field(
+        "local_port"; 10,
+        {
+            U16,
+            local_port
+        }
+    )
 );
 
 impl BytesRecord<PeerUpNotification> {

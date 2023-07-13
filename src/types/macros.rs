@@ -56,7 +56,7 @@ macro_rules! typedefconversion {
 macro_rules! createtoken {
     (
         $token_enum: ident;
-        $( $token: literal = $value: literal ),*
+        $( $token: literal = $value: literal )*
     ) => {
         paste! {
             #[derive(Debug)]
@@ -194,72 +194,124 @@ macro_rules! lazyenum {
 macro_rules! bytes_record_impl {
     (
         $bytes_record_type: ident,
-        $( (
-            $sub_record_name: literal; $self_variant_identifier: literal,
-            { $( (
-                    $field_name: literal;
-                    $variant_identifier: literal,
-                    $ty: ident,
-                    $base_call: ident
-                    $( .$method_call: ident )*
-                ),
-            )+ },
-            { $(
-                (
-                    $enum_field_name: literal;
-                    $enum_variant_identifier: literal,
-                    $enum_ty: path = $enum_name: literal,
-                    $enum_raw_ty: path,
-                    $enum_base_call: ident
-                    $( .$enum_method_call: ident )*
-                ),
-            )+ }
-        ) )+
+        $(
+            $(
+                record(
+                    $(
+                        $sub_record_name: literal; $self_variant_identifier: literal,
+                        { $( (
+                                $field_name: literal;
+                                $variant_identifier: literal,
+                                $ty: ident,
+                                $base_call: ident
+                                $( .$method_call: ident )*
+                            ),
+                        )+ },
+                        { $(
+                            (
+                                $enum_field_name: literal;
+                                $enum_variant_identifier: literal,
+                                $enum_ty: path = $enum_name: literal,
+                                $enum_raw_ty: path,
+                                $enum_base_call: ident
+                                $( .$enum_method_call: ident )*
+                            ),
+                        )+ },
+                    )+
+                )
+            )?,
+            $( 
+                field(
+                    $(
+                        $next_field_name: literal; $next_field_variant_identifier: literal,
+                        { 
+                            $next_field_ty: ident,
+                            $next_field_base_call: ident
+                            $( .$next_field_method_call: ident )* 
+                        }
+                    )?
+                ) 
+            )?
+        )+
     ) => {
         impl BytesRecord<$bytes_record_type> {
             pub(crate) fn lazy_type_def<'a>() -> LazyNamedTypeDef<
                 'a,
                 $bytes_record_type,
             > { 
-                vec![$( (
-                    $sub_record_name.into(),
-                    LazyElementTypeValue::LazyRecord(lazyrecord!(
-                        vec![
-                            $( lazyfield!(
-                                $field_name, 
-                                $ty,
-                                $bytes_record_type,
-                                $base_call$(.$method_call )*),
-                            )+
-                            $( lazyenum!(
-                                $enum_field_name,
-                                $enum_ty=$enum_name,
-                                $enum_raw_ty,
-                                $enum_base_call$(.$enum_method_call )*),
-                            )+
-                        ])
-                    )
-                ) )+]
+                vec![
+                    $(                    
+                        $(
+                            $( 
+                                (
+                                    $sub_record_name.into(),
+                                    LazyElementTypeValue::LazyRecord(lazyrecord!(
+                                        vec![
+                                            $( lazyfield!(
+                                                $field_name, 
+                                                $ty,
+                                                $bytes_record_type,
+                                                $base_call$(.$method_call )*),
+                                            )+
+                                            $( lazyenum!(
+                                                $enum_field_name,
+                                                $enum_ty=$enum_name,
+                                                $enum_raw_ty,
+                                                $enum_base_call$(.$enum_method_call )*),
+                                            )+
+                                        ])
+                                    )
+                                )
+                            )+,
+                        )?
+                        $(
+                            $(
+                                lazyfield!(
+                                    $next_field_name,
+                                    $next_field_ty,
+                                    $bytes_record_type,
+                                    $next_field_base_call$(.$next_field_method_call)*
+                                ),
+                            )?
+                        )?
+                    )+
+                ]
             }
 
             pub(crate) fn type_def() -> Vec<NamedTypeDef> {
-                vec![$( (
-                    $sub_record_name.into(),
-                    TypeDef::Record(
-                        vec![
-                            $( ( 
-                                $field_name.into(), 
-                                TypeDef::$ty.into()
-                            ), )+
-                            $( ( 
-                                    $enum_field_name.into(), 
-                                    TypeDef::ConstEnumVariant(
-                                        $enum_name.into()
+                vec![
+                    $( 
+                        $(
+                            $(
+                                (
+                                    $sub_record_name.into(),
+                                    TypeDef::Record(
+                                        vec![
+                                            $( ( 
+                                                $field_name.into(), 
+                                                TypeDef::$ty.into()
+                                            ), )+
+                                            $( ( 
+                                                    $enum_field_name.into(), 
+                                                    TypeDef::ConstEnumVariant(
+                                                        $enum_name.into()
+                                                    ).into()
+                                            ), )+
+                                        ]
                                     ).into()
-                            ), )+
-                        ]
-                    ).into()
-                ) )+]
+                                )
+                            )+
+                        )?,
+                        $(
+                            $(
+                                (
+                                    $next_field_name.into(),
+                                    TypeDef::$next_field_ty.into()
+                                )      
+                            )?
+                        )?
+                    )+
+                ]
             }
 
             pub(crate) fn get_props_for_field(
@@ -269,50 +321,67 @@ macro_rules! bytes_record_impl {
                 Self: std::marker::Sized,
             {
                 match field_name.ident.as_str() {
-                    $( $sub_record_name => Ok((
-                        TypeDef::LazyRecord(LazyTypeDef::$bytes_record_type),
-                        Token::FieldAccess(vec![$self_variant_identifier]),
-                    )), )+
-                    // LazyRecords are laid out in in a flat enum space, 
-                    // meaning all fields and sub-fields live in the same
-                    // enum with different variant discriminators. We'll
-                    // have to calculate the offset in the variant
-                    // discriminator to align the value of the
-                    // discriminator with the index of the Record Type
-                    // Value. The Record Type is counting from the start
-                    // of the subfield! E.g.:
-                    // A TypeDef {
-                    //       my_rec: LazyRecord,
-                    //       my_value: U32
-                    //  } would have an Enum that goes something like this:
-                    // 
-                    // MyTypeToken { 
-                    //     MyRec = 0,
-                    //     MyRecField1 = 1, 
-                    //     MyRecField2 = 2,
-                    //     MyValue = 3
-                    // }
-                    // But its corresponding BuiltinTypeValue::Record for
-                    // MyRec looks like:
-                    //
-                    // vec![("MyRecField1", ..), ("MyRecField2", ...)]
-                    // 
-                    // So, the trick is to align the variant discriminator
-                    // with the index.
-                    $( $( $field_name => Ok((
-                            TypeDef::$ty,
-                            Token::FieldAccess(vec![
-                                $variant_identifier - 
-                                $self_variant_identifier - 1
-                            ])
-                        )), )+ )+
-                    $( $( $enum_field_name => Ok((
-                            TypeDef::ConstEnumVariant($enum_name.into()),
-                            Token::FieldAccess(vec![
-                                $enum_variant_identifier - 
-                                $self_variant_identifier - 1
-                            ])
-                        )), )+ )+
+                    $( 
+                        $(
+                            $( $sub_record_name => Ok((
+                                TypeDef::LazyRecord(LazyTypeDef::$bytes_record_type),
+                                Token::FieldAccess(vec![$self_variant_identifier]),)), 
+                            )+
+                            // LazyRecords are laid out in in a flat enum space, 
+                            // meaning all fields and sub-fields live in the same
+                            // enum with different variant discriminators. We'll
+                            // have to calculate the offset in the variant
+                            // discriminator to align the value of the
+                            // discriminator with the index of the Record Type
+                            // Value. The Record Type is counting from the start
+                            // of the subfield! E.g.:
+                            // A TypeDef {
+                            //       my_rec: LazyRecord,
+                            //       my_value: U32
+                            //  } would have an Enum that goes something like this:
+                            // 
+                            // MyTypeToken { 
+                            //     MyRec = 0,
+                            //     MyRecField1 = 1, 
+                            //     MyRecField2 = 2,
+                            //     MyValue = 3
+                            // }
+                            // But its corresponding BuiltinTypeValue::Record for
+                            // MyRec looks like:
+                            //
+                            // vec![("MyRecField1", ..), ("MyRecField2", ...)]
+                            // 
+                            // So, the trick is to align the variant discriminator
+                            // with the index.
+                            $( 
+                                $( $field_name => Ok((
+                                    TypeDef::$ty,
+                                    Token::FieldAccess(vec![
+                                        $variant_identifier - 
+                                        $self_variant_identifier - 1
+                                    ]))), 
+                                )+
+                            )+
+                            $( 
+                                $( $enum_field_name => Ok((
+                                    TypeDef::ConstEnumVariant($enum_name.into()),
+                                    Token::FieldAccess(vec![
+                                        $enum_variant_identifier - 
+                                        $self_variant_identifier - 1
+                                    ]))),
+                                )+
+                            )+
+                        )?
+                        $(
+                            $(
+                                $next_field_name => Ok((
+                                    TypeDef::$next_field_ty,
+                                    Token::FieldAccess(vec![
+                                        $next_field_variant_identifier                                
+                                    ]))), 
+                            )?
+                        )?
+                    )+
                     _ => {
                         trace!(
                             "Unknown field '{}' for type BmpUpdateMessage",
@@ -330,9 +399,20 @@ macro_rules! bytes_record_impl {
 
         createtoken!(
             $bytes_record_type;
-            $( $sub_record_name = $self_variant_identifier ),+,
-            $( $( $field_name = $variant_identifier ),+ )+,
-            $( $( $enum_field_name = $enum_variant_identifier ),+ )+
+            $(
+                $(
+                    $( 
+                        $sub_record_name = $self_variant_identifier
+                        $( $field_name = $variant_identifier )+
+                        $( $enum_field_name = $enum_variant_identifier )+
+                    )+
+                )?
+                $(
+                    $( 
+                        $next_field_name = $next_field_variant_identifier
+                    )?
+                )?
+            )?
         );
     }
 }
