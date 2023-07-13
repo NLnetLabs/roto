@@ -11,7 +11,9 @@ use crate::{
     traits::{RotoType, Token},
     types::{
         builtin::{Boolean, BuiltinTypeValue},
-        collections::{ElementTypeValue, LazyRecord, List, Record, BytesRecord},
+        collections::{
+            BytesRecord, ElementTypeValue, LazyRecord, List, Record,
+        },
         datasources::{DataSource, DataSourceMethodValue},
         typedef::TypeDef,
         typevalue::TypeValue,
@@ -259,10 +261,14 @@ impl LinearMemory {
                     Some(TypeValue::Builtin(
                         BuiltinTypeValue::BmpRouteMonitoringMessage(bmp_msg),
                     )) => {
-                        trace!("get bmp_message get_value_owned_for_field {:?} {:?}", bmp_msg, field_index);
-                        
-                        LazyRecord::from_type_def(BytesRecord::<routecore::bmp::message::RouteMonitoring<
-                            bytes::Bytes>>::lazy_type_def())
+                        trace!("get bmp_route_monitoring_message get_value_owned_for_field {:?} {:?}", bmp_msg, field_index);
+
+                        LazyRecord::from_type_def(BytesRecord::<
+                            routecore::bmp::message::RouteMonitoring<
+                                bytes::Bytes,
+                            >,
+                        >::lazy_type_def(
+                        ))
                         .get_field_by_index(&field_index, bmp_msg)
                         .map(|elm| StackValue::Owned(elm.into()))
                     }
@@ -1606,9 +1612,7 @@ impl Display for VmError {
             VmError::UnexpectedTermination => {
                 f.write_str("UnexpectedTermination")
             }
-            VmError::InvalidMsgType => {
-                f.write_str("InvalidMessageType")
-            }
+            VmError::InvalidMsgType => f.write_str("InvalidMessageType"),
             VmError::AsPathTooLong => f.write_str("AsPathTooLong"),
             VmError::DeltaLocked => f.write_str("DeltaLocked"),
             VmError::NoMir => f.write_str("NoMir"),

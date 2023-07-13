@@ -1,5 +1,4 @@
 use log::trace;
-use routecore::bmp::message::PerPeerHeader;
 use serde::Serialize;
 
 use super::{
@@ -12,28 +11,29 @@ use crate::{
 pub type RouteMonitoring = routecore::bmp::message::RouteMonitoring<bytes::Bytes>;
 pub type PeerUpNotification =
     routecore::bmp::message::PeerUpNotification<bytes::Bytes>;
+// pub type PerPeerHeader = routecore::bmp::message::PerPeerHeader<bytes::Bytes>;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize)]
 pub enum LazyTypeDef {
-    BmpRouteMonitoringMessage,
-    BmpPeerUpNotificationMessage,
-    BmpPeerDownNotificationMessage,
-    BmpStatisticsReport,
-    BmpRouteMirroringMessage,
-    BmpPerPeerHeader
+    RouteMonitoring,
+    PeerUpNotification,
+    PeerDownNotification,
+    StatisticsReport,
+    RouteMirroring,
+    // BmpPerPeerHeader
 }
 
 impl LazyTypeDef {
     pub fn type_def(&self) -> Vec<NamedTypeDef> {
         match &self {
-            LazyTypeDef::BmpRouteMonitoringMessage => 
+            LazyTypeDef::RouteMonitoring => 
                 BytesRecord::<RouteMonitoring>::type_def(),
-            LazyTypeDef::BmpPeerUpNotificationMessage => 
+            LazyTypeDef::PeerUpNotification => 
                 BytesRecord::<PeerUpNotification>::type_def(),
-            LazyTypeDef::BmpPeerDownNotificationMessage => todo!(),
-            LazyTypeDef::BmpStatisticsReport => todo!(),
-            LazyTypeDef::BmpRouteMirroringMessage => todo!(),
-            LazyTypeDef::BmpPerPeerHeader => BytesRecord::<PerPeerHeader<bytes::Bytes>>::type_def()
+            LazyTypeDef::PeerDownNotification => todo!(),
+            LazyTypeDef::StatisticsReport => todo!(),
+            LazyTypeDef::RouteMirroring => todo!(),
+            // LazyTypeDef::BmpPerPeerHeader => BytesRecord::<PerPeerHeader>::type_def()
         }
     }
 
@@ -43,16 +43,16 @@ impl LazyTypeDef {
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError> {
         match self {
-            LazyTypeDef::BmpRouteMonitoringMessage => BytesRecord::<
+            LazyTypeDef::RouteMonitoring => BytesRecord::<
                 RouteMonitoring,
             >::get_props_for_method(
                 ty, method_name
             ),
-            LazyTypeDef::BmpPeerUpNotificationMessage => todo!(),
-            LazyTypeDef::BmpPeerDownNotificationMessage => todo!(),
-            LazyTypeDef::BmpStatisticsReport => todo!(),
-            LazyTypeDef::BmpRouteMirroringMessage => todo!(),
-            LazyTypeDef::BmpPerPeerHeader => Err(CompileError::from("Record 'PerPeerHeader' doesn't have methods"))
+            LazyTypeDef::PeerUpNotification => todo!(),
+            LazyTypeDef::PeerDownNotification => todo!(),
+            LazyTypeDef::StatisticsReport => todo!(),
+            LazyTypeDef::RouteMirroring => todo!(),
+            // LazyTypeDef::BmpPerPeerHeader => Err(CompileError::from("Record 'PerPeerHeader' doesn't have methods"))
         }
     }
 
@@ -61,21 +61,21 @@ impl LazyTypeDef {
         field: &Identifier,
     ) -> Result<(TypeDef, Token), CompileError> {
         match self {
-            LazyTypeDef::BmpRouteMonitoringMessage => {
+            LazyTypeDef::RouteMonitoring => {
                 trace!("BmpRouteMonitoringMessage w/ field '{}'", field);
                 BytesRecord::<RouteMonitoring>::get_props_for_field(field)
             }
-            LazyTypeDef::BmpPeerUpNotificationMessage => {
+            LazyTypeDef::PeerUpNotification => {
                 trace!("BmpPeerUpNotificationMessage w/ field '{}'", field);
                 BytesRecord::<PeerUpNotification>::get_props_for_field(field)
             },
-            LazyTypeDef::BmpPeerDownNotificationMessage => todo!(),
-            LazyTypeDef::BmpStatisticsReport => todo!(),
-            LazyTypeDef::BmpRouteMirroringMessage => todo!(),
-            LazyTypeDef::BmpPerPeerHeader => {
-                trace!("BmpPerPeerHeader w/ field '{}'", field);
-                BytesRecord::<PerPeerHeader<bytes::Bytes>>::get_props_for_field(field)
-            }
+            LazyTypeDef::PeerDownNotification => todo!(),
+            LazyTypeDef::StatisticsReport => todo!(),
+            LazyTypeDef::RouteMirroring => todo!(),
+            // LazyTypeDef::BmpPerPeerHeader => {
+            //     trace!("BmpPerPeerHeader w/ field '{}'", field);
+            //     BytesRecord::<PerPeerHeader>::get_props_for_field(field)
+            // }
        }
     }
 }

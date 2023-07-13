@@ -219,6 +219,18 @@ impl From<u32> for BuiltinTypeValue {
     }
 }
 
+impl From<U32> for BuiltinTypeValue {
+    fn from(val: U32) -> Self {
+        BuiltinTypeValue::U32(val)
+    }
+}
+
+impl From<HexLiteral> for BuiltinTypeValue {
+    fn from(value: HexLiteral) -> Self {
+        BuiltinTypeValue::HexLiteral(value)
+    }
+}
+
 impl From<i64> for BuiltinTypeValue {
     fn from(val: i64) -> Self {
         BuiltinTypeValue::IntegerLiteral(IntegerLiteral(val))

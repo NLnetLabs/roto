@@ -781,7 +781,7 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             "Route" => Ok(TypeDef::Route),
             "RouteStatus" => Ok(TypeDef::RouteStatus),
             "BgpUpdateMessage" => Ok(TypeDef::BgpUpdateMessage),
-            "BmpRouteMonitoringMessage" => Ok(TypeDef::LazyRecord(LazyTypeDef::BmpRouteMonitoringMessage)),
+            "BmpRouteMonitoringMessage" => Ok(TypeDef::LazyRecord(LazyTypeDef::RouteMonitoring)),
             "HexLiteral" => Ok(TypeDef::HexLiteral),
             _ => Err(format!("Undefined type: {}", ty.ident).into()),
         }
@@ -808,7 +808,7 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
             "Route" => Ok(TypeDef::Route),
             "RouteStatus" => Ok(TypeDef::RouteStatus),
             "BgpUpdateMessage" => Ok(TypeDef::BgpUpdateMessage),
-            "BmpRouteMonitoringMessage" => Ok(TypeDef::LazyRecord(LazyTypeDef::BmpRouteMonitoringMessage)),
+            "BmpRouteMonitoringMessage" => Ok(TypeDef::LazyRecord(LazyTypeDef::RouteMonitoring)),
             "HexLiteral" => Ok(TypeDef::HexLiteral),
             _ => Err(format!("Undefined type: {}", ty.ident).into()),
         }
@@ -848,10 +848,10 @@ impl From<&BuiltinTypeValue> for TypeDef {
                 TypeDef::BgpUpdateMessage
             }
             BuiltinTypeValue::BmpRouteMonitoringMessage(_) => {
-                TypeDef::LazyRecord(LazyTypeDef::BmpRouteMonitoringMessage)
+                TypeDef::LazyRecord(LazyTypeDef::RouteMonitoring)
             }
             BuiltinTypeValue::BmpPeerUpNotificationMessage(_) => {
-                TypeDef::LazyRecord(LazyTypeDef::BmpPeerUpNotificationMessage)
+                TypeDef::LazyRecord(LazyTypeDef::PeerUpNotification)
             }
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
@@ -898,10 +898,10 @@ impl From<BuiltinTypeValue> for TypeDef {
                 TypeDef::BgpUpdateMessage
             }
             BuiltinTypeValue::BmpRouteMonitoringMessage(_) => {
-                TypeDef::LazyRecord(LazyTypeDef::BmpRouteMonitoringMessage)
+                TypeDef::LazyRecord(LazyTypeDef::RouteMonitoring)
             }
             BuiltinTypeValue::BmpPeerUpNotificationMessage(_) => {
-                TypeDef::LazyRecord(LazyTypeDef::BmpPeerUpNotificationMessage)
+                TypeDef::LazyRecord(LazyTypeDef::PeerUpNotification)
             }
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
