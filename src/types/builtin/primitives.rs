@@ -15,6 +15,167 @@ use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 use super::builtin_type_value::BuiltinTypeValue;
 
+//------------ U16 Type -----------------------------------------------------
+
+#[derive(Debug, Eq, Copy, Clone, Serialize)]
+pub struct U16(pub(crate) u16);
+
+impl U16 {
+    pub fn new(val: u16) -> Self {
+        U16(val)
+    }
+}
+
+impl From<U16> for TypeValue {
+    fn from(val: U16) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::U16(val))
+    }
+}
+
+impl RotoType for U16 {
+    fn get_props_for_method(
+        _ty: TypeDef,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, CompileError>
+    where
+        Self: std::marker::Sized,
+    {
+        match method_name.ident.as_str() {
+            "set" => Ok(MethodProps::new(
+                TypeDef::Unknown,
+                U16Token::Set.into(),
+                vec![TypeDef::IntegerLiteral],
+            )
+            .consume_value()),
+            _ => Err(format!(
+                "Unknown method: '{}' for type U16",
+                method_name.ident
+            )
+            .into()),
+        }
+    }
+
+    fn exec_value_method<'a>(
+        &'a self,
+        _method_token: usize,
+        _args: &[StackValue],
+        _res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        Err(VmError::InvalidMethodCall)
+    }
+
+    fn exec_consume_value_method(
+        self,
+        method_token: usize,
+        mut args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        match method_token.into() {
+            U16Token::Set => {
+                if let Ok(TypeValue::Builtin(BuiltinTypeValue::U16(int_u16))) =
+                    args.remove(0).into_type(&TypeDef::U16)
+                {
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::U16(int_u16)))
+                } else {
+                    Err(VmError::InvalidValueType)
+                }
+            }
+        }
+    }
+
+    fn exec_type_method<'a>(    
+        _method_token: usize,
+        _args: &[StackValue],
+        _res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        Err(VmError::InvalidMethodCall)
+    }
+
+    fn into_type(
+        self,
+        type_def: &TypeDef,
+    ) -> Result<TypeValue, CompileError> {
+        match type_def {
+            TypeDef::U16 => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::U16(self)))
+            }
+            TypeDef::U32 => {
+                Ok(TypeValue::Builtin((self.0 as u32).into()))
+            }
+            TypeDef::Asn => Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(
+                Asn(routecore::asn::Asn::from(self.0 as u32)),
+            ))),
+            TypeDef::PrefixLength => {
+                match self.0 {
+                    0..=128 => Ok(TypeValue::Builtin(BuiltinTypeValue::PrefixLength(PrefixLength(self.0 as u8)))),
+                    _ =>
+                    Err(format!("Cannot convert an instance of type U16 with a value greater than 128 into type {:?}", type_def)
+                    .into())
+                }
+            },
+            TypeDef::U8 => {
+                match self.0 {
+                    0..=255 => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(self.0 as u8)))),
+                    _ => Err(format!("Cannot convert an instance of type U16 with a value greater than 128 into type {:?}", type_def)
+                    .into())
+                }
+            }
+            _ => {
+                Err(format!("Cannot convert type U16 into type {:?}", type_def)
+                    .into())
+            }
+        }
+    }
+}
+
+impl PartialEq for U16 {
+    fn eq(&self, other: &Self) -> bool {
+        if let Ok(TypeValue::Builtin(BuiltinTypeValue::U16(U16(o)))) =
+            other.into_type(&TypeDef::U16)
+        {
+            o == self.0
+        } else {
+            false
+        }
+    }
+}
+
+impl std::hash::Hash for U16 {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl Display for U16 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug)]
+pub enum U16Token {
+    Set,
+}
+
+
+
+impl From<usize> for U16Token {
+    fn from(val: usize) -> Self {
+        match val {
+            0 => U16Token::Set,
+            _ => panic!("Unknown token value: {}", val),
+        }
+    }
+}
+
+impl From<U16Token> for usize {
+    fn from(val: U16Token) -> Self {
+        match val {
+            U16Token::Set => 0,
+        }
+    }
+}
+
 // ----------- A simple u32 type --------------------------------------------
 
 #[derive(Debug, Eq, Copy, Clone, Serialize)]
@@ -1641,6 +1802,12 @@ impl From<Asn> for TypeValue {
 impl From<u32> for Asn {
     fn from(value: u32) -> Self {
         Asn(value.into())
+    }
+}
+
+impl From<u16> for Asn {
+    fn from(value: u16) -> Self {
+        Asn((value as u32).into())
     }
 }
 

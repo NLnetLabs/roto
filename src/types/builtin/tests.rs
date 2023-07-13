@@ -82,7 +82,7 @@ mod route {
         let res = delta
             .attributes
             .as_path
-            .prepend(crate::types::builtin::primitives::Asn::from(211321));
+            .prepend(crate::types::builtin::primitives::Asn::from(211321_u32));
         assert!(res.is_ok());
 
         let res = delta.attributes.origin_type.set(OriginType::Incomplete);
@@ -105,7 +105,7 @@ mod route {
         );
         assert_eq!(
             attr_set.as_path.as_routecore_hops_vec().get(0),
-            Asn::try_from(211321)
+            Asn::try_from(211321_u32)
                 .ok()
                 .map(move |a| routecore::bgp::aspath::Hop::from(a.0))
                 .as_ref()
@@ -113,7 +113,7 @@ mod route {
         );
         assert_eq!(
             attr_set.as_path.as_routecore_hops_vec().get(1),
-            Asn::try_from(200)
+            Asn::try_from(200_u32)
                 .ok()
                 .map(move |a| routecore::bgp::aspath::Hop::from(a.0))
                 .as_ref()
@@ -205,12 +205,12 @@ mod route {
         assert_eq!(
             *attr_set.as_path.as_routecore_hops_vec()[0],
             routecore::bgp::aspath::Hop::from(
-                Asn::try_from(211321).unwrap().0
+                Asn::try_from(211321_u32).unwrap().0
             )
         );
         assert_eq!(
             attr_set.as_path.as_routecore_hops_vec().get(1),
-            Asn::try_from(200)
+            Asn::try_from(200_u16)
                 .ok()
                 .map(move |a| routecore::bgp::aspath::Hop::from(a.0))
                 .as_ref()
@@ -229,7 +229,7 @@ mod route {
         assert_eq!(attr_set.as_path.len(), Some(3));
         assert_eq!(
             attr_set.as_path.as_routecore_hops_vec().get(0),
-            Asn::try_from(211322)
+            Asn::try_from(211322_u32)
                 .ok()
                 .map(move |a| routecore::bgp::aspath::Hop::from(a.0))
                 .as_ref()
@@ -237,7 +237,7 @@ mod route {
         );
         assert_eq!(
             attr_set.as_path.as_routecore_hops_vec().get(1),
-            Asn::try_from(211321)
+            Asn::try_from(211321_u32)
                 .ok()
                 .map(move |a| routecore::bgp::aspath::Hop::from(a.0))
                 .as_ref()
@@ -245,7 +245,7 @@ mod route {
         );
         assert_eq!(
             attr_set.as_path.as_routecore_hops_vec().get(2),
-            Asn::try_from(200)
+            Asn::try_from(200_u32)
                 .ok()
                 .map(move |a| routecore::bgp::aspath::Hop::from(a.0))
                 .as_ref()

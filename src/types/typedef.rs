@@ -23,7 +23,7 @@ use super::builtin::{
     AsPath, Asn, AtomicAggregator, Boolean, Community, HexLiteral, Hop,
     IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, NextHop, OriginType,
     Prefix, PrefixLength, RawRouteWithDeltas, RouteStatus, StringLiteral,
-    Unknown, U32, U8,
+    Unknown, U32, U8, U16,
 };
 use super::collections::{LazyElementTypeValue, Record};
 use super::constant_enum::{Enum, EnumVariant};
@@ -63,6 +63,7 @@ pub enum TypeDef {
     LazyRecord(LazyTypeDef),
     // Builtin Types
     U32,
+    U16,
     U8,
     Boolean,
     Prefix,
@@ -109,6 +110,7 @@ impl TypeDef {
         // SOURCE TYPE(TARGET TYPE WITHOUT DATA FIELD, ..;
         // TARGET TYPE WITH DATA FIELD)
         U8(U32,PrefixLength,IntegerLiteral;),
+        U16(U32,PrefixLength,IntegerLiteral;),
         U32(StringLiteral,IntegerLiteral;),
         Boolean(StringLiteral;),
         IpAddress(StringLiteral;),
@@ -406,6 +408,9 @@ impl TypeDef {
             TypeDef::U32 => {
                 U32::get_props_for_method(self.clone(), method_name)
             }
+            TypeDef::U16 => {
+                U16::get_props_for_method(self.clone(), method_name)
+            }
             TypeDef::U8 => {
                 U8::get_props_for_method(self.clone(), method_name)
             }
@@ -627,6 +632,7 @@ impl std::fmt::Display for TypeDef {
             TypeDef::Hop => write!(f, "Hop"),
             TypeDef::Prefix => write!(f, "Prefix"),
             TypeDef::U32 => write!(f, "U32"),
+            TypeDef::U16 => write!(f, "U16"),
             TypeDef::Asn => write!(f, "Asn"),
             TypeDef::IpAddress => write!(f, "IpAddress"),
             TypeDef::Route => write!(f, "Route"),
@@ -793,6 +799,7 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
     fn try_from(ty: crate::ast::Identifier) -> Result<TypeDef, CompileError> {
         match ty.ident.as_str() {
             "U32" => Ok(TypeDef::U32),
+            "U16" => Ok(TypeDef::U16),
             "U8" => Ok(TypeDef::U8),
             "IntegerLiteral" => Ok(TypeDef::IntegerLiteral),
             // StringLiterals are referred to as 'String' in roto. To avond
@@ -819,6 +826,7 @@ impl From<&BuiltinTypeValue> for TypeDef {
     fn from(ty: &BuiltinTypeValue) -> TypeDef {
         match ty {
             BuiltinTypeValue::U32(_) => TypeDef::U32,
+            BuiltinTypeValue::U16(_) => TypeDef::U16,
             BuiltinTypeValue::U8(_) => TypeDef::U8,
             BuiltinTypeValue::ConstU8EnumVariant(c_enum) => {
                 TypeDef::ConstEnumVariant(c_enum.enum_name.clone())
@@ -869,6 +877,7 @@ impl From<BuiltinTypeValue> for TypeDef {
     fn from(ty: BuiltinTypeValue) -> TypeDef {
         match ty {
             BuiltinTypeValue::U32(_) => TypeDef::U32,
+            BuiltinTypeValue::U16(_) => TypeDef::U16,
             BuiltinTypeValue::U8(_) => TypeDef::U8,
             BuiltinTypeValue::ConstU8EnumVariant(c_enum) => {
                 TypeDef::ConstEnumVariant(c_enum.enum_name)

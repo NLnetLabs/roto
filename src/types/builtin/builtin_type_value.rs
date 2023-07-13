@@ -20,13 +20,14 @@ use super::{
     AsPath, Asn, AtomicAggregator, Boolean, Community, HexLiteral, Hop,
     IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, NextHop, OriginType,
     Prefix, PrefixLength, BgpUpdateMessage, RawRouteWithDeltas, RouteStatus,
-    StringLiteral, U32, U8,
+    StringLiteral, U32, U8, U16,
 };
 
 #[derive(Debug, Eq, Clone, Hash, PartialEq, Serialize)]
 #[serde(untagged)]
 pub enum BuiltinTypeValue {
     U32(U32),                       // scalar
+    U16(U16),                       // scalar
     U8(U8),                         // scalar
     IntegerLiteral(IntegerLiteral), // scalar
     StringLiteral(StringLiteral),   // scalar
@@ -166,6 +167,7 @@ impl BuiltinTypeValue {
     ) -> Result<TypeValue, CompileError> {
         match self {
             BuiltinTypeValue::U32(v) => v.into_type(ty),
+            BuiltinTypeValue::U16(v) => v.into_type(ty),
             BuiltinTypeValue::U8(v) => v.into_type(ty),
             BuiltinTypeValue::ConstU8EnumVariant(v) => v.into_type(ty),
             BuiltinTypeValue::ConstU16EnumVariant(v) => v.into_type(ty),
@@ -219,9 +221,9 @@ impl From<u32> for BuiltinTypeValue {
     }
 }
 
-impl From<U32> for BuiltinTypeValue {
-    fn from(val: U32) -> Self {
-        BuiltinTypeValue::U32(val)
+impl From<U16> for BuiltinTypeValue {
+    fn from(val: U16) -> Self {
+        BuiltinTypeValue::U16(val)
     }
 }
 
@@ -322,6 +324,7 @@ impl Display for BuiltinTypeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             BuiltinTypeValue::U32(v) => write!(f, "{} (U32)", v),
+            BuiltinTypeValue::U16(v) => write!(f, "{} (U16)", v),
             BuiltinTypeValue::U8(v) => write!(f, "{} (U8)", v),
             BuiltinTypeValue::IntegerLiteral(v) => {
                 write!(f, "{} (Integer)", v)

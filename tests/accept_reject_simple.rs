@@ -28,7 +28,7 @@ fn test_data(
 
     let payload = Record::create_instance(
         &payload_type,
-        vec![("asn", Asn::from(65534).into())],
+        vec![("asn", Asn::from(65534_u32).into())],
     )?;
     let ds_ref = roto_pack.data_sources;
 

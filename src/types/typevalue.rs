@@ -2,7 +2,7 @@ use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
 use primitives::{
     AsPath, Community, Hop, LocalPref, MultiExitDisc, NextHop, OriginType,
-    RouteStatus,
+    RouteStatus, U16,
 };
 use serde::Serialize;
 use smallvec::SmallVec;
@@ -200,6 +200,7 @@ impl RotoType for TypeValue {
             TypeDef::StringLiteral => StringLiteral::get_props_for_method(ty, method_name),
             TypeDef::Table(ty) => Self::get_props_for_method(*ty, method_name),
             TypeDef::U32 => U32::get_props_for_method(ty, method_name),
+            TypeDef::U16 => U16::get_props_for_method(ty, method_name),
             TypeDef::U8 => U8::get_props_for_method(ty, method_name),
             TypeDef::Unknown => Err(CompileError::new("Unsupported TypeDef::Unknown in TypeValue::get_props_for_method()".to_string())),
         }
@@ -235,6 +236,7 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::RouteStatus(v) => v.into_type(ty),
                 BuiltinTypeValue::StringLiteral(v) => v.into_type(ty),
                 BuiltinTypeValue::U32(v) => v.into_type(ty),
+                BuiltinTypeValue::U16(v) => v.into_type(ty),
                 BuiltinTypeValue::U8(v) => v.into_type(ty),
                 BuiltinTypeValue::BmpRouteMonitoringMessage(v) => Err(CompileError::new("Unsupported TypeValue::BmpRouteMonitoringMessage in TypeValue::into_type()".to_string())),
                 BuiltinTypeValue::BmpPeerUpNotificationMessage(v) => Err(CompileError::new("Unsupported TypeValue::BmpPeerUpNotificationMessage in TypeValue::into_type()".to_string())),
@@ -338,6 +340,9 @@ impl RotoType for TypeValue {
                     v.exec_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::U32(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::U16(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::U8(v) => {
@@ -448,6 +453,9 @@ impl RotoType for TypeValue {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::U32(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::U16(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::U8(v) => {
