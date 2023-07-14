@@ -182,9 +182,9 @@ fn test_data(
     let res = vm.exec(my_payload, None::<Record>, None, mem).unwrap();
 
     trace!("\nRESULT");
-    trace!("action: {}", res.0);
-    trace!("rx    : {:?}", res.1);
-    trace!("tx    : {:?}", res.2);
+    trace!("action: {}", res.accept_reject);
+    trace!("rx    : {:?}", res.rx);
+    trace!("tx    : {:?}", res.tx);
 
     Ok(())
 }

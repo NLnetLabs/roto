@@ -82,9 +82,9 @@ fn test_data(
     .unwrap();
 
     println!("\nRESULT");
-    println!("action: {}", res.0);
-    println!("rx    : {:?}", res.1);
-    println!("tx    : {:?}", res.2);
+    println!("action: {}", res.accept_reject);
+    println!("rx    : {:?}", res.rx);
+    println!("tx    : {:?}", res.tx);
 
     Ok(())
 }

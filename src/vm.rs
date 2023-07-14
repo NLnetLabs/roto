@@ -843,7 +843,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
         // define filter-map-level arguments, not used yet! Todo
         mut _arguments: Option<FilterMapArgs>,
         mem: &mut LinearMemory,
-    ) -> Result<(AcceptReject, TypeValue, Option<TypeValue>), VmError> {
+    ) -> Result<VmResult, VmError> {
         trace!("\nstart executing vm...");
 
         let mut commands_num: usize = 0;
@@ -1404,7 +1404,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                 commands_num
                             );
 
-                            return Ok((*accept_reject, rx, tx));
+                            return Ok(VmResult { accept_reject: *accept_reject, rx, tx, stream_output: None });
                         }
                     }
 
@@ -1536,6 +1536,18 @@ impl<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> Default
         Self::new()
     }
 }
+
+//------------ VmResult -----------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct VmResult {
+    pub accept_reject: AcceptReject,
+    pub rx: TypeValue,
+    pub tx: Option<TypeValue>,
+    pub stream_output: Option<TypeValue>,
+}
+
+//------------ VmError ------------------------------------------------------
 
 #[derive(Debug)]
 pub enum VmError {

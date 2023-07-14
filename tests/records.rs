@@ -6,7 +6,7 @@ use roto::types::builtin::Asn;
 use roto::types::collections::Record;
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
-use roto::vm;
+use roto::vm::{self, VmResult};
 use rotonda_store::prelude::MergeUpdate;
 
 mod common;
@@ -105,7 +105,7 @@ fn test_data(
     name: &str,
     source_code: &str,
 ) -> Result<
-    (AcceptReject, TypeValue, Option<TypeValue>),
+    VmResult,
     Box<dyn std::error::Error>,
 > {
     trace!("Evaluate filter-map {}...", name);
@@ -149,9 +149,9 @@ fn test_data(
     let res = vm.exec(my_payload, None::<Record>, None, mem).unwrap();
 
     println!("\nRESULT");
-    println!("action: {}", res.0);
-    println!("rx    : {:?}", res.1);
-    println!("tx    : {:?}", res.2);
+    println!("action: {}", res.accept_reject);
+    println!("rx    : {:?}", res.rx);
+    println!("tx    : {:?}", res.tx);
 
     Ok(res)
 }
@@ -166,8 +166,8 @@ fn test_records_compare_1() {
     );
     let test_run = test_data("in-filter-map", &src_line);
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -196,8 +196,8 @@ fn test_records_compare_3() {
     );
     let test_run = test_data("in-filter-map", &src_line);
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -312,8 +312,8 @@ fn test_records_compare_11() {
     );
     let test_run = test_data("in-filter-map", &src_line);
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -326,6 +326,6 @@ fn test_records_compare_12() {
     );
     let test_run = test_data("in-filter-map", &src_line);
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Reject);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Reject);
 }

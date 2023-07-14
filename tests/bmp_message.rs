@@ -2,10 +2,9 @@ use std::sync::Arc;
 
 use log::trace;
 use roto::{
-    types::{builtin::{
-       BytesRecord,
-    }, lazytypedef::RouteMonitoring, typevalue::TypeValue, collections::Record},
-    vm::{VmError, self}, compile::Compiler, ast::AcceptReject,
+    types::{builtin::BytesRecord,
+    lazytypedef::RouteMonitoring, typevalue::TypeValue, collections::Record},
+    vm::{self, VmResult}, compile::Compiler, ast::AcceptReject,
 };
 
 mod common;
@@ -13,7 +12,7 @@ mod common;
 fn test_data(
     name: &str,
     source_code: &'static str,
-) -> Result<(AcceptReject, TypeValue, Option<TypeValue>), Box<dyn std::error::Error>> {    
+) -> Result<VmResult, Box<dyn std::error::Error>> {    
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
@@ -66,9 +65,9 @@ fn test_data(
     .unwrap();
 
     trace!("\nRESULT");
-    trace!("action: {}", res.0);
-    trace!("rx    : {:?}", res.1);
-    trace!("tx    : {:?}", res.2);
+    trace!("action: {}", res.accept_reject);
+    trace!("rx    : {:?}", res.rx);
+    trace!("tx    : {:?}", res.tx);
 
     Ok(res)
 }
@@ -101,7 +100,7 @@ fn bmp_message_1() {
         "###,
     ).unwrap();
 
-    assert_eq!(res.0, AcceptReject::Accept);
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -132,7 +131,7 @@ fn bmp_message_2() {
         "###,
     ).unwrap();
 
-    assert_eq!(res.0, AcceptReject::Reject);
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
 
 #[test]

@@ -5,7 +5,7 @@ use roto::types::builtin::Asn;
 use roto::types::collections::Record;
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
-use roto::vm;
+use roto::vm::{self, VmResult};
 use rotonda_store::prelude::MergeUpdate;
 
 mod common;
@@ -81,7 +81,7 @@ fn test_data(
     name: &str,
     source_code: &str,
 ) -> Result<
-    (AcceptReject, TypeValue, Option<TypeValue>),
+    VmResult,
     Box<dyn std::error::Error>,
 > {
     println!("Evaluate filter-map {}...", name);
@@ -125,9 +125,9 @@ fn test_data(
     let res = vm.exec(my_payload, None::<Record>, None, mem).unwrap();
 
     println!("\nRESULT");
-    println!("action: {}", res.0);
-    println!("rx    : {:?}", res.1);
-    println!("tx    : {:?}", res.2);
+    println!("action: {}", res.accept_reject);
+    println!("rx    : {:?}", res.rx);
+    println!("tx    : {:?}", res.tx);
 
     Ok(res)
 }
@@ -138,8 +138,8 @@ fn test_compare_1() {
     let src_line = src_code("msg.type == 2; // Peer Down", "reject");
     let test_run = test_data("in-filter-map", &src_line);
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -148,8 +148,8 @@ fn test_compare_2() {
     let src_line = src_code("msg.type == 2; // Peer Down", "accept");
     let test_run = test_data("in-filter-map", &src_line);
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -158,8 +158,8 @@ fn test_compare_3() {
     let src_line = src_code("msg.type == 1; // Peer Down", "reject");
     let test_run = test_data("in-filter-map", &src_line);
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Reject);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Reject);
 }
 
 #[test]
@@ -169,8 +169,8 @@ fn test_compare_4() {
         src_code("msg.type == 1 && msg.type == 2; // Peer Down", "accept");
     let test_run = test_data("in-filter-map", &src_line);
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -180,8 +180,8 @@ fn test_compare_5() {
         src_code("msg.type == 2 && msg.type == 2; // Peer Down", "reject");
     let test_run = test_data("in-filter-map", &src_line);
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -193,8 +193,8 @@ fn test_compare_6() {
     );
     let test_run = test_data("in-filter-map", &src_line);
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -206,8 +206,8 @@ fn test_compare_7() {
     );
     let test_run = test_data("in-filter-map", &src_line);
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -219,8 +219,8 @@ fn test_compare_8() {
     );
     let test_run = test_data("in-filter-map", &src_line);
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Reject);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Reject);
 }
 
 #[test]
@@ -229,8 +229,8 @@ fn test_compare_9() {
     let src_line = src_code("msg.type in [2,3,4,5]; // Peer Down", "accept");
     let test_run = test_data("in-filter-map", &src_line);
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -239,6 +239,6 @@ fn test_compare_10() {
     let src_line = src_code("msg.type in [20,30,40,50]; // Peer Down", "reject");
     let test_run = test_data("in-filter-map", &src_line);
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }

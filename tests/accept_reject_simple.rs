@@ -5,8 +5,7 @@ use roto::compile::Compiler;
 use roto::types::builtin::Asn;
 use roto::types::collections::Record;
 use roto::types::typedef::TypeDef;
-use roto::types::typevalue::TypeValue;
-use roto::vm;
+use roto::vm::{self, VmResult};
 
 mod common;
 
@@ -14,7 +13,7 @@ fn test_data(
     name: &str,
     source_code: &str,
 ) -> Result<
-    (AcceptReject, TypeValue, std::option::Option<TypeValue>),
+    VmResult,
     Box<dyn std::error::Error>,
 > {
     info!("Evaluate filter-map {}...", name);
@@ -41,9 +40,9 @@ fn test_data(
     let res = vm.exec(payload, None::<Record>, None, mem)?;
 
     trace!("\nRESULT");
-    trace!("action: {}", res.0);
-    trace!("rx    : {:?}", res.1);
-    trace!("tx    : {:?}", res.2);
+    trace!("action: {}", res.accept_reject);
+    trace!("rx    : {:?}", res.rx);
+    trace!("tx    : {:?}", res.tx);
 
     Ok(res)
 }
@@ -102,8 +101,8 @@ fn test_filter_map_10() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let VmResult {accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -118,8 +117,8 @@ fn test_filter_map_11() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Reject);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Reject);
 }
 
 #[test]
@@ -134,8 +133,8 @@ fn test_filter_map_12() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -150,8 +149,8 @@ fn test_filter_map_20() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Reject);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Reject);
 }
 
 #[test]
@@ -165,8 +164,8 @@ fn test_filter_map_21() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Reject);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Reject);
 }
 
 #[test]
@@ -180,8 +179,8 @@ fn test_filter_map_22() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -195,8 +194,8 @@ fn test_filter_map_30() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Reject);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Reject);
 }
 
 #[test]
@@ -210,8 +209,8 @@ fn test_filter_map_31() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Reject);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Reject);
 }
 
 #[test]
@@ -225,8 +224,8 @@ fn test_filter_map_32() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -240,8 +239,8 @@ fn test_filter_map_40() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -255,8 +254,8 @@ fn test_filter_map_41() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Reject);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Reject);
 }
 
 #[test]
@@ -270,8 +269,8 @@ fn test_filter_map_42() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -285,8 +284,8 @@ fn test_filter_map_50() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Reject);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Reject);
 }
 
 #[test]
@@ -300,8 +299,8 @@ fn test_filter_map_51() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Reject);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Reject);
 }
 
 
@@ -316,8 +315,8 @@ fn test_filter_map_52() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -331,8 +330,8 @@ fn test_filter_map_60() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Reject);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Reject);
 }
 
 #[test]
@@ -346,8 +345,8 @@ fn test_filter_map_61() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Reject);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Reject);
 }
 
 #[test]
@@ -361,8 +360,8 @@ fn test_filter_map_62() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -380,8 +379,8 @@ fn test_filter_map_70() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -399,8 +398,8 @@ fn test_filter_map_71() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Reject);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Reject);
 }
 
 #[test]
@@ -421,8 +420,8 @@ fn test_filter_map_72() {
     trace!("{:?}", test_run);
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Accept);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -440,8 +439,8 @@ fn test_filter_map_80() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Reject);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Reject);
 }
 
 #[test]
@@ -461,8 +460,8 @@ fn test_filter_map_81() {
     trace!("test run {:?}", test_run);
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Reject);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Reject);
 }
 
 #[test]
@@ -481,6 +480,6 @@ fn test_filter_map_82() {
 
     assert!(test_run.is_ok());
 
-    let (ar, _rx, _tx) = test_run.unwrap();
-    assert_eq!(ar, AcceptReject::Reject);
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Reject);
 }

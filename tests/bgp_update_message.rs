@@ -4,8 +4,7 @@ use roto::compile::Compiler;
 
 use roto::types::builtin::{RotondaId, UpdateMessage, BgpUpdateMessage};
 use roto::types::collections::Record;
-use roto::types::typevalue::TypeValue;
-use roto::vm;
+use roto::vm::{self, VmResult};
 use routecore::bgp::message::SessionConfig;
 
 mod common;
@@ -13,7 +12,7 @@ mod common;
 fn test_data(
     name: &str,
     source_code: &'static str,
-) -> Result<(AcceptReject, TypeValue, Option<TypeValue>), Box<dyn std::error::Error>> {
+) -> Result<VmResult, Box<dyn std::error::Error>> {
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
@@ -80,9 +79,9 @@ fn test_data(
     .unwrap();
 
     trace!("\nRESULT");
-    trace!("action: {}", res.0);
-    trace!("rx    : {:?}", res.1);
-    trace!("tx    : {:?}", res.2);
+    trace!("action: {}", res.accept_reject);
+    trace!("rx    : {:?}", res.rx);
+    trace!("tx    : {:?}", res.tx);
 
     Ok(res)
 }
@@ -139,7 +138,7 @@ fn test_bgp_update_1() {
         "###,
     ).unwrap();
 
-    assert_eq!(res.0, AcceptReject::Accept);
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
 
 #[test]
@@ -172,5 +171,5 @@ fn test_bgp_update_2() {
         "###,
     ).unwrap();
 
-    assert_eq!(res.0, AcceptReject::Accept);
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
