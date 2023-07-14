@@ -194,45 +194,48 @@ macro_rules! lazyenum {
 macro_rules! bytes_record_impl {
     (
         $bytes_record_type: ident,
-        $(
+        #[type_def($(
             $(
-                record(
-                    $(
-                        $sub_record_name: literal; $self_variant_identifier: literal,
-                        { $( (
-                                $field_name: literal;
-                                $variant_identifier: literal,
-                                $ty: ident,
-                                $base_call: ident
-                                $( .$method_call: ident )*
-                            ),
-                        )+ },
-                        { $(
-                            (
-                                $enum_field_name: literal;
-                                $enum_variant_identifier: literal,
-                                $enum_ty: path = $enum_name: literal,
-                                $enum_raw_ty: path,
-                                $enum_base_call: ident
-                                $( .$enum_method_call: ident )*
-                            ),
-                        )+ },
-                    )+
+                record_field(
+                    $sub_record_name: literal; $self_variant_identifier: literal,
+                    $( 
+                        $( field(
+                            $field_name: literal;
+                            $variant_identifier: literal,
+                            $ty: ident,
+                            $base_call: ident
+                            $( .$method_call: ident )*
+                        ) )?
+                        $( enum_field(
+                            $enum_field_name: literal;
+                            $enum_variant_identifier: literal,
+                            $enum_ty: path = $enum_name: literal,
+                            $enum_raw_ty: path,
+                            $enum_base_call: ident
+                            $( .$enum_method_call: ident )*
+                        ) )?,
+                    )*
                 )
-            )?,
+            )?
             $( 
                 field(
-                    $(
-                        $next_field_name: literal; $next_field_variant_identifier: literal,
-                        { 
-                            $next_field_ty: ident,
-                            $next_field_base_call: ident
-                            $( .$next_field_method_call: ident )* 
-                        }
-                    )?
+                    $next_field_name: literal; $next_field_variant_identifier: literal,
+                    $next_field_ty: ident,
+                    $next_field_base_call: ident
+                    $( .$next_field_method_call: ident )* 
                 ) 
             )?
-        )+
+            $( 
+                enum_field(
+                    $next_enum_field_name: literal;
+                    $next_enum_variant_identifier: literal,
+                    $next_enum_ty: path = $next_enum_name: literal,
+                    $next_enum_raw_ty: path,
+                    $next_enum_base_call: ident
+                    $( .$next_enum_method_call: ident )*
+                )
+            )?,
+        )*)]
     ) => {
         impl BytesRecord<$bytes_record_type> {
             pub(crate) fn lazy_type_def<'a>() -> LazyNamedTypeDef<
@@ -241,28 +244,28 @@ macro_rules! bytes_record_impl {
             > { 
                 vec![
                     $(                    
-                        $(
-                            $( 
-                                (
-                                    $sub_record_name.into(),
-                                    LazyElementTypeValue::LazyRecord(lazyrecord!(
-                                        vec![
+                        $( 
+                            (
+                                $sub_record_name.into(),
+                                LazyElementTypeValue::LazyRecord(lazyrecord!(
+                                    vec![
+                                        $(
                                             $( lazyfield!(
                                                 $field_name, 
                                                 $ty,
                                                 $bytes_record_type,
                                                 $base_call$(.$method_call )*),
-                                            )+
+                                            )?
                                             $( lazyenum!(
                                                 $enum_field_name,
                                                 $enum_ty=$enum_name,
                                                 $enum_raw_ty,
                                                 $enum_base_call$(.$enum_method_call )*),
-                                            )+
-                                        ])
-                                    )
+                                            )? 
+                                        )+
+                                    ])
                                 )
-                            )+,
+                            ),  
                         )?
                         $(
                             $(
@@ -282,33 +285,35 @@ macro_rules! bytes_record_impl {
                 vec![
                     $( 
                         $(
-                            $(
+                            
                                 (
                                     $sub_record_name.into(),
                                     TypeDef::Record(
                                         vec![
+                                        $( 
                                             $( ( 
                                                 $field_name.into(), 
                                                 TypeDef::$ty.into()
-                                            ), )+
+                                            ), )?
                                             $( ( 
                                                     $enum_field_name.into(), 
                                                     TypeDef::ConstEnumVariant(
                                                         $enum_name.into()
                                                     ).into()
-                                            ), )+
+                                            ), )? 
+                                        )+
                                         ]
                                     ).into()
-                                )
-                            )+
-                        )?,
+                                ),
+                                
+                        )?
                         $(
-                            $(
+                            // $(
                                 (
                                     $next_field_name.into(),
                                     TypeDef::$next_field_ty.into()
-                                )      
-                            )?
+                                ),     
+                            // )?
                         )?
                     )+
                 ]
@@ -323,10 +328,10 @@ macro_rules! bytes_record_impl {
                 match field_name.ident.as_str() {
                     $( 
                         $(
-                            $( $sub_record_name => Ok((
+                            $sub_record_name => Ok((
                                 TypeDef::LazyRecord(LazyTypeDef::$bytes_record_type),
                                 Token::FieldAccess(vec![$self_variant_identifier]),)), 
-                            )+
+                            
                             // LazyRecords are laid out in in a flat enum space, 
                             // meaning all fields and sub-fields live in the same
                             // enum with different variant discriminators. We'll
@@ -360,26 +365,23 @@ macro_rules! bytes_record_impl {
                                         $variant_identifier - 
                                         $self_variant_identifier - 1
                                     ]))), 
-                                )+
-                            )+
-                            $( 
+                                )? 
                                 $( $enum_field_name => Ok((
                                     TypeDef::ConstEnumVariant($enum_name.into()),
                                     Token::FieldAccess(vec![
                                         $enum_variant_identifier - 
                                         $self_variant_identifier - 1
                                     ]))),
-                                )+
+                                )?
                             )+
                         )?
                         $(
-                            $(
-                                $next_field_name => Ok((
-                                    TypeDef::$next_field_ty,
-                                    Token::FieldAccess(vec![
-                                        $next_field_variant_identifier                                
-                                    ]))), 
-                            )?
+                            $next_field_name => Ok((
+                                TypeDef::$next_field_ty,
+                                Token::FieldAccess(vec![
+                                    $next_field_variant_identifier                                
+                                ])
+                            )), 
                         )?
                     )+
                     _ => {
@@ -402,18 +404,16 @@ macro_rules! bytes_record_impl {
                 $bytes_record_type;
                 $(
                     $(
-                        $(
-                            [<$sub_record_name>] = $self_variant_identifier
-                            $( [<$sub_record_name _$field_name>] = $variant_identifier )+
-                            $( [<$sub_record_name _$enum_field_name>] = $enum_variant_identifier )+
+                        [<$sub_record_name>] = $self_variant_identifier
+                        $( 
+                            $( [<$sub_record_name _$field_name>] = $variant_identifier )?
+                            $( [<$sub_record_name _$enum_field_name>] = $enum_variant_identifier )?
                         )+
                     )?
                     $(
-                        $( 
-                            [< $next_field_name >] = $next_field_variant_identifier
-                        )?
+                        [< $next_field_name >] = $next_field_variant_identifier
                     )?
-                )?
+                )+
             );
         );
     }

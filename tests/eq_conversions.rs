@@ -1,5 +1,5 @@
 use roto::ast::AcceptReject;
-use roto::compile::{Compiler, CompileError};
+use roto::compile::Compiler;
 
 use roto::types::builtin::Asn;
 use roto::types::collections::Record;
