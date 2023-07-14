@@ -11,54 +11,56 @@ use crate::compile::CompileError;
 use crate::traits::RotoType;
 use crate::types::collections::BytesRecord;
 use crate::types::constant_enum::EnumVariant;
-use crate::types::lazytypedef::{PeerDownNotification, PeerUpNotification, RouteMonitoring};
+use crate::types::lazytypedef::{
+    PeerDownNotification, PeerUpNotification, RouteMonitoring,
+};
 
 use super::super::collections::List;
 use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 
 use super::{
-    AsPath, Asn, AtomicAggregator, Boolean, Community, HexLiteral, Hop,
-    IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, NextHop, OriginType,
-    Prefix, PrefixLength, BgpUpdateMessage, RawRouteWithDeltas, RouteStatus,
-    StringLiteral, U32, U8, U16,
+    AsPath, Asn, AtomicAggregator, BgpUpdateMessage, Boolean, Community,
+    HexLiteral, Hop, IntegerLiteral, IpAddress, LocalPref, MultiExitDisc,
+    NextHop, OriginType, Prefix, PrefixLength, RawRouteWithDeltas,
+    RouteStatus, StringLiteral, U16, U32, U8,
 };
 
 #[derive(Debug, Eq, Clone, Hash, PartialEq, Serialize)]
 #[serde(untagged)]
 pub enum BuiltinTypeValue {
-    U32(U32),                       // scalar
-    U16(U16),                       // scalar
-    U8(U8),                         // scalar
-    IntegerLiteral(IntegerLiteral), // scalar
-    StringLiteral(StringLiteral),   // scalar
-    Boolean(Boolean),               // scalar
-    HexLiteral(HexLiteral),         // scalar
-    IpAddress(IpAddress),           // scalar
-    Prefix(Prefix),                 // scalar
-    PrefixLength(PrefixLength),     // scalar
+    U32(U32),                           // scalar
+    U16(U16),                           // scalar
+    U8(U8),                             // scalar
+    IntegerLiteral(IntegerLiteral),     // scalar
+    StringLiteral(StringLiteral),       // scalar
+    Boolean(Boolean),                   // scalar
+    HexLiteral(HexLiteral),             // scalar
+    IpAddress(IpAddress),               // scalar
+    Prefix(Prefix),                     // scalar
+    PrefixLength(PrefixLength),         // scalar
     LocalPref(LocalPref),               // scalar
     AtomicAggregator(AtomicAggregator), // scalar
     NextHop(NextHop),                   // scalar
     MultiExitDisc(MultiExitDisc),       // scalar
     RouteStatus(RouteStatus),           // scalar
-    Community(Community),           // scalar
-    Communities(List),              // vector
-    Asn(Asn),                       // scalar
-    AsPath(AsPath),                 // vector
-    Hop(Hop),                       // read-only scalar
-    OriginType(OriginType),         // scalar
-    Route(RawRouteWithDeltas),      // vector
+    Community(Community),               // scalar
+    Communities(List),                  // vector
+    Asn(Asn),                           // scalar
+    AsPath(AsPath),                     // vector
+    Hop(Hop),                           // read-only scalar
+    OriginType(OriginType),             // scalar
+    Route(RawRouteWithDeltas),          // vector
     // A read-only enum variant for capturing constants
     ConstU8EnumVariant(EnumVariant<u8>),
     ConstU16EnumVariant(EnumVariant<u16>),
     ConstU32EnumVariant(EnumVariant<u32>),
     // Used for filtering on the properties of the whole message,
     // not taking into account any individual prefixes.
-    BgpUpdateMessage(Arc<BgpUpdateMessage>),  // scalar
+    BgpUpdateMessage(Arc<BgpUpdateMessage>), // scalar
     BmpRouteMonitoringMessage(Arc<BytesRecord<RouteMonitoring>>),
     BmpPeerUpNotification(Arc<BytesRecord<PeerUpNotification>>),
-    BmpPeerDownNotification(Arc<BytesRecord<PeerDownNotification>>)
+    BmpPeerDownNotification(Arc<BytesRecord<PeerDownNotification>>),
 }
 
 impl BuiltinTypeValue {

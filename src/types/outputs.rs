@@ -75,8 +75,6 @@ pub(crate) enum OutputStreamToken {
     Send,
 }
 
-
-
 impl From<usize> for OutputStreamToken {
     fn from(val: usize) -> Self {
         match val {

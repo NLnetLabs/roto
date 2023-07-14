@@ -15,7 +15,7 @@ use log::trace;
 use routecore::bgp::message::SessionConfig;
 use serde::Serialize;
 use smallvec::SmallVec;
-use std::{sync::Arc, net::IpAddr};
+use std::{net::IpAddr, sync::Arc};
 
 /// Lamport Timestamp. Used to order messages between units/systems.
 pub type LogicalTime = u64;
@@ -33,7 +33,8 @@ use crate::{
 };
 
 use super::{
-    AsPath, BuiltinTypeValue, NextHop, OriginType, Prefix, RouteStatus, IpAddress, Asn,
+    AsPath, Asn, BuiltinTypeValue, IpAddress, NextHop, OriginType, Prefix,
+    RouteStatus,
 };
 use crate::attr_change_set::{
     AttrChangeSet, ScalarOption, ScalarValue, VectorOption, VectorValue,
@@ -64,7 +65,7 @@ use crate::attr_change_set::{
 pub struct MaterializedRoute {
     pub route: AttrChangeSet,
     pub status: RouteStatus,
-    route_id: (RotondaId, LogicalTime)
+    route_id: (RotondaId, LogicalTime),
 }
 
 impl From<RawRouteWithDeltas> for MaterializedRoute {
@@ -75,7 +76,7 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
         MaterializedRoute {
             route: raw_route.take_latest_attrs(),
             status: status.into(),
-            route_id
+            route_id,
         }
     }
 }
@@ -136,7 +137,8 @@ impl RawRouteWithDeltas {
             peer_asn: None,
             attribute_deltas,
             status_deltas: RouteStatusDeltaList::new(RouteStatusDelta::new(
-                delta_id, route_status,
+                delta_id,
+                route_status,
             )),
         }
     }
@@ -154,7 +156,8 @@ impl RawRouteWithDeltas {
             peer_asn: None,
             attribute_deltas: AttributeDeltaList::new(),
             status_deltas: RouteStatusDeltaList::new(RouteStatusDelta::new(
-                delta_id, route_status,
+                delta_id,
+                route_status,
             )),
         }
     }
@@ -189,7 +192,11 @@ impl RawRouteWithDeltas {
         self.peer_asn.map(|asn| asn.0)
     }
 
-    pub fn update_status(&mut self, delta_id: (RotondaId, LogicalTime), new_status: RouteStatus) {
+    pub fn update_status(
+        &mut self,
+        delta_id: (RotondaId, LogicalTime),
+        new_status: RouteStatus,
+    ) {
         let delta = RouteStatusDelta::new(delta_id, new_status);
         self.status_deltas.0.push(delta);
     }
@@ -467,7 +474,10 @@ impl RawRouteWithDeltas {
     }
 
     pub fn status(&self) -> RouteStatus {
-        if let TypeValue::Builtin(BuiltinTypeValue::RouteStatus(route_status)) = self.status_deltas.current() {
+        if let TypeValue::Builtin(BuiltinTypeValue::RouteStatus(
+            route_status,
+        )) = self.status_deltas.current()
+        {
             route_status
         } else {
             unreachable!() // When we were constructed a RouteStatus was passed in so we always have at least one, and
@@ -564,11 +574,11 @@ struct RouteStatusDelta {
 }
 
 impl RouteStatusDelta {
-    pub fn new(delta_id: (RotondaId, LogicalTime), status: RouteStatus) -> Self {
-        Self {
-            delta_id,
-            status,
-        }
+    pub fn new(
+        delta_id: (RotondaId, LogicalTime),
+        status: RouteStatus,
+    ) -> Self {
+        Self { delta_id, status }
     }
 }
 
@@ -650,10 +660,9 @@ impl BgpUpdateMessage {
         match field_name.ident.as_str() {
             // `nlris` is a fake field (at least for now), it just serves to
             // host the `afi` and `safi` field.
-            "nlris" => Ok((
-                TypeDef::BgpUpdateMessage,
-                Token::FieldAccess(vec![]),
-            )),
+            "nlris" => {
+                Ok((TypeDef::BgpUpdateMessage, Token::FieldAccess(vec![])))
+            }
             "afi" => Ok((
                 TypeDef::ConstEnumVariant("AFI".into()),
                 Token::FieldAccess(vec![usize::from(
@@ -680,22 +689,18 @@ impl BgpUpdateMessage {
     ) -> Option<TypeValue> {
         match field_token.into() {
             BgpUpdateMessageToken::Nlris => Some(TypeValue::Unknown),
-            BgpUpdateMessageToken::Afi => Some(
-                TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(
-                    EnumVariant {
-                        enum_name: "AFI".into(),
-                        value: self.raw_message.0.nlris().afi().into(),
-                    },
-                ))
-            ),
-            BgpUpdateMessageToken::Safi => Some(
-                TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(
-                    EnumVariant {
-                        enum_name: "SAFI".into(),
-                        value: self.raw_message.0.nlris().safi().into(),
-                    },
-                ))
-            ),
+            BgpUpdateMessageToken::Afi => Some(TypeValue::Builtin(
+                BuiltinTypeValue::ConstU16EnumVariant(EnumVariant {
+                    enum_name: "AFI".into(),
+                    value: self.raw_message.0.nlris().afi().into(),
+                }),
+            )),
+            BgpUpdateMessageToken::Safi => Some(TypeValue::Builtin(
+                BuiltinTypeValue::ConstU8EnumVariant(EnumVariant {
+                    enum_name: "SAFI".into(),
+                    value: self.raw_message.0.nlris().safi().into(),
+                }),
+            )),
         }
     }
 }
@@ -715,10 +720,7 @@ impl RotoType for BgpUpdateMessage {
         .into())
     }
 
-    fn into_type(
-        self,
-        ty: &TypeDef,
-    ) -> Result<TypeValue, CompileError>
+    fn into_type(self, ty: &TypeDef) -> Result<TypeValue, CompileError>
     where
         Self: std::marker::Sized,
     {
@@ -736,22 +738,18 @@ impl RotoType for BgpUpdateMessage {
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         match method_token.into() {
-            BgpUpdateMessageToken::Afi => Ok(
-                TypeValue::Builtin(BuiltinTypeValue::ConstU16EnumVariant(
-                    EnumVariant {
-                        enum_name: "AFI".into(),
-                        value: self.raw_message.0.nlris().afi().into(),
-                    },
-                ))
-            ),
-            BgpUpdateMessageToken::Safi => Ok(
-                TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(
-                    EnumVariant {
-                        enum_name: "SAFI".into(),
-                        value: self.raw_message.0.nlris().safi().into(),
-                    },
-                ))
-            ),
+            BgpUpdateMessageToken::Afi => Ok(TypeValue::Builtin(
+                BuiltinTypeValue::ConstU16EnumVariant(EnumVariant {
+                    enum_name: "AFI".into(),
+                    value: self.raw_message.0.nlris().afi().into(),
+                }),
+            )),
+            BgpUpdateMessageToken::Safi => Ok(TypeValue::Builtin(
+                BuiltinTypeValue::ConstU8EnumVariant(EnumVariant {
+                    enum_name: "SAFI".into(),
+                    value: self.raw_message.0.nlris().safi().into(),
+                }),
+            )),
             _ => Err(VmError::InvalidMethodCall),
         }
     }
@@ -803,7 +801,7 @@ impl From<BgpUpdateMessageToken> for usize {
         match val {
             BgpUpdateMessageToken::Nlris => 0,
             BgpUpdateMessageToken::Afi => 1,
-            BgpUpdateMessageToken::Safi => 2
+            BgpUpdateMessageToken::Safi => 2,
         }
     }
 }
@@ -1105,8 +1103,6 @@ pub enum RouteStatusToken {
     IsEmpty = 6,
 }
 
-
-
 impl From<usize> for RouteStatusToken {
     fn from(value: usize) -> Self {
         match value {
@@ -1129,7 +1125,6 @@ impl From<RouteStatusToken> for usize {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize)]
 pub struct RotondaId(pub usize);
-
 
 //------------ Modification & Creation of new Updates -----------------------
 

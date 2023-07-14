@@ -35,7 +35,8 @@ impl<T> Display for EnumVariant<T> {
 impl<T: Copy> EnumVariant<T> {
     pub fn new(enum_tv: (ShortString, T)) -> Self {
         Self {
-            enum_name: enum_tv.0, value: enum_tv.1
+            enum_name: enum_tv.0,
+            value: enum_tv.1,
         }
     }
 
@@ -68,9 +69,7 @@ where
         Self: std::marker::Sized,
     {
         match type_def {
-            TypeDef::ConstEnumVariant(_) => {
-                Ok(self.into())
-            }
+            TypeDef::ConstEnumVariant(_) => Ok(self.into()),
             _ => Err(format!(
                 "Cannot convert type EnumVariant to type {:?}",
                 type_def

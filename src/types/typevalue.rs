@@ -25,10 +25,13 @@ use super::{
         HexLiteral, IntegerLiteral, IpAddress, Prefix, PrefixLength,
         RawRouteWithDeltas, StringLiteral, U32, U8,
     },
-    collections::{ElementTypeValue, List, Record, LazyRecord, BytesRecord},
+    collections::{BytesRecord, ElementTypeValue, LazyRecord, List, Record},
     constant_enum::Enum,
+    lazytypedef::{
+        PeerDownNotification, PeerUpNotification, RouteMonitoring,
+    },
     outputs::OutputStreamMessage,
-    typedef::TypeDef, lazytypedef::{PeerDownNotification, PeerUpNotification, RouteMonitoring}
+    typedef::TypeDef,
 };
 
 /// These are the actual types that are used in the Roto language. This enum
@@ -243,7 +246,7 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::BmpPeerDownNotification(_v) => Err(CompileError::new("Unsupported TypeValue::BmpPeerDownNotification in TypeValue::into_type()".to_string())),
 
             }
-            
+
             TypeValue::Enum(v) => v.into_type(ty),
             TypeValue::List(v) => v.into_type(ty),
             TypeValue::OutputStreamMessage(_) => Err(CompileError::new("Unsupported TypeValue::OutputStreamMessage in TypeValue::into_type()".to_string())),
@@ -276,18 +279,36 @@ impl RotoType for TypeValue {
                 }
                 BuiltinTypeValue::BmpRouteMonitoringMessage(bytes_rec) => {
                     LazyRecord::new(
-                        BytesRecord::<RouteMonitoring>::lazy_type_def()
-                    )?.exec_value_method(method_token, args, res_type, bytes_rec.bytes_parser())
+                        BytesRecord::<RouteMonitoring>::lazy_type_def(),
+                    )?
+                    .exec_value_method(
+                        method_token,
+                        args,
+                        res_type,
+                        bytes_rec.bytes_parser(),
+                    )
                 }
                 BuiltinTypeValue::BmpPeerUpNotification(bytes_rec) => {
                     LazyRecord::new(
-                        BytesRecord::<PeerUpNotification>::lazy_type_def()
-                    )?.exec_value_method(method_token, args, res_type, bytes_rec.bytes_parser())
+                        BytesRecord::<PeerUpNotification>::lazy_type_def(),
+                    )?
+                    .exec_value_method(
+                        method_token,
+                        args,
+                        res_type,
+                        bytes_rec.bytes_parser(),
+                    )
                 }
                 BuiltinTypeValue::BmpPeerDownNotification(bytes_rec) => {
                     LazyRecord::new(
-                        BytesRecord::<PeerDownNotification>::lazy_type_def()
-                    )?.exec_value_method(method_token, args, res_type, bytes_rec.bytes_parser())
+                        BytesRecord::<PeerDownNotification>::lazy_type_def(),
+                    )?
+                    .exec_value_method(
+                        method_token,
+                        args,
+                        res_type,
+                        bytes_rec.bytes_parser(),
+                    )
                 }
                 BuiltinTypeValue::Boolean(v) => {
                     v.exec_value_method(method_token, args, res_type)
@@ -530,7 +551,7 @@ impl Display for TypeValue {
 impl PartialEq for TypeValue {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            // Builtins 
+            // Builtins
 
             // Builtins to Builtins
             (TypeValue::Builtin(b1), TypeValue::Builtin(b2)) => {
@@ -574,14 +595,16 @@ impl PartialEq for TypeValue {
                     false
                 } else {
                     l1.0.iter().enumerate().all(|(i, elm)| {
-                        if let Ok(tv) = l2.0[i].clone().into_type(&(elm.into())) {
+                        if let Ok(tv) =
+                            l2.0[i].clone().into_type(&(elm.into()))
+                        {
                             elm == &tv
                         } else {
                             false
                         }
                     })
                 }
-            },
+            }
             // Lists to Builtin::Communities
             (
                 TypeValue::List(l),
@@ -610,14 +633,16 @@ impl PartialEq for TypeValue {
                     false
                 } else {
                     r1.0.iter().enumerate().all(|(i, elm)| {
-                        if let Ok(tv) = r2.0[i].1.clone().into_type(&(&elm.1).into()) {
+                        if let Ok(tv) =
+                            r2.0[i].1.clone().into_type(&(&elm.1).into())
+                        {
                             elm.1 == tv
                         } else {
                             false
                         }
                     })
                 }
-            },
+            }
             (TypeValue::Record(_), _) => false,
 
             // SharedValues
@@ -643,7 +668,6 @@ impl PartialEq for TypeValue {
             }
 
             // Inconvertible & Incomparable types
-
             (TypeValue::Unknown, _) => false,
             (TypeValue::UnInit, _) => false,
             (TypeValue::OutputStreamMessage(_), _) => false,

@@ -6,8 +6,8 @@ use std::marker::PhantomData;
 use std::ops::Index;
 
 use crate::types::builtin::{
-    AsPath, Asn, AtomicAggregator, BuiltinTypeValue, Community, LocalPref,
-    MultiExitDisc, NextHop, OriginType, Prefix, RouteStatus, IpAddress,
+    AsPath, Asn, AtomicAggregator, BuiltinTypeValue, Community, IpAddress,
+    LocalPref, MultiExitDisc, NextHop, OriginType, Prefix, RouteStatus,
 };
 use crate::types::collections::ElementTypeValue;
 use crate::types::typevalue::TypeValue;
@@ -111,9 +111,9 @@ pub struct AttrChangeSet {
     #[serde(skip)]
     pub large_communities: Todo,
     #[serde(skip)]
-    pub bgpsec_as_path: Todo,    // BgpsecAsPath,
+    pub bgpsec_as_path: Todo, // BgpsecAsPath,
     #[serde(skip)]
-    pub attr_set: Todo,          // AttrSet,
+    pub attr_set: Todo, // AttrSet,
     #[serde(skip)]
     pub rsrvd_development: Todo, // RsrvdDevelopment,
 }

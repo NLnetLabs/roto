@@ -12,7 +12,7 @@ use crate::compile::CompileError;
 use crate::traits::Token;
 use crate::typedefconversion;
 use crate::types::builtin::BgpUpdateMessage;
-use crate::types::collections::{ElementTypeValue};
+use crate::types::collections::ElementTypeValue;
 use crate::vm::{StackValue, VmError};
 use crate::{
     ast::{AcceptReject, ShortString},
@@ -23,7 +23,7 @@ use super::builtin::{
     AsPath, Asn, AtomicAggregator, Boolean, Community, HexLiteral, Hop,
     IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, NextHop, OriginType,
     Prefix, PrefixLength, RawRouteWithDeltas, RouteStatus, StringLiteral,
-    Unknown, U32, U8, U16,
+    Unknown, U16, U32, U8,
 };
 use super::collections::{LazyElementTypeValue, Record};
 use super::constant_enum::{Enum, EnumVariant};
@@ -291,8 +291,7 @@ impl TypeDef {
                 // Another special case: BgpUpdateMessage also doesn't have
                 // actual fields, they are all simulated
                 (TypeDef::LazyRecord(lazy_type_def), _) => {
-                    parent_type =
-                        lazy_type_def.get_props_for_field(field)?;
+                    parent_type = lazy_type_def.get_props_for_field(field)?;
                     // Add the token to the FieldAccess vec.
                     result_type = if let Token::FieldAccess(to_f) =
                         &result_type.1
@@ -400,11 +399,9 @@ impl TypeDef {
                     method_name,
                 )
             }
-            TypeDef::LazyRecord(lazy_type_def) => 
-                lazy_type_def.get_props_for_method(
-                    self.clone(), method_name
-                )
-            ,
+            TypeDef::LazyRecord(lazy_type_def) => {
+                lazy_type_def.get_props_for_method(self.clone(), method_name)
+            }
             TypeDef::U32 => {
                 U32::get_props_for_method(self.clone(), method_name)
             }
@@ -643,7 +640,7 @@ impl std::fmt::Display for TypeDef {
                     write!(f, "{}: {}, ", name, ty)?;
                 }
                 write!(f, "}}")
-            },
+            }
             TypeDef::Rib(rib) => write!(f, "Rib of {}", rib.0),
             TypeDef::Table(table) => write!(f, "Table of {}", table),
             TypeDef::OutputStream(stream) => {
@@ -787,7 +784,9 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             "Route" => Ok(TypeDef::Route),
             "RouteStatus" => Ok(TypeDef::RouteStatus),
             "BgpUpdateMessage" => Ok(TypeDef::BgpUpdateMessage),
-            "BmpRouteMonitoringMessage" => Ok(TypeDef::LazyRecord(LazyTypeDef::RouteMonitoring)),
+            "BmpRouteMonitoringMessage" => {
+                Ok(TypeDef::LazyRecord(LazyTypeDef::RouteMonitoring))
+            }
             "HexLiteral" => Ok(TypeDef::HexLiteral),
             _ => Err(format!("Undefined type: {}", ty.ident).into()),
         }
@@ -815,7 +814,9 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
             "Route" => Ok(TypeDef::Route),
             "RouteStatus" => Ok(TypeDef::RouteStatus),
             "BgpUpdateMessage" => Ok(TypeDef::BgpUpdateMessage),
-            "BmpRouteMonitoringMessage" => Ok(TypeDef::LazyRecord(LazyTypeDef::RouteMonitoring)),
+            "BmpRouteMonitoringMessage" => {
+                Ok(TypeDef::LazyRecord(LazyTypeDef::RouteMonitoring))
+            }
             "HexLiteral" => Ok(TypeDef::HexLiteral),
             _ => Err(format!("Undefined type: {}", ty.ident).into()),
         }

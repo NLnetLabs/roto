@@ -169,8 +169,6 @@ pub enum RibToken {
     Contains,
 }
 
-
-
 impl From<usize> for RibToken {
     fn from(token: usize) -> Self {
         match token {
@@ -426,7 +424,6 @@ pub enum TableToken {
     Find,
     Contains,
 }
-
 
 impl From<usize> for TableToken {
     fn from(token: usize) -> Self {

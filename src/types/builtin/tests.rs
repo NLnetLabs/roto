@@ -79,10 +79,9 @@ mod route {
             delta.attributes.next_hop.set(NextHop::Ipv6(v6));
         }
 
-        let res = delta
-            .attributes
-            .as_path
-            .prepend(crate::types::builtin::primitives::Asn::from(211321_u32));
+        let res = delta.attributes.as_path.prepend(
+            crate::types::builtin::primitives::Asn::from(211321_u32),
+        );
         assert!(res.is_ok());
 
         let res = delta.attributes.origin_type.set(OriginType::Incomplete);

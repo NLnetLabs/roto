@@ -72,8 +72,9 @@ impl RotoType for U16 {
     ) -> Result<TypeValue, VmError> {
         match method_token.into() {
             U16Token::Set => {
-                if let Ok(TypeValue::Builtin(BuiltinTypeValue::U16(int_u16))) =
-                    args.remove(0).into_type(&TypeDef::U16)
+                if let Ok(TypeValue::Builtin(BuiltinTypeValue::U16(
+                    int_u16,
+                ))) = args.remove(0).into_type(&TypeDef::U16)
                 {
                     Ok(TypeValue::Builtin(BuiltinTypeValue::U16(int_u16)))
                 } else {
@@ -83,7 +84,7 @@ impl RotoType for U16 {
         }
     }
 
-    fn exec_type_method<'a>(    
+    fn exec_type_method<'a>(
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
@@ -156,8 +157,6 @@ impl Display for U16 {
 pub enum U16Token {
     Set,
 }
-
-
 
 impl From<usize> for U16Token {
     fn from(val: usize) -> Self {
@@ -233,8 +232,9 @@ impl RotoType for U32 {
     ) -> Result<TypeValue, VmError> {
         match method_token.into() {
             U32Token::Set => {
-                if let Ok(TypeValue::Builtin(BuiltinTypeValue::U32(int_u32))) =
-                    args.remove(0).into_type(&TypeDef::U32)
+                if let Ok(TypeValue::Builtin(BuiltinTypeValue::U32(
+                    int_u32,
+                ))) = args.remove(0).into_type(&TypeDef::U32)
                 {
                     Ok(TypeValue::Builtin(BuiltinTypeValue::U32(int_u32)))
                 } else {
@@ -244,7 +244,7 @@ impl RotoType for U32 {
         }
     }
 
-    fn exec_type_method<'a>(    
+    fn exec_type_method<'a>(
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
@@ -314,8 +314,6 @@ impl Display for U32 {
 pub enum U32Token {
     Set,
 }
-
-
 
 impl From<usize> for U32Token {
     fn from(val: usize) -> Self {
@@ -672,10 +670,13 @@ impl RotoType for StringLiteral {
     ) -> Result<TypeValue, VmError> {
         match method_token.into() {
             StringLiteralToken::Set => {
-                if let Ok(TypeValue::Builtin(BuiltinTypeValue::StringLiteral(str))) =
-                    args.remove(0).into_type(&TypeDef::StringLiteral)
+                if let Ok(TypeValue::Builtin(
+                    BuiltinTypeValue::StringLiteral(str),
+                )) = args.remove(0).into_type(&TypeDef::StringLiteral)
                 {
-                    Ok(TypeValue::Builtin(BuiltinTypeValue::StringLiteral(str)))
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
+                        str,
+                    )))
                 } else {
                     Err(VmError::InvalidValueType)
                 }
@@ -711,11 +712,9 @@ impl RotoType for StringLiteral {
                     if let Some(s) = sub_str.next() { s } else { "" },
                 ]);
 
-                Ok(
-                    TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
-                        StringLiteral(new_string),
-                    ))
-                )
+                Ok(TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
+                    StringLiteral(new_string),
+                )))
             }
             StringLiteralToken::Cmp => unimplemented!(),
             StringLiteralToken::Set => Err(VmError::InvalidMethodCall),
@@ -755,7 +754,7 @@ impl Display for StringLiteral {
 pub enum StringLiteralToken {
     Cmp = 0,
     Format = 1,
-    Set = 2
+    Set = 2,
 }
 
 impl From<usize> for StringLiteralToken {
@@ -777,7 +776,9 @@ impl From<StringLiteralToken> for usize {
 
 //------------ IntegerLiteral type ------------------------------------------
 
-#[derive(Debug, Eq, Ord, PartialEq, PartialOrd, Copy, Clone, Hash, Serialize)]
+#[derive(
+    Debug, Eq, Ord, PartialEq, PartialOrd, Copy, Clone, Hash, Serialize,
+)]
 pub struct IntegerLiteral(pub(crate) i64);
 impl IntegerLiteral {
     pub fn new(val: i64) -> Self {
@@ -861,9 +862,9 @@ impl RotoType for IntegerLiteral {
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         match method_token.into() {
-            IntegerLiteralToken::Cmp => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(args[0] == args[1]))))
-            }
+            IntegerLiteralToken::Cmp => Ok(TypeValue::Builtin(
+                BuiltinTypeValue::Boolean(Boolean(args[0] == args[1])),
+            )),
         }
     }
 
@@ -1137,19 +1138,15 @@ impl RotoType for Prefix {
         match method_token.into() {
             PrefixToken::Address => {
                 let prefix = self.0;
-                Ok(
-                    TypeValue::Builtin(BuiltinTypeValue::IpAddress(
-                        IpAddress(prefix.addr()),
-                    ))
-                )
+                Ok(TypeValue::Builtin(BuiltinTypeValue::IpAddress(
+                    IpAddress(prefix.addr()),
+                )))
             }
             PrefixToken::Len => {
                 let Prefix(pfx) = self;
-                Ok(
-                    TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
-                        PrefixLength(pfx.len()),
-                    ))
-                )
+                Ok(TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
+                    PrefixLength(pfx.len()),
+                )))
             }
             PrefixToken::From => unimplemented!(),
             PrefixToken::Exists => Ok(true.into()),
@@ -1181,10 +1178,8 @@ impl RotoType for Prefix {
                         .try_into()
                         .map_err(|_e| VmError::InvalidConversion)?;
                     let ip = ip.0;
-                    Ok(
-                        routecore::addr::Prefix::new(ip, len.into())
-                            .map_or_else(|_| TypeValue::Unknown, |p| p.into())
-                    )
+                    Ok(routecore::addr::Prefix::new(ip, len.into())
+                        .map_or_else(|_| TypeValue::Unknown, |p| p.into()))
                 } else {
                     Err(VmError::AnonymousArgumentNotFound)
                 }
@@ -1932,11 +1927,11 @@ impl RotoType for AsPath {
     ) -> Result<TypeValue, VmError> {
         match method.into() {
             AsPathToken::Origin => match self.0.origin().cloned() {
-                Some(origin_asn) => Ok(
-                    TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(origin_asn
-                        .try_into_asn()
-                        .unwrap())))
-                ),
+                Some(origin_asn) => {
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(
+                        origin_asn.try_into_asn().unwrap(),
+                    ))))
+                }
                 None => Err(VmError::InvalidPayload),
             },
             AsPathToken::Contains => {
@@ -1946,13 +1941,13 @@ impl RotoType for AsPath {
                 {
                     let contains =
                         self.contains(&Hop(RoutecoreHop::from(*search_asn)));
-                    Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
-                        contains,
-                    ))))
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(
+                        Boolean(contains),
+                    )))
                 } else {
                     Ok(TypeValue::Unknown)
                 }
-            },
+            }
             AsPathToken::Len => {
                 let len = self.0.hop_count();
                 Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(len as u8))))
@@ -2504,9 +2499,7 @@ impl From<UnknownToken> for usize {
     }
 }
 
-
 //------------ Local Preference type ----------------------------------------
-
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize)]
 pub struct LocalPref(pub(crate) routecore::bgp::types::LocalPref);
@@ -2553,8 +2546,7 @@ impl RotoType for LocalPref {
         match method_token.into() {
             LocalPrefToken::Set => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::LocalPref(*self)))
-            }
-            // _ => Err(VmError::InvalidMethodCall),
+            } // _ => Err(VmError::InvalidMethodCall),
         }
     }
 

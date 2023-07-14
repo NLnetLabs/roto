@@ -1,10 +1,10 @@
 #[macro_export]
 macro_rules! typedefconversion {
-    ( 
-        $( $type_no_data:ident ( 
+    (
+        $( $type_no_data:ident (
             $( $into_type:ident ),* ; $( $into_type_nest:ident ),*
         ) ),* ;
-        $( $type_data:ident ( 
+        $( $type_data:ident (
             $( $into_type_data:ident ),* ; $( $into_type_nest_data:ident ),*
         ) ),* ;
         $( $no_conversion_no_data:ident ),* ;
@@ -18,7 +18,7 @@ macro_rules! typedefconversion {
                 $(
                     TypeDef::$type_no_data => {
                         return match into_ty {
-                            $( 
+                            $(
                                 TypeDef::$into_type => true,
                             )*
                             $(
@@ -31,7 +31,7 @@ macro_rules! typedefconversion {
                 $(
                     TypeDef::$type_data(_) => {
                         return match into_ty {
-                            $( 
+                            $(
                                 TypeDef::$into_type_data => true,
                             )*
                             $(
@@ -63,11 +63,11 @@ macro_rules! createtoken {
             enum [<$token_enum Token>] {
                 $( [<$token:camel>] ),*
             }
-        
+
             impl From<usize> for [<$token_enum Token>] {
                 fn from(val: usize) -> Self {
                     match val {
-                        $( $value => 
+                        $( $value =>
                             [<$token_enum Token>]::[<$token:camel>], )*
                         _ => panic!("Unknown token value: {}", val),
                     }
@@ -77,7 +77,7 @@ macro_rules! createtoken {
             impl From<[<$token_enum Token>]> for usize {
                 fn from(val: [<$token_enum Token>]) -> Self {
                     match val {
-                        $( [<$token_enum Token>]::[<$token:camel>] => 
+                        $( [<$token_enum Token>]::[<$token:camel>] =>
                             $value, )*
                     }
                 }
@@ -93,23 +93,19 @@ macro_rules! lazyelmtypevalue {
         $raw_ty: path;
         $lazy_fn_body: expr
     ) => {
-        LazyElementTypeValue::Lazy(
-            Box::new(
-                move |$raw_bytes: &BytesRecord<$raw_ty>| { $lazy_fn_body }
-            )
-        )
-    }
+        LazyElementTypeValue::Lazy(Box::new(
+            move |$raw_bytes: &BytesRecord<$raw_ty>| $lazy_fn_body,
+        ))
+    };
 }
 
 #[macro_export]
 macro_rules! lazyrecord {
     (
         $lazy_record_vec: expr
-    ) => {    
-        LazyRecord::new(
-            $lazy_record_vec
-        ).unwrap()
-    }
+    ) => {
+        LazyRecord::new($lazy_record_vec).unwrap()
+    };
 }
 
 #[macro_export]
@@ -136,7 +132,7 @@ macro_rules! lazyfield {
             ).into()
         )
         // LazyElementTypeValue::Lazy(
-        //     Box::new(move |$raw_bytes: &BytesRecord<routecore::bmp::message::RouteMonitoring<bytes::Bytes>>| { 
+        //     Box::new(move |$raw_bytes: &BytesRecord<routecore::bmp::message::RouteMonitoring<bytes::Bytes>>| {
         //         TypeValue::Builtin(
         //             $ty::new(
         //                 $method_call
@@ -157,10 +153,10 @@ macro_rules! lazyenum {
         $( .$method_call: ident )*
     ) => {(
         ShortString::from($field_name),
-        LazyElementTypeValue::Lazy(Box::new( 
+        LazyElementTypeValue::Lazy(Box::new(
             |raw_bytes: &$raw_ty| {
-            trace!("Evaluate lazy fn {} result {}", 
-                $field_name, 
+            trace!("Evaluate lazy fn {} result {}",
+                $field_name,
                 raw_bytes.bytes_parser().$base_call()$(.$method_call())*
             );
             TypeValue::Builtin(
@@ -173,7 +169,7 @@ macro_rules! lazyenum {
         ).into() }))
         // (
         //     "peer_type".into(),
-        //     LazyElementTypeValue::Lazy(Box::new( 
+        //     LazyElementTypeValue::Lazy(Box::new(
         //         |raw_message: &BytesRecord<routecore::bmp::message::RouteMonitoring<bytes::Bytes>>| {
         //         TypeValue::Builtin(
         //         // BuiltinTypeValue::ConstU8EnumVariant(
@@ -198,7 +194,7 @@ macro_rules! bytes_record_impl {
             $(
                 record_field(
                     $sub_record_name: literal; $self_variant_identifier: literal,
-                    $( 
+                    $(
                         $( field(
                             $field_name: literal;
                             $variant_identifier: literal,
@@ -217,15 +213,15 @@ macro_rules! bytes_record_impl {
                     )*
                 )
             )?
-            $( 
+            $(
                 field(
                     $next_field_name: literal; $next_field_variant_identifier: literal,
                     $next_field_ty: ident,
                     $next_field_base_call: ident
-                    $( .$next_field_method_call: ident )* 
-                ) 
+                    $( .$next_field_method_call: ident )*
+                )
             )?
-            $( 
+            $(
                 enum_field(
                     $next_enum_field_name: literal;
                     $next_enum_variant_identifier: literal,
@@ -241,17 +237,17 @@ macro_rules! bytes_record_impl {
             pub(crate) fn lazy_type_def<'a>() -> LazyNamedTypeDef<
                 'a,
                 $bytes_record_type,
-            > { 
+            > {
                 vec![
-                    $(                    
-                        $( 
+                    $(
+                        $(
                             (
                                 $sub_record_name.into(),
                                 LazyElementTypeValue::LazyRecord(lazyrecord!(
                                     vec![
                                         $(
                                             $( lazyfield!(
-                                                $field_name, 
+                                                $field_name,
                                                 $ty,
                                                 $bytes_record_type,
                                                 $base_call$(.$method_call )*),
@@ -261,11 +257,11 @@ macro_rules! bytes_record_impl {
                                                 $enum_ty=$enum_name,
                                                 $enum_raw_ty,
                                                 $enum_base_call$(.$enum_method_call )*),
-                                            )? 
+                                            )?
                                         )+
                                     ])
                                 )
-                            ),  
+                            ),
                         )?
                         $(
                             $(
@@ -283,36 +279,36 @@ macro_rules! bytes_record_impl {
 
             pub(crate) fn type_def() -> Vec<NamedTypeDef> {
                 vec![
-                    $( 
+                    $(
                         $(
-                            
+
                                 (
                                     $sub_record_name.into(),
                                     TypeDef::Record(
                                         vec![
-                                        $( 
-                                            $( ( 
-                                                $field_name.into(), 
+                                        $(
+                                            $( (
+                                                $field_name.into(),
                                                 TypeDef::$ty.into()
                                             ), )?
-                                            $( ( 
-                                                    $enum_field_name.into(), 
+                                            $( (
+                                                    $enum_field_name.into(),
                                                     TypeDef::ConstEnumVariant(
                                                         $enum_name.into()
                                                     ).into()
-                                            ), )? 
+                                            ), )?
                                         )+
                                         ]
                                     ).into()
                                 ),
-                                
+
                         )?
                         $(
                             // $(
                                 (
                                     $next_field_name.into(),
                                     TypeDef::$next_field_ty.into()
-                                ),     
+                                ),
                             // )?
                         )?
                     )+
@@ -326,13 +322,13 @@ macro_rules! bytes_record_impl {
                 Self: std::marker::Sized,
             {
                 match field_name.ident.as_str() {
-                    $( 
+                    $(
                         $(
                             $sub_record_name => Ok((
                                 TypeDef::LazyRecord(LazyTypeDef::$bytes_record_type),
-                                Token::FieldAccess(vec![$self_variant_identifier]),)), 
-                            
-                            // LazyRecords are laid out in in a flat enum space, 
+                                Token::FieldAccess(vec![$self_variant_identifier]),)),
+
+                            // LazyRecords are laid out in in a flat enum space,
                             // meaning all fields and sub-fields live in the same
                             // enum with different variant discriminators. We'll
                             // have to calculate the offset in the variant
@@ -344,10 +340,10 @@ macro_rules! bytes_record_impl {
                             //       my_rec: LazyRecord,
                             //       my_value: U32
                             //  } would have an Enum that goes something like this:
-                            // 
-                            // MyTypeToken { 
+                            //
+                            // MyTypeToken {
                             //     MyRec = 0,
-                            //     MyRecField1 = 1, 
+                            //     MyRecField1 = 1,
                             //     MyRecField2 = 2,
                             //     MyValue = 3
                             // }
@@ -355,21 +351,21 @@ macro_rules! bytes_record_impl {
                             // MyRec looks like:
                             //
                             // vec![("MyRecField1", ..), ("MyRecField2", ...)]
-                            // 
+                            //
                             // So, the trick is to align the variant discriminator
                             // with the index.
-                            $( 
+                            $(
                                 $( $field_name => Ok((
                                     TypeDef::$ty,
                                     Token::FieldAccess(vec![
-                                        $variant_identifier - 
+                                        $variant_identifier -
                                         $self_variant_identifier - 1
-                                    ]))), 
-                                )? 
+                                    ]))),
+                                )?
                                 $( $enum_field_name => Ok((
                                     TypeDef::ConstEnumVariant($enum_name.into()),
                                     Token::FieldAccess(vec![
-                                        $enum_variant_identifier - 
+                                        $enum_variant_identifier -
                                         $self_variant_identifier - 1
                                     ]))),
                                 )?
@@ -379,9 +375,9 @@ macro_rules! bytes_record_impl {
                             $next_field_name => Ok((
                                 TypeDef::$next_field_ty,
                                 Token::FieldAccess(vec![
-                                    $next_field_variant_identifier                                
+                                    $next_field_variant_identifier
                                 ])
-                            )), 
+                            )),
                         )?
                     )+
                     _ => {
@@ -405,7 +401,7 @@ macro_rules! bytes_record_impl {
                 $(
                     $(
                         [<$sub_record_name>] = $self_variant_identifier
-                        $( 
+                        $(
                             $( [<$sub_record_name _$field_name>] = $variant_identifier )?
                             $( [<$sub_record_name _$enum_field_name>] = $enum_variant_identifier )?
                         )+
@@ -422,7 +418,7 @@ macro_rules! bytes_record_impl {
 // #[macro_export]
 // macro_rules! subrecord_impl {
 //     (
-//         $bytes_record_type: ident, 
+//         $bytes_record_type: ident,
 //         $sub_record_name: literal,
 //         { $( (
 //                 $field_name: literal;
@@ -442,7 +438,7 @@ macro_rules! bytes_record_impl {
 //                 // $( .$enum_method_call: ident )*
 //             ),
 //         )+ }
-    
+
 //     ) => {
 //         impl BytesRecord<$bytes_record_type> {
 //             pub(crate) fn type_def() -> Vec<NamedTypeDef> {

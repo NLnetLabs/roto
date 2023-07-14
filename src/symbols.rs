@@ -324,10 +324,11 @@ impl Symbol {
         mut self,
         into_ty: TypeDef,
     ) -> Result<Self, CompileError> {
-        if self.ty == into_ty { return Ok(self); }
+        if self.ty == into_ty {
+            return Ok(self);
+        }
 
-        if self.ty.clone().test_type_conversion(into_ty.clone())
-        {
+        if self.ty.clone().test_type_conversion(into_ty.clone()) {
             self.ty = into_ty.clone();
             if let TypeValue::Unknown = self.value {
                 trace!("UNKNOWN");

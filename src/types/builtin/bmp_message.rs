@@ -3,18 +3,16 @@ use paste::paste;
 
 use crate::{
     ast::ShortString,
+    bytes_record_impl,
     compile::CompileError,
     createtoken, lazyelmtypevalue, lazyenum, lazyfield, lazyrecord,
-    bytes_record_impl,
     traits::Token,
     types::{
-        builtin::{
-            Asn, Boolean, BuiltinTypeValue, IpAddress,
-        },
+        builtin::{Asn, Boolean, BuiltinTypeValue, IpAddress},
         collections::{LazyElementTypeValue, LazyRecord},
         constant_enum::EnumVariant,
         lazytypedef::{
-            LazyTypeDef, PeerUpNotification, PeerDownNotification, 
+            LazyTypeDef, PeerDownNotification, PeerUpNotification,
             RouteMonitoring,
         },
         typedef::{LazyNamedTypeDef, NamedTypeDef, TypeDef},
@@ -134,8 +132,8 @@ bytes_record_impl!(
         record_field(
             "session_config"; 12,
             field(
-                "has_four_octet_asn"; 13, 
-                Boolean, 
+                "has_four_octet_asn"; 13,
+                Boolean,
                 session_config.has_four_octet_asn
             ),
         ),
@@ -221,11 +219,12 @@ bytes_record_impl!(
 
 impl BytesRecord<PeerDownNotification> {
     pub fn new(bytes: bytes::Bytes) -> Result<Self, VmError> {
-        if let routecore::bmp::message::Message::PeerDownNotification(pd_msg) =
-            routecore::bmp::message::Message::<bytes::Bytes>::from_octets(
-                bytes,
-            )
-            .unwrap()
+        if let routecore::bmp::message::Message::PeerDownNotification(
+            pd_msg,
+        ) = routecore::bmp::message::Message::<bytes::Bytes>::from_octets(
+            bytes,
+        )
+        .unwrap()
         {
             Ok(Self(pd_msg))
         } else {

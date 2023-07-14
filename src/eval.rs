@@ -529,13 +529,17 @@ impl ast::Term {
                         symbols.clone(),
                         &scope,
                     )?;
-                    if expr.get_type() == TypeDef::Boolean || expr.get_type().test_type_conversion(TypeDef::Boolean)
+                    if expr.get_type() == TypeDef::Boolean
+                        || expr
+                            .get_type()
+                            .test_type_conversion(TypeDef::Boolean)
                     {
                         expr
                     } else {
-                        return Err(CompileError::from(
-                            format!("Cannot convert value with type {} into Boolean",expr.get_type())
-                        ));
+                        return Err(CompileError::from(format!(
+                            "Cannot convert value with type {} into Boolean",
+                            expr.get_type()
+                        )));
                     }
                 }
                 LogicalExpr::OrExpr(or_expr) => {
@@ -1089,10 +1093,7 @@ impl ast::ValueExpr {
                         scope,
                     )
                 } else {
-                    Err(format!(
-                        "Unknown built-in method call: {}",
-                        name
-                    ))?
+                    Err(format!("Unknown built-in method call: {}", name))?
                 }
             }
             ast::ValueExpr::StringLiteral(str_lit) => {
@@ -1199,8 +1200,9 @@ impl ast::ValueExpr {
                         checked_ty.iter().find(|v| v.0 == field_s.get_name());
                     if let Some(cur_ty) = cur_ty {
                         checked_values.push(
-                            field_s
-                                .try_convert_type_value_into(*cur_ty.1.clone())?,
+                            field_s.try_convert_type_value_into(
+                                *cur_ty.1.clone(),
+                            )?,
                         );
                     } else {
                         return Err(CompileError::from(format!("The field name '{}' cannot be found in type '{}'", field_s.get_name(), type_id.ident)));
@@ -1452,7 +1454,8 @@ impl ast::CompareExpr {
         // NOT reversed, i.e. `32 == prefix.len();` is INVALID.
         trace!("left_type {:#?} <-> right_type {:#?}", left_s, right_s);
         if left_type != right_type {
-            right_s = right_s.try_convert_type_value_into(left_type.clone())?;
+            right_s =
+                right_s.try_convert_type_value_into(left_type.clone())?;
         }
         trace!("after conversion {} <-> {:?}", left_type, right_s);
 

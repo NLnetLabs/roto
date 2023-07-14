@@ -1,14 +1,14 @@
 use log::trace;
 use serde::Serialize;
 
-use super::{
-    typedef::{MethodProps, NamedTypeDef, TypeDef}
-};
+use super::typedef::{MethodProps, NamedTypeDef, TypeDef};
 use crate::{
-    ast::Identifier, compile::CompileError, traits::Token, types::builtin::BytesRecord,
+    ast::Identifier, compile::CompileError, traits::Token,
+    types::builtin::BytesRecord,
 };
 
-pub type RouteMonitoring = routecore::bmp::message::RouteMonitoring<bytes::Bytes>;
+pub type RouteMonitoring =
+    routecore::bmp::message::RouteMonitoring<bytes::Bytes>;
 pub type PeerUpNotification =
     routecore::bmp::message::PeerUpNotification<bytes::Bytes>;
 pub type PeerDownNotification =
@@ -21,18 +21,20 @@ pub enum LazyTypeDef {
     PeerDownNotification,
     StatisticsReport,
     RouteMirroring,
-    // BmpPerPeerHeader
 }
 
 impl LazyTypeDef {
     pub fn type_def(&self) -> Vec<NamedTypeDef> {
         match &self {
-            LazyTypeDef::RouteMonitoring => 
-                BytesRecord::<RouteMonitoring>::type_def(),
-            LazyTypeDef::PeerUpNotification => 
-                BytesRecord::<PeerUpNotification>::type_def(),
-            LazyTypeDef::PeerDownNotification => 
-                BytesRecord::<PeerDownNotification>::type_def(),
+            LazyTypeDef::RouteMonitoring => {
+                BytesRecord::<RouteMonitoring>::type_def()
+            }
+            LazyTypeDef::PeerUpNotification => {
+                BytesRecord::<PeerUpNotification>::type_def()
+            }
+            LazyTypeDef::PeerDownNotification => {
+                BytesRecord::<PeerDownNotification>::type_def()
+            }
             LazyTypeDef::StatisticsReport => todo!(),
             LazyTypeDef::RouteMirroring => todo!(),
         }
@@ -44,11 +46,12 @@ impl LazyTypeDef {
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError> {
         match self {
-            LazyTypeDef::RouteMonitoring => BytesRecord::<
-                RouteMonitoring,
-            >::get_props_for_method(
-                ty, method_name
-            ),
+            LazyTypeDef::RouteMonitoring => {
+                BytesRecord::<RouteMonitoring>::get_props_for_method(
+                    ty,
+                    method_name,
+                )
+            }
             LazyTypeDef::PeerUpNotification => todo!(),
             LazyTypeDef::PeerDownNotification => todo!(),
             LazyTypeDef::StatisticsReport => todo!(),
@@ -68,13 +71,15 @@ impl LazyTypeDef {
             LazyTypeDef::PeerUpNotification => {
                 trace!("BmpPeerUpNotification w/ field '{}'", field);
                 BytesRecord::<PeerUpNotification>::get_props_for_field(field)
-            },
+            }
             LazyTypeDef::PeerDownNotification => {
                 trace!("BmpPeerDownNotification w/ field '{}'", field);
-                BytesRecord::<PeerDownNotification>::get_props_for_field(field)
-            },
+                BytesRecord::<PeerDownNotification>::get_props_for_field(
+                    field,
+                )
+            }
             LazyTypeDef::StatisticsReport => todo!(),
             LazyTypeDef::RouteMirroring => todo!(),
-       }
+        }
     }
 }
