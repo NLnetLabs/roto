@@ -12,7 +12,7 @@ fn test_data(
     name: &str,
     source_code: &'static str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Evaluate module {}...", name);
+    println!("Evaluate filter {}...", name);
 
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code)?;
@@ -85,14 +85,14 @@ fn test_data(
     println!("Used Data Sources");
     println!("{:#?}", &roto_pack.data_sources);
 
-    let module_arguments = vec![(
+    let filter_map_arguments = vec![(
         "extra_asn",
         // use Roto type coercion
         TypeValue::from(65534_u32)
     )];
 
     let ds_ref = roto_pack.data_sources;
-    let args = rotolo.compile_arguments(name, module_arguments)?;
+    let args = rotolo.compile_arguments(name, filter_map_arguments)?;
 
     let mut vm = vm::VmBuilder::new()
         .with_arguments(args)
@@ -104,7 +104,7 @@ fn test_data(
     let res = vm.exec(
         my_payload,
         None::<Record>,
-        // Some(module_arguments),
+        // Some(filter_map_arguments),
         None,
         mem,
     )
@@ -120,9 +120,9 @@ fn test_data(
 
 fn main() {
     test_data(
-        "in-module",
+        "in-filter-map",
         r###"
-            module in-module with my_asn: Asn {
+            filter-map in-filter-map with my_asn: Asn {
                 define for ext_r: ExtRoute with extra_asn: Asn {
                     // specify the types of that this filter receives
                     // and sends.
@@ -210,7 +210,7 @@ fn main() {
                    // This shouldn't be allowed, a filter does not get to
                    // decide where to write.
                    // rib-rov.set-best(route);
-                   // Doesn't work either, users can only modify the rx type of a module.
+                   // Doesn't work either, users can only modify the rx type of a filter.
                    // route_in_table.set(true); 
                    // This should work. The filter is allowed to modify the
                    // route that flows through it.

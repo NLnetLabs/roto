@@ -1,4 +1,4 @@
-mod modules;
+mod filter_maps;
 mod common;
 
 //------------ RIB parse ----------------------------------------------------
@@ -7,7 +7,7 @@ mod common;
 fn test_rib_invalid_1() {
     common::init();
 
-    let compiler = modules::TestCompiler::create(
+    let compiler = filter_maps::TestCompiler::create(
         "test_rib_invalid_1",
         r###"
             rib my_rib contains Blaffer { 
@@ -24,7 +24,7 @@ fn test_rib_invalid_1() {
 fn test_rib_invalid_2() {
     common::init();
 
-    let compiler = modules::TestCompiler::create(
+    let compiler = filter_maps::TestCompiler::create(
         "invalid-rib-with-comment-2",
         r###"
             rib my_rib contains Blaffer { 
@@ -41,7 +41,7 @@ fn test_rib_invalid_2() {
 fn test_rib_without_name_1() {
     common::init();
     
-    let compiler = modules::TestCompiler::create(
+    let compiler = filter_maps::TestCompiler::create(
         "rib-without-a-name",
         r###"
         // comment
@@ -54,7 +54,7 @@ fn test_rib_without_name_1() {
 fn test_empty() {
     common::init();
     
-    let compiler = modules::TestCompiler::create(
+    let compiler = filter_maps::TestCompiler::create(
         "invalid-rib-without-name-2",
         r###"
             // some comment
@@ -69,7 +69,7 @@ fn test_empty() {
 fn test_interspersed_comments() {
     common::init();
     
-    let compiler = modules::TestCompiler::create(
+    let compiler = filter_maps::TestCompiler::create(
         "interspersed-comments",
         r###"
         rib my_rib contains SomeCrap { prefix: Prefix, as-path: AsPath }
@@ -87,7 +87,7 @@ fn test_interspersed_comments() {
 fn test_stream_1() {
     common::init();
     
-    let compiler = modules::TestCompiler::create(
+    let compiler = filter_maps::TestCompiler::create(
         "stream_1",
         r###"
         output-stream mqtt contains Message {

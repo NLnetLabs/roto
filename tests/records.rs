@@ -54,7 +54,7 @@ fn src_code(
 ) -> String {
     let pre = format!(
         r###"
-        module in-module {{
+        filter-map in-filter-map {{
             define {{
                 rx_tx msg: BmpMsg;
                 c = 99;
@@ -108,7 +108,7 @@ fn test_data(
     (AcceptReject, TypeValue, Option<TypeValue>),
     Box<dyn std::error::Error>,
 > {
-    trace!("Evaluate module {}...", name);
+    trace!("Evaluate filter-map {}...", name);
 
     let c = Compiler::new();
     let roto_packs = c.build_from_compiler(source_code)?;
@@ -164,7 +164,7 @@ fn test_records_compare_1() {
         "100 in [a.i, 2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-module", &src_line);
+    let test_run = test_data("in-filter-map", &src_line);
 
     let (ar, _rx, _tx) = test_run.unwrap();
     assert_eq!(ar, AcceptReject::Accept);
@@ -178,7 +178,7 @@ fn test_records_compare_2() {
         "100 in [a.i, 2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-module", &src_line).unwrap_err().to_string();
+    let test_run = test_data("in-filter-map", &src_line).unwrap_err().to_string();
 
     assert_eq!(
         test_run,
@@ -194,7 +194,7 @@ fn test_records_compare_3() {
         "100 in [a.i, 2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-module", &src_line);
+    let test_run = test_data("in-filter-map", &src_line);
 
     let (ar, _rx, _tx) = test_run.unwrap();
     assert_eq!(ar, AcceptReject::Accept);
@@ -208,7 +208,7 @@ fn test_records_compare_4() {
         "100 in [a.i, 2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-module", &src_line).unwrap_err().to_string();
+    let test_run = test_data("in-filter-map", &src_line).unwrap_err().to_string();
     assert_eq!(test_run, "Eval error: The field name 'garbage_field' cannot be found in type 'A'");
 }
 
@@ -220,10 +220,10 @@ fn test_records_compare_5() {
         "100 in [a.i, 2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-module", &src_line).unwrap_err().to_string();
+    let test_run = test_data("in-filter-map", &src_line).unwrap_err().to_string();
     assert_eq!(
         test_run,
-        "Eval error: No type named 'B' found in scope 'module 'in-module''"
+        "Eval error: No type named 'B' found in scope 'filter-map 'in-filter-map''"
     );
 }
 
@@ -235,7 +235,7 @@ fn test_records_compare_6() {
         "100 in [a.i, 2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-module", &src_line).unwrap_err().to_string();
+    let test_run = test_data("in-filter-map", &src_line).unwrap_err().to_string();
     assert_eq!(
         test_run,
         "This record: {\n\tasn: AS100 (ASN)\n   } is of type Record {asn: Asn, i: U8, }, but we got a record with type Record {asn: Asn, }. It's not the same and cannot be converted."
@@ -250,7 +250,7 @@ fn test_records_compare_7() {
         "100 in [a.i, 2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-module", &src_line).unwrap_err().to_string();
+    let test_run = test_data("in-filter-map", &src_line).unwrap_err().to_string();
     assert_eq!(
         test_run,
         "Eval error: The field name 'd' cannot be found in type 'A'"
@@ -265,7 +265,7 @@ fn test_records_compare_8() {
         "100 in [a.i, 2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-module", &src_line).unwrap_err().to_string();
+    let test_run = test_data("in-filter-map", &src_line).unwrap_err().to_string();
     assert_eq!(
         test_run,
         "Eval error: Record {f: U8, g: Asn, } cannot be converted into IntegerLiteral"
@@ -280,7 +280,7 @@ fn test_records_compare_9() {
         "100 in [a.i,2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-module", &src_line).unwrap_err().to_string();
+    let test_run = test_data("in-filter-map", &src_line).unwrap_err().to_string();
     assert_eq!(
         test_run,
         "Eval error: The sub-field name 'h' cannot be found in field 'i' in type 'C'"
@@ -295,7 +295,7 @@ fn test_records_compare_10() {
         "100 in [1,2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-module", &src_line).unwrap_err().to_string();
+    let test_run = test_data("in-filter-map", &src_line).unwrap_err().to_string();
     assert_eq!(
         test_run,
         "Eval error: The sub-field name 'h' cannot be found in field 'i' in type 'C'"
@@ -310,7 +310,7 @@ fn test_records_compare_11() {
         "100 in [a.i.f,2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-module", &src_line);
+    let test_run = test_data("in-filter-map", &src_line);
 
     let (ar, _rx, _tx) = test_run.unwrap();
     assert_eq!(ar, AcceptReject::Accept);
@@ -324,7 +324,7 @@ fn test_records_compare_12() {
         "100 in [a.i.f,2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-module", &src_line);
+    let test_run = test_data("in-filter-map", &src_line);
 
     let (ar, _rx, _tx) = test_run.unwrap();
     assert_eq!(ar, AcceptReject::Reject);

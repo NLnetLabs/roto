@@ -410,19 +410,19 @@ impl<'a> From<&'a Vec<CommandArg>> for CommandArgsStack<'a> {
 
 //------------ Argument -----------------------------------------------------
 
-// These are the module-level arguments, they can be compiled in when passed
+// These are the filter-map-level arguments, they can be compiled in when passed
 // in before compiling (`with_arguments()`), or they can be provided at run-
 // time.
 
 #[derive(Debug)]
-pub struct ModuleArg {
+pub struct FilterMapArg {
     pub(crate) name: ShortString,
     index: usize,
     ty: TypeDef,
     value: TypeValue,
 }
 
-impl ModuleArg {
+impl FilterMapArg {
     pub fn get_value(&self) -> &TypeValue {
         &self.value
     }
@@ -459,16 +459,16 @@ impl ModuleArg {
 }
 
 #[derive(Default, Debug)]
-pub struct ModuleArgsMap(Vec<ModuleArg>);
+pub struct FilterMapArgs(Vec<FilterMapArg>);
 
-impl ModuleArgsMap {
+impl FilterMapArgs {
     pub fn compile_arguments(
         &self,
         args: Vec<(&str, TypeValue)>,
-    ) -> Result<ModuleArgsMap, CompileError> {
-        // Walk over all the module arguments that were supplied and see if
+    ) -> Result<FilterMapArgs, CompileError> {
+        // Walk over all the filter_map arguments that were supplied and see if
         // they match up with the ones in the source code.
-        let mut arguments_map = ModuleArgsMap::new();
+        let mut arguments_map = FilterMapArgs::new();
         let len = args.len();
         for supplied_arg in args {
             match self.iter().find(|a| supplied_arg.0 == a.get_name()) {
@@ -565,7 +565,7 @@ impl ModuleArgsMap {
     }
 
     pub fn new() -> Self {
-        ModuleArgsMap(Vec::new())
+        FilterMapArgs(Vec::new())
     }
 
     pub fn len(&self) -> usize {
@@ -583,7 +583,7 @@ impl ModuleArgsMap {
         ty: TypeDef,
         value: TypeValue,
     ) {
-        self.0.push(ModuleArg {
+        self.0.push(FilterMapArg {
             name: name.into(),
             index,
             ty,
@@ -599,22 +599,22 @@ impl ModuleArgsMap {
         }
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, ModuleArg> {
+    pub fn iter(&self) -> std::slice::Iter<'_, FilterMapArg> {
         self.0.iter()
     }
 }
 
-impl IntoIterator for ModuleArgsMap {
+impl IntoIterator for FilterMapArgs {
     type IntoIter = std::vec::IntoIter<Self::Item>;
-    type Item = ModuleArg;
+    type Item = FilterMapArg;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }
 
-impl From<Vec<ModuleArg>> for ModuleArgsMap {
-    fn from(value: Vec<ModuleArg>) -> Self {
+impl From<Vec<FilterMapArg>> for FilterMapArgs {
+    fn from(value: Vec<FilterMapArg>) -> Self {
         Self(value)
     }
 }
@@ -666,7 +666,7 @@ pub struct VirtualMachine<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
     // _tx_type: Option<TypeDef>,
     mir_code: MB,
     data_sources: EDS,
-    arguments: ModuleArgsMap,
+    arguments: FilterMapArgs,
     stack: RefCell<Stack>,
 }
 
@@ -840,8 +840,8 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
         &'a mut self,
         rx: impl RotoType,
         tx: Option<impl RotoType>,
-        // define module-level arguments, not used yet! Todo
-        mut _arguments: Option<ModuleArgsMap>,
+        // define filter-map-level arguments, not used yet! Todo
+        mut _arguments: Option<FilterMapArgs>,
         mem: &mut LinearMemory,
     ) -> Result<(AcceptReject, TypeValue, Option<TypeValue>), VmError> {
         trace!("\nstart executing vm...");
@@ -1456,7 +1456,7 @@ pub struct VmBuilder<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> {
     rx_type: TypeDef,
     tx_type: Option<TypeDef>,
     mir_code: Option<MB>,
-    arguments: ModuleArgsMap,
+    arguments: FilterMapArgs,
     data_sources: Option<EDS>,
 }
 
@@ -1466,7 +1466,7 @@ impl<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> VmBuilder<MB, EDS> {
             rx_type: TypeDef::default(),
             tx_type: None,
             mir_code: None,
-            arguments: ModuleArgsMap::default(),
+            arguments: FilterMapArgs::default(),
             data_sources: None,
         }
     }
@@ -1476,7 +1476,7 @@ impl<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> VmBuilder<MB, EDS> {
         self
     }
 
-    pub fn with_arguments(mut self, args: ModuleArgsMap) -> Self {
+    pub fn with_arguments(mut self, args: FilterMapArgs) -> Self {
         self.arguments = args;
         self
     }
@@ -1671,7 +1671,7 @@ impl Display for Command {
 pub enum CommandArg {
     Constant(TypeValue),        // Constant value
     Variable(usize),            // Variable with token value
-    Argument(usize),            // extra runtime argument for module & term
+    Argument(usize),            // extra runtime argument for filter_map & term
     List(List), // a list that needs to be stored at a memory posision
     Record(Record), // a record that needs to be stored at a mem posistion
     RxValue,    // the placeholder for the value of the rx type at runtime

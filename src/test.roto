@@ -1,4 +1,4 @@
-module my_module for my-rib with bla: Blaffer {
+module my_filter_map for my-rib with bla: Blaffer {
     define {
         use bla;
         bla = Bla;

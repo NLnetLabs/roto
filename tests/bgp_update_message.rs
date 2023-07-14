@@ -14,7 +14,7 @@ fn test_data(
     name: &str,
     source_code: &'static str,
 ) -> Result<(AcceptReject, TypeValue, Option<TypeValue>), Box<dyn std::error::Error>> {
-    println!("Evaluate module {}...", name);
+    println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code)?;
@@ -73,7 +73,7 @@ fn test_data(
     let res = vm.exec(
         payload,
         None::<Record>,
-        // Some(module_arguments),
+        // Some(filter_map_arguments),
         None,
         mem,
     )
@@ -94,7 +94,7 @@ fn test_bgp_update_1() {
     let res = test_data(
         "filter-unicast-v4-v6-only",
         r###"
-        module filter-unicast-v4-v6-only {
+        filter-map filter-unicast-v4-v6-only {
             define {
                 rx_tx bgp_msg: BgpUpdateMessage;
                 // IPV4 = 100;
@@ -149,7 +149,7 @@ fn test_bgp_update_2() {
     let res = test_data(
         "filter-unicast-v4-v6-only",
         r###"
-        module filter-unicast-v4-v6-only {
+        filter-map filter-unicast-v4-v6-only {
             define {
                 rx_tx bgp_msg: BgpUpdateMessage;
             }

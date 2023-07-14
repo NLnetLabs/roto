@@ -392,7 +392,7 @@ pub enum SymbolKind {
     // assigment+access receiver symbols
     // these symbols are used both for assignment and as
     // root access receivers.
-    Constant, // A literal value or a module-level variable
+    Constant, // A literal value or a filter-map-level variable
 
     // Rx and Tx Types
     // The payload can be a mutable type, that comes in at the input of the
@@ -423,7 +423,7 @@ pub enum SymbolKind {
     AccessReceiver,
     // these symbols are only used to as roots for receiving
     // data.
-    Argument,      // a passed-in module or term level argument
+    Argument,      // a passed-in filter_map or term level argument
     AnonymousType, // type of a sub-record
     NamedType,     // User-defined type of a record
 
@@ -520,12 +520,12 @@ pub struct MatchActionKey((ShortString, MatchActionType));
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Scope {
     Global,
-    Module(ShortString),
+    FilterMap(ShortString),
 }
 
 impl Scope {
     pub(crate) fn get_name(&self) -> ShortString {
-        if let Scope::Module(name) = self {
+        if let Scope::FilterMap(name) = self {
             name.clone()
         } else {
             "global".into()
@@ -537,7 +537,7 @@ impl Display for Scope {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Scope::Global => write!(f, "global"),
-            Scope::Module(name) => write!(f, "module '{}'", name),
+            Scope::FilterMap(name) => write!(f, "filter-map '{}'", name),
         }
     }
 }
@@ -545,29 +545,29 @@ impl Display for Scope {
 impl From<AccessReceiver> for Scope {
     fn from(value: AccessReceiver) -> Self {
         match value {
-            AccessReceiver::Ident(ident) => Scope::Module(ident.ident),
+            AccessReceiver::Ident(ident) => Scope::FilterMap(ident.ident),
             AccessReceiver::GlobalScope => Scope::Global,
         }
     }
 }
 
-// A per-module symbol table.
+// A per-filter-map symbol table.
 #[derive(Debug)]
 pub struct SymbolTable {
     scope: Scope,
-    // The input payload type of the module.
+    // The input payload type of the filter_map.
     rx_type: Symbol,
-    // The output payload type of the module. If it's none its identical
+    // The output payload type of the filter_map. If it's none its identical
     // to the input payload type.
     tx_type: Option<Symbol>,
     // The special symbols that will be filled in at runtime, once per filter
     // run.
     arguments: HashMap<ShortString, Symbol>,
-    // The variables and constants that are defined in the module.
+    // The variables and constants that are defined in the filter_map.
     variables: HashMap<ShortString, Symbol>,
-    // The evaluated `term` sections that are defined in the module.
+    // The evaluated `term` sections that are defined in the filter_map.
     terms: HashMap<ShortString, Symbol>,
-    // The evaluated `action` sections that are defined in the module.
+    // The evaluated `action` sections that are defined in the filter_map.
     actions: HashMap<ShortString, Symbol>,
     // All the `filter` clauses in the `apply` section, the tie actions to
     // terms.
@@ -631,14 +631,14 @@ pub(crate) struct DepsGraph<'a> {
 
 // struct Location {
 //     name: ShortString,
-//     module: ShortString,
+//     filter_map: ShortString,
 //     line: usize,
 // }
 
 impl SymbolTable {
-    pub(crate) fn new(module: &Scope) -> Self {
+    pub(crate) fn new(filter_map: &Scope) -> Self {
         SymbolTable {
-            scope: module.clone(),
+            scope: filter_map.clone(),
             rx_type: Symbol::empty(),
             tx_type: None,
             arguments: HashMap::new(),
@@ -907,7 +907,7 @@ impl SymbolTable {
             .ok_or_else(|| format!("Symbol '{}' not found", name).into())
     }
 
-    // Retrieve the symbol from the `variables` table of a module the entry
+    // Retrieve the symbol from the `variables` table of a filter_map the entry
     // Used in the compile stage to build the command stack.
 
     // panics if the symbol is not found.
@@ -1011,7 +1011,7 @@ impl SymbolTable {
 
     // retrieve all the unique arguments, variables and data-sources that are
     // referenced in the terms field of a symbol table (i.e. the terms
-    // sections in a module)
+    // sections in a filter_map)
     pub(crate) fn create_deps_graph(
         &self,
     ) -> Result<

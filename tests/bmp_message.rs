@@ -14,7 +14,7 @@ fn test_data(
     name: &str,
     source_code: &'static str,
 ) -> Result<(AcceptReject, TypeValue, Option<TypeValue>), Box<dyn std::error::Error>> {    
-    println!("Evaluate module {}...", name);
+    println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code)?;
@@ -59,7 +59,7 @@ fn test_data(
     let res = vm.exec(
         payload,
         None::<Record>,
-        // Some(module_arguments),
+        // Some(filter_map_arguments),
         None,
         mem,
     )
@@ -80,7 +80,7 @@ fn bmp_message_1() {
     let res = test_data(
         "filter-v4-only",
         r###"
-        module filter-v4-only {
+        filter-map filter-v4-only {
             define {
                 rx_tx rm_msg: BmpRouteMonitoringMessage;
             }
@@ -111,7 +111,7 @@ fn bmp_message_2() {
     let res = test_data(
         "filter-v6-only",
         r###"
-        module filter-v6-only {
+        filter-map filter-v6-only {
             define {
                 rx_tx rm_msg: BmpRouteMonitoringMessage;
             }
@@ -142,7 +142,7 @@ fn bmp_message_3() {
     let res = test_data(
         "filter-v6-only",
         r###"
-        module filter-v6-only {
+        filter-map filter-v6-only {
             define {
                 rx_tx rm_msg: BmpRouteMonitoringMessage;
             }

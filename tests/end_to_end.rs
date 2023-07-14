@@ -51,14 +51,14 @@ fn test_data(
     name: &str,
     source_code: &'static str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    trace!("Evaluate module {}...", name);
+    trace!("Evaluate filter-map {}...", name);
 
     // Type coercion doesn't work here...
-    let module_arguments =
+    let filter_map_arguments =
         vec![("extra_asn", TypeValue::from(Asn::from(65534_u32)))];
 
     let mut c = Compiler::new();
-    c.with_arguments(name, module_arguments)?;
+    c.with_arguments(name, filter_map_arguments)?;
     let roto_packs = c.build_from_compiler(source_code)?;
 
     let mut roto_pack = roto_packs.retrieve_public_as_refs(name)?;
@@ -190,13 +190,13 @@ fn test_data(
 }
 
 #[test]
-fn test_module_1() {
+fn test_filter_map_1() {
     common::init();
 
     test_data(
-        "in-module",
+        "in-filter-map",
         r###"
-            module in-module with my_asn: Asn {
+            filter-map in-filter-map with my_asn: Asn {
                 define for ext_r: ExtRoute with extra_asn: Asn {
                     // specify the types of that this filter receives
                     // and sends.
@@ -286,7 +286,7 @@ fn test_module_1() {
                    // This shouldn't be allowed, a filter does not get to
                    // decide where to write.
                    // rib-rov.set-best(route);
-                   // Doesn't work either, users can only modify the rx type of a module.
+                   // Doesn't work either, users can only modify the rx type of a filter-map.
                    // route_in_table.set(true); 
                    // This should work. The filter is allowed to modify the
                    // route that flows through it.

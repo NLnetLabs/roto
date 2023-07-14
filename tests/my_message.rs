@@ -14,15 +14,15 @@ fn test_data(
     name: &str,
     source_code: &'static str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Evaluate module {}...", name);
+    println!("Evaluate filter-map {}...", name);
 
-    let module_arguments = vec![(
+    let filter_map_arguments = vec![(
         "my_asn",
         TypeValue::from(Asn::from(65534_u32))
     )];
 
     let mut c = Compiler::new();
-    c.with_arguments(name, module_arguments)?;
+    c.with_arguments(name, filter_map_arguments)?;
     let roto_packs = c.build_from_compiler(source_code)?;
 
     println!("miscompilations");
@@ -117,12 +117,12 @@ fn test_data(
 }
 
 #[test]
-fn test_module_message_1() {
+fn test_filter_map_message_1() {
     common::init();
     test_data(
-        "my-message-module-1",
+        "my-message-filter-map-1",
         r###"
-        module my-message-module-1 with my_asn: Asn {
+        filter-map my-message-filter-map-1 with my_asn: Asn {
             define {
                 // specify the types of that this filter receives
                 // and sends.
@@ -160,12 +160,12 @@ fn test_module_message_1() {
 }
 
 #[test]
-fn test_module_message_2() {
+fn test_filter_map_message_2() {
     common::init();
     test_data(
-        "my-message-module-2",
+        "my-message-filter-map-2",
         r###"
-        module my-message-module-2 with my_asn: Asn {
+        filter-map my-message-filter-map-2 with my_asn: Asn {
             define {
                 // specify the types of that this filter receives
                 // and sends.

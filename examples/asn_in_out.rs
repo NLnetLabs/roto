@@ -56,14 +56,14 @@ fn test_data(
     println!("Used Data Sources");
     println!("{:#?}", &roto_pack.get_data_sources());
 
-    // let module_arguments = vec![(
+    // let filter_map_arguments = vec![(
     //     "extra_asn".into(),
     //     // use Roto type coercion
     //     TypeValue::from(65534_u32)
     // )];
 
     let ds_ref = roto_pack.get_data_sources();
-    // let args = rotolo.compile_arguments(name, module_arguments)?;
+    // let args = rotolo.compile_arguments(name, filter_map_arguments)?;
 
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
@@ -75,7 +75,7 @@ fn test_data(
     let res = vm.exec(
         payload,
         None::<Record>,
-        // Some(module_arguments),
+        // Some(filter_map_arguments),
         None,
         mem,
     )
@@ -91,9 +91,9 @@ fn test_data(
 
 fn main() {
     test_data(
-        "my-module",
+        "my-filter-map",
         r###"
-            module my-module {
+            filter-map my-filter-map {
                 define {
                     // specify the types of that this filter receives
                     // and sends.

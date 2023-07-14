@@ -17,7 +17,7 @@ fn test_data(
     (AcceptReject, TypeValue, std::option::Option<TypeValue>),
     Box<dyn std::error::Error>,
 > {
-    info!("Evaluate module {}...", name);
+    info!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code)?;
@@ -51,7 +51,7 @@ fn test_data(
 fn src_code(code_line: &str, asn: &str, end_accept_reject: &str) -> String {
     let pre = format!(
         r###"
-    module my-module {{
+    filter-map my-filter-map {{
         define {{
             // specify the types of that this filter receives
             // and sends.
@@ -91,14 +91,14 @@ fn src_code(code_line: &str, asn: &str, end_accept_reject: &str) -> String {
 }
 
 #[test]
-fn test_module_10() {
+fn test_filter_map_10() {
     common::init();
     let src_line = &src_code(
         "filter match peer-asn-matches matching { return accept; };",
         "AS65534",
         "reject",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 
@@ -107,14 +107,14 @@ fn test_module_10() {
 }
 
 #[test]
-fn test_module_11() {
+fn test_filter_map_11() {
     common::init();
     let src_line = &src_code(
         "filter match peer-asn-matches matching { return accept; };",
         "AS0",
         "reject",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 
@@ -123,14 +123,14 @@ fn test_module_11() {
 }
 
 #[test]
-fn test_module_12() {
+fn test_filter_map_12() {
     common::init();
     let src_line = &src_code(
         "filter match peer-asn-matches matching { return reject; };",
         "AS0",
         "accept",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 
@@ -139,14 +139,14 @@ fn test_module_12() {
 }
 
 #[test]
-fn test_module_20() {
+fn test_filter_map_20() {
     common::init();
     let src_line = &src_code(
         "filter match peer-asn-matches matching { return reject; };",
         "AS65534",
         "reject",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 
@@ -155,13 +155,13 @@ fn test_module_20() {
 }
 
 #[test]
-fn test_module_21() {
+fn test_filter_map_21() {
     let src_line = &src_code(
         "filter match peer-asn-matches matching { return reject; };",
         "AS0",
         "reject",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 
@@ -170,13 +170,13 @@ fn test_module_21() {
 }
 
 #[test]
-fn test_module_22() {
+fn test_filter_map_22() {
     let src_line = &src_code(
         "filter match peer-asn-matches matching { return reject; };",
         "AS0",
         "accept",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 
@@ -185,13 +185,13 @@ fn test_module_22() {
 }
 
 #[test]
-fn test_module_30() {
+fn test_filter_map_30() {
     let src_line = &src_code(
         "filter match peer-asn-matches matching { set-asn; };",
         "AS65534",
         "reject",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 
@@ -200,13 +200,13 @@ fn test_module_30() {
 }
 
 #[test]
-fn test_module_31() {
+fn test_filter_map_31() {
     let src_line = &src_code(
         "filter match peer-asn-matches matching { set-asn; };",
         "AS0",
         "reject",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 
@@ -215,13 +215,13 @@ fn test_module_31() {
 }
 
 #[test]
-fn test_module_32() {
+fn test_filter_map_32() {
     let src_line = &src_code(
         "filter match peer-asn-matches matching { set-asn; };",
         "AS0",
         "accept",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 
@@ -230,13 +230,13 @@ fn test_module_32() {
 }
 
 #[test]
-fn test_module_40() {
+fn test_filter_map_40() {
     let src_line = &src_code(
         "filter match peer-asn-matches matching { set-asn; return accept; };",
         "AS65534",
         "reject",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 
@@ -245,13 +245,13 @@ fn test_module_40() {
 }
 
 #[test]
-fn test_module_41() {
+fn test_filter_map_41() {
     let src_line = &src_code(
         "filter match peer-asn-matches matching { set-asn; return accept; };",
         "AS0",
         "reject",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 
@@ -260,13 +260,13 @@ fn test_module_41() {
 }
 
 #[test]
-fn test_module_42() {
+fn test_filter_map_42() {
     let src_line = &src_code(
         "filter match peer-asn-matches matching { set-asn; return accept; };",
         "AS0",
         "accept",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 
@@ -275,13 +275,13 @@ fn test_module_42() {
 }
 
 #[test]
-fn test_module_50() {
+fn test_filter_map_50() {
     let src_line = &src_code(
         "filter match peer-asn-matches matching { set-asn; return reject; };",
         "AS65534",
         "reject",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 
@@ -290,13 +290,13 @@ fn test_module_50() {
 }
 
 #[test]
-fn test_module_51() {
+fn test_filter_map_51() {
     let src_line = &src_code(
         "filter match peer-asn-matches matching { set-asn; return reject; };",
         "AS0",
         "reject",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 
@@ -306,13 +306,13 @@ fn test_module_51() {
 
 
 #[test]
-fn test_module_52() {
+fn test_filter_map_52() {
     let src_line = &src_code(
         "filter match peer-asn-matches matching { set-asn; return reject; };",
         "AS0",
         "accept",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 
@@ -321,13 +321,13 @@ fn test_module_52() {
 }
 
 #[test]
-fn test_module_60() {
+fn test_filter_map_60() {
     let src_line = &src_code(
         "filter match peer-asn-matches matching { set-asn; set-again-asn; };",
         "AS65534",
         "reject",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 
@@ -336,13 +336,13 @@ fn test_module_60() {
 }
 
 #[test]
-fn test_module_61() {
+fn test_filter_map_61() {
     let src_line = &src_code(
         "filter match peer-asn-matches matching { set-asn; set-again-asn; };",
         "AS0",
         "reject",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 
@@ -351,13 +351,13 @@ fn test_module_61() {
 }
 
 #[test]
-fn test_module_62() {
+fn test_filter_map_62() {
     let src_line = &src_code(
         "filter match peer-asn-matches matching { set-asn; set-again-asn; };",
         "AS0",
         "accept",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 
@@ -366,7 +366,7 @@ fn test_module_62() {
 }
 
 #[test]
-fn test_module_70() {
+fn test_filter_map_70() {
     let src_line = &src_code(
         r#"filter match peer-asn-matches matching { 
             set-asn; 
@@ -376,7 +376,7 @@ fn test_module_70() {
         "AS65534",
         "reject",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 
@@ -385,7 +385,7 @@ fn test_module_70() {
 }
 
 #[test]
-fn test_module_71() {
+fn test_filter_map_71() {
     let src_line = &src_code(
         r#"filter match peer-asn-matches matching { 
             set-asn; 
@@ -395,7 +395,7 @@ fn test_module_71() {
         "AS0",
         "reject",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 
@@ -404,7 +404,7 @@ fn test_module_71() {
 }
 
 #[test]
-fn test_module_72() {
+fn test_filter_map_72() {
     common::init();
 
     let src_line = &src_code(
@@ -416,7 +416,7 @@ fn test_module_72() {
         "AS0",
         "accept",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     trace!("{:?}", test_run);
     assert!(test_run.is_ok());
@@ -426,7 +426,7 @@ fn test_module_72() {
 }
 
 #[test]
-fn test_module_80() {
+fn test_filter_map_80() {
     common::init();
     let src_line = &src_code(
         r#"filter match peer-asn-matches matching { 
@@ -436,7 +436,7 @@ fn test_module_80() {
         "AS65534",
         "reject",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 
@@ -445,7 +445,7 @@ fn test_module_80() {
 }
 
 #[test]
-fn test_module_81() {
+fn test_filter_map_81() {
     common::init();
     let src_line = &src_code(
         r#"filter match peer-asn-matches matching { 
@@ -456,7 +456,7 @@ fn test_module_81() {
         "AS65534",
         "reject",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     trace!("test run {:?}", test_run);
     assert!(test_run.is_ok());
@@ -466,7 +466,7 @@ fn test_module_81() {
 }
 
 #[test]
-fn test_module_82() {
+fn test_filter_map_82() {
     common::init();
     let src_line = &src_code(
         r#"filter match peer-asn-matches matching { 
@@ -477,7 +477,7 @@ fn test_module_82() {
         "AS65534",
         "accept",
     );
-    let test_run = test_data("my-module", src_line);
+    let test_run = test_data("my-filter-map", src_line);
 
     assert!(test_run.is_ok());
 

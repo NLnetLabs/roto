@@ -55,8 +55,8 @@ impl SyntaxTree {
 
 //------------ RootExpr -----------------------------------------------------
 
-// RootExpr ::= Module |
-//     "module" Identifier ForStatement WithStatement '{' Module '}' |
+// RootExpr ::= FilterMap |
+//     "filter-map" Identifier ForStatement WithStatement '{' FilterMap '}' |
 //     "rib" Identifier 'contains' TypeIdentifier '{' RibBody '}' |
 //     "table" Identifier '{' TableBody '}' |
 //     "output-stream" Identifier '{' StreamBody '}' |
@@ -65,7 +65,7 @@ impl SyntaxTree {
 
 #[derive(Debug, Clone)]
 pub enum RootExpr {
-    Module(Box<Module>),
+    FilterMap(Box<FilterMap>),
     Rib(Rib),
     // PrefixList(PrefixListExpr),
     Table(Table),
@@ -81,17 +81,17 @@ impl RootExpr {
                 map(Rib::parse, Self::Rib),
                 map(Table::parse, Self::Table),
                 map(OutputStream::parse, Self::OutputStream),
-                map(Module::parse, |m| Self::Module(Box::new(m))),
+                map(FilterMap::parse, |m| Self::FilterMap(Box::new(m))),
                 map(RecordTypeAssignment::parse, Self::Ty),
             )),
         )(input)?;
         Ok((input, expressions))
     }
 
-    pub fn get_module(&self) -> Result<&Module, CompileError> {
+    pub fn get_filter_map(&self) -> Result<&FilterMap, CompileError> {
         match self {
-            Self::Module(m) => Ok(m),
-            _ => Err(CompileError::new("not a module".into())),
+            Self::FilterMap(m) => Ok(m),
+            _ => Err(CompileError::new("not a filter-map".into())),
         }
     }
 }
@@ -253,38 +253,38 @@ impl RecordTypeAssignment {
     }
 }
 
-//------------ Module -------------------------------------------------------
+//------------ FilterMap -------------------------------------------------------
 
-// Module ::= "module" Identifier "for" Identifier WithStatement
-//              WithStatement '{' ModuleBody '}'
+// FilterMap ::= "filter-map" Identifier "for" Identifier WithStatement
+//              WithStatement '{' FilterMapBody '}'
 
 #[derive(Clone, Debug)]
-pub struct Module {
+pub struct FilterMap {
     pub ident: Identifier,
     pub for_ident: Option<TypeIdentField>,
     pub with_kv: Vec<TypeIdentField>,
-    pub body: ModuleBody,
+    pub body: FilterMapBody,
 }
 
-impl Module {
+impl FilterMap {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, (ident, for_ident, with_kv, body)) = context(
-            "module definition",
+            "filter-map definition",
             tuple((
                 context(
-                    "module name",
+                    "filter-map name",
                     preceded(
-                        opt_ws(tag("module")),
+                        opt_ws(tag("filter-map")),
                         opt_ws(Identifier::parse),
                     ),
                 ),
                 for_statement,
                 with_statement,
                 context(
-                    "module body",
+                    "filter-map body",
                     delimited(
                         opt_ws(char('{')),
-                        cut(ModuleBody::parse),
+                        cut(FilterMapBody::parse),
                         opt_ws(char('}')),
                     ),
                 ),
@@ -294,7 +294,7 @@ impl Module {
 
         Ok((
             input,
-            Module {
+            FilterMap {
                 ident,
                 body,
                 for_ident,
@@ -304,22 +304,22 @@ impl Module {
     }
 }
 
-//------------ ModuleBody ---------------------------------------------------
+//------------ FilterMapBody ---------------------------------------------------
 
-// ModuleBody ::= Define ModuleExpr+ Apply
+// FilterMapBody ::= Define FilterMapExpr+ Apply
 
 #[derive(Clone, Debug)]
-pub struct ModuleBody {
+pub struct FilterMapBody {
     pub define: Define,
-    pub expressions: Vec<ModuleExpr>,
+    pub expressions: Vec<FilterMapExpr>,
     pub apply: Option<Apply>,
 }
 
-impl ModuleBody {
+impl FilterMapBody {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, (define, expressions, apply)) = permutation((
             Define::parse,
-            context("module expressions", many1(ModuleExpr::parse)),
+            context("filter-map expressions", many1(FilterMapExpr::parse)),
             opt(Apply::parse),
         ))(input)?;
 
@@ -335,28 +335,28 @@ impl ModuleBody {
 }
 
 #[derive(Debug, Clone)]
-pub enum ModuleExpr {
+pub enum FilterMapExpr {
     Term(Term),
     Action(Action),
     // Empty, // Import(ImportBody),
 }
 
-//------------ ModuleExpr ----------------------------------------------------
+//------------ FilterMapExpr ----------------------------------------------------
 //
-// ModuleExpr ::= Define |
+// FilterMapExpr ::= Define |
 //   Term+ |
 //   Action+ |
 //   'import' ForStatement '{' ImportBody '}'
 
-impl ModuleExpr {
+impl FilterMapExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, expressions) = context(
-            "module expression",
+            "filter-map expression",
             alt((
                 map(Term::parse, Self::Term),
                 map(Action::parse, Self::Action),
                 // map(multispace1, |_| Self::Empty),
-                // map(ImportBody::parse, ModuleBody::Import),
+                // map(ImportBody::parse, FilterMapBody::Import),
             )),
         )(input)?;
         Ok((input, expressions))
@@ -1193,7 +1193,7 @@ impl Identifier {
                     tag("in"),
                     tag("not"),
                     tag("define"),
-                    tag("module"),
+                    tag("filter-map"),
                     tag("import"),
                     tag("term"),
                     tag("filter"),

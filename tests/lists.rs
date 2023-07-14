@@ -50,7 +50,7 @@ impl std::fmt::Display for RibValue {
 fn src_code(code_line: &str, end_accept_reject: &str) -> String {
     let pre = format!(
         r###"
-        module in-module {{
+        filter-map in-filter-map {{
             define {{
                 rx_tx msg: BmpMsg;
                 a = 100;
@@ -88,7 +88,7 @@ fn test_data(
     (AcceptReject, TypeValue, Option<TypeValue>),
     Box<dyn std::error::Error>,
 > {
-    trace!("Evaluate module {}...", name);
+    trace!("Evaluate filter-map {}...", name);
 
     let c = Compiler::new();
     let roto_packs = c.build_from_compiler(source_code)?;
@@ -140,7 +140,7 @@ fn test_data(
 fn test_list_compare_1() {
     common::init();
     let src_line = src_code("msg.type in [2,3,4,5]; // Peer Down", "reject");
-    let test_run = test_data("in-module", &src_line);
+    let test_run = test_data("in-filter-map", &src_line);
 
     let (ar, _rx, _tx) = test_run.unwrap();
     assert_eq!(ar, AcceptReject::Accept);
@@ -151,7 +151,7 @@ fn test_list_compare_2() {
     common::init();
     let src_line =
         src_code("msg.type in [1,2,3,4,5]; // Peer Down", "reject");
-    let test_run = test_data("in-module", &src_line);
+    let test_run = test_data("in-filter-map", &src_line);
 
     let (ar, _rx, _tx) = test_run.unwrap();
     assert_eq!(ar, AcceptReject::Reject);
@@ -162,7 +162,7 @@ fn test_list_compare_3() {
     common::init();
     let src_line =
         src_code("msg.type in [1,2,3,4,5]; // Peer Down", "reject");
-    let test_run = test_data("in-module", &src_line);
+    let test_run = test_data("in-filter-map", &src_line);
 
     let (ar, _rx, _tx) = test_run.unwrap();
     assert_eq!(ar, AcceptReject::Reject);
@@ -173,7 +173,7 @@ fn test_list_compare_4() {
     common::init();
     let src_line =
         src_code("msg.type in [2,3,4,5,1,9]; // Peer Down", "reject");
-    let test_run = test_data("in-module", &src_line);
+    let test_run = test_data("in-filter-map", &src_line);
 
     let (ar, _rx, _tx) = test_run.unwrap();
     assert_eq!(ar, AcceptReject::Reject);
@@ -184,7 +184,7 @@ fn test_list_compare_5() {
     common::init();
     let src_line =
         src_code(r#""stringetje" in [2,3,4,5,1]; // Peer Down"#, "reject");
-    let test_run = test_data("in-module", &src_line);
+    let test_run = test_data("in-filter-map", &src_line);
 
     assert!(test_run.is_err());
 }
@@ -194,7 +194,7 @@ fn test_list_compare_6() {
     common::init();
     let src_line =
         src_code(r#"msg.type not in [2,3,4,5,1]; // Peer Down"#, "reject");
-    let test_run = test_data("in-module", &src_line);
+    let test_run = test_data("in-filter-map", &src_line);
     let (ar, _rx, _tx) = test_run.unwrap();
     assert_eq!(ar, AcceptReject::Reject);
 }
@@ -203,7 +203,7 @@ fn test_list_compare_6() {
 fn test_list_compare_7() {
     common::init();
     let src_line = src_code(r#"a in [2,3,4,5,1]; // Peer Down"#, "reject");
-    let test_run = test_data("in-module", &src_line);
+    let test_run = test_data("in-filter-map", &src_line);
     let (ar, _rx, _tx) = test_run.unwrap();
     assert_eq!(ar, AcceptReject::Accept);
 }
@@ -212,7 +212,7 @@ fn test_list_compare_7() {
 fn test_list_compare_8() {
     common::init();
     let src_line = src_code(r#"100 in [2,3,4,5,1]; // Peer Down"#, "reject");
-    let test_run = test_data("in-module", &src_line);
+    let test_run = test_data("in-filter-map", &src_line);
     let (ar, _rx, _tx) = test_run.unwrap();
     assert_eq!(ar, AcceptReject::Accept);
 }
@@ -221,7 +221,7 @@ fn test_list_compare_8() {
 fn test_list_compare_9() {
     common::init();
     let src_line = src_code(r#"100 in b; // Peer Down"#, "reject");
-    let test_run = test_data("in-module", &src_line);
+    let test_run = test_data("in-filter-map", &src_line);
     let (ar, _rx, _tx) = test_run.unwrap();
     assert_eq!(ar, AcceptReject::Accept);
 }
@@ -230,7 +230,7 @@ fn test_list_compare_9() {
 fn test_list_compare_10() {
     common::init();
     let src_line = src_code(r#"100 in [2,3,4,a]; // Peer Down"#, "reject");
-    let test_run = test_data("in-module", &src_line);
+    let test_run = test_data("in-filter-map", &src_line);
     let (ar, _rx, _tx) = test_run.unwrap();
     assert_eq!(ar, AcceptReject::Reject);
 }
@@ -239,7 +239,7 @@ fn test_list_compare_10() {
 fn test_list_compare_11() {
     common::init();
     let src_line = src_code(r#"100 in [2,3,4,c]; // Peer Down"#, "reject");
-    let test_run = test_data("in-module", &src_line);
+    let test_run = test_data("in-filter-map", &src_line);
     let (ar, _rx, _tx) = test_run.unwrap();
     assert_eq!(ar, AcceptReject::Accept);
 }

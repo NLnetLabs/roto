@@ -76,11 +76,11 @@ impl<'a> TestCompiler<'a> {
 }
 
 #[test]
-fn test_module_garbage_1() {
+fn test_filter_map_garbage_1() {
     let _parsed_data = TestCompiler::create(
         "garbage_1",
         r###"
-    module garbage {
+    filter-map garbage {
         ;dljhg;sdlkjgsdf
         d
         dg
@@ -94,11 +94,11 @@ fn test_module_garbage_1() {
 }
 
 #[test]
-fn test_module_00() {
+fn test_filter_map_00() {
     let mut _compiler = TestCompiler::create(
-        "module_1",
+        "filter-map_1",
         r###"
-        module in-module {
+        filter-map in-filter-map {
             define {
                 rx_tx route: Route;
             }
@@ -117,11 +117,11 @@ fn test_module_00() {
 }
 
 #[test]
-fn test_module_20() {
+fn test_filter_map_20() {
     let mut _compiler = TestCompiler::create(
-        "module_1",
+        "filter-map_1",
         r###"
-        module in-module {
+        filter-map in-filter-map {
             define {
                 rx_tx route: MyRoute;
             }
@@ -145,11 +145,11 @@ fn test_module_20() {
 }
 
 #[test]
-fn test_module_30() {
+fn test_filter_map_30() {
     let _compiler = TestCompiler::create(
-        "module_1",
+        "filter-map_1",
         r###"
-        module in-module {
+        filter-map in-filter-map {
             define {
                 rx route: ExtRoute;
                 tx ext_route: ExtRoute;
@@ -174,11 +174,11 @@ fn test_module_30() {
 }
 
 #[test]
-fn test_module_31() {
+fn test_filter_map_31() {
     let _compiler = TestCompiler::create(
-        "module_1",
+        "filter-map_1",
         r###"
-        module module_1 {
+        filter-map filter-map_1 {
             define {
                 // specify the types of that this filter receives
                 // and sends.
@@ -198,7 +198,7 @@ fn test_module_31() {
             }
 
             apply {
-                use my-module;
+                use my-filter-map;
                 filter match peer-asn-matches matching { set-asn; return accept; };
                 return reject;
             }
@@ -215,11 +215,11 @@ fn test_module_31() {
 }
 
 #[test]
-fn test_module_32() {
+fn test_filter_map_32() {
     let _compiler = TestCompiler::create(
-        "module_1",
+        "filter-map_1",
         r###"
-        module module_1 {
+        filter-map filter-map_1 {
             define {
                 // specify the types of that this filter receives
                 // and sends.
@@ -239,7 +239,7 @@ fn test_module_32() {
             }
 
             apply {
-                use my-module;
+                use my-filter-map;
                 filter match peer-asn-matches matching { set-asn; return accept; };
                 return reject;
             }
@@ -255,11 +255,11 @@ fn test_module_32() {
 }
 
 #[test]
-fn test_module_33() {
+fn test_filter_map_33() {
     let _compiler = TestCompiler::create(
-        "module_1",
+        "filter-map_1",
         r###"
-        module module_1 {
+        filter-map filter-map_1 {
             define {
                 // specify the types of that this filter receives
                 // and sends.
@@ -279,7 +279,7 @@ fn test_module_33() {
             }
 
             apply {
-                use my-module;
+                use my-filter-map;
                 filter match peer-asn-matches matching { set-asn; return accept; };
                 return reject;
             }
@@ -295,11 +295,11 @@ fn test_module_33() {
 }
 
 #[test]
-fn test_module_34() {
+fn test_filter_map_34() {
     let _compiler = TestCompiler::create(
-        "module_34",
+        "filter-map_34",
         r###"
-        module module_1 {
+        filter-map filter-map_1 {
             define {
                 // specify the types of that this filter receives
                 // and sends.
@@ -320,7 +320,7 @@ fn test_module_34() {
             }
 
             apply {
-                use my-module;
+                use my-filter-map;
                 filter match peer-asn-matches matching { set-asn; return accept; };
                 return reject;
             }

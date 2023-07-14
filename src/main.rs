@@ -53,8 +53,8 @@ fn main() {
     println!("{:#?}", r);
     assert!(r.is_ok());
 
-    // let r = Module::parse(r###"
-    //     module my_module for rib-in with bla: Blaffer {
+    // let r = FilterMap::parse(r###"
+    //     filter-map my_filter_map for rib-in with bla: Blaffer {
     //         define { use bla; }
     //         term filter2 {
     //             use bla;
@@ -93,7 +93,7 @@ fn main() {
 
     test_data("empty-rib", "rib my_rib {}\n// comment\n", false);
 
-    test_data("crab-rib", "rib [] ribribribmodule\n", false);
+    test_data("crab-rib", "rib [] ribribribfilter_map\n", false);
 
     test_data(
         "valid-rib-with-comment",
@@ -148,9 +148,9 @@ fn main() {
     );
 
     test_data(
-        "module_1",
+        "filter-map-1",
         r###"
-        module in-module with my_asn: Asn {
+        filter-map filter-map-1 with my_asn: Asn {
             define for ext_r: ExtRoute with extra_asn: Asn {
                 // specify the types of that this filter receives
                 // and sends.
@@ -230,10 +230,14 @@ fn main() {
     );
 
     test_data(
-        "module-more-with",
+        "filter-map-more-with",
         r###"
-        module my_module for route_in: Route with bla: Blaffer {
-            define { use rib bla; }
+        filter-map filter-map-more-with for route_in: Route with bla: Blaffer {
+            define { 
+                rx route: Route;
+                tx ext_route: Route;
+                use rib bla; 
+            }
             term filter2 {
                 use bla;
                 match { blaffer.blaf.contains(something); }
@@ -247,23 +251,29 @@ fn main() {
     );
 
     test_data(
-        "module_2",
+        "filter_map_2",
         r###"
-            module my_module for route_in: Route with bla: Blaffer {
-               define { use rib bla; }
-               term filter3 {}
-            }
-            // comment
-            rib unrib contains Blaffer { blaffer: Blaf }
+            filter-map filter_map_2 for route_in: Route with bla: Blaffer {
+                define { 
+                    rx route: Route;
+                    tx ext_route: Route;
+                    use rib bla; 
+                }
+                term filter3 {}
+                }
+                // comment
+                rib unrib contains Blaffer { blaffer: Blaf }
         "###,
         true,
     );
 
     test_data(
-        "module_with_assignments_1",
+        "filter-map_with_assignments_1",
         r###"
-            module my_module for route_in: Route with bla: Blaffer {
+            filter-map filter-map_with_assignments_1 for route_in: Route with bla: Blaffer {
                define {
+                   rx route: Route;
+                   tx ext_route: Route;
                    use rib bla;
                    bla = blaf(Bla);
                }
@@ -281,10 +291,12 @@ fn main() {
     );
 
     test_data(
-        "module_with_assignments_2",
+        "filter-map_with_assignments_2",
         r###"
-            module my_module for route_in: Route with bla: Blaffer {
+            filter-map filter-map_with_assignments_2 for route_in: Route with bla: Blaffer {
                define {
+                   rx route: Route;
+                   tx ext_route: Route;
                    use rib bla;
                    bla = bla2(Bla);
                }
@@ -304,10 +316,12 @@ fn main() {
     );
 
     test_data(
-        "module_with_assignments_3",
+        "filter_map_with_assignments_3",
         r###"
-            module my_module for route_in: Route with bla: Blaffer {
+            filter-map filter-map_with_assignments_3 for route_in: Route with bla: Blaffer {
                define {
+                   rx route: Route;
+                   tx ext_route: Route;
                    use rib bla;
                    bla = bla3(Bla);
                }
@@ -327,9 +341,9 @@ fn main() {
     );
 
     test_data(
-        "module_with_apply_1",
+        "filter_map_with_apply_1",
         r###"
-            module my_module for route_in: Route with bla: Blaffer {
+            filter-map filter_map_with_apply_1 for route_in: Route with bla: Blaffer {
                define {
                     rx route: StreamRoute;
                     tx ext_route: ExtRoute;
@@ -338,9 +352,9 @@ fn main() {
                }
             
                term blaffer_filter {
-                   match {
+                    match {
                         blaffer.waf() > gruf;
-                        route.prefix in 0.0.0.0/0 prefix-length-range /12-/16;
+                        // route.prefix in 0.0.0.0/0 prefix-length-range /12-/16;
                     }
                }
                
@@ -360,10 +374,12 @@ fn main() {
     );
 
     test_data(
-        "module_with_apply_2",
+        "filter_map_with_apply_2",
         r###"
-            module my_module for route_in: Route with bla: Blaffer {
+            filter-map filter_map_with_apply_2 for route_in: Route with bla: Blaffer {
                define {
+                   rx route: Route;
+                   tx ext_route: Route;
                    use rib bla;
                    bla = bla();
                }
@@ -393,17 +409,19 @@ fn main() {
     );
 
     test_data(
-        "module_with_nested_match_expressions",
+        "filter-map_with_nested_match_expressions",
         r###"
-            module my_module for route_in: Route with bla: Blaffer {
+            filter-map filter-map_with_nested_match_expressions for route_in: Route with bla: Blaffer {
                define {
+                   rx route: Route;
+                   tx ext_route: Route;
                    use rib bla;
                    bla = bla();
                }
             
                term blaffer_filter {
                    match { 
-                        // blaffer.blaf.contains(something,"somewhat") > blaf();
+                        blaffer.blaf.contains(something,"somewhat") > blaf();
                         ( bla.bla() in my_set ) || ( bla.bla() in my_other_set );
                    }
                }

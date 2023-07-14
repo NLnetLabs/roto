@@ -49,7 +49,7 @@ impl std::fmt::Display for RibValue {
 fn src_code(code_line: &str, end_accept_reject: &str) -> String {
     let pre = format!(
         r###"
-        module in-module {{
+        filter-map in-filter-map {{
             define {{
                 rx_tx msg: BmpMsg;
                 a = [1,2,3];
@@ -85,7 +85,7 @@ fn test_data(
     (AcceptReject, TypeValue, Option<TypeValue>),
     Box<dyn std::error::Error>,
 > {
-    println!("Evaluate module {}...", name);
+    println!("Evaluate filter-map {}...", name);
 
     let c = Compiler::new();
     let roto_packs = c.build_from_compiler(source_code)?;
@@ -137,7 +137,7 @@ fn test_data(
 fn test_eq_conversion_1() {
     common::init();
     let src_line = src_code(r#"1 in a;"#, "reject");
-    let test_run = test_data("in-module", &src_line);
+    let test_run = test_data("in-filter-map", &src_line);
 
     let (ar, _rx, _tx) = test_run.unwrap();
     assert_eq!(ar, AcceptReject::Reject);
@@ -147,7 +147,7 @@ fn test_eq_conversion_1() {
 fn test_eq_conversion_2() {
     common::init();
     let src_line = src_code(r#""b" in a;"#, "reject");
-    let test_run = test_data("in-module", &src_line);
+    let test_run = test_data("in-filter-map", &src_line);
 
     let err = "Eval error: IntegerLiteral cannot be converted into String".to_string();
     let str = test_run.unwrap_err().to_string();
@@ -158,7 +158,7 @@ fn test_eq_conversion_2() {
 fn test_eq_conversion_3() {
     common::init();
     let src_line = src_code(r#"32768 in a;"#, "reject");
-    let test_run = test_data("in-module", &src_line);
+    let test_run = test_data("in-filter-map", &src_line);
 
     let (ar, _rx, _tx) = test_run.unwrap();
     assert_eq!(ar, AcceptReject::Accept);

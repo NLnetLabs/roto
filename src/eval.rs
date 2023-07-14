@@ -32,13 +32,13 @@ impl<'a> ast::SyntaxTree {
         &'a self,
         symbols: GlobalSymbolTable,
     ) -> Result<(), CompileError> {
-        let (modules, global): (Vec<_>, Vec<_>) = self
+        let (filter_maps, global): (Vec<_>, Vec<_>) = self
             .expressions
             .iter()
-            .partition(|e| matches!(e, ast::RootExpr::Module(_)));
+            .partition(|e| matches!(e, ast::RootExpr::FilterMap(_)));
 
-        // First, evaluate all the non-module expressions, so that they are
-        // available to the modules.
+        // First, evaluate all the non-filter-map expressions, so that they are
+        // available to the filter_maps.
 
         // If the global symbol table does not exist, create it.
         let mut symbols_mut = symbols.borrow_mut();
@@ -68,35 +68,35 @@ impl<'a> ast::SyntaxTree {
             };
         }
 
-        // For each module, create a new symbol table if it does not exist.
-        for module in &modules {
-            let module_name = &module.get_module()?.ident.ident;
-            let module_scope = symbols::Scope::Module(module_name.clone());
+        // For each filter_map, create a new symbol table if it does not exist.
+        for filter_map in &filter_maps {
+            let filter_map_name = &filter_map.get_filter_map()?.ident.ident;
+            let filter_map_scope = symbols::Scope::FilterMap(filter_map_name.clone());
 
             if let std::collections::hash_map::Entry::Vacant(e) =
-                symbols_mut.entry(module_scope.clone())
+                symbols_mut.entry(filter_map_scope.clone())
             {
-                e.insert(symbols::SymbolTable::new(&Scope::Module(
-                    module_name.clone(),
+                e.insert(symbols::SymbolTable::new(&Scope::FilterMap(
+                    filter_map_name.clone(),
                 )));
                 symbols_mut.get_mut(&global_scope).unwrap()
             } else {
-                symbols_mut.get_mut(&module_scope).unwrap()
+                symbols_mut.get_mut(&filter_map_scope).unwrap()
             };
         }
         drop(symbols_mut);
 
-        // Now, evaluate all the define sections in modules, so that modules
+        // Now, evaluate all the define sections in modules, so that filter_maps
         // can use each other's types and variables.
-        for module in &modules {
-            if let ast::RootExpr::Module(m) = module {
+        for filter_map in &filter_maps {
+            if let ast::RootExpr::FilterMap(m) = filter_map {
                 m.eval_define_header(symbols.clone())?;
             }
         }
 
-        // Finally, evaluate all the modules themselves.
-        for module in &modules {
-            if let ast::RootExpr::Module(m) = module {
+        // Finally, evaluate all the filter_maps themselves.
+        for filter_map in &filter_maps {
+            if let ast::RootExpr::FilterMap(m) = filter_map {
                 m.eval(symbols.clone())?;
             }
         }
@@ -340,12 +340,12 @@ impl<'a> ast::RecordTypeIdentifier {
     }
 }
 
-impl ast::Module {
+impl ast::FilterMap {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
     ) -> Result<(), CompileError> {
-        let module_scope = symbols::Scope::Module(self.ident.ident.clone());
+        let filter_map_scope = symbols::Scope::FilterMap(self.ident.ident.clone());
         // Check the `with` clause for additional arguments.
         let with_kv: Vec<_> = self.with_kv.clone();
         let _with_ty = with_kv
@@ -356,37 +356,37 @@ impl ast::Module {
                     ty,
                     symbols::SymbolKind::Constant,
                     symbols.clone(),
-                    &symbols::Scope::Module(self.ident.ident.clone()),
+                    &symbols::Scope::FilterMap(self.ident.ident.clone()),
                 )
             })
             .collect::<Vec<_>>();
 
         // first, parse the define section, so that other sections in this
-        // module can use the defined variables.
+        // filter_map can use the defined variables.
         self.body
             .define
-            .eval(symbols.clone(), module_scope.clone())?;
+            .eval(symbols.clone(), filter_map_scope.clone())?;
 
         let (terms, actions): (Vec<_>, Vec<_>) = self
             .body
             .expressions
             .iter()
-            .partition(|s| matches!(s, ast::ModuleExpr::Term(_t)));
+            .partition(|s| matches!(s, ast::FilterMapExpr::Term(_t)));
 
         for term in terms.into_iter() {
-            if let ast::ModuleExpr::Term(t) = term {
-                t.eval(symbols.clone(), module_scope.clone())?;
+            if let ast::FilterMapExpr::Term(t) = term {
+                t.eval(symbols.clone(), filter_map_scope.clone())?;
             }
         }
 
         for action in actions.into_iter() {
-            if let ast::ModuleExpr::Action(a) = action {
-                a.eval(symbols.clone(), module_scope.clone())?;
+            if let ast::FilterMapExpr::Action(a) = action {
+                a.eval(symbols.clone(), filter_map_scope.clone())?;
             }
         }
 
         if let Some(apply) = &self.body.apply {
-            apply.eval(symbols, module_scope)?;
+            apply.eval(symbols, filter_map_scope)?;
         }
 
         Ok(())
@@ -400,7 +400,7 @@ impl ast::Module {
         let with_kv: Vec<_> = self.body.define.with_kv.clone();
 
         // The `with` clause of the `define` section acts as an extra
-        // argument to the whole module, that can be used as a extra
+        // argument to the whole filter_map, that can be used as a extra
         // read-only payload.
         let _with_ty = with_kv
             .into_iter()
@@ -410,7 +410,7 @@ impl ast::Module {
                     ty,
                     symbols::SymbolKind::Argument,
                     symbols.clone(),
-                    &symbols::Scope::Module(self.ident.ident.clone()),
+                    &symbols::Scope::FilterMap(self.ident.ident.clone()),
                 )
             })
             .collect::<Vec<_>>();
@@ -450,7 +450,7 @@ impl ast::Define {
 
         // The default output-argument is defined by the 'tx' keyword in the
         // 'define' section. This is the argument that will be created by
-        // this filter-module on each run. We start with an empty record of
+        // this filter-filter-map on each run. We start with an empty record of
         // the specified type.
         let tx_kind;
         match &self.body.rx_tx_type {
@@ -638,16 +638,16 @@ impl ast::Apply {
         scope: symbols::Scope,
     ) -> Result<(), CompileError> {
         let mut _symbols = symbols.borrow_mut();
-        let _module_symbols = _symbols.get_mut(&scope).ok_or_else(|| {
-            format!("no symbols found for module {}", scope)
+        let _filter_map_symbols = _symbols.get_mut(&scope).ok_or_else(|| {
+            format!("No symbols found for filter-map {}", scope)
         })?;
 
-        // There can only be one `apply` section in a modules, so we can set
-        // the default action from the apply section for the whole module.
+        // There can only be one `apply` section in a filter_maps, so we can set
+        // the default action from the apply section for the whole filter_map.
         if let Some(accept_reject) = self.body.accept_reject {
-            _module_symbols.set_default_action(accept_reject);
+            _filter_map_symbols.set_default_action(accept_reject);
         } else {
-            _module_symbols.set_default_action(AcceptReject::Accept);
+            _filter_map_symbols.set_default_action(AcceptReject::Accept);
         }
 
         drop(_symbols);
@@ -668,8 +668,8 @@ impl ast::ApplyScope {
         scope: symbols::Scope,
     ) -> Result<symbols::Symbol, CompileError> {
         let _symbols = symbols.borrow();
-        let module_symbols = _symbols.get(&scope).ok_or_else(|| {
-            format!("no symbols found for module {}", scope)
+        let filter_map_symbols = _symbols.get(&scope).ok_or_else(|| {
+            format!("No symbols found for filter-map {}", scope)
         })?;
 
         // not doing anything with the actual ApplyScope (the use statement),
@@ -677,7 +677,7 @@ impl ast::ApplyScope {
         let _s_name = self.scope.clone().map(|s| s.ident);
 
         let term = self.filter_ident.eval(symbols.clone(), scope.clone())?;
-        let (_ty, token) = module_symbols.get_term(&term.get_name())?;
+        let (_ty, token) = filter_map_symbols.get_term(&term.get_name())?;
 
         let mut args_vec = vec![];
         for action in &self.actions {
@@ -689,7 +689,7 @@ impl ast::ApplyScope {
                     .get_name();
 
                 let (_ty, token) =
-                    module_symbols.get_action(&match_action_name)?;
+                    filter_map_symbols.get_action(&match_action_name)?;
 
                 let s = symbols::Symbol::new(
                     match_action_name,
@@ -734,7 +734,7 @@ impl ast::ApplyScope {
             },
             // The AcceptReject value from the Apply section does not end up
             // here, instead it lives on the ApplyBody, and it is saved in the
-            // symboltable of the module.
+            // symboltable of the filter_map.
             TypeDef::Unknown,
             args_vec,
             Some(token),
@@ -863,7 +863,7 @@ impl ast::ComputeExpr {
                 ast::AccessExpr::FieldAccessExpr(field_access) => {
                     trace!("FA symbol (s) {:#?}", s);
                     trace!(
-                        "all symbols in module table {:#?}",
+                        "all symbols in filter-map table {:#?}",
                         symbols.borrow().get(&scope)
                     );
                     let arg_s = field_access.eval(ty)?;
@@ -1009,7 +1009,7 @@ impl ast::AccessReceiver {
                 }
             }
 
-            // is it an module-level argument?
+            // is it an filter-map-level argument?
             if let Some(Ok(arg)) = _symbols
                 .borrow()
                 .get(&scope)
@@ -1664,9 +1664,9 @@ fn check_type_identifier(
     }
 
     match &scope {
-        symbols::Scope::Module(module) => {
+        symbols::Scope::FilterMap(filter_map) => {
             // is it in the symbol table for this scope?
-            let module_ty = symbols
+            let filter_map_ty = symbols
                 .get(scope)
                 .and_then(|gt| {
                     gt.get_variable(&ty.ident)
@@ -1674,11 +1674,11 @@ fn check_type_identifier(
                         .map(|s| (s.get_type(), s.get_kind()))
                 })
                 .ok_or(format!(
-                    "No type named '{}' found in module '{}'",
-                    ty.ident, module
+                    "No type named '{}' found in filter-map '{}'",
+                    ty.ident, filter_map
                 ));
 
-            if let Ok(ty) = module_ty {
+            if let Ok(ty) = filter_map_ty {
                 if ty.1 == symbols::SymbolKind::AnonymousType
                     || ty.1 == symbols::SymbolKind::NamedType
                 {
@@ -1704,13 +1704,13 @@ fn check_type_identifier(
     .into())
 }
 
-// This function checks if a variable exists in the scope of the module, but
+// This function checks if a variable exists in the scope of the filter_map, but
 // not in the global scope (variables in the global scope are not allowed).
 // The variables can be of form:
 // <var_name>
 // <var of type Record>[.<field>]+
 //
-// In the last case the whole form may live in the module scope as an
+// In the last case the whole form may live in the filter_map scope as an
 // anonymous type (deducted from user-defined record-types), but in the case
 // of a primitive type they live in the user-defined record-type itself.
 //
@@ -1732,7 +1732,7 @@ fn get_props_for_scoped_variable(
     let search_str = fields.join(".");
 
     match &scope {
-        symbols::Scope::Module(module) => {
+        symbols::Scope::FilterMap(filter_map) => {
             // 1. is the whole dotted name in the symbol table for this scope?
             return symbols
                 .get(&symbols::Scope::Global)
@@ -1742,8 +1742,8 @@ fn get_props_for_scoped_variable(
                             |s| s.get_props()
                             .unwrap_or_else(
                             |_| panic!(
-                                "No token found for variable '{}' in module '{}'",
-                                search_str, module
+                                "No token found for variable '{}' in filter-map '{}'",
+                                search_str, filter_map
                             )
                         )).ok()
                 })
@@ -1755,8 +1755,8 @@ fn get_props_for_scoped_variable(
                             .get(&scope).and_then(|gt|
                             gt.get_symbol(first_field_name) ).map(|s| s.get_props())
                             .ok_or_else(|| format!(
-                                "___ No variable named '{}' found in module '{}'",
-                                first_field_name, module
+                                "___ No variable named '{}' found in filter-map '{}'",
+                                first_field_name, filter_map
                             ))?;
 
                         let var_ty_to = var_ty_to?;
@@ -1771,8 +1771,8 @@ fn get_props_for_scoped_variable(
                             .1.has_fields_chain(&fields[1..])
                             .map_err(|err| {
                             trace!(
-                                "{} on field '{}' for variable '{}' found in module '{}'",
-                                err, fields[1], fields[0].ident, module
+                                "{} on field '{}' for variable '{}' found in filter-map '{}'",
+                                err, fields[1], fields[0].ident, filter_map
                             );
                             err
                         })?;
@@ -1786,7 +1786,7 @@ fn get_props_for_scoped_variable(
                 );
         }
         // There is NO global scope for variables. All vars are always
-        // in the namespace of a module.
+        // in the namespace of a filter_map.
         symbols::Scope::Global => Err(format!(
             "=== No variable named '{}' found in global scope.",
             fields.join(".").as_str()
@@ -1805,20 +1805,20 @@ fn _declare_variable(
     let _symbols = symbols.clone();
 
     // There is NO global scope for variables.  All vars are all local to a
-    // module.
+    // filter_map.
 
     match &scope {
-        symbols::Scope::Module(module) => {
+        symbols::Scope::FilterMap(filter_map) => {
             // Does the supplied type exist in our scope?
             let ty = check_type_identifier(type_ident.ty, _symbols, scope)?;
 
             // Apparently, we have a type.  Let's add it to the symbol table.
             let mut _symbols = symbols.borrow_mut();
-            let module = _symbols
+            let filter_map = _symbols
                 .get_mut(scope)
-                .ok_or(format!("No module named '{}' found.", module))?;
+                .ok_or(format!("No filter-map named '{}' found.", filter_map))?;
 
-            module.add_variable(
+            filter_map.add_variable(
                 type_ident.field_name.ident,
                 Some(name),
                 kind,
@@ -1847,20 +1847,20 @@ fn declare_argument(
     let _symbols = symbols.clone();
 
     // There is NO global scope for variables.  All vars are all local to a
-    // module.
+    // filter_map.
 
     match &scope {
-        symbols::Scope::Module(module) => {
+        symbols::Scope::FilterMap(filter_map) => {
             // Does the supplied type exist in our scope?
             let ty = check_type_identifier(type_ident.ty, _symbols, scope)?;
 
             // Apparently, we have a type.  Let's add it to the symbol table.
             let mut _symbols = symbols.borrow_mut();
-            let module = _symbols
+            let filter_map = _symbols
                 .get_mut(scope)
-                .ok_or(format!("No module named '{}' found.", module))?;
+                .ok_or(format!("No filter-map named '{}' found.", filter_map))?;
 
-            module.add_argument(
+            filter_map.add_argument(
                 type_ident.field_name.ident,
                 Some(name),
                 kind,
@@ -1892,14 +1892,14 @@ fn declare_variable_from_symbol(
     let _symbols = symbols.clone();
 
     // There is NO global scope for variables.  All vars are all local to a
-    // module.
+    // filter_map.
     match &scope {
-        symbols::Scope::Module(module) => {
+        symbols::Scope::FilterMap(filter_map) => {
 
             let mut _symbols = symbols.borrow_mut();
-            let module = _symbols
+            let filter_map = _symbols
                 .get_mut(scope)
-                .ok_or(format!("No module named '{}' found.", module))?;
+                .ok_or(format!("No filter-map named '{}' found.", filter_map))?;
 
             match arg_symbol.has_unknown_value() {
                 // This is a variable, create an empty value on the symbol.
@@ -1927,7 +1927,7 @@ fn declare_variable_from_symbol(
                         None,
                     );
 
-                    module.move_var_or_const_into(
+                    filter_map.move_var_or_const_into(
                         symbol
                     )
                 }
@@ -1941,7 +1941,7 @@ fn declare_variable_from_symbol(
                         vec![],
                         Token::Constant(None),
                     );
-                    module.move_var_or_const_into(
+                    filter_map.move_var_or_const_into(
                         symbol
                     )
                 }
@@ -1965,14 +1965,14 @@ fn declare_variable_from_symbol(
 //     scope: &symbols::Scope,
 // ) -> Result<(), CompileError> {
 //     // There is NO global scope for variables.  All vars are all local to a
-//     // module.
+//     // filter_map.
 //     match &scope {
-//         symbols::Scope::Module(module) => {
+//         symbols::Scope::FilterMap(filter_map) => {
 
 //             let mut _symbols = symbols.borrow_mut();
-//             let module = _symbols
+//             let filter_map = _symbols
 //                 .get_mut(scope)
-//                 .ok_or(format!("No module named '{}' found.", module))?;
+//                 .ok_or(format!(No filter-map named '{}' found.", filter_map))?;
 
 //             let name = arg_symbol.get_name();
 //             let symbol = symbols::Symbol::new_with_value(
@@ -1983,7 +1983,7 @@ fn declare_variable_from_symbol(
 //                 Token::Constant,
 //             );
 
-//             module.move_symbol_into(
+//             filter_map.move_symbol_into(
 //                 key.unwrap_or(name),
 //                 symbol
 //             )
@@ -1999,7 +1999,7 @@ fn declare_variable_from_symbol(
 // }
 
 // Terms will be added as a vec of Logical Formulas to the `term` hashmap in
-// a module's symbol table. So, a subterm is one element of the vec.
+// a filter_map's symbol table. So, a subterm is one element of the vec.
 fn add_logical_formula(
     key: Option<ast::ShortString>,
     symbol: symbols::Symbol,
@@ -2009,15 +2009,15 @@ fn add_logical_formula(
     let _symbols = symbols.clone();
 
     match &scope {
-        symbols::Scope::Module(module) => {
+        symbols::Scope::FilterMap(filter_map) => {
             drop(_symbols);
 
             let mut _symbols = symbols.borrow_mut();
-            let module = _symbols
+            let filter_map = _symbols
                 .get_mut(scope)
-                .ok_or(format!("No module named '{}' found.", module))?;
+                .ok_or(format!("No filter-map named '{}' found.", filter_map))?;
 
-            module.add_logical_formula(
+            filter_map.add_logical_formula(
                 key.unwrap(),
                 symbol
             )
@@ -2039,15 +2039,15 @@ fn add_action(
     scope: &symbols::Scope,
 ) -> Result<(), CompileError> {
     match &scope {
-        symbols::Scope::Module(module) => {
+        symbols::Scope::FilterMap(filter_map) => {
             let mut _symbols = symbols.borrow_mut();
-            let module = _symbols
+            let filter_map = _symbols
                 .get_mut(scope)
-                .ok_or(format!("No module named '{}' found.", module))?;
+                .ok_or(format!("No filter-map named '{}' found.", filter_map))?;
 
             let action = action.set_name(name.clone());
 
-            module.add_action(name, action)
+            filter_map.add_action(name, action)
         }
         symbols::Scope::Global => Err(format!(
             "Can't create an action in the global scope (NEVER). Action '{}'",
@@ -2064,15 +2064,15 @@ fn add_match_action(
     scope: &symbols::Scope,
 ) -> Result<(), CompileError> {
     match &scope {
-        symbols::Scope::Module(module) => {
+        symbols::Scope::FilterMap(filter_map) => {
             let mut _symbols = symbols.borrow_mut();
-            let module = _symbols
+            let filter_map = _symbols
                 .get_mut(scope)
-                .ok_or(format!("No module named '{}' found.", module))?;
+                .ok_or(format!("No filter-map named '{}' found.", filter_map))?;
 
             let token = match_action.get_token()?;
 
-            module.move_match_action_into(Symbol::new(
+            filter_map.move_match_action_into(Symbol::new(
                 name,
                 match_action.get_kind(),
                 match_action.get_type(),
@@ -2171,19 +2171,19 @@ fn _declare_variable_from_typedef(
     scope: &symbols::Scope,
 ) -> Result<(), CompileError> {
     // There is NO global scope for variables.  All vars are all local to a
-    // module.
+    // filter_map.
 
     match &scope {
-        symbols::Scope::Module(module) => {
+        symbols::Scope::FilterMap(filter_map) => {
             // drop(_symbols);
 
             // Apparently, we have a type.  Let's add it to the symbol table.
             let mut _symbols = symbols.borrow_mut();
-            let module = _symbols
+            let filter_map = _symbols
                 .get_mut(scope)
-                .ok_or(format!("No module named '{}' found.", module))?;
+                .ok_or(format!("No filter-map named '{}' found.", filter_map))?;
 
-            module.add_variable(
+            filter_map.add_variable(
                 ident.into(),
                 Some(name),
                 kind,
