@@ -52,8 +52,18 @@ impl LazyTypeDef {
                     method_name,
                 )
             }
-            LazyTypeDef::PeerUpNotification => todo!(),
-            LazyTypeDef::PeerDownNotification => todo!(),
+            LazyTypeDef::PeerUpNotification => {
+                BytesRecord::<PeerUpNotification>::get_props_for_method(
+                    ty,
+                    method_name,
+                )
+            },
+            LazyTypeDef::PeerDownNotification => {
+                BytesRecord::<PeerDownNotification>::get_props_for_method(
+                    ty,
+                    method_name,
+                )
+            },
             LazyTypeDef::StatisticsReport => todo!(),
             LazyTypeDef::RouteMirroring => todo!(),
         }
