@@ -1,4 +1,3 @@
-use log::trace;
 use serde::Serialize;
 use smallvec::SmallVec;
 
@@ -851,6 +850,7 @@ impl<T: AsRef<[u8]>> std::hash::Hash for BytesRecord<T> {
 }
 
 //------------- LazyElementTypeValue ----------------------------------------
+#[allow(clippy::complexity)]
 pub enum LazyElementTypeValue<'a, T> {
     LazyRecord(LazyRecord<'a, T>),
     Lazy(Box<dyn Fn(&BytesRecord<T>) -> ElementTypeValue + 'a>),
@@ -858,7 +858,7 @@ pub enum LazyElementTypeValue<'a, T> {
 }
 
 impl<T: std::fmt::Debug> LazyElementTypeValue<'_, T> {
-    fn into_materialized(self, raw_bytes: &BytesRecord<T>) -> Self {
+    fn _into_materialized(self, raw_bytes: &BytesRecord<T>) -> Self {
         match self {
             LazyElementTypeValue::LazyRecord(rec) => {
                 let rec = Record::from((&rec, raw_bytes));
@@ -874,7 +874,7 @@ impl<T: std::fmt::Debug> LazyElementTypeValue<'_, T> {
         }
     }
 
-    fn materialize(&mut self, raw_bytes: &BytesRecord<T>) {
+    fn _materialize(&mut self, raw_bytes: &BytesRecord<T>) {
         if let LazyElementTypeValue::Lazy(elm) = self {
             *self = LazyElementTypeValue::Materialized(elm(raw_bytes));
         }
@@ -982,7 +982,7 @@ impl<T> std::fmt::Display for LazyElementTypeValue<'_, T> {
 #[derive(Debug)]
 pub struct LazyRecord<'a, T> {
     value: LazyNamedTypeDef<'a, T>,
-    is_materialized: bool,
+    _is_materialized: bool,
     _raw_message: PhantomData<T>,
 }
 
@@ -995,7 +995,7 @@ impl<'a, T: std::fmt::Debug> LazyRecord<'a, T> {
     ) -> Result<Self, VmError> {
         Ok(LazyRecord {
             value,
-            is_materialized: false,
+            _is_materialized: false,
             _raw_message: PhantomData,
         })
     }
@@ -1005,7 +1005,7 @@ impl<'a, T: std::fmt::Debug> LazyRecord<'a, T> {
     ) -> LazyRecord<'a, T> {
         Self {
             value: ty,
-            is_materialized: false,
+            _is_materialized: false,
             _raw_message: PhantomData,
         }
     }
@@ -1094,7 +1094,7 @@ impl<'a, T: std::fmt::Debug> LazyRecord<'a, T> {
         _method: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
-        raw_bytes: impl AsRef<[u8]>,
+        _raw_bytes: impl AsRef<[u8]>,
     ) -> Result<TypeValue, VmError> {
         todo!()
     }
