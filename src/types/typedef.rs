@@ -858,8 +858,11 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::BmpRouteMonitoringMessage(_) => {
                 TypeDef::LazyRecord(LazyTypeDef::RouteMonitoring)
             }
-            BuiltinTypeValue::BmpPeerUpNotificationMessage(_) => {
+            BuiltinTypeValue::BmpPeerUpNotification(_) => {
                 TypeDef::LazyRecord(LazyTypeDef::PeerUpNotification)
+            }
+            BuiltinTypeValue::BmpPeerDownNotification(_) => {
+                TypeDef::LazyRecord(LazyTypeDef::PeerDownNotification)
             }
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
@@ -909,8 +912,11 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::BmpRouteMonitoringMessage(_) => {
                 TypeDef::LazyRecord(LazyTypeDef::RouteMonitoring)
             }
-            BuiltinTypeValue::BmpPeerUpNotificationMessage(_) => {
+            BuiltinTypeValue::BmpPeerUpNotification(_) => {
                 TypeDef::LazyRecord(LazyTypeDef::PeerUpNotification)
+            }
+            BuiltinTypeValue::BmpPeerDownNotification(_) => {
+                TypeDef::LazyRecord(LazyTypeDef::PeerDownNotification)
             }
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
@@ -920,7 +926,6 @@ impl From<BuiltinTypeValue> for TypeDef {
             }
             BuiltinTypeValue::NextHop(_) => TypeDef::NextHop,
             BuiltinTypeValue::MultiExitDisc(_) => TypeDef::MultiExitDisc,
-            // BuiltinTypeValue::BmpMessage(_) => todo!(),
         }
     }
 }

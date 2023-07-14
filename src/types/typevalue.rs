@@ -28,7 +28,7 @@ use super::{
     collections::{ElementTypeValue, List, Record, LazyRecord, BytesRecord},
     constant_enum::Enum,
     outputs::OutputStreamMessage,
-    typedef::TypeDef
+    typedef::TypeDef, lazytypedef::{PeerDownNotification, PeerUpNotification, RouteMonitoring}
 };
 
 /// These are the actual types that are used in the Roto language. This enum
@@ -238,8 +238,10 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::U32(v) => v.into_type(ty),
                 BuiltinTypeValue::U16(v) => v.into_type(ty),
                 BuiltinTypeValue::U8(v) => v.into_type(ty),
-                BuiltinTypeValue::BmpRouteMonitoringMessage(v) => Err(CompileError::new("Unsupported TypeValue::BmpRouteMonitoringMessage in TypeValue::into_type()".to_string())),
-                BuiltinTypeValue::BmpPeerUpNotificationMessage(v) => Err(CompileError::new("Unsupported TypeValue::BmpPeerUpNotificationMessage in TypeValue::into_type()".to_string())),
+                BuiltinTypeValue::BmpRouteMonitoringMessage(_v) => Err(CompileError::new("Unsupported TypeValue::BmpRouteMonitoringMessage in TypeValue::into_type()".to_string())),
+                BuiltinTypeValue::BmpPeerUpNotification(_v) => Err(CompileError::new("Unsupported TypeValue::BmpPeerUpNotification in TypeValue::into_type()".to_string())),
+                BuiltinTypeValue::BmpPeerDownNotification(_v) => Err(CompileError::new("Unsupported TypeValue::BmpPeerDownNotification in TypeValue::into_type()".to_string())),
+
             }
             
             TypeValue::Enum(v) => v.into_type(ty),
@@ -274,12 +276,17 @@ impl RotoType for TypeValue {
                 }
                 BuiltinTypeValue::BmpRouteMonitoringMessage(bytes_rec) => {
                     LazyRecord::new(
-                        BytesRecord::<routecore::bmp::message::RouteMonitoring<bytes::Bytes>>::lazy_type_def()
+                        BytesRecord::<RouteMonitoring>::lazy_type_def()
                     )?.exec_value_method(method_token, args, res_type, bytes_rec.bytes_parser())
                 }
-                BuiltinTypeValue::BmpPeerUpNotificationMessage(bytes_rec) => {
+                BuiltinTypeValue::BmpPeerUpNotification(bytes_rec) => {
                     LazyRecord::new(
-                        BytesRecord::<routecore::bmp::message::PeerUpNotification<bytes::Bytes>>::lazy_type_def()
+                        BytesRecord::<PeerUpNotification>::lazy_type_def()
+                    )?.exec_value_method(method_token, args, res_type, bytes_rec.bytes_parser())
+                }
+                BuiltinTypeValue::BmpPeerDownNotification(bytes_rec) => {
+                    LazyRecord::new(
+                        BytesRecord::<PeerDownNotification>::lazy_type_def()
                     )?.exec_value_method(method_token, args, res_type, bytes_rec.bytes_parser())
                 }
                 BuiltinTypeValue::Boolean(v) => {
@@ -392,7 +399,10 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::BmpRouteMonitoringMessage(_) => {
                     Err(VmError::InvalidValueType)
                 }
-                BuiltinTypeValue::BmpPeerUpNotificationMessage(_) => {
+                BuiltinTypeValue::BmpPeerUpNotification(_) => {
+                    Err(VmError::InvalidValueType)
+                }
+                BuiltinTypeValue::BmpPeerDownNotification(_) => {
                     Err(VmError::InvalidValueType)
                 }
                 BuiltinTypeValue::Boolean(v) => {

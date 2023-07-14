@@ -9,12 +9,13 @@ use crate::{
     traits::Token,
     types::{
         builtin::{
-            Asn, Boolean, BuiltinTypeValue, IpAddress, U16,
+            Asn, Boolean, BuiltinTypeValue, IpAddress,
         },
         collections::{LazyElementTypeValue, LazyRecord},
         constant_enum::EnumVariant,
         lazytypedef::{
-            LazyTypeDef, PeerUpNotification, RouteMonitoring,
+            LazyTypeDef, PeerUpNotification, PeerDownNotification, 
+            RouteMonitoring,
         },
         typedef::{LazyNamedTypeDef, NamedTypeDef, TypeDef},
         typevalue::TypeValue,
@@ -92,7 +93,7 @@ impl BytesRecord<RouteMonitoring> {
     }
 }
 
-//------------ BmpPeerUpNotificationMessage ---------------------------------
+//------------ PeerUpNotification -------------------------------------------
 
 bytes_record_impl!(
     PeerUpNotification,
@@ -171,36 +172,64 @@ impl BytesRecord<PeerUpNotification> {
     }
 }
 
-//------------ PerPeerHeader ------------------------------------------------
+//------------ PeerDownNotification -------------------------------------------
 
-// subrecord_impl!(
-//     PerPeerHeader,
-//     "per_peer_header",
-//     {
-//         ("is_ipv4"; 0, Boolean),
-//         ("is_ipv6"; 1, Boolean),
-//         (
-//             "is_pre_policy"; 2,
-//             Boolean
-//         ),
-//         (
-//             "is_post_policy"; 3,
-//             Boolean
-//         ),
-//         (
-//             "is_legacy_format"; 4,
-//             Boolean
-//         ),
-//         ("address"; 5, IpAddress),
-//     },
-//     {
-//         (
-//             "peer_type"; 6,
-//             EnumVariant<U8> = "BMP_PEER_TYPE"
-//         ),
-//         (
-//             "adj_rib_type"; 7,
-//             EnumVariant<U8> = "BMP_ADJ_RIB_TYPE"
-//         ),
-//     }
-// );
+bytes_record_impl!(
+    PeerDownNotification,
+    #[type_def(
+        record_field(
+            "per_peer_header"; 0,
+            field("is_ipv4"; 1, Boolean, per_peer_header.is_ipv4),
+            field("is_ipv6"; 2, Boolean, per_peer_header.is_ipv6),
+            field(
+                "is_pre_policy"; 3,
+                Boolean,
+                per_peer_header.is_pre_policy
+            ),
+            field(
+                "is_post_policy"; 4,
+                Boolean,
+                per_peer_header.is_post_policy
+            ),
+            field(
+                "is_legacy_format"; 5,
+                Boolean,
+                per_peer_header.is_legacy_format
+            ),
+            field("address"; 6, IpAddress, per_peer_header.address),
+            enum_field(
+                "peer_type"; 7,
+                EnumVariant<U8> = "BMP_PEER_TYPE",
+                BytesRecord<PeerDownNotification>,
+                per_peer_header.peer_type
+            ),
+            enum_field(
+                "adj_rib_type"; 8,
+                EnumVariant<U8> = "BMP_ADJ_RIB_TYPE",
+                BytesRecord<PeerDownNotification>,
+                per_peer_header.adj_rib_type
+            ),
+        ),
+        enum_field(
+            "reason"; 10,
+            EnumVariant<U8> = "BMP_PEER_DOWN_REASON",
+            BytesRecord<PeerDownNotification>,
+            reason
+        ),
+    )]
+);
+
+impl BytesRecord<PeerDownNotification> {
+    pub fn new(bytes: bytes::Bytes) -> Result<Self, VmError> {
+        if let routecore::bmp::message::Message::PeerDownNotification(pd_msg) =
+            routecore::bmp::message::Message::<bytes::Bytes>::from_octets(
+                bytes,
+            )
+            .unwrap()
+        {
+            Ok(Self(pd_msg))
+        } else {
+            Err(VmError::InvalidMsgType)
+        }
+    }
+}
