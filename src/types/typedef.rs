@@ -109,8 +109,8 @@ impl TypeDef {
         // have conversions, no data field
         // SOURCE TYPE(TARGET TYPE WITHOUT DATA FIELD, ..;
         // TARGET TYPE WITH DATA FIELD)
-        U8(U32,PrefixLength,IntegerLiteral;),
-        U16(U32,PrefixLength,IntegerLiteral;),
+        U8(U16,U32,PrefixLength,IntegerLiteral;),
+        U16(U32,PrefixLength,IntegerLiteral,LocalPref;),
         U32(StringLiteral,IntegerLiteral;),
         Boolean(StringLiteral;),
         IpAddress(StringLiteral;),
@@ -126,7 +126,7 @@ impl TypeDef {
         PrefixLength(U8,U32;),
         Asn(U32,StringLiteral;),
         AsPath(StringLiteral;List),
-        LocalPref(U8,IntegerLiteral,StringLiteral;),
+        LocalPref(U8,U16,U32,IntegerLiteral,StringLiteral;),
         MultiExitDisc(U8,IntegerLiteral,StringLiteral;),
         AtomicAggregator(U8;);
         // have conversions, have data field
