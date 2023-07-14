@@ -13,7 +13,7 @@
 
 use log::trace;
 use routecore::bgp::message::SessionConfig;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use smallvec::SmallVec;
 use std::{net::IpAddr, sync::Arc};
 
@@ -953,7 +953,7 @@ impl std::fmt::Display for RawRouteWithDeltas {
     }
 }
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug, Deserialize)]
 pub enum RouteToken {
     Prefix = 0,
     AsPath = 1,
