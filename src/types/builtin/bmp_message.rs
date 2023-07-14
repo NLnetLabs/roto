@@ -1,5 +1,6 @@
 use log::trace;
 use paste::paste;
+use seq_macro::seq;
 
 use crate::{
     ast::ShortString,
@@ -27,14 +28,14 @@ pub use crate::types::collections::BytesRecord;
 //------------ BmpRouteMonitoringMessage ------------------------------------
 
 createtoken!(
-    BmpMessageToken;
-    "route_monitoring" = 0
-    "statistics_report" = 1
-    "peer_down_notification" = 2
-    "peer_up_notification" = 3
-    "initiation_message" = 4
-    "termination_message" = 5
-    "route_mirroring" = 6
+    BmpMessage;
+    route_monitoring = 0
+    statistics_report = 1
+    peer_down_notification = 2
+    peer_up_notification = 3
+    initiation_message = 4
+    termination_message = 5
+    route_mirroring = 6
 );
 
 bytes_record_impl!(

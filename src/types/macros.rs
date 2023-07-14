@@ -56,12 +56,12 @@ macro_rules! typedefconversion {
 macro_rules! createtoken {
     (
         $token_enum: ident;
-        $( $token: literal = $value: literal )*
+        $( $token: ident = $value: literal )*
     ) => {
         paste! {
             #[derive(Debug)]
             enum [<$token_enum Token>] {
-                $( [<$token:camel>] = $value ),*
+                $( [<$token:camel>] ),*
             }
         
             impl From<usize> for [<$token_enum Token>] {
@@ -397,22 +397,24 @@ macro_rules! bytes_record_impl {
             }
         }
 
-        createtoken!(
-            $bytes_record_type;
-            $(
+        paste!(
+            createtoken!(
+                $bytes_record_type;
                 $(
-                    $( 
-                        $sub_record_name = $self_variant_identifier
-                        $( $field_name = $variant_identifier )+
-                        $( $enum_field_name = $enum_variant_identifier )+
-                    )+
-                )?
-                $(
-                    $( 
-                        $next_field_name = $next_field_variant_identifier
+                    $(
+                        $(
+                            [<$sub_record_name>] = $self_variant_identifier
+                            $( [<$sub_record_name _$field_name>] = $variant_identifier )+
+                            $( [<$sub_record_name _$enum_field_name>] = $enum_variant_identifier )+
+                        )+
+                    )?
+                    $(
+                        $( 
+                            [< $next_field_name >] = $next_field_variant_identifier
+                        )?
                     )?
                 )?
-            )?
+            );
         );
     }
 }
