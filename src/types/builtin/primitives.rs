@@ -1432,19 +1432,23 @@ impl Serialize for Community {
     where
         S: Serializer,
     {
-        match &self.0 {
-            routecore::bgp::communities::Community::Standard(c) => {
-                c.serialize_for_operator(serializer)
+        if serializer.is_human_readable() {
+            match &self.0 {
+                routecore::bgp::communities::Community::Standard(c) => {
+                    c.serialize_for_operator(serializer)
+                }
+                routecore::bgp::communities::Community::Large(c) => {
+                    c.serialize_for_operator(serializer)
+                }
+                routecore::bgp::communities::Community::Extended(c) => {
+                    c.serialize(serializer)
+                }
+                routecore::bgp::communities::Community::Ipv6Extended(c) => {
+                    c.serialize(serializer)
+                }
             }
-            routecore::bgp::communities::Community::Large(c) => {
-                c.serialize_for_operator(serializer)
-            }
-            routecore::bgp::communities::Community::Extended(c) => {
-                c.serialize(serializer)
-            }
-            routecore::bgp::communities::Community::Ipv6Extended(c) => {
-                c.serialize(serializer)
-            }
+        } else {
+            self.0.serialize(serializer)
         }
     }
 }
