@@ -1463,7 +1463,7 @@ impl SerializeForOperators for StandardCommunity {
             Some(Wellknown::Unrecognized(_)) => ser::Community {
                 raw_fields: vec![format!("{:#010X}", self.to_u32())],
                 r#type: "standard",
-                parsed: ser::Parsed {
+                parsed: ser::Parsed::ExplicitValue {
                     value: ser::Value::PlainValue(ser::PlainValue {
                         r#type: "well-known-unrecognised",
                     }),
@@ -1474,7 +1474,7 @@ impl SerializeForOperators for StandardCommunity {
             Some(wk) => ser::Community {
                 raw_fields: vec![format!("{:#010X}", self.to_u32())],
                 r#type: "standard",
-                parsed: ser::Parsed {
+                parsed: ser::Parsed::ExplicitValue {
                     value: ser::Value::AttributeValue(ser::AttributeValue {
                         r#type: "well-known",
                         attribute: format!("{}", wk),
@@ -1486,7 +1486,7 @@ impl SerializeForOperators for StandardCommunity {
             None if self.is_reserved() => ser::Community {
                 raw_fields: vec![format!("{:#010X}", self.to_u32())],
                 r#type: "standard",
-                parsed: ser::Parsed {
+                parsed: ser::Parsed::ExplicitValue {
                     value: ser::Value::PlainValue(ser::PlainValue {
                         r#type: "reserved",
                     }),
@@ -1505,7 +1505,7 @@ impl SerializeForOperators for StandardCommunity {
                         format!("{:#06X}", tag),
                     ],
                     r#type: "standard",
-                    parsed: ser::Parsed {
+                    parsed: ser::Parsed::ExplicitValue {
                         value: ser::Value::AsnTagValue(ser::AsnTagValue {
                             r#type: "private",
                             asn: formatted_asn,
@@ -1535,15 +1535,15 @@ impl SerializeForOperators for routecore::bgp::communities::LargeCommunity {
                 format!("{:#06X}", self.local2()),
             ],
             r#type: "large",
-            parsed: ser::Parsed {
-                value: ser::Value::GlobalLocalDataPartsValue(
+            parsed: ser::Parsed::InlineValue(
+                ser::Value::GlobalLocalDataPartsValue(
                     ser::GlobalLocalDataPartsValue {
-                        globalAdmin: ser::GlobalAdmin { r#type: "asn", asn },
+                        globalAdmin: ser::GlobalAdmin { r#type: "asn", value: asn },
                         localDataPart1: self.local1(),
                         localDataPart2: self.local2(),
                     },
                 ),
-            },
+            ),
         }
         .serialize(serializer)
     }
@@ -1577,7 +1577,7 @@ mod ser {
     #[serde(rename = "value")]
     pub struct GlobalAdmin {
         pub r#type: &'static str,
-        pub asn: String,
+        pub value: String,
     }
 
     #[derive(serde::Serialize)]
@@ -1598,9 +1598,10 @@ mod ser {
     }
 
     #[derive(serde::Serialize)]
-    #[serde(rename = "parsed")]
-    pub struct Parsed {
-        pub value: Value,
+    #[serde(rename = "parsed", untagged)]
+    pub enum Parsed {
+        ExplicitValue { value: Value },
+        InlineValue(Value)
     }
 
     #[derive(serde::Serialize)]
