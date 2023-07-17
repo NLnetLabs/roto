@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 
 use log::trace;
 use routecore::asn::LongSegmentError;
-use routecore::bgp::communities::{StandardCommunity, Wellknown};
+use routecore::bgp::communities::{StandardCommunity, Wellknown, LargeCommunity, ExtendedCommunity};
 use serde::ser::SerializeSeq;
 use serde::{Serialize, Serializer};
 
@@ -1442,7 +1442,7 @@ impl Serialize for Community {
                     c.serialize_for_operator(serializer)
                 }
                 routecore::bgp::communities::Community::Extended(c) => {
-                    c.serialize(serializer)
+                    c.serialize_for_operator(serializer)
                 }
                 routecore::bgp::communities::Community::Ipv6Extended(c) => {
                     c.serialize(serializer)
@@ -1521,7 +1521,7 @@ impl SerializeForOperators for StandardCommunity {
     }
 }
 
-impl SerializeForOperators for routecore::bgp::communities::LargeCommunity {
+impl SerializeForOperators for LargeCommunity {
     fn serialize_for_operator<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -1548,6 +1548,103 @@ impl SerializeForOperators for routecore::bgp::communities::LargeCommunity {
         .serialize(serializer)
     }
 }
+
+impl SerializeForOperators for ExtendedCommunity {
+    fn serialize_for_operator<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // The structure doesn't tell us if we have to look at the "type low" (subtyp()) value or not, we can only know
+        // that based on knowledge of the "type value" stored in the IANA BGP Extended Communities registry [1].
+        //
+        // [1]: https://www.iana.org/assignments/bgp-extended-communities/bgp-extended-communities.xhtml
+        use routecore::bgp::communities::ExtendedCommunitySubType::*;
+        use routecore::bgp::communities::ExtendedCommunityType::*;
+
+        let mut raw_fields = Vec::new();
+        let (typ, subtyp) = self.types();
+
+        match (typ, subtyp) {
+            // 0x00 = Transitive Two-Octet AS-Specific Extended Community (RFC 7153)
+            // - 0x02 = Route Target (RFC 4360)
+            // - 0x03 = Route Origin (RFC 4360)
+            (TransitiveTwoOctetSpecific, RouteTarget) | (TransitiveTwoOctetSpecific, RouteOrigin) => {
+                let global_admin = self.as2().unwrap();
+                let local_admin = self.an4().unwrap();
+                raw_fields.push(format!("{:#04X}", self.type_raw()));
+                raw_fields.push(format!("{:#04X}", self.raw()[1]));
+                raw_fields.push(format!("{:#06X}", global_admin.to_u16()));
+                raw_fields.push(format!("{:#010X}", local_admin));
+                ser::Community {
+                    raw_fields,
+                    r#type: "extended",
+                    parsed: ser::Parsed::InlineValue(ser::Value::ExtendedValue(ser::ExtendedValue {
+                        r#type: "as2-specific",
+                        transitive: self.is_transitive(),
+                        inner: ser::TypedValueInner::As2Specific {
+                            rfc7153SubType: match subtyp {
+                                RouteTarget => "route-target",
+                                RouteOrigin => "route-origin",
+                                _ => unreachable!()
+                            },
+                            globalAdmin: ser::GlobalAdmin {
+                                r#type: "asn",
+                                value: global_admin.to_string(),
+                            },
+                            localAdmin: local_admin,
+                        },
+                    }))
+                }
+            }
+
+            // 0x01 = Transitive IPv4-Address-Specific Extended Community (RFC 7153)
+            // - 0x02 = Route Target (RFC 4360)
+            // - 0x03 = Route Origin (RFC 4360)
+            (TransitiveIp4Specific, RouteTarget) | (TransitiveIp4Specific, RouteOrigin) => {
+                let global_admin = self.ip4().unwrap();
+                let local_admin = self.an2().unwrap();
+                raw_fields.push(format!("{:#04X}", self.type_raw()));
+                raw_fields.push(format!("{:#04X}", self.raw()[1]));
+                raw_fields.push(format!("{:#010X}", u32::from(global_admin)));
+                raw_fields.push(format!("{:#06X}", local_admin));
+                ser::Community {
+                    raw_fields,
+                    r#type: "extended",
+                    parsed: ser::Parsed::InlineValue(ser::Value::ExtendedValue(ser::ExtendedValue {
+                        r#type: "ipv4-address-specific",
+                        transitive: self.is_transitive(),
+                        inner: ser::TypedValueInner::Ipv4AddressSpecific {
+                            rfc7153SubType: match subtyp {
+                                RouteTarget => "route-target",
+                                RouteOrigin => "route-origin",
+                                _ => unreachable!()
+                            },
+                            globalAdmin: ser::GlobalAdmin {
+                                r#type: "ipv4-address",
+                                value: format!("{}", global_admin.to_string()),
+                            },
+                            localAdmin: local_admin,
+                        },
+                    }))
+                }
+            }
+
+            _ => {
+                raw_fields.extend(self.raw().iter().map(|x| format!("{:#04X}", x)));
+                ser::Community {
+                    raw_fields,
+                    r#type: "extended",
+                    parsed: ser::Parsed::InlineValue(ser::Value::ExtendedValue(ser::ExtendedValue {
+                        r#type: "unrecognised",
+                        transitive: self.is_transitive(),
+                        inner: ser::TypedValueInner::Unrecognised,
+                    }))
+                }
+            }
+        }.serialize(serializer)
+    }
+}
+
 
 // Types used only by our own Serialize implementation to structure the serialized output differently than is done by
 // routecore.
@@ -1582,11 +1679,31 @@ mod ser {
 
     #[derive(serde::Serialize)]
     #[serde(rename = "value")]
+    #[allow(non_snake_case)]
     pub struct GlobalLocalDataPartsValue {
         pub globalAdmin: GlobalAdmin,
         pub localDataPart1: u32,
         pub localDataPart2: u32,
     }
+
+    #[derive(serde::Serialize)]
+    #[serde(rename = "value")]
+    pub struct ExtendedValue {
+        pub r#type: &'static str,
+        pub transitive: bool,
+        #[serde(flatten)]
+        pub inner: TypedValueInner,
+    }
+
+    #[derive(serde::Serialize)]
+    #[serde(untagged)]
+    #[allow(non_snake_case)]
+    pub enum TypedValueInner {
+        As2Specific { rfc7153SubType: &'static str, globalAdmin: GlobalAdmin, localAdmin: u32 },
+        Ipv4AddressSpecific { rfc7153SubType: &'static str, globalAdmin: GlobalAdmin, localAdmin: u16 },
+        Unrecognised,
+    }
+
 
     #[derive(serde::Serialize)]
     #[serde(untagged)]
@@ -1595,6 +1712,7 @@ mod ser {
         AttributeValue(AttributeValue),
         GlobalLocalDataPartsValue(GlobalLocalDataPartsValue),
         PlainValue(PlainValue),
+        ExtendedValue(ExtendedValue),
     }
 
     #[derive(serde::Serialize)]
