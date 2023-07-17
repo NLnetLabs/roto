@@ -953,7 +953,7 @@ impl std::fmt::Display for RawRouteWithDeltas {
     }
 }
 
-#[derive(Copy, Clone, Debug, Deserialize)]
+#[derive(Copy, Clone, Debug, Deserialize, PartialEq, Eq)]
 pub enum RouteToken {
     Prefix = 0,
     AsPath = 1,
