@@ -3,6 +3,7 @@ use std::fmt::{Display, Formatter};
 use log::trace;
 use routecore::asn::LongSegmentError;
 use routecore::bgp::communities::{StandardCommunity, Wellknown};
+use serde::ser::SerializeSeq;
 use serde::{Serialize, Serializer};
 
 use crate::attr_change_set::VectorValue;
@@ -2049,7 +2050,7 @@ impl From<AsnToken> for usize {
 
 type RoutecoreHop = routecore::bgp::aspath::Hop<Vec<u8>>;
 
-#[derive(Debug, Eq, PartialEq, Clone, Default, Hash, Serialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Default, Hash)]
 pub struct AsPath(pub(crate) routecore::bgp::aspath::HopPath);
 
 impl AsPath {
@@ -2081,6 +2082,32 @@ impl AsPath {
 
     pub fn contains(&self, hop: &Hop) -> bool {
         self.0.contains(&hop.0)
+    }
+}
+
+impl Serialize for AsPath {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if serializer.is_human_readable() {
+            self.serialize_for_operator(serializer)
+        } else {
+            self.0.serialize(serializer)
+        }
+    }
+}
+
+impl SerializeForOperators for AsPath {
+    fn serialize_for_operator<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(self.0.hop_count()))?;
+        for hop in self.0.iter() {
+            seq.serialize_element(&format!("{}", hop))?;
+        }
+        seq.end()
     }
 }
 
