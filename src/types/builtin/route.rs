@@ -121,23 +121,20 @@ impl RawRouteWithDeltas {
     ) -> Self {
         let raw_message = BgpUpdateMessage::new(delta_id, raw_message);
         let mut attribute_deltas = AttributeDeltaList::new();
-        let (peer_ip, peer_asn) = (None, None);
         // This stores the attributes in the raw message as the first delta.
         attribute_deltas
             .store_delta(AttributeDelta::new(
                 delta_id,
                 0,
-                raw_message
-                    .raw_message
-                    .create_changeset(prefix, peer_ip, peer_asn),
+                raw_message.raw_message.create_changeset(prefix),
             ))
             .unwrap();
 
         Self {
             prefix,
             raw_message: Arc::new(raw_message),
-            peer_ip,
-            peer_asn,
+            peer_ip: None,
+            peer_asn: None,
             attribute_deltas,
             status_deltas: RouteStatusDeltaList::new(RouteStatusDelta::new(
                 delta_id,
@@ -210,11 +207,7 @@ impl RawRouteWithDeltas {
         if let Some(attr_set) = self.attribute_deltas.deltas.last() {
             attr_set.attributes.clone()
         } else {
-            self.raw_message.raw_message.create_changeset(
-                self.prefix,
-                self.peer_ip,
-                self.peer_asn,
-            )
+            self.raw_message.raw_message.create_changeset(self.prefix)
         }
     }
 
@@ -238,11 +231,10 @@ impl RawRouteWithDeltas {
     // deltas.
     pub fn take_latest_attrs(mut self) -> AttrChangeSet {
         if self.attribute_deltas.deltas.is_empty() {
-            return self.raw_message.raw_message.create_changeset(
-                self.prefix,
-                self.peer_ip,
-                self.peer_asn,
-            );
+            return self
+                .raw_message
+                .raw_message
+                .create_changeset(self.prefix);
         }
 
         self.attribute_deltas
@@ -261,11 +253,9 @@ impl RawRouteWithDeltas {
                 .store_delta(AttributeDelta::new(
                     self.raw_message.message_id,
                     0,
-                    self.raw_message.raw_message.create_changeset(
-                        self.prefix,
-                        self.peer_ip,
-                        self.peer_asn,
-                    ),
+                    self.raw_message
+                        .raw_message
+                        .create_changeset(self.prefix),
                 ))
                 .unwrap();
         }
@@ -1149,12 +1139,7 @@ impl UpdateMessage {
     // Materialize a ChangeSet from the Update message. The materialized
     // Change set is completely self-contained (no references of any kind) &
     // holds all the attributes of the current BGP Update message.
-    pub fn create_changeset(
-        &self,
-        prefix: Prefix,
-        peer_ip: Option<IpAddress>,
-        peer_asn: Option<Asn>,
-    ) -> AttrChangeSet {
+    pub fn create_changeset(&self, prefix: Prefix) -> AttrChangeSet {
         AttrChangeSet {
             prefix: ReadOnlyScalarOption::<Prefix>::new(prefix.into()),
             as_path: VectorOption::<AsPath>::from(
@@ -1171,8 +1156,8 @@ impl UpdateMessage {
             )),
             aggregator: ScalarOption::from(self.0.aggregator()),
             communities: VectorOption::from(self.0.all_communities()),
-            peer_ip: peer_ip.into(),
-            peer_asn: peer_asn.into(),
+            peer_ip: Option::<IpAddress>::None.into(),
+            peer_asn: Option::<Asn>::None.into(),
             originator_id: Todo,
             cluster_list: Todo,
             extended_communities: Todo,
