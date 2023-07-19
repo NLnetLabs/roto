@@ -1275,9 +1275,6 @@ fn compile_compute_expr<'a>(
                         symbol.get_args()
                     );
                 }
-                Token::NamedRecordField(field_name) => {
-                    trace!("PARENT IS NAMED RECORD FIELD {} = {:#?}", field_name, symbol);
-                }
                 Token::Enum(_) => {
                     trace!("ENUM PARENT ARGS {:#?}", symbol.get_args());
                 }
@@ -1443,10 +1440,6 @@ fn compile_compute_expr<'a>(
                 ],
             ));
             return Ok(state);
-        }
-        Token::NamedRecordField(field_name) => {
-            assert!(is_ar);
-            panic!("NAMED RECORD FIELD {} = {:#?}", field_name, symbol);
         }
         // This is used in variable assignments where a var is assigned to
         // a list. On arrival here all the elements of the defined list will
