@@ -849,6 +849,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
         let mut commands_num: usize = 0;
 
         self._move_rx_tx_to_mem(rx, tx, mem);
+        let mut stream_output_queue: StreamOutputQueue = StreamOutputQueue::new();
 
         for MirBlock {
             command_stack,
@@ -994,7 +995,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                         };
                         let (_args, method_t, return_type) = args.pop_3();
 
-                        let stack_args = self._take_resolved_and_flush(
+                        let stack_args = self._take_resolved(
                             _args.get_args_len() as u32,
                             mem,
                         );
@@ -1229,36 +1230,37 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                 0
                             };
 
+                        trace!("execute data store method with args {:?}", args);
                         let (method_token, data_source_token) = args.pop_2();
 
-                        if let CommandArg::DataSourceTable(ds_s)
-                        | CommandArg::DataSourceRib(ds_s) =
-                            data_source_token
-                        {
-                            let ds = self.get_data_source(*ds_s).unwrap();
-                            let stack_args =
-                                self._unwind_resolved_stack_into_vec(mem);
+                        match data_source_token {
+                            CommandArg::DataSourceTable(ds_s) | CommandArg::DataSourceRib(ds_s) => {
+                                let ds = self.get_data_source(*ds_s).unwrap();
+                                let stack_args =
+                                    self._unwind_resolved_stack_into_vec(mem);
 
-                            let v = ds.exec_method(
-                                method_token.into(),
-                                &stack_args[..],
-                                TypeDef::Unknown,
-                            );
-                            let mut s = self.stack.borrow_mut();
-                            match v {
-                                DataSourceMethodValue::Ref(sr_pos) => {
-                                    s.push(sr_pos)?;
-                                }
-                                DataSourceMethodValue::TypeValue(tv) => {
-                                    mem.set_mem_pos(mem_pos, tv);
-                                }
-                                DataSourceMethodValue::Empty(_ty) => {
-                                    mem.set_mem_pos(
-                                        mem_pos,
-                                        TypeValue::Unknown,
-                                    );
+                                let v = ds.exec_method(
+                                    method_token.into(),
+                                    &stack_args[..],
+                                    TypeDef::Unknown,
+                                );
+                                let mut s = self.stack.borrow_mut();
+                                match v {
+                                    DataSourceMethodValue::Ref(sr_pos) => {
+                                        s.push(sr_pos)?;
+                                    }
+                                    DataSourceMethodValue::TypeValue(tv) => {
+                                        mem.set_mem_pos(mem_pos, tv);
+                                    }
+                                    DataSourceMethodValue::Empty(_ty) => {
+                                        mem.set_mem_pos(
+                                            mem_pos,
+                                            TypeValue::Unknown,
+                                        );
+                                    }
                                 }
                             }
+                            _ => return Err(VmError::InvalidDataSource),
                         }
                     }
                     // stack args: [mem_pos, constant_value]
@@ -1404,7 +1406,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                 commands_num
                             );
 
-                            return Ok(VmResult { accept_reject: *accept_reject, rx, tx, stream_output: None });
+                            return Ok(VmResult { accept_reject: *accept_reject, rx, tx, stream_output_queue });
                         }
                     }
 
@@ -1433,7 +1435,30 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                     OpCode::SetTxField => {
                         todo!();
                     }
-                };
+                    // stack args: []
+                    OpCode::PushOutputStreamQueue => {
+                        trace!("Send: {:?}", args);
+                        let stack_args = self.as_vec();
+                        trace!("Stack args {:?}", stack_args);
+
+                        if let CommandArg::MemPos(mem_pos) = args[3] {
+                            trace!("from mem pos {}", mem_pos);
+                        }
+                        
+                        let mut rec_fields: Vec<TypeValue> = vec![];
+                        for stack_ref in &stack_args {
+                            rec_fields.push(mem.get_mp_field_by_stack_ref_owned(stack_ref).unwrap());
+                        }
+
+                        if let CommandArg::Arguments(type_def) = &args[2] {
+                            trace!("type_def {:?}", type_def);
+                            if let TypeDef::OutputStream(os_ty) = &type_def[0] {
+                                let rec = Record::create_instance_from_ordered_fields(os_ty, rec_fields).unwrap();
+                                stream_output_queue.push(rec.into());
+                            }
+                        }
+                    }
+                }
             }
 
             if log_enabled!(Level::Trace) {
@@ -1544,8 +1569,28 @@ pub struct VmResult {
     pub accept_reject: AcceptReject,
     pub rx: TypeValue,
     pub tx: Option<TypeValue>,
-    pub stream_output: Option<TypeValue>,
+    pub stream_output_queue: StreamOutputQueue,
 }
+
+
+//------------ StreamOutputQueue --------------------------------------------
+
+#[derive(Debug, Copy, Clone)]
+pub struct StreamId(usize);
+
+#[derive(Debug, Clone, Default)]
+pub struct StreamOutputQueue(Vec<TypeValue>);
+
+impl StreamOutputQueue {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn push(&mut self, tv: TypeValue) {
+        self.0.push(tv)
+    }
+}
+
 
 //------------ VmError ------------------------------------------------------
 
@@ -1568,6 +1613,8 @@ pub enum VmError {
     DataSourceEmpty(ShortString),
     DataSourcesNotReady,
     ImpossibleComparison,
+    InvalidDataSource,
+    InvalidCommand,
     InvalidWrite,
     InvalidConversion,
     InvalidMsgType,
@@ -1620,6 +1667,8 @@ impl Display for VmError {
                 f.write_str("ImpossibleComparison")
             }
             VmError::InvalidWrite => f.write_str("InvalidWrite"),
+            VmError::InvalidCommand => f.write_str("InvalidCommand"),
+            VmError::InvalidDataSource => f.write_str("InvalidDataSource"),
             VmError::InvalidConversion => f.write_str("InvalidConversion"),
             VmError::UnexpectedTermination => {
                 f.write_str("UnexpectedTermination")
@@ -1672,6 +1721,7 @@ impl Display for Command {
             OpCode::Exit(accept_reject) => {
                 return write!(f, "Exit::{}", accept_reject)
             }
+            OpCode::PushOutputStreamQueue => "(o)=>",
             OpCode::SetRxField => "->",
             OpCode::SetTxField => "->",
         };
@@ -1845,6 +1895,9 @@ pub enum OpCode {
     Label,
     SetRxField,
     SetTxField,
+    // The output stream stack holds indexes to memory positions that
+    // contain messages to be send out.
+    PushOutputStreamQueue,
     Exit(AcceptReject),
 }
 

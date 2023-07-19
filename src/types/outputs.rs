@@ -1,3 +1,4 @@
+use log::trace;
 use serde::Serialize;
 
 use crate::{
@@ -21,9 +22,9 @@ impl RotoType for OutputStreamMessage {
                 ty.clone(),
                 OutputStreamToken::Send.into(),
                 vec![ty],
-            )),
+            ).consume_value()),
             _ => Err(format!(
-                "Unknown method: '{}' for type Prefix",
+                "Unknown method: '{}' for type OutputStreamMessage",
                 method_name.ident
             )
             .into()),
@@ -48,11 +49,16 @@ impl RotoType for OutputStreamMessage {
 
     fn exec_consume_value_method(
         self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
+        method_token: usize,
+        mut args: Vec<TypeValue>,
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        todo!()
+        match method_token.into() {
+            OutputStreamToken::Send => {
+                trace!("Send: args for output stream message {}", args[0]);
+                Ok(args.remove(0))
+            }
+        }
     }
 
     fn exec_type_method<'a>(
