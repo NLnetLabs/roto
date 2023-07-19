@@ -76,7 +76,7 @@ impl TypeValue {
             .into_iter()
             .map(|(ident, ty)| (ShortString::from(ident), ty.into()))
             .collect::<Vec<_>>();
-        Record::new(def_)
+        Ok(Record::new(def_))
     }
 
     pub fn is_boolean_type(&self) -> bool {
@@ -627,14 +627,14 @@ impl PartialEq for TypeValue {
 
             // Records to Records
             (TypeValue::Record(r1), TypeValue::Record(r2)) => {
-                if r1.0[..] == r2.0[..] {
+                if r1.get_values() == r2.get_values() {
                     true
-                } else if r1.0.len() != r2.0.len() {
+                } else if r1.len() != r2.len() {
                     false
                 } else {
-                    r1.0.iter().enumerate().all(|(i, elm)| {
+                    r1.iter().enumerate().all(|(i, elm)| {
                         if let Ok(tv) =
-                            r2.0[i].1.clone().into_type(&(&elm.1).into())
+                            r2.get_field_by_single_index(i).unwrap().1.clone().into_type(&(&elm.1).into())
                         {
                             elm.1 == tv
                         } else {
@@ -1093,6 +1093,6 @@ impl From<AnonymousRecordValueExpr> for TypeValue {
 
 impl From<TypedRecordValueExpr> for TypeValue {
     fn from(value: TypedRecordValueExpr) -> Self {
-        TypeValue::Record(value.into())
+        TypeValue::Record(Record::from(value))
     }
 }

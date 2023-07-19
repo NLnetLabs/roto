@@ -1,3 +1,4 @@
+use log::trace;
 use roto::compile::Compiler;
 
 use roto::types::builtin::{
@@ -90,6 +91,8 @@ fn test_data(
     )
     .unwrap();
 
+    trace!("PAYLOAD {:#?}", my_payload);
+
     let source_asns_type = TypeDef::new_record_type(vec![("asn", Box::new(TypeDef::Asn))])?;
     let new_sa_rec = Record::create_instance(&source_asns_type, vec![
         ("asn", Asn::from_u32(300).into())
@@ -107,6 +110,10 @@ fn test_data(
     // }
     let sources_asns = DataSource::table_from_records("source_asns", vec![new_sa_rec])?;
     roto_pack.set_source(sources_asns)?;
+
+    for mb in roto_pack.get_mir().iter() {
+        println!("{}", mb);
+    }
 
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
@@ -138,7 +145,7 @@ fn test_filter_map_1() {
                     // specify the types of that this filter receives
                     // and sends.
                     // rx_tx route: StreamRoute;
-                    rx route: Route;
+                    rx route: MyPayload;
                     tx ext_route: Route;
 
                     // specify additional external data sets that will be consulted.
@@ -243,6 +250,15 @@ fn test_filter_map_1() {
                 asn: Asn
             }
 
+            type MyPayload {
+                prefix: Prefix,
+                as-path: AsPath,
+                origin: Asn,
+                next-hop: IpAddress,
+                med: U32,
+                communities: [Community],
+                local-pref: U32
+            }
         "###,
     ).unwrap();
 }

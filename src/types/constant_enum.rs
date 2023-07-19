@@ -134,7 +134,7 @@ impl From<EnumVariant<u32>> for BuiltinTypeValue {
 
 //------------ Enum ---------------------------------------------------------
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize)]
+#[derive(Debug, Eq, Clone, Serialize)]
 pub struct Enum {
     ty: TypeDef,
     token: Token,
@@ -154,6 +154,18 @@ impl Enum {
 impl From<Enum> for TypeValue {
     fn from(value: Enum) -> Self {
         TypeValue::Enum(value)
+    }
+}
+
+impl std::hash::Hash for Enum {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.token.hash(state);
+    }
+}
+
+impl PartialEq for Enum {
+    fn eq(&self, other: &Self) -> bool {
+        self.token == other.token
     }
 }
 

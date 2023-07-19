@@ -235,6 +235,7 @@ impl<M: Meta> RotoRib for Rib<M> {
             }
             RibToken::LongestMatch => {
                 trace!("longest match on rib");
+                trace!("args {:?}", args);
                 let guard = epoch::pin();
                 self.store
                     .match_prefix(
@@ -317,7 +318,7 @@ impl Table {
             fi if fi.is_empty() => self
                 .records
                 .get(index)
-                .and_then(|r| r.0.get(index).map(|v| (&v.1).into())),
+                .and_then(|r| r.get_field_by_single_index(index).map(|v| (&v.1).into())),
             field_index => match self.records.get(index) {
                 Some(r) => {
                     r.get_field_by_index(field_index).map(|v| v.into())

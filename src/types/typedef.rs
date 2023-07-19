@@ -1,6 +1,7 @@
 //------------ TypeDef -----------------------------------------------------
 
 use std::hash::{Hash, Hasher};
+use std::ops::Deref;
 
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
@@ -42,7 +43,82 @@ pub type NamedTypeDef = (ShortString, Box<TypeDef>);
 pub type LazyNamedTypeDef<'a, T> =
     Vec<(ShortString, LazyElementTypeValue<'a, T>)>;
 
-#[derive(Clone, Debug, Eq, PartialEq, Default, Hash, Serialize)]
+// This struct meanly serves the purpose of making sure that all inner
+// Vec<NamedTypeDef> are being sorted at creation time, so that they
+// are comparable (for equivalence) at all times without the need to
+// ever sort them again.
+#[derive(Clone, Debug, Eq, Default, Ord, PartialOrd, Serialize)]
+pub struct RecordTypeDef(Vec<NamedTypeDef>);
+
+impl RecordTypeDef {
+    pub(crate) fn new(mut named_type_vec: Vec<NamedTypeDef>) -> Self {
+        named_type_vec.sort();
+        Self(named_type_vec)
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &NamedTypeDef> + '_ {
+        self.0.iter()
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+// Eqiuvalence of two RecordTypeDefs is defined as the two vecs being
+// completely the same, or the field names being the same. The types
+// of the fields are being left out of the equivalence comparison
+// here! That is the responsablity of the evaluator.
+impl PartialEq for RecordTypeDef {
+    fn eq(&self, other: &Self) -> bool {
+        if self.0 == other.0 {
+            return true;
+        }
+
+        self.0
+            .iter()
+            .zip(other.iter())
+            .all(|(self_field, other_field)| {
+                if self_field.0 != other_field.0 {
+                    return false;
+                }
+                true
+            })
+    }
+}
+
+impl From<Vec<NamedTypeDef>> for RecordTypeDef {
+    fn from(mut value: Vec<NamedTypeDef>) -> Self {
+        value.sort();
+        Self(value)
+    }
+}
+
+impl From<Vec<(&str, Box<TypeDef>)>> for RecordTypeDef {
+    fn from(mut value: Vec<(&str, Box<TypeDef>)>) -> Self {
+        value.sort();
+        Self(
+            value
+                .into_iter()
+                .map(|(s, td)| (s.into(), td))
+                .collect::<Vec<_>>(),
+        )
+    }
+}
+
+impl std::fmt::Display for RecordTypeDef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{{")?;
+        for (name, ty) in &self.0 {
+            write!(f, "{}: {}, ", name, ty)?;
+        }
+        write!(f, "}}")
+    }
+}
+
+#[derive(
+    Clone, Debug, Eq, PartialEq, Default, Ord, PartialOrd, Serialize,
+)]
 pub enum TypeDef {
     // Data Sources, the data field in the enum represents the contained
     // type.
@@ -51,7 +127,8 @@ pub enum TypeDef {
     OutputStream(Box<TypeDef>),
     // Collection Types
     List(Box<TypeDef>),
-    Record(Vec<NamedTypeDef>),
+    // Record with sorted named fields
+    Record(RecordTypeDef),
     Enum(Box<TypeDef>),
     // The data field holds the name of the enum this variant belongs to.
     ConstEnumVariant(ShortString),
@@ -98,9 +175,11 @@ impl TypeDef {
     // holds a value bigger than 128, is NOT checked here. That check is done
     // during compilation.
 
-    // Likewise for a Record, the only check is that it
-    // can be converted into another Record, not that the sub-types of the
-    // records match.
+    // For all types that are expressed as variants with a data field, where
+    // the data field holds a sub-type definition, the sub-types names are
+    // also checked for equivalence. Field types are left alone, checking
+    // equivalence or type conversion for those should done at the symbol
+    // level.
 
     // The conversions indicated here is unidirectional, e.g. a line
     // `U8(U32,PrefixLength,IntegerLiteral;),` means that an U8 can converted
@@ -130,6 +209,12 @@ impl TypeDef {
         MultiExitDisc(U8,IntegerLiteral,StringLiteral;),
         AtomicAggregator(U8;);
         // have conversions, have data field
+        // Records can be converted to other type of Records under certain
+        // conditions:
+        // - The fields match but are not sorted differently
+        // - Field types do not match, but conversion is possible
+        // - The fields set of the target record type is a superset of the
+        //   source record type (TODO!)
         Record(;Record,OutputStream),
         LazyRecord(;Record,OutputStream),
         AcceptReject(StringLiteral;);
@@ -149,12 +234,13 @@ impl TypeDef {
     );
 
     pub(crate) fn new_record_type_from_short_string(
-        type_ident_pairs: Vec<NamedTypeDef>,
+        mut type_ident_pairs: Vec<NamedTypeDef>,
     ) -> Result<TypeDef, CompileError> {
-        Ok(TypeDef::Record(type_ident_pairs))
+        type_ident_pairs.sort();
+        Ok(TypeDef::Record(RecordTypeDef::new(type_ident_pairs)))
     }
 
-    // Gets the type of a field of a Record Type, which canbe a porimitive,
+    // Gets the type of a field of a Record Type, which can be a primitive,
     // but it can also be an anonymous record type.
     pub fn get_field(&self, field: &str) -> Option<TypeDef> {
         match self {
@@ -180,17 +266,14 @@ impl TypeDef {
         type_ident_pairs: Vec<(&str, Box<TypeDef>)>,
     ) -> Result<TypeDef, CompileError> {
         Ok(TypeDef::Record(
-            type_ident_pairs
-                .iter()
-                .map(|(k, v)| (ShortString::from(*k), v.clone()))
-                .collect(),
+            type_ident_pairs.into(),
         ))
     }
 
     // this function checks that the `fields` vec describes the fields
     // present in self. If so it returns the positions in the vec of the
     // corresponding fields, to serve as the token for each field.
-    pub(crate) fn has_fields_chain(
+    pub(crate) fn has_fields_chain<'a>(
         &self,
         check_fields: &[crate::ast::Identifier],
     ) -> Result<(TypeDef, Token), CompileError> {
@@ -220,13 +303,13 @@ impl TypeDef {
 
                     // Check if this field exists in the TypeDef of the
                     // Record.
-                    if let Some((_, (_, ty))) = found_fields
-                        .iter()
-                        .enumerate()
-                        .find(|(i, (ident, _))| {
-                            index = *i;
-                            ident == &field.ident.as_str()
-                        })
+                    if let Some((_, (_, ty))) =
+                        found_fields.0.iter().enumerate().find(
+                            |(i, (ident, _))| {
+                                index = *i;
+                                ident == &field.ident.as_str()
+                            },
+                        )
                     {
                         // Add up all the type defs in the data field
                         // of self.
@@ -613,12 +696,8 @@ impl MethodProps {
 impl std::fmt::Display for TypeDef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TypeDef::Record(rec) => {
-                write!(f, "Record {{")?;
-                for (name, ty) in rec {
-                    write!(f, "{}: {}, ", name, ty)?;
-                }
-                write!(f, "}}")
+            TypeDef::Record(rec_def) => {
+                write!(f, "Record {}", rec_def)
             }
             TypeDef::List(list) => write!(f, "List of {}", list),
             TypeDef::Enum(c_enum) => write!(f, "Enum of {}", c_enum),
@@ -635,11 +714,7 @@ impl std::fmt::Display for TypeDef {
             TypeDef::Route => write!(f, "Route"),
             TypeDef::BgpUpdateMessage => write!(f, "BgpUpdateMessage"),
             TypeDef::LazyRecord(lazy_type_def) => {
-                write!(f, "Lazy Record {{")?;
-                for (name, ty) in lazy_type_def.type_def() {
-                    write!(f, "{}: {}, ", name, ty)?;
-                }
-                write!(f, "}}")
+                write!(f, "Lazy Record {}", lazy_type_def.type_def())
             }
             TypeDef::Rib(rib) => write!(f, "Rib of {}", rib.0),
             TypeDef::Table(table) => write!(f, "Table of {}", table),
@@ -656,7 +731,7 @@ impl std::fmt::Display for TypeDef {
             TypeDef::HexLiteral => write!(f, "HexLiteral"),
             TypeDef::StringLiteral => write!(f, "String"),
             TypeDef::AcceptReject(_) => write!(f, "AcceptReject"),
-            TypeDef::Unknown => write!(f, "None"),
+            TypeDef::Unknown => write!(f, "Unknown"),
             TypeDef::LocalPref => write!(f, "Local Preference"),
             TypeDef::MultiExitDisc => write!(f, "Multi Exit Discriminator"),
             TypeDef::NextHop => write!(f, "Next Hop"),
@@ -726,13 +801,10 @@ impl PartialEq<TypeValue> for TypeDef {
                     false
                 }
             },
-            (TypeDef::Record(rec), TypeValue::Record(_b)) => {
-                trace!("compare {:?} <-> {:?}", rec, _b);
+            (TypeDef::Record(rec), TypeValue::Record(b)) => {
+                trace!("compare {:?} <-> {:?}", rec, b);
+                let fields: Vec<(ShortString, TypeDef)> = b.clone().into();
 
-                let fields =
-                    _b.0.iter()
-                        .map(|ty| (ty.0.clone(), (&ty.1).into()))
-                        .collect::<Vec<(_, TypeDef)>>();
                 let mut field_count = 0;
 
                 for (name, ty) in fields.as_slice() {
@@ -756,6 +828,46 @@ impl PartialEq<TypeValue> for TypeDef {
                 true
             }
             _ => false,
+        }
+    }
+}
+
+impl TryInto<RecordTypeDef> for Box<TypeDef> {
+    type Error = CompileError;
+    fn try_into(self) -> Result<RecordTypeDef, Self::Error> {
+        if let TypeDef::Record(mut rec_def) = *self {
+            Ok(rec_def)
+        } else {
+            Err(CompileError::from(format!(
+                "Cannot convert type {} into a record type",
+                self
+            )))
+        }
+    }
+}
+
+impl From<RecordTypeDef> for Box<TypeDef> {
+    fn from(mut value: RecordTypeDef) -> Self {
+        TypeDef::Record(value.into()).into()
+    }
+}
+
+impl PartialEq<RecordTypeDef> for Box<TypeDef> {
+    fn eq(&self, other: &RecordTypeDef) -> bool {
+        if let TypeDef::Record(ref rec_def) = **self {
+            rec_def == other
+        } else {
+            false
+        }
+    }
+}
+
+impl PartialEq<Box<TypeDef>> for RecordTypeDef {
+    fn eq(&self, other: &Box<TypeDef>) -> bool {
+        if let TypeDef::Record(ref rec_def) = **other {
+            rec_def == self
+        } else {
+            false
         }
     }
 }
@@ -954,11 +1066,11 @@ impl From<&TypeValue> for TypeDef {
                     }
                 },
             },
-            TypeValue::Record(r) => TypeDef::Record(
-                r.0.iter()
+            TypeValue::Record(r) => TypeDef::Record(RecordTypeDef::new(
+                r.iter()
                     .map(|(k, v)| (k.clone(), Box::new(v.into())))
-                    .collect(),
-            ),
+                    .collect::<Vec<_>>(),
+            )),
             TypeValue::Enum(e) => e.get_type(),
             // TypeValue::Rib(r) => r.ty.clone(),
             // TypeValue::Table(t) => t.ty.clone(),

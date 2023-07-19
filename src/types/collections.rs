@@ -1,3 +1,4 @@
+use log::trace;
 use serde::Serialize;
 use smallvec::SmallVec;
 
@@ -546,13 +547,14 @@ impl From<ListToken> for usize {
 //---------------- Record type ----------------------------------------------
 
 #[derive(Debug, PartialEq, Eq, Default, Clone, Hash, Serialize)]
-pub struct Record(pub(crate) Vec<(ShortString, ElementTypeValue)>);
+pub struct Record(Vec<(ShortString, ElementTypeValue)>);
 
 impl<'a> Record {
     pub(crate) fn new(
-        elems: Vec<(ShortString, ElementTypeValue)>,
-    ) -> Result<Self, CompileError> {
-        Ok(Self(elems))
+        mut elems: Vec<(ShortString, ElementTypeValue)>,
+    ) -> Self {
+        elems.sort_by_key(|v| v.0.clone());
+        Self(elems)
     }
 
     pub fn create_instance(
@@ -580,6 +582,52 @@ impl<'a> Record {
         } else {
             Err(CompileError::new("Not a record type".into()))
         }
+    }
+
+    // This function requires quite the trust from our VM and the user, it takes
+    // a Vec of TypeValues under the assumption that they are exactly ordered the
+    // way the resulting Record is, so that the caller can omit the field NAMES,
+    // only supplying the values.
+    pub fn create_instance_from_ordered_fields(
+        ty: &TypeDef,
+        mut values: Vec<TypeValue>,
+    ) -> Result<Record, CompileError> {
+        if values.is_empty() {
+            return Err(CompileError::new(
+                "Can't create empty instance.".into(),
+            ));
+        }
+
+        trace!("ordered values {:?}", values);
+        let mut kvs = vec![];
+        if let TypeDef::Record(rec) = ty {
+            for (field_name, _field_type) in rec.iter() {
+                let value = values.pop().unwrap();
+                kvs.push((field_name.clone(), ElementTypeValue::from(value)));
+            }
+
+        } else {
+            trace!("TypeDef for ordered fields {:?}", ty);
+            return Err(CompileError::new("Not a record type".into()));
+        }
+
+        Ok(Self(kvs))
+    }
+
+    pub fn get_values(&self) -> &[(ShortString, ElementTypeValue)] {
+        &self.0[..]
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item=&(ShortString, ElementTypeValue)> + '_ {
+        self.0.iter()
     }
 
     pub fn get_value_for_field(
@@ -622,6 +670,13 @@ impl<'a> Record {
         }
 
         elm.unwrap()
+    }
+
+    pub fn get_field_by_single_index(
+        &self,
+        index: usize,
+    ) -> Option<&(ShortString, ElementTypeValue)> {
+        self.0.get(index)
     }
 
     pub fn set_value_on_field_index(
@@ -703,6 +758,7 @@ impl RotoType for Record {
         // Converting from a Record into a Record is not as straight-forward
         // as it is for primitive types, since we have to check whether the
         // fields in both completely match.
+        trace!("CONVERT RECORD TYPE INSTANCE");
         match into_type {
             TypeDef::Record(_) => {
                 if into_type == &TypeValue::Record(self.clone()) {
@@ -788,6 +844,14 @@ impl From<Record> for TypeValue {
     }
 }
 
+impl From<Record> for Vec<(ShortString, TypeDef)> {
+    fn from(value: Record) -> Self {
+        value.0.iter()
+        .map(|ty| (ty.0.clone(), (&ty.1).into()))
+        .collect::<Vec<(_, TypeDef)>>()
+    }
+}
+
 #[derive(Debug)]
 #[repr(u8)]
 pub enum RecordToken {
@@ -814,7 +878,7 @@ impl From<RecordToken> for usize {
     }
 }
 
-//------------ bytesRecord --------------------------------------------------
+//------------ BytesRecord --------------------------------------------------
 
 #[derive(Debug, Serialize)]
 pub struct BytesRecord<T>(pub(crate) T);
@@ -1348,7 +1412,7 @@ impl<T: std::fmt::Debug> From<(LazyRecord<'_, T>, &BytesRecord<T>)>
         for field in value.0.value {
             rec.push((field.0, ElementTypeValue::from((field.1, value.1))));
         }
-        TypeValue::Record(Record::new(rec).unwrap())
+        TypeValue::Record(Record::new(rec))
     }
 }
 

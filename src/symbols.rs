@@ -155,7 +155,7 @@ impl Symbol {
         }
 
         match self.get_type() {
-            TypeDef::Record(_) => TypeValue::Record(Record(rec_values)),
+            TypeDef::Record(_) => TypeValue::Record(Record::new(rec_values)),
             _ => self.value.clone(),
         }
     }
@@ -181,7 +181,7 @@ impl Symbol {
                     rec_values.push((
                         arg.get_name(),
                         checked_type,
-                        TypeValue::Record(Record(
+                        TypeValue::Record(Record::new(
                             checked_val
                                 .iter()
                                 .map(|cv| (cv.0.clone(), cv.2.clone().into()))
@@ -329,14 +329,16 @@ impl Symbol {
         }
 
         if self.ty.clone().test_type_conversion(into_ty.clone()) {
+            trace!("Type conversion possible from {} into {}", self.ty, into_ty);
             self.ty = into_ty.clone();
             if let TypeValue::Unknown = self.value {
-                trace!("UNKNOWN");
+                trace!("Value is Unknown");
             } else {
                 trace!("try conversion from value into value of other type");
                 self.value = self.value.into_type(&into_ty)?;
             }
         } else {
+            trace!("Type conversion NOT possible from {} into {}", self.ty, into_ty);
             return Err(CompileError::from(format!(
                 "{} cannot be converted into {}",
                 self.ty, into_ty

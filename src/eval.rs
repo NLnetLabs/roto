@@ -18,6 +18,7 @@ use crate::types::builtin::PrefixLength;
 use crate::types::builtin::StringLiteral;
 use crate::types::constant_enum::global_enums;
 use crate::types::typedef::NamedTypeDef;
+use crate::types::typedef::RecordTypeDef;
 
 use super::ast;
 use super::symbols;
@@ -261,7 +262,7 @@ impl<'a> ast::RibBody {
 
                     kvs.push((
                         r.0.ident.as_str().into(),
-                        Box::new(TypeDef::Record(nested_record)),
+                        Box::new(TypeDef::Record(RecordTypeDef::new(nested_record))),
                     ));
                 }
                 ast::RibField::ListField(l) => {
@@ -312,7 +313,7 @@ impl<'a> ast::RecordTypeIdentifier {
 
                     kvs.push((
                         r.0.ident.as_str().into(),
-                        Box::new(TypeDef::Record(nested_record)),
+                        Box::new(TypeDef::Record(RecordTypeDef::new(nested_record))),
                     ));
                 }
                 ast::RibField::ListField(l) => {
@@ -326,7 +327,7 @@ impl<'a> ast::RecordTypeIdentifier {
             }
         }
 
-        let record = TypeDef::Record(kvs.clone());
+        let record = TypeDef::Record(RecordTypeDef::new(kvs.clone()));
         symbols.add_variable(
             name,
             None,
@@ -965,6 +966,7 @@ impl ast::MethodComputeExpr {
                     .try_convert_type_value_into(expected_arg_type.clone())?,
             );
         }
+        trace!("converted args {:?}", args);
 
         Ok(symbols::Symbol::new(
             self.ident.clone().ident,
@@ -1171,7 +1173,7 @@ impl ast::ValueExpr {
                 Ok(symbols::Symbol::new(
                     "anonymous_record".into(),
                     symbols::SymbolKind::AnonymousType,
-                    TypeDef::Record(type_def),
+                    TypeDef::Record(RecordTypeDef::new(type_def)),
                     rec_value,
                     Some(Token::AnonymousRecord),
                 ))
@@ -1186,12 +1188,12 @@ impl ast::ValueExpr {
                 {
                     fields
                 } else {
-                    vec![]
+                    RecordTypeDef::new(vec![])
                 };
 
                 // now check all individual fields to see if they match up,
                 // meaning the (field_name, type) pairs match or can be made
-                // to match by trying a type conversion on each field untill
+                // to match by trying a type conversion on each field until
                 // we fail, or succeed for all fields. The type with the
                 // conversions is stored as the actual type.
                 let mut checked_values = vec![];
@@ -1199,10 +1201,13 @@ impl ast::ValueExpr {
                     let cur_ty =
                         checked_ty.iter().find(|v| v.0 == field_s.get_name());
                     if let Some(cur_ty) = cur_ty {
+                        let field_name = field_s.get_name();
+                        let field_ty = field_s.get_type();
                         checked_values.push(
                             field_s.try_convert_type_value_into(
                                 *cur_ty.1.clone(),
-                            )?,
+                            ).map_err(|_e| CompileError::from(
+                                format!("The field name '{}' has the wrong type. Expected '{}', but got '{}'", field_name, cur_ty.1, field_ty)))?,
                         );
                     } else {
                         return Err(CompileError::from(format!("The field name '{}' cannot be found in type '{}'", field_s.get_name(), type_id.ident)));
@@ -1254,8 +1259,10 @@ impl ast::FieldAccessExpr {
         &self,
         field_type: TypeDef,
     ) -> Result<symbols::Symbol, CompileError> {
+
         trace!("field access on field type {:?}", field_type);
         trace!("self field names {:?}", self.field_names);
+
         if let Ok((ty, to)) = field_type.has_fields_chain(&self.field_names) {
             trace!("token {:?}", to);
             let name = self.field_names.join(".");

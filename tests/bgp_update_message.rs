@@ -11,7 +11,7 @@ mod common;
 
 fn test_data(
     name: &str,
-    source_code: &'static str,
+    source_code: &str,
 ) -> Result<VmResult, Box<dyn std::error::Error>> {
     println!("Evaluate filter-map {}...", name);
 

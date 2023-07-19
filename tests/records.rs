@@ -182,7 +182,7 @@ fn test_records_compare_2() {
 
     assert_eq!(
         test_run,
-        "Eval error: Cannot convert type StringLiteral to type Asn"
+        "Eval error: The field name 'asn' has the wrong type. Expected 'Asn', but got 'String'"
     );
 }
 

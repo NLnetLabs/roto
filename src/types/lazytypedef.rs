@@ -1,9 +1,9 @@
 use log::trace;
 use serde::Serialize;
 
-use super::typedef::{MethodProps, NamedTypeDef, TypeDef};
+use super::typedef::{MethodProps, NamedTypeDef, TypeDef, RecordTypeDef};
 use crate::{
-    ast::Identifier, compile::CompileError, traits::Token,
+    ast::{Identifier, ShortString}, compile::CompileError, traits::Token,
     types::builtin::BytesRecord,
 };
 
@@ -14,7 +14,7 @@ pub type PeerUpNotification =
 pub type PeerDownNotification =
     routecore::bmp::message::PeerDownNotification<bytes::Bytes>;
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
 pub enum LazyTypeDef {
     RouteMonitoring,
     PeerUpNotification,
@@ -24,7 +24,7 @@ pub enum LazyTypeDef {
 }
 
 impl LazyTypeDef {
-    pub fn type_def(&self) -> Vec<NamedTypeDef> {
+    pub fn type_def(&self) -> RecordTypeDef {
         match &self {
             LazyTypeDef::RouteMonitoring => {
                 BytesRecord::<RouteMonitoring>::type_def()
@@ -90,6 +90,28 @@ impl LazyTypeDef {
             }
             LazyTypeDef::StatisticsReport => todo!(),
             LazyTypeDef::RouteMirroring => todo!(),
+        }
+    }
+}
+
+impl From<LazyTypeDef> for Box<TypeDef> {
+    fn from(value: LazyTypeDef) -> Self {
+        TypeDef::Record(value.type_def().into()).into()
+    }
+}
+
+impl PartialEq<RecordTypeDef> for LazyTypeDef {
+    fn eq(&self, other: &RecordTypeDef) -> bool {
+        todo!()
+    }
+}
+
+impl PartialEq<Box<TypeDef>> for LazyTypeDef {
+    fn eq(&self, other: &Box<TypeDef>) -> bool {
+        if let TypeDef::Record(rec_def) = &**other {
+            rec_def == &self.type_def()
+        } else {
+            false
         }
     }
 }

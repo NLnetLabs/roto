@@ -5,7 +5,7 @@ use roto::types::builtin::{
 };
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
-use roto::types::typevalue::TypeValue;
+use roto::types::{typevalue::TypeValue};
 use roto::vm;
 
 mod common;
@@ -95,6 +95,13 @@ fn test_data(
     println!("Used Data Sources");
     println!("{:#?}", &roto_pack.data_sources);
 
+    for mb in roto_pack.get_mir().iter() {
+        println!("{}", mb);
+    }
+
+    let my_payload = TypeValue::Record(my_payload);
+    assert!(roto_pack.check_rx_payload_type(&my_payload));
+
     let ds_ref = roto_pack.data_sources;
 
     println!("Start vm...");
@@ -112,6 +119,7 @@ fn test_data(
     println!("action: {}", res.accept_reject);
     println!("rx    : {:?}", res.rx);
     println!("tx    : {:?}", res.tx);
+    println!("stream: {:?}", res.stream_output_queue);
 
     Ok(())
 }
@@ -127,7 +135,7 @@ fn test_filter_map_message_1() {
                 // specify the types of that this filter receives
                 // and sends.
                 // rx_tx route: StreamRoute;
-                rx route: Route;
+                rx route: MyPayload;
                 tx out: Route;
             }
 
@@ -140,7 +148,7 @@ fn test_filter_map_message_1() {
             action send-message {
                 mqtt.send({ 
                     message: String.format("🤭 I encountered ", my_asn),
-                    my_asn: my_asn
+                    asn: my_asn
                 });
             }
 
@@ -152,8 +160,18 @@ fn test_filter_map_message_1() {
         }
 
         output-stream mqtt contains Message {
-             message: String,
-             asn: Asn
+            asn: Asn,
+            message: String
+        }
+
+        type MyPayload {
+            prefix: Prefix,
+            as-path: AsPath,
+            origin: Asn,
+            next-hop: IpAddress,
+            med: U32,
+            local-pref: U32,
+            community: [Community]
         }
         "###,
     ).unwrap();
@@ -162,7 +180,7 @@ fn test_filter_map_message_1() {
 #[test]
 fn test_filter_map_message_2() {
     common::init();
-    test_data(
+    let res = test_data(
         "my-message-filter-map-2",
         r###"
         filter-map my-message-filter-map-2 with my_asn: Asn {
@@ -170,7 +188,7 @@ fn test_filter_map_message_2() {
                 // specify the types of that this filter receives
                 // and sends.
                 // rx_tx route: StreamRoute;
-                rx route: Route;
+                rx route: MyPayload;
                 tx out: Route;
             }
 
@@ -182,8 +200,8 @@ fn test_filter_map_message_2() {
             
             action send-message {
                 mqtt.send({ 
-                    message: String.format("🤭 I, the messager, saw {} in a BGP update.", my_asn),
-                    my_asn: my_asn
+                    my_asn: my_asn,
+                    message: String.format("🤭 I, the messager, saw {} in a BGP update.", my_asn)
                 });
             }
 
@@ -195,8 +213,76 @@ fn test_filter_map_message_2() {
         }
 
         output-stream mqtt contains Message {
-             message: String,
-             asn: Asn
+            asn: Asn,
+            message: String
+        }
+
+        type MyPayload {
+            prefix: Prefix,
+            as-path: AsPath,
+            origin: Asn,
+            next-hop: IpAddress,
+            med: U32,
+            local-pref: U32,
+            community: [Community]
+        }
+        "###,
+    );
+
+    let err = "Eval error: Record {message: String, my_asn: Asn, } cannot".to_string();
+    let mut str = res.unwrap_err().to_string();
+    str.truncate(err.len());
+    assert_eq!(str, err);
+}
+
+#[test]
+fn test_filter_map_message_3() {
+    common::init();
+    test_data(
+        "my-message-filter-map-2",
+        r###"
+        filter-map my-message-filter-map-2 with my_asn: Asn {
+            define {
+                // specify the types of that this filter receives
+                // and sends.
+                // rx_tx route: StreamRoute;
+                rx route: MyPayload;
+                tx out: Route;
+            }
+
+            term rov-valid for route: Route {
+                match {
+                    route.as-path.origin() == my_asn;
+                }
+            }
+            
+            action send-message {
+                mqtt.send({ 
+                    asn: my_asn,
+                    message: String.format("🤭 I, the messager, saw {} in a BGP update.", my_asn)
+                });
+            }
+
+            apply {
+                filter match rov-valid not matching {  
+                    send-message;
+                };
+            }
+        }
+
+        output-stream mqtt contains Message {
+            asn: Asn,
+            message: String
+        }
+
+        type MyPayload {
+            prefix: Prefix,
+            as-path: AsPath,
+            origin: Asn,
+            next-hop: IpAddress,
+            med: U32,
+            local-pref: U32,
+            community: [Community]
         }
         "###,
     ).unwrap();

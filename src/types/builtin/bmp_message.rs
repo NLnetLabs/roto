@@ -15,7 +15,7 @@ use crate::{
             LazyTypeDef, PeerDownNotification, PeerUpNotification,
             RouteMonitoring,
         },
-        typedef::{LazyNamedTypeDef, NamedTypeDef, TypeDef},
+        typedef::{LazyNamedTypeDef, RecordTypeDef, TypeDef},
         typevalue::TypeValue,
     },
     vm::VmError,

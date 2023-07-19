@@ -29,13 +29,13 @@ macro_rules! typedefconversion {
                     }
                 )*
                 $(
-                    TypeDef::$type_data(_) => {
+                    TypeDef::$type_data(rec_def) => {
                         return match into_ty {
                             $(
                                 TypeDef::$into_type_data => true,
                             )*
                             $(
-                                TypeDef::$into_type_nest_data(_) => true,
+                                TypeDef::$into_type_nest_data(rec_def_into) => rec_def == rec_def_into,
                             )*
                             _ => false
                         };
@@ -277,15 +277,15 @@ macro_rules! bytes_record_impl {
                 ]
             }
 
-            pub(crate) fn type_def() -> Vec<NamedTypeDef> {
-                vec![
+            pub(crate) fn type_def() -> RecordTypeDef {
+                RecordTypeDef::new(vec![
                     $(
                         $(
 
                                 (
                                     $sub_record_name.into(),
                                     TypeDef::Record(
-                                        vec![
+                                        RecordTypeDef::new(vec![
                                         $(
                                             $( (
                                                 $field_name.into(),
@@ -298,7 +298,7 @@ macro_rules! bytes_record_impl {
                                                     ).into()
                                             ), )?
                                         )+
-                                        ]
+                                        ])
                                     ).into()
                                 ),
 
@@ -312,7 +312,7 @@ macro_rules! bytes_record_impl {
                             // )?
                         )?
                     )+
-                ]
+                ])
             }
 
             pub(crate) fn get_props_for_field(
