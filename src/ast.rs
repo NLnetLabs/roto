@@ -1174,7 +1174,7 @@ fn comment(input: &str) -> IResult<&str, (), VerboseError<&str>> {
 ///
 /// Identifier ::= ([a-z]) ([0-9a-z-_])*
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Ord, PartialOrd)]
 pub struct Identifier {
     /// The actual identifier.
     pub ident: ShortString,
@@ -1418,6 +1418,20 @@ impl RecordTypeIdentifier {
                 char(','),
                 opt_ws(cut(alt((
                     map(TypeIdentField::parse, RibField::PrimitiveField),
+                    map(
+                        tuple((
+                            terminated(
+                                opt_ws(Identifier::parse),
+                                opt_ws(char(':')),
+                            ),
+                            delimited(
+                                opt_ws(char('[')),
+                                ListTypeIdentifier::parse,
+                                opt_ws(char(']')),
+                            ),
+                        )),
+                        |r| RibField::ListField(Box::new(r)),
+                    ),
                     map(
                         tuple((
                             terminated(
@@ -1676,7 +1690,7 @@ impl<'a> ByteStringLiteral {
 
 // AcceptReject ::= 'return'? ( 'accept' | 'reject' ) ';'
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Serialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
 pub enum AcceptReject {
     Accept,
     Reject,
