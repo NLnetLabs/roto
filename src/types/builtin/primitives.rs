@@ -1465,7 +1465,7 @@ impl SerializeForOperators for StandardCommunity {
                 raw_fields: vec![format!("{:#010X}", self.to_u32())],
                 r#type: "standard",
                 parsed: ser::Parsed::ExplicitValue {
-                    value: ser::Value::PlainValue(ser::PlainValue {
+                    value: ser::Value::Plain(ser::PlainValue {
                         r#type: "well-known-unrecognised",
                     }),
                 },
@@ -1476,7 +1476,7 @@ impl SerializeForOperators for StandardCommunity {
                 raw_fields: vec![format!("{:#010X}", self.to_u32())],
                 r#type: "standard",
                 parsed: ser::Parsed::ExplicitValue {
-                    value: ser::Value::AttributeValue(ser::AttributeValue {
+                    value: ser::Value::Attribute(ser::AttributeValue {
                         r#type: "well-known",
                         attribute: format!("{}", wk),
                     }),
@@ -1488,7 +1488,7 @@ impl SerializeForOperators for StandardCommunity {
                 raw_fields: vec![format!("{:#010X}", self.to_u32())],
                 r#type: "standard",
                 parsed: ser::Parsed::ExplicitValue {
-                    value: ser::Value::PlainValue(ser::PlainValue {
+                    value: ser::Value::Plain(ser::PlainValue {
                         r#type: "reserved",
                     }),
                 },
@@ -1507,7 +1507,7 @@ impl SerializeForOperators for StandardCommunity {
                     ],
                     r#type: "standard",
                     parsed: ser::Parsed::ExplicitValue {
-                        value: ser::Value::AsnTagValue(ser::AsnTagValue {
+                        value: ser::Value::AsnTag(ser::AsnTagValue {
                             r#type: "private",
                             asn: formatted_asn,
                             tag,
@@ -1537,7 +1537,7 @@ impl SerializeForOperators for LargeCommunity {
             ],
             r#type: "large",
             parsed: ser::Parsed::InlineValue(
-                ser::Value::GlobalLocalDataPartsValue(
+                ser::Value::GlobalLocalDataParts(
                     ser::GlobalLocalDataPartsValue {
                         globalAdmin: ser::GlobalAdmin { r#type: "asn", value: asn },
                         localDataPart1: self.local1(),
@@ -1579,7 +1579,7 @@ impl SerializeForOperators for ExtendedCommunity {
                 ser::Community {
                     raw_fields,
                     r#type: "extended",
-                    parsed: ser::Parsed::InlineValue(ser::Value::ExtendedValue(ser::ExtendedValue {
+                    parsed: ser::Parsed::InlineValue(ser::Value::Extended(ser::ExtendedValue {
                         r#type: "as2-specific",
                         transitive: self.is_transitive(),
                         inner: ser::TypedValueInner::As2Specific {
@@ -1611,7 +1611,7 @@ impl SerializeForOperators for ExtendedCommunity {
                 ser::Community {
                     raw_fields,
                     r#type: "extended",
-                    parsed: ser::Parsed::InlineValue(ser::Value::ExtendedValue(ser::ExtendedValue {
+                    parsed: ser::Parsed::InlineValue(ser::Value::Extended(ser::ExtendedValue {
                         r#type: "ipv4-address-specific",
                         transitive: self.is_transitive(),
                         inner: ser::TypedValueInner::Ipv4AddressSpecific {
@@ -1622,7 +1622,7 @@ impl SerializeForOperators for ExtendedCommunity {
                             },
                             globalAdmin: ser::GlobalAdmin {
                                 r#type: "ipv4-address",
-                                value: format!("{}", global_admin.to_string()),
+                                value: global_admin.to_string(),
                             },
                             localAdmin: local_admin,
                         },
@@ -1635,7 +1635,7 @@ impl SerializeForOperators for ExtendedCommunity {
                 ser::Community {
                     raw_fields,
                     r#type: "extended",
-                    parsed: ser::Parsed::InlineValue(ser::Value::ExtendedValue(ser::ExtendedValue {
+                    parsed: ser::Parsed::InlineValue(ser::Value::Extended(ser::ExtendedValue {
                         r#type: "unrecognised",
                         transitive: self.is_transitive(),
                         inner: ser::TypedValueInner::Unrecognised,
@@ -1709,11 +1709,11 @@ mod ser {
     #[derive(serde::Serialize)]
     #[serde(untagged)]
     pub enum Value {
-        AsnTagValue(AsnTagValue),
-        AttributeValue(AttributeValue),
-        GlobalLocalDataPartsValue(GlobalLocalDataPartsValue),
-        PlainValue(PlainValue),
-        ExtendedValue(ExtendedValue),
+        AsnTag(AsnTagValue),
+        Attribute(AttributeValue),
+        GlobalLocalDataParts(GlobalLocalDataPartsValue),
+        Plain(PlainValue),
+        Extended(ExtendedValue),
     }
 
     #[derive(serde::Serialize)]
