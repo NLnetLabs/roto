@@ -1379,7 +1379,7 @@ impl ListTypeIdentifier {
 // quotes. We don't do any escaping or anything like that.
 
 // StringLiteral ::= '"' Identifier '"'
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug)]
 pub struct StringLiteral(pub(crate) String);
 
 impl StringLiteral {

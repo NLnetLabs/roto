@@ -5,7 +5,6 @@ use serde::Serialize;
 use std::marker::PhantomData;
 use std::ops::Index;
 
-use crate::ast::StringLiteral;
 use crate::types::builtin::{
     AsPath, Asn, AtomicAggregator, BuiltinTypeValue, Community, IpAddress,
     LocalPref, MultiExitDisc, NextHop, OriginType, Prefix, RouteStatus,
@@ -59,7 +58,6 @@ impl ScalarValue for Prefix {}
 impl ScalarValue for RouteStatus {}
 impl ScalarValue for IpAddress {}
 impl ScalarValue for Asn {}
-impl ScalarValue for StringLiteral {}
 // impl ScalarValue for (u8, u32) {}
 
 //------------ Attributes Change Set ----------------------------------------
@@ -90,8 +88,6 @@ pub struct AttrChangeSet {
     pub peer_ip: ScalarOption<IpAddress>,
     #[serde(skip_serializing_if = "ScalarOption::is_none")]
     pub peer_asn: ScalarOption<Asn>,
-    #[serde(skip_serializing_if = "ScalarOption::is_none")]
-    pub router_id: ScalarOption<StringLiteral>,
     // mp_reach_nlri: Vec<Prefix>,
     // mp_unreach_nlri: Vec<Prefix>,
     #[serde(skip)]
