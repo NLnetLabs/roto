@@ -1,9 +1,9 @@
 use log::trace;
 use serde::Serialize;
 
-use super::typedef::{MethodProps, NamedTypeDef, TypeDef, RecordTypeDef};
+use super::typedef::{MethodProps, TypeDef, RecordTypeDef};
 use crate::{
-    ast::{Identifier, ShortString}, compile::CompileError, traits::Token,
+    ast::Identifier, compile::CompileError, traits::Token,
     types::builtin::BytesRecord,
 };
 
@@ -96,12 +96,12 @@ impl LazyTypeDef {
 
 impl From<LazyTypeDef> for Box<TypeDef> {
     fn from(value: LazyTypeDef) -> Self {
-        TypeDef::Record(value.type_def().into()).into()
+        TypeDef::Record(value.type_def()).into()
     }
 }
 
 impl PartialEq<RecordTypeDef> for LazyTypeDef {
-    fn eq(&self, other: &RecordTypeDef) -> bool {
+    fn eq(&self, _other: &RecordTypeDef) -> bool {
         todo!()
     }
 }

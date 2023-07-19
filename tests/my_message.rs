@@ -5,7 +5,7 @@ use roto::types::builtin::{
 };
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
-use roto::types::{typevalue::TypeValue};
+use roto::types::typevalue::TypeValue;
 use roto::vm;
 
 mod common;

@@ -29,13 +29,13 @@ macro_rules! typedefconversion {
                     }
                 )*
                 $(
-                    TypeDef::$type_data(rec_def) => {
+                    TypeDef::$type_data(_rec_def) => {
                         return match into_ty {
                             $(
                                 TypeDef::$into_type_data => true,
                             )*
                             $(
-                                TypeDef::$into_type_nest_data(rec_def_into) => rec_def == rec_def_into,
+                                TypeDef::$into_type_nest_data(rec_def_into) => _rec_def == rec_def_into,
                             )*
                             _ => false
                         };

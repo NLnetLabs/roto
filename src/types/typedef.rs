@@ -1,7 +1,6 @@
 //------------ TypeDef -----------------------------------------------------
 
 use std::hash::{Hash, Hasher};
-use std::ops::Deref;
 
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
@@ -273,7 +272,7 @@ impl TypeDef {
     // this function checks that the `fields` vec describes the fields
     // present in self. If so it returns the positions in the vec of the
     // corresponding fields, to serve as the token for each field.
-    pub(crate) fn has_fields_chain<'a>(
+    pub(crate) fn has_fields_chain(
         &self,
         check_fields: &[crate::ast::Identifier],
     ) -> Result<(TypeDef, Token), CompileError> {
@@ -835,7 +834,7 @@ impl PartialEq<TypeValue> for TypeDef {
 impl TryInto<RecordTypeDef> for Box<TypeDef> {
     type Error = CompileError;
     fn try_into(self) -> Result<RecordTypeDef, Self::Error> {
-        if let TypeDef::Record(mut rec_def) = *self {
+        if let TypeDef::Record(rec_def) = *self {
             Ok(rec_def)
         } else {
             Err(CompileError::from(format!(
@@ -847,8 +846,8 @@ impl TryInto<RecordTypeDef> for Box<TypeDef> {
 }
 
 impl From<RecordTypeDef> for Box<TypeDef> {
-    fn from(mut value: RecordTypeDef) -> Self {
-        TypeDef::Record(value.into()).into()
+    fn from(value: RecordTypeDef) -> Self {
+        TypeDef::Record(value).into()
     }
 }
 
