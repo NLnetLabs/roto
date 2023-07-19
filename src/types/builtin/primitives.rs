@@ -1445,6 +1445,7 @@ impl Serialize for Community {
                     c.serialize_for_operator(serializer)
                 }
                 routecore::bgp::communities::Community::Ipv6Extended(c) => {
+                    // TODO: Also implement SerializeForOperators for IPv6 Extended Communities.
                     c.serialize(serializer)
                 }
             }
