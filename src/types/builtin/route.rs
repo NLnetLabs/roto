@@ -29,7 +29,7 @@ use crate::{
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
     },
-    vm::{StackValue, VmError},
+    vm::{StackValue, VmError}, ast::StringLiteral,
 };
 
 use super::{
@@ -106,6 +106,9 @@ pub struct RawRouteWithDeltas {
     peer_ip: Option<IpAddress>,
     // The ASN of the BGP speaker that originated the route, if known.
     peer_asn: Option<Asn>,
+    // The ID (e.g. "<ip addr>:<port>", or "<BMP initiate sysName>") of the
+    // connected router from which the route was received, if known.
+    router_id: Option<Arc<String>>,
     // history of recorded changes to the route
     attribute_deltas: AttributeDeltaList,
     // history of status changes to the route
@@ -121,20 +124,24 @@ impl RawRouteWithDeltas {
     ) -> Self {
         let raw_message = BgpUpdateMessage::new(delta_id, raw_message);
         let mut attribute_deltas = AttributeDeltaList::new();
+        let (peer_ip, peer_asn, router_id) = (None, None, None);
         // This stores the attributes in the raw message as the first delta.
         attribute_deltas
             .store_delta(AttributeDelta::new(
                 delta_id,
                 0,
-                raw_message.raw_message.create_changeset(prefix),
+                raw_message
+                    .raw_message
+                    .create_changeset(prefix, peer_ip, peer_asn, router_id.clone()),
             ))
             .unwrap();
 
         Self {
             prefix,
             raw_message: Arc::new(raw_message),
-            peer_ip: None,
-            peer_asn: None,
+            peer_ip,
+            peer_asn,
+            router_id,
             attribute_deltas,
             status_deltas: RouteStatusDeltaList::new(RouteStatusDelta::new(
                 delta_id,
@@ -154,6 +161,7 @@ impl RawRouteWithDeltas {
             raw_message: Arc::clone(raw_message),
             peer_ip: None,
             peer_asn: None,
+            router_id: None,
             attribute_deltas: AttributeDeltaList::new(),
             status_deltas: RouteStatusDeltaList::new(RouteStatusDelta::new(
                 delta_id,
@@ -168,6 +176,7 @@ impl RawRouteWithDeltas {
             raw_message: self.raw_message,
             peer_ip: Some(IpAddress::new(peer_ip)),
             peer_asn: self.peer_asn,
+            router_id: self.router_id,
             attribute_deltas: self.attribute_deltas,
             status_deltas: self.status_deltas,
         }
@@ -179,6 +188,19 @@ impl RawRouteWithDeltas {
             raw_message: self.raw_message,
             peer_ip: self.peer_ip,
             peer_asn: Some(Asn::new(peer_asn)),
+            router_id: self.router_id,
+            attribute_deltas: self.attribute_deltas,
+            status_deltas: self.status_deltas,
+        }
+    }
+
+    pub fn with_router_id(self, router_id: Arc<String>) -> Self {
+        Self {
+            prefix: self.prefix,
+            raw_message: self.raw_message,
+            peer_ip: self.peer_ip,
+            peer_asn: self.peer_asn,
+            router_id: Some(router_id),
             attribute_deltas: self.attribute_deltas,
             status_deltas: self.status_deltas,
         }
@@ -190,6 +212,10 @@ impl RawRouteWithDeltas {
 
     pub fn peer_asn(&self) -> Option<routecore::asn::Asn> {
         self.peer_asn.map(|asn| asn.0)
+    }
+
+    pub fn router_id(&self) -> Option<Arc<String>> {
+        self.router_id.clone()
     }
 
     pub fn update_status(
@@ -207,7 +233,12 @@ impl RawRouteWithDeltas {
         if let Some(attr_set) = self.attribute_deltas.deltas.last() {
             attr_set.attributes.clone()
         } else {
-            self.raw_message.raw_message.create_changeset(self.prefix)
+            self.raw_message.raw_message.create_changeset(
+                self.prefix,
+                self.peer_ip,
+                self.peer_asn,
+                self.router_id.clone(),
+            )
         }
     }
 
@@ -231,10 +262,12 @@ impl RawRouteWithDeltas {
     // deltas.
     pub fn take_latest_attrs(mut self) -> AttrChangeSet {
         if self.attribute_deltas.deltas.is_empty() {
-            return self
-                .raw_message
-                .raw_message
-                .create_changeset(self.prefix);
+            return self.raw_message.raw_message.create_changeset(
+                self.prefix,
+                self.peer_ip,
+                self.peer_asn,
+                self.router_id,
+            );
         }
 
         self.attribute_deltas
@@ -253,9 +286,12 @@ impl RawRouteWithDeltas {
                 .store_delta(AttributeDelta::new(
                     self.raw_message.message_id,
                     0,
-                    self.raw_message
-                        .raw_message
-                        .create_changeset(self.prefix),
+                    self.raw_message.raw_message.create_changeset(
+                        self.prefix,
+                        self.peer_ip,
+                        self.peer_asn,
+                        self.router_id.clone(),
+                    ),
                 ))
                 .unwrap();
         }
@@ -1139,7 +1175,13 @@ impl UpdateMessage {
     // Materialize a ChangeSet from the Update message. The materialized
     // Change set is completely self-contained (no references of any kind) &
     // holds all the attributes of the current BGP Update message.
-    pub fn create_changeset(&self, prefix: Prefix) -> AttrChangeSet {
+    pub fn create_changeset(
+        &self,
+        prefix: Prefix,
+        peer_ip: Option<IpAddress>,
+        peer_asn: Option<Asn>,
+        router_id: Option<Arc<String>>,
+    ) -> AttrChangeSet {
         AttrChangeSet {
             prefix: ReadOnlyScalarOption::<Prefix>::new(prefix.into()),
             as_path: VectorOption::<AsPath>::from(
@@ -1156,8 +1198,9 @@ impl UpdateMessage {
             )),
             aggregator: ScalarOption::from(self.0.aggregator()),
             communities: VectorOption::from(self.0.all_communities()),
-            peer_ip: Option::<IpAddress>::None.into(),
-            peer_asn: Option::<Asn>::None.into(),
+            peer_ip: peer_ip.into(),
+            peer_asn: peer_asn.into(),
+            router_id: router_id.map(|v| StringLiteral(String::clone(&v))).into(),
             originator_id: Todo,
             cluster_list: Todo,
             extended_communities: Todo,
