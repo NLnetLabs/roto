@@ -279,6 +279,37 @@ pub(crate) fn global_enums(
                             .to_u32(),
                     }))
                 }
+                "BMP_MESSAGE_TYPE" => match var {
+                    "ROUTE_MONITORING" =>
+                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant { enum_name: (*enum_name).into(), 
+                        value:  routecore::bmp::message::MessageType::RouteMonitoring.into()
+                    })),
+                    "STATISTICS_REPORT" =>
+                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant { enum_name: (*enum_name).into(), 
+                        value:  routecore::bmp::message::MessageType::StatisticsReport.into()
+                    })),
+                    "PEER_DOWN_NOTIFICATION" =>
+                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant { enum_name: (*enum_name).into(), 
+                        value:  routecore::bmp::message::MessageType::PeerDownNotification.into()
+                    })),
+                    "PEER_UP_NOTIFICATION" =>
+                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant { enum_name: (*enum_name).into(), 
+                        value:  routecore::bmp::message::MessageType::PeerUpNotification.into()
+                    })),
+                    "INITATION_MESSAGE" =>
+                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant { enum_name: (*enum_name).into(), 
+                        value:  routecore::bmp::message::MessageType::InitiationMessage.into()
+                    })),
+                    "TERMINATION_MESSAGE" =>
+                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant { enum_name: (*enum_name).into(), 
+                        value:  routecore::bmp::message::MessageType::TerminationMessage.into()
+                    })),
+                    "ROUTE_MIRRORING" =>
+                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant { enum_name: (*enum_name).into(), 
+                        value:  routecore::bmp::message::MessageType::RouteMirroring.into()
+                    })),
+                    _ => Err(AccessReceiverError::Global),
+                }
                 _ => Err(AccessReceiverError::Global),
             }
         {
