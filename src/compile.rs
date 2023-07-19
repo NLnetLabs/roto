@@ -343,6 +343,15 @@ impl<
 
         Ok(())
     }
+
+    pub fn check_rx_payload_type(&self, payload: &TypeValue) -> bool {
+        trace!("compare payload {} with type {:?}", payload, self.rx_type);
+        self.rx_type == *payload
+    }
+
+    pub fn check_tx_payload_type(&self, payload: &TypeValue) -> Option<bool> {
+        self.tx_type.as_ref().map(|tx| tx == payload)
+    }
 }
 
 #[derive(Debug)]
@@ -979,8 +988,8 @@ fn compile_filter_map(
     Ok(RotoPack::new(
         filter_map.get_name(),
         mir,
-        TypeDef::Unknown,
-        None,
+        rx_type.map_or(TypeDef::Unknown, |rx| rx.1),
+        tx_type.map(|tx| tx.1),
         args,
         data_sources,
     ))
@@ -1215,7 +1224,7 @@ fn compile_compute_expr<'a>(
                 // method on the OutputStream type
                 Token::OutputStream(o_s) => {
                     state.cur_mir_block.command_stack.push(Command::new(
-                        OpCode::ExecuteDataStoreMethod,
+                        OpCode::PushOutputStreamQueue,
                         vec![
                             CommandArg::OutputStream(o_s),
                             CommandArg::Method(o_s),
@@ -1265,6 +1274,9 @@ fn compile_compute_expr<'a>(
                         "TYPED RECORD PARENT ARGS {:#?}",
                         symbol.get_args()
                     );
+                }
+                Token::NamedRecordField(field_name) => {
+                    trace!("PARENT IS NAMED RECORD FIELD {} = {:#?}", field_name, symbol);
                 }
                 Token::Enum(_) => {
                     trace!("ENUM PARENT ARGS {:#?}", symbol.get_args());
@@ -1389,7 +1401,7 @@ fn compile_compute_expr<'a>(
             )));
         }
         // This record is defined without a type and used direcly, mainly in
-        // as a n argument for a method. The inferred type is unambiguous.
+        // as an argument for a method. The inferred type is unambiguous.
         Token::AnonymousRecord => {
             assert!(!is_ar);
 
@@ -1412,14 +1424,14 @@ fn compile_compute_expr<'a>(
                 .map(|v| (v.0.clone(), v.2.clone().into()))
                 .collect::<Vec<_>>();
 
-            let value_type = Record(values);
+            let value_type = Record::new(values);
             if symbol.get_type() != TypeValue::Record(value_type.clone()) {
                 return Err(CompileError::from(
                     format!(
                         "This record: {} is of type {}, but we got a record with type {}. It's not the same and cannot be converted.",
                         value_type,
                         symbol.get_type(),
-                        TypeDef::Record(symbol.get_args().iter().map(|v| (v.get_name(), Box::new(v.get_type()))).collect::<Vec<_>>())
+                        TypeDef::Record(symbol.get_args().iter().map(|v| (v.get_name(), Box::new(v.get_type()))).collect::<Vec<_>>().into())
                     )
                 ));
             }
@@ -1431,6 +1443,10 @@ fn compile_compute_expr<'a>(
                 ],
             ));
             return Ok(state);
+        }
+        Token::NamedRecordField(field_name) => {
+            assert!(is_ar);
+            panic!("NAMED RECORD FIELD {} = {:#?}", field_name, symbol);
         }
         // This is used in variable assignments where a var is assigned to
         // a list. On arrival here all the elements of the defined list will
