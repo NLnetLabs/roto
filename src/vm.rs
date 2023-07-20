@@ -16,7 +16,7 @@ use crate::{
         },
         datasources::{DataSource, DataSourceMethodValue},
         typedef::TypeDef,
-        typevalue::TypeValue,
+        typevalue::TypeValue, outputs::OutputStreamMessage,
     },
 };
 
@@ -849,7 +849,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
         let mut commands_num: usize = 0;
 
         self._move_rx_tx_to_mem(rx, tx, mem);
-        let mut stream_output_queue: StreamOutputQueue = StreamOutputQueue::new();
+        let mut output_stream_queue: OutputStreamQueue = OutputStreamQueue::new();
 
         for MirBlock {
             command_stack,
@@ -1406,7 +1406,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                 commands_num
                             );
 
-                            return Ok(VmResult { accept_reject: *accept_reject, rx, tx, stream_output_queue });
+                            return Ok(VmResult { accept_reject: *accept_reject, rx, tx, output_stream_queue });
                         }
                     }
 
@@ -1454,7 +1454,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                             trace!("type_def {:?}", type_def);
                             if let TypeDef::OutputStream(os_ty) = &type_def[0] {
                                 let rec = Record::create_instance_from_ordered_fields(os_ty, rec_fields).unwrap();
-                                stream_output_queue.push(rec.into());
+                                output_stream_queue.push(rec.into());
                             }
                         }
                     }
@@ -1569,7 +1569,7 @@ pub struct VmResult {
     pub accept_reject: AcceptReject,
     pub rx: TypeValue,
     pub tx: Option<TypeValue>,
-    pub stream_output_queue: StreamOutputQueue,
+    pub output_stream_queue: OutputStreamQueue,
 }
 
 
@@ -1578,16 +1578,22 @@ pub struct VmResult {
 #[derive(Debug, Copy, Clone)]
 pub struct StreamId(usize);
 
-#[derive(Debug, Clone, Default)]
-pub struct StreamOutputQueue(Vec<TypeValue>);
+#[derive(Debug, Clone)]
+pub struct OutputStreamQueue(SmallVec<[OutputStreamMessage; 8]>);
 
-impl StreamOutputQueue {
+impl OutputStreamQueue {
     pub fn new() -> Self {
-        Self::default()
+        OutputStreamQueue(SmallVec::<[OutputStreamMessage; 8]>::new())
     }
 
-    pub fn push(&mut self, tv: TypeValue) {
-        self.0.push(tv)
+    pub fn push(&mut self, msg: OutputStreamMessage) {
+        self.0.push(msg)
+    }
+}
+
+impl Default for OutputStreamQueue {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

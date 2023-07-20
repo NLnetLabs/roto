@@ -195,6 +195,27 @@ impl std::fmt::Display for ElementTypeValue {
     }
 }
 
+// These conversions are used when creating OutputStreamMessages as a poor
+// men's serializer (for `name` and `topic` fields). Probably want to make
+// a more structural solution.
+impl From<&ElementTypeValue> for String {
+    fn from(value: &ElementTypeValue) -> String {
+        match value {
+            ElementTypeValue::Nested(n) => format!("{}", n),
+            ElementTypeValue::Primitive(p) => format!("{}", p),
+        }
+    }
+}
+
+impl From<&ElementTypeValue> for ShortString {
+    fn from(value: &ElementTypeValue) -> ShortString {
+        match value {
+            ElementTypeValue::Nested(n) => ShortString::from(format!("{}", n).as_str()),
+            ElementTypeValue::Primitive(p) => ShortString::from(format!("{}", p).as_str()),
+        }
+    }
+}
+
 //------------ List type ----------------------------------------------------
 
 #[derive(Debug, Eq, Clone, Hash, PartialEq, Serialize)]

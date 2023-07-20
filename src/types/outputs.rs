@@ -12,6 +12,8 @@ use crate::{
     vm::{StackValue, VmError},
 };
 
+use super::collections::Record;
+
 impl RotoType for OutputStreamMessage {
     fn get_props_for_method(
         ty: TypeDef,
@@ -107,5 +109,22 @@ pub struct OutputStreamMessage {
 impl From<OutputStreamMessage> for TypeValue {
     fn from(msg: OutputStreamMessage) -> Self {
         TypeValue::OutputStreamMessage(msg.into())
+    }
+}
+
+// Temporary solution. Uses the From<&ElementTypeValue> impl for (Short)-
+// String. Probably tokenization for topic at the very least makes more
+// sense performance wise and logically.
+impl From<Record> for OutputStreamMessage {
+    fn from(value: Record) -> Self {
+        let record_type = (&TypeValue::Record(value.clone())).into();
+        let name: ShortString = value.get_value_for_field("name").map(|v| v.into()).unwrap_or_else(|| "".into());
+        let topic: String = value.get_value_for_field("topic").map(|v| v.into()).unwrap_or_else(|| "".into());
+        Self {
+            name,
+            topic,
+            record_type, 
+            record: value.into()
+        }
     }
 }
