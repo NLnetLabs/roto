@@ -1,6 +1,7 @@
 use log::trace;
 use roto::compile::Compiler;
 
+use roto::blocks::Scope;
 use roto::types::builtin::{
     Asn, Community,
 };
@@ -13,7 +14,7 @@ use roto::vm;
 mod common;
 
 fn test_data(
-    name: &str,
+    name: Scope,
     source_code: &'static str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Evaluate filter-map {}...", name);
@@ -25,10 +26,10 @@ fn test_data(
     )];
 
     let mut c = Compiler::new();
-    c.with_arguments(name, filter_map_arguments)?;
+    c.with_arguments(&name, filter_map_arguments)?;
     let roto_packs = c.build_from_compiler(source_code)?;
 
-    let mut roto_pack = roto_packs.retrieve_public_as_refs(name)?;
+    let mut roto_pack = roto_packs.retrieve_public_as_refs(&name)?;
     let _count: TypeValue = 1_u32.into();
     let prefix: TypeValue =
         routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?
@@ -138,7 +139,7 @@ fn test_filter_map_1() {
     common::init();
 
     test_data(
-        "in-filter-map",
+        Scope::FilterMap("in-filter-map".into()),
         r###"
             filter-map in-filter-map with my_asn: Asn {
                 define for ext_r: ExtRoute with extra_asn: Asn {

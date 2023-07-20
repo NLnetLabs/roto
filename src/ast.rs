@@ -57,6 +57,7 @@ impl SyntaxTree {
 
 // RootExpr ::= FilterMap |
 //     "filter-map" Identifier ForStatement WithStatement '{' FilterMap '}' |
+//     "filter" Identifier ForStatement WithStatement '{' Filter '}' |
 //     "rib" Identifier 'contains' TypeIdentifier '{' RibBody '}' |
 //     "table" Identifier '{' TableBody '}' |
 //     "output-stream" Identifier '{' StreamBody '}' |
@@ -256,10 +257,26 @@ impl RecordTypeAssignment {
 //------------ FilterMap -------------------------------------------------------
 
 // FilterMap ::= "filter-map" Identifier "for" Identifier WithStatement
-//              WithStatement '{' FilterMapBody '}'
+//              WithStatement '{' FilterMapBody '}' |
+//               "filter" Indentifier "for" Identifier WithStatement '{' FilterBody '}'
+#[derive(Clone, Copy, Debug)]
+pub enum FilterType {
+    FilterMap,
+    Filter,
+}
+
+impl FilterType {
+    pub fn is_filter(&self) -> bool {
+        if let FilterType::Filter = self {
+            return true;
+        }
+        false
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct FilterMap {
+    pub ty: FilterType,
     pub ident: Identifier,
     pub for_ident: Option<TypeIdentField>,
     pub with_kv: Vec<TypeIdentField>,
@@ -268,16 +285,22 @@ pub struct FilterMap {
 
 impl FilterMap {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (ident, for_ident, with_kv, body)) = context(
+        let (input, (ty, ident, for_ident, with_kv, body)) = context(
             "filter-map definition",
             tuple((
-                context(
-                    "filter-map name",
-                    preceded(
-                        opt_ws(tag("filter-map")),
-                        opt_ws(Identifier::parse),
+                alt((
+                    context(
+                        "filter-map type",
+                        map(opt_ws(tag("filter-map")), |_| {
+                            FilterType::FilterMap
+                        }),
                     ),
-                ),
+                    context(
+                        "filter-map type",
+                        map(opt_ws(tag("filter")), |_| FilterType::Filter),
+                    ),
+                )),
+                opt_ws(Identifier::parse),
                 for_statement,
                 with_statement,
                 context(
@@ -295,6 +318,7 @@ impl FilterMap {
         Ok((
             input,
             FilterMap {
+                ty,
                 ident,
                 body,
                 for_ident,
@@ -405,6 +429,7 @@ impl Define {
 
 #[derive(Clone, Debug)]
 pub enum RxTxType {
+    RxOnly(TypeIdentField),
     Split(TypeIdentField, TypeIdentField),
     PassThrough(TypeIdentField),
 }
@@ -451,6 +476,14 @@ impl DefineBody {
                     )),
                     |t| RxTxType::Split(t.0, t.1),
                 ),
+                map(
+                    delimited(
+                        opt_ws(tag("rx")),
+                        opt_ws(TypeIdentField::parse),
+                        opt_ws(char(';')),
+                    ),
+                    RxTxType::RxOnly
+                )
             )),
             many0(delimited(
                 opt_ws(tag("use")),
@@ -1690,7 +1723,9 @@ impl<'a> ByteStringLiteral {
 
 // AcceptReject ::= 'return'? ( 'accept' | 'reject' ) ';'
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
+#[derive(
+    Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize,
+)]
 pub enum AcceptReject {
     Accept,
     Reject,

@@ -7,16 +7,17 @@ use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
 use roto::vm;
+use roto::blocks::Scope::{self, FilterMap};
 
 fn test_data(
-    name: &str,
+    name: Scope,
     source_code: &'static str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Evaluate filter {}...", name);
 
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code)?;
-    let roto_pack = rotolo.retrieve_public_as_arcs(name)?;
+    let roto_pack = rotolo.retrieve_public_as_arcs(name.clone())?;
 
     // Create a payload type and instance to feed into a VM.
     let _count: TypeValue = 1_u32.into();
@@ -92,7 +93,7 @@ fn test_data(
     )];
 
     let ds_ref = roto_pack.data_sources;
-    let args = rotolo.compile_arguments(name, filter_map_arguments)?;
+    let args = rotolo.compile_arguments(&name, filter_map_arguments)?;
 
     let mut vm = vm::VmBuilder::new()
         .with_arguments(args)
@@ -120,7 +121,7 @@ fn test_data(
 
 fn main() {
     test_data(
-        "in-filter-map",
+        FilterMap("in-filter-map".into()),
         r###"
             filter-map in-filter-map with my_asn: Asn {
                 define for ext_r: ExtRoute with extra_asn: Asn {

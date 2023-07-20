@@ -1,12 +1,13 @@
 use log::trace;
 
 use crate::ast::AcceptReject;
+use crate::ast::FilterType;
 use crate::ast::LogicalExpr;
 use crate::ast::ShortString;
+use crate::blocks::Scope;
 use crate::compile::CompileError;
 use crate::symbols::GlobalSymbolTable;
 use crate::symbols::MatchActionType;
-use crate::symbols::Scope;
 use crate::symbols::Symbol;
 use crate::symbols::SymbolKind;
 use crate::traits::Token;
@@ -43,7 +44,7 @@ impl<'a> ast::SyntaxTree {
 
         // If the global symbol table does not exist, create it.
         let mut symbols_mut = symbols.borrow_mut();
-        let global_scope = symbols::Scope::Global;
+        let global_scope = Scope::Global;
 
         let global_symbols = if symbols_mut.contains_key(&global_scope) {
             symbols_mut.get_mut(&global_scope).unwrap()
@@ -72,14 +73,18 @@ impl<'a> ast::SyntaxTree {
         // For each filter_map, create a new symbol table if it does not exist.
         for filter_map in &filter_maps {
             let filter_map_name = &filter_map.get_filter_map()?.ident.ident;
-            let filter_map_scope = symbols::Scope::FilterMap(filter_map_name.clone());
+            let filter_map_scope = match 
+                filter_map.get_filter_map()?.ty {
+                    FilterType::Filter => Scope::Filter(filter_map_name.clone()),
+                    FilterType::FilterMap => Scope::FilterMap(filter_map_name.clone())
+                };
+            
+                // Scope::FilterMap(filter_map_name.clone());
 
             if let std::collections::hash_map::Entry::Vacant(e) =
                 symbols_mut.entry(filter_map_scope.clone())
             {
-                e.insert(symbols::SymbolTable::new(&Scope::FilterMap(
-                    filter_map_name.clone(),
-                )));
+                e.insert(symbols::SymbolTable::new(&filter_map_scope));
                 symbols_mut.get_mut(&global_scope).unwrap()
             } else {
                 symbols_mut.get_mut(&filter_map_scope).unwrap()
@@ -262,7 +267,9 @@ impl<'a> ast::RibBody {
 
                     kvs.push((
                         r.0.ident.as_str().into(),
-                        Box::new(TypeDef::Record(RecordTypeDef::new(nested_record))),
+                        Box::new(TypeDef::Record(RecordTypeDef::new(
+                            nested_record,
+                        ))),
                     ));
                 }
                 ast::RibField::ListField(l) => {
@@ -313,7 +320,9 @@ impl<'a> ast::RecordTypeIdentifier {
 
                     kvs.push((
                         r.0.ident.as_str().into(),
-                        Box::new(TypeDef::Record(RecordTypeDef::new(nested_record))),
+                        Box::new(TypeDef::Record(RecordTypeDef::new(
+                            nested_record,
+                        ))),
                     ));
                 }
                 ast::RibField::ListField(l) => {
@@ -346,7 +355,10 @@ impl ast::FilterMap {
         &self,
         symbols: symbols::GlobalSymbolTable,
     ) -> Result<(), CompileError> {
-        let filter_map_scope = symbols::Scope::FilterMap(self.ident.ident.clone());
+        let filter_map_scope = match &self.ty {
+            FilterType::FilterMap => Scope::FilterMap(self.ident.ident.clone()),
+            FilterType::Filter => Scope::Filter(self.ident.ident.clone())
+        };
         // Check the `with` clause for additional arguments.
         let with_kv: Vec<_> = self.with_kv.clone();
         let _with_ty = with_kv
@@ -357,16 +369,18 @@ impl ast::FilterMap {
                     ty,
                     symbols::SymbolKind::Constant,
                     symbols.clone(),
-                    &symbols::Scope::FilterMap(self.ident.ident.clone()),
+                    &filter_map_scope,
                 )
             })
             .collect::<Vec<_>>();
 
         // first, parse the define section, so that other sections in this
         // filter_map can use the defined variables.
-        self.body
-            .define
-            .eval(symbols.clone(), filter_map_scope.clone())?;
+        self.body.define.eval(
+            self.ty,
+            symbols.clone(),
+            filter_map_scope.clone(),
+        )?;
 
         let (terms, actions): (Vec<_>, Vec<_>) = self
             .body
@@ -403,6 +417,11 @@ impl ast::FilterMap {
         // The `with` clause of the `define` section acts as an extra
         // argument to the whole filter_map, that can be used as a extra
         // read-only payload.
+        let scope = match self.ty {
+            FilterType::FilterMap => Scope::FilterMap(self.ident.ident.clone()),
+            FilterType::Filter  => Scope::Filter(self.ident.ident.clone()),
+        };
+
         let _with_ty = with_kv
             .into_iter()
             .map(|ty| {
@@ -411,7 +430,7 @@ impl ast::FilterMap {
                     ty,
                     symbols::SymbolKind::Argument,
                     symbols.clone(),
-                    &symbols::Scope::FilterMap(self.ident.ident.clone()),
+                    &scope
                 )
             })
             .collect::<Vec<_>>();
@@ -423,8 +442,9 @@ impl ast::FilterMap {
 impl ast::Define {
     fn eval(
         &self,
+        filter_type: FilterType,
         symbols: symbols::GlobalSymbolTable,
-        scope: symbols::Scope,
+        scope: Scope,
     ) -> Result<(), CompileError> {
         // The default input-argument is defined by the 'rx' keyword in the
         // `define` section. This the argument that holds the payload at
@@ -432,12 +452,25 @@ impl ast::Define {
         let rx_kind;
         let rx_type = match &self.body.rx_tx_type {
             ast::RxTxType::Split(rx_type, _tx_type) => {
+                if filter_type.is_filter() {
+                    return Err(CompileError::from("Filter does not accept a type for 'tx'. Specify only a 'rx' in the Define section for a filter"));
+                }
                 rx_kind = SymbolKind::SplitRxType;
                 rx_type
             }
             ast::RxTxType::PassThrough(rx_tx_type) => {
+                if filter_type.is_filter() {
+                    return Err(CompileError::from("Filter does not accept a type for 'rx_tx'. Specify only a 'rx' in the Define section for a filter"));
+                }
                 rx_kind = SymbolKind::PassThroughRxTxType;
                 rx_tx_type
+            }
+            ast::RxTxType::RxOnly(rx_type) => {
+                if !filter_type.is_filter() {
+                    return Err(CompileError::from("FilterMap is missing the 'tx' type. Specify both 'rx' and 'tx' variables, or a `rx_tx` variable in the Define section for a filter. Alternatively you may specify a filter"));
+                }
+                rx_kind = SymbolKind::PassThroughRxTxType;
+                rx_type
             }
         };
 
@@ -468,6 +501,14 @@ impl ast::Define {
             ast::RxTxType::PassThrough(rx_tx_type) => {
                 assert!(check_type_identifier(
                     rx_tx_type.ty.clone(),
+                    symbols.clone(),
+                    &scope
+                )
+                .is_ok());
+            }
+            ast::RxTxType::RxOnly(rx_type) => {
+                assert!(check_type_identifier(
+                    rx_type.ty.clone(),
                     symbols.clone(),
                     &scope
                 )
@@ -515,7 +556,7 @@ impl ast::Term {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
-        scope: symbols::Scope,
+        scope: Scope,
     ) -> Result<(), CompileError> {
         let term_scopes = &self.body.scopes;
         for term in term_scopes[0].match_exprs.iter().enumerate() {
@@ -571,7 +612,7 @@ impl ast::Action {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
-        scope: symbols::Scope,
+        scope: Scope,
     ) -> Result<(), CompileError> {
         let _symbols = symbols.borrow();
 
@@ -636,12 +677,13 @@ impl ast::Apply {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
-        scope: symbols::Scope,
+        scope: Scope,
     ) -> Result<(), CompileError> {
         let mut _symbols = symbols.borrow_mut();
-        let _filter_map_symbols = _symbols.get_mut(&scope).ok_or_else(|| {
-            format!("No symbols found for filter-map {}", scope)
-        })?;
+        let _filter_map_symbols =
+            _symbols.get_mut(&scope).ok_or_else(|| {
+                format!("No symbols found for filter-map {}", scope)
+            })?;
 
         // There can only be one `apply` section in a filter_maps, so we can set
         // the default action from the apply section for the whole filter_map.
@@ -666,7 +708,7 @@ impl ast::ApplyScope {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
-        scope: symbols::Scope,
+        scope: Scope,
     ) -> Result<symbols::Symbol, CompileError> {
         let _symbols = symbols.borrow();
         let filter_map_symbols = _symbols.get(&scope).ok_or_else(|| {
@@ -795,7 +837,7 @@ impl ast::ComputeExpr {
         // If no name is provided we use the ident of the access receiver
         name: Option<ShortString>,
         symbols: symbols::GlobalSymbolTable,
-        scope: symbols::Scope,
+        scope: Scope,
     ) -> Result<symbols::Symbol, CompileError> {
         // this ar_name is only for use in error messages, the actual name
         // for the symbol that will be created can be slightly different,
@@ -902,7 +944,7 @@ impl ast::MethodComputeExpr {
         mut method_kind: symbols::SymbolKind,
         method_call_type: TypeDef,
         symbols: symbols::GlobalSymbolTable,
-        scope: symbols::Scope,
+        scope: Scope,
     ) -> Result<symbols::Symbol, CompileError> {
         // self is the call receiver, e.g. in `rib-rov.longest_match()`,
         // `rib-rov` is the receiver and `longest_match` is the method call
@@ -991,7 +1033,7 @@ impl ast::AccessReceiver {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
-        scope: symbols::Scope,
+        scope: Scope,
     ) -> Result<symbols::Symbol, AccessReceiverError> {
         trace!("AccessReceiver {:#?}", self);
         let _symbols = symbols.clone();
@@ -1072,7 +1114,7 @@ impl ast::ValueExpr {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
-        scope: symbols::Scope,
+        scope: Scope,
     ) -> Result<symbols::Symbol, CompileError> {
         match self {
             // an expression ending in a a method call (e.g. `foo.bar()`).
@@ -1243,7 +1285,7 @@ impl ast::ArgExprList {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
-        scope: symbols::Scope,
+        scope: Scope,
     ) -> Result<Vec<symbols::Symbol>, CompileError> {
         let mut eval_args = vec![];
         for arg in &self.args {
@@ -1259,7 +1301,6 @@ impl ast::FieldAccessExpr {
         &self,
         field_type: TypeDef,
     ) -> Result<symbols::Symbol, CompileError> {
-
         trace!("field access on field type {:?}", field_type);
         trace!("self field names {:?}", self.field_names);
 
@@ -1285,7 +1326,7 @@ impl ast::ListValueExpr {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
-        scope: symbols::Scope,
+        scope: Scope,
     ) -> Result<Vec<symbols::Symbol>, CompileError> {
         trace!("anonymous list");
         let mut s: Vec<symbols::Symbol> = vec![];
@@ -1302,7 +1343,7 @@ impl ast::AnonymousRecordValueExpr {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
-        scope: symbols::Scope,
+        scope: Scope,
     ) -> Result<Vec<symbols::Symbol>, CompileError> {
         trace!("anonymous record");
         let mut s: Vec<symbols::Symbol> = vec![];
@@ -1319,7 +1360,7 @@ impl ast::TypedRecordValueExpr {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
-        scope: symbols::Scope,
+        scope: Scope,
     ) -> Result<(ast::TypeIdentifier, Vec<symbols::Symbol>), CompileError>
     {
         trace!("typed record");
@@ -1343,7 +1384,7 @@ impl ast::LogicalExpr {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
-        scope: symbols::Scope,
+        scope: Scope,
     ) -> Result<symbols::Symbol, CompileError> {
         match self {
             LogicalExpr::BooleanExpr(expr) => {
@@ -1372,7 +1413,7 @@ impl ast::BooleanExpr {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
-        scope: &symbols::Scope,
+        scope: &Scope,
     ) -> Result<symbols::Symbol, CompileError> {
         let _symbols = symbols.clone();
 
@@ -1441,7 +1482,7 @@ impl ast::CompareExpr {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
-        scope: &symbols::Scope,
+        scope: &Scope,
     ) -> Result<symbols::Symbol, CompileError> {
         let _symbols = symbols.clone();
 
@@ -1480,7 +1521,7 @@ impl ast::CompareArg {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
-        scope: &symbols::Scope,
+        scope: &Scope,
     ) -> Result<symbols::Symbol, CompileError> {
         let _symbols = symbols.clone();
 
@@ -1508,7 +1549,7 @@ impl ast::AndExpr {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
-        scope: &symbols::Scope,
+        scope: &Scope,
     ) -> Result<symbols::Symbol, CompileError> {
         // An "And Expression" is a Boolean function, meaning it takes a
         // boolean as input and returns a boolean as output. That way
@@ -1537,7 +1578,7 @@ impl ast::OrExpr {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
-        scope: &symbols::Scope,
+        scope: &Scope,
     ) -> Result<symbols::Symbol, CompileError> {
         let _symbols = symbols.clone();
 
@@ -1560,7 +1601,7 @@ impl ast::NotExpr {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
-        scope: &symbols::Scope,
+        scope: &Scope,
     ) -> Result<symbols::Symbol, CompileError> {
         let _symbols = symbols;
 
@@ -1586,7 +1627,7 @@ impl ast::GroupedLogicalExpr {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
-        scope: &symbols::Scope,
+        scope: &Scope,
     ) -> Result<symbols::Symbol, CompileError> {
         self.expr.eval(symbols, scope.clone())
     }
@@ -1596,7 +1637,7 @@ impl ast::ListCompareExpr {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
-        scope: &symbols::Scope,
+        scope: &Scope,
     ) -> Result<symbols::Symbol, CompileError> {
         let _symbols = symbols.clone();
 
@@ -1648,7 +1689,7 @@ impl ast::ListCompareExpr {
 fn check_type_identifier(
     ty: ast::TypeIdentifier,
     symbols: symbols::GlobalSymbolTable,
-    scope: &symbols::Scope,
+    scope: &Scope,
 ) -> Result<TypeDef, CompileError> {
     let symbols = symbols.borrow();
     // is it a builtin type?
@@ -1657,7 +1698,7 @@ fn check_type_identifier(
     }
 
     // is it in the global table?
-    let global_ty = symbols.get(&symbols::Scope::Global).and_then(|gt| {
+    let global_ty = symbols.get(&Scope::Global).and_then(|gt| {
         gt.get_variable(&ty.ident)
             .ok()
             .map(|s| (s.get_type(), s.get_kind()))
@@ -1671,7 +1712,8 @@ fn check_type_identifier(
     }
 
     match &scope {
-        symbols::Scope::FilterMap(filter_map) => {
+        Scope::FilterMap(filter_map)
+        | Scope::Filter(filter_map) => {
             // is it in the symbol table for this scope?
             let filter_map_ty = symbols
                 .get(scope)
@@ -1693,7 +1735,7 @@ fn check_type_identifier(
                 }
             }
         }
-        symbols::Scope::Global => {
+        Scope::Global => {
             return Err(format!(
                 "No type named '{}' found in global scope.",
                 ty.ident
@@ -1727,7 +1769,7 @@ fn check_type_identifier(
 fn get_props_for_scoped_variable(
     fields: &[ast::Identifier],
     symbols: GlobalSymbolTable,
-    scope: symbols::Scope,
+    scope: Scope,
 ) -> Result<(SymbolKind, TypeDef, Token, Option<TypeValue>), CompileError> {
     // Implicit early return. Are there any actual fields? If not then we're
     // done, and there's nothing here.
@@ -1739,10 +1781,11 @@ fn get_props_for_scoped_variable(
     let search_str = fields.join(".");
 
     match &scope {
-        symbols::Scope::FilterMap(filter_map) => {
+        Scope::FilterMap(filter_map)
+        | Scope::Filter(filter_map) => {
             // 1. is the whole dotted name in the symbol table for this scope?
             return symbols
-                .get(&symbols::Scope::Global)
+                .get(&Scope::Global)
                 .and_then(|gt| {
                     gt.get_variable(
                         &search_str.as_str().into()).map(
@@ -1794,7 +1837,7 @@ fn get_props_for_scoped_variable(
         }
         // There is NO global scope for variables. All vars are always
         // in the namespace of a filter_map.
-        symbols::Scope::Global => Err(format!(
+        Scope::Global => Err(format!(
             "=== No variable named '{}' found in global scope.",
             fields.join(".").as_str()
         )
@@ -1807,7 +1850,7 @@ fn _declare_variable(
     type_ident: ast::TypeIdentField,
     kind: symbols::SymbolKind,
     symbols: symbols::GlobalSymbolTable,
-    scope: &symbols::Scope,
+    scope: &Scope,
 ) -> Result<(), CompileError> {
     let _symbols = symbols.clone();
 
@@ -1815,7 +1858,7 @@ fn _declare_variable(
     // filter_map.
 
     match &scope {
-        symbols::Scope::FilterMap(filter_map) => {
+        Scope::FilterMap(filter_map) | Scope::Filter(filter_map) => {
             // Does the supplied type exist in our scope?
             let ty = check_type_identifier(type_ident.ty, _symbols, scope)?;
 
@@ -1823,7 +1866,7 @@ fn _declare_variable(
             let mut _symbols = symbols.borrow_mut();
             let filter_map = _symbols
                 .get_mut(scope)
-                .ok_or(format!("No filter-map named '{}' found.", filter_map))?;
+                .ok_or(format!("1 No filter-map named '{}' found.", filter_map))?;
 
             filter_map.add_variable(
                 type_ident.field_name.ident,
@@ -1834,7 +1877,7 @@ fn _declare_variable(
                 TypeValue::Unknown,
             )
         }
-        symbols::Scope::Global => {
+        Scope::Global => {
             Err(format!(
                 "Can't create a variable in the global scope (NEVER). Variable '{}'",
                 type_ident.field_name
@@ -1849,15 +1892,16 @@ fn declare_argument(
     type_ident: ast::TypeIdentField,
     kind: symbols::SymbolKind,
     symbols: symbols::GlobalSymbolTable,
-    scope: &symbols::Scope,
+    scope: &Scope,
 ) -> Result<(), CompileError> {
     let _symbols = symbols.clone();
 
     // There is NO global scope for variables.  All vars are all local to a
     // filter_map.
 
+    trace!("SCOPE {:?}", scope);
     match &scope {
-        symbols::Scope::FilterMap(filter_map) => {
+        Scope::FilterMap(filter_map) | Scope::Filter(filter_map) => {
             // Does the supplied type exist in our scope?
             let ty = check_type_identifier(type_ident.ty, _symbols, scope)?;
 
@@ -1865,7 +1909,7 @@ fn declare_argument(
             let mut _symbols = symbols.borrow_mut();
             let filter_map = _symbols
                 .get_mut(scope)
-                .ok_or(format!("No filter-map named '{}' found.", filter_map))?;
+                .ok_or(format!("2 No filter-map named '{}' found.", filter_map))?;
 
             filter_map.add_argument(
                 type_ident.field_name.ident,
@@ -1876,7 +1920,7 @@ fn declare_argument(
                 TypeValue::Unknown,
             )
         }
-        symbols::Scope::Global => {
+        Scope::Global => {
             Err(format!(
                 "Can't create a variable in the global scope (NEVER). Variable '{}'",
                 type_ident.field_name
@@ -1894,14 +1938,14 @@ fn declare_variable_from_symbol(
     key: ast::ShortString,
     arg_symbol: symbols::Symbol,
     symbols: symbols::GlobalSymbolTable,
-    scope: &symbols::Scope,
+    scope: &Scope,
 ) -> Result<(), CompileError> {
     let _symbols = symbols.clone();
 
     // There is NO global scope for variables.  All vars are all local to a
     // filter_map.
     match &scope {
-        symbols::Scope::FilterMap(filter_map) => {
+        Scope::FilterMap(filter_map) | Scope::Filter(filter_map) => {
 
             let mut _symbols = symbols.borrow_mut();
             let filter_map = _symbols
@@ -1955,7 +1999,7 @@ fn declare_variable_from_symbol(
             }
 
         }
-        symbols::Scope::Global => {
+        Scope::Global => {
             Err(format!(
                 "Can't create a variable in the global scope (NEVER). Variable '{}'",
                 arg_symbol.get_name()
@@ -1969,12 +2013,12 @@ fn declare_variable_from_symbol(
 //     key: Option<ast::ShortString>,
 //     arg_symbol: symbols::Symbol,
 //     symbols: symbols::GlobalSymbolTable,
-//     scope: &symbols::Scope,
+//     scope: &Scope,
 // ) -> Result<(), CompileError> {
 //     // There is NO global scope for variables.  All vars are all local to a
 //     // filter_map.
 //     match &scope {
-//         symbols::Scope::FilterMap(filter_map) => {
+//         Scope::FilterMap(filter_map) => {
 
 //             let mut _symbols = symbols.borrow_mut();
 //             let filter_map = _symbols
@@ -1995,7 +2039,7 @@ fn declare_variable_from_symbol(
 //                 symbol
 //             )
 //         }
-//         symbols::Scope::Global => {
+//         Scope::Global => {
 //             Err(format!(
 //                 "Can't create a variable in the global scope (NEVER). Variable '{}'",
 //                 arg_symbol.get_name()
@@ -2011,12 +2055,12 @@ fn add_logical_formula(
     key: Option<ast::ShortString>,
     symbol: symbols::Symbol,
     symbols: symbols::GlobalSymbolTable,
-    scope: &symbols::Scope,
+    scope: &Scope,
 ) -> Result<(), CompileError> {
     let _symbols = symbols.clone();
 
     match &scope {
-        symbols::Scope::FilterMap(filter_map) => {
+        Scope::FilterMap(filter_map) | Scope::Filter(filter_map) => {
             drop(_symbols);
 
             let mut _symbols = symbols.borrow_mut();
@@ -2029,7 +2073,7 @@ fn add_logical_formula(
                 symbol
             )
         }
-        symbols::Scope::Global => {
+        Scope::Global => {
             Err(format!(
                 "Can't create a (sub-)term in the global scope (NEVER). Term '{}'",
                 symbol.get_name()
@@ -2043,20 +2087,22 @@ fn add_action(
     name: ShortString,
     action: symbols::Symbol,
     symbols: symbols::GlobalSymbolTable,
-    scope: &symbols::Scope,
+    scope: &Scope,
 ) -> Result<(), CompileError> {
     match &scope {
-        symbols::Scope::FilterMap(filter_map) => {
+        Scope::FilterMap(filter_map)
+        | Scope::Filter(filter_map) => {
             let mut _symbols = symbols.borrow_mut();
-            let filter_map = _symbols
-                .get_mut(scope)
-                .ok_or(format!("No filter-map named '{}' found.", filter_map))?;
+            let filter_map = _symbols.get_mut(scope).ok_or(format!(
+                "No filter-map named '{}' found.",
+                filter_map
+            ))?;
 
             let action = action.set_name(name.clone());
 
             filter_map.add_action(name, action)
         }
-        symbols::Scope::Global => Err(format!(
+        Scope::Global => Err(format!(
             "Can't create an action in the global scope (NEVER). Action '{}'",
             action.get_name()
         )
@@ -2068,10 +2114,10 @@ fn add_match_action(
     name: ShortString,
     match_action: symbols::Symbol,
     symbols: symbols::GlobalSymbolTable,
-    scope: &symbols::Scope,
+    scope: &Scope,
 ) -> Result<(), CompileError> {
     match &scope {
-        symbols::Scope::FilterMap(filter_map) => {
+        Scope::FilterMap(filter_map) | Scope::Filter(filter_map) => {
             let mut _symbols = symbols.borrow_mut();
             let filter_map = _symbols
                 .get_mut(scope)
@@ -2087,7 +2133,7 @@ fn add_match_action(
                 Some(token)
             ))
         }
-        symbols::Scope::Global => Err(format!(
+        Scope::Global => Err(format!(
             "Can't create a match action in the global scope (NEVER). Action '{}'",
             match_action.get_name()
         )
@@ -2175,13 +2221,13 @@ fn _declare_variable_from_typedef(
     kind: symbols::SymbolKind,
     _args: Option<ast::ArgExprList>,
     symbols: symbols::GlobalSymbolTable,
-    scope: &symbols::Scope,
+    scope: &Scope,
 ) -> Result<(), CompileError> {
     // There is NO global scope for variables.  All vars are all local to a
     // filter_map.
 
     match &scope {
-        symbols::Scope::FilterMap(filter_map) => {
+        Scope::FilterMap(filter_map) | Scope::Filter(filter_map) => {
             // drop(_symbols);
 
             // Apparently, we have a type.  Let's add it to the symbol table.
@@ -2199,7 +2245,7 @@ fn _declare_variable_from_typedef(
                 TypeValue::Unknown,
             )
         }
-        symbols::Scope::Global => {
+        Scope::Global => {
             Err(format!(
                 "Can't create a variable in the global scope (NEVER). Variable '{}'",
                 ident

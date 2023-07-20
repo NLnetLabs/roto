@@ -2,7 +2,8 @@ use log::trace;
 use roto::ast::AcceptReject;
 use roto::compile::Compiler;
 
-use roto::types::builtin::{RotondaId, UpdateMessage, BgpUpdateMessage};
+use roto::blocks::Scope::{self, FilterMap};
+use roto::types::builtin::{BgpUpdateMessage, RotondaId, UpdateMessage};
 use roto::types::collections::Record;
 use roto::vm::{self, VmResult};
 use routecore::bgp::message::SessionConfig;
@@ -10,7 +11,7 @@ use routecore::bgp::message::SessionConfig;
 mod common;
 
 fn test_data(
-    name: &str,
+    name: Scope,
     source_code: &str,
 ) -> Result<VmResult, Box<dyn std::error::Error>> {
     println!("Evaluate filter-map {}...", name);
@@ -69,14 +70,15 @@ fn test_data(
         .build()?;
 
     let mem = &mut vm::LinearMemory::uninit();
-    let res = vm.exec(
-        payload,
-        None::<Record>,
-        // Some(filter_map_arguments),
-        None,
-        mem,
-    )
-    .unwrap();
+    let res = vm
+        .exec(
+            payload,
+            None::<Record>,
+            // Some(filter_map_arguments),
+            None,
+            mem,
+        )
+        .unwrap();
 
     trace!("\nRESULT");
     trace!("action: {}", res.accept_reject);
@@ -91,7 +93,7 @@ fn test_bgp_update_1() {
     common::init();
 
     let res = test_data(
-        "filter-unicast-v4-v6-only",
+        Scope::FilterMap("filter-unicast-v4-v6-only".into()),
         r###"
         filter-map filter-unicast-v4-v6-only {
             define {
@@ -136,7 +138,8 @@ fn test_bgp_update_1() {
             }
         }
         "###,
-    ).unwrap();
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
@@ -146,7 +149,7 @@ fn test_bgp_update_2() {
     common::init();
 
     let res = test_data(
-        "filter-unicast-v4-v6-only",
+        FilterMap("filter-unicast-v4-v6-only".into()),
         r###"
         filter-map filter-unicast-v4-v6-only {
             define {
@@ -169,7 +172,8 @@ fn test_bgp_update_2() {
             }
         }
         "###,
-    ).unwrap();
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }

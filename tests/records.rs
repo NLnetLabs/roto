@@ -2,6 +2,7 @@ use log::trace;
 use roto::ast::AcceptReject;
 use roto::compile::Compiler;
 
+use roto::blocks::Scope::{self, FilterMap};
 use roto::types::builtin::Asn;
 use roto::types::collections::Record;
 use roto::types::typedef::TypeDef;
@@ -102,18 +103,15 @@ fn src_code(
 }
 
 fn test_data(
-    name: &str,
+    name: Scope,
     source_code: &str,
-) -> Result<
-    VmResult,
-    Box<dyn std::error::Error>,
-> {
+) -> Result<VmResult, Box<dyn std::error::Error>> {
     trace!("Evaluate filter-map {}...", name);
 
     let c = Compiler::new();
     let roto_packs = c.build_from_compiler(source_code)?;
 
-    let roto_pack = roto_packs.retrieve_public_as_refs(name)?;
+    let roto_pack = roto_packs.retrieve_public_as_refs(&name)?;
     let asn: TypeValue = Asn::from_u32(211321).into();
 
     println!("ASN {:?}", asn);
@@ -164,7 +162,7 @@ fn test_records_compare_1() {
         "100 in [a.i, 2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-filter-map", &src_line);
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line);
 
     let VmResult { accept_reject, .. } = test_run.unwrap();
     assert_eq!(accept_reject, AcceptReject::Accept);
@@ -178,7 +176,9 @@ fn test_records_compare_2() {
         "100 in [a.i, 2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-filter-map", &src_line).unwrap_err().to_string();
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line)
+        .unwrap_err()
+        .to_string();
 
     assert_eq!(
         test_run,
@@ -194,7 +194,7 @@ fn test_records_compare_3() {
         "100 in [a.i, 2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-filter-map", &src_line);
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line);
 
     let VmResult { accept_reject, .. } = test_run.unwrap();
     assert_eq!(accept_reject, AcceptReject::Accept);
@@ -208,7 +208,9 @@ fn test_records_compare_4() {
         "100 in [a.i, 2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-filter-map", &src_line).unwrap_err().to_string();
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line)
+        .unwrap_err()
+        .to_string();
     assert_eq!(test_run, "Eval error: The field name 'garbage_field' cannot be found in type 'A'");
 }
 
@@ -220,7 +222,9 @@ fn test_records_compare_5() {
         "100 in [a.i, 2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-filter-map", &src_line).unwrap_err().to_string();
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line)
+        .unwrap_err()
+        .to_string();
     assert_eq!(
         test_run,
         "Eval error: No type named 'B' found in scope 'filter-map 'in-filter-map''"
@@ -235,7 +239,9 @@ fn test_records_compare_6() {
         "100 in [a.i, 2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-filter-map", &src_line).unwrap_err().to_string();
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line)
+        .unwrap_err()
+        .to_string();
     assert_eq!(
         test_run,
         "This record: {\n\tasn: AS100 (ASN)\n   } is of type Record {asn: Asn, i: U8, }, but we got a record with type Record {asn: Asn, }. It's not the same and cannot be converted."
@@ -250,7 +256,9 @@ fn test_records_compare_7() {
         "100 in [a.i, 2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-filter-map", &src_line).unwrap_err().to_string();
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line)
+        .unwrap_err()
+        .to_string();
     assert_eq!(
         test_run,
         "Eval error: The field name 'd' cannot be found in type 'A'"
@@ -265,7 +273,9 @@ fn test_records_compare_8() {
         "100 in [a.i, 2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-filter-map", &src_line).unwrap_err().to_string();
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line)
+        .unwrap_err()
+        .to_string();
     assert_eq!(
         test_run,
         "Eval error: Record {f: U8, g: Asn, } cannot be converted into IntegerLiteral"
@@ -280,7 +290,9 @@ fn test_records_compare_9() {
         "100 in [a.i,2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-filter-map", &src_line).unwrap_err().to_string();
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line)
+        .unwrap_err()
+        .to_string();
     assert_eq!(
         test_run,
         "Eval error: The sub-field name 'h' cannot be found in field 'i' in type 'C'"
@@ -295,7 +307,9 @@ fn test_records_compare_10() {
         "100 in [1,2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-filter-map", &src_line).unwrap_err().to_string();
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line)
+        .unwrap_err()
+        .to_string();
     assert_eq!(
         test_run,
         "Eval error: The sub-field name 'h' cannot be found in field 'i' in type 'C'"
@@ -310,7 +324,7 @@ fn test_records_compare_11() {
         "100 in [a.i.f,2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-filter-map", &src_line);
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line);
 
     let VmResult { accept_reject, .. } = test_run.unwrap();
     assert_eq!(accept_reject, AcceptReject::Accept);
@@ -324,7 +338,7 @@ fn test_records_compare_12() {
         "100 in [a.i.f,2,3,4,5]; // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-filter-map", &src_line);
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line);
 
     let VmResult { accept_reject, .. } = test_run.unwrap();
     assert_eq!(accept_reject, AcceptReject::Reject);

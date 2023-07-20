@@ -1,7 +1,6 @@
 use nom::error::convert_error;
 use roto::{
-    ast::ShortString,
-    compile::{CompileError, Compiler},
+    compile::{CompileError, Compiler}, blocks::Scope,
 };
 
 pub struct TestCompiler<'a> {
@@ -56,7 +55,7 @@ impl<'a> TestCompiler<'a> {
     pub(crate) fn test_compile(
         self,
         expect_success: bool,
-    ) -> Result<(), Vec<(ShortString, CompileError)>> {
+    ) -> Result<(), Vec<(Scope, CompileError)>> {
         println!("compile eval {}", self.name);
         let compile_res = self.compiler.compile();
 

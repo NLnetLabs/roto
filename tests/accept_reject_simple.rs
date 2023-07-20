@@ -1,7 +1,8 @@
-use log::{trace, info};
+use log::{info, trace};
 use roto::ast::AcceptReject;
 use roto::compile::Compiler;
 
+use roto::blocks::Scope::{self, FilterMap};
 use roto::types::builtin::Asn;
 use roto::types::collections::Record;
 use roto::types::typedef::TypeDef;
@@ -10,12 +11,9 @@ use roto::vm::{self, VmResult};
 mod common;
 
 fn test_data(
-    name: &str,
+    name: Scope,
     source_code: &str,
-) -> Result<
-    VmResult,
-    Box<dyn std::error::Error>,
-> {
+) -> Result<VmResult, Box<dyn std::error::Error>> {
     info!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
@@ -97,11 +95,11 @@ fn test_filter_map_10() {
         "AS65534",
         "reject",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 
-    let VmResult {accept_reject, .. } = test_run.unwrap();
+    let VmResult { accept_reject, .. } = test_run.unwrap();
     assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
@@ -113,7 +111,7 @@ fn test_filter_map_11() {
         "AS0",
         "reject",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 
@@ -129,7 +127,7 @@ fn test_filter_map_12() {
         "AS0",
         "accept",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 
@@ -145,7 +143,7 @@ fn test_filter_map_20() {
         "AS65534",
         "reject",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 
@@ -160,7 +158,7 @@ fn test_filter_map_21() {
         "AS0",
         "reject",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 
@@ -175,7 +173,7 @@ fn test_filter_map_22() {
         "AS0",
         "accept",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 
@@ -190,7 +188,7 @@ fn test_filter_map_30() {
         "AS65534",
         "reject",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 
@@ -205,7 +203,7 @@ fn test_filter_map_31() {
         "AS0",
         "reject",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 
@@ -220,7 +218,7 @@ fn test_filter_map_32() {
         "AS0",
         "accept",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 
@@ -235,7 +233,7 @@ fn test_filter_map_40() {
         "AS65534",
         "reject",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 
@@ -250,7 +248,7 @@ fn test_filter_map_41() {
         "AS0",
         "reject",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 
@@ -265,7 +263,7 @@ fn test_filter_map_42() {
         "AS0",
         "accept",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 
@@ -280,7 +278,7 @@ fn test_filter_map_50() {
         "AS65534",
         "reject",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 
@@ -295,14 +293,13 @@ fn test_filter_map_51() {
         "AS0",
         "reject",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 
     let VmResult { accept_reject, .. } = test_run.unwrap();
     assert_eq!(accept_reject, AcceptReject::Reject);
 }
-
 
 #[test]
 fn test_filter_map_52() {
@@ -311,7 +308,7 @@ fn test_filter_map_52() {
         "AS0",
         "accept",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 
@@ -326,7 +323,7 @@ fn test_filter_map_60() {
         "AS65534",
         "reject",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 
@@ -341,7 +338,7 @@ fn test_filter_map_61() {
         "AS0",
         "reject",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 
@@ -356,7 +353,7 @@ fn test_filter_map_62() {
         "AS0",
         "accept",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 
@@ -375,7 +372,7 @@ fn test_filter_map_70() {
         "AS65534",
         "reject",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 
@@ -394,7 +391,7 @@ fn test_filter_map_71() {
         "AS0",
         "reject",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 
@@ -415,7 +412,7 @@ fn test_filter_map_72() {
         "AS0",
         "accept",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     trace!("{:?}", test_run);
     assert!(test_run.is_ok());
@@ -435,7 +432,7 @@ fn test_filter_map_80() {
         "AS65534",
         "reject",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 
@@ -455,7 +452,7 @@ fn test_filter_map_81() {
         "AS65534",
         "reject",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     trace!("test run {:?}", test_run);
     assert!(test_run.is_ok());
@@ -476,7 +473,7 @@ fn test_filter_map_82() {
         "AS65534",
         "accept",
     );
-    let test_run = test_data("my-filter-map", src_line);
+    let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
     assert!(test_run.is_ok());
 

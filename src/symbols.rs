@@ -2,7 +2,6 @@ use std::{
     cell::RefCell,
     cmp::Ordering,
     collections::{hash_map::Entry, HashMap},
-    fmt::{Display, Formatter},
     hash::Hash,
     rc::Rc,
 };
@@ -10,7 +9,8 @@ use std::{
 use log::trace;
 
 use crate::{
-    ast::{AcceptReject, AccessReceiver, CompareOp, Identifier, ShortString},
+    ast::{AcceptReject, CompareOp, Identifier, ShortString, FilterType},
+    blocks::Scope,
     compile::CompileError,
     traits::{RotoType, Token},
     types::{
@@ -516,42 +516,8 @@ impl TryFrom<SymbolKind> for MatchActionType {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
-pub struct MatchActionKey((ShortString, MatchActionType));
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub enum Scope {
-    Global,
-    FilterMap(ShortString),
-}
-
-impl Scope {
-    pub(crate) fn get_name(&self) -> ShortString {
-        if let Scope::FilterMap(name) = self {
-            name.clone()
-        } else {
-            "global".into()
-        }
-    }
-}
-
-impl Display for Scope {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Scope::Global => write!(f, "global"),
-            Scope::FilterMap(name) => write!(f, "filter-map '{}'", name),
-        }
-    }
-}
-
-impl From<AccessReceiver> for Scope {
-    fn from(value: AccessReceiver) -> Self {
-        match value {
-            AccessReceiver::Ident(ident) => Scope::FilterMap(ident.ident),
-            AccessReceiver::GlobalScope => Scope::Global,
-        }
-    }
-}
+//------------ SymbolTable --------------------------------------------------
 
 // A per-filter-map symbol table.
 #[derive(Debug)]
@@ -573,7 +539,6 @@ pub struct SymbolTable {
     actions: HashMap<ShortString, Symbol>,
     // All the `filter` clauses in the `apply` section, the tie actions to
     // terms.
-    // match_actions: HashMap<MatchActionKey, Vec<Symbol>>,
     match_actions: Vec<MatchAction>,
     // the action that will be activated when all of the match_actions are
     // processed and no early return has been issued
@@ -652,8 +617,16 @@ impl SymbolTable {
         }
     }
 
-    pub(crate) fn get_name(&self) -> ShortString {
-        self.scope.get_name()
+    pub(crate) fn get_scope(&self) -> Scope {
+        self.scope.clone()
+    }
+
+    pub(crate) fn get_type(&self) -> FilterType {
+        match self.scope {
+            Scope::Filter(_) => FilterType::Filter,
+            Scope::FilterMap(_) => FilterType::FilterMap,
+            Scope::Global => panic!("Global scope is not a filter.")
+        }
     }
 
     pub(crate) fn validate_variable_name(

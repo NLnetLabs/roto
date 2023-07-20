@@ -1,8 +1,7 @@
 use roto::compile::Compiler;
 
-use roto::types::builtin::{
-    Asn, Community,
-};
+use roto::blocks::Scope;
+use roto::types::builtin::{Asn, Community};
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
@@ -11,18 +10,16 @@ use roto::vm;
 mod common;
 
 fn test_data(
-    name: &str,
+    name: Scope,
     source_code: &'static str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Evaluate filter-map {}...", name);
 
-    let filter_map_arguments = vec![(
-        "my_asn",
-        TypeValue::from(Asn::from(65534_u32))
-    )];
+    let filter_map_arguments =
+        vec![("my_asn", TypeValue::from(Asn::from(65534_u32)))];
 
     let mut c = Compiler::new();
-    c.with_arguments(name, filter_map_arguments)?;
+    c.with_arguments(&name, filter_map_arguments)?;
     let roto_packs = c.build_from_compiler(source_code)?;
 
     println!("miscompilations");
@@ -56,10 +53,7 @@ fn test_data(
 
     let _my_nested_rec_instance = Record::create_instance(
         &my_nested_rec_type,
-        vec![(
-            "counter",
-            1_u32.into(),
-        )],
+        vec![("counter", 1_u32.into())],
     )
     .unwrap();
 
@@ -111,9 +105,7 @@ fn test_data(
         .with_mir_code(roto_pack.mir)
         .build()?;
 
-    let res = vm
-        .exec(my_payload, None::<Record>, None, mem)
-        .unwrap();
+    let res = vm.exec(my_payload, None::<Record>, None, mem).unwrap();
 
     println!("\nRESULT");
     println!("action: {}", res.accept_reject);
@@ -127,8 +119,9 @@ fn test_data(
 #[test]
 fn test_filter_map_message_1() {
     common::init();
+
     test_data(
-        "my-message-filter-map-1",
+        Scope::FilterMap("my-message-filter-map-1".into()),
         r###"
         filter-map my-message-filter-map-1 with my_asn: Asn {
             define {
@@ -174,14 +167,16 @@ fn test_filter_map_message_1() {
             community: [Community]
         }
         "###,
-    ).unwrap();
+    )
+    .unwrap();
 }
 
 #[test]
 fn test_filter_map_message_2() {
     common::init();
+
     let res = test_data(
-        "my-message-filter-map-2",
+        Scope::FilterMap("my-message-filter-map-2".into()),
         r###"
         filter-map my-message-filter-map-2 with my_asn: Asn {
             define {
@@ -229,7 +224,8 @@ fn test_filter_map_message_2() {
         "###,
     );
 
-    let err = "Eval error: Record {message: String, my_asn: Asn, } cannot".to_string();
+    let err = "Eval error: Record {message: String, my_asn: Asn, } cannot"
+        .to_string();
     let mut str = res.unwrap_err().to_string();
     str.truncate(err.len());
     assert_eq!(str, err);
@@ -239,15 +235,14 @@ fn test_filter_map_message_2() {
 fn test_filter_map_message_3() {
     common::init();
     test_data(
-        "my-message-filter-map-2",
+        Scope::Filter("my-message-filter-map-3".into()),
         r###"
-        filter-map my-message-filter-map-2 with my_asn: Asn {
+        filter my-message-filter-map-3 with my_asn: Asn {
             define {
                 // specify the types of that this filter receives
                 // and sends.
                 // rx_tx route: StreamRoute;
                 rx route: MyPayload;
-                tx out: Route;
             }
 
             term rov-valid for route: Route {
@@ -286,4 +281,64 @@ fn test_filter_map_message_3() {
         }
         "###,
     ).unwrap();
+}
+
+#[test]
+fn test_filter_map_message_4() {
+    common::init();
+
+    let res = test_data(
+        Scope::Filter("my-message-filter-map-2".into()),
+        r###"
+        filter my-message-filter-map-2 with my_asn: Asn {
+            define {
+                // specify the types of that this filter receives
+                // and sends.
+                // rx_tx route: StreamRoute;
+                rx route: MyPayload;
+                tx route: Route;
+            }
+
+            term rov-valid for route: Route {
+                match {
+                    route.as-path.origin() == my_asn;
+                }
+            }
+            
+            action send-message {
+                mqtt.send({ 
+                    asn: my_asn,
+                    message: String.format("🤭 I, the messager, saw {} in a BGP update.", my_asn)
+                });
+            }
+
+            apply {
+                filter match rov-valid not matching {  
+                    send-message;
+                };
+            }
+        }
+
+        output-stream mqtt contains Message {
+            asn: Asn,
+            message: String
+        }
+
+        type MyPayload {
+            prefix: Prefix,
+            as-path: AsPath,
+            origin: Asn,
+            next-hop: IpAddress,
+            med: U32,
+            local-pref: U32,
+            community: [Community]
+        }
+    "###,
+    );
+
+    let err =
+        "Eval error: Filter does not accept a type for 'tx'.".to_string();
+    let mut str = res.unwrap_err().to_string();
+    str.truncate(err.len());
+    assert_eq!(str, err);
 }

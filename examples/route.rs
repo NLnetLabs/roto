@@ -4,17 +4,18 @@ use roto::types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage, Prefix,
 use roto::types::collections::Record;
 use roto::types::typevalue::TypeValue;
 use roto::vm;
+use roto::blocks::Scope::{self, FilterMap};
 use routecore::bgp::message::SessionConfig;
 
 fn test_data(
-    name: &str,
+    name: Scope,
     source_code: &'static str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Evaluate module {}...", name);
 
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code)?;
-    let roto_pack = rotolo.retrieve_public_as_arcs(name)?;
+    let roto_pack = rotolo.retrieve_public_as_arcs(name.clone())?;
 
     // BGP UPDATE message containing MP_REACH_NLRI path attribute,
     // comprising 5 IPv6 NLRIs
@@ -60,7 +61,7 @@ fn test_data(
     )];
 
     let ds_ref = roto_pack.data_sources;
-    let args = rotolo.compile_arguments(name, filter_map_arguments)?;
+    let args = rotolo.compile_arguments(&name, filter_map_arguments)?;
 
     let mut vm = vm::VmBuilder::new()
         .with_arguments(args)
@@ -88,7 +89,7 @@ fn test_data(
 
 fn main() {
     test_data(
-        "in-filter-map",
+        FilterMap("in-filter-map".into()),
         r###"
             filter-map in-filter-map with my_asn: Asn {
                 define for ext_r: ExtRoute with extra_asn: Asn {

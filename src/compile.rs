@@ -9,9 +9,10 @@ use nom::error::VerboseError;
 use smallvec::SmallVec;
 
 use crate::{
-    ast::{self, AcceptReject, ShortString, SyntaxTree},
+    ast::{self, AcceptReject, FilterType, ShortString, SyntaxTree},
+    blocks::Scope,
     symbols::{
-        DepsGraph, GlobalSymbolTable, MatchActionType, Scope, Symbol,
+        DepsGraph, GlobalSymbolTable, MatchActionType, Symbol,
         SymbolKind, SymbolTable,
     },
     traits::Token,
@@ -22,8 +23,8 @@ use crate::{
     },
     types::{datasources::Table, typedef::TypeDef},
     vm::{
-        Command, CommandArg, ExtDataSource, FilterMapArg, FilterMapArgs, OpCode,
-        StackRefPos, VariablesMap,
+        Command, CommandArg, ExtDataSource, FilterMapArg, FilterMapArgs,
+        OpCode, StackRefPos, VariablesMap,
     },
 };
 
@@ -59,14 +60,14 @@ use crate::{
 #[derive(Debug)]
 pub struct Rotolo {
     packs: Vec<RotoPack>,
-    mis_compilations: Vec<(ShortString, CompileError)>,
+    mis_compilations: Vec<(Scope, CompileError)>,
 }
 
 impl Rotolo {
     pub fn inspect_all_arguments(
         &self,
-    ) -> HashMap<ShortString, Vec<(&str, TypeDef)>> {
-        let mut res = HashMap::<ShortString, Vec<(&str, TypeDef)>>::new();
+    ) -> HashMap<Scope, Vec<(&str, TypeDef)>> {
+        let mut res = HashMap::<Scope, Vec<(&str, TypeDef)>>::new();
         for rp in self.packs.iter() {
             res.insert(
                 rp.filter_map_name.clone(),
@@ -84,12 +85,12 @@ impl Rotolo {
         self.mis_compilations.is_empty()
     }
 
-    pub fn get_mis_compilations(&self) -> &Vec<(ShortString, CompileError)> {
+    pub fn get_mis_compilations(&self) -> &Vec<(Scope, CompileError)> {
         &self.mis_compilations
     }
 
-    fn _take_pack_by_name(&mut self, name: &str) -> Option<RotoPack> {
-        let idx = self.packs.iter().position(|p| p.filter_map_name == name);
+    fn _take_pack_by_name(&mut self, name: &Scope) -> Option<RotoPack> {
+        let idx = self.packs.iter().position(|p| p.filter_map_name == *name);
         if let Some(idx) = idx {
             let p = self.packs.remove(idx);
             Some(p)
@@ -100,7 +101,7 @@ impl Rotolo {
 
     fn iter_all_filter_maps(
         &self,
-    ) -> impl Iterator<Item = (ShortString, Result<&RotoPack, CompileError>)>
+    ) -> impl Iterator<Item = (Scope, Result<&RotoPack, CompileError>)>
     {
         let mp = self
             .get_mis_compilations()
@@ -114,7 +115,7 @@ impl Rotolo {
 
     pub fn retrieve_public_as_arcs(
         &self,
-        name: &str,
+        name: Scope,
     ) -> Result<RotoPackArc, CompileError> {
         self.iter_all_filter_maps()
             .find(|p| p.0 == name)
@@ -131,7 +132,8 @@ impl Rotolo {
                         Arc<[(&str, TypeDef)]>,
                         Arc<[ExtDataSource]>,
                     > {
-                        filter_map_name: p.filter_map_name.as_str(),
+                        filter_map_name: &p.filter_map_name,
+                        filter_type: p.filter_type,
                         arguments: p
                             .arguments
                             .inspect_arguments()
@@ -150,10 +152,10 @@ impl Rotolo {
 
     pub fn retrieve_public_as_refs(
         &self,
-        name: &str,
+        name: &Scope,
     ) -> Result<RotoPackRef, CompileError> {
         self.iter_all_filter_maps()
-            .find(|p| p.0 == name)
+            .find(|p| p.0 == *name)
             .ok_or_else(|| {
                 CompileError::from(format!(
                     "Can't find filter-map with specified name in this pack: {}",
@@ -163,7 +165,8 @@ impl Rotolo {
             .and_then(|p| {
                 if let Ok(p) = p.1 {
                     Ok(PublicRotoPack {
-                        filter_map_name: p.filter_map_name.as_str(),
+                        filter_map_name: &p.filter_map_name,
+                        filter_type: p.filter_type,
                         arguments: p.arguments.inspect_arguments(),
                         rx_type: p.rx_type.clone(),
                         tx_type: p.tx_type.clone(),
@@ -183,7 +186,9 @@ impl Rotolo {
             .take(1)
             .next()
             .ok_or_else(|| {
-                CompileError::from("No filter-maps are available in this pack")
+                CompileError::from(
+                    "No filter-maps are available in this pack",
+                )
             })
             .and_then(|p| {
                 if let Ok(p) = p.1 {
@@ -192,7 +197,8 @@ impl Rotolo {
                         Arc<[(&str, TypeDef)]>,
                         Arc<[ExtDataSource]>,
                     > {
-                        filter_map_name: p.filter_map_name.as_str(),
+                        filter_map_name: &p.filter_map_name,
+                        filter_type: p.filter_type,
                         arguments: p
                             .arguments
                             .inspect_arguments()
@@ -211,9 +217,9 @@ impl Rotolo {
 
     pub fn compile_all_arguments(
         &self,
-        mut args: HashMap<ShortString, Vec<(&str, TypeValue)>>,
-    ) -> HashMap<ShortString, FilterMapArgs> {
-        let mut res = HashMap::<ShortString, FilterMapArgs>::new();
+        mut args: HashMap<Scope, Vec<(&str, TypeValue)>>,
+    ) -> HashMap<Scope, FilterMapArgs> {
+        let mut res = HashMap::<Scope, FilterMapArgs>::new();
         for pack in self.packs.iter() {
             let args =
                 std::mem::take(args.get_mut(&pack.filter_map_name).unwrap());
@@ -228,10 +234,10 @@ impl Rotolo {
 
     pub fn compile_arguments(
         &self,
-        name: &str,
+        name: &Scope,
         args: Vec<(&str, TypeValue)>,
     ) -> Result<FilterMapArgs, CompileError> {
-        let pack = self.packs.iter().find(|p| p.filter_map_name == name);
+        let pack = self.packs.iter().find(|p| p.filter_map_name == *name);
         if let Some(pack) = pack {
             let cp = pack.arguments.compile_arguments(args);
 
@@ -240,8 +246,11 @@ impl Rotolo {
                 Err(err) => Err(err),
             }
         } else {
-            Err(format!("Can't find with specified filter-map name: {}", name)
-                .into())
+            Err(format!(
+                "Can't find with specified filter-map name: {}",
+                name
+            )
+            .into())
         }
     }
 }
@@ -255,7 +264,8 @@ pub struct PublicRotoPack<
     A: AsRef<[(&'a str, TypeDef)]>,
     EDS: AsRef<[ExtDataSource]>,
 > {
-    pub filter_map_name: &'a str,
+    pub filter_map_name: &'a Scope,
+    pub filter_type: FilterType,
     pub mir: M,
     pub rx_type: TypeDef,
     pub tx_type: Option<TypeDef>,
@@ -356,7 +366,8 @@ impl<
 
 #[derive(Debug)]
 struct RotoPack {
-    filter_map_name: ShortString,
+    filter_map_name: Scope,
+    filter_type: FilterType,
     mir: Vec<MirBlock>,
     rx_type: TypeDef,
     tx_type: Option<TypeDef>,
@@ -366,7 +377,8 @@ struct RotoPack {
 
 impl RotoPack {
     fn new(
-        filter_map_name: ShortString,
+        filter_map_name: Scope,
+        filter_type: FilterType,
         mir: Vec<MirBlock>,
         rx_type: TypeDef,
         tx_type: Option<TypeDef>,
@@ -375,6 +387,7 @@ impl RotoPack {
     ) -> Self {
         RotoPack {
             filter_map_name,
+            filter_type,
             mir,
             rx_type,
             tx_type,
@@ -562,7 +575,7 @@ pub struct Compiler {
     pub ast: SyntaxTree,
     symbols: GlobalSymbolTable,
     // Compile time arguments
-    arguments: Vec<(ShortString, Vec<(ShortString, TypeValue)>)>,
+    arguments: Vec<(Scope, Vec<(ShortString, TypeValue)>)>,
     // data_sources: Vec<(&'a str, Arc<DataSource>)>,
 }
 
@@ -595,13 +608,13 @@ impl<'a> Compiler {
     ) -> Result<(), CompileError> {
         trace!("compile time arguments: {:?}", self.arguments);
         let mut filter_map = self.symbols.borrow_mut();
-        for (filter_map_name, args) in self.arguments.iter() {
+        for (filter_map_scope, args) in self.arguments.iter() {
             let _filter_map = filter_map
-                .get_mut(&crate::symbols::Scope::FilterMap(filter_map_name.clone()))
+                .get_mut(filter_map_scope)
                 .ok_or_else(|| {
                     CompileError::from(format!(
                         "Cannot find filter-map with name '{}'",
-                        filter_map_name
+                        filter_map_scope
                     ))
                 })?;
             for arg in args {
@@ -610,7 +623,7 @@ impl<'a> Compiler {
                         format!(
                             "Cannot find argument with name '{}' for filter-map '{}'",
                             arg.0,
-                            filter_map_name
+                            filter_map_scope
                         )
                     ))?;
 
@@ -648,7 +661,7 @@ impl<'a> Compiler {
         // each filter_map outputs one roto-pack with its own MIR (composed of MIR blocks),
         // its used arguments and used data sources.
         let mut packs = vec![];
-        let mut miscompilations = vec![];
+        let mut mis_compilations = vec![];
 
         for filter_map in filter_maps {
             let _filter_map = _global.get(&filter_map).unwrap();
@@ -666,7 +679,7 @@ impl<'a> Compiler {
                     packs.push(pack);
                 }
                 Err(err) => {
-                    miscompilations.push((filter_map.get_name(), err));
+                    mis_compilations.push((filter_map, err));
                 }
             }
         }
@@ -675,17 +688,17 @@ impl<'a> Compiler {
 
         Rotolo {
             packs,
-            mis_compilations: miscompilations,
+            mis_compilations,
         }
     }
 
     pub fn with_arguments(
         &mut self,
-        filter_map_name: &str,
+        filter_map_scope: &Scope,
         args: Vec<(&str, TypeValue)>,
     ) -> Result<(), CompileError> {
         self.arguments.push((
-            filter_map_name.into(),
+            filter_map_scope.clone(),
             args.into_iter().map(|a| (a.0.into(), a.1)).collect(),
         ));
         // let mut filter_map = self.symbols.borrow_mut();
@@ -910,19 +923,20 @@ fn compile_filter_map(
     // initialize the command stack
     let mut mir = vec![];
     if log_enabled!(Level::Trace) {
+        trace!("___filter type");
+        trace!("{:?}", filter_map.get_type());
+
         trace!("___used args");
         state.used_arguments.iter().for_each(|s| {
             trace!("{:?}: {:?}", s.1.get_token().unwrap(), s.0)
         });
 
         trace!("___used vars");
-
         state.used_variables.iter().for_each(|s| {
             trace!("{:?} {:?}", s.1.get_token().unwrap(), s.0);
         });
 
         trace!("___used data_sources");
-
         state.used_data_sources.iter().for_each(|t| {
             trace!("{:?} {:?}", t.1.get_token().unwrap(), t.0);
         });
@@ -986,7 +1000,8 @@ fn compile_filter_map(
         .collect::<Vec<_>>();
 
     Ok(RotoPack::new(
-        filter_map.get_name(),
+        filter_map.get_scope(),
+        filter_map.get_type(),
         mir,
         rx_type.map_or(TypeDef::Unknown, |rx| rx.1),
         tx_type.map(|tx| tx.1),

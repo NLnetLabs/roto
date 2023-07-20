@@ -1,6 +1,7 @@
 use roto::ast::AcceptReject;
 use roto::compile::Compiler;
 
+use roto::blocks::Scope::{self, FilterMap};
 use roto::types::builtin::Asn;
 use roto::types::collections::Record;
 use roto::types::typedef::TypeDef;
@@ -78,18 +79,15 @@ fn src_code(code_line: &str, end_accept_reject: &str) -> String {
 }
 
 fn test_data(
-    name: &str,
+    name: Scope,
     source_code: &str,
-) -> Result<
-    VmResult,
-    Box<dyn std::error::Error>,
-> {
+) -> Result<VmResult, Box<dyn std::error::Error>> {
     println!("Evaluate filter-map {}...", name);
 
     let c = Compiler::new();
     let roto_packs = c.build_from_compiler(source_code)?;
 
-    let roto_pack = roto_packs.retrieve_public_as_refs(name)?;
+    let roto_pack = roto_packs.retrieve_public_as_refs(&name)?;
     let asn: TypeValue = Asn::from_u32(211321).into();
 
     println!("ASN {:?}", asn);
@@ -136,7 +134,7 @@ fn test_data(
 fn test_compare_1() {
     common::init();
     let src_line = src_code("msg.type == 2; // Peer Down", "reject");
-    let test_run = test_data("in-filter-map", &src_line);
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line);
 
     let VmResult { accept_reject, .. } = test_run.unwrap();
     assert_eq!(accept_reject, AcceptReject::Accept);
@@ -146,7 +144,7 @@ fn test_compare_1() {
 fn test_compare_2() {
     common::init();
     let src_line = src_code("msg.type == 2; // Peer Down", "accept");
-    let test_run = test_data("in-filter-map", &src_line);
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line);
 
     let VmResult { accept_reject, .. } = test_run.unwrap();
     assert_eq!(accept_reject, AcceptReject::Accept);
@@ -156,7 +154,7 @@ fn test_compare_2() {
 fn test_compare_3() {
     common::init();
     let src_line = src_code("msg.type == 1; // Peer Down", "reject");
-    let test_run = test_data("in-filter-map", &src_line);
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line);
 
     let VmResult { accept_reject, .. } = test_run.unwrap();
     assert_eq!(accept_reject, AcceptReject::Reject);
@@ -167,7 +165,7 @@ fn test_compare_4() {
     common::init();
     let src_line =
         src_code("msg.type == 1 && msg.type == 2; // Peer Down", "accept");
-    let test_run = test_data("in-filter-map", &src_line);
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line);
 
     let VmResult { accept_reject, .. } = test_run.unwrap();
     assert_eq!(accept_reject, AcceptReject::Accept);
@@ -178,7 +176,7 @@ fn test_compare_5() {
     common::init();
     let src_line =
         src_code("msg.type == 2 && msg.type == 2; // Peer Down", "reject");
-    let test_run = test_data("in-filter-map", &src_line);
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line);
 
     let VmResult { accept_reject, .. } = test_run.unwrap();
     assert_eq!(accept_reject, AcceptReject::Accept);
@@ -191,7 +189,7 @@ fn test_compare_6() {
         "(msg.type == 2) || (msg.type == 2); // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-filter-map", &src_line);
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line);
 
     let VmResult { accept_reject, .. } = test_run.unwrap();
     assert_eq!(accept_reject, AcceptReject::Accept);
@@ -204,7 +202,7 @@ fn test_compare_7() {
         "( (msg.type == 2) || (msg.type == 2) ) && ( msg.type == 2 ); // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-filter-map", &src_line);
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line);
 
     let VmResult { accept_reject, .. } = test_run.unwrap();
     assert_eq!(accept_reject, AcceptReject::Accept);
@@ -217,7 +215,7 @@ fn test_compare_8() {
         "( (msg.type == 2) || (msg.type == 2) ) || ( msg.type == 1 ); // Peer Down",
         "reject",
     );
-    let test_run = test_data("in-filter-map", &src_line);
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line);
 
     let VmResult { accept_reject, .. } = test_run.unwrap();
     assert_eq!(accept_reject, AcceptReject::Reject);
@@ -227,7 +225,7 @@ fn test_compare_8() {
 fn test_compare_9() {
     common::init();
     let src_line = src_code("msg.type in [2,3,4,5]; // Peer Down", "accept");
-    let test_run = test_data("in-filter-map", &src_line);
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line);
 
     let VmResult { accept_reject, .. } = test_run.unwrap();
     assert_eq!(accept_reject, AcceptReject::Accept);
@@ -236,8 +234,9 @@ fn test_compare_9() {
 #[test]
 fn test_compare_10() {
     common::init();
-    let src_line = src_code("msg.type in [20,30,40,50]; // Peer Down", "reject");
-    let test_run = test_data("in-filter-map", &src_line);
+    let src_line =
+        src_code("msg.type in [20,30,40,50]; // Peer Down", "reject");
+    let test_run = test_data(FilterMap("in-filter-map".into()), &src_line);
 
     let VmResult { accept_reject, .. } = test_run.unwrap();
     assert_eq!(accept_reject, AcceptReject::Accept);

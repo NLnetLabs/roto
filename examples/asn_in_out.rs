@@ -1,5 +1,6 @@
 use roto::compile::Compiler;
 
+use roto::blocks::Scope::{self, FilterMap};
 use roto::types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage, Prefix, Asn, RouteStatus};
 use roto::types::collections::Record;
 use roto::types::typedef::TypeDef;
@@ -7,7 +8,7 @@ use roto::vm;
 use routecore::bgp::message::SessionConfig;
 
 fn test_data(
-    name: &str,
+    name: Scope,
     source_code: &'static str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Evaluate module {}...", name);
@@ -16,7 +17,7 @@ fn test_data(
 
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code)?;
-    let roto_pack = rotolo.retrieve_public_as_refs(name)?;
+    let roto_pack = rotolo.retrieve_public_as_refs(&name)?;
 
     // BGP UPDATE message containing MP_REACH_NLRI path attribute,
     // comprising 5 IPv6 NLRIs
@@ -91,7 +92,7 @@ fn test_data(
 
 fn main() {
     test_data(
-        "my-filter-map",
+        FilterMap("my-filter-map".into()),
         r###"
             filter-map my-filter-map {
                 define {

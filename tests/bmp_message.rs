@@ -2,17 +2,23 @@ use std::sync::Arc;
 
 use log::trace;
 use roto::{
-    types::{builtin::BytesRecord,
-    lazytypedef::RouteMonitoring, typevalue::TypeValue, collections::Record},
-    vm::{self, VmResult}, compile::Compiler, ast::AcceptReject,
+    ast::AcceptReject,
+    compile::Compiler,
+    blocks::Scope,
+    blocks::Scope::FilterMap,
+    types::{
+        builtin::BytesRecord, collections::Record,
+        lazytypedef::RouteMonitoring, typevalue::TypeValue,
+    },
+    vm::{self, VmResult},
 };
 
 mod common;
 
 fn test_data(
-    name: &str,
+    name: Scope,
     source_code: &'static str,
-) -> Result<VmResult, Box<dyn std::error::Error>> {    
+) -> Result<VmResult, Box<dyn std::error::Error>> {
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
@@ -35,7 +41,11 @@ fn test_data(
     let rm_msg = BytesRecord::<RouteMonitoring>::new(buf.into());
     assert!(rm_msg.is_ok());
     let rm_msg = rm_msg.unwrap();
-    let payload = TypeValue::Builtin(roto::types::builtin::BuiltinTypeValue::BmpRouteMonitoringMessage(Arc::new(rm_msg)));
+    let payload = TypeValue::Builtin(
+        roto::types::builtin::BuiltinTypeValue::BmpRouteMonitoringMessage(
+            Arc::new(rm_msg),
+        ),
+    );
 
     trace!("Used Arguments");
     trace!("{:#?}", &roto_pack.get_arguments());
@@ -49,20 +59,21 @@ fn test_data(
     }
 
     let mut vm = vm::VmBuilder::new()
-    // .with_arguments(args)
-    .with_data_sources(ds_ref)
-    .with_mir_code(roto_pack.get_mir())
-    .build()?;
+        // .with_arguments(args)
+        .with_data_sources(ds_ref)
+        .with_mir_code(roto_pack.get_mir())
+        .build()?;
 
     let mem = &mut vm::LinearMemory::uninit();
-    let res = vm.exec(
-        payload,
-        None::<Record>,
-        // Some(filter_map_arguments),
-        None,
-        mem,
-    )
-    .unwrap();
+    let res = vm
+        .exec(
+            payload,
+            None::<Record>,
+            // Some(filter_map_arguments),
+            None,
+            mem,
+        )
+        .unwrap();
 
     trace!("\nRESULT");
     trace!("action: {}", res.accept_reject);
@@ -77,7 +88,7 @@ fn bmp_message_1() {
     common::init();
 
     let res = test_data(
-        "filter-v4-only",
+        FilterMap("filter-v4-only".into()),
         r###"
         filter-map filter-v4-only {
             define {
@@ -98,7 +109,8 @@ fn bmp_message_1() {
             }
         }
         "###,
-    ).unwrap();
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
@@ -108,7 +120,7 @@ fn bmp_message_2() {
     common::init();
 
     let res = test_data(
-        "filter-v6-only",
+        FilterMap("filter-v6-only".into()),
         r###"
         filter-map filter-v6-only {
             define {
@@ -129,7 +141,8 @@ fn bmp_message_2() {
             }
         }
         "###,
-    ).unwrap();
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -139,7 +152,7 @@ fn bmp_message_3() {
     common::init();
 
     let res = test_data(
-        "filter-v6-only",
+        FilterMap("filter-v6-only".into()),
         r###"
         filter-map filter-v6-only {
             define {
@@ -162,7 +175,8 @@ fn bmp_message_3() {
         "###,
     );
 
-    let err = "Eval error: Cannot convert value with type Lazy Record".to_string();
+    let err =
+        "Eval error: Cannot convert value with type Lazy Record".to_string();
     let mut str = res.unwrap_err().to_string();
     str.truncate(err.len());
     assert_eq!(str, err);
