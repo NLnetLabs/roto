@@ -1589,6 +1589,22 @@ impl OutputStreamQueue {
     pub fn push(&mut self, msg: OutputStreamMessage) {
         self.0.push(msg)
     }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn pop(&mut self) -> Option<OutputStreamMessage> {
+        self.0.pop()
+    }
+
+    pub fn iter(&self) -> impl Iterator + '_ {
+        self.0.iter()
+    }
 }
 
 impl Default for OutputStreamQueue {
@@ -1597,6 +1613,23 @@ impl Default for OutputStreamQueue {
     }
 }
 
+impl Index<usize> for OutputStreamQueue {
+    type Output = OutputStreamMessage;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        self.0.index(index)
+    }
+}
+
+impl IntoIterator for OutputStreamQueue {
+    type Item = OutputStreamMessage;
+    type IntoIter = <smallvec::SmallVec<[OutputStreamMessage; 8]> 
+        as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
 
 //------------ VmError ------------------------------------------------------
 
