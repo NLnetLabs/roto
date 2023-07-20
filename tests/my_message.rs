@@ -119,7 +119,7 @@ fn test_data(
     println!("action: {}", res.accept_reject);
     println!("rx    : {:?}", res.rx);
     println!("tx    : {:?}", res.tx);
-    println!("stream: {:?}", res.stream_output_queue);
+    println!("stream: {:?}", res.output_stream_queue);
 
     Ok(())
 }
