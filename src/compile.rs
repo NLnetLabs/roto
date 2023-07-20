@@ -1412,13 +1412,24 @@ fn compile_compute_expr<'a>(
                 to
             )));
         }
-        // This record is defined without a type and used direcly, mainly in
+        // This record is defined without a type and used directly, mainly
         // as an argument for a method. The inferred type is unambiguous.
         Token::AnonymousRecord => {
             assert!(!is_ar);
 
-            trace!("ANONYMOUS RECORD FIELDS {:#?}", symbol.get_args());
-            for arg in symbol.get_args() {
+            // Re-order the args vec on this symbol to reflect the ordering
+            // on the type definition for the record. The original ordering
+            // is the order in which it was specificed in the source code,
+            // the resulting order is alphabetically on the names of the
+            // fields. We're using a bit of a trick to re-order, since the
+            // `symbol` variable is not mutable. So create a Vec<&Symbol>
+            // from the original &[Symbol]. The vec can then be re-ordered
+            // and we're writing the state in the order of the vec elements.
+            let mut field_symbols = symbol.get_args().iter().collect::<Vec<_>>();
+            field_symbols.sort_by_key(|a| a.get_name());
+            trace!("ANONYMOUS RECORD FIELDS {:#?}", field_symbols);
+
+            for arg in field_symbols {
                 state = compile_compute_expr(arg, state, None, true)?;
             }
             return Ok(state);

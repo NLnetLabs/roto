@@ -19,6 +19,7 @@ impl RotoType for OutputStreamMessage {
         ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError> {
+        trace!("GET PROPS FOR METHOD ON OUTPUTSTREAMMESSAGE");
         match method_name.ident.as_str() {
             "send" => Ok(MethodProps::new(
                 ty.clone(),
@@ -74,7 +75,7 @@ impl RotoType for OutputStreamMessage {
 
 impl std::fmt::Display for OutputStreamMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Output stream with record type {:#?}", self.record_type)
+        write!(f, "Output stream record {:#?}", self.record)
     }
 }
 
@@ -100,10 +101,29 @@ impl From<OutputStreamToken> for usize {
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize)]
 pub struct OutputStreamMessage {
-    pub(crate) name: ShortString,
-    pub(crate) topic: String,
-    pub(crate) record_type: TypeDef,
-    pub(crate) record: TypeValue,
+    name: ShortString,
+    topic: String,
+    record: TypeValue,
+}
+
+impl OutputStreamMessage {
+    // pub fn new(name: ShortString, topic: String, record: TypeValue) -> Self {
+    //     Self {
+    //         name, topic, record
+    //     }
+    // }
+
+    pub fn get_name(&self) -> ShortString {
+        self.name.clone()
+    }
+
+    pub fn get_topic(&self) -> &String {
+        &self.topic
+    }
+
+    pub fn get_record(&self) -> &TypeValue {
+        &self.record
+    }
 }
 
 impl From<OutputStreamMessage> for TypeValue {
@@ -117,13 +137,14 @@ impl From<OutputStreamMessage> for TypeValue {
 // sense performance wise and logically.
 impl From<Record> for OutputStreamMessage {
     fn from(value: Record) -> Self {
-        let record_type = (&TypeValue::Record(value.clone())).into();
+        trace!("CONVERT INTO OUTPUTSTREAMMESSAGE");
+        trace!("{}", value);
         let name: ShortString = value.get_value_for_field("name").map(|v| v.into()).unwrap_or_else(|| "".into());
         let topic: String = value.get_value_for_field("topic").map(|v| v.into()).unwrap_or_else(|| "".into());
+        
         Self {
             name,
             topic,
-            record_type, 
             record: value.into()
         }
     }

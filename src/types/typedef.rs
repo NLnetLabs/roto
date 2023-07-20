@@ -1073,7 +1073,7 @@ impl From<&TypeValue> for TypeDef {
             TypeValue::Enum(e) => e.get_type(),
             // TypeValue::Rib(r) => r.ty.clone(),
             // TypeValue::Table(t) => t.ty.clone(),
-            TypeValue::OutputStreamMessage(m) => m.record_type.clone(),
+            TypeValue::OutputStreamMessage(m) => m.get_record().into(),
             TypeValue::SharedValue(sv) => TypeDef::from(sv.as_ref()),
             TypeValue::Unknown => TypeDef::Unknown,
             TypeValue::UnInit => TypeDef::Unknown,

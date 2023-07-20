@@ -2,6 +2,7 @@ use std::{
     cell::RefCell,
     fmt::{Display, Formatter},
     ops::{Index, IndexMut},
+    process::Output,
     sync::Arc,
 };
 
@@ -15,8 +16,9 @@ use crate::{
             BytesRecord, ElementTypeValue, LazyRecord, List, Record,
         },
         datasources::{DataSource, DataSourceMethodValue},
+        outputs::OutputStreamMessage,
         typedef::TypeDef,
-        typevalue::TypeValue, outputs::OutputStreamMessage,
+        typevalue::TypeValue,
     },
 };
 
@@ -815,6 +817,40 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
         take_vec
     }
 
+    // Take a `elem_num` elements on the stack, leaving the rest of the stack in place.
+    fn _take_resolved_as_owned(
+        &'a self,
+        elem_num: u32, // number of elements to take
+        mem: &'a mut LinearMemory,
+    ) -> Vec<TypeValue> {
+        let mut stack = self.stack.borrow_mut();
+
+        let len = stack.0.len();
+        let stack_part = stack.0.split_off(len - elem_num as usize);
+
+        let take_vec = stack_part
+            .iter()
+            .map(|sr| match sr.pos.clone() {
+                StackRefPos::MemPos(pos) => {
+                    mem.get_mp_field_by_stack_ref_owned(
+                        sr,
+                        // sr.field_index.clone(),
+                    )
+                    .unwrap_or_else(|_| {
+                        panic!("Uninitialized memory in position {}", pos);
+                    })
+                    // StackValue::Ref(v)
+                }
+                StackRefPos::TablePos(_token, _pos) => {
+                    panic!("Attempt to move a value from a data-source");
+                }
+                StackRefPos::CompareResult(res) => res.into(),
+            })
+            .collect();
+
+        take_vec
+    }
+
     fn as_vec(&'a self) -> Vec<StackRef> {
         let mut stack = self.stack.borrow_mut();
         stack.unwind()
@@ -849,7 +885,8 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
         let mut commands_num: usize = 0;
 
         self._move_rx_tx_to_mem(rx, tx, mem);
-        let mut output_stream_queue: OutputStreamQueue = OutputStreamQueue::new();
+        let mut output_stream_queue: OutputStreamQueue =
+            OutputStreamQueue::new();
 
         for MirBlock {
             command_stack,
@@ -995,10 +1032,8 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                         };
                         let (_args, method_t, return_type) = args.pop_3();
 
-                        let stack_args = self._take_resolved(
-                            _args.get_args_len() as u32,
-                            mem,
-                        );
+                        let stack_args = self
+                            ._take_resolved(_args.get_args_len() as u32, mem);
 
                         // We are going to call a method on a type, so we
                         // extract the type from the first argument on the
@@ -1230,11 +1265,15 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                 0
                             };
 
-                        trace!("execute data store method with args {:?}", args);
+                        trace!(
+                            "execute data store method with args {:?}",
+                            args
+                        );
                         let (method_token, data_source_token) = args.pop_2();
 
                         match data_source_token {
-                            CommandArg::DataSourceTable(ds_s) | CommandArg::DataSourceRib(ds_s) => {
+                            CommandArg::DataSourceTable(ds_s)
+                            | CommandArg::DataSourceRib(ds_s) => {
                                 let ds = self.get_data_source(*ds_s).unwrap();
                                 let stack_args =
                                     self._unwind_resolved_stack_into_vec(mem);
@@ -1406,7 +1445,12 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                 commands_num
                             );
 
-                            return Ok(VmResult { accept_reject: *accept_reject, rx, tx, output_stream_queue });
+                            return Ok(VmResult {
+                                accept_reject: *accept_reject,
+                                rx,
+                                tx,
+                                output_stream_queue,
+                            });
                         }
                     }
 
@@ -1435,24 +1479,36 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                     OpCode::SetTxField => {
                         todo!();
                     }
-                    // stack args: []
+                    // stack args: [ordered_field_values..]
                     OpCode::PushOutputStreamQueue => {
                         trace!("Send: {:?}", args);
-                        let stack_args = self.as_vec();
+
+                        let elem_num =
+                            args[2].get_args_len_for_outputstream_record();
+
+                        trace!(
+                            "no of fields {}",
+                            args[3].get_args_len() as u32
+                        );
+
+                        let stack_args =
+                            self._take_resolved_as_owned(elem_num, mem);
                         trace!("Stack args {:?}", stack_args);
 
                         if let CommandArg::MemPos(mem_pos) = args[3] {
                             trace!("from mem pos {}", mem_pos);
                         }
-                        
+
                         let mut rec_fields: Vec<TypeValue> = vec![];
-                        for stack_ref in &stack_args {
-                            rec_fields.push(mem.get_mp_field_by_stack_ref_owned(stack_ref).unwrap());
+
+                        for stack_ref in stack_args {
+                            rec_fields.insert(0, stack_ref);
                         }
 
                         if let CommandArg::Arguments(type_def) = &args[2] {
                             trace!("type_def {:?}", type_def);
-                            if let TypeDef::OutputStream(os_ty) = &type_def[0] {
+                            if let TypeDef::OutputStream(os_ty) = &type_def[0]
+                            {
                                 let rec = Record::create_instance_from_ordered_fields(os_ty, rec_fields).unwrap();
                                 output_stream_queue.push(rec.into());
                             }
@@ -1571,7 +1627,6 @@ pub struct VmResult {
     pub tx: Option<TypeValue>,
     pub output_stream_queue: OutputStreamQueue,
 }
-
 
 //------------ StreamOutputQueue --------------------------------------------
 
@@ -1772,11 +1827,11 @@ impl Display for Command {
 pub enum CommandArg {
     Constant(TypeValue),        // Constant value
     Variable(usize),            // Variable with token value
-    Argument(usize),            // extra runtime argument for filter_map & term
-    List(List), // a list that needs to be stored at a memory posision
-    Record(Record), // a record that needs to be stored at a mem posistion
-    RxValue,    // the placeholder for the value of the rx type at runtime
-    TxValue,    // the placeholder for the value of the tx type at runtime
+    Argument(usize), // extra runtime argument for filter_map & term
+    List(List),      // a list that needs to be stored at a memory posision
+    Record(Record),  // a record that needs to be stored at a mem posistion
+    RxValue, // the placeholder for the value of the rx type at runtime
+    TxValue, // the placeholder for the value of the tx type at runtime
     Method(usize), // method token value
     DataSourceTable(usize), // data source: table token value
     DataSourceRib(usize), // data source: rib token value
@@ -1809,6 +1864,22 @@ impl CommandArg {
             args.len()
         } else {
             1
+        }
+    }
+
+    pub fn get_args_len_for_outputstream_record(&self) -> u32 {
+        if let CommandArg::Arguments(fields) = &self {
+            if let TypeDef::OutputStream(record) = &fields[0] {
+                if let TypeDef::Record(args) = &**record {
+                    args.len() as u32
+                } else {
+                    0
+                }
+            } else {
+                0
+            }
+        } else {
+            0
         }
     }
 }

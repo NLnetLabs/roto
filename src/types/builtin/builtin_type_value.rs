@@ -337,7 +337,7 @@ impl Display for BuiltinTypeValue {
                 write!(f, "{} (Integer)", v)
             }
             BuiltinTypeValue::StringLiteral(v) => {
-                write!(f, "{} (String)", v)
+                write!(f, "{}", v)
             }
             BuiltinTypeValue::ConstU8EnumVariant(v) => {
                 write!(f, "{} (Const U8 Enum Variant)", v)

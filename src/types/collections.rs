@@ -11,7 +11,6 @@ use crate::traits::RotoType;
 use crate::vm::{StackValue, VmError};
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
-use std::sync::Arc;
 
 use super::builtin::{BuiltinTypeValue, U32};
 use super::typedef::{LazyNamedTypeDef, MethodProps, TypeDef};
@@ -210,8 +209,12 @@ impl From<&ElementTypeValue> for String {
 impl From<&ElementTypeValue> for ShortString {
     fn from(value: &ElementTypeValue) -> ShortString {
         match value {
-            ElementTypeValue::Nested(n) => ShortString::from(format!("{}", n).as_str()),
-            ElementTypeValue::Primitive(p) => ShortString::from(format!("{}", p).as_str()),
+            ElementTypeValue::Nested(n) => {
+                ShortString::from(format!("{}", n).as_str())
+            }
+            ElementTypeValue::Primitive(p) => {
+                ShortString::from(format!("{}", p).as_str())
+            }
         }
     }
 }
@@ -627,7 +630,6 @@ impl<'a> Record {
                 let value = values.pop().unwrap();
                 kvs.push((field_name.clone(), ElementTypeValue::from(value)));
             }
-
         } else {
             trace!("TypeDef for ordered fields {:?}", ty);
             return Err(CompileError::new("Not a record type".into()));
@@ -648,7 +650,9 @@ impl<'a> Record {
         self.0.is_empty()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item=&(ShortString, ElementTypeValue)> + '_ {
+    pub fn iter(
+        &self,
+    ) -> impl Iterator<Item = &(ShortString, ElementTypeValue)> + '_ {
         self.0.iter()
     }
 
@@ -781,27 +785,22 @@ impl RotoType for Record {
         // as it is for primitive types, since we have to check whether the
         // fields in both completely match.
         trace!("CONVERT RECORD TYPE INSTANCE");
+        // trace!("type {} -> type {}", TypeDef::from(&TypeValue::from(self)), into_type);
         match into_type {
             TypeDef::Record(_) => {
                 if into_type == &TypeValue::Record(self.clone()) {
                     Ok(TypeValue::Record(self))
                 } else {
-                    match into_type {
-                        TypeDef::OutputStream(rec) => Ok(TypeValue::OutputStreamMessage(
-                            Arc::new(super::outputs::OutputStreamMessage {
-                                name: "".into(),
-                                topic: "".into(),
-                                record_type: (**rec).clone(),
-                                record: self.into(),
-                            }),
-                        )),
-                        _ => Err("Record type cannot be converted into another type"
-                        .to_string()
-                        .into())
-                    }
+                    Err(CompileError::from(
+                        format!(
+                            "Record instance {} can't be converted into record type {}",
+                            TypeDef::from(&TypeValue::from(self)), 
+                            into_type)
+                        )
+                    )
                 }
             }
-            _ => Err("Record type cannot be converted into another type"
+            _ => Err("Instance of type Record cannot be converted into another type"
                 .to_string()
                 .into()),
         }
@@ -834,22 +833,24 @@ impl RotoType for Record {
     }
 }
 
-// Value Expressions that containt a Record parsed as a pair of
+// Value Expressions that contain a Record parsed as a pair of
 // (field_name, value) pairs. This turns it into an actual Record.
 impl From<AnonymousRecordValueExpr> for Record {
     fn from(value: AnonymousRecordValueExpr) -> Self {
-        Record(
-            value
-                .key_values
-                .iter()
-                .map(|(s, t)| (s.ident.clone(), t.clone().into()))
-                .collect::<Vec<_>>(),
-        )
+        trace!("FROM ANONYMOUS RECORD VALUE EXPR");
+        let mut kvs: Vec<(ShortString, ElementTypeValue)> = value
+            .key_values
+            .iter()
+            .map(|(s, t)| (s.ident.clone(), t.clone().into()))
+            .collect::<Vec<_>>();
+        kvs.sort_by(|a, b| a.0.cmp(&b.0));
+        Record(kvs)
     }
 }
 
 impl From<TypedRecordValueExpr> for Record {
     fn from(value: TypedRecordValueExpr) -> Self {
+        trace!("FROM TYPED RECORD VALUE EXPR");
         Record(
             value
                 .key_values
@@ -868,9 +869,11 @@ impl From<Record> for TypeValue {
 
 impl From<Record> for Vec<(ShortString, TypeDef)> {
     fn from(value: Record) -> Self {
-        value.0.iter()
-        .map(|ty| (ty.0.clone(), (&ty.1).into()))
-        .collect::<Vec<(_, TypeDef)>>()
+        value
+            .0
+            .iter()
+            .map(|ty| (ty.0.clone(), (&ty.1).into()))
+            .collect::<Vec<(_, TypeDef)>>()
     }
 }
 

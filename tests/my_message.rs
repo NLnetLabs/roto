@@ -1,3 +1,4 @@
+use log::trace;
 use roto::compile::Compiler;
 
 use roto::blocks::Scope;
@@ -5,14 +6,14 @@ use roto::types::builtin::{Asn, Community};
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
-use roto::vm;
+use roto::vm::{self, VmResult};
 
 mod common;
 
 fn test_data(
     name: Scope,
     source_code: &'static str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<VmResult, Box<dyn std::error::Error>> {
     println!("Evaluate filter-map {}...", name);
 
     let filter_map_arguments =
@@ -113,7 +114,7 @@ fn test_data(
     println!("tx    : {:?}", res.tx);
     println!("stream: {:?}", res.output_stream_queue);
 
-    Ok(())
+    Ok(res)
 }
 
 #[test]
@@ -341,4 +342,127 @@ fn test_filter_map_message_4() {
     let mut str = res.unwrap_err().to_string();
     str.truncate(err.len());
     assert_eq!(str, err);
+}
+
+#[test]
+fn test_filter_map_message_5() {
+    common::init();
+    let res = test_data(
+        Scope::Filter("my-message-filter-map-5".into()),
+        r###"
+        filter my-message-filter-map-5 with my_asn: Asn {
+            define {
+                // specify the types of that this filter receives
+                // and sends.
+                // rx_tx route: StreamRoute;
+                rx route: MyPayload;
+            }
+
+            term rov-valid for route: Route {
+                match {
+                    route.as-path.origin() == my_asn;
+                }
+            }
+            
+            action send-message {
+                mqtt.send({ 
+                    name: "My ASN",
+                    topic: "My Asn was Seen!",
+                    asn: my_asn,
+                    message: String.format("🤭 I, the messager, saw {} in a BGP update.", my_asn)
+                });
+            }
+
+            apply {
+                filter match rov-valid not matching {  
+                    send-message;
+                };
+            }
+        }
+
+        output-stream mqtt contains Message {
+            asn: Asn,
+            message: String,
+            name: String,
+            topic: String
+        }
+
+        type MyPayload {
+            prefix: Prefix,
+            as-path: AsPath,
+            origin: Asn,
+            next-hop: IpAddress,
+            med: U32,
+            local-pref: U32,
+            community: [Community]
+        }
+        "###,
+    ).unwrap();
+    
+    assert_eq!(res.output_stream_queue.len(), 1);
+    assert_eq!(res.output_stream_queue[0].get_name(), "My ASN");
+    assert_eq!(res.output_stream_queue[0].get_topic(), "My Asn was Seen!");
+}
+
+#[test]
+fn test_filter_map_message_6() {
+    common::init();
+    let res = test_data(
+        Scope::Filter("my-message-filter-map-6".into()),
+        r###"
+        filter my-message-filter-map-6 with my_asn: Asn {
+            define {
+                // specify the types of that this filter receives
+                // and sends.
+                // rx_tx route: StreamRoute;
+                rx route: MyPayload;
+            }
+
+            term rov-valid for route: Route {
+                match {
+                    route.as-path.origin() == my_asn;
+                }
+            }
+            
+            action send-message {
+                mqtt.send({ 
+                    name: "My ASN",
+                    topic: "My Asn was Seen!",
+                    asn: my_asn,
+                    message: String.format("🤭 I, the messager, saw {} in a BGP update.", my_asn)
+                });
+            }
+
+            apply {
+                filter match rov-valid not matching {  
+                    send-message;
+                };
+            }
+        }
+
+        output-stream mqtt contains Message {
+            name: String,
+            topic: String,
+            asn: Asn,
+            message: String
+        }
+
+        type MyPayload {
+            prefix: Prefix,
+            as-path: AsPath,
+            origin: Asn,
+            next-hop: IpAddress,
+            med: U32,
+            local-pref: U32,
+            community: [Community]
+        }
+        "###,
+    ).unwrap();
+    
+    for m in res.output_stream_queue.iter() {
+        trace!("MESSAGE {:?}", m);
+    }
+    assert_eq!(res.output_stream_queue.len(), 1);
+    assert_eq!(res.output_stream_queue[0].get_name(), "My ASN");
+
 }
