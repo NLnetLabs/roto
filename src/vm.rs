@@ -1602,7 +1602,7 @@ impl OutputStreamQueue {
         self.0.pop()
     }
 
-    pub fn iter(&self) -> impl Iterator + '_ {
+    pub fn iter(&self) -> impl Iterator<Item=&OutputStreamMessage> + '_ {
         self.0.iter()
     }
 }
