@@ -9,13 +9,13 @@ use std::{
 use log::trace;
 
 use crate::{
-    ast::{AcceptReject, CompareOp, Identifier, ShortString, FilterType},
+    ast::{AcceptReject, CompareOp, FilterType, Identifier, ShortString},
     blocks::Scope,
     compile::CompileError,
     traits::{RotoType, Token},
     types::{
         collections::{ElementTypeValue, Record},
-        constant_enum::global_enums,
+        constant_enum::GlobalEnumTypeDef,
         typedef::TypeDef,
         typevalue::TypeValue,
     },
@@ -329,7 +329,11 @@ impl Symbol {
         }
 
         if self.ty.clone().test_type_conversion(into_ty.clone()) {
-            trace!("Type conversion possible from {} into {}", self.ty, into_ty);
+            trace!(
+                "Type conversion possible from {} into {}",
+                self.ty,
+                into_ty
+            );
             self.ty = into_ty.clone();
             if let TypeValue::Unknown = self.value {
                 trace!("Value is Unknown");
@@ -338,7 +342,11 @@ impl Symbol {
                 self.value = self.value.into_type(&into_ty)?;
             }
         } else {
-            trace!("Type conversion NOT possible from {} into {}", self.ty, into_ty);
+            trace!(
+                "Type conversion NOT possible from {} into {}",
+                self.ty,
+                into_ty
+            );
             return Err(CompileError::from(format!(
                 "{} cannot be converted into {}",
                 self.ty, into_ty
@@ -428,6 +436,8 @@ pub enum SymbolKind {
     Argument,      // a passed-in filter_map or term level argument
     AnonymousType, // type of a sub-record
     NamedType,     // User-defined type of a record
+    GlobalEnum,    // reference to a complete globally defined enum
+    //                (not a variant)
 
     // accessor symbols
     // symbols that come after an access receiver in the args list.
@@ -515,7 +525,6 @@ impl TryFrom<SymbolKind> for MatchActionType {
         }
     }
 }
-
 
 //------------ SymbolTable --------------------------------------------------
 
@@ -625,7 +634,7 @@ impl SymbolTable {
         match self.scope {
             Scope::Filter(_) => FilterType::Filter,
             Scope::FilterMap(_) => FilterType::FilterMap,
-            Scope::Global => panic!("Global scope is not a filter.")
+            Scope::Global => panic!("Global scope is not a filter."),
         }
     }
 
@@ -641,17 +650,26 @@ impl SymbolTable {
             .into());
         }
 
-        let existing_enum_var = global_enums(key);
-
-        if existing_enum_var.is_ok() {
-            Err(format!(
-                "Can't shadow existing enum variant: {:?} in enum {:?}",
-                key,
-                existing_enum_var.unwrap().get_name()
+        match GlobalEnumTypeDef::get_enum_for_variant_as_token(key) {
+            // Is it the name of an existing global enum variant? btw we may
+            // want to relax this some day. It's not an actual name-spacing
+            // error or anything, it's just here to avoid confusion.
+            Err(existing_enum_var) if !existing_enum_var.is_empty() => {
+                Err(format!(
+                    "Can't shadow existing enum variant: {:?} in enum {:?}",
+                    key, existing_enum_var
+                )
+                .into())
+            }
+            // Is it the name of a global enum itself? This is an actual
+            // name-spacing error. If we allow this a global enum gets
+            // overridden and therefore unreachable.
+            Ok(global_enum) => Err(format!(
+                "Can't shadow global enum name: {:?} in enum {:?}",
+                key, global_enum
             )
-            .into())
-        } else {
-            Ok(())
+            .into()),
+            Err(_) => Ok(()),
         }
     }
 

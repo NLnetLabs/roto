@@ -97,7 +97,7 @@ fn test_filter_map_00() {
     let mut _compiler = TestCompiler::create(
         "filter-map_1",
         r###"
-        filter-map in-filter-map {
+        filter-map in-module-map {
             define {
                 rx_tx route: Route;
             }
@@ -113,6 +113,86 @@ fn test_filter_map_00() {
     .test_parse(true)
     .test_eval(true)
     .test_compile(true);
+}
+
+#[test]
+fn test_filter_map_10() {
+    let mut _compiler = TestCompiler::create(
+        "filter-map-10",
+        r###"
+        filter-map my-module {
+            define {
+                rx_tx bgp_msg: BgpUpdateMessage;
+            }
+        
+            term afi-safi-unicast {
+                match {
+                    bgp_msg.nlris.afi != IPV4;
+                }
+            }
+        
+            action send-message {
+                mqtt.send({ 
+                    message: String.format("🤭 I, the messager, saw {} in a BGP update.", AS3200)
+                });
+            }
+        
+            apply {
+                filter match afi-safi-unicast matching {
+                    return reject;
+                };
+            }
+        }
+        
+        output-stream mqtt contains Message {
+            message: String
+        }
+        "###
+    )
+    .test_parse(true)
+    .test_eval(true)
+    .test_compile(true);
+
+}
+
+#[test]
+fn test_filter_map_11() {
+    let mut _compiler = TestCompiler::create(
+        "filter-map-10",
+        r###"
+        filter-map my-module {
+            define {
+                rx_tx bgp_msg: BgpUpdateMessage;
+            }
+        
+            term afi-safi-unicast {
+                match {
+                    bgp_msg.nlris.afi != IPV4;
+                }
+            }
+        
+            action send-message {
+                mqtt.send({ 
+                    message: String.format("🤭 I, the messager, saw {} in a BGP update.", 3200)
+                });
+            }
+        
+            apply {
+                filter match afi-safi-unicast matching {
+                    return reject;
+                };
+            }
+        }
+        
+        output-stream mqtt contains Message {
+            message: String
+        }
+        "###
+    )
+    .test_parse(true)
+    .test_eval(true)
+    .test_compile(true);
+
 }
 
 #[test]

@@ -746,12 +746,6 @@ impl From<StringLiteral> for TypeValue {
     }
 }
 
-impl Display for StringLiteral {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 #[derive(Debug)]
 pub enum StringLiteralToken {
     Cmp = 0,
@@ -773,6 +767,12 @@ impl From<usize> for StringLiteralToken {
 impl From<StringLiteralToken> for usize {
     fn from(val: StringLiteralToken) -> Self {
         val as usize
+    }
+}
+
+impl<T: Display> From<T> for StringLiteral {
+    fn from(value: T) -> Self {
+        StringLiteral(format!("{}", value))
     }
 }
 
@@ -814,6 +814,9 @@ impl RotoType for IntegerLiteral {
         match type_def {
             TypeDef::IntegerLiteral => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(self)))
+            }
+            TypeDef::StringLiteral => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::StringLiteral(self.into())))
             }
             TypeDef::PrefixLength => match self.0 {
                 0..=128 => {
@@ -1868,7 +1871,11 @@ impl From<Vec<routecore::bgp::communities::Community>> for BuiltinTypeValue {
 
 impl Display for Community {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.0)
+        if !f.alternate() {
+            write!(f, "{}", self.0)
+        } else {
+            write!(f, "{:#?}", self.0)
+        }
     }
 }
 
@@ -2077,6 +2084,9 @@ impl RotoType for Asn {
         match type_def {
             TypeDef::Asn => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(self)))
+            }
+            TypeDef::StringLiteral => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::StringLiteral(self.into())))
             }
             _ => {
                 Err(format!("Cannot convert type Asn to type {:?}", type_def)

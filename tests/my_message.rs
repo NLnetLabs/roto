@@ -52,7 +52,7 @@ fn test_data(
         TypeDef::new_record_type(vec![("counter", Box::new(TypeDef::U32))])
             .unwrap();
 
-    let _my_nested_rec_instance = Record::create_instance(
+    let _my_nested_rec_instance = Record::create_instance_with_ordered_fields(
         &my_nested_rec_type,
         vec![("counter", 1_u32.into())],
     )
@@ -69,7 +69,7 @@ fn test_data(
     ])
     .unwrap();
 
-    let my_payload = Record::create_instance(
+    let my_payload = Record::create_instance_with_ordered_fields(
         &my_rec_type,
         vec![
             ("prefix", prefix),

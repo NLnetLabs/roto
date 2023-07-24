@@ -122,7 +122,7 @@ fn test_bgp_update_1() {
                     // bgp_msg.nlris.afi in [AFI_IPV4, AFI_IPV6];
                     // bgp_msg.nlris.afi in [Ipv4, Ipv6];
                     // bgp_msg.nlris.afi in [AFI.Ipv4, AFI.Ipv6];
-                    bgp_msg.nlris.afi in [IPV4, IPV6];
+                    bgp_msg.nlris.afi in [AFI.IPV4, IPV6];
                     // bgp_msg.nlris.afi in [afi.IPV4, afi.IPV6];
                     // bgp_msg.nlris.afi == IPV4 | IPV6;
                     bgp_msg.nlris.safi == UNICAST;

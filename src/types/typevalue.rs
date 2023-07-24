@@ -72,11 +72,12 @@ impl TypeValue {
     pub fn create_record(
         type_ident_pairs: Vec<(&str, TypeValue)>,
     ) -> Result<Record, CompileError> {
-        let def_ = type_ident_pairs
+        let elems = type_ident_pairs
             .into_iter()
             .map(|(ident, ty)| (ShortString::from(ident), ty.into()))
             .collect::<Vec<_>>();
-        Ok(Record::new(def_))
+
+        Ok(Record::new(elems))
     }
 
     pub fn is_boolean_type(&self) -> bool {
@@ -183,7 +184,7 @@ impl RotoType for TypeValue {
             TypeDef::Boolean => Boolean::get_props_for_method(ty, method_name),
             TypeDef::Community => Community::get_props_for_method(ty, method_name),
             TypeDef::ConstEnumVariant(_) => Err(CompileError::new("Unsupported TypeDef::ConstEnumVariant in TypeValue::get_props_for_method()".to_string())),
-            TypeDef::Enum(ty) => Self::get_props_for_method(*ty, method_name),
+            TypeDef::GlobalEnum(to) => Enum::get_props_for_variant(to, method_name),
             TypeDef::HexLiteral => HexLiteral::get_props_for_method(ty, method_name),
             TypeDef::Hop => Hop::get_props_for_method(ty, method_name),
             TypeDef::IntegerLiteral => IntegerLiteral::get_props_for_method(ty, method_name),
@@ -522,21 +523,41 @@ impl RotoType for TypeValue {
 
 impl Display for TypeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            TypeValue::Builtin(p) => write!(f, "{}", p),
-            TypeValue::List(l) => write!(f, "{} (List)", l),
-            TypeValue::Record(r) => {
-                write!(f, "{} (Record)", r)
+        if !f.alternate() {
+            match self {
+                TypeValue::Builtin(p) => write!(f, "{}", p),
+                TypeValue::List(l) => write!(f, "{}", l),
+                TypeValue::Record(r) => {
+                    write!(f, "{}", r)
+                }
+                TypeValue::Enum(c_enum) => {
+                    write!(f, "{}", c_enum)
+                }
+                TypeValue::OutputStreamMessage(m) => {
+                    write!(f, "{}", m)
+                }
+                TypeValue::SharedValue(sv) => write!(f, "{}", sv),
+                TypeValue::Unknown => write!(f, "Unknown"),
+                TypeValue::UnInit => write!(f, "Uninitialized"),
             }
-            TypeValue::Enum(c_enum) => {
-                write!(f, "{} (Enum)", c_enum)
+        } else {
+            // The pretty printer "{:?}"
+            match self {
+                TypeValue::Builtin(p) => write!(f, "{}", p),
+                TypeValue::List(l) => write!(f, "{} (List)", l),
+                TypeValue::Record(r) => {
+                    write!(f, "{} (Record)", r)
+                }
+                TypeValue::Enum(c_enum) => {
+                    write!(f, "{} (Enum)", c_enum)
+                }
+                TypeValue::OutputStreamMessage(m) => {
+                    write!(f, "{} (Stream message)", m)
+                }
+                TypeValue::SharedValue(sv) => write!(f, "{} (Shared Value)", sv),
+                TypeValue::Unknown => write!(f, "Unknown"),
+                TypeValue::UnInit => write!(f, "Uninitialized"),
             }
-            TypeValue::OutputStreamMessage(m) => {
-                write!(f, "{} (Stream message)", m)
-            }
-            TypeValue::SharedValue(sv) => write!(f, "{} (Shared Value)", sv),
-            TypeValue::Unknown => write!(f, "Unknown"),
-            TypeValue::UnInit => write!(f, "Uninitialized"),
         }
     }
 }

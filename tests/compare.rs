@@ -98,7 +98,7 @@ fn test_data(
     ])
     .unwrap();
 
-    let my_payload = Record::create_instance(
+    let my_payload = Record::create_instance_with_ordered_fields(
         &my_rec_type,
         vec![("type", TypeValue::from(1_u8)), ("asn", asn)],
     )

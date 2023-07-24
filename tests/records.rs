@@ -122,7 +122,7 @@ fn test_data(
     ])
     .unwrap();
 
-    let my_payload = Record::create_instance(
+    let my_payload = Record::create_instance_with_ordered_fields(
         &my_rec_type,
         vec![("type", TypeValue::from(1_u8)), ("asn", asn)],
     )
@@ -244,7 +244,7 @@ fn test_records_compare_6() {
         .to_string();
     assert_eq!(
         test_run,
-        "This record: {\n\tasn: AS100 (ASN)\n   } is of type Record {asn: Asn, i: U8, }, but we got a record with type Record {asn: Asn, }. It's not the same and cannot be converted."
+        "This record: {\n\tasn: AS100\n   } is of type Record {asn: Asn, i: U8, }, but we got a record with type Record {asn: Asn, }. It's not the same and cannot be converted."
     );
 }
 

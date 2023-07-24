@@ -582,7 +582,15 @@ impl<'a> Record {
         Self(elems)
     }
 
-    pub fn create_instance(
+    // Sorted inserts on record creation time are essential for the PartialEq
+    // impl (equivalence testing) of a Record TypeDef. The TypeDefs of two 
+    // Records are compared field-by-field in a simple zipped loop. Therefore
+    // all the fields need to be sorted in the same way (aligned), otherwise
+    // they'll be unequal, even if all the values are the same. This method
+    // assumes the typevalues are ordered, and DOESN"T CHECK THE SORTING, but
+    // it does check whether the typevalue of the record-to-be-created matches
+    // its type definition.
+    pub fn create_instance_with_ordered_fields(
         ty: &TypeDef,
         kvs: Vec<(&str, TypeValue)>,
     ) -> Result<Record, CompileError> {
@@ -596,6 +604,38 @@ impl<'a> Record {
             .iter()
             .map(|(name, ty)| (ShortString::from(*name), ty))
             .collect::<Vec<_>>();
+
+        if let TypeDef::Record(_rec) = ty {
+            if ty._check_record_fields(shortstring_vec.as_slice()) {
+                TypeValue::create_record(kvs)
+            } else {
+                Err(CompileError::new(
+                    format!("Record fields do not match record type, expected instance of type {}, but got {:?}", ty, shortstring_vec)
+                ))
+            }
+        } else {
+            Err(CompileError::new("Not a record type".into()))
+        }
+    }
+
+    // This method actually sorts first. It may save your ass, or it may
+    // waste your time.
+    pub fn create_instance_with_sort(
+        ty: &TypeDef,
+        mut kvs: Vec<(&str, TypeValue)>,
+    ) -> Result<Record, CompileError> {
+        if kvs.is_empty() {
+            return Err(CompileError::new(
+                "Can't create empty instance.".into(),
+            ));
+        }
+        kvs.sort_by(|a,b| a.0.cmp(b.0));
+
+        let shortstring_vec = kvs
+            .iter()
+            .map(|(name, ty)| (ShortString::from(*name), ty))
+            .collect::<Vec<_>>();
+
         if let TypeDef::Record(_rec) = ty {
             if ty._check_record_fields(shortstring_vec.as_slice()) {
                 TypeValue::create_record(kvs)
@@ -612,7 +652,9 @@ impl<'a> Record {
     // This function requires quite the trust from our VM and the user, it takes
     // a Vec of TypeValues under the assumption that they are exactly ordered the
     // way the resulting Record is, so that the caller can omit the field NAMES,
-    // only supplying the values.
+    // only supplying the values. If you have the field names available you
+    // should probably use the `create_instance_with_ordered_fields` method,
+    // which does check whether field names and type match.
     pub fn create_instance_from_ordered_fields(
         ty: &TypeDef,
         mut values: Vec<TypeValue>,

@@ -105,7 +105,7 @@ fn test_data(
         TypeDef::new_record_type(vec![("counter", Box::new(TypeDef::U32))])
             .unwrap();
 
-    let _my_nested_rec_instance = Record::create_instance(
+    let _my_nested_rec_instance = Record::create_instance_with_ordered_fields(
         &my_nested_rec_type,
         vec![("counter", 1_u32.into())],
     )
@@ -122,7 +122,7 @@ fn test_data(
     ])
     .unwrap();
 
-    let my_payload = Record::create_instance(
+    let my_payload = Record::create_instance_with_ordered_fields(
         &my_rec_type,
         vec![
             ("prefix", prefix),
@@ -138,7 +138,7 @@ fn test_data(
 
     let source_asns_type =
         TypeDef::new_record_type(vec![("asn", Box::new(TypeDef::Asn))])?;
-    let new_sa_rec = Record::create_instance(
+    let new_sa_rec = Record::create_instance_with_ordered_fields(
         &source_asns_type,
         vec![("asn", Asn::from_u32(300).into())],
     )?;

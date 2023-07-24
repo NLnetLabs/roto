@@ -102,7 +102,7 @@ fn test_data(
     ])
     .unwrap();
 
-    let my_payload = Record::create_instance(
+    let my_payload = Record::create_instance_with_ordered_fields(
         &my_rec_type,
         vec![("type", TypeValue::from(1_u8)), ("asn", asn)],
     )
@@ -184,7 +184,8 @@ fn test_list_compare_5() {
         src_code(r#""stringetje" in [2,3,4,5,1]; // Peer Down"#, "reject");
     let test_run = test_data(FilterMap("in-filter-map".into()), &src_line);
 
-    assert!(test_run.is_err());
+    let VmResult { accept_reject, .. } = test_run.unwrap();
+    assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
 #[test]

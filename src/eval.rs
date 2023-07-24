@@ -17,7 +17,7 @@ use crate::types::builtin::HexLiteral;
 use crate::types::builtin::IntegerLiteral;
 use crate::types::builtin::PrefixLength;
 use crate::types::builtin::StringLiteral;
-use crate::types::constant_enum::global_enums;
+use crate::types::constant_enum::GlobalEnumTypeDef;
 use crate::types::typedef::NamedTypeDef;
 use crate::types::typedef::RecordTypeDef;
 
@@ -73,13 +73,14 @@ impl<'a> ast::SyntaxTree {
         // For each filter_map, create a new symbol table if it does not exist.
         for filter_map in &filter_maps {
             let filter_map_name = &filter_map.get_filter_map()?.ident.ident;
-            let filter_map_scope = match 
-                filter_map.get_filter_map()?.ty {
-                    FilterType::Filter => Scope::Filter(filter_map_name.clone()),
-                    FilterType::FilterMap => Scope::FilterMap(filter_map_name.clone())
-                };
-            
-                // Scope::FilterMap(filter_map_name.clone());
+            let filter_map_scope = match filter_map.get_filter_map()?.ty {
+                FilterType::Filter => Scope::Filter(filter_map_name.clone()),
+                FilterType::FilterMap => {
+                    Scope::FilterMap(filter_map_name.clone())
+                }
+            };
+
+            // Scope::FilterMap(filter_map_name.clone());
 
             if let std::collections::hash_map::Entry::Vacant(e) =
                 symbols_mut.entry(filter_map_scope.clone())
@@ -356,8 +357,10 @@ impl ast::FilterMap {
         symbols: symbols::GlobalSymbolTable,
     ) -> Result<(), CompileError> {
         let filter_map_scope = match &self.ty {
-            FilterType::FilterMap => Scope::FilterMap(self.ident.ident.clone()),
-            FilterType::Filter => Scope::Filter(self.ident.ident.clone())
+            FilterType::FilterMap => {
+                Scope::FilterMap(self.ident.ident.clone())
+            }
+            FilterType::Filter => Scope::Filter(self.ident.ident.clone()),
         };
         // Check the `with` clause for additional arguments.
         let with_kv: Vec<_> = self.with_kv.clone();
@@ -418,8 +421,10 @@ impl ast::FilterMap {
         // argument to the whole filter_map, that can be used as a extra
         // read-only payload.
         let scope = match self.ty {
-            FilterType::FilterMap => Scope::FilterMap(self.ident.ident.clone()),
-            FilterType::Filter  => Scope::Filter(self.ident.ident.clone()),
+            FilterType::FilterMap => {
+                Scope::FilterMap(self.ident.ident.clone())
+            }
+            FilterType::Filter => Scope::Filter(self.ident.ident.clone()),
         };
 
         let _with_ty = with_kv
@@ -430,7 +435,7 @@ impl ast::FilterMap {
                     ty,
                     symbols::SymbolKind::Argument,
                     symbols.clone(),
-                    &scope
+                    &scope,
                 )
             })
             .collect::<Vec<_>>();
@@ -852,9 +857,16 @@ impl ast::ComputeExpr {
 
         // The evaluation of the Access Receiver
         let mut ar_symbol =
+            // was it registered in the current scope by the user?
             ar_s.eval(symbols.clone(), scope.clone())
+                // Is it registered in the global scope by the user?
                 .or_else(|_| ar_s.eval(symbols.clone(), Scope::Global))
-                .or_else(|_| global_enums(&ar_s.get_ident().unwrap().ident))
+                // Is it  a global enum or a variant of a global enum?
+                .or_else(|_| {
+                    GlobalEnumTypeDef::any_variant_as_symbol(
+                        &ar_s.get_ident().unwrap().ident,
+                    )
+                })
                 .map_err(|ar_err| match ar_err {
                     AccessReceiverError::Var => CompileError::from(format!(
                     "Cannot find variable '{}' in {} or in the global scope.",
@@ -1053,7 +1065,7 @@ impl ast::AccessReceiver {
                 }
             }
 
-            // is it an filter-map-level argument?
+            // is it a filter-map-level argument?
             if let Some(Ok(arg)) = _symbols
                 .borrow()
                 .get(&scope)
@@ -1304,17 +1316,36 @@ impl ast::FieldAccessExpr {
         trace!("field access on field type {:?}", field_type);
         trace!("self field names {:?}", self.field_names);
 
-        if let Ok((ty, to)) = field_type.has_fields_chain(&self.field_names) {
+        // has_fields_chain preserves the TypeValue of the AST subtree,
+        // if it was already set, i.e. in the case of a Constant or a variant
+        // of a global enum.
+        if let Ok((type_def, to, tv)) =
+            field_type.has_fields_chain(&self.field_names)
+        {
             trace!("token {:?}", to);
             let name = self.field_names.join(".");
 
-            return Ok(symbols::Symbol::new(
-                name.as_str().into(),
-                symbols::SymbolKind::FieldAccess,
-                ty,
-                vec![],
-                Some(to),
-            ));
+            match tv {
+                None => {
+                    return Ok(symbols::Symbol::new(
+                        name.as_str().into(),
+                        symbols::SymbolKind::FieldAccess,
+                        type_def,
+                        vec![],
+                        Some(to),
+                    ))
+                }
+                // preserve the TypeValue if set.
+                Some(tv) => {
+                    return Ok(symbols::Symbol::new_with_value(
+                        name.as_str().into(),
+                        symbols::SymbolKind::FieldAccess,
+                        tv,
+                        vec![],
+                        to,
+                    ))
+                }
+            }
         } else {
             Err(format!("Invalid field access expression: {:?}.", self)
                 .into())
@@ -1712,8 +1743,7 @@ fn check_type_identifier(
     }
 
     match &scope {
-        Scope::FilterMap(filter_map)
-        | Scope::Filter(filter_map) => {
+        Scope::FilterMap(filter_map) | Scope::Filter(filter_map) => {
             // is it in the symbol table for this scope?
             let filter_map_ty = symbols
                 .get(scope)
@@ -1781,8 +1811,7 @@ fn get_props_for_scoped_variable(
     let search_str = fields.join(".");
 
     match &scope {
-        Scope::FilterMap(filter_map)
-        | Scope::Filter(filter_map) => {
+        Scope::FilterMap(filter_map) | Scope::Filter(filter_map) => {
             // 1. is the whole dotted name in the symbol table for this scope?
             return symbols
                 .get(&Scope::Global)
@@ -2090,8 +2119,7 @@ fn add_action(
     scope: &Scope,
 ) -> Result<(), CompileError> {
     match &scope {
-        Scope::FilterMap(filter_map)
-        | Scope::Filter(filter_map) => {
+        Scope::FilterMap(filter_map) | Scope::Filter(filter_map) => {
             let mut _symbols = symbols.borrow_mut();
             let filter_map = _symbols.get_mut(scope).ok_or(format!(
                 "No filter-map named '{}' found.",

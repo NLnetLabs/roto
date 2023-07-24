@@ -1141,14 +1141,16 @@ fn compile_compute_expr<'a>(
         Token::BuiltinType(_b_to) => {
             assert!(is_ar);
         }
+        // A Global Enum that is referenced with its Fully Qualified name,
+        // e.g. AFI.IPV4. The Global Enum is the part before the dot ("AFI"),
+        // for compilation it can be safely ignored. Mainly useful to
+        // disambiguate variant of Global Enums that have the same name.
         Token::Enum(_) => {
-            assert!(is_ar);
+            trace!("ENUM {:?}", symbol);
             trace!("ENUM VALUES {:?}", symbol.get_args());
-
-            return Ok(state);
+            assert!(is_ar);
         }
         Token::ConstEnumVariant => {
-            assert!(is_ar);
             trace!("ENUM VARIANT VALUE {:?}", symbol.get_value());
 
             let val = symbol.get_value();

@@ -50,7 +50,7 @@ fn test_data(
 
 
     let payload_type = TypeDef::new_record_type(vec![("asn", Box::new(TypeDef::Asn))])?;
-    let payload = Record::create_instance(&payload_type, vec![("asn", Asn::from(65534_u32).into())])?;
+    let payload = Record::create_instance_with_ordered_fields(&payload_type, vec![("asn", Asn::from(65534_u32).into())])?;
     // Create the VM
     println!("Used Arguments");
     println!("{:#?}", &roto_pack.get_arguments());

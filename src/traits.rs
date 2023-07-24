@@ -9,7 +9,7 @@ use crate::{
         collections::Record,
         datasources::DataSourceMethodValue,
         typedef::{MethodProps, TypeDef},
-        typevalue::TypeValue,
+        typevalue::TypeValue, constant_enum::GlobalEnumTypeDef,
     },
     vm::{StackValue, VmError},
 };
@@ -43,7 +43,7 @@ pub enum Token {
     List,
     BuiltinType(u8),
     // Enum
-    Enum(u32),
+    Enum(GlobalEnumTypeDef),
     ConstEnumVariant,
 }
 

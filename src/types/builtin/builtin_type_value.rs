@@ -329,74 +329,147 @@ impl From<crate::types::builtin::primitives::IpAddress> for BuiltinTypeValue {
 
 impl Display for BuiltinTypeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            BuiltinTypeValue::U32(v) => write!(f, "{} (U32)", v),
-            BuiltinTypeValue::U16(v) => write!(f, "{} (U16)", v),
-            BuiltinTypeValue::U8(v) => write!(f, "{} (U8)", v),
-            BuiltinTypeValue::IntegerLiteral(v) => {
-                write!(f, "{} (Integer)", v)
+        if !f.alternate() {
+            match self {
+                BuiltinTypeValue::U32(v) => write!(f, "{}", v),
+                BuiltinTypeValue::U16(v) => write!(f, "{}", v),
+                BuiltinTypeValue::U8(v) => write!(f, "{}", v),
+                BuiltinTypeValue::IntegerLiteral(v) => {
+                    write!(f, "{}", v)
+                }
+                BuiltinTypeValue::StringLiteral(v) => {
+                    write!(f, "{}", v.0)
+                }
+                BuiltinTypeValue::ConstU8EnumVariant(v) => {
+                    write!(f, "{}", v.value)
+                }
+                BuiltinTypeValue::ConstU16EnumVariant(v) => {
+                    write!(f, "{}", v)
+                }
+                BuiltinTypeValue::ConstU32EnumVariant(v) => {
+                    write!(f, "{}", v)
+                }
+                BuiltinTypeValue::Prefix(v) => write!(f, "{}", v),
+                BuiltinTypeValue::PrefixLength(v) => {
+                    write!(f, "{}", v)
+                }
+                BuiltinTypeValue::Community(v) => write!(f, "{}", v),
+                BuiltinTypeValue::Communities(v) => {
+                    write!(f, "{}", v)
+                }
+                BuiltinTypeValue::IpAddress(v) => write!(f, "{}", v),
+                BuiltinTypeValue::Asn(v) => write!(f, "{}", v),
+                BuiltinTypeValue::AsPath(v) => {
+                    write!(f, "{}", v)
+                }
+                BuiltinTypeValue::Hop(h) => {
+                    write!(f, "{}", h)
+                }
+                BuiltinTypeValue::OriginType(v) => {
+                    write!(f, "{}", v)
+                }
+                BuiltinTypeValue::Route(r) => write!(f, "{}", r),
+                BuiltinTypeValue::BgpUpdateMessage(raw) => {
+                    write!(f, "{:X?}", **raw)
+                }
+                BuiltinTypeValue::BmpRouteMonitoringMessage(raw) => {
+                    write!(f, "{:X?}", **raw)
+                }
+                BuiltinTypeValue::BmpPeerUpNotification(raw) => {
+                    write!(f, "{:X?}", **raw)
+                }
+                BuiltinTypeValue::BmpPeerDownNotification(raw) => {
+                    write!(f, "{:X?}", **raw)
+                }
+                BuiltinTypeValue::RouteStatus(v) => {
+                    write!(f, "{}", v)
+                }
+                BuiltinTypeValue::Boolean(v) => write!(f, "{}", v),
+                BuiltinTypeValue::HexLiteral(v) => {
+                    write!(f, "{}", v)
+                }
+                BuiltinTypeValue::LocalPref(v) => {
+                    write!(f, "{}", v)
+                }
+                BuiltinTypeValue::AtomicAggregator(v) => {
+                    write!(f, "{}", v)
+                }
+                BuiltinTypeValue::NextHop(v) => write!(f, "{}", v),
+                BuiltinTypeValue::MultiExitDisc(v) => {
+                    write!(f, "{}", v)
+                }
             }
-            BuiltinTypeValue::StringLiteral(v) => {
-                write!(f, "{}", v)
-            }
-            BuiltinTypeValue::ConstU8EnumVariant(v) => {
-                write!(f, "{} (Const U8 Enum Variant)", v)
-            }
-            BuiltinTypeValue::ConstU16EnumVariant(v) => {
-                write!(f, "{} (Const U16 Enum Variant)", v)
-            }
-            BuiltinTypeValue::ConstU32EnumVariant(v) => {
-                write!(f, "{} (Const U32 Enum Variant)", v)
-            }
-            BuiltinTypeValue::Prefix(v) => write!(f, "{} (Prefix)", v),
-            BuiltinTypeValue::PrefixLength(v) => {
-                write!(f, "{} (Prefix Length)", v)
-            }
-            BuiltinTypeValue::Community(v) => write!(f, "{} (Community)", v),
-            BuiltinTypeValue::Communities(v) => {
-                write!(f, "{:?} (Communities)", v)
-            }
-            BuiltinTypeValue::IpAddress(v) => write!(f, "{} (IP Address)", v),
-            BuiltinTypeValue::Asn(v) => write!(f, "{} (ASN)", v),
-            BuiltinTypeValue::AsPath(v) => {
-                write!(f, "{} (AS Path)", v)
-            }
-            BuiltinTypeValue::Hop(h) => {
-                write!(f, "{} (Hop)", h)
-            }
-            BuiltinTypeValue::OriginType(v) => {
-                write!(f, "{} (Origin Type)", v)
-            }
-            BuiltinTypeValue::Route(r) => write!(f, "{} (Route)", r),
-            BuiltinTypeValue::BgpUpdateMessage(raw) => {
-                write!(f, "{:X?} (RawBgpMessage)", **raw)
-            }
-            BuiltinTypeValue::BmpRouteMonitoringMessage(raw) => {
-                write!(f, "{:X?} (BmpRouteMonitoringMessage)", **raw)
-            }
-            BuiltinTypeValue::BmpPeerUpNotification(raw) => {
-                write!(f, "{:X?} (BmpPeerUpNotification)", **raw)
-            }
-            BuiltinTypeValue::BmpPeerDownNotification(raw) => {
-                write!(f, "{:X?} (BmpPeerDownNotification)", **raw)
-            }
-            BuiltinTypeValue::RouteStatus(v) => {
-                write!(f, "{} (Route Status)", v)
-            }
-            BuiltinTypeValue::Boolean(v) => write!(f, "{} (Boolean)", v),
-            BuiltinTypeValue::HexLiteral(v) => {
-                write!(f, "{} (Hex)", v)
-            }
-            BuiltinTypeValue::LocalPref(v) => {
-                write!(f, "{} (Local Preference)", v)
-            }
-            BuiltinTypeValue::AtomicAggregator(v) => {
-                write!(f, "{} (Atomic Aggregator)", v)
-            }
-            BuiltinTypeValue::NextHop(v) => write!(f, "{} (Next Hop)", v),
-            BuiltinTypeValue::MultiExitDisc(v) => {
-                write!(f, "{} (Multi Exit Discriminator)", v)
-            }
+        } else {
+            // This is the pretty printer: "{:#?}"
+            match self {
+                BuiltinTypeValue::U32(v) => write!(f, "{} (U32)", v),
+                BuiltinTypeValue::U16(v) => write!(f, "{} (U16)", v),
+                BuiltinTypeValue::U8(v) => write!(f, "{} (U8)", v),
+                BuiltinTypeValue::IntegerLiteral(v) => {
+                    write!(f, "{} (Integer)", v)
+                }
+                BuiltinTypeValue::StringLiteral(v) => {
+                    write!(f, "{} (String)", v.0)
+                }
+                BuiltinTypeValue::ConstU8EnumVariant(v) => {
+                    write!(f, "{} (Const U8 Enum Variant)", v.value)
+                }
+                BuiltinTypeValue::ConstU16EnumVariant(v) => {
+                    write!(f, "{} (Const U16 Enum Variant)", v.value)
+                }
+                BuiltinTypeValue::ConstU32EnumVariant(v) => {
+                    write!(f, "{} (Const U32 Enum Variant)", v.value)
+                }
+                BuiltinTypeValue::Prefix(v) => write!(f, "{} (Prefix)", v),
+                BuiltinTypeValue::PrefixLength(v) => {
+                    write!(f, "{} (Prefix Length)", v)
+                }
+                BuiltinTypeValue::Community(v) => write!(f, "{} (Community)", v),
+                BuiltinTypeValue::Communities(v) => {
+                    write!(f, "{:?} (Communities)", v)
+                }
+                BuiltinTypeValue::IpAddress(v) => write!(f, "{} (IP Address)", v),
+                BuiltinTypeValue::Asn(v) => write!(f, "{} (ASN)", v),
+                BuiltinTypeValue::AsPath(v) => {
+                    write!(f, "{} (AS Path)", v)
+                }
+                BuiltinTypeValue::Hop(h) => {
+                    write!(f, "{} (Hop)", h)
+                }
+                BuiltinTypeValue::OriginType(v) => {
+                    write!(f, "{} (Origin Type)", v)
+                }
+                BuiltinTypeValue::Route(r) => write!(f, "{} (Route)", r),
+                BuiltinTypeValue::BgpUpdateMessage(raw) => {
+                    write!(f, "{:X?} (RawBgpMessage)", **raw)
+                }
+                BuiltinTypeValue::BmpRouteMonitoringMessage(raw) => {
+                    write!(f, "{:X?} (BmpRouteMonitoringMessage)", **raw)
+                }
+                BuiltinTypeValue::BmpPeerUpNotification(raw) => {
+                    write!(f, "{:X?} (BmpPeerUpNotification)", **raw)
+                }
+                BuiltinTypeValue::BmpPeerDownNotification(raw) => {
+                    write!(f, "{:X?} (BmpPeerDownNotification)", **raw)
+                }
+                BuiltinTypeValue::RouteStatus(v) => {
+                    write!(f, "{} (Route Status)", v)
+                }
+                BuiltinTypeValue::Boolean(v) => write!(f, "{} (Boolean)", v),
+                BuiltinTypeValue::HexLiteral(v) => {
+                    write!(f, "{} (Hex)", v)
+                }
+                BuiltinTypeValue::LocalPref(v) => {
+                    write!(f, "{} (Local Preference)", v)
+                }
+                BuiltinTypeValue::AtomicAggregator(v) => {
+                    write!(f, "{} (Atomic Aggregator)", v)
+                }
+                BuiltinTypeValue::NextHop(v) => write!(f, "{} (Next Hop)", v),
+                BuiltinTypeValue::MultiExitDisc(v) => {
+                    write!(f, "{} (Multi Exit Discriminator)", v)
+                }
+            } 
         }
     }
 }

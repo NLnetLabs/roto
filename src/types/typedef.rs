@@ -26,7 +26,7 @@ use super::builtin::{
     Unknown, U16, U32, U8,
 };
 use super::collections::{LazyElementTypeValue, Record};
-use super::constant_enum::{Enum, EnumVariant};
+use super::constant_enum::{Enum, EnumVariant, GlobalEnumTypeDef};
 use super::datasources::{RibType, Table};
 use super::lazytypedef::LazyTypeDef;
 use super::outputs::OutputStreamMessage;
@@ -128,7 +128,7 @@ pub enum TypeDef {
     List(Box<TypeDef>),
     // Record with sorted named fields
     Record(RecordTypeDef),
-    Enum(Box<TypeDef>),
+    GlobalEnum(GlobalEnumTypeDef),
     // The data field holds the name of the enum this variant belongs to.
     ConstEnumVariant(ShortString),
     // The data field holds the name of the enum this variant belongs to.
@@ -187,8 +187,8 @@ impl TypeDef {
         // have conversions, no data field
         // SOURCE TYPE(TARGET TYPE WITHOUT DATA FIELD, ..;
         // TARGET TYPE WITH DATA FIELD)
-        U8(U16,U32,PrefixLength,IntegerLiteral;),
-        U16(U32,PrefixLength,IntegerLiteral,LocalPref;),
+        U8(StringLiteral,U16,U32,PrefixLength,IntegerLiteral;),
+        U16(StringLiteral,U32,PrefixLength,IntegerLiteral,LocalPref;),
         U32(StringLiteral,IntegerLiteral;),
         Boolean(StringLiteral;),
         IpAddress(StringLiteral;),
@@ -198,15 +198,15 @@ impl TypeDef {
         OriginType(StringLiteral;),
         NextHop(StringLiteral;),
         RouteStatus(StringLiteral;),
-        IntegerLiteral(U8,U32,PrefixLength,LocalPref,Asn;),
+        IntegerLiteral(StringLiteral,U8,U32,StringLiteral,PrefixLength,LocalPref,Asn;),
         StringLiteral(Asn;),
-        HexLiteral(U8,U32,Community;),
-        PrefixLength(U8,U32;),
-        Asn(U32,StringLiteral;),
+        HexLiteral(StringLiteral,U8,U32,Community;),
+        PrefixLength(StringLiteral,U8,U32;),
+        Asn(StringLiteral,U32;),
         AsPath(StringLiteral;List),
-        LocalPref(U8,U16,U32,IntegerLiteral,StringLiteral;),
-        MultiExitDisc(U8,IntegerLiteral,StringLiteral;),
-        AtomicAggregator(U8;);
+        LocalPref(StringLiteral,U8,U16,U32,IntegerLiteral;),
+        MultiExitDisc(StringLiteral,U8,IntegerLiteral;),
+        AtomicAggregator(StringLiteral,U8;);
         // have conversions, have data field
         // Records can be converted to other type of Records under certain
         // conditions:
@@ -214,9 +214,10 @@ impl TypeDef {
         // - Field types do not match, but conversion is possible
         // - The fields set of the target record type is a superset of the
         //   source record type (TODO!)
-        Record(;Record,OutputStream),
-        LazyRecord(;Record,OutputStream),
-        AcceptReject(StringLiteral;);
+        Record(StringLiteral;Record,OutputStream),
+        LazyRecord(StringLiteral;Record,OutputStream),
+        AcceptReject(StringLiteral;),
+        List(StringLiteral;);
         // no conversions, no data field
         // SOURCE TYPE
         Route,
@@ -224,8 +225,7 @@ impl TypeDef {
         Unknown;
         // no conversions, have data field
         // SOURCE TYPE
-        List,
-        Enum,
+        GlobalEnum,
         Rib,
         Table,
         OutputStream,
@@ -264,9 +264,7 @@ impl TypeDef {
     pub fn new_record_type(
         type_ident_pairs: Vec<(&str, Box<TypeDef>)>,
     ) -> Result<TypeDef, CompileError> {
-        Ok(TypeDef::Record(
-            type_ident_pairs.into(),
-        ))
+        Ok(TypeDef::Record(type_ident_pairs.into()))
     }
 
     // this function checks that the `fields` vec describes the fields
@@ -275,10 +273,11 @@ impl TypeDef {
     pub(crate) fn has_fields_chain(
         &self,
         check_fields: &[crate::ast::Identifier],
-    ) -> Result<(TypeDef, Token), CompileError> {
+    ) -> Result<(TypeDef, Token, Option<TypeValue>), CompileError> {
         // Data sources (rib and table) are special cases, because they have
         // their methods on the container (the datasource) and not on the
         // contained type. They don't have field access.
+        trace!("has_fields_chain for {:?} with {:?}", self, check_fields);
         let mut parent_type: (TypeDef, Token) = (
             if let TypeDef::Table(rec)
             | TypeDef::Rib((rec, None))
@@ -292,6 +291,7 @@ impl TypeDef {
         );
 
         let mut result_type = parent_type.clone();
+        let mut existing_tv = None;
 
         for field in check_fields {
             let mut index = 0;
@@ -389,7 +389,25 @@ impl TypeDef {
                         result_type
                     };
                 }
+                // Enums can look up their fieldin the token (that is passed
+                // in in the TypeDef)
+                (TypeDef::GlobalEnum(enum_type), _) => {
+                    let btv = enum_type
+                        .get_value_for_variant(&field.ident)
+                        .map_err(|_| {
+                            CompileError::from(format!(
+                                "Cannot find global enum '{}'",
+                                enum_type
+                            ))
+                        })?;
+                    result_type = //enum_type
+                        // .get_value_for_variant(&field.ident)
+                        // .map_err(|_| CompileError::from(format!("Cannot find global enum '{}'", enum_type)))
+                        ((&btv).into(), Token::ConstEnumVariant);
+                    existing_tv = Some(btv.into());
+                }
                 _ => {
+                    trace!("can't find field '{}'", field.ident.as_str());
                     return Err(format!(
                         "No field named '{}'",
                         field.ident.as_str()
@@ -401,7 +419,7 @@ impl TypeDef {
 
         trace!("has_fields_chain {:?}", parent_type);
 
-        Ok(result_type)
+        Ok((result_type.0, result_type.1, existing_tv))
     }
 
     // This does a strict check to see if all the names of the fields and
@@ -416,7 +434,7 @@ impl TypeDef {
             for (name, ty) in fields {
                 if !rec.iter().any(|(k, v)| k == name && v.as_ref() == *ty) {
                     trace!(
-                        "Error in field instance '{}' of type {}",
+                        "Error in field instance '{:?}' of type {:?}",
                         name,
                         ty
                     );
@@ -445,7 +463,7 @@ impl TypeDef {
             TypeDef::Record(_) => {
                 Record::get_props_for_method(self.clone(), method_name)
             }
-            TypeDef::Enum(_) => {
+            TypeDef::GlobalEnum(_) => {
                 Enum::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::ConstEnumVariant(_) => {
@@ -699,9 +717,9 @@ impl std::fmt::Display for TypeDef {
                 write!(f, "Record {}", rec_def)
             }
             TypeDef::List(list) => write!(f, "List of {}", list),
-            TypeDef::Enum(c_enum) => write!(f, "Enum of {}", c_enum),
+            TypeDef::GlobalEnum(c_enum) => write!(f, "Enum of {}", c_enum),
             TypeDef::ConstEnumVariant(c_enum) => {
-                write!(f, "ConsU8tEnumVariant('{}')", c_enum)
+                write!(f, "ConstU8EnumVariant('{}')", c_enum)
             }
             TypeDef::AsPath => write!(f, "AsPath"),
             TypeDef::Hop => write!(f, "Hop"),
@@ -739,6 +757,8 @@ impl std::fmt::Display for TypeDef {
     }
 }
 
+// This impl is used to see if a TypValue (an instance of a Type) is equal to
+// a type.
 impl PartialEq<BuiltinTypeValue> for TypeDef {
     fn eq(&self, other: &BuiltinTypeValue) -> bool {
         match self {
@@ -775,6 +795,18 @@ impl PartialEq<BuiltinTypeValue> for TypeDef {
             TypeDef::Community => {
                 matches!(other, BuiltinTypeValue::Community(_))
             }
+            TypeDef::ConstEnumVariant(name) => match other {
+                BuiltinTypeValue::ConstU8EnumVariant(o_enum) => {
+                    o_enum.enum_name == name
+                }
+                BuiltinTypeValue::ConstU16EnumVariant(o_enum) => {
+                    o_enum.enum_name == name
+                }
+                BuiltinTypeValue::ConstU32EnumVariant(o_enum) => {
+                    o_enum.enum_name == name
+                }
+                _ => false,
+            },
             _ => false,
         }
     }
@@ -899,6 +931,9 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
                 Ok(TypeDef::LazyRecord(LazyTypeDef::RouteMonitoring))
             }
             "HexLiteral" => Ok(TypeDef::HexLiteral),
+            "BmpMessageType" => {
+                Ok(TypeDef::ConstEnumVariant("BMP_MESSAGE_TYPE".into()))
+            }
             _ => Err(format!("Undefined type: {}", ty.ident).into()),
         }
     }
@@ -929,6 +964,9 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
                 Ok(TypeDef::LazyRecord(LazyTypeDef::RouteMonitoring))
             }
             "HexLiteral" => Ok(TypeDef::HexLiteral),
+            "BmpMessageType" => {
+                Ok(TypeDef::ConstEnumVariant("BMP_MESSAGE_TYPE".into()))
+            }
             _ => Err(format!("Undefined type: {}", ty.ident).into()),
         }
     }
