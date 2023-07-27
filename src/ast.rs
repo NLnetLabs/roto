@@ -482,8 +482,8 @@ impl DefineBody {
                         opt_ws(TypeIdentField::parse),
                         opt_ws(char(';')),
                     ),
-                    RxTxType::RxOnly
-                )
+                    RxTxType::RxOnly,
+                ),
             )),
             many0(delimited(
                 opt_ws(tag("use")),
@@ -583,17 +583,25 @@ impl TermBody {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct VariantMatchExpr {
+    variant: Identifier,
+    data_field: Option<Identifier>,
+}
+
 //------------ TermScope -----------------------------------------------------
+
+// Everything that can appear inside a named `term` block.
 
 // TermScope ::=
 //      ('use' Identifier ';')?
-//     ( MatchOperator '{' (ComputeExpr ';')+ '}' )+
+//     ( MatchOperator '{' ( ( LogicalExpr ';' ) | MatchExpr ) )+ '}'
 
 #[derive(Clone, Debug)]
 pub struct TermScope {
     pub scope: Option<Identifier>,
-    pub operator: MatchOperator, // kinda' useless and kinda' incorrect.
-    pub match_exprs: Vec<LogicalExpr>,
+    pub operator: MatchOperator,
+    pub match_exprs: Vec<(Option<VariantMatchExpr>, Vec<LogicalExpr>)>,
 }
 
 impl TermScope {
@@ -618,10 +626,24 @@ impl TermScope {
                         opt_ws(char('{')),
                         many0(context(
                             "match expression",
-                            terminated(
-                                opt_ws(LogicalExpr::parse),
-                                opt_ws(char(';')),
-                            ),
+                            alt((
+                                map(MatchExpr::parse, |m_e| {
+                                    (
+                                        Some(VariantMatchExpr {
+                                            variant: m_e.variant_id,
+                                            data_field: m_e.data_field,
+                                        }),
+                                        m_e.logical_expr,
+                                    )
+                                }),
+                                map(
+                                    terminated(
+                                        LogicalExpr::parse,
+                                        opt_ws(char(';')),
+                                    ),
+                                    |l_e| (None, vec![l_e]),
+                                ),
+                            )),
                         )),
                         opt_ws(char('}')),
                     ),
@@ -2052,6 +2074,73 @@ impl MethodComputeExpr {
     }
 }
 
+//------------ MatchExpr ----------------------------------------------------
+
+// A MatchExpr describes a variant of an enum together with its data field
+// and a logical expression, that will evaluate to a boolean, it may
+// reference the data field.
+
+// MatchExpr := Identifier '(' Identifier ')' '->'
+//  (( LogicalExpr ';' ',' ) | '{'  ( LogicalExpr ';' )+ '}' ','? )
+#[derive(Clone, Debug)]
+pub struct MatchExpr {
+    pub variant_id: Identifier,
+    pub data_field: Option<Identifier>,
+    pub logical_expr: Vec<LogicalExpr>,
+}
+
+impl MatchExpr {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (variant_id, data_field, logical_expr)) = context(
+            "match variant expression",
+            tuple((
+                opt_ws(Identifier::parse),
+                opt(delimited(
+                    opt_ws(char('(')),
+                    Identifier::parse,
+                    opt_ws(char(')')),
+                )),
+                preceded(
+                    opt_ws(tag("->")),
+                    // Either a ..
+                    alt((
+                        // buch of logical expressions, within curly
+                        // braces and semi-colon separated, and
+                        // terminated with an optional comma, or...
+                        terminated(
+                            delimited(
+                                opt_ws(char('{')),
+                                many1(terminated(
+                                    LogicalExpr::parse,
+                                    opt_ws(char(';')),
+                                )),
+                                opt_ws(char('}')),
+                            ),
+                            opt(opt_ws(char(','))),
+                        ),
+                        // a single logical expression that must
+                        // have a comma at the end.
+                        map(
+                            terminated(LogicalExpr::parse, opt_ws(char(','))),
+                            |l_e| vec![l_e],
+                        ),
+                    )),
+                ),
+            )),
+        )(
+            input
+        )?;
+        Ok((
+            input,
+            Self {
+                variant_id,
+                data_field,
+                logical_expr,
+            },
+        ))
+    }
+}
+
 //============ First-Order Logic ============================================
 
 // "No, no, you're not thinking. You're just being logical." -- Niels Bohr
@@ -2379,7 +2468,13 @@ impl GroupedLogicalExpr {
 
 #[derive(Clone, Debug)]
 pub enum MatchOperator {
+    // 'match' followed by a block containing truth expressions
     Match,
+    // a `match some_value with` match pattern for enums, the block
+    // enumerates the variants
+    MatchValueWith,
+    // Query quantifiers, where the following block contains expressions that
+    // may yield multiple instances of type values
     Some,
     ExactlyOne,
     All,
@@ -2388,6 +2483,14 @@ pub enum MatchOperator {
 impl MatchOperator {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         alt((
+            map(
+                tuple((
+                    tag("match"),
+                    opt_ws(Identifier::parse),
+                    opt_ws(tag("with")),
+                )),
+                |_| MatchOperator::MatchValueWith,
+            ),
             map(tag("match"), |_| MatchOperator::Match),
             map(tag("some"), |_| MatchOperator::Some),
             map(tag("exactly-one"), |_| MatchOperator::ExactlyOne),
@@ -2396,7 +2499,7 @@ impl MatchOperator {
     }
 }
 
-//------------ PrefixMatchType ------------------------------------------
+//------------ PrefixMatchType ----------------------------------------------
 
 // PrefixMatchType ::= ( 'exact' | 'longer' | 'orlonger' |
 //      'prefix-length-range' | 'upto' | 'through' | 'netmask' )

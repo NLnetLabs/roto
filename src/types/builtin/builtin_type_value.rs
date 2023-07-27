@@ -12,7 +12,7 @@ use crate::traits::RotoType;
 use crate::types::collections::BytesRecord;
 use crate::types::constant_enum::EnumVariant;
 use crate::types::lazytypedef::{
-    PeerDownNotification, PeerUpNotification, RouteMonitoring,
+    PeerDownNotification, PeerUpNotification, RouteMonitoring, BmpMessage,
 };
 
 use super::super::collections::List;
@@ -58,6 +58,7 @@ pub enum BuiltinTypeValue {
     // Used for filtering on the properties of the whole message,
     // not taking into account any individual prefixes.
     BgpUpdateMessage(Arc<BgpUpdateMessage>), // scalar
+    BmpMessage(Arc<BytesRecord<BmpMessage>>),
     BmpRouteMonitoringMessage(Arc<BytesRecord<RouteMonitoring>>),
     BmpPeerUpNotification(Arc<BytesRecord<PeerUpNotification>>),
     BmpPeerDownNotification(Arc<BytesRecord<PeerDownNotification>>),
@@ -191,6 +192,9 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::Route(r) => r.into_type(ty),
             BuiltinTypeValue::BgpUpdateMessage(_raw) => Err(CompileError::from(
                 "Cannot convert raw BGP message into any other type.",
+            )),
+            BuiltinTypeValue::BmpMessage(_raw) => Err(CompileError::from(
+                "Cannot convert raw BMP message into any other type.",
             )),
             BuiltinTypeValue::BmpRouteMonitoringMessage(_raw) => Err(CompileError::from(
                 "Cannot convert raw BMP Route Monitoring message into any other type.",
@@ -372,14 +376,17 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::BgpUpdateMessage(raw) => {
                     write!(f, "{:X?}", **raw)
                 }
+                BuiltinTypeValue::BmpMessage(raw) => {
+                    write!(f, "{:X?}", *raw)
+                }
                 BuiltinTypeValue::BmpRouteMonitoringMessage(raw) => {
-                    write!(f, "{:X?}", **raw)
+                    write!(f, "{:X?}", *raw)
                 }
                 BuiltinTypeValue::BmpPeerUpNotification(raw) => {
-                    write!(f, "{:X?}", **raw)
+                    write!(f, "{:X?}", *raw)
                 }
                 BuiltinTypeValue::BmpPeerDownNotification(raw) => {
-                    write!(f, "{:X?}", **raw)
+                    write!(f, "{:X?}", *raw)
                 }
                 BuiltinTypeValue::RouteStatus(v) => {
                     write!(f, "{}", v)
@@ -443,14 +450,17 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::BgpUpdateMessage(raw) => {
                     write!(f, "{:X?} (RawBgpMessage)", **raw)
                 }
+                BuiltinTypeValue::BmpMessage(raw) => {
+                    write!(f, "{:X?} (RawBgpMessage)", *raw)
+                }
                 BuiltinTypeValue::BmpRouteMonitoringMessage(raw) => {
-                    write!(f, "{:X?} (BmpRouteMonitoringMessage)", **raw)
+                    write!(f, "{:X?} (BmpRouteMonitoringMessage)", *raw)
                 }
                 BuiltinTypeValue::BmpPeerUpNotification(raw) => {
-                    write!(f, "{:X?} (BmpPeerUpNotification)", **raw)
+                    write!(f, "{:X?} (BmpPeerUpNotification)", *raw)
                 }
                 BuiltinTypeValue::BmpPeerDownNotification(raw) => {
-                    write!(f, "{:X?} (BmpPeerDownNotification)", **raw)
+                    write!(f, "{:X?} (BmpPeerDownNotification)", *raw)
                 }
                 BuiltinTypeValue::RouteStatus(v) => {
                     write!(f, "{} (Route Status)", v)

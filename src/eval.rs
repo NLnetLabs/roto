@@ -3,6 +3,7 @@ use log::trace;
 use crate::ast::AcceptReject;
 use crate::ast::FilterType;
 use crate::ast::LogicalExpr;
+use crate::ast::MatchOperator;
 use crate::ast::ShortString;
 use crate::blocks::Scope;
 use crate::compile::CompileError;
@@ -393,7 +394,15 @@ impl ast::FilterMap {
 
         for term in terms.into_iter() {
             if let ast::FilterMapExpr::Term(t) = term {
-                t.eval(symbols.clone(), filter_map_scope.clone())?;
+                match t.body.scopes[0].operator {
+                    MatchOperator::Match => {
+                        t.eval(symbols.clone(), filter_map_scope.clone())?;
+                    }
+                    MatchOperator::MatchValueWith => todo!(),
+                    MatchOperator::Some => todo!(),
+                    MatchOperator::ExactlyOne => todo!(),
+                    MatchOperator::All => todo!(),
+                }
             }
         }
 
@@ -564,7 +573,15 @@ impl ast::Term {
         scope: Scope,
     ) -> Result<(), CompileError> {
         let term_scopes = &self.body.scopes;
-        for term in term_scopes[0].match_exprs.iter().enumerate() {
+        // take all the logic expressions out of here, since this data
+        // structure is also used to store actual match expressions.
+        // (from match patterns)
+        for term in term_scopes[0]
+            .match_exprs
+            .iter()
+            .map(|me| &me.1[0])
+            .enumerate()
+        {
             let logical_formula = match &term.1 {
                 LogicalExpr::BooleanExpr(expr) => {
                     // Boolean expressions may actually be a (sub)term that

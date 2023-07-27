@@ -26,9 +26,8 @@ use super::{
         RawRouteWithDeltas, StringLiteral, U32, U8,
     },
     collections::{BytesRecord, ElementTypeValue, LazyRecord, List, Record},
-    constant_enum::Enum,
     lazytypedef::{
-        PeerDownNotification, PeerUpNotification, RouteMonitoring,
+        BmpMessage, PeerDownNotification, PeerUpNotification, RouteMonitoring,
     },
     outputs::OutputStreamMessage,
     typedef::TypeDef,
@@ -48,7 +47,7 @@ pub enum TypeValue {
     // A map of (key, value) pairs, where value can be any of the other types.
     // Always user-defined.
     Record(Record),
-    Enum(Enum),
+    // Enum(Enum),
     // A Record meant to be handled by an Output stream.
     OutputStreamMessage(Arc<OutputStreamMessage>),
     // A wrapper around an immutable value that lives in an external
@@ -175,38 +174,92 @@ impl RotoType for TypeValue {
         Self: std::marker::Sized,
     {
         match ty {
-            TypeDef::AcceptReject(_) => Err(CompileError::new("Unsupported TypeDef::AcceptReject in TypeValue::get_props_for_method()".to_string())),
+            TypeDef::AcceptReject(_) => Err(CompileError::new(
+                "Unsupported TypeDef::AcceptReject in TypeValue::\
+                get_props_for_method()".to_string(),
+            )),
             TypeDef::Asn => Asn::get_props_for_method(ty, method_name),
             TypeDef::AsPath => AsPath::get_props_for_method(ty, method_name),
-            TypeDef::AtomicAggregator => Err(CompileError::new("Unsupported TypeDef::AtomicAggregator in TypeValue::get_props_for_method()".to_string())),
-            TypeDef::BgpUpdateMessage => BgpUpdateMessage::get_props_for_method(ty, method_name),
-            TypeDef::LazyRecord(ref bytes_parser) => bytes_parser.get_props_for_method(ty.clone(), method_name),
-            TypeDef::Boolean => Boolean::get_props_for_method(ty, method_name),
-            TypeDef::Community => Community::get_props_for_method(ty, method_name),
-            TypeDef::ConstEnumVariant(_) => Err(CompileError::new("Unsupported TypeDef::ConstEnumVariant in TypeValue::get_props_for_method()".to_string())),
-            TypeDef::GlobalEnum(to) => Enum::get_props_for_variant(to, method_name),
-            TypeDef::HexLiteral => HexLiteral::get_props_for_method(ty, method_name),
+            TypeDef::AtomicAggregator => Err(CompileError::new(
+                "Unsupported TypeDef::AtomicAggregator in TypeValue::\
+                get_props_for_method()".to_string(),
+            )),
+            TypeDef::BgpUpdateMessage => {
+                BgpUpdateMessage::get_props_for_method(ty, method_name)
+            }
+            TypeDef::LazyRecord(ref bytes_parser) => {
+                bytes_parser.get_props_for_method(ty.clone(), method_name)
+            }
+            TypeDef::Boolean => {
+                Boolean::get_props_for_method(ty, method_name)
+            }
+            TypeDef::Community => {
+                Community::get_props_for_method(ty, method_name)
+            }
+            TypeDef::ConstEnumVariant(_) => Err(CompileError::new(
+                "Unsupported TypeDef::ConstEnumVariant in TypeValue::\
+                get_props_for_method()".to_string(),
+            )),
+            TypeDef::GlobalEnum(_to) => Err(CompileError::new(
+                "Unsupported TypeDef::GlobalEnum in TypeValue::\
+                get_props_for_method()".to_string(),
+            )),
+            TypeDef::HexLiteral => {
+                HexLiteral::get_props_for_method(ty, method_name)
+            }
             TypeDef::Hop => Hop::get_props_for_method(ty, method_name),
-            TypeDef::IntegerLiteral => IntegerLiteral::get_props_for_method(ty, method_name),
-            TypeDef::IpAddress => IpAddress::get_props_for_method(ty, method_name),
+            TypeDef::IntegerLiteral => {
+                IntegerLiteral::get_props_for_method(ty, method_name)
+            }
+            TypeDef::IpAddress => {
+                IpAddress::get_props_for_method(ty, method_name)
+            }
             TypeDef::List(ty) => Self::get_props_for_method(*ty, method_name),
-            TypeDef::LocalPref => LocalPref::get_props_for_method(ty, method_name),
-            TypeDef::MultiExitDisc => MultiExitDisc::get_props_for_method(ty, method_name),
-            TypeDef::NextHop => NextHop::get_props_for_method(ty, method_name),
-            TypeDef::OriginType => OriginType::get_props_for_method(ty, method_name),
-            TypeDef::OutputStream(ty) => Self::get_props_for_method(*ty, method_name),
+            TypeDef::LocalPref => {
+                LocalPref::get_props_for_method(ty, method_name)
+            }
+            TypeDef::MultiExitDisc => {
+                MultiExitDisc::get_props_for_method(ty, method_name)
+            }
+            TypeDef::NextHop => {
+                NextHop::get_props_for_method(ty, method_name)
+            }
+            TypeDef::OriginType => {
+                OriginType::get_props_for_method(ty, method_name)
+            }
+            TypeDef::OutputStream(ty) => {
+                Self::get_props_for_method(*ty, method_name)
+            }
             TypeDef::Prefix => Prefix::get_props_for_method(ty, method_name),
-            TypeDef::PrefixLength => PrefixLength::get_props_for_method(ty, method_name),
-            TypeDef::Record(_) => Record::get_props_for_method(ty, method_name),
-            TypeDef::Rib(ty) => Self::get_props_for_method(*ty.0, method_name),
-            TypeDef::Route => RawRouteWithDeltas::get_props_for_method(ty, method_name),
-            TypeDef::RouteStatus => RouteStatus::get_props_for_method(ty, method_name),
-            TypeDef::StringLiteral => StringLiteral::get_props_for_method(ty, method_name),
-            TypeDef::Table(ty) => Self::get_props_for_method(*ty, method_name),
+            TypeDef::PrefixLength => {
+                PrefixLength::get_props_for_method(ty, method_name)
+            }
+            TypeDef::Record(_) => {
+                Record::get_props_for_method(ty, method_name)
+            }
+            TypeDef::Rib(ty) => {
+                Self::get_props_for_method(*ty.0, method_name)
+            }
+            TypeDef::Route => {
+                RawRouteWithDeltas::get_props_for_method(ty, method_name)
+            }
+            TypeDef::RouteStatus => {
+                RouteStatus::get_props_for_method(ty, method_name)
+            }
+            TypeDef::StringLiteral => {
+                StringLiteral::get_props_for_method(ty, method_name)
+            }
+            TypeDef::Table(ty) => {
+                Self::get_props_for_method(*ty, method_name)
+            }
             TypeDef::U32 => U32::get_props_for_method(ty, method_name),
             TypeDef::U16 => U16::get_props_for_method(ty, method_name),
             TypeDef::U8 => U8::get_props_for_method(ty, method_name),
-            TypeDef::Unknown => Err(CompileError::new("Unsupported TypeDef::Unknown in TypeValue::get_props_for_method()".to_string())),
+            TypeDef::Unknown => Err(CompileError::new(
+                "Unsupported TypeDef::Unknown in TypeValue::\
+                get_props_for_method()"
+                    .to_string(),
+            )),
         }
     }
 
@@ -219,7 +272,13 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::Asn(v) => v.into_type(ty),
                 BuiltinTypeValue::AsPath(v) => v.into_type(ty),
                 BuiltinTypeValue::AtomicAggregator(v) => v.into_type(ty),
-                BuiltinTypeValue::BgpUpdateMessage(_) => Err(CompileError::new("Unsupported TypeValue::BgpUpdateMessage in TypeValue::into_type()".to_string())),
+                BuiltinTypeValue::BgpUpdateMessage(_) => {
+                    Err(CompileError::new(
+                        "Unsupported TypeValue::BgpUpdateMessage in \
+                    TypeValue::into_type()"
+                            .to_string(),
+                    ))
+                }
                 BuiltinTypeValue::Boolean(v) => v.into_type(ty),
                 BuiltinTypeValue::Communities(v) => v.into_type(ty),
                 BuiltinTypeValue::Community(v) => v.into_type(ty),
@@ -242,19 +301,49 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::U32(v) => v.into_type(ty),
                 BuiltinTypeValue::U16(v) => v.into_type(ty),
                 BuiltinTypeValue::U8(v) => v.into_type(ty),
-                BuiltinTypeValue::BmpRouteMonitoringMessage(_v) => Err(CompileError::new("Unsupported TypeValue::BmpRouteMonitoringMessage in TypeValue::into_type()".to_string())),
-                BuiltinTypeValue::BmpPeerUpNotification(_v) => Err(CompileError::new("Unsupported TypeValue::BmpPeerUpNotification in TypeValue::into_type()".to_string())),
-                BuiltinTypeValue::BmpPeerDownNotification(_v) => Err(CompileError::new("Unsupported TypeValue::BmpPeerDownNotification in TypeValue::into_type()".to_string())),
+                BuiltinTypeValue::BmpMessage(_v) => Err(CompileError::new(
+                    "Unsupported TypeValue::BmpMessage in TypeValue::\
+                    into_type()".to_string(),
+                )),
+                BuiltinTypeValue::BmpRouteMonitoringMessage(_v) => {
+                    Err(CompileError::new(
+                        "Unsupported TypeValue::\
+                        BmpRouteMonitoringMessage in TypeValue::into_type()"
+                            .to_string(),
+                    ))
+                }
+                BuiltinTypeValue::BmpPeerUpNotification(_v) => {
+                    Err(CompileError::new(
+                        "Unsupported TypeValue::BmpPeerUpNotification in \
+                        TypeValue::into_type()".to_string(),
+                    ))
+                }
+                BuiltinTypeValue::BmpPeerDownNotification(_v) => {
+                    Err(CompileError::new(
+                        "Unsupported TypeValue::\
+                        BmpPeerDownNotification in TypeValue::into_type()"
+                            .to_string(),
+                    ))
+                }
+            },
 
-            }
-
-            TypeValue::Enum(v) => v.into_type(ty),
+            // TypeValue::Enum(v) => v.into_type(ty),
             TypeValue::List(v) => v.into_type(ty),
-            TypeValue::OutputStreamMessage(_) => Err(CompileError::new("Unsupported TypeValue::OutputStreamMessage in TypeValue::into_type()".to_string())),
+            TypeValue::OutputStreamMessage(_) => Err(CompileError::new(
+                "Unsupported TypeValue::OutputStreamMessage in TypeValue\
+                ::into_type()"
+                    .to_string(),
+            )),
             TypeValue::Record(v) => v.into_type(ty),
             TypeValue::SharedValue(v) => (*v).clone().into_type(ty),
-            TypeValue::UnInit => Err(CompileError::new("Unsupported TypeValue::UnInit in TypeValue::into_type()".to_string())),
-            TypeValue::Unknown => Err(CompileError::new("Unsupported TypeValue::Unknown in TypeValue::into_type()".to_string())),
+            TypeValue::UnInit => Err(CompileError::new(
+                "Unsupported TypeValue::UnInit in TypeValue::into_type()"
+                    .to_string(),
+            )),
+            TypeValue::Unknown => Err(CompileError::new(
+                "Unsupported TypeValue::Unknown in TypeValue::into_type()"
+                    .to_string(),
+            )),
         }
     }
 
@@ -278,37 +367,46 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::BgpUpdateMessage(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
+                BuiltinTypeValue::BmpMessage(bytes_rec) => LazyRecord::new(
+                    BytesRecord::<BmpMessage>::lazy_type_def(),
+                )
+                .exec_value_method(
+                    method_token,
+                    args,
+                    res_type,
+                    (*bytes_rec).0.as_ref(),
+                ),
                 BuiltinTypeValue::BmpRouteMonitoringMessage(bytes_rec) => {
                     LazyRecord::new(
                         BytesRecord::<RouteMonitoring>::lazy_type_def(),
-                    )?
+                    )
                     .exec_value_method(
                         method_token,
                         args,
                         res_type,
-                        bytes_rec.bytes_parser(),
+                        (*bytes_rec).0.as_ref(),
                     )
                 }
                 BuiltinTypeValue::BmpPeerUpNotification(bytes_rec) => {
                     LazyRecord::new(
                         BytesRecord::<PeerUpNotification>::lazy_type_def(),
-                    )?
+                    )
                     .exec_value_method(
                         method_token,
                         args,
                         res_type,
-                        bytes_rec.bytes_parser(),
+                        (*bytes_rec).0.as_ref(),
                     )
                 }
                 BuiltinTypeValue::BmpPeerDownNotification(bytes_rec) => {
                     LazyRecord::new(
                         BytesRecord::<PeerDownNotification>::lazy_type_def(),
-                    )?
+                    )
                     .exec_value_method(
                         method_token,
                         args,
                         res_type,
-                        bytes_rec.bytes_parser(),
+                        (*bytes_rec).0.as_ref(),
                     )
                 }
                 BuiltinTypeValue::Boolean(v) => {
@@ -378,9 +476,9 @@ impl RotoType for TypeValue {
                     v.exec_value_method(method_token, args, res_type)
                 }
             },
-            TypeValue::Enum(v) => {
-                v.exec_value_method(method_token, args, res_type)
-            }
+            // TypeValue::Enum(v) => {
+            //     v.exec_value_method(method_token, args, res_type)
+            // }
             TypeValue::List(v) => {
                 v.exec_value_method(method_token, args, res_type)
             }
@@ -416,6 +514,9 @@ impl RotoType for TypeValue {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::BgpUpdateMessage(_) => {
+                    Err(VmError::InvalidValueType)
+                }
+                BuiltinTypeValue::BmpMessage(_) => {
                     Err(VmError::InvalidValueType)
                 }
                 BuiltinTypeValue::BmpRouteMonitoringMessage(_) => {
@@ -494,9 +595,9 @@ impl RotoType for TypeValue {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
             },
-            TypeValue::Enum(v) => {
-                v.exec_consume_value_method(method_token, args, res_type)
-            }
+            // TypeValue::Enum(v) => {
+            //     v.exec_consume_value_method(method_token, args, res_type)
+            // }
             TypeValue::List(v) => {
                 v.exec_consume_value_method(method_token, args, res_type)
             }
@@ -530,9 +631,9 @@ impl Display for TypeValue {
                 TypeValue::Record(r) => {
                     write!(f, "{}", r)
                 }
-                TypeValue::Enum(c_enum) => {
-                    write!(f, "{}", c_enum)
-                }
+                // TypeValue::Enum(c_enum) => {
+                //     write!(f, "{}", c_enum)
+                // }
                 TypeValue::OutputStreamMessage(m) => {
                     write!(f, "{}", m)
                 }
@@ -548,13 +649,15 @@ impl Display for TypeValue {
                 TypeValue::Record(r) => {
                     write!(f, "{} (Record)", r)
                 }
-                TypeValue::Enum(c_enum) => {
-                    write!(f, "{} (Enum)", c_enum)
-                }
+                // TypeValue::Enum(c_enum) => {
+                //     write!(f, "{} (Enum)", c_enum)
+                // }
                 TypeValue::OutputStreamMessage(m) => {
                     write!(f, "{} (Stream message)", m)
                 }
-                TypeValue::SharedValue(sv) => write!(f, "{} (Shared Value)", sv),
+                TypeValue::SharedValue(sv) => {
+                    write!(f, "{} (Shared Value)", sv)
+                }
                 TypeValue::Unknown => write!(f, "Unknown"),
                 TypeValue::UnInit => write!(f, "Uninitialized"),
             }
@@ -654,8 +757,12 @@ impl PartialEq for TypeValue {
                     false
                 } else {
                     r1.iter().enumerate().all(|(i, elm)| {
-                        if let Ok(tv) =
-                            r2.get_field_by_single_index(i).unwrap().1.clone().into_type(&(&elm.1).into())
+                        if let Ok(tv) = r2
+                            .get_field_by_single_index(i)
+                            .unwrap()
+                            .1
+                            .clone()
+                            .into_type(&(&elm.1).into())
                         {
                             elm.1 == tv
                         } else {
@@ -692,7 +799,7 @@ impl PartialEq for TypeValue {
             (TypeValue::Unknown, _) => false,
             (TypeValue::UnInit, _) => false,
             (TypeValue::OutputStreamMessage(_), _) => false,
-            (TypeValue::Enum(_), _) => false,
+            // (TypeValue::Enum(_), _) => false,
         }
     }
 }
@@ -709,9 +816,9 @@ impl std::hash::Hash for TypeValue {
             TypeValue::Record(rec) => {
                 rec.hash(state);
             }
-            TypeValue::Enum(e) => {
-                e.hash(state);
-            }
+            // TypeValue::Enum(e) => {
+            //     e.hash(state);
+            // }
             // Shouldn't appear in the payload out (tx)
             TypeValue::OutputStreamMessage(_msg) => {}
             TypeValue::SharedValue(sv) => {

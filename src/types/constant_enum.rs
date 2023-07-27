@@ -136,111 +136,111 @@ impl From<EnumVariant<u32>> for BuiltinTypeValue {
 
 //------------ Enum ---------------------------------------------------------
 
-#[derive(Debug, Eq, Clone, Serialize)]
-pub struct Enum {
-    ty: TypeDef,
-    token: Token,
-    pub(crate) variants: Vec<EnumVariant<u16>>,
-}
+// #[derive(Debug, Eq, Clone, Serialize)]
+// pub struct Enum {
+//     ty: TypeDef,
+//     token: Token,
+//     pub(crate) variants: Vec<EnumVariant<u16>>,
+// }
 
-impl Enum {
-    pub fn get_type(&self) -> TypeDef {
-        self.ty.clone()
-    }
+// impl Enum {
+//     pub fn get_type(&self) -> TypeDef {
+//         self.ty.clone()
+//     }
 
-    pub fn find(&self, variant: ShortString) -> Option<&EnumVariant<u16>> {
-        self.variants.iter().find(|var| var.enum_name == variant)
-    }
+//     pub fn find(&self, variant: ShortString) -> Option<&EnumVariant<u16>> {
+//         self.variants.iter().find(|var| var.enum_name == variant)
+//     }
 
-    pub(crate) fn get_props_for_variant(
-        _to: GlobalEnumTypeDef,
-        _method_name: &crate::ast::Identifier,
-    ) -> Result<super::typedef::MethodProps, crate::compile::CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        todo!()
-    }
-}
+//     pub(crate) fn get_props_for_variant(
+//         _to: GlobalEnumTypeDef,
+//         _method_name: &crate::ast::Identifier,
+//     ) -> Result<super::typedef::MethodProps, crate::compile::CompileError>
+//     where
+//         Self: std::marker::Sized,
+//     {
+//         todo!()
+//     }
+// }
 
-impl From<Enum> for TypeValue {
-    fn from(value: Enum) -> Self {
-        TypeValue::Enum(value)
-    }
-}
+// impl From<Enum> for TypeValue {
+//     fn from(value: Enum) -> Self {
+//         TypeValue::Enum(value)
+//     }
+// }
 
-impl std::hash::Hash for Enum {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.token.hash(state);
-    }
-}
+// impl std::hash::Hash for Enum {
+//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+//         self.token.hash(state);
+//     }
+// }
 
-impl PartialEq for Enum {
-    fn eq(&self, other: &Self) -> bool {
-        self.token == other.token
-    }
-}
+// impl PartialEq for Enum {
+//     fn eq(&self, other: &Self) -> bool {
+//         self.token == other.token
+//     }
+// }
 
-impl RotoType for Enum {
-    fn get_props_for_method(
-        _to: TypeDef,
-        _method_name: &crate::ast::Identifier,
-    ) -> Result<super::typedef::MethodProps, crate::compile::CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        unimplemented!()
-    }
+// impl RotoType for Enum {
+//     fn get_props_for_method(
+//         _to: TypeDef,
+//         _method_name: &crate::ast::Identifier,
+//     ) -> Result<super::typedef::MethodProps, crate::compile::CompileError>
+//     where
+//         Self: std::marker::Sized,
+//     {
+//         unimplemented!()
+//     }
 
-    fn into_type(
-        self,
-        _type_value: &TypeDef,
-    ) -> Result<TypeValue, crate::compile::CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        todo!()
-    }
+//     fn into_type(
+//         self,
+//         _type_value: &TypeDef,
+//     ) -> Result<TypeValue, crate::compile::CompileError>
+//     where
+//         Self: std::marker::Sized,
+//     {
+//         todo!()
+//     }
 
-    fn exec_value_method<'a>(
-        &'a self,
-        _method_token: usize,
-        _args: &'a [crate::vm::StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
+//     fn exec_value_method<'a>(
+//         &'a self,
+//         _method_token: usize,
+//         _args: &'a [crate::vm::StackValue],
+//         _res_type: TypeDef,
+//     ) -> Result<TypeValue, VmError> {
+//         todo!()
+//     }
 
-    fn exec_consume_value_method(
-        self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
+//     fn exec_consume_value_method(
+//         self,
+//         _method_token: usize,
+//         _args: Vec<TypeValue>,
+//         _res_type: TypeDef,
+//     ) -> Result<TypeValue, VmError> {
+//         todo!()
+//     }
 
-    fn exec_type_method(
-        _method_token: usize,
-        _args: &[crate::vm::StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
-}
+//     fn exec_type_method(
+//         _method_token: usize,
+//         _args: &[crate::vm::StackValue],
+//         _res_type: TypeDef,
+//     ) -> Result<TypeValue, VmError> {
+//         todo!()
+//     }
+// }
 
-impl Display for Enum {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{{")?;
-        for (i, var) in self.variants.iter().enumerate() {
-            if i > 0 {
-                write!(f, "| ")?;
-            }
-            write!(f, "{}", var)?;
-        }
-        write!(f, "\n   }}")
-    }
-}
+// impl Display for Enum {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{{")?;
+//         for (i, var) in self.variants.iter().enumerate() {
+//             if i > 0 {
+//                 write!(f, "| ")?;
+//             }
+//             write!(f, "{}", var)?;
+//         }
+//         write!(f, "\n   }}")
+//     }
+// }
 
 #[derive(
     Debug, Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Serialize,

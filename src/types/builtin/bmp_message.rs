@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use log::trace;
 use paste::paste;
 
@@ -5,15 +7,15 @@ use crate::{
     ast::ShortString,
     bytes_record_impl,
     compile::CompileError,
-    createtoken, lazyelmtypevalue, lazyenum, lazyfield, lazyrecord,
+    createtoken, lazyelmtypevalue, lazyenum, lazy_data_enum, lazyfield, lazyrecord,
     traits::Token,
     types::{
-        builtin::{Asn, Boolean, BuiltinTypeValue, IpAddress},
-        collections::{LazyElementTypeValue, LazyRecord},
+        builtin::{Asn, U16, Boolean, BuiltinTypeValue, IpAddress},
+        collections::{LazyElementTypeValue, LazyRecord, ElementTypeValue},
         constant_enum::EnumVariant,
         lazytypedef::{
             LazyTypeDef, PeerDownNotification, PeerUpNotification,
-            RouteMonitoring,
+            RouteMonitoring, BmpMessage
         },
         typedef::{LazyNamedTypeDef, RecordTypeDef, TypeDef},
         typevalue::TypeValue,
@@ -23,18 +25,68 @@ use crate::{
 
 pub use crate::types::collections::BytesRecord;
 
-//------------ BmpRouteMonitoringMessage ------------------------------------
 
-createtoken!(
-    BmpMessage;
-    route_monitoring = 0
-    statistics_report = 1
-    peer_down_notification = 2
-    peer_up_notification = 3
-    initiation_message = 4
-    termination_message = 5
-    route_mirroring = 6
+//------------ BmpMessage ---------------------------------------------------
+
+// createtoken!(
+//     BmpMessage;
+//     route_monitoring = 0
+//     statistics_report = 1
+//     peer_down_notification = 2
+//     peer_up_notification = 3
+//     initiation_message = 4
+//     termination_message = 5
+//     route_mirroring = 6
+// );
+
+bytes_record_impl!(
+    BmpMessage,
+    #[type_def(
+        enum_data_field(
+            "route_monitoring";
+            "",
+            EnumVariant<RouteMonitoring>,
+            BytesRecord<BmpMessage>,
+            BmpMessage::RouteMonitoring,
+            BmpRouteMonitoringMessage
+
+
+            // $next_enum_data_field_name: literal;
+            //         $next_enum_data_variant_identifier: literal,
+            //         $next_enum_data_ty: path, // = $next_enum_data_name: literal,
+            //         $next_enum_data_raw_ty: path,
+            //         $next_enum_data_variant: path,
+            //         $target_ty_value: path
+        ),
+        enum_data_field(
+            "peer_down_notification";
+            "",
+            EnumVariant<PeerDownNotification>,
+            BytesRecord<BmpMessage>,
+            BmpMessage::PeerDownNotification,
+            BmpPeerDownNotification
+        ),
+        enum_data_field(
+            "peer_up_notification";
+            "",
+            EnumVariant<PeerUpNotification>,
+            BytesRecord<BmpMessage>,
+            BmpMessage::PeerUpNotification,
+            BmpPeerUpNotification
+        ),
+    )]
 );
+
+impl BytesRecord<BmpMessage> {
+    pub fn new(bytes: bytes::Bytes) -> Result<Self, VmError> {
+        Ok(Self(routecore::bmp::message::Message::<bytes::Bytes>::from_octets(
+            bytes,
+        ).map_err(|_| VmError::InvalidMsgType)?))
+    }
+}
+
+
+//------------ BmpRouteMonitoringMessage ------------------------------------
 
 bytes_record_impl!(
     RouteMonitoring,
@@ -208,12 +260,12 @@ bytes_record_impl!(
                 per_peer_header.adj_rib_type
             ),
         ),
-        enum_field(
-            "reason"; 10,
-            EnumVariant<U8> = "BMP_PEER_DOWN_REASON",
-            BytesRecord<PeerDownNotification>,
-            reason
-        ),
+        // enum_field(
+        //     "reason"; 10,
+        //     EnumVariant<U8> = "BMP_PEER_DOWN_REASON",
+        //     BytesRecord<PeerDownNotification>,
+        //     reason
+        // ),
     )]
 );
 

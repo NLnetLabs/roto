@@ -181,3 +181,47 @@ fn bmp_message_3() {
     str.truncate(err.len());
     assert_eq!(str, err);
 }
+
+
+#[test]
+fn bmp_message_4() {
+    common::init();
+
+    let res = test_data(
+        FilterMap("filter-v6-only".into()),
+        r###"
+        filter filter-v6-only {
+            define {
+                rx msg: BmpMessage;
+            }
+
+            term rm_only {
+                match msg with {
+                    RouteMonitoring(rm_msg) -> rm_msg.per_peer_header.is_ipv4,
+                    PeerDownNotification(pd_msg) -> { rm_msg.per_peer_header.is_ipv4; },
+                    PeerUpNotification(pu_msg) -> {
+                        pu_msg.per_peer_header.is_ipv4;
+                        pu_msg.per_peer_header.peer_type == 1;
+                    },
+                }
+            }
+        
+            apply {
+                filter match is_ipv6_msg matching {
+                    return accept;
+                };
+                reject;
+            }
+        }
+        "###,
+    );
+
+    trace!("res : {:?}", res);
+
+    res.unwrap();
+    // let err =
+    //     "Eval error: Cannot convert value with type Lazy Record".to_string();
+    // let mut str = res.unwrap_err().to_string();
+    // str.truncate(err.len());
+    // assert_eq!(str, err);
+}

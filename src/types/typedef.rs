@@ -26,7 +26,7 @@ use super::builtin::{
     Unknown, U16, U32, U8,
 };
 use super::collections::{LazyElementTypeValue, Record};
-use super::constant_enum::{Enum, EnumVariant, GlobalEnumTypeDef};
+use super::constant_enum::{EnumVariant, GlobalEnumTypeDef};
 use super::datasources::{RibType, Table};
 use super::lazytypedef::LazyTypeDef;
 use super::outputs::OutputStreamMessage;
@@ -42,7 +42,7 @@ pub type NamedTypeDef = (ShortString, Box<TypeDef>);
 pub type LazyNamedTypeDef<'a, T> =
     Vec<(ShortString, LazyElementTypeValue<'a, T>)>;
 
-// This struct meanly serves the purpose of making sure that all inner
+// This struct mainly serves the purpose of making sure that all inner
 // Vec<NamedTypeDef> are being sorted at creation time, so that they
 // are comparable (for equivalence) at all times without the need to
 // ever sort them again.
@@ -464,7 +464,7 @@ impl TypeDef {
                 Record::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::GlobalEnum(_) => {
-                Enum::get_props_for_method(self.clone(), method_name)
+                Err(CompileError::from("GlobalEnum type has no methods"))
             }
             TypeDef::ConstEnumVariant(_) => {
                 EnumVariant::<u8>::get_props_for_method(
@@ -666,9 +666,9 @@ impl TypeDef {
                 TypeValue::List(l) => {
                     l.hash(state);
                 }
-                TypeValue::Enum(e) => {
-                    e.hash(state);
-                }
+                // TypeValue::Enum(e) => {
+                //     e.hash(state);
+                // }
                 TypeValue::SharedValue(sv) => {
                     sv.hash(state);
                 }
@@ -926,6 +926,7 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             "Community" => Ok(TypeDef::Community),
             "Route" => Ok(TypeDef::Route),
             "RouteStatus" => Ok(TypeDef::RouteStatus),
+            "BmpMessage" => Ok(TypeDef::LazyRecord(LazyTypeDef::BmpMessage)),
             "BgpUpdateMessage" => Ok(TypeDef::BgpUpdateMessage),
             "BmpRouteMonitoringMessage" => {
                 Ok(TypeDef::LazyRecord(LazyTypeDef::RouteMonitoring))
@@ -960,6 +961,7 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
             "Route" => Ok(TypeDef::Route),
             "RouteStatus" => Ok(TypeDef::RouteStatus),
             "BgpUpdateMessage" => Ok(TypeDef::BgpUpdateMessage),
+            "BmpMessage" => Ok(TypeDef::LazyRecord(LazyTypeDef::BmpMessage)),
             "BmpRouteMonitoringMessage" => {
                 Ok(TypeDef::LazyRecord(LazyTypeDef::RouteMonitoring))
             }
@@ -1004,6 +1006,9 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::Route(_) => TypeDef::Route,
             BuiltinTypeValue::BgpUpdateMessage(_) => {
                 TypeDef::BgpUpdateMessage
+            }
+            BuiltinTypeValue::BmpMessage(_) => {
+                TypeDef::LazyRecord(LazyTypeDef::BmpMessage)
             }
             BuiltinTypeValue::BmpRouteMonitoringMessage(_) => {
                 TypeDef::LazyRecord(LazyTypeDef::RouteMonitoring)
@@ -1059,6 +1064,9 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::BgpUpdateMessage(_) => {
                 TypeDef::BgpUpdateMessage
             }
+            BuiltinTypeValue::BmpMessage(_) => {
+                TypeDef::LazyRecord(LazyTypeDef::BmpMessage)
+            }
             BuiltinTypeValue::BmpRouteMonitoringMessage(_) => {
                 TypeDef::LazyRecord(LazyTypeDef::RouteMonitoring)
             }
@@ -1108,7 +1116,7 @@ impl From<&TypeValue> for TypeDef {
                     .map(|(k, v)| (k.clone(), Box::new(v.into())))
                     .collect::<Vec<_>>(),
             )),
-            TypeValue::Enum(e) => e.get_type(),
+            // TypeValue::Enum(e) => e.get_type(),
             // TypeValue::Rib(r) => r.ty.clone(),
             // TypeValue::Table(t) => t.ty.clone(),
             TypeValue::OutputStreamMessage(m) => m.get_record().into(),

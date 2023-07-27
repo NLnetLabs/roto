@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use log::trace;
 use serde::Serialize;
 
@@ -7,6 +9,8 @@ use crate::{
     types::builtin::BytesRecord,
 };
 
+pub type BmpMessage =
+    routecore::bmp::message::Message<bytes::Bytes>;
 pub type RouteMonitoring =
     routecore::bmp::message::RouteMonitoring<bytes::Bytes>;
 pub type PeerUpNotification =
@@ -16,6 +20,7 @@ pub type PeerDownNotification =
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
 pub enum LazyTypeDef {
+    BmpMessage,
     RouteMonitoring,
     PeerUpNotification,
     PeerDownNotification,
@@ -26,6 +31,9 @@ pub enum LazyTypeDef {
 impl LazyTypeDef {
     pub fn type_def(&self) -> RecordTypeDef {
         match &self {
+            LazyTypeDef::BmpMessage => {
+                BytesRecord::<BmpMessage>::type_def()
+            }
             LazyTypeDef::RouteMonitoring => {
                 BytesRecord::<RouteMonitoring>::type_def()
             }
@@ -46,6 +54,12 @@ impl LazyTypeDef {
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError> {
         match self {
+            LazyTypeDef::BmpMessage => {
+                BytesRecord::<BmpMessage>::get_props_for_method(
+                    ty,
+                    method_name,
+                )
+            }
             LazyTypeDef::RouteMonitoring => {
                 BytesRecord::<RouteMonitoring>::get_props_for_method(
                     ty,
@@ -74,6 +88,10 @@ impl LazyTypeDef {
         field: &Identifier,
     ) -> Result<(TypeDef, Token), CompileError> {
         match self {
+            LazyTypeDef::BmpMessage => {
+                trace!("BmpMessage w/ field '{}'", field);
+                BytesRecord::<BmpMessage>::get_props_for_field(field)
+            }
             LazyTypeDef::RouteMonitoring => {
                 trace!("BmpRouteMonitoring w/ field '{}'", field);
                 BytesRecord::<RouteMonitoring>::get_props_for_field(field)

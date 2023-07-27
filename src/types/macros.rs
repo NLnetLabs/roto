@@ -104,7 +104,7 @@ macro_rules! lazyrecord {
     (
         $lazy_record_vec: expr
     ) => {
-        LazyRecord::new($lazy_record_vec).unwrap()
+        LazyRecord::new($lazy_record_vec)
     };
 }
 
@@ -155,7 +155,7 @@ macro_rules! lazyenum {
         ShortString::from($field_name),
         LazyElementTypeValue::Lazy(Box::new(
             |raw_bytes: &$raw_ty| {
-            trace!("Evaluate lazy fn {} result {}",
+            trace!("Evaluate lazy fn {} result {:?}",
                 $field_name,
                 raw_bytes.bytes_parser().$base_call()$(.$method_call())*
             );
@@ -183,6 +183,56 @@ macro_rules! lazyenum {
         //         // )
         //     ).into() }))
         // ),
+    )}
+}
+
+#[macro_export]
+macro_rules! lazy_data_enum {
+    (
+        $field_name: literal,
+        $variant_identifier: literal,
+        $enum_ty: path,
+        $raw_ty: path,
+        $variant: path,
+        $target_ty_value: ident
+
+
+        // $next_enum_data_field_name: literal;
+        //             $next_enum_data_variant_identifier: literal,
+        //             $next_enum_data_ty: path, // = $next_enum_data_name: literal,
+        //             $next_enum_data_raw_ty: path,
+        //             $next_enum_data_variant: path,
+        //             $target_ty_value: path
+    ) => {(
+        ShortString::from($field_name),
+        LazyElementTypeValue::Lazy(Box::new(
+            |raw_bytes: &$raw_ty| {
+            trace!("Evaluate lazy fn {}",
+                $field_name
+            );
+            if let $variant(data) = raw_bytes.bytes_parser() {
+                ElementTypeValue::Primitive(
+                    TypeValue::Builtin(
+                        BuiltinTypeValue::$target_ty_value(
+                            Arc::new(BytesRecord(data.clone()))
+                        )
+                    )
+                )
+            } else {
+                panic!("MOFGO!!@E");
+            }
+            // TypeValue::Builtin(
+            //     EnumVariant::<u8>::new((
+            //         $enum_name.into(),
+            //         raw_bytes
+            //             .bytes_parser()
+            //             .$base_call()$(.$method_call())*.into(),
+            //     )).into(),
+            // ).into() 
+        }))
+        // LazyElementTypeValue::LazyRecord(
+        //     LazyRecord::new($raw_ty())
+        // )
     )}
 }
 
@@ -219,6 +269,16 @@ macro_rules! bytes_record_impl {
                     $next_field_ty: ident,
                     $next_field_base_call: ident
                     $( .$next_field_method_call: ident )*
+                )
+            )?
+            $(
+                enum_data_field(
+                    $next_enum_data_field_name: literal;
+                    $next_enum_data_variant_identifier: literal,
+                    $next_enum_data_ty: path, // = $next_enum_data_name: literal,
+                    $next_enum_data_raw_ty: path,
+                    $next_enum_data_variant: path,
+                    $target_ty_value: ident
                 )
             )?
             $(
@@ -259,11 +319,11 @@ macro_rules! bytes_record_impl {
                                                 $enum_base_call$(.$enum_method_call )*),
                                             )?
                                         )+
-                                    ])
-                                )
+                                    ]
+                                ))
                             ),
                         )?
-                        $(
+                        // $(
                             $(
                                 lazyfield!(
                                     $next_field_name,
@@ -272,7 +332,27 @@ macro_rules! bytes_record_impl {
                                     $next_field_base_call$(.$next_field_method_call)*
                                 ),
                             )?
-                        )?
+                        // )?
+                        // $(
+                            $( 
+                                lazy_data_enum!(
+                                    $next_enum_data_field_name,
+                                    $next_enum_data_variant_identifier,
+                                    $next_enum_data_ty, // = $next_enum_data_name: literal,
+                                    $next_enum_data_raw_ty,
+                                    $next_enum_data_variant,
+                                    $target_ty_value
+                                ),
+                            )?
+                            $( 
+                                lazyenum!(
+                                    $next_enum_field_name,
+                                    $next_enum_ty=$next_enum_name,
+                                    $next_enum_raw_ty,
+                                    $next_enum_base_call$(.$next_enum_method_call )*
+                                ),
+                            )?
+                        // )?
                     )+
                 ]
             }
@@ -304,12 +384,16 @@ macro_rules! bytes_record_impl {
 
                         )?
                         $(
-                            // $(
-                                (
-                                    $next_field_name.into(),
-                                    TypeDef::$next_field_ty.into()
-                                ),
-                            // )?
+                            (
+                                $next_field_name.into(),
+                                TypeDef::$next_field_ty.into()
+                            ),
+                        )?
+                        $(
+                            (
+                                $next_enum_name.into(),
+                                TypeDef::ConstEnumVariant($next_enum_name.into()).into()
+                            ),
                         )?
                     )+
                 ])
@@ -379,6 +463,14 @@ macro_rules! bytes_record_impl {
                                 ])
                             )),
                         )?
+                        $(
+                            $next_enum_field_name => Ok((
+                                TypeDef::ConstEnumVariant($next_enum_name.into()),
+                                Token::FieldAccess(vec![
+                                    $next_enum_variant_identifier
+                                ])
+                            )),
+                        )?
                     )+
                     _ => {
                         trace!(
@@ -408,6 +500,9 @@ macro_rules! bytes_record_impl {
                     )?
                     $(
                         [< $next_field_name >] = $next_field_variant_identifier
+                    )?
+                    $(
+                        [< $next_enum_name >] = $next_enum_variant_identifier
                     )?
                 )+
             );

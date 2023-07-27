@@ -2561,7 +2561,7 @@ impl RotoType for OriginType {
 
     fn into_type(
         self,
-        _type_value: &TypeDef,
+        _type_def: &TypeDef,
     ) -> Result<TypeValue, CompileError>
     where
         Self: std::marker::Sized,

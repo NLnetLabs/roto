@@ -267,10 +267,10 @@ impl LinearMemory {
                         LazyRecord::from_type_def(BytesRecord::<
                             routecore::bmp::message::RouteMonitoring<
                                 bytes::Bytes,
-                            >,
+                            >
                         >::lazy_type_def(
                         ))
-                        .get_field_by_index(&field_index, bmp_msg)
+                        .get_field_by_index(&field_index, bmp_msg.as_ref())
                         .map(|elm| StackValue::Owned(elm.into()))
                     }
                     Some(tv) => match tv {
