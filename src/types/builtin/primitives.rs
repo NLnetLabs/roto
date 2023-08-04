@@ -10,8 +10,9 @@ use crate::attr_change_set::VectorValue;
 use crate::compile::CompileError;
 use crate::traits::RotoType;
 use crate::types::collections::{ElementTypeValue, List};
+use crate::types::enum_types::EnumVariant;
 use crate::types::typedef::MethodProps;
-use crate::vm::{StackValue, VmError};
+use crate::vm::{StackValue, VmError, CommandArg};
 
 use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
@@ -60,6 +61,7 @@ impl RotoType for U16 {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -220,6 +222,7 @@ impl RotoType for U32 {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -371,6 +374,7 @@ impl RotoType for U8 {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -527,6 +531,7 @@ impl RotoType for Boolean {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -658,6 +663,7 @@ impl RotoType for StringLiteral {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -852,6 +858,11 @@ impl RotoType for IntegerLiteral {
                         self.0
                     ))
                 }),
+            TypeDef::ConstEnumVariant(e_num) => match self.0 {
+                0..=255 => 
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant { enum_name: e_num.clone(), value: u8::try_from(self.0).unwrap() }))),
+                _ => Err(CompileError::from(format!("Cannot convert type IntegerLiteral > 255 into ConstU8Variant of type {}", e_num)))
+            }
             _ => Err(format!(
                 "Cannot convert type IntegerLiteral to type {:?}",
                 type_def
@@ -863,6 +874,7 @@ impl RotoType for IntegerLiteral {
     fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -999,6 +1011,7 @@ impl RotoType for HexLiteral {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -1137,6 +1150,7 @@ impl RotoType for Prefix {
     fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -1302,6 +1316,7 @@ impl RotoType for PrefixLength {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -1807,6 +1822,7 @@ impl RotoType for Community {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -1977,6 +1993,7 @@ impl RotoType for IpAddress {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -2098,6 +2115,7 @@ impl RotoType for Asn {
     fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -2292,6 +2310,7 @@ impl RotoType for AsPath {
     fn exec_value_method<'a>(
         &'a self,
         method: usize,
+        _extra_command_args: Option<CommandArg>,
         args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -2501,6 +2520,7 @@ impl RotoType for Hop {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -2572,6 +2592,7 @@ impl RotoType for OriginType {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -2649,6 +2670,7 @@ impl RotoType for NextHop {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -2726,6 +2748,7 @@ impl RotoType for MultiExitDisc {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -2823,6 +2846,7 @@ impl RotoType for Unknown {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -2910,6 +2934,7 @@ impl RotoType for LocalPref {
     fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -3027,6 +3052,7 @@ impl RotoType for AtomicAggregator {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {

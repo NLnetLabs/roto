@@ -15,7 +15,7 @@ use crate::{
     traits::{RotoType, Token},
     types::{
         collections::{ElementTypeValue, Record},
-        constant_enum::GlobalEnumTypeDef,
+        enum_types::GlobalEnumTypeDef,
         typedef::TypeDef,
         typevalue::TypeValue,
     },
@@ -338,7 +338,6 @@ impl Symbol {
             if let TypeValue::Unknown = self.value {
                 trace!("Value is Unknown");
             } else {
-                trace!("try conversion from value into value of other type");
                 self.value = self.value.into_type(&into_ty)?;
             }
         } else {
@@ -437,7 +436,7 @@ pub enum SymbolKind {
     AnonymousType, // type of a sub-record
     NamedType,     // User-defined type of a record
     GlobalEnum,    // reference to a complete globally defined enum
-    //                (not a variant)
+    EnumVariant,   // one of the variants of an enum
 
     // accessor symbols
     // symbols that come after an access receiver in the args list.
@@ -814,13 +813,13 @@ impl SymbolTable {
         term_key: ShortString,
         child_symbol: Symbol,
     ) -> Result<(), CompileError> {
-        let term_token = Some(Token::Term(self.terms.len() as u8));
+        let term_token = Some(Token::NamedTerm);
 
         if let Entry::Vacant(term) = self.terms.entry(term_key.clone()) {
             term.insert(Symbol {
                 name: term_key.clone(),
                 kind: SymbolKind::Term,
-                ty: child_symbol.get_type(),
+                ty: TypeDef::Boolean,
                 args: vec![child_symbol],
                 value: TypeValue::Unknown,
                 token: term_token,

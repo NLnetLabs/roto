@@ -583,10 +583,19 @@ impl TermBody {
     }
 }
 
+//------------ VariantMatchExpr ---------------------------------------------
+
+// A Match arm, with or without a data field. Used to capture a MatchExpr and
+// separate it from its logical expression(s), so that the TermScope (down
+// below) can capture it as an optional expression for that TermScope. so the
+// difference between a Match Expression that represents a match arm (of an
+// Enum) and a 'regular' collection of logical expressions, is just this
+// optional VariantMatchExpr.
+
 #[derive(Clone, Debug)]
 pub struct VariantMatchExpr {
-    variant: Identifier,
-    data_field: Option<Identifier>,
+    pub variant: Identifier,
+    pub data_field: Option<Identifier>,
 }
 
 //------------ TermScope -----------------------------------------------------
@@ -595,7 +604,7 @@ pub struct VariantMatchExpr {
 
 // TermScope ::=
 //      ('use' Identifier ';')?
-//     ( MatchOperator '{' ( ( LogicalExpr ';' ) | MatchExpr ) )+ '}'
+//     ( MatchOperator '{' ( ( LogicalExpr ';' ) | VariantMatchExpr ) )+ '}'
 
 #[derive(Clone, Debug)]
 pub struct TermScope {
@@ -2077,8 +2086,10 @@ impl MethodComputeExpr {
 //------------ MatchExpr ----------------------------------------------------
 
 // A MatchExpr describes a variant of an enum together with its data field
-// and a logical expression, that will evaluate to a boolean, it may
-// reference the data field.
+// and one or more logical expressions, that will evaluate to a boolean, it
+// may reference the data field. Note that this MatchExpr will be split out
+// in (variant_id, data_field) and the logical epressions to be able to store
+// it in a TermScope as `VariantMatchExpr`s.
 
 // MatchExpr := Identifier '(' Identifier ')' '->'
 //  (( LogicalExpr ';' ',' ) | '{'  ( LogicalExpr ';' )+ '}' ','? )
@@ -2092,7 +2103,7 @@ pub struct MatchExpr {
 impl MatchExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, (variant_id, data_field, logical_expr)) = context(
-            "match variant expression",
+            "match expression",
             tuple((
                 opt_ws(Identifier::parse),
                 opt(delimited(
@@ -2104,7 +2115,7 @@ impl MatchExpr {
                     opt_ws(tag("->")),
                     // Either a ..
                     alt((
-                        // buch of logical expressions, within curly
+                        // bunch of logical expressions, within curly
                         // braces and semi-colon separated, and
                         // terminated with an optional comma, or...
                         terminated(
@@ -2472,7 +2483,7 @@ pub enum MatchOperator {
     Match,
     // a `match some_value with` match pattern for enums, the block
     // enumerates the variants
-    MatchValueWith,
+    MatchValueWith(Identifier),
     // Query quantifiers, where the following block contains expressions that
     // may yield multiple instances of type values
     Some,
@@ -2489,7 +2500,7 @@ impl MatchOperator {
                     opt_ws(Identifier::parse),
                     opt_ws(tag("with")),
                 )),
-                |_| MatchOperator::MatchValueWith,
+                |t| MatchOperator::MatchValueWith(t.1),
             ),
             map(tag("match"), |_| MatchOperator::Match),
             map(tag("some"), |_| MatchOperator::Some),

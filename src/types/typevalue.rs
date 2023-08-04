@@ -1,5 +1,6 @@
 use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
+use log::trace;
 use primitives::{
     AsPath, Community, Hop, LocalPref, MultiExitDisc, NextHop, OriginType,
     RouteStatus, U16,
@@ -16,7 +17,7 @@ use crate::{
     attr_change_set::ScalarValue,
     compile::CompileError,
     traits::RotoType,
-    vm::{StackValue, VmError},
+    vm::{CommandArg, StackValue, VmError},
 };
 
 use super::{
@@ -27,7 +28,7 @@ use super::{
     },
     collections::{BytesRecord, ElementTypeValue, LazyRecord, List, Record},
     lazytypedef::{
-        BmpMessage, PeerDownNotification, PeerUpNotification, RouteMonitoring,
+        PeerDownNotification, PeerUpNotification, RouteMonitoring,
     },
     outputs::OutputStreamMessage,
     typedef::TypeDef,
@@ -176,13 +177,15 @@ impl RotoType for TypeValue {
         match ty {
             TypeDef::AcceptReject(_) => Err(CompileError::new(
                 "Unsupported TypeDef::AcceptReject in TypeValue::\
-                get_props_for_method()".to_string(),
+                get_props_for_method()"
+                    .to_string(),
             )),
             TypeDef::Asn => Asn::get_props_for_method(ty, method_name),
             TypeDef::AsPath => AsPath::get_props_for_method(ty, method_name),
             TypeDef::AtomicAggregator => Err(CompileError::new(
                 "Unsupported TypeDef::AtomicAggregator in TypeValue::\
-                get_props_for_method()".to_string(),
+                get_props_for_method()"
+                    .to_string(),
             )),
             TypeDef::BgpUpdateMessage => {
                 BgpUpdateMessage::get_props_for_method(ty, method_name)
@@ -198,11 +201,13 @@ impl RotoType for TypeValue {
             }
             TypeDef::ConstEnumVariant(_) => Err(CompileError::new(
                 "Unsupported TypeDef::ConstEnumVariant in TypeValue::\
-                get_props_for_method()".to_string(),
+                get_props_for_method()"
+                    .to_string(),
             )),
             TypeDef::GlobalEnum(_to) => Err(CompileError::new(
                 "Unsupported TypeDef::GlobalEnum in TypeValue::\
-                get_props_for_method()".to_string(),
+                get_props_for_method()"
+                    .to_string(),
             )),
             TypeDef::HexLiteral => {
                 HexLiteral::get_props_for_method(ty, method_name)
@@ -303,7 +308,8 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::U8(v) => v.into_type(ty),
                 BuiltinTypeValue::BmpMessage(_v) => Err(CompileError::new(
                     "Unsupported TypeValue::BmpMessage in TypeValue::\
-                    into_type()".to_string(),
+                    into_type()"
+                        .to_string(),
                 )),
                 BuiltinTypeValue::BmpRouteMonitoringMessage(_v) => {
                     Err(CompileError::new(
@@ -315,7 +321,8 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::BmpPeerUpNotification(_v) => {
                     Err(CompileError::new(
                         "Unsupported TypeValue::BmpPeerUpNotification in \
-                        TypeValue::into_type()".to_string(),
+                        TypeValue::into_type()"
+                            .to_string(),
                     ))
                 }
                 BuiltinTypeValue::BmpPeerDownNotification(_v) => {
@@ -350,32 +357,56 @@ impl RotoType for TypeValue {
     fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
+        extra_command_arg: Option<CommandArg>,
         args: &'a [StackValue],
         res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         match self {
             TypeValue::Builtin(builtin) => match builtin {
-                BuiltinTypeValue::Asn(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::AsPath(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::AtomicAggregator(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::BgpUpdateMessage(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::BmpMessage(bytes_rec) => LazyRecord::new(
-                    BytesRecord::<BmpMessage>::lazy_type_def(),
-                )
-                .exec_value_method(
+                BuiltinTypeValue::Asn(v) => v.exec_value_method(
                     method_token,
+                    extra_command_arg,
                     args,
                     res_type,
-                    (*bytes_rec).0.as_ref(),
                 ),
+                BuiltinTypeValue::AsPath(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
+                BuiltinTypeValue::AtomicAggregator(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
+                BuiltinTypeValue::BgpUpdateMessage(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
+                BuiltinTypeValue::BmpMessage(bytes_rec) => {
+                    trace!(
+                        "BmpMessage get_field_index_for_variant {} \
+                        {:?} {:?} {}",
+                        method_token,
+                        extra_command_arg,
+                        args,
+                        res_type
+                    );
+                    trace!("variant = {}", bytes_rec.get_variant());
+                    bytes_rec
+                        .get_field_index_for_variant(
+                            method_token,
+                            extra_command_arg,
+                            args,
+                            res_type,
+                            bytes_rec.0.as_ref(),
+                        )
+                        .or(Err(VmError::InvalidVariant))
+                }
                 BuiltinTypeValue::BmpRouteMonitoringMessage(bytes_rec) => {
                     LazyRecord::new(
                         BytesRecord::<RouteMonitoring>::lazy_type_def(),
@@ -384,7 +415,7 @@ impl RotoType for TypeValue {
                         method_token,
                         args,
                         res_type,
-                        (*bytes_rec).0.as_ref(),
+                        bytes_rec.0.as_ref(),
                     )
                 }
                 BuiltinTypeValue::BmpPeerUpNotification(bytes_rec) => {
@@ -395,7 +426,7 @@ impl RotoType for TypeValue {
                         method_token,
                         args,
                         res_type,
-                        (*bytes_rec).0.as_ref(),
+                        bytes_rec.0.as_ref(),
                     )
                 }
                 BuiltinTypeValue::BmpPeerDownNotification(bytes_rec) => {
@@ -406,91 +437,172 @@ impl RotoType for TypeValue {
                         method_token,
                         args,
                         res_type,
-                        (*bytes_rec).0.as_ref(),
+                        bytes_rec.0.as_ref(),
                     )
                 }
-                BuiltinTypeValue::Boolean(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::Communities(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::Community(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::ConstU16EnumVariant(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::ConstU32EnumVariant(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::ConstU8EnumVariant(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::HexLiteral(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::Hop(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::IntegerLiteral(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::IpAddress(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::LocalPref(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::MultiExitDisc(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::NextHop(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::OriginType(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::Prefix(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::PrefixLength(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::Route(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::RouteStatus(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::StringLiteral(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::U32(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::U16(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::U8(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
+                BuiltinTypeValue::Boolean(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
+                BuiltinTypeValue::Communities(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
+                BuiltinTypeValue::Community(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
+                BuiltinTypeValue::ConstU16EnumVariant(v) => v
+                    .exec_value_method(
+                        method_token,
+                        extra_command_arg,
+                        args,
+                        res_type,
+                    ),
+                BuiltinTypeValue::ConstU32EnumVariant(v) => v
+                    .exec_value_method(
+                        method_token,
+                        extra_command_arg,
+                        args,
+                        res_type,
+                    ),
+                BuiltinTypeValue::ConstU8EnumVariant(v) => v
+                    .exec_value_method(
+                        method_token,
+                        extra_command_arg,
+                        args,
+                        res_type,
+                    ),
+                BuiltinTypeValue::HexLiteral(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
+                BuiltinTypeValue::Hop(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
+                BuiltinTypeValue::IntegerLiteral(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
+                BuiltinTypeValue::IpAddress(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
+                BuiltinTypeValue::LocalPref(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
+                BuiltinTypeValue::MultiExitDisc(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
+                BuiltinTypeValue::NextHop(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
+                BuiltinTypeValue::OriginType(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
+                BuiltinTypeValue::Prefix(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
+                BuiltinTypeValue::PrefixLength(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
+                BuiltinTypeValue::Route(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
+                BuiltinTypeValue::RouteStatus(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
+                BuiltinTypeValue::StringLiteral(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
+                BuiltinTypeValue::U32(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
+                BuiltinTypeValue::U16(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
+                BuiltinTypeValue::U8(v) => v.exec_value_method(
+                    method_token,
+                    extra_command_arg,
+                    args,
+                    res_type,
+                ),
             },
             // TypeValue::Enum(v) => {
-            //     v.exec_value_method(method_token, args, res_type)
+            //     v.exec_value_method(method_token, extra_command_arg, args, res_type)
             // }
-            TypeValue::List(v) => {
-                v.exec_value_method(method_token, args, res_type)
-            }
-            TypeValue::OutputStreamMessage(v) => {
-                v.exec_value_method(method_token, args, res_type)
-            }
-            TypeValue::Record(v) => {
-                v.exec_value_method(method_token, args, res_type)
-            }
-            TypeValue::SharedValue(v) => {
-                v.exec_value_method(method_token, args, res_type)
-            }
+            TypeValue::List(v) => v.exec_value_method(
+                method_token,
+                extra_command_arg,
+                args,
+                res_type,
+            ),
+            TypeValue::OutputStreamMessage(v) => v.exec_value_method(
+                method_token,
+                extra_command_arg,
+                args,
+                res_type,
+            ),
+            TypeValue::Record(v) => v.exec_value_method(
+                method_token,
+                extra_command_arg,
+                args,
+                res_type,
+            ),
+            TypeValue::SharedValue(v) => v.exec_value_method(
+                method_token,
+                extra_command_arg,
+                args,
+                res_type,
+            ),
             TypeValue::UnInit => Err(VmError::InvalidValueType),
             TypeValue::Unknown => Err(VmError::InvalidValueType),
         }
@@ -516,9 +628,8 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::BgpUpdateMessage(_) => {
                     Err(VmError::InvalidValueType)
                 }
-                BuiltinTypeValue::BmpMessage(_) => {
-                    Err(VmError::InvalidValueType)
-                }
+                BuiltinTypeValue::BmpMessage(bytes_rec) => bytes_rec
+                    .exec_consume_value_method(method_token, args, res_type),
                 BuiltinTypeValue::BmpRouteMonitoringMessage(_) => {
                     Err(VmError::InvalidValueType)
                 }
@@ -1024,6 +1135,18 @@ impl From<BuiltinTypeValue> for TypeValue {
 impl From<u32> for TypeValue {
     fn from(value: u32) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::U32(U32(value)))
+    }
+}
+
+impl TryInto<u32> for &TypeValue {
+    type Error = VmError;
+
+    fn try_into(self) -> Result<u32, Self::Error> {
+        if let TypeValue::Builtin(BuiltinTypeValue::U32(U32(value))) = self {
+            Ok(*value)
+        } else {
+            Err(VmError::InvalidValueType)
+        }
     }
 }
 

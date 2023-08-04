@@ -9,15 +9,16 @@ use crate::{
         collections::Record,
         datasources::DataSourceMethodValue,
         typedef::{MethodProps, TypeDef},
-        typevalue::TypeValue, constant_enum::GlobalEnumTypeDef,
+        typevalue::TypeValue, enum_types::GlobalEnumTypeDef,
     },
-    vm::{StackValue, VmError},
+    vm::{StackValue, VmError, CommandArg},
 };
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize)]
 pub enum Token {
     Variable(usize),
     Method(usize),
+    Variant(usize),
     Argument(usize),
     // There can only ever be one RxType
     RxType,
@@ -29,8 +30,15 @@ pub enum Token {
     // A generic stream that can be used by Roto to send messages to and that
     // can be configured through a Roto script, e.g. a Kafka or a MQTT stream.
     OutputStream(usize),
+    // A mapping to the (recursive) field of a record, the first u8 is a 
+    // numbered field of the record, the second points into the first
+    // sub-field etc.
     FieldAccess(Vec<u8>),
-    Term(u8),
+    // A term as stored in the `terms` hashmap in the compiler state.
+    NamedTerm,
+    // A term that is used only once (in a match expression) and will be
+    // compiled at the spot.
+    AnonymousTerm,
     Action(u8),
     MatchAction(u8),
     // None as data indicates a constant that wasn't stored (yet) in the
@@ -86,7 +94,7 @@ impl From<Token> for usize {
             Token::Variable(v) => v,
             Token::RxType => 0,
             Token::TxType => 1,
-            Token::Term(v) => v as usize,
+            Token::Variant(v) => v,
             _ => {
                 panic!(
                     "Cannot convert {:?} to usize, and that's fatal.",
@@ -122,6 +130,7 @@ where
     fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
+        extra_command_args: Option<CommandArg>,
         args: &'a [StackValue],
         res_type: TypeDef,
     ) -> Result<TypeValue, VmError>;

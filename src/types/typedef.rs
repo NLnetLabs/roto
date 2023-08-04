@@ -26,9 +26,9 @@ use super::builtin::{
     Unknown, U16, U32, U8,
 };
 use super::collections::{LazyElementTypeValue, Record};
-use super::constant_enum::{EnumVariant, GlobalEnumTypeDef};
 use super::datasources::{RibType, Table};
-use super::lazytypedef::LazyTypeDef;
+use super::enum_types::{EnumVariant, GlobalEnumTypeDef};
+use super::lazytypedef::LazyRecordTypeDef;
 use super::outputs::OutputStreamMessage;
 use super::{
     builtin::BuiltinTypeValue, collections::List, typevalue::TypeValue,
@@ -128,6 +128,7 @@ pub enum TypeDef {
     List(Box<TypeDef>),
     // Record with sorted named fields
     Record(RecordTypeDef),
+    // Built-in Enums in the global namespace
     GlobalEnum(GlobalEnumTypeDef),
     // The data field holds the name of the enum this variant belongs to.
     ConstEnumVariant(ShortString),
@@ -136,7 +137,7 @@ pub enum TypeDef {
     // ConstU32EnumVariant(ShortString),
     // A raw BGP message as bytes
     BgpUpdateMessage,
-    LazyRecord(LazyTypeDef),
+    LazyRecord(LazyRecordTypeDef),
     // Builtin Types
     U32,
     U16,
@@ -198,7 +199,7 @@ impl TypeDef {
         OriginType(StringLiteral;),
         NextHop(StringLiteral;),
         RouteStatus(StringLiteral;),
-        IntegerLiteral(StringLiteral,U8,U32,StringLiteral,PrefixLength,LocalPref,Asn;),
+        IntegerLiteral(StringLiteral,U8,U32,StringLiteral,PrefixLength,LocalPref,Asn;ConstEnumVariant),
         StringLiteral(Asn;),
         HexLiteral(StringLiteral,U8,U32,Community;),
         PrefixLength(StringLiteral,U8,U32;),
@@ -395,11 +396,11 @@ impl TypeDef {
                     let btv = enum_type
                         .get_value_for_variant(&field.ident)
                         .map_err(|_| {
-                            CompileError::from(format!(
-                                "Cannot find global enum '{}'",
-                                enum_type
-                            ))
-                        })?;
+                        CompileError::from(format!(
+                            "Cannot find global enum '{}'",
+                            enum_type
+                        ))
+                    })?;
                     result_type = //enum_type
                         // .get_value_for_variant(&field.ident)
                         // .map_err(|_| CompileError::from(format!("Cannot find global enum '{}'", enum_type)))
@@ -683,6 +684,7 @@ impl TypeDef {
     }
 }
 
+#[derive(Debug)]
 pub struct MethodProps {
     pub(crate) return_type: TypeDef,
     pub(crate) method_token: Token,
@@ -926,10 +928,12 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             "Community" => Ok(TypeDef::Community),
             "Route" => Ok(TypeDef::Route),
             "RouteStatus" => Ok(TypeDef::RouteStatus),
-            "BmpMessage" => Ok(TypeDef::LazyRecord(LazyTypeDef::BmpMessage)),
+            "BmpMessage" => {
+                Ok(TypeDef::GlobalEnum(GlobalEnumTypeDef::BmpMessageType))
+            }
             "BgpUpdateMessage" => Ok(TypeDef::BgpUpdateMessage),
             "BmpRouteMonitoringMessage" => {
-                Ok(TypeDef::LazyRecord(LazyTypeDef::RouteMonitoring))
+                Ok(TypeDef::LazyRecord(LazyRecordTypeDef::RouteMonitoring))
             }
             "HexLiteral" => Ok(TypeDef::HexLiteral),
             "BmpMessageType" => {
@@ -961,9 +965,11 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
             "Route" => Ok(TypeDef::Route),
             "RouteStatus" => Ok(TypeDef::RouteStatus),
             "BgpUpdateMessage" => Ok(TypeDef::BgpUpdateMessage),
-            "BmpMessage" => Ok(TypeDef::LazyRecord(LazyTypeDef::BmpMessage)),
+            "BmpMessage" => {
+                Ok(TypeDef::GlobalEnum(GlobalEnumTypeDef::BmpMessageType))
+            }
             "BmpRouteMonitoringMessage" => {
-                Ok(TypeDef::LazyRecord(LazyTypeDef::RouteMonitoring))
+                Ok(TypeDef::LazyRecord(LazyRecordTypeDef::RouteMonitoring))
             }
             "HexLiteral" => Ok(TypeDef::HexLiteral),
             "BmpMessageType" => {
@@ -1008,16 +1014,16 @@ impl From<&BuiltinTypeValue> for TypeDef {
                 TypeDef::BgpUpdateMessage
             }
             BuiltinTypeValue::BmpMessage(_) => {
-                TypeDef::LazyRecord(LazyTypeDef::BmpMessage)
+                TypeDef::GlobalEnum(GlobalEnumTypeDef::BmpMessageType)
             }
             BuiltinTypeValue::BmpRouteMonitoringMessage(_) => {
-                TypeDef::LazyRecord(LazyTypeDef::RouteMonitoring)
+                TypeDef::LazyRecord(LazyRecordTypeDef::RouteMonitoring)
             }
             BuiltinTypeValue::BmpPeerUpNotification(_) => {
-                TypeDef::LazyRecord(LazyTypeDef::PeerUpNotification)
+                TypeDef::LazyRecord(LazyRecordTypeDef::PeerUpNotification)
             }
             BuiltinTypeValue::BmpPeerDownNotification(_) => {
-                TypeDef::LazyRecord(LazyTypeDef::PeerDownNotification)
+                TypeDef::LazyRecord(LazyRecordTypeDef::PeerDownNotification)
             }
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
@@ -1065,16 +1071,16 @@ impl From<BuiltinTypeValue> for TypeDef {
                 TypeDef::BgpUpdateMessage
             }
             BuiltinTypeValue::BmpMessage(_) => {
-                TypeDef::LazyRecord(LazyTypeDef::BmpMessage)
+                TypeDef::GlobalEnum(GlobalEnumTypeDef::BmpMessageType)
             }
             BuiltinTypeValue::BmpRouteMonitoringMessage(_) => {
-                TypeDef::LazyRecord(LazyTypeDef::RouteMonitoring)
+                TypeDef::LazyRecord(LazyRecordTypeDef::RouteMonitoring)
             }
             BuiltinTypeValue::BmpPeerUpNotification(_) => {
-                TypeDef::LazyRecord(LazyTypeDef::PeerUpNotification)
+                TypeDef::LazyRecord(LazyRecordTypeDef::PeerUpNotification)
             }
             BuiltinTypeValue::BmpPeerDownNotification(_) => {
-                TypeDef::LazyRecord(LazyTypeDef::PeerDownNotification)
+                TypeDef::LazyRecord(LazyRecordTypeDef::PeerDownNotification)
             }
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,

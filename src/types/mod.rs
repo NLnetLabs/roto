@@ -1,6 +1,6 @@
 pub mod builtin;
 pub mod collections;
-pub mod constant_enum;
+pub mod enum_types;
 pub mod datasources;
 pub mod lazytypedef;
 pub mod outputs;

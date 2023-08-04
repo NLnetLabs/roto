@@ -25,11 +25,11 @@ use crate::{
     compile::CompileError,
     traits::{RotoType, Token},
     types::{
-        constant_enum::EnumVariant,
+        enum_types::EnumVariant,
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
     },
-    vm::{StackValue, VmError}, ast::StringLiteral,
+    vm::{StackValue, VmError, CommandArg}, ast::StringLiteral,
 };
 
 use super::{
@@ -768,6 +768,7 @@ impl RotoType for BgpUpdateMessage {
     fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -950,6 +951,7 @@ impl RotoType for RawRouteWithDeltas {
     fn exec_value_method<'a>(
         &'a self,
         _method: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -1103,6 +1105,7 @@ impl RotoType for RouteStatus {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {

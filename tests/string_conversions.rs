@@ -4,7 +4,7 @@ use roto::compile::Compiler;
 use roto::blocks::Scope;
 use roto::types::builtin::{Asn, BuiltinTypeValue, Community};
 use roto::types::collections::{ElementTypeValue, List, Record};
-use roto::types::constant_enum::EnumVariant;
+use roto::types::enum_types::EnumVariant;
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};

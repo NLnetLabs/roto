@@ -409,7 +409,7 @@ macro_rules! bytes_record_impl {
                     $(
                         $(
                             $sub_record_name => Ok((
-                                TypeDef::LazyRecord(LazyTypeDef::$bytes_record_type),
+                                TypeDef::LazyRecord(LazyRecordTypeDef::$bytes_record_type),
                                 Token::FieldAccess(vec![$self_variant_identifier]),)),
 
                             // LazyRecords are laid out in in a flat enum space,
@@ -474,11 +474,11 @@ macro_rules! bytes_record_impl {
                     )+
                     _ => {
                         trace!(
-                            "Unknown field '{}' for type BmpUpdateMessage",
+                            "Unknown field '{}' for type BmpMessage",
                             field_name.ident
                         );
                         Err(format!(
-                            "Unknown field '{}' for type BmpUpdateMessage",
+                            "Unknown field '{}' for type BmpMessage",
                             field_name.ident
                         )
                         .into())

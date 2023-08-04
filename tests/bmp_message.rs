@@ -5,10 +5,10 @@ use roto::{
     ast::AcceptReject,
     compile::Compiler,
     blocks::Scope,
-    blocks::Scope::FilterMap,
+    blocks::Scope::{Filter, FilterMap},
     types::{
         builtin::BytesRecord, collections::Record,
-        lazytypedef::RouteMonitoring, typevalue::TypeValue,
+        lazytypedef::{RouteMonitoring, BmpMessage}, typevalue::TypeValue,
     },
     vm::{self, VmResult},
 };
@@ -43,6 +43,144 @@ fn test_data(
     let rm_msg = rm_msg.unwrap();
     let payload = TypeValue::Builtin(
         roto::types::builtin::BuiltinTypeValue::BmpRouteMonitoringMessage(
+            Arc::new(rm_msg),
+        ),
+    );
+
+    trace!("Used Arguments");
+    trace!("{:#?}", &roto_pack.get_arguments());
+    trace!("Used Data Sources");
+    trace!("{:#?}", &roto_pack.get_data_sources());
+
+    let ds_ref = roto_pack.get_data_sources();
+
+    for mb in roto_pack.get_mir().iter() {
+        println!("{}", mb);
+    }
+
+    let mut vm = vm::VmBuilder::new()
+        // .with_arguments(args)
+        .with_data_sources(ds_ref)
+        .with_mir_code(roto_pack.get_mir())
+        .build()?;
+
+    let mem = &mut vm::LinearMemory::uninit();
+    let res = vm
+        .exec(
+            payload,
+            None::<Record>,
+            // Some(filter_map_arguments),
+            None,
+            mem,
+        )
+        .unwrap();
+
+    trace!("\nRESULT");
+    trace!("action: {}", res.accept_reject);
+    trace!("rx    : {:?}", res.rx);
+    trace!("tx    : {:?}", res.tx);
+
+    Ok(res)
+}
+
+fn test_data_2(
+    name: Scope,
+    source_code: &'static str,
+) -> Result<VmResult, Box<dyn std::error::Error>> {
+    println!("Evaluate filter-map {}...", name);
+
+    // Compile the source code in this example
+    let rotolo = Compiler::build(source_code)?;
+    let roto_pack = rotolo.retrieve_public_as_arcs(name)?;
+
+    let buf = vec![
+        0x03, 0x00, 0x00, 0x00, 0x67, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a, 0xff, 0x00, 0x65, 0x00,
+        0x01, 0x00, 0x00, 0x0a, 0x0a, 0x0a, 0x01, 0x54, 0xa2, 0x0e, 0x0c,
+        0x00, 0x0e, 0x81, 0x09, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x37,
+        0x02, 0x00, 0x00, 0x00, 0x1b, 0x40, 0x01, 0x01, 0x00, 0x40, 0x02,
+        0x06, 0x02, 0x01, 0x00, 0x01, 0x00, 0x00, 0x40, 0x03, 0x04, 0x0a,
+        0xff, 0x00, 0x65, 0x80, 0x04, 0x04, 0x00, 0x00, 0x00, 0x01, 0x20,
+        0x0a, 0x0a, 0x0a, 0x02,
+    ];
+
+    // let bla = BmpMessage::from_octets(buf.into()).unwrap();
+    let rm_msg = BytesRecord::<BmpMessage>::new(buf.into());
+    assert!(rm_msg.is_ok());
+    let rm_msg = rm_msg.unwrap();
+    let payload = TypeValue::Builtin(
+        roto::types::builtin::BuiltinTypeValue::BmpMessage(
+            Arc::new(rm_msg),
+        ),
+    );
+
+    trace!("Used Arguments");
+    trace!("{:#?}", &roto_pack.get_arguments());
+    trace!("Used Data Sources");
+    trace!("{:#?}", &roto_pack.get_data_sources());
+
+    let ds_ref = roto_pack.get_data_sources();
+
+    for mb in roto_pack.get_mir().iter() {
+        println!("{}", mb);
+    }
+
+    let mut vm = vm::VmBuilder::new()
+        // .with_arguments(args)
+        .with_data_sources(ds_ref)
+        .with_mir_code(roto_pack.get_mir())
+        .build()?;
+
+    let mem = &mut vm::LinearMemory::uninit();
+    let res = vm
+        .exec(
+            payload,
+            None::<Record>,
+            // Some(filter_map_arguments),
+            None,
+            mem,
+        )
+        .unwrap();
+
+    trace!("\nRESULT");
+    trace!("action: {}", res.accept_reject);
+    trace!("rx    : {:?}", res.rx);
+    trace!("tx    : {:?}", res.tx);
+
+    Ok(res)
+}
+
+fn test_data_3(
+    name: Scope,
+    source_code: &'static str,
+) -> Result<VmResult, Box<dyn std::error::Error>>  {
+    println!("Evaluate filter-map {}...", name);
+
+    // Compile the source code in this example
+    let rotolo = Compiler::build(source_code)?;
+    let roto_pack = rotolo.retrieve_public_as_arcs(name)?;
+
+    // BMP PeerDownNotification type 3, containing a BGP NOTIFICATION.
+    let buf = vec![
+        0x03, 0x00, 0x00, 0x00, 0x46, 0x02, 0x00, 0x80,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+        0x00, 0x01, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x0a,
+        0x62, 0x2d, 0xea, 0x80, 0x00, 0x05, 0x58, 0x22,
+        0x03, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0x00, 0x15, 0x03, 0x06, 0x02
+    ];
+
+    // let bla = BmpMessage::from_octets(buf.into()).unwrap();
+    let rm_msg = BytesRecord::<BmpMessage>::new(buf.into());
+    assert!(rm_msg.is_ok());
+    let rm_msg = rm_msg.unwrap();
+    let payload = TypeValue::Builtin(
+        roto::types::builtin::BuiltinTypeValue::BmpMessage(
             Arc::new(rm_msg),
         ),
     );
@@ -182,13 +320,12 @@ fn bmp_message_3() {
     assert_eq!(str, err);
 }
 
-
 #[test]
 fn bmp_message_4() {
     common::init();
 
-    let res = test_data(
-        FilterMap("filter-v6-only".into()),
+    let res = test_data_2(
+        Filter("filter-v6-only".into()),
         r###"
         filter filter-v6-only {
             define {
@@ -198,7 +335,7 @@ fn bmp_message_4() {
             term rm_only {
                 match msg with {
                     RouteMonitoring(rm_msg) -> rm_msg.per_peer_header.is_ipv4,
-                    PeerDownNotification(pd_msg) -> { rm_msg.per_peer_header.is_ipv4; },
+                    PeerDownNotification(pd_msg) -> { pd_msg.per_peer_header.is_ipv4; },
                     PeerUpNotification(pu_msg) -> {
                         pu_msg.per_peer_header.is_ipv4;
                         pu_msg.per_peer_header.peer_type == 1;
@@ -207,7 +344,48 @@ fn bmp_message_4() {
             }
         
             apply {
-                filter match is_ipv6_msg matching {
+                filter match rm_only matching {
+                    return accept;
+                };
+                reject;
+            }
+        }
+        "###,
+    );
+
+    trace!("res : {:?}", res);
+
+    res.unwrap();
+    // let err =
+    //     "Eval error: Cannot convert value with type Lazy Record".to_string();
+    // let mut str = res.unwrap_err().to_string();
+    // str.truncate(err.len());
+    // assert_eq!(str, err);
+}
+#[test]
+fn bmp_message_5() {
+    common::init();
+
+    let res = test_data_3(
+        Filter("filter-v6-only".into()),
+        r###"
+        filter filter-v6-only {
+            define {
+                rx msg: BmpMessage;
+            }
+
+            term rm_only {
+                match msg with {
+                    RouteMonitoring(rm_msg) -> rm_msg.per_peer_header.is_ipv4,
+                    PeerDownNotification(pd_msg) -> { pd_msg.per_peer_header.peer_type == 23; },
+                    PeerUpNotification(pu_msg) -> {
+                        pu_msg.per_peer_header.is_ipv4;
+                    },
+                }
+            }
+        
+            apply {
+                filter match rm_only matching {
                     return accept;
                 };
                 reject;

@@ -18,7 +18,7 @@ use crate::types::builtin::HexLiteral;
 use crate::types::builtin::IntegerLiteral;
 use crate::types::builtin::PrefixLength;
 use crate::types::builtin::StringLiteral;
-use crate::types::constant_enum::GlobalEnumTypeDef;
+use crate::types::enum_types::GlobalEnumTypeDef;
 use crate::types::typedef::NamedTypeDef;
 use crate::types::typedef::RecordTypeDef;
 
@@ -394,11 +394,22 @@ impl ast::FilterMap {
 
         for term in terms.into_iter() {
             if let ast::FilterMapExpr::Term(t) = term {
-                match t.body.scopes[0].operator {
+                match &t.body.scopes[0].operator {
+                    // A regular term expression is basically a bunch
+                    // of logical expressions.
                     MatchOperator::Match => {
                         t.eval(symbols.clone(), filter_map_scope.clone())?;
                     }
-                    MatchOperator::MatchValueWith => todo!(),
+                    // A `match `enum_ident` with` expression is a match
+                    // expression and will contain a logical expression per
+                    // variant in a vec
+                    MatchOperator::MatchValueWith(enum_ident) => {
+                        t.eval_as_match_expression(
+                            enum_ident,
+                            symbols.clone(),
+                            filter_map_scope.clone(),
+                        )?;
+                    }
                     MatchOperator::Some => todo!(),
                     MatchOperator::ExactlyOne => todo!(),
                     MatchOperator::All => todo!(),
@@ -536,6 +547,7 @@ impl ast::Define {
                 &assignment.1,
                 symbols.clone(),
                 scope.clone(),
+                &[],
             )?;
 
             // we only allow typed record instances, an anonymous type would
@@ -572,17 +584,18 @@ impl ast::Term {
         symbols: symbols::GlobalSymbolTable,
         scope: Scope,
     ) -> Result<(), CompileError> {
-        let term_scopes = &self.body.scopes;
-        // take all the logic expressions out of here, since this data
-        // structure is also used to store actual match expressions.
-        // (from match patterns)
-        for term in term_scopes[0]
-            .match_exprs
-            .iter()
-            .map(|me| &me.1[0])
-            .enumerate()
+        // A regular term expressions starting with `match` only is a
+        // collection of logical expressions in one block, but
+        // wrapped in a vec (so with only one element). A scope is
+        // a bunch of logical expressions separated by a `use`
+        // statement.
+
+        // We currently only look at the first scope
+        let term_scopes = &self.body.scopes[0];
+        for term in term_scopes.match_exprs.iter().map(|me| &me.1[0])
+        // .enumerate()
         {
-            let logical_formula = match &term.1 {
+            let logical_formula = match &term {
                 LogicalExpr::BooleanExpr(expr) => {
                     // Boolean expressions may actually be a (sub)term that
                     // isn't a boolean at this stage. We should be able to
@@ -592,6 +605,7 @@ impl ast::Term {
                         expr,
                         symbols.clone(),
                         &scope,
+                        &vec![],
                     )?;
                     if expr.get_type() == TypeDef::Boolean
                         || expr
@@ -606,15 +620,24 @@ impl ast::Term {
                         )));
                     }
                 }
-                LogicalExpr::OrExpr(or_expr) => {
-                    ast::OrExpr::eval(or_expr, symbols.clone(), &scope)?
-                }
-                LogicalExpr::AndExpr(and_expr) => {
-                    ast::AndExpr::eval(and_expr, symbols.clone(), &scope)?
-                }
-                LogicalExpr::NotExpr(not_expr) => {
-                    ast::NotExpr::eval(not_expr, symbols.clone(), &scope)?
-                }
+                LogicalExpr::OrExpr(or_expr) => ast::OrExpr::eval(
+                    or_expr,
+                    symbols.clone(),
+                    &scope,
+                    &vec![],
+                )?,
+                LogicalExpr::AndExpr(and_expr) => ast::AndExpr::eval(
+                    and_expr,
+                    symbols.clone(),
+                    &scope,
+                    &vec![],
+                )?,
+                LogicalExpr::NotExpr(not_expr) => ast::NotExpr::eval(
+                    not_expr,
+                    symbols.clone(),
+                    &scope,
+                    &vec![],
+                )?,
             };
 
             add_logical_formula(
@@ -624,6 +647,141 @@ impl ast::Term {
                 &scope,
             )?;
         }
+        Ok(())
+    }
+
+    fn eval_as_match_expression(
+        &self,
+        enum_ident: &ast::Identifier,
+        symbols: symbols::GlobalSymbolTable,
+        scope: Scope,
+    ) -> Result<(), CompileError> {
+        // A match expressions is a collection of logical expressions, one
+        // per variant.
+        let term_scopes = &self.body.scopes[0];
+
+        trace!("enum {}", enum_ident);
+
+        // check if the enum makes sense as an AccessReceiver
+        let mut enum_s = ast::AccessReceiver::Ident(enum_ident.clone())
+            .eval(symbols.clone(), scope.clone(), &[])
+            .map_err(|_| {
+                CompileError::from(format!(
+                    "Variable '{}' (supposedly an Enum) cannot be found in \
+                    this scope.",
+                    enum_ident
+                ))
+            })?;
+        enum_s = enum_s
+            .set_type(TypeDef::GlobalEnum(GlobalEnumTypeDef::BmpMessageType));
+        enum_s = enum_s.set_kind(symbols::SymbolKind::GlobalEnum);
+        trace!("symbol {:#?}", enum_s);
+
+        // loop over all the variants for this enum. AccessReceiver::eval
+        // checks for the existence of the identifier.
+        for (variant, logic_exprs) in term_scopes.match_exprs.iter() {
+            if let Some(variant) = variant {
+                trace!(
+                    "{}({:?}) -> {:#?}",
+                    variant.variant,
+                    variant.data_field,
+                    logic_exprs
+                );
+
+                if let TypeDef::GlobalEnum(e_num) = enum_s.get_type() {
+                    let (variant_type_def, variant_token) =
+                        e_num.get_props_for_variant(&variant.variant)?;
+
+                    let local_scope = vec![symbols::Symbol::new(
+                        variant.data_field.clone().unwrap().ident,
+                        symbols::SymbolKind::VariableAssignment,
+                        variant_type_def.clone(),
+                        vec![],
+                        Some(variant_token.clone()),
+                    )];
+
+                    // extract the logical expressions for this variant
+                    let mut logic_args = vec![];
+                    for logic_expr in logic_exprs {
+                        match logic_expr {
+                            LogicalExpr::BooleanExpr(expr) => {
+                                // Boolean expressions may actually be a (sub)term that
+                                // isn't a boolean at this stage. We should be able to
+                                // convert it into one, though, otherwise it's an
+                                // error (and not false!).
+                                let expr = ast::BooleanExpr::eval(
+                                    expr,
+                                    symbols.clone(),
+                                    &scope,
+                                    &local_scope,
+                                )?;
+                                if expr.get_type() == TypeDef::Boolean
+                                    || expr.get_type().test_type_conversion(
+                                        TypeDef::Boolean,
+                                    )
+                                {
+                                    logic_args.push(expr);
+                                } else {
+                                    return Err(CompileError::from(format!(
+                                        "Cannot convert value with type {} into Boolean",
+                                        expr.get_type()
+                                    )));
+                                }
+                            }
+                            LogicalExpr::OrExpr(or_expr) => {
+                                logic_args.push(ast::OrExpr::eval(
+                                    or_expr,
+                                    symbols.clone(),
+                                    &scope,
+                                    &local_scope,
+                                )?);
+                            }
+                            LogicalExpr::AndExpr(and_expr) => {
+                                logic_args.push(ast::AndExpr::eval(
+                                    and_expr,
+                                    symbols.clone(),
+                                    &scope,
+                                    &local_scope,
+                                )?);
+                            }
+                            LogicalExpr::NotExpr(not_expr) => {
+                                logic_args.push(ast::NotExpr::eval(
+                                    not_expr,
+                                    symbols.clone(),
+                                    &scope,
+                                    &local_scope,
+                                )?);
+                            }
+                        }
+                    }
+                    trace!("logical expressions {:?}", logic_args);
+
+                    let anon_term = vec![symbols::Symbol::new(
+                        "anonymous_term".into(),
+                        symbols::SymbolKind::Term,
+                        TypeDef::Boolean,
+                        logic_args,
+                        Some(Token::AnonymousTerm),
+                    )];
+
+                    enum_s.add_arg(symbols::Symbol::new(
+                        variant.data_field.clone().unwrap().ident,
+                        symbols::SymbolKind::EnumVariant,
+                        variant_type_def,
+                        anon_term,
+                        Some(variant_token),
+                    ));
+                }
+            }
+        }
+
+        add_logical_formula(
+            Some(self.ident.ident.clone()),
+            enum_s,
+            symbols,
+            &scope,
+        )?;
+
         Ok(())
     }
 }
@@ -665,6 +823,7 @@ impl ast::Action {
                 Some(format!("sub-action-{}", ar_name).as_str().into()),
                 symbols.clone(),
                 scope.clone(),
+                &[],
             )?;
 
             s = s.set_kind(SymbolKind::AccessReceiver);
@@ -741,7 +900,9 @@ impl ast::ApplyScope {
         // not sure whether it is going to be needed.
         let _s_name = self.scope.clone().map(|s| s.ident);
 
-        let term = self.filter_ident.eval(symbols.clone(), scope.clone())?;
+        let term =
+            self.filter_ident
+                .eval(symbols.clone(), scope.clone(), &[])?;
         let (_ty, token) = filter_map_symbols.get_term(&term.get_name())?;
 
         let mut args_vec = vec![];
@@ -750,7 +911,7 @@ impl ast::ApplyScope {
                 // If there's one or more actions in the filter block we
                 // will store them as args in the vector.
                 let match_action_name = match_action
-                    .eval(symbols.clone(), scope.clone())?
+                    .eval(symbols.clone(), scope.clone(), &[])?
                     .get_name();
 
                 let (_ty, token) =
@@ -860,6 +1021,7 @@ impl ast::ComputeExpr {
         name: Option<ShortString>,
         symbols: symbols::GlobalSymbolTable,
         scope: Scope,
+        local_scope: &[symbols::Symbol],
     ) -> Result<symbols::Symbol, CompileError> {
         // this ar_name is only for use in error messages, the actual name
         // for the symbol that will be created can be slightly different,
@@ -875,9 +1037,9 @@ impl ast::ComputeExpr {
         // The evaluation of the Access Receiver
         let mut ar_symbol =
             // was it registered in the current scope by the user?
-            ar_s.eval(symbols.clone(), scope.clone())
+            ar_s.eval(symbols.clone(), scope.clone(), local_scope)
                 // Is it registered in the global scope by the user?
-                .or_else(|_| ar_s.eval(symbols.clone(), Scope::Global))
+                .or_else(|_| ar_s.eval(symbols.clone(), Scope::Global, &[]))
                 // Is it  a global enum or a variant of a global enum?
                 .or_else(|_| {
                     GlobalEnumTypeDef::any_variant_as_symbol(
@@ -1063,6 +1225,7 @@ impl ast::AccessReceiver {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: Scope,
+        local_scope: &[Symbol],
     ) -> Result<symbols::Symbol, AccessReceiverError> {
         trace!("AccessReceiver {:#?}", self);
         let _symbols = symbols.clone();
@@ -1080,6 +1243,20 @@ impl ast::AccessReceiver {
                         ));
                     };
                 }
+            }
+
+            // is it a local-scope-level argument?
+            if let Some(arg) = local_scope
+                .iter()
+                .find(move |s| s.get_name() == search_ar.ident)
+            {
+                return Ok(symbols::Symbol::new(
+                    search_ar.ident.clone(),
+                    symbols::SymbolKind::AccessReceiver,
+                    arg.get_type(),
+                    vec![],
+                    arg.get_token().ok(),
+                ));
             }
 
             // is it a filter-map-level argument?
@@ -1144,6 +1321,7 @@ impl ast::ValueExpr {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: Scope,
+        local_scope: &[Symbol],
     ) -> Result<symbols::Symbol, CompileError> {
         match self {
             // an expression ending in a a method call (e.g. `foo.bar()`).
@@ -1151,7 +1329,7 @@ impl ast::ValueExpr {
             // the existence of the method.
             ast::ValueExpr::ComputeExpr(compute_expr) => {
                 trace!("compute expr {:?}", compute_expr);
-                compute_expr.eval(None, symbols, scope)
+                compute_expr.eval(None, symbols, scope, local_scope)
             }
             ast::ValueExpr::BuiltinMethodCallExpr(builtin_call_expr) => {
                 let name: ShortString = builtin_call_expr.ident.clone().ident;
@@ -1318,7 +1496,7 @@ impl ast::ArgExprList {
     ) -> Result<Vec<symbols::Symbol>, CompileError> {
         let mut eval_args = vec![];
         for arg in &self.args {
-            let parsed_arg = arg.eval(symbols.clone(), scope.clone())?;
+            let parsed_arg = arg.eval(symbols.clone(), scope.clone(), &[])?;
             eval_args.push(parsed_arg);
         }
         Ok(eval_args)
@@ -1379,7 +1557,7 @@ impl ast::ListValueExpr {
         trace!("anonymous list");
         let mut s: Vec<symbols::Symbol> = vec![];
         for value in &self.values {
-            let arg = value.eval(symbols.clone(), scope.clone())?;
+            let arg = value.eval(symbols.clone(), scope.clone(), &[])?;
             s.push(arg);
         }
 
@@ -1396,7 +1574,7 @@ impl ast::AnonymousRecordValueExpr {
         trace!("anonymous record");
         let mut s: Vec<symbols::Symbol> = vec![];
         for (key, value) in &self.key_values {
-            let arg = value.eval(symbols.clone(), scope.clone())?;
+            let arg = value.eval(symbols.clone(), scope.clone(), &[])?;
             s.push(arg.set_name(key.ident.clone()));
         }
 
@@ -1414,7 +1592,7 @@ impl ast::TypedRecordValueExpr {
         trace!("typed record");
         let mut s: Vec<symbols::Symbol> = vec![];
         for (key, value) in &self.key_values {
-            let arg = value.eval(symbols.clone(), scope.clone())?;
+            let arg = value.eval(symbols.clone(), scope.clone(), &[])?;
             s.push(arg.set_name(key.ident.clone()));
         }
 
@@ -1433,19 +1611,20 @@ impl ast::LogicalExpr {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: Scope,
+        local_scope: &Vec<Symbol>,
     ) -> Result<symbols::Symbol, CompileError> {
         match self {
             LogicalExpr::BooleanExpr(expr) => {
-                ast::BooleanExpr::eval(expr, symbols, &scope)
+                ast::BooleanExpr::eval(expr, symbols, &scope, local_scope)
             }
             LogicalExpr::OrExpr(or_expr) => {
-                ast::OrExpr::eval(or_expr, symbols, &scope)
+                ast::OrExpr::eval(or_expr, symbols, &scope, local_scope)
             }
             LogicalExpr::AndExpr(and_expr) => {
-                ast::AndExpr::eval(and_expr, symbols, &scope)
+                ast::AndExpr::eval(and_expr, symbols, &scope, local_scope)
             }
             LogicalExpr::NotExpr(not_expr) => {
-                ast::NotExpr::eval(not_expr, symbols, &scope)
+                ast::NotExpr::eval(not_expr, symbols, &scope, local_scope)
             }
         }
     }
@@ -1462,12 +1641,13 @@ impl ast::BooleanExpr {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: &Scope,
+        local_scope: &Vec<Symbol>,
     ) -> Result<symbols::Symbol, CompileError> {
         let _symbols = symbols.clone();
 
         match &self {
             ast::BooleanExpr::GroupedLogicalExpr(grouped_expr) => {
-                grouped_expr.eval(symbols, scope)
+                grouped_expr.eval(symbols, scope, local_scope)
             }
             ast::BooleanExpr::BooleanLiteral(bool_lit) => {
                 // Leaf node, needs a TypeValue in this case a boolean
@@ -1483,7 +1663,12 @@ impl ast::BooleanExpr {
                 ))
             }
             ast::BooleanExpr::CompareExpr(compare_expr) => {
-                ast::CompareExpr::eval(compare_expr, symbols, scope)
+                ast::CompareExpr::eval(
+                    compare_expr,
+                    symbols,
+                    scope,
+                    local_scope,
+                )
             }
             ast::BooleanExpr::ComputeExpr(call_expr) => {
                 // A Call Expression does not necessarily have to return a
@@ -1496,6 +1681,7 @@ impl ast::BooleanExpr {
                     None,
                     symbols,
                     scope.clone(),
+                    local_scope,
                 )?;
                 Ok(s)
             }
@@ -1531,16 +1717,17 @@ impl ast::CompareExpr {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: &Scope,
+        local_scope: &Vec<Symbol>,
     ) -> Result<symbols::Symbol, CompileError> {
         let _symbols = symbols.clone();
 
         // Process the left hand side of the compare expression. This is a
         // Compare Argument. It has to end in a leaf node, otherwise it's
         // an error.
-        let left_s = self.left.eval(_symbols, scope)?;
+        let left_s = self.left.eval(_symbols, scope, local_scope)?;
         let left_type = left_s.get_type();
 
-        let mut right_s = self.right.eval(symbols, scope)?;
+        let mut right_s = self.right.eval(symbols, scope, local_scope)?;
         let right_type = right_s.get_type();
 
         // Either the left and right hand sides are of the same type OR the
@@ -1570,13 +1757,14 @@ impl ast::CompareArg {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: &Scope,
+        local_scope: &Vec<Symbol>,
     ) -> Result<symbols::Symbol, CompileError> {
         let _symbols = symbols.clone();
 
         match self {
             ast::CompareArg::GroupedLogicalExpr(expr) => {
                 // This is a grouped expression that will return a boolean.
-                let s = expr.eval(symbols, scope)?;
+                let s = expr.eval(symbols, scope, local_scope)?;
 
                 if s.get_type() == TypeDef::Boolean {
                     Ok(s)
@@ -1587,7 +1775,7 @@ impl ast::CompareArg {
             ast::CompareArg::ValueExpr(expr) => {
                 // A simple operator.
                 trace!("COMPARE VALUE EXPRESSION {:#?}", expr);
-                expr.eval(symbols, scope.clone())
+                expr.eval(symbols, scope.clone(), local_scope)
             }
         }
     }
@@ -1598,6 +1786,7 @@ impl ast::AndExpr {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: &Scope,
+        local_scope: &Vec<Symbol>,
     ) -> Result<symbols::Symbol, CompileError> {
         // An "And Expression" is a Boolean function, meaning it takes a
         // boolean as input and returns a boolean as output. That way
@@ -1607,8 +1796,8 @@ impl ast::AndExpr {
         // meaning they have a value, not a type.
         let _symbols = symbols.clone();
 
-        let left = self.left.eval(_symbols, scope)?;
-        let right = self.right.eval(symbols, scope)?;
+        let left = self.left.eval(_symbols, scope, local_scope)?;
+        let right = self.right.eval(symbols, scope, local_scope)?;
 
         is_boolean_function(&left, &right)?;
 
@@ -1627,11 +1816,12 @@ impl ast::OrExpr {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: &Scope,
+        local_scope: &Vec<Symbol>,
     ) -> Result<symbols::Symbol, CompileError> {
         let _symbols = symbols.clone();
 
-        let left = self.left.eval(_symbols, scope)?;
-        let right = self.right.eval(symbols, scope)?;
+        let left = self.left.eval(_symbols, scope, local_scope)?;
+        let right = self.right.eval(symbols, scope, local_scope)?;
 
         is_boolean_function(&left, &right)?;
 
@@ -1650,10 +1840,11 @@ impl ast::NotExpr {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: &Scope,
+        local_scope: &Vec<Symbol>,
     ) -> Result<symbols::Symbol, CompileError> {
         let _symbols = symbols;
 
-        let expr = self.expr.eval(_symbols, scope)?;
+        let expr = self.expr.eval(_symbols, scope, local_scope)?;
 
         if expr.get_type() != TypeDef::Boolean {
             return Err("Expression doesn't evaluate to a Boolean"
@@ -1676,8 +1867,9 @@ impl ast::GroupedLogicalExpr {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: &Scope,
+        local_scope: &Vec<Symbol>,
     ) -> Result<symbols::Symbol, CompileError> {
-        self.expr.eval(symbols, scope.clone())
+        self.expr.eval(symbols, scope.clone(), local_scope)
     }
 }
 
@@ -1692,10 +1884,10 @@ impl ast::ListCompareExpr {
         // Process the left hand side of the compare expression. This is a
         // Compare Argument. It has to end in a leaf node, otherwise it's
         // an error.
-        let left_s = self.left.eval(_symbols, scope.clone())?;
+        let left_s = self.left.eval(_symbols, scope.clone(), &[])?;
         let left_type = left_s.get_type();
 
-        let right_s = self.right.eval(symbols, scope.clone())?;
+        let right_s = self.right.eval(symbols, scope.clone(), &[])?;
 
         let mut l_args = vec![];
         if let TypeDef::List(_) = right_s.get_type() {

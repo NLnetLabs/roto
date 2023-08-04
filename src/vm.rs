@@ -34,8 +34,10 @@ pub enum StackRefPos {
     // index into a Table (which is a vec of shared Records)
     TablePos(Token, usize),
     // CompareResult, which is not a Ref at all, but hey,
-    // it's smaller that a ref, so who cares
+    // it's smaller than a ref, so who cares
     CompareResult(bool),
+    // Constant value, used for indexing a match variant
+    Constant(u32),
 }
 
 impl From<u32> for StackRefPos {
@@ -132,7 +134,11 @@ impl LinearMemory {
     }
 
     pub(crate) fn get_mp_field_as_bool(&self, stack_ref: &StackRef) -> bool {
-        trace!("mp field: {:?}", stack_ref.pos);
+        trace!(
+            "mp field pos: {:?}, field_index: {:?}",
+            stack_ref.pos,
+            stack_ref.field_index
+        );
         match stack_ref.pos {
             StackRefPos::MemPos(pos) => {
                 if let StackValue::Owned(TypeValue::Builtin(
@@ -151,6 +157,25 @@ impl LinearMemory {
             }
             StackRefPos::CompareResult(res) => res,
             _ => false,
+        }
+    }
+
+    pub(crate) fn get_mp_field_as_unknown(
+        &self,
+        stack_ref: &StackRef,
+    ) -> bool {
+        trace!(
+            "mp field pos: {:?}, field_index: {:?}",
+            stack_ref.pos,
+            stack_ref.field_index
+        );
+        if let StackRefPos::MemPos(pos) = stack_ref.pos {
+            matches!(
+                self.get_mem_pos(pos as usize).unwrap(),
+                TypeValue::Unknown
+            )
+        } else {
+            false
         }
     }
 
@@ -202,21 +227,59 @@ impl LinearMemory {
         index: usize,
         field_index: SmallVec<[usize; 8]>,
     ) -> Option<StackValue> {
+        trace!(
+            "get_mp_field_by_index_as_stack_value {:?}",
+            self.get_mem_pos(index).map(StackValue::Ref)
+        );
         match field_index {
             fi if fi.is_empty() => {
-                self.get_mem_pos(index).map(StackValue::Ref)
+                trace!("empty field index");
+                if let Some(tv) = self.get_mem_pos(index) {
+                    match tv {
+                        // Do not own AsPath and Communities, cloning is expensive!
+                        TypeValue::Builtin(BuiltinTypeValue::AsPath(_)) => {
+                            Some(StackValue::Ref(tv))
+                        }
+                        TypeValue::Builtin(
+                            BuiltinTypeValue::Communities(_),
+                        ) => Some(StackValue::Ref(tv)),
+                        // Clone all other builtins, they're cheap to clone (all copy) and the
+                        // result is smaller than a pointer
+                        TypeValue::Builtin(_) => {
+                            trace!("builtin copy {}", tv);
+                            Some(StackValue::Owned(tv.clone()))
+                        }
+                        _ => Some(StackValue::Ref(tv)),
+                    }
+                } else {
+                    None
+                }
             }
             field_index => {
+                trace!(
+                    "value in mem pos {}: {:?}",
+                    index,
+                    self.get_mem_pos(index)
+                );
                 match self.get_mem_pos(index) {
                     Some(TypeValue::Record(rec)) => {
+                        trace!("record -> {}", rec);
                         match rec.get_field_by_index(field_index) {
                             Some(ElementTypeValue::Nested(nested)) => {
+                                trace!("=> nested field {}", nested);
                                 Some(StackValue::Ref(nested))
                             }
                             Some(ElementTypeValue::Primitive(b)) => {
+                                trace!("=> primitive record field {:?}", b);
                                 Some(StackValue::Ref(b))
                             }
-                            _ => None,
+                            unknown_rec_field => {
+                                trace!(
+                                    "=> unknown record field {:?}",
+                                    unknown_rec_field
+                                );
+                                None
+                            }
                         }
                     }
                     Some(TypeValue::List(l)) => {
@@ -267,7 +330,7 @@ impl LinearMemory {
                         LazyRecord::from_type_def(BytesRecord::<
                             routecore::bmp::message::RouteMonitoring<
                                 bytes::Bytes,
-                            >
+                            >,
                         >::lazy_type_def(
                         ))
                         .get_field_by_index(&field_index, bmp_msg.as_ref())
@@ -284,6 +347,7 @@ impl LinearMemory {
                         // Clone all other builtins, they're cheap to clone (all copy) and the
                         // result is smaller than a pointer
                         TypeValue::Builtin(_) => {
+                            trace!("builtin copy {}", tv);
                             Some(StackValue::Owned(tv.clone()))
                         }
                         _ => Some(StackValue::Ref(tv)),
@@ -725,6 +789,9 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                 StackRefPos::CompareResult(res) => {
                     unwind_stack.push(StackValue::Owned(res.into()))
                 }
+                StackRefPos::Constant(c) => {
+                    unwind_stack.push(StackValue::Owned(c.into()))
+                }
             }
         }
         unwind_stack
@@ -766,6 +833,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                 StackRefPos::CompareResult(res) => {
                     StackValue::Owned(res.into())
                 }
+                StackRefPos::Constant(c) => StackValue::Owned(c.into()),
             })
             .collect();
 
@@ -810,6 +878,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                 StackRefPos::CompareResult(res) => {
                     StackValue::Owned(res.into())
                 }
+                StackRefPos::Constant(c) => StackValue::Owned(c.into()),
             })
             .collect();
 
@@ -844,6 +913,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                     panic!("Attempt to move a value from a data-source");
                 }
                 StackRefPos::CompareResult(res) => res.into(),
+                StackRefPos::Constant(c) => c.into(),
             })
             .collect();
 
@@ -887,16 +957,21 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
         let mut output_stream_queue: OutputStreamQueue =
             OutputStreamQueue::new();
 
-        for MirBlock {
-            command_stack,
-            ty: _,
-        } in self.mir_code.as_ref()
-        {
+        for mir_block in self.mir_code.as_ref() {
             trace!("\n\n--mirblock------------------");
             trace!("stack: {:?}", self.stack);
+            let mut skip_label = false;
 
-            for (pc, Command { op, args }) in command_stack.iter().enumerate()
-            {
+            for (pc, Command { op, args }) in mir_block.iter().enumerate() {
+                if skip_label {
+                    if let OpCode::Label = op {
+                        trace!("stop skip");
+                        skip_label = false;
+                    } else {
+                        continue;
+                    }
+                }
+
                 commands_num += 1;
                 let mut args = CommandArgsStack::new(args);
                 trace!("\n{:3} -> {:?} {:?} ", pc, op, args);
@@ -1029,6 +1104,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                         } else {
                             return Err(VmError::InvalidValueType);
                         };
+
                         let (_args, method_t, return_type) = args.pop_3();
 
                         let stack_args = self
@@ -1050,7 +1126,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                     //      arguments, result memory position
                     // ]
                     OpCode::ExecuteValueMethod => {
-                        trace!("execute value method");
+                        trace!("execute value method {:?}", args);
                         let mem_pos = if let CommandArg::MemPos(pos) =
                             args.pop().unwrap()
                         {
@@ -1059,24 +1135,39 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                             return Err(VmError::InvalidValueType);
                         };
 
-                        let args_len: usize =
-                            if let Some(CommandArg::Arguments(args)) =
-                                args.pop()
-                            {
-                                args.len()
-                            } else {
+                        let mut extra_command_arg = None;
+
+                        // Blergh, we have two different ways of dealing with
+                        // arguments, one for LazyRecords (using the
+                        // extra_command_arg) and one for the rest. probably
+                        // don't do this. TODO
+                        let args_len: usize = match args.pop().cloned() {
+                            Some(CommandArg::Arguments(c_args)) => {
+                                c_args.len()
+                            }
+                            fi => {
+                                extra_command_arg =
+                                    if let Some(CommandArg::FieldIndex(fi)) =
+                                        fi
+                                    {
+                                        Some(fi)
+                                    } else {
+                                        None
+                                    };
                                 0
-                            };
+                            }
+                        };
 
                         let (return_type, method_token) = args.pop_2();
                         trace!(
-                            "return_type {:?}, method_token {:?}",
+                            "return_type {:?}, method_token {:?}, extra command arg {:?}",
                             return_type,
-                            method_token
+                            method_token,
+                            extra_command_arg
                         );
 
                         // pop as many refs from the stack as we have
-                        // arguments for this method and resolve them  to
+                        // arguments for this method and resolve them to
                         // their values.
                         let mut stack = self.stack.borrow_mut();
 
@@ -1084,8 +1175,11 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                             let sr = stack.pop().unwrap();
                             match sr.pos {
                                 StackRefPos::MemPos(pos) => {
+                                    let field_index = if let Some(fi) = extra_command_arg.clone() {
+                                        fi
+                                    } else { sr.field_index };
                                     mem
-                                        .get_mp_field_by_index_as_stack_value(pos as usize, sr.field_index)
+                                        .get_mp_field_by_index_as_stack_value(pos as usize, field_index)
                                         .unwrap_or_else(|| {
                                             trace!("\nstack: {:?}", stack);
                                             trace!("mem: {:#?}", mem.0);
@@ -1099,17 +1193,27 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                         StackValue::Arc(v.into())
                                     } else { StackValue::Owned(TypeValue::Unknown) }
                                 }
-                                StackRefPos::CompareResult(res) => StackValue::Owned(res.into())
+                                StackRefPos::CompareResult(res) => StackValue::Owned(res.into()),
+                                StackRefPos::Constant(c) => StackValue::Owned(c.into()),
                             }
                         }).collect::<Vec<_>>();
-                        trace!("stack_args {:?}", stack_args);
+                        trace!("stack_args {:?} <--", stack_args);
 
                         // The first value on the stack is the value which we
                         // are going to call a method with.
                         let call_value = stack_args.get(0).unwrap().as_ref();
 
+                        trace!(
+                            "typevalue to call method on {} with \
+                        extra_command_arg {:?}",
+                            call_value,
+                            extra_command_arg
+                                .clone()
+                                .map(CommandArg::FieldIndex)
+                        );
                         let v = call_value.exec_value_method(
                             method_token.into(),
+                            extra_command_arg.map(CommandArg::FieldIndex),
                             &stack_args[1..],
                             return_type.into(),
                         )?;
@@ -1184,6 +1288,9 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                 }
                                 StackRefPos::CompareResult(_res) => {
                                     panic!("Fatal: Can't mutate a compare result.");
+                                }
+                                StackRefPos::Constant(_c) => {
+                                    panic!("Fatal: can't mutate a constant.");
                                 }
                             }
                         }).collect::<Vec<_>>();
@@ -1301,7 +1408,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                             _ => return Err(VmError::InvalidDataSource),
                         }
                     }
-                    // stack args: [mem_pos, constant_value]
+                    // stack args: [mem_pos | constant_value]
                     OpCode::PushStack => match args[0] {
                         CommandArg::MemPos(pos) => {
                             if log_enabled!(Level::Trace) {
@@ -1313,6 +1420,16 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
 
                             let mut s = self.stack.borrow_mut();
                             s.push(StackRefPos::MemPos(pos))?;
+                            if log_enabled!(Level::Trace) {
+                                trace!(" stack {:?}", s);
+                            }
+                        }
+                        CommandArg::Constant(ref c) => {
+                            if log_enabled!(Level::Trace) {
+                                trace!(" content: {:?}", c);
+                            }
+                            let mut s = self.stack.borrow_mut();
+                            s.push(StackRefPos::Constant(c.try_into()?))?;
                             if log_enabled!(Level::Trace) {
                                 trace!(" stack {:?}", s);
                             }
@@ -1349,12 +1466,9 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                         for arg in args.args.iter() {
                             if let CommandArg::FieldAccess(field) = arg {
                                 let mut s = self.stack.borrow_mut();
-                                trace!(" -> stack {:?}", s);
                                 trace!("mem_pos 0 {:?}", mem.0[0]);
                                 s.add_field_index(*field)?;
-                                if log_enabled!(Level::Trace) {
-                                    trace!(" -> stack {:?}", s);
-                                }
+                                trace!(" -> stack after offset {:?}", s);
                             } else {
                                 return Err(VmError::InvalidValueType);
                             }
@@ -1412,6 +1526,21 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                 trace!(" skip to end of block");
                             }
                             break;
+                        }
+                    }
+                    OpCode::CondUnknownSkipToLabel => {
+                        let s = self.stack.borrow();
+                        let stack_ref = s.get_top_value()?;
+                        if !mem.get_mp_field_as_unknown(stack_ref) {
+                            if log_enabled!(Level::Trace) {
+                                trace!(" continue");
+                            }
+                            continue;
+                        } else {
+                            if log_enabled!(Level::Trace) {
+                                trace!(" skip to next label");
+                            }
+                            skip_label = true;
                         }
                     }
                     // stack args: [exit value]
@@ -1656,7 +1785,7 @@ impl OutputStreamQueue {
         self.0.pop()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item=&OutputStreamMessage> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = &OutputStreamMessage> + '_ {
         self.0.iter()
     }
 }
@@ -1677,7 +1806,7 @@ impl Index<usize> for OutputStreamQueue {
 
 impl IntoIterator for OutputStreamQueue {
     type Item = OutputStreamMessage;
-    type IntoIter = <smallvec::SmallVec<[OutputStreamMessage; 8]> 
+    type IntoIter = <smallvec::SmallVec<[OutputStreamMessage; 8]>
         as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -1699,6 +1828,7 @@ pub enum VmError {
     InvalidValueType,
     InvalidPayload,
     InvalidVariableAccess,
+    InvalidVariant,
     InvalidFieldAccess(usize),
     InvalidMethodCall,
     DataSourceTokenNotFound(usize),
@@ -1767,6 +1897,7 @@ impl Display for VmError {
                 f.write_str("UnexpectedTermination")
             }
             VmError::InvalidMsgType => f.write_str("InvalidMessageType"),
+            VmError::InvalidVariant => f.write_str("InvalidVariant"),
             VmError::AsPathTooLong => f.write_str("AsPathTooLong"),
             VmError::DeltaLocked => f.write_str("DeltaLocked"),
             VmError::NoMir => f.write_str("NoMir"),
@@ -1808,6 +1939,7 @@ impl Display for Command {
             OpCode::StackOffset => "",
             OpCode::CondFalseSkipToEOB => "-->",
             OpCode::CondTrueSkipToEOB => "-->",
+            OpCode::CondUnknownSkipToLabel => "-->",
             OpCode::Label => {
                 return write!(f, "🏷  {}", self.args[0]);
             }
@@ -1824,8 +1956,8 @@ impl Display for Command {
 
 #[derive(Debug)]
 pub enum CommandArg {
-    Constant(TypeValue),        // Constant value
-    Variable(usize),            // Variable with token value
+    Constant(TypeValue),              // Constant value
+    Variable(usize),                  // Variable with token value
     Argument(usize), // extra runtime argument for filter_map & term
     List(List),      // a list that needs to be stored at a memory posision
     Record(Record),  // a record that needs to be stored at a mem posistion
@@ -1836,14 +1968,15 @@ pub enum CommandArg {
     DataSourceRib(usize), // data source: rib token value
     OutputStream(usize), // ouput stream value
     FieldAccess(usize), // field access token value
-    BuiltinMethod(usize), // builtin method token value
-    MemPos(u32), // memory position
-    Type(TypeDef), // type definition
-    Arguments(Vec<TypeDef>), // argument types (for method calls)
-    Boolean(bool), // boolean value (used in cmp opcode)
-    Term(usize), // term token value
-    CompareOp(ast::CompareOp), // compare operation
-    Label(ShortString), // a label with its name (to jump to)
+    FieldIndex(SmallVec<[usize; 8]>), // field index token value (for LazyRecord)
+    BuiltinMethod(usize),             // builtin method token value
+    MemPos(u32),                      // memory position
+    Type(TypeDef),                    // type definition
+    Arguments(Vec<TypeDef>),          // argument types (for method calls)
+    Boolean(bool),                    // boolean value (used in cmp opcode)
+    Term(usize),                      // term token value
+    CompareOp(ast::CompareOp),        // compare operation
+    Label(ShortString),               // a label with its name (to jump to)
     AcceptReject(AcceptReject), // argument tell what should happen after
 }
 
@@ -1966,6 +2099,7 @@ impl Clone for CommandArg {
             CommandArg::DataSourceRib(ds) => CommandArg::DataSourceTable(*ds),
             CommandArg::OutputStream(os) => CommandArg::OutputStream(*os),
             CommandArg::FieldAccess(fa) => CommandArg::FieldAccess(*fa),
+            CommandArg::FieldIndex(fi) => CommandArg::FieldIndex(fi.clone()),
             CommandArg::BuiltinMethod(bim) => CommandArg::BuiltinMethod(*bim),
             CommandArg::MemPos(mp) => CommandArg::MemPos(*mp),
             CommandArg::Type(ty) => CommandArg::Type(ty.clone()),
@@ -2000,6 +2134,10 @@ pub enum OpCode {
     // Skip to the end of the MIR block if the top of the stack
     // holds a redference to a boolean value false.
     CondTrueSkipToEOB,
+    // Skip to the end of the MIR block if the top of the stack
+    // holds a reference to a typevalue::Unknown. Used to match
+    // expression variants.
+    CondUnknownSkipToLabel,
     // Debug Label for terms
     Label,
     SetRxField,

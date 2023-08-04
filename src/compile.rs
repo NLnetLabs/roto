@@ -12,8 +12,8 @@ use crate::{
     ast::{self, AcceptReject, FilterType, ShortString, SyntaxTree},
     blocks::Scope,
     symbols::{
-        DepsGraph, GlobalSymbolTable, MatchActionType, Symbol,
-        SymbolKind, SymbolTable,
+        DepsGraph, GlobalSymbolTable, MatchActionType, Symbol, SymbolKind,
+        SymbolTable,
     },
     traits::Token,
     types::{
@@ -101,8 +101,7 @@ impl Rotolo {
 
     fn iter_all_filter_maps(
         &self,
-    ) -> impl Iterator<Item = (Scope, Result<&RotoPack, CompileError>)>
-    {
+    ) -> impl Iterator<Item = (Scope, Result<&RotoPack, CompileError>)> {
         let mp = self
             .get_mis_compilations()
             .iter()
@@ -117,6 +116,9 @@ impl Rotolo {
         &self,
         name: Scope,
     ) -> Result<RotoPackArc, CompileError> {
+        if !self.mis_compilations.is_empty() {
+            return Err(self.mis_compilations[0].1.clone());
+        }
         self.iter_all_filter_maps()
             .find(|p| p.0 == name)
             .ok_or_else(|| {
@@ -609,9 +611,8 @@ impl<'a> Compiler {
         trace!("compile time arguments: {:?}", self.arguments);
         let mut filter_map = self.symbols.borrow_mut();
         for (filter_map_scope, args) in self.arguments.iter() {
-            let _filter_map = filter_map
-                .get_mut(filter_map_scope)
-                .ok_or_else(|| {
+            let filter_map_symbols =
+                filter_map.get_mut(filter_map_scope).ok_or_else(|| {
                     CompileError::from(format!(
                         "Cannot find filter-map with name '{}'",
                         filter_map_scope
@@ -619,7 +620,7 @@ impl<'a> Compiler {
                 })?;
             for arg in args {
                 let mut _arg =
-                    _filter_map.get_argument_mut(&arg.0.clone()).map_err(|_| CompileError::from(
+                    filter_map_symbols.get_argument_mut(&arg.0.clone()).map_err(|_| CompileError::from(
                         format!(
                             "Cannot find argument with name '{}' for filter-map '{}'",
                             arg.0,
@@ -765,8 +766,8 @@ pub enum MirBlockType {
 
 #[derive(Debug)]
 pub struct MirBlock {
-    pub command_stack: Vec<Command>,
-    pub ty: MirBlockType,
+    command_stack: Vec<Command>,
+    ty: MirBlockType,
 }
 
 impl MirBlock {
@@ -775,6 +776,14 @@ impl MirBlock {
             command_stack: Vec::new(),
             ty,
         }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Command> + '_ {
+        self.command_stack.iter()
+    }
+
+    pub fn get_cur_type(&self) -> &MirBlockType {
+        &self.ty
     }
 
     pub fn push_command(&mut self, command: Command) {
@@ -893,6 +902,72 @@ impl Clone for MirBlock {
     }
 }
 
+// search basically everywhere in the current global state for the value that
+// corresponds to the given token. Used to look up the enum instance in a
+// match expression.
+fn get_variable_value_for_token(
+    mut state: CompilerState,
+    token: Token,
+) -> CompilerState {
+    match token {
+        Token::RxType => {
+            state.cur_mir_block.push_command(Command::new(
+                OpCode::PushStack,
+                vec![CommandArg::MemPos(0)],
+            ));
+        }
+        Token::TxType => {
+            state.cur_mir_block.push_command(Command::new(
+                OpCode::PushStack,
+                vec![CommandArg::MemPos(1)],
+            ));
+        }
+        Token::Variable(var_to) => {
+            if let Some(var) = state
+                .used_variables
+                .iter()
+                .find(|(_, var)| var_to == var.get_token().unwrap().into())
+            {
+                state.cur_mir_block.push_command(Command::new(
+                    OpCode::PushStack,
+                    vec![CommandArg::Constant(var.1.get_value().clone())],
+                ));
+            };
+        }
+        Token::Method(_) => todo!(),
+        Token::Variant(_) => todo!(),
+        Token::Argument(arg_to) => {
+            if let Some(var) = state
+                .used_arguments
+                .iter()
+                .find(|(_, arg)| arg_to == arg.get_token().unwrap().into())
+            {
+                state.cur_mir_block.push_command(Command::new(
+                    OpCode::PushStack,
+                    vec![CommandArg::Constant(var.1.get_value().clone())],
+                ));
+            };
+        }
+        Token::Table(_) => todo!(),
+        Token::Rib(_) => todo!(),
+        Token::OutputStream(_) => todo!(),
+        Token::FieldAccess(_) => todo!(),
+        Token::NamedTerm => todo!(),
+        Token::AnonymousTerm => todo!(),
+        Token::Action(_) => todo!(),
+        Token::MatchAction(_) => todo!(),
+        Token::Constant(_) => todo!(),
+        Token::AnonymousRecord => todo!(),
+        Token::TypedRecord => todo!(),
+        Token::List => todo!(),
+        Token::BuiltinType(_) => todo!(),
+        Token::Enum(_) => todo!(),
+        Token::ConstEnumVariant => todo!(),
+    };
+
+    state
+}
+
 fn compile_filter_map(
     filter_map: &SymbolTable,
     global_table: &SymbolTable,
@@ -954,7 +1029,7 @@ fn compile_filter_map(
     (mir, state) = compile_apply(mir, state)?;
 
     state.cur_mir_block = MirBlock::new(MirBlockType::Terminator);
-    state.cur_mir_block.command_stack.push(Command::new(
+    state.cur_mir_block.push_command(Command::new(
         OpCode::Exit(state.cur_filter_map.get_default_action()),
         vec![],
     ));
@@ -1041,13 +1116,13 @@ fn compile_compute_expr<'a>(
             // when writing, push the content of the referenced variable to the stack,
             // note this might be the same as the assigned mem position, but it may also
             // be different!
-            state.cur_mir_block.command_stack.push(Command::new(
+            state.cur_mir_block.push_command(Command::new(
                 OpCode::PushStack,
                 vec![CommandArg::MemPos(var_ref.mem_pos)],
             ));
 
             for field_index in &var_ref.field_index {
-                state.cur_mir_block.command_stack.push(Command::new(
+                state.cur_mir_block.push_command(Command::new(
                     OpCode::StackOffset,
                     vec![CommandArg::FieldAccess(*field_index)],
                 ));
@@ -1068,7 +1143,7 @@ fn compile_compute_expr<'a>(
                 a.1.get_token().unwrap() == Token::Argument(arg_to)
                     && !a.1.has_unknown_value()
             }) {
-                state.cur_mir_block.command_stack.push(Command::new(
+                state.cur_mir_block.push_command(Command::new(
                     OpCode::MemPosSet,
                     vec![
                         CommandArg::MemPos(state.cur_mem_pos),
@@ -1076,7 +1151,7 @@ fn compile_compute_expr<'a>(
                     ],
                 ));
             } else {
-                state.cur_mir_block.command_stack.push(Command::new(
+                state.cur_mir_block.push_command(Command::new(
                     OpCode::ArgToMemPos,
                     vec![
                         CommandArg::Argument(arg_to),
@@ -1085,7 +1160,7 @@ fn compile_compute_expr<'a>(
                 ));
             }
 
-            state.cur_mir_block.command_stack.push(Command::new(
+            state.cur_mir_block.push_command(Command::new(
                 OpCode::PushStack,
                 vec![CommandArg::MemPos(state.cur_mem_pos)],
             ));
@@ -1094,11 +1169,19 @@ fn compile_compute_expr<'a>(
                 state.cur_mem_pos += 1;
             }
         }
+        // An enum variant mentioned in an arm of a match expression
+        Token::Variant(_var_to) => {
+            assert!(
+                symbol.get_kind() == SymbolKind::EnumVariant
+                    || symbol.get_kind() == SymbolKind::AccessReceiver
+            );
+            trace!("VARIANT {}", _var_to);
+        }
         // rx instance reference
         Token::RxType => {
             assert!(is_ar);
 
-            state.cur_mir_block.command_stack.push(Command::new(
+            state.cur_mir_block.push_command(Command::new(
                 OpCode::PushStack,
                 vec![CommandArg::MemPos(0)],
             ));
@@ -1107,7 +1190,7 @@ fn compile_compute_expr<'a>(
         Token::TxType => {
             assert!(is_ar);
 
-            state.cur_mir_block.command_stack.push(Command::new(
+            state.cur_mir_block.push_command(Command::new(
                 OpCode::PushStack,
                 vec![CommandArg::MemPos(1)],
             ));
@@ -1116,7 +1199,7 @@ fn compile_compute_expr<'a>(
         Token::Constant(_) => {
             let val = symbol.get_value();
 
-            state.cur_mir_block.command_stack.push(Command::new(
+            state.cur_mir_block.push_command(Command::new(
                 OpCode::MemPosSet,
                 vec![
                     CommandArg::MemPos(state.cur_mem_pos),
@@ -1124,7 +1207,7 @@ fn compile_compute_expr<'a>(
                 ],
             ));
 
-            state.cur_mir_block.command_stack.push(Command::new(
+            state.cur_mir_block.push_command(Command::new(
                 OpCode::PushStack,
                 vec![CommandArg::MemPos(state.cur_mem_pos)],
             ));
@@ -1155,7 +1238,7 @@ fn compile_compute_expr<'a>(
 
             let val = symbol.get_value();
 
-            state.cur_mir_block.command_stack.push(Command::new(
+            state.cur_mir_block.push_command(Command::new(
                 OpCode::MemPosSet,
                 vec![
                     CommandArg::MemPos(state.cur_mem_pos),
@@ -1163,7 +1246,7 @@ fn compile_compute_expr<'a>(
                 ],
             ));
 
-            state.cur_mir_block.command_stack.push(Command::new(
+            state.cur_mir_block.push_command(Command::new(
                 OpCode::PushStack,
                 vec![CommandArg::MemPos(state.cur_mem_pos)],
             ));
@@ -1203,7 +1286,7 @@ fn compile_compute_expr<'a>(
                 // The parent is a table, so this symbol is a method on a
                 // table.
                 Token::Table(t_to) => {
-                    state.cur_mir_block.command_stack.push(Command::new(
+                    state.cur_mir_block.push_command(Command::new(
                         OpCode::ExecuteDataStoreMethod,
                         vec![
                             CommandArg::DataSourceTable(t_to),
@@ -1221,7 +1304,7 @@ fn compile_compute_expr<'a>(
                 }
                 // The parent is a RIB, so this symbol is a method on a rib
                 Token::Rib(r_to) => {
-                    state.cur_mir_block.command_stack.push(Command::new(
+                    state.cur_mir_block.push_command(Command::new(
                         OpCode::ExecuteDataStoreMethod,
                         vec![
                             CommandArg::DataSourceRib(r_to),
@@ -1240,7 +1323,7 @@ fn compile_compute_expr<'a>(
                 // The parent is a OutputStream, so this symbol is a
                 // method on the OutputStream type
                 Token::OutputStream(o_s) => {
-                    state.cur_mir_block.command_stack.push(Command::new(
+                    state.cur_mir_block.push_command(Command::new(
                         OpCode::PushOutputStreamQueue,
                         vec![
                             CommandArg::OutputStream(o_s),
@@ -1259,7 +1342,7 @@ fn compile_compute_expr<'a>(
                 // The parent is a built-in method, so this symbol is a
                 // method on a built-in method.
                 Token::BuiltinType(_b_to) => {
-                    state.cur_mir_block.command_stack.push(Command::new(
+                    state.cur_mir_block.push_command(Command::new(
                         OpCode::ExecuteTypeMethod,
                         vec![
                             CommandArg::Type(symbol.get_type()), // return type
@@ -1295,9 +1378,12 @@ fn compile_compute_expr<'a>(
                 Token::Enum(_) => {
                     trace!("ENUM PARENT ARGS {:#?}", symbol.get_args());
                 }
+                Token::Variant(_) => {
+                    trace!("VARIANT {:?}", symbol.get_args());
+                }
                 Token::ConstEnumVariant => {
                     trace!(
-                        "ENUM VARIANT PARENT ARGS {:#?}",
+                        "CONST ENUM VARIANT PARENT ARGS {:#?}",
                         symbol.get_args()
                     );
                 }
@@ -1319,55 +1405,56 @@ fn compile_compute_expr<'a>(
                         SymbolKind::MethodCallbyRef => {
                             // args: [ method_call, type, arguments,
                             //         return_type ]
-                            state.cur_mir_block.command_stack.push(
-                                Command::new(
-                                    OpCode::ExecuteValueMethod,
-                                    vec![
-                                        CommandArg::Method(token.into()),
-                                        CommandArg::Type(symbol.get_type()),
-                                        CommandArg::Arguments(
-                                            symbol
-                                                .get_args()
-                                                .iter()
-                                                .map(|s| s.get_type())
-                                                .collect::<Vec<_>>(),
-                                        ),
-                                        // argument types and number
-                                        CommandArg::MemPos(state.cur_mem_pos),
-                                    ],
-                                ),
-                            );
+                            state.cur_mir_block.push_command(Command::new(
+                                OpCode::ExecuteValueMethod,
+                                vec![
+                                    CommandArg::Method(token.into()),
+                                    CommandArg::Type(symbol.get_type()),
+                                    CommandArg::Arguments(
+                                        symbol
+                                            .get_args()
+                                            .iter()
+                                            .map(|s| s.get_type())
+                                            .collect::<Vec<_>>(),
+                                    ),
+                                    // argument types and number
+                                    CommandArg::MemPos(state.cur_mem_pos),
+                                ],
+                            ));
                         }
                         SymbolKind::MethodCallByConsumedValue => {
                             // args: [ method_call, type, arguments,
                             //         return_type ]
-                            state.cur_mir_block.command_stack.push(
-                                Command::new(
-                                    OpCode::ExecuteConsumeValueMethod,
-                                    vec![
-                                        CommandArg::Method(token.into()),
-                                        CommandArg::Type(symbol.get_type()),
-                                        CommandArg::Arguments(
-                                            symbol
-                                                .get_args()
-                                                .iter()
-                                                .map(|s| s.get_type())
-                                                .collect::<Vec<_>>(),
-                                        ),
-                                        // argument types and number
-                                        CommandArg::MemPos(state.cur_mem_pos),
-                                    ],
-                                ),
-                            );
+                            state.cur_mir_block.push_command(Command::new(
+                                OpCode::ExecuteConsumeValueMethod,
+                                vec![
+                                    CommandArg::Method(token.into()),
+                                    CommandArg::Type(symbol.get_type()),
+                                    CommandArg::Arguments(
+                                        symbol
+                                            .get_args()
+                                            .iter()
+                                            .map(|s| s.get_type())
+                                            .collect::<Vec<_>>(),
+                                    ),
+                                    // argument types and number
+                                    CommandArg::MemPos(state.cur_mem_pos),
+                                ],
+                            ));
                         }
                         _ => {
                             panic!("PANIC!");
                         }
                     };
                 }
-                Token::Term(parent_to)
-                | Token::Action(parent_to)
-                | Token::MatchAction(parent_to) => {
+                Token::NamedTerm | Token::AnonymousTerm => {
+                    return Err(CompileError::new(
+                        "Invalid Data Source with \
+                    (Anonymous)Term token "
+                            .into(),
+                    ));
+                }
+                Token::Action(parent_to) | Token::MatchAction(parent_to) => {
                     return Err(CompileError::new(format!(
                         "Invalid data source: {:?} {:?}",
                         token, parent_to
@@ -1377,7 +1464,7 @@ fn compile_compute_expr<'a>(
 
             // Push the result to the stack for an (optional) next Accessor
             // to be used.
-            state.cur_mir_block.command_stack.push(Command::new(
+            state.cur_mir_block.push_command(Command::new(
                 OpCode::PushStack,
                 vec![CommandArg::MemPos(state.cur_mem_pos)],
             ));
@@ -1395,27 +1482,84 @@ fn compile_compute_expr<'a>(
         Token::FieldAccess(ref fa) => {
             assert!(!is_ar);
             trace!("FieldAccess {:?}", fa);
+            // This a match arm
+            if let Some(Token::Variant(_var_to)) = parent_token {
+                trace!(
+                    "FieldAccess {:?} for Variant w/ parent token {:?}",
+                    fa,
+                    parent_token
+                );
 
-            let mut args = vec![];
-            args.extend(
-                fa.iter()
-                    .map(|t| CommandArg::FieldAccess(*t as usize))
-                    .collect::<Vec<_>>(),
-            );
+                let args = vec![
+                    CommandArg::Method(_var_to),
+                    CommandArg::Type(symbol.get_type()),
+                    CommandArg::FieldIndex(
+                        fa.iter()
+                            .map(|t| (*t as usize))
+                            .collect::<SmallVec<_>>(),
+                    ),
+                    CommandArg::MemPos(state.cur_mem_pos),
+                ];
 
-            state
-                .cur_mir_block
-                .command_stack
-                .push(Command::new(OpCode::StackOffset, args));
+                state
+                    .cur_mir_block
+                    .command_stack
+                    .push(Command::new(OpCode::ExecuteValueMethod, args));
+
+                state.cur_mir_block.push_command(Command::new(
+                    OpCode::PushStack,
+                    vec![CommandArg::MemPos(state.cur_mem_pos)],
+                ));
+
+                state.cur_mir_block.push_command(Command::new(
+                    OpCode::CondUnknownSkipToLabel,
+                    vec![],
+                ));
+            // This is a regular field access.
+            } else {
+                let mut args = vec![];
+                args.extend(
+                    fa.iter()
+                        .map(|t| CommandArg::FieldAccess(*t as usize))
+                        .collect::<Vec<_>>(),
+                );
+
+                state
+                    .cur_mir_block
+                    .command_stack
+                    .push(Command::new(OpCode::StackOffset, args));
+            };
         }
-        Token::Term(to) | Token::Action(to) | Token::MatchAction(to) => {
+        // A NamedTerm shoould be compiled with the `compile_term` method,
+        // that will make sure it gets compiled and stored in the compiler
+        // state `terms` hashmap, so that it can be inlined in multiple
+        // places. It ending up here is an error.
+        Token::NamedTerm => {
+            return Err(CompileError::new(
+                "Found invalid Token of variant NamedTerm for compute \
+                expression"
+                    .into(),
+            ));
+        }
+        // Anonymous terms are compile in-line as a one off, only used in
+        // match expressions (at least for now).
+        Token::AnonymousTerm => {
+            trace!("TOKEN ANONYMOUS SYMBOL {:#?}", symbol);
+            let sub_terms = symbol.get_args();
+
+            for sub_term in sub_terms {
+                state = compile_sub_term(sub_term, state)?;
+            }
+            return Ok(state);
+        }
+        Token::Action(to) | Token::MatchAction(to) => {
             return Err(CompileError::new(format!(
                 "Invalid Token encountered in compute expression: {}",
                 to
             )));
         }
-        // This record is defined without a type and used directly, mainly
-        // as an argument for a method. The inferred type is unambiguous.
+        // This record is defined without a type and used directly, mainly as
+        // an argument for a method. The inferred type is unambiguous.
         Token::AnonymousRecord => {
             assert!(!is_ar);
 
@@ -1427,7 +1571,8 @@ fn compile_compute_expr<'a>(
             // `symbol` variable is not mutable. So create a Vec<&Symbol>
             // from the original &[Symbol]. The vec can then be re-ordered
             // and we're writing the state in the order of the vec elements.
-            let mut field_symbols = symbol.get_args().iter().collect::<Vec<_>>();
+            let mut field_symbols =
+                symbol.get_args().iter().collect::<Vec<_>>();
             field_symbols.sort_by_key(|a| a.get_name());
             trace!("ANONYMOUS RECORD FIELDS {:#?}", field_symbols);
 
@@ -1460,7 +1605,7 @@ fn compile_compute_expr<'a>(
                     )
                 ));
             }
-            state.cur_mir_block.command_stack.push(Command::new(
+            state.cur_mir_block.push_command(Command::new(
                 OpCode::MemPosSet,
                 vec![
                     CommandArg::MemPos(state.cur_mem_pos),
@@ -1485,7 +1630,7 @@ fn compile_compute_expr<'a>(
                 .iter()
                 .map(|v| v.get_value().clone().into())
                 .collect::<Vec<ElementTypeValue>>();
-            state.cur_mir_block.command_stack.push(Command::new(
+            state.cur_mir_block.push_command(Command::new(
                 OpCode::MemPosSet,
                 vec![
                     CommandArg::MemPos(state.cur_mem_pos),
@@ -1563,7 +1708,7 @@ fn compile_assignments(
 
         let s = _filter_map.get_variable_by_token(&var.1.get_token()?);
 
-        state.cur_mir_block.command_stack.push(Command::new(
+        state.cur_mir_block.push_command(Command::new(
             OpCode::Label,
             vec![CommandArg::Label(format!("VAR {}", var.0).as_str().into())],
         ));
@@ -1785,7 +1930,8 @@ fn compile_term<'a>(
     state.cur_mir_block = MirBlock::new(MirBlockType::Term);
 
     // Set a Label so that each term block is identifiable for humans.
-    state.cur_mir_block.command_stack.push(Command::new(
+    trace!("TERM {}", term.get_name());
+    state.cur_mir_block.push_command(Command::new(
         OpCode::Label,
         vec![CommandArg::Label(
             format!("TERM {}", term.get_name()).as_str().into(),
@@ -1793,6 +1939,7 @@ fn compile_term<'a>(
     ));
 
     let sub_terms = term.get_args();
+    trace!("SUB TERMS {:#?}", sub_terms);
     let mut sub_terms = sub_terms.iter().peekable();
 
     while let Some(arg) = &mut sub_terms.next() {
@@ -1836,7 +1983,7 @@ fn compile_sub_term<'a>(
             state.cur_mem_pos += 1;
             state = compile_sub_term(&args[1], state)?;
 
-            state.cur_mir_block.command_stack.push(Command::new(
+            state.cur_mir_block.push_command(Command::new(
                 OpCode::Cmp,
                 vec![CommandArg::CompareOp(ast::CompareOp::Or)],
             ));
@@ -1847,13 +1994,13 @@ fn compile_sub_term<'a>(
             state.cur_mem_pos += 1;
             state = compile_sub_term(&args[1], state)?;
 
-            state.cur_mir_block.command_stack.push(Command::new(
+            state.cur_mir_block.push_command(Command::new(
                 OpCode::Cmp,
                 vec![CommandArg::CompareOp(ast::CompareOp::And)],
             ));
         }
         SymbolKind::NotExpr => {
-            panic!("NOT NOT!");
+            todo!();
         }
         SymbolKind::ListCompareExpr(op) => {
             let args = sub_term.get_args();
@@ -1868,7 +2015,7 @@ fn compile_sub_term<'a>(
                 // retrieve the next value from the right hand list
                 state = compile_compute_expr(arg, state, None, false)?;
 
-                state.cur_mir_block.command_stack.push(Command::new(
+                state.cur_mir_block.push_command(Command::new(
                     OpCode::Cmp,
                     vec![CommandArg::CompareOp(op)],
                 ));
@@ -1882,7 +2029,60 @@ fn compile_sub_term<'a>(
                 state.cur_mem_pos = orig_mem_pos;
             }
         }
+        SymbolKind::GlobalEnum => {
+            trace!(
+                "ENUM TERM EXPRESSION {} {:?}",
+                sub_term.get_name(),
+                sub_term.get_kind_type_and_token()
+            );
+
+            let variants = sub_term.get_args();
+            state.cur_mem_pos += 1;
+            let orig_mem_pos = state.cur_mem_pos;
+
+            state.cur_mir_block.push_command(Command::new(
+                OpCode::Label,
+                vec![CommandArg::Label(
+                    format!("ENUM {}", sub_term.get_name()).as_str().into(),
+                )],
+            ));
+
+            trace!("enum token {:?}", sub_term.get_token());
+
+            for variant in variants {
+                state.cur_mir_block.push_command(Command::new(
+                    OpCode::Label,
+                    vec![CommandArg::Label(
+                        format!("VARIANT_{}", variant.get_name())
+                            .as_str()
+                            .into(),
+                    )],
+                ));
+
+                // push the enum instance to the stack.
+                state = get_variable_value_for_token(
+                    state,
+                    sub_term.get_token()?,
+                );
+
+                // compile that variants.
+                state = compile_compute_expr(variant, state, None, false)?;
+
+                state
+                    .cur_mir_block
+                    .command_stack
+                    .push(Command::new(OpCode::CondTrueSkipToEOB, vec![]));
+            }
+
+            // restore old mem_pos, let's not waste memory
+            state.cur_mem_pos = orig_mem_pos;
+        }
         _ => {
+            trace!(
+                "RESIDUAL SUB TERM EXPRESSION {} {:?}",
+                sub_term.get_name(),
+                sub_term.get_kind_type_and_token()
+            );
             state = compile_compute_expr(sub_term, state, None, false)?;
         }
     };

@@ -7,7 +7,9 @@ use routecore::bgp::types::{AFI, SAFI};
 use serde::Serialize;
 
 use crate::compile::CompileError;
-use crate::vm::VmError;
+use crate::types::builtin::BytesRecord;
+use crate::types::lazytypedef::BmpMessage;
+use crate::vm::{VmError, CommandArg};
 use crate::{
     ast::ShortString,
     eval::AccessReceiverError,
@@ -83,6 +85,7 @@ where
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &'a [crate::vm::StackValue],
         _res_type: super::typedef::TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -242,6 +245,11 @@ impl From<EnumVariant<u32>> for BuiltinTypeValue {
 //     }
 // }
 
+
+// Every possible enum type that can is available pre-defined should be
+// resigeterd here. This is used by the eveluator to figure out if the
+// name of the enum type, what variants it has, etc. It's not possible
+// for users to create enums currently (there's no syntax!).
 #[derive(
     Debug, Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Serialize,
 )]
@@ -280,6 +288,21 @@ impl GlobalEnumTypeDef {
                 })
                 .collect::<Vec<_>>()
         })
+    }
+
+    // This is the equivalent for a Lazy Enum of the `get_props_for_field` 
+    // method of a Lazy Record.
+    pub(crate) fn get_props_for_variant(
+        &self,
+        field: &crate::ast::Identifier,
+    ) -> Result<(TypeDef, Token), CompileError> {
+        match self {
+            GlobalEnumTypeDef::BmpMessageType => {
+                trace!("BmpMessage w/ variant '{}'", field);
+                BytesRecord::<BmpMessage>::get_props_for_variant(field)
+            }
+            _ => Err(CompileError::from(format!("{}", self)))
+        }
     }
 
     // This method returns the data field of a Variant of the GlobalEnum that
@@ -401,9 +424,9 @@ impl GlobalEnumTypeDef {
                         .ok()
                 })
                 .collect::<Vec<_>>(),
-            // The supplied variant is the nam of a Global Enum, we will
+            // The supplied variant is the name of a Global Enum, we will
             // create a Symbol for, without args. The caller will have to
-            // fill in the `args` field. 
+            // fill in the `args` field.
             Ok(t) => {
                 return Ok(symbols::Symbol::new(
                     t.into(),
@@ -497,7 +520,7 @@ impl From<GlobalEnumTypeDef> for TypeDef {
             GlobalEnumTypeDef::Safi => TypeDef::U8,
             GlobalEnumTypeDef::WellKnownCommunities => TypeDef::U8,
             GlobalEnumTypeDef::BmpMessageType => TypeDef::LazyRecord(
-                super::lazytypedef::LazyTypeDef::RouteMirroring,
+                super::lazytypedef::LazyRecordTypeDef::RouteMirroring,
             ),
         }
     }

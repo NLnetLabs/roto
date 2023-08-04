@@ -10,7 +10,7 @@ use serde::Serialize;
 use crate::compile::CompileError;
 use crate::traits::RotoType;
 use crate::types::collections::BytesRecord;
-use crate::types::constant_enum::EnumVariant;
+use crate::types::enum_types::EnumVariant;
 use crate::types::lazytypedef::{
     PeerDownNotification, PeerUpNotification, RouteMonitoring, BmpMessage,
 };

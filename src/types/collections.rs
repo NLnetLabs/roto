@@ -8,13 +8,11 @@ use crate::ast::{
 };
 use crate::compile::CompileError;
 use crate::traits::RotoType;
-use crate::vm::{StackValue, VmError};
+use crate::vm::{StackValue, VmError, CommandArg};
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
-use std::sync::Arc;
 
 use super::builtin::{BuiltinTypeValue, U32};
-use super::lazytypedef::BmpMessage;
 use super::typedef::{LazyNamedTypeDef, MethodProps, TypeDef};
 use super::typevalue::TypeValue;
 
@@ -257,7 +255,7 @@ impl List {
         &self,
         field_index: SmallVec<[usize; 8]>,
     ) -> Option<&ElementTypeValue> {
-        let mut elm = self.0.get(field_index[0]);
+        let mut elm = self.0.get(*field_index.first()?);
 
         for index in &field_index[1..] {
             elm = elm
@@ -470,6 +468,7 @@ impl RotoType for List {
     fn exec_value_method<'a>(
         &'a self,
         method: usize,
+        _extra_command_args: Option<CommandArg>,
         args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -585,7 +584,7 @@ impl<'a> Record {
     }
 
     // Sorted inserts on record creation time are essential for the PartialEq
-    // impl (equivalence testing) of a Record TypeDef. The TypeDefs of two 
+    // impl (equivalence testing) of a Record TypeDef. The TypeDefs of two
     // Records are compared field-by-field in a simple zipped loop. Therefore
     // all the fields need to be sorted in the same way (aligned), otherwise
     // they'll be unequal, even if all the values are the same. This method
@@ -631,7 +630,7 @@ impl<'a> Record {
                 "Can't create empty instance.".into(),
             ));
         }
-        kvs.sort_by(|a,b| a.0.cmp(b.0));
+        kvs.sort_by(|a, b| a.0.cmp(b.0));
 
         let shortstring_vec = kvs
             .iter()
@@ -853,6 +852,7 @@ impl RotoType for Record {
     fn exec_value_method(
         &self,
         _method: usize,
+        _extra_command_args: Option<CommandArg>,
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -949,7 +949,7 @@ impl From<RecordToken> for usize {
 
 //------------ BytesRecord --------------------------------------------------
 
-#[derive(Debug, Serialize, Eq, PartialEq, Hash, Clone)]
+#[derive(Debug, Serialize, Eq)]
 pub struct BytesRecord<T: AsRef<[u8]>>(pub(crate) T);
 
 impl<T: AsRef<[u8]>> BytesRecord<T> {
@@ -957,34 +957,17 @@ impl<T: AsRef<[u8]>> BytesRecord<T> {
         &self.0
     }
 
-    pub(crate) fn arc_bytes_parser(self) -> Arc<T> {
-        Arc::new(self.0)
-    }
-
     pub(crate) fn get_props_for_method(
-        _ty: TypeDef,
-        _method_name: &Identifier,
-    ) -> Result<MethodProps, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        todo!()
+        _type_def: TypeDef,
+        method_name: &Identifier,
+    ) -> Result<MethodProps, CompileError> {
+        Err(CompileError::from(format!(
+            "Cannot find field/method/\
+        variant {} in this BytesRecord type",
+            method_name
+        )))
     }
 }
-
-// impl<T: AsRef<[u8]>> Clone for BytesRecord<T> {
-//     fn clone(&self) -> Self {
-//         BytesRecord(self.0.clone())
-//     }
-// }
-
-// impl<T> Eq for BytesRecord<Arc<T>> where Arc<T>: AsRef<[u8]> {}
-
-// impl<T> AsRef<[u8]> for BytesRecord<Arc<T>> where Arc<T>: AsRef<[u8]> {
-//     fn as_ref(&self) -> &[u8] {
-//         self.0.as_ref()
-//     }
-// }
 
 impl<T: AsRef<[u8]>> AsRef<[u8]> for BytesRecord<T> {
     fn as_ref(&self) -> &[u8] {
@@ -992,23 +975,18 @@ impl<T: AsRef<[u8]>> AsRef<[u8]> for BytesRecord<T> {
     }
 }
 
-// impl<T: AsRef<[u8]>> PartialEq for BytesRecord<T> {
-//     fn eq(&self, other: &Self) -> bool {
-//         self.0.as_ref() == other.0.as_ref()
-//     }
-// }
+impl<T: AsRef<[u8]>> PartialEq for BytesRecord<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.as_ref() == other.0.as_ref()
+    }
+}
 
-// impl<T: AsRef<[u8]>> std::hash::Hash for BytesRecord<T> {
-//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-//         self.0.as_ref().hash(state);
-//     }
-// }
+impl<T: AsRef<[u8]>> std::hash::Hash for BytesRecord<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.as_ref().hash(state);
+    }
+}
 
-// impl AsRef<[u8]> for Arc<routecore::bmp::message::Message<bytes::Bytes>> {
-//     fn as_ref(&self) -> &[u8] {
-//         self.0.as_ref()
-//     }
-// }
 
 //------------- LazyElementTypeValue ----------------------------------------
 
@@ -1021,7 +999,10 @@ pub enum LazyElementTypeValue<'a, T: AsRef<[u8]>> {
 }
 
 impl<T: std::fmt::Debug + AsRef<[u8]>> LazyElementTypeValue<'_, T> {
-    fn _into_materialized(self, raw_bytes: &BytesRecord<T>) -> Self {
+    pub(crate) fn _into_materialized(
+        self,
+        raw_bytes: &BytesRecord<T>,
+    ) -> Self {
         match self {
             LazyElementTypeValue::LazyRecord(rec) => {
                 let rec = Record::from((&rec, raw_bytes));
@@ -1051,7 +1032,8 @@ impl<T: std::fmt::Debug + AsRef<[u8]>> LazyElementTypeValue<'_, T> {
     }
 }
 
-impl<T: std::fmt::Debug + AsRef<[u8]>> From<(LazyElementTypeValue<'_, T>, &BytesRecord<T>)>
+impl<T: std::fmt::Debug + AsRef<[u8]>>
+    From<(LazyElementTypeValue<'_, T>, &BytesRecord<T>)>
     for ElementTypeValue
 {
     fn from(value: (LazyElementTypeValue<'_, T>, &BytesRecord<T>)) -> Self {
@@ -1068,7 +1050,8 @@ impl<T: std::fmt::Debug + AsRef<[u8]>> From<(LazyElementTypeValue<'_, T>, &Bytes
     }
 }
 
-impl<T: std::fmt::Debug + AsRef<[u8]>> From<(&LazyElementTypeValue<'_, T>, &BytesRecord<T>)>
+impl<T: std::fmt::Debug + AsRef<[u8]>>
+    From<(&LazyElementTypeValue<'_, T>, &BytesRecord<T>)>
     for ElementTypeValue
 {
     fn from(
@@ -1096,7 +1079,9 @@ impl<T: std::fmt::Debug + AsRef<[u8]>> From<(&LazyElementTypeValue<'_, T>, &Byte
 //     }
 // }
 
-impl<T: std::fmt::Debug + AsRef<[u8]>> std::fmt::Debug for LazyElementTypeValue<'_, T> {
+impl<T: std::fmt::Debug + AsRef<[u8]>> std::fmt::Debug
+    for LazyElementTypeValue<'_, T>
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             LazyElementTypeValue::Materialized(mat_v) => {
@@ -1107,10 +1092,9 @@ impl<T: std::fmt::Debug + AsRef<[u8]>> std::fmt::Debug for LazyElementTypeValue<
             }
             LazyElementTypeValue::Lazy(_lazy_elm) => {
                 write!(f, "unresolved lazy value")
-            }
-            // LazyElementTypeValue::LazyOwned(_lazy_elm) => {
-            //     write!(f, "unresolved lazy owned value")
-            // }
+            } // LazyElementTypeValue::LazyOwned(_lazy_elm) => {
+              //     write!(f, "unresolved lazy owned value")
+              // }
         }
     }
 }
@@ -1125,27 +1109,25 @@ impl<T: AsRef<[u8]>> std::fmt::Display for LazyElementTypeValue<'_, T> {
     }
 }
 
-// impl<T> Eq for LazyElementTypeValue<'_, T> {}
 
-// impl<T> PartialEq for LazyElementTypeValue<'_, T> {
-//     fn eq(&self, other: &Self) -> bool {
-//         ElementTypeValue::from(self) == ElementTypeValue::from(other)
-//     }
-// }
-
-// impl<T> Clone for LazyElementTypeValue<'_, T> {
-//     fn clone(&self) -> Self {
-//         match self {
-//             LazyElementTypeValue::LazyRecord(elm) => LazyElementTypeValue::LazyRecord(elm.clone()),
-//             LazyElementTypeValue::Lazy(elm) => {
-//                 Self::Materialized(elm())
-//             }
-//             LazyElementTypeValue::Materialized(elm) => {
-//                 Self::Materialized(elm.clone())
-//             }
-//         }
-//     }
-// }
+impl<'a, T: AsRef<[u8]> + std::fmt::Debug> LazyElementTypeValue<'a, T> {
+    pub(crate) fn _as_materialized(
+        &'a self,
+        raw_bytes: BytesRecord<T>,
+    ) -> Result<ElementTypeValue, VmError> {
+        match self {
+            LazyElementTypeValue::LazyRecord(ref rec) => {
+                let rec = Record::from((rec, &raw_bytes));
+                Ok(ElementTypeValue::Primitive(rec.into()))
+            }
+            LazyElementTypeValue::Lazy(elm) => Ok(elm(&raw_bytes)),
+            // LazyElementTypeValue::LazyOwned(elm) => {
+            //     LazyElementTypeValue::Materialized(elm(*raw_bytes))
+            // }
+            LazyElementTypeValue::Materialized(elm) => Ok(elm.clone()),
+        }
+    }
+}
 
 //------------ LazyRecord type ---------------------------------------------
 
@@ -1251,6 +1233,7 @@ impl<'a, T: std::fmt::Debug + AsRef<[u8]>> LazyRecord<'a, T> {
         field_index: &[usize],
         raw_bytes: &BytesRecord<T>,
     ) -> Option<ElementTypeValue> {
+        trace!("get_field_by_index for {:?} w/ field index {:?}", self.value, field_index);
         self.value.get(field_index[0]).map(|f| match &f.1 {
             LazyElementTypeValue::Lazy(l_value) => l_value(raw_bytes),
             // LazyElementTypeValue::LazyOwned(l_value) => l_value(*raw_bytes),
@@ -1495,8 +1478,8 @@ impl<T: AsRef<[u8]>> Display for LazyRecord<'_, T> {
 //     }
 // }
 
-impl<T: std::fmt::Debug + AsRef<[u8]>> From<(&LazyRecord<'_, T>, &BytesRecord<T>)>
-    for Record
+impl<T: std::fmt::Debug + AsRef<[u8]>>
+    From<(&LazyRecord<'_, T>, &BytesRecord<T>)> for Record
 {
     fn from(value: (&LazyRecord<T>, &BytesRecord<T>)) -> Self {
         Record(
@@ -1512,8 +1495,8 @@ impl<T: std::fmt::Debug + AsRef<[u8]>> From<(&LazyRecord<'_, T>, &BytesRecord<T>
     }
 }
 
-impl<T: std::fmt::Debug + AsRef<[u8]>> From<(LazyRecord<'_, T>, &BytesRecord<T>)>
-    for TypeValue
+impl<T: std::fmt::Debug + AsRef<[u8]>>
+    From<(LazyRecord<'_, T>, &BytesRecord<T>)> for TypeValue
 {
     fn from(value: (LazyRecord<T>, &BytesRecord<T>)) -> Self {
         let mut rec = vec![];
