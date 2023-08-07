@@ -2,7 +2,9 @@ use std::fmt::{Display, Formatter};
 
 use log::trace;
 use routecore::asn::LongSegmentError;
-use routecore::bgp::communities::{StandardCommunity, Wellknown, LargeCommunity, ExtendedCommunity};
+use routecore::bgp::communities::{
+    ExtendedCommunity, LargeCommunity, StandardCommunity, Wellknown,
+};
 use serde::ser::SerializeSeq;
 use serde::{Serialize, Serializer};
 
@@ -12,7 +14,7 @@ use crate::traits::RotoType;
 use crate::types::collections::{ElementTypeValue, List};
 use crate::types::enum_types::EnumVariant;
 use crate::types::typedef::MethodProps;
-use crate::vm::{StackValue, VmError, CommandArg};
+use crate::vm::{StackValue, VmError};
 
 use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
@@ -61,7 +63,6 @@ impl RotoType for U16 {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _extra_command_args: Option<CommandArg>,
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -222,7 +223,6 @@ impl RotoType for U32 {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _extra_command_args: Option<CommandArg>,
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -374,7 +374,7 @@ impl RotoType for U8 {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _extra_command_args: Option<CommandArg>,
+
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -531,7 +531,6 @@ impl RotoType for Boolean {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _extra_command_args: Option<CommandArg>,
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -663,7 +662,7 @@ impl RotoType for StringLiteral {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _extra_command_args: Option<CommandArg>,
+
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -859,7 +858,7 @@ impl RotoType for IntegerLiteral {
                     ))
                 }),
             TypeDef::ConstEnumVariant(e_num) => match self.0 {
-                0..=255 => 
+                0..=255 =>
                     Ok(TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant { enum_name: e_num.clone(), value: u8::try_from(self.0).unwrap() }))),
                 _ => Err(CompileError::from(format!("Cannot convert type IntegerLiteral > 255 into ConstU8Variant of type {}", e_num)))
             }
@@ -874,7 +873,6 @@ impl RotoType for IntegerLiteral {
     fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        _extra_command_args: Option<CommandArg>,
         args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -1011,7 +1009,7 @@ impl RotoType for HexLiteral {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _extra_command_args: Option<CommandArg>,
+
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -1150,7 +1148,7 @@ impl RotoType for Prefix {
     fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        _extra_command_args: Option<CommandArg>,
+
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -1316,7 +1314,7 @@ impl RotoType for PrefixLength {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _extra_command_args: Option<CommandArg>,
+
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -1413,12 +1411,12 @@ impl From<PrefixLength> for u8 {
 /// A BGP community.
 ///
 /// # Serialization
-/// 
+///
 /// The routecore types implement the Serialize trait but do so in a way
 /// suitable for machine <-> machine interaction where the consuming code is
 /// also routecore, i.e. the details of how (de)serialization is done are not
 /// important to nor intended to be visible to anyone except routecore itself.
-/// 
+///
 /// In roto however, a TypeValue (which may contain a Community) can be
 /// serialized in order to render it to consumers outside the application,
 /// e.g. as JSON served by a HTTP API or contained in an MQTT payload. The
@@ -1441,7 +1439,10 @@ impl Community {
 }
 
 pub trait SerializeForOperators: Serialize {
-    fn serialize_for_operator<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize_for_operator<S>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
     where
         S: Serializer;
 }
@@ -1474,7 +1475,10 @@ impl Serialize for Community {
 }
 
 impl SerializeForOperators for StandardCommunity {
-    fn serialize_for_operator<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize_for_operator<S>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -1541,7 +1545,10 @@ impl SerializeForOperators for StandardCommunity {
 }
 
 impl SerializeForOperators for LargeCommunity {
-    fn serialize_for_operator<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize_for_operator<S>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
@@ -1557,7 +1564,10 @@ impl SerializeForOperators for LargeCommunity {
             parsed: ser::Parsed::InlineValue(
                 ser::Value::GlobalLocalDataParts(
                     ser::GlobalLocalDataPartsValue {
-                        globalAdmin: ser::GlobalAdmin { r#type: "asn", value: asn },
+                        globalAdmin: ser::GlobalAdmin {
+                            r#type: "asn",
+                            value: asn,
+                        },
                         localDataPart1: self.local1(),
                         localDataPart2: self.local2(),
                     },
@@ -1569,7 +1579,10 @@ impl SerializeForOperators for LargeCommunity {
 }
 
 impl SerializeForOperators for ExtendedCommunity {
-    fn serialize_for_operator<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize_for_operator<S>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
@@ -1587,7 +1600,8 @@ impl SerializeForOperators for ExtendedCommunity {
             // 0x00 = Transitive Two-Octet AS-Specific Extended Community (RFC 7153)
             // - 0x02 = Route Target (RFC 4360)
             // - 0x03 = Route Origin (RFC 4360)
-            (TransitiveTwoOctetSpecific, RouteTarget) | (TransitiveTwoOctetSpecific, RouteOrigin) => {
+            (TransitiveTwoOctetSpecific, RouteTarget)
+            | (TransitiveTwoOctetSpecific, RouteOrigin) => {
                 let global_admin = self.as2().unwrap();
                 let local_admin = self.an4().unwrap();
                 raw_fields.push(format!("{:#04X}", self.type_raw()));
@@ -1597,29 +1611,32 @@ impl SerializeForOperators for ExtendedCommunity {
                 ser::Community {
                     raw_fields,
                     r#type: "extended",
-                    parsed: ser::Parsed::InlineValue(ser::Value::Extended(ser::ExtendedValue {
-                        r#type: "as2-specific",
-                        transitive: self.is_transitive(),
-                        inner: ser::TypedValueInner::As2Specific {
-                            rfc7153SubType: match subtyp {
-                                RouteTarget => "route-target",
-                                RouteOrigin => "route-origin",
-                                _ => unreachable!()
+                    parsed: ser::Parsed::InlineValue(ser::Value::Extended(
+                        ser::ExtendedValue {
+                            r#type: "as2-specific",
+                            transitive: self.is_transitive(),
+                            inner: ser::TypedValueInner::As2Specific {
+                                rfc7153SubType: match subtyp {
+                                    RouteTarget => "route-target",
+                                    RouteOrigin => "route-origin",
+                                    _ => unreachable!(),
+                                },
+                                globalAdmin: ser::GlobalAdmin {
+                                    r#type: "asn",
+                                    value: global_admin.to_string(),
+                                },
+                                localAdmin: local_admin,
                             },
-                            globalAdmin: ser::GlobalAdmin {
-                                r#type: "asn",
-                                value: global_admin.to_string(),
-                            },
-                            localAdmin: local_admin,
                         },
-                    }))
+                    )),
                 }
             }
 
             // 0x01 = Transitive IPv4-Address-Specific Extended Community (RFC 7153)
             // - 0x02 = Route Target (RFC 4360)
             // - 0x03 = Route Origin (RFC 4360)
-            (TransitiveIp4Specific, RouteTarget) | (TransitiveIp4Specific, RouteOrigin) => {
+            (TransitiveIp4Specific, RouteTarget)
+            | (TransitiveIp4Specific, RouteOrigin) => {
                 let global_admin = self.ip4().unwrap();
                 let local_admin = self.an2().unwrap();
                 raw_fields.push(format!("{:#04X}", self.type_raw()));
@@ -1629,41 +1646,47 @@ impl SerializeForOperators for ExtendedCommunity {
                 ser::Community {
                     raw_fields,
                     r#type: "extended",
-                    parsed: ser::Parsed::InlineValue(ser::Value::Extended(ser::ExtendedValue {
-                        r#type: "ipv4-address-specific",
-                        transitive: self.is_transitive(),
-                        inner: ser::TypedValueInner::Ipv4AddressSpecific {
-                            rfc7153SubType: match subtyp {
-                                RouteTarget => "route-target",
-                                RouteOrigin => "route-origin",
-                                _ => unreachable!()
-                            },
-                            globalAdmin: ser::GlobalAdmin {
-                                r#type: "ipv4-address",
-                                value: global_admin.to_string(),
-                            },
-                            localAdmin: local_admin,
+                    parsed: ser::Parsed::InlineValue(ser::Value::Extended(
+                        ser::ExtendedValue {
+                            r#type: "ipv4-address-specific",
+                            transitive: self.is_transitive(),
+                            inner:
+                                ser::TypedValueInner::Ipv4AddressSpecific {
+                                    rfc7153SubType: match subtyp {
+                                        RouteTarget => "route-target",
+                                        RouteOrigin => "route-origin",
+                                        _ => unreachable!(),
+                                    },
+                                    globalAdmin: ser::GlobalAdmin {
+                                        r#type: "ipv4-address",
+                                        value: global_admin.to_string(),
+                                    },
+                                    localAdmin: local_admin,
+                                },
                         },
-                    }))
+                    )),
                 }
             }
 
             _ => {
-                raw_fields.extend(self.raw().iter().map(|x| format!("{:#04X}", x)));
+                raw_fields
+                    .extend(self.raw().iter().map(|x| format!("{:#04X}", x)));
                 ser::Community {
                     raw_fields,
                     r#type: "extended",
-                    parsed: ser::Parsed::InlineValue(ser::Value::Extended(ser::ExtendedValue {
-                        r#type: "unrecognised",
-                        transitive: self.is_transitive(),
-                        inner: ser::TypedValueInner::Unrecognised,
-                    }))
+                    parsed: ser::Parsed::InlineValue(ser::Value::Extended(
+                        ser::ExtendedValue {
+                            r#type: "unrecognised",
+                            transitive: self.is_transitive(),
+                            inner: ser::TypedValueInner::Unrecognised,
+                        },
+                    )),
                 }
             }
-        }.serialize(serializer)
+        }
+        .serialize(serializer)
     }
 }
-
 
 // Types used only by our own Serialize implementation to structure the serialized output differently than is done by
 // routecore.
@@ -1718,11 +1741,18 @@ mod ser {
     #[serde(untagged)]
     #[allow(non_snake_case)]
     pub enum TypedValueInner {
-        As2Specific { rfc7153SubType: &'static str, globalAdmin: GlobalAdmin, localAdmin: u32 },
-        Ipv4AddressSpecific { rfc7153SubType: &'static str, globalAdmin: GlobalAdmin, localAdmin: u16 },
+        As2Specific {
+            rfc7153SubType: &'static str,
+            globalAdmin: GlobalAdmin,
+            localAdmin: u32,
+        },
+        Ipv4AddressSpecific {
+            rfc7153SubType: &'static str,
+            globalAdmin: GlobalAdmin,
+            localAdmin: u16,
+        },
         Unrecognised,
     }
-
 
     #[derive(serde::Serialize)]
     #[serde(untagged)]
@@ -1738,7 +1768,7 @@ mod ser {
     #[serde(rename = "parsed", untagged)]
     pub enum Parsed {
         ExplicitValue { value: Value },
-        InlineValue(Value)
+        InlineValue(Value),
     }
 
     #[derive(serde::Serialize)]
@@ -1822,7 +1852,7 @@ impl RotoType for Community {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _extra_command_args: Option<CommandArg>,
+
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -1993,7 +2023,7 @@ impl RotoType for IpAddress {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _extra_command_args: Option<CommandArg>,
+
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -2102,9 +2132,9 @@ impl RotoType for Asn {
             TypeDef::Asn => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(self)))
             }
-            TypeDef::StringLiteral => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::StringLiteral(self.into())))
-            }
+            TypeDef::StringLiteral => Ok(TypeValue::Builtin(
+                BuiltinTypeValue::StringLiteral(self.into()),
+            )),
             _ => {
                 Err(format!("Cannot convert type Asn to type {:?}", type_def)
                     .into())
@@ -2115,7 +2145,6 @@ impl RotoType for Asn {
     fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        _extra_command_args: Option<CommandArg>,
         args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -2247,7 +2276,10 @@ impl Serialize for AsPath {
 }
 
 impl SerializeForOperators for AsPath {
-    fn serialize_for_operator<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize_for_operator<S>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -2310,7 +2342,7 @@ impl RotoType for AsPath {
     fn exec_value_method<'a>(
         &'a self,
         method: usize,
-        _extra_command_args: Option<CommandArg>,
+
         args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -2520,7 +2552,7 @@ impl RotoType for Hop {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _extra_command_args: Option<CommandArg>,
+
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -2579,10 +2611,7 @@ impl RotoType for OriginType {
         todo!()
     }
 
-    fn into_type(
-        self,
-        _type_def: &TypeDef,
-    ) -> Result<TypeValue, CompileError>
+    fn into_type(self, _type_def: &TypeDef) -> Result<TypeValue, CompileError>
     where
         Self: std::marker::Sized,
     {
@@ -2592,7 +2621,7 @@ impl RotoType for OriginType {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _extra_command_args: Option<CommandArg>,
+
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -2670,7 +2699,7 @@ impl RotoType for NextHop {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _extra_command_args: Option<CommandArg>,
+
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -2748,7 +2777,7 @@ impl RotoType for MultiExitDisc {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _extra_command_args: Option<CommandArg>,
+
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -2846,7 +2875,7 @@ impl RotoType for Unknown {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _extra_command_args: Option<CommandArg>,
+
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -2934,7 +2963,7 @@ impl RotoType for LocalPref {
     fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        _extra_command_args: Option<CommandArg>,
+
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -3052,7 +3081,7 @@ impl RotoType for AtomicAggregator {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _extra_command_args: Option<CommandArg>,
+
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {

@@ -18,7 +18,7 @@ pub type PeerUpNotification =
 pub type PeerDownNotification =
     routecore::bmp::message::PeerDownNotification<bytes::Bytes>;
 
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
 pub enum LazyRecordTypeDef {
     RouteMonitoring,
     PeerUpNotification,
@@ -128,6 +128,31 @@ impl std::fmt::Display for LazyRecordTypeDef {
             LazyRecordTypeDef::PeerDownNotification => write!(f, "PeerDownNotification"),
             LazyRecordTypeDef::StatisticsReport => write!(f, "StatiscticsReport"),
             LazyRecordTypeDef::RouteMirroring => write!(f, "RouteMirroring"),
+        }
+    }
+}
+
+impl From<LazyRecordTypeDef> for usize {
+    fn from(value: LazyRecordTypeDef) -> Self {
+        match value {
+            LazyRecordTypeDef::RouteMonitoring => 0,
+            LazyRecordTypeDef::PeerUpNotification => 2,
+            LazyRecordTypeDef::PeerDownNotification => 3,
+            LazyRecordTypeDef::StatisticsReport => 1,
+            LazyRecordTypeDef::RouteMirroring => 4,
+        }
+    }
+}
+
+impl From<usize> for LazyRecordTypeDef {
+    fn from(value: usize) -> Self {
+        match value {
+            0 => LazyRecordTypeDef::RouteMonitoring,
+            1 => LazyRecordTypeDef::StatisticsReport,
+            2 => LazyRecordTypeDef::PeerDownNotification,
+            3 => LazyRecordTypeDef::PeerUpNotification,
+            4 => LazyRecordTypeDef::RouteMonitoring,
+            _ => unimplemented!()
         }
     }
 }

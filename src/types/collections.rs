@@ -8,11 +8,15 @@ use crate::ast::{
 };
 use crate::compile::CompileError;
 use crate::traits::RotoType;
-use crate::vm::{StackValue, VmError, CommandArg};
+use crate::types::lazytypedef::{
+    PeerDownNotification, PeerUpNotification, RouteMonitoring,
+};
+use crate::vm::{StackValue, VmError};
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 
 use super::builtin::{BuiltinTypeValue, U32};
+use super::lazytypedef::LazyRecordTypeDef;
 use super::typedef::{LazyNamedTypeDef, MethodProps, TypeDef};
 use super::typevalue::TypeValue;
 
@@ -468,7 +472,6 @@ impl RotoType for List {
     fn exec_value_method<'a>(
         &'a self,
         method: usize,
-        _extra_command_args: Option<CommandArg>,
         args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -837,7 +840,7 @@ impl RotoType for Record {
                     Err(CompileError::from(
                         format!(
                             "Record instance {} can't be converted into record type {}",
-                            TypeDef::from(&TypeValue::from(self)), 
+                            TypeDef::from(&TypeValue::from(self)),
                             into_type)
                         )
                     )
@@ -852,7 +855,7 @@ impl RotoType for Record {
     fn exec_value_method(
         &self,
         _method: usize,
-        _extra_command_args: Option<CommandArg>,
+
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -948,11 +951,19 @@ impl From<RecordToken> for usize {
 }
 
 //------------ BytesRecord --------------------------------------------------
+pub trait EnumBytesRecord {
+    fn get_variant(&self) -> LazyRecordTypeDef;
+}
 
 #[derive(Debug, Serialize, Eq)]
-pub struct BytesRecord<T: AsRef<[u8]>>(pub(crate) T);
+pub struct BytesRecord<T: AsRef<[u8]>>(pub(crate) T)
+where
+    BytesRecord<T>: EnumBytesRecord;
 
-impl<T: AsRef<[u8]>> BytesRecord<T> {
+impl<T: AsRef<[u8]> + std::fmt::Debug> BytesRecord<T>
+where
+    BytesRecord<T>: EnumBytesRecord,
+{
     pub(crate) fn bytes_parser(&self) -> &T {
         &self.0
     }
@@ -967,38 +978,148 @@ impl<T: AsRef<[u8]>> BytesRecord<T> {
             method_name
         )))
     }
+
+    // Unlike a normal record, a bytes record need to have its recursive
+    // fields resolved in one go, there can be no intermediary methods
+    // that return a (sub)-field value and then other methods can take
+    // that as argument for the next recursion IN THE VM, becuause that
+    // would mean having to clone the (sub-)field and probably the whole
+    // bytes message. This would defy the point of lazy evaluation.
+    // Therefore this method takes the bytes record AND the complete
+    // field index vec to go to do all the recursion in this method.
+    // The data-fields of the variants in this enum are handled as
+    // closely as possible to actual lazy fields. Note that we're still
+    // copying bytes out into the actual variant. Grrr, TODO.
+
+    // Returns the typevalue for a variant and field_index on this
+    // bytes_record. Returns a TypeValue::Unknown if the requested
+    // variant does not match the bytes record. Returns an error if
+    // no field_index was specified.
+    pub fn get_field_index_for_variant(
+        &self,
+        variant_token: LazyRecordTypeDef,
+        field_index: &SmallVec<[usize; 8]>,
+    ) -> Result<TypeValue, VmError> {
+        if field_index.is_empty() {
+            return Err(VmError::InvalidMethodCall);
+        }
+
+        if variant_token != self.get_variant() {
+            return Ok(TypeValue::Unknown);
+        };
+
+        let raw_bytes = self.0.as_ref();
+        let lazy_rec: TypeValue = match variant_token {
+            LazyRecordTypeDef::RouteMonitoring => {
+                trace!("get_field_index_for_variant on Route Monitoring");
+                trace!("field index {:?}", field_index);
+                trace!(
+                    "type def {:#?}",
+                    &BytesRecord::<RouteMonitoring>::lazy_type_def()
+                );
+                let rm =
+                    routecore::bmp::message::RouteMonitoring::from_octets(
+                        bytes::Bytes::copy_from_slice(raw_bytes),
+                    )
+                    .unwrap();
+                LazyRecord::<RouteMonitoring>::new(BytesRecord::<
+                    RouteMonitoring,
+                >::lazy_type_def(
+                ))
+                .get_field_by_index(
+                    field_index,
+                    &BytesRecord::<RouteMonitoring>(rm),
+                )
+                .map(|elm| elm.into())
+                .unwrap()
+            }
+            LazyRecordTypeDef::PeerDownNotification => {
+                let pd =
+                    routecore::bmp::message::PeerDownNotification::from_octets(
+                        bytes::Bytes::copy_from_slice(raw_bytes),
+                    )
+                    .unwrap();
+                LazyRecord::<PeerDownNotification>::new(BytesRecord::<
+                    PeerDownNotification,
+                >::lazy_type_def(
+                ))
+                .get_field_by_index(
+                    field_index,
+                    &BytesRecord::<PeerDownNotification>(pd),
+                )
+                .map(|elm| elm.into())
+                .unwrap()
+            }
+            LazyRecordTypeDef::PeerUpNotification => {
+                let pu =
+                    routecore::bmp::message::PeerUpNotification::from_octets(
+                        bytes::Bytes::copy_from_slice(raw_bytes),
+                    )
+                    .unwrap();
+                LazyRecord::<PeerUpNotification>::new(BytesRecord::<
+                    PeerUpNotification,
+                >::lazy_type_def(
+                ))
+                .get_field_by_index(
+                    field_index,
+                    &BytesRecord::<PeerUpNotification>(pu),
+                )
+                .map(|elm| elm.into())
+                .unwrap()
+            }
+            _ => {
+                return Err(VmError::InvalidMethodCall);
+            }
+        };
+
+        Ok(lazy_rec)
+    }
 }
 
-impl<T: AsRef<[u8]>> AsRef<[u8]> for BytesRecord<T> {
+impl<T: AsRef<[u8]>> AsRef<[u8]> for BytesRecord<T>
+where
+    BytesRecord<T>: EnumBytesRecord,
+{
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
     }
 }
 
-impl<T: AsRef<[u8]>> PartialEq for BytesRecord<T> {
+impl<T: AsRef<[u8]>> PartialEq for BytesRecord<T>
+where
+    BytesRecord<T>: EnumBytesRecord,
+{
     fn eq(&self, other: &Self) -> bool {
         self.0.as_ref() == other.0.as_ref()
     }
 }
 
-impl<T: AsRef<[u8]>> std::hash::Hash for BytesRecord<T> {
+impl<T: AsRef<[u8]>> std::hash::Hash for BytesRecord<T>
+where
+    BytesRecord<T>: EnumBytesRecord,
+{
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.as_ref().hash(state);
     }
 }
 
-
 //------------- LazyElementTypeValue ----------------------------------------
 
 #[allow(clippy::complexity)]
-pub enum LazyElementTypeValue<'a, T: AsRef<[u8]>> {
+pub enum LazyElementTypeValue<'a, T: AsRef<[u8]>>
+where
+    BytesRecord<T>: EnumBytesRecord,
+{
     LazyRecord(LazyRecord<'a, T>),
     Lazy(Box<dyn Fn(&BytesRecord<T>) -> ElementTypeValue + 'a>),
     // LazyOwned(Box<dyn Fn(BytesRecord<T>) -> ElementTypeValue>),
     Materialized(ElementTypeValue),
 }
 
-impl<T: std::fmt::Debug + AsRef<[u8]>> LazyElementTypeValue<'_, T> {
+impl<T: std::fmt::Debug + AsRef<[u8]>> LazyElementTypeValue<'_, T>
+where
+    BytesRecord<T>: EnumBytesRecord,
+{
     pub(crate) fn _into_materialized(
         self,
         raw_bytes: &BytesRecord<T>,
@@ -1033,8 +1154,9 @@ impl<T: std::fmt::Debug + AsRef<[u8]>> LazyElementTypeValue<'_, T> {
 }
 
 impl<T: std::fmt::Debug + AsRef<[u8]>>
-    From<(LazyElementTypeValue<'_, T>, &BytesRecord<T>)>
-    for ElementTypeValue
+    From<(LazyElementTypeValue<'_, T>, &BytesRecord<T>)> for ElementTypeValue
+where
+    BytesRecord<T>: EnumBytesRecord,
 {
     fn from(value: (LazyElementTypeValue<'_, T>, &BytesRecord<T>)) -> Self {
         match value {
@@ -1051,8 +1173,9 @@ impl<T: std::fmt::Debug + AsRef<[u8]>>
 }
 
 impl<T: std::fmt::Debug + AsRef<[u8]>>
-    From<(&LazyElementTypeValue<'_, T>, &BytesRecord<T>)>
-    for ElementTypeValue
+    From<(&LazyElementTypeValue<'_, T>, &BytesRecord<T>)> for ElementTypeValue
+where
+    BytesRecord<T>: EnumBytesRecord,
 {
     fn from(
         (value, raw_bytes): (&LazyElementTypeValue<'_, T>, &BytesRecord<T>),
@@ -1081,6 +1204,8 @@ impl<T: std::fmt::Debug + AsRef<[u8]>>
 
 impl<T: std::fmt::Debug + AsRef<[u8]>> std::fmt::Debug
     for LazyElementTypeValue<'_, T>
+where
+    BytesRecord<T>: EnumBytesRecord,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -1099,7 +1224,10 @@ impl<T: std::fmt::Debug + AsRef<[u8]>> std::fmt::Debug
     }
 }
 
-impl<T: AsRef<[u8]>> std::fmt::Display for LazyElementTypeValue<'_, T> {
+impl<T: AsRef<[u8]>> std::fmt::Display for LazyElementTypeValue<'_, T>
+where
+    BytesRecord<T>: EnumBytesRecord,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let LazyElementTypeValue::Materialized(mat_v) = self {
             write!(f, "{}", mat_v)
@@ -1109,8 +1237,10 @@ impl<T: AsRef<[u8]>> std::fmt::Display for LazyElementTypeValue<'_, T> {
     }
 }
 
-
-impl<'a, T: AsRef<[u8]> + std::fmt::Debug> LazyElementTypeValue<'a, T> {
+impl<'a, T: AsRef<[u8]> + std::fmt::Debug> LazyElementTypeValue<'a, T>
+where
+    BytesRecord<T>: EnumBytesRecord,
+{
     pub(crate) fn _as_materialized(
         &'a self,
         raw_bytes: BytesRecord<T>,
@@ -1133,7 +1263,10 @@ impl<'a, T: AsRef<[u8]> + std::fmt::Debug> LazyElementTypeValue<'a, T> {
 
 // The LazyRecord is a Chimaera
 #[derive(Debug)]
-pub struct LazyRecord<'a, T: AsRef<[u8]>> {
+pub struct LazyRecord<'a, T: AsRef<[u8]>>
+where
+    BytesRecord<T>: EnumBytesRecord,
+{
     value: LazyNamedTypeDef<'a, T>,
     _is_materialized: bool,
     _raw_message: PhantomData<T>,
@@ -1141,7 +1274,10 @@ pub struct LazyRecord<'a, T: AsRef<[u8]>> {
 
 // impl<T> Eq for LazyRecord<'_, T> {}
 
-impl<'a, T: std::fmt::Debug + AsRef<[u8]>> LazyRecord<'a, T> {
+impl<'a, T: std::fmt::Debug + AsRef<[u8]>> LazyRecord<'a, T>
+where
+    BytesRecord<T>: EnumBytesRecord,
+{
     pub(crate) fn new(
         value: LazyNamedTypeDef<'a, T>,
         // raw_message: Arc<T>,
@@ -1155,7 +1291,10 @@ impl<'a, T: std::fmt::Debug + AsRef<[u8]>> LazyRecord<'a, T> {
 
     pub(crate) fn from_type_def(
         ty: LazyNamedTypeDef<'a, T>,
-    ) -> LazyRecord<'a, T> {
+    ) -> LazyRecord<'a, T>
+    where
+        BytesRecord<T>: EnumBytesRecord,
+    {
         Self {
             value: ty,
             _is_materialized: false,
@@ -1230,16 +1369,20 @@ impl<'a, T: std::fmt::Debug + AsRef<[u8]>> LazyRecord<'a, T> {
 
     pub fn get_field_by_index(
         &self,
-        field_index: &[usize],
+        field_index: &SmallVec<[usize; 8]>,
         raw_bytes: &BytesRecord<T>,
     ) -> Option<ElementTypeValue> {
-        trace!("get_field_by_index for {:?} w/ field index {:?}", self.value, field_index);
+        trace!(
+            "get_field_by_index for {:?} w/ field index {:?}",
+            self.value,
+            field_index
+        );
         self.value.get(field_index[0]).map(|f| match &f.1 {
             LazyElementTypeValue::Lazy(l_value) => l_value(raw_bytes),
             // LazyElementTypeValue::LazyOwned(l_value) => l_value(*raw_bytes),
             LazyElementTypeValue::Materialized(m_value) => m_value.clone(),
             LazyElementTypeValue::LazyRecord(rec) => rec
-                .get_field_by_index(&field_index[1..], raw_bytes)
+                .get_field_by_index(&field_index[1..].into(), raw_bytes)
                 .unwrap(),
         })
     }
@@ -1282,24 +1425,6 @@ impl<'a, T: std::fmt::Debug + AsRef<[u8]>> LazyRecord<'a, T> {
         field_index: SmallVec<[usize; 8]>,
         value: TypeValue,
     ) -> Result<(), VmError> {
-        // let mut elm = self.0.get_mut(field_index[0]);
-
-        // for index in &field_index[1..] {
-        //     elm = elm
-        //         .ok_or(VmError::MemOutOfBounds)?
-        //         .1
-        //         .as_mut_record()
-        //         .unwrap()
-        //         .0
-        //         .get_mut(*index)
-        // }
-
-        // let e_tv = elm.ok_or(VmError::MemOutOfBounds)?;
-        // let new_field = &mut (e_tv.0.clone(), ElementTypeValue::from(value));
-        // std::mem::swap(e_tv, new_field);
-
-        // Ok(())
-
         let mut elm: Option<&mut (ShortString, LazyElementTypeValue<'_, T>)> =
             self.value.get_mut(field_index[0]);
 
@@ -1344,7 +1469,10 @@ impl<'a, T: std::fmt::Debug + AsRef<[u8]>> LazyRecord<'a, T> {
 //     }
 // }
 
-impl<T: AsRef<[u8]>> Display for LazyRecord<'_, T> {
+impl<T: AsRef<[u8]>> Display for LazyRecord<'_, T>
+where
+    BytesRecord<T>: EnumBytesRecord,
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{{")?;
         for (i, (field, elm)) in self.value.iter().enumerate() {
@@ -1480,6 +1608,8 @@ impl<T: AsRef<[u8]>> Display for LazyRecord<'_, T> {
 
 impl<T: std::fmt::Debug + AsRef<[u8]>>
     From<(&LazyRecord<'_, T>, &BytesRecord<T>)> for Record
+where
+    BytesRecord<T>: EnumBytesRecord,
 {
     fn from(value: (&LazyRecord<T>, &BytesRecord<T>)) -> Self {
         Record(
@@ -1497,6 +1627,8 @@ impl<T: std::fmt::Debug + AsRef<[u8]>>
 
 impl<T: std::fmt::Debug + AsRef<[u8]>>
     From<(LazyRecord<'_, T>, &BytesRecord<T>)> for TypeValue
+where
+    BytesRecord<T>: EnumBytesRecord,
 {
     fn from(value: (LazyRecord<T>, &BytesRecord<T>)) -> Self {
         let mut rec = vec![];

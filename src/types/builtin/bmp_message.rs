@@ -11,7 +11,7 @@ use crate::{
     traits::Token,
     types::{
         builtin::{Asn, Boolean, BuiltinTypeValue, IpAddress, U16},
-        collections::{LazyElementTypeValue, LazyRecord},
+        collections::{LazyElementTypeValue, LazyRecord, EnumBytesRecord},
         enum_types::EnumVariant,
         lazytypedef::{
             BmpMessage, LazyRecordTypeDef, PeerDownNotification,
@@ -20,7 +20,7 @@ use crate::{
         typedef::{LazyNamedTypeDef, RecordTypeDef, TypeDef},
         typevalue::TypeValue,
     },
-    vm::{CommandArg, StackValue, VmError},
+    vm::VmError,
 };
 
 pub use crate::types::collections::BytesRecord;
@@ -39,121 +39,6 @@ createtoken!(
     // route_mirroring = 6
 );
 
-// bytes_record_impl!(
-//     BmpMessage,
-//     #[type_def(
-//         enum_data_field(
-//             "route_monitoring";
-//             "",
-//             EnumVariant<RouteMonitoring>,
-//             BytesRecord<BmpMessage>,
-//             BmpMessage::RouteMonitoring,
-//             BmpRouteMonitoringMessage
-
-//             // $next_enum_data_field_name: literal;
-//             //         $next_enum_data_variant_identifier: literal,
-//             //         $next_enum_data_ty: path, // = $next_enum_data_name: literal,
-//             //         $next_enum_data_raw_ty: path,
-//             //         $next_enum_data_variant: path,
-//             //         $target_ty_value: path
-//         ),
-//         enum_data_field(
-//             "peer_down_notification";
-//             "",
-//             EnumVariant<PeerDownNotification>,
-//             BytesRecord<BmpMessage>,
-//             BmpMessage::PeerDownNotification,
-//             BmpPeerDownNotification
-//         ),
-//         enum_data_field(
-//             "peer_up_notification";
-//             "",
-//             EnumVariant<PeerUpNotification>,
-//             BytesRecord<BmpMessage>,
-//             BmpMessage::PeerUpNotification,
-//             BmpPeerUpNotification
-//         ),
-//     )]
-// );
-
-// impl BytesRecord<BmpMessage> {
-//     pub fn new(bytes: bytes::Bytes) -> Result<Self, VmError> {
-//         Ok(Self(
-//             routecore::bmp::message::Message::<bytes::Bytes>::from_octets(
-//                 bytes,
-//             )
-//             .map_err(|_| VmError::InvalidMsgType)?,
-//         ))
-//     }
-// }
-
-// pub(crate) enum LazyEnumVariant<'a> {
-//     RouteMonitoring(LazyElementTypeValue<'a, RouteMonitoring>),
-//     // StatisticsReport(LazyElementTypeValue<'a, StatisticsReport>),
-//     PeerUpNotification(LazyElementTypeValue<'a, PeerUpNotification>),
-//     PeerDownNotification(LazyElementTypeValue<'a, PeerDownNotification>),
-// }
-
-// pub(crate) struct LazyEnum<'a>(Vec<(ShortString, LazyEnumVariant<'a>)>);
-
-// pub enum LazyEnum<'a> {
-//     RouteMonitoring(LazyRecord<'a, RouteMonitoring>),
-//     PeerUpNotification(LazyRecord<'a, PeerUpNotification>),
-//     PeerDownNotification(LazyRecord<'a, PeerDownNotification>),
-// }
-
-// impl<'a> From<LazyRecord<'a, RouteMonitoring>> for LazyEnum<'a> {
-//     fn from(value: LazyRecord<'a, RouteMonitoring>) -> Self {
-//         LazyEnum::RouteMonitoring(value)
-//     }
-// }
-
-// impl<'a> From<LazyRecord<'a, PeerDownNotification>> for LazyEnum<'a> {
-//     fn from(value: LazyRecord<'a, PeerDownNotification>) -> Self {
-//         LazyEnum::PeerDownNotification(value)
-//     }
-// }
-
-// impl<'a> From<LazyRecord<'a, PeerUpNotification>> for LazyEnum<'a> {
-//     fn from(value: LazyRecord<'a, PeerUpNotification>) -> Self {
-//         LazyEnum::PeerUpNotification(value)
-//     }
-// }
-
-// impl<'a> LazyEnum<'a> {
-// pub fn exec_value_method(
-//     &self,
-//     variant_token: usize,
-//     method_token: usize,
-//     _args: &[StackValue],
-//     res_type: TypeDef,
-//     raw_bytes: &[u8]
-// ) -> Result<TypeValue, VmError> {
-//     match variant_token {
-//         0 => {
-//                 // let b_rec = if let LazyEnumVariant::RouteMonitoring(rm) = self.0[0].1 {
-//                 //     rm.into_materialized(raw_bytes)
-//                 // } else { panic!("FGFJDFDJF"); };
-//                 // self.as_variant_0()?;
-//                 let lazy_elm = &BytesRecord::<RouteMonitoring>::lazy_type_def()[method_token].1;
-//                 let rm = routecore::bmp::message::RouteMonitoring::from_octets(bytes::Bytes::copy_from_slice(raw_bytes)).unwrap();
-//                 let elm = lazy_elm.as_materialized(BytesRecord(rm))?;
-//                 Ok(elm.into_type(&res_type).unwrap())
-//         },
-//         _ => Err(VmError::InvalidMethodCall)
-//     }
-// }
-
-//     pub fn exec_consume_value_method(
-//         &self,
-//         _variant_token: usize,
-//         _method_token: usize,
-//         _args: Vec<TypeValue>,
-//         _res_type: TypeDef,
-//     ) -> Result<TypeValue, VmError> {
-//         todo!()
-//     }
-// }
 
 impl BytesRecord<BmpMessage> {
     pub fn new(bytes: bytes::Bytes) -> Result<Self, VmError> {
@@ -163,161 +48,6 @@ impl BytesRecord<BmpMessage> {
             )
             .map_err(|_| VmError::InvalidMsgType)?,
         ))
-    }
-
-    // pub fn exec_value_method(
-    //     &self,
-    //     variant_token: usize,
-    //     _args: &[StackValue],
-    //     _res_type: TypeDef,
-    //     raw_bytes: &[u8],
-    // ) -> Result<TypeValue, VmError> {
-    //     match variant_token {
-    //         0 => {
-    //             trace!("exec value method on Route Monitoring");
-    //             trace!(
-    //                 "type def {:#?}",
-    //                 &BytesRecord::<RouteMonitoring>::lazy_type_def()
-    //             );
-    //             let lazy_elm =
-    //                 &BytesRecord::<RouteMonitoring>::lazy_type_def()[0].1;
-    //             let rm =
-    //                 routecore::bmp::message::RouteMonitoring::from_octets(
-    //                     bytes::Bytes::copy_from_slice(raw_bytes),
-    //                 )
-    //                 .unwrap();
-    //             let elm = lazy_elm.as_materialized(BytesRecord(rm))?;
-    //             Ok(elm.into())
-    //         }
-    //         2 => {
-    //             let lazy_elm =
-    //                 &BytesRecord::<PeerDownNotification>::lazy_type_def()[0]
-    //                     .1;
-    //             let rm =
-    //                 routecore::bmp::message::PeerDownNotification::from_octets(
-    //                     bytes::Bytes::copy_from_slice(raw_bytes),
-    //                 )
-    //                 .unwrap();
-    //             let elm = lazy_elm.as_materialized(BytesRecord(rm))?;
-    //             Ok(elm.into())
-    //         }
-    //         3 => {
-    //             let lazy_elm =
-    //                 &BytesRecord::<PeerUpNotification>::lazy_type_def()[0].1;
-    //             let rm =
-    //                 routecore::bmp::message::PeerUpNotification::from_octets(
-    //                     bytes::Bytes::copy_from_slice(raw_bytes),
-    //                 )
-    //                 .unwrap();
-    //             let elm = lazy_elm.as_materialized(BytesRecord(rm))?;
-    //             Ok(elm.into())
-    //         }
-    //         _ => Err(VmError::InvalidMethodCall),
-    //     }
-    // }
-
-    pub fn get_variant(&self) -> MessageType {
-        self.0.common_header().msg_type()
-    }
-
-    // Unlike a normal record, a bytes record need to have its recursive
-    // fields resolved in one go, there can be no intermediary methods
-    // that return a (sub)-field value and then other methods can take
-    // that as argument for the next recursion IN THE VM, becuause that
-    // would mean having to clone the (sub-)field and probably the whole
-    // bytes message. This would defy the point of lazy evaluation.
-    // Therefore this method takes the bytes record AND the complete
-    // field index vec to go to do all the recursion in this method.
-    // The data-fields of the variants in this enum are handled as
-    // closely as possible to actual lazy fields. Note that we're still
-    // copying bytes out into the actual variant. Grrr, TODO. Another
-    // thing is the different layout of the arguments of this method
-    // as compared to the `get_field_*` for non-enum records. 
-    pub fn get_field_index_for_variant(
-        &self,
-        variant_token: usize,
-        field_index: Option<CommandArg>,
-        _args: &[StackValue],
-        _res_type: TypeDef,
-        raw_bytes: &[u8],
-    ) -> Result<TypeValue, VmError> {
-        // let field_index = args
-        //     .iter()
-        //     .filter_map(move |sv| {
-        //         if let StackValue::Owned(TypeValue::Builtin(
-        //             BuiltinTypeValue::U8(U8(i)),
-        //         )) = sv
-        //         {
-        //             Some(*i as usize)
-        //         } else {
-        //             None
-        //         }
-        //     })
-        //     .collect::<Vec<_>>();
-
-        if let Some(CommandArg::FieldIndex(field_index)) =
-            field_index
-        {
-
-            if variant_token != u8::from(self.get_variant()).into() {
-                return Ok(TypeValue::Unknown);
-            };
-
-            let lazy_rec: TypeValue = match variant_token {
-                0 => {
-                    trace!("get_field_index_for_variant on Route Monitoring");
-                    trace!("field index {:?}", field_index);
-                    trace!(
-                        "type def {:#?}",
-                        &BytesRecord::<RouteMonitoring>::lazy_type_def()
-                    );
-                    let rm =
-                        routecore::bmp::message::RouteMonitoring::from_octets(
-                            bytes::Bytes::copy_from_slice(raw_bytes),
-                        )
-                        .unwrap();
-                    LazyRecord::new(
-                        BytesRecord::<RouteMonitoring>::lazy_type_def(),
-                    )
-                    .get_field_by_index(&field_index, &BytesRecord(rm))
-                    .map(|elm| elm.into())
-                    .unwrap()
-                }
-                2 => {
-                    let pd =
-                        routecore::bmp::message::PeerDownNotification::from_octets(
-                            bytes::Bytes::copy_from_slice(raw_bytes),
-                        )
-                        .unwrap();
-                    LazyRecord::new(
-                        BytesRecord::<PeerDownNotification>::lazy_type_def(),
-                    )
-                    .get_field_by_index(&field_index, &BytesRecord(pd))
-                    .map(|elm| elm.into())
-                    .unwrap()
-                }
-                3 => {
-                    let pu =
-                        routecore::bmp::message::PeerUpNotification::from_octets(
-                            bytes::Bytes::copy_from_slice(raw_bytes),
-                        )
-                        .unwrap();
-                    LazyRecord::new(
-                        BytesRecord::<PeerUpNotification>::lazy_type_def(),
-                    )
-                    .get_field_by_index(&field_index, &BytesRecord(pu))
-                    .map(|elm| elm.into())
-                    .unwrap()
-                }
-                _ => {
-                    return Err(VmError::InvalidMethodCall);
-                }
-            };
-
-            Ok(lazy_rec)
-        } else {    
-            Err(VmError::InvalidMethodCall)
-        }
     }
 
     pub fn exec_consume_value_method(
@@ -357,6 +87,27 @@ impl BytesRecord<BmpMessage> {
                 "No variant name {} for BmpMessage",
                 name
             ))),
+        }
+    }
+}
+
+impl EnumBytesRecord for BytesRecord<BmpMessage> {
+    fn get_variant(&self) -> LazyRecordTypeDef {
+        self.0.common_header().msg_type().into()
+    }
+}
+
+impl From<MessageType> for LazyRecordTypeDef {
+    fn from(value: MessageType) -> Self {
+        match value {
+            MessageType::RouteMonitoring => LazyRecordTypeDef::RouteMonitoring,
+            MessageType::StatisticsReport => LazyRecordTypeDef::StatisticsReport,
+            MessageType::PeerDownNotification => LazyRecordTypeDef::PeerDownNotification,
+            MessageType::PeerUpNotification => LazyRecordTypeDef::PeerUpNotification,
+            MessageType::InitiationMessage => todo!(),
+            MessageType::TerminationMessage => todo!(),
+            MessageType::RouteMirroring => todo!(),
+            MessageType::Unimplemented(_) => todo!(),
         }
     }
 }
@@ -418,6 +169,12 @@ impl BytesRecord<RouteMonitoring> {
         } else {
             Err(VmError::InvalidMsgType)
         }
+    }
+}
+
+impl EnumBytesRecord for BytesRecord<RouteMonitoring> {
+    fn get_variant(&self) -> LazyRecordTypeDef {
+        self.0.common_header().msg_type().into()
     }
 }
 
@@ -503,6 +260,12 @@ impl BytesRecord<PeerUpNotification> {
     }
 }
 
+impl EnumBytesRecord for BytesRecord<PeerUpNotification> {
+    fn get_variant(&self) -> LazyRecordTypeDef {
+        self.0.common_header().msg_type().into()
+    }
+}
+
 //------------ PeerDownNotification -------------------------------------------
 
 bytes_record_impl!(
@@ -557,5 +320,11 @@ impl BytesRecord<PeerDownNotification> {
         } else {
             Err(VmError::InvalidMsgType)
         }
+    }
+}
+
+impl EnumBytesRecord for BytesRecord<PeerDownNotification> {
+    fn get_variant(&self) -> LazyRecordTypeDef {
+        self.0.common_header().msg_type().into()
     }
 }

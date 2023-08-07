@@ -11,7 +11,7 @@ use crate::{
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue, enum_types::GlobalEnumTypeDef,
     },
-    vm::{StackValue, VmError, CommandArg},
+    vm::{StackValue, VmError},
 };
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize)]
@@ -130,7 +130,6 @@ where
     fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        extra_command_args: Option<CommandArg>,
         args: &'a [StackValue],
         res_type: TypeDef,
     ) -> Result<TypeValue, VmError>;

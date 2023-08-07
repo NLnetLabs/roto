@@ -13,7 +13,7 @@
 
 use log::trace;
 use routecore::bgp::message::SessionConfig;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use std::{net::IpAddr, sync::Arc};
 
@@ -21,6 +21,7 @@ use std::{net::IpAddr, sync::Arc};
 pub type LogicalTime = u64;
 
 use crate::{
+    ast::StringLiteral,
     attr_change_set::{ReadOnlyScalarOption, Todo},
     compile::CompileError,
     traits::{RotoType, Token},
@@ -29,7 +30,7 @@ use crate::{
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
     },
-    vm::{StackValue, VmError, CommandArg}, ast::StringLiteral,
+    vm::{StackValue, VmError},
 };
 
 use super::{
@@ -130,9 +131,12 @@ impl RawRouteWithDeltas {
             .store_delta(AttributeDelta::new(
                 delta_id,
                 0,
-                raw_message
-                    .raw_message
-                    .create_changeset(prefix, peer_ip, peer_asn, router_id.clone()),
+                raw_message.raw_message.create_changeset(
+                    prefix,
+                    peer_ip,
+                    peer_asn,
+                    router_id.clone(),
+                ),
             ))
             .unwrap();
 
@@ -416,7 +420,13 @@ impl RawRouteWithDeltas {
         field_token: usize,
     ) -> Option<TypeValue> {
         match field_token.into() {
-            RouteToken::AsPath => self.raw_message.raw_message.0.aspath().map(|p| p.to_hop_path()).map(TypeValue::from),
+            RouteToken::AsPath => self
+                .raw_message
+                .raw_message
+                .0
+                .aspath()
+                .map(|p| p.to_hop_path())
+                .map(TypeValue::from),
             RouteToken::OriginType => {
                 self.raw_message.raw_message.0.origin().map(TypeValue::from)
             }
@@ -768,7 +778,7 @@ impl RotoType for BgpUpdateMessage {
     fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        _extra_command_args: Option<CommandArg>,
+
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -951,7 +961,7 @@ impl RotoType for RawRouteWithDeltas {
     fn exec_value_method<'a>(
         &'a self,
         _method: usize,
-        _extra_command_args: Option<CommandArg>,
+
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -1105,7 +1115,7 @@ impl RotoType for RouteStatus {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _extra_command_args: Option<CommandArg>,
+
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -1203,7 +1213,9 @@ impl UpdateMessage {
             communities: VectorOption::from(self.0.all_communities()),
             peer_ip: peer_ip.into(),
             peer_asn: peer_asn.into(),
-            router_id: router_id.map(|v| StringLiteral(String::clone(&v))).into(),
+            router_id: router_id
+                .map(|v| StringLiteral(String::clone(&v)))
+                .into(),
             originator_id: Todo,
             cluster_list: Todo,
             extended_communities: Todo,

@@ -21,7 +21,9 @@ use crate::{
         datasources::DataSource,
         typevalue::TypeValue,
     },
-    types::{datasources::Table, typedef::TypeDef},
+    types::{
+        datasources::Table, lazytypedef::LazyRecordTypeDef, typedef::TypeDef,
+    },
     vm::{
         Command, CommandArg, ExtDataSource, FilterMapArg, FilterMapArgs,
         OpCode, StackRefPos, VariablesMap,
@@ -1490,21 +1492,26 @@ fn compile_compute_expr<'a>(
                     parent_token
                 );
 
+                // args: [field_index_0, field_index_1, ...,
+                // lazy_record_type, variant_token, return type, store
+                // memory position]
                 let args = vec![
-                    CommandArg::Method(_var_to),
-                    CommandArg::Type(symbol.get_type()),
                     CommandArg::FieldIndex(
                         fa.iter()
                             .map(|t| (*t as usize))
                             .collect::<SmallVec<_>>(),
                     ),
+                    CommandArg::Type(TypeDef::LazyRecord(
+                        LazyRecordTypeDef::from(_var_to),
+                    )),
+                    CommandArg::Type(symbol.get_type()),
                     CommandArg::MemPos(state.cur_mem_pos),
                 ];
 
                 state
                     .cur_mir_block
                     .command_stack
-                    .push(Command::new(OpCode::ExecuteValueMethod, args));
+                    .push(Command::new(OpCode::LoadLazyFieldValue, args));
 
                 state.cur_mir_block.push_command(Command::new(
                     OpCode::PushStack,

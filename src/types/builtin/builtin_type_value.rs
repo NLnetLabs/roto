@@ -268,68 +268,29 @@ impl From<crate::types::builtin::primitives::IpAddress> for BuiltinTypeValue {
     }
 }
 
-// impl TryFrom<&'_ str> for BuiltinTypeValue {
-//     type Error = CompileError;
+impl From<Arc<BytesRecord<BmpMessage>>> for BuiltinTypeValue {
+    fn from(value: Arc<BytesRecord<BmpMessage>>) -> Self {
+        BuiltinTypeValue::BmpMessage(value)
+    }
+}
 
-//     fn try_from(val: &'_ str) -> Result<Self, Self::Error> {
-//         match val {
-//             "U32" => Ok(BuiltinTypeValue::U32(U32(None))),
-//             "U8" => Ok(BuiltinTypeValue::U8(U8(None))),
-//             "IntegerLiteral" => {
-//                 Ok(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(None)))
-//             }
-//             "PrefixLengthLiteral" => {
-//                 Ok(BuiltinTypeValue::PrefixLength(PrefixLength(None)))
-//             }
-//             "Boolean" => Ok(BuiltinTypeValue::Boolean(Boolean(None))),
-//             "Prefix" => Ok(BuiltinTypeValue::Prefix(Prefix(None))),
-//             "PrefixLength" => {
-//                 Ok(BuiltinTypeValue::PrefixLength(PrefixLength(None)))
-//             }
-//             "Community" => Ok(BuiltinTypeValue::Community(Community(None))),
-//             "IpAddress" => Ok(BuiltinTypeValue::IpAddress(IpAddress(None))),
-//             "Asn" => Ok(BuiltinTypeValue::Asn(Asn(None))),
-//             "AsPath" => Ok(BuiltinTypeValue::AsPath(AsPath(None))),
-//             "Route" => Ok(BuiltinTypeValue::Route(None)),
-//             "RouteStatus" => {
-//                 Ok(BuiltinTypeValue::RouteStatus(RouteStatus::Empty))
-//             }
-//             _ => Err(format!("Unknown type: {}", val).into()),
-//         }
-//     }
-// }
+impl From<Arc<BytesRecord<RouteMonitoring>>> for BuiltinTypeValue {
+    fn from(value: Arc<BytesRecord<RouteMonitoring>>) -> Self {
+        BuiltinTypeValue::BmpRouteMonitoringMessage(value)
+    }
+}
 
-// impl TryFrom<&TypeDef> for BuiltinTypeValue {
-//     type Error = CompileError;
+impl From<Arc<BytesRecord<PeerDownNotification>>> for BuiltinTypeValue {
+    fn from(value: Arc<BytesRecord<PeerDownNotification>>) -> Self {
+        BuiltinTypeValue::BmpPeerDownNotification(value)
+    }
+}
 
-//     fn try_from(ty: &TypeDef) -> Result<Self, Self::Error> {
-//         match ty {
-//             TypeDef::U32 => Ok(BuiltinTypeValue::U32(U32(None))),
-//             TypeDef::U8 => Ok(BuiltinTypeValue::U8(U8(None))),
-//             TypeDef::IntegerLiteral => {
-//                 Ok(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(None)))
-//             }
-//             TypeDef::Boolean => Ok(BuiltinTypeValue::Boolean(Boolean(None))),
-//             TypeDef::Prefix => Ok(BuiltinTypeValue::Prefix(Prefix(None))),
-//             TypeDef::PrefixLength => {
-//                 Ok(BuiltinTypeValue::PrefixLength(PrefixLength(None)))
-//             }
-//             TypeDef::Community => {
-//                 Ok(BuiltinTypeValue::Community(Community(None)))
-//             }
-//             TypeDef::IpAddress => {
-//                 Ok(BuiltinTypeValue::IpAddress(IpAddress(None)))
-//             }
-//             TypeDef::Asn => Ok(BuiltinTypeValue::Asn(Asn(None))),
-//             TypeDef::AsPath => Ok(BuiltinTypeValue::AsPath(AsPath(None))),
-//             TypeDef::Route => Ok(BuiltinTypeValue::Route(None)),
-//             TypeDef::RouteStatus => {
-//                 Ok(BuiltinTypeValue::RouteStatus(RouteStatus::Empty))
-//             }
-//             _ => Err(format!("Unknown type: {:?}", ty).into()),
-//         }
-//     }
-// }
+impl From<Arc<BytesRecord<PeerUpNotification>>> for BuiltinTypeValue {
+    fn from(value: Arc<BytesRecord<PeerUpNotification>>) -> Self {
+        BuiltinTypeValue::BmpPeerUpNotification(value)
+    }
+}
 
 impl Display for BuiltinTypeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {

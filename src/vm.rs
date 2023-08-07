@@ -224,17 +224,17 @@ impl LinearMemory {
 
     pub fn get_mp_field_by_index_as_stack_value(
         &self,
-        index: usize,
+        mem_pos: usize,
         field_index: SmallVec<[usize; 8]>,
     ) -> Option<StackValue> {
         trace!(
             "get_mp_field_by_index_as_stack_value {:?}",
-            self.get_mem_pos(index).map(StackValue::Ref)
+            self.get_mem_pos(mem_pos).map(StackValue::Ref)
         );
         match field_index {
             fi if fi.is_empty() => {
                 trace!("empty field index");
-                if let Some(tv) = self.get_mem_pos(index) {
+                if let Some(tv) = self.get_mem_pos(mem_pos) {
                     match tv {
                         // Do not own AsPath and Communities, cloning is expensive!
                         TypeValue::Builtin(BuiltinTypeValue::AsPath(_)) => {
@@ -258,10 +258,10 @@ impl LinearMemory {
             field_index => {
                 trace!(
                     "value in mem pos {}: {:?}",
-                    index,
-                    self.get_mem_pos(index)
+                    mem_pos,
+                    self.get_mem_pos(mem_pos)
                 );
-                match self.get_mem_pos(index) {
+                match self.get_mem_pos(mem_pos) {
                     Some(TypeValue::Record(rec)) => {
                         trace!("record -> {}", rec);
                         match rec.get_field_by_index(field_index) {
@@ -354,6 +354,110 @@ impl LinearMemory {
                     },
                     // This is apparently a type that does not have fields
                     None => None,
+                }
+            }
+        }
+    }
+
+    // Only return a typevalue (Wrapping a bytesrecord arc) if the memory position and field index
+    // offset contain an actual bytes record, otherwise return None.
+    pub fn get_mp_field_by_index_as_bytes_record(
+        &self,
+        mem_pos: usize,
+        field_index: SmallVec<[usize; 8]>,
+    ) -> Option<TypeValue> {
+        trace!(
+            "get_mp_field_by_index_as_bytes_record {:?}",
+            self.get_mem_pos(mem_pos).map(StackValue::Ref)
+        );
+        match field_index {
+            fi if fi.is_empty() => {
+                trace!("empty field index");
+                if let Some(tv) = self.get_mem_pos(mem_pos) {
+                    match tv {
+                        TypeValue::Builtin(BuiltinTypeValue::BmpMessage(
+                            bytes_rec,
+                        )) => Some(TypeValue::Builtin(
+                            BuiltinTypeValue::from(Arc::clone(bytes_rec)),
+                        )),
+                        TypeValue::Builtin(
+                            BuiltinTypeValue::BmpRouteMonitoringMessage(
+                                bytes_rec,
+                            ),
+                        ) => Some(TypeValue::Builtin(
+                            BuiltinTypeValue::from(Arc::clone(bytes_rec)),
+                        )),
+                        TypeValue::Builtin(
+                            BuiltinTypeValue::BmpPeerDownNotification(
+                                bytes_rec,
+                            ),
+                        ) => Some(TypeValue::Builtin(
+                            BuiltinTypeValue::from(Arc::clone(bytes_rec)),
+                        )),
+                        TypeValue::Builtin(
+                            BuiltinTypeValue::BmpPeerUpNotification(
+                                bytes_rec,
+                            ),
+                        ) => Some(TypeValue::Builtin(
+                            BuiltinTypeValue::from(Arc::clone(bytes_rec)),
+                        )),
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            }
+            field_index => {
+                trace!(
+                    "value in mem pos {}: {:?}",
+                    mem_pos,
+                    self.get_mem_pos(mem_pos)
+                );
+                match self.get_mem_pos(mem_pos) {
+                    Some(TypeValue::Builtin(
+                        BuiltinTypeValue::BmpRouteMonitoringMessage(bmp_msg),
+                    )) => {
+                        trace!("get bmp_route_monitoring_message get_value_owned_for_field {:?} {:?}", bmp_msg, field_index);
+
+                        LazyRecord::from_type_def(BytesRecord::<
+                            routecore::bmp::message::RouteMonitoring<
+                                bytes::Bytes,
+                            >,
+                        >::lazy_type_def(
+                        ))
+                        .get_field_by_index(&field_index, bmp_msg.as_ref())
+                        .map(|elm| elm.into())
+                    }
+                    Some(TypeValue::Builtin(
+                        BuiltinTypeValue::BmpPeerDownNotification(bmp_msg),
+                    )) => {
+                        trace!("get bmp_peer_down_message get_value_owned_for_field {:?} {:?}", bmp_msg, field_index);
+
+                        LazyRecord::from_type_def(BytesRecord::<
+                            routecore::bmp::message::PeerDownNotification<
+                                bytes::Bytes,
+                            >,
+                        >::lazy_type_def(
+                        ))
+                        .get_field_by_index(&field_index, bmp_msg.as_ref())
+                        .map(|elm| elm.into())
+                    }
+                    Some(TypeValue::Builtin(
+                        BuiltinTypeValue::BmpPeerUpNotification(bmp_msg),
+                    )) => {
+                        trace!("get bmp_peer_up_message get_value_owned_for_field {:?} {:?}", bmp_msg, field_index);
+
+                        LazyRecord::from_type_def(BytesRecord::<
+                            routecore::bmp::message::PeerUpNotification<
+                                bytes::Bytes,
+                            >,
+                        >::lazy_type_def(
+                        ))
+                        .get_field_by_index(&field_index, bmp_msg.as_ref())
+                        .map(|elm| elm.into())
+                    }
+                    // This is apparently a type that does not have fields
+                    _ => None,
                 }
             }
         }
@@ -1135,51 +1239,30 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                             return Err(VmError::InvalidValueType);
                         };
 
-                        let mut extra_command_arg = None;
-
-                        // Blergh, we have two different ways of dealing with
-                        // arguments, one for LazyRecords (using the
-                        // extra_command_arg) and one for the rest. probably
-                        // don't do this. TODO
-                        let args_len: usize = match args.pop().cloned() {
-                            Some(CommandArg::Arguments(c_args)) => {
-                                c_args.len()
-                            }
-                            fi => {
-                                extra_command_arg =
-                                    if let Some(CommandArg::FieldIndex(fi)) =
-                                        fi
-                                    {
-                                        Some(fi)
-                                    } else {
-                                        None
-                                    };
+                        let args_len: usize =
+                            if let Some(CommandArg::Arguments(args)) =
+                                args.pop()
+                            {
+                                args.len()
+                            } else {
                                 0
-                            }
-                        };
+                            };
 
                         let (return_type, method_token) = args.pop_2();
                         trace!(
-                            "return_type {:?}, method_token {:?}, extra command arg {:?}",
+                            "return_type {:?}, method_token {:?}",
                             return_type,
                             method_token,
-                            extra_command_arg
                         );
 
-                        // pop as many refs from the stack as we have
-                        // arguments for this method and resolve them to
-                        // their values.
                         let mut stack = self.stack.borrow_mut();
 
                         let stack_args = [0..args_len].iter().map(|_i| {
                             let sr = stack.pop().unwrap();
                             match sr.pos {
                                 StackRefPos::MemPos(pos) => {
-                                    let field_index = if let Some(fi) = extra_command_arg.clone() {
-                                        fi
-                                    } else { sr.field_index };
                                     mem
-                                        .get_mp_field_by_index_as_stack_value(pos as usize, field_index)
+                                        .get_mp_field_by_index_as_stack_value(pos as usize, sr.field_index)
                                         .unwrap_or_else(|| {
                                             trace!("\nstack: {:?}", stack);
                                             trace!("mem: {:#?}", mem.0);
@@ -1197,23 +1280,15 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                 StackRefPos::Constant(c) => StackValue::Owned(c.into()),
                             }
                         }).collect::<Vec<_>>();
-                        trace!("stack_args {:?} <--", stack_args);
+                        trace!("stack_args {:?}", stack_args);
 
                         // The first value on the stack is the value which we
                         // are going to call a method with.
                         let call_value = stack_args.get(0).unwrap().as_ref();
 
-                        trace!(
-                            "typevalue to call method on {} with \
-                        extra_command_arg {:?}",
-                            call_value,
-                            extra_command_arg
-                                .clone()
-                                .map(CommandArg::FieldIndex)
-                        );
+                        trace!("typevalue to call method on {}", call_value);
                         let v = call_value.exec_value_method(
                             method_token.into(),
-                            extra_command_arg.map(CommandArg::FieldIndex),
                             &stack_args[1..],
                             return_type.into(),
                         )?;
@@ -1350,6 +1425,79 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                         };
 
                         mem.set_mem_pos(mem_pos, result_value);
+                    }
+                    // args: [field_index_0, field_index_1, ...,
+                    // lazy_record_type, variant_token, return type, store
+                    // memory position]
+                    OpCode::LoadLazyFieldValue => {
+                        trace!("load lazy field value {:?}", args);
+                        let mem_pos = if let CommandArg::MemPos(pos) =
+                            args.pop().unwrap()
+                        {
+                            *pos as usize
+                        } else {
+                            return Err(VmError::InvalidValueType);
+                        };
+
+                        let return_type = args.pop();
+                        trace!("return_type {:?}", return_type,);
+
+                        let lazy_record_type = if let Some(
+                            CommandArg::Type(TypeDef::LazyRecord(
+                                lazy_record_type,
+                            )),
+                        ) = args.pop()
+                        {
+                            trace!("lazy record type {:?}", lazy_record_type);
+                            *lazy_record_type
+                        } else {
+                            return Err(VmError::InvalidMethodCall);
+                        };
+
+                        let field_index =
+                            if let Some(CommandArg::FieldIndex(fi)) =
+                                args.pop()
+                            {
+                                fi
+                            } else {
+                                return Err(VmError::InvalidMethodCall);
+                            };
+
+                        let mut stack = self.stack.borrow_mut();
+
+                        let bytes_rec_tv = {
+                            let sr = stack.pop().unwrap();
+
+                            match sr.pos {
+                                StackRefPos::MemPos(pos) => {
+                                    mem
+                                        .get_mp_field_by_index_as_bytes_record(pos as usize, sr.field_index)
+                                        .unwrap_or_else(|| {
+                                            trace!("\nstack: {:?}", stack);
+                                            trace!("mem: {:#?}", mem.0);
+                                            panic!("Uninitialized memory in position {}", pos);
+                                        })
+                                }
+                                _ => { return Err(VmError::InvalidVariant); }
+                            }
+                        };
+
+                        if let TypeValue::Builtin(b_tv) = bytes_rec_tv {
+                            match b_tv {
+                                BuiltinTypeValue::BmpMessage(bytes_rec) => {
+                                    let v = (*bytes_rec)
+                                        .get_field_index_for_variant(
+                                            lazy_record_type,
+                                            field_index,
+                                        )?;
+
+                                    mem.set_mem_pos(mem_pos, v);
+                                }
+                                _ => {
+                                    return Err(VmError::InvalidValueType);
+                                }
+                            }
+                        }
                     }
                     // args: [data_source_token, method_token, arguments,
                     //       return memory position]
@@ -1931,6 +2079,7 @@ impl Display for Command {
             OpCode::ExecuteDataStoreMethod => "->",
             OpCode::ExecuteValueMethod => "->",
             OpCode::ExecuteConsumeValueMethod => "=>",
+            OpCode::LoadLazyFieldValue => "💾",
             OpCode::PushStack => "<-",
             OpCode::PopStack => "->",
             OpCode::ClearStack => "::",
@@ -2122,6 +2271,7 @@ pub enum OpCode {
     ExecuteDataStoreMethod,
     ExecuteValueMethod,
     ExecuteConsumeValueMethod,
+    LoadLazyFieldValue,
     PopStack,
     PushStack,
     ClearStack,

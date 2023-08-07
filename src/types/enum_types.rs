@@ -9,7 +9,7 @@ use serde::Serialize;
 use crate::compile::CompileError;
 use crate::types::builtin::BytesRecord;
 use crate::types::lazytypedef::BmpMessage;
-use crate::vm::{VmError, CommandArg};
+use crate::vm::VmError;
 use crate::{
     ast::ShortString,
     eval::AccessReceiverError,
@@ -85,7 +85,7 @@ where
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _extra_command_args: Option<CommandArg>,
+        
         _args: &'a [crate::vm::StackValue],
         _res_type: super::typedef::TypeDef,
     ) -> Result<TypeValue, VmError> {

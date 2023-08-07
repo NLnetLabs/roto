@@ -7,7 +7,7 @@ use crate::{
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
     },
-    vm::{StackValue, VmError, CommandArg},
+    vm::{StackValue, VmError},
 };
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Default)]
@@ -47,7 +47,6 @@ impl RotoType for GlobalMethods {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _extra_command_args: Option<CommandArg>,
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {

@@ -9,7 +9,7 @@ use crate::{
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
     },
-    vm::{StackValue, VmError, CommandArg},
+    vm::{StackValue, VmError},
 };
 
 use super::collections::Record;
@@ -25,7 +25,8 @@ impl RotoType for OutputStreamMessage {
                 ty.clone(),
                 OutputStreamToken::Send.into(),
                 vec![ty],
-            ).consume_value()),
+            )
+            .consume_value()),
             _ => Err(format!(
                 "Unknown method: '{}' for type OutputStreamMessage",
                 method_name.ident
@@ -44,7 +45,6 @@ impl RotoType for OutputStreamMessage {
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        _extra_command_args: Option<CommandArg>,
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -140,13 +140,19 @@ impl From<Record> for OutputStreamMessage {
     fn from(value: Record) -> Self {
         trace!("CONVERT INTO OUTPUTSTREAMMESSAGE");
         trace!("{}", value);
-        let name: ShortString = value.get_value_for_field("name").map(|v| v.into()).unwrap_or_else(|| "".into());
-        let topic: String = value.get_value_for_field("topic").map(|v| v.into()).unwrap_or_else(|| "".into());
-        
+        let name: ShortString = value
+            .get_value_for_field("name")
+            .map(|v| v.into())
+            .unwrap_or_else(|| "".into());
+        let topic: String = value
+            .get_value_for_field("topic")
+            .map(|v| v.into())
+            .unwrap_or_else(|| "".into());
+
         Self {
             name,
             topic,
-            record: value.into()
+            record: value.into(),
         }
     }
 }

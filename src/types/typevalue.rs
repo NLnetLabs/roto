@@ -1,6 +1,5 @@
 use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
-use log::trace;
 use primitives::{
     AsPath, Community, Hop, LocalPref, MultiExitDisc, NextHop, OriginType,
     RouteStatus, U16,
@@ -17,7 +16,7 @@ use crate::{
     attr_change_set::ScalarValue,
     compile::CompileError,
     traits::RotoType,
-    vm::{CommandArg, StackValue, VmError},
+    vm::{StackValue, VmError},
 };
 
 use super::{
@@ -357,55 +356,25 @@ impl RotoType for TypeValue {
     fn exec_value_method<'a>(
         &'a self,
         method_token: usize,
-        extra_command_arg: Option<CommandArg>,
         args: &'a [StackValue],
         res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         match self {
             TypeValue::Builtin(builtin) => match builtin {
-                BuiltinTypeValue::Asn(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::AsPath(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::AtomicAggregator(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::BgpUpdateMessage(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::BmpMessage(bytes_rec) => {
-                    trace!(
-                        "BmpMessage get_field_index_for_variant {} \
-                        {:?} {:?} {}",
-                        method_token,
-                        extra_command_arg,
-                        args,
-                        res_type
-                    );
-                    trace!("variant = {}", bytes_rec.get_variant());
-                    bytes_rec
-                        .get_field_index_for_variant(
-                            method_token,
-                            extra_command_arg,
-                            args,
-                            res_type,
-                            bytes_rec.0.as_ref(),
-                        )
-                        .or(Err(VmError::InvalidVariant))
+                BuiltinTypeValue::Asn(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::AsPath(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::AtomicAggregator(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::BgpUpdateMessage(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::BmpMessage(_bytes_rec) => {
+                    Err(VmError::InvalidValueType)
                 }
                 BuiltinTypeValue::BmpRouteMonitoringMessage(bytes_rec) => {
                     LazyRecord::new(
@@ -440,169 +409,88 @@ impl RotoType for TypeValue {
                         bytes_rec.0.as_ref(),
                     )
                 }
-                BuiltinTypeValue::Boolean(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::Communities(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::Community(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::ConstU16EnumVariant(v) => v
-                    .exec_value_method(
-                        method_token,
-                        extra_command_arg,
-                        args,
-                        res_type,
-                    ),
-                BuiltinTypeValue::ConstU32EnumVariant(v) => v
-                    .exec_value_method(
-                        method_token,
-                        extra_command_arg,
-                        args,
-                        res_type,
-                    ),
-                BuiltinTypeValue::ConstU8EnumVariant(v) => v
-                    .exec_value_method(
-                        method_token,
-                        extra_command_arg,
-                        args,
-                        res_type,
-                    ),
-                BuiltinTypeValue::HexLiteral(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::Hop(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::IntegerLiteral(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::IpAddress(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::LocalPref(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::MultiExitDisc(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::NextHop(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::OriginType(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::Prefix(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::PrefixLength(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::Route(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::RouteStatus(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::StringLiteral(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::U32(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::U16(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
-                BuiltinTypeValue::U8(v) => v.exec_value_method(
-                    method_token,
-                    extra_command_arg,
-                    args,
-                    res_type,
-                ),
+                BuiltinTypeValue::Boolean(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::Communities(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::Community(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::ConstU16EnumVariant(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::ConstU32EnumVariant(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::ConstU8EnumVariant(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::HexLiteral(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::Hop(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::IntegerLiteral(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::IpAddress(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::LocalPref(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::MultiExitDisc(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::NextHop(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::OriginType(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::Prefix(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::PrefixLength(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::Route(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::RouteStatus(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::StringLiteral(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::U32(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::U16(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::U8(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
             },
             // TypeValue::Enum(v) => {
-            //     v.exec_value_method(method_token, extra_command_arg, args, res_type)
+            //     v.exec_value_method(method_token,  args, res_type)
             // }
-            TypeValue::List(v) => v.exec_value_method(
-                method_token,
-                extra_command_arg,
-                args,
-                res_type,
-            ),
-            TypeValue::OutputStreamMessage(v) => v.exec_value_method(
-                method_token,
-                extra_command_arg,
-                args,
-                res_type,
-            ),
-            TypeValue::Record(v) => v.exec_value_method(
-                method_token,
-                extra_command_arg,
-                args,
-                res_type,
-            ),
-            TypeValue::SharedValue(v) => v.exec_value_method(
-                method_token,
-                extra_command_arg,
-                args,
-                res_type,
-            ),
+            TypeValue::List(v) => {
+                v.exec_value_method(method_token, args, res_type)
+            }
+            TypeValue::OutputStreamMessage(v) => {
+                v.exec_value_method(method_token, args, res_type)
+            }
+            TypeValue::Record(v) => {
+                v.exec_value_method(method_token, args, res_type)
+            }
+            TypeValue::SharedValue(v) => {
+                v.exec_value_method(method_token, args, res_type)
+            }
             TypeValue::UnInit => Err(VmError::InvalidValueType),
             TypeValue::Unknown => Err(VmError::InvalidValueType),
         }
