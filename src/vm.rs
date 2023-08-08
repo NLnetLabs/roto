@@ -12,7 +12,7 @@ use crate::{
     types::{
         builtin::{Boolean, BuiltinTypeValue},
         collections::{
-            BytesRecord, ElementTypeValue, LazyRecord, List, Record,
+            BytesRecord, ElementTypeValue, LazyRecord, List, Record, EnumBytesRecord,
         },
         datasources::{DataSource, DataSourceMethodValue},
         outputs::OutputStreamMessage,

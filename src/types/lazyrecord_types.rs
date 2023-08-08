@@ -18,12 +18,16 @@ pub type PeerUpNotification =
 pub type PeerDownNotification =
     routecore::bmp::message::PeerDownNotification<bytes::Bytes>;
 
+// This is the complete enumeration of all Lazy Record types available to
+// roto users. Note that this does *NOT* include BgpMessage, which is a
+// BytesRecord, by it's also an Enum, therefore it contains a Lazy Record,
+// but it isn't one itself.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
 pub enum LazyRecordTypeDef {
     RouteMonitoring,
+    StatisticsReport,
     PeerUpNotification,
     PeerDownNotification,
-    StatisticsReport,
     RouteMirroring,
 }
 
@@ -33,13 +37,13 @@ impl LazyRecordTypeDef {
             LazyRecordTypeDef::RouteMonitoring => {
                 BytesRecord::<RouteMonitoring>::type_def()
             }
+            LazyRecordTypeDef::StatisticsReport => todo!(),
             LazyRecordTypeDef::PeerUpNotification => {
                 BytesRecord::<PeerUpNotification>::type_def()
             }
             LazyRecordTypeDef::PeerDownNotification => {
                 BytesRecord::<PeerDownNotification>::type_def()
             }
-            LazyRecordTypeDef::StatisticsReport => todo!(),
             LazyRecordTypeDef::RouteMirroring => todo!(),
         }
     }
@@ -56,6 +60,7 @@ impl LazyRecordTypeDef {
                     method_name,
                 )
             }
+            LazyRecordTypeDef::StatisticsReport => todo!(),
             LazyRecordTypeDef::PeerUpNotification => {
                 BytesRecord::<PeerUpNotification>::get_props_for_method(
                     ty,
@@ -68,7 +73,6 @@ impl LazyRecordTypeDef {
                     method_name,
                 )
             },
-            LazyRecordTypeDef::StatisticsReport => todo!(),
             LazyRecordTypeDef::RouteMirroring => todo!(),
         }
     }
@@ -82,6 +86,7 @@ impl LazyRecordTypeDef {
                 trace!("BmpRouteMonitoring w/ field '{}'", field);
                 BytesRecord::<RouteMonitoring>::get_props_for_field(field)
             }
+            LazyRecordTypeDef::StatisticsReport => todo!(),
             LazyRecordTypeDef::PeerUpNotification => {
                 trace!("BmpPeerUpNotification w/ field '{}'", field);
                 BytesRecord::<PeerUpNotification>::get_props_for_field(field)
@@ -92,7 +97,6 @@ impl LazyRecordTypeDef {
                     field,
                 )
             }
-            LazyRecordTypeDef::StatisticsReport => todo!(),
             LazyRecordTypeDef::RouteMirroring => todo!(),
         }
     }
@@ -124,9 +128,9 @@ impl std::fmt::Display for LazyRecordTypeDef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             LazyRecordTypeDef::RouteMonitoring => write!(f, "RouteMonitoring"),
+            LazyRecordTypeDef::StatisticsReport => write!(f, "StatiscticsReport"),
             LazyRecordTypeDef::PeerUpNotification => write!(f, "PeerUpNotification"),
             LazyRecordTypeDef::PeerDownNotification => write!(f, "PeerDownNotification"),
-            LazyRecordTypeDef::StatisticsReport => write!(f, "StatiscticsReport"),
             LazyRecordTypeDef::RouteMirroring => write!(f, "RouteMirroring"),
         }
     }
@@ -136,9 +140,9 @@ impl From<LazyRecordTypeDef> for usize {
     fn from(value: LazyRecordTypeDef) -> Self {
         match value {
             LazyRecordTypeDef::RouteMonitoring => 0,
+            LazyRecordTypeDef::StatisticsReport => 1,
             LazyRecordTypeDef::PeerUpNotification => 2,
             LazyRecordTypeDef::PeerDownNotification => 3,
-            LazyRecordTypeDef::StatisticsReport => 1,
             LazyRecordTypeDef::RouteMirroring => 4,
         }
     }

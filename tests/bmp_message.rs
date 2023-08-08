@@ -8,7 +8,7 @@ use roto::{
     blocks::Scope::{Filter, FilterMap},
     types::{
         builtin::BytesRecord, collections::Record,
-        lazytypedef::{RouteMonitoring, BmpMessage}, typevalue::TypeValue,
+        lazyrecord_types::{RouteMonitoring, BmpMessage}, typevalue::TypeValue,
     },
     vm::{self, VmResult},
 };

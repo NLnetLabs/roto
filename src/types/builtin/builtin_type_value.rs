@@ -11,7 +11,7 @@ use crate::compile::CompileError;
 use crate::traits::RotoType;
 use crate::types::collections::BytesRecord;
 use crate::types::enum_types::EnumVariant;
-use crate::types::lazytypedef::{
+use crate::types::lazyrecord_types::{
     PeerDownNotification, PeerUpNotification, RouteMonitoring, BmpMessage,
 };
 

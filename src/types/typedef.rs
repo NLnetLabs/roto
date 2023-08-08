@@ -28,7 +28,7 @@ use super::builtin::{
 use super::collections::{LazyElementTypeValue, Record};
 use super::datasources::{RibType, Table};
 use super::enum_types::{EnumVariant, GlobalEnumTypeDef};
-use super::lazytypedef::LazyRecordTypeDef;
+use super::lazyrecord_types::LazyRecordTypeDef;
 use super::outputs::OutputStreamMessage;
 use super::{
     builtin::BuiltinTypeValue, collections::List, typevalue::TypeValue,
@@ -135,8 +135,12 @@ pub enum TypeDef {
     // The data field holds the name of the enum this variant belongs to.
     // ConstU16EnumVariant(ShortString),
     // ConstU32EnumVariant(ShortString),
-    // A raw BGP message as bytes
+    // A raw BGP message as bytes (a so called BytesRecord)
     BgpUpdateMessage,
+    // A intermediate record where fields are only evaluated when called by
+    // the VM, or when modified. This type doesn't have a corresponding
+    // typevalue, it needs to be materialzed into a record, or only be used
+    // read-only (for filter operations).
     LazyRecord(LazyRecordTypeDef),
     // Builtin Types
     U32,
@@ -371,8 +375,6 @@ impl TypeDef {
                         result_type
                     };
                 }
-                // Another special case: BgpUpdateMessage also doesn't have
-                // actual fields, they are all simulated
                 (TypeDef::LazyRecord(lazy_type_def), _) => {
                     parent_type = lazy_type_def.get_props_for_field(field)?;
                     // Add the token to the FieldAccess vec.

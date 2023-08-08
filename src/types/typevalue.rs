@@ -26,7 +26,7 @@ use super::{
         RawRouteWithDeltas, StringLiteral, U32, U8,
     },
     collections::{BytesRecord, ElementTypeValue, LazyRecord, List, Record},
-    lazytypedef::{
+    lazyrecord_types::{
         PeerDownNotification, PeerUpNotification, RouteMonitoring,
     },
     outputs::OutputStreamMessage,
@@ -476,9 +476,6 @@ impl RotoType for TypeValue {
                     v.exec_value_method(method_token, args, res_type)
                 }
             },
-            // TypeValue::Enum(v) => {
-            //     v.exec_value_method(method_token,  args, res_type)
-            // }
             TypeValue::List(v) => {
                 v.exec_value_method(method_token, args, res_type)
             }

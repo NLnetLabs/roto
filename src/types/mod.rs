@@ -2,7 +2,7 @@ pub mod builtin;
 pub mod collections;
 pub mod enum_types;
 pub mod datasources;
-pub mod lazytypedef;
+pub mod lazyrecord_types;
 pub mod outputs;
 pub mod typedef;
 pub mod typevalue;

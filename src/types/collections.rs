@@ -8,25 +8,54 @@ use crate::ast::{
 };
 use crate::compile::CompileError;
 use crate::traits::RotoType;
-use crate::types::lazytypedef::{
-    PeerDownNotification, PeerUpNotification, RouteMonitoring,
-};
 use crate::vm::{StackValue, VmError};
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 
 use super::builtin::{BuiltinTypeValue, U32};
-use super::lazytypedef::LazyRecordTypeDef;
+use super::lazyrecord_types::LazyRecordTypeDef;
 use super::typedef::{LazyNamedTypeDef, MethodProps, TypeDef};
 use super::typevalue::TypeValue;
 
 //============ Collections ==================================================
 
-//------------ ElementType -------------------------------------
+// Roughly the collection types fall into two categories: Materialized
+// collections and their element types, and lazy evaluated collection types
+// and their element types.
 
-// This enum is used to differentiate between recursive collections and simple
-// collections (that only contain primitive types). The latter do not need to
-// be boxed, while the former do.
+// The materialized collection typrs are Record and List. The elemen type for
+// both is called ElementTypeValue. The latter has the ability to store
+// nested typevalues, so the roto user can create/modify things like Lists of
+// lists, or Record with List-typed fields. The collection types themselves
+// are straight-forward vecs of ElementTypeValues (with a ShortString added
+// for the Record type). The List type is ordered (order of insert), the 
+// Record type MUST be ordered alpabetically by key. The Roto user should not
+// have to worry about this, though.
+
+// The lazy types are BytesRecord and LazyRecord. BytesRecord is the type
+// that wraps the more complex routecore types, mainly the different BMP 
+// message types. They are a wrapper around this message. A LazyRecord is a
+// special type that provides the translation between the method calls on a
+// routecore type and the corresponding fields that are offered to the roto
+// user. So, from the perspective of the roto user a LazyRecord is just a 
+// regular Record, with (field_name, value) pairs. The LazyRecord type
+// instances *cannot* be stored in a TypeValue enum, they are strictly to be
+// used as intermediary types inside a Rotonda instance. If they need to be
+// stored (e.g. in a RIB), they need to be materialized first. Materializing
+// them only makes sense when the Roto user has modified them, otherwise it's
+// advisable to store the related BytesRecord, which *do* have 
+// a BuiltinTypeValue variants to store them in, e.g. BuiltinTypeValue::
+// BmpMessage. Each BytesRecord type has a variant in the `LazyRecordTypeDef`
+// enum, so this acts as a registry for them (see lazyrecord_types).
+
+// There's also an `EnumBytesRecord` trait that should be implemented for
+// BytesRecord types that contain an enum, e.g. BytesRecord<BmpMessage>.
+
+//------------ ElementType --------------------------------------------------
+
+// This enum is used to differentiate between recursive collections and
+// simple collections (that only contain primitive types). The latter do not
+// need to be boxed, while the former do.
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize)]
 #[serde(untagged)]
@@ -224,6 +253,9 @@ impl From<&ElementTypeValue> for ShortString {
 }
 
 //------------ List type ----------------------------------------------------
+
+// A recursive, materialized list that can contain any TypeValue variant,
+// including Records and Lists.
 
 #[derive(Debug, Eq, Clone, Hash, PartialEq, Serialize)]
 pub struct List(pub(crate) Vec<ElementTypeValue>);
@@ -575,6 +607,9 @@ impl From<ListToken> for usize {
 
 //---------------- Record type ----------------------------------------------
 
+// A recursive, materialized Record type that can contain any TypeValue
+// variant, including Lists and Records.
+
 #[derive(Debug, PartialEq, Eq, Default, Clone, Hash, Serialize)]
 pub struct Record(Vec<(ShortString, ElementTypeValue)>);
 
@@ -613,9 +648,11 @@ impl<'a> Record {
             if ty._check_record_fields(shortstring_vec.as_slice()) {
                 TypeValue::create_record(kvs)
             } else {
-                Err(CompileError::new(
-                    format!("Record fields do not match record type, expected instance of type {}, but got {:?}", ty, shortstring_vec)
-                ))
+                Err(CompileError::new(format!(
+                    "Record fields do not match record type, \
+                    expected instance of type {}, but got {:?}",
+                    ty, shortstring_vec
+                )))
             }
         } else {
             Err(CompileError::new("Not a record type".into()))
@@ -644,21 +681,24 @@ impl<'a> Record {
             if ty._check_record_fields(shortstring_vec.as_slice()) {
                 TypeValue::create_record(kvs)
             } else {
-                Err(CompileError::new(
-                    format!("Record fields do not match record type, expected instance of type {}, but got {:?}", ty, shortstring_vec)
-                ))
+                Err(CompileError::new(format!(
+                    "Record fields do not match record type, expected \
+                    instance of type {}, but got {:?}",
+                    ty, shortstring_vec
+                )))
             }
         } else {
             Err(CompileError::new("Not a record type".into()))
         }
     }
 
-    // This function requires quite the trust from our VM and the user, it takes
-    // a Vec of TypeValues under the assumption that they are exactly ordered the
-    // way the resulting Record is, so that the caller can omit the field NAMES,
-    // only supplying the values. If you have the field names available you
-    // should probably use the `create_instance_with_ordered_fields` method,
-    // which does check whether field names and type match.
+    // This function requires quite the trust from our VM and the user, it
+    // takes a Vec of TypeValues under the assumption that they are exactly
+    // ordered the way the resulting Record is, so that the caller can omit
+    // the field NAMES, only supplying the values. If you have the field
+    // names available you should probably use the
+    // `create_instance_with_ordered_fields` method, which does check whether
+    // field names and type match.
     pub fn create_instance_from_ordered_fields(
         ty: &TypeDef,
         mut values: Vec<TypeValue>,
@@ -831,22 +871,21 @@ impl RotoType for Record {
         // as it is for primitive types, since we have to check whether the
         // fields in both completely match.
         trace!("CONVERT RECORD TYPE INSTANCE");
-        // trace!("type {} -> type {}", TypeDef::from(&TypeValue::from(self)), into_type);
         match into_type {
             TypeDef::Record(_) => {
                 if into_type == &TypeValue::Record(self.clone()) {
                     Ok(TypeValue::Record(self))
                 } else {
-                    Err(CompileError::from(
-                        format!(
-                            "Record instance {} can't be converted into record type {}",
-                            TypeDef::from(&TypeValue::from(self)),
-                            into_type)
-                        )
-                    )
+                    Err(CompileError::from(format!(
+                        "Record instance {} can't be converted into \
+                            record type {}",
+                        TypeDef::from(&TypeValue::from(self)),
+                        into_type
+                    )))
                 }
             }
-            _ => Err("Instance of type Record cannot be converted into another type"
+            _ => Err("Instance of type Record cannot be converted into \
+            another type"
                 .to_string()
                 .into()),
         }
@@ -950,20 +989,47 @@ impl From<RecordToken> for usize {
     }
 }
 
-//------------ BytesRecord --------------------------------------------------
+//------------ EnumBytesRecord ----------------------------------------------
+
+// This trait is used for BytesRecord types that are enums themselves,
+// currently that is only the BytesRecord<BmpMessage> type.
+
+// Unlike a normal record, a bytes record need to have its recursive
+// fields resolved in one go, there can be no intermediary methods
+// that return a (sub)-field value and then other methods can take
+// that as argument for the next recursion IN THE VM, becuause that
+// would mean having to clone the (sub-)field and probably the whole
+// bytes message. This would defy the point of lazy evaluation.
+// Therefore this method takes the bytes record AND the complete
+// field index vec to go to do all the recursion in this method.
+// The data-fields of the variants in this enum are handled as
+// closely as possible to actual lazy fields. Note that we're still
+// copying bytes out into the actual variant. Grrr, TODO.
+
 pub trait EnumBytesRecord {
     fn get_variant(&self) -> LazyRecordTypeDef;
+
+    // Returns the typevalue for a variant and field_index on this
+    // bytes_record. Returns a TypeValue::Unknown if the requested
+    // variant does not match the bytes record. Returns an error if
+    // no field_index was specified.
+    fn get_field_index_for_variant(
+        &self,
+        variant_token: LazyRecordTypeDef,
+        field_index: &SmallVec<[usize; 8]>,
+    ) -> Result<TypeValue, VmError>;
 }
 
-#[derive(Debug, Serialize, Eq)]
-pub struct BytesRecord<T: AsRef<[u8]>>(pub(crate) T)
-where
-    BytesRecord<T>: EnumBytesRecord;
+//------------ BytesRecord --------------------------------------------------
 
-impl<T: AsRef<[u8]> + std::fmt::Debug> BytesRecord<T>
-where
-    BytesRecord<T>: EnumBytesRecord,
-{
+// A wrapper around routecore types, used to store into a TypeValue. The
+// actual mapping between routecore methods and Roto record field names and
+// values does not happen here, but in the LazyRecord type.
+
+#[derive(Debug, Serialize)]
+pub struct BytesRecord<T: AsRef<[u8]>>(pub(crate) T);
+
+impl<T: AsRef<[u8]> + std::fmt::Debug> BytesRecord<T> {
     pub(crate) fn bytes_parser(&self) -> &T {
         &self.0
     }
@@ -978,148 +1044,44 @@ where
             method_name
         )))
     }
-
-    // Unlike a normal record, a bytes record need to have its recursive
-    // fields resolved in one go, there can be no intermediary methods
-    // that return a (sub)-field value and then other methods can take
-    // that as argument for the next recursion IN THE VM, becuause that
-    // would mean having to clone the (sub-)field and probably the whole
-    // bytes message. This would defy the point of lazy evaluation.
-    // Therefore this method takes the bytes record AND the complete
-    // field index vec to go to do all the recursion in this method.
-    // The data-fields of the variants in this enum are handled as
-    // closely as possible to actual lazy fields. Note that we're still
-    // copying bytes out into the actual variant. Grrr, TODO.
-
-    // Returns the typevalue for a variant and field_index on this
-    // bytes_record. Returns a TypeValue::Unknown if the requested
-    // variant does not match the bytes record. Returns an error if
-    // no field_index was specified.
-    pub fn get_field_index_for_variant(
-        &self,
-        variant_token: LazyRecordTypeDef,
-        field_index: &SmallVec<[usize; 8]>,
-    ) -> Result<TypeValue, VmError> {
-        if field_index.is_empty() {
-            return Err(VmError::InvalidMethodCall);
-        }
-
-        if variant_token != self.get_variant() {
-            return Ok(TypeValue::Unknown);
-        };
-
-        let raw_bytes = self.0.as_ref();
-        let lazy_rec: TypeValue = match variant_token {
-            LazyRecordTypeDef::RouteMonitoring => {
-                trace!("get_field_index_for_variant on Route Monitoring");
-                trace!("field index {:?}", field_index);
-                trace!(
-                    "type def {:#?}",
-                    &BytesRecord::<RouteMonitoring>::lazy_type_def()
-                );
-                let rm =
-                    routecore::bmp::message::RouteMonitoring::from_octets(
-                        bytes::Bytes::copy_from_slice(raw_bytes),
-                    )
-                    .unwrap();
-                LazyRecord::<RouteMonitoring>::new(BytesRecord::<
-                    RouteMonitoring,
-                >::lazy_type_def(
-                ))
-                .get_field_by_index(
-                    field_index,
-                    &BytesRecord::<RouteMonitoring>(rm),
-                )
-                .map(|elm| elm.into())
-                .unwrap()
-            }
-            LazyRecordTypeDef::PeerDownNotification => {
-                let pd =
-                    routecore::bmp::message::PeerDownNotification::from_octets(
-                        bytes::Bytes::copy_from_slice(raw_bytes),
-                    )
-                    .unwrap();
-                LazyRecord::<PeerDownNotification>::new(BytesRecord::<
-                    PeerDownNotification,
-                >::lazy_type_def(
-                ))
-                .get_field_by_index(
-                    field_index,
-                    &BytesRecord::<PeerDownNotification>(pd),
-                )
-                .map(|elm| elm.into())
-                .unwrap()
-            }
-            LazyRecordTypeDef::PeerUpNotification => {
-                let pu =
-                    routecore::bmp::message::PeerUpNotification::from_octets(
-                        bytes::Bytes::copy_from_slice(raw_bytes),
-                    )
-                    .unwrap();
-                LazyRecord::<PeerUpNotification>::new(BytesRecord::<
-                    PeerUpNotification,
-                >::lazy_type_def(
-                ))
-                .get_field_by_index(
-                    field_index,
-                    &BytesRecord::<PeerUpNotification>(pu),
-                )
-                .map(|elm| elm.into())
-                .unwrap()
-            }
-            _ => {
-                return Err(VmError::InvalidMethodCall);
-            }
-        };
-
-        Ok(lazy_rec)
-    }
 }
 
-impl<T: AsRef<[u8]>> AsRef<[u8]> for BytesRecord<T>
-where
-    BytesRecord<T>: EnumBytesRecord,
-{
+impl<T: AsRef<[u8]>> AsRef<[u8]> for BytesRecord<T> {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
     }
 }
 
-impl<T: AsRef<[u8]>> PartialEq for BytesRecord<T>
-where
-    BytesRecord<T>: EnumBytesRecord,
-{
+impl<T: AsRef<[u8]>> Eq for BytesRecord<T> {}
+
+impl<T: AsRef<[u8]>> PartialEq for BytesRecord<T> {
     fn eq(&self, other: &Self) -> bool {
         self.0.as_ref() == other.0.as_ref()
     }
 }
 
-impl<T: AsRef<[u8]>> std::hash::Hash for BytesRecord<T>
-where
-    BytesRecord<T>: EnumBytesRecord,
-{
+impl<T: AsRef<[u8]>> std::hash::Hash for BytesRecord<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.as_ref().hash(state);
     }
 }
 
+
 //------------- LazyElementTypeValue ----------------------------------------
 
-#[allow(clippy::complexity)]
-pub enum LazyElementTypeValue<'a, T: AsRef<[u8]>>
-where
-    BytesRecord<T>: EnumBytesRecord,
-{
+// The containing element of a LazyRecord, besides being able to store
+// recursive and simple collections (like its counterpart the materialized
+// LazyElemenTypeValue), it can also host unevaluated expressions (as
+// closures) of field values, to be called by the VM at runtime.
+
+#[allow(clippy::type_complexity)]
+pub enum LazyElementTypeValue<'a, T: AsRef<[u8]>> {
     LazyRecord(LazyRecord<'a, T>),
     Lazy(Box<dyn Fn(&BytesRecord<T>) -> ElementTypeValue + 'a>),
-    // LazyOwned(Box<dyn Fn(BytesRecord<T>) -> ElementTypeValue>),
     Materialized(ElementTypeValue),
 }
 
-impl<T: std::fmt::Debug + AsRef<[u8]>> LazyElementTypeValue<'_, T>
-where
-    BytesRecord<T>: EnumBytesRecord,
-{
+impl<T: std::fmt::Debug + AsRef<[u8]>> LazyElementTypeValue<'_, T> {
     pub(crate) fn _into_materialized(
         self,
         raw_bytes: &BytesRecord<T>,
@@ -1135,9 +1097,6 @@ where
             LazyElementTypeValue::Lazy(elm) => {
                 LazyElementTypeValue::Materialized(elm(raw_bytes))
             }
-            // LazyElementTypeValue::LazyOwned(elm) => {
-            //     LazyElementTypeValue::Materialized(elm(*raw_bytes))
-            // }
             LazyElementTypeValue::Materialized(_) => self,
         }
     }
@@ -1154,9 +1113,8 @@ where
 }
 
 impl<T: std::fmt::Debug + AsRef<[u8]>>
-    From<(LazyElementTypeValue<'_, T>, &BytesRecord<T>)> for ElementTypeValue
-where
-    BytesRecord<T>: EnumBytesRecord,
+    From<(LazyElementTypeValue<'_, T>, &BytesRecord<T>)>
+    for ElementTypeValue
 {
     fn from(value: (LazyElementTypeValue<'_, T>, &BytesRecord<T>)) -> Self {
         match value {
@@ -1166,16 +1124,14 @@ where
                 ))))
             }
             (LazyElementTypeValue::Lazy(elm), raw_bytes) => elm(raw_bytes),
-            // (LazyElementTypeValue::LazyOwned(elm), raw_bytes) => elm(*raw_bytes.clone()),
             (LazyElementTypeValue::Materialized(elm), _) => elm,
         }
     }
 }
 
 impl<T: std::fmt::Debug + AsRef<[u8]>>
-    From<(&LazyElementTypeValue<'_, T>, &BytesRecord<T>)> for ElementTypeValue
-where
-    BytesRecord<T>: EnumBytesRecord,
+    From<(&LazyElementTypeValue<'_, T>, &BytesRecord<T>)>
+    for ElementTypeValue
 {
     fn from(
         (value, raw_bytes): (&LazyElementTypeValue<'_, T>, &BytesRecord<T>),
@@ -1187,25 +1143,13 @@ where
                 ))))
             }
             (LazyElementTypeValue::Lazy(elm), raw_bytes) => elm(raw_bytes),
-            // (LazyElementTypeValue::LazyOwned(elm), raw_bytes) => elm(*(raw_bytes.clone())),
             (LazyElementTypeValue::Materialized(elm), _) => elm.clone(),
         }
     }
 }
 
-// impl<T> Serialize for LazyElementTypeValue<'_, T> {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer,
-//     {
-//         ElementTypeValue::from(self).serialize(serializer)
-//     }
-// }
-
 impl<T: std::fmt::Debug + AsRef<[u8]>> std::fmt::Debug
     for LazyElementTypeValue<'_, T>
-where
-    BytesRecord<T>: EnumBytesRecord,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -1217,17 +1161,12 @@ where
             }
             LazyElementTypeValue::Lazy(_lazy_elm) => {
                 write!(f, "unresolved lazy value")
-            } // LazyElementTypeValue::LazyOwned(_lazy_elm) => {
-              //     write!(f, "unresolved lazy owned value")
-              // }
+            }
         }
     }
 }
 
-impl<T: AsRef<[u8]>> std::fmt::Display for LazyElementTypeValue<'_, T>
-where
-    BytesRecord<T>: EnumBytesRecord,
-{
+impl<T: AsRef<[u8]>> std::fmt::Display for LazyElementTypeValue<'_, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let LazyElementTypeValue::Materialized(mat_v) = self {
             write!(f, "{}", mat_v)
@@ -1237,10 +1176,7 @@ where
     }
 }
 
-impl<'a, T: AsRef<[u8]> + std::fmt::Debug> LazyElementTypeValue<'a, T>
-where
-    BytesRecord<T>: EnumBytesRecord,
-{
+impl<'a, T: AsRef<[u8]> + std::fmt::Debug> LazyElementTypeValue<'a, T> {
     pub(crate) fn _as_materialized(
         &'a self,
         raw_bytes: BytesRecord<T>,
@@ -1251,37 +1187,31 @@ where
                 Ok(ElementTypeValue::Primitive(rec.into()))
             }
             LazyElementTypeValue::Lazy(elm) => Ok(elm(&raw_bytes)),
-            // LazyElementTypeValue::LazyOwned(elm) => {
-            //     LazyElementTypeValue::Materialized(elm(*raw_bytes))
-            // }
             LazyElementTypeValue::Materialized(elm) => Ok(elm.clone()),
         }
     }
 }
 
-//------------ LazyRecord type ---------------------------------------------
+//------------ LazyRecord type ----------------------------------------------
 
-// The LazyRecord is a Chimaera
+// The LazyRecord type is the mapping between the routecore parser methods
+// and the roto record (field_name, value) pairs that we communicate to a
+// roto user. It does contains neither the parser, nor the original bytes of
+// the message, instead each method of LazyRecord requires the caller (the 
+// roto VM) to pass in a reference to the BytesRecord. A value whether lazily
+// evaluated or not, can be modified by the caller. The result of the
+// modification should be materialized into a (regular) roto record though,
+// the LazyRecord itself cannot be stored into a TypeValue variant.
+
 #[derive(Debug)]
-pub struct LazyRecord<'a, T: AsRef<[u8]>>
-where
-    BytesRecord<T>: EnumBytesRecord,
-{
+pub struct LazyRecord<'a, T: AsRef<[u8]>> {
     value: LazyNamedTypeDef<'a, T>,
     _is_materialized: bool,
     _raw_message: PhantomData<T>,
 }
 
-// impl<T> Eq for LazyRecord<'_, T> {}
-
-impl<'a, T: std::fmt::Debug + AsRef<[u8]>> LazyRecord<'a, T>
-where
-    BytesRecord<T>: EnumBytesRecord,
-{
-    pub(crate) fn new(
-        value: LazyNamedTypeDef<'a, T>,
-        // raw_message: Arc<T>,
-    ) -> Self {
+impl<'a, T: std::fmt::Debug + AsRef<[u8]>> LazyRecord<'a, T> {
+    pub(crate) fn new(value: LazyNamedTypeDef<'a, T>) -> Self {
         LazyRecord {
             value,
             _is_materialized: false,
@@ -1291,81 +1221,13 @@ where
 
     pub(crate) fn from_type_def(
         ty: LazyNamedTypeDef<'a, T>,
-    ) -> LazyRecord<'a, T>
-    where
-        BytesRecord<T>: EnumBytesRecord,
-    {
+    ) -> LazyRecord<'a, T> {
         Self {
             value: ty,
             _is_materialized: false,
             _raw_message: PhantomData,
         }
     }
-
-    // pub(crate) fn materialize_record(&mut self, raw_bytes: &BytesRecord<T>) {
-    //     for field in &mut self.value {
-    //         field.1.materialize(raw_bytes);
-    //     }
-    //     self.is_materialized = true;
-    // }
-
-    // pub(crate) fn into_materialized_record(self, raw_bytes: &BytesRecord<T>) -> Self {
-    //     if self.is_materialized {
-    //         return self;
-    //     }
-
-    //     let mut s = vec![];
-    //     for field in self.value {
-    //         s.push((field.0, field.1.into_materialized(raw_bytes)));
-    //     }
-
-    //     Self {
-    //         value: s,
-    //         is_materialized: true,
-    //         _raw_message: PhantomData
-    //     }
-    // }
-
-    // fn as_materialized_record(&self, raw_bytes: &RawBytes<T>) -> Self {
-    //     self.clone().into_materialized_record(raw_bytes)
-    // }
-
-    // pub fn create_instance(
-    //     ty: &TypeDef,
-    //     kvs: Vec<(&str, TypeValue)>,
-    // ) -> Result<Record, CompileError> {
-    //     if kvs.is_empty() {
-    //         return Err(CompileError::new(
-    //             "Can't create empty instance.".into(),
-    //         ));
-    //     }
-
-    //     let shortstring_vec = kvs
-    //         .iter()
-    //         .map(|(name, ty)| (ShortString::from(*name), ty))
-    //         .collect::<Vec<_>>();
-    //     if let TypeDef::Record(_rec) = ty {
-    //         if ty._check_record_fields(shortstring_vec.as_slice()) {
-    //             TypeValue::create_record(kvs)
-    //         } else {
-    //             Err(CompileError::new(
-    //                 format!("Record fields do not match record type, expected instance of type {}, but got {:?}", ty, shortstring_vec)
-    //             ))
-    //         }
-    //     } else {
-    //         Err(CompileError::new("Not a record type".into()))
-    //     }
-    // }
-
-    // pub fn get_value_for_field(
-    //     &self,
-    //     field: &str,
-    // ) -> Option<ElementTypeValue> {
-    //     self.value
-    //         .iter()
-    //         .find(|(f, _)| f == &field)
-    //         .map(|f| ElementTypeValue::from(&f.1))
-    // }
 
     pub fn get_field_by_index(
         &self,
@@ -1379,7 +1241,6 @@ where
         );
         self.value.get(field_index[0]).map(|f| match &f.1 {
             LazyElementTypeValue::Lazy(l_value) => l_value(raw_bytes),
-            // LazyElementTypeValue::LazyOwned(l_value) => l_value(*raw_bytes),
             LazyElementTypeValue::Materialized(m_value) => m_value.clone(),
             LazyElementTypeValue::LazyRecord(rec) => rec
                 .get_field_by_index(&field_index[1..].into(), raw_bytes)
@@ -1396,29 +1257,6 @@ where
     ) -> Result<TypeValue, VmError> {
         todo!()
     }
-
-    // pub fn get_field_by_index_owned(
-    //     &mut self,
-    //     field_index: SmallVec<[usize; 8]>,
-    // ) -> ElementTypeValue {
-    //     let mut elm = self
-    //         .value
-    //         .get_mut(field_index[0])
-    //         .map(|f| ElementTypeValue::from(f.1.clone()));
-
-    //     for index in &field_index[1..] {
-    //         elm = elm
-    //             .or(None)
-    //             .unwrap()
-    //             .into_record()
-    //             .unwrap()
-    //             .0
-    //             .get_mut(*index)
-    //             .map(|f| std::mem::take(&mut f.1))
-    //     }
-
-    //     elm.unwrap()
-    // }
 
     pub fn set_value_on_field_index(
         &'a mut self,
@@ -1449,30 +1287,7 @@ where
     }
 }
 
-// impl<T> PartialEq for LazyRecord<'_, T> {
-//     fn eq(&self, other: &Self) -> bool {
-//         Record::from(self) == Record::from(other)
-//     }
-// }
-
-// impl Eq for LazyRecord {}
-
-// impl<T> Clone for LazyRecord<'_, T> {
-//     fn clone(&self) -> Self {
-//         self.as_materialized_record()
-//     }
-// }
-
-// impl<T> std::hash::Hash for LazyRecord<'_, T> {
-//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-//         todo!()
-//     }
-// }
-
-impl<T: AsRef<[u8]>> Display for LazyRecord<'_, T>
-where
-    BytesRecord<T>: EnumBytesRecord,
-{
+impl<T: AsRef<[u8]>> Display for LazyRecord<'_, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{{")?;
         for (i, (field, elm)) in self.value.iter().enumerate() {
@@ -1481,135 +1296,13 @@ where
             }
             write!(f, "\n\t{}: ", field)?;
             write!(f, "{}", elm)?;
-            // match *elm {
-            //     ElementTypeValue::Primitive(v) => write!(f, "{}", v)?,
-            //     ElementTypeValue::Nested(v) => write!(f, "{}", v)?,
-            // }
         }
         write!(f, "\n   }}")
     }
 }
 
-// impl<T: std::fmt::Debug> RotoType for LazyRecord<T> {
-//     fn get_props_for_method(
-//         ty: TypeDef,
-//         method_name: &crate::ast::Identifier,
-//     ) -> Result<MethodProps, CompileError>
-//     where
-//         Self: std::marker::Sized,
-//     {
-//         match method_name.ident.as_str() {
-//             "get" => Ok(MethodProps::new(
-//                 ty,
-//                 RecordToken::Get.into(),
-//                 vec![TypeDef::U32],
-//             )),
-//             "get_all" => {
-//                 Ok(MethodProps::new(ty, RecordToken::GetAll.into(), vec![]))
-//             }
-//             "contains" => Ok(MethodProps::new(
-//                 TypeDef::Boolean,
-//                 RecordToken::Contains.into(),
-//                 vec![ty],
-//             )),
-//             _ => Err(format!(
-//                 "Unknown method '{}' for Record type with fields {:?}",
-//                 method_name.ident, ty
-//             )
-//             .into()),
-//         }
-//     }
-
-//     fn into_type(
-//         self,
-//         into_type: &TypeDef,
-//     ) -> Result<TypeValue, CompileError> {
-//         // Converting from a Record into a Record is not as straight-forward
-//         // as it is for primitive types, since we have to check whether the
-//         // fields in both completely match.
-//         match into_type {
-//             TypeDef::Record(_) => {
-//                 if into_type == &TypeValue::Record((&self).into()) {
-//                     Ok(self.into())
-//                 } else {
-//                     match into_type {
-//                         TypeDef::OutputStream(rec) => Ok(TypeValue::OutputStreamMessage(
-//                             Arc::new(super::outputs::OutputStreamMessage {
-//                                 name: "".into(),
-//                                 topic: "".into(),
-//                                 record_type: (**rec).clone(),
-//                                 record: self.into(),
-//                             }),
-//                         )),
-//                         _ => Err("Record type cannot be converted into another type"
-//                         .to_string()
-//                         .into())
-//                     }
-//                 }
-//             }
-//             _ => Err("Record type cannot be converted into another type"
-//                 .to_string()
-//                 .into()),
-//         }
-//     }
-
-//     fn exec_value_method(
-//         &self,
-//         _method: usize,
-//         _args: &[StackValue],
-//         _res_type: TypeDef,
-//     ) -> Result<TypeValue, VmError> {
-//         todo!()
-//     }
-
-//     fn exec_consume_value_method(
-//         self,
-//         _method: usize,
-//         _args: Vec<TypeValue>,
-//         _res_type: TypeDef,
-//     ) -> Result<TypeValue, VmError> {
-//         todo!()
-//     }
-
-//     fn exec_type_method(
-//         _method_token: usize,
-//         _args: &[StackValue],
-//         _res_type: TypeDef,
-//     ) -> Result<TypeValue, VmError> {
-//         todo!()
-//     }
-// }
-
-// Value Expressions that contain a Record parsed as a pair of
-// (field_name, value) pairs. This turns it into an actual Record.
-// impl From<AnonymousRecordValueExpr> for LazyRecord {
-//     fn from(value: AnonymousRecordValueExpr) -> Self {
-//         LazyRecord(
-//             value
-//                 .key_values
-//                 .iter()
-//                 .map(|(s, t)| (s.ident.clone(), t.clone().into()))
-//                 .collect::<Vec<_>>(),
-//         )
-//     }
-// }
-
-// impl From<TypedRecordValueExpr> for LazyRecord {
-//     fn from(value: TypedRecordValueExpr) -> Self {
-//         LazyRecord(
-//             value
-//                 .key_values
-//                 .iter()
-//                 .map(|(s, t)| (s.ident.clone(), t.clone().into()))
-//                 .collect::<Vec<_>>(),
-//         )
-//     }
-// }
-
 impl<T: std::fmt::Debug + AsRef<[u8]>>
     From<(&LazyRecord<'_, T>, &BytesRecord<T>)> for Record
-where
-    BytesRecord<T>: EnumBytesRecord,
 {
     fn from(value: (&LazyRecord<T>, &BytesRecord<T>)) -> Self {
         Record(
@@ -1627,8 +1320,6 @@ where
 
 impl<T: std::fmt::Debug + AsRef<[u8]>>
     From<(LazyRecord<'_, T>, &BytesRecord<T>)> for TypeValue
-where
-    BytesRecord<T>: EnumBytesRecord,
 {
     fn from(value: (LazyRecord<T>, &BytesRecord<T>)) -> Self {
         let mut rec = vec![];

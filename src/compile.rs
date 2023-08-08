@@ -22,7 +22,7 @@ use crate::{
         typevalue::TypeValue,
     },
     types::{
-        datasources::Table, lazytypedef::LazyRecordTypeDef, typedef::TypeDef,
+        datasources::Table, lazyrecord_types::LazyRecordTypeDef, typedef::TypeDef,
     },
     vm::{
         Command, CommandArg, ExtDataSource, FilterMapArg, FilterMapArgs,
