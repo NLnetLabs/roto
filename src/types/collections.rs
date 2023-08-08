@@ -28,28 +28,32 @@ use super::typevalue::TypeValue;
 // nested typevalues, so the roto user can create/modify things like Lists of
 // lists, or Record with List-typed fields. The collection types themselves
 // are straight-forward vecs of ElementTypeValues (with a ShortString added
-// for the Record type). The List type is ordered (order of insert), the 
+// for the Record type). The List type is ordered (order of insert), the
 // Record type MUST be ordered alpabetically by key. The Roto user should not
 // have to worry about this, though.
 
 // The lazy types are BytesRecord and LazyRecord. BytesRecord is the type
-// that wraps the more complex routecore types, mainly the different BMP 
+// that wraps the more complex routecore types, mainly the different BMP
 // message types. They are a wrapper around this message. A LazyRecord is a
 // special type that provides the translation between the method calls on a
 // routecore type and the corresponding fields that are offered to the roto
-// user. So, from the perspective of the roto user a LazyRecord is just a 
+// user. So, from the perspective of the roto user a LazyRecord is just a
 // regular Record, with (field_name, value) pairs. The LazyRecord type
 // instances *cannot* be stored in a TypeValue enum, they are strictly to be
 // used as intermediary types inside a Rotonda instance. If they need to be
 // stored (e.g. in a RIB), they need to be materialized first. Materializing
 // them only makes sense when the Roto user has modified them, otherwise it's
-// advisable to store the related BytesRecord, which *do* have 
-// a BuiltinTypeValue variants to store them in, e.g. BuiltinTypeValue::
+// advisable to store the related BytesRecord, which *do* have
+// BuiltinTypeValue variants to store them in, e.g. BuiltinTypeValue::
 // BmpMessage. Each BytesRecord type has a variant in the `LazyRecordTypeDef`
 // enum, so this acts as a registry for them (see lazyrecord_types).
 
 // There's also an `EnumBytesRecord` trait that should be implemented for
-// BytesRecord types that contain an enum, e.g. BytesRecord<BmpMessage>.
+// BytesRecord types that contain an enum, e.g. BytesRecord<BmpMessage>. This
+// allows the roto user to create a match pattern on them.
+
+// Note that the roto user should not be have to worry about or ever be
+// confronted with the lazy evaluated types.
 
 //------------ ElementType --------------------------------------------------
 
@@ -989,22 +993,22 @@ impl From<RecordToken> for usize {
     }
 }
 
-//------------ EnumBytesRecord ----------------------------------------------
+//------------ EnumBytesRecord trait ----------------------------------------
 
 // This trait is used for BytesRecord types that are enums themselves,
-// currently that is only the BytesRecord<BmpMessage> type.
+// currently that is only the BytesRecord<BmpMessage> type. This allows the
+// roto user to create match patterns for these BytesRecord instances.
 
-// Unlike a normal record, a bytes record need to have its recursive
-// fields resolved in one go, there can be no intermediary methods
-// that return a (sub)-field value and then other methods can take
-// that as argument for the next recursion IN THE VM, becuause that
-// would mean having to clone the (sub-)field and probably the whole
-// bytes message. This would defy the point of lazy evaluation.
-// Therefore this method takes the bytes record AND the complete
-// field index vec to go to do all the recursion in this method.
-// The data-fields of the variants in this enum are handled as
-// closely as possible to actual lazy fields. Note that we're still
-// copying bytes out into the actual variant. Grrr, TODO.
+// Unlike a normal record, a bytes record need to have its recursive field
+// resolved in one go, there can be no intermediary methods that return a
+// (sub)-field value and then other methods can take that as argument for the
+// next recursion IN THE VM, becuause that would mean having to clone the
+// (sub-)field and probably the whole bytes message. This would defy the
+// point of lazy evaluation. Therefore this method takes the bytes record AND
+// the complete field index vec to go to do all the recursion in this method.
+// The data-fields of the variants in this enum are handled as closely as
+// possible to actual lazy fields. Note that we're still copying bytes out
+// into the actual variant. Grrr, TODO.
 
 pub trait EnumBytesRecord {
     fn get_variant(&self) -> LazyRecordTypeDef;
@@ -1020,7 +1024,7 @@ pub trait EnumBytesRecord {
     ) -> Result<TypeValue, VmError>;
 }
 
-//------------ BytesRecord --------------------------------------------------
+//------------ BytesRecord type ---------------------------------------------
 
 // A wrapper around routecore types, used to store into a TypeValue. The
 // actual mapping between routecore methods and Roto record field names and
@@ -1066,8 +1070,7 @@ impl<T: AsRef<[u8]>> std::hash::Hash for BytesRecord<T> {
     }
 }
 
-
-//------------- LazyElementTypeValue ----------------------------------------
+//------------- LazyElementTypeValue type -----------------------------------
 
 // The containing element of a LazyRecord, besides being able to store
 // recursive and simple collections (like its counterpart the materialized
@@ -1197,7 +1200,7 @@ impl<'a, T: AsRef<[u8]> + std::fmt::Debug> LazyElementTypeValue<'a, T> {
 // The LazyRecord type is the mapping between the routecore parser methods
 // and the roto record (field_name, value) pairs that we communicate to a
 // roto user. It does contains neither the parser, nor the original bytes of
-// the message, instead each method of LazyRecord requires the caller (the 
+// the message, instead each method of LazyRecord requires the caller (the
 // roto VM) to pass in a reference to the BytesRecord. A value whether lazily
 // evaluated or not, can be modified by the caller. The result of the
 // modification should be materialized into a (regular) roto record though,
