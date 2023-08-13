@@ -114,7 +114,7 @@ fn test_compute_expr_5() {
 
 #[test]
 fn test_action_body() {
-    let r = ActionBody::parse(r###"
+    let r = ActionSectionBody::parse(r###"
         send_to(a,b);
         pph_asn.asn.set(AS200);"###);
     assert!(r.is_ok());

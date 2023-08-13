@@ -4,7 +4,7 @@ use roto::ast::*;
 
 #[test]
 fn test_logical_expr_1() {
-    let r = Action::parse(
+    let r = ActionSection::parse(
         r###"
         action my-action {
             send-to(a,b);

@@ -362,6 +362,7 @@ fn bmp_message_4() {
     // str.truncate(err.len());
     // assert_eq!(str, err);
 }
+
 #[test]
 fn bmp_message_5() {
     common::init();
@@ -390,6 +391,54 @@ fn bmp_message_5() {
                 };
                 reject;
             }
+        }
+        "###,
+    );
+
+    trace!("res : {:?}", res);
+
+    res.unwrap();
+    // let err =
+    //     "Eval error: Cannot convert value with type Lazy Record".to_string();
+    // let mut str = res.unwrap_err().to_string();
+    // str.truncate(err.len());
+    // assert_eq!(str, err);
+}
+
+#[test]
+fn bmp_message_6() {
+    common::init();
+
+    let res = test_data_3(
+        Filter("is-rm-ipv4".into()),
+        r###"
+        filter is-rm-ipv4 {
+            define {
+                rx msg: BmpMessage;
+            }
+
+            term is_rm_ipv4 with xx_msg: BmpRouteMonitoringMessage {
+                match {
+                    xx_msg.per_peer_header.is_ipv4;
+                }
+            }
+        
+            apply {
+                match msg with {
+                    RouteMonitoring(rm_msg) | is_rm_ipv4(rm_msg) -> { return accept; },
+                    PeerDownNotification(pd_msg) -> 
+                        mqtt.send(
+                            String.format("Peer with ASN {} just went down.", 
+                            pd_msg.per_peer_header.asn)
+                        ),
+                }
+                reject;
+            }
+        }
+
+        output-stream mqtt contains Message {
+            asn: Asn,
+            message: String
         }
         "###,
     );

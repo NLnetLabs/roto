@@ -937,6 +937,12 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             "BmpRouteMonitoringMessage" => {
                 Ok(TypeDef::LazyRecord(LazyRecordTypeDef::RouteMonitoring))
             }
+            "BmpPeerDownNotification" => {
+                Ok(TypeDef::LazyRecord(LazyRecordTypeDef::PeerDownNotification))
+            }
+            "BmpPeerUpNotification" => {
+                Ok(TypeDef::LazyRecord(LazyRecordTypeDef::PeerUpNotification))
+            }
             "HexLiteral" => Ok(TypeDef::HexLiteral),
             "BmpMessageType" => {
                 Ok(TypeDef::ConstEnumVariant("BMP_MESSAGE_TYPE".into()))
@@ -972,6 +978,12 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
             }
             "BmpRouteMonitoringMessage" => {
                 Ok(TypeDef::LazyRecord(LazyRecordTypeDef::RouteMonitoring))
+            }
+            "BmpPeerDownNotification" => {
+                Ok(TypeDef::LazyRecord(LazyRecordTypeDef::PeerDownNotification))
+            }
+            "BmpPeerUpNotification" => {
+                Ok(TypeDef::LazyRecord(LazyRecordTypeDef::PeerUpNotification))
             }
             "HexLiteral" => Ok(TypeDef::HexLiteral),
             "BmpMessageType" => {

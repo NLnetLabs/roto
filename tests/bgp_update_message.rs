@@ -155,7 +155,6 @@ fn test_bgp_update_2() {
             define {
                 rx_tx bgp_msg: BgpUpdateMessage;
             }
-        
 
             term afi-safi-unicast {
                 match {

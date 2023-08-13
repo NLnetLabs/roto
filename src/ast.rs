@@ -360,8 +360,8 @@ impl FilterMapBody {
 
 #[derive(Debug, Clone)]
 pub enum FilterMapExpr {
-    Term(Term),
-    Action(Action),
+    Term(TermSection),
+    Action(ActionSection),
     // Empty, // Import(ImportBody),
 }
 
@@ -377,8 +377,8 @@ impl FilterMapExpr {
         let (input, expressions) = context(
             "filter-map expression",
             alt((
-                map(Term::parse, Self::Term),
-                map(Action::parse, Self::Action),
+                map(TermSection::parse, Self::Term),
+                map(ActionSection::parse, Self::Action),
                 // map(multispace1, |_| Self::Empty),
                 // map(ImportBody::parse, FilterMapBody::Import),
             )),
@@ -518,14 +518,14 @@ impl DefineBody {
 //------------ Term ---------------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct Term {
+pub struct TermSection {
     pub ident: Identifier,
     pub for_kv: Option<TypeIdentField>,
     pub with_kv: Vec<TypeIdentField>,
     pub body: TermBody,
 }
 
-impl Term {
+impl TermSection {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, (ident, for_kv, with_kv, body)) = context(
             "term definition",
@@ -556,7 +556,7 @@ impl Term {
 
         Ok((
             input,
-            Term {
+            TermSection {
                 ident,
                 for_kv,
                 with_kv: with_kv.unwrap_or_default(),
@@ -583,22 +583,7 @@ impl TermBody {
     }
 }
 
-//------------ VariantMatchExpr ---------------------------------------------
-
-// A Match arm, with or without a data field. Used to capture a MatchExpr and
-// separate it from its logical expression(s), so that the TermScope (down
-// below) can capture it as an optional expression for that TermScope. so the
-// difference between a Match Expression that represents a match arm (of an
-// Enum) and a 'regular' collection of logical expressions, is just this
-// optional VariantMatchExpr.
-
-#[derive(Clone, Debug)]
-pub struct VariantMatchExpr {
-    pub variant: Identifier,
-    pub data_field: Option<Identifier>,
-}
-
-//------------ TermScope -----------------------------------------------------
+//------------ TermScope ----------------------------------------------------
 
 // Everything that can appear inside a named `term` block.
 
@@ -610,7 +595,7 @@ pub struct VariantMatchExpr {
 pub struct TermScope {
     pub scope: Option<Identifier>,
     pub operator: MatchOperator,
-    pub match_exprs: Vec<(Option<VariantMatchExpr>, Vec<LogicalExpr>)>,
+    pub match_arms: Vec<(Option<TermPatternMatchArm>, Vec<LogicalExpr>)>,
 }
 
 impl TermScope {
@@ -636,10 +621,10 @@ impl TermScope {
                         many0(context(
                             "match expression",
                             alt((
-                                map(MatchExpr::parse, |m_e| {
+                                map(TermMatchExpr::parse, |m_e| {
                                     (
-                                        Some(VariantMatchExpr {
-                                            variant: m_e.variant_id,
+                                        Some(TermPatternMatchArm {
+                                            variant_id: m_e.variant_id,
                                             data_field: m_e.data_field,
                                         }),
                                         m_e.logical_expr,
@@ -664,10 +649,25 @@ impl TermScope {
             Self {
                 scope,
                 operator,
-                match_exprs,
+                match_arms: match_exprs,
             },
         ))
     }
+}
+
+//------------ TermPatternMatchArm ------------------------------------------
+
+// A Match arm, with or without a data field. Used to capture a MatchExpr and
+// separate it from its logical expression(s), so that the TermScope (down
+// below) can capture it as an optional expression for that TermScope. so the
+// difference between a Match Expression that represents a match arm (of an
+// Enum) and a 'regular' collection of logical expressions, is just this
+// optional VariantMatchExpr.
+
+#[derive(Clone, Debug)]
+pub struct TermPatternMatchArm {
+    pub variant_id: Identifier,
+    pub data_field: Option<Identifier>,
 }
 
 //------------ Action -------------------------------------------------------
@@ -676,14 +676,14 @@ impl TermScope {
 //  '{' ActionBody '}'
 
 #[derive(Clone, Debug)]
-pub struct Action {
+pub struct ActionSection {
     pub ident: Identifier,
     // pub for_kv: Option<TypeIdentField>,
     // pub with_kv: Vec<TypeIdentField>,
-    pub body: ActionBody,
+    pub body: ActionSectionBody,
 }
 
-impl Action {
+impl ActionSection {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, (_, ident, body)) = context(
             "action definition",
@@ -699,7 +699,7 @@ impl Action {
                     "action block",
                     delimited(
                         opt_ws(char('{')),
-                        ActionBody::parse,
+                        ActionSectionBody::parse,
                         opt_ws(char('}')),
                     ),
                 ),
@@ -708,7 +708,7 @@ impl Action {
 
         Ok((
             input,
-            Action {
+            ActionSection {
                 ident,
                 // for_kv,
                 // with_kv: with_kv.unwrap_or_default(),
@@ -723,11 +723,11 @@ impl Action {
 // ActionBody ::= (ActionExpr ';')+
 
 #[derive(Clone, Debug)]
-pub struct ActionBody {
+pub struct ActionSectionBody {
     pub expressions: Vec<ComputeExpr>,
 }
 
-impl ActionBody {
+impl ActionSectionBody {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, expressions) = context(
             "action body",
@@ -881,73 +881,311 @@ impl ApplyBody {
 #[derive(Clone, Debug)]
 pub struct ApplyScope {
     pub scope: Option<Identifier>,
+    pub match_action: MatchAction,
+}
+
+impl ApplyScope {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (scope, apply_scope)) = tuple((
+            opt_ws(opt(context(
+                "use scope",
+                preceded(
+                    opt_ws(tag("use")),
+                    delimited(
+                        multispace1,
+                        Identifier::parse,
+                        opt_ws(char(';')),
+                    ),
+                ),
+            ))),
+            alt((
+                map(
+                    tuple((
+                        preceded(
+                            opt_ws(tag("filter")),
+                            opt_ws(MatchOperator::parse),
+                        ),
+                        context(
+                            "action expressions",
+                            opt_ws(tuple((
+                                ValueExpr::parse,
+                                opt(terminated(
+                                    opt(opt_ws(tag("not"))),
+                                    opt_ws(tag("matching")),
+                                )),
+                                delimited(
+                                    opt_ws(char('{')),
+                                    alt((
+                                        many1(context(
+                                            "Call Expression",
+                                            tuple((
+                                                map(
+                                                    opt_ws(terminated(
+                                                        ValueExpr::parse,
+                                                        opt_ws(char(';')),
+                                                    )),
+                                                    Some,
+                                                ),
+                                                opt(opt_ws(accept_reject)),
+                                            )),
+                                        )),
+                                        map(opt_ws(accept_reject), |ar| {
+                                            vec![(None, Some(ar))]
+                                        }),
+                                    )),
+                                    terminated(
+                                        opt_ws(char('}')),
+                                        opt_ws(char(';')),
+                                    ),
+                                ),
+                            ))),
+                        ),
+                    )),
+                    |expr| {
+                        (
+                            input,
+                            MatchAction::FilterMatchAction(
+                                FilterMatchActionExpr {
+                                    operator: expr.0,
+                                    negate: if let Some(negate) = expr.1 .1 {
+                                        negate.is_none()
+                                    } else {
+                                        false
+                                    },
+                                    actions: expr.1 .2,
+                                    filter_ident: expr.1 .0,
+                                },
+                            ),
+                        )
+                    },
+                ),
+                map(
+                    context(
+                        "pattern match expression",
+                        opt_ws(PatternMatchActionExpr::parse),
+                    ),
+                    |expr| (input, MatchAction::PatternMatchAction(expr)),
+                ),
+            )),
+        ))(input)?;
+        Ok((
+            input,
+            Self {
+                scope,
+                match_action: apply_scope.1,
+            },
+        ))
+    }
+}
+
+// the Apply section can host regular rules that bind a term to an action
+// under specified conditions. It can also host a match expressions that
+// does the same for enums.
+#[derive(Clone, Debug)]
+pub enum MatchAction {
+    FilterMatchAction(FilterMatchActionExpr),
+    PatternMatchAction(PatternMatchActionExpr),
+}
+
+// A regular 'filter match` expression that binds a term to a (number of)
+// action(s).
+#[derive(Clone, Debug)]
+
+pub struct FilterMatchActionExpr {
     pub operator: MatchOperator,
     pub filter_ident: ValueExpr,
     pub negate: bool,
     pub actions: Vec<(Option<ValueExpr>, Option<AcceptReject>)>,
 }
 
-impl ApplyScope {
-    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (scope, operator, (filter_ident, negate, action_exprs))) =
-            tuple((
-                opt_ws(opt(context(
-                    "use scope",
-                    preceded(
-                        opt_ws(tag("use")),
-                        delimited(
-                            multispace1,
-                            Identifier::parse,
-                            opt_ws(char(';')),
-                        ),
-                    ),
-                ))),
-                preceded(opt_ws(tag("filter")), opt_ws(MatchOperator::parse)),
-                context(
-                    "action expressions",
-                    opt_ws(tuple((
-                        ValueExpr::parse,
-                        opt(terminated(
-                            opt(opt_ws(tag("not"))),
-                            opt_ws(tag("matching")),
+// A complete pattern match on a variable where every match arm can have
+// multiple action. Similar to TermMatchActionExpr, but a PatternMatchAction
+// can only take actions in its body, no Logic Expressions.
+
+#[derive(Clone, Debug)]
+pub struct PatternMatchActionExpr {
+    // The data field of the MatchOperator is the identifier of the variable
+    // to be matched on
+    pub operator: MatchOperator,
+    // All the match arms appearing in the source code, with an optional
+    // guard, i.e. a condition on this variant.
+    pub match_arms: Vec<PatternMatchActionArm>,
+}
+
+impl PatternMatchActionExpr {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (variable_id, match_arms)) = context(
+            "pattern match expression",
+            context(
+                "match expressions",
+                tuple((
+                    opt_ws(MatchOperator::parse),
+                    delimited(
+                        opt_ws(char('{')),
+                        many1(context(
+                            "match expression",
+                            opt_ws(PatternMatchActionArm::parse),
                         )),
-                        delimited(
-                            opt_ws(char('{')),
-                            alt((
-                                many1(context(
-                                    "Call Expression",
-                                    tuple((
-                                        map(
-                                            opt_ws(terminated(
-                                                ValueExpr::parse,
-                                                opt_ws(char(';')),
-                                            )),
-                                            Some,
-                                        ),
-                                        opt(opt_ws(accept_reject)),
-                                    )),
-                                )),
-                                map(opt_ws(accept_reject), |ar| {
-                                    vec![(None, Some(ar))]
-                                }),
-                            )),
-                            terminated(opt_ws(char('}')), opt_ws(char(';'))),
-                        ),
-                    ))),
-                ),
-            ))(input)?;
+                        opt_ws(char('}')),
+                    ),
+                )),
+            ),
+        )(input)?;
         Ok((
             input,
             Self {
-                scope,
-                operator,
-                negate: if let Some(negate) = negate {
-                    negate.is_none()
-                } else {
-                    false
-                },
-                actions: action_exprs,
-                filter_ident,
+                operator: variable_id,
+                match_arms,
+            },
+        ))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct PatternMatchActionArm {
+    pub variant_id: Identifier,
+    pub data_field: Option<Identifier>,
+    pub guard: Option<ValueExpr>,
+    pub actions: Vec<(Option<ComputeExpr>, Option<AcceptReject>)>,
+}
+
+impl PatternMatchActionArm {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        // let (input, (variant_id, data_field, guard, actions)) =
+        let (input, (variant_id, data_field)) = context(
+            "pattern match expression",
+            tuple((
+                opt_ws(Identifier::parse),
+                opt(delimited(
+                    opt_ws(char('(')),
+                    Identifier::parse,
+                    opt_ws(char(')')),
+                )),
+            )),
+        )(input)?;
+
+        let (input, guard) = opt(preceded(
+            opt_ws(char('|')),
+            opt_ws(ValueExpr::parse),
+        ))(input)?;
+
+        let (input, actions) = preceded(
+            opt_ws(tag("->")),
+            // Either a ..
+            alt((
+                // bunch of action expressions, within curly
+                // braces and semi-colon separated, and
+                // terminated with an optional comma, or...
+                delimited(
+                    opt_ws(char('{')),
+                    alt((
+                        many1(context(
+                            "Call Expression",
+                            tuple((
+                                map(
+                                    opt_ws(terminated(
+                                        ComputeExpr::parse,
+                                        opt_ws(char(';')),
+                                    )),
+                                    Some,
+                                ),
+                                opt(opt_ws(accept_reject)),
+                            )),
+                        )),
+                        map(opt_ws(accept_reject), |ar| {
+                            vec![(None, Some(ar))]
+                        }),
+                    )),
+                    terminated(opt_ws(char('}')), opt_ws(char(','))),
+                ),
+                // a single action expression that must have a
+                // comma at the end. Cannot end with a
+                // accept_reject
+                map(
+                    terminated(opt_ws(ComputeExpr::parse), opt_ws(char(','))),
+                    |l_e| vec![(Some(l_e), None)],
+                ),
+            )),
+        )(input)?;
+
+        Ok((
+            input,
+            Self {
+                variant_id,
+                guard,
+                data_field,
+                actions,
+            },
+        ))
+    }
+}
+
+//------------ TermMatchExpr ------------------------------------------------
+
+// A TermMatchExpr describes a variant of an enum together with its data
+// field and one or more logical expressions, that will evaluate to a boolean,
+// it may reference the data field. Note that this MatchExpr will be split out
+// in (variant_id, data_field) and the logical epressions to be able to store
+// it in a TermScope as `VariantMatchExpr`s.
+// Since it only store Logical Expressions it is only fit for use in a Term
+// section. In the Apply sections the PatternMatchActionExpr is used.
+
+// MatchExpr := Identifier '(' Identifier ')' '->'
+//  (( LogicalExpr ';' ',' ) | '{'  ( LogicalExpr ';' )+ '}' ','? )
+#[derive(Clone, Debug)]
+pub struct TermMatchExpr {
+    pub variant_id: Identifier,
+    pub data_field: Option<Identifier>,
+    pub logical_expr: Vec<LogicalExpr>,
+}
+
+impl TermMatchExpr {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (variant_id, data_field, logical_expr)) = context(
+            "match expression",
+            tuple((
+                opt_ws(Identifier::parse),
+                opt(delimited(
+                    opt_ws(char('(')),
+                    Identifier::parse,
+                    opt_ws(char(')')),
+                )),
+                preceded(
+                    opt_ws(tag("->")),
+                    // Either a ..
+                    alt((
+                        // bunch of logical expressions, within curly
+                        // braces and semi-colon separated, and
+                        // terminated with an optional comma, or...
+                        terminated(
+                            delimited(
+                                opt_ws(char('{')),
+                                many1(terminated(
+                                    LogicalExpr::parse,
+                                    opt_ws(char(';')),
+                                )),
+                                opt_ws(char('}')),
+                            ),
+                            opt(opt_ws(char(','))),
+                        ),
+                        // a single logical expression that must
+                        // have a comma at the end.
+                        map(
+                            terminated(LogicalExpr::parse, opt_ws(char(','))),
+                            |l_e| vec![l_e],
+                        ),
+                    )),
+                ),
+            )),
+        )(
+            input
+        )?;
+        Ok((
+            input,
+            Self {
+                variant_id,
+                data_field,
+                logical_expr,
             },
         ))
     }
@@ -2083,75 +2321,6 @@ impl MethodComputeExpr {
     }
 }
 
-//------------ MatchExpr ----------------------------------------------------
-
-// A MatchExpr describes a variant of an enum together with its data field
-// and one or more logical expressions, that will evaluate to a boolean, it
-// may reference the data field. Note that this MatchExpr will be split out
-// in (variant_id, data_field) and the logical epressions to be able to store
-// it in a TermScope as `VariantMatchExpr`s.
-
-// MatchExpr := Identifier '(' Identifier ')' '->'
-//  (( LogicalExpr ';' ',' ) | '{'  ( LogicalExpr ';' )+ '}' ','? )
-#[derive(Clone, Debug)]
-pub struct MatchExpr {
-    pub variant_id: Identifier,
-    pub data_field: Option<Identifier>,
-    pub logical_expr: Vec<LogicalExpr>,
-}
-
-impl MatchExpr {
-    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (variant_id, data_field, logical_expr)) = context(
-            "match expression",
-            tuple((
-                opt_ws(Identifier::parse),
-                opt(delimited(
-                    opt_ws(char('(')),
-                    Identifier::parse,
-                    opt_ws(char(')')),
-                )),
-                preceded(
-                    opt_ws(tag("->")),
-                    // Either a ..
-                    alt((
-                        // bunch of logical expressions, within curly
-                        // braces and semi-colon separated, and
-                        // terminated with an optional comma, or...
-                        terminated(
-                            delimited(
-                                opt_ws(char('{')),
-                                many1(terminated(
-                                    LogicalExpr::parse,
-                                    opt_ws(char(';')),
-                                )),
-                                opt_ws(char('}')),
-                            ),
-                            opt(opt_ws(char(','))),
-                        ),
-                        // a single logical expression that must
-                        // have a comma at the end.
-                        map(
-                            terminated(LogicalExpr::parse, opt_ws(char(','))),
-                            |l_e| vec![l_e],
-                        ),
-                    )),
-                ),
-            )),
-        )(
-            input
-        )?;
-        Ok((
-            input,
-            Self {
-                variant_id,
-                data_field,
-                logical_expr,
-            },
-        ))
-    }
-}
-
 //============ First-Order Logic ============================================
 
 // "No, no, you're not thinking. You're just being logical." -- Niels Bohr
@@ -2507,6 +2676,17 @@ impl MatchOperator {
             map(tag("exactly-one"), |_| MatchOperator::ExactlyOne),
             map(tag("all"), |_| MatchOperator::All),
         ))(input)
+    }
+
+    pub(crate) fn get_ident(&self) -> Result<Identifier, CompileError> {
+        if let MatchOperator::MatchValueWith(id) = self {
+            Ok(id.clone())
+        } else {
+            Err(CompileError::from(format!(
+                "Cannot find identifier for this match: {:?}",
+                self
+            )))
+        }
     }
 }
 

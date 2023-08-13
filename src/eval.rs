@@ -1,12 +1,16 @@
 use log::trace;
 
 use crate::ast::AcceptReject;
+use crate::ast::AccessReceiver;
 use crate::ast::FilterType;
 use crate::ast::LogicalExpr;
+use crate::ast::MatchAction;
 use crate::ast::MatchOperator;
 use crate::ast::ShortString;
+use crate::ast::TypeIdentField;
 use crate::blocks::Scope;
 use crate::compile::CompileError;
+use crate::compile::Compiler;
 use crate::symbols::GlobalSymbolTable;
 use crate::symbols::MatchActionType;
 use crate::symbols::Symbol;
@@ -578,7 +582,7 @@ impl ast::Define {
     }
 }
 
-impl ast::Term {
+impl ast::TermSection {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
@@ -589,10 +593,32 @@ impl ast::Term {
         // wrapped in a vec (so with only one element). A scope is
         // a bunch of logical expressions separated by a `use`
         // statement.
+        trace!("term symbol to evaluate :");
+        trace!("{:#?}", self);
+
+        let mut local_scope: Vec<Symbol> = vec![];
+        // There may be a local scope defined in a `with <ARGUMENT_ID>`
+        // in the term header.
+        if let Some(TypeIdentField { field_name, ty }) = self.with_kv.get(0) {
+            // Does the supplied type exist in our scope?
+            let ty =
+                check_type_identifier(ty.clone(), symbols.clone(), &scope)?;
+
+            local_scope.push(symbols::Symbol::new(
+                field_name.clone().ident,
+                SymbolKind::Constant,
+                ty,
+                vec![],
+                Some(Token::BuiltinType(0)),
+            ))
+        }
+
+        trace!("local scope");
+        trace!("{:#?}", local_scope);
 
         // We currently only look at the first scope
         let term_scopes = &self.body.scopes[0];
-        for term in term_scopes.match_exprs.iter().map(|me| &me.1[0])
+        for term in term_scopes.match_arms.iter().map(|me| &me.1[0])
         // .enumerate()
         {
             let logical_formula = match &term {
@@ -605,7 +631,7 @@ impl ast::Term {
                         expr,
                         symbols.clone(),
                         &scope,
-                        &vec![],
+                        &local_scope,
                     )?;
                     if expr.get_type() == TypeDef::Boolean
                         || expr
@@ -624,19 +650,19 @@ impl ast::Term {
                     or_expr,
                     symbols.clone(),
                     &scope,
-                    &vec![],
+                    &local_scope,
                 )?,
                 LogicalExpr::AndExpr(and_expr) => ast::AndExpr::eval(
                     and_expr,
                     symbols.clone(),
                     &scope,
-                    &vec![],
+                    &local_scope,
                 )?,
                 LogicalExpr::NotExpr(not_expr) => ast::NotExpr::eval(
                     not_expr,
                     symbols.clone(),
                     &scope,
-                    &vec![],
+                    &local_scope,
                 )?,
             };
 
@@ -679,18 +705,18 @@ impl ast::Term {
 
         // loop over all the variants for this enum. AccessReceiver::eval
         // checks for the existence of the identifier.
-        for (variant, logic_exprs) in term_scopes.match_exprs.iter() {
+        for (variant, logic_exprs) in term_scopes.match_arms.iter() {
             if let Some(variant) = variant {
                 trace!(
                     "{}({:?}) -> {:#?}",
-                    variant.variant,
+                    variant.variant_id,
                     variant.data_field,
                     logic_exprs
                 );
 
                 if let TypeDef::GlobalEnum(e_num) = enum_s.get_type() {
                     let (variant_type_def, variant_token) =
-                        e_num.get_props_for_variant(&variant.variant)?;
+                        e_num.get_props_for_variant(&variant.variant_id)?;
 
                     let local_scope = vec![symbols::Symbol::new(
                         variant.data_field.clone().unwrap().ident,
@@ -723,7 +749,8 @@ impl ast::Term {
                                     logic_args.push(expr);
                                 } else {
                                     return Err(CompileError::from(format!(
-                                        "Cannot convert value with type {} into Boolean",
+                                        "Cannot convert value with type {} \
+                                        into Boolean",
                                         expr.get_type()
                                     )));
                                 }
@@ -788,7 +815,7 @@ impl ast::Term {
 
 // =========== Actions ======================================================
 
-impl ast::Action {
+impl ast::ActionSection {
     fn eval(
         &self,
         symbols: symbols::GlobalSymbolTable,
@@ -900,75 +927,212 @@ impl ast::ApplyScope {
         // not sure whether it is going to be needed.
         let _s_name = self.scope.clone().map(|s| s.ident);
 
-        let term =
-            self.filter_ident
-                .eval(symbols.clone(), scope.clone(), &[])?;
-        let (_ty, token) = filter_map_symbols.get_term(&term.get_name())?;
-
-        let mut args_vec = vec![];
-        for action in &self.actions {
-            if let Some(match_action) = action.0.clone() {
-                // If there's one or more actions in the filter block we
-                // will store them as args in the vector.
-                let match_action_name = match_action
-                    .eval(symbols.clone(), scope.clone(), &[])?
-                    .get_name();
-
+        match &self.match_action {
+            MatchAction::FilterMatchAction(fma) => {
+                let term = fma.filter_ident.eval(
+                    symbols.clone(),
+                    scope.clone(),
+                    &[],
+                )?;
                 let (_ty, token) =
-                    filter_map_symbols.get_action(&match_action_name)?;
+                    filter_map_symbols.get_term(&term.get_name())?;
 
-                let s = symbols::Symbol::new(
-                    match_action_name,
-                    symbols::SymbolKind::Action,
-                    TypeDef::AcceptReject(
-                        action.1.unwrap_or(ast::AcceptReject::NoReturn),
-                    ),
-                    vec![],
-                    Some(token),
-                );
-                args_vec.push(s);
-            } else {
-                // If there's no Action mentioned in a filter block, we will
-                // create a MatchAction of type Empty, so that the compiler
-                // can invoke the right accept/reject commands. The action
-                // symbol gets to have the name of the term, but it is never
-                // inspected, since it doesn't exist in any symbol map.
-                let s = symbols::Symbol::new(
-                    term.get_name(),
-                    symbols::SymbolKind::MatchAction(MatchActionType::EmptyAction),
-                    TypeDef::AcceptReject(
-                        action.1.ok_or_else(
-                            || CompileError::from(
-                                "Encountered MatchAction without Action or Accept Reject statement."
+                let mut args_vec = vec![];
+                for action in &fma.actions {
+                    if let Some(match_action) = action.0.clone() {
+                        // If there's one or more actions in the filter block we
+                        // will store them as args in the vector.
+                        let match_action_name = match_action
+                            .eval(symbols.clone(), scope.clone(), &[])?
+                            .get_name();
+
+                        let (_ty, token) = filter_map_symbols
+                            .get_action(&match_action_name)?;
+
+                        let s = symbols::Symbol::new(
+                            match_action_name,
+                            symbols::SymbolKind::Action,
+                            TypeDef::AcceptReject(
+                                action
+                                    .1
+                                    .unwrap_or(ast::AcceptReject::NoReturn),
+                            ),
+                            vec![],
+                            Some(token),
+                        );
+                        args_vec.push(s);
+                    } else {
+                        // If there's no Action mentioned in a filter block, we will
+                        // create a MatchAction of type Empty, so that the compiler
+                        // can invoke the right accept/reject commands. The action
+                        // symbol gets to have the name of the term, but it is never
+                        // inspected, since it doesn't exist in any symbol map.
+                        let s = symbols::Symbol::new(
+                            term.get_name(),
+                            symbols::SymbolKind::MatchAction(
+                                MatchActionType::EmptyAction,
+                            ),
+                            TypeDef::AcceptReject(action.1.ok_or_else(
+                                || {
+                                    CompileError::from(
+                                "Encountered FilterMatchAction without \
+                                Action or Accept-Reject expression.",
                             )
-                        )?,
-                    ),
-                    vec![],
-                    None
-                );
-                args_vec.push(s);
+                                },
+                            )?),
+                            vec![],
+                            None,
+                        );
+                        args_vec.push(s);
+                    }
+                }
+
+                Ok(symbols::Symbol::new(
+                    term.get_name(),
+                    if fma.negate {
+                        symbols::SymbolKind::MatchAction(
+                            MatchActionType::MatchAction,
+                        )
+                    } else {
+                        symbols::SymbolKind::MatchAction(
+                            MatchActionType::NegateMatchAction,
+                        )
+                    },
+                    // The AcceptReject value from the Apply section does not end up
+                    // here, instead it lives on the ApplyBody, and it is saved in the
+                    // symboltable of the filter_map.
+                    TypeDef::Unknown,
+                    args_vec,
+                    Some(token),
+                ))
+            }
+            MatchAction::PatternMatchAction(pma) => {
+                // this code is all very similar to `eval_as_match_expression`
+                trace!("pattern match");
+                trace!("{:#?}", pma);
+                let enum_ident = pma.operator.get_ident()?;
+                // check if the enum makes sense as an AccessReceiver
+                let mut enum_s = ast::AccessReceiver::Ident(enum_ident.clone())
+                    .eval(symbols.clone(), scope.clone(), &[])
+                    .map_err(|_| {
+                        CompileError::from(format!(
+                            "Variable '{}' (supposedly an Enum) cannot be found in \
+                            this scope.",
+                            enum_ident
+                        ))
+                    })?;
+                enum_s = enum_s.set_type(TypeDef::GlobalEnum(
+                    GlobalEnumTypeDef::BmpMessageType,
+                ));
+                enum_s = enum_s.set_kind(symbols::SymbolKind::GlobalEnum);
+
+                trace!("symbol {:#?}", enum_s);
+                trace!("enum symbol");
+                trace!("{:#?}", enum_s);
+
+                // loop over all the variants for this enum. AccessReceiver::eval
+                // checks for the existence of the identifier.
+                for variant in pma.match_arms.iter() {
+                    trace!(
+                        "{}({:?}) -> {:#?}",
+                        variant.variant_id,
+                        variant.data_field,
+                        variant.actions
+                    );
+
+                    if let TypeDef::GlobalEnum(e_num) = enum_s.get_type() {
+                        let (variant_type_def, variant_token) = e_num
+                            .get_props_for_variant(&variant.variant_id)?;
+
+                        // create a local scope with the data field variable
+                        // for this variant.
+                        let local_scope = vec![symbols::Symbol::new(
+                            variant.data_field.clone().unwrap().ident,
+                            symbols::SymbolKind::VariableAssignment,
+                            variant_type_def.clone(),
+                            vec![],
+                            Some(variant_token.clone()),
+                        )];
+
+                        // extract the logical expressions for this variant
+                        let mut args_vec = vec![];
+                        for action in &variant.actions {
+                            match action {
+                                (Some(match_action), accept_reject) => {
+                                    // If there's one or more actions in the 
+                                    // filter block we will store them as 
+                                    // args in the vector.
+                                    let match_action_name = match_action
+                                        .eval(
+                                            None,
+                                            symbols.clone(),
+                                            scope.clone(),
+                                            &[],
+                                        )?
+                                        .get_name();
+
+                                    let (_ty, token) = filter_map_symbols
+                                        .get_action(&match_action_name)?;
+
+                                    let s = symbols::Symbol::new(
+                                        match_action_name,
+                                        symbols::SymbolKind::Action,
+                                        TypeDef::AcceptReject(
+                                            accept_reject.unwrap_or(
+                                                ast::AcceptReject::NoReturn,
+                                            ),
+                                        ),
+                                        vec![],
+                                        Some(token),
+                                    );
+                                    args_vec.push(s);
+                                }
+                                (None, Some(accept_reject)) => {
+                                    let s = symbols::Symbol::new(
+                                        variant.variant_id.clone().ident,
+                                        symbols::SymbolKind::MatchAction(
+                                            MatchActionType::EmptyAction,
+                                        ),
+                                        TypeDef::AcceptReject(*accept_reject),
+                                        vec![],
+                                        None,
+                                    );
+                                    args_vec.push(s);
+                                }
+                                (None, None) => {
+                                    todo!()
+                                }
+                            }
+                        }
+                        trace!("matchaction expressions {:?}", args_vec);
+
+                        // let anon_term = vec![symbols::Symbol::new(
+                        //     "anonymous_term".into(),
+                        //     symbols::SymbolKind::Term,
+                        //     TypeDef::Boolean,
+                        //     args_vec,
+                        //     Some(Token::AnonymousTerm),
+                        // )];
+
+                        enum_s.add_arg(symbols::Symbol::new(
+                            variant.data_field.clone().unwrap().ident,
+                            symbols::SymbolKind::EnumVariant,
+                            variant_type_def,
+                            args_vec,
+                            Some(variant_token),
+                        ));
+                    }
+                }
+
+                trace!("result enum eval map");
+                trace!("{:#?}", enum_s);
+                Ok(enum_s)
             }
         }
-        let s = symbols::Symbol::new(
-            term.get_name(),
-            if self.negate {
-                symbols::SymbolKind::MatchAction(MatchActionType::MatchAction)
-            } else {
-                symbols::SymbolKind::MatchAction(
-                    MatchActionType::NegateMatchAction,
-                )
-            },
-            // The AcceptReject value from the Apply section does not end up
-            // here, instead it lives on the ApplyBody, and it is saved in the
-            // symboltable of the filter_map.
-            TypeDef::Unknown,
-            args_vec,
-            Some(token),
-        );
 
-        drop(_symbols);
+        // drop(_symbols);
 
-        Ok(s)
+        // Ok(s)
     }
 }
 
@@ -1172,7 +1336,8 @@ impl ast::MethodComputeExpr {
         // take any either.
         if parsed_args.len() != props.arg_types.len() {
             return Err(format!(
-                "Method '{}' on type {:?} expects {} arguments, but {} were provided.",
+                "Method '{}' on type {:?} expects {} arguments, but {} were \
+                provided.",
                 self.ident,
                 method_call_type,
                 props.arg_types.len(),
@@ -1246,6 +1411,8 @@ impl ast::AccessReceiver {
             }
 
             // is it a local-scope-level argument?
+            trace!("checking local scope");
+            trace!("local scope {:#?}", local_scope);
             if let Some(arg) = local_scope
                 .iter()
                 .find(move |s| s.get_name() == search_ar.ident)
@@ -1453,13 +1620,25 @@ impl ast::ValueExpr {
                         let field_name = field_s.get_name();
                         let field_ty = field_s.get_type();
                         checked_values.push(
-                            field_s.try_convert_type_value_into(
-                                *cur_ty.1.clone(),
-                            ).map_err(|_e| CompileError::from(
-                                format!("The field name '{}' has the wrong type. Expected '{}', but got '{}'", field_name, cur_ty.1, field_ty)))?,
+                            field_s
+                                .try_convert_type_value_into(
+                                    *cur_ty.1.clone(),
+                                )
+                                .map_err(|_e| {
+                                    CompileError::from(format!(
+                                        "The field name '{}' has the wrong \
+                                type. Expected '{}', but got '{}'",
+                                        field_name, cur_ty.1, field_ty
+                                    ))
+                                })?,
                         );
                     } else {
-                        return Err(CompileError::from(format!("The field name '{}' cannot be found in type '{}'", field_s.get_name(), type_id.ident)));
+                        return Err(CompileError::from(format!(
+                            "The field \
+                        name '{}' cannot be found in type '{}'",
+                            field_s.get_name(),
+                            type_id.ident
+                        )));
                     }
                 }
 
@@ -1992,9 +2171,9 @@ fn check_type_identifier(
     .into())
 }
 
-// This function checks if a variable exists in the scope of the filter_map, but
-// not in the global scope (variables in the global scope are not allowed).
-// The variables can be of form:
+// This function checks if a variable exists in the scope of the filter_map,
+// but not in the global scope (variables in the global scope are not
+// allowed). The variables can be of form:
 // <var_name>
 // <var of type Record>[.<field>]+
 //
@@ -2025,27 +2204,33 @@ fn get_props_for_scoped_variable(
             return symbols
                 .get(&Scope::Global)
                 .and_then(|gt| {
-                    gt.get_variable(
-                        &search_str.as_str().into()).map(
-                            |s| s.get_props()
-                            .unwrap_or_else(
-                            |_| panic!(
-                                "No token found for variable '{}' in filter-map '{}'",
-                                search_str, filter_map
-                            )
-                        )).ok()
+                    gt.get_variable(&search_str.as_str().into())
+                        .map(|s| {
+                            s.get_props().unwrap_or_else(|_| {
+                                panic!(
+                                    "No token found for variable '{}' in \
+                                filter-map '{}'",
+                                    search_str, filter_map
+                                )
+                            })
+                        })
+                        .ok()
                 })
                 .map_or_else(
                     // No, let's go over the chain of fields to see if it's
                     // a previously defined variable, constant or data-source.
                     || {
                         let var_ty_to = symbols
-                            .get(&scope).and_then(|gt|
-                            gt.get_symbol(first_field_name) ).map(|s| s.get_props())
-                            .ok_or_else(|| format!(
-                                "___ No variable named '{}' found in filter-map '{}'",
-                                first_field_name, filter_map
-                            ))?;
+                            .get(&scope)
+                            .and_then(|gt| gt.get_symbol(first_field_name))
+                            .map(|s| s.get_props())
+                            .ok_or_else(|| {
+                                format!(
+                                    "___ No variable named '{}' found in \
+                                filter-map '{}'",
+                                    first_field_name, filter_map
+                                )
+                            })?;
 
                         let var_ty_to = var_ty_to?;
                         // This checks if `field` is present in the type
@@ -2056,18 +2241,25 @@ fn get_props_for_scoped_variable(
                         // assignment completely matches the assigned
                         // type is not done here.
                         let field_ty = var_ty_to
-                            .1.has_fields_chain(&fields[1..])
+                            .1
+                            .has_fields_chain(&fields[1..])
                             .map_err(|err| {
-                            trace!(
-                                "{} on field '{}' for variable '{}' found in filter-map '{}'",
+                                trace!(
+                                "{} on field '{}' for variable '{}' found in \
+                                filter-map '{}'",
                                 err, fields[1], fields[0].ident, filter_map
                             );
-                            err
-                        })?;
+                                err
+                            })?;
 
-                        // return the type of the last field, but the token 
+                        // return the type of the last field, but the token
                         // of the var/constant/data-source
-                        Ok((var_ty_to.0, field_ty.0, var_ty_to.2, var_ty_to.3))
+                        Ok((
+                            var_ty_to.0,
+                            field_ty.0,
+                            var_ty_to.2,
+                            var_ty_to.3,
+                        ))
                     },
                     // yes, it is:
                     Ok,
@@ -2080,6 +2272,40 @@ fn get_props_for_scoped_variable(
             fields.join(".").as_str()
         )
         .into()),
+    }
+}
+
+impl
+    TryFrom<(
+        ShortString,
+        symbols::SymbolKind,
+        TypeDef,
+        Token,
+        Option<TypeValue>,
+    )> for symbols::Symbol
+{
+    type Error = CompileError;
+    fn try_from(
+        value: (
+            ShortString,
+            symbols::SymbolKind,
+            TypeDef,
+            Token,
+            Option<TypeValue>,
+        ),
+    ) -> Result<Self, CompileError> {
+        match value {
+            (id, sk, ty, to, None) => {
+                Ok(symbols::Symbol::new(id, sk, ty, vec![], Some(to)))
+            }
+            (id, sk, ty, to, Some(tv)) => {
+                Ok(symbols::Symbol::new_with_value(id, sk, tv, vec![], to))
+            }
+            _ => Err(CompileError::from(format!(
+                "Cannot create symbol from {:?}",
+                value
+            ))),
+        }
     }
 }
 
@@ -2102,9 +2328,10 @@ fn _declare_variable(
 
             // Apparently, we have a type.  Let's add it to the symbol table.
             let mut _symbols = symbols.borrow_mut();
-            let filter_map = _symbols
-                .get_mut(scope)
-                .ok_or(format!("1 No filter-map named '{}' found.", filter_map))?;
+            let filter_map = _symbols.get_mut(scope).ok_or(format!(
+                "1 No filter-map named '{}' found.",
+                filter_map
+            ))?;
 
             filter_map.add_variable(
                 type_ident.field_name.ident,
@@ -2115,13 +2342,12 @@ fn _declare_variable(
                 TypeValue::Unknown,
             )
         }
-        Scope::Global => {
-            Err(format!(
-                "Can't create a variable in the global scope (NEVER). Variable '{}'",
-                type_ident.field_name
-            )
-            .into())
-        }
+        Scope::Global => Err(format!(
+            "Can't create a variable in the global scope (NEVER). \
+                Variable '{}'",
+            type_ident.field_name
+        )
+        .into()),
     }
 }
 
@@ -2145,9 +2371,10 @@ fn declare_argument(
 
             // Apparently, we have a type.  Let's add it to the symbol table.
             let mut _symbols = symbols.borrow_mut();
-            let filter_map = _symbols
-                .get_mut(scope)
-                .ok_or(format!("2 No filter-map named '{}' found.", filter_map))?;
+            let filter_map = _symbols.get_mut(scope).ok_or(format!(
+                "2 No filter-map named '{}' found.",
+                filter_map
+            ))?;
 
             filter_map.add_argument(
                 type_ident.field_name.ident,
@@ -2158,13 +2385,12 @@ fn declare_argument(
                 TypeValue::Unknown,
             )
         }
-        Scope::Global => {
-            Err(format!(
-                "Can't create a variable in the global scope (NEVER). Variable '{}'",
-                type_ident.field_name
-            )
-            .into())
-        }
+        Scope::Global => Err(format!(
+            "Can't create a variable in the global scope (NEVER). \
+                Variable '{}'",
+            type_ident.field_name
+        )
+        .into()),
     }
 }
 
@@ -2184,11 +2410,11 @@ fn declare_variable_from_symbol(
     // filter_map.
     match &scope {
         Scope::FilterMap(filter_map) | Scope::Filter(filter_map) => {
-
             let mut _symbols = symbols.borrow_mut();
-            let filter_map = _symbols
-                .get_mut(scope)
-                .ok_or(format!("No filter-map named '{}' found.", filter_map))?;
+            let filter_map = _symbols.get_mut(scope).ok_or(format!(
+                "No filter-map named '{}' found.",
+                filter_map
+            ))?;
 
             match arg_symbol.has_unknown_value() {
                 // This is a variable, create an empty value on the symbol.
@@ -2197,14 +2423,19 @@ fn declare_variable_from_symbol(
 
                     match arg_symbol.get_token()? {
                         Token::TypedRecord | Token::AnonymousRecord => {
-                            let fields =
-                                arg_symbol
-                                    .get_recursive_values_primitive(type_def.clone())
-                                    .map_err(
-                                        |e| format!("{} in type '{}'",e, arg_symbol.get_name())
-                                    )?;
+                            let fields = arg_symbol
+                                .get_recursive_values_primitive(
+                                    type_def.clone(),
+                                )
+                                .map_err(|e| {
+                                    format!(
+                                        "{} in type '{}'",
+                                        e,
+                                        arg_symbol.get_name()
+                                    )
+                                })?;
                             trace!("fields {:?}", fields);
-                        },
+                        }
                         _ => {}
                     }
 
@@ -2216,9 +2447,7 @@ fn declare_variable_from_symbol(
                         None,
                     );
 
-                    filter_map.move_var_or_const_into(
-                        symbol
-                    )
+                    filter_map.move_var_or_const_into(symbol)
                 }
                 // This is a constant, move the value into the symbol we're
                 // storing. This can only be a builtin-typed value.
@@ -2230,20 +2459,16 @@ fn declare_variable_from_symbol(
                         vec![],
                         Token::Constant(None),
                     );
-                    filter_map.move_var_or_const_into(
-                        symbol
-                    )
+                    filter_map.move_var_or_const_into(symbol)
                 }
             }
-
         }
-        Scope::Global => {
-            Err(format!(
-                "Can't create a variable in the global scope (NEVER). Variable '{}'",
-                arg_symbol.get_name()
-            )
-            .into())
-        }
+        Scope::Global => Err(format!(
+            "Can't create a variable in the global scope (NEVER). \
+                Variable '{}'",
+            arg_symbol.get_name()
+        )
+        .into()),
     }
 }
 
@@ -2302,22 +2527,19 @@ fn add_logical_formula(
             drop(_symbols);
 
             let mut _symbols = symbols.borrow_mut();
-            let filter_map = _symbols
-                .get_mut(scope)
-                .ok_or(format!("No filter-map named '{}' found.", filter_map))?;
+            let filter_map = _symbols.get_mut(scope).ok_or(format!(
+                "No filter-map named '{}' found.",
+                filter_map
+            ))?;
 
-            filter_map.add_logical_formula(
-                key.unwrap(),
-                symbol
-            )
+            filter_map.add_logical_formula(key.unwrap(), symbol)
         }
-        Scope::Global => {
-            Err(format!(
-                "Can't create a (sub-)term in the global scope (NEVER). Term '{}'",
-                symbol.get_name()
-            )
-            .into())
-        }
+        Scope::Global => Err(format!(
+            "Can't create a (sub-)term in the global scope (NEVER). Term \
+                '{}'",
+            symbol.get_name()
+        )
+        .into()),
     }
 }
 
@@ -2356,9 +2578,10 @@ fn add_match_action(
     match &scope {
         Scope::FilterMap(filter_map) | Scope::Filter(filter_map) => {
             let mut _symbols = symbols.borrow_mut();
-            let filter_map = _symbols
-                .get_mut(scope)
-                .ok_or(format!("No filter-map named '{}' found.", filter_map))?;
+            let filter_map = _symbols.get_mut(scope).ok_or(format!(
+                "No filter-map named '{}' found.",
+                filter_map
+            ))?;
 
             let token = match_action.get_token()?;
 
@@ -2367,11 +2590,12 @@ fn add_match_action(
                 match_action.get_kind(),
                 match_action.get_type(),
                 match_action.get_args_owned(),
-                Some(token)
+                Some(token),
             ))
         }
         Scope::Global => Err(format!(
-            "Can't create a match action in the global scope (NEVER). Action '{}'",
+            "Can't create a match action in the global scope (NEVER). Action \
+            '{}'",
             match_action.get_name()
         )
         .into()),
@@ -2422,9 +2646,15 @@ fn is_boolean_function(
     );
 
     match (left, right) {
-        ((false, None), (false, None)) => Err("Right and Left hand expressions don't evaluate to boolean functions".into()),
-        ((_, _), (false, None)) => Err("Right hand expression doesn't evaluate to a boolean function".into()),
-        ((false, None), (_, _)) => Err("Left hand expression doesn't evaluate to a boolean function".into()),
+        ((false, None), (false, None)) => Err("Right and Left hand \
+        expressions don't evaluate to boolean functions"
+            .into()),
+        ((_, _), (false, None)) => Err("Right hand expression doesn't \
+        evaluate to a boolean function"
+            .into()),
+        ((false, None), (_, _)) => Err("Left hand expression doesn't \
+        evaluate to a boolean function"
+            .into()),
         // Only accept leaf-nodes for now. Can't think of a reason to accept these, but who knows.
         // ((_, None), (_, None)) => Err("not accepting non-leaf nodes as boolean function".into()),
         _ => Ok(()),
@@ -2469,9 +2699,10 @@ fn _declare_variable_from_typedef(
 
             // Apparently, we have a type.  Let's add it to the symbol table.
             let mut _symbols = symbols.borrow_mut();
-            let filter_map = _symbols
-                .get_mut(scope)
-                .ok_or(format!("No filter-map named '{}' found.", filter_map))?;
+            let filter_map = _symbols.get_mut(scope).ok_or(format!(
+                "No filter-map named '{}' found.",
+                filter_map
+            ))?;
 
             filter_map.add_variable(
                 ident.into(),
@@ -2482,12 +2713,11 @@ fn _declare_variable_from_typedef(
                 TypeValue::Unknown,
             )
         }
-        Scope::Global => {
-            Err(format!(
-                "Can't create a variable in the global scope (NEVER). Variable '{}'",
-                ident
-            )
-            .into())
-        }
+        Scope::Global => Err(format!(
+            "Can't create a variable in the global scope (NEVER). \
+                Variable '{}'",
+            ident
+        )
+        .into()),
     }
 }
