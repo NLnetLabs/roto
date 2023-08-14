@@ -19,7 +19,7 @@ use nom::{
     combinator::map,
     IResult,
 };
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use smallvec::SmallVec;
 
 use crate::compile::CompileError;
@@ -2709,7 +2709,18 @@ impl PrefixLengthRange {
 
 #[derive(Clone, Serialize)]
 pub struct ShortString {
+    #[serde(serialize_with = "short_string_serialize")]
     bytes: SmallVec<[u8; 24]>,
+}
+
+fn short_string_serialize<S>(short_string: &SmallVec<[u8; 24]>, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match str::from_utf8(short_string.as_slice()) {
+        Ok(v) => s.serialize_str(v),
+        Err(err) => Err(serde::ser::Error::custom(&format!("ShortString contains invalid UTF-8 characters: {err}"))),
+    }
 }
 
 impl ShortString {
