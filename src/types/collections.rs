@@ -616,9 +616,7 @@ impl From<ListToken> for usize {
 // variant, including Lists and Records.
 
 #[derive(Debug, PartialEq, Eq, Default, Clone, Hash)]
-pub struct Record(
-    Vec<(ShortString, ElementTypeValue)>
-);
+pub struct Record(Vec<(ShortString, ElementTypeValue)>);
 
 impl<'a> Record {
     pub(crate) fn new(
