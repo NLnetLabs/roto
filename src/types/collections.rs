@@ -1,5 +1,6 @@
 use log::trace;
-use serde::Serialize;
+use serde::ser::SerializeMap;
+use serde::{Serialize, Serializer};
 use smallvec::SmallVec;
 
 use crate::ast::{
@@ -614,8 +615,10 @@ impl From<ListToken> for usize {
 // A recursive, materialized Record type that can contain any TypeValue
 // variant, including Lists and Records.
 
-#[derive(Debug, PartialEq, Eq, Default, Clone, Hash, Serialize)]
-pub struct Record(Vec<(ShortString, ElementTypeValue)>);
+#[derive(Debug, PartialEq, Eq, Default, Clone, Hash)]
+pub struct Record(
+    Vec<(ShortString, ElementTypeValue)>
+);
 
 impl<'a> Record {
     pub(crate) fn new(
@@ -920,6 +923,19 @@ impl RotoType for Record {
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         todo!()
+    }
+}
+
+impl Serialize for Record {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer
+    {
+        let mut map = serializer.serialize_map(Some(self.len()))?;
+        for (key, value) in self.iter() {
+            map.serialize_entry(key.as_str(), value)?;
+        }
+        map.end()
     }
 }
 
