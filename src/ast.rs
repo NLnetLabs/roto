@@ -2707,20 +2707,9 @@ impl PrefixLengthRange {
 
 //------------ ShortString ---------------------------------------------------
 
-#[derive(Clone, Serialize)]
+#[derive(Clone)]
 pub struct ShortString {
-    #[serde(serialize_with = "serialize_short_string")]
     bytes: SmallVec<[u8; 24]>,
-}
-
-fn serialize_short_string<S>(short_string: &SmallVec<[u8; 24]>, s: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    match str::from_utf8(short_string.as_slice()) {
-        Ok(v) => s.serialize_str(v),
-        Err(err) => Err(serde::ser::Error::custom(&format!("ShortString contains invalid UTF-8 characters: {err}"))),
-    }
 }
 
 impl ShortString {
@@ -2808,5 +2797,13 @@ impl fmt::Display for ShortString {
 impl fmt::Debug for ShortString {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self.as_str(), f)
+    }
+}
+
+impl Serialize for ShortString {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer {
+        serializer.serialize_str(self)
     }
 }
