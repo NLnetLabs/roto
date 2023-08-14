@@ -2709,11 +2709,11 @@ impl PrefixLengthRange {
 
 #[derive(Clone, Serialize)]
 pub struct ShortString {
-    #[serde(serialize_with = "short_string_serialize")]
+    #[serde(serialize_with = "serialize_short_string")]
     bytes: SmallVec<[u8; 24]>,
 }
 
-fn short_string_serialize<S>(short_string: &SmallVec<[u8; 24]>, s: S) -> Result<S::Ok, S::Error>
+fn serialize_short_string<S>(short_string: &SmallVec<[u8; 24]>, s: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
