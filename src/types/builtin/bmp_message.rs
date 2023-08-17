@@ -15,7 +15,7 @@ use crate::{
         enum_types::EnumVariant,
         lazyrecord_types::{
             BmpMessage, LazyRecordTypeDef, PeerDownNotification,
-            PeerUpNotification, RouteMonitoring,
+            PeerUpNotification, RouteMonitoring, StatisticsReport,
         },
         typedef::{LazyNamedTypeDef, RecordTypeDef, TypeDef},
         typevalue::TypeValue,
@@ -31,7 +31,7 @@ pub use crate::types::collections::BytesRecord;
 createtoken!(
     BmpMessage;
     route_monitoring = 0
-    // statistics_report = 1
+    statistics_report = 1
     peer_down_notification = 2
     peer_up_notification = 3
     // initiation_message = 4
@@ -68,11 +68,6 @@ impl BytesRecord<BmpMessage> {
                 // TypeDef::LazyRecord(LazyRecordTypeDef::RouteMonitoring),
                 Token::Variant(BmpMessageToken::RouteMonitoring.into()),
             )),
-            // "statistics_report" => {
-            //     BytesRecord::<StatisticsReport>::get_props_for_field(
-            //         field_name,
-            //     )
-            // }
             "PeerUpNotification" => Ok((
                 // TypeDef::Record(BytesRecord::<PeerUpNotification>::type_def()),
                 TypeDef::LazyRecord(LazyRecordTypeDef::PeerUpNotification),
@@ -81,6 +76,10 @@ impl BytesRecord<BmpMessage> {
             "PeerDownNotification" => Ok((
                 TypeDef::LazyRecord(LazyRecordTypeDef::PeerDownNotification),
                 Token::Variant(BmpMessageToken::PeerDownNotification.into()),
+            )),
+            "StatisticsReport" => Ok((
+                TypeDef::LazyRecord(LazyRecordTypeDef::StatisticsReport),
+                Token::Variant(BmpMessageToken::StatisticsReport.into()),
             )),
             name => Err(CompileError::from(format!(
                 "No variant name {} for BmpMessage",
@@ -167,6 +166,23 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
                 .get_field_by_index(
                     field_index,
                     &BytesRecord::<PeerUpNotification>(pu),
+                )
+                .map(|elm| elm.into())
+                .unwrap()
+            }
+            LazyRecordTypeDef::StatisticsReport => {
+                let pu =
+                    routecore::bmp::message::StatisticsReport::from_octets(
+                        bytes::Bytes::copy_from_slice(raw_bytes),
+                    )
+                    .unwrap();
+                LazyRecord::<StatisticsReport>::new(BytesRecord::<
+                    StatisticsReport,
+                >::lazy_type_def(
+                ))
+                .get_field_by_index(
+                    field_index,
+                    &BytesRecord::<StatisticsReport>(pu),
                 )
                 .map(|elm| elm.into())
                 .unwrap()
@@ -403,6 +419,65 @@ impl BytesRecord<PeerDownNotification> {
         .unwrap()
         {
             Ok(Self(pd_msg))
+        } else {
+            Err(VmError::InvalidMsgType)
+        }
+    }
+}
+
+
+//------------ StatisticsReport ---------------------------------------------
+
+bytes_record_impl!(
+    StatisticsReport,
+    #[type_def(
+        record_field(
+            "per_peer_header"; 0,
+            field("address"; 1, IpAddress, per_peer_header.address),
+            enum_field(
+                "adj_rib_type"; 2,
+                EnumVariant<U8> = "BMP_ADJ_RIB_TYPE",
+                BytesRecord<StatisticsReport>,
+                per_peer_header.adj_rib_type
+            ),
+            field("asn"; 3, Asn, per_peer_header.asn),
+            field("is_ipv4"; 4, Boolean, per_peer_header.is_ipv4),
+            field("is_ipv6"; 5, Boolean, per_peer_header.is_ipv6),
+            field(
+                "is_legacy_format"; 6,
+                Boolean,
+                per_peer_header.is_legacy_format
+            ),
+            field(
+                "is_post_policy"; 7,
+                Boolean,
+                per_peer_header.is_post_policy
+            ),
+            field(
+                "is_pre_policy"; 8,
+                Boolean,
+                per_peer_header.is_pre_policy
+            ),
+            enum_field(
+                "peer_type"; 9,
+                EnumVariant<U8> = "BMP_PEER_TYPE",
+                BytesRecord<StatisticsReport>,
+                per_peer_header.peer_type
+            ),
+        ),
+    )]
+);
+
+impl BytesRecord<StatisticsReport> {
+    pub fn new(bytes: bytes::Bytes) -> Result<Self, VmError> {
+        if let routecore::bmp::message::Message::StatisticsReport(
+            sr_msg,
+        ) = routecore::bmp::message::Message::<bytes::Bytes>::from_octets(
+            bytes,
+        )
+        .unwrap()
+        {
+            Ok(Self(sr_msg))
         } else {
             Err(VmError::InvalidMsgType)
         }

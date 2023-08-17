@@ -92,7 +92,10 @@ impl LazyRecordTypeDef {
                 trace!("BmpRouteMonitoring w/ field '{}'", field);
                 BytesRecord::<RouteMonitoring>::get_props_for_field(field)
             }
-            LazyRecordTypeDef::StatisticsReport => todo!(),
+            LazyRecordTypeDef::StatisticsReport => {
+                trace!("BmpStatisticsReport w/ field '{}'", field);
+                BytesRecord::<StatisticsReport>::get_props_for_field(field)
+            }
             LazyRecordTypeDef::PeerUpNotification => {
                 trace!("BmpPeerUpNotification w/ field '{}'", field);
                 BytesRecord::<PeerUpNotification>::get_props_for_field(field)
@@ -135,7 +138,7 @@ impl std::fmt::Display for LazyRecordTypeDef {
         match self {
             LazyRecordTypeDef::InitiationMessage => write!(f, "InitiationMessage"),
             LazyRecordTypeDef::RouteMonitoring => write!(f, "RouteMonitoring"),
-            LazyRecordTypeDef::StatisticsReport => write!(f, "StatiscticsReport"),
+            LazyRecordTypeDef::StatisticsReport => write!(f, "StatisticsReport"),
             LazyRecordTypeDef::PeerUpNotification => write!(f, "PeerUpNotification"),
             LazyRecordTypeDef::PeerDownNotification => write!(f, "PeerDownNotification"),
             LazyRecordTypeDef::RouteMirroring => write!(f, "RouteMirroring"),
