@@ -292,39 +292,40 @@ bytes_record_impl!(
                 BytesRecord<PeerUpNotification>,
                 per_peer_header.adj_rib_type
             ),
-            field("is_ipv4"; 5, Boolean, per_peer_header.is_ipv4),
-            field("is_ipv6"; 6, Boolean, per_peer_header.is_ipv6),
+            field("asn"; 5, Asn, per_peer_header.asn),
+            field("is_ipv4"; 6, Boolean, per_peer_header.is_ipv4),
+            field("is_ipv6"; 7, Boolean, per_peer_header.is_ipv6),
             field(
-                "is_legacy_format"; 7,
+                "is_legacy_format"; 8,
                 Boolean,
                 per_peer_header.is_legacy_format
             ),
             field(
-                "is_post_policy"; 8,
+                "is_post_policy"; 9,
                 Boolean,
                 per_peer_header.is_post_policy
             ),
             field(
-                "is_pre_policy"; 9,
+                "is_pre_policy"; 10,
                 Boolean,
                 per_peer_header.is_pre_policy
             ),
             enum_field(
-                "peer_type"; 10,
+                "peer_type"; 11,
                 EnumVariant<U8> = "BMP_PEER_TYPE",
                 BytesRecord<PeerUpNotification>,
                 per_peer_header.peer_type
             ),
         ),
         field(
-            "remote_port"; 11,
+            "remote_port"; 12,
             U16,
             remote_port
         ),
         record_field(
-            "session_config"; 12,
+            "session_config"; 13,
             field(
-                "has_four_octet_asn"; 13,
+                "has_four_octet_asn"; 14,
                 Boolean,
                 session_config.has_four_octet_asn
             ),
@@ -362,25 +363,26 @@ bytes_record_impl!(
                 BytesRecord<PeerDownNotification>,
                 per_peer_header.adj_rib_type
             ),
-            field("is_ipv4"; 3, Boolean, per_peer_header.is_ipv4),
-            field("is_ipv6"; 4, Boolean, per_peer_header.is_ipv6),
+            field("asn"; 3, Asn, per_peer_header.asn),
+            field("is_ipv4"; 4, Boolean, per_peer_header.is_ipv4),
+            field("is_ipv6"; 5, Boolean, per_peer_header.is_ipv6),
             field(
-                "is_legacy_format"; 5,
+                "is_legacy_format"; 6,
                 Boolean,
                 per_peer_header.is_legacy_format
             ),
             field(
-                "is_post_policy"; 6,
+                "is_post_policy"; 7,
                 Boolean,
                 per_peer_header.is_post_policy
             ),
             field(
-                "is_pre_policy"; 7,
+                "is_pre_policy"; 8,
                 Boolean,
                 per_peer_header.is_pre_policy
             ),
             enum_field(
-                "peer_type"; 8,
+                "peer_type"; 9,
                 EnumVariant<U8> = "BMP_PEER_TYPE",
                 BytesRecord<PeerDownNotification>,
                 per_peer_header.peer_type
