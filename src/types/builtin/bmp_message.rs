@@ -214,7 +214,9 @@ impl From<MessageType> for LazyRecordTypeDef {
             MessageType::InitiationMessage => {
                 LazyRecordTypeDef::InitiationMessage
             }
-            MessageType::TerminationMessage => todo!(),
+            MessageType::TerminationMessage => {
+                LazyRecordTypeDef::TerminationMessage
+            }
             MessageType::RouteMirroring => todo!(),
             MessageType::Unimplemented(_) => todo!(),
         }

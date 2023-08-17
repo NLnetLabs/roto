@@ -19,6 +19,8 @@ pub type PeerUpNotification =
     routecore::bmp::message::PeerUpNotification<bytes::Bytes>;
 pub type PeerDownNotification =
     routecore::bmp::message::PeerDownNotification<bytes::Bytes>;
+pub type TerminationMessage =
+    routecore::bmp::message::TerminationMessage<bytes::Bytes>;
 
 // This is the complete enumeration of all Lazy Record types available to
 // roto users. Note that this does *NOT* include BgpMessage, which is a
@@ -32,6 +34,7 @@ pub enum LazyRecordTypeDef {
     PeerUpNotification,
     PeerDownNotification,
     RouteMirroring,
+    TerminationMessage,
 }
 
 impl LazyRecordTypeDef {
@@ -49,6 +52,7 @@ impl LazyRecordTypeDef {
                 BytesRecord::<PeerDownNotification>::type_def()
             }
             LazyRecordTypeDef::RouteMirroring => todo!(),
+            LazyRecordTypeDef::TerminationMessage => todo!(),
         }
     }
 
@@ -79,6 +83,7 @@ impl LazyRecordTypeDef {
                 )
             },
             LazyRecordTypeDef::RouteMirroring => todo!(),
+            LazyRecordTypeDef::TerminationMessage => todo!(),
         }
     }
 
@@ -107,6 +112,7 @@ impl LazyRecordTypeDef {
                 )
             }
             LazyRecordTypeDef::RouteMirroring => todo!(),
+            LazyRecordTypeDef::TerminationMessage => todo!(),
         }
     }
 }
@@ -142,6 +148,7 @@ impl std::fmt::Display for LazyRecordTypeDef {
             LazyRecordTypeDef::PeerUpNotification => write!(f, "PeerUpNotification"),
             LazyRecordTypeDef::PeerDownNotification => write!(f, "PeerDownNotification"),
             LazyRecordTypeDef::RouteMirroring => write!(f, "RouteMirroring"),
+            LazyRecordTypeDef::TerminationMessage => write!(f, "TerminationMessage"),
         }
     }
 }
@@ -155,6 +162,7 @@ impl From<LazyRecordTypeDef> for usize {
             LazyRecordTypeDef::PeerDownNotification => 3,
             LazyRecordTypeDef::RouteMirroring => 4,
             LazyRecordTypeDef::InitiationMessage => 5,
+            LazyRecordTypeDef::TerminationMessage => 6,
         }
     }
 }
@@ -168,6 +176,7 @@ impl From<usize> for LazyRecordTypeDef {
             3 => LazyRecordTypeDef::PeerUpNotification,
             4 => LazyRecordTypeDef::RouteMonitoring,
             5 => LazyRecordTypeDef::InitiationMessage,
+            6 => LazyRecordTypeDef::TerminationMessage,
             _ => unimplemented!()
         }
     }
