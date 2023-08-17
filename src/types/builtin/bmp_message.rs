@@ -195,7 +195,9 @@ impl From<MessageType> for LazyRecordTypeDef {
             MessageType::PeerUpNotification => {
                 LazyRecordTypeDef::PeerUpNotification
             }
-            MessageType::InitiationMessage => todo!(),
+            MessageType::InitiationMessage => {
+                LazyRecordTypeDef::InitiationMessage
+            }
             MessageType::TerminationMessage => todo!(),
             MessageType::RouteMirroring => todo!(),
             MessageType::Unimplemented(_) => todo!(),

@@ -9,6 +9,8 @@ use crate::{
 
 pub type BmpMessage =
     routecore::bmp::message::Message<bytes::Bytes>;
+pub type InitiationMessage =
+    routecore::bmp::message::InitiationMessage<bytes::Bytes>;
 pub type StatisticsReport =
     routecore::bmp::message::StatisticsReport<bytes::Bytes>;
 pub type RouteMonitoring =
@@ -24,6 +26,7 @@ pub type PeerDownNotification =
 // but it isn't one itself.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
 pub enum LazyRecordTypeDef {
+    InitiationMessage,
     RouteMonitoring,
     StatisticsReport,
     PeerUpNotification,
@@ -34,6 +37,7 @@ pub enum LazyRecordTypeDef {
 impl LazyRecordTypeDef {
     pub fn type_def(&self) -> RecordTypeDef {
         match &self {
+            LazyRecordTypeDef::InitiationMessage => todo!(),
             LazyRecordTypeDef::RouteMonitoring => {
                 BytesRecord::<RouteMonitoring>::type_def()
             }
@@ -54,6 +58,7 @@ impl LazyRecordTypeDef {
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError> {
         match self {
+            LazyRecordTypeDef::InitiationMessage => todo!(),
             LazyRecordTypeDef::RouteMonitoring => {
                 BytesRecord::<RouteMonitoring>::get_props_for_method(
                     ty,
@@ -82,6 +87,7 @@ impl LazyRecordTypeDef {
         field: &Identifier,
     ) -> Result<(TypeDef, Token), CompileError> {
         match self {
+            LazyRecordTypeDef::InitiationMessage => todo!(),
             LazyRecordTypeDef::RouteMonitoring => {
                 trace!("BmpRouteMonitoring w/ field '{}'", field);
                 BytesRecord::<RouteMonitoring>::get_props_for_field(field)
@@ -127,6 +133,7 @@ impl PartialEq<Box<TypeDef>> for LazyRecordTypeDef {
 impl std::fmt::Display for LazyRecordTypeDef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            LazyRecordTypeDef::InitiationMessage => write!(f, "InitiationMessage"),
             LazyRecordTypeDef::RouteMonitoring => write!(f, "RouteMonitoring"),
             LazyRecordTypeDef::StatisticsReport => write!(f, "StatiscticsReport"),
             LazyRecordTypeDef::PeerUpNotification => write!(f, "PeerUpNotification"),
@@ -144,6 +151,7 @@ impl From<LazyRecordTypeDef> for usize {
             LazyRecordTypeDef::PeerUpNotification => 2,
             LazyRecordTypeDef::PeerDownNotification => 3,
             LazyRecordTypeDef::RouteMirroring => 4,
+            LazyRecordTypeDef::InitiationMessage => 5,
         }
     }
 }
@@ -156,6 +164,7 @@ impl From<usize> for LazyRecordTypeDef {
             2 => LazyRecordTypeDef::PeerDownNotification,
             3 => LazyRecordTypeDef::PeerUpNotification,
             4 => LazyRecordTypeDef::RouteMonitoring,
+            5 => LazyRecordTypeDef::InitiationMessage,
             _ => unimplemented!()
         }
     }
