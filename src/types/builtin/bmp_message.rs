@@ -34,8 +34,8 @@ createtoken!(
     statistics_report = 1
     peer_down_notification = 2
     peer_up_notification = 3
-    // initiation_message = 4
-    // termination_message = 5
+    initiation_message = 4
+    termination_message = 5
     // route_mirroring = 6
 );
 
@@ -62,14 +62,15 @@ impl BytesRecord<BmpMessage> {
         field_name: &crate::ast::Identifier,
     ) -> Result<(TypeDef, Token), CompileError> {
         match field_name.ident.as_str() {
+            "InitiationMessage" => Ok((
+                TypeDef::LazyRecord(LazyRecordTypeDef::InitiationMessage),
+                Token::Variant(BmpMessageToken::InitiationMessage.into()),
+            )),
             "RouteMonitoring" => Ok((
-                // TypeDef::Record(BytesRecord::<RouteMonitoring>::type_def()),
                 TypeDef::LazyRecord(LazyRecordTypeDef::RouteMonitoring),
-                // TypeDef::LazyRecord(LazyRecordTypeDef::RouteMonitoring),
                 Token::Variant(BmpMessageToken::RouteMonitoring.into()),
             )),
             "PeerUpNotification" => Ok((
-                // TypeDef::Record(BytesRecord::<PeerUpNotification>::type_def()),
                 TypeDef::LazyRecord(LazyRecordTypeDef::PeerUpNotification),
                 Token::Variant(BmpMessageToken::PeerUpNotification.into()),
             )),
@@ -80,6 +81,10 @@ impl BytesRecord<BmpMessage> {
             "StatisticsReport" => Ok((
                 TypeDef::LazyRecord(LazyRecordTypeDef::StatisticsReport),
                 Token::Variant(BmpMessageToken::StatisticsReport.into()),
+            )),
+            "TerminationMessage" => Ok((
+                TypeDef::LazyRecord(LazyRecordTypeDef::TerminationMessage),
+                Token::Variant(BmpMessageToken::TerminationMessage.into()),
             )),
             name => Err(CompileError::from(format!(
                 "No variant name {} for BmpMessage",
