@@ -19,7 +19,7 @@ use nom::{
     combinator::map,
     IResult,
 };
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use smallvec::SmallVec;
 
 use crate::compile::CompileError;
@@ -2887,7 +2887,7 @@ impl PrefixLengthRange {
 
 //------------ ShortString ---------------------------------------------------
 
-#[derive(Clone, Serialize)]
+#[derive(Clone)]
 pub struct ShortString {
     bytes: SmallVec<[u8; 24]>,
 }
@@ -2977,5 +2977,14 @@ impl fmt::Display for ShortString {
 impl fmt::Debug for ShortString {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self.as_str(), f)
+    }
+}
+
+impl Serialize for ShortString {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer
+    {
+        serializer.serialize_str(self)
     }
 }
