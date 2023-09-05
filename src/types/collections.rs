@@ -1045,7 +1045,7 @@ pub trait EnumBytesRecord {
 // values does not happen here, but in the LazyRecord type.
 
 #[derive(Debug, Serialize)]
-pub struct BytesRecord<T: AsRef<[u8]>>(pub(crate) T);
+pub struct BytesRecord<T: AsRef<[u8]>>(pub T);
 
 impl<T: AsRef<[u8]> + std::fmt::Debug> BytesRecord<T> {
     pub(crate) fn bytes_parser(&self) -> &T {
