@@ -754,6 +754,13 @@ impl<'a> Record {
         self.0.iter().find(|(f, _)| f == &field).map(|(_, v)| v)
     }
 
+    pub fn pop_value_for_field(
+        &mut self,
+        field: &'a str,
+    ) -> Option<ElementTypeValue> {
+        self.0.iter().position(|(f, _)| f == &field).map(|i| self.0.remove(i).1)
+    }
+
     pub fn get_field_by_index(
         &'a self,
         field_index: SmallVec<[usize; 8]>,
