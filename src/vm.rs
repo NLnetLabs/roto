@@ -464,7 +464,15 @@ impl LinearMemory {
     }
 
     fn get_mem_pos_as_owned(&mut self, index: usize) -> Option<TypeValue> {
-        self.0.get_mut(index).map(std::mem::take)
+        // Memory positions 0 and 1 hold the rx and tx value resp., you
+        // can mutate those, but you can't move them out of here. If you
+        // insist on doing this (the PushOutputStreamQueue command in the
+        // VM wants this), then you get a clone
+        match index {
+            0 | 1 => self.0.get(index).cloned(),
+            _ => self.0.get_mut(index).map(std::mem::take)
+        }
+        
     }
 
     fn set_mem_pos(&mut self, index: usize, value: TypeValue) {
