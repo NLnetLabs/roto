@@ -718,24 +718,14 @@ impl<'a> Compiler {
         Ok(())
     }
 
-    pub fn build(source_code: &'a str) -> Result<Rotolo, String> {
-        let mut compiler: Compiler = Compiler::new();
-        compiler
-            .parse_source_code(source_code)
-            .map_err(|err| format!("Parse error: {err}"))?;
-        compiler
-            .eval_ast()
-            .map_err(|err| format!("Eval error: {err}"))?;
-        compiler
-            .inject_compile_time_arguments()
-            .map_err(|op| format!("Argument error: {}", op))?;
-        Ok(compiler.compile())
+    pub fn build(source_code: &'a str) -> Result<Rotolo, CompileError> {
+        Compiler::new().build_from_compiler(source_code)
     }
 
     pub fn build_from_compiler(
         mut self,
         source_code: &'a str,
-    ) -> Result<Rotolo, String> {
+    ) -> Result<Rotolo, CompileError> {
         self.parse_source_code(source_code)
             .map_err(|err| format!("Parse error: {err}"))?;
         self.eval_ast()
