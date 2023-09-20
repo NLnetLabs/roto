@@ -1786,42 +1786,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                             }
                         }
                     }
-                    // args: [variant_index]
-                    OpCode::StackIntoVariantOrSkipToLabel => {
-                        for arg in args.args.iter() {
-                            if let CommandArg::Variant(variant_index) = arg {
-                                let mut s = self.stack.borrow_mut();
-                                match s.pop()?.pos {
-                                    StackRefPos::MemPos(mem_pos) => {
-                                        let val = mem
-                                            .get_mp_as_variant_or_unknown(
-                                                mem_pos as usize,
-                                                Token::Variant(
-                                                    *variant_index,
-                                                ),
-                                            )?;
-                                        trace!(
-                                            "unpacked variant value {:?}",
-                                            val
-                                        );
-                                        if val == TypeValue::Unknown {
-                                            skip_label = true;
-                                        } else {
-                                            mem.set_mem_pos(
-                                                mem_pos as usize,
-                                                val,
-                                            );
-                                            s.push(StackRefPos::MemPos(
-                                                mem_pos,
-                                            ))?;
-                                        }
-                                    }
-                                    _ => return Err(VmError::InvalidVariant),
-                                };
-                            }
-                        }
-                    }
-                    // stack args: [variant_index]
+                    // stack args: []
                     OpCode::StackIsVariant => {
                         for arg in args.args.iter() {
                             if let CommandArg::Variant(variant_index) = arg {
@@ -2327,7 +2292,6 @@ impl Display for Command {
             OpCode::StackIsVariant => {
                 return write!(f, "{:?}=={:?}?", self.op, self.args[0]);
             }
-            OpCode::StackIntoVariantOrSkipToLabel => " ",
             OpCode::CondFalseSkipToEOB => "-->",
             OpCode::CondTrueSkipToEOB => "-->",
             OpCode::CondUnknownSkipToLabel => "-->",
@@ -2524,11 +2488,10 @@ pub enum OpCode {
     PushStack,
     ClearStack,
     StackOffset,
-    // Replace the current top of the stack value with the value of one of
-    // its variants, if the argument to the command corresponds with the
-    // variant that is stored in the top of the stack. Otherwise replaces
-    // the current top of the stack with TypeValue::Unknown.
-    StackIntoVariantOrSkipToLabel,
+    // Inspects the top of the stack to see if its value corresponds to
+    // the variant of an enum, passed in as a Variant Token in the arguments
+    // of the command. Pushes the result (the boolean) onto the stack. Does
+    // not pop the enum instance of the stack.
     StackIsVariant,
     MemPosSet,
     ArgToMemPos,
