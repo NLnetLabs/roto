@@ -16,10 +16,16 @@ use crate::{
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize)]
 pub enum Token {
+    // A value represented by the index of the entry in the `local_variables`
+    // VariableRefTable of the CompilerState.
     Variable(usize),
     Method(usize),
     Variant(usize),
     Argument(usize),
+    // Actions can have arguments passed in, a symbol labeled with this token
+    // references that argument. The usize represents the index of the
+    // argument.
+    ActionArgument(usize),
     // There can only ever be one RxType
     RxType,
     // There can only ever be one TxType too
@@ -39,8 +45,9 @@ pub enum Token {
     // A term that is used only once (in a match expression) and will be
     // compiled at the spot.
     AnonymousTerm,
-    Action(u8),
-    MatchAction(u8),
+    ActionSection(usize),
+    NoAction,
+    MatchAction(usize),
     // None as data indicates a constant that wasn't stored (yet) in the
     // symbol table.
     Constant(Option<usize>),
@@ -89,6 +96,7 @@ impl From<Token> for usize {
     fn from(token: Token) -> Self {
         match token {
             Token::Argument(v) => v,
+            Token::ActionArgument(v) => v,
             Token::Table(v) | Token::Rib(v) => v,
             Token::Method(v) => v,
             Token::Variable(v) => v,

@@ -336,7 +336,7 @@ impl FilterMap {
 pub struct FilterMapBody {
     pub define: Define,
     pub expressions: Vec<FilterMapExpr>,
-    pub apply: Option<Apply>,
+    pub apply: Option<ApplySection>,
 }
 
 impl FilterMapBody {
@@ -344,7 +344,7 @@ impl FilterMapBody {
         let (input, (define, expressions, apply)) = permutation((
             Define::parse,
             context("filter-map expressions", many1(FilterMapExpr::parse)),
-            opt(Apply::parse),
+            opt(ApplySection::parse),
         ))(input)?;
 
         Ok((
@@ -679,22 +679,27 @@ pub struct TermPatternMatchArm {
 pub struct ActionSection {
     pub ident: Identifier,
     // pub for_kv: Option<TypeIdentField>,
-    // pub with_kv: Vec<TypeIdentField>,
+    pub with_kv: Vec<TypeIdentField>,
     pub body: ActionSectionBody,
 }
 
 impl ActionSection {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (_, ident, body)) = context(
+        let (input, (ident, with_kv, body)) = context(
             "action definition",
             tuple((
-                opt_ws(tag("action")),
-                context(
-                    "action name",
-                    delimited(multispace1, Identifier::parse, multispace1),
+                preceded(
+                    opt_ws(tag("action")),
+                    cut(context(
+                        "action name",
+                        delimited(
+                            multispace1,
+                            Identifier::parse,
+                            multispace1,
+                        ),
+                    )),
                 ),
-                // for_statement,
-                // with_statement,
+                with_statement,
                 context(
                     "action block",
                     delimited(
@@ -711,7 +716,7 @@ impl ActionSection {
             ActionSection {
                 ident,
                 // for_kv,
-                // with_kv: with_kv.unwrap_or_default(),
+                with_kv: with_kv.unwrap_or_default(),
                 body,
             },
         ))
@@ -744,7 +749,7 @@ impl ActionSectionBody {
 
 // ActionExpr ::= ComputeExpr | GlobalMethodExpr
 
-// An Optional Gloval Compute Expressions can be either an ordinary Compute
+// An Optional Global Compute Expressions can be either an ordinary Compute
 // Expression, or a global method call, i.e. 'some-global-method(a, b)', so
 // an expression without any dots in it ending in a method call.
 
@@ -793,23 +798,23 @@ impl OptionalGlobalComputeExpr {
     }
 }
 
-//------------ ImportBody -----------------------------------------------------
+//------------ ImportBody ---------------------------------------------------
 
 // #[derive(Clone, Debug)]
 // pub struct ImportBody {}
 
-//------------ Apply ---------------------------------------------------------
+//------------ ApplySection -------------------------------------------------
 
-// Apply ::= 'apply' ForStatement WithStatement '{' ApplyBody '}'
+// ApplySection ::= 'apply' ForStatement WithStatement '{' ApplyBody '}'
 
 #[derive(Clone, Debug)]
-pub struct Apply {
+pub struct ApplySection {
     pub body: ApplyBody,
     pub for_kv: Option<TypeIdentField>,
     pub with_kv: Vec<TypeIdentField>,
 }
 
-impl Apply {
+impl ApplySection {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, (for_kv, with_kv, body)) = context(
             "apply definition",
@@ -881,7 +886,7 @@ impl ApplyBody {
 #[derive(Clone, Debug)]
 pub struct ApplyScope {
     pub scope: Option<Identifier>,
-    pub match_action: MatchAction,
+    pub match_action: MatchActionExpr,
 }
 
 impl ApplyScope {
@@ -944,7 +949,7 @@ impl ApplyScope {
                     |expr| {
                         (
                             input,
-                            MatchAction::FilterMatchAction(
+                            MatchActionExpr::FilterMatchAction(
                                 FilterMatchActionExpr {
                                     operator: expr.0,
                                     negate: if let Some(negate) = expr.1 .1 {
@@ -964,7 +969,7 @@ impl ApplyScope {
                         "pattern match expression",
                         opt_ws(PatternMatchActionExpr::parse),
                     ),
-                    |expr| (input, MatchAction::PatternMatchAction(expr)),
+                    |expr| (input, MatchActionExpr::PatternMatchAction(expr)),
                 ),
             )),
         ))(input)?;
@@ -979,16 +984,22 @@ impl ApplyScope {
 }
 
 // the Apply section can host regular rules that bind a term to an action
-// under specified conditions. It can also host a match expressions that
+// under specified conditions. It can also host a match expression that
 // does the same for enums.
+
+//      MatchAction ::= FilterMatch | PatternMatch
 #[derive(Clone, Debug)]
-pub enum MatchAction {
+pub enum MatchActionExpr {
     FilterMatchAction(FilterMatchActionExpr),
     PatternMatchAction(PatternMatchActionExpr),
 }
 
 // A regular 'filter match` expression that binds a term to a (number of)
 // action(s).
+
+// FilterMatchAction ::= MatchOperator Value 'not'? 'matching' '{'
+// ActionCallExpr+ ';' ( AcceptReject ';' )? '}' ';'?
+
 #[derive(Clone, Debug)]
 
 pub struct FilterMatchActionExpr {
@@ -999,8 +1010,10 @@ pub struct FilterMatchActionExpr {
 }
 
 // A complete pattern match on a variable where every match arm can have
-// multiple action. Similar to TermMatchActionExpr, but a PatternMatchAction
+// multiple actions. Similar to TermMatchActionExpr, but a PatternMatchAction
 // can only take actions in its body, no Logic Expressions.
+
+// PatternMatchAction ::= MatchOperator '{' PatternMatchActionArm+ '},'
 
 #[derive(Clone, Debug)]
 pub struct PatternMatchActionExpr {
@@ -1041,12 +1054,38 @@ impl PatternMatchActionExpr {
     }
 }
 
+//------------ ActionCallExpr -----------------------------------------------
+
+// An invocation of an action, used in the Apply section only, it consists of
+// the name of the actions plus an optional arguments list of variable names,
+// whose values are to be passed in at runtime. The Action definition should
+// have all the variables defined in a `with` statement.
+#[derive(Clone, Debug)]
+pub struct ActionCallExpr {
+    pub action_id: Identifier,
+    pub args: Option<ArgExprList>,
+}
+
+impl ActionCallExpr {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (action_id, args)) = context(
+            "action expression",
+            tuple((
+                opt_ws(Identifier::parse),
+                opt(delimited(char('('), ArgExprList::parse, char(')'))),
+            )),
+        )(input)?;
+
+        Ok((input, Self { action_id, args }))
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct PatternMatchActionArm {
     pub variant_id: Identifier,
     pub data_field: Option<Identifier>,
     pub guard: Option<ValueExpr>,
-    pub actions: Vec<(Option<ComputeExpr>, Option<AcceptReject>)>,
+    pub actions: Vec<(Option<ActionCallExpr>, Option<AcceptReject>)>,
 }
 
 impl PatternMatchActionArm {
@@ -1080,11 +1119,11 @@ impl PatternMatchActionArm {
                     opt_ws(char('{')),
                     alt((
                         many1(context(
-                            "Call Expression",
+                            "Action Expression",
                             tuple((
                                 map(
                                     opt_ws(terminated(
-                                        ComputeExpr::parse,
+                                        ActionCallExpr::parse,
                                         opt_ws(char(';')),
                                     )),
                                     Some,
@@ -1102,7 +1141,7 @@ impl PatternMatchActionArm {
                 // comma at the end. Cannot end with a
                 // accept_reject
                 map(
-                    terminated(opt_ws(ComputeExpr::parse), opt_ws(char(','))),
+                    terminated(opt_ws(ActionCallExpr::parse), opt_ws(char(','))),
                     |l_e| vec![(Some(l_e), None)],
                 ),
             )),
@@ -2983,7 +3022,7 @@ impl fmt::Debug for ShortString {
 impl Serialize for ShortString {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: Serializer
+        S: Serializer,
     {
         serializer.serialize_str(self)
     }

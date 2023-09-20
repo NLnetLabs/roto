@@ -411,7 +411,7 @@ fn bmp_message_6() {
 
     let res = test_data_3(
         Filter("is-rm-ipv4".into()),
-        r###"
+        r#"
         filter is-rm-ipv4 {
             define {
                 rx msg: BmpMessage;
@@ -422,15 +422,23 @@ fn bmp_message_6() {
                     xx_msg.per_peer_header.is_ipv4;
                 }
             }
+
+            action send_msg with yy_msg: BmpPeerDownNotification {
+                mqtt.send(
+                    {
+                        asn: yy_msg.per_peer_header.asn,
+                        message: String.format(
+                            "Peer with ASN {} just went down.", 
+                            yy_msg.per_peer_header.is_legacy_format
+                        )
+                    }
+                );
+            }
         
             apply {
                 match msg with {
                     RouteMonitoring(rm_msg) | is_rm_ipv4(rm_msg) -> { return accept; },
-                    PeerDownNotification(pd_msg) -> 
-                        mqtt.send(
-                            String.format("Peer with ASN {} just went down.", 
-                            pd_msg.per_peer_header.asn)
-                        ),
+                    PeerDownNotification(pd_msg) -> { send_msg(pd_msg); },
                 }
                 reject;
             }
@@ -440,7 +448,7 @@ fn bmp_message_6() {
             asn: Asn,
             message: String
         }
-        "###,
+        "#,
     );
 
     trace!("res : {:?}", res);

@@ -169,8 +169,10 @@ impl Symbol {
         &self,
         type_def: TypeDef,
     ) -> Result<Vec<(ShortString, TypeDef, TypeValue)>, CompileError> {
+        trace!("get_recursive_values_primitive with args {:#?} and type_def {:#?}", self.get_args(), type_def);
         let mut rec_values: Vec<(ShortString, TypeDef, TypeValue)> = vec![];
         for arg in self.get_args() {
+            trace!("arg {:?}", arg);
             if let TypeDef::Record(_rec) = arg.get_type() {
                 if let Some(checked_type) =
                     type_def.get_field(&arg.get_name())
@@ -202,16 +204,38 @@ impl Symbol {
             } else if let Some(checked_type) =
                 type_def.get_field(&arg.get_name())
             {
-                let checked_val =
-                    arg.get_value().clone().into_type(&checked_type)?;
-                rec_values.push((arg.get_name(), checked_type, checked_val));
+                trace!(
+                    "field with name '{}' found in type_def",
+                    arg.get_name()
+                );
+                trace!("checked type {:?}", checked_type);
+
+                if !arg.get_type().test_type_conversion(checked_type.clone())
+                {
+                    return Err(CompileError::from(format!("Cannot convert value of type {} into value of type {}", arg.get_type(), checked_type)));
+                };
+                // let checked_val =
+                //     arg.get_value().clone().into_type(&checked_type)?;
+                rec_values.push((
+                    arg.get_name(),
+                    checked_type,
+                    arg.get_value().clone(),
+                ));
             } else {
+                trace!("arg.get_name()=\"{}\"", arg.get_name());
+                trace!(
+                    "type_def.get_field()=\"{:?}\"",
+                    type_def.get_field(&arg.get_name())
+                );
+                trace!("type_def {:?}", type_def);
+                trace!("checked values {:?}", rec_values);
                 return Err(CompileError::from(format!(
                     "'{}' cannot be found in '{}'",
                     arg.get_name(),
                     type_def
                 )));
             }
+            trace!("recursive value {:?}", rec_values);
         }
 
         Ok(rec_values)
@@ -435,8 +459,9 @@ pub enum SymbolKind {
     Argument,      // a passed-in filter_map or term level argument
     AnonymousType, // type of a sub-record
     NamedType,     // User-defined type of a record
-    GlobalEnum,    // reference to a complete globally defined enum
-    EnumVariant,   // one of the variants of an enum
+
+    GlobalEnum,  // reference to a complete globally defined enum
+    EnumVariant, // one of the variants of an enum
 
     // accessor symbols
     // symbols that come after an access receiver in the args list.
@@ -466,8 +491,8 @@ pub enum SymbolKind {
 
     // apply symbols
     MatchAction(MatchActionType),
-    Action,
-    SubAction,
+    ActionSection,
+    ActionCall,
     Term,
 
     // A symbol that has been consumed by the compiler
@@ -476,9 +501,8 @@ pub enum SymbolKind {
 
 #[derive(Debug)]
 pub struct MatchAction {
-    _action_type: MatchActionType,
-    _quantifier: MatchActionQuantifier,
-    symbol: Symbol,
+    pub(crate) _quantifier: MatchActionQuantifier,
+    pub(crate) symbol: Symbol,
 }
 
 impl MatchAction {
@@ -499,18 +523,26 @@ impl MatchAction {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
+pub enum ActionType {
+    Named,
+    Empty,
+}
+
+#[derive(Debug, Copy, Clone)]
 pub enum MatchActionQuantifier {
-    Exists,
-    ExactlyOne,
-    Every,
+    MatchesAny,
+    MatchesVariant,
+    MatchesExactlyOne,
+    MatchesEvery,
 }
 
 #[derive(Debug, Hash, Copy, Clone, Eq, PartialEq)]
 pub enum MatchActionType {
-    MatchAction,
+    FilterMatchAction,
+    PatternMatchAction,
     NegateMatchAction,
-    EmptyAction, // An MatchAction without an action, just a accept or reject
+    // EmptyAction, // An MatchAction without an action, just a accept or reject
 }
 
 impl TryFrom<SymbolKind> for MatchActionType {
@@ -542,12 +574,12 @@ pub struct SymbolTable {
     // The variables and constants that are defined in the filter_map.
     variables: HashMap<ShortString, Symbol>,
     // The evaluated `term` sections that are defined in the filter_map.
-    terms: HashMap<ShortString, Symbol>,
+    term_sections: HashMap<ShortString, Symbol>,
     // The evaluated `action` sections that are defined in the filter_map.
-    actions: HashMap<ShortString, Symbol>,
+    action_sections: HashMap<ShortString, Symbol>,
     // All the `filter` clauses in the `apply` section, the tie actions to
     // terms.
-    match_actions: Vec<MatchAction>,
+    match_action_sections: Vec<MatchAction>,
     // the action that will be activated when all of the match_actions are
     // processed and no early return has been issued
     default_action: crate::ast::AcceptReject,
@@ -599,9 +631,9 @@ impl Default for GlobalSymbolTable {
 pub(crate) struct DepsGraph<'a> {
     pub(crate) rx_type: Option<(ShortString, TypeDef)>,
     pub(crate) tx_type: Option<(ShortString, TypeDef)>,
-    pub(crate) used_variables: Vec<(ShortString, &'a Symbol)>,
+    pub(crate) used_variables: crate::compile::Variables<'a>,
     pub(crate) used_arguments: Vec<(ShortString, &'a Symbol)>,
-    pub(crate) used_data_sources: Vec<(ShortString, &'a Symbol)>,
+    pub(crate) used_data_sources: crate::compile::DataSources<'a>,
 }
 
 // struct Location {
@@ -618,9 +650,9 @@ impl SymbolTable {
             tx_type: None,
             arguments: HashMap::new(),
             variables: HashMap::new(),
-            terms: HashMap::new(),
-            actions: HashMap::new(),
-            match_actions: vec![],
+            term_sections: HashMap::new(),
+            action_sections: HashMap::new(),
+            match_action_sections: vec![],
             default_action: crate::ast::AcceptReject::Accept,
         }
     }
@@ -815,7 +847,7 @@ impl SymbolTable {
     ) -> Result<(), CompileError> {
         let term_token = Some(Token::NamedTerm);
 
-        if let Entry::Vacant(term) = self.terms.entry(term_key.clone()) {
+        if let Entry::Vacant(term) = self.term_sections.entry(term_key.clone()) {
             term.insert(Symbol {
                 name: term_key.clone(),
                 kind: SymbolKind::Term,
@@ -825,23 +857,23 @@ impl SymbolTable {
                 token: term_token,
             });
         } else {
-            let child_args = &mut self.terms.get_mut(&term_key).unwrap().args;
+            let child_args = &mut self.term_sections.get_mut(&term_key).unwrap().args;
             child_args.push(child_symbol);
         }
 
         Ok(())
     }
 
-    pub(crate) fn add_action(
+    pub(crate) fn add_action_section(
         &mut self,
         key: ShortString,
         mut action: Symbol,
     ) -> Result<(), CompileError> {
-        let token_int = self.actions.len() as u8;
-        let token = Some(Token::Action(token_int));
+        let token_int = self.action_sections.len();
+        let token = Some(Token::ActionSection(token_int));
 
         action.token = token;
-        self.actions.insert(key, action);
+        self.action_sections.insert(key, action);
 
         Ok(())
     }
@@ -849,13 +881,18 @@ impl SymbolTable {
     pub(crate) fn move_match_action_into(
         &mut self,
         symbol: Symbol,
+        quantifier: MatchActionQuantifier,
     ) -> Result<(), CompileError> {
-        if let SymbolKind::MatchAction(s) = symbol.get_kind() {
-            self.match_actions.push(MatchAction {
+        if let SymbolKind::MatchAction(_) | SymbolKind::GlobalEnum = symbol.get_kind() {
+            self.match_action_sections.push(MatchAction {
                 symbol,
-                _action_type: s,
-                _quantifier: MatchActionQuantifier::Exists,
+                _quantifier: quantifier,
             })
+        } else {
+            return Err(CompileError::from(format!(
+                "Symbol with name {} is not a match-action",
+                symbol.get_name()
+            )));
         }
         Ok(())
     }
@@ -878,11 +915,11 @@ impl SymbolTable {
             return Some(symbol);
         }
 
-        if let Some(symbol) = self.terms.get(name) {
+        if let Some(symbol) = self.term_sections.get(name) {
             return Some(symbol);
         }
 
-        if let Some(symbol) = self.actions.get(name) {
+        if let Some(symbol) = self.action_sections.get(name) {
             return Some(symbol);
         }
 
@@ -896,7 +933,9 @@ impl SymbolTable {
         self.variables
             .get(name)
             .or_else(|| self.arguments.get(name))
-            .ok_or_else(|| format!("Symbol '{}' not found", name).into())
+            .ok_or_else(|| {
+                format!("Symbol '{}' not found as variable", name).into()
+            })
     }
 
     // Retrieve the symbol from the `variables` table of a filter_map the entry
@@ -934,32 +973,40 @@ impl SymbolTable {
         })
     }
 
-    pub(crate) fn get_term(
+    pub(crate) fn get_term_section(
         &self,
         name: &ShortString,
     ) -> Result<(TypeDef, Token), CompileError> {
-        self.terms
+        self.term_sections
             .get(name)
-            .ok_or_else(|| format!("Symbol '{}' not found", name).into())
+            .ok_or_else(|| {
+                format!("Symbol '{}' not found as term", name).into()
+            })
             .map(|term| (term.ty.clone(), term.token.clone().unwrap()))
     }
 
     pub(crate) fn get_terms(&self) -> Vec<&Symbol> {
-        self.terms.values().collect::<Vec<_>>()
+        self.term_sections.values().collect::<Vec<_>>()
     }
 
-    pub(crate) fn get_action(
+    pub(crate) fn get_action_section(
         &self,
         name: &ShortString,
     ) -> Result<(TypeDef, Token), CompileError> {
-        self.actions
+        self.action_sections
             .get(name)
-            .ok_or_else(|| format!("Symbol '{}' not found", name).into())
+            .ok_or_else(|| {
+                format!(
+                    "Cannot find action named '{}' in the global table.",
+                    name
+                )
+                .into()
+            })
             .map(|action| (action.ty.clone(), action.token.clone().unwrap()))
     }
 
-    pub(crate) fn get_actions(&self) -> Vec<&Symbol> {
-        self.actions.values().collect::<Vec<_>>()
+    pub(crate) fn get_action_sections(&self) -> Vec<&Symbol> {
+        self.action_sections.values().collect::<Vec<_>>()
     }
 
     pub(crate) fn set_default_action(
@@ -973,8 +1020,8 @@ impl SymbolTable {
         self.default_action
     }
 
-    pub(crate) fn get_match_actions(&self) -> Vec<&MatchAction> {
-        self.match_actions.iter().collect::<Vec<_>>() //.values().collect::<Vec<_>>()
+    pub(crate) fn get_match_action_sections(&self) -> Vec<&MatchAction> {
+        self.match_action_sections.iter().collect::<Vec<_>>() //.values().collect::<Vec<_>>()
     }
 
     pub(crate) fn get_data_source(
@@ -985,7 +1032,9 @@ impl SymbolTable {
             .variables
             .values()
             .find(|kv| kv.get_name() == name)
-            .ok_or_else(|| format!("Symbol '{}' not found", name).into());
+            .ok_or_else(|| {
+                format!("Symbol '{}' not found as data source", name).into()
+            });
 
         src.map(|r| match r.get_token() {
             Ok(Token::Rib(_)) => {
@@ -1014,7 +1063,7 @@ impl SymbolTable {
         // and data-sources they refer to.
 
         let mut deps_vec: Vec<&Symbol> = vec![];
-        for s in self.terms.values() {
+        for s in self.term_sections.values() {
             deps_vec.extend(s.flatten_nodes()) // .into_iter().filter(|s| s.get_token().is_ok()));
         }
 

@@ -171,7 +171,7 @@ pub enum TypeDef {
 }
 
 impl TypeDef {
-    // The function defined by this macro called `can_convert_into_type()`
+    // The function defined by this macro called `test_type_conversion()`
     // indicates whether the self type can be converted into another
     // specified type. This function is used during Evaluation.
     // This happens ONLY ON THE UNBOUNDED TYPES, meaning that Type
@@ -247,11 +247,22 @@ impl TypeDef {
     // Gets the type of a field of a Record Type, which can be a primitive,
     // but it can also be an anonymous record type.
     pub fn get_field(&self, field: &str) -> Option<TypeDef> {
+        trace!("Self on get_field() {:?}", self);
         match self {
             TypeDef::Record(fields) => fields
                 .iter()
                 .find(|(ident, _)| ident == &field)
                 .map(|td| *td.1.clone()),
+            TypeDef::OutputStream(type_def) => {
+                if let TypeDef::Record(fields) = &(**type_def) {
+                    fields
+                        .iter()
+                        .find(|(ident, _)| ident == &field)
+                        .map(|td| *td.1.clone())
+                } else {
+                    None
+                }
+            }
             _ => None,
         }
     }
@@ -761,8 +772,8 @@ impl std::fmt::Display for TypeDef {
     }
 }
 
-// This impl is used to see if a TypValue (an instance of a Type) is equal to
-// a type.
+// This impl is used to see if a TypeValue (an instance of a Type) is equal
+// to a TypeDef (a Roto type).
 impl PartialEq<BuiltinTypeValue> for TypeDef {
     fn eq(&self, other: &BuiltinTypeValue) -> bool {
         match self {
@@ -818,7 +829,12 @@ impl PartialEq<BuiltinTypeValue> for TypeDef {
 
 impl PartialEq<TypeValue> for TypeDef {
     fn eq(&self, other: &TypeValue) -> bool {
+        trace!("compare typedef {:?} with typevalue {:?}", self, other);
         match (self, other) {
+            // unknown *values* can be of any type!
+            (_, TypeValue::Unknown) => {
+                true
+            }
             (a, TypeValue::Builtin(b)) => a == b,
             (a, TypeValue::List(b)) => match (a, b) {
                 (TypeDef::List(aa), List(bb)) => match &bb[0] {
@@ -836,31 +852,41 @@ impl PartialEq<TypeValue> for TypeDef {
                     false
                 }
             },
-            (TypeDef::Record(rec), TypeValue::Record(b)) => {
-                trace!("compare {:?} <-> {:?}", rec, b);
-                let fields: Vec<(ShortString, TypeDef)> = b.clone().into();
+            (TypeDef::Record(a_rec_type), TypeValue::Record(b_rec)) => {
+                trace!("rec-rec compare {:?} <-> {:?}", a_rec_type, b_rec);
+                let fields: Vec<(ShortString, TypeDef)> =
+                    b_rec.clone().into();
 
                 let mut field_count = 0;
 
                 for (name, ty) in fields.as_slice() {
-                    if !rec.iter().any(|(k, v)| k == name && v.as_ref() == ty)
-                    {
+                    if !a_rec_type.iter().any(|(k, v)| {
+                        // again, an Unknown TypeValue may be represent any
+                        // TypeDef. The 2nd equal comparison here actually
+                        // recurses to the first variant of this eq() method
+                        k == name
+                            && (v.as_ref() == ty || ty == &TypeValue::Unknown)
+                    }) {
                         trace!(
                             "Error in field instance '{}' of type {}",
                             name,
                             ty
                         );
-                        trace!("record {:?}", rec);
+                        trace!("record {:?}", a_rec_type);
                         return false;
                     }
                     field_count += 1;
                 }
 
-                if field_count != rec.len() {
+                if field_count != a_rec_type.len() {
                     trace!("Missing fields in record {:?}", self);
                     return false;
                 }
                 true
+            }
+            (TypeDef::OutputStream(a), b) => {
+                trace!("compare output stream record to record");
+                **a == *b
             }
             _ => false,
         }
@@ -937,9 +963,9 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             "BmpRouteMonitoringMessage" => {
                 Ok(TypeDef::LazyRecord(LazyRecordTypeDef::RouteMonitoring))
             }
-            "BmpPeerDownNotification" => {
-                Ok(TypeDef::LazyRecord(LazyRecordTypeDef::PeerDownNotification))
-            }
+            "BmpPeerDownNotification" => Ok(TypeDef::LazyRecord(
+                LazyRecordTypeDef::PeerDownNotification,
+            )),
             "BmpPeerUpNotification" => {
                 Ok(TypeDef::LazyRecord(LazyRecordTypeDef::PeerUpNotification))
             }
@@ -979,9 +1005,9 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
             "BmpRouteMonitoringMessage" => {
                 Ok(TypeDef::LazyRecord(LazyRecordTypeDef::RouteMonitoring))
             }
-            "BmpPeerDownNotification" => {
-                Ok(TypeDef::LazyRecord(LazyRecordTypeDef::PeerDownNotification))
-            }
+            "BmpPeerDownNotification" => Ok(TypeDef::LazyRecord(
+                LazyRecordTypeDef::PeerDownNotification,
+            )),
             "BmpPeerUpNotification" => {
                 Ok(TypeDef::LazyRecord(LazyRecordTypeDef::PeerUpNotification))
             }

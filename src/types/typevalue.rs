@@ -791,6 +791,7 @@ impl PartialEq for TypeValue {
                 }
             }
 
+            (TypeValue::Unknown, TypeValue::Unknown) => true,
             // Inconvertible & Incomparable types
             (TypeValue::Unknown, _) => false,
             (TypeValue::UnInit, _) => false,
