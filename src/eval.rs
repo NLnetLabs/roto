@@ -1,9 +1,6 @@
-use arc_swap::access::Constant;
 use log::trace;
 
 use crate::ast::AcceptReject;
-use crate::ast::AccessReceiver;
-use crate::ast::ComputeExpr;
 use crate::ast::FilterType;
 use crate::ast::LogicalExpr;
 use crate::ast::MatchActionExpr;
@@ -12,7 +9,6 @@ use crate::ast::ShortString;
 use crate::ast::TypeIdentField;
 use crate::blocks::Scope;
 use crate::compile::CompileError;
-use crate::compile::Compiler;
 use crate::symbols::GlobalSymbolTable;
 use crate::symbols::MatchActionType;
 use crate::symbols::Symbol;
@@ -599,19 +595,21 @@ impl ast::TermSection {
         trace!("{:#?}", self);
 
         let mut local_scope: Vec<Symbol> = vec![];
+        let mut argument_type = TypeDef::Unknown;
         // There may be a local scope defined in a `with <ARGUMENT_ID>`
         // in the term header.
         if let Some(TypeIdentField { field_name, ty }) = self.with_kv.get(0) {
             // Does the supplied type exist in our scope?
-            let ty =
+            argument_type =
                 check_type_identifier(ty.clone(), symbols.clone(), &scope)?;
+            trace!("type {}", ty);
 
             local_scope.push(symbols::Symbol::new(
                 field_name.clone().ident,
                 SymbolKind::Constant,
-                ty,
+                argument_type.clone(),
                 vec![],
-                Some(Token::BuiltinType(0)),
+                Some(Token::TermArgument(0)),
             ))
         }
 
@@ -620,10 +618,8 @@ impl ast::TermSection {
 
         // We currently only look at the first scope
         let term_scopes = &self.body.scopes[0];
-        for term in term_scopes.match_arms.iter().map(|me| &me.1[0])
-        // .enumerate()
-        {
-            let logical_formula = match &term {
+        for term in term_scopes.match_arms.iter().map(|me| &me.1[0]) {
+            let mut logical_formula = match &term {
                 LogicalExpr::BooleanExpr(expr) => {
                     // Boolean expressions may actually be a (sub)term that
                     // isn't a boolean at this stage. We should be able to
@@ -668,6 +664,13 @@ impl ast::TermSection {
                 )?,
             };
 
+            // The return type of the logical formula is boolean, which is
+            // in itself correct, but boring, because a TermSection always
+            // has a bool as return type. We are repurposing this field to
+            // hold the type of the `with` argument for this section. So that
+            // that type can be used when invoking a code block for
+            // retrieving that argument.
+            logical_formula = logical_formula.set_type(argument_type.clone());
             add_logical_formula(
                 Some(self.ident.ident.clone()),
                 logical_formula,
@@ -1112,6 +1115,31 @@ impl ast::ApplyScope {
 
                         // extract the action calls in this variant's body
                         let mut args_vec = vec![];
+
+                        // If there was a guard defined for this variant then
+                        // we're storing that as the first argument. We are
+                        // only allowing one term as the actual guard (for
+                        // now at least), so we're looking the ident as a
+                        // term,
+                        if let Some(term_call_expr) = &variant.guard {
+                            trace!("Term Call Expr {:?}", term_call_expr);
+                            let term = term_call_expr.eval(
+                                symbols.clone(),
+                                scope.clone(),
+                                &local_scope,
+                            )?;
+                            let (_ty, _token) = filter_map_symbols
+                                .get_term_section(&term.get_name())?;
+                            trace!(
+                                "evaluated guard {:?} as term with {} and\
+                             {:?}",
+                                variant.guard,
+                                _ty,
+                                _token
+                            );
+
+                            args_vec.push(term);
+                        }
                         for action in &variant.actions {
                             match action {
                                 (Some(action_call), accept_reject) => {
@@ -1545,7 +1573,7 @@ impl ast::ValueExpr {
                 trace!("compute expr {:?}", compute_expr);
                 compute_expr.eval(None, symbols, scope, local_scope)
             }
-            ast::ValueExpr::BuiltinMethodCallExpr(builtin_call_expr) => {
+            ast::ValueExpr::RootMethodCallExpr(builtin_call_expr) => {
                 let name: ShortString = builtin_call_expr.ident.clone().ident;
                 let prim_ty =
                     TypeDef::try_from(builtin_call_expr.ident.clone())?;
@@ -1740,6 +1768,16 @@ impl ast::FieldAccessExpr {
         trace!("field access on field type {:?}", field_type);
         trace!("self field names {:?}", self.field_names);
 
+        // The type of a Field Access symbol is going to be the type of the
+        // parent that we're indexing. The kind however indicates whether
+        // we need to lazily or 'directly' retrieve the value for the
+        // index(es).
+        let symbol_kind = if let TypeDef::LazyRecord(_) = field_type {
+            symbols::SymbolKind::LazyFieldAccess
+        } else {
+            symbols::SymbolKind::FieldAccess
+        };
+
         // has_fields_chain preserves the TypeValue of the AST subtree,
         // if it was already set, i.e. in the case of a Constant or a variant
         // of a global enum.
@@ -1753,7 +1791,7 @@ impl ast::FieldAccessExpr {
                 None => {
                     return Ok(symbols::Symbol::new(
                         name.as_str().into(),
-                        symbols::SymbolKind::FieldAccess,
+                        symbol_kind,
                         type_def,
                         vec![],
                         Some(to),
@@ -1763,7 +1801,7 @@ impl ast::FieldAccessExpr {
                 Some(tv) => {
                     return Ok(symbols::Symbol::new_with_value(
                         name.as_str().into(),
-                        symbols::SymbolKind::FieldAccess,
+                        symbol_kind,
                         tv,
                         vec![],
                         to,
@@ -1844,7 +1882,7 @@ impl ast::ActionCallExpr {
         scope: Scope,
         local_scope: &[symbols::Symbol],
     ) -> Result<symbols::Symbol, CompileError> {
-        trace!("action expr {} with {:?}", self.action_id, self.args);
+        trace!("action call expr {} with {:?}", self.action_id, self.args);
         let _symbols = symbols.borrow();
 
         let filter_map_symbols = _symbols.get(&scope).ok_or_else(|| {
@@ -1863,6 +1901,39 @@ impl ast::ActionCallExpr {
         Ok(symbols::Symbol::new(
             self.action_id.ident.clone(),
             symbols::SymbolKind::ActionCall,
+            ty,
+            args,
+            Some(to),
+        ))
+    }
+}
+
+impl ast::TermCallExpr {
+    fn eval(
+        &self,
+        symbols: symbols::GlobalSymbolTable,
+        scope: Scope,
+        local_scope: &[symbols::Symbol],
+    ) -> Result<symbols::Symbol, CompileError> {
+        trace!("term call expr {} with {:?}", self.term_id, self.args);
+        let _symbols = symbols.borrow();
+
+        let filter_map_symbols = _symbols.get(&scope).ok_or_else(|| {
+            format!("No symbols found for filter-map {}", scope)
+        })?;
+
+        let (ty, to) =
+            filter_map_symbols.get_term_section(&self.term_id.ident)?;
+
+        let args = if let Some(args) = &self.args {
+            args.eval(symbols.clone(), scope.clone(), local_scope)?
+        } else {
+            vec![]
+        };
+
+        Ok(symbols::Symbol::new(
+            self.term_id.ident.clone(),
+            symbols::SymbolKind::TermCall,
             ty,
             args,
             Some(to),
@@ -2390,12 +2461,16 @@ impl
                 Ok(symbols::Symbol::new(id, sk, ty, vec![], Some(to)))
             }
             (id, sk, ty, to, Some(tv)) => {
-                Ok(symbols::Symbol::new_with_value(id, sk, tv, vec![], to))
+                let s =
+                    symbols::Symbol::new_with_value(id, sk, tv, vec![], to);
+                if s.get_type() != ty {
+                    return Err(CompileError::from(format!(
+                        "Type and value do not match for {:?}",
+                        s
+                    )));
+                }
+                Ok(s)
             }
-            _ => Err(CompileError::from(format!(
-                "Cannot create symbol from {:?}",
-                value
-            ))),
         }
     }
 }

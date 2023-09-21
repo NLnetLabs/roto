@@ -22,10 +22,13 @@ pub enum Token {
     Method(usize),
     Variant(usize),
     Argument(usize),
-    // Actions can have arguments passed in, a symbol labeled with this token
-    // references that argument. The usize represents the index of the
-    // argument.
+    // Action Sections can have arguments passed in, a symbol labeled with
+    // this token references that argument. The usize represents the index of
+    // the argument. Note that the data-field for now is always zero, since
+    // only `with` argument is allowed per action section
     ActionArgument(usize),
+    // Idem but for Terms
+    TermArgument(usize),
     // There can only ever be one RxType
     RxType,
     // There can only ever be one TxType too
@@ -156,7 +159,7 @@ where
     ) -> Result<TypeValue, VmError>;
 }
 
-pub trait RotoRib {
+pub trait RotoRib: Send + Sync {
     fn exec_value_method<'a>(
         &'a self,
         method_token: usize,

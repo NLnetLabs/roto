@@ -1060,6 +1060,9 @@ impl PatternMatchActionExpr {
 // the name of the actions plus an optional arguments list of variable names,
 // whose values are to be passed in at runtime. The Action definition should
 // have all the variables defined in a `with` statement.
+// 
+// The fields of this struct are the same as `MethodComputeExpr`, but it gets
+// treated differently at eval time.
 #[derive(Clone, Debug)]
 pub struct ActionCallExpr {
     pub action_id: Identifier,
@@ -1069,7 +1072,7 @@ pub struct ActionCallExpr {
 impl ActionCallExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, (action_id, args)) = context(
-            "action expression",
+            "action call expression",
             tuple((
                 opt_ws(Identifier::parse),
                 opt(delimited(char('('), ArgExprList::parse, char(')'))),
@@ -1080,11 +1083,36 @@ impl ActionCallExpr {
     }
 }
 
+//------------ TermActionExpr -----------------------------------------------
+
+// The same as the ActionCallExpr and the MethodCallExpr, but for its
+// treatment by the evaluator.
+
+#[derive(Clone, Debug)]
+pub struct TermCallExpr {
+    pub term_id: Identifier,
+    pub args: Option<ArgExprList>,
+}
+
+impl TermCallExpr {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (term_id, args)) = context(
+            "term call expression",
+            tuple((
+                opt_ws(Identifier::parse),
+                opt(delimited(char('('), ArgExprList::parse, char(')'))),
+            )),
+        )(input)?;
+
+        Ok((input, Self { term_id, args }))
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct PatternMatchActionArm {
     pub variant_id: Identifier,
     pub data_field: Option<Identifier>,
-    pub guard: Option<ValueExpr>,
+    pub guard: Option<TermCallExpr>,
     pub actions: Vec<(Option<ActionCallExpr>, Option<AcceptReject>)>,
 }
 
@@ -1105,7 +1133,7 @@ impl PatternMatchActionArm {
 
         let (input, guard) = opt(preceded(
             opt_ws(char('|')),
-            opt_ws(ValueExpr::parse),
+            opt_ws(TermCallExpr::parse),
         ))(input)?;
 
         let (input, actions) = preceded(
@@ -2088,7 +2116,10 @@ pub enum ValueExpr {
     BooleanLit(BooleanLiteral),
     PrefixMatchExpr(PrefixMatchExpr),
     ComputeExpr(ComputeExpr),
-    BuiltinMethodCallExpr(MethodComputeExpr),
+    // an expression of the form `word(argument)`, so nothing in front of
+    // `word`, this would be something like a builtin method call, or an
+    // action or term with an argument.
+    RootMethodCallExpr(MethodComputeExpr),
     AnonymousRecordExpr(AnonymousRecordValueExpr),
     TypedRecordExpr(TypedRecordValueExpr),
     ListExpr(ListValueExpr),
@@ -2113,7 +2144,7 @@ impl ValueExpr {
             ),
             map(TypedRecordValueExpr::parse, ValueExpr::TypedRecordExpr),
             map(PrefixMatchExpr::parse, ValueExpr::PrefixMatchExpr),
-            map(MethodComputeExpr::parse, ValueExpr::BuiltinMethodCallExpr),
+            map(MethodComputeExpr::parse, ValueExpr::RootMethodCallExpr),
             map(ComputeExpr::parse, ValueExpr::ComputeExpr),
         ))(input)
     }

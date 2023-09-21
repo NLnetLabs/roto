@@ -41,8 +41,8 @@ fn test_data(
         0x00, 0x00, 0x00, 0x00,
     ]);
 
-    let update: UpdateMessage =
-        UpdateMessage::new(buf.clone(), SessionConfig::modern());
+    // let update: UpdateMessage =
+    //     UpdateMessage::new(buf.clone(), SessionConfig::modern());
     // let prefixes: Vec<Prefix> =
     //         update.0.nlris().iter().filter_map(|n| n.prefix().map(|p| p.into())).collect();
     let msg_id = (RotondaId(0), 0);
@@ -198,7 +198,7 @@ fn test_bgp_update_3() {
     common::init();
     let (res, payload) = test_data(
         Scope::FilterMap("bgp-update-filter-map-3".into()),
-        r###"
+        r#"
         filter-map bgp-update-filter-map-3 {
             define {
                 rx_tx bgp_msg: BgpUpdateMessage;
@@ -230,7 +230,7 @@ fn test_bgp_update_3() {
             topic: String,
             bgp_msg: BgpUpdateMessage
         }
-        "###,
+        "#,
     )
     .unwrap();
 

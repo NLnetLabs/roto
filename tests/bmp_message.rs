@@ -38,7 +38,7 @@ fn test_data(
         0x0a, 0x0a, 0x0a, 0x02,
     ];
 
-    let rm_msg = BytesRecord::<RouteMonitoring>::new(buf.into());
+    let rm_msg = BytesRecord::<RouteMonitoring>::new(buf.clone().into());
     assert!(rm_msg.is_ok());
     let rm_msg = rm_msg.unwrap();
     let payload = TypeValue::Builtin(
@@ -47,6 +47,7 @@ fn test_data(
         ),
     );
 
+    trace!("BUF {}", routecore::bmp::message::Message::from_octets(buf.clone()).unwrap());
     trace!("Used Arguments");
     trace!("{:#?}", &roto_pack.get_arguments());
     trace!("Used Data Sources");
@@ -439,6 +440,63 @@ fn bmp_message_6() {
                 match msg with {
                     RouteMonitoring(rm_msg) | is_rm_ipv4(rm_msg) -> { return accept; },
                     PeerDownNotification(pd_msg) -> { send_msg(pd_msg); },
+                }
+                reject;
+            }
+        }
+
+        output-stream mqtt contains Message {
+            asn: Asn,
+            message: String
+        }
+        "#,
+    );
+
+    trace!("res : {:?}", res);
+
+    res.unwrap();
+    // let err =
+    //     "Eval error: Cannot convert value with type Lazy Record".to_string();
+    // let mut str = res.unwrap_err().to_string();
+    // str.truncate(err.len());
+    // assert_eq!(str, err);
+}
+
+
+#[test]
+fn bmp_message_7() {
+    common::init();
+
+    let res = test_data_3(
+        Filter("is-rm-ipv4".into()),
+        r#"
+        filter is-rm-ipv4 {
+            define {
+                rx msg: BmpMessage;
+            }
+
+            term is_rm_ipv4 with xx_msg: BmpRouteMonitoringMessage {
+                match {
+                    xx_msg.per_peer_header.is_legacy_format;
+                }
+            }
+
+            action send_msg with yy_msg: BmpPeerDownNotification {
+                mqtt.send(
+                    {
+                        asn: yy_msg.per_peer_header.asn,
+                        message: String.format(
+                            "Peer with ASN {} just went down.", 
+                            yy_msg.per_peer_header.is_legacy_format
+                        )
+                    }
+                );
+            }
+        
+            apply {
+                match msg with {
+                    PeerDownNotification(rm_msg) | is_rm_ipv4(rm_msg) -> { return accept; },
+                    RouteMonitoring(pd_msg) -> { send_msg(pd_msg); },
                 }
                 reject;
             }

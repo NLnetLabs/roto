@@ -388,7 +388,9 @@ impl TypeDef {
                 }
                 (TypeDef::LazyRecord(lazy_type_def), _) => {
                     parent_type = lazy_type_def.get_props_for_field(field)?;
-                    // Add the token to the FieldAccess vec.
+                    // Add the token to the FieldAccess vec, rewrite the 
+                    // FieldAccess token into a LazyFieldAccess token so that
+                    // the compiler can insert a LoadLazyValue command.
                     result_type = if let Token::FieldAccess(to_f) =
                         &result_type.1
                     {

@@ -123,7 +123,7 @@ fn test_filter_map_message_1() {
 
     test_data(
         Scope::FilterMap("my-message-filter-map-1".into()),
-        r###"
+        r#"
         filter-map my-message-filter-map-1 with my_asn: Asn {
             define {
                 // specify the types of that this filter receives
@@ -167,7 +167,7 @@ fn test_filter_map_message_1() {
             local-pref: U32,
             community: [Community]
         }
-        "###,
+        "#,
     )
     .unwrap();
 }
@@ -178,7 +178,7 @@ fn test_filter_map_message_2() {
 
     let res = test_data(
         Scope::FilterMap("my-message-filter-map-2".into()),
-        r###"
+        r#"
         filter-map my-message-filter-map-2 with my_asn: Asn {
             define {
                 // specify the types of that this filter receives
@@ -222,7 +222,7 @@ fn test_filter_map_message_2() {
             local-pref: U32,
             community: [Community]
         }
-        "###,
+        "#,
     );
 
     let err = "Eval error: Record {message: String, my_asn: Asn, } cannot"
@@ -237,7 +237,7 @@ fn test_filter_map_message_3() {
     common::init();
     test_data(
         Scope::Filter("my-message-filter-map-3".into()),
-        r###"
+        r#"
         filter my-message-filter-map-3 with my_asn: Asn {
             define {
                 // specify the types of that this filter receives
@@ -280,7 +280,7 @@ fn test_filter_map_message_3() {
             local-pref: U32,
             community: [Community]
         }
-        "###,
+        "#,
     ).unwrap();
 }
 
@@ -290,7 +290,7 @@ fn test_filter_map_message_4() {
 
     let res = test_data(
         Scope::Filter("my-message-filter-map-2".into()),
-        r###"
+        r#"
         filter my-message-filter-map-2 with my_asn: Asn {
             define {
                 // specify the types of that this filter receives
@@ -334,7 +334,7 @@ fn test_filter_map_message_4() {
             local-pref: U32,
             community: [Community]
         }
-    "###,
+    "#,
     );
 
     let err =
@@ -349,7 +349,7 @@ fn test_filter_map_message_5() {
     common::init();
     let res = test_data(
         Scope::Filter("my-message-filter-map-5".into()),
-        r###"
+        r#"
         filter my-message-filter-map-5 with my_asn: Asn {
             define {
                 // specify the types of that this filter receives
@@ -396,7 +396,7 @@ fn test_filter_map_message_5() {
             local-pref: U32,
             community: [Community]
         }
-        "###,
+        "#,
     ).unwrap();
     
     assert_eq!(res.output_stream_queue.len(), 1);
@@ -409,7 +409,7 @@ fn test_filter_map_message_6() {
     common::init();
     let res = test_data(
         Scope::Filter("my-message-filter-map-6".into()),
-        r###"
+        r#"
         filter my-message-filter-map-6 with my_asn: Asn {
             define {
                 // specify the types of that this filter receives
@@ -456,7 +456,7 @@ fn test_filter_map_message_6() {
             local-pref: U32,
             community: [Community]
         }
-        "###,
+        "#,
     ).unwrap();
     
     for m in res.output_stream_queue.iter() {

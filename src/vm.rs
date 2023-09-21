@@ -691,7 +691,7 @@ impl<'a> From<&'a Vec<CommandArg>> for CommandArgsStack<'a> {
 #[derive(Debug)]
 pub struct FilterMapArg {
     pub(crate) name: ShortString,
-    index: usize,
+    index: Token,
     ty: TypeDef,
     value: TypeValue,
 }
@@ -713,13 +713,13 @@ impl FilterMapArg {
         self.ty.clone()
     }
 
-    pub fn get_index(&self) -> usize {
-        self.index
+    pub fn get_index(&self) -> Token {
+        self.index.clone()
     }
 
     pub(crate) fn new(
         name: &str,
-        index: usize,
+        index: Token,
         ty: TypeDef,
         value: TypeValue,
     ) -> Self {
@@ -823,7 +823,7 @@ impl FilterMapArgs {
 
     pub fn take_value_by_token(
         &mut self,
-        index: usize,
+        index: Token,
     ) -> Result<TypeValue, VmError> {
         self.0
             .iter_mut()
@@ -832,7 +832,7 @@ impl FilterMapArgs {
             .ok_or(VmError::AnonymousArgumentNotFound)
     }
 
-    pub fn get_by_token_value(&self, index: usize) -> Option<&TypeValue> {
+    pub fn get_by_token_value(&self, index: Token) -> Option<&TypeValue> {
         self.0
             .iter()
             .find(|a| a.get_index() == index)
@@ -858,7 +858,7 @@ impl FilterMapArgs {
     pub fn insert(
         &mut self,
         name: &str,
-        index: usize,
+        index: Token,
         ty: TypeDef,
         value: TypeValue,
     ) {
@@ -1832,7 +1832,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                 CommandArg::Argument(token_value) => {
                                     let arg_value = self
                                         .arguments
-                                        .take_value_by_token(token_value)?;
+                                        .take_value_by_token(Token::Argument(token_value))?;
                                     mem.set_mem_pos(pos as usize, arg_value);
                                 }
                                 _ => {

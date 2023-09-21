@@ -477,6 +477,8 @@ pub enum SymbolKind {
     // `send-to-log`
     GlobalMethodCall,
     FieldAccess,
+    // (multi-)indexed access on a LazyRecord
+    LazyFieldAccess,
 
     // term symbols
     LogicalExpr,
@@ -494,6 +496,7 @@ pub enum SymbolKind {
     ActionSection,
     ActionCall,
     Term,
+    TermCall,
 
     // A symbol that has been consumed by the compiler
     Empty,
@@ -506,14 +509,6 @@ pub struct MatchAction {
 }
 
 impl MatchAction {
-    pub(crate) fn get_args(&self) -> &[Symbol] {
-        self.symbol.get_args()
-    }
-
-    pub(crate) fn get_kind(&self) -> SymbolKind {
-        self.symbol.get_kind()
-    }
-
     pub fn get_name(&self) -> ShortString {
         self.symbol.get_name()
     }

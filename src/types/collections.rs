@@ -15,7 +15,7 @@ use std::marker::PhantomData;
 
 use super::builtin::{BuiltinTypeValue, U32};
 use super::lazyrecord_types::LazyRecordTypeDef;
-use super::typedef::{LazyNamedTypeDef, MethodProps, TypeDef, RecordTypeDef};
+use super::typedef::{LazyNamedTypeDef, MethodProps, TypeDef};
 use super::typevalue::TypeValue;
 
 //============ Collections ==================================================
@@ -212,7 +212,7 @@ impl From<ValueExpr> for ElementTypeValue {
             }
             ValueExpr::PrefixMatchExpr(_) => todo!(),
             ValueExpr::ComputeExpr(_) => todo!(),
-            ValueExpr::BuiltinMethodCallExpr(_) => todo!(),
+            ValueExpr::RootMethodCallExpr(_) => todo!(),
             ValueExpr::AnonymousRecordExpr(rec) => {
                 ElementTypeValue::Nested(Box::new(rec.into()))
             }
