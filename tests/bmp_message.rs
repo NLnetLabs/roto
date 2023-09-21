@@ -462,7 +462,6 @@ fn bmp_message_6() {
     // assert_eq!(str, err);
 }
 
-
 #[test]
 fn bmp_message_7() {
     common::init();
@@ -475,7 +474,7 @@ fn bmp_message_7() {
                 rx msg: BmpMessage;
             }
 
-            term is_rm_ipv4 with xx_msg: BmpRouteMonitoringMessage {
+            term is_rm_ipv4 with xx_msg: BmpPeerDownNotification {
                 match {
                     xx_msg.per_peer_header.is_legacy_format;
                 }
@@ -495,8 +494,8 @@ fn bmp_message_7() {
         
             apply {
                 match msg with {
-                    PeerDownNotification(rm_msg) | is_rm_ipv4(rm_msg) -> { return accept; },
-                    RouteMonitoring(pd_msg) -> { send_msg(pd_msg); },
+                    PeerDownNotification(rm_msg) | is_rm_ipv4(rm_msg) -> { send_msg(rm_msg); },
+                    RouteMonitoring(pd_msg) -> { return accept; },
                 }
                 reject;
             }
@@ -517,4 +516,64 @@ fn bmp_message_7() {
     // let mut str = res.unwrap_err().to_string();
     // str.truncate(err.len());
     // assert_eq!(str, err);
+}
+
+#[test]
+fn bmp_message_8() {
+    common::init();
+
+    let res = test_data_3(
+        Filter("is-rm-ipv4".into()),
+        r#"
+        filter is-rm-ipv4 {
+            define {
+                rx msg: BmpMessage;
+                bla = "my_string";
+            }
+
+            term is_legacy_format with xx_msg: BmpRouteMonitoringMessage {
+                match {
+                    xx_msg.per_peer_header.is_legacy_format;
+                }
+            }
+
+            term is_rm_ipv6 with zz_msg: BmpRouteMonitoringMessage {
+                match {
+                    zz_msg.per_peer_header.is_ipv6;
+                }
+            }
+
+            action send_msg with yy_msg: IntegerLiteral {
+                mqtt.send(
+                    {
+                        asn: yy_msg,
+                        message: yy_msg
+                    }
+                );
+            }
+        
+            apply {
+                match msg with {
+                    PeerDownNotification(rm_msg) | is_rm_ipv6(bla) -> { return accept; },
+                    RouteMonitoring(pd_msg) | is_legacy_format(pd_msg) -> { send_msg(pd_msg); },
+                }
+                reject;
+            }
+        }
+
+        output-stream mqtt contains Message {
+            asn: Asn,
+            message: IntegerLiteral
+        }
+        "#,
+    );
+
+    trace!("res : {:?}", res);
+
+    // res.unwrap();
+    let err =
+        "Eval error: String cannot be converted into Lazy Record".to_string();
+    let mut str = res.unwrap_err().to_string();
+    str.truncate(err.len());
+    assert_eq!(str, err);
 }

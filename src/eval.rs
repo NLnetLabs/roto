@@ -388,19 +388,23 @@ impl ast::FilterMap {
             filter_map_scope.clone(),
         )?;
 
-        let (terms, actions): (Vec<_>, Vec<_>) = self
+        let (term_sections, action_sections): (Vec<_>, Vec<_>) = self
             .body
             .expressions
             .iter()
             .partition(|s| matches!(s, ast::FilterMapExpr::Term(_t)));
 
-        for term in terms.into_iter() {
-            if let ast::FilterMapExpr::Term(t) = term {
+        for (index, term_section) in term_sections.into_iter().enumerate() {
+            if let ast::FilterMapExpr::Term(t) = term_section {
                 match &t.body.scopes[0].operator {
                     // A regular term expression is basically a bunch
                     // of logical expressions.
                     MatchOperator::Match => {
-                        t.eval(symbols.clone(), filter_map_scope.clone())?;
+                        t.eval(
+                            index,
+                            symbols.clone(),
+                            filter_map_scope.clone(),
+                        )?;
                     }
                     // A `match `enum_ident` with` expression is a match
                     // expression and will contain a logical expression per
@@ -408,6 +412,7 @@ impl ast::FilterMap {
                     MatchOperator::MatchValueWith(enum_ident) => {
                         t.eval_as_match_expression(
                             enum_ident,
+                            index,
                             symbols.clone(),
                             filter_map_scope.clone(),
                         )?;
@@ -419,9 +424,9 @@ impl ast::FilterMap {
             }
         }
 
-        for action in actions.into_iter() {
+        for (index, action) in action_sections.into_iter().enumerate() {
             if let ast::FilterMapExpr::Action(a) = action {
-                a.eval(symbols.clone(), filter_map_scope.clone())?;
+                a.eval(index, symbols.clone(), filter_map_scope.clone())?;
             }
         }
 
@@ -583,6 +588,7 @@ impl ast::Define {
 impl ast::TermSection {
     fn eval(
         &self,
+        term_section_index: usize,
         symbols: symbols::GlobalSymbolTable,
         scope: Scope,
     ) -> Result<(), CompileError> {
@@ -604,12 +610,14 @@ impl ast::TermSection {
                 check_type_identifier(ty.clone(), symbols.clone(), &scope)?;
             trace!("type {}", ty);
 
+            // for now we only accept one `with` argument for a term-
+            // section, so the index to the token is always 0.
             local_scope.push(symbols::Symbol::new(
                 field_name.clone().ident,
                 SymbolKind::Constant,
                 argument_type.clone(),
                 vec![],
-                Some(Token::TermArgument(0)),
+                Some(Token::TermArgument(term_section_index, 0)),
             ))
         }
 
@@ -673,6 +681,7 @@ impl ast::TermSection {
             logical_formula = logical_formula.set_type(argument_type.clone());
             add_logical_formula(
                 Some(self.ident.ident.clone()),
+                term_section_index,
                 logical_formula,
                 symbols.clone(),
                 &scope,
@@ -684,6 +693,7 @@ impl ast::TermSection {
     fn eval_as_match_expression(
         &self,
         enum_ident: &ast::Identifier,
+        term_section_index: usize,
         symbols: symbols::GlobalSymbolTable,
         scope: Scope,
     ) -> Result<(), CompileError> {
@@ -809,6 +819,7 @@ impl ast::TermSection {
 
         add_logical_formula(
             Some(self.ident.ident.clone()),
+            term_section_index,
             enum_s,
             symbols,
             &scope,
@@ -823,6 +834,7 @@ impl ast::TermSection {
 impl ast::ActionSection {
     fn eval(
         &self,
+        action_section_index: usize,
         symbols: symbols::GlobalSymbolTable,
         scope: Scope,
     ) -> Result<(), CompileError> {
@@ -846,7 +858,7 @@ impl ast::ActionSection {
                 SymbolKind::Argument,
                 action_section_type.clone(),
                 vec![],
-                Some(Token::ActionArgument(0)),
+                Some(Token::ActionArgument(action_section_index, 0)),
             ))
         }
 
@@ -861,7 +873,7 @@ impl ast::ActionSection {
                 symbols::SymbolKind::Argument,
                 TypeDef::try_from(kv.ty.clone())?,
                 vec![],
-                Some(Token::ActionArgument(i)),
+                Some(Token::ActionArgument(action_section_index, i)),
             ))
         }
 
@@ -998,8 +1010,8 @@ impl ast::ApplyScope {
                     scope.clone(),
                     &[],
                 )?;
-                let (_ty, token) =
-                    filter_map_symbols.get_term_section(&term.get_name())?;
+                let (_ty, token) = filter_map_symbols
+                    .get_term_section_type_and_token(&term.get_name())?;
 
                 let mut args_vec = vec![];
                 for (action_expr, accept_reject) in &fma.actions {
@@ -1129,7 +1141,9 @@ impl ast::ApplyScope {
                                 &local_scope,
                             )?;
                             let (_ty, _token) = filter_map_symbols
-                                .get_term_section(&term.get_name())?;
+                                .get_term_section_type_and_token(
+                                    &term.get_name(),
+                                )?;
                             trace!(
                                 "evaluated guard {:?} as term with {} and\
                              {:?}",
@@ -1892,11 +1906,16 @@ impl ast::ActionCallExpr {
         let (ty, to) =
             filter_map_symbols.get_action_section(&self.action_id.ident)?;
 
-        let args = if let Some(args) = &self.args {
+        let mut args = if let Some(args) = &self.args {
             args.eval(symbols.clone(), scope.clone(), local_scope)?
         } else {
             vec![]
         };
+
+        // Check if the first argument of the call is the same, or can be
+        // converted to the type of the ActionSection
+        let args =
+            vec![args.remove(0).try_convert_type_value_into(ty.clone())?];
 
         Ok(symbols::Symbol::new(
             self.action_id.ident.clone(),
@@ -1915,18 +1934,28 @@ impl ast::TermCallExpr {
         scope: Scope,
         local_scope: &[symbols::Symbol],
     ) -> Result<symbols::Symbol, CompileError> {
-        trace!("term call expr {} with {:?}", self.term_id, self.args);
         let _symbols = symbols.borrow();
 
         let filter_map_symbols = _symbols.get(&scope).ok_or_else(|| {
             format!("No symbols found for filter-map {}", scope)
         })?;
 
-        let (ty, to) =
-            filter_map_symbols.get_term_section(&self.term_id.ident)?;
+        let (ty, to) = filter_map_symbols
+            .get_term_section_type_and_token(&self.term_id.ident)?;
 
-        let args = if let Some(args) = &self.args {
+        let mut args = if let Some(args) = &self.args {
             args.eval(symbols.clone(), scope.clone(), local_scope)?
+        } else {
+            vec![]
+        };
+        let first_arg = args.remove(0);
+
+        // Check if the first argument of the call is the same, or can be
+        // converted to the type of the TermSection
+        let args = if let Some(first_arg_type) =
+            filter_map_symbols.get_type_of_argument(&self.term_id.ident, 0)
+        {
+            vec![first_arg.try_convert_type_value_into(first_arg_type)?]
         } else {
             vec![]
         };
@@ -2682,6 +2711,8 @@ fn declare_variable_from_symbol(
 // a filter_map's symbol table. So, a term is one element of the vec.
 fn add_logical_formula(
     key: Option<ast::ShortString>,
+    // the index of the term section
+    index: usize,
     symbol: symbols::Symbol,
     symbols: symbols::GlobalSymbolTable,
     scope: &Scope,
@@ -2698,7 +2729,7 @@ fn add_logical_formula(
                 filter_map
             ))?;
 
-            filter_map.add_logical_formula(key.unwrap(), symbol)
+            filter_map.add_logical_formula(key.unwrap(), index, symbol)
         }
         Scope::Global => Err(format!(
             "Can't create a (sub-)term in the global scope (NEVER). Term \

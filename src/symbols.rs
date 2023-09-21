@@ -837,22 +837,23 @@ impl SymbolTable {
 
     pub(crate) fn add_logical_formula(
         &mut self,
-        term_key: ShortString,
+        term_section_key: ShortString,
+        term_section_index: usize,
         child_symbol: Symbol,
     ) -> Result<(), CompileError> {
-        let term_token = Some(Token::NamedTerm);
+        // let term_token = Some(Token::TermSection);
 
-        if let Entry::Vacant(term) = self.term_sections.entry(term_key.clone()) {
+        if let Entry::Vacant(term) = self.term_sections.entry(term_section_key.clone()) {
             term.insert(Symbol {
-                name: term_key.clone(),
+                name: term_section_key.clone(),
                 kind: SymbolKind::Term,
                 ty: TypeDef::Boolean,
                 args: vec![child_symbol],
                 value: TypeValue::Unknown,
-                token: term_token,
+                token: Some(Token::TermSection(term_section_index)),
             });
         } else {
-            let child_args = &mut self.term_sections.get_mut(&term_key).unwrap().args;
+            let child_args = &mut self.term_sections.get_mut(&term_section_key).unwrap().args;
             child_args.push(child_symbol);
         }
 
@@ -968,7 +969,7 @@ impl SymbolTable {
         })
     }
 
-    pub(crate) fn get_term_section(
+    pub(crate) fn get_term_section_type_and_token(
         &self,
         name: &ShortString,
     ) -> Result<(TypeDef, Token), CompileError> {
@@ -978,6 +979,18 @@ impl SymbolTable {
                 format!("Symbol '{}' not found as term", name).into()
             })
             .map(|term| (term.ty.clone(), term.token.clone().unwrap()))
+    }
+
+    // Return the type of the first argument of the symbol that lives in this
+    // hashmap, used by the evaluator when looking to resolve arguments.
+    pub(crate) fn get_type_of_argument(
+        &self,
+        name: &ShortString,
+        index: usize
+    ) -> Option<TypeDef> {
+        self.term_sections
+            .get(name)
+            .and_then(|kv| kv.get_args().get(index).map(|kv| kv.get_type()))
     }
 
     pub(crate) fn get_terms(&self) -> Vec<&Symbol> {

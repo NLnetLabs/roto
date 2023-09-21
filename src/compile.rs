@@ -552,10 +552,10 @@ impl From<CompileError> for Box<dyn std::error::Error> {
 }
 
 pub(crate) type Arguments<'a> =
-    Vec<(Token, &'a Symbol, Option<Vec<Command>>)>;
+    Vec<(Token, &'a Symbol, Vec<Command>)>;
 pub(crate) type DataSources<'a> = Vec<(ShortString, &'a Symbol)>;
 pub(crate) type Variables<'a> = Vec<(ShortString, &'a Symbol)>;
-pub(crate) type Terms<'a> = Vec<(ShortString, StackRefPos)>;
+pub(crate) type TermSections<'a> = Vec<(ShortString, StackRefPos)>;
 pub(crate) type ActionSections<'a> = Vec<(usize, StackRefPos)>;
 pub(crate) type Term<'a> = &'a Symbol;
 pub(crate) type Action<'a> = &'a Symbol;
@@ -575,13 +575,28 @@ struct CompilerState<'a> {
     // variable, filled by the compiler when compiling the `used_variables`.
     variable_ref_table: VariablesRefTable,
     used_data_sources: DataSources<'a>,
+    // The cache of all arguments, global or local with their associated
+    // symbol and code block to generate the retrieval of its value. Note
+    // that this cache cannot be used to figure out if a argument is defined
+    // in a particular scope. For the latter purpose the local_scope vec that
+    // is passed around from eval to nested eval method is used. When the
+    // compiler kicks in, this should already been all solved by the
+    // evaluator. Having said that each argument for each scope has a unique
+    // index, the first element in the tuples it stores is a 
+    // Token::ActionArgument or Token::TermArgument. That token has *two*
+    // usizes in it, one that corresponds to the ACtionSection or TermSection
+    // it was defined in (it is the value of the token of the section, which
+    // is an index from the enumration of sections in the source code). The
+    // second usize is the index of the `with` argument of the enumeration of
+    // all the `with` arguments in that section. Currently only one is
+    // allowed, btw.
     used_arguments: Arguments<'a>,
     cur_mir_block: MirBlock,
     // the memory position that is currently empty and available to be
     // written to.
     cur_mem_pos: u32,
     var_read_only: bool,
-    compiled_terms: Terms<'a>,
+    compiled_terms: TermSections<'a>,
     compiled_action_sections: ActionSections<'a>,
 }
 
@@ -951,37 +966,34 @@ fn generate_code_for_token_value(
         Token::Method(_) => todo!(),
         Token::Variant(_) => todo!(),
         Token::Argument(_) => {
-            if let Some(var) = state
+            if let Some((_, _, code_block)) = state
                 .used_arguments
                 .iter()
-                .find(|(to, _arg, _)| to == &token)
+                .find(|(to, _, _)| to == &token)
             {
-                vec![Command::new(
-                    OpCode::PushStack,
-                    vec![CommandArg::Constant(var.1.get_value().clone())],
-                )]
+                code_block.clone()
             } else {
                 vec![]
             }
         }
-        Token::ActionArgument(_) => {
-            if let Some(var_props) = state
+        Token::ActionArgument(_, _) => {
+            if let Some((_, _, code_block)) = state
                 .used_arguments
                 .iter()
-                .find(|(to, _arg, _)| to == &token)
+                .find(|(to, _, _)| to == &token)
             {
-                var_props.2.clone().unwrap()
+                code_block.clone()
             } else {
                 vec![]
             }
         }
-        Token::TermArgument(_) => {
-            if let Some(var_props) = state
+        Token::TermArgument(_, _) => {
+            if let Some((_, _, code_block)) = state
                 .used_arguments
                 .iter()
-                .find(|(to, _arg, _)| to == &token)
+                .find(|(to, _, _)| to == &token)
             {
-                var_props.2.clone().unwrap()
+                code_block.clone()
             } else {
                 vec![]
             }
@@ -990,7 +1002,7 @@ fn generate_code_for_token_value(
         Token::Rib(_) => todo!(),
         Token::OutputStream(_) => todo!(),
         Token::FieldAccess(_) => todo!(),
-        Token::NamedTerm => todo!(),
+        Token::TermSection(_) => todo!(),
         Token::AnonymousTerm => todo!(),
         Token::ActionSection(_) => todo!(),
         Token::NoAction => todo!(),
@@ -1027,9 +1039,9 @@ fn compile_filter_map(
         used_data_sources,
         used_arguments: used_arguments
             .into_iter()
-            .map(|(_n, s)| (s.get_token().unwrap(), s, None))
+            .map(|(_n, s)| (s.get_token().unwrap(), s, vec![]))
             .collect::<Vec<_>>(),
-        compiled_terms: Terms::new(),
+        compiled_terms: TermSections::new(),
         compiled_action_sections: ActionSections::new(),
         cur_mir_block: MirBlock::new(MirBlockType::Assignment),
         var_read_only: false,
@@ -1216,8 +1228,8 @@ fn compile_compute_expr<'a>(
         // The argument passed into an action in a 'with' statement. The
         // assumption is that the arguments live on the top of the stack at
         // the moment the action is called.
-        Token::ActionArgument(_arg_index)
-        | Token::TermArgument(_arg_index) => {
+        Token::ActionArgument(_arg_index, _)
+        | Token::TermArgument(_arg_index, _) => {
             assert!(is_ar);
         }
         // An enum variant mentioned in an arm of a match expression
@@ -1449,8 +1461,8 @@ fn compile_compute_expr<'a>(
                 | Token::Method(_)
                 | Token::Variable(_)
                 | Token::Argument(_)
-                | Token::ActionArgument(_)
-                | Token::TermArgument(_)
+                | Token::ActionArgument(_, _)
+                | Token::TermArgument(_, _)
                 | Token::RxType
                 | Token::TxType
                 | Token::Constant(_) => {
@@ -1500,7 +1512,7 @@ fn compile_compute_expr<'a>(
                         }
                     };
                 }
-                Token::NamedTerm | Token::AnonymousTerm => {
+                Token::TermSection(_) | Token::AnonymousTerm => {
                     return Err(CompileError::new(
                         "Invalid Data Source with \
                     (Anonymous)Term token "
@@ -1597,8 +1609,8 @@ fn compile_compute_expr<'a>(
                 }
                 // The `with` argument of an Action can be of a regular
                 // FieldAccess, or a LazyFieldAccess kind.
-                Some(Token::ActionArgument(_))
-                | Some(Token::TermArgument(_)) => {
+                Some(Token::ActionArgument(_, _))
+                | Some(Token::TermArgument(_, _)) => {
                     trace!("name {}", symbol.get_name());
                     trace!(
                         "LazyFieldAccess {:?} with action argument {:?}",
@@ -1687,7 +1699,7 @@ fn compile_compute_expr<'a>(
         // that will make sure it gets compiled and stored in the compiler
         // state `terms` hashmap, so that it can be inlined in multiple
         // places. It ending up here is an error.
-        Token::NamedTerm => {
+        Token::TermSection(_) => {
             return Err(CompileError::new(
                 "Found invalid Token of variant NamedTerm for compute \
                 expression"
@@ -1883,7 +1895,7 @@ fn compile_compute_expr<'a>(
     trace!("parent token {:?}", parent_token);
     trace!("current token {:?}", symbol.get_token());
 
-    if let Ok(Token::ActionArgument(_current_token)) = symbol.get_token() {
+    if let Ok(Token::ActionArgument(_, _)) = symbol.get_token() {
         parent_token = symbol.get_token().ok();
     } else {
         parent_token = if parent_token.is_some() {
@@ -2168,7 +2180,7 @@ fn compile_apply_section(
                                     state = compile_term_section(
                                         term,
                                         state,
-                                        Some(&enum_instance_code_block),
+                                        &enum_instance_code_block,
                                     )?;
 
                                     state.cur_mir_block.push_command(
@@ -2264,7 +2276,7 @@ fn compile_apply_section(
                                             .unwrap();
                                         state = compile_action_section(
                                             a_s,
-                                            Some(&enum_instance_code_block),
+                                            &enum_instance_code_block,
                                             state,
                                         )?;
 
@@ -2362,7 +2374,7 @@ fn compile_apply_section(
 
                         state.cur_mir_block =
                             MirBlock::new(MirBlockType::Term);
-                        state = compile_term_section(term, state, None)?;
+                        state = compile_term_section(term, state, &[])?;
 
                         // store the resulting value into a variable so that future references
                         // to this term can directly use the result instead of doing the whole
@@ -2492,7 +2504,7 @@ fn compile_match_action<'a>(
         {
             state = compile_action_section(
                 action,
-                Some(&enum_instance_code_block),
+                &enum_instance_code_block,
                 state,
             )?;
         }
@@ -2514,7 +2526,7 @@ fn compile_action_section<'a>(
     action_section: &'a symbols::Symbol,
     // A block of code that retrieves the action argument and puts it on the
     // stack (if any arguments are available in the ActionSection).
-    argument_code_block: Option<&Vec<Command>>,
+    argument_code_block: &[Command],
     mut state: CompilerState<'a>,
 ) -> Result<CompilerState<'a>, CompileError> {
     // do not create assignment block, only produce code to read variables
@@ -2535,7 +2547,7 @@ fn compile_action<'a>(
     action: Action<'a>,
     // The argument code block is needed each time a argument is referenced
     // in the action.
-    argument_code_block: Option<&Vec<Command>>,
+    argument_code_block: &[Command],
     mut state: CompilerState<'a>,
 ) -> Result<CompilerState<'a>, CompileError> {
     match action.get_kind() {
@@ -2552,7 +2564,7 @@ fn compile_action<'a>(
             state.used_arguments.push((
                 action.get_token()?,
                 action,
-                argument_code_block.cloned(),
+                argument_code_block.to_vec(),
             ));
         }
         _ => {
@@ -2572,7 +2584,7 @@ fn compile_term_section<'a>(
     mut state: CompilerState<'a>,
     // The argument code block is needed each time a argument is referenced
     // in the term section.
-    argument_code_block: Option<&Vec<Command>>,
+    argument_code_block: &[Command],
 ) -> Result<CompilerState<'a>, CompileError> {
     // do not create assignment block, only produce code to read variables
     // when referenced.
@@ -2588,7 +2600,7 @@ fn compile_term_section<'a>(
             state.used_arguments.push((
                 token,
                 s,
-                argument_code_block.cloned(),
+                argument_code_block.to_vec(),
             ));
         }
     }
