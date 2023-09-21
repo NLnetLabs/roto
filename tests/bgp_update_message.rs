@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use log::trace;
 use roto::ast::AcceptReject;
 use roto::compile::Compiler;
@@ -5,6 +7,7 @@ use roto::compile::Compiler;
 use roto::blocks::Scope::{self, FilterMap};
 use roto::types::builtin::{BgpUpdateMessage, RotondaId, UpdateMessage};
 use roto::types::collections::Record;
+use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
 use routecore::bgp::message::SessionConfig;
 
@@ -13,7 +16,7 @@ mod common;
 fn test_data(
     name: Scope,
     source_code: &str,
-) -> Result<VmResult, Box<dyn std::error::Error>> {
+) -> Result<(VmResult, BgpUpdateMessage), Box<dyn std::error::Error>> {
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
@@ -38,8 +41,8 @@ fn test_data(
         0x00, 0x00, 0x00, 0x00,
     ]);
 
-    let update: UpdateMessage =
-        UpdateMessage::new(buf, SessionConfig::modern());
+    // let update: UpdateMessage =
+    //     UpdateMessage::new(buf.clone(), SessionConfig::modern());
     // let prefixes: Vec<Prefix> =
     //         update.0.nlris().iter().filter_map(|n| n.prefix().map(|p| p.into())).collect();
     let msg_id = (RotondaId(0), 0);
@@ -49,7 +52,20 @@ fn test_data(
     //     prefixes[0],
     //     update,
     // );
-    let payload = BgpUpdateMessage::new(msg_id, update);
+    let payload = BgpUpdateMessage::new(
+        msg_id,
+        UpdateMessage::new(buf, SessionConfig::modern()),
+    );
+
+    // let payload2 = TypeValue::Builtin(
+    //     roto::types::builtin::BuiltinTypeValue::BgpUpdateMessage(
+    //         Arc::new(payload),
+    //     ),
+    // );
+
+    // let payload = BgpUpdateMessage::new(msg_id, update);
+
+    // assert!(roto_pack.check_rx_payload_type(&payload2));
 
     // Create the VM
     trace!("Used Arguments");
@@ -72,7 +88,7 @@ fn test_data(
     let mem = &mut vm::LinearMemory::uninit();
     let res = vm
         .exec(
-            payload,
+            payload.clone(),
             None::<Record>,
             // Some(filter_map_arguments),
             None,
@@ -85,14 +101,14 @@ fn test_data(
     trace!("rx    : {:?}", res.rx);
     trace!("tx    : {:?}", res.tx);
 
-    Ok(res)
+    Ok((res, payload))
 }
 
 #[test]
 fn test_bgp_update_1() {
     common::init();
 
-    let res = test_data(
+    let (res, _payload) = test_data(
         Scope::FilterMap("filter-unicast-v4-v6-only".into()),
         r###"
         filter-map filter-unicast-v4-v6-only {
@@ -155,7 +171,6 @@ fn test_bgp_update_2() {
             define {
                 rx_tx bgp_msg: BgpUpdateMessage;
             }
-        
 
             term afi-safi-unicast {
                 match {
@@ -175,5 +190,62 @@ fn test_bgp_update_2() {
     )
     .unwrap();
 
-    assert_eq!(res.accept_reject, AcceptReject::Accept);
+    assert_eq!(res.0.accept_reject, AcceptReject::Accept);
+}
+
+#[test]
+fn test_bgp_update_3() {
+    common::init();
+    let (res, payload) = test_data(
+        Scope::FilterMap("bgp-update-filter-map-3".into()),
+        r#"
+        filter-map bgp-update-filter-map-3 {
+            define {
+                rx_tx bgp_msg: BgpUpdateMessage;
+            }
+        
+            term afi-safi-unicast {
+                match {
+                    bgp_msg.nlris.afi != IPV4;
+                }
+            }
+        
+            action send-message {
+                bgp-msg.send({
+                    name: "local-broker",
+                    topic: "testing",
+                    bgp_msg: bgp_msg
+                });
+            }
+        
+            apply {
+                filter match afi-safi-unicast matching {
+                    send-message;
+                };
+            }
+        }
+        
+        output-stream bgp-msg contains Message2 {
+            name: String,
+            topic: String,
+            bgp_msg: BgpUpdateMessage
+        }
+        "#,
+    )
+    .unwrap();
+
+    for m in res.output_stream_queue.iter() {
+        trace!("MESSAGE {:?}", m);
+    }
+
+    assert_eq!(res.output_stream_queue.len(), 1);
+    assert_eq!(res.output_stream_queue[0].get_name(), "local-broker");
+    assert_eq!(
+        res.rx,
+        TypeValue::Builtin(
+            roto::types::builtin::BuiltinTypeValue::BgpUpdateMessage(
+                Arc::new(payload),
+            ),
+        )
+    );
 }

@@ -4,6 +4,7 @@ use std::str::FromStr;
 use log::trace;
 use routecore::bgp::communities::Wellknown;
 use routecore::bgp::types::{AFI, SAFI};
+use routecore::bmp::message::MessageType;
 use serde::Serialize;
 
 use crate::compile::CompileError;
@@ -85,7 +86,7 @@ where
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-        
+
         _args: &'a [crate::vm::StackValue],
         _res_type: super::typedef::TypeDef,
     ) -> Result<TypeValue, VmError> {
@@ -181,7 +182,7 @@ impl GlobalEnumTypeDef {
         })
     }
 
-    // This is the equivalent for a Lazy Enum of the `get_props_for_field` 
+    // This is the equivalent for a Lazy Enum of the `get_props_for_field`
     // method of a Lazy Record.
     pub(crate) fn get_props_for_variant(
         &self,
@@ -192,7 +193,7 @@ impl GlobalEnumTypeDef {
                 trace!("BmpMessage w/ variant '{}'", field);
                 BytesRecord::<BmpMessage>::get_props_for_variant(field)
             }
-            _ => Err(CompileError::from(format!("{}", self)))
+            _ => Err(CompileError::from(format!("{}", self))),
         }
     }
 
@@ -205,81 +206,97 @@ impl GlobalEnumTypeDef {
         trace!("get_value_for_variant {}", variant);
 
         match self {
-            GlobalEnumTypeDef::Afi => match variant {
-                "IPV4" => Ok(BuiltinTypeValue::ConstU16EnumVariant(
-                    EnumVariant::<u16> {
-                        enum_name: self.into(),
-                        value: AFI::Ipv4.into(),
-                    },
-                )),
-                "IPV6" => Ok(BuiltinTypeValue::ConstU16EnumVariant(
-                    EnumVariant::<u16> {
-                        enum_name: self.into(),
-                        value: AFI::Ipv6.into(),
-                    },
-                )),
-                _ => Err(AccessReceiverError::Global),
-            },
-            GlobalEnumTypeDef::Safi => match variant {
-                "UNICAST" => {
-                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant::<u8> {
-                        enum_name: self.into(),
-                        value: SAFI::Unicast.into(),
-                    }))
+            GlobalEnumTypeDef::Afi => {
+                match variant {
+                    "IPV4" => Ok(BuiltinTypeValue::ConstU16EnumVariant(
+                        EnumVariant::<u16> {
+                            enum_name: self.into(),
+                            value: AFI::Ipv4.into(),
+                        },
+                    )),
+                    "IPV6" => Ok(BuiltinTypeValue::ConstU16EnumVariant(
+                        EnumVariant::<u16> {
+                            enum_name: self.into(),
+                            value: AFI::Ipv6.into(),
+                        },
+                    )),
+                    _ => Err(AccessReceiverError::Global),
                 }
-                "MULTICAST" => {
-                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant::<u8> {
-                        enum_name: self.into(),
-                        value: SAFI::Multicast.into(),
-                    }))
+            }
+            GlobalEnumTypeDef::Safi => {
+                match variant {
+                    "UNICAST" => Ok(BuiltinTypeValue::ConstU8EnumVariant(
+                        EnumVariant::<u8> {
+                            enum_name: self.into(),
+                            value: SAFI::Unicast.into(),
+                        },
+                    )),
+                    "MULTICAST" => Ok(BuiltinTypeValue::ConstU8EnumVariant(
+                        EnumVariant::<u8> {
+                            enum_name: self.into(),
+                            value: SAFI::Multicast.into(),
+                        },
+                    )),
+                    _ => Err(AccessReceiverError::Global),
                 }
-                _ => Err(AccessReceiverError::Global),
-            },
-            GlobalEnumTypeDef::WellKnownCommunities => {
-                Ok(BuiltinTypeValue::ConstU32EnumVariant(EnumVariant::<u32> {
+            }
+            GlobalEnumTypeDef::WellKnownCommunities => Ok(
+                BuiltinTypeValue::ConstU32EnumVariant(EnumVariant::<u32> {
                     enum_name: self.into(),
                     value: Wellknown::from_str(variant)
                         .map_err(|_| AccessReceiverError::Arg)?
                         .to_u32(),
-                }))
-            },
-            GlobalEnumTypeDef::BmpMessageType => {
-                match variant {
-                    "ROUTE_MONITORING" =>
-                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant { enum_name: self.into(),
-                        value:  routecore::bmp::message::MessageType::RouteMonitoring.into()
-                    })),
-                    "STATISTICS_REPORT" =>
-                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant { enum_name: self.into(),
-                        value:  routecore::bmp::message::MessageType::StatisticsReport.into()
-                    })),
-                    "PEER_DOWN_NOTIFICATION" =>
-                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant { enum_name: self.into(),
-                        value:  routecore::bmp::message::MessageType::PeerDownNotification.into()
-                    })),
-                    "PEER_UP_NOTIFICATION" =>
-                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant { enum_name: self.into(),
-                        value:  routecore::bmp::message::MessageType::PeerUpNotification.into()
-                    })),
-                    "INITATION_MESSAGE" =>
-                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant { enum_name: self.into(),
-                        value:  routecore::bmp::message::MessageType::InitiationMessage.into()
-                    })),
-                    "TERMINATION_MESSAGE" =>
-                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant { enum_name: self.into(),
-                        value:  routecore::bmp::message::MessageType::TerminationMessage.into()
-                    })),
-                    "ROUTE_MIRRORING" =>
-                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant { enum_name: self.into(),
-                        value:  routecore::bmp::message::MessageType::RouteMirroring.into()
-                    })),
-                    _ => Err(AccessReceiverError::Global),
+                }),
+            ),
+            GlobalEnumTypeDef::BmpMessageType => match variant {
+                "ROUTE_MONITORING" => {
+                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant {
+                        enum_name: self.into(),
+                        value: MessageType::RouteMonitoring.into(),
+                    }))
                 }
-            }
+                "STATISTICS_REPORT" => {
+                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant {
+                        enum_name: self.into(),
+                        value: MessageType::StatisticsReport.into(),
+                    }))
+                }
+                "PEER_DOWN_NOTIFICATION" => {
+                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant {
+                        enum_name: self.into(),
+                        value: MessageType::PeerDownNotification.into(),
+                    }))
+                }
+                "PEER_UP_NOTIFICATION" => {
+                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant {
+                        enum_name: self.into(),
+                        value: MessageType::PeerUpNotification.into(),
+                    }))
+                }
+                "INITATION_MESSAGE" => {
+                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant {
+                        enum_name: self.into(),
+                        value: MessageType::InitiationMessage.into(),
+                    }))
+                }
+                "TERMINATION_MESSAGE" => {
+                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant {
+                        enum_name: self.into(),
+                        value: MessageType::TerminationMessage.into(),
+                    }))
+                }
+                "ROUTE_MIRRORING" => {
+                    Ok(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant {
+                        enum_name: self.into(),
+                        value: MessageType::RouteMirroring.into(),
+                    }))
+                }
+                _ => Err(AccessReceiverError::Global),
+            },
         }
     }
 
-    // This method cheks if any variant of any enum of any global enum itself
+    // This method checks if any variant of any enum of any global enum itself
     // has the name `variant`, if so it creates and returns a symbol, that
     // may have some arguments.
     pub(crate) fn any_variant_as_symbol(
@@ -351,7 +368,9 @@ impl std::fmt::Display for GlobalEnumTypeDef {
             GlobalEnumTypeDef::WellKnownCommunities => {
                 write!(f, "WELL_KNOWN_COMMUNITIES")
             }
-            GlobalEnumTypeDef::BmpMessageType => write!(f, "BMP_MESSAGE_TYPE"),
+            GlobalEnumTypeDef::BmpMessageType => {
+                write!(f, "BMP_MESSAGE_TYPE")
+            }
         }
     }
 }

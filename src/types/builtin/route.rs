@@ -654,7 +654,7 @@ impl RouteStatusDeltaList {
 // The `attr_cache` AttributeList allows readers to get a reference to a path
 // attribute. This avoids having to clone from the AttributeLists in the
 // iterator over the latest attributes.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct BgpUpdateMessage {
     message_id: (RotondaId, LogicalTime),
     raw_message: UpdateMessage,
@@ -1175,7 +1175,7 @@ pub struct RotondaId(pub usize);
 
 //------------ Modification & Creation of new Updates -----------------------
 
-#[derive(Debug, Hash, Serialize)]
+#[derive(Debug, Hash, Serialize, Clone)]
 pub struct UpdateMessage(
     pub routecore::bgp::message::UpdateMessage<bytes::Bytes>,
 );

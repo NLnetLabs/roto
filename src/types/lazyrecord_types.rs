@@ -158,8 +158,8 @@ impl From<LazyRecordTypeDef> for usize {
         match value {
             LazyRecordTypeDef::RouteMonitoring => 0,
             LazyRecordTypeDef::StatisticsReport => 1,
-            LazyRecordTypeDef::PeerUpNotification => 2,
-            LazyRecordTypeDef::PeerDownNotification => 3,
+            LazyRecordTypeDef::PeerDownNotification => 2,
+            LazyRecordTypeDef::PeerUpNotification => 3,
             LazyRecordTypeDef::RouteMirroring => 4,
             LazyRecordTypeDef::InitiationMessage => 5,
             LazyRecordTypeDef::TerminationMessage => 6,

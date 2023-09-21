@@ -60,8 +60,8 @@ impl RotoType for U16 {
         }
     }
 
-    fn exec_value_method<'a>(
-        &'a self,
+    fn exec_value_method(
+        &self,
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
@@ -220,8 +220,8 @@ impl RotoType for U32 {
         }
     }
 
-    fn exec_value_method<'a>(
-        &'a self,
+    fn exec_value_method(
+        &self,
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
@@ -371,8 +371,8 @@ impl RotoType for U8 {
         }
     }
 
-    fn exec_value_method<'a>(
-        &'a self,
+    fn exec_value_method(
+        &self,
         _method_token: usize,
 
         _args: &[StackValue],
@@ -528,8 +528,8 @@ impl RotoType for Boolean {
         }
     }
 
-    fn exec_value_method<'a>(
-        &'a self,
+    fn exec_value_method(
+        &self,
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
@@ -659,8 +659,8 @@ impl RotoType for StringLiteral {
         }
     }
 
-    fn exec_value_method<'a>(
-        &'a self,
+    fn exec_value_method(
+        &self,
         _method_token: usize,
 
         _args: &[StackValue],
@@ -870,8 +870,8 @@ impl RotoType for IntegerLiteral {
         }
     }
 
-    fn exec_value_method<'a>(
-        &'a self,
+    fn exec_value_method(
+        &self,
         method_token: usize,
         args: &[StackValue],
         _res_type: TypeDef,
@@ -1006,8 +1006,8 @@ impl RotoType for HexLiteral {
         }
     }
 
-    fn exec_value_method<'a>(
-        &'a self,
+    fn exec_value_method(
+        &self,
         _method_token: usize,
 
         _args: &[StackValue],
@@ -1145,8 +1145,8 @@ impl RotoType for Prefix {
         }
     }
 
-    fn exec_value_method<'a>(
-        &'a self,
+    fn exec_value_method(
+        &self,
         method_token: usize,
 
         _args: &[StackValue],
@@ -1311,8 +1311,8 @@ impl RotoType for PrefixLength {
         }
     }
 
-    fn exec_value_method<'a>(
-        &'a self,
+    fn exec_value_method(
+        &self,
         _method_token: usize,
 
         _args: &[StackValue],
@@ -1849,8 +1849,8 @@ impl RotoType for Community {
         }
     }
 
-    fn exec_value_method<'a>(
-        &'a self,
+    fn exec_value_method(
+        &self,
         _method_token: usize,
 
         _args: &[StackValue],
@@ -2020,8 +2020,8 @@ impl RotoType for IpAddress {
         }
     }
 
-    fn exec_value_method<'a>(
-        &'a self,
+    fn exec_value_method(
+        &self,
         _method_token: usize,
 
         _args: &[StackValue],

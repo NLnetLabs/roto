@@ -44,8 +44,8 @@ impl RotoType for GlobalMethods {
         unimplemented!();
     }
 
-    fn exec_value_method<'a>(
-        &'a self,
+    fn exec_value_method(
+        &self,
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,

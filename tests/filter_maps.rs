@@ -1,99 +1,32 @@
-use nom::error::convert_error;
-use roto::{
-    compile::{CompileError, Compiler}, blocks::Scope,
-};
+mod helpers;
+mod common;
 
-pub struct TestCompiler<'a> {
-    name: &'a str,
-    compiler: Compiler,
-    source_code: &'a str,
-}
-
-impl<'a> TestCompiler<'a> {
-    pub(crate) fn create(name: &'a str, source_code: &'a str) -> Self {
-        Self {
-            name,
-            compiler: Compiler::new(),
-            source_code,
-        }
-    }
-
-    pub(crate) fn test_parse(mut self, expect_success: bool) -> Self {        
-        println!("test parse {}", self.name);
-
-        let parse_res = self.compiler.parse_source_code(self.source_code);
-
-        println!("{} {:#?}", self.name, self.compiler.ast);
-        if let Err(e) = parse_res.clone() {
-            println!("{}", convert_error(self.source_code, e));
-        }
-
-        match expect_success {
-            false => assert!(parse_res.is_err()),
-            true => assert!(parse_res.is_ok()),
-        };
-
-        self
-    }
-
-    pub(crate) fn test_eval(mut self, expect_success: bool) -> Self {
-        println!("test eval {}", self.name);
-        let eval_res = self.compiler.eval_ast();
-
-        if let Err(e) = &eval_res {
-            println!("Error: {}", e);
-        }
-
-        match expect_success {
-            false => assert!(eval_res.is_err()),
-            true => assert!(eval_res.is_ok()),
-        }
-
-        self
-    }
-
-    pub(crate) fn test_compile(
-        self,
-        expect_success: bool,
-    ) -> Result<(), Vec<(Scope, CompileError)>> {
-        println!("compile eval {}", self.name);
-        let compile_res = self.compiler.compile();
-
-        let res = if compile_res.is_success() {
-            Ok(())
-        } else {
-            Err(compile_res.get_mis_compilations().to_vec())
-        };
-
-        match expect_success {
-            false => assert!(res.is_err()),
-            true => assert!(res.is_ok()),
-        };
-
-        res
-    }
-}
+use helpers::TestCompiler;
+use log::trace;
 
 #[test]
 fn test_filter_map_garbage_1() {
+    common::init();
+    
     let _parsed_data = TestCompiler::create(
         "garbage_1",
-        r###"
-    filter-map garbage {
-        ;dljhg;sdlkjgsdf
-        d
-        dg
-        dfgijdfg
-        sdfgsiofjg'\ae]-rg[pe,g]okd,g[pdgof
-        ]]
-    }
-    "###,
+        r"
+        filter-map garbage {
+            ;dljhg;sdlkjgsdf
+            d
+            dg
+            dfgijdfg
+            sdfgsiofjg'\ae]-rg[pe,g]okd,g[pdgof
+            ]]
+        }",
     )
     .test_parse(false);
 }
 
 #[test]
 fn test_filter_map_00() {
+    common::init();
+
     let mut _compiler = TestCompiler::create(
         "filter-map_1",
         r###"
@@ -117,9 +50,11 @@ fn test_filter_map_00() {
 
 #[test]
 fn test_filter_map_10() {
-    let mut _compiler = TestCompiler::create(
+    common::init();
+
+    let parser = TestCompiler::create(
         "filter-map-10",
-        r###"
+        r#"
         filter-map my-module {
             define {
                 rx_tx bgp_msg: BgpUpdateMessage;
@@ -147,19 +82,21 @@ fn test_filter_map_10() {
         output-stream mqtt contains Message {
             message: String
         }
-        "###
+        "#
     )
-    .test_parse(true)
-    .test_eval(true)
-    .test_compile(true);
-
+    .test_parse(true);
+    let evaluator = parser.test_eval(true);
+    let compiler = evaluator.test_compile(true);
+    trace!("{:#?}", compiler);
 }
 
 #[test]
 fn test_filter_map_11() {
+    common::init();
+
     let mut _compiler = TestCompiler::create(
         "filter-map-10",
-        r###"
+        r#"
         filter-map my-module {
             define {
                 rx_tx bgp_msg: BgpUpdateMessage;
@@ -187,7 +124,7 @@ fn test_filter_map_11() {
         output-stream mqtt contains Message {
             message: String
         }
-        "###
+        "#
     )
     .test_parse(true)
     .test_eval(true)
@@ -197,6 +134,8 @@ fn test_filter_map_11() {
 
 #[test]
 fn test_filter_map_20() {
+    common::init();
+
     let mut _compiler = TestCompiler::create(
         "filter-map_1",
         r###"
@@ -254,6 +193,8 @@ fn test_filter_map_30() {
 
 #[test]
 fn test_filter_map_31() {
+    common::init();
+
     let _compiler = TestCompiler::create(
         "filter-map_1",
         r###"
@@ -295,6 +236,8 @@ fn test_filter_map_31() {
 
 #[test]
 fn test_filter_map_32() {
+    common::init();
+
     let _compiler = TestCompiler::create(
         "filter-map_1",
         r###"
@@ -335,6 +278,8 @@ fn test_filter_map_32() {
 
 #[test]
 fn test_filter_map_33() {
+    common::init();
+
     let _compiler = TestCompiler::create(
         "filter-map_1",
         r###"
@@ -375,6 +320,8 @@ fn test_filter_map_33() {
 
 #[test]
 fn test_filter_map_34() {
+    common::init();
+
     let _compiler = TestCompiler::create(
         "filter-map_34",
         r###"

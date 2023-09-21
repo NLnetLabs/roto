@@ -14,6 +14,7 @@ macro_rules! typedefconversion {
             self,
             into_ty: TypeDef,
         ) -> bool {
+            if self == into_ty { return true; }
             match self {
                 $(
                     TypeDef::$type_no_data => {

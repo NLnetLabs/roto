@@ -204,7 +204,7 @@ fn test_filter_map_message_00() {
     assert_eq!(res.output_stream_queue[0].get_name(), "My ASN");
     assert_eq!(res.output_stream_queue[0].get_topic(), "My Asn was Seen!");
     assert_eq!(res.output_stream_queue[0].get_record().to_string(),
-        "{\n\tasn: AS65534, \n\tmessage: 🤭 I, the messager, saw AS3200 in a BGP update., \n\tname: My ASN, \n\ttopic: My Asn was Seen!\n   }"
+        "{\n\tasn: AS65534, \n\tmessage: 🤭 I, the messager, saw AS3200 in a BGP update.\n   }"
     );
 }
 
@@ -233,7 +233,7 @@ fn test_filter_map_message_01() {
     assert_eq!(res.output_stream_queue[0].get_name(), "My ASN");
     assert_eq!(res.output_stream_queue[0].get_topic(), "My Asn was Seen!");
     assert_eq!(res.output_stream_queue[0].get_record().to_string(),
-        "{\n\tasn: AS65534, \n\tmessage: 🤭 I, the messager, saw 3200 in a BGP update., \n\tname: My ASN, \n\ttopic: My Asn was Seen!\n   }"
+        "{\n\tasn: AS65534, \n\tmessage: 🤭 I, the messager, saw 3200 in a BGP update.\n   }"
     );
 }
 
@@ -262,7 +262,7 @@ fn test_filter_map_message_02() {
     assert_eq!(res.output_stream_queue[0].get_name(), "My ASN");
     assert_eq!(res.output_stream_queue[0].get_topic(), "My Asn was Seen!");
     assert_eq!(res.output_stream_queue[0].get_record().to_string(),
-        "{\n\tasn: AS65534, \n\tmessage: 🤭 I, the messager, saw 193.0.0.23 in a BGP update., \n\tname: My ASN, \n\ttopic: My Asn was Seen!\n   }"
+        "{\n\tasn: AS65534, \n\tmessage: 🤭 I, the messager, saw 193.0.0.23 in a BGP update.\n   }"
     );
 }
 
@@ -291,7 +291,7 @@ fn test_filter_map_message_03() {
     assert_eq!(res.output_stream_queue[0].get_name(), "My ASN");
     assert_eq!(res.output_stream_queue[0].get_topic(), "My Asn was Seen!");
     assert_eq!(res.output_stream_queue[0].get_record().to_string(),
-        "{\n\tasn: AS65534, \n\tmessage: 🤭 I, the messager, saw AS65534 AS65335 in a BGP update., \n\tname: My ASN, \n\ttopic: My Asn was Seen!\n   }"
+        "{\n\tasn: AS65534, \n\tmessage: 🤭 I, the messager, saw AS65534 AS65335 in a BGP update.\n   }"
     );
 }
 
@@ -320,7 +320,7 @@ fn test_filter_map_message_04() {
     assert_eq!(res.output_stream_queue[0].get_name(), "My ASN");
     assert_eq!(res.output_stream_queue[0].get_topic(), "My Asn was Seen!");
     assert_eq!(res.output_stream_queue[0].get_record().to_string(),
-        "{\n\tasn: AS65534, \n\tmessage: 🤭 I, the messager, saw [AS32524:3340, AS32524:3348] in a BGP update., \n\tname: My ASN, \n\ttopic: My Asn was Seen!\n   }"
+        "{\n\tasn: AS65534, \n\tmessage: 🤭 I, the messager, saw [AS32524:3340, AS32524:3348] in a BGP update.\n   }"
     );
 }
 
@@ -349,6 +349,6 @@ fn test_filter_map_message_05() {
     assert_eq!(res.output_stream_queue[0].get_name(), "My ASN");
     assert_eq!(res.output_stream_queue[0].get_topic(), "My Asn was Seen!");
     assert_eq!(res.output_stream_queue[0].get_record().to_string(),
-        "{\n\tasn: AS65534, \n\tmessage: 🤭 I, the messager, saw {\n\tas-path: AS65534 AS65335, \n\tbmp_msg_type: 1, \n\tcommunities: [AS32524:3340, AS32524:3348], \n\tlocal-pref: 20, \n\tmed: 80, \n\tnext-hop: 193.0.0.23, \n\torigin: AS211321, \n\tprefix: 193.0.0.0/24\n   } in a BGP update., \n\tname: My ASN, \n\ttopic: My Asn was Seen!\n   }"
+        "{\n\tasn: AS65534, \n\tmessage: 🤭 I, the messager, saw {\n\tas-path: AS65534 AS65335, \n\tbmp_msg_type: 1, \n\tcommunities: [AS32524:3340, AS32524:3348], \n\tlocal-pref: 20, \n\tmed: 80, \n\tnext-hop: 193.0.0.23, \n\torigin: AS211321, \n\tprefix: 193.0.0.0/24\n   } in a BGP update.\n   }"
     );
 }

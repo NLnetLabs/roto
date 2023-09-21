@@ -42,8 +42,8 @@ impl RotoType for OutputStreamMessage {
         unimplemented!();
     }
 
-    fn exec_value_method<'a>(
-        &'a self,
+    fn exec_value_method(
+        &self,
         _method_token: usize,
         _args: &[StackValue],
         _res_type: TypeDef,
@@ -137,17 +137,19 @@ impl From<OutputStreamMessage> for TypeValue {
 // String. Probably tokenization for topic at the very least makes more
 // sense performance wise and logically.
 impl From<Record> for OutputStreamMessage {
-    fn from(value: Record) -> Self {
+    fn from(mut value: Record) -> Self {
         trace!("CONVERT INTO OUTPUTSTREAMMESSAGE");
-        trace!("{}", value);
+        // Strip name and topic from the record, since we're already
+        // including it in the OutputStreamMessage.
         let name: ShortString = value
-            .get_value_for_field("name")
-            .map(|v| v.into())
+            .pop_value_for_field("name")
+            .map(|v| (&v).into())
             .unwrap_or_else(|| "".into());
         let topic: String = value
-            .get_value_for_field("topic")
-            .map(|v| v.into())
+            .pop_value_for_field("topic")
+            .map(|v| (&v).into())
             .unwrap_or_else(|| "".into());
+        trace!("{}", value);
 
         Self {
             name,

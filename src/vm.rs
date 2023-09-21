@@ -12,7 +12,8 @@ use crate::{
     types::{
         builtin::{Boolean, BuiltinTypeValue},
         collections::{
-            BytesRecord, ElementTypeValue, LazyRecord, List, Record, EnumBytesRecord,
+            BytesRecord, ElementTypeValue, EnumBytesRecord, LazyRecord, List,
+            Record,
         },
         datasources::{DataSource, DataSourceMethodValue},
         outputs::OutputStreamMessage,
@@ -236,15 +237,17 @@ impl LinearMemory {
                 trace!("empty field index");
                 if let Some(tv) = self.get_mem_pos(mem_pos) {
                     match tv {
-                        // Do not own AsPath and Communities, cloning is expensive!
+                        // Do not own AsPath and Communities, cloning is
+                        // expensive!
                         TypeValue::Builtin(BuiltinTypeValue::AsPath(_)) => {
                             Some(StackValue::Ref(tv))
                         }
                         TypeValue::Builtin(
                             BuiltinTypeValue::Communities(_),
                         ) => Some(StackValue::Ref(tv)),
-                        // Clone all other builtins, they're cheap to clone (all copy) and the
-                        // result is smaller than a pointer
+                        // Clone all other builtins, they're cheap to clone
+                        // (all copy) and the result is smaller than a
+                        // pointer
                         TypeValue::Builtin(_) => {
                             trace!("builtin copy {}", tv);
                             Some(StackValue::Owned(tv.clone()))
@@ -312,7 +315,12 @@ impl LinearMemory {
                     Some(TypeValue::Builtin(
                         BuiltinTypeValue::BgpUpdateMessage(bgp_msg),
                     )) => {
-                        trace!("get bgp_update_message get_value_owned_for_field {:?} {:?}", bgp_msg, field_index);
+                        trace!(
+                            "get bgp_update_message \
+                        get_value_owned_for_field {:?} {:?}",
+                            bgp_msg,
+                            field_index
+                        );
                         if let Some(v) = (*bgp_msg.as_ref())
                             .get_value_owned_for_field(field_index[0])
                         {
@@ -325,7 +333,12 @@ impl LinearMemory {
                     Some(TypeValue::Builtin(
                         BuiltinTypeValue::BmpRouteMonitoringMessage(bmp_msg),
                     )) => {
-                        trace!("get bmp_route_monitoring_message get_value_owned_for_field {:?} {:?}", bmp_msg, field_index);
+                        trace!(
+                            "get bmp_route_monitoring_message \
+                        get_value_owned_for_field {:?} {:?}",
+                            bmp_msg,
+                            field_index
+                        );
 
                         LazyRecord::from_type_def(BytesRecord::<
                             routecore::bmp::message::RouteMonitoring<
@@ -336,16 +349,37 @@ impl LinearMemory {
                         .get_field_by_index(&field_index, bmp_msg.as_ref())
                         .map(|elm| StackValue::Owned(elm.into()))
                     }
+                    Some(TypeValue::Builtin(
+                        BuiltinTypeValue::BmpPeerDownNotification(bmp_msg),
+                    )) => {
+                        trace!(
+                            "get bmp_route_monitoring_message \
+                        get_value_owned_for_field {:?} {:?}",
+                            bmp_msg,
+                            field_index
+                        );
+
+                        LazyRecord::from_type_def(BytesRecord::<
+                            routecore::bmp::message::PeerDownNotification<
+                                bytes::Bytes,
+                            >,
+                        >::lazy_type_def(
+                        ))
+                        .get_field_by_index(&field_index, bmp_msg.as_ref())
+                        .map(|elm| StackValue::Owned(elm.into()))
+                    }
                     Some(tv) => match tv {
-                        // Do not own AsPath and Communities, cloning is expensive!
+                        // Do not own AsPath and Communities, cloning is
+                        // expensive!
                         TypeValue::Builtin(BuiltinTypeValue::AsPath(_)) => {
                             Some(StackValue::Ref(tv))
                         }
                         TypeValue::Builtin(
                             BuiltinTypeValue::Communities(_),
                         ) => Some(StackValue::Ref(tv)),
-                        // Clone all other builtins, they're cheap to clone (all copy) and the
-                        // result is smaller than a pointer
+                        // Clone all other builtins, they're cheap to clone
+                        // (all copy) and the result is smaller than a
+                        // pointer
                         TypeValue::Builtin(_) => {
                             trace!("builtin copy {}", tv);
                             Some(StackValue::Owned(tv.clone()))
@@ -359,8 +393,57 @@ impl LinearMemory {
         }
     }
 
-    // Only return a typevalue (Wrapping a bytesrecord arc) if the memory position and field index
-    // offset contain an actual bytes record, otherwise return None.
+    // Return a TypeValue if the memory holds the enum variant specified by
+    // the varian_token. If the memory position holds an enum, but not of
+    // the specified variant, then return TypeValue::Unknown.
+    pub fn get_mp_as_variant_or_unknown(
+        &self,
+        mem_pos: usize,
+        variant_token: Token,
+    ) -> Result<TypeValue, VmError> {
+        trace!(
+            "get_mp_as_variant_or_unknown {:?}",
+            self.get_mem_pos(mem_pos).map(StackValue::Ref)
+        );
+        if let Some(tv) = self.get_mem_pos(mem_pos) {
+            if let TypeValue::Builtin(BuiltinTypeValue::BmpMessage(
+                bytes_rec,
+            )) = tv
+            {
+                if bytes_rec.is_variant(variant_token) {
+                    Ok(tv.clone())
+                } else {
+                    Ok(TypeValue::Unknown)
+                }
+            } else {
+                Err(VmError::InvalidValueType)
+            }
+        } else {
+            Err(VmError::InvalidMemoryAccess(mem_pos, None))
+        }
+    }
+
+    pub fn mp_is_variant(
+        &self,
+        mem_pos: usize,
+        variant_token: Token,
+    ) -> bool {
+        trace!(
+            "mp_is_variant {:?}",
+            self.get_mem_pos(mem_pos).map(StackValue::Ref)
+        );
+        match self.get_mem_pos(mem_pos) {
+            Some(TypeValue::Builtin(BuiltinTypeValue::BmpMessage(
+                bytes_rec,
+            ))) => bytes_rec.is_variant(variant_token),
+            Some(_) => false,
+            _ => false,
+        }
+    }
+
+    // Only return a typevalue (Wrapping a bytesrecord arc) if the memory
+    // position and field index offset contain an actual bytes record,
+    // otherwise return None.
     pub fn get_mp_field_by_index_as_bytes_record(
         &self,
         mem_pos: usize,
@@ -372,7 +455,7 @@ impl LinearMemory {
         );
         match field_index {
             fi if fi.is_empty() => {
-                trace!("empty field index");
+                trace!("empty field index on bytes record");
                 if let Some(tv) = self.get_mem_pos(mem_pos) {
                     match tv {
                         TypeValue::Builtin(BuiltinTypeValue::BmpMessage(
@@ -417,7 +500,12 @@ impl LinearMemory {
                     Some(TypeValue::Builtin(
                         BuiltinTypeValue::BmpRouteMonitoringMessage(bmp_msg),
                     )) => {
-                        trace!("get bmp_route_monitoring_message get_value_owned_for_field {:?} {:?}", bmp_msg, field_index);
+                        trace!(
+                            "get bmp_route_monitoring_message \
+                        get_value_owned_for_field {:?} {:?}",
+                            bmp_msg,
+                            field_index
+                        );
 
                         LazyRecord::from_type_def(BytesRecord::<
                             routecore::bmp::message::RouteMonitoring<
@@ -431,7 +519,12 @@ impl LinearMemory {
                     Some(TypeValue::Builtin(
                         BuiltinTypeValue::BmpPeerDownNotification(bmp_msg),
                     )) => {
-                        trace!("get bmp_peer_down_message get_value_owned_for_field {:?} {:?}", bmp_msg, field_index);
+                        trace!(
+                            "get bmp_peer_down_message \
+                        get_value_owned_for_field {:?} {:?}",
+                            bmp_msg,
+                            field_index
+                        );
 
                         LazyRecord::from_type_def(BytesRecord::<
                             routecore::bmp::message::PeerDownNotification<
@@ -445,7 +538,12 @@ impl LinearMemory {
                     Some(TypeValue::Builtin(
                         BuiltinTypeValue::BmpPeerUpNotification(bmp_msg),
                     )) => {
-                        trace!("get bmp_peer_up_message get_value_owned_for_field {:?} {:?}", bmp_msg, field_index);
+                        trace!(
+                            "get bmp_peer_up_message \
+                        get_value_owned_for_field {:?} {:?}",
+                            bmp_msg,
+                            field_index
+                        );
 
                         LazyRecord::from_type_def(BytesRecord::<
                             routecore::bmp::message::PeerUpNotification<
@@ -464,7 +562,14 @@ impl LinearMemory {
     }
 
     fn get_mem_pos_as_owned(&mut self, index: usize) -> Option<TypeValue> {
-        self.0.get_mut(index).map(std::mem::take)
+        // Memory positions 0 and 1 hold the rx and tx value resp., you
+        // can mutate those, but you can't move them out of here. If you
+        // insist on doing this (the PushOutputStreamQueue command in the
+        // VM wants this), then you get a clone
+        match index {
+            0 | 1 => self.0.get(index).cloned(),
+            _ => self.0.get_mut(index).map(std::mem::take),
+        }
     }
 
     fn set_mem_pos(&mut self, index: usize, value: TypeValue) {
@@ -579,14 +684,14 @@ impl<'a> From<&'a Vec<CommandArg>> for CommandArgsStack<'a> {
 
 //------------ Argument -----------------------------------------------------
 
-// These are the filter-map-level arguments, they can be compiled in when passed
-// in before compiling (`with_arguments()`), or they can be provided at run-
-// time.
+// These are the filter-map-level arguments, they can be compiled in when
+// passed in before compiling (`with_arguments()`), or they can be provided
+// at run-time.
 
 #[derive(Debug)]
 pub struct FilterMapArg {
     pub(crate) name: ShortString,
-    index: usize,
+    index: Token,
     ty: TypeDef,
     value: TypeValue,
 }
@@ -608,13 +713,13 @@ impl FilterMapArg {
         self.ty.clone()
     }
 
-    pub fn get_index(&self) -> usize {
-        self.index
+    pub fn get_index(&self) -> Token {
+        self.index.clone()
     }
 
     pub(crate) fn new(
         name: &str,
-        index: usize,
+        index: Token,
         ty: TypeDef,
         value: TypeValue,
     ) -> Self {
@@ -635,8 +740,8 @@ impl FilterMapArgs {
         &self,
         args: Vec<(&str, TypeValue)>,
     ) -> Result<FilterMapArgs, CompileError> {
-        // Walk over all the filter_map arguments that were supplied and see if
-        // they match up with the ones in the source code.
+        // Walk over all the filter_map arguments that were supplied and see
+        // if they match up with the ones in the source code.
         let mut arguments_map = FilterMapArgs::new();
         let len = args.len();
         for supplied_arg in args {
@@ -668,7 +773,12 @@ impl FilterMapArgs {
                                 arg,
                             ),
                             Err(_) => {
-                                return Err(format!("An invalid type was specified for argument: {}", supplied_arg.0).into());
+                                return Err(format!(
+                                    "An invalid type was \
+                                specified for argument: {}",
+                                    supplied_arg.0
+                                )
+                                .into());
                             }
                         };
                     }
@@ -713,7 +823,7 @@ impl FilterMapArgs {
 
     pub fn take_value_by_token(
         &mut self,
-        index: usize,
+        index: Token,
     ) -> Result<TypeValue, VmError> {
         self.0
             .iter_mut()
@@ -722,7 +832,7 @@ impl FilterMapArgs {
             .ok_or(VmError::AnonymousArgumentNotFound)
     }
 
-    pub fn get_by_token_value(&self, index: usize) -> Option<&TypeValue> {
+    pub fn get_by_token_value(&self, index: Token) -> Option<&TypeValue> {
         self.0
             .iter()
             .find(|a| a.get_index() == index)
@@ -748,7 +858,7 @@ impl FilterMapArgs {
     pub fn insert(
         &mut self,
         name: &str,
-        index: usize,
+        index: Token,
         ty: TypeDef,
         value: TypeValue,
     ) {
@@ -789,6 +899,9 @@ impl From<Vec<FilterMapArg>> for FilterMapArgs {
 }
 
 //------------ Variables ----------------------------------------------------
+
+// This the table that maps the user-defined variables from the 'define'
+// section to memory positions in the VM.
 #[derive(Debug)]
 pub struct VariableRef {
     pub var_token_value: usize,
@@ -797,15 +910,29 @@ pub struct VariableRef {
 }
 
 #[derive(Debug, Default)]
-pub struct VariablesMap(Vec<VariableRef>);
+pub struct VariablesRefTable(Vec<VariableRef>);
 
-impl VariablesMap {
+impl VariablesRefTable {
     pub fn get_by_token_value(&self, index: usize) -> Option<&VariableRef> {
         self.0.iter().find(
             |VariableRef {
                  var_token_value: t, ..
              }| { t == &index },
         )
+    }
+
+    pub fn append(
+        &mut self,
+        mem_pos: u32,
+        field_index: SmallVec<[usize; 8]>,
+    ) -> Result<usize, CompileError> {
+        self.0.push(VariableRef {
+            var_token_value: self.0.len(),
+            mem_pos,
+            field_index,
+        });
+
+        Ok(self.0.len())
     }
 
     pub fn set(
@@ -823,7 +950,7 @@ impl VariablesMap {
     }
 
     pub fn new() -> Self {
-        VariablesMap(Vec::new())
+        VariablesRefTable(Vec::new())
     }
 }
 
@@ -945,7 +1072,8 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
         take_vec
     }
 
-    // Take a `elem_num` elements on the stack, leaving the rest of the stack in place.
+    // Take a `elem_num` elements on the stack, leaving the rest of the stack
+    // in place.
     fn _take_resolved(
         &'a self,
         elem_num: u32, // number of elements to take
@@ -989,7 +1117,8 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
         take_vec
     }
 
-    // Take a `elem_num` elements on the stack, leaving the rest of the stack in place.
+    // Take a `elem_num` elements on the stack, leaving the rest of the stack
+    // in place.
     fn _take_resolved_as_owned(
         &'a self,
         elem_num: u32, // number of elements to take
@@ -1146,12 +1275,13 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                     .push(StackRefPos::CompareResult(res))?;
                             }
                             // Two possibilities here:
-                            // - the right hand side is an actual TypeValue::List,
-                            //   we can compare the left hand to all the values in
+                            // - the right hand side is an actual
+                            //   TypeValue::List, we can compare the left
+                            //   hand to all the values in
                             //   the right hand side list.
                             // - the right hand side list consists of all the
-                            //   elements in stack_args, but for the first one
-                            //   (that's still the left hand side)
+                            //   elements in stack_args, but for the first
+                            //   one (that's still the left hand side)
                             CommandArg::CompareOp(CompareOp::In) => {
                                 let res = if let TypeValue::List(list) = right
                                 {
@@ -1195,7 +1325,8 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                             _ => panic!("{:3} -> invalid compare op", pc),
                         }
                     }
-                    // stack args: [type, method_token, args, return memory position]
+                    // stack args: [type, method_token, args, return memory
+                    // position]
                     OpCode::ExecuteTypeMethod => {
                         if log_enabled!(Level::Trace) {
                             trace!("Stack {:?}", self.stack);
@@ -1257,29 +1388,50 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
 
                         let mut stack = self.stack.borrow_mut();
 
-                        let stack_args = [0..args_len].iter().map(|_i| {
-                            let sr = stack.pop().unwrap();
-                            match sr.pos {
-                                StackRefPos::MemPos(pos) => {
-                                    mem
-                                        .get_mp_field_by_index_as_stack_value(pos as usize, sr.field_index)
+                        // TODO THIS IS MOST PROBABLY WRONG!!
+                        // There always needs to be one argument on the stack.
+                        let stack_args = (0..=args_len)
+                            .map(|_i| {
+                                let sr = stack.pop().unwrap();
+                                match sr.pos {
+                                    StackRefPos::MemPos(pos) => mem
+                                        .get_mp_field_by_index_as_stack_value(
+                                            pos as usize,
+                                            sr.field_index,
+                                        )
                                         .unwrap_or_else(|| {
                                             trace!("\nstack: {:?}", stack);
                                             trace!("mem: {:#?}", mem.0);
-                                            panic!("Uninitialized memory in position {}", pos);
-                                        })
+                                            panic!(
+                                                "Uninitialized memory in \
+                                            position {}",
+                                                pos
+                                            );
+                                        }),
+                                    StackRefPos::TablePos(token, pos) => {
+                                        let ds = &self.data_sources.as_ref()
+                                            [token];
+                                        let v = ds.get_at_field_index(
+                                            pos,
+                                            sr.field_index,
+                                        );
+                                        if let Some(v) = v {
+                                            StackValue::Arc(v.into())
+                                        } else {
+                                            StackValue::Owned(
+                                                TypeValue::Unknown,
+                                            )
+                                        }
+                                    }
+                                    StackRefPos::CompareResult(res) => {
+                                        StackValue::Owned(res.into())
+                                    }
+                                    StackRefPos::Constant(c) => {
+                                        StackValue::Owned(c.into())
+                                    }
                                 }
-                                StackRefPos::TablePos(token, pos) => {
-                                    let ds = &self.data_sources.as_ref()[token];
-                                    let v = ds.get_at_field_index(pos, sr.field_index);
-                                    if let Some(v) = v {
-                                        StackValue::Arc(v.into())
-                                    } else { StackValue::Owned(TypeValue::Unknown) }
-                                }
-                                StackRefPos::CompareResult(res) => StackValue::Owned(res.into()),
-                                StackRefPos::Constant(c) => StackValue::Owned(c.into()),
-                            }
-                        }).collect::<Vec<_>>();
+                            })
+                            .collect::<Vec<_>>();
                         trace!("stack_args {:?}", stack_args);
 
                         // The first value on the stack is the value which we
@@ -1337,16 +1489,19 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                         trace!("\nargs_len {}", args_len);
                         trace!("Stack {:?}", stack);
 
-                        let mut stack_args = (0..args_len).map(|_i| {
-                            let sr = stack.pop().unwrap();
+                        let mut stack_args =
+                            (0..args_len)
+                                .map(|_i| {
+                                    let sr = stack.pop().unwrap();
 
-                            target_field_index = if target_field_index.is_empty() {
-                                sr.field_index
-                            } else {
-                                target_field_index.clone()
-                            };
+                                    target_field_index =
+                                        if target_field_index.is_empty() {
+                                            sr.field_index
+                                        } else {
+                                            target_field_index.clone()
+                                        };
 
-                            match sr.pos {
+                                    match sr.pos {
                                 StackRefPos::MemPos(pos) => {
                                     mem
                                         .get_mem_pos_as_owned(pos as usize)
@@ -1358,17 +1513,19 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                                         })
                                 }
                                 StackRefPos::TablePos(_token, _pos) => {
-                                    panic!(r#"Can't mutate data in a data source. 
-                                    That's fatal."#);
+                                    panic!(r#"Can't mutate data in a data \
+                                    source. That's fatal."#);
                                 }
                                 StackRefPos::CompareResult(_res) => {
-                                    panic!("Fatal: Can't mutate a compare result.");
+                                    panic!("Fatal: Can't mutate a compare \
+                                    result.");
                                 }
                                 StackRefPos::Constant(_c) => {
                                     panic!("Fatal: can't mutate a constant.");
                                 }
                             }
-                        }).collect::<Vec<_>>();
+                                })
+                                .collect::<Vec<_>>();
 
                         // The first value on the stack is the value which we
                         // are going to call a method with.
@@ -1469,16 +1626,23 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                             let sr = stack.pop().unwrap();
 
                             match sr.pos {
-                                StackRefPos::MemPos(pos) => {
-                                    mem
-                                        .get_mp_field_by_index_as_bytes_record(pos as usize, sr.field_index)
-                                        .unwrap_or_else(|| {
-                                            trace!("\nstack: {:?}", stack);
-                                            trace!("mem: {:#?}", mem.0);
-                                            panic!("Uninitialized memory in position {}", pos);
-                                        })
+                                StackRefPos::MemPos(pos) => mem
+                                    .get_mp_field_by_index_as_bytes_record(
+                                        pos as usize,
+                                        sr.field_index,
+                                    )
+                                    .unwrap_or_else(|| {
+                                        trace!("\nstack: {:?}", stack);
+                                        trace!("mem: {:#?}", mem.0);
+                                        panic!(
+                                            "Uninitialized memory in \
+                                            position {}",
+                                            pos
+                                        );
+                                    }),
+                                _ => {
+                                    return Err(VmError::InvalidVariant);
                                 }
-                                _ => { return Err(VmError::InvalidVariant); }
                             }
                         };
 
@@ -1622,14 +1786,53 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                             }
                         }
                     }
+                    // stack args: []
+                    OpCode::StackIsVariant => {
+                        for arg in args.args.iter() {
+                            if let CommandArg::Variant(variant_index) = arg {
+                                let mut s = self.stack.borrow_mut();
+                                match s.get_top_value()?.pos {
+                                    StackRefPos::MemPos(mem_pos) => {
+                                        let val = mem.mp_is_variant(
+                                            mem_pos as usize,
+                                            Token::Variant(*variant_index),
+                                        );
+                                        trace!(
+                                            "stack head is variant {:?}? {:?}",
+                                            variant_index, val
+                                        );
+                                        if val {
+                                            let var_val = mem
+                                                .get_mp_as_variant_or_unknown(
+                                                    mem_pos as usize,
+                                                    Token::Variant(
+                                                        *variant_index,
+                                                    ),
+                                                )?;
+                                            trace!("variant value {:?}", var_val);
+                                            mem.set_mem_pos(
+                                                mem_pos as usize,
+                                                var_val
+                                            );
+                                        }
+                                        s.push(StackRefPos::CompareResult(
+                                            val,
+                                        ))?;
+                                    }
+                                    _ => return Err(VmError::InvalidVariant),
+                                };
+                            }
+                        }
+                    }
                     // stack args: [arg_token_value, mem_pos]
                     OpCode::ArgToMemPos => {
+                        trace!("argument {:#?}", self.arguments);
                         if let CommandArg::MemPos(pos) = args[1] {
                             match args[0] {
                                 CommandArg::Argument(token_value) => {
                                     let arg_value = self
                                         .arguments
-                                        .take_value_by_token(token_value)?;
+                                        .take_value_by_token(Token::Argument(token_value))?;
                                     mem.set_mem_pos(pos as usize, arg_value);
                                 }
                                 _ => {
@@ -2079,13 +2282,16 @@ impl Display for Command {
             OpCode::ExecuteDataStoreMethod => "->",
             OpCode::ExecuteValueMethod => "->",
             OpCode::ExecuteConsumeValueMethod => "=>",
-            OpCode::LoadLazyFieldValue => "💾",
+            OpCode::LoadLazyFieldValue => { return write!(f, "💾  {:?} {:?}", self.op, self.args); },
             OpCode::PushStack => "<-",
             OpCode::PopStack => "->",
             OpCode::ClearStack => "::",
             OpCode::MemPosSet => "->",
             OpCode::ArgToMemPos => "->",
             OpCode::StackOffset => "",
+            OpCode::StackIsVariant => {
+                return write!(f, "{:?}=={:?}?", self.op, self.args[0]);
+            }
             OpCode::CondFalseSkipToEOB => "-->",
             OpCode::CondTrueSkipToEOB => "-->",
             OpCode::CondUnknownSkipToLabel => "-->",
@@ -2127,6 +2333,7 @@ pub enum CommandArg {
     CompareOp(ast::CompareOp),        // compare operation
     Label(ShortString),               // a label with its name (to jump to)
     AcceptReject(AcceptReject), // argument tell what should happen after
+    Variant(usize),             // the index of a variant of an enum
 }
 
 impl CommandArg {
@@ -2135,7 +2342,11 @@ impl CommandArg {
             CommandArg::Argument(v) => *v,
             CommandArg::Variable(v) => *v,
             _ => {
-                panic!("Cannot get token value from this arg: {:?} and that's fatal", self);
+                panic!(
+                    "Cannot get token value from this arg: {:?} and \
+                that's fatal",
+                    self
+                );
             }
         }
     }
@@ -2260,6 +2471,7 @@ impl Clone for CommandArg {
             CommandArg::CompareOp(op) => CommandArg::CompareOp(*op),
             CommandArg::Label(l) => CommandArg::Label(l.clone()),
             CommandArg::AcceptReject(ar) => CommandArg::AcceptReject(*ar),
+            CommandArg::Variant(v) => CommandArg::Variant(*v),
         }
     }
 }
@@ -2276,24 +2488,28 @@ pub enum OpCode {
     PushStack,
     ClearStack,
     StackOffset,
+    // Inspects the top of the stack to see if its value corresponds to
+    // the variant of an enum, passed in as a Variant Token in the arguments
+    // of the command. Pushes the result (the boolean) onto the stack. Does
+    // not pop the enum instance of the stack.
+    StackIsVariant,
     MemPosSet,
     ArgToMemPos,
-    // Skip to the end of the MIR block if the top of the stack
-    // holds a reference to a boolean value true
+    // Skip to the end of the MIR block if the top of the stack holds a
+    // reference to a boolean value true
     CondFalseSkipToEOB,
-    // Skip to the end of the MIR block if the top of the stack
-    // holds a redference to a boolean value false.
+    // Skip to the end of the MIR block if the top of the stack holds a
+    // reference to a boolean value false.
     CondTrueSkipToEOB,
-    // Skip to the end of the MIR block if the top of the stack
-    // holds a reference to a typevalue::Unknown. Used to match
-    // expression variants.
+    // Skip to the next label in a MIR block if the top of the stack holds a
+    // reference to a TypeValue::Unknown. Used to match expression variants.
     CondUnknownSkipToLabel,
     // Debug Label for terms
     Label,
     SetRxField,
     SetTxField,
-    // The output stream stack holds indexes to memory positions that
-    // contain messages to be send out.
+    // The output stream stack holds indexes to memory positions that contain
+    // messages to be send out.
     PushOutputStreamQueue,
     Exit(AcceptReject),
 }

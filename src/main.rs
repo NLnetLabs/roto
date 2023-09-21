@@ -17,7 +17,7 @@ fn test_data(name: &str, data: &str, expect_success: bool) {
 
 fn main() {
     let cm = ComputeExpr::parse(
-        r###"source_asns.contains("asn", route.as_path.origin)"###,
+        r#"source_asns.contains("asn", route.as_path.origin)"#,
     );
 
     println!("{}, {:#?}", cm.is_ok(), cm);
@@ -45,10 +45,10 @@ fn main() {
     assert!(r.is_ok());
 
     r = LogicalExpr::parse(
-        r###"
+        r#"
         blaffer.blaf.contains(something,"somewhat") > blaf();
         // ( bla.bla() in my_set ) || ( bla.bla() in my_other_set );
-    "###,
+    "#,
     );
     println!("{:#?}", r);
     assert!(r.is_ok());
@@ -292,7 +292,7 @@ fn main() {
 
     test_data(
         "filter-map_with_assignments_2",
-        r###"
+        r#"
             filter-map filter-map_with_assignments_2 for route_in: Route with bla: Blaffer {
                define {
                    rx route: Route;
@@ -311,13 +311,13 @@ fn main() {
             }
             // comment
             rib unrib contains Blaffer { blaffer: Blaf }
-        "###,
+        "#,
         false,
     );
 
     test_data(
         "filter_map_with_assignments_3",
-        r###"
+        r#"
             filter-map filter-map_with_assignments_3 for route_in: Route with bla: Blaffer {
                define {
                    rx route: Route;
@@ -336,7 +336,7 @@ fn main() {
             }
             // comment
             rib unrib contains Blaffer { blaffer: Blaf }
-        "###,
+        "#,
         true,
     );
 
@@ -375,7 +375,7 @@ fn main() {
 
     test_data(
         "filter_map_with_apply_2",
-        r###"
+        r#"
             filter-map filter_map_with_apply_2 for route_in: Route with bla: Blaffer {
                define {
                    rx route: Route;
@@ -404,13 +404,13 @@ fn main() {
             }
             // comment
             rib unrib contains Blaffer { blaffer: Blaf }
-        "###,
+        "#,
         true,
     );
 
     test_data(
         "filter-map_with_nested_match_expressions",
-        r###"
+        r#"
             filter-map filter-map_with_nested_match_expressions for route_in: Route with bla: Blaffer {
                define {
                    rx route: Route;
@@ -439,7 +439,7 @@ fn main() {
             }
             // comment
             rib unrib contains Blaffer { blaffer: Blaf, blixer: { bloop: U32, blap: U8 } }
-        "###,
+        "#,
         true,
     );
 }

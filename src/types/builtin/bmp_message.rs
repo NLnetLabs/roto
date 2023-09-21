@@ -25,7 +25,6 @@ use crate::{
 
 pub use crate::types::collections::BytesRecord;
 
-
 //------------ BmpMessage ---------------------------------------------------
 
 createtoken!(
@@ -96,6 +95,7 @@ impl BytesRecord<BmpMessage> {
 
 impl EnumBytesRecord for BytesRecord<BmpMessage> {
     fn get_variant(&self) -> LazyRecordTypeDef {
+        trace!("this variant is {:?}", LazyRecordTypeDef::from(self.0.common_header().msg_type()));
         self.0.common_header().msg_type().into()
     }
 
@@ -199,6 +199,17 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
 
         Ok(lazy_rec)
     }
+
+    fn is_variant(&self, variant_token: Token) -> bool {
+        trace!("requested variant_token {:?}", variant_token);
+        trace!("actual variant {:?}", self.get_variant());
+        trace!("conversion {:?}", usize::from(self.get_variant()));
+        if let Token::Variant(variant_index) = variant_token {
+            variant_index == self.get_variant().into()
+        } else {
+            false
+        }
+    }
 }
 
 impl From<MessageType> for LazyRecordTypeDef {
@@ -227,7 +238,6 @@ impl From<MessageType> for LazyRecordTypeDef {
         }
     }
 }
-
 
 //------------ BmpRouteMonitoringMessage ------------------------------------
 
@@ -288,7 +298,6 @@ impl BytesRecord<RouteMonitoring> {
         }
     }
 }
-
 
 //------------ PeerUpNotification -------------------------------------------
 
@@ -373,7 +382,6 @@ impl BytesRecord<PeerUpNotification> {
     }
 }
 
-
 //------------ PeerDownNotification -------------------------------------------
 
 bytes_record_impl!(
@@ -432,7 +440,6 @@ impl BytesRecord<PeerDownNotification> {
     }
 }
 
-
 //------------ StatisticsReport ---------------------------------------------
 
 bytes_record_impl!(
@@ -477,12 +484,11 @@ bytes_record_impl!(
 
 impl BytesRecord<StatisticsReport> {
     pub fn new(bytes: bytes::Bytes) -> Result<Self, VmError> {
-        if let routecore::bmp::message::Message::StatisticsReport(
-            sr_msg,
-        ) = routecore::bmp::message::Message::<bytes::Bytes>::from_octets(
-            bytes,
-        )
-        .unwrap()
+        if let routecore::bmp::message::Message::StatisticsReport(sr_msg) =
+            routecore::bmp::message::Message::<bytes::Bytes>::from_octets(
+                bytes,
+            )
+            .unwrap()
         {
             Ok(Self(sr_msg))
         } else {

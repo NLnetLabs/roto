@@ -8,7 +8,7 @@ use crate::ast::{
     TypedRecordValueExpr, ValueExpr,
 };
 use crate::compile::CompileError;
-use crate::traits::RotoType;
+use crate::traits::{RotoType, Token};
 use crate::vm::{StackValue, VmError};
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
@@ -119,6 +119,9 @@ impl From<TypeValue> for ElementTypeValue {
             TypeValue::Record(kv_list) => {
                 ElementTypeValue::Nested(Box::new(TypeValue::Record(kv_list)))
             }
+            TypeValue::Unknown => {
+                ElementTypeValue::Primitive(TypeValue::Unknown)
+            }
             ty => panic!("1. Unknown type {}", ty),
         }
     }
@@ -209,7 +212,7 @@ impl From<ValueExpr> for ElementTypeValue {
             }
             ValueExpr::PrefixMatchExpr(_) => todo!(),
             ValueExpr::ComputeExpr(_) => todo!(),
-            ValueExpr::BuiltinMethodCallExpr(_) => todo!(),
+            ValueExpr::RootMethodCallExpr(_) => todo!(),
             ValueExpr::AnonymousRecordExpr(rec) => {
                 ElementTypeValue::Nested(Box::new(rec.into()))
             }
@@ -754,6 +757,16 @@ impl<'a> Record {
         self.0.iter().find(|(f, _)| f == &field).map(|(_, v)| v)
     }
 
+    pub fn pop_value_for_field(
+        &mut self,
+        field: &'a str,
+    ) -> Option<ElementTypeValue> {
+        self.0
+            .iter()
+            .position(|(f, _)| f == &field)
+            .map(|i| self.0.remove(i).1)
+    }
+
     pub fn get_field_by_index(
         &'a self,
         field_index: SmallVec<[usize; 8]>,
@@ -927,7 +940,7 @@ impl RotoType for Record {
 impl Serialize for Record {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: Serializer
+        S: Serializer,
     {
         let mut map = serializer.serialize_map(Some(self.len()))?;
         for (key, value) in self.iter() {
@@ -1036,6 +1049,11 @@ pub trait EnumBytesRecord {
         variant_token: LazyRecordTypeDef,
         field_index: &SmallVec<[usize; 8]>,
     ) -> Result<TypeValue, VmError>;
+
+    fn is_variant(
+        &self,
+        variant_token: Token
+    ) -> bool;
 }
 
 //------------ BytesRecord type ---------------------------------------------
@@ -1045,7 +1063,7 @@ pub trait EnumBytesRecord {
 // values does not happen here, but in the LazyRecord type.
 
 #[derive(Debug, Serialize)]
-pub struct BytesRecord<T: AsRef<[u8]>>(pub(crate) T);
+pub struct BytesRecord<T: AsRef<[u8]>>(pub T);
 
 impl<T: AsRef<[u8]> + std::fmt::Debug> BytesRecord<T> {
     pub(crate) fn bytes_parser(&self) -> &T {

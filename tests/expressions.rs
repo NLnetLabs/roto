@@ -28,7 +28,7 @@ fn test_logical_expr_2() {
 #[test]
 fn test_logical_expr_3() {
     let r = LogicalExpr::parse(
-        r###"blaffer.blaf.contains(something,"somewhat") > blaf()"###,
+        r#"blaffer.blaf.contains(something,"somewhat") > blaf()"#,
     );
     println!("{:#?}", r);
     assert!(r.is_ok());
@@ -40,7 +40,7 @@ fn test_logical_expr_3() {
 #[test]
 fn test_logical_expr_4() {
     let r = LogicalExpr::parse(
-        r###"( my_set.contains(bla.bla()) ) || ( my_other_set.contains(bla.bla()) )"###,
+        r#"( my_set.contains(bla.bla()) ) || ( my_other_set.contains(bla.bla()) )"#,
     );
     println!("{:#?}", r);
     assert!(r.is_ok());
@@ -66,7 +66,7 @@ fn test_logical_expr_5() {
 #[test]
 fn test_compute_expr_1() {
     let cm = ComputeExpr::parse(
-        r###"source_asns.contains("asn", route.as_path.origin)"###,
+        r#"source_asns.contains("asn", route.as_path.origin)"#,
     );
 
     println!("{}, {:#?}", cm.is_ok(), cm);
@@ -114,7 +114,7 @@ fn test_compute_expr_5() {
 
 #[test]
 fn test_action_body() {
-    let r = ActionBody::parse(r###"
+    let r = ActionSectionBody::parse(r###"
         send_to(a,b);
         pph_asn.asn.set(AS200);"###);
     assert!(r.is_ok());
