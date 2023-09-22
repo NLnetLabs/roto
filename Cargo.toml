@@ -2,7 +2,7 @@
 name = "roto"
 version = "0.1.0"
 edition = "2021"
-authors = ["The NLnet Labs RPKI team <rpki-team@nlnetlabs.nl>"]
+authors = ["NLnet Labs <routing-team@nlnetlabs.nl>"]
 description = "A modular analytical BGP Engine"
 documentation = "https://docs.rs/roto/"
 homepage = "https://nlnetlabs.nl/projects/routing/roto/"
