@@ -29,7 +29,7 @@ fn test_data(
     c.with_arguments(&name, filter_map_arguments)?;
     let roto_packs = c.build_from_compiler(source_code)?;
 
-    let mut roto_pack = roto_packs.retrieve_public_as_refs(&name)?;
+    let mut roto_pack = roto_packs.retrieve_pack_as_refs(&name)?;
     let _count: TypeValue = 1_u32.into();
     let prefix: TypeValue =
         routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?

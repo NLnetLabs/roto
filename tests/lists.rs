@@ -91,7 +91,7 @@ fn test_data(
     let c = Compiler::new();
     let roto_packs = c.build_from_compiler(source_code)?;
 
-    let roto_pack = roto_packs.retrieve_public_as_refs(&name)?;
+    let roto_pack = roto_packs.retrieve_pack_as_refs(&name)?;
     let asn: TypeValue = Asn::from_u32(211321).into();
 
     println!("ASN {:?}", asn);

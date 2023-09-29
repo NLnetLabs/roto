@@ -60,9 +60,20 @@ use crate::{
 
 //========================== Compiler ========================================
 
+//------------ Rotolo --------------------------------------------------------
+
+/// Rotolo is the collection of compiled packages, called RotoPacks.
+/// 
+/// Not all filter maps may have succeeded to compile, so there is also a vec 
+/// with the names and error of the Filter(Map)s that couldn't be compiled. 
+/// 
+/// Rotolo holds all the attributes of the compilation as owned. There are
+/// public methods to retrieve and iter over the packs filled with references
+/// or with arcs.
+
 #[derive(Debug)]
 pub struct Rotolo {
-    packs: Vec<RotoPack>,
+    packs: Vec<InternalPack>,
     mis_compilations: Vec<(Scope, CompileError)>,
 }
 
@@ -92,7 +103,7 @@ impl Rotolo {
         &self.mis_compilations
     }
 
-    fn _take_pack_by_name(&mut self, name: &Scope) -> Option<RotoPack> {
+    fn _take_pack_by_name(&mut self, name: &Scope) -> Option<InternalPack> {
         let idx = self.packs.iter().position(|p| p.filter_map_name == *name);
         if let Some(idx) = idx {
             let p = self.packs.remove(idx);
@@ -102,64 +113,52 @@ impl Rotolo {
         }
     }
 
-    fn iter_all_filter_maps(
-        &self,
-    ) -> impl Iterator<Item = (Scope, Result<&RotoPack, CompileError>)> {
+    // this iterator is not public because that would leak the (private)
+    // RotoPack.
+    fn iter<'a, T: From<&'a InternalPack>>(
+        &'a self,
+    ) -> impl Iterator<Item = (Scope, Result<T, CompileError>)> + 'a {
         let mp = self
             .get_mis_compilations()
             .iter()
             .map(|mp| (mp.0.clone(), Err(mp.1.clone())));
         self.packs
             .iter()
-            .map(|p| (p.filter_map_name.clone(), Ok(p)))
+            .map(|p| (p.filter_map_name.clone(), Ok(p.into())))
             .chain(mp)
     }
 
-    pub fn retrieve_public_as_arcs(
+    /// Returns an iterator that goes over all the mis-compilations and packs.
+    /// The items returned from this Iterator are Results over RotoPacks
+    /// filled with `Arc<T>` over all collection-type attributes T inside the
+    /// pack, or, they are a Compile Error, indicating a mis-compilation.
+    pub fn iter_as_arcs(
         &self,
-        name: Scope,
-    ) -> Result<RotoPackArc, CompileError> {
+    ) -> impl Iterator<Item = (Scope, Result<RotoPackArc, CompileError>)>
+    {
+        self.iter::<RotoPackArc>()
+    }
+
+    /// Returns an iterator that goes over all the mis-compilations and packs.
+    /// The items returned from this Iterator are RotoPacks filled with &T
+    /// over all collection-type attributes T inside the pack, or, they are a
+    /// Compile Error, indicating a mis-compilation.
+    pub fn iter_as_refs(
+        &self,
+    ) -> impl Iterator<Item = (Scope, Result<RotoPackRef, CompileError>)>
+    {
+        self.iter::<RotoPackRef>()
+    }
+
+    // Not public, because it would leak the (private) RotoPack.
+    fn retrieve_pack<'a, T: From<&'a InternalPack>>(
+        &'a self,
+        name: &'a Scope,
+    ) -> Result<T, CompileError> {
         if !self.mis_compilations.is_empty() {
             return Err(self.mis_compilations[0].1.clone());
         }
-        self.iter_all_filter_maps()
-            .find(|p| p.0 == name)
-            .ok_or_else(|| {
-                CompileError::from(format!(
-                    "Can't find filter-map with specified name in this pack: {}",
-                    name
-                ))
-            })
-            .and_then(|p| {
-                if let Ok(p) = p.1 {
-                    Ok(PublicRotoPack::<
-                        Arc<[MirBlock]>,
-                        Arc<[(&str, TypeDef)]>,
-                        Arc<[ExtDataSource]>,
-                    > {
-                        filter_map_name: &p.filter_map_name,
-                        filter_type: p.filter_type,
-                        arguments: p
-                            .arguments
-                            .inspect_arguments()
-                            .clone()
-                            .into(),
-                        rx_type: p.rx_type.clone(),
-                        tx_type: p.tx_type.clone(),
-                        data_sources: p.data_sources.as_slice().into(),
-                        mir: p.mir.clone().into(),
-                    })
-                } else {
-                    Err(p.1.err().unwrap())
-                }
-            })
-    }
-
-    pub fn retrieve_public_as_refs(
-        &self,
-        name: &Scope,
-    ) -> Result<RotoPackRef, CompileError> {
-        self.iter_all_filter_maps()
+        self.iter::<&InternalPack>()
             .find(|p| p.0 == *name)
             .ok_or_else(|| {
                 CompileError::from(format!(
@@ -169,25 +168,40 @@ impl Rotolo {
             })
             .and_then(|p| {
                 if let Ok(p) = p.1 {
-                    Ok(PublicRotoPack {
-                        filter_map_name: &p.filter_map_name,
-                        filter_type: p.filter_type,
-                        arguments: p.arguments.inspect_arguments(),
-                        rx_type: p.rx_type.clone(),
-                        tx_type: p.tx_type.clone(),
-                        data_sources: p.data_sources.clone(),
-                        mir: p.mir.as_slice(),
-                    })
+                    Ok(p.into())
                 } else {
                     Err(p.1.err().unwrap())
                 }
             })
     }
 
-    pub fn retrieve_first_public_as_arcs(
+    /// Retrieves a pack by name, returns a Result over a pack that contains
+    /// `&T` for every collection-type attribute: T inside the pack. An error
+    /// indicates a mis-compilation for this Filter(Map).
+    pub fn retrieve_pack_as_refs<'a>(
+        &'a self,
+        name: &'a Scope,
+    ) -> Result<RotoPackRef, CompileError> {
+        self.retrieve_pack::<RotoPackRef<'a>>(name)
+    }
+
+    /// Retrieves a pack by name, returns a Result over a pack that contains
+    /// `Arc<T>` for every collection-type attribute: T inside the pack. An
+    /// error indicates a mis-compilation for this Filter(Map).
+    pub fn retrieve_pack_as_arcs<'a>(
+        &'a self,
+        name: &'a Scope,
+    ) -> Result<RotoPackArc, CompileError> {
+        self.retrieve_pack::<RotoPackArc<'a>>(name)
+    }
+
+    /// Retrieves the first pack in this rotolo, either a pack that contains
+    /// `&T` for every collection-type attribute: T inside the pack, or an
+    /// error indicating a mis-compilation for this Filter(Map).
+    pub fn retrieve_first_pack_as_arcs(
         &self,
     ) -> Result<RotoPackArc, CompileError> {
-        self.iter_all_filter_maps()
+        self.iter::<&InternalPack>()
             .take(1)
             .next()
             .ok_or_else(|| {
@@ -197,23 +211,7 @@ impl Rotolo {
             })
             .and_then(|p| {
                 if let Ok(p) = p.1 {
-                    Ok(PublicRotoPack::<
-                        Arc<[MirBlock]>,
-                        Arc<[(&str, TypeDef)]>,
-                        Arc<[ExtDataSource]>,
-                    > {
-                        filter_map_name: &p.filter_map_name,
-                        filter_type: p.filter_type,
-                        arguments: p
-                            .arguments
-                            .inspect_arguments()
-                            .clone()
-                            .into(),
-                        rx_type: p.rx_type.clone(),
-                        tx_type: p.tx_type.clone(),
-                        data_sources: p.data_sources.as_slice().into(),
-                        mir: p.mir.clone().into(),
-                    })
+                    Ok(p.into())
                 } else {
                     Err(p.1.err().unwrap())
                 }
@@ -260,10 +258,16 @@ impl Rotolo {
     }
 }
 
-// pub type RotoloArc = Rotolo<Arc<Vec<MirBlock>>>;
-// pub type RotoloRef<'a> = Rotolo<[&'a MirBlock]>;
+
+//------------ RotoPack -----------------------------------------------------
+
+/// A compiled Filter(Map)
+
+/// RotoPacks are the public representation of the compiled packs, where the
+/// collection-type fields can be `&T`, `Arc<T>`, or really any other 
+/// `T: AsRef<[T]>.`.
 #[derive(Debug)]
-pub struct PublicRotoPack<
+pub struct RotoPack<
     'a,
     M: AsRef<[MirBlock]>,
     A: AsRef<[(&'a str, TypeDef)]>,
@@ -278,14 +282,14 @@ pub struct PublicRotoPack<
     pub data_sources: EDS,
 }
 
-type RotoPackArc<'a> = PublicRotoPack<
+pub type RotoPackArc<'a> = RotoPack<
     'a,
     Arc<[MirBlock]>,
     Arc<[(&'a str, TypeDef)]>,
     Arc<[ExtDataSource]>,
 >;
 
-type RotoPackRef<'a> = PublicRotoPack<
+pub type RotoPackRef<'a> = RotoPack<
     'a,
     &'a [MirBlock],
     Vec<(&'a str, TypeDef)>,
@@ -297,7 +301,7 @@ impl<
         M: AsRef<[MirBlock]>,
         A: AsRef<[(&'a str, TypeDef)]>,
         EDS: AsRef<[ExtDataSource]>,
-    > PublicRotoPack<'a, M, A, EDS>
+    > RotoPack<'a, M, A, EDS>
 {
     pub fn get_arguments(&'a self) -> &'a [(&str, TypeDef)] {
         self.arguments.as_ref()
@@ -369,8 +373,12 @@ impl<
     }
 }
 
+//------------ InternalPack -------------------------------------------------
+
+// The internal representation of a RotoPack, where all values are owned.
+
 #[derive(Debug)]
-struct RotoPack {
+struct InternalPack {
     filter_map_name: Scope,
     filter_type: FilterType,
     mir: Vec<MirBlock>,
@@ -380,7 +388,7 @@ struct RotoPack {
     data_sources: Vec<ExtDataSource>,
 }
 
-impl RotoPack {
+impl InternalPack {
     fn new(
         filter_map_name: Scope,
         filter_type: FilterType,
@@ -390,7 +398,7 @@ impl RotoPack {
         arguments: FilterMapArgs,
         data_sources: Vec<ExtDataSource>,
     ) -> Self {
-        RotoPack {
+        InternalPack {
             filter_map_name,
             filter_type,
             mir,
@@ -488,31 +496,35 @@ impl RotoPack {
     // }
 }
 
-// impl<'a> From<&'a RotoPack for PublicRotoPack<'a, Arc<Vec<MirBlock>>> {
-//     fn from(rp: &'a RotoPack<Arc<Vec<MirBlock>>>) -> Self {
-//         PublicRotoPack {
-//             filter_map_name: rp.filter_map_name.as_str(),
-//             mir: Arc::clone(&rp.mir),
-//             rx_type: rp.rx_type.clone(),
-//             tx_type: rp.tx_type.clone(),
-//             arguments: Arc::clone(&rp.arguments.inspect_arguments()),
-//             data_sources: rp.data_sources.clone(),
-//         }
-//     }
-// }
+// PublicRotoPack<&[MirBlock], &[(&'a str, TypeDef)], &[ExtDataSource]>
 
-// impl<'a> From<&'a RotoPack<&'a Vec<MirBlock>>> for PublicRotoPack<'a, &'a Vec<MirBlock>> {
-//     fn from(rp: &'a RotoPack<&'a Vec<MirBlock>>) -> Self {
-//         PublicRotoPack {
-//             filter_map_name: rp.filter_map_name.as_str(),
-//             mir: rp.mir,
-//             rx_type: rp.rx_type.clone(),
-//             tx_type: rp.tx_type.clone(),
-//             arguments: Arc::clone(&rp.arguments.inspect_arguments()),
-//             data_sources: rp.data_sources.clone(),
-//         }
-//     }
-// }
+impl<'a> From<&'a InternalPack> for RotoPackArc<'a> {
+    fn from(rp: &'a InternalPack) -> Self {
+        RotoPackArc {
+            filter_map_name: &rp.filter_map_name,
+            mir: rp.mir.as_slice().into(),
+            rx_type: rp.rx_type.clone(),
+            tx_type: rp.tx_type.clone(),
+            arguments: rp.arguments.inspect_arguments().into(),
+            data_sources: rp.data_sources.clone().into(),
+            filter_type: rp.filter_type,
+        }
+    }
+}
+
+impl<'a> From<&'a InternalPack> for RotoPackRef<'a> {
+    fn from(rp: &'a InternalPack) -> Self {
+        RotoPackRef {
+            filter_map_name: &rp.filter_map_name,
+            mir: rp.mir.as_slice(),
+            rx_type: rp.rx_type.clone(),
+            tx_type: rp.tx_type.clone(),
+            arguments: rp.arguments.inspect_arguments(),
+            data_sources: rp.data_sources.clone(),
+            filter_type: rp.filter_type,
+        }
+    }
+}
 
 #[derive(Debug, Default, Clone)]
 pub struct CompileError {
@@ -551,8 +563,7 @@ impl From<CompileError> for Box<dyn std::error::Error> {
     }
 }
 
-pub(crate) type Arguments<'a> =
-    Vec<(Token, &'a Symbol, Vec<Command>)>;
+pub(crate) type Arguments<'a> = Vec<(Token, &'a Symbol, Vec<Command>)>;
 pub(crate) type DataSources<'a> = Vec<(ShortString, &'a Symbol)>;
 pub(crate) type Variables<'a> = Vec<(ShortString, &'a Symbol)>;
 pub(crate) type TermSections<'a> = Vec<(ShortString, StackRefPos)>;
@@ -582,7 +593,7 @@ struct CompilerState<'a> {
     // is passed around from eval to nested eval method is used. When the
     // compiler kicks in, this should already been all solved by the
     // evaluator. Having said that each argument for each scope has a unique
-    // index, the first element in the tuples it stores is a 
+    // index, the first element in the tuples it stores is a
     // Token::ActionArgument or Token::TermArgument. That token has *two*
     // usizes in it, one that corresponds to the ACtionSection or TermSection
     // it was defined in (it is the value of the token of the section, which
@@ -600,6 +611,12 @@ struct CompilerState<'a> {
     compiled_action_sections: ActionSections<'a>,
 }
 
+
+/// The `roto` compiler
+///
+/// The roto compiler is a single-stage, three phase compiler. it has
+/// separate public methods for each phase, as well as a method that bundles
+/// all phases.
 #[derive(Debug, Default)]
 pub struct Compiler {
     pub ast: SyntaxTree,
@@ -956,10 +973,8 @@ fn generate_code_for_token_value(
         Token::Method(_) => todo!(),
         Token::Variant(_) => todo!(),
         Token::Argument(_) => {
-            if let Some((_, _, code_block)) = state
-                .used_arguments
-                .iter()
-                .find(|(to, _, _)| to == &token)
+            if let Some((_, _, code_block)) =
+                state.used_arguments.iter().find(|(to, _, _)| to == &token)
             {
                 code_block.clone()
             } else {
@@ -967,10 +982,8 @@ fn generate_code_for_token_value(
             }
         }
         Token::ActionArgument(_, _) => {
-            if let Some((_, _, code_block)) = state
-                .used_arguments
-                .iter()
-                .find(|(to, _, _)| to == &token)
+            if let Some((_, _, code_block)) =
+                state.used_arguments.iter().find(|(to, _, _)| to == &token)
             {
                 code_block.clone()
             } else {
@@ -978,10 +991,8 @@ fn generate_code_for_token_value(
             }
         }
         Token::TermArgument(_, _) => {
-            if let Some((_, _, code_block)) = state
-                .used_arguments
-                .iter()
-                .find(|(to, _, _)| to == &token)
+            if let Some((_, _, code_block)) =
+                state.used_arguments.iter().find(|(to, _, _)| to == &token)
             {
                 code_block.clone()
             } else {
@@ -1011,7 +1022,7 @@ fn compile_filter_map(
     filter_map: &SymbolTable,
     global_table: &SymbolTable,
     // data_sources: Vec<(&str, Arc<DataSource>)>,
-) -> Result<RotoPack, CompileError> {
+) -> Result<InternalPack, CompileError> {
     trace!("SYMBOL MAP\n{:#?}", filter_map);
 
     let DepsGraph {
@@ -1116,7 +1127,7 @@ fn compile_filter_map(
         })
         .collect::<Vec<_>>();
 
-    Ok(RotoPack::new(
+    Ok(InternalPack::new(
         filter_map.get_scope(),
         filter_map.get_type(),
         mir,

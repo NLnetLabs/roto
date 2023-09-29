@@ -21,7 +21,7 @@ fn test_data(
 
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code)?;
-    let roto_pack = rotolo.retrieve_public_as_arcs(name)?;
+    let roto_pack = rotolo.retrieve_pack_as_arcs(&name)?;
 
     // BGP UPDATE message containing MP_REACH_NLRI path attribute,
     // comprising 5 IPv6 NLRIs

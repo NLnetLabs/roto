@@ -23,7 +23,7 @@ fn test_data(
 
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code)?;
-    let roto_pack = rotolo.retrieve_public_as_arcs(name)?;
+    let roto_pack = rotolo.retrieve_pack_as_arcs(&name)?;
 
     let buf = vec![
         0x03, 0x00, 0x00, 0x00, 0x67, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -92,7 +92,7 @@ fn test_data_2(
 
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code)?;
-    let roto_pack = rotolo.retrieve_public_as_arcs(name)?;
+    let roto_pack = rotolo.retrieve_pack_as_arcs(&name)?;
 
     let buf = vec![
         0x03, 0x00, 0x00, 0x00, 0x67, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -161,7 +161,7 @@ fn test_data_3(
 
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code)?;
-    let roto_pack = rotolo.retrieve_public_as_arcs(name)?;
+    let roto_pack = rotolo.retrieve_pack_as_arcs(&name)?;
 
     // BMP PeerDownNotification type 3, containing a BGP NOTIFICATION.
     let buf = vec![

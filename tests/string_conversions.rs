@@ -83,7 +83,7 @@ fn test_data(
 
     println!("miscompilations");
     println!("{:?}", roto_packs.get_mis_compilations());
-    let roto_pack = roto_packs.retrieve_first_public_as_arcs()?;
+    let roto_pack = roto_packs.retrieve_first_pack_as_arcs()?;
 
     let _count: TypeValue = 1_u32.into();
     let prefix: TypeValue =
