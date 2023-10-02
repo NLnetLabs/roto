@@ -76,3 +76,9 @@ impl std::hash::Hash for Scope {
         };
     }
 }
+
+impl From<&Scope> for ShortString {
+    fn from(value:&Scope) -> Self {
+        value.as_str().into()
+    }
+}
