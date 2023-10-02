@@ -1605,7 +1605,7 @@ impl SerializeForOperators for ExtendedCommunity {
                 let global_admin = self.as2().unwrap();
                 let local_admin = self.an4().unwrap();
                 raw_fields.push(format!("{:#04X}", self.type_raw()));
-                raw_fields.push(format!("{:#04X}", self.raw()[1]));
+                raw_fields.push(format!("{:#04X}", self.to_raw()[1]));
                 raw_fields.push(format!("{:#06X}", global_admin.to_u16()));
                 raw_fields.push(format!("{:#010X}", local_admin));
                 ser::Community {
@@ -1640,7 +1640,7 @@ impl SerializeForOperators for ExtendedCommunity {
                 let global_admin = self.ip4().unwrap();
                 let local_admin = self.an2().unwrap();
                 raw_fields.push(format!("{:#04X}", self.type_raw()));
-                raw_fields.push(format!("{:#04X}", self.raw()[1]));
+                raw_fields.push(format!("{:#04X}", self.to_raw()[1]));
                 raw_fields.push(format!("{:#010X}", u32::from(global_admin)));
                 raw_fields.push(format!("{:#06X}", local_admin));
                 ser::Community {
@@ -1670,7 +1670,7 @@ impl SerializeForOperators for ExtendedCommunity {
 
             _ => {
                 raw_fields
-                    .extend(self.raw().iter().map(|x| format!("{:#04X}", x)));
+                    .extend(self.to_raw().iter().map(|x| format!("{:#04X}", x)));
                 ser::Community {
                     raw_fields,
                     r#type: "extended",
