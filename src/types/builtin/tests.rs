@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod route {
     use routecore::bgp::{
-        message::SessionConfig,
+        message::{SessionConfig, nlri::{BasicNlri, Nlri}},
         types::{NextHop, OriginType},
     };
 
@@ -40,7 +40,7 @@ mod route {
             .0
             .nlris()
             .iter()
-            .filter_map(|n| n.prefix().map(|p| p.into()))
+            .filter_map(|n| if let Nlri::Unicast(n) = n  { Some(n.prefix().into()) } else { None }) 
             .collect();
         let msg_id = (RotondaId(0), 0);
 
@@ -148,7 +148,7 @@ mod route {
             .0
             .nlris()
             .iter()
-            .filter_map(|n| n.prefix().map(|p| p.into()))
+            .filter_map(|n| if let Nlri::Unicast(n) = n  { Some(n.prefix().into()) } else { None }) 
             .collect();
         let msg_id = (RotondaId(0), 0);
 

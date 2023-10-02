@@ -688,7 +688,7 @@ impl<'a> From<&'a Vec<CommandArg>> for CommandArgsStack<'a> {
 // passed in before compiling (`with_arguments()`), or they can be provided
 // at run-time.
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FilterMapArg {
     pub(crate) name: ShortString,
     index: Token,
@@ -732,7 +732,7 @@ impl FilterMapArg {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct FilterMapArgs(Vec<FilterMapArg>);
 
 impl FilterMapArgs {
