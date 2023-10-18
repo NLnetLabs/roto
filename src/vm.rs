@@ -575,6 +575,26 @@ impl LinearMemory {
     fn set_mem_pos(&mut self, index: usize, value: TypeValue) {
         *self.0.get_mut(index).unwrap() = value;
     }
+
+    // When returning the value on exiting the VM, the rx value should be
+    // reset to uninit, otherwise a hard reference to the rx argument that was
+    // passed into the VM, will linger on, panicking when the LinearMemory
+    // is reused.
+    pub fn take_rx_value(&mut self) -> Option<TypeValue> {
+        self.0.get_mut(0).map(std::mem::take)
+    }
+
+    // Same for the tx value.
+    pub fn take_tx_value(&mut self) -> Option<TypeValue> {
+        self.0.get_mut(1).map(std::mem::take)
+    }
+
+    // When aborting the VM this should be invoked, so that this LinearMemory
+    // instance can be reused.
+    pub fn reset(&mut self) {
+        self.0.get_mut(0).map(std::mem::take);
+        self.0.get_mut(1).map(std::mem::take);
+    }
 }
 
 impl Index<usize> for LinearMemory {
@@ -599,7 +619,7 @@ impl Display for LinearMemory {
 
 //------------ Command Arguments Stack --------------------------------------
 
-// A stack especially for the aguments to a Command. The Vec that forms the
+// A stack especially for the arguments to a Command. The Vec that forms the
 // stack is immutable, so that the VM doesn't need to clone the MIR code for
 // each run. A counter keeps track of the current position in the stack.
 
@@ -1896,11 +1916,14 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                     }
                     // stack args: [exit value]
                     OpCode::Exit(accept_reject) => {
+                        // Make sure to TAKE the rx and optionally the tx
+                        // value, so the references in LinearMemory are
+                        // broken and LM can be reused.
                         let rx = mem
-                            .get_mem_pos_as_owned(0)
+                            .take_rx_value()
                             .ok_or(VmError::InvalidPayload)?;
 
-                        let tx = match mem.get_mem_pos_as_owned(1) {
+                        let tx = match mem.take_tx_value() {
                             Some(TypeValue::Record(rec)) => Some(rec.into()),
                             _ => None,
                         };
@@ -2008,6 +2031,10 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
             }
         }
 
+        // This is obviously not good, so we are terminating here, but first
+        // we'll wipe the rx and tx value, so that the LinearMemory instance
+        // can still be reused by another VM run.
+        mem.reset();
         Err(VmError::UnexpectedTermination)
     }
 }
