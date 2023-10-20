@@ -2341,14 +2341,14 @@ pub enum CommandArg {
     Constant(TypeValue),              // Constant value
     Variable(usize),                  // Variable with token value
     Argument(usize), // extra runtime argument for filter_map & term
-    List(List),      // a list that needs to be stored at a memory posision
-    Record(Record),  // a record that needs to be stored at a mem posistion
+    List(List),      // a list that needs to be stored at a memory position
+    Record(Record),  // a record that needs to be stored at a mem position
     RxValue, // the placeholder for the value of the rx type at runtime
     TxValue, // the placeholder for the value of the tx type at runtime
     Method(usize), // method token value
     DataSourceTable(usize), // data source: table token value
     DataSourceRib(usize), // data source: rib token value
-    OutputStream(usize), // ouput stream value
+    OutputStream(usize), // output stream value
     FieldAccess(usize), // field access token value
     FieldIndex(SmallVec<[usize; 8]>), // field index token value (for LazyRecord)
     BuiltinMethod(usize),             // builtin method token value

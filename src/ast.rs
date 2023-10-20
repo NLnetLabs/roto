@@ -131,7 +131,7 @@ impl ListValueExpr {
 
 // RecordValueExpr ::= '{' (Identifier ':' ValueExpr, )+ '}'
 
-// The value of a (anonnymous) record
+// The value of a (anonymous) record
 // Defined and directly used, mainly as an argument to a method, where the
 // actual type can be inferred unambiguously.
 
@@ -258,7 +258,7 @@ impl RecordTypeAssignment {
 
 // FilterMap ::= "filter-map" Identifier "for" Identifier WithStatement
 //              WithStatement '{' FilterMapBody '}' |
-//               "filter" Indentifier "for" Identifier WithStatement '{' FilterBody '}'
+//               "filter" Identifier "for" Identifier WithStatement '{' FilterBody '}'
 #[derive(Clone, Copy, Debug)]
 pub enum FilterType {
     FilterMap,
@@ -1193,7 +1193,7 @@ impl PatternMatchActionArm {
 // A TermMatchExpr describes a variant of an enum together with its data
 // field and one or more logical expressions, that will evaluate to a boolean,
 // it may reference the data field. Note that this MatchExpr will be split out
-// in (variant_id, data_field) and the logical epressions to be able to store
+// in (variant_id, data_field) and the logical expressions to be able to store
 // it in a TermScope as `VariantMatchExpr`s.
 // Since it only store Logical Expressions it is only fit for use in a Term
 // section. In the Apply sections the PatternMatchActionExpr is used.
@@ -2247,7 +2247,7 @@ impl AccessExpr {
 // optionally followed by one or more method calls, and/or access receivers,
 // e.g. 'rib-rov.longest_match(route.prefix).prefix.len()`.
 //
-// Note that an expression ending in a field acces, i.e. not a method call,
+// Note that an expression ending in a field access, i.e. not a method call,
 // is also parsed as a ComputeExpr, but with an empty method call list.
 
 #[derive(Clone, Debug)]
@@ -2335,7 +2335,7 @@ impl std::fmt::Display for AccessReceiver {
 
 //------------- FieldAccessExpr ---------------------------------------------
 
-// The chain of fields that are being accesed. The last field is the name of
+// The chain of fields that are being accessed. The last field is the name of
 // the field that is accessed.
 
 // FieldAccessExpr ::= ( '.'? Identifier )+
@@ -2421,10 +2421,10 @@ impl MethodComputeExpr {
 //   arity of 2.
 //
 // The first point above reduces the cognitive overhead by simplifying the
-// flow of the program and using familar constructs, like 'if..then' and
+// flow of the program and using familiar constructs, like 'if..then' and
 // early returns.
 //
-// The second point also reduces (perceicved) ambiguity because we do not
+// The second point also reduces (perceived) ambiguity because we do not
 // allow using implicit logic operator precedence (that probably no one
 // knows anyway).
 
@@ -2457,7 +2457,7 @@ impl MethodComputeExpr {
 
 //------------ LogicalExpr --------------------------------------------------
 
-// The Logical expression evaluates to a logical forumula, that is a tuple of
+// The Logical expression evaluates to a logical formula, that is a tuple of
 // (optional boolean expression, logical operator, boolean expression).
 // The first boolean expression is optional, only in the case of a negation
 // (not) operator. The second boolean expression is always present.
@@ -2507,7 +2507,7 @@ impl CompareArg {
 // A Boolean expression is an expression that *may* evaluate to one of:
 // - a Boolean-valued function, which is a fn : X → B, where X is an
 //   arbitrary set and B is a boolean value. For example, an Integer
-//   expresssion can never evaluate to a boolean value, but a method call
+//   expression can never evaluate to a boolean value, but a method call
 //   expression may evaluate to a method that returns a Boolean value.
 // - a Literal Boolean value, "true" or "false"
 // - a Boolean-typed variable, including boolean-typed record fields
