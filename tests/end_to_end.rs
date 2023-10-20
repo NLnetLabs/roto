@@ -1,13 +1,14 @@
 use log::trace;
+use roto::ast::AcceptReject;
 use roto::compile::Compiler;
 
-use roto::blocks::Scope::{self, FilterMap};
+use roto::blocks::Scope::{self, FilterMap, Filter};
 use roto::types::builtin::{Asn, Community};
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::datasources::{DataSource, Rib};
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
-use roto::vm;
+use roto::vm::{self, VmResult};
 use rotonda_store::prelude::MergeUpdate;
 
 mod common;
@@ -51,15 +52,13 @@ impl std::fmt::Display for RibValue {
 fn test_data(
     name: Scope,
     source_code: &'static str,
-) -> Result<(), Box<dyn std::error::Error>> {
+    filter_args: Vec<(&str, TypeValue)>,
+    data_sources: Vec<DataSource>
+) -> Result<VmResult, Box<dyn std::error::Error>> {
     trace!("Evaluate filter-map {}...", name);
 
-    // Type coercion doesn't work here...
-    let filter_map_arguments =
-        vec![("extra_asn", TypeValue::from(Asn::from(65534_u32)))];
-
     let mut c = Compiler::new();
-    c.with_arguments(&name, filter_map_arguments)?;
+    c.with_arguments(&name, filter_args)?;
     let roto_packs = c.build_from_compiler(source_code)?;
 
     let mut roto_pack = roto_packs.retrieve_pack_as_refs(&name)?;
@@ -83,9 +82,15 @@ fn test_data(
 
     trace!("comms list {}", comms_list);
 
-    // For some reason absolute type definitions don't work properly
-    // let my_comms_type =
-    //     TypeDef::List(Box::new(TypeDef::Community));
+    let my_nested_rec_type =
+        TypeDef::new_record_type(vec![("counter", Box::new(TypeDef::U32))])
+            .unwrap();
+
+    let _my_nested_rec_instance = Record::create_instance_with_ordered_fields(
+        &my_nested_rec_type,
+        vec![("counter", 1_u32.into())],
+    )
+    .unwrap();
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
@@ -100,16 +105,6 @@ fn test_data(
     let my_comms_type: TypeDef = (&comms).into();
 
     trace!("comms type {}", my_comms_type);
-
-    let my_nested_rec_type =
-        TypeDef::new_record_type(vec![("counter", Box::new(TypeDef::U32))])
-            .unwrap();
-
-    let _my_nested_rec_instance = Record::create_instance_with_ordered_fields(
-        &my_nested_rec_type,
-        vec![("counter", 1_u32.into())],
-    )
-    .unwrap();
 
     let my_rec_type = TypeDef::new_record_type(vec![
         ("prefix", Box::new(TypeDef::Prefix)),
@@ -136,23 +131,8 @@ fn test_data(
     )
     .unwrap();
 
-    let source_asns_type =
-        TypeDef::new_record_type(vec![("asn", Box::new(TypeDef::Asn))])?;
-    let new_sa_rec = Record::create_instance_with_ordered_fields(
-        &source_asns_type,
-        vec![("asn", Asn::from_u32(300).into())],
-    )?;
-
-    // external rib
-    let rib_rov = Rib::new(
-        "rib-rov",
-        my_rec_type,
-        rotonda_store::MultiThreadedStore::<RibValue>::new()?,
-    );
-
-    // Turn it into a DataSource.
-    // let rib_rov_source: DataSource = rib_rov.into();
     
+    // Turn it into a DataSource.    
     let mem = &mut vm::LinearMemory::uninit();
 
     trace!("Used Arguments");
@@ -164,15 +144,11 @@ fn test_data(
     for mb in roto_pack.get_mir().iter() {
         trace!("{}", mb);
     }
-    // table source_asns contains AsnLines {
-    //     asn: Asn
-    // }
-    let sources_asns =
-        DataSource::table_from_records("source_asns", vec![new_sa_rec])?;
-    roto_pack.set_source(sources_asns)?;
 
-    trace!("insert source rib-rov");
-    roto_pack.set_source(rib_rov.into())?;
+    for data_source in data_sources {
+        roto_pack.set_source(data_source)?;
+    }
+
 
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
@@ -187,12 +163,59 @@ fn test_data(
     trace!("rx    : {:?}", res.rx);
     trace!("tx    : {:?}", res.tx);
 
-    Ok(())
+    Ok(res)
 }
 
 #[test]
 fn test_filter_map_1() {
     common::init();
+
+    // Type coercion doesn't work here...
+    let filter_map_arguments =
+        vec![("extra_asn", TypeValue::from(Asn::from(65534_u32)))];
+
+    let source_asns_type =
+        TypeDef::new_record_type(vec![("asn", Box::new(TypeDef::Asn))]).unwrap();
+    let new_sa_rec = Record::create_instance_with_ordered_fields(
+        &source_asns_type,
+        vec![("asn", Asn::from_u32(300).into())],
+    ).unwrap();
+    let mut data_sources =
+        vec![DataSource::table_from_records("source_asns", vec![new_sa_rec]).unwrap()];
+
+
+    let comms =
+        TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
+            Community::new(routecore::bgp::communities::Community::from([
+                127, 12, 13, 12,
+            ]))
+            .into(),
+        )]));
+
+    trace!("comms instance {}", comms);
+
+    let my_comms_type: TypeDef = (&comms).into();
+
+    trace!("comms type {}", my_comms_type);
+
+    // rib record
+    let my_rec_type = TypeDef::new_record_type(vec![
+        ("prefix", Box::new(TypeDef::Prefix)),
+        ("as-path", Box::new(TypeDef::AsPath)),
+        ("origin", Box::new(TypeDef::Asn)),
+        ("next-hop", Box::new(TypeDef::IpAddress)),
+        ("med", Box::new(TypeDef::U32)),
+        ("local-pref", Box::new(TypeDef::U32)),
+        ("community", Box::new(my_comms_type)),
+    ])
+    .unwrap();
+
+    // external rib
+    data_sources.push(Rib::new(
+        "rib-rov",
+        my_rec_type,
+        rotonda_store::MultiThreadedStore::<RibValue>::new().unwrap(),
+    ).into());
 
     test_data(
         FilterMap("in-filter-map".into()),
@@ -344,5 +367,119 @@ fn test_filter_map_1() {
                 community: [Community]
             }
         "###,
+        filter_map_arguments,
+        data_sources
     ).unwrap();
+}
+
+#[test]
+fn test_filter_map_2() {
+    common::init();
+    let res = test_data(
+        Filter("in-filter".into()),
+        r#"
+        filter in-filter {
+            define {
+                rx msg: Route;
+            }
+        
+            term filter_asn {
+                match {
+                    // msg.as-path.origin() == AS65001;
+                    1 == 1;
+                }
+            }
+        
+            apply {
+                filter match filter_asn matching {
+                    return accept;
+                };
+                accept;
+            }
+        }
+        "#,
+        vec![],
+        vec![]
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
+}
+
+#[test]
+fn test_filter_map_3() {
+    common::init();
+    let res = test_data(
+        Filter("in-filter".into()),
+        r#"
+        filter in-filter {
+            define {
+                rx msg: Route;
+            }
+        
+            term filter_asn {
+                match {
+                    // msg.as-path.origin() == AS65001;
+                    1 == 1;
+                }
+            }
+        
+            apply {
+                filter match filter_asn matching {
+                    return reject;
+                };
+                reject;
+            }
+        }
+        "#,
+        vec![],
+        vec![]
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
+}
+
+#[test]
+fn test_reject_all_filter() {
+    common::init();
+    let res = test_data(
+        Filter("reject-filter".into()),
+        r#"
+        filter reject-filter {
+            define {
+                rx msg: Route;
+            }
+        
+            apply {
+                reject;
+            }
+        }
+        "#,
+        vec![],
+        vec![]
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
+}
+
+#[test]
+fn test_accept_all_filter() {
+    common::init();
+    let res = test_data(
+        Filter("accept-filter".into()),
+        r#"
+        filter accept-filter {
+            define {
+                rx msg: Route;
+            }
+        
+            apply {
+                accept;
+            }
+        }
+        "#,
+        vec![],
+        vec![]
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
 }

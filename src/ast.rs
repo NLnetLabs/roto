@@ -343,7 +343,7 @@ impl FilterMapBody {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, (define, expressions, apply)) = permutation((
             Define::parse,
-            context("filter-map expressions", many1(FilterMapExpr::parse)),
+            context("filter-map expressions", many0(FilterMapExpr::parse)),
             opt(ApplySection::parse),
         ))(input)?;
 
@@ -358,6 +358,7 @@ impl FilterMapBody {
     }
 }
 
+// These are the sections that can appear multiple times in a Filter(Map)
 #[derive(Debug, Clone)]
 pub enum FilterMapExpr {
     Term(TermSection),
@@ -861,7 +862,7 @@ impl ApplyBody {
         let (input, (scopes, accept_reject)) = context(
             "apply body",
             tuple((
-                many1(ApplyScope::parse),
+                many0(ApplyScope::parse),
                 context("final accept reject", opt(opt_ws(accept_reject))),
             )),
         )(input)?;
