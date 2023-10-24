@@ -27,7 +27,7 @@ use crate::{
     },
     vm::{
         compute_hash, Command, CommandArg, ExtDataSource, FilterMapArg,
-        FilterMapArgs, OpCode, StackRefPos, VariablesRefTable
+        FilterMapArgs, OpCode, StackRefPos, VariablesRefTable,
     },
 };
 
@@ -646,7 +646,7 @@ struct CompilerState<'a> {
     // the actions -> terms -> define chain in the source code, i.e. only
     // actions that reference terms that reference variables that we're
     // defined in the `Define` section are stored here (as symbols). These
-    // variables are guarenteed to be necessary, no matter how the code
+    // variables are guaranteed to be necessary, no matter how the code
     // branches. The compiler will unconditionally compile these symbols and
     // store them at the start of the MIR code.
     used_variables: Variables<'a>,
@@ -665,7 +665,7 @@ struct CompilerState<'a> {
     // Token::ActionArgument or Token::TermArgument. That token has *two*
     // usizes in it, one that corresponds to the ACtionSection or TermSection
     // it was defined in (it is the value of the token of the section, which
-    // is an index from the enumration of sections in the source code). The
+    // is an index from the enumeration of sections in the source code). The
     // second usize is the index of the `with` argument of the enumeration of
     // all the `with` arguments in that section. Currently only one is
     // allowed, btw.
@@ -1771,7 +1771,7 @@ fn compile_compute_expr<'a>(
                 }
             }
         }
-        // A NamedTerm shoould be compiled with the `compile_term` method,
+        // A NamedTerm should be compiled with the `compile_term` method,
         // that will make sure it gets compiled and stored in the compiler
         // state `terms` hashmap, so that it can be inlined in multiple
         // places. It ending up here is an error.
@@ -1782,14 +1782,25 @@ fn compile_compute_expr<'a>(
                     .into(),
             ));
         }
-        // Anonymous terms are compile in-line as a one off, only used in
-        // match expressions (at least for now).
+        // Anonymous terms are compile in-line as a one off, only used as
+        // blocks for a variant in a match expressions (at least for now).
         Token::AnonymousTerm => {
             trace!("TOKEN ANONYMOUS SYMBOL {:#?}", symbol);
             let sub_terms = symbol.get_args();
 
-            for sub_term in sub_terms {
+            let mut sub_terms = sub_terms.iter().peekable();
+            while let Some(sub_term) = &mut sub_terms.next() {
                 state = compile_term(sub_term, state)?;
+
+                // Since these anonymous terms appear in a block, we're done
+                // if we evaluate to `true`. But: we don't need that if this
+                // is the last sub_term.
+                if sub_terms.peek().is_some() {
+                    state
+                        .cur_mir_block
+                        .command_stack
+                        .push(Command::new(OpCode::CondTrueSkipToEOB, vec![]));
+                }
             }
             return Ok(state);
         }
@@ -2801,7 +2812,8 @@ fn compile_term<'a>(
 
             trace!("enum token {:?}", term.get_token());
 
-            for variant in variants {
+            let mut variants = variants.iter().peekable();
+            while let Some(variant) = &mut variants.next() {
                 state.cur_mir_block.push_command(Command::new(
                     OpCode::Label,
                     vec![CommandArg::Label(
@@ -2817,13 +2829,39 @@ fn compile_term<'a>(
                     term.get_token()?,
                 ));
 
-                // compile the variants.
+                if let Ok(Token::Variant(variant_index)) = variant.get_token()
+                {
+                    state.cur_mir_block.command_stack.push(Command::new(
+                        OpCode::StackIsVariant,
+                        vec![CommandArg::Variant(variant_index)],
+                    ));
+
+                    // The next label should be next variant, so if this is
+                    // not the right variant, jump there.
+                    state.cur_mir_block.command_stack.push(Command::new(
+                        OpCode::CondFalseSkipToLabel,
+                        vec![CommandArg::Variant(variant_index)],
+                    ));
+
+                    // Ok, we're continuing, so pop the StackIsVariant value
+                    // from the stack.
+                    state.cur_mir_block.command_stack.push(Command::new(
+                        OpCode::PopStack,
+                        vec![]
+                    ));
+                }
+
+                // compile term blocks for each variant.
                 state = compile_compute_expr(variant, state, None, false)?;
 
-                state
-                    .cur_mir_block
-                    .command_stack
-                    .push(Command::new(OpCode::CondTrueSkipToEOB, vec![]));
+                if variants.peek().is_some() {
+                    // Do not spill over into the next variant, go to the end
+                    // of the block.
+                    state
+                        .cur_mir_block
+                        .command_stack
+                        .push(Command::new(OpCode::SkipToEOB, vec![]));
+                }
             }
 
             // restore old mem_pos, let's not waste memory

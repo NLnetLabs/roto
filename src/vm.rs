@@ -430,14 +430,18 @@ impl LinearMemory {
         variant_token: Token,
     ) -> bool {
         trace!(
-            "mp_is_variant {:?}",
-            self.get_mem_pos(mem_pos).map(StackValue::Ref)
+            "mp_is_variant {:?} == {:?}",
+            self.get_mem_pos(mem_pos).map(StackValue::Ref),
+            variant_token
         );
         match self.get_mem_pos(mem_pos) {
+            // We only know how to deal with BmpMessages currently.
             Some(TypeValue::Builtin(BuiltinTypeValue::BmpMessage(
                 bytes_rec,
             ))) => bytes_rec.is_variant(variant_token),
-            Some(_) => false,
+            Some(_) => {
+                false
+            }
             _ => false,
         }
     }
@@ -1721,6 +1725,7 @@ impl<
                                         );
                                     }),
                                 _ => {
+                                    trace!("WHAT? {:?}", sr.pos);
                                     return Err(VmError::InvalidVariant);
                                 }
                             }
@@ -1889,10 +1894,13 @@ impl<
                                                         *variant_index,
                                                     ),
                                                 )?;
-                                            trace!("variant value {:?}", var_val);
+                                            trace!(
+                                                "variant value {:?}",
+                                                var_val
+                                            );
                                             mem.set_mem_pos(
                                                 mem_pos as usize,
-                                                var_val
+                                                var_val,
                                             );
                                         }
                                         s.push(StackRefPos::CompareResult(
@@ -1929,6 +1937,10 @@ impl<
                     }
                     // Term procedures
                     // stack args ignored
+                    OpCode::SkipToEOB => {
+                        break;
+                    }
+                    // stack args ignored
                     OpCode::CondFalseSkipToEOB => {
                         let s = self.stack.borrow();
                         let stack_ref = s.get_top_value()?;
@@ -1964,6 +1976,21 @@ impl<
                         let s = self.stack.borrow();
                         let stack_ref = s.get_top_value()?;
                         if !mem.get_mp_field_as_unknown(stack_ref) {
+                            if log_enabled!(Level::Trace) {
+                                trace!(" continue");
+                            }
+                            continue;
+                        } else {
+                            if log_enabled!(Level::Trace) {
+                                trace!(" skip to next label");
+                            }
+                            skip_label = true;
+                        }
+                    }
+                    OpCode::CondFalseSkipToLabel => {
+                        let s = self.stack.borrow();
+                        let stack_ref = s.get_top_value()?;
+                        if mem.get_mp_field_as_bool(stack_ref) {
                             if log_enabled!(Level::Trace) {
                                 trace!(" continue");
                             }
@@ -2409,8 +2436,10 @@ impl Display for Command {
             OpCode::StackIsVariant => {
                 return write!(f, "{:?}=={:?}?", self.op, self.args[0]);
             }
+            OpCode::SkipToEOB => "-->",
             OpCode::CondFalseSkipToEOB => "-->",
             OpCode::CondTrueSkipToEOB => "-->",
+            OpCode::CondFalseSkipToLabel => "-->",
             OpCode::CondUnknownSkipToLabel => "-->",
             OpCode::Label => {
                 return write!(f, "🏷  {}", self.args[0]);
@@ -2612,6 +2641,8 @@ pub enum OpCode {
     StackIsVariant,
     MemPosSet,
     ArgToMemPos,
+    // Conditionally skip to the end ot the MIR block.
+    SkipToEOB,
     // Skip to the end of the MIR block if the top of the stack holds a
     // reference to a boolean value true
     CondFalseSkipToEOB,
@@ -2619,7 +2650,11 @@ pub enum OpCode {
     // reference to a boolean value false.
     CondTrueSkipToEOB,
     // Skip to the next label in a MIR block if the top of the stack holds a
-    // reference to a TypeValue::Unknown. Used to match expression variants.
+    // reference to a TypeValue::Boolean that is false.
+    CondFalseSkipToLabel,
+    // Skip to the next label
+    // in a MIR block if the top of the stack holds a reference to a
+    // TypeValue::Unknown. Used to match expression variants.
     CondUnknownSkipToLabel,
     // Debug Label for terms
     Label,
