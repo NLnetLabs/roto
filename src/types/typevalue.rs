@@ -27,7 +27,7 @@ use super::{
     },
     collections::{BytesRecord, ElementTypeValue, LazyRecord, List, Record},
     lazyrecord_types::{
-        PeerDownNotification, PeerUpNotification, RouteMonitoring,
+        PeerDownNotification, PeerUpNotification, RouteMonitoring, InitiationMessage,
     },
     outputs::OutputStreamMessage,
     typedef::TypeDef,
@@ -330,6 +330,12 @@ impl RotoType for TypeValue {
                         BmpPeerDownNotification in TypeValue::into_type()"
                             .to_string(),
                     ))
+                }BuiltinTypeValue::BmpInitationMessage(_v) => {
+                    Err(CompileError::new(
+                        "Unsupported TypeValue::\
+                        BmpInitiationMessage in TypeValue::into_type()"
+                            .to_string(),
+                    ))
                 }
             },
 
@@ -401,6 +407,17 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::BmpPeerDownNotification(bytes_rec) => {
                     LazyRecord::new(
                         BytesRecord::<PeerDownNotification>::lazy_type_def(),
+                    )
+                    .exec_value_method(
+                        method_token,
+                        args,
+                        res_type,
+                        bytes_rec.0.as_ref(),
+                    )
+                }
+                BuiltinTypeValue::BmpInitationMessage(bytes_rec) => {
+                    LazyRecord::new(
+                        BytesRecord::<InitiationMessage>::lazy_type_def(),
                     )
                     .exec_value_method(
                         method_token,
@@ -522,6 +539,9 @@ impl RotoType for TypeValue {
                     Err(VmError::InvalidValueType)
                 }
                 BuiltinTypeValue::BmpPeerDownNotification(_) => {
+                    Err(VmError::InvalidValueType)
+                }
+                BuiltinTypeValue::BmpInitationMessage(_) => {
                     Err(VmError::InvalidValueType)
                 }
                 BuiltinTypeValue::Boolean(v) => {

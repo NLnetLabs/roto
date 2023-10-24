@@ -67,7 +67,7 @@ impl RecordTypeDef {
 // Equivalence of two RecordTypeDefs is defined as the two vectors being
 // completely the same, or the field names being the same. The types
 // of the fields are being left out of the equivalence comparison
-// here! That is the responsablity of the evaluator.
+// here! That is the responsibility of the evaluator.
 impl PartialEq for RecordTypeDef {
     fn eq(&self, other: &Self) -> bool {
         if self.0 == other.0 {
@@ -1075,6 +1075,9 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::BmpPeerDownNotification(_) => {
                 TypeDef::LazyRecord(LazyRecordTypeDef::PeerDownNotification)
             }
+            BuiltinTypeValue::BmpInitationMessage(_) => {
+                TypeDef::LazyRecord(LazyRecordTypeDef::InitiationMessage)
+            }
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
             BuiltinTypeValue::LocalPref(_) => TypeDef::LocalPref,
@@ -1131,6 +1134,9 @@ impl From<BuiltinTypeValue> for TypeDef {
             }
             BuiltinTypeValue::BmpPeerDownNotification(_) => {
                 TypeDef::LazyRecord(LazyRecordTypeDef::PeerDownNotification)
+            }
+            BuiltinTypeValue::BmpInitationMessage(_) => {
+                TypeDef::LazyRecord(LazyRecordTypeDef::InitiationMessage)
             }
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,

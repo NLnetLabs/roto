@@ -40,7 +40,9 @@ pub enum LazyRecordTypeDef {
 impl LazyRecordTypeDef {
     pub fn type_def(&self) -> RecordTypeDef {
         match &self {
-            LazyRecordTypeDef::InitiationMessage => todo!(),
+            LazyRecordTypeDef::InitiationMessage => {
+                BytesRecord::<InitiationMessage>::type_def()
+            },
             LazyRecordTypeDef::RouteMonitoring => {
                 BytesRecord::<RouteMonitoring>::type_def()
             }
@@ -62,7 +64,12 @@ impl LazyRecordTypeDef {
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError> {
         match self {
-            LazyRecordTypeDef::InitiationMessage => todo!(),
+            LazyRecordTypeDef::InitiationMessage => {
+                BytesRecord::<InitiationMessage>::get_props_for_method(
+                    ty,
+                    method_name,
+                )
+            },
             LazyRecordTypeDef::RouteMonitoring => {
                 BytesRecord::<RouteMonitoring>::get_props_for_method(
                     ty,
@@ -92,7 +99,6 @@ impl LazyRecordTypeDef {
         field: &Identifier,
     ) -> Result<(TypeDef, Token), CompileError> {
         match self {
-            LazyRecordTypeDef::InitiationMessage => todo!(),
             LazyRecordTypeDef::RouteMonitoring => {
                 trace!("BmpRouteMonitoring w/ field '{}'", field);
                 BytesRecord::<RouteMonitoring>::get_props_for_field(field)
@@ -111,8 +117,12 @@ impl LazyRecordTypeDef {
                     field,
                 )
             }
-            LazyRecordTypeDef::RouteMirroring => todo!(),
+            LazyRecordTypeDef::InitiationMessage => {
+                trace!("BmpInitiationMessage w/ field '{}'", field);
+                BytesRecord::<InitiationMessage>::get_props_for_field(field)
+            },
             LazyRecordTypeDef::TerminationMessage => todo!(),
+            LazyRecordTypeDef::RouteMirroring => todo!(),
         }
     }
 }
@@ -160,9 +170,9 @@ impl From<LazyRecordTypeDef> for usize {
             LazyRecordTypeDef::StatisticsReport => 1,
             LazyRecordTypeDef::PeerDownNotification => 2,
             LazyRecordTypeDef::PeerUpNotification => 3,
-            LazyRecordTypeDef::RouteMirroring => 4,
-            LazyRecordTypeDef::InitiationMessage => 5,
-            LazyRecordTypeDef::TerminationMessage => 6,
+            LazyRecordTypeDef::InitiationMessage => 4,
+            LazyRecordTypeDef::TerminationMessage => 5,
+            LazyRecordTypeDef::RouteMirroring => 6,
         }
     }
 }
@@ -174,9 +184,9 @@ impl From<usize> for LazyRecordTypeDef {
             1 => LazyRecordTypeDef::StatisticsReport,
             2 => LazyRecordTypeDef::PeerDownNotification,
             3 => LazyRecordTypeDef::PeerUpNotification,
-            4 => LazyRecordTypeDef::RouteMonitoring,
-            5 => LazyRecordTypeDef::InitiationMessage,
-            6 => LazyRecordTypeDef::TerminationMessage,
+            4 => LazyRecordTypeDef::InitiationMessage,
+            5 => LazyRecordTypeDef::TerminationMessage,
+            6 => LazyRecordTypeDef::RouteMonitoring,
             _ => unimplemented!()
         }
     }

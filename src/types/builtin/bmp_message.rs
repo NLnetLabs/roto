@@ -10,12 +10,12 @@ use crate::{
     createtoken, lazyelmtypevalue, lazyenum, lazyfield, lazyrecord,
     traits::Token,
     types::{
-        builtin::{Asn, Boolean, BuiltinTypeValue, IpAddress, U16},
+        builtin::{Asn, Boolean, BuiltinTypeValue, IpAddress, U8, U16},
         collections::{EnumBytesRecord, LazyElementTypeValue, LazyRecord},
         enum_types::EnumVariant,
         lazyrecord_types::{
             BmpMessage, LazyRecordTypeDef, PeerDownNotification,
-            PeerUpNotification, RouteMonitoring, StatisticsReport,
+            PeerUpNotification, RouteMonitoring, StatisticsReport, InitiationMessage,
         },
         typedef::{LazyNamedTypeDef, RecordTypeDef, TypeDef},
         typevalue::TypeValue,
@@ -171,6 +171,23 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
                 .get_field_by_index(
                     field_index,
                     &BytesRecord::<PeerUpNotification>(pu),
+                )
+                .map(|elm| elm.into())
+                .unwrap()
+            }
+            LazyRecordTypeDef::InitiationMessage => {
+                let pu =
+                    routecore::bmp::message::InitiationMessage::from_octets(
+                        bytes::Bytes::copy_from_slice(raw_bytes),
+                    )
+                    .unwrap();
+                LazyRecord::<InitiationMessage>::new(BytesRecord::<
+                    InitiationMessage,
+                >::lazy_type_def(
+                ))
+                .get_field_by_index(
+                    field_index,
+                    &BytesRecord::<InitiationMessage>(pu),
                 )
                 .map(|elm| elm.into())
                 .unwrap()
@@ -427,6 +444,34 @@ bytes_record_impl!(
 impl BytesRecord<PeerDownNotification> {
     pub fn new(bytes: bytes::Bytes) -> Result<Self, VmError> {
         if let routecore::bmp::message::Message::PeerDownNotification(
+            pd_msg,
+        ) = routecore::bmp::message::Message::<bytes::Bytes>::from_octets(
+            bytes,
+        )
+        .unwrap()
+        {
+            Ok(Self(pd_msg))
+        } else {
+            Err(VmError::InvalidMsgType)
+        }
+    }
+}
+
+//------------ InitiationMessage --------------------------------------------
+
+bytes_record_impl!(
+    InitiationMessage,
+    #[type_def(
+        record_field(
+            "common_header"; 0,
+            field("version"; 1, U8, common_header.version),
+        ),
+    )]
+);
+
+impl BytesRecord<InitiationMessage> {
+    pub fn new(bytes: bytes::Bytes) -> Result<Self, VmError> {
+        if let routecore::bmp::message::Message::InitiationMessage(
             pd_msg,
         ) = routecore::bmp::message::Message::<bytes::Bytes>::from_octets(
             bytes,

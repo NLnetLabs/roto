@@ -12,7 +12,7 @@ use crate::traits::RotoType;
 use crate::types::collections::BytesRecord;
 use crate::types::enum_types::EnumVariant;
 use crate::types::lazyrecord_types::{
-    PeerDownNotification, PeerUpNotification, RouteMonitoring, BmpMessage,
+    PeerDownNotification, PeerUpNotification, RouteMonitoring, BmpMessage, InitiationMessage,
 };
 
 use super::super::collections::List;
@@ -62,6 +62,7 @@ pub enum BuiltinTypeValue {
     BmpRouteMonitoringMessage(Arc<BytesRecord<RouteMonitoring>>),
     BmpPeerUpNotification(Arc<BytesRecord<PeerUpNotification>>),
     BmpPeerDownNotification(Arc<BytesRecord<PeerDownNotification>>),
+    BmpInitationMessage(Arc<BytesRecord<InitiationMessage>>),
 }
 
 impl BuiltinTypeValue {
@@ -205,6 +206,9 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::BmpPeerDownNotification(_raw) => Err(CompileError::from(
                 "Cannot convert raw BMP Peer Down Notification into any other type.",
             )),
+            BuiltinTypeValue::BmpInitationMessage(_raw) => Err(CompileError::from(
+                "Cannot convert raw BMP Initiation into any other type.",
+            )),
             BuiltinTypeValue::RouteStatus(v) => v.into_type(ty),
             BuiltinTypeValue::Boolean(v) => v.into_type(ty),
             BuiltinTypeValue::HexLiteral(v) => v.into_type(ty),
@@ -233,8 +237,14 @@ impl From<u32> for BuiltinTypeValue {
 }
 
 impl From<U16> for BuiltinTypeValue {
-    fn from(val: U16) -> Self {
-        BuiltinTypeValue::U16(val)
+    fn from(value: U16) -> Self {
+        BuiltinTypeValue::U16(value)
+    }
+}
+
+impl From<U8> for BuiltinTypeValue {
+    fn from(value: U8) -> Self {
+        BuiltinTypeValue::U8(value)
     }
 }
 
@@ -349,6 +359,9 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::BmpPeerDownNotification(raw) => {
                     write!(f, "{:X?}", *raw)
                 }
+                BuiltinTypeValue::BmpInitationMessage(raw) => {
+                    write!(f, "{:X?}", *raw)
+                }
                 BuiltinTypeValue::RouteStatus(v) => {
                     write!(f, "{}", v)
                 }
@@ -422,6 +435,9 @@ impl Display for BuiltinTypeValue {
                 }
                 BuiltinTypeValue::BmpPeerDownNotification(raw) => {
                     write!(f, "{:X?} (BmpPeerDownNotification)", *raw)
+                }
+                BuiltinTypeValue::BmpInitationMessage(raw) => {
+                    write!(f, "{:X?} (BmpInitiationMessage)", *raw)
                 }
                 BuiltinTypeValue::RouteStatus(v) => {
                     write!(f, "{} (Route Status)", v)
