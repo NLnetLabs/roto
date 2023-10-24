@@ -26,8 +26,8 @@ use crate::{
         typedef::TypeDef,
     },
     vm::{
-        Command, CommandArg, ExtDataSource, FilterMapArg, FilterMapArgs,
-        OpCode, StackRefPos, VariablesRefTable,
+        compute_hash, Command, CommandArg, ExtDataSource, FilterMapArg,
+        FilterMapArgs, OpCode, StackRefPos, VariablesRefTable
     },
 };
 
@@ -327,6 +327,7 @@ pub struct InternalPack<
     pub tx_type: Option<TypeDef>,
     pub arguments: A,
     pub data_sources: EDS,
+    pub hash_id: u64,
 }
 
 pub type RotoPackArc<'a> = InternalPack<
@@ -336,8 +337,12 @@ pub type RotoPackArc<'a> = InternalPack<
     Arc<[ExtDataSource]>,
 >;
 
-pub type RotoPackRef<'a> =
-    InternalPack<'a, &'a [MirBlock], Vec<(&'a str, TypeDef)>, Vec<ExtDataSource>>;
+pub type RotoPackRef<'a> = InternalPack<
+    'a,
+    &'a [MirBlock],
+    Vec<(&'a str, TypeDef)>,
+    Vec<ExtDataSource>,
+>;
 
 impl<
         'a,
@@ -429,6 +434,7 @@ pub struct RotoPack {
     tx_type: Option<TypeDef>,
     arguments: FilterMapArgs,
     data_sources: Vec<ExtDataSource>,
+    hash_id: u64,
 }
 
 impl RotoPack {
@@ -441,6 +447,10 @@ impl RotoPack {
         arguments: FilterMapArgs,
         data_sources: Vec<ExtDataSource>,
     ) -> Self {
+        // This hash is used to determine, whether reloading or replacing mir
+        // code is actually necessary.
+        let hash_id = compute_hash(&mir, &data_sources);
+
         RotoPack {
             filter_map_name,
             filter_type,
@@ -449,6 +459,7 @@ impl RotoPack {
             tx_type,
             arguments,
             data_sources,
+            hash_id,
         }
     }
 
@@ -563,6 +574,7 @@ impl<'a> From<&'a RotoPack> for RotoPackArc<'a> {
             arguments: rp.arguments.inspect_arguments().into(),
             data_sources: rp.data_sources.clone().into(),
             filter_type: rp.filter_type,
+            hash_id: rp.hash_id,
         }
     }
 }
@@ -577,6 +589,7 @@ impl<'a> From<&'a RotoPack> for RotoPackRef<'a> {
             arguments: rp.arguments.inspect_arguments(),
             data_sources: rp.data_sources.clone(),
             filter_type: rp.filter_type,
+            hash_id: rp.hash_id,
         }
     }
 }
@@ -962,6 +975,14 @@ impl MirBlock {
         self.command_stack = c_stack;
 
         (self, mem_pos, field_indexes)
+    }
+}
+
+impl std::hash::Hash for MirBlock {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        for c in &self.command_stack {
+            c.hash(state);
+        }
     }
 }
 

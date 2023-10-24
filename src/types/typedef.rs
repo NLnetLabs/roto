@@ -64,7 +64,7 @@ impl RecordTypeDef {
     }
 }
 
-// Eqiuvalence of two RecordTypeDefs is defined as the two vecs being
+// Equivalence of two RecordTypeDefs is defined as the two vectors being
 // completely the same, or the field names being the same. The types
 // of the fields are being left out of the equivalence comparison
 // here! That is the responsablity of the evaluator.
@@ -83,6 +83,14 @@ impl PartialEq for RecordTypeDef {
                 }
                 true
             })
+    }
+}
+
+impl std::hash::Hash for RecordTypeDef {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        for ntd in &self.0 {
+            ntd.hash(state);
+        }
     }
 }
 
@@ -116,7 +124,7 @@ impl std::fmt::Display for RecordTypeDef {
 }
 
 #[derive(
-    Clone, Debug, Eq, PartialEq, Default, Ord, PartialOrd, Serialize,
+    Clone, Debug, Eq, PartialEq, Default, Ord, PartialOrd, Serialize, Hash
 )]
 pub enum TypeDef {
     // Data Sources, the data field in the enum represents the contained

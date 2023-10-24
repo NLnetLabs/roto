@@ -1,6 +1,7 @@
 use std::{
     cell::RefCell,
     fmt::{Display, Formatter},
+    hash::{Hash, Hasher},
     ops::{Index, IndexMut},
     sync::Arc,
 };
@@ -918,6 +919,27 @@ impl From<Vec<FilterMapArg>> for FilterMapArgs {
     }
 }
 
+impl std::hash::Hash for FilterMapArgs {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        for a in &self.0 {
+            a.value.hash(state);
+        }
+    }
+}
+
+// Computes the has over the mir code and the data sources, that is stored in
+// the built VM. This hash serves the purpose to figure out if a new (mir
+// code,data sources) tuple actually contains meaningful changes.
+pub fn compute_hash(
+    mir_code: &[MirBlock],
+    data_sources: &[ExtDataSource],
+) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    mir_code.hash(&mut hasher);
+    data_sources.hash(&mut hasher);
+    hasher.finish()
+}
+
 //------------ Variables ----------------------------------------------------
 
 // This the table that maps the user-defined variables from the 'define'
@@ -984,10 +1006,14 @@ pub struct VirtualMachine<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
     data_sources: EDS,
     arguments: FilterMapArgs,
     stack: RefCell<Stack>,
+    hash_id: u64,
 }
 
-impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
-    VirtualMachine<MB, EDS>
+impl<
+        'a,
+        MB: AsRef<[MirBlock]> + std::hash::Hash,
+        EDS: AsRef<[ExtDataSource]> + std::hash::Hash,
+    > VirtualMachine<MB, EDS>
 {
     fn _move_rx_tx_to_mem(
         &'a mut self,
@@ -1178,7 +1204,7 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
         stack.unwind()
     }
 
-    pub fn reset(&self) {
+    pub fn reset_stack(&self) {
         self.stack.borrow_mut().clear();
     }
 
@@ -1192,6 +1218,40 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
             .find(|ds| ds.token == token)
             .and_then(|ds| ds.source.load_full().as_ref().map(Arc::clone))
             .ok_or(VmError::DataSourceTokenNotFound(token))
+    }
+
+    pub fn get_hash_id(&self) -> u64 {
+        self.hash_id
+    }
+
+    // re-populate the VM with different intermediate code and different data
+    // sources. Note that the MIR and the data sources MUST come from the same
+    // RotoPack. If they are not, then the VM will crash or return arbitrary
+    // results, a.k.a. Undefined Behaviour! THIS IS NOT CHECKED BY THIS
+    // METHOD, ITS ON THE CONSUMER OF THIS METHOD TO GUARANTEE THIS.
+
+    // Returns a bool that indicates whether the MIR and the data sources
+    // where actually replaced.
+    pub fn replace_mir_code_and_data_sources(
+        &'a mut self,
+        mir_code: MB,
+        data_sources: EDS,
+    ) -> bool {
+        let new_hash = compute_hash(mir_code.as_ref(), data_sources.as_ref());
+
+        // If the hash is the same the MIR code has *not* changed, return
+        // without replacing anything.
+        if new_hash == self.hash_id {
+            return false;
+        }
+
+        // This is different from the *mir_cde, data_sources) tuple, so store
+        // that.
+        self.data_sources = data_sources;
+        self.mir_code = mir_code;
+        self.hash_id = new_hash;
+
+        true
     }
 
     pub fn exec(
@@ -1850,9 +1910,10 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
                         if let CommandArg::MemPos(pos) = args[1] {
                             match args[0] {
                                 CommandArg::Argument(token_value) => {
-                                    let arg_value = self
-                                        .arguments
-                                        .take_value_by_token(Token::Argument(token_value))?;
+                                    let arg_value =
+                                        self.arguments.take_value_by_token(
+                                            Token::Argument(token_value),
+                                        )?;
                                     mem.set_mem_pos(pos as usize, arg_value);
                                 }
                                 _ => {
@@ -2039,6 +2100,18 @@ impl<'a, MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
     }
 }
 
+impl<
+        MB: AsRef<[MirBlock]> + std::hash::Hash,
+        EDS: AsRef<[ExtDataSource]> + std::hash::Hash,
+    > std::hash::Hash for VirtualMachine<MB, EDS>
+{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.mir_code.hash(state);
+        self.data_sources.hash(state);
+        self.arguments.hash(state);
+    }
+}
+
 pub struct VmBuilder<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> {
     rx_type: TypeDef,
     tx_type: Option<TypeDef>,
@@ -2104,11 +2177,15 @@ impl<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> VmBuilder<MB, EDS> {
         };
 
         if let Some(mir_code) = self.mir_code {
+            let hash_id =
+                compute_hash(mir_code.as_ref(), data_sources.as_ref());
+
             Ok(VirtualMachine {
                 mir_code,
                 data_sources,
                 arguments: self.arguments,
                 stack: RefCell::new(Stack::new()),
+                hash_id,
             })
         } else {
             Err(VmError::NoMir)
@@ -2116,8 +2193,10 @@ impl<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> VmBuilder<MB, EDS> {
     }
 }
 
-impl<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> Default
-    for VmBuilder<MB, EDS>
+impl<
+        MB: AsRef<[MirBlock]> + std::hash::Hash,
+        EDS: AsRef<[ExtDataSource]> + std::hash::Hash,
+    > Default for VmBuilder<MB, EDS>
 {
     fn default() -> Self {
         Self::new()
@@ -2301,6 +2380,15 @@ impl Command {
     }
 }
 
+impl std::hash::Hash for Command {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.op.hash(state);
+        for a in &self.args {
+            a.hash(state);
+        }
+    }
+}
+
 impl Display for Command {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let arrow = match &self.op {
@@ -2309,7 +2397,9 @@ impl Display for Command {
             OpCode::ExecuteDataStoreMethod => "->",
             OpCode::ExecuteValueMethod => "->",
             OpCode::ExecuteConsumeValueMethod => "=>",
-            OpCode::LoadLazyFieldValue => { return write!(f, "💾  {:?} {:?}", self.op, self.args); },
+            OpCode::LoadLazyFieldValue => {
+                return write!(f, "💾  {:?} {:?}", self.op, self.args);
+            }
             OpCode::PushStack => "<-",
             OpCode::PopStack => "->",
             OpCode::ClearStack => "::",
@@ -2336,7 +2426,7 @@ impl Display for Command {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 pub enum CommandArg {
     Constant(TypeValue),              // Constant value
     Variable(usize),                  // Variable with token value
@@ -2503,7 +2593,7 @@ impl Clone for CommandArg {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash)]
 pub enum OpCode {
     Cmp,
     ExecuteTypeMethod,
@@ -2554,6 +2644,11 @@ impl std::fmt::Debug for ExtDataSource {
     }
 }
 
+impl std::hash::Hash for ExtDataSource {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.token.hash(state);
+    }
+}
 pub struct ExistsAndEmpty(Option<bool>);
 
 impl Display for ExistsAndEmpty {

@@ -2593,7 +2593,7 @@ impl CompareExpr {
 
 // CompareOp ::= '==' | '!=' | '<' | '<=' | '>' | '>='
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum CompareOp {
     Eq,
     Ne,
