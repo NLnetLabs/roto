@@ -24,26 +24,26 @@ use super::typevalue::TypeValue;
 // collections and their element types, and lazy evaluated collection types
 // and their element types.
 
-// The materialized collection typrs are Record and List. The elemen type for
-// both is called ElementTypeValue. The latter has the ability to store
-// nested typevalues, so the roto user can create/modify things like Lists of
-// lists, or Record with List-typed fields. The collection types themselves
-// are straight-forward vecs of ElementTypeValues (with a ShortString added
-// for the Record type). The List type is ordered (order of insert), the
-// Record type MUST be ordered alpabetically by key. The Roto user should not
-// have to worry about this, though.
+// The materialized collection types are Record and List. The element type for
+// both is called ElementTypeValue. The latter has the ability to store nested
+// typevalues, so the roto user can create/modify things like Lists of lists,
+// or Record with List-typed fields. The collection types themselves are
+// straight-forward vecs of ElementTypeValues (with a ShortString added for
+// the Record type). The List type is ordered (order of insert), the Record
+// type MUST be ordered alphabetically by key. The Roto user should not have
+// to worry about this, though.
 
-// The lazy types are BytesRecord and LazyRecord. BytesRecord is the type
-// that wraps the more complex routecore types, mainly the different BMP
-// message types. They are a wrapper around this message. A LazyRecord is a
-// special type that provides the translation between the method calls on a
-// routecore type and the corresponding fields that are offered to the roto
-// user. So, from the perspective of the roto user a LazyRecord is just a
-// regular Record, with (field_name, value) pairs. The LazyRecord type
-// instances *cannot* be stored in a TypeValue enum, they are strictly to be
-// used as intermediary types inside a Rotonda instance. If they need to be
-// stored (e.g. in a RIB), they need to be materialized first. Materializing
-// them only makes sense when the Roto user has modified them, otherwise it's
+// The lazy types are BytesRecord and LazyRecord. BytesRecord is the type that
+// wraps the more complex routecore types, mainly the different BMP message
+// types. They are a wrapper around this message. A LazyRecord is a special
+// type that provides the translation between the method calls on a routecore
+// type and the corresponding fields that are offered to the roto user. So,
+// from the perspective of the roto user a LazyRecord is just a regular
+// Record, with (field_name, value) pairs. The LazyRecord type instances
+// *cannot* be stored in a TypeValue enum, they are strictly to be used as
+// intermediary types inside a Rotonda instance. If they need to be stored
+// (e.g. in a RIB), they need to be materialized first. Materializing them
+// only makes sense when the Roto user has modified them, otherwise it's
 // advisable to store the related BytesRecord, which *do* have
 // BuiltinTypeValue variants to store them in, e.g. BuiltinTypeValue::
 // BmpMessage. Each BytesRecord type has a variant in the `LazyRecordTypeDef`
