@@ -3,12 +3,14 @@ use std::sync::Arc;
 use log::trace;
 use roto::{
     ast::AcceptReject,
-    compile::Compiler,
     blocks::Scope,
     blocks::Scope::{Filter, FilterMap},
+    compile::Compiler,
     types::{
-        builtin::BytesRecord, collections::Record,
-        lazyrecord_types::{RouteMonitoring, BmpMessage}, typevalue::TypeValue,
+        builtin::BytesRecord,
+        collections::Record,
+        lazyrecord_types::{BmpMessage, RouteMonitoring},
+        typevalue::TypeValue,
     },
     vm::{self, VmResult},
 };
@@ -18,25 +20,13 @@ mod common;
 fn test_data(
     name: Scope,
     source_code: &'static str,
+    buf: Vec<u8>,
 ) -> Result<VmResult, Box<dyn std::error::Error>> {
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code)?;
     let roto_pack = rotolo.retrieve_pack_as_arcs(&name)?;
-
-    let buf = vec![
-        0x03, 0x00, 0x00, 0x00, 0x67, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a, 0xff, 0x00, 0x65, 0x00,
-        0x01, 0x00, 0x00, 0x0a, 0x0a, 0x0a, 0x01, 0x54, 0xa2, 0x0e, 0x0c,
-        0x00, 0x0e, 0x81, 0x09, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x37,
-        0x02, 0x00, 0x00, 0x00, 0x1b, 0x40, 0x01, 0x01, 0x00, 0x40, 0x02,
-        0x06, 0x02, 0x01, 0x00, 0x01, 0x00, 0x00, 0x40, 0x03, 0x04, 0x0a,
-        0xff, 0x00, 0x65, 0x80, 0x04, 0x04, 0x00, 0x00, 0x00, 0x01, 0x20,
-        0x0a, 0x0a, 0x0a, 0x02,
-    ];
 
     let rm_msg = BytesRecord::<RouteMonitoring>::new(buf.clone().into());
     assert!(rm_msg.is_ok());
@@ -47,7 +37,10 @@ fn test_data(
         ),
     );
 
-    trace!("BUF {}", routecore::bmp::message::Message::from_octets(buf.clone()).unwrap());
+    trace!(
+        "BUF {}",
+        routecore::bmp::message::Message::from_octets(buf.clone()).unwrap()
+    );
     trace!("Used Arguments");
     trace!("{:#?}", &roto_pack.get_arguments());
     trace!("Used Data Sources");
@@ -112,9 +105,7 @@ fn test_data_2(
     assert!(rm_msg.is_ok());
     let rm_msg = rm_msg.unwrap();
     let payload = TypeValue::Builtin(
-        roto::types::builtin::BuiltinTypeValue::BmpMessage(
-            Arc::new(rm_msg),
-        ),
+        roto::types::builtin::BuiltinTypeValue::BmpMessage(Arc::new(rm_msg)),
     );
 
     trace!("Used Arguments");
@@ -156,7 +147,7 @@ fn test_data_2(
 fn test_data_3(
     name: Scope,
     source_code: &'static str,
-) -> Result<VmResult, Box<dyn std::error::Error>>  {
+) -> Result<VmResult, Box<dyn std::error::Error>> {
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
@@ -165,15 +156,13 @@ fn test_data_3(
 
     // BMP PeerDownNotification type 3, containing a BGP NOTIFICATION.
     let buf = vec![
-        0x03, 0x00, 0x00, 0x00, 0x46, 0x02, 0x00, 0x80,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-        0x00, 0x01, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x0a,
-        0x62, 0x2d, 0xea, 0x80, 0x00, 0x05, 0x58, 0x22,
-        0x03, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-        0xff, 0x00, 0x15, 0x03, 0x06, 0x02
+        0x03, 0x00, 0x00, 0x00, 0x46, 0x02, 0x00, 0x80, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x01, 0x0d, 0xb8, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
+        0x01, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x0a, 0x62, 0x2d, 0xea, 0x80,
+        0x00, 0x05, 0x58, 0x22, 0x03, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00,
+        0x15, 0x03, 0x06, 0x02,
     ];
 
     // let bla = BmpMessage::from_octets(buf.into()).unwrap();
@@ -181,8 +170,72 @@ fn test_data_3(
     assert!(rm_msg.is_ok());
     let rm_msg = rm_msg.unwrap();
     let payload = TypeValue::Builtin(
+        roto::types::builtin::BuiltinTypeValue::BmpMessage(Arc::new(rm_msg)),
+    );
+
+    trace!("Used Arguments");
+    trace!("{:#?}", &roto_pack.get_arguments());
+    trace!("Used Data Sources");
+    trace!("{:#?}", &roto_pack.get_data_sources());
+
+    let ds_ref = roto_pack.get_data_sources();
+
+    for mb in roto_pack.get_mir().iter() {
+        println!("{}", mb);
+    }
+
+    let mut vm = vm::VmBuilder::new()
+        // .with_arguments(args)
+        .with_data_sources(ds_ref)
+        .with_mir_code(roto_pack.get_mir())
+        .build()?;
+
+    let mem = &mut vm::LinearMemory::uninit();
+    let res = vm
+        .exec(
+            payload,
+            None::<Record>,
+            // Some(filter_map_arguments),
+            None,
+            mem,
+        )
+        .unwrap();
+
+    trace!("\nRESULT");
+    trace!("action: {}", res.accept_reject);
+    trace!("rx    : {:?}", res.rx);
+    trace!("tx    : {:?}", res.tx);
+
+    Ok(res)
+}
+
+fn initiation_payload_example() -> Vec<u8> {
+    vec![
+        0x03, 0x00, 0x00, 0x00, 0x34, 0x04, 0x00, 0x02, 0x00, 0x0d, 0x6d,
+        0x79, 0x2d, 0x62, 0x6d, 0x70, 0x2d, 0x72, 0x6f, 0x75, 0x74, 0x65,
+        0x72, 0x00, 0x01, 0x00, 0x19, 0x4d, 0x6f, 0x63, 0x6b, 0x20, 0x42,
+        0x4d, 0x50, 0x20, 0x6d, 0x6f, 0x6e, 0x69, 0x74, 0x6f, 0x72, 0x65,
+        0x64, 0x20, 0x72, 0x6f, 0x75, 0x74, 0x65, 0x72,
+    ]
+}
+
+fn compile_initiation_payload(
+    name: Scope,
+    source_code: &'static str,
+    buf: routecore::bmp::message::Message<bytes::Bytes>,
+) -> Result<VmResult, Box<dyn std::error::Error>> {
+    println!("Evaluate filter-map {}...", name);
+
+    // Compile the source code in this example
+    let rotolo = Compiler::build(source_code)?;
+    let roto_pack = rotolo.retrieve_pack_as_arcs(&name)?;
+
+    // assert!(i_msg.is_ok());
+
+    // let rm_msg = i_msg.unwrap();
+    let payload = TypeValue::Builtin(
         roto::types::builtin::BuiltinTypeValue::BmpMessage(
-            Arc::new(rm_msg),
+            Arc::new(roto::types::builtin::BytesRecord(buf)),
         ),
     );
 
@@ -222,6 +275,231 @@ fn test_data_3(
     Ok(res)
 }
 
+fn route_monitoring_example() -> Vec<u8> {
+    vec![
+        0x03, 0x00, 0x00, 0x00, 0x67, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a, 0xff, 0x00, 0x65, 0x00,
+        0x01, 0x00, 0x00, 0x0a, 0x0a, 0x0a, 0x01, 0x54, 0xa2, 0x0e, 0x0c,
+        0x00, 0x0e, 0x81, 0x09, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x37,
+        0x02, 0x00, 0x00, 0x00, 0x1b, 0x40, 0x01, 0x01, 0x00, 0x40, 0x02,
+        0x06, 0x02, 0x01, 0x00, 0x01, 0x00, 0x00, 0x40, 0x03, 0x04, 0x0a,
+        0xff, 0x00, 0x65, 0x80, 0x04, 0x04, 0x00, 0x00, 0x00, 0x01, 0x20,
+        0x0a, 0x0a, 0x0a, 0x02,
+    ]
+}
+
+#[test]
+fn initiation_msg_test_1() {
+    common::init();
+
+    let payl = initiation_payload_example();
+
+    let i_msg = routecore::bmp::message::Message::from_octets(
+        bytes::Bytes::from(payl),
+    )
+    .unwrap();
+
+    assert!(matches!(
+        i_msg,
+        routecore::bmp::message::Message::InitiationMessage(_)
+    ));
+
+    let res = compile_initiation_payload(
+        Filter("bmp-in-filter".into()),
+        r#"
+        filter bmp-in-filter {
+            define {
+                rx msg: BmpMessage;
+            }
+
+            term is_rm_ipv4 with msg: BmpRouteMonitoringMessage {
+                match {
+                    msg.per_peer_header.is_ipv4;
+                }
+            }
+
+            term is_pd_ipv4 with msg: BmpPeerDownNotification {
+                match {
+                    msg.per_peer_header.is_ipv4;
+                }
+            }
+
+            apply {
+                match msg with {
+                    RouteMonitoring(rm_msg) | is_rm_ipv4(rm_msg) -> { return accept; },
+                    PeerDownNotification(pd_msg) -> { return accept; },
+                    InitiationMessage(i_msg) -> { return accept; },
+                }
+                reject;
+            }  
+        }
+        "#,
+        i_msg
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
+}
+
+#[test]
+fn initiation_msg_test_2() {
+    common::init();
+
+    let payl = initiation_payload_example();
+
+    let i_msg = routecore::bmp::message::Message::from_octets(
+        bytes::Bytes::from(payl),
+    )
+    .unwrap();
+
+    assert!(matches!(
+        i_msg,
+        routecore::bmp::message::Message::InitiationMessage(_)
+    ));
+
+    let res = compile_initiation_payload(
+        Filter("bmp-in-filter".into()),
+        r#"filter bmp-in-filter {
+        define {
+            rx msg: BmpMessage;
+        }
+
+        term ipv6_only {
+            match msg with {
+                RouteMonitoring(rm_msg) -> 
+                    rm_msg.per_peer_header.is_ipv6,
+                PeerDownNotification(pd_msg) -> { 
+                    pd_msg.per_peer_header.is_ipv6; 
+                },
+                InitiationMessage(i_msg) -> {
+                    1 == 1;
+                },
+                PeerUpNotification(pu_msg) -> {
+                    pu_msg.per_peer_header.is_ipv6;
+                },
+            }
+        }
+
+        apply {
+            filter match ipv6_only matching {
+                return accept;
+            };
+            reject;
+        }   
+    }"#,
+        i_msg,
+    )
+    .unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
+}
+
+#[test]
+fn initiation_msg_test_3() {
+    common::init();
+
+    let payl = initiation_payload_example();
+
+    let i_msg = routecore::bmp::message::Message::from_octets(
+        bytes::Bytes::from(payl),
+    )
+    .unwrap();
+
+    assert!(matches!(
+        i_msg,
+        routecore::bmp::message::Message::InitiationMessage(_)
+    ));
+
+    let res = compile_initiation_payload(
+        Filter("bmp-in-filter".into()),
+        r#"filter bmp-in-filter {
+        define {
+            rx msg: BmpMessage;
+        }
+    
+        term ipv6_only {
+            match msg with {
+                RouteMonitoring(rm_msg) -> rm_msg.per_peer_header.is_ipv6,
+                PeerDownNotification(pd_msg) -> { pd_msg.per_peer_header.is_ipv6; },
+                PeerUpNotification(pu_msg) -> {
+                    1 != 1;
+                },
+                InitiationMessage(i_msg) -> {
+                    1 == 1;
+                }
+            }
+        }
+    
+        apply {
+            filter match ipv6_only matching {
+                return accept;
+            };
+            reject;
+        }  
+    }"#,
+        i_msg,
+    )
+    .unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
+}
+
+#[test]
+fn bmp_route_monitoring_1() {
+    common::init();
+
+    let payl = route_monitoring_example();
+
+    let pd_msg = routecore::bmp::message::Message::from_octets(
+        bytes::Bytes::from(payl),
+    )
+    .unwrap();
+
+    trace!("{}", pd_msg);
+    assert!(matches!(
+        pd_msg,
+        routecore::bmp::message::Message::RouteMonitoring(_)
+    ));
+
+    let res = compile_initiation_payload(
+        Filter("bmp-in-filter".into()),
+        r#"filter bmp-in-filter {
+        define {
+            rx msg: BmpMessage;
+        }
+
+        term ipv6_only {
+            match msg with {
+                RouteMonitoring(rm_msg) -> 
+                    rm_msg.per_peer_header.is_ipv6,
+                PeerDownNotification(pd_msg) -> { 
+                    pd_msg.per_peer_header.is_ipv6; 
+                },
+                InitiationMessage(i_msg) -> {
+                    1 != 1;
+                    1 == 1;
+                },
+                PeerUpNotification(pu_msg) -> {
+                    pu_msg.per_peer_header.is_ipv6;
+                },
+            }
+        }
+
+        apply {
+            filter match ipv6_only matching {
+                return accept;
+            };
+            reject;
+        }   
+    }"#,
+        pd_msg,
+    )
+    .unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
+}
+
 #[test]
 fn bmp_message_1() {
     common::init();
@@ -248,6 +526,7 @@ fn bmp_message_1() {
             }
         }
         "###,
+        route_monitoring_example(),
     )
     .unwrap();
 
@@ -280,6 +559,7 @@ fn bmp_message_2() {
             }
         }
         "###,
+        route_monitoring_example(),
     )
     .unwrap();
 
@@ -312,6 +592,7 @@ fn bmp_message_3() {
             }
         }
         "###,
+        route_monitoring_example(),
     );
 
     let err =
