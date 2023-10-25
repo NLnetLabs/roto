@@ -11,7 +11,7 @@
 //               └─▶ Withdrawals │──change ──────┘
 //                 └─────────────┘  status
 
-use log::trace;
+use log::{info, trace};
 use routecore::bgp::message::SessionConfig;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
@@ -26,6 +26,7 @@ use crate::{
     compile::CompileError,
     traits::{RotoType, Token},
     types::{
+        builtin::Boolean,
         enum_types::EnumVariant,
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
@@ -1049,6 +1050,9 @@ impl From<RouteToken> for u8 {
     }
 }
 
+// We are abusing the method_token to convey the requested RouteStatus
+// from the invoked method. So instead of creating all 'is_*' methods
+// separately, we can just compare the method_token with self.
 impl RotoType for RouteStatus {
     fn get_props_for_method(
         _ty: TypeDef,
@@ -1060,32 +1064,32 @@ impl RotoType for RouteStatus {
         match method_name.ident.as_str() {
             "is_in_convergence" => Ok(MethodProps::new(
                 TypeDef::Boolean,
-                RouteStatusToken::IsInConvergence.into(),
+                usize::from(RouteStatus::InConvergence),
                 vec![],
             )),
             "is_up_to_date" => Ok(MethodProps::new(
                 TypeDef::Boolean,
-                RouteStatusToken::IsUpToDate.into(),
+                usize::from(RouteStatus::UpToDate),
                 vec![],
             )),
             "is_stale" => Ok(MethodProps::new(
                 TypeDef::Boolean,
-                RouteStatusToken::IsStale.into(),
+                usize::from(RouteStatus::Stale),
                 vec![],
             )),
             "is_start_of_route_refresh" => Ok(MethodProps::new(
                 TypeDef::Boolean,
-                RouteStatusToken::IsStartOfRouteRefresh.into(),
+                usize::from(RouteStatus::StartOfRouteRefresh),
                 vec![],
             )),
             "is_withdrawn" => Ok(MethodProps::new(
                 TypeDef::Boolean,
-                RouteStatusToken::IsWithdrawn.into(),
+                usize::from(RouteStatus::Withdrawn),
                 vec![],
             )),
             "is_empty" => Ok(MethodProps::new(
                 TypeDef::Boolean,
-                RouteStatusToken::IsEmpty.into(),
+                usize::from(RouteStatus::Empty),
                 vec![],
             )),
             _ => Err(format!(
@@ -1112,14 +1116,18 @@ impl RotoType for RouteStatus {
         }
     }
 
+    // The abuse happens here.
     fn exec_value_method<'a>(
         &'a self,
-        _method_token: usize,
-
+        method_token: usize,
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        Err(VmError::InvalidMethodCall)
+        Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
+            method_token
+                == usize::try_from(*self)
+                    .map_err(|_e| VmError::InvalidVariant)?,
+        ))))
     }
 
     fn exec_consume_value_method(
@@ -1140,32 +1148,8 @@ impl RotoType for RouteStatus {
     }
 }
 
-#[derive(Debug)]
-pub enum RouteStatusToken {
-    IsInConvergence = 1,
-    IsUpToDate = 2,
-    IsStale = 3,
-    IsStartOfRouteRefresh = 4,
-    IsWithdrawn = 5,
-    IsEmpty = 6,
-}
-
-impl From<usize> for RouteStatusToken {
-    fn from(value: usize) -> Self {
-        match value {
-            1 => RouteStatusToken::IsInConvergence,
-            2 => RouteStatusToken::IsUpToDate,
-            3 => RouteStatusToken::IsStale,
-            4 => RouteStatusToken::IsStartOfRouteRefresh,
-            5 => RouteStatusToken::IsWithdrawn,
-            6 => RouteStatusToken::IsEmpty,
-            _ => panic!("Unknown RouteStatusToken value: {}", value),
-        }
-    }
-}
-
-impl From<RouteStatusToken> for usize {
-    fn from(val: RouteStatusToken) -> Self {
+impl From<RouteStatus> for usize {
+    fn from(val: RouteStatus) -> Self {
         val as usize
     }
 }
