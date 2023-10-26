@@ -158,8 +158,9 @@ fn test_data(
 fn test_records_compare_1() {
     common::init();
     let src_line = src_code(
-        "A { asn: AS100, i: c }",
-        "100 in [a.i, 2,3,4,5]; // Peer Down",
+        // c = 99
+        "A { i: c, asn: AS100 }",
+        "100 in [a.i,2,3,4,5]; // Peer Down",
         "reject",
     );
     let test_run = test_data(FilterMap("in-filter-map".into()), &src_line);
@@ -173,7 +174,7 @@ fn test_records_compare_2() {
     common::init();
     let src_line = src_code(
         r#"A { asn: "stringetje", i: c }"#,
-        "100 in [a.i, 2,3,4,5]; // Peer Down",
+        "100 in [a.i,2,3,4,5]; // Peer Down",
         "reject",
     );
     let test_run = test_data(FilterMap("in-filter-map".into()), &src_line)

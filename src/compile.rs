@@ -1782,7 +1782,7 @@ fn compile_compute_expr<'a>(
                     .into(),
             ));
         }
-        // Anonymous terms are compile in-line as a one off, only used as
+        // Anonymous terms are compiled in-line as a one off, only used as
         // blocks for a variant in a match expressions (at least for now).
         Token::AnonymousTerm => {
             trace!("TOKEN ANONYMOUS SYMBOL {:#?}", symbol);
@@ -1863,7 +1863,7 @@ fn compile_compute_expr<'a>(
 
             // Re-order the args vec on this symbol to reflect the ordering
             // on the type definition for the record. The original ordering
-            // is the order in which it was specificed in the source code,
+            // is the order in which it was specified in the source code,
             // the resulting order is alphabetically on the names of the
             // fields. We're using a bit of a trick to re-order, since the
             // `symbol` variable is not mutable. So create a Vec<&Symbol>
@@ -1880,7 +1880,7 @@ fn compile_compute_expr<'a>(
 
             return Ok(state);
         }
-        // This is a record that appears in a variable assigment that creates
+        // This is a record that appears in a variable assignment that creates
         // a record in the `Define` section or it is an argument to a method
         // call.
         Token::TypedRecord => {
@@ -2001,12 +2001,12 @@ fn compile_compute_expr<'a>(
     Ok(state)
 }
 
-// Compiles the variable assigments, creates a MirBlock that retrieves and/or
+// Compiles the variable assignments, creates a MirBlock that retrieves and/or
 // computes the value of the variable and stores it in the
 // `variables_ref_table` map. Note that in cases where the variables
-// assignments points to a field access, the access receiver of the
-// assignment is stored together with the ield_index on the access receiver
-// that points to the actual variable assignment.
+// assignments points to a field access, the access receiver of the assignment
+// is stored together with the field_index on the access receiver that points
+// to the actual variable assignment.
 fn compile_assignments(
     mut mir: Vec<MirBlock>,
     mut state: CompilerState<'_>,
