@@ -216,6 +216,11 @@ impl LinearMemory {
                             _ => Err(VmError::MemOutOfBounds),
                         }
                     }
+                    Some(TypeValue::Builtin(BuiltinTypeValue::Route(
+                        route,
+                    ))) => Ok(route
+                        .get_field_by_index(field_index[0])
+                        .unwrap_or(TypeValue::Unknown)),
                     _ => Err(VmError::MemOutOfBounds),
                 },
             },
@@ -439,9 +444,7 @@ impl LinearMemory {
             Some(TypeValue::Builtin(BuiltinTypeValue::BmpMessage(
                 bytes_rec,
             ))) => bytes_rec.is_variant(variant_token),
-            Some(_) => {
-                false
-            }
+            Some(_) => false,
             _ => false,
         }
     }
@@ -2077,8 +2080,9 @@ impl<
                             args[2].get_args_len_for_outputstream_record();
 
                         trace!(
-                            "no of fields {}",
-                            args[3].get_args_len() as u32
+                            "no of fields {} elem_num {}",
+                            args[3].get_args_len() as u32,
+                            elem_num
                         );
 
                         let stack_args =
