@@ -711,7 +711,7 @@ fn bmp_message_6() {
                         asn: yy_msg.per_peer_header.asn,
                         message: String.format(
                             "Peer with ASN {} just went down.", 
-                            yy_msg.per_peer_header.is_legacy_format
+                            yy_msg.per_peer_header.peer_type
                         )
                     }
                 );
