@@ -2637,6 +2637,10 @@ pub enum OpCode {
     PopStack,
     PushStack,
     ClearStack,
+    // Assumes the top of the stack is a Vec of typevalues, and modifies the
+    // value on the top of the stack to the element that is indexed by the
+    // first argument is receives. It will recurse into that element if their
+    // is a next argument, and repeats that until the arguments are exhausted.
     StackOffset,
     // Inspects the top of the stack to see if its value corresponds to
     // the variant of an enum, passed in as a Variant Token in the arguments
