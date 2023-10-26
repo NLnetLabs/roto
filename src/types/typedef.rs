@@ -230,7 +230,8 @@ impl TypeDef {
         Record(StringLiteral;Record,OutputStream),
         LazyRecord(StringLiteral;Record,OutputStream),
         AcceptReject(StringLiteral;),
-        List(StringLiteral;);
+        List(StringLiteral;),
+        ConstEnumVariant(StringLiteral,U32;);
         // no conversions, no data field
         // SOURCE TYPE
         Route,
@@ -241,8 +242,7 @@ impl TypeDef {
         GlobalEnum,
         Rib,
         Table,
-        OutputStream,
-        ConstEnumVariant
+        OutputStream
     );
 
     pub(crate) fn new_record_type_from_short_string(
