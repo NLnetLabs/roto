@@ -2,16 +2,14 @@ use log::trace;
 use roto::ast::AcceptReject;
 use roto::compile::Compiler;
 
-use roto::blocks::Scope::{self, Filter, FilterMap};
-use roto::types::builtin::{Prefix, BuiltinTypeValue};
+use roto::blocks::Scope::{self, Filter};
+use roto::types::builtin::Prefix;
 use roto::types::builtin::{
-    Asn, RawRouteWithDeltas, RotondaId, RouteStatus, UpdateMessage,
+    RawRouteWithDeltas, RotondaId, RouteStatus, UpdateMessage,
 };
 use roto::types::collections::Record;
-use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
-use rotonda_store::prelude::MergeUpdate;
 use routecore::bgp::message::nlri::Nlri;
 use routecore::bgp::message::SessionConfig;
 
@@ -232,6 +230,62 @@ fn test_routes_3() {
             // A typed named record
             action send_msg {
                 mqtt.send(msg);
+            }
+        
+            apply {
+                filter match always matching {
+                    send_msg;
+                    return accept;
+                };
+                reject;
+            }
+        }
+        
+        output-stream mqtt contains Message {
+            prefix: Prefix,
+            peer_ip: IpAddress
+        }
+    "#;
+
+    let test_run = test_data(Filter("rib-in-pre-filter".into()), src);
+
+    let (VmResult { accept_reject, output_stream_queue, .. }, prefix, peer_ip) = test_run.unwrap();
+    let output_record = output_stream_queue[0].get_record();
+    trace!("{:#?}", output_record);
+    assert_eq!(output_stream_queue.len(), 1);
+
+    // The outputted record is an ordered_record, meaning it is sorted
+    // alphabetically on the key, so [0] is "peer_ip" and [1] is "prefix"
+    assert_eq!(output_record.get_field_by_index(vec![1].into()).unwrap(), &prefix);
+    assert_eq!(output_record.get_field_by_index(vec![0].into()).unwrap(), &peer_ip);
+    trace!("{:#?}", output_stream_queue);
+    assert_eq!(accept_reject, AcceptReject::Accept);
+}
+
+#[test]
+fn test_routes_4() {
+    common::init();
+    let src = r#"
+        filter rib-in-pre-filter {
+            define {
+                rx route: Route;
+
+                pfx = route.prefix;
+                peer = route.peer_ip;
+            }
+        
+            term always {
+                match {
+                    1 == 1;
+                }
+            }
+        
+            // A typed named record
+            action send_msg {
+                mqtt.send({
+                    prefix: pfx,
+                    peer_ip: peer
+                });
             }
         
             apply {
