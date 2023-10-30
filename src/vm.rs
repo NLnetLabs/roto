@@ -949,53 +949,155 @@ pub fn compute_hash(
 
 //------------ Variables ----------------------------------------------------
 
+// Variable Assignments can be of any these types:
+// 1. literal primitive values: a = “AA”;
+// 2. literal compound values: a = [1,2,3]; a = Msg { prefix: fe80::/24,
+//    peer_ip: fe80::1, comment: “bla” };
+// 3. primitive aliasing a = route.prefix;
+// 4. compound aliasing a = Msg { prefix: route.prefix, peer_ip:
+//    route.peer_ip, comment: “bla”  };
+
+// In the first case we're creating a new value, that we'll have to store in a
+// memory position and create a single entry in the VariablesRefTable. In the
+// second case we can do the same thing, since a memory position can hold a
+// complete literal record, provided all of its fields are literal values (so
+// no computation needed at run time). The third case only needs a single
+// entry in the VariablesRefTable, pointing to a pre-filled memory position.
+// The last case is the hardest, we need to be able to store a series of
+// references to memory positions that can addressed from a single entry in
+// the VariablesRefTable.
+
+// In short:
+// 1. single mem_pos_set + entry in var_ref_table
+// 2. single mem_pos_set + entry in var_ref_table
+// 3. entry in var_ref_table
+// 4. mem_pos_sets + entry in var_ref_table
+
 // This the table that maps the user-defined variables from the 'define'
 // section to memory positions in the VM.
-#[derive(Debug)]
-pub struct VariableRef {
+#[derive(Debug,Clone)]
+pub struct PrimitiveRef {
     pub var_token_value: usize,
-    pub mem_pos: u32,
-    pub field_index: SmallVec<[usize; 8]>,
+    mem_pos: u32,
+    field_index: SmallVec<[usize; 8]>,
+}
+
+impl PrimitiveRef {
+    pub fn new(var_token_value: usize, mem_pos: u32, field_index: SmallVec<[usize; 8]>) -> Self {
+        Self {
+            var_token_value,
+            mem_pos,
+            field_index
+        }
+    }
+    
+    pub fn get_mem_pos(&self) -> u32 {
+        self.mem_pos
+    }
+
+    pub fn get_field_index(&self) -> &SmallVec<[usize; 8]> {
+        &self.field_index
+    }
+}
+
+#[derive(Debug,Clone)]
+pub struct CollectionRef {
+    var_token_value: usize,
+    var_refs: Vec<VariableRef>,
+}
+
+impl CollectionRef {
+    pub fn iter(&self) -> std::slice::Iter<'_, VariableRef> {
+        self.var_refs.iter()
+    }
+}
+
+#[derive(Debug,Clone)]
+pub enum VariableRef {
+    Primitive(PrimitiveRef),
+    Collection(CollectionRef),
+}
+
+impl VariableRef {
+    pub fn get_mem_pos(&self) -> Result<u32, &Vec<VariableRef>> {
+        match self {
+            VariableRef::Primitive(p) => Ok(p.mem_pos),
+            VariableRef::Collection(c) => Err(&c.var_refs)
+        }
+    }
+
+    pub fn get_field_index(&self) -> Result<&SmallVec<[usize; 8]>, CompileError> {
+        match self {
+            VariableRef::Primitive(p) => Ok(&p.field_index),
+            VariableRef::Collection(c) => Err(CompileError::from("Cannot get field index for a collection"))
+        }
+    }
 }
 
 #[derive(Debug, Default)]
 pub struct VariablesRefTable(Vec<VariableRef>);
 
 impl VariablesRefTable {
-    pub fn get_by_token_value(&self, index: usize) -> Option<&VariableRef> {
-        self.0.iter().find(
-            |VariableRef {
-                 var_token_value: t, ..
-             }| { t == &index },
-        )
+    pub fn get_by_token_value(&self, index: usize) -> Option<VariableRef> {
+        self.0.iter().find(|v| match v {
+            VariableRef::Primitive(PrimitiveRef {
+                var_token_value: t,
+                ..
+            }) => t == &index,
+            VariableRef::Collection(CollectionRef {
+                var_token_value: t,
+                ..
+            }) => t == &index,
+        }).cloned()
     }
 
-    pub fn append(
+    pub fn append_primitive(
         &mut self,
         mem_pos: u32,
         field_index: SmallVec<[usize; 8]>,
     ) -> Result<usize, CompileError> {
-        self.0.push(VariableRef {
+        self.0.push(VariableRef::Primitive(PrimitiveRef {
             var_token_value: self.0.len(),
             mem_pos,
             field_index,
-        });
+        }));
 
         Ok(self.0.len())
     }
 
-    pub fn set(
+    pub fn set_primitive(
         &mut self,
         var_token_value: usize,
         mem_pos: u32,
         field_index: SmallVec<[usize; 8]>,
     ) -> Result<(), CompileError> {
-        self.0.push(VariableRef {
+        self.0.push(VariableRef::Primitive(PrimitiveRef {
             var_token_value,
             mem_pos,
             field_index,
-        });
+        }));
         Ok(())
+    }
+
+    pub fn set_collection(
+        &mut self,
+        var_token_value: usize,
+        var_refs: Vec<VariableRef>,
+    ) -> Result<(), CompileError> {
+        self.0.push(VariableRef::Collection(CollectionRef { var_token_value, var_refs }));
+        Ok(())
+    }
+
+    pub fn append_collection(
+        &mut self,
+        var_refs: Vec<VariableRef>,
+        field_index: SmallVec<[usize; 8]>,
+    ) -> Result<u32, CompileError> {
+        self.0.push(VariableRef::Collection(CollectionRef {
+            var_token_value: self.0.len(),
+            var_refs,
+        }));
+        Ok(self.0.len() as u32)
     }
 
     pub fn new() -> Self {

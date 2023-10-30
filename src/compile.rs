@@ -27,7 +27,7 @@ use crate::{
     },
     vm::{
         compute_hash, Command, CommandArg, ExtDataSource, FilterMapArg,
-        FilterMapArgs, OpCode, StackRefPos, VariablesRefTable,
+        FilterMapArgs, OpCode, StackRefPos, VariablesRefTable, VariableRef, PrimitiveRef, CollectionRef,
     },
 };
 
@@ -1213,6 +1213,36 @@ fn compile_filter_map(
     ))
 }
 
+fn recursive_ref_grabber(mut state: CompilerState, var_ref: VariableRef, inc_mem_pos: bool) -> CompilerState {
+    match var_ref {
+        VariableRef::Primitive(var_ref) => {
+            state.cur_mir_block.push_command(Command::new(
+                OpCode::PushStack,
+                vec![CommandArg::MemPos(var_ref.get_mem_pos())],
+            ));
+
+            for field_index in var_ref.get_field_index() {
+                state.cur_mir_block.push_command(Command::new(
+                    OpCode::StackOffset,
+                    vec![CommandArg::FieldAccess(*field_index)],
+                ));
+            }
+
+            if inc_mem_pos {
+                state.cur_mem_pos += 1;
+            }
+        },
+        VariableRef::Collection(coll_refs) => {
+            for var_ref in coll_refs.iter() {
+                state = recursive_ref_grabber(state, var_ref.clone(), inc_mem_pos);
+            }
+        }
+        _ =>  {panic!("cant' happen");}
+    }
+
+    state
+}
+
 fn compile_compute_expr<'a>(
     symbol: &'a Symbol,
     mut state: CompilerState<'a>,
@@ -1240,6 +1270,9 @@ fn compile_compute_expr<'a>(
 
         // Assign a variable
         Token::Variable(var_to) => {
+            trace!("var_to {}", var_to);
+            trace!("var ref table {:?}", state.variable_ref_table);
+            trace!("kind {:?}", symbol.get_kind());
             assert!(is_ar);
             let var_ref =
                 state.variable_ref_table.get_by_token_value(var_to).unwrap();
@@ -1247,21 +1280,48 @@ fn compile_compute_expr<'a>(
             // when writing, push the content of the referenced variable to the stack,
             // note this might be the same as the assigned mem position, but it may also
             // be different!
-            state.cur_mir_block.push_command(Command::new(
-                OpCode::PushStack,
-                vec![CommandArg::MemPos(var_ref.mem_pos)],
-            ));
+            match var_ref.get_mem_pos() {
+                Ok(mem_pos) => {
+                    state.cur_mir_block.push_command(Command::new(
+                        OpCode::PushStack,
+                        vec![CommandArg::MemPos(var_ref.get_mem_pos().unwrap())],
+                    ));
 
-            for field_index in &var_ref.field_index {
-                state.cur_mir_block.push_command(Command::new(
-                    OpCode::StackOffset,
-                    vec![CommandArg::FieldAccess(*field_index)],
-                ));
+                    for field_index in var_ref.get_field_index().unwrap() {
+                        state.cur_mir_block.push_command(Command::new(
+                            OpCode::StackOffset,
+                            vec![CommandArg::FieldAccess(*field_index)],
+                        ));
+                    }
+        
+                    if inc_mem_pos {
+                        state.cur_mem_pos += 1;
+                    }
+                },
+                Err(var_refs) => {
+                    for var_ref in var_refs {
+                        state = recursive_ref_grabber(state, var_ref.clone(), inc_mem_pos);
+                    }
+                    // for var_ref in var_refs { 
+                    //     state.cur_mir_block.push_command(Command::new(
+                    //         OpCode::PushStack,
+                    //         vec![CommandArg::MemPos(var_ref.get_mem_pos().unwrap())],
+                    //     ));
+    
+                    //     for field_index in var_ref.get_field_index().unwrap() {
+                    //         state.cur_mir_block.push_command(Command::new(
+                    //             OpCode::StackOffset,
+                    //             vec![CommandArg::FieldAccess(*field_index)],
+                    //         ));
+                    //     }
+            
+                    //     if inc_mem_pos {
+                    //         state.cur_mem_pos += 1;
+                    //     }
+                    // }
+                }
             }
 
-            if inc_mem_pos {
-                state.cur_mem_pos += 1;
-            }
         }
         // a user-defined argument (filter_map or term)
         Token::Argument(arg_to) => {
@@ -1796,10 +1856,10 @@ fn compile_compute_expr<'a>(
                 // if we evaluate to `true`. But: we don't need that if this
                 // is the last sub_term.
                 if sub_terms.peek().is_some() {
-                    state
-                        .cur_mir_block
-                        .command_stack
-                        .push(Command::new(OpCode::CondTrueSkipToEOB, vec![]));
+                    state.cur_mir_block.command_stack.push(Command::new(
+                        OpCode::CondTrueSkipToEOB,
+                        vec![],
+                    ));
                 }
             }
             return Ok(state);
@@ -2011,6 +2071,7 @@ fn compile_assignments(
     mut mir: Vec<MirBlock>,
     mut state: CompilerState<'_>,
 ) -> Result<(Vec<MirBlock>, CompilerState<'_>), CompileError> {
+    trace!("COMPILE ASSIGNMENTS");
     let _filter_map = state.cur_filter_map;
 
     // a new block
@@ -2043,29 +2104,76 @@ fn compile_assignments(
             vec![CommandArg::Label(format!("VAR {}", var.0).as_str().into())],
         ));
 
-        state = compile_compute_expr(
-            s.get_args().get(0).unwrap(),
-            state,
-            None,
-            false,
-        )?;
+        for arg in s.get_args() {
+            trace!("arg {:?} {:?} {:?} {:?}", arg.get_name(), arg.get_token(), arg.get_type(), arg.get_kind());
+            if let TypeDef::Record(_r) = arg.get_type() {
+                let mut var_refs = vec![];
+                for child_arg in arg.get_args() {
+                    trace!("child_arg {}", child_arg.get_name());
+                    state = compile_compute_expr(
+                        child_arg,
+                        state,
+                        None,
+                        false,
+                    )?;
 
-        state
-            .cur_mir_block
-            .command_stack
-            .push(Command::new(OpCode::ClearStack, vec![]));
+                    state
+                        .cur_mir_block
+                        .command_stack
+                        .push(Command::new(OpCode::MemPosSet, vec![CommandArg::MemPos(state.cur_mem_pos)]));
+            
+                    // let (cur_mir_block, cur_mem_pos, field_indexes) =
+                    //     state.cur_mir_block.into_assign_block(var_mem_pos + 2);
 
-        let (cur_mir_block, cur_mem_pos, field_indexes) =
-            state.cur_mir_block.into_assign_block(var_mem_pos + 2);
+                    var_refs.push(VariableRef::Primitive(
+                        PrimitiveRef::new(
+                            var.1.get_token()?.into(),
+                            state.cur_mem_pos,
+                            vec![].into()
+                        )
+                    ));
 
-        state.variable_ref_table.set(
-            var.1.get_token()?.into(),
-            cur_mem_pos as u32,
-            field_indexes,
-        )?;
+                    state
+                        .cur_mir_block
+                        .command_stack
+                        .push(Command::new(OpCode::ClearStack, vec![]));
 
-        mir.push(cur_mir_block);
-        state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
+                    state.cur_mem_pos += 1;
+                }
+                                    
+                state.variable_ref_table.set_collection(
+                    var.1.get_token()?.into(),
+                    var_refs,
+                )?;
+                mir.push(state.cur_mir_block);
+                state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
+
+            } else {
+                state = compile_compute_expr(
+                    arg,
+                    state,
+                    None,
+                    false,
+                )?;
+
+                state
+                .cur_mir_block
+                .command_stack
+                .push(Command::new(OpCode::ClearStack, vec![]));
+    
+                let (cur_mir_block, cur_mem_pos, field_indexes) =
+                    state.cur_mir_block.into_assign_block(var_mem_pos + 2);
+        
+                state.variable_ref_table.set_primitive(
+                    var.1.get_token()?.into(),
+                    cur_mem_pos as u32,
+                    field_indexes,
+                )?;
+        
+                mir.push(cur_mir_block);
+                state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
+            }
+        }
     }
 
     state.cur_mem_pos = 1 + state.used_variables.len() as u32;
@@ -2105,23 +2213,25 @@ fn compile_apply_section(
 
                 // SSA and Ordered Types
 
-                // This is my take on Static Single-Assignment form (SSA). Although
-                // variables in Roto are immutable, pointing to indexes of a Record
-                // or enum instance mutates the original value (the record or enum
-                // instance): once a record is indexed or an enum is unpacked into
-                // its variant and that gets indexed, the original value is lost to
-                // the compiler beyond that point, it simply can't know where to
-                // retrieve the original value anymore. So, we need to keep track
-                // of each time the original value is referenced and supply the
-                // compiler with a fresh copy of the original value. This is what
-                // SSA is supposed to do, or, in other words, the MIR language can
-                // only deal with Ordered Types (every variable is of a unique type
-                // that can only be used once and in the order of appearance). The
-                // solution is fairly easy, just before one of these values is
-                // referenced, we put a block of code in front of it that pushed
-                // the original value (from a protected memory position) onto the
-                // stack. This is that code for the action argument ('with' clause)
-                // of an action section
+                // This is my take on Static Single-Assignment form (SSA).
+                // Although variables in Roto are immutable, pointing to
+                // indexes of a Record or enum instance mutates the original
+                // value (the record or enum instance): once a record is
+                // indexed or an enum is unpacked into its variant and that
+                // gets indexed, the original value is lost to the compiler
+                // beyond that point, it simply can't know where to retrieve
+                // the original value any more. So, we need to keep track of
+                // each time the original value is referenced and supply the
+                // compiler with a fresh copy of the original value. This is
+                // what SSA is supposed to do, or, in other words, the MIR
+                // language can only deal with Ordered Types (every variable
+                // is of a unique type that can only be used once and in the
+                // order of appearance). The solution is fairly easy, just
+                // before one of these values is referenced, we put a block of
+                // code in front of it that pushed the original value (from a
+                // protected memory position) onto the stack. This is that
+                // code for the action argument ('with' clause) of an action
+                // section
                 let enum_instance_code_block = generate_code_for_token_value(
                     &state,
                     match_action.get_token()?,
@@ -2845,10 +2955,10 @@ fn compile_term<'a>(
 
                     // Ok, we're continuing, so pop the StackIsVariant value
                     // from the stack.
-                    state.cur_mir_block.command_stack.push(Command::new(
-                        OpCode::PopStack,
-                        vec![]
-                    ));
+                    state
+                        .cur_mir_block
+                        .command_stack
+                        .push(Command::new(OpCode::PopStack, vec![]));
                 }
 
                 // compile term blocks for each variant.
