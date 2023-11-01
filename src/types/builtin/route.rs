@@ -363,8 +363,8 @@ impl RawRouteWithDeltas {
                 Token::FieldAccess(vec![RouteToken::AtomicAggregate.into()]),
             )),
             "aggregator" => Ok((
-                TypeDef::AtomicAggregator,
-                Token::FieldAccess(vec![RouteToken::AtomicAggregator.into()]),
+                TypeDef::Aggregator,
+                Token::FieldAccess(vec![RouteToken::Aggregator.into()]),
             )),
             "communities" => Ok((
                 TypeDef::List(Box::new(TypeDef::Community)),
@@ -408,7 +408,7 @@ impl RawRouteWithDeltas {
             RouteToken::AtomicAggregate => {
                 current_set.atomic_aggregate.as_ref()
             }
-            RouteToken::AtomicAggregator => current_set.aggregator.as_ref(),
+            RouteToken::Aggregator => current_set.aggregator.as_ref(),
             RouteToken::Communities => current_set.communities.as_ref(),
             RouteToken::Status => self.status_deltas.current_as_ref(),
             RouteToken::PeerIp => current_set.peer_ip.as_ref(),
@@ -426,43 +426,59 @@ impl RawRouteWithDeltas {
                 .raw_message
                 .0
                 .aspath()
+                .ok()
+                .flatten()
                 .map(|p| p.to_hop_path())
                 .map(TypeValue::from),
             RouteToken::OriginType => {
-                self.raw_message.raw_message.0.origin().map(TypeValue::from)
+                self.raw_message.raw_message.0.origin().ok().flatten().map(TypeValue::from)
             }
             RouteToken::NextHop => self
                 .raw_message
                 .raw_message
                 .0
-                .next_hop()
+                .mp_next_hop()
+                .ok()
+                .flatten()
+                .or_else(|| { self
+                    .raw_message
+                    .raw_message
+                    .0.conventional_next_hop().ok().flatten() })
                 .map(TypeValue::from),
             RouteToken::MultiExitDisc => self
                 .raw_message
                 .raw_message
                 .0
-                .multi_exit_desc()
+                .multi_exit_disc()
+                .ok()
+                .flatten()
                 .map(TypeValue::from),
             RouteToken::LocalPref => self
                 .raw_message
                 .raw_message
                 .0
                 .local_pref()
+                .ok()
+                .flatten()
                 .map(TypeValue::from),
             RouteToken::AtomicAggregate => Some(TypeValue::from(
-                self.raw_message.raw_message.0.is_atomic_aggregate(),
+                self.raw_message.raw_message.0.is_atomic_aggregate().unwrap(),
             )),
-            RouteToken::AtomicAggregator => self
+            RouteToken::Aggregator => self
                 .raw_message
                 .raw_message
                 .0
                 .aggregator()
+                .ok()
+                .flatten()
                 .map(TypeValue::from),
             RouteToken::Communities => self
                 .raw_message
                 .raw_message
                 .0
                 .all_communities()
+                .ok()
+                .flatten()
                 .map(TypeValue::from),
             RouteToken::Prefix => Some(self.prefix.into()),
             RouteToken::Status => Some(self.status_deltas.current()),
@@ -734,18 +750,34 @@ impl BgpUpdateMessage {
     ) -> Option<TypeValue> {
         match field_token.into() {
             BgpUpdateMessageToken::Nlris => Some(TypeValue::Unknown),
-            BgpUpdateMessageToken::Afi => Some(TypeValue::Builtin(
-                BuiltinTypeValue::ConstU16EnumVariant(EnumVariant {
-                    enum_name: "AFI".into(),
-                    value: self.raw_message.0.nlris().afi().into(),
-                }),
-            )),
-            BgpUpdateMessageToken::Safi => Some(TypeValue::Builtin(
-                BuiltinTypeValue::ConstU8EnumVariant(EnumVariant {
-                    enum_name: "SAFI".into(),
-                    value: self.raw_message.0.nlris().safi().into(),
-                }),
-            )),
+            BgpUpdateMessageToken::Afi => {
+                if let Some(Ok(nlri)) =
+                    self.raw_message.0.announcements().unwrap().next()
+                {
+                    Some(TypeValue::Builtin(
+                        BuiltinTypeValue::ConstU16EnumVariant(EnumVariant {
+                            enum_name: "AFI".into(),
+                            value: nlri.afi_safi().0.into(),
+                        }),
+                    ))
+                } else {
+                    None
+                }
+            }
+            BgpUpdateMessageToken::Safi => {
+                if let Some(Ok(nlri)) =
+                    self.raw_message.0.announcements().unwrap().next()
+                {
+                    Some(TypeValue::Builtin(
+                        BuiltinTypeValue::ConstU16EnumVariant(EnumVariant {
+                            enum_name: "SAFI".into(),
+                            value: nlri.afi_safi().0.into(),
+                        }),
+                    ))
+                } else {
+                    None
+                }
+            }
         }
     }
 }
@@ -784,18 +816,34 @@ impl RotoType for BgpUpdateMessage {
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         match method_token.into() {
-            BgpUpdateMessageToken::Afi => Ok(TypeValue::Builtin(
-                BuiltinTypeValue::ConstU16EnumVariant(EnumVariant {
-                    enum_name: "AFI".into(),
-                    value: self.raw_message.0.nlris().afi().into(),
-                }),
-            )),
-            BgpUpdateMessageToken::Safi => Ok(TypeValue::Builtin(
-                BuiltinTypeValue::ConstU8EnumVariant(EnumVariant {
-                    enum_name: "SAFI".into(),
-                    value: self.raw_message.0.nlris().safi().into(),
-                }),
-            )),
+            BgpUpdateMessageToken::Afi => {
+                if let Some(Ok(nlri)) =
+                    self.raw_message.0.announcements().unwrap().next()
+                {
+                    Ok(TypeValue::Builtin(
+                        BuiltinTypeValue::ConstU16EnumVariant(EnumVariant {
+                            enum_name: "AFI".into(),
+                            value: nlri.afi_safi().0.into(),
+                        }),
+                    ))
+                } else {
+                    Err(VmError::InvalidValueType)
+                }
+            }
+            BgpUpdateMessageToken::Safi => {
+                if let Some(Ok(nlri)) =
+                    self.raw_message.0.announcements().unwrap().next()
+                {
+                    Ok(TypeValue::Builtin(
+                        BuiltinTypeValue::ConstU16EnumVariant(EnumVariant {
+                            enum_name: "SAFI".into(),
+                            value: nlri.afi_safi().0.into(),
+                        }),
+                    ))
+                } else {
+                    Err(VmError::InvalidValueType)
+                }
+            }
             _ => Err(VmError::InvalidMethodCall),
         }
     }
@@ -921,8 +969,8 @@ impl RotoType for RawRouteWithDeltas {
                 vec![],
             )),
             "aggregator" => Ok(MethodProps::new(
-                TypeDef::AtomicAggregator,
-                RouteToken::AtomicAggregator.into(),
+                TypeDef::Aggregator,
+                RouteToken::Aggregator.into(),
                 vec![],
             )),
             "communities" => Ok(MethodProps::new(
@@ -1011,7 +1059,7 @@ pub enum RouteToken {
     MultiExitDisc = 4,
     LocalPref = 5,
     AtomicAggregate = 6,
-    AtomicAggregator = 7,
+    Aggregator = 7,
     Communities = 8,
     Status = 9,
     PeerIp = 10,
@@ -1028,7 +1076,7 @@ impl From<usize> for RouteToken {
             4 => RouteToken::MultiExitDisc,
             5 => RouteToken::LocalPref,
             6 => RouteToken::AtomicAggregate,
-            7 => RouteToken::AtomicAggregator,
+            7 => RouteToken::Aggregator,
             8 => RouteToken::Communities,
             9 => RouteToken::Status,
             10 => RouteToken::PeerIp,
@@ -1179,22 +1227,25 @@ impl UpdateMessage {
         peer_asn: Option<Asn>,
         router_id: Option<Arc<String>>,
     ) -> AttrChangeSet {
+        let next_hop = self.0.mp_next_hop().ok().flatten().or_else(|| {
+            self.0.conventional_next_hop().ok().flatten()
+        });
         AttrChangeSet {
             prefix: ReadOnlyScalarOption::<Prefix>::new(prefix.into()),
             as_path: VectorOption::<AsPath>::from(
-                self.0.aspath().map(|p| p.to_hop_path()),
+                self.0.aspath().ok().flatten().map(|p| { p.to_hop_path() }),
             ),
-            origin_type: ScalarOption::<OriginType>::from(self.0.origin()),
-            next_hop: ScalarOption::<NextHop>::from(self.0.next_hop()),
+            origin_type: ScalarOption::<OriginType>::from(self.0.origin().unwrap()),
+            next_hop: ScalarOption::<NextHop>::from(next_hop),
             multi_exit_discriminator: ScalarOption::from(
-                self.0.multi_exit_desc(),
+                self.0.multi_exit_disc().unwrap(),
             ),
-            local_pref: ScalarOption::from(self.0.local_pref()),
+            local_pref: ScalarOption::from(self.0.local_pref().unwrap()),
             atomic_aggregate: ScalarOption::from(Some(
-                self.0.is_atomic_aggregate(),
+                self.0.is_atomic_aggregate().unwrap(),
             )),
-            aggregator: ScalarOption::from(self.0.aggregator()),
-            communities: VectorOption::from(self.0.all_communities()),
+            aggregator: ScalarOption::from(self.0.aggregator().unwrap()),
+            communities: VectorOption::from(self.0.all_communities().unwrap()),
             peer_ip: peer_ip.into(),
             peer_asn: peer_asn.into(),
             router_id: router_id
@@ -1207,7 +1258,7 @@ impl UpdateMessage {
             //     .ext_communities()
             //     .map(|c| c.collect::<Vec<ExtendedCommunity>>()),
             as4_path: VectorOption::from(
-                self.0.as4path().map(|p| p.to_hop_path()),
+                self.0.as4path().ok().flatten().map(|p| p.to_hop_path()),
             ),
             connector: Todo,
             as_path_limit: Todo,
