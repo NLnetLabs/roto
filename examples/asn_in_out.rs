@@ -38,18 +38,6 @@ fn test_data(
         0x00, 0x00, 0x00, 0x00,
     ]);
 
-    let _update: UpdateMessage =
-        UpdateMessage::new(_buf, SessionConfig::modern());
-    let _prefixes: Vec<Prefix> =
-            _update.0.nlris().iter().filter_map(|n| if let Nlri::Unicast(n) = n { Some(Prefix::from(n.prefix())) } else { None }).collect();
-    let _payload: RawRouteWithDeltas = RawRouteWithDeltas::new_with_message(
-        (RotondaId(0), 0),
-        _prefixes[0],
-        _update,
-        RouteStatus::InConvergence,
-    );
-
-
     let payload_type = TypeDef::new_record_type(vec![("asn", Box::new(TypeDef::Asn))])?;
     let payload = Record::create_instance_with_ordered_fields(&payload_type, vec![("asn", Asn::from(65534_u32).into())])?;
     // Create the VM
@@ -58,11 +46,6 @@ fn test_data(
     println!("Used Data Sources");
     println!("{:#?}", &roto_pack.get_data_sources());
 
-    // let filter_map_arguments = vec![(
-    //     "extra_asn".into(),
-    //     // use Roto type coercion
-    //     TypeValue::from(65534_u32)
-    // )];
 
     let ds_ref = roto_pack.get_data_sources();
     // let args = rotolo.compile_arguments(name, filter_map_arguments)?;

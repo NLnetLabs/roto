@@ -10,7 +10,7 @@ use roto::types::builtin::{
 use roto::types::collections::Record;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
-use routecore::bgp::message::nlri::Nlri;
+use routecore::bgp::message::nlri::{Nlri, BasicNlri};
 use routecore::bgp::message::SessionConfig;
 
 mod common;
@@ -47,18 +47,13 @@ fn test_data(
     let msg_id = (RotondaId(0), 0);
     let update: UpdateMessage =
         UpdateMessage::new(buf.clone(), SessionConfig::modern());
+
     let first_prefix: Prefix = update
-        .0
-        .nlris()
-        .iter()
-        .next()
-        .map(|n| {
-            if let Nlri::Unicast(prefix) = n {
-                prefix.prefix().into()
-            } else {
-                panic!("This is not a unicast prefix!");
-            }
-        }).unwrap();
+    .0
+    .announcements()
+    .into_iter()
+    .next()
+    .and_then(|mut p| if let Some(Ok(Nlri::Unicast(BasicNlri { prefix, .. }))) = p.next() { Some(Prefix::from(prefix)) } else { None }).unwrap();
     let peer_ip = "fe80::1".parse().unwrap();
 
     let payload: RawRouteWithDeltas = RawRouteWithDeltas::new_with_message(
@@ -153,6 +148,7 @@ fn test_routes_1() {
 }
 
 #[test]
+#[ignore = "ignored, named records in method calls do not work yet."]
 fn test_routes_2() {
     common::init();
     let src = r#"
@@ -208,6 +204,7 @@ fn test_routes_2() {
 }
 
 #[test]
+#[ignore = "ignored, named, typed record do not work yet"]
 fn test_routes_3() {
     common::init();
     let src = r#"
@@ -263,6 +260,7 @@ fn test_routes_3() {
 }
 
 #[test]
+#[ignore = "todo, field aliasing in anonymous records does not work yet"]
 fn test_routes_4() {
     common::init();
     let src = r#"

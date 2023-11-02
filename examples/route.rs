@@ -6,7 +6,7 @@ use roto::types::typevalue::TypeValue;
 use roto::vm;
 use roto::blocks::Scope::{self, FilterMap};
 use routecore::bgp::message::SessionConfig;
-use routecore::bgp::message::nlri::Nlri;
+use routecore::bgp::message::nlri::{Nlri, BasicNlri};
 
 fn test_data(
     name: Scope,
@@ -38,8 +38,13 @@ fn test_data(
 
     let update: UpdateMessage =
         UpdateMessage::new(buf, SessionConfig::modern());
-    let prefixes: Vec<Prefix> =
-            update.0.nlris().iter().filter_map(|n| if let Nlri::Unicast(n) = n { Some(Prefix::from(n.prefix())) } else { None }).collect();
+
+    let prefixes: Vec<Prefix> = update
+        .0
+        .announcements()
+        .unwrap()
+        .filter_map(|p| if let Ok(Nlri::Unicast(BasicNlri { prefix, .. })) = p { Some(Prefix::from(prefix)) } else { None })
+        .collect();
     let msg_id = (RotondaId(0), 0);
 
     let payload: RawRouteWithDeltas = RawRouteWithDeltas::new_with_message(

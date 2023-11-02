@@ -38,9 +38,9 @@ mod route {
 
         let prefixes: Vec<Prefix> = update
             .0
-            .nlris()
-            .iter()
-            .filter_map(|n| if let Nlri::Unicast(n) = n  { Some(n.prefix().into()) } else { None }) 
+            .announcements()
+            .into_iter()
+            .flat_map(|n| n.filter_map(|p| if let Ok(Nlri::Unicast(BasicNlri { prefix, .. })) = p { Some(Prefix::from(prefix)) } else { None }) )
             .collect();
         let msg_id = (RotondaId(0), 0);
 
@@ -76,7 +76,7 @@ mod route {
 
         let mut delta = roto_msgs[0].open_new_delta(delta_id)?;
         if let std::net::IpAddr::V6(v6) = prefixes[0].0.addr() {
-            delta.attributes.next_hop.set(NextHop::Ipv6(v6));
+            delta.attributes.next_hop.set(NextHop::Unicast(std::net::IpAddr::V6(v6)));
         }
 
         let res = delta.attributes.as_path.prepend(
@@ -146,10 +146,11 @@ mod route {
 
         let prefixes: Vec<Prefix> = update
             .0
-            .nlris()
-            .iter()
-            .filter_map(|n| if let Nlri::Unicast(n) = n  { Some(n.prefix().into()) } else { None }) 
+            .announcements()
+            .into_iter()
+            .flat_map(|n| n.filter_map(|p| if let Ok(Nlri::Unicast(BasicNlri { prefix, .. })) = p { Some(Prefix::from(prefix)) } else { None }))
             .collect();
+
         let msg_id = (RotondaId(0), 0);
 
         let mut roto_msgs = vec![];
@@ -184,7 +185,7 @@ mod route {
 
         println!("change set {:#?}", new_change_set1);
         if let std::net::IpAddr::V6(v6) = prefixes[2].0.addr() {
-            new_change_set1.attributes.next_hop.set(NextHop::Ipv6(v6));
+            new_change_set1.attributes.next_hop.set(NextHop::Unicast(std::net::IpAddr::V6(v6)));
         }
 
         let res = new_change_set1.attributes.as_path.prepend(211321_u32); //].try_into().unwrap());
