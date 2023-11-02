@@ -181,8 +181,13 @@ impl RotoType for TypeValue {
             )),
             TypeDef::Asn => Asn::get_props_for_method(ty, method_name),
             TypeDef::AsPath => AsPath::get_props_for_method(ty, method_name),
-            TypeDef::AtomicAggregator => Err(CompileError::new(
+            TypeDef::AtomicAggregate => Err(CompileError::new(
                 "Unsupported TypeDef::AtomicAggregator in TypeValue::\
+                get_props_for_method()"
+                    .to_string(),
+            )),
+            TypeDef::Aggregator => Err(CompileError::new(
+                "Unsupported TypeDef::Aggregator in TypeValue::\
                 get_props_for_method()"
                     .to_string(),
             )),
@@ -275,7 +280,8 @@ impl RotoType for TypeValue {
             TypeValue::Builtin(builtin) => match builtin {
                 BuiltinTypeValue::Asn(v) => v.into_type(ty),
                 BuiltinTypeValue::AsPath(v) => v.into_type(ty),
-                BuiltinTypeValue::AtomicAggregator(v) => v.into_type(ty),
+                BuiltinTypeValue::Aggregator(v) => v.into_type(ty),
+                BuiltinTypeValue::AtomicAggregate(v) => v.into_type(ty),
                 BuiltinTypeValue::BgpUpdateMessage(_) => {
                     Err(CompileError::new(
                         "Unsupported TypeValue::BgpUpdateMessage in \
@@ -373,7 +379,10 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::AsPath(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::AtomicAggregator(v) => {
+                BuiltinTypeValue::Aggregator(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::AtomicAggregate(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::BgpUpdateMessage(v) => {
@@ -524,7 +533,10 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::AsPath(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::AtomicAggregator(v) => {
+                BuiltinTypeValue::Aggregator(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::AtomicAggregate(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::BgpUpdateMessage(_) => {

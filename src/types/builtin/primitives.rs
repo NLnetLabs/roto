@@ -2433,8 +2433,8 @@ impl VectorValue for crate::types::builtin::AsPath {
         Ok(())
     }
 
-    // Naieve insert that will try to append to the segment that is already
-    // in place at the specified position. Fancier, more conditional ways are
+    // Naïve insert that will try to append to the segment that is already in
+    // place at the specified position. Fancier, more conditional ways are
     // available to the roto user, but those methods are implemented directly
     // on builtin::AsPath.
     fn insert_vec(
@@ -3038,14 +3038,14 @@ impl From<LocalPrefToken> for usize {
     }
 }
 
-//------------ Aggregator type ----------------------------------------------
+//------------ AtomicAggregate type -----------------------------------------
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize)]
-pub struct AtomicAggregator(
-    pub(crate) routecore::bgp::message::update::Aggregator,
+pub struct AtomicAggregate(
+    pub(crate) routecore::bgp::path_attributes::AtomicAggregate,
 );
 
-impl RotoType for AtomicAggregator {
+impl RotoType for AtomicAggregate {
     fn get_props_for_method(
         _ty: TypeDef,
         method_name: &crate::ast::Identifier,
@@ -3056,7 +3056,7 @@ impl RotoType for AtomicAggregator {
         match method_name.ident.as_str() {
             "set" => Ok(MethodProps::new(
                 TypeDef::Unknown,
-                AtomicAggregatorToken::Set.into(),
+                AtomicAggregateToken::Set.into(),
                 vec![TypeDef::Asn, TypeDef::IpAddress],
             )
             .consume_value()),
@@ -3106,56 +3106,178 @@ impl RotoType for AtomicAggregator {
     }
 }
 
-impl From<AtomicAggregator> for TypeValue {
-    fn from(value: AtomicAggregator) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::AtomicAggregator(value))
+impl From<AtomicAggregate> for TypeValue {
+    fn from(value: AtomicAggregate) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::AtomicAggregate(value))
     }
 }
 
-impl From<AtomicAggregator> for BuiltinTypeValue {
-    fn from(value: AtomicAggregator) -> Self {
-        BuiltinTypeValue::AtomicAggregator(value)
+impl From<AtomicAggregate> for BuiltinTypeValue {
+    fn from(value: AtomicAggregate) -> Self {
+        BuiltinTypeValue::AtomicAggregate(value)
     }
 }
 
-impl From<routecore::bgp::message::update::Aggregator> for TypeValue {
-    fn from(value: routecore::bgp::message::update::Aggregator) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::AtomicAggregator(
-            AtomicAggregator(value),
+impl From<routecore::bgp::path_attributes::AtomicAggregate> for TypeValue {
+    fn from(value: routecore::bgp::path_attributes::AtomicAggregate) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::AtomicAggregate(
+            AtomicAggregate(value),
         ))
     }
 }
 
-impl From<routecore::bgp::message::update::Aggregator> for BuiltinTypeValue {
-    fn from(value: routecore::bgp::message::update::Aggregator) -> Self {
-        BuiltinTypeValue::AtomicAggregator(AtomicAggregator(value))
+impl From<routecore::bgp::path_attributes::AtomicAggregate> for BuiltinTypeValue {
+    fn from(value: routecore::bgp::path_attributes::AtomicAggregate) -> Self {
+        BuiltinTypeValue::AtomicAggregate(AtomicAggregate(value))
     }
 }
 
-impl std::fmt::Display for AtomicAggregator {
+impl std::fmt::Display for AtomicAggregate {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{:?}", self.0)
     }
 }
 
 #[derive(Debug)]
-pub enum AtomicAggregatorToken {
+pub enum AtomicAggregateToken {
     Set,
 }
 
-impl From<usize> for AtomicAggregatorToken {
+impl From<usize> for AtomicAggregateToken {
     fn from(val: usize) -> Self {
         match val {
-            0 => AtomicAggregatorToken::Set,
+            0 => AtomicAggregateToken::Set,
             _ => panic!("Unknown token value: {}", val),
         }
     }
 }
 
-impl From<AtomicAggregatorToken> for usize {
-    fn from(val: AtomicAggregatorToken) -> Self {
+impl From<AtomicAggregateToken> for usize {
+    fn from(val: AtomicAggregateToken) -> Self {
         match val {
-            AtomicAggregatorToken::Set => 0,
+            AtomicAggregateToken::Set => 0,
+        }
+    }
+}
+
+//------------ Aggregator type ----------------------------------------------
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize)]
+pub struct Aggregator(
+    pub(crate) routecore::bgp::path_attributes::AggregatorInfo,
+);
+
+impl RotoType for Aggregator {
+    fn get_props_for_method(
+        _ty: TypeDef,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, CompileError>
+    where
+        Self: std::marker::Sized,
+    {
+        match method_name.ident.as_str() {
+            "set" => Ok(MethodProps::new(
+                TypeDef::Unknown,
+                AtomicAggregateToken::Set.into(),
+                vec![TypeDef::Asn, TypeDef::IpAddress],
+            )
+            .consume_value()),
+            _ => Err(format!(
+                "Unknown method: '{}' for type Aggregator",
+                method_name.ident
+            )
+            .into()),
+        }
+    }
+
+    fn into_type(
+        self,
+        _type_value: &TypeDef,
+    ) -> Result<TypeValue, CompileError>
+    where
+        Self: std::marker::Sized,
+    {
+        todo!()
+    }
+
+    fn exec_value_method<'a>(
+        &'a self,
+        _method_token: usize,
+
+        _args: &'a [StackValue],
+        _res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        todo!()
+    }
+
+    fn exec_consume_value_method(
+        self,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        todo!()
+    }
+
+    fn exec_type_method<'a>(
+        _method_token: usize,
+        _args: &[StackValue],
+        _res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        todo!()
+    }
+}
+
+impl From<Aggregator> for TypeValue {
+    fn from(value: Aggregator) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::Aggregator(value))
+    }
+}
+
+impl From<Aggregator> for BuiltinTypeValue {
+    fn from(value: Aggregator) -> Self {
+        BuiltinTypeValue::Aggregator(value)
+    }
+}
+
+impl From<routecore::bgp::path_attributes::AggregatorInfo> for TypeValue {
+    fn from(value: routecore::bgp::path_attributes::AggregatorInfo) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::Aggregator(
+            Aggregator(value),
+        ))
+    }
+}
+
+impl From<routecore::bgp::path_attributes::AggregatorInfo> for BuiltinTypeValue {
+    fn from(value: routecore::bgp::path_attributes::AggregatorInfo) -> Self {
+        BuiltinTypeValue::Aggregator(Aggregator(value))
+    }
+}
+
+impl std::fmt::Display for Aggregator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
+
+#[derive(Debug)]
+pub enum AggregatorToken {
+    Set,
+}
+
+impl From<usize> for AggregatorToken {
+    fn from(val: usize) -> Self {
+        match val {
+            0 => AggregatorToken::Set,
+            _ => panic!("Unknown token value: {}", val),
+        }
+    }
+}
+
+impl From<AggregatorToken> for usize {
+    fn from(val: AggregatorToken) -> Self {
+        match val {
+            AggregatorToken::Set => 0,
         }
     }
 }

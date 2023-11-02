@@ -20,10 +20,10 @@ use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 
 use super::{
-    AsPath, Asn, AtomicAggregator, BgpUpdateMessage, Boolean, Community,
+    AsPath, Asn, BgpUpdateMessage, Boolean, Community,
     HexLiteral, Hop, IntegerLiteral, IpAddress, LocalPref, MultiExitDisc,
     NextHop, OriginType, Prefix, PrefixLength, RawRouteWithDeltas,
-    RouteStatus, StringLiteral, U16, U32, U8,
+    RouteStatus, StringLiteral, U16, U32, U8, AtomicAggregate, Aggregator
 };
 
 #[derive(Debug, Eq, Clone, Hash, PartialEq, Serialize)]
@@ -40,7 +40,8 @@ pub enum BuiltinTypeValue {
     Prefix(Prefix),                     // scalar
     PrefixLength(PrefixLength),         // scalar
     LocalPref(LocalPref),               // scalar
-    AtomicAggregator(AtomicAggregator), // scalar
+    AtomicAggregate(AtomicAggregate),   // scalar
+    Aggregator(Aggregator),             // scalar
     NextHop(NextHop),                   // scalar
     MultiExitDisc(MultiExitDisc),       // scalar
     RouteStatus(RouteStatus),           // scalar
@@ -214,7 +215,8 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::HexLiteral(v) => v.into_type(ty),
             BuiltinTypeValue::Asn(v) => v.into_type(ty),
             BuiltinTypeValue::LocalPref(v) => v.into_type(ty),
-            BuiltinTypeValue::AtomicAggregator(v) => v.into_type(ty),
+            BuiltinTypeValue::AtomicAggregate(v) => v.into_type(ty),
+            BuiltinTypeValue::Aggregator(v) => v.into_type(ty),
             BuiltinTypeValue::NextHop(v) => v.into_type(ty),
             BuiltinTypeValue::MultiExitDisc(v) => v.into_type(ty),
         }
@@ -372,7 +374,10 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::LocalPref(v) => {
                     write!(f, "{}", v)
                 }
-                BuiltinTypeValue::AtomicAggregator(v) => {
+                BuiltinTypeValue::AtomicAggregate(v) => {
+                    write!(f, "{}", v)
+                }
+                BuiltinTypeValue::Aggregator(v) => {
                     write!(f, "{}", v)
                 }
                 BuiltinTypeValue::NextHop(v) => write!(f, "{}", v),
@@ -449,8 +454,11 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::LocalPref(v) => {
                     write!(f, "{} (Local Preference)", v)
                 }
-                BuiltinTypeValue::AtomicAggregator(v) => {
-                    write!(f, "{} (Atomic Aggregator)", v)
+                BuiltinTypeValue::Aggregator(v) => {
+                    write!(f, "{} (Aggregator)", v)
+                }
+                BuiltinTypeValue::AtomicAggregate(v) => {
+                    write!(f, "{} (Atomic Aggregate)", v)
                 }
                 BuiltinTypeValue::NextHop(v) => write!(f, "{} (Next Hop)", v),
                 BuiltinTypeValue::MultiExitDisc(v) => {

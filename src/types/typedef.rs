@@ -20,7 +20,7 @@ use crate::{
 };
 
 use super::builtin::{
-    AsPath, Asn, AtomicAggregator, Boolean, Community, HexLiteral, Hop,
+    AsPath, Asn, AtomicAggregate, Aggregator, Boolean, Community, HexLiteral, Hop,
     IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, NextHop, OriginType,
     Prefix, PrefixLength, RawRouteWithDeltas, RouteStatus, StringLiteral,
     Unknown, U16, U32, U8,
@@ -167,7 +167,8 @@ pub enum TypeDef {
     LocalPref,
     MultiExitDisc,
     NextHop,
-    AtomicAggregator,
+    AtomicAggregate,
+    Aggregator,
     RouteStatus,
     // Literals
     HexLiteral,
@@ -219,7 +220,8 @@ impl TypeDef {
         AsPath(StringLiteral;List),
         LocalPref(StringLiteral,U8,U16,U32,IntegerLiteral;),
         MultiExitDisc(StringLiteral,U8,IntegerLiteral;),
-        AtomicAggregator(StringLiteral,U8;);
+        AtomicAggregate(StringLiteral,Boolean;),
+        Aggregator(StringLiteral,U8;);
         // have conversions, have data field
         // Records can be converted to other type of Records under certain
         // conditions:
@@ -594,8 +596,14 @@ impl TypeDef {
             TypeDef::NextHop => {
                 NextHop::get_props_for_method(self.clone(), method_name)
             }
-            TypeDef::AtomicAggregator => {
-                AtomicAggregator::get_props_for_method(
+            TypeDef::AtomicAggregate => {
+                AtomicAggregate::get_props_for_method(
+                    self.clone(),
+                    method_name,
+                )
+            }
+            TypeDef::Aggregator => {
+                Aggregator::get_props_for_method(
                     self.clone(),
                     method_name,
                 )
@@ -777,7 +785,8 @@ impl std::fmt::Display for TypeDef {
             TypeDef::LocalPref => write!(f, "Local Preference"),
             TypeDef::MultiExitDisc => write!(f, "Multi Exit Discriminator"),
             TypeDef::NextHop => write!(f, "Next Hop"),
-            TypeDef::AtomicAggregator => write!(f, "Atomic Aggregator"),
+            TypeDef::AtomicAggregate => write!(f, "Atomic Aggregate"),
+            TypeDef::Aggregator => write!(f, "Aggregator"),
         }
     }
 }
@@ -1081,8 +1090,9 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
             BuiltinTypeValue::LocalPref(_) => TypeDef::LocalPref,
-            BuiltinTypeValue::AtomicAggregator(_) => {
-                TypeDef::AtomicAggregator
+            BuiltinTypeValue::AtomicAggregate(_) => TypeDef::AtomicAggregate,
+            BuiltinTypeValue::Aggregator(_) => {
+                TypeDef::Aggregator
             }
             BuiltinTypeValue::NextHop(_) => TypeDef::NextHop,
             BuiltinTypeValue::MultiExitDisc(_) => TypeDef::MultiExitDisc,
@@ -1141,8 +1151,9 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
             BuiltinTypeValue::LocalPref(_) => TypeDef::LocalPref,
-            BuiltinTypeValue::AtomicAggregator(_) => {
-                TypeDef::AtomicAggregator
+            BuiltinTypeValue::AtomicAggregate(_) => TypeDef::AtomicAggregate,
+            BuiltinTypeValue::Aggregator(_) => {
+                TypeDef::Aggregator
             }
             BuiltinTypeValue::NextHop(_) => TypeDef::NextHop,
             BuiltinTypeValue::MultiExitDisc(_) => TypeDef::MultiExitDisc,
