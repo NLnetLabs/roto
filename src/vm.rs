@@ -3,7 +3,7 @@ use std::{
     fmt::{Display, Formatter},
     hash::{Hash, Hasher},
     ops::{Index, IndexMut},
-    sync::Arc,
+    sync::Arc, collections::HashMap,
 };
 
 use crate::{
@@ -976,8 +976,8 @@ pub fn compute_hash(
 // This the table that maps the user-defined variables from the 'define'
 // section to memory positions in the VM.
 #[derive(Debug,Clone)]
-pub struct PrimitiveRef {
-    pub var_token_value: usize,
+pub(crate) struct PrimitiveRef {
+    // pub var_token_value: usize,
     mem_pos: u32,
     field_index: SmallVec<[usize; 8]>,
 }
@@ -985,7 +985,7 @@ pub struct PrimitiveRef {
 impl PrimitiveRef {
     pub fn new(var_token_value: usize, mem_pos: u32, field_index: SmallVec<[usize; 8]>) -> Self {
         Self {
-            var_token_value,
+            // var_token_value,
             mem_pos,
             field_index
         }
@@ -1002,18 +1002,18 @@ impl PrimitiveRef {
 
 #[derive(Debug,Clone)]
 pub struct CollectionRef {
-    var_token_value: usize,
+    // var_token_value: usize,
     var_refs: Vec<VariableRef>,
 }
 
 impl CollectionRef {
-    pub fn iter(&self) -> std::slice::Iter<'_, VariableRef> {
+    pub(crate) fn iter(&self) -> std::slice::Iter<'_, VariableRef> {
         self.var_refs.iter()
     }
 }
 
 #[derive(Debug,Clone)]
-pub enum VariableRef {
+pub(crate) enum VariableRef {
     Primitive(PrimitiveRef),
     Collection(CollectionRef),
 }
@@ -1035,73 +1035,91 @@ impl VariableRef {
 }
 
 #[derive(Debug, Default)]
-pub struct VariablesRefTable(Vec<VariableRef>);
+pub(crate) struct VariablesRefTable(HashMap<Token, VariableRef>);
 
 impl VariablesRefTable {
-    pub fn get_by_token_value(&self, index: usize) -> Option<VariableRef> {
-        self.0.iter().find(|v| match v {
-            VariableRef::Primitive(PrimitiveRef {
-                var_token_value: t,
-                ..
-            }) => t == &index,
-            VariableRef::Collection(CollectionRef {
-                var_token_value: t,
-                ..
-            }) => t == &index,
-        }).cloned()
+    pub(crate) fn get_by_token_value(&self, index: usize) -> Option<VariableRef> {
+        self.0.get(&Token::Variable(index)).cloned()
+        // self.0.iter().find(|v| match v {
+        //     VariableRef::Primitive(PrimitiveRef {
+        //         var_token_value: t,
+        //         ..
+        //     }) => t == &index,
+        //     VariableRef::Collection(CollectionRef {
+        //         var_token_value: t,
+        //         ..
+        //     }) => t == &index,
+        // }).cloned()
     }
 
-    pub fn append_primitive(
+    pub(crate) fn append_primitive(
         &mut self,
         mem_pos: u32,
         field_index: SmallVec<[usize; 8]>,
     ) -> Result<usize, CompileError> {
-        self.0.push(VariableRef::Primitive(PrimitiveRef {
-            var_token_value: self.0.len(),
-            mem_pos,
-            field_index,
-        }));
+        self.0.insert(Token::Variable(self.0.len()), VariableRef::Primitive(PrimitiveRef {
+                mem_pos,
+                field_index,
+            }));
+        // self.0.push(VariableRef::Primitive(PrimitiveRef {
+        //     var_token_value: self.0.len(),
+        //     mem_pos,
+        //     field_index,
+        // }));
 
         Ok(self.0.len())
     }
 
-    pub fn set_primitive(
+    pub(crate) fn set_primitive(
         &mut self,
         var_token_value: usize,
         mem_pos: u32,
         field_index: SmallVec<[usize; 8]>,
     ) -> Result<(), CompileError> {
-        self.0.push(VariableRef::Primitive(PrimitiveRef {
-            var_token_value,
-            mem_pos,
-            field_index,
-        }));
+        // self.0.push(VariableRef::Primitive(PrimitiveRef {
+        //     var_token_value,
+        //     mem_pos,
+        //     field_index,
+        // }));
+        self.0.insert(Token::Variable(var_token_value), VariableRef::Primitive(PrimitiveRef {
+                mem_pos,
+                field_index,
+            }));
         Ok(())
     }
 
-    pub fn set_collection(
+    pub(crate) fn set_collection(
         &mut self,
         var_token_value: usize,
         var_refs: Vec<VariableRef>,
     ) -> Result<(), CompileError> {
-        self.0.push(VariableRef::Collection(CollectionRef { var_token_value, var_refs }));
+        // self.0.push(VariableRef::Collection(CollectionRef { var_token_value, var_refs }));
+
+        self.0.insert(Token::Variable(var_token_value), VariableRef::Collection(CollectionRef { var_refs }));
         Ok(())
     }
 
-    pub fn append_collection(
+    pub(crate) fn append_collection(
         &mut self,
         var_refs: Vec<VariableRef>,
         field_index: SmallVec<[usize; 8]>,
     ) -> Result<u32, CompileError> {
-        self.0.push(VariableRef::Collection(CollectionRef {
-            var_token_value: self.0.len(),
-            var_refs,
-        }));
+        // self.0.push(VariableRef::Collection(CollectionRef {
+        //     var_token_value: self.0.len(),
+        //     var_refs,
+        // }));
+
+        self.0.insert(
+            Token::Variable(self.0.len()),
+            VariableRef::Collection(CollectionRef {
+                var_refs,
+            })
+        );
         Ok(self.0.len() as u32)
     }
 
-    pub fn new() -> Self {
-        VariablesRefTable(Vec::new())
+    pub(crate) fn new() -> Self {
+        VariablesRefTable(HashMap::new())
     }
 }
 
