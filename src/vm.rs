@@ -1,9 +1,10 @@
 use std::{
     cell::RefCell,
+    collections::{HashMap, VecDeque},
     fmt::{Display, Formatter},
     hash::{Hash, Hasher},
     ops::{Index, IndexMut},
-    sync::Arc, collections::HashMap,
+    sync::Arc,
 };
 
 use crate::{
@@ -38,8 +39,9 @@ pub enum StackRefPos {
     // CompareResult, which is not a Ref at all, but hey,
     // it's smaller than a ref, so who cares
     CompareResult(bool),
-    // Constant value, used for indexing a match variant
-    Constant(u32),
+    // Index pointing to a constant, used for indexing a match variant
+    ConstantIndex(u32),
+    ConstantValue(TypeValue),
 }
 
 impl From<u32> for StackRefPos {
@@ -633,17 +635,21 @@ impl Display for LinearMemory {
 
 #[derive(Debug)]
 pub(crate) struct CommandArgsStack<'a> {
-    args: &'a Vec<CommandArg>,
+    args: &'a mut VecDeque<CommandArg>,
     args_counter: usize,
 }
 
 impl<'a> CommandArgsStack<'a> {
     // The counter counts down from the last element + 1.
-    fn new(args: &'a Vec<CommandArg>) -> Self {
-        Self {
-            args,
-            args_counter: args.len(),
-        }
+    fn new(args: &'a mut VecDeque<CommandArg>) -> Self {
+        let args_counter = args.len();
+        Self { args, args_counter }
+    }
+
+    // Remove and return the last item, decrement the counter
+    fn pop_front(&mut self) -> Option<CommandArg> {
+        self.args_counter -= 1;
+        self.args.pop_front()
     }
 
     // Return the last item and decrement the counter.
@@ -664,7 +670,7 @@ impl<'a> CommandArgsStack<'a> {
         // the second arg is the value to set on the
         // memory position.
         match self.args.get(1) {
-            Some(CommandArg::Constant(c)) => Ok(c.clone()),
+            Some(CommandArg::ConstantIndex(c)) => Ok(c.clone()),
             Some(CommandArg::List(l)) => Ok(TypeValue::List(l.clone())),
             Some(CommandArg::Record(r)) => Ok(TypeValue::Record(r.clone())),
             _ => Err(VmError::InvalidValueType),
@@ -701,8 +707,8 @@ impl<'a> Index<usize> for CommandArgsStack<'a> {
     }
 }
 
-impl<'a> From<&'a Vec<CommandArg>> for CommandArgsStack<'a> {
-    fn from(value: &'a Vec<CommandArg>) -> Self {
+impl<'a> From<&'a mut VecDeque<CommandArg>> for CommandArgsStack<'a> {
+    fn from(value: &'a mut VecDeque<CommandArg>) -> Self {
         Self {
             args: value,
             args_counter: 0,
@@ -975,70 +981,301 @@ pub fn compute_hash(
 
 // This the table that maps the user-defined variables from the 'define'
 // section to memory positions in the VM.
-#[derive(Debug,Clone)]
-pub(crate) struct PrimitiveRef {
+#[derive(Debug, Clone)]
+pub(crate) struct CompiledPrimitiveField {
     // pub var_token_value: usize,
-    mem_pos: u32,
+    // mem_pos: u32,
+    name: ShortString,
     field_index: SmallVec<[usize; 8]>,
+    commands: Vec<Command>,
 }
 
-impl PrimitiveRef {
-    pub fn new(var_token_value: usize, mem_pos: u32, field_index: SmallVec<[usize; 8]>) -> Self {
+impl CompiledPrimitiveField {
+    pub fn new(
+        name: ShortString,
+        commands: Vec<Command>,
+        field_index: SmallVec<[usize; 8]>,
+    ) -> Self {
         Self {
-            // var_token_value,
-            mem_pos,
-            field_index
+            name,
+            commands,
+            field_index,
         }
     }
-    
-    pub fn get_mem_pos(&self) -> u32 {
-        self.mem_pos
+
+    pub fn push_command(&mut self, op: OpCode, args: Vec<CommandArg>) {
+        self.commands.push(Command::new(op, args));
+    }
+
+    pub fn extend_commands(&mut self, commands: Vec<Command>) {
+        self.commands.extend(commands);
+    }
+
+    pub fn get_commands(&self) -> &Vec<Command> {
+        &self.commands
     }
 
     pub fn get_field_index(&self) -> &SmallVec<[usize; 8]> {
         &self.field_index
     }
+
+    pub fn push_first_index(&mut self, index: usize) {
+        self.field_index.insert(index, 0);
+    }
+
+    pub fn push_index(&mut self, index: usize) {
+        self.field_index.push(index);
+    }
 }
 
-#[derive(Debug,Clone)]
-pub struct CollectionRef {
+#[derive(Debug, Clone)]
+pub(crate) struct CompiledCollectionField {
     // var_token_value: usize,
-    var_refs: Vec<VariableRef>,
+    name: ShortString,
+    field_index: SmallVec<[usize; 8]>,
+    field_num: usize,
 }
 
-impl CollectionRef {
-    pub(crate) fn iter(&self) -> std::slice::Iter<'_, VariableRef> {
-        self.var_refs.iter()
+impl CompiledCollectionField {
+    pub(crate) fn new(
+        name: ShortString,
+        field_index: SmallVec<[usize; 8]>,
+        field_num: usize
+    ) -> Self {
+        Self { name, field_index, field_num }
+    }
+
+    pub(crate) fn get_name(&self) -> &ShortString {
+        &self.name
+    }
+
+    pub(crate) fn get_field_index(&self) -> &SmallVec<[usize; 8]> {
+        &self.field_index
+    }
+
+    pub(crate) fn push_first_index(&mut self, index: usize) {
+        self.field_index.insert(index, 0);
+    }
+
+    pub(crate) fn push_index(&mut self, index: usize) {
+        self.field_index.push(index);
+    }
+    // pub(crate) fn push_primitive(&mut self, primitive: PrimitiveRef) {
+    //     self.var_refs.push(VariableRef::Primitive(primitive))
+    // }
+
+    // pub(crate) fn push_collection(&mut self, name: ShortString) {
+    //     self.var_refs.push(VariableRef::Collection(CollectionRef::new(name)))
+    // }
+
+    // pub(crate) fn iter(&self) -> std::slice::Iter<'_, VariableRef> {
+    //     self.var_refs.iter()
+    // }
+
+    // pub(crate) fn last(&mut self) -> Option<&mut VariableRef> {
+    //     self.var_refs.last_mut()
+    // }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum CompiledField {
+    Primitive(CompiledPrimitiveField),
+    Collection(CompiledCollectionField),
+}
+
+impl CompiledField {
+    pub(crate) fn get_field_index(&self) -> &SmallVec<[usize; 8]> {
+        match self {
+            CompiledField::Primitive(p) => p.get_field_index(),
+            CompiledField::Collection(c) => c.get_field_index(),
+        }
+    }
+}
+
+// This is the data-structure that stores snippets of compiled code (sequences
+// of VM commands) that compute a variable, in a flat, stack-friendly way. For
+// scalar values the length of the of the Vec<CompiledField> will be one, for
+// records it will correspond to the number of fields in that record.
+#[derive(Debug, Clone)]
+pub(crate) struct CompiledVariable(Vec<CompiledField>);
+
+impl CompiledVariable {
+    pub fn new() -> Self {
+        Self(vec![])
+    }
+
+    pub fn get_accumulated_commands(&self) -> Vec<Command> {
+        let mut acc_commands = vec![];
+
+        for vr in self.0.iter() {
+            match vr {
+                CompiledField::Primitive(p) => {
+                    acc_commands.extend(p.get_commands().clone())
+                }
+                CompiledField::Collection(c) => {}
+            }
+        }
+
+        acc_commands
+    }
+
+    // pub fn get_accumulated_commands_for_collection_at_field_index(
+    //     &self,
+    //     field_index: SmallVec<[usize; 8]>,
+    // ) -> Result<Vec<Command>, VmError> {
+    //     let mut acc_commands = vec![];
+
+    //     let start_vr = self
+    //         .0
+    //         .iter()
+    //         .position(|vr| vr.get_field_index() == &field_index)
+    //         .ok_or_else(|| VmError::InvalidCommand)?;
+
+    //     for vr in self.0.split_at(start_vr).1 {
+    //         if let CompiledField::Primitive(p) = vr {
+    //             acc_commands.extend(p.get_commands().clone());
+    //         }
+    //     }
+
+    //     Ok(acc_commands)
+    // }
+
+    // fn recurse_commands_accumulative(&self, mut command_stack: Vec<Command>, field_index: &[usize]) -> Option<Vec<Command>> {
+    //     match self {
+    //         VariableRef::Primitive(p) => {
+    //             command_stack.extend(p.commands.clone());
+    //             Some(command_stack)
+    //         },
+    //         VariableRef::Collection(c) => {
+    //             match field_index.split_first() {
+    //                 Some((index, remain)) => c.var_refs[*index].recurse_commands(command_stack, remain),
+    //                 _ => Some(command_stack)
+    //             }
+    //         }
+    //     }
+    // }
+
+    // pub fn get_acummulated_commands_for_collection(&self, field_index: &[usize]) -> Option<Vec<Command>> {
+    //     trace!("get_accumulated_commands_for_collectoin {:#?}", self);
+    //     let command_stack = vec![];
+    //     // match self {
+    //     //     VariableRef::Primitive(v) => Some(v.commands.clone()),
+    //     //     VariableRef::Collection(c) => {
+    //     //         match field_index.split_first() {
+    //     //             Some((index, remain)) => {
+    //     //                 c.var_refs[*index].recurse_commands_accumulative(command_stack, remain)
+    //     //             }
+    //     //             _ => Some(command_stack)
+    //     //         }
+    //     //     }
+    //     // }
+    // }
+
+    // fn recurse_commands(&self, command_stack: Vec<Command>, field_index: &[usize]) -> Option<Vec<Command>> {
+    //     match self {
+    //         VariableRef::Primitive(p) => { Some(command_stack) },
+    //         VariableRef::Collection(c) => {
+    //             match field_index.split_first() {
+    //                 Some((index, remain)) => c.var_refs[*index].recurse_commands(command_stack, remain),
+    //                 _ => Some(command_stack)
+    //             }
+    //         }
+    //     }
+    // }
+
+    pub fn get_commands_for_field_index(
+        &self,
+        field_index: &[usize],
+    ) -> Result<Vec<Command>, VmError> {
+        // trace!("get_commands_for_field_index {:?} {:#?}", field_index, self);
+        // let command_stack = vec![];
+        // match self {
+        //     VariableRef::Primitive(v) => Some(v.commands.clone()),
+        //     VariableRef::Collection(c) => {
+        //         match field_index.split_first() {
+        //             Some((index, remain)) => {
+        //                 c.var_refs[*index].recurse_commands(command_stack, remain)
+        //             }
+        //             _ => Some(command_stack)
+        //         }
+        //     }
+        // }
+        trace!("get_commands_for_field_index {:?} {:#?}", field_index, self);
+
+        let field_index = SmallVec::<[usize; 8]>::from(field_index);
+        // we need to know first what type this field has.
+        let field = self
+            .0
+            .iter()
+            .find(|vr| vr.get_field_index() == &field_index);
+
+        let cmds = match field {
+            Some(CompiledField::Primitive(p)) => p.get_commands().clone(),
+            Some(CompiledField::Collection(c)) => {
+                let mut acc_commands = vec![];
+
+                let start_vr = self
+                    .0
+                    .iter()
+                    .position(|vr| vr.get_field_index() == &field_index)
+                    .ok_or_else(|| VmError::InvalidCommand)?;
+
+                for vr in self.0.split_at(start_vr).1 {
+                    if let CompiledField::Primitive(p) = vr {
+                        acc_commands.extend(p.get_commands().clone());
+                    }
+                }
+
+                acc_commands
+            }
+            None => vec![],
+        };
+
+        Ok(cmds)
+    }
+
+    pub fn append_primitive(&mut self, primitive: CompiledPrimitiveField) {
+        self.0.push(CompiledField::Primitive(primitive));
+    }
+
+    pub fn append_collection(&mut self, collection: CompiledCollectionField) {
+        self.0.push(CompiledField::Collection(collection));
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &CompiledField> + '_ {
+        self.0.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<CompiledField> {
+        self.0.iter_mut()
+    }
+
+    pub fn sort(&mut self) {
+        self.0
+            .sort_by(|a, b| a.get_field_index().cmp(b.get_field_index()));
     }
 }
 
-#[derive(Debug,Clone)]
-pub(crate) enum VariableRef {
-    Primitive(PrimitiveRef),
-    Collection(CollectionRef),
+impl From<CompiledPrimitiveField> for CompiledVariable {
+    fn from(value: CompiledPrimitiveField) -> Self {
+        CompiledVariable(vec![CompiledField::Primitive(value)])
+    }
 }
 
-impl VariableRef {
-    pub fn get_mem_pos(&self) -> Result<u32, &Vec<VariableRef>> {
-        match self {
-            VariableRef::Primitive(p) => Ok(p.mem_pos),
-            VariableRef::Collection(c) => Err(&c.var_refs)
-        }
-    }
-
-    pub fn get_field_index(&self) -> Result<&SmallVec<[usize; 8]>, CompileError> {
-        match self {
-            VariableRef::Primitive(p) => Ok(&p.field_index),
-            VariableRef::Collection(c) => Err(CompileError::from("Cannot get field index for a collection"))
-        }
+impl From<CompiledCollectionField> for CompiledVariable {
+    fn from(value: CompiledCollectionField) -> Self {
+        CompiledVariable(vec![CompiledField::Collection(value)])
     }
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct VariablesRefTable(HashMap<Token, VariableRef>);
+pub(crate) struct VariablesRefTable(HashMap<Token, CompiledVariable>);
 
 impl VariablesRefTable {
-    pub(crate) fn get_by_token_value(&self, index: usize) -> Option<VariableRef> {
+    pub(crate) fn get_by_token_value(
+        &self,
+        index: usize,
+    ) -> Option<CompiledVariable> {
         self.0.get(&Token::Variable(index)).cloned()
         // self.0.iter().find(|v| match v {
         //     VariableRef::Primitive(PrimitiveRef {
@@ -1052,28 +1289,40 @@ impl VariablesRefTable {
         // }).cloned()
     }
 
-    pub(crate) fn append_primitive(
-        &mut self,
-        mem_pos: u32,
-        field_index: SmallVec<[usize; 8]>,
-    ) -> Result<usize, CompileError> {
-        self.0.insert(Token::Variable(self.0.len()), VariableRef::Primitive(PrimitiveRef {
-                mem_pos,
-                field_index,
-            }));
-        // self.0.push(VariableRef::Primitive(PrimitiveRef {
-        //     var_token_value: self.0.len(),
-        //     mem_pos,
-        //     field_index,
-        // }));
-
-        Ok(self.0.len())
+    pub(crate) fn get_by_token(&self, index: &Option<Token>) -> Option<CompiledVariable> {
+        if let Some(index) = index {
+            self.0.get(&index).cloned()
+        } else { None }
     }
+
+    // pub(crate) fn append_primitive(
+    //     &mut self,
+    //     name: ShortString,
+    //     commands: Vec<Command>,
+    //     field_index: SmallVec<[usize; 8]>,
+    // ) -> Result<usize, CompileError> {
+    //     self.0.insert(
+    //         Token::Variable(self.0.len()),
+    //         CompiledField::Primitive(CompiledPrimitiveField {
+    //             name,
+    //             commands,
+    //             field_index,
+    //         }),
+    //     );
+    //     // self.0.push(VariableRef::Primitive(PrimitiveRef {
+    //     //     var_token_value: self.0.len(),
+    //     //     mem_pos,
+    //     //     field_index,
+    //     // }));
+
+    //     Ok(self.0.len())
+    // }
 
     pub(crate) fn set_primitive(
         &mut self,
         var_token_value: usize,
-        mem_pos: u32,
+        name: ShortString,
+        commands: Vec<Command>,
         field_index: SmallVec<[usize; 8]>,
     ) -> Result<(), CompileError> {
         // self.0.push(VariableRef::Primitive(PrimitiveRef {
@@ -1081,45 +1330,58 @@ impl VariablesRefTable {
         //     mem_pos,
         //     field_index,
         // }));
-        self.0.insert(Token::Variable(var_token_value), VariableRef::Primitive(PrimitiveRef {
-                mem_pos,
+        self.0.insert(
+            Token::Variable(var_token_value),
+            CompiledPrimitiveField {
+                name,
+                commands,
                 field_index,
-            }));
+            }
+            .into(),
+        );
         Ok(())
     }
 
     pub(crate) fn set_collection(
         &mut self,
         var_token_value: usize,
-        var_refs: Vec<VariableRef>,
+        collection: CompiledCollectionField,
     ) -> Result<(), CompileError> {
         // self.0.push(VariableRef::Collection(CollectionRef { var_token_value, var_refs }));
-
-        self.0.insert(Token::Variable(var_token_value), VariableRef::Collection(CollectionRef { var_refs }));
+        self.0
+            .insert(Token::Variable(var_token_value), collection.into());
         Ok(())
     }
 
-    pub(crate) fn append_collection(
-        &mut self,
-        var_refs: Vec<VariableRef>,
-        field_index: SmallVec<[usize; 8]>,
-    ) -> Result<u32, CompileError> {
-        // self.0.push(VariableRef::Collection(CollectionRef {
-        //     var_token_value: self.0.len(),
-        //     var_refs,
-        // }));
+    // pub(crate) fn append_collection(
+    //     &mut self,
+    //     name: ShortString,
+    //     field_index: SmallVec<[usize; 8]>,
+    // ) -> Result<u32, CompileError> {
+    //     // self.0.push(VariableRef::Collection(CollectionRef {
+    //     //     var_token_value: self.0.len(),
+    //     //     var_refs,
+    //     // }));
 
-        self.0.insert(
-            Token::Variable(self.0.len()),
-            VariableRef::Collection(CollectionRef {
-                var_refs,
-            })
-        );
-        Ok(self.0.len() as u32)
-    }
+    //     self.0.insert(
+    //         Token::Variable(self.0.len()),
+    //         CompiledField::Collection(CompiledCollectionField { name, field_index }),
+    //     );
+    //     Ok(self.0.len() as u32)
+    // }
 
     pub(crate) fn new() -> Self {
         VariablesRefTable(HashMap::new())
+    }
+
+    pub(crate) fn insert(
+        &mut self,
+        token: Token,
+        mut var: CompiledVariable,
+    ) -> Result<(), CompileError> {
+        var.sort();
+        self.0.insert(token, var);
+        Ok(())
     }
 }
 
@@ -1193,8 +1455,11 @@ impl<
                 StackRefPos::CompareResult(res) => {
                     unwind_stack.push(StackValue::Owned(res.into()))
                 }
-                StackRefPos::Constant(c) => {
+                StackRefPos::ConstantIndex(c) => {
                     unwind_stack.push(StackValue::Owned(c.into()))
+                }
+                StackRefPos::ConstantValue(v) => {
+                    unwind_stack.push(StackValue::Owned(v))
                 }
             }
         }
@@ -1237,7 +1502,8 @@ impl<
                 StackRefPos::CompareResult(res) => {
                     StackValue::Owned(res.into())
                 }
-                StackRefPos::Constant(c) => StackValue::Owned(c.into()),
+                StackRefPos::ConstantIndex(c) => StackValue::Owned(c.into()),
+                StackRefPos::ConstantValue(v) => StackValue::Owned(v.into()),
             })
             .collect();
 
@@ -1283,7 +1549,8 @@ impl<
                 StackRefPos::CompareResult(res) => {
                     StackValue::Owned(res.into())
                 }
-                StackRefPos::Constant(c) => StackValue::Owned(c.into()),
+                StackRefPos::ConstantIndex(c) => StackValue::Owned(c.into()),
+                StackRefPos::ConstantValue(v) => StackValue::Owned(v.into()),
             })
             .collect();
 
@@ -1319,7 +1586,8 @@ impl<
                     panic!("Attempt to move a value from a data-source");
                 }
                 StackRefPos::CompareResult(res) => res.into(),
-                StackRefPos::Constant(c) => c.into(),
+                StackRefPos::ConstantIndex(c) => c.into(),
+                StackRefPos::ConstantValue(v) => v.into(),
             })
             .collect();
 
@@ -1413,6 +1681,7 @@ impl<
                 }
 
                 commands_num += 1;
+                let args = &mut args.clone();
                 let mut args = CommandArgsStack::new(args);
                 trace!("\n{:3} -> {:?} {:?} ", pc, op, args);
                 match op {
@@ -1633,8 +1902,11 @@ impl<
                                     StackRefPos::CompareResult(res) => {
                                         StackValue::Owned(res.into())
                                     }
-                                    StackRefPos::Constant(c) => {
+                                    StackRefPos::ConstantIndex(c) => {
                                         StackValue::Owned(c.into())
+                                    }
+                                    StackRefPos::ConstantValue(v) => {
+                                        StackValue::Owned(v.into())
                                     }
                                 }
                             })
@@ -1727,8 +1999,18 @@ impl<
                                     panic!("Fatal: Can't mutate a compare \
                                     result.");
                                 }
-                                StackRefPos::Constant(_c) => {
+                                StackRefPos::ConstantIndex(_c) => {
                                     panic!("Fatal: can't mutate a constant.");
+                                }
+                                StackRefPos::ConstantValue(_v) => {
+                                    mem
+                                        .get_mem_pos_as_owned(mem_pos)
+                                        .unwrap_or_else(|| {
+                                            trace!("\nstack: {:?}", stack);
+                                            trace!("mem: {:#?}", mem.0);
+                                            panic!(r#"Uninitialized memory in 
+                                                pos {}. That's fatal"#, mem_pos);
+                                        })
                                 }
                             }
                                 })
@@ -1871,8 +2153,8 @@ impl<
                             }
                         }
                     }
-                    // args: [data_source_token, method_token, arguments,
-                    //       return memory position]
+                    // args: [data_source_token, method_token, arguments] The
+                    // result of this method will be pushed to the stack.
                     OpCode::ExecuteDataStoreMethod => {
                         let mem_pos = if let CommandArg::MemPos(pos) =
                             args.pop().unwrap()
@@ -1915,13 +2197,16 @@ impl<
                                         s.push(sr_pos)?;
                                     }
                                     DataSourceMethodValue::TypeValue(tv) => {
-                                        mem.set_mem_pos(mem_pos, tv);
+                                        // mem.set_mem_pos(mem_pos, tv);
+                                        s.push(StackRefPos::ConstantValue(tv))?;
                                     }
                                     DataSourceMethodValue::Empty(_ty) => {
-                                        mem.set_mem_pos(
-                                            mem_pos,
-                                            TypeValue::Unknown,
-                                        );
+                                        // mem.set_mem_pos(
+                                        //     mem_pos,
+                                        //     TypeValue::Unknown,
+                                        // );
+                                        s.push(StackRefPos::ConstantValue(TypeValue::Unknown))?;
+
                                     }
                                 }
                             }
@@ -1929,11 +2214,11 @@ impl<
                         }
                     }
                     // stack args: [mem_pos | constant_value]
-                    OpCode::PushStack => match args[0] {
-                        CommandArg::MemPos(pos) => {
+                    OpCode::PushStack => match args.pop_front() {
+                        Some(CommandArg::MemPos(pos)) => {
                             if log_enabled!(Level::Trace) {
                                 trace!(
-                                    " content: {:?}",
+                                    " mem_pos content: {:?}",
                                     mem.get_mem_pos(pos as usize)
                                 );
                             }
@@ -1944,16 +2229,39 @@ impl<
                                 trace!(" stack {:?}", s);
                             }
                         }
-                        CommandArg::Constant(ref c) => {
+                        Some(CommandArg::ConstantIndex(ref c)) => {
                             if log_enabled!(Level::Trace) {
-                                trace!(" content: {:?}", c);
+                                trace!(" constant index content: {:?}", c);
                             }
                             let mut s = self.stack.borrow_mut();
-                            s.push(StackRefPos::Constant(c.try_into()?))?;
+                            s.push(StackRefPos::ConstantIndex(
+                                c.try_into()?,
+                            ))?;
                             if log_enabled!(Level::Trace) {
                                 trace!(" stack {:?}", s);
                             }
                         }
+                        Some(CommandArg::ConstantValue(v)) => {
+                            if log_enabled!(Level::Trace) {
+                                trace!(" constant value content: {:?}", v);
+                            }
+                            let mut s = self.stack.borrow_mut();
+                            s.push(StackRefPos::ConstantValue(v))?;
+                            if log_enabled!(Level::Trace) {
+                                trace!(" stack {:?}", s);
+                            }
+                        }
+                        Some(CommandArg::List(l)) => {
+                            if log_enabled!(Level::Trace) {
+                                trace!(" list value content: {:?}", l);
+                            }
+                            let mut s = self.stack.borrow_mut();
+                            s.push(StackRefPos::ConstantValue(l.into()))?;
+                            if log_enabled!(Level::Trace) {
+                                trace!(" stack {:?}", s);
+                            }
+                        }
+                        None => return Err(VmError::InvalidCommand),
                         _ => return Err(VmError::InvalidValueType),
                     },
                     // no stack_args
@@ -2522,12 +2830,15 @@ impl From<VmError> for Box<dyn std::error::Error> {
 #[derive(Debug, Clone)]
 pub struct Command {
     pub(crate) op: OpCode,
-    pub(crate) args: Vec<CommandArg>,
+    pub(crate) args: VecDeque<CommandArg>,
 }
 
 impl Command {
     pub fn new(op: OpCode, args: Vec<CommandArg>) -> Self {
-        Command { op, args }
+        Command {
+            op,
+            args: args.into(),
+        }
     }
 }
 
@@ -2581,7 +2892,8 @@ impl Display for Command {
 
 #[derive(Debug, Hash)]
 pub enum CommandArg {
-    Constant(TypeValue),              // Constant value
+    ConstantIndex(TypeValue),         // Constant index
+    ConstantValue(TypeValue),         // TypeValue constant
     Variable(usize),                  // Variable with token value
     Argument(usize), // extra runtime argument for filter_map & term
     List(List),      // a list that needs to be stored at a memory position
@@ -2713,9 +3025,12 @@ impl From<crate::traits::Token> for Vec<CommandArg> {
 impl Clone for CommandArg {
     fn clone(&self) -> Self {
         match self {
-            CommandArg::Constant(c) => CommandArg::Constant(
+            CommandArg::ConstantIndex(c) => CommandArg::ConstantIndex(
                 c.builtin_as_cloned_type_value().unwrap(),
             ),
+            CommandArg::ConstantValue(v) => {
+                CommandArg::ConstantValue(v.clone())
+            }
             CommandArg::Variable(v) => CommandArg::Variable(*v),
             CommandArg::Argument(a) => CommandArg::Argument(*a),
             CommandArg::RxValue => CommandArg::RxValue,

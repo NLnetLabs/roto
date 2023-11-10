@@ -62,6 +62,14 @@ impl RecordTypeDef {
     pub(crate) fn len(&self) -> usize {
         self.0.len()
     }
+
+    pub(crate) fn get_index_for_field_name(&self, name: &ShortString) -> Option<usize> {
+        self.0.iter().enumerate().find(|(i, td)| td.0 == name).map(|(i, _)| i)
+    }
+
+    pub(crate) fn get_field_num(&self) -> Option<usize> {
+        Some(self.0.len())
+    }
 }
 
 // Equivalence of two RecordTypeDefs is defined as the two vectors being
@@ -291,6 +299,19 @@ impl TypeDef {
         type_ident_pairs: Vec<(&str, Box<TypeDef>)>,
     ) -> Result<TypeDef, CompileError> {
         Ok(TypeDef::Record(type_ident_pairs.into()))
+    }
+
+    // compute the number of fields in this typedef, mostly relevant for
+    // records to figure how many values should be popped from the stack for
+    // method calls. Some types do not have a fixes number of fields, e.g. a
+    // List. We're returning None for types like these.
+    pub fn get_field_num(&self) -> Option<usize> {
+        match self {
+            TypeDef::Record(rec_type) => Some(rec_type.len()),
+            TypeDef::LazyRecord(l_rec) => l_rec.get_field_num(),
+            TypeDef::List(list) => None,
+            _ => Some(1)
+        }
     }
 
     // this function checks that the `fields` vec describes the fields

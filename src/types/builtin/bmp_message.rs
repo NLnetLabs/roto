@@ -11,7 +11,7 @@ use crate::{
     traits::Token,
     types::{
         builtin::{Asn, Boolean, BuiltinTypeValue, IpAddress, U8, U16},
-        collections::{EnumBytesRecord, LazyElementTypeValue, LazyRecord},
+        collections::{EnumBytesRecord, LazyElementTypeValue, LazyRecord, RecordType},
         enum_types::EnumVariant,
         lazyrecord_types::{
             BmpMessage, LazyRecordTypeDef, PeerDownNotification,
@@ -256,10 +256,11 @@ impl From<MessageType> for LazyRecordTypeDef {
     }
 }
 
-//------------ BmpRouteMonitoringMessage ------------------------------------
 
-// THe fields of a bytes_record_impl should be STRICTLY alphabeticallay
-// ordered by the the name of the key and numbered in that order.
+//------------ BmpRouteMonitoringMessage -------------------------------------
+
+// THe fields of a bytes_record_impl should be STRICTLY alphabetically ordered
+// by the the name of the key and numbered in that order.
 
 bytes_record_impl!(
     RouteMonitoring,
@@ -298,7 +299,8 @@ bytes_record_impl!(
                 per_peer_header.peer_type
             ),
         ),
-    )]
+    )],
+    10
 );
 
 impl BytesRecord<RouteMonitoring> {
@@ -318,7 +320,7 @@ impl BytesRecord<RouteMonitoring> {
 
 //------------ PeerUpNotification -------------------------------------------
 
-// THe fields of a bytes_record_impl should be STRICTLY alphabeticallay
+// THe fields of a bytes_record_impl should be STRICTLY alphabetically
 // ordered by the the name of the key and numbered in that order.
 
 bytes_record_impl!(
@@ -381,7 +383,8 @@ bytes_record_impl!(
                 session_config.has_four_octet_asn
             ),
         ),
-    )]
+    )],
+    14
 );
 
 impl BytesRecord<PeerUpNotification> {
@@ -438,7 +441,8 @@ bytes_record_impl!(
                 per_peer_header.peer_type
             ),
         ),
-    )]
+    )],
+    10
 );
 
 impl BytesRecord<PeerDownNotification> {
@@ -466,7 +470,8 @@ bytes_record_impl!(
             "common_header"; 0,
             field("version"; 1, U8, common_header.version),
         ),
-    )]
+    )],
+    2
 );
 
 impl BytesRecord<InitiationMessage> {
@@ -524,7 +529,8 @@ bytes_record_impl!(
                 per_peer_header.peer_type
             ),
         ),
-    )]
+    )],
+    10
 );
 
 impl BytesRecord<StatisticsReport> {

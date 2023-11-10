@@ -292,8 +292,15 @@ macro_rules! bytes_record_impl {
                     $( .$next_enum_method_call: ident )*
                 )
             )?,
-        )*)]
+        )*)],
+        $field_num: expr
     ) => {
+        impl RecordType for $bytes_record_type {
+            fn get_field_num() -> Option<usize> {
+                Some($field_num)
+            }
+        }
+
         impl BytesRecord<$bytes_record_type> {
             pub(crate) fn lazy_type_def<'a>() -> LazyNamedTypeDef<
                 'a,

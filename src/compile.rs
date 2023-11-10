@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     fmt::{Display, Formatter},
     sync::Arc,
 };
@@ -22,12 +22,15 @@ use crate::{
         typevalue::TypeValue,
     },
     types::{
-        datasources::Table, lazyrecord_types::LazyRecordTypeDef,
-        typedef::TypeDef,
+        datasources::Table,
+        lazyrecord_types::LazyRecordTypeDef,
+        typedef::{RecordTypeDef, TypeDef},
     },
     vm::{
-        compute_hash, Command, CommandArg, ExtDataSource, FilterMapArg,
-        FilterMapArgs, OpCode, StackRefPos, VariablesRefTable, VariableRef, PrimitiveRef, CollectionRef,
+        compute_hash, Command, CommandArg, CompiledCollectionField,
+        CompiledField, CompiledPrimitiveField, CompiledVariable,
+        ExtDataSource, FilterMapArg, FilterMapArgs, OpCode, StackRefPos,
+        VariablesRefTable, VmError,
     },
 };
 
@@ -671,12 +674,160 @@ struct CompilerState<'a> {
     // allowed, btw.
     used_arguments: Arguments<'a>,
     cur_mir_block: MirBlock,
+    // A register for the current field on a variable, where the variable
+    // represents a record.
+    cur_record_variable: Option<CompiledVariable>,
+    cur_record_depth: usize,
+    cur_record_field_index: SmallVec<[usize; 8]>,
+    cur_record_field_name: Option<ShortString>,
+    cur_record_type: Option<RecordTypeDef>,
     // the memory position that is currently empty and available to be
     // written to.
     cur_mem_pos: u32,
     var_read_only: bool,
     compiled_terms: TermSections<'a>,
     compiled_action_sections: ActionSections<'a>,
+}
+
+impl<'a> CompilerState<'a> {
+    pub(crate) fn push_command(&mut self, op: OpCode, args: Vec<CommandArg>) {
+        if let Some(cur_rec_var) = &mut self.cur_record_variable {
+            match cur_rec_var.iter_mut().last() {
+                Some(CompiledField::Primitive(p)) => {
+                    if let Some(CommandArg::ConstantValue(_)) = args.get(0) {
+                        if let Some(field_name) =
+                            self.cur_record_field_name.clone()
+                        {
+                            cur_rec_var.append_primitive(
+                                CompiledPrimitiveField::new(
+                                    field_name,
+                                    vec![Command::new(op, args.clone())],
+                                    self.cur_record_field_index.clone(),
+                                ),
+                            )
+                        };
+                    } else {
+                        p.push_command(op, args.clone());
+                    }
+                }
+                Some(CompiledField::Collection(_)) | None => {
+                    if let Some(field_name) =
+                        self.cur_record_field_name.clone()
+                    {
+                        cur_rec_var.append_primitive(
+                            CompiledPrimitiveField::new(
+                                field_name,
+                                vec![Command::new(op, args.clone())],
+                                self.cur_record_field_index.clone(),
+                            ),
+                        );
+                    }
+                }
+            }
+        }
+        trace!("cur_rec_var {:?}", self.cur_record_variable);
+        self.cur_mir_block
+            .command_stack
+            .push_back(Command::new(op, args));
+    }
+
+    pub(crate) fn extend_commands(&mut self, commands: Vec<Command>) {
+        if let Some(cur_rec_var) = &mut self.cur_record_variable {
+            match cur_rec_var.iter_mut().last() {
+                Some(CompiledField::Primitive(p)) => {
+                    p.extend_commands(commands.clone());
+                }
+                Some(CompiledField::Collection(_)) | None => {
+                    cur_rec_var.append_primitive(
+                        CompiledPrimitiveField::new(
+                            self.cur_record_field_name.clone().unwrap(),
+                            commands.clone(),
+                            self.cur_record_field_index.clone(),
+                        ),
+                    );
+                }
+            }
+        }
+        self.cur_mir_block.extend(commands);
+    }
+
+    pub(crate) fn init_current_record_tracker_with_collection(
+        &mut self,
+        name: ShortString,
+        field_num: usize,
+    ) {
+        let mut compile_var = CompiledVariable::new();
+        compile_var.append_collection(CompiledCollectionField::new(
+            name,
+            vec![].into(),
+            field_num,
+        ));
+        self.cur_record_variable = Some(compile_var);
+        self.cur_record_depth = 0;
+        self.cur_record_field_index = vec![].into();
+    }
+
+    pub(crate) fn init_current_record_tracker_with_primitive(
+        &mut self,
+        name: ShortString,
+    ) {
+        let mut compile_var = CompiledVariable::new();
+        compile_var.append_primitive(CompiledPrimitiveField::new(
+            name,
+            vec![],
+            vec![].into(),
+        ));
+        self.cur_record_variable = Some(compile_var);
+        self.cur_record_depth = 0;
+        self.cur_record_field_index = vec![].into();
+    }
+
+    pub(crate) fn destroy_current_record_tracker(&mut self) {
+        self.cur_record_variable = None;
+        self.cur_record_depth = 0;
+        self.cur_record_field_index = vec![].into();
+        self.cur_record_field_name = None;
+    }
+
+    pub(crate) fn inc_record_field_depth(
+        &mut self,
+        name: ShortString,
+    ) -> Result<(), CompileError> {
+        trace!("inc depth level");
+        match self.cur_record_variable {
+            // Init the new record
+            None => {
+                // self.cur_record_variable = Some(CompiledVariable::new());
+                self.cur_record_depth = 0;
+                self.cur_record_field_index = vec![].into();
+            }
+            Some(_) => {
+                self.cur_record_depth += 1;
+            }
+        }
+        self.cur_record_field_name = Some(name);
+
+        Ok(())
+    }
+
+    pub(crate) fn append_collection_to_record_tracker(
+        &mut self,
+        collection: CompiledCollectionField,
+    ) {
+        if let Some(var) = self.cur_record_variable.as_mut() {
+            var.append_collection(collection);
+        }
+    }
+
+    pub(crate) fn reset_record_depth(
+        &mut self,
+        name: ShortString,
+        commands: Vec<Command>,
+        field_index: SmallVec<[usize; 8]>,
+    ) {
+        trace!("reset depth level");
+        self.cur_record_depth = 0;
+    }
 }
 
 /// The `roto` compiler
@@ -868,14 +1019,14 @@ pub enum MirBlockType {
 
 #[derive(Debug)]
 pub struct MirBlock {
-    command_stack: Vec<Command>,
+    command_stack: VecDeque<Command>,
     ty: MirBlockType,
 }
 
 impl MirBlock {
     pub fn new(ty: MirBlockType) -> Self {
         MirBlock {
-            command_stack: Vec::new(),
+            command_stack: VecDeque::new(),
             ty,
         }
     }
@@ -884,24 +1035,28 @@ impl MirBlock {
         self.command_stack.iter()
     }
 
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Command> + '_ {
+        self.command_stack.iter_mut()
+    }
+
     pub fn get_cur_type(&self) -> &MirBlockType {
         &self.ty
     }
 
-    pub fn push_command(&mut self, command: Command) {
-        self.command_stack.push(command);
-    }
+    // fn push_command(&mut self, command: Command) {
+    //     self.command_stack.push_back(command);
+    // }
 
     pub fn extend(&mut self, commands: Vec<Command>) {
         self.command_stack.extend(commands);
     }
 
     pub fn last(&self) -> &Command {
-        self.command_stack.last().unwrap()
+        self.command_stack.back().unwrap()
     }
 
     pub fn pop_last(&mut self) -> Command {
-        self.command_stack.pop().unwrap()
+        self.command_stack.pop_back().unwrap()
     }
 
     // Post-process this block to filter out any PushStack and StackOffset
@@ -927,17 +1082,17 @@ impl MirBlock {
     ) -> (Self, usize, SmallVec<[usize; 8]>) {
         let mut field_indexes = smallvec::smallvec![];
 
-        self.command_stack.reverse();
+        let mut c_stack = Vec::from(self.command_stack);
+        c_stack.reverse();
 
         let mut method_encountered = false;
         let mut mem_pos = var_mem_pos;
 
-        let mut c_stack = self
-            .command_stack
+        c_stack = c_stack
             .into_iter()
             .filter_map(|mut c| match c.op {
                 OpCode::PushStack if !method_encountered => {
-                    mem_pos = c.args.first().unwrap().into();
+                    mem_pos = c.args.front().unwrap().into();
                     None
                 }
                 OpCode::StackOffset if !method_encountered => {
@@ -971,8 +1126,7 @@ impl MirBlock {
         };
 
         c_stack.reverse();
-
-        self.command_stack = c_stack;
+        self.command_stack = VecDeque::from(c_stack);
 
         (self, mem_pos, field_indexes)
     }
@@ -1004,10 +1158,13 @@ impl Clone for MirBlock {
             .command_stack
             .iter()
             .map(|c| {
-                let args = c.args.to_vec();
-                Command::new(c.op, args)
+                // let args = c.args.into_vec();
+                Command {
+                    op: c.op,
+                    args: c.args.clone(),
+                }
             })
-            .collect::<Vec<_>>();
+            .collect::<VecDeque<_>>();
 
         MirBlock {
             ty: MirBlockType::Alias,
@@ -1039,7 +1196,9 @@ fn generate_code_for_token_value(
             {
                 vec![Command::new(
                     OpCode::PushStack,
-                    vec![CommandArg::Constant(var.1.get_value().clone())],
+                    vec![CommandArg::ConstantIndex(
+                        var.1.get_value().clone(),
+                    )],
                 )]
             } else {
                 vec![]
@@ -1120,6 +1279,11 @@ fn compile_filter_map(
         compiled_terms: TermSections::new(),
         compiled_action_sections: ActionSections::new(),
         cur_mir_block: MirBlock::new(MirBlockType::Assignment),
+        cur_record_depth: 0,
+        cur_record_field_index: vec![].into(),
+        cur_record_variable: None,
+        cur_record_field_name: None,
+        cur_record_type: None,
         var_read_only: false,
         cur_mem_pos: 0,
     };
@@ -1158,10 +1322,10 @@ fn compile_filter_map(
     (mir, state) = compile_apply_section(mir, state)?;
 
     state.cur_mir_block = MirBlock::new(MirBlockType::Terminator);
-    state.cur_mir_block.push_command(Command::new(
+    state.push_command(
         OpCode::Exit(state.cur_filter_map.get_default_action()),
         vec![],
-    ));
+    );
 
     mir.push(state.cur_mir_block);
 
@@ -1213,36 +1377,6 @@ fn compile_filter_map(
     ))
 }
 
-fn recursive_ref_grabber(mut state: CompilerState, var_ref: VariableRef, inc_mem_pos: bool) -> CompilerState {
-    match var_ref {
-        VariableRef::Primitive(var_ref) => {
-            state.cur_mir_block.push_command(Command::new(
-                OpCode::PushStack,
-                vec![CommandArg::MemPos(var_ref.get_mem_pos())],
-            ));
-
-            for field_index in var_ref.get_field_index() {
-                state.cur_mir_block.push_command(Command::new(
-                    OpCode::StackOffset,
-                    vec![CommandArg::FieldAccess(*field_index)],
-                ));
-            }
-
-            if inc_mem_pos {
-                state.cur_mem_pos += 1;
-            }
-        },
-        VariableRef::Collection(coll_refs) => {
-            for var_ref in coll_refs.iter() {
-                state = recursive_ref_grabber(state, var_ref.clone(), inc_mem_pos);
-            }
-        }
-        _ =>  {panic!("cant' happen");}
-    }
-
-    state
-}
-
 fn compile_compute_expr<'a>(
     symbol: &'a Symbol,
     mut state: CompilerState<'a>,
@@ -1259,7 +1393,7 @@ fn compile_compute_expr<'a>(
     // AccessReceiver (args) -> (MethodCall | FieldAccess)*
     //
     // so always starting with an AccessReceiver. Furthermore, a variable
-    // reference or assignment should always be an AccessReceiver.
+    // reference or assignment should always bef an AccessReceiver.
     trace!("compile compute expr {:#?}", symbol);
     let is_ar = symbol.get_kind() == SymbolKind::AccessReceiver;
     let token = symbol.get_token()?;
@@ -1268,60 +1402,60 @@ fn compile_compute_expr<'a>(
     match token {
         // ACCESS RECEIVERS
 
-        // Assign a variable
+        // A reference to a variable, seen anywhere but this can't be the
+        // assignment itself, since compile_compute_expr is only used from the
+        // level of the children of an assignment.
         Token::Variable(var_to) => {
             trace!("var_to {}", var_to);
-            trace!("var ref table {:?}", state.variable_ref_table);
             trace!("kind {:?}", symbol.get_kind());
             assert!(is_ar);
+            assert!(symbol.get_kind() != SymbolKind::VariableAssignment);
+
             let var_ref =
                 state.variable_ref_table.get_by_token_value(var_to).unwrap();
 
-            // when writing, push the content of the referenced variable to the stack,
-            // note this might be the same as the assigned mem position, but it may also
-            // be different!
-            match var_ref.get_mem_pos() {
-                Ok(mem_pos) => {
-                    state.cur_mir_block.push_command(Command::new(
-                        OpCode::PushStack,
-                        vec![CommandArg::MemPos(var_ref.get_mem_pos().unwrap())],
-                    ));
+            trace!("var ref {:#?}", var_ref);
 
-                    for field_index in var_ref.get_field_index().unwrap() {
-                        state.cur_mir_block.push_command(Command::new(
-                            OpCode::StackOffset,
-                            vec![CommandArg::FieldAccess(*field_index)],
-                        ));
-                    }
-        
-                    if inc_mem_pos {
-                        state.cur_mem_pos += 1;
-                    }
-                },
-                Err(var_refs) => {
-                    for var_ref in var_refs {
-                        state = recursive_ref_grabber(state, var_ref.clone(), inc_mem_pos);
-                    }
-                    // for var_ref in var_refs { 
-                    //     state.cur_mir_block.push_command(Command::new(
-                    //         OpCode::PushStack,
-                    //         vec![CommandArg::MemPos(var_ref.get_mem_pos().unwrap())],
-                    //     ));
-    
-                    //     for field_index in var_ref.get_field_index().unwrap() {
-                    //         state.cur_mir_block.push_command(Command::new(
-                    //             OpCode::StackOffset,
-                    //             vec![CommandArg::FieldAccess(*field_index)],
-                    //         ));
-                    //     }
-            
-                    //     if inc_mem_pos {
-                    //         state.cur_mem_pos += 1;
-                    //     }
-                    // }
+            // start a new record or increase the depth level.
+            // state.cur_record_field_name = Some(symbol.get_name());
+            let var_type = &symbol.get_type();
+
+            match var_type {
+                TypeDef::Record(_rec_type) => {
+                    match symbol.get_kind() {
+                        SymbolKind::NamedType => {}
+                        SymbolKind::AnonymousType => {}
+                        kind => {
+                            return Err(CompileError::from(format!(
+                                "Type Record has invalid kind {:?}",
+                                kind
+                            )));
+                        }
+                    };
                 }
-            }
+                _ty => {
+                    match var_type.get_field_num() {
+                        Some(n) => {
+                            state.append_collection_to_record_tracker(
+                                CompiledCollectionField::new(
+                                    symbol.get_name(),
+                                    vec![].into(),
+                                    n,
+                                ),
+                            );
+                        }
+                        None => todo!(),
+                    };
+                }
+            };
 
+            // A referenced variable can only have zero or one child. Zero
+            // children means that we're going to push all the fields of the
+            // variable unto the stack.
+            assert!(symbol.get_args().iter().count() < 2);
+            if symbol.get_args().is_empty() {
+                state.extend_commands(var_ref.get_accumulated_commands());
+            }
         }
         // a user-defined argument (filter_map or term)
         Token::Argument(arg_to) => {
@@ -1335,27 +1469,27 @@ fn compile_compute_expr<'a>(
                 .iter()
                 .find(|(to, arg, _)| to == &token && !arg.has_unknown_value())
             {
-                state.cur_mir_block.push_command(Command::new(
+                state.push_command(
                     OpCode::MemPosSet,
                     vec![
                         CommandArg::MemPos(state.cur_mem_pos),
-                        CommandArg::Constant(arg.get_value().clone()),
+                        CommandArg::ConstantIndex(arg.get_value().clone()),
                     ],
-                ));
+                );
             } else {
-                state.cur_mir_block.push_command(Command::new(
+                state.push_command(
                     OpCode::ArgToMemPos,
                     vec![
                         CommandArg::Argument(arg_to),
                         CommandArg::MemPos(state.cur_mem_pos),
                     ],
-                ));
+                );
             }
 
-            state.cur_mir_block.push_command(Command::new(
+            state.push_command(
                 OpCode::PushStack,
                 vec![CommandArg::MemPos(state.cur_mem_pos)],
-            ));
+            );
 
             if inc_mem_pos {
                 state.cur_mem_pos += 1;
@@ -1379,37 +1513,36 @@ fn compile_compute_expr<'a>(
         // rx instance reference
         Token::RxType => {
             assert!(is_ar);
-
-            state.cur_mir_block.push_command(Command::new(
-                OpCode::PushStack,
-                vec![CommandArg::MemPos(0)],
-            ));
+            state
+                .push_command(OpCode::PushStack, vec![CommandArg::MemPos(0)]);
         }
         // tx instance reference
         Token::TxType => {
             assert!(is_ar);
-
-            state.cur_mir_block.push_command(Command::new(
-                OpCode::PushStack,
-                vec![CommandArg::MemPos(1)],
-            ));
+            state
+                .push_command(OpCode::PushStack, vec![CommandArg::MemPos(1)]);
         }
-        // a constant value (not a reference!)
+        // a constant value
         Token::Constant(_) => {
             let val = symbol.get_value();
+            trace!("encode constant value {:?}", val);
 
-            state.cur_mir_block.push_command(Command::new(
-                OpCode::MemPosSet,
-                vec![
-                    CommandArg::MemPos(state.cur_mem_pos),
-                    CommandArg::Constant(val.builtin_as_cloned_type_value()?),
-                ],
-            ));
+            // state.push_command(
+            //     OpCode::MemPosSet,
+            //     vec![
+            //         CommandArg::MemPos(state.cur_mem_pos),
+            //         CommandArg::Constant(val.builtin_as_cloned_type_value()?),
+            //     ],
+            // ));
 
-            state.cur_mir_block.push_command(Command::new(
+            // state.push_command(
+            //     OpCode::PushStack,
+            //     vec![CommandArg::MemPos(state.cur_mem_pos)],
+            // ));
+            state.push_command(
                 OpCode::PushStack,
-                vec![CommandArg::MemPos(state.cur_mem_pos)],
-            ));
+                vec![CommandArg::ConstantValue(val.clone())],
+            );
 
             if inc_mem_pos {
                 state.cur_mem_pos += 1;
@@ -1437,18 +1570,20 @@ fn compile_compute_expr<'a>(
 
             let val = symbol.get_value();
 
-            state.cur_mir_block.push_command(Command::new(
+            state.push_command(
                 OpCode::MemPosSet,
                 vec![
                     CommandArg::MemPos(state.cur_mem_pos),
-                    CommandArg::Constant(val.builtin_as_cloned_type_value()?),
+                    CommandArg::ConstantIndex(
+                        val.builtin_as_cloned_type_value()?,
+                    ),
                 ],
-            ));
+            );
 
-            state.cur_mir_block.push_command(Command::new(
+            state.push_command(
                 OpCode::PushStack,
                 vec![CommandArg::MemPos(state.cur_mem_pos)],
-            ));
+            );
 
             if inc_mem_pos {
                 state.cur_mem_pos += 1;
@@ -1485,7 +1620,7 @@ fn compile_compute_expr<'a>(
                 // The parent is a table, so this symbol is a method on a
                 // table.
                 Token::Table(t_to) => {
-                    state.cur_mir_block.push_command(Command::new(
+                    state.push_command(
                         OpCode::ExecuteDataStoreMethod,
                         vec![
                             CommandArg::DataSourceTable(t_to),
@@ -1499,11 +1634,11 @@ fn compile_compute_expr<'a>(
                             ), // argument types and number
                             CommandArg::MemPos(state.cur_mem_pos),
                         ],
-                    ));
+                    );
                 }
                 // The parent is a RIB, so this symbol is a method on a rib
                 Token::Rib(r_to) => {
-                    state.cur_mir_block.push_command(Command::new(
+                    state.push_command(
                         OpCode::ExecuteDataStoreMethod,
                         vec![
                             CommandArg::DataSourceRib(r_to),
@@ -1517,12 +1652,12 @@ fn compile_compute_expr<'a>(
                             ), // argument types and number
                             CommandArg::MemPos(state.cur_mem_pos),
                         ],
-                    ));
+                    );
                 }
                 // The parent is a OutputStream, so this symbol is a
                 // method on the OutputStream type
                 Token::OutputStream(o_s) => {
-                    state.cur_mir_block.push_command(Command::new(
+                    state.push_command(
                         OpCode::PushOutputStreamQueue,
                         vec![
                             CommandArg::OutputStream(o_s),
@@ -1536,12 +1671,12 @@ fn compile_compute_expr<'a>(
                             ), // argument types and number
                             CommandArg::MemPos(state.cur_mem_pos),
                         ],
-                    ));
+                    );
                 }
                 // The parent is a built-in method, so this symbol is a
                 // method on a built-in method.
                 Token::BuiltinType(_b_to) => {
-                    state.cur_mir_block.push_command(Command::new(
+                    state.push_command(
                         OpCode::ExecuteTypeMethod,
                         vec![
                             CommandArg::Type(symbol.get_type()), // return type
@@ -1555,7 +1690,7 @@ fn compile_compute_expr<'a>(
                             ), // argument types and number
                             CommandArg::MemPos(state.cur_mem_pos),
                         ],
-                    ));
+                    );
                 }
                 // The parent is a List
                 Token::List => {
@@ -1606,7 +1741,7 @@ fn compile_compute_expr<'a>(
                         SymbolKind::MethodCallbyRef => {
                             // args: [ method_call, type, arguments,
                             //         return_type ]
-                            state.cur_mir_block.push_command(Command::new(
+                            state.push_command(
                                 OpCode::ExecuteValueMethod,
                                 vec![
                                     CommandArg::Method(token.into()),
@@ -1621,12 +1756,12 @@ fn compile_compute_expr<'a>(
                                     // argument types and number
                                     CommandArg::MemPos(state.cur_mem_pos),
                                 ],
-                            ));
+                            );
                         }
                         SymbolKind::MethodCallByConsumedValue => {
                             // args: [ method_call, type, arguments,
                             //         return_type ]
-                            state.cur_mir_block.push_command(Command::new(
+                            state.push_command(
                                 OpCode::ExecuteConsumeValueMethod,
                                 vec![
                                     CommandArg::Method(token.into()),
@@ -1641,7 +1776,7 @@ fn compile_compute_expr<'a>(
                                     // argument types and number
                                     CommandArg::MemPos(state.cur_mem_pos),
                                 ],
-                            ));
+                            );
                         }
                         _ => {
                             panic!("PANIC!");
@@ -1671,10 +1806,10 @@ fn compile_compute_expr<'a>(
 
             // Push the result to the stack for an (optional) next Accessor
             // to be used.
-            state.cur_mir_block.push_command(Command::new(
+            state.push_command(
                 OpCode::PushStack,
                 vec![CommandArg::MemPos(state.cur_mem_pos)],
-            ));
+            );
 
             state.cur_mem_pos += 1;
 
@@ -1726,22 +1861,17 @@ fn compile_compute_expr<'a>(
                         CommandArg::MemPos(state.cur_mem_pos),
                     ];
 
-                    state
-                        .cur_mir_block
-                        .command_stack
-                        .push(Command::new(OpCode::LoadLazyFieldValue, args));
+                    state.push_command(OpCode::LoadLazyFieldValue, args);
 
                     // Push the computed variant value from the memory
                     // position onto the stack.
-                    state.cur_mir_block.push_command(Command::new(
+                    state.push_command(
                         OpCode::PushStack,
                         vec![CommandArg::MemPos(state.cur_mem_pos)],
-                    ));
+                    );
 
-                    state.cur_mir_block.push_command(Command::new(
-                        OpCode::CondUnknownSkipToLabel,
-                        vec![],
-                    ));
+                    state
+                        .push_command(OpCode::CondUnknownSkipToLabel, vec![]);
                 }
                 // The `with` argument of an Action can be of a regular
                 // FieldAccess, or a LazyFieldAccess kind.
@@ -1787,17 +1917,15 @@ fn compile_compute_expr<'a>(
                                 CommandArg::MemPos(state.cur_mem_pos),
                             ];
 
-                            state.cur_mir_block.command_stack.push(
-                                Command::new(
-                                    OpCode::LoadLazyFieldValue,
-                                    args,
-                                ),
+                            state.push_command(
+                                OpCode::LoadLazyFieldValue,
+                                args,
                             );
 
-                            state.cur_mir_block.push_command(Command::new(
+                            state.push_command(
                                 OpCode::PushStack,
                                 vec![CommandArg::MemPos(state.cur_mem_pos)],
-                            ));
+                            );
 
                             state.cur_mem_pos += 1;
                         }
@@ -1812,11 +1940,52 @@ fn compile_compute_expr<'a>(
                         }
                     };
                 }
-                // This is a regular field access.
-                _ => {
+                // This is a regular field access, but only if we're in the
+                // process of creating code for a variable assignment. This
+                // code will be invoked from `compile_assignments`.
+                _ if state.cur_record_variable.is_some() => {
                     trace!("FIELD ACCESS PARENT TOKEN {:#?}", parent_token);
                     trace!("current symbol {:#?}", symbol);
                     trace!("fa {:?}", fa);
+                    trace!(
+                        "cur_record_variable {:?}",
+                        state.cur_record_variable
+                    );
+                    if let Some(var_refs) = &state.cur_record_variable {
+                        if let Ok(cmds) = var_refs
+                            .get_commands_for_field_index(
+                                fa.iter()
+                                    .map(|i| usize::from(*i))
+                                    .collect::<Vec<_>>()
+                                    .as_slice(),
+                            )
+                        {
+                            state.extend_commands(cmds);
+                        }
+                    }
+                }
+                // This is also regular field access, but only on a variable
+                // that represents a record and when creating the variable
+                // referencing code.
+                Some(Token::Variable(v)) => {
+                    if let Some(var_ref) =
+                        state.variable_ref_table.get_by_token_value(v)
+                    {
+                        if let Ok(commands) = var_ref
+                            .get_commands_for_field_index(
+                                fa.iter()
+                                    .map(|f| *f as usize)
+                                    .collect::<Vec<_>>()
+                                    .as_slice(),
+                            )
+                        {
+                            state.extend_commands(commands);
+                        };
+                    }
+                }
+                // Field access on non-record types, like LazyRecord, Route,
+                // etc.
+                _ => {
                     let mut args = vec![];
                     args.extend(
                         fa.iter()
@@ -1824,10 +1993,7 @@ fn compile_compute_expr<'a>(
                             .collect::<Vec<_>>(),
                     );
 
-                    state
-                        .cur_mir_block
-                        .command_stack
-                        .push(Command::new(OpCode::StackOffset, args));
+                    state.push_command(OpCode::StackOffset, args);
                 }
             }
         }
@@ -1856,10 +2022,7 @@ fn compile_compute_expr<'a>(
                 // if we evaluate to `true`. But: we don't need that if this
                 // is the last sub_term.
                 if sub_terms.peek().is_some() {
-                    state.cur_mir_block.command_stack.push(Command::new(
-                        OpCode::CondTrueSkipToEOB,
-                        vec![],
-                    ));
+                    state.push_command(OpCode::CondTrueSkipToEOB, vec![]);
                 }
             }
             return Ok(state);
@@ -1900,26 +2063,60 @@ fn compile_compute_expr<'a>(
                     CommandArg::MemPos(state.cur_mem_pos),
                 ];
 
-                state
-                    .cur_mir_block
-                    .command_stack
-                    .push(Command::new(OpCode::LoadLazyFieldValue, args));
+                state.push_command(OpCode::LoadLazyFieldValue, args);
 
-                state.cur_mir_block.push_command(Command::new(
+                state.push_command(
                     OpCode::PushStack,
                     vec![CommandArg::MemPos(state.cur_mem_pos)],
-                ));
+                );
 
-                state.cur_mir_block.push_command(Command::new(
-                    OpCode::CondUnknownSkipToLabel,
-                    vec![],
-                ));
+                state.push_command(OpCode::CondUnknownSkipToLabel, vec![]);
             };
         }
         // This record is defined without a type and used directly, mainly as
         // an argument for a method. The inferred type is unambiguous.
         Token::AnonymousRecord => {
             assert!(!is_ar);
+
+            // A new record increases the depth of the record current we are
+            // tracking
+            // let new_field_name = symbol.get_name();
+            // state.cur_record_field_name = Some(symbol.get_name());
+
+            state.inc_record_field_depth(symbol.get_name())?;
+            // state.append_collection_to_record_tracker(
+            //     CompiledCollectionField::new(new_field_name,vec![].into())
+            // );
+            if let Some(var) = state.cur_record_variable.as_mut() {
+                trace!("new collection {:?}", state.cur_record_field_name);
+                trace!("compiled var {:?}", var);
+                trace!("TYPE {:#?}", symbol.get_type());
+
+                let field_num = if let Some(field_num) =
+                    symbol.get_type().get_field_num()
+                {
+                    field_num
+                } else {
+                    return Err(CompileError::from(format!(
+                        "Invalid type {:?}",
+                        symbol.get_type()
+                    )));
+                };
+
+                var.append_collection(CompiledCollectionField::new(
+                    state.cur_record_field_name.clone().unwrap(),
+                    state.cur_record_field_index.clone(),
+                    field_num,
+                ));
+            }
+
+            state.cur_record_field_index.push(0);
+            state.cur_record_type =
+                if let TypeDef::Record(rec_type) = symbol.get_type() {
+                    Some(rec_type)
+                } else {
+                    None
+                };
 
             // Re-order the args vec on this symbol to reflect the ordering
             // on the type definition for the record. The original ordering
@@ -1932,11 +2129,37 @@ fn compile_compute_expr<'a>(
             let mut field_symbols =
                 symbol.get_args().iter().collect::<Vec<_>>();
             field_symbols.sort_by_key(|a| a.get_name());
+            trace!("field index {:?}", state.cur_record_field_index);
             trace!("ANONYMOUS RECORD FIELDS {:#?}", field_symbols);
 
             for arg in field_symbols {
+                let new_field_name = arg.get_name();
+                state.cur_record_field_name = Some(new_field_name.clone());
+                if let Some(rec_type) = state.cur_record_type.clone() {
+                    trace!("field name {:?}", new_field_name);
+                    trace!("current index {:?}", state.cur_record_type);
+                    if let Some(local_index) =
+                        rec_type.get_index_for_field_name(&new_field_name)
+                    {
+                        trace!("next index {:?}", local_index);
+                        if let Some(cur_index) =
+                            state.cur_record_field_index.last_mut()
+                        {
+                            *cur_index = local_index;
+                        }
+                    }
+                };
+
+                state.cur_record_field_name = Some(arg.get_name());
                 state = compile_compute_expr(arg, state, None, true)?;
             }
+
+            state.cur_record_type =
+                if let TypeDef::Record(rec_type) = symbol.get_type() {
+                    Some(rec_type)
+                } else {
+                    None
+                };
 
             return Ok(state);
         }
@@ -1946,6 +2169,9 @@ fn compile_compute_expr<'a>(
         Token::TypedRecord => {
             assert!(!is_ar);
 
+            let mut field_symbols =
+                symbol.get_args().iter().collect::<Vec<_>>();
+            field_symbols.sort_by_key(|a| a.get_name());
             trace!("TYPED RECORD FIELDS {:#?}", symbol.get_args());
             trace!("Checked Type {:#?}", symbol.get_type());
             let values = symbol
@@ -1962,9 +2188,7 @@ fn compile_compute_expr<'a>(
                 .collect::<Vec<_>>();
             let unresolved_symbols = unresolved_values
                 .into_iter()
-                .map(|v| {
-                    symbol.get_args().iter().find(|s| s.get_name() == v.0)
-                })
+                .map(|v| field_symbols.iter().find(|s| s.get_name() == v.0))
                 .collect::<Vec<_>>();
             trace!("unresolved symbols {:#?}", unresolved_symbols);
             let value_type = Record::new(values);
@@ -1977,8 +2201,7 @@ fn compile_compute_expr<'a>(
                     value_type,
                     symbol.get_type(),
                     TypeDef::Record(
-                        symbol
-                            .get_args()
+                        field_symbols
                             .iter()
                             .map(|v| (v.get_name(), Box::new(v.get_type())))
                             .collect::<Vec<_>>()
@@ -1986,13 +2209,40 @@ fn compile_compute_expr<'a>(
                     )
                 )));
             }
-            state.cur_mir_block.push_command(Command::new(
-                OpCode::MemPosSet,
-                vec![
-                    CommandArg::MemPos(state.cur_mem_pos),
-                    CommandArg::Record(value_type),
-                ],
-            ));
+            // state.push_command(
+            //     OpCode::MemPosSet,
+            //     vec![
+            //         CommandArg::MemPos(state.cur_mem_pos),
+            //         CommandArg::Record(value_type),
+            //     ],
+            // );
+            for child_arg in field_symbols {
+                state.cur_record_depth = 0;
+                state.cur_record_field_index = vec![].into();
+
+                state.cur_record_field_name = Some(child_arg.get_name());
+                if let TypeDef::Record(rec_type) = symbol.get_type() {
+                    if let Some(field_index) = rec_type
+                        .get_index_for_field_name(&child_arg.get_name())
+                    {
+                        if let Some(index) =
+                            state.cur_record_field_index.last_mut()
+                        {
+                            *index = field_index;
+                        } else {
+                            state.cur_record_field_index.push(field_index);
+                        }
+                    }
+                }
+
+                trace!("child_arg {}", child_arg.get_name());
+                state = compile_compute_expr(child_arg, state, None, false)?;
+
+                state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
+
+                state.cur_mem_pos += 1;
+            }
+
             return Ok(state);
         }
         // This is used in variable assignments where a var is assigned to
@@ -2005,19 +2255,24 @@ fn compile_compute_expr<'a>(
         Token::List => {
             assert!(!is_ar);
 
-            trace!("LIST VALUES {:?}", symbol.get_args());
             let values = symbol
                 .get_args()
                 .iter()
                 .map(|v| v.get_value().clone().into())
                 .collect::<Vec<ElementTypeValue>>();
-            state.cur_mir_block.push_command(Command::new(
-                OpCode::MemPosSet,
-                vec![
-                    CommandArg::MemPos(state.cur_mem_pos),
-                    CommandArg::List(List(values)),
-                ],
-            ));
+            // state.push_command(
+            //     OpCode::MemPosSet,
+            //     vec![
+            //         CommandArg::MemPos(state.cur_mem_pos),
+            //         CommandArg::List(List(values)),
+            //     ],
+            // );
+            trace!("LIST VALUES {:?}", values);
+
+            state.push_command(
+                OpCode::PushStack,
+                vec![CommandArg::List(List(values))],
+            );
 
             return Ok(state);
         }
@@ -2099,87 +2354,96 @@ fn compile_assignments(
 
         let s = _filter_map.get_variable_by_token(&var.1.get_token()?);
 
-        state.cur_mir_block.push_command(Command::new(
-            OpCode::Label,
-            vec![CommandArg::Label(format!("VAR {}", var.0).as_str().into())],
-        ));
-
         for arg in s.get_args() {
-            trace!("arg {:?} {:?} {:?} {:?}", arg.get_name(), arg.get_token(), arg.get_type(), arg.get_kind());
-            if let TypeDef::Record(_r) = arg.get_type() {
-                let mut var_refs = vec![];
-                for child_arg in arg.get_args() {
-                    trace!("child_arg {}", child_arg.get_name());
-                    state = compile_compute_expr(
-                        child_arg,
-                        state,
-                        None,
-                        false,
+            trace!(
+                "arg {:?} {:?} {:?} {:?}",
+                arg.get_name(),
+                arg.get_token(),
+                arg.get_type(),
+                arg.get_kind()
+            );
+
+            match arg.get_type() {
+                TypeDef::Record(rec_type) => {
+                    // reset the current record
+                    let field_num =
+                        if let Some(field_num) = rec_type.get_field_num() {
+                            field_num
+                        } else {
+                            return Err(CompileError::from(format!(
+                                "Invalid type definition {:?}",
+                                rec_type
+                            )));
+                        };
+                    state.init_current_record_tracker_with_collection(
+                        arg.get_name(),
+                        field_num,
+                    );
+
+                    // state.inc_record_field_depth(arg.get_name())?;
+                    state.cur_record_type =
+                        if let TypeDef::Record(rec_type) = arg.get_type() {
+                            Some(rec_type)
+                        } else {
+                            None
+                        };
+                    state.cur_mir_block =
+                        MirBlock::new(MirBlockType::Assignment);
+
+                    state = compile_compute_expr(arg, state, None, false)?;
+
+                    trace!("inserting {:#?}", var.1.get_token());
+                    state.variable_ref_table.insert(
+                        var.1.get_token()?,
+                        state.cur_record_variable.clone().unwrap(),
+                    )?;
+                    // mir.push(state.cur_mir_block);
+                }
+                TypeDef::List(list_type) => {
+                    trace!("LIST TYPE");
+                    // reset the current variable
+                    state.init_current_record_tracker_with_primitive(
+                        arg.get_name(),
+                    );
+                    state.cur_mir_block =
+                        MirBlock::new(MirBlockType::Assignment);
+
+                    state = compile_compute_expr(arg, state, None, false)?;
+
+                    trace!("inserting {:#?}", var.1.get_token());
+                    state.variable_ref_table.insert(
+                        var.1.get_token()?,
+                        state.cur_record_variable.clone().unwrap(),
+                    )?;
+                }
+                _ty => {
+                    state = compile_compute_expr(arg, state, None, false)?;
+
+                    let (cur_mir_block, cur_mem_pos, field_indexes) = state
+                        .cur_mir_block
+                        .into_assign_block(var_mem_pos + 2);
+
+                    state.variable_ref_table.set_primitive(
+                        var.1.get_token()?.into(),
+                        var.1.get_name(),
+                        cur_mir_block.command_stack.into(),
+                        field_indexes,
                     )?;
 
-                    state
-                        .cur_mir_block
-                        .command_stack
-                        .push(Command::new(OpCode::MemPosSet, vec![CommandArg::MemPos(state.cur_mem_pos)]));
-            
-                    // let (cur_mir_block, cur_mem_pos, field_indexes) =
-                    //     state.cur_mir_block.into_assign_block(var_mem_pos + 2);
-
-                    var_refs.push(VariableRef::Primitive(
-                        PrimitiveRef::new(
-                            var.1.get_token()?.into(),
-                            state.cur_mem_pos,
-                            vec![].into()
-                        )
-                    ));
-
-                    state
-                        .cur_mir_block
-                        .command_stack
-                        .push(Command::new(OpCode::ClearStack, vec![]));
-
-                    state.cur_mem_pos += 1;
+                    // mir.push(cur_mir_block);
+                    state.cur_mir_block =
+                        MirBlock::new(MirBlockType::Assignment);
                 }
-                                    
-                state.variable_ref_table.set_collection(
-                    var.1.get_token()?.into(),
-                    var_refs,
-                )?;
-                mir.push(state.cur_mir_block);
-                state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
-
-            } else {
-                state = compile_compute_expr(
-                    arg,
-                    state,
-                    None,
-                    false,
-                )?;
-
-                state
-                .cur_mir_block
-                .command_stack
-                .push(Command::new(OpCode::ClearStack, vec![]));
-    
-                let (cur_mir_block, cur_mem_pos, field_indexes) =
-                    state.cur_mir_block.into_assign_block(var_mem_pos + 2);
-        
-                state.variable_ref_table.set_primitive(
-                    var.1.get_token()?.into(),
-                    cur_mem_pos as u32,
-                    field_indexes,
-                )?;
-        
-                mir.push(cur_mir_block);
-                state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
             }
         }
     }
 
+    state.destroy_current_record_tracker();
     state.cur_mem_pos = 1 + state.used_variables.len() as u32;
     trace!("local variables map");
     trace!("{:#?}", state.variable_ref_table);
 
+    // panic!("Stop AFTER COMPILING DEFINE SECTION");
     Ok((mir, state))
 }
 
@@ -2240,7 +2504,7 @@ fn compile_apply_section(
                 state.cur_mem_pos += 1;
                 let orig_mem_pos = state.cur_mem_pos;
 
-                state.cur_mir_block.push_command(Command::new(
+                state.cur_mir_block.command_stack.push_back(Command::new(
                     OpCode::Label,
                     vec![CommandArg::Label(
                         format!("ENUM {}", match_action.get_name())
@@ -2265,14 +2529,14 @@ fn compile_apply_section(
                         variant.get_kind(),
                         symbols::SymbolKind::EnumVariant
                     );
-                    state.cur_mir_block.push_command(Command::new(
+                    state.push_command(
                         OpCode::Label,
                         vec![CommandArg::Label(
                             format!("VARIANT {}", variant.get_name())
                                 .as_str()
                                 .into(),
                         )],
-                    ));
+                    );
 
                     // Unpack the enum instance into the variant that we're
                     // handling currently. StackUnPackAsVariant will set
@@ -2287,25 +2551,19 @@ fn compile_apply_section(
                         // evaluation, and we don't want that. We want the
                         // enum instance underneath it.
                         if first_variant_done {
-                            state.cur_mir_block.push_command(Command::new(
-                                OpCode::PopStack,
-                                vec![],
-                            ))
+                            state.push_command(OpCode::PopStack, vec![])
                         }
-                        state.cur_mir_block.push_command(Command::new(
+                        state.push_command(
                             OpCode::StackIsVariant,
                             vec![CommandArg::Variant(variant_index)],
-                        ));
-                        state.cur_mir_block.push_command(Command::new(
+                        );
+                        state.push_command(
                             OpCode::CondFalseSkipToEOB,
                             vec![CommandArg::Variant(variant_index)],
-                        ));
+                        );
                         // If we're continuing then remove the variant
                         // boolean indication.
-                        state.cur_mir_block.push_command(Command::new(
-                            OpCode::PopStack,
-                            vec![],
-                        ));
+                        state.push_command(OpCode::PopStack, vec![]);
                     } else {
                         return Err(CompileError::from(format!(
                             "Expected an Enum Variant, but got a {:?}",
@@ -2380,11 +2638,9 @@ fn compile_apply_section(
                                         &enum_instance_code_block,
                                     )?;
 
-                                    state.cur_mir_block.push_command(
-                                        Command::new(
-                                            OpCode::CondFalseSkipToEOB,
-                                            vec![],
-                                        ),
+                                    state.push_command(
+                                        OpCode::CondFalseSkipToEOB,
+                                        vec![],
                                     );
                                     trace!("compile_term_section");
                                     trace!("{:#?}", state.cur_mir_block);
@@ -2438,7 +2694,7 @@ fn compile_apply_section(
                                         if let StackRefPos::MemPos(mem_pos) =
                                             stack_ref_pos
                                         {
-                                            state.cur_mir_block.command_stack.extend(vec![
+                                            state.extend_commands(vec![
                                                 Command::new(
                                                     OpCode::Label,
                                                     vec![CommandArg::Label(
@@ -2510,11 +2766,9 @@ fn compile_apply_section(
                         // action is either `Reject` or
                         // `Accept`.
                         if accept_reject != AcceptReject::NoReturn {
-                            state.cur_mir_block.command_stack.push(
-                                Command::new(
-                                    OpCode::Exit(accept_reject),
-                                    vec![],
-                                ),
+                            state.push_command(
+                                OpCode::Exit(accept_reject),
+                                vec![],
                             )
                         }
                     }
@@ -2541,7 +2795,7 @@ fn compile_apply_section(
                     // yes, it was, create a reference to the result on the stack
                     Some((_, stack_ref_pos)) => {
                         if let StackRefPos::MemPos(mem_pos) = stack_ref_pos {
-                            state.cur_mir_block.command_stack.extend(vec![
+                            state.extend_commands(vec![
                                 Command::new(
                                     OpCode::Label,
                                     vec![CommandArg::Label(
@@ -2594,7 +2848,7 @@ fn compile_apply_section(
 
                 match ma {
                     MatchActionType::FilterMatchAction => {
-                        state.cur_mir_block.command_stack.extend([
+                        state.extend_commands(vec![
                             Command::new(
                                 OpCode::Label,
                                 vec![CommandArg::Label(
@@ -2611,7 +2865,7 @@ fn compile_apply_section(
                         ]);
                     }
                     MatchActionType::NegateMatchAction => {
-                        state.cur_mir_block.command_stack.extend(vec![
+                        state.extend_commands(vec![
                             Command::new(
                                 OpCode::Label,
                                 vec![CommandArg::Label(
@@ -2651,10 +2905,7 @@ fn compile_apply_section(
         // Add an early return if the type of the match action is either `Reject` or
         // `Accept`.
         if accept_reject != AcceptReject::NoReturn {
-            state
-                .cur_mir_block
-                .command_stack
-                .push(Command::new(OpCode::Exit(accept_reject), vec![]))
+            state.push_command(OpCode::Exit(accept_reject), vec![])
         }
 
         // move the current mir block to the end of all the collected MIR.
@@ -2709,10 +2960,7 @@ fn compile_match_action<'a>(
         // Add an early return if the type of the match action is either `Reject` or
         // `Accept`.
         if accept_reject != AcceptReject::NoReturn {
-            state
-                .cur_mir_block
-                .command_stack
-                .push(Command::new(OpCode::Exit(accept_reject), vec![]))
+            state.push_command(OpCode::Exit(accept_reject), vec![])
         }
     }
 
@@ -2802,17 +3050,16 @@ fn compile_term_section<'a>(
         }
     }
 
-    state.cur_mir_block.push_command(Command::new(
+    state.push_command(
         OpCode::Label,
         vec![CommandArg::Label(
             format!("TERM SECTION {}", term_section.get_name())
                 .as_str()
                 .into(),
         )],
-    ));
+    );
 
     let terms = term_section.get_args();
-    trace!("TERMS {:#?}", terms);
     let mut terms = terms.iter().peekable();
 
     while let Some(arg) = &mut terms.next() {
@@ -2826,7 +3073,7 @@ fn compile_term_section<'a>(
             state
                 .cur_mir_block
                 .command_stack
-                .push(Command::new(OpCode::CondFalseSkipToEOB, vec![]));
+                .push_back(Command::new(OpCode::CondFalseSkipToEOB, vec![]));
         }
     }
 
@@ -2838,17 +3085,23 @@ fn compile_term<'a>(
     mut state: CompilerState<'a>,
 ) -> Result<CompilerState<'a>, CompileError> {
     let saved_mem_pos = state.cur_mem_pos;
+
     match term.get_kind() {
         SymbolKind::CompareExpr(op) => {
             let args = term.get_args();
+            trace!("COMPILE TERM BEFORE ARG 0 {:?}", args[0]);
             state = compile_compute_expr(&args[0], state, None, false)?;
             state.cur_mem_pos += 1;
+            trace!("COMPILE TERM AFTER ARG 0 {:?}", args[0]);
+            trace!("COMPILE TERM BEFORE ARG 1 {:?}", args[1]);
             state = compile_compute_expr(&args[1], state, None, false)?;
+            trace!("COMPILE TERM AFTER ARG 1 {:?}", args[1]);
+            trace!("MIR BLOCK {:?}", state.cur_mir_block);
 
             state
                 .cur_mir_block
                 .command_stack
-                .push(Command::new(OpCode::Cmp, vec![op.into()]));
+                .push_back(Command::new(OpCode::Cmp, vec![op.into()]));
         }
         SymbolKind::OrExpr => {
             let args = term.get_args();
@@ -2856,7 +3109,7 @@ fn compile_term<'a>(
             state.cur_mem_pos += 1;
             state = compile_term(&args[1], state)?;
 
-            state.cur_mir_block.push_command(Command::new(
+            state.cur_mir_block.command_stack.push_back(Command::new(
                 OpCode::Cmp,
                 vec![CommandArg::CompareOp(ast::CompareOp::Or)],
             ));
@@ -2867,15 +3120,16 @@ fn compile_term<'a>(
             state.cur_mem_pos += 1;
             state = compile_term(&args[1], state)?;
 
-            state.cur_mir_block.push_command(Command::new(
+            state.push_command(
                 OpCode::Cmp,
                 vec![CommandArg::CompareOp(ast::CompareOp::And)],
-            ));
+            );
         }
         SymbolKind::NotExpr => {
             todo!();
         }
         SymbolKind::ListCompareExpr(op) => {
+            trace!("list compare");
             let args = term.get_args();
             state.cur_mem_pos += 1;
             let orig_mem_pos = state.cur_mem_pos;
@@ -2888,15 +3142,15 @@ fn compile_term<'a>(
                 // retrieve the next value from the right hand list
                 state = compile_compute_expr(arg, state, None, false)?;
 
-                state.cur_mir_block.push_command(Command::new(
+                state.cur_mir_block.command_stack.push_back(Command::new(
                     OpCode::Cmp,
                     vec![CommandArg::CompareOp(op)],
                 ));
 
-                state
-                    .cur_mir_block
-                    .command_stack
-                    .push(Command::new(OpCode::CondTrueSkipToEOB, vec![]));
+                state.cur_mir_block.command_stack.push_back(Command::new(
+                    OpCode::CondTrueSkipToEOB,
+                    vec![],
+                ));
 
                 // restore old mem_pos, let's not waste memory
                 state.cur_mem_pos = orig_mem_pos;
@@ -2913,7 +3167,7 @@ fn compile_term<'a>(
             state.cur_mem_pos += 1;
             let orig_mem_pos = state.cur_mem_pos;
 
-            state.cur_mir_block.push_command(Command::new(
+            state.cur_mir_block.command_stack.push_back(Command::new(
                 OpCode::Label,
                 vec![CommandArg::Label(
                     format!("ENUM {}", term.get_name()).as_str().into(),
@@ -2924,7 +3178,7 @@ fn compile_term<'a>(
 
             let mut variants = variants.iter().peekable();
             while let Some(variant) = &mut variants.next() {
-                state.cur_mir_block.push_command(Command::new(
+                state.cur_mir_block.command_stack.push_back(Command::new(
                     OpCode::Label,
                     vec![CommandArg::Label(
                         format!("VARIANT_{}", variant.get_name())
@@ -2941,24 +3195,28 @@ fn compile_term<'a>(
 
                 if let Ok(Token::Variant(variant_index)) = variant.get_token()
                 {
-                    state.cur_mir_block.command_stack.push(Command::new(
-                        OpCode::StackIsVariant,
-                        vec![CommandArg::Variant(variant_index)],
-                    ));
+                    state.cur_mir_block.command_stack.push_back(
+                        Command::new(
+                            OpCode::StackIsVariant,
+                            vec![CommandArg::Variant(variant_index)],
+                        ),
+                    );
 
                     // The next label should be next variant, so if this is
                     // not the right variant, jump there.
-                    state.cur_mir_block.command_stack.push(Command::new(
-                        OpCode::CondFalseSkipToLabel,
-                        vec![CommandArg::Variant(variant_index)],
-                    ));
+                    state.cur_mir_block.command_stack.push_back(
+                        Command::new(
+                            OpCode::CondFalseSkipToLabel,
+                            vec![CommandArg::Variant(variant_index)],
+                        ),
+                    );
 
                     // Ok, we're continuing, so pop the StackIsVariant value
                     // from the stack.
                     state
                         .cur_mir_block
                         .command_stack
-                        .push(Command::new(OpCode::PopStack, vec![]));
+                        .push_back(Command::new(OpCode::PopStack, vec![]));
                 }
 
                 // compile term blocks for each variant.
@@ -2970,7 +3228,7 @@ fn compile_term<'a>(
                     state
                         .cur_mir_block
                         .command_stack
-                        .push(Command::new(OpCode::SkipToEOB, vec![]));
+                        .push_back(Command::new(OpCode::SkipToEOB, vec![]));
                 }
             }
 

@@ -1056,6 +1056,10 @@ pub trait EnumBytesRecord {
     ) -> bool;
 }
 
+pub trait RecordType: AsRef<[u8]> {
+    fn get_field_num() -> Option<usize>;
+}
+
 //------------ BytesRecord type ---------------------------------------------
 
 // A wrapper around routecore types, used to store into a TypeValue. The
@@ -1063,9 +1067,9 @@ pub trait EnumBytesRecord {
 // values does not happen here, but in the LazyRecord type.
 
 #[derive(Debug, Serialize)]
-pub struct BytesRecord<T: AsRef<[u8]>>(pub T);
+pub struct BytesRecord<T: RecordType>(pub T);
 
-impl<T: AsRef<[u8]> + std::fmt::Debug> BytesRecord<T> {
+impl<T: RecordType + std::fmt::Debug> BytesRecord<T> {
     pub(crate) fn bytes_parser(&self) -> &T {
         &self.0
     }
@@ -1082,25 +1086,26 @@ impl<T: AsRef<[u8]> + std::fmt::Debug> BytesRecord<T> {
     }
 }
 
-impl<T: AsRef<[u8]>> AsRef<[u8]> for BytesRecord<T> {
+impl<T: RecordType> AsRef<[u8]> for BytesRecord<T> {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
     }
 }
 
-impl<T: AsRef<[u8]>> Eq for BytesRecord<T> {}
+impl<T: RecordType> Eq for BytesRecord<T> {}
 
-impl<T: AsRef<[u8]>> PartialEq for BytesRecord<T> {
+impl<T: RecordType> PartialEq for BytesRecord<T> {
     fn eq(&self, other: &Self) -> bool {
         self.0.as_ref() == other.0.as_ref()
     }
 }
 
-impl<T: AsRef<[u8]>> std::hash::Hash for BytesRecord<T> {
+impl<T: RecordType> std::hash::Hash for BytesRecord<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.as_ref().hash(state);
     }
 }
+
 
 //------------- LazyElementTypeValue type -----------------------------------
 
@@ -1110,13 +1115,13 @@ impl<T: AsRef<[u8]>> std::hash::Hash for BytesRecord<T> {
 // closures) of field values, to be called by the VM at runtime.
 
 #[allow(clippy::type_complexity)]
-pub enum LazyElementTypeValue<'a, T: AsRef<[u8]>> {
+pub enum LazyElementTypeValue<'a, T: RecordType> {
     LazyRecord(LazyRecord<'a, T>),
     Lazy(Box<dyn Fn(&BytesRecord<T>) -> ElementTypeValue + 'a>),
     Materialized(ElementTypeValue),
 }
 
-impl<T: std::fmt::Debug + AsRef<[u8]>> LazyElementTypeValue<'_, T> {
+impl<T: RecordType + std::fmt::Debug> LazyElementTypeValue<'_, T> {
     pub(crate) fn _into_materialized(
         self,
         raw_bytes: &BytesRecord<T>,
@@ -1147,7 +1152,7 @@ impl<T: std::fmt::Debug + AsRef<[u8]>> LazyElementTypeValue<'_, T> {
     }
 }
 
-impl<T: std::fmt::Debug + AsRef<[u8]>>
+impl<T: RecordType + std::fmt::Debug>
     From<(LazyElementTypeValue<'_, T>, &BytesRecord<T>)>
     for ElementTypeValue
 {
@@ -1164,7 +1169,7 @@ impl<T: std::fmt::Debug + AsRef<[u8]>>
     }
 }
 
-impl<T: std::fmt::Debug + AsRef<[u8]>>
+impl<T: std::fmt::Debug + RecordType>
     From<(&LazyElementTypeValue<'_, T>, &BytesRecord<T>)>
     for ElementTypeValue
 {
@@ -1183,7 +1188,7 @@ impl<T: std::fmt::Debug + AsRef<[u8]>>
     }
 }
 
-impl<T: std::fmt::Debug + AsRef<[u8]>> std::fmt::Debug
+impl<T: RecordType + std::fmt::Debug> std::fmt::Debug
     for LazyElementTypeValue<'_, T>
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -1201,7 +1206,7 @@ impl<T: std::fmt::Debug + AsRef<[u8]>> std::fmt::Debug
     }
 }
 
-impl<T: AsRef<[u8]>> std::fmt::Display for LazyElementTypeValue<'_, T> {
+impl<T: RecordType> std::fmt::Display for LazyElementTypeValue<'_, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let LazyElementTypeValue::Materialized(mat_v) = self {
             write!(f, "{}", mat_v)
@@ -1211,7 +1216,7 @@ impl<T: AsRef<[u8]>> std::fmt::Display for LazyElementTypeValue<'_, T> {
     }
 }
 
-impl<'a, T: AsRef<[u8]> + std::fmt::Debug> LazyElementTypeValue<'a, T> {
+impl<'a, T: RecordType + std::fmt::Debug> LazyElementTypeValue<'a, T> {
     pub(crate) fn _as_materialized(
         &'a self,
         raw_bytes: BytesRecord<T>,
@@ -1239,13 +1244,13 @@ impl<'a, T: AsRef<[u8]> + std::fmt::Debug> LazyElementTypeValue<'a, T> {
 // the LazyRecord itself cannot be stored into a TypeValue variant.
 
 #[derive(Debug)]
-pub struct LazyRecord<'a, T: AsRef<[u8]>> {
+pub struct LazyRecord<'a, T: RecordType> {
     value: LazyNamedTypeDef<'a, T>,
     _is_materialized: bool,
     _raw_message: PhantomData<T>,
 }
 
-impl<'a, T: std::fmt::Debug + AsRef<[u8]>> LazyRecord<'a, T> {
+impl<'a, T: std::fmt::Debug + RecordType> LazyRecord<'a, T> {
     pub(crate) fn new(value: LazyNamedTypeDef<'a, T>) -> Self {
         LazyRecord {
             value,
@@ -1322,7 +1327,7 @@ impl<'a, T: std::fmt::Debug + AsRef<[u8]>> LazyRecord<'a, T> {
     }
 }
 
-impl<T: AsRef<[u8]>> Display for LazyRecord<'_, T> {
+impl<T: RecordType> Display for LazyRecord<'_, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{{")?;
         for (i, (field, elm)) in self.value.iter().enumerate() {
@@ -1336,7 +1341,7 @@ impl<T: AsRef<[u8]>> Display for LazyRecord<'_, T> {
     }
 }
 
-impl<T: std::fmt::Debug + AsRef<[u8]>>
+impl<T: std::fmt::Debug + RecordType>
     From<(&LazyRecord<'_, T>, &BytesRecord<T>)> for Record
 {
     fn from(value: (&LazyRecord<T>, &BytesRecord<T>)) -> Self {
@@ -1353,7 +1358,7 @@ impl<T: std::fmt::Debug + AsRef<[u8]>>
     }
 }
 
-impl<T: std::fmt::Debug + AsRef<[u8]>>
+impl<T: std::fmt::Debug + RecordType>
     From<(LazyRecord<'_, T>, &BytesRecord<T>)> for TypeValue
 {
     fn from(value: (LazyRecord<T>, &BytesRecord<T>)) -> Self {

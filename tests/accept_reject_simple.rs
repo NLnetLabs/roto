@@ -27,10 +27,13 @@ fn test_data(
         &payload_type,
         vec![("asn", Asn::from(65534_u32).into())],
     )?;
-    let ds_ref = roto_pack.data_sources;
+
+    for mb in roto_pack.get_mir().iter() {
+        println!("{}", mb);
+    }
 
     let mut vm = vm::VmBuilder::new()
-        .with_data_sources(ds_ref)
+        .with_data_sources(roto_pack.data_sources)
         .with_mir_code(roto_pack.mir)
         .build()?;
 

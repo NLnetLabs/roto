@@ -335,8 +335,8 @@ fn test_records_compare_11() {
 fn test_records_compare_12() {
     common::init();
     let src_line = src_code(
-        "D { asn: AS99, i: { f: 100, g: AS24, h: { k: 86400, l: 2 } }, d: 400 }",
-        "100 in [a.i.f,2,3,4,5]; // Peer Down",
+        "D { asn: AS99, i: { f: 86400, g: AS24, h: { l:2, k: 100 } }, d: 400 }",
+        "100 in [a.i.h.k,2,3,4,5]; // Peer Down",
         "reject",
     );
     let test_run = test_data(FilterMap("in-filter-map".into()), &src_line);

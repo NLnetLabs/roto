@@ -1,7 +1,7 @@
 use log::trace;
 use serde::Serialize;
 
-use super::typedef::{MethodProps, TypeDef, RecordTypeDef};
+use super::{typedef::{MethodProps, TypeDef, RecordTypeDef}, collections::RecordType};
 use crate::{
     ast::Identifier, compile::CompileError, traits::Token,
     types::builtin::BytesRecord,
@@ -21,6 +21,13 @@ pub type PeerDownNotification =
     routecore::bmp::message::PeerDownNotification<bytes::Bytes>;
 pub type TerminationMessage =
     routecore::bmp::message::TerminationMessage<bytes::Bytes>;
+
+
+impl RecordType for BmpMessage {
+    fn get_field_num() -> Option<usize> {
+        Some(1)
+    }
+}
 
 // This is the complete enumeration of all Lazy Record types available to
 // roto users. Note that this does *NOT* include BgpMessage, which is a
@@ -52,6 +59,26 @@ impl LazyRecordTypeDef {
             }
             LazyRecordTypeDef::PeerDownNotification => {
                 BytesRecord::<PeerDownNotification>::type_def()
+            }
+            LazyRecordTypeDef::RouteMirroring => todo!(),
+            LazyRecordTypeDef::TerminationMessage => todo!(),
+        }
+    }
+
+    pub fn get_field_num(&self) -> Option<usize> {
+        match &self {
+            LazyRecordTypeDef::InitiationMessage => {
+                InitiationMessage::get_field_num()
+            },
+            LazyRecordTypeDef::RouteMonitoring => {
+                RouteMonitoring::get_field_num()
+            }
+            LazyRecordTypeDef::StatisticsReport => todo!(),
+            LazyRecordTypeDef::PeerUpNotification => {
+                PeerUpNotification::get_field_num()
+            }
+            LazyRecordTypeDef::PeerDownNotification => {
+                PeerDownNotification::get_field_num()
             }
             LazyRecordTypeDef::RouteMirroring => todo!(),
             LazyRecordTypeDef::TerminationMessage => todo!(),
