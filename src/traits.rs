@@ -5,7 +5,7 @@ use smallvec::SmallVec;
 
 use crate::{
     ast::ShortString,
-    compile::CompileError,
+    compiler::compile::CompileError,
     types::{
         collections::Record,
         datasources::DataSourceMethodValue,

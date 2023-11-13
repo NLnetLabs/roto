@@ -1,7 +1,7 @@
 use std::{
     cell::RefCell,
     cmp::Ordering,
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap},
     hash::Hash,
     rc::Rc,
 };
@@ -11,7 +11,7 @@ use log::trace;
 use crate::{
     ast::{AcceptReject, CompareOp, FilterType, Identifier, ShortString},
     blocks::Scope,
-    compile::CompileError,
+    compiler::compile::CompileError,
     traits::{RotoType, Token},
     types::{
         collections::{ElementTypeValue, Record},
@@ -624,9 +624,9 @@ impl Default for GlobalSymbolTable {
 pub(crate) struct DepsGraph<'a> {
     pub(crate) rx_type: Option<(ShortString, TypeDef)>,
     pub(crate) tx_type: Option<(ShortString, TypeDef)>,
-    pub(crate) used_variables: crate::compile::Variables<'a>,
+    pub(crate) used_variables: crate::compiler::compile::Variables<'a>,
     pub(crate) used_arguments: Vec<(ShortString, &'a Symbol)>,
-    pub(crate) used_data_sources: crate::compile::DataSources<'a>,
+    pub(crate) used_data_sources: crate::compiler::compile::DataSources<'a>,
 }
 
 // struct Location {

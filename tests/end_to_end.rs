@@ -1,6 +1,6 @@
 use log::trace;
 use roto::ast::AcceptReject;
-use roto::compile::Compiler;
+use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self, FilterMap, Filter};
 use roto::types::builtin::{Asn, Community};

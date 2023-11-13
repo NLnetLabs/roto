@@ -5,7 +5,7 @@ use roto::{
     ast::AcceptReject,
     blocks::Scope,
     blocks::Scope::{Filter, FilterMap},
-    compile::Compiler,
+    compiler::Compiler,
     types::{
         builtin::BytesRecord,
         collections::Record,

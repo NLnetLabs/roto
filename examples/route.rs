@@ -1,4 +1,4 @@
-use roto::compile::Compiler;
+use roto::compiler::Compiler;
 
 use roto::types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage, Prefix, RouteStatus};
 use roto::types::collections::Record;

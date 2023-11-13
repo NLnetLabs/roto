@@ -22,7 +22,7 @@ use nom::{
 use serde::{Serialize, Serializer};
 use smallvec::SmallVec;
 
-use crate::compile::CompileError;
+use crate::compiler::compile::CompileError;
 use crate::parse_string;
 use crate::types::builtin::{Asn, Boolean};
 

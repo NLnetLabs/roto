@@ -14,7 +14,7 @@ use crate::{
         TypedRecordValueExpr,
     },
     attr_change_set::ScalarValue,
-    compile::CompileError,
+    compiler::compile::CompileError,
     traits::RotoType,
     vm::{StackValue, VmError},
 };

@@ -3,7 +3,7 @@ use serde::Serialize;
 
 use super::{typedef::{MethodProps, TypeDef, RecordTypeDef}, collections::RecordType};
 use crate::{
-    ast::Identifier, compile::CompileError, traits::Token,
+    ast::Identifier, compiler::compile::CompileError, traits::Token,
     types::builtin::BytesRecord,
 };
 

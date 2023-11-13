@@ -1,7 +1,7 @@
 use log::trace;
 use nom::error::convert_error;
 use roto::{
-    compile::{CompileError, Compiler}, blocks::Scope,
+    compiler::{CompileError, Compiler}, blocks::Scope,
 };
 
 pub struct TestCompiler<'a> {

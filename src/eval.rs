@@ -8,7 +8,7 @@ use crate::ast::MatchOperator;
 use crate::ast::ShortString;
 use crate::ast::TypeIdentField;
 use crate::blocks::Scope;
-use crate::compile::CompileError;
+use crate::compiler::compile::CompileError;
 use crate::symbols::GlobalSymbolTable;
 use crate::symbols::MatchActionType;
 use crate::symbols::Symbol;

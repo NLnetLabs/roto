@@ -3,7 +3,7 @@ use serde::Serialize;
 
 use crate::{
     ast::ShortString,
-    compile::CompileError,
+    compiler::compile::CompileError,
     traits::RotoType,
     types::{
         typedef::{MethodProps, TypeDef},

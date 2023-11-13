@@ -23,7 +23,7 @@ pub type LogicalTime = u64;
 use crate::{
     ast::StringLiteral,
     attr_change_set::{ReadOnlyScalarOption, Todo},
-    compile::CompileError,
+    compiler::compile::CompileError,
     traits::{RotoType, Token},
     types::{
         builtin::Boolean,

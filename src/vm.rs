@@ -9,7 +9,7 @@ use std::{
 
 use crate::{
     ast::{self, AcceptReject, CompareOp, ShortString},
-    compile::{CompileError, MirBlock},
+    compiler::compile::{CompileError, MirBlock},
     traits::{RotoType, Token},
     types::{
         builtin::{Boolean, BuiltinTypeValue},
@@ -83,7 +83,10 @@ impl<'a> Stack {
         self.0.last().ok_or(VmError::StackUnderflow)
     }
 
-    fn add_index_to_field_index(&mut self, index: usize) -> Result<(), VmError> {
+    fn add_index_to_field_index(
+        &mut self,
+        index: usize,
+    ) -> Result<(), VmError> {
         self.0
             .last_mut()
             .ok_or(VmError::StackUnderflow)?
@@ -92,14 +95,17 @@ impl<'a> Stack {
         Ok(())
     }
 
-    fn push_with_field_index(&mut self, field_index: SmallVec<[usize; 8]>) -> Result<(), VmError> {
+    fn push_with_field_index(
+        &mut self,
+        field_index: SmallVec<[usize; 8]>,
+    ) -> Result<(), VmError> {
         self.0
             .last_mut()
             .ok_or(VmError::StackUnderflow)?
             .field_index = field_index;
         Ok(())
     }
-    
+
     fn unwind(&mut self) -> Vec<StackRef> {
         std::mem::take(&mut self.0)
     }
@@ -261,9 +267,8 @@ impl LinearMemory {
                         TypeValue::Builtin(
                             BuiltinTypeValue::Communities(_),
                         ) => Some(StackValue::Ref(tv)),
-                        // Clone all other builtins, they're cheap to clone
-                        // (all copy) and the result is smaller than a
-                        // pointer
+                        // Clone all other built-ins, they're cheap to clone
+                        // (all copy) and the result is smaller than a pointer
                         TypeValue::Builtin(_) => {
                             trace!("builtin copy {}", tv);
                             Some(StackValue::Owned(tv.clone()))
@@ -393,9 +398,8 @@ impl LinearMemory {
                         TypeValue::Builtin(
                             BuiltinTypeValue::Communities(_),
                         ) => Some(StackValue::Ref(tv)),
-                        // Clone all other builtins, they're cheap to clone
-                        // (all copy) and the result is smaller than a
-                        // pointer
+                        // Clone all other built-ins, they're cheap to clone
+                        // (all copy) and the result is smaller than a pointer
                         TypeValue::Builtin(_) => {
                             trace!("builtin copy {}", tv);
                             Some(StackValue::Owned(tv.clone()))
@@ -410,8 +414,8 @@ impl LinearMemory {
     }
 
     // Return a TypeValue if the memory holds the enum variant specified by
-    // the varian_token. If the memory position holds an enum, but not of
-    // the specified variant, then return TypeValue::Unknown.
+    // the varian_token. If the memory position holds an enum, but not of the
+    // specified variant, then return TypeValue::Unknown.
     pub fn get_mp_as_variant_or_unknown(
         &self,
         mem_pos: usize,
@@ -991,21 +995,16 @@ pub fn compute_hash(
 // section to memory positions in the VM.
 #[derive(Debug, Clone)]
 pub(crate) struct CompiledPrimitiveField {
-    // pub var_token_value: usize,
-    // mem_pos: u32,
-    name: ShortString,
     field_index: SmallVec<[usize; 8]>,
     commands: Vec<Command>,
 }
 
 impl CompiledPrimitiveField {
     pub fn new(
-        name: ShortString,
         commands: Vec<Command>,
         field_index: SmallVec<[usize; 8]>,
     ) -> Self {
         Self {
-            name,
             commands,
             field_index,
         }
@@ -1026,63 +1025,23 @@ impl CompiledPrimitiveField {
     pub fn get_field_index(&self) -> &SmallVec<[usize; 8]> {
         &self.field_index
     }
-
-    pub fn push_first_index(&mut self, index: usize) {
-        self.field_index.insert(index, 0);
-    }
-
-    pub fn push_index(&mut self, index: usize) {
-        self.field_index.push(index);
-    }
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct CompiledCollectionField {
-    // var_token_value: usize,
-    name: ShortString,
     field_index: SmallVec<[usize; 8]>,
-    field_num: usize,
 }
 
 impl CompiledCollectionField {
     pub(crate) fn new(
-        name: ShortString,
         field_index: SmallVec<[usize; 8]>,
-        field_num: usize
     ) -> Self {
-        Self { name, field_index, field_num }
-    }
-
-    pub(crate) fn get_name(&self) -> &ShortString {
-        &self.name
+        Self { field_index }
     }
 
     pub(crate) fn get_field_index(&self) -> &SmallVec<[usize; 8]> {
         &self.field_index
     }
-
-    pub(crate) fn push_first_index(&mut self, index: usize) {
-        self.field_index.insert(index, 0);
-    }
-
-    pub(crate) fn push_index(&mut self, index: usize) {
-        self.field_index.push(index);
-    }
-    // pub(crate) fn push_primitive(&mut self, primitive: PrimitiveRef) {
-    //     self.var_refs.push(VariableRef::Primitive(primitive))
-    // }
-
-    // pub(crate) fn push_collection(&mut self, name: ShortString) {
-    //     self.var_refs.push(VariableRef::Collection(CollectionRef::new(name)))
-    // }
-
-    // pub(crate) fn iter(&self) -> std::slice::Iter<'_, VariableRef> {
-    //     self.var_refs.iter()
-    // }
-
-    // pub(crate) fn last(&mut self) -> Option<&mut VariableRef> {
-    //     self.var_refs.last_mut()
-    // }
 }
 
 #[derive(Debug, Clone)]
@@ -1126,7 +1085,6 @@ impl CompiledVariable {
 
         acc_commands
     }
-
 
     pub fn get_commands_for_field_index(
         &self,
@@ -1221,10 +1179,15 @@ impl VariablesRefTable {
         // }).cloned()
     }
 
-    pub(crate) fn get_by_token(&self, index: &Option<Token>) -> Option<CompiledVariable> {
+    pub(crate) fn get_by_token(
+        &self,
+        index: &Option<Token>,
+    ) -> Option<CompiledVariable> {
         if let Some(index) = index {
             self.0.get(&index).cloned()
-        } else { None }
+        } else {
+            None
+        }
     }
 
     // pub(crate) fn append_primitive(
@@ -1253,7 +1216,7 @@ impl VariablesRefTable {
     pub(crate) fn set_primitive(
         &mut self,
         var_token_value: usize,
-        name: ShortString,
+        // name: ShortString,
         commands: Vec<Command>,
         field_index: SmallVec<[usize; 8]>,
     ) -> Result<(), CompileError> {
@@ -1265,7 +1228,7 @@ impl VariablesRefTable {
         self.0.insert(
             Token::Variable(var_token_value),
             CompiledPrimitiveField {
-                name,
+                // name,
                 commands,
                 field_index,
             }
@@ -1900,53 +1863,60 @@ impl<
                         trace!("\nargs_len {}", args_len);
                         trace!("Stack {:?}", stack);
 
-                        let mut stack_args =
-                            (0..args_len)
-                                .map(|_i| {
-                                    let sr = stack.pop().unwrap();
+                        let mut stack_args = (0..args_len)
+                            .map(|_i| {
+                                let sr = stack.pop().unwrap();
 
-                                    target_field_index =
-                                        if target_field_index.is_empty() {
-                                            sr.field_index
-                                        } else {
-                                            target_field_index.clone()
-                                        };
+                                target_field_index =
+                                    if target_field_index.is_empty() {
+                                        sr.field_index
+                                    } else {
+                                        target_field_index.clone()
+                                    };
 
-                                    match sr.pos {
-                                StackRefPos::MemPos(pos) => {
-                                    mem
+                                match sr.pos {
+                                    StackRefPos::MemPos(pos) => mem
                                         .get_mem_pos_as_owned(pos as usize)
                                         .unwrap_or_else(|| {
                                             trace!("\nstack: {:?}", stack);
                                             trace!("mem: {:#?}", mem.0);
-                                            panic!(r#"Uninitialized memory in 
-                                                pos {}. That's fatal"#, pos);
-                                        })
-                                }
-                                StackRefPos::TablePos(_token, _pos) => {
-                                    panic!(r#"Can't mutate data in a data \
-                                    source. That's fatal."#);
-                                }
-                                StackRefPos::CompareResult(_res) => {
-                                    panic!("Fatal: Can't mutate a compare \
-                                    result.");
-                                }
-                                StackRefPos::ConstantIndex(_c) => {
-                                    panic!("Fatal: can't mutate a constant.");
-                                }
-                                StackRefPos::ConstantValue(_v) => {
-                                    mem
+                                            panic!(
+                                                r#"Uninitialized memory in 
+                                                pos {}. That's fatal"#,
+                                                pos
+                                            );
+                                        }),
+                                    StackRefPos::TablePos(_token, _pos) => {
+                                        panic!(
+                                            r#"Can't mutate data in a data \
+                                    source. That's fatal."#
+                                        );
+                                    }
+                                    StackRefPos::CompareResult(_res) => {
+                                        panic!(
+                                            "Fatal: Can't mutate a compare \
+                                    result."
+                                        );
+                                    }
+                                    StackRefPos::ConstantIndex(_c) => {
+                                        panic!(
+                                            "Fatal: can't mutate a constant."
+                                        );
+                                    }
+                                    StackRefPos::ConstantValue(_v) => mem
                                         .get_mem_pos_as_owned(mem_pos)
                                         .unwrap_or_else(|| {
                                             trace!("\nstack: {:?}", stack);
                                             trace!("mem: {:#?}", mem.0);
-                                            panic!(r#"Uninitialized memory in 
-                                                pos {}. That's fatal"#, mem_pos);
-                                        })
+                                            panic!(
+                                                r#"Uninitialized memory in 
+                                                pos {}. That's fatal"#,
+                                                mem_pos
+                                            );
+                                        }),
                                 }
-                            }
-                                })
-                                .collect::<Vec<_>>();
+                            })
+                            .collect::<Vec<_>>();
 
                         // The first value on the stack is the value which we
                         // are going to call a method with.
@@ -2088,9 +2058,7 @@ impl<
                     // args: [data_source_token, method_token, arguments] The
                     // result of this method will be pushed to the stack.
                     OpCode::ExecuteDataStoreMethod => {
-                        let mem_pos = if let CommandArg::MemPos(pos) =
-                            args.pop().unwrap()
-                        {
+                        if let CommandArg::MemPos(pos) = args.pop().unwrap() {
                             *pos as usize
                         } else {
                             return Err(VmError::InvalidValueType);
@@ -2130,15 +2098,18 @@ impl<
                                     }
                                     DataSourceMethodValue::TypeValue(tv) => {
                                         // mem.set_mem_pos(mem_pos, tv);
-                                        s.push(StackRefPos::ConstantValue(tv))?;
+                                        s.push(StackRefPos::ConstantValue(
+                                            tv,
+                                        ))?;
                                     }
                                     DataSourceMethodValue::Empty(_ty) => {
                                         // mem.set_mem_pos(
                                         //     mem_pos,
                                         //     TypeValue::Unknown,
                                         // );
-                                        s.push(StackRefPos::ConstantValue(TypeValue::Unknown))?;
-
+                                        s.push(StackRefPos::ConstantValue(
+                                            TypeValue::Unknown,
+                                        ))?;
                                     }
                                 }
                             }
@@ -2227,21 +2198,28 @@ impl<
                         match args.next() {
                             Some(CommandArg::FieldAccess(_field)) => {
                                 for arg in args {
-                                    if let CommandArg::FieldAccess(field) = arg {
+                                    if let CommandArg::FieldAccess(field) =
+                                        arg
+                                    {
                                         let mut s = self.stack.borrow_mut();
                                         s.add_index_to_field_index(*field)?;
                                     } else {
-                                        return Err(VmError::InvalidValueType);
+                                        return Err(
+                                            VmError::InvalidValueType,
+                                        );
                                     }
                                 }
-                            },
+                            }
                             Some(CommandArg::FieldIndex(field_index)) => {
                                 let mut s = self.stack.borrow_mut();
-                                s.push_with_field_index(std::mem::take(field_index))?;
-                            },
-                            _ => { return Err(VmError::InvalidValueType); }
+                                s.push_with_field_index(std::mem::take(
+                                    field_index,
+                                ))?;
+                            }
+                            _ => {
+                                return Err(VmError::InvalidValueType);
+                            }
                         };
-                         
                     }
                     // stack args: []
                     OpCode::StackIsVariant => {
@@ -3013,7 +2991,7 @@ pub enum OpCode {
     PopStack,
     PushStack,
     ClearStack,
-    // Assumes the top of the stack is a Vec of typevalues, and modifies the
+    // Assumes the top of the stack is a Vec of type values, and modifies the
     // value on the top of the stack to the element that is indexed by the
     // first argument is receives. It will recurse into that element if their
     // is a next argument, and repeats that until the arguments are exhausted.

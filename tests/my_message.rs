@@ -1,5 +1,5 @@
 use log::trace;
-use roto::compile::Compiler;
+use roto::compiler::Compiler;
 
 use roto::blocks::Scope;
 use roto::types::builtin::{Asn, Community};

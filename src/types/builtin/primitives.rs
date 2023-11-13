@@ -9,7 +9,7 @@ use serde::ser::SerializeSeq;
 use serde::{Serialize, Serializer};
 
 use crate::attr_change_set::VectorValue;
-use crate::compile::CompileError;
+use crate::compiler::compile::CompileError;
 use crate::traits::RotoType;
 use crate::types::collections::{ElementTypeValue, List};
 use crate::types::enum_types::EnumVariant;

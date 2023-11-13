@@ -6,7 +6,7 @@ use smallvec::SmallVec;
 use crate::{
     ast::ShortString,
     bytes_record_impl,
-    compile::CompileError,
+    compiler::compile::CompileError,
     createtoken, lazyelmtypevalue, lazyenum, lazyfield, lazyrecord,
     traits::Token,
     types::{

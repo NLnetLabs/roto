@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use log::trace;
 use roto::ast::AcceptReject;
-use roto::compile::Compiler;
+use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self, FilterMap};
 use roto::types::builtin::{BgpUpdateMessage, RotondaId, UpdateMessage};

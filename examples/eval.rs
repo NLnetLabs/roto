@@ -1,4 +1,4 @@
-use roto::compile::Compiler;
+use roto::compiler::compile::Compiler;
 
 use roto::types::builtin::{
     self, Asn, BuiltinTypeValue, Community, U32,

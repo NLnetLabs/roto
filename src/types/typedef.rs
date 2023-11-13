@@ -8,7 +8,7 @@ use log::trace;
 use serde::Serialize;
 use smallvec::SmallVec;
 
-use crate::compile::CompileError;
+use crate::compiler::compile::CompileError;
 use crate::traits::Token;
 use crate::typedefconversion;
 use crate::types::builtin::BgpUpdateMessage;

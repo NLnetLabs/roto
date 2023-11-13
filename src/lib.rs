@@ -1,6 +1,5 @@
 pub mod ast;
 mod attr_change_set;
-pub mod compile;
 pub mod eval;
 mod parse_string;
 mod symbols;
@@ -8,3 +7,4 @@ mod traits;
 pub mod types;
 pub mod vm;
 pub mod blocks;
+pub mod compiler;

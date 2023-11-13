@@ -7,7 +7,7 @@ use routecore::bgp::types::{AFI, SAFI};
 use routecore::bmp::message::MessageType;
 use serde::Serialize;
 
-use crate::compile::CompileError;
+use crate::compiler::compile::CompileError;
 use crate::types::builtin::BytesRecord;
 use crate::types::lazyrecord_types::BmpMessage;
 use crate::vm::VmError;
@@ -58,7 +58,7 @@ where
     fn get_props_for_method(
         _ty: super::typedef::TypeDef,
         _method_name: &crate::ast::Identifier,
-    ) -> Result<super::typedef::MethodProps, crate::compile::CompileError>
+    ) -> Result<super::typedef::MethodProps, CompileError>
     where
         Self: std::marker::Sized,
     {
@@ -68,7 +68,7 @@ where
     fn into_type(
         self,
         type_def: &super::typedef::TypeDef,
-    ) -> Result<super::typevalue::TypeValue, crate::compile::CompileError>
+    ) -> Result<super::typevalue::TypeValue, CompileError>
     where
         Self: std::marker::Sized,
     {

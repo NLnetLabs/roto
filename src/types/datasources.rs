@@ -104,7 +104,7 @@ use smallvec::SmallVec;
 
 use crate::{
     ast::ShortString,
-    compile::CompileError,
+    compiler::compile::CompileError,
     traits::{RotoRib, Token},
     vm::{StackRefPos, StackValue, VmError},
 };

@@ -7,7 +7,7 @@ use crate::ast::{
     AnonymousRecordValueExpr, Identifier, ListValueExpr, ShortString,
     TypedRecordValueExpr, ValueExpr,
 };
-use crate::compile::CompileError;
+use crate::compiler::compile::CompileError;
 use crate::traits::{RotoType, Token};
 use crate::vm::{StackValue, VmError};
 use std::fmt::{Display, Formatter};

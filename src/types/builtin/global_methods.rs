@@ -1,7 +1,7 @@
 //------------ Global Methods type ----------------------------------------------
 
 use crate::{
-    compile::CompileError,
+    compiler::compile::CompileError,
     traits::RotoType,
     types::{
         typedef::{MethodProps, TypeDef},
