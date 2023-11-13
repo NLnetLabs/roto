@@ -1,6 +1,7 @@
 // =========== RotoFilter trait ============================================
 
 use serde::Serialize;
+use smallvec::SmallVec;
 
 use crate::{
     ast::ShortString,
@@ -31,7 +32,7 @@ pub enum Token {
     // Idem but for Terms
     TermArgument(usize, usize),
     // There can only ever be one RxType
-    RxType,
+    RxType(TypeDef),
     // There can only ever be one TxType too
     TxType,
     // External Data Sources
@@ -83,6 +84,14 @@ impl Token {
         }
     }
 
+    pub fn is_term(&self) -> bool {
+        matches!(self, Token::TermSection(_))
+    }
+
+    pub fn is_action(&self) -> bool {
+        matches!(self, Token::ActionSection(_))
+    }
+
     pub fn is_variable(&self) -> bool {
         matches!(self, Token::Variable(_))
     }
@@ -102,7 +111,7 @@ impl From<Token> for usize {
             Token::Table(v) | Token::Rib(v) => v,
             Token::Method(v) => v,
             Token::Variable(v) => v,
-            Token::RxType => 0,
+            Token::RxType(_) => 0,
             Token::TxType => 1,
             Token::Variant(v) => v,
             _ => {
@@ -111,6 +120,24 @@ impl From<Token> for usize {
                     token
                 );
             }
+        }
+    }
+}
+
+// impl From for Field Index.
+impl TryFrom<Token> for SmallVec<[usize; 8]> {
+    type Error = CompileError;
+
+    fn try_from(value: Token) -> Result<Self, Self::Error> {
+        if let Token::FieldAccess(fa) = value {
+            Ok(fa.iter().map(|fi| *fi as usize).collect::<Vec<_>>().into())
+        } else { 
+            Err(CompileError::from(
+                format!(
+                    "Cannot convert token {:?} into FieldIndex",
+                    value
+                ))
+            )
         }
     }
 }

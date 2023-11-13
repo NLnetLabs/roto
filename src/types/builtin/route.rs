@@ -36,7 +36,7 @@ use crate::{
 
 use super::{
     AsPath, Asn, BuiltinTypeValue, IpAddress, NextHop, OriginType, Prefix,
-    RouteStatus,
+    RouteStatus, BytesRecord,
 };
 use crate::attr_change_set::{
     AttrChangeSet, ScalarOption, ScalarValue, VectorOption, VectorValue,
@@ -389,6 +389,8 @@ impl RawRouteWithDeltas {
             .into()),
         }
     }
+
+    pub(crate) fn get_field_num() -> Option<usize> { Some(12) }
 
     pub(crate) fn get_value_ref_for_field(
         &self,

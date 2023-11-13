@@ -148,7 +148,6 @@ fn test_routes_1() {
 }
 
 #[test]
-#[ignore = "ignored, named records in method calls do not work yet."]
 fn test_routes_2() {
     common::init();
     let src = r#"
@@ -204,7 +203,6 @@ fn test_routes_2() {
 }
 
 #[test]
-#[ignore = "ignored, named, typed record do not work yet"]
 fn test_routes_3() {
     common::init();
     let src = r#"
@@ -260,7 +258,6 @@ fn test_routes_3() {
 }
 
 #[test]
-#[ignore = "todo, field aliasing in anonymous records does not work yet"]
 fn test_routes_4() {
     common::init();
     let src = r#"

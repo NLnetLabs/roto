@@ -694,7 +694,11 @@ impl<'a> CompilerState<'a> {
         if let Some(cur_rec_var) = &mut self.cur_record_variable {
             match cur_rec_var.iter_mut().last() {
                 Some(CompiledField::Primitive(p)) => {
-                    if let Some(CommandArg::ConstantValue(_)) = args.get(0) {
+                    if let Some(
+                        CommandArg::ConstantValue(_)
+                        | CommandArg::FieldIndex(_),
+                    ) = args.get(0)
+                    {
                         if let Some(field_name) =
                             self.cur_record_field_name.clone()
                         {
@@ -725,10 +729,11 @@ impl<'a> CompilerState<'a> {
                 }
             }
         }
-        trace!("cur_rec_var {:?}", self.cur_record_variable);
+        trace!("after push cur_rec_var {:?}", self.cur_record_variable);
         self.cur_mir_block
             .command_stack
             .push_back(Command::new(op, args));
+        trace!("after push cur_mir_block {:?}", self.cur_mir_block);
     }
 
     pub(crate) fn extend_commands(&mut self, commands: Vec<Command>) {
@@ -1096,7 +1101,16 @@ impl MirBlock {
                     None
                 }
                 OpCode::StackOffset if !method_encountered => {
-                    field_indexes.push((&c.args[0]).into());
+                    match &c.args[0] {
+                        CommandArg::FieldAccess(fa) => {
+                            field_indexes.push(*fa);
+                        }
+                        CommandArg::FieldIndex(fa) => {
+                            field_indexes = fa.clone();
+                        },
+                        _ => { panic!("Invalid Command Argument {:?}", c.args[0]); }
+                    }
+                    
                     None
                 }
                 OpCode::ExecuteValueMethod
@@ -1182,7 +1196,7 @@ fn generate_code_for_token_value(
     token: Token,
 ) -> Vec<Command> {
     match token {
-        Token::RxType => {
+        Token::RxType(_) => {
             vec![Command::new(OpCode::PushStack, vec![CommandArg::MemPos(0)])]
         }
         Token::TxType => {
@@ -1411,6 +1425,7 @@ fn compile_compute_expr<'a>(
             assert!(is_ar);
             assert!(symbol.get_kind() != SymbolKind::VariableAssignment);
 
+            trace!("var ref table {:#?}", state.variable_ref_table);
             let var_ref =
                 state.variable_ref_table.get_by_token_value(var_to).unwrap();
 
@@ -1436,6 +1451,7 @@ fn compile_compute_expr<'a>(
                 _ty => {
                     match var_type.get_field_num() {
                         Some(n) => {
+                            trace!("get_field_num {} ty {}", n, _ty);
                             state.append_collection_to_record_tracker(
                                 CompiledCollectionField::new(
                                     symbol.get_name(),
@@ -1511,10 +1527,58 @@ fn compile_compute_expr<'a>(
             trace!("VARIANT {}", _var_to);
         }
         // rx instance reference
-        Token::RxType => {
+        Token::RxType(_) => {
             assert!(is_ar);
-            state
-                .push_command(OpCode::PushStack, vec![CommandArg::MemPos(0)]);
+            match symbol.get_args() {
+                a if a.is_empty() => {
+                    state.push_command(
+                        OpCode::PushStack,
+                        vec![CommandArg::MemPos(0)],
+                    );
+                    return Ok(state);
+                }
+                args => {
+                    trace!("commands for RxType named {}", symbol.get_name());
+                    state.cur_record_field_name = Some(args[0].get_name());
+                    if let Some(v) = state.cur_record_variable.as_mut() {
+                        v.append_primitive(
+                            crate::vm::CompiledPrimitiveField::new(
+                                state.cur_record_field_name.clone().unwrap(),
+                                vec![
+                                    Command::new(
+                                        OpCode::PushStack,
+                                        vec![CommandArg::MemPos(0)],
+                                    ),
+                                    Command::new(
+                                        OpCode::StackOffset,
+                                        vec![CommandArg::FieldIndex(
+                                            args[0]
+                                                .get_token()?
+                                                .try_into()?,
+                                        )],
+                                    ),
+                                ],
+                                state.cur_record_field_index.clone(),
+                            ),
+                        )
+                    } else {
+                        state.cur_mir_block.extend(vec![
+                            Command::new(
+                                OpCode::PushStack,
+                                vec![CommandArg::MemPos(0)],
+                            ),
+                            Command::new(
+                                OpCode::StackOffset,
+                                vec![CommandArg::FieldIndex(
+                                    args[0].get_token()?.try_into()?,
+                                )],
+                            ),
+                        ]);
+                    };
+                    trace!("field {:?} done.", args[0].get_name());
+                    return Ok(state);
+                }
+            }
         }
         // tx instance reference
         Token::TxType => {
@@ -1734,7 +1798,7 @@ fn compile_compute_expr<'a>(
                 | Token::Argument(_)
                 | Token::ActionArgument(_, _)
                 | Token::TermArgument(_, _)
-                | Token::RxType
+                | Token::RxType(_)
                 | Token::TxType
                 | Token::Constant(_) => {
                     match kind {
@@ -1945,12 +2009,6 @@ fn compile_compute_expr<'a>(
                 // code will be invoked from `compile_assignments`.
                 _ if state.cur_record_variable.is_some() => {
                     trace!("FIELD ACCESS PARENT TOKEN {:#?}", parent_token);
-                    trace!("current symbol {:#?}", symbol);
-                    trace!("fa {:?}", fa);
-                    trace!(
-                        "cur_record_variable {:?}",
-                        state.cur_record_variable
-                    );
                     if let Some(var_refs) = &state.cur_record_variable {
                         if let Ok(cmds) = var_refs
                             .get_commands_for_field_index(
@@ -1985,7 +2043,8 @@ fn compile_compute_expr<'a>(
                 }
                 // Field access on non-record types, like LazyRecord, Route,
                 // etc.
-                _ => {
+                ref t => {
+                    trace!("RESIDUAL FIELD ACCESS {:?}", t);
                     let mut args = vec![];
                     args.extend(
                         fa.iter()
@@ -2074,7 +2133,13 @@ fn compile_compute_expr<'a>(
             };
         }
         // This record is defined without a type and used directly, mainly as
-        // an argument for a method. The inferred type is unambiguous.
+        // an argument for a method. The inferred type is unambiguous. This
+        // token does NOT appear as a direct assignment, i.e. a variable
+        // cannot be defined as a AnonymousRecord.
+
+        // TODO: Should an AnonymousRecord be allowed to appear deeper in an
+        // assignment, though? e.g. `a = Prefix.from({ address: IpAddress,
+        // length: U8})`
         Token::AnonymousRecord => {
             assert!(!is_ar);
 
@@ -2132,6 +2197,7 @@ fn compile_compute_expr<'a>(
             trace!("field index {:?}", state.cur_record_field_index);
             trace!("ANONYMOUS RECORD FIELDS {:#?}", field_symbols);
 
+            // Local recursion
             for arg in field_symbols {
                 let new_field_name = arg.get_name();
                 state.cur_record_field_name = Some(new_field_name.clone());
@@ -2165,7 +2231,9 @@ fn compile_compute_expr<'a>(
         }
         // This is a record that appears in a variable assignment that creates
         // a record in the `Define` section or it is an argument to a method
-        // call.
+        // call, e.g. `a = A { address: 192.0.2.0, length: /24 };` or
+        // `mqtt.send(Message { msg: String.format('Withdrawal from {}`,
+        // route.peer_as, asn: route.peer_as }`.
         Token::TypedRecord => {
             assert!(!is_ar);
 
@@ -2216,11 +2284,14 @@ fn compile_compute_expr<'a>(
             //         CommandArg::Record(value_type),
             //     ],
             // );
-            for child_arg in field_symbols {
-                state.cur_record_depth = 0;
-                state.cur_record_field_index = vec![].into();
 
+            // local recursion
+            state.cur_record_depth = 0;
+            state.cur_record_field_index = vec![].into();
+
+            for child_arg in field_symbols {
                 state.cur_record_field_name = Some(child_arg.get_name());
+
                 if let TypeDef::Record(rec_type) = symbol.get_type() {
                     if let Some(field_index) = rec_type
                         .get_index_for_field_name(&child_arg.get_name())
@@ -2231,14 +2302,26 @@ fn compile_compute_expr<'a>(
                             *index = field_index;
                         } else {
                             state.cur_record_field_index.push(field_index);
-                        }
-                    }
+                        };
+                    };
                 }
 
-                trace!("child_arg {}", child_arg.get_name());
-                state = compile_compute_expr(child_arg, state, None, false)?;
+                trace!("field access typed record {}", child_arg.get_name());
+                trace!(
+                    "type {:?} token {:?}",
+                    child_arg.get_type(),
+                    child_arg.get_token()
+                );
+                trace!("parent token {:?}", symbol.get_token());
+                trace!("rec_cur_var {:?}", state.cur_record_variable);
+                state = compile_compute_expr(
+                    child_arg,
+                    state,
+                    Some(symbol.get_token()?),
+                    false,
+                )?;
 
-                state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
+                // state.cur_mir_block = MirBlock::new(MirBlockType::Assignment);
 
                 state.cur_mem_pos += 1;
             }
@@ -2308,6 +2391,7 @@ fn compile_compute_expr<'a>(
     }
     trace!("resulting token {:?}", parent_token);
 
+    // tail recursion
     for arg in symbol.get_args() {
         state = compile_compute_expr(arg, state, parent_token, inc_mem_pos)?;
         parent_token = arg.get_token().ok();
@@ -2323,7 +2407,7 @@ fn compile_compute_expr<'a>(
 // is stored together with the field_index on the access receiver that points
 // to the actual variable assignment.
 fn compile_assignments(
-    mut mir: Vec<MirBlock>,
+    mir: Vec<MirBlock>,
     mut state: CompilerState<'_>,
 ) -> Result<(Vec<MirBlock>, CompilerState<'_>), CompileError> {
     trace!("COMPILE ASSIGNMENTS");
@@ -2419,15 +2503,19 @@ fn compile_assignments(
                 _ty => {
                     state = compile_compute_expr(arg, state, None, false)?;
 
-                    let (cur_mir_block, cur_mem_pos, field_indexes) = state
-                        .cur_mir_block
-                        .into_assign_block(var_mem_pos + 2);
+                    trace!("done with {}", arg.get_name());
+                    trace!("{:?}", state.cur_record_variable);
+                    trace!("cur_mir_block {:#?}", state.cur_mir_block);
+
+                    // let (cur_mir_block, cur_mem_pos, field_indexes) = state
+                    //     .cur_mir_block
+                    //     .into_assign_block(var_mem_pos + 2);
 
                     state.variable_ref_table.set_primitive(
                         var.1.get_token()?.into(),
                         var.1.get_name(),
-                        cur_mir_block.command_stack.into(),
-                        field_indexes,
+                        state.cur_mir_block.command_stack.into(),
+                        vec![].into(),
                     )?;
 
                     // mir.push(cur_mir_block);

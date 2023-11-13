@@ -309,7 +309,9 @@ impl TypeDef {
         match self {
             TypeDef::Record(rec_type) => Some(rec_type.len()),
             TypeDef::LazyRecord(l_rec) => l_rec.get_field_num(),
-            TypeDef::List(list) => None,
+            TypeDef::List(_list) => None,
+            TypeDef::Route => RawRouteWithDeltas::get_field_num(),
+            TypeDef::OutputStream(rec) => rec.get_field_num(),
             _ => Some(1)
         }
     }

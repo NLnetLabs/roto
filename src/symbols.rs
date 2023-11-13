@@ -1,7 +1,7 @@
 use std::{
     cell::RefCell,
     cmp::Ordering,
-    collections::{hash_map::Entry, HashMap},
+    collections::{hash_map::Entry, HashMap, HashSet},
     hash::Hash,
     rc::Rc,
 };
@@ -413,26 +413,24 @@ impl std::cmp::Ord for Symbol {
 
 impl PartialEq for Symbol {
     fn eq(&self, other: &Symbol) -> bool {
-        self.token.as_ref().unwrap() == other.token.as_ref().unwrap()
+        self.token.as_ref().map(|t1| other.token.as_ref().map(|t2| t2 == t1)).unwrap_or(Some(false)).unwrap_or(false)
     }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum SymbolKind {
-    // Assigment Symbols
+    // Assignment Symbols
     VariableAssignment, // A variable defined by the user
 
-    // assigment+access receiver symbols
-    // these symbols are used both for assignment and as
-    // root access receivers.
+    // assignment+access receiver symbols these symbols are used both for
+    // assignment and as root access receivers.
     Constant, // A literal value or a filter-map-level variable
-
     // Rx and Tx Types
     // The payload can be a mutable type, that comes in at the input of the
     // VM, and is mutated. In that case there is no separate Rx and Tx types:
     // they have to be the same type. These two types are the indicators for
     // that situation.
-    PassThroughRxTxType, // type of the mutatable incoming & outgoing payload
+    PassThroughRxTxType, // type of the mutable incoming & outgoing payload
     // The incoming and outgoing are separate types, this means that the
     // incoming payload is *not* mutated, but instead a new outgoing, empty
     // payload of the SplitTxType is created and filled by the specified
@@ -466,9 +464,9 @@ pub enum SymbolKind {
     // accessor symbols
     // symbols that come after an access receiver in the args list.
 
-    // A method call, that will either mutate the typevalue this SymolKind
-    // lives on when the data field is true, otherwise it will just read
-    // it (to produce a new typevalue).
+    // A method call, that will either mutate the typevalue this SymbolKind
+    // lives on when the data field is true, otherwise it will just read it
+    // (to produce a new typevalue).
     MethodCallbyRef,
     MethodCallByConsumedValue,
     // A method call on a built-in type, e.g. `AsPath.contains()`
@@ -805,9 +803,11 @@ impl SymbolTable {
         let token_int = self.arguments.len();
 
         let token = match kind {
-            SymbolKind::SplitRxType => Some(Token::RxType),
+            SymbolKind::SplitRxType => Some(Token::RxType(ty.clone())),
             SymbolKind::SplitTxType => Some(Token::TxType),
-            SymbolKind::PassThroughRxTxType => Some(Token::RxType),
+            SymbolKind::PassThroughRxTxType => {
+                Some(Token::RxType(ty.clone()))
+            }
             _ => Some(Token::Argument(token_int)),
         };
 
@@ -843,7 +843,9 @@ impl SymbolTable {
     ) -> Result<(), CompileError> {
         // let term_token = Some(Token::TermSection);
 
-        if let Entry::Vacant(term) = self.term_sections.entry(term_section_key.clone()) {
+        if let Entry::Vacant(term) =
+            self.term_sections.entry(term_section_key.clone())
+        {
             term.insert(Symbol {
                 name: term_section_key.clone(),
                 kind: SymbolKind::Term,
@@ -853,7 +855,11 @@ impl SymbolTable {
                 token: Some(Token::TermSection(term_section_index)),
             });
         } else {
-            let child_args = &mut self.term_sections.get_mut(&term_section_key).unwrap().args;
+            let child_args = &mut self
+                .term_sections
+                .get_mut(&term_section_key)
+                .unwrap()
+                .args;
             child_args.push(child_symbol);
         }
 
@@ -879,7 +885,9 @@ impl SymbolTable {
         symbol: Symbol,
         quantifier: MatchActionQuantifier,
     ) -> Result<(), CompileError> {
-        if let SymbolKind::MatchAction(_) | SymbolKind::GlobalEnum = symbol.get_kind() {
+        if let SymbolKind::MatchAction(_) | SymbolKind::GlobalEnum =
+            symbol.get_kind()
+        {
             self.match_action_sections.push(MatchAction {
                 symbol,
                 _quantifier: quantifier,
@@ -986,7 +994,7 @@ impl SymbolTable {
     pub(crate) fn get_type_of_argument(
         &self,
         name: &ShortString,
-        index: usize
+        index: usize,
     ) -> Option<TypeDef> {
         self.term_sections
             .get(name)
@@ -1067,12 +1075,45 @@ impl SymbolTable {
         DepsGraph, // (variables, arguments, data sources)
         CompileError,
     > {
-        // First, go over all the terms and see which variables, arguments
-        // and data-sources they refer to.
+        // First, go over all the match actions and see which Terms sections,
+        // Action sections and Variables they refer to.
 
-        let mut deps_vec: Vec<&Symbol> = vec![];
-        for s in self.term_sections.values() {
-            deps_vec.extend(s.flatten_nodes()) // .into_iter().filter(|s| s.get_token().is_ok()));
+        let mut deps_set: Vec<&Symbol> = vec![];
+        for ma in self
+            .match_action_sections
+            .iter()
+            .map(|ma| &ma.symbol)
+            .collect::<Vec<_>>()
+        {
+            deps_set.extend(ma.flatten_nodes());
+        }
+
+        // collect all the symbols in all the term sections mentioned in the
+        // match actions.
+        for ts in &self.term_sections {
+            if deps_set.iter().any(|ma| {
+                if let Ok(token) = ts.1.get_token() {
+                    token.is_term() && ma.name == ts.0
+                } else {
+                    false
+                }
+            }) {
+                deps_set.extend(ts.1.flatten_nodes());
+            }
+        }
+
+        // collect all the symbols in all the action sections mentioned in the
+        // match actions.
+        for ts in &self.action_sections {
+            if deps_set.iter().any(|ma| {
+                if let Ok(token) = ts.1.get_token() {
+                    token.is_action() && ma.name == ts.0
+                } else {
+                    false
+                }
+            }) {
+                deps_set.extend(ts.1.flatten_nodes());
+            }
         }
 
         let DepsGraph {
@@ -1082,11 +1123,13 @@ impl SymbolTable {
             mut used_arguments,
             mut used_data_sources,
             ..
-        } = self._partition_deps_graph(deps_vec).map_err(|_e| {
-            CompileError::new(
-                "can't create dependencies graph for terms".into(),
-            )
-        })?;
+        } = self
+            ._partition_deps_graph(deps_set)
+            .map_err(|_e| {
+                CompileError::new(
+                    "can't create dependencies graph for terms".into(),
+                )
+            })?;
 
         // Second, go over all the variables that we gathered in the last
         // step and see which variables, arguments and data-sources they

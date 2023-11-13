@@ -83,7 +83,7 @@ impl<'a> Stack {
         self.0.last().ok_or(VmError::StackUnderflow)
     }
 
-    fn add_field_index(&mut self, index: usize) -> Result<(), VmError> {
+    fn add_index_to_field_index(&mut self, index: usize) -> Result<(), VmError> {
         self.0
             .last_mut()
             .ok_or(VmError::StackUnderflow)?
@@ -92,6 +92,14 @@ impl<'a> Stack {
         Ok(())
     }
 
+    fn push_with_field_index(&mut self, field_index: SmallVec<[usize; 8]>) -> Result<(), VmError> {
+        self.0
+            .last_mut()
+            .ok_or(VmError::StackUnderflow)?
+            .field_index = field_index;
+        Ok(())
+    }
+    
     fn unwind(&mut self) -> Vec<StackRef> {
         std::mem::take(&mut self.0)
     }
@@ -1119,87 +1127,11 @@ impl CompiledVariable {
         acc_commands
     }
 
-    // pub fn get_accumulated_commands_for_collection_at_field_index(
-    //     &self,
-    //     field_index: SmallVec<[usize; 8]>,
-    // ) -> Result<Vec<Command>, VmError> {
-    //     let mut acc_commands = vec![];
-
-    //     let start_vr = self
-    //         .0
-    //         .iter()
-    //         .position(|vr| vr.get_field_index() == &field_index)
-    //         .ok_or_else(|| VmError::InvalidCommand)?;
-
-    //     for vr in self.0.split_at(start_vr).1 {
-    //         if let CompiledField::Primitive(p) = vr {
-    //             acc_commands.extend(p.get_commands().clone());
-    //         }
-    //     }
-
-    //     Ok(acc_commands)
-    // }
-
-    // fn recurse_commands_accumulative(&self, mut command_stack: Vec<Command>, field_index: &[usize]) -> Option<Vec<Command>> {
-    //     match self {
-    //         VariableRef::Primitive(p) => {
-    //             command_stack.extend(p.commands.clone());
-    //             Some(command_stack)
-    //         },
-    //         VariableRef::Collection(c) => {
-    //             match field_index.split_first() {
-    //                 Some((index, remain)) => c.var_refs[*index].recurse_commands(command_stack, remain),
-    //                 _ => Some(command_stack)
-    //             }
-    //         }
-    //     }
-    // }
-
-    // pub fn get_acummulated_commands_for_collection(&self, field_index: &[usize]) -> Option<Vec<Command>> {
-    //     trace!("get_accumulated_commands_for_collectoin {:#?}", self);
-    //     let command_stack = vec![];
-    //     // match self {
-    //     //     VariableRef::Primitive(v) => Some(v.commands.clone()),
-    //     //     VariableRef::Collection(c) => {
-    //     //         match field_index.split_first() {
-    //     //             Some((index, remain)) => {
-    //     //                 c.var_refs[*index].recurse_commands_accumulative(command_stack, remain)
-    //     //             }
-    //     //             _ => Some(command_stack)
-    //     //         }
-    //     //     }
-    //     // }
-    // }
-
-    // fn recurse_commands(&self, command_stack: Vec<Command>, field_index: &[usize]) -> Option<Vec<Command>> {
-    //     match self {
-    //         VariableRef::Primitive(p) => { Some(command_stack) },
-    //         VariableRef::Collection(c) => {
-    //             match field_index.split_first() {
-    //                 Some((index, remain)) => c.var_refs[*index].recurse_commands(command_stack, remain),
-    //                 _ => Some(command_stack)
-    //             }
-    //         }
-    //     }
-    // }
 
     pub fn get_commands_for_field_index(
         &self,
         field_index: &[usize],
     ) -> Result<Vec<Command>, VmError> {
-        // trace!("get_commands_for_field_index {:?} {:#?}", field_index, self);
-        // let command_stack = vec![];
-        // match self {
-        //     VariableRef::Primitive(v) => Some(v.commands.clone()),
-        //     VariableRef::Collection(c) => {
-        //         match field_index.split_first() {
-        //             Some((index, remain)) => {
-        //                 c.var_refs[*index].recurse_commands(command_stack, remain)
-        //             }
-        //             _ => Some(command_stack)
-        //         }
-        //     }
-        // }
         trace!("get_commands_for_field_index {:?} {:#?}", field_index, self);
 
         let field_index = SmallVec::<[usize; 8]>::from(field_index);
@@ -2291,16 +2223,25 @@ impl<
                     }
                     // stack args: [field_index]
                     OpCode::StackOffset => {
-                        for arg in args.args.iter() {
-                            if let CommandArg::FieldAccess(field) = arg {
+                        let mut args = args.args.iter_mut();
+                        match args.next() {
+                            Some(CommandArg::FieldAccess(_field)) => {
+                                for arg in args {
+                                    if let CommandArg::FieldAccess(field) = arg {
+                                        let mut s = self.stack.borrow_mut();
+                                        s.add_index_to_field_index(*field)?;
+                                    } else {
+                                        return Err(VmError::InvalidValueType);
+                                    }
+                                }
+                            },
+                            Some(CommandArg::FieldIndex(field_index)) => {
                                 let mut s = self.stack.borrow_mut();
-                                trace!("mem_pos 0 {:?}", mem.0[0]);
-                                s.add_field_index(*field)?;
-                                trace!(" -> stack after offset {:?}", s);
-                            } else {
-                                return Err(VmError::InvalidValueType);
-                            }
-                        }
+                                s.push_with_field_index(std::mem::take(field_index))?;
+                            },
+                            _ => { return Err(VmError::InvalidValueType); }
+                        };
+                         
                     }
                     // stack args: []
                     OpCode::StackIsVariant => {
@@ -2994,7 +2935,7 @@ impl From<&CommandArg> for usize {
             CommandArg::MemPos(m) => *m as usize,
             _ => {
                 panic!(
-                    "Cannot convert to usize {:?} and that's fatal.",
+                    "Cannot convert {:?} to usize and that's fatal.",
                     value
                 );
             }
