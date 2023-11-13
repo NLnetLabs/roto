@@ -159,10 +159,9 @@ pub(crate) fn recurse_compile<'a>(
                 args => {
                     trace!("commands for RxType named {}", symbol.get_name());
                     state.cur_record_field_name = Some(args[0].get_name());
-                    if let Some(v) = state.cur_record_variable.as_mut() {
+                    if let Some(v) = state.cur_partial_variable.as_mut() {
                         v.append_primitive(
                             crate::vm::CompiledPrimitiveField::new(
-                                // state.cur_record_field_name.clone().unwrap(),
                                 vec![
                                     Command::new(
                                         OpCode::PushStack,
@@ -209,18 +208,6 @@ pub(crate) fn recurse_compile<'a>(
             let val = symbol.get_value();
             trace!("encode constant value {:?}", val);
 
-            // state.push_command(
-            //     OpCode::MemPosSet,
-            //     vec![
-            //         CommandArg::MemPos(state.cur_mem_pos),
-            //         CommandArg::Constant(val.builtin_as_cloned_type_value()?),
-            //     ],
-            // ));
-
-            // state.push_command(
-            //     OpCode::PushStack,
-            //     vec![CommandArg::MemPos(state.cur_mem_pos)],
-            // ));
             state.push_command(
                 OpCode::PushStack,
                 vec![CommandArg::ConstantValue(val.clone())],
@@ -625,9 +612,9 @@ pub(crate) fn recurse_compile<'a>(
                 // This is a regular field access, but only if we're in the
                 // process of creating code for a variable assignment. This
                 // code will be invoked from `compile_assignments`.
-                _ if state.cur_record_variable.is_some() => {
+                _ if state.cur_partial_variable.is_some() => {
                     trace!("FIELD ACCESS PARENT TOKEN {:#?}", parent_token);
-                    if let Some(var_refs) = &state.cur_record_variable {
+                    if let Some(var_refs) = &state.cur_partial_variable {
                         if let Ok(cmds) = var_refs
                             .get_commands_for_field_index(
                                 fa.iter()
@@ -762,13 +749,10 @@ pub(crate) fn recurse_compile<'a>(
             assert!(!is_ar);
 
             // A new record increases the depth of the record current we are
-            // tracking
-            // let new_field_name = symbol.get_name();
-            // state.cur_record_field_name = Some(symbol.get_name());
-
+            // tracking.
             state.inc_record_field_depth(symbol.get_name())?;
 
-            if let Some(var) = state.cur_record_variable.as_mut() {
+            if let Some(var) = state.cur_partial_variable.as_mut() {
                 trace!("new collection {:?}", state.cur_record_field_name);
                 trace!("compiled var {:?}", var);
                 trace!("TYPE {:#?}", symbol.get_type());
@@ -891,13 +875,6 @@ pub(crate) fn recurse_compile<'a>(
                     )
                 )));
             }
-            // state.push_command(
-            //     OpCode::MemPosSet,
-            //     vec![
-            //         CommandArg::MemPos(state.cur_mem_pos),
-            //         CommandArg::Record(value_type),
-            //     ],
-            // );
 
             // local recursion
             state.cur_record_depth = 0;
@@ -927,7 +904,7 @@ pub(crate) fn recurse_compile<'a>(
                     child_arg.get_token()
                 );
                 trace!("parent token {:?}", symbol.get_token());
-                trace!("rec_cur_var {:?}", state.cur_record_variable);
+                trace!("rec_cur_var {:?}", state.cur_partial_variable);
                 state = recurse_compile(
                     child_arg,
                     state,
@@ -955,13 +932,7 @@ pub(crate) fn recurse_compile<'a>(
                 .iter()
                 .map(|v| v.get_value().clone().into())
                 .collect::<Vec<ElementTypeValue>>();
-            // state.push_command(
-            //     OpCode::MemPosSet,
-            //     vec![
-            //         CommandArg::MemPos(state.cur_mem_pos),
-            //         CommandArg::List(List(values)),
-            //     ],
-            // );
+
             trace!("LIST VALUES {:?}", values);
 
             state.push_command(

@@ -1167,106 +1167,23 @@ impl VariablesRefTable {
         index: usize,
     ) -> Option<CompiledVariable> {
         self.0.get(&Token::Variable(index)).cloned()
-        // self.0.iter().find(|v| match v {
-        //     VariableRef::Primitive(PrimitiveRef {
-        //         var_token_value: t,
-        //         ..
-        //     }) => t == &index,
-        //     VariableRef::Collection(CollectionRef {
-        //         var_token_value: t,
-        //         ..
-        //     }) => t == &index,
-        // }).cloned()
     }
-
-    pub(crate) fn get_by_token(
-        &self,
-        index: &Option<Token>,
-    ) -> Option<CompiledVariable> {
-        if let Some(index) = index {
-            self.0.get(&index).cloned()
-        } else {
-            None
-        }
-    }
-
-    // pub(crate) fn append_primitive(
-    //     &mut self,
-    //     name: ShortString,
-    //     commands: Vec<Command>,
-    //     field_index: SmallVec<[usize; 8]>,
-    // ) -> Result<usize, CompileError> {
-    //     self.0.insert(
-    //         Token::Variable(self.0.len()),
-    //         CompiledField::Primitive(CompiledPrimitiveField {
-    //             name,
-    //             commands,
-    //             field_index,
-    //         }),
-    //     );
-    //     // self.0.push(VariableRef::Primitive(PrimitiveRef {
-    //     //     var_token_value: self.0.len(),
-    //     //     mem_pos,
-    //     //     field_index,
-    //     // }));
-
-    //     Ok(self.0.len())
-    // }
 
     pub(crate) fn set_primitive(
         &mut self,
         var_token_value: usize,
-        // name: ShortString,
         commands: Vec<Command>,
         field_index: SmallVec<[usize; 8]>,
     ) -> Result<(), CompileError> {
-        // self.0.push(VariableRef::Primitive(PrimitiveRef {
-        //     var_token_value,
-        //     mem_pos,
-        //     field_index,
-        // }));
         self.0.insert(
             Token::Variable(var_token_value),
             CompiledPrimitiveField {
-                // name,
                 commands,
                 field_index,
             }
             .into(),
         );
         Ok(())
-    }
-
-    pub(crate) fn set_collection(
-        &mut self,
-        var_token_value: usize,
-        collection: CompiledCollectionField,
-    ) -> Result<(), CompileError> {
-        // self.0.push(VariableRef::Collection(CollectionRef { var_token_value, var_refs }));
-        self.0
-            .insert(Token::Variable(var_token_value), collection.into());
-        Ok(())
-    }
-
-    // pub(crate) fn append_collection(
-    //     &mut self,
-    //     name: ShortString,
-    //     field_index: SmallVec<[usize; 8]>,
-    // ) -> Result<u32, CompileError> {
-    //     // self.0.push(VariableRef::Collection(CollectionRef {
-    //     //     var_token_value: self.0.len(),
-    //     //     var_refs,
-    //     // }));
-
-    //     self.0.insert(
-    //         Token::Variable(self.0.len()),
-    //         CompiledField::Collection(CompiledCollectionField { name, field_index }),
-    //     );
-    //     Ok(self.0.len() as u32)
-    // }
-
-    pub(crate) fn new() -> Self {
-        VariablesRefTable(HashMap::new())
     }
 
     pub(crate) fn insert(

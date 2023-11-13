@@ -22,14 +22,14 @@ use crate::{
     },
     types::{
         datasources::Table,
-        typedef::{RecordTypeDef, TypeDef},
+        typedef::{RecordTypeDef, TypeDef}, collections::Record,
     },
     vm::{
         compute_hash, Command, CommandArg, CompiledCollectionField,
         CompiledField, CompiledPrimitiveField, CompiledVariable,
         ExtDataSource, FilterMapArg, FilterMapArgs, OpCode, StackRefPos,
         VariablesRefTable,
-    }, compiler::compute_expr::recurse_compile,
+    }, compiler::recurse_compile::recurse_compile,
 };
 
 //============ The Compiler (Filter creation time) ==========================
@@ -672,9 +672,10 @@ pub(crate) struct CompilerState<'a> {
     // allowed, btw.
     pub(crate) used_arguments: Arguments<'a>,
     pub(crate) cur_mir_block: MirBlock,
-    // A register for the current field on a variable, where the variable
-    // represents a record.
-    pub(crate) cur_record_variable: Option<CompiledVariable>,
+    // This holds the flattened stack-friendly data-structure for a variable,
+    // up until the current field index, if the variable is a scalar, then the
+    // field index is an empty (small)vec.
+    pub(crate) cur_partial_variable: Option<CompiledVariable>,
     pub(crate) cur_record_depth: usize,
     pub(crate) cur_record_field_index: SmallVec<[usize; 8]>,
     pub(crate) cur_record_field_name: Option<ShortString>,
@@ -689,7 +690,7 @@ pub(crate) struct CompilerState<'a> {
 
 impl<'a> CompilerState<'a> {
     pub(crate) fn push_command(&mut self, op: OpCode, args: Vec<CommandArg>) {
-        if let Some(cur_rec_var) = &mut self.cur_record_variable {
+        if let Some(cur_rec_var) = &mut self.cur_partial_variable {
             match cur_rec_var.iter_mut().last() {
                 Some(CompiledField::Primitive(p)) => {
                     if let Some(
@@ -725,7 +726,7 @@ impl<'a> CompilerState<'a> {
                 }
             }
         }
-        trace!("after push cur_rec_var {:?}", self.cur_record_variable);
+        trace!("after push cur_rec_var {:?}", self.cur_partial_variable);
         self.cur_mir_block
             .command_stack
             .push_back(Command::new(op, args));
@@ -733,7 +734,7 @@ impl<'a> CompilerState<'a> {
     }
 
     pub(crate) fn extend_commands(&mut self, commands: Vec<Command>) {
-        if let Some(cur_rec_var) = &mut self.cur_record_variable {
+        if let Some(cur_rec_var) = &mut self.cur_partial_variable {
             match cur_rec_var.iter_mut().last() {
                 Some(CompiledField::Primitive(p)) => {
                     p.extend_commands(commands.clone());
@@ -753,13 +754,12 @@ impl<'a> CompilerState<'a> {
 
     pub(crate) fn init_current_record_tracker_with_collection(
         &mut self,
-        // field_num: usize,
     ) {
         let mut compile_var = CompiledVariable::new();
         compile_var.append_collection(CompiledCollectionField::new(
             vec![].into(),
         ));
-        self.cur_record_variable = Some(compile_var);
+        self.cur_partial_variable = Some(compile_var);
         self.cur_record_depth = 0;
         self.cur_record_field_index = vec![].into();
     }
@@ -772,13 +772,13 @@ impl<'a> CompilerState<'a> {
             vec![],
             vec![].into(),
         ));
-        self.cur_record_variable = Some(compile_var);
+        self.cur_partial_variable = Some(compile_var);
         self.cur_record_depth = 0;
         self.cur_record_field_index = vec![].into();
     }
 
     pub(crate) fn destroy_current_record_tracker(&mut self) {
-        self.cur_record_variable = None;
+        self.cur_partial_variable = None;
         self.cur_record_depth = 0;
         self.cur_record_field_index = vec![].into();
         self.cur_record_field_name = None;
@@ -789,7 +789,7 @@ impl<'a> CompilerState<'a> {
         name: ShortString,
     ) -> Result<(), CompileError> {
         trace!("inc depth level");
-        match self.cur_record_variable {
+        match self.cur_partial_variable {
             // Init the new record
             None => {
                 self.cur_record_depth = 0;
@@ -808,7 +808,7 @@ impl<'a> CompilerState<'a> {
         &mut self,
         collection: CompiledCollectionField,
     ) {
-        if let Some(var) = self.cur_record_variable.as_mut() {
+        if let Some(var) = self.cur_partial_variable.as_mut() {
             var.append_collection(collection);
         }
     }
@@ -1004,14 +1004,12 @@ pub enum MirBlockType {
 #[derive(Debug)]
 pub struct MirBlock {
     command_stack: VecDeque<Command>,
-    ty: MirBlockType,
 }
 
 impl MirBlock {
-    pub fn new(ty: MirBlockType) -> Self {
+    fn new() -> Self {
         MirBlock {
             command_stack: VecDeque::new(),
-            ty,
         }
     }
 
@@ -1022,14 +1020,6 @@ impl MirBlock {
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Command> + '_ {
         self.command_stack.iter_mut()
     }
-
-    pub fn get_cur_type(&self) -> &MirBlockType {
-        &self.ty
-    }
-
-    // fn push_command(&mut self, command: Command) {
-    //     self.command_stack.push_back(command);
-    // }
 
     pub fn extend(&mut self, commands: Vec<Command>) {
         self.command_stack.extend(commands);
@@ -1060,7 +1050,7 @@ impl MirBlock {
     // variable should use. The memory position will be changed if there are
     // no *MethodCall commands in the command stack, meaning the variable
     // is an alias to a field on some access receiver.
-    pub fn into_assign_block(
+    fn into_assign_block(
         mut self,
         var_mem_pos: usize,
     ) -> (Self, usize, SmallVec<[usize; 8]>) {
@@ -1165,7 +1155,7 @@ impl Clone for MirBlock {
             .collect::<VecDeque<_>>();
 
         MirBlock {
-            ty: MirBlockType::Alias,
+            // ty: MirBlockType::Alias,
             command_stack: c_stack,
         }
     }
@@ -1276,10 +1266,10 @@ fn compile_filter_map(
             .collect::<Vec<_>>(),
         compiled_terms: TermSections::new(),
         compiled_action_sections: ActionSections::new(),
-        cur_mir_block: MirBlock::new(MirBlockType::Assignment),
+        cur_mir_block: MirBlock::new(),
         cur_record_depth: 0,
         cur_record_field_index: vec![].into(),
-        cur_record_variable: None,
+        cur_partial_variable: None,
         cur_record_field_name: None,
         cur_record_type: None,
         var_read_only: false,
@@ -1319,7 +1309,7 @@ fn compile_filter_map(
 
     (mir, state) = compile_apply_section(mir, state)?;
 
-    state.cur_mir_block = MirBlock::new(MirBlockType::Terminator);
+    state.cur_mir_block = MirBlock::new();
     state.push_command(
         OpCode::Exit(state.cur_filter_map.get_default_action()),
         vec![],
@@ -1432,7 +1422,7 @@ fn compile_assignments(
                     trace!("inserting {:#?}", var.1.get_token());
                     state.variable_ref_table.insert(
                         var.1.get_token()?,
-                        state.cur_record_variable.clone().unwrap(),
+                        state.cur_partial_variable.clone().unwrap(),
                     )?;
                 }
                 TypeDef::List(_list_type) => {
@@ -1446,7 +1436,7 @@ fn compile_assignments(
                     trace!("inserting {:#?}", var.1.get_token());
                     state.variable_ref_table.insert(
                         var.1.get_token()?,
-                        state.cur_record_variable.clone().unwrap(),
+                        state.cur_partial_variable.clone().unwrap(),
                     )?;
                 }
                 _ty => {
@@ -1456,11 +1446,11 @@ fn compile_assignments(
                 
                     trace!("scalar type {}", _ty);
                     trace!("cur_mir_block {:?}", state.cur_mir_block);
-                    trace!("cur_record_variable {:?}", state.cur_record_variable);
-                    trace!("{:?}", &state.cur_record_variable.clone().unwrap().get_accumulated_commands());
+                    trace!("cur_record_variable {:?}", state.cur_partial_variable);
+                    trace!("{:?}", &state.cur_partial_variable.clone().unwrap().get_accumulated_commands());
                     state.variable_ref_table.set_primitive(
                         var.1.get_token()?.into(),
-                        state.cur_record_variable.clone().unwrap().get_accumulated_commands(),
+                        state.cur_partial_variable.clone().unwrap().get_accumulated_commands(),
                         vec![].into(),
                     )?;
                 }
@@ -1469,7 +1459,6 @@ fn compile_assignments(
     }
 
     state.destroy_current_record_tracker();
-    // state.cur_mem_pos = 1 + state.used_variables.len() as u32;
     trace!("local variables map");
     trace!("{:#?}", state.variable_ref_table);
 
@@ -1480,7 +1469,7 @@ fn compile_apply_section(
     mut mir: Vec<MirBlock>,
     mut state: CompilerState<'_>,
 ) -> Result<(Vec<MirBlock>, CompilerState), CompileError> {
-    state.cur_mir_block = MirBlock::new(MirBlockType::MatchAction);
+    state.cur_mir_block = MirBlock::new();
 
     let match_action_sections =
         state.cur_filter_map.get_match_action_sections();
@@ -1806,7 +1795,7 @@ fn compile_apply_section(
 
                     // continue with a fresh block
                     state.cur_mir_block =
-                        MirBlock::new(MirBlockType::MatchAction);
+                        MirBlock::new();
                     // restore old mem_pos, let's not waste memory
                     state.cur_mem_pos = orig_mem_pos;
 
@@ -1852,7 +1841,7 @@ fn compile_apply_section(
                             .unwrap();
 
                         state.cur_mir_block =
-                            MirBlock::new(MirBlockType::Term);
+                            MirBlock::new();
                         state = compile_term_section(term, state, &[])?;
 
                         // store the resulting value into a variable so that future references
@@ -1872,7 +1861,7 @@ fn compile_apply_section(
 
                 // continue with a fresh block
                 state.cur_mir_block =
-                    MirBlock::new(MirBlockType::MatchAction);
+                    MirBlock::new();
 
                 match ma {
                     MatchActionType::FilterMatchAction => {
@@ -1940,7 +1929,7 @@ fn compile_apply_section(
         mir.push(state.cur_mir_block);
 
         // continue with a fresh block
-        state.cur_mir_block = MirBlock::new(MirBlockType::MatchAction);
+        state.cur_mir_block = MirBlock::new();
     }
     trace!("done compiling apply section");
 
