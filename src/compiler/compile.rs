@@ -22,7 +22,7 @@ use crate::{
     },
     types::{
         datasources::Table,
-        typedef::{RecordTypeDef, TypeDef}, collections::Record,
+        typedef::{RecordTypeDef, TypeDef},
     },
     vm::{
         compute_hash, Command, CommandArg, CompiledCollectionField,
@@ -981,25 +981,8 @@ impl<'a> Compiler {
     }
 }
 
+
 //------------ MirBlock & Mir -----------------------------------------------
-
-// #[derive(Debug)]
-// pub struct MirRef<MB: AsRef<Vec<MirBlock>>>(pub MB);
-
-#[derive(Debug, PartialEq)]
-pub enum MirBlockType {
-    // A block that contains a variable assignment in the `define` section
-    Assignment,
-    // One complete `term` section
-    Term,
-    // a single match action from the `apply` section
-    MatchAction,
-    // A block that should be inserted whenever the variable/data source is
-    // referenced outside of the `define` section.
-    Alias,
-    // Exit statements
-    Terminator,
-}
 
 #[derive(Debug)]
 pub struct MirBlock {
@@ -1017,106 +1000,8 @@ impl MirBlock {
         self.command_stack.iter()
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Command> + '_ {
-        self.command_stack.iter_mut()
-    }
-
     pub fn extend(&mut self, commands: Vec<Command>) {
         self.command_stack.extend(commands);
-    }
-
-    pub fn last(&self) -> &Command {
-        self.command_stack.back().unwrap()
-    }
-
-    pub fn pop_last(&mut self) -> Command {
-        self.command_stack.pop_back().unwrap()
-    }
-
-    // Post-process this block to filter out any PushStack and StackOffset
-    // commands beyond the last *MethodCall command and to change the memory
-    // position to the result of the last *MethodCall command into the
-    // position that was passed in as an argument.
-    //
-    // This is used by a block that computes a variable and needs to store it
-    // in a memory position. Only newly created values can be stored in a
-    // memory position, and those can only be the result of a method. Field
-    // indexes do *not* create new values. Thus, we store only the result of
-    // the last MethodCall command and the consumer of `into_assign_block`
-    // will have to keep a map of field indexes for each variable to insert
-    // those when reading a variable.
-    //
-    // Returns the changed block and the memory position a reader of this
-    // variable should use. The memory position will be changed if there are
-    // no *MethodCall commands in the command stack, meaning the variable
-    // is an alias to a field on some access receiver.
-    fn into_assign_block(
-        mut self,
-        var_mem_pos: usize,
-    ) -> (Self, usize, SmallVec<[usize; 8]>) {
-        let mut field_indexes = smallvec::smallvec![];
-
-        let mut c_stack = Vec::from(self.command_stack);
-        c_stack.reverse();
-
-        let mut method_encountered = false;
-        let mut mem_pos = var_mem_pos;
-
-        c_stack = c_stack
-            .into_iter()
-            .filter_map(|mut c| match c.op {
-                OpCode::PushStack if !method_encountered => {
-                    mem_pos = c.args.front().unwrap().into();
-                    None
-                }
-                OpCode::StackOffset if !method_encountered => {
-                    match &c.args[0] {
-                        CommandArg::FieldAccess(fa) => {
-                            field_indexes.push(*fa);
-                        }
-                        CommandArg::FieldIndex(fa) => {
-                            field_indexes = fa.clone();
-                        }
-                        _ => {
-                            panic!(
-                                "Invalid Command Argument {:?}",
-                                c.args[0]
-                            );
-                        }
-                    }
-
-                    None
-                }
-                OpCode::ExecuteValueMethod
-                | OpCode::ExecuteDataStoreMethod
-                | OpCode::ExecuteConsumeValueMethod
-                | OpCode::ExecuteTypeMethod => {
-                    // rewrite the memory position if this is the last
-                    // MethodCall we've encountered.
-                    if !method_encountered {
-                        let last_i = c.args.len() - 1;
-                        c.args[last_i] =
-                            CommandArg::MemPos(var_mem_pos as u32);
-                    }
-
-                    method_encountered = true;
-                    Some(c)
-                }
-                _ => Some(c),
-            })
-            .collect::<Vec<_>>();
-
-        // No MethodCall encountered? Then it's an alias
-        mem_pos = if !method_encountered {
-            mem_pos
-        } else {
-            var_mem_pos
-        };
-
-        c_stack.reverse();
-        self.command_stack = VecDeque::from(c_stack);
-
-        (self, mem_pos, field_indexes)
     }
 }
 
@@ -2106,14 +1991,9 @@ pub(crate) fn compile_term<'a>(
     match term.get_kind() {
         SymbolKind::CompareExpr(op) => {
             let args = term.get_args();
-            trace!("COMPILE TERM BEFORE ARG 0 {:?}", args[0]);
             state = recurse_compile(&args[0], state, None, false)?;
             state.cur_mem_pos += 1;
-            trace!("COMPILE TERM AFTER ARG 0 {:?}", args[0]);
-            trace!("COMPILE TERM BEFORE ARG 1 {:?}", args[1]);
             state = recurse_compile(&args[1], state, None, false)?;
-            trace!("COMPILE TERM AFTER ARG 1 {:?}", args[1]);
-            trace!("MIR BLOCK {:?}", state.cur_mir_block);
 
             state
                 .cur_mir_block
