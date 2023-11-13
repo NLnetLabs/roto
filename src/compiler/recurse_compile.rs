@@ -31,7 +31,7 @@ pub(crate) fn recurse_compile<'a>(
     //
     // so always starting with an AccessReceiver. Furthermore, a variable
     // reference or assignment should always bef an AccessReceiver.
-    trace!("compile compute expr {:#?}", symbol);
+    trace!("recurse compile Symbol with name {} and token {:?}", symbol.get_name(), symbol.get_token());
     let is_ar = symbol.get_kind() == SymbolKind::AccessReceiver;
     let token = symbol.get_token()?;
     let kind = symbol.get_kind();
@@ -70,17 +70,11 @@ pub(crate) fn recurse_compile<'a>(
                     };
                 }
                 _ty => {
-                    match var_type.get_field_num() {
-                        Some(n) => {
-                            trace!("get_field_num {} ty {}", n, _ty);
-                            state.append_collection_to_record_tracker(
-                                CompiledCollectionField::new(
-                                    vec![].into(),
-                                ),
-                            );
-                        }
-                        None => todo!(),
-                    };
+                    state.append_collection_to_record_tracker(
+                        CompiledCollectionField::new(
+                            vec![].into(),
+                        ),
+                    );
                 }
             };
 
@@ -757,17 +751,6 @@ pub(crate) fn recurse_compile<'a>(
                 trace!("compiled var {:?}", var);
                 trace!("TYPE {:#?}", symbol.get_type());
 
-                if let Some(field_num) =
-                    symbol.get_type().get_field_num()
-                {
-                    field_num
-                } else {
-                    return Err(CompileError::from(format!(
-                        "Invalid type {:?}",
-                        symbol.get_type()
-                    )));
-                };
-
                 var.append_collection(CompiledCollectionField::new(
                     state.cur_record_field_index.clone(),
                 ));
@@ -839,14 +822,18 @@ pub(crate) fn recurse_compile<'a>(
                 symbol.get_args().iter().collect::<Vec<_>>();
             field_symbols.sort_by_key(|a| a.get_name());
             trace!("TYPED RECORD FIELDS {:#?}", symbol.get_args());
-            trace!("Checked Type {:#?}", symbol.get_type());
+
+            // See if the supplied typedef lines up with the typedef of the
+            // name of the type that was also supplied.
+            // trace!("Checked Type {:#?}", symbol.get_type());
+
             let values = symbol
                 .get_recursive_values_primitive(symbol.get_type())?
                 .iter()
                 .map(|v| (v.0.clone(), v.2.clone().into()))
                 .collect::<Vec<_>>();
 
-            trace!("values {:?}", values);
+            // trace!("values {:?}", values);
             let unresolved_values = values
                 .clone()
                 .into_iter()
@@ -856,9 +843,9 @@ pub(crate) fn recurse_compile<'a>(
                 .into_iter()
                 .map(|v| field_symbols.iter().find(|s| s.get_name() == v.0))
                 .collect::<Vec<_>>();
-            trace!("unresolved symbols {:#?}", unresolved_symbols);
+            // trace!("unresolved symbols {:#?}", unresolved_symbols);
             let value_type = Record::new(values);
-            trace!("value_type {:?}", value_type);
+            // trace!("value_type {:?}", value_type);
 
             if symbol.get_type() != TypeValue::Record(value_type.clone()) {
                 return Err(CompileError::from(format!(
@@ -876,44 +863,59 @@ pub(crate) fn recurse_compile<'a>(
                 )));
             }
 
-            // local recursion
-            state.cur_record_depth = 0;
-            state.cur_record_field_index = vec![].into();
+            // End of Type Check
 
-            for child_arg in field_symbols {
-                state.cur_record_field_name = Some(child_arg.get_name());
+            // A new record increases the depth of the record current we are
+            // tracking.
+            state.inc_record_field_depth(symbol.get_name())?;
 
+            if let Some(var) = state.cur_partial_variable.as_mut() {
+                trace!("new collection {:?}", state.cur_record_field_name);
+                trace!("compiled var {:?}", var);
+                trace!("TYPE {:#?}", symbol.get_type());
+
+                var.append_collection(CompiledCollectionField::new(
+                    state.cur_record_field_index.clone(),
+                ));
+            }
+
+            state.cur_record_field_index.push(0);
+            state.cur_record_type =
                 if let TypeDef::Record(rec_type) = symbol.get_type() {
-                    if let Some(field_index) = rec_type
-                        .get_index_for_field_name(&child_arg.get_name())
+                    Some(rec_type)
+                } else {
+                    None
+                };
+
+            // Local recursion
+            for arg in field_symbols {
+                let new_field_name = arg.get_name();
+                state.cur_record_field_name = Some(new_field_name.clone());
+                if let Some(rec_type) = state.cur_record_type.clone() {
+                    trace!("field name {:?}", new_field_name);
+                    trace!("current index {:?}", state.cur_record_type);
+                    if let Some(local_index) =
+                        rec_type.get_index_for_field_name(&new_field_name)
                     {
-                        if let Some(index) =
+                        trace!("next index {:?}", local_index);
+                        if let Some(cur_index) =
                             state.cur_record_field_index.last_mut()
                         {
-                            *index = field_index;
-                        } else {
-                            state.cur_record_field_index.push(field_index);
-                        };
-                    };
-                }
+                            *cur_index = local_index;
+                        }
+                    }
+                };
 
-                trace!("field access typed record {}", child_arg.get_name());
-                trace!(
-                    "type {:?} token {:?}",
-                    child_arg.get_type(),
-                    child_arg.get_token()
-                );
-                trace!("parent token {:?}", symbol.get_token());
-                trace!("rec_cur_var {:?}", state.cur_partial_variable);
-                state = recurse_compile(
-                    child_arg,
-                    state,
-                    Some(symbol.get_token()?),
-                    false,
-                )?;
-
-                state.cur_mem_pos += 1;
+                state.cur_record_field_name = Some(arg.get_name());
+                state = recurse_compile(arg, state, None, true)?;
             }
+
+            state.cur_record_type =
+                if let TypeDef::Record(rec_type) = symbol.get_type() {
+                    Some(rec_type)
+                } else {
+                    None
+                };
 
             return Ok(state);
         }

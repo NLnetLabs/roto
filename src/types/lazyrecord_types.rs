@@ -24,8 +24,8 @@ pub type TerminationMessage =
 
 
 impl RecordType for BmpMessage {
-    fn get_field_num() -> Option<usize> {
-        Some(1)
+    fn get_field_num() -> usize {
+        1
     }
 }
 
@@ -65,7 +65,7 @@ impl LazyRecordTypeDef {
         }
     }
 
-    pub fn get_field_num(&self) -> Option<usize> {
+    pub fn get_field_num(&self) -> usize {
         match &self {
             LazyRecordTypeDef::InitiationMessage => {
                 InitiationMessage::get_field_num()

@@ -1188,17 +1188,6 @@ impl From<Vec<crate::types::builtin::Community>> for TypeValue {
     }
 }
 
-impl From<Vec<TypeValue>> for TypeValue {
-    fn from(value: Vec<TypeValue>) -> Self {
-        TypeValue::List(List::new(
-            value
-                .iter()
-                .map(|v| ElementTypeValue::Primitive((*v).clone()))
-                .collect::<Vec<_>>(),
-        ))
-    }
-}
-
 impl ScalarValue for TypeValue {}
 
 // Type conversions for Records

@@ -11,7 +11,7 @@
 //               └─▶ Withdrawals │──change ──────┘
 //                 └─────────────┘  status
 
-use log::{info, trace};
+use log::trace;
 use routecore::bgp::message::SessionConfig;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
@@ -36,7 +36,7 @@ use crate::{
 
 use super::{
     AsPath, Asn, BuiltinTypeValue, IpAddress, NextHop, OriginType, Prefix,
-    RouteStatus, BytesRecord,
+    RouteStatus,
 };
 use crate::attr_change_set::{
     AttrChangeSet, ScalarOption, ScalarValue, VectorOption, VectorValue,
@@ -390,7 +390,7 @@ impl RawRouteWithDeltas {
         }
     }
 
-    pub(crate) fn get_field_num() -> Option<usize> { Some(12) }
+    pub(crate) fn get_field_num() -> usize { 12 }
 
     pub(crate) fn get_value_ref_for_field(
         &self,

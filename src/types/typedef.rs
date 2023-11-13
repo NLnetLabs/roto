@@ -59,16 +59,24 @@ impl RecordTypeDef {
         self.0.iter()
     }
 
-    pub(crate) fn len(&self) -> usize {
+    pub(crate) fn level_0_len(&self) -> usize {
         self.0.len()
+    }
+
+    // returns the number of all fields in the flattened record type.
+    pub(crate) fn recursive_len(&self) -> usize {
+        let mut len = self.0.len();
+        for field in self.0.iter() {
+            if let TypeDef::Record(rec_type) = &*(field.1) {
+                len += rec_type.0.len() - 1;
+            }
+        }
+        trace!("total len() for record {}", len);
+        len
     }
 
     pub(crate) fn get_index_for_field_name(&self, name: &ShortString) -> Option<usize> {
         self.0.iter().enumerate().find(|(i, td)| td.0 == name).map(|(i, _)| i)
-    }
-
-    pub(crate) fn get_field_num(&self) -> Option<usize> {
-        Some(self.0.len())
     }
 }
 
@@ -188,7 +196,7 @@ pub enum TypeDef {
 }
 
 impl TypeDef {
-    // The function defined by this macro called `test_type_conversion()`
+    // The function defined by this macro called `typedefconversion`
     // indicates whether the self type can be converted into another
     // specified type. This function is used during Evaluation.
     // This happens ONLY ON THE UNBOUNDED TYPES, meaning that Type
@@ -303,16 +311,15 @@ impl TypeDef {
 
     // compute the number of fields in this typedef, mostly relevant for
     // records to figure how many values should be popped from the stack for
-    // method calls. Some types do not have a fixes number of fields, e.g. a
-    // List. We're returning None for types like these.
-    pub fn get_field_num(&self) -> Option<usize> {
+    // method calls.
+    pub fn get_field_num(&self) -> usize {
         match self {
-            TypeDef::Record(rec_type) => Some(rec_type.len()),
+            TypeDef::Record(rec_type) => rec_type.recursive_len(),
             TypeDef::LazyRecord(l_rec) => l_rec.get_field_num(),
-            TypeDef::List(_list) => None,
+            TypeDef::List(list) => list.get_field_num(),
             TypeDef::Route => RawRouteWithDeltas::get_field_num(),
             TypeDef::OutputStream(rec) => rec.get_field_num(),
-            _ => Some(1)
+            _ => 1
         }
     }
 
@@ -493,7 +500,7 @@ impl TypeDef {
                 field_count += 1;
             }
 
-            if field_count != rec.len() {
+            if field_count != rec.level_0_len() {
                 trace!("Missing fields in record {:?}", self);
                 return false;
             }
@@ -920,7 +927,9 @@ impl PartialEq<TypeValue> for TypeDef {
                     field_count += 1;
                 }
 
-                if field_count != a_rec_type.len() {
+                trace!("field count {} != rec len() {}", field_count, a_rec_type.level_0_len());
+
+                if field_count != a_rec_type.level_0_len() {
                     trace!("Missing fields in record {:?}", self);
                     return false;
                 }

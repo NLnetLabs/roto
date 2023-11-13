@@ -1291,7 +1291,8 @@ fn compile_assignments(
 
             match arg.get_type() {
                 TypeDef::Record(_rec_type) => {
-                    
+                    trace!("RECORD TYPE");
+                    trace!("{:#?}", arg);
                     // reset the current variable
                     state.init_current_record_tracker_with_collection();
 

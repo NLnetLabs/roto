@@ -296,8 +296,8 @@ macro_rules! bytes_record_impl {
         $field_num: expr
     ) => {
         impl RecordType for $bytes_record_type {
-            fn get_field_num() -> Option<usize> {
-                Some($field_num)
+            fn get_field_num() -> usize {
+                $field_num
             }
         }
 

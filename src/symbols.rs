@@ -169,10 +169,10 @@ impl Symbol {
         &self,
         type_def: TypeDef,
     ) -> Result<Vec<(ShortString, TypeDef, TypeValue)>, CompileError> {
-        trace!("get_recursive_values_primitive with args {:#?} and type_def {:#?}", self.get_args(), type_def);
+        // trace!("get_recursive_values_primitive with args {:#?} and type_def {:#?}", self.get_args(), type_def);
         let mut rec_values: Vec<(ShortString, TypeDef, TypeValue)> = vec![];
         for arg in self.get_args() {
-            trace!("arg {:?}", arg);
+            // trace!("arg {:?}", arg);
             if let TypeDef::Record(_rec) = arg.get_type() {
                 if let Some(checked_type) =
                     type_def.get_field(&arg.get_name())
@@ -204,11 +204,11 @@ impl Symbol {
             } else if let Some(checked_type) =
                 type_def.get_field(&arg.get_name())
             {
-                trace!(
-                    "field with name '{}' found in type_def",
-                    arg.get_name()
-                );
-                trace!("checked type {:?}", checked_type);
+                // trace!(
+                //     "field with name '{}' found in type_def",
+                //     arg.get_name()
+                // );
+                // trace!("checked type {:?}", checked_type);
 
                 if !arg.get_type().test_type_conversion(checked_type.clone())
                 {

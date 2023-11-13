@@ -2364,7 +2364,7 @@ impl<
                         }
 
                         if let CommandArg::Arguments(type_def) = &args[2] {
-                            trace!("type_def {:?}", type_def);
+                            trace!("type_def {:?}", type_def[0]);
                             if let TypeDef::OutputStream(os_ty) = &type_def[0]
                             {
                                 let rec = Record::create_instance_from_ordered_fields(os_ty, rec_fields).unwrap();
@@ -2779,15 +2779,7 @@ impl CommandArg {
 
     pub fn get_args_len_for_outputstream_record(&self) -> u32 {
         if let CommandArg::Arguments(fields) = &self {
-            if let TypeDef::OutputStream(record) = &fields[0] {
-                if let TypeDef::Record(args) = &**record {
-                    args.len() as u32
-                } else {
-                    0
-                }
-            } else {
-                0
-            }
+            fields[0].get_field_num() as u32
         } else {
             0
         }

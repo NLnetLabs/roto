@@ -578,6 +578,17 @@ impl From<List> for TypeValue {
     }
 }
 
+impl From<Vec<TypeValue>> for List {
+    fn from(value: Vec<TypeValue>) -> Self {
+        List::new(
+            value
+                .iter()
+                .map(|v| ElementTypeValue::Primitive((*v).clone()))
+                .collect::<Vec<_>>(),
+        )
+    }
+}
+
 #[derive(Debug)]
 #[repr(u8)]
 pub enum ListToken {
@@ -700,6 +711,39 @@ impl<'a> Record {
         }
     }
 
+    pub fn _recurse_create(
+        ty: &TypeDef,
+        // the sequential typevalue vec
+        mut values: Vec<TypeValue>,
+    ) -> Result<Vec<(ShortString, ElementTypeValue)>, CompileError> {
+        if values.is_empty() {
+            return Err(CompileError::new(
+                "Can't create empty instance.".into(),
+            ));
+        }
+
+        trace!("ordered values {:?}", values);
+        let mut kvs: Vec<(ShortString, ElementTypeValue)> = vec![];
+        if let TypeDef::Record(rec) = ty {
+            for (field_name, field_type) in rec.iter() {
+                if let TypeDef::Record(ref rec_type) = &**field_type {
+                    let num_values = rec_type.level_0_len();
+                    let part_values = values.split_off(values.len() - num_values);
+                    kvs.extend(Self::_recurse_create(field_type, part_values).unwrap());
+                } else {
+                    let value = values.pop().unwrap();
+                    kvs.push((field_name.clone(), ElementTypeValue::Primitive(value)));
+                }
+            }
+        } else {
+            trace!("TypeDef for ordered fields {:?}", ty);
+            return Err(CompileError::new("Not a record type".into()));
+        }
+        trace!("KVS {:#?}", kvs);
+
+        Ok(kvs)
+    }
+
     // This function requires quite the trust from our VM and the user, it
     // takes a Vec of TypeValues under the assumption that they are exactly
     // ordered the way the resulting Record is, so that the caller can omit
@@ -720,14 +764,22 @@ impl<'a> Record {
         trace!("ordered values {:?}", values);
         let mut kvs = vec![];
         if let TypeDef::Record(rec) = ty {
-            for (field_name, _field_type) in rec.iter() {
-                let value = values.pop().unwrap();
-                kvs.push((field_name.clone(), ElementTypeValue::from(value)));
+            for (field_name, field_type) in rec.iter() {
+                if let TypeDef::Record(ref rec_type) = &**field_type {
+                    let num_values = rec_type.level_0_len();
+                    let value = values.split_off(values.len() - num_values);
+                    let a = Record::new(Self::_recurse_create(field_type, value).unwrap());
+                    kvs.push((field_name.clone(), ElementTypeValue::Nested(Box::new(a.into()))));
+                } else {
+                    let value = values.pop().unwrap();
+                    kvs.push((field_name.clone(), ElementTypeValue::from(value)));
+                }
             }
         } else {
             trace!("TypeDef for ordered fields {:?}", ty);
             return Err(CompileError::new("Not a record type".into()));
         }
+        trace!("KVS {:#?}", kvs);
 
         Ok(Self(kvs))
     }
@@ -774,7 +826,7 @@ impl<'a> Record {
         let mut elm = self.0.get(field_index[0]).map(|f| &f.1);
 
         for index in &field_index[1..] {
-            elm = elm?.as_record().unwrap().0.get(*index).map(|f| &f.1)
+            elm = elm?.as_record().ok()?.0.get(*index).map(|f| &f.1)
         }
         elm
     }
@@ -1057,7 +1109,7 @@ pub trait EnumBytesRecord {
 }
 
 pub trait RecordType: AsRef<[u8]> {
-    fn get_field_num() -> Option<usize>;
+    fn get_field_num() -> usize;
 }
 
 //------------ BytesRecord type ---------------------------------------------
