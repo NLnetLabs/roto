@@ -1,5 +1,5 @@
-mod helpers;
 mod common;
+mod helpers;
 
 //------------ RIB parse ----------------------------------------------------
 
@@ -31,7 +31,7 @@ fn test_rib_invalid_2() {
                 bla: Bla; blow: up
             }
             // comment
-            "###
+            "###,
     );
 
     compiler.test_parse(false);
@@ -40,26 +40,27 @@ fn test_rib_invalid_2() {
 #[test]
 fn test_rib_without_name_1() {
     common::init();
-    
+
     let compiler = helpers::TestCompiler::create(
         "rib-without-a-name",
         r###"
         // comment
         rib {}
-    "###);
+    "###,
+    );
     compiler.test_parse(false);
 }
 
 #[test]
 fn test_empty() {
     common::init();
-    
+
     let compiler = helpers::TestCompiler::create(
         "invalid-rib-without-name-2",
         r#"
             // some comment
             // bl alba  bcomment"
-        "#
+        "#,
     );
 
     compiler.test_parse(false);
@@ -68,7 +69,7 @@ fn test_empty() {
 #[test]
 fn test_interspersed_comments() {
     common::init();
-    
+
     let compiler = helpers::TestCompiler::create(
         "interspersed-comments",
         r###"
@@ -82,11 +83,10 @@ fn test_interspersed_comments() {
     let _e = _p.test_eval(true);
 }
 
-
 #[test]
 fn test_stream_1() {
     common::init();
-    
+
     let compiler = helpers::TestCompiler::create(
         "stream_1",
         r###"

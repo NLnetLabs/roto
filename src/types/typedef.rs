@@ -646,57 +646,46 @@ impl TypeDef {
         method_token: usize,
         args: &[StackValue],
         return_type: TypeDef,
-    ) -> TypeValue {
+    ) -> Result<TypeValue, VmError> {
         match self {
             TypeDef::Record(_rec_type) => {
                 Record::exec_type_method(method_token, args, return_type)
-                    .unwrap()
             }
             TypeDef::List(_list) => {
                 List::exec_type_method(method_token, args, return_type)
-                    .unwrap()
             }
             TypeDef::AsPath => {
                 AsPath::exec_type_method(method_token, args, return_type)
-                    .unwrap()
             }
             TypeDef::Prefix => {
                 Prefix::exec_type_method(method_token, args, return_type)
-                    .unwrap()
             }
             TypeDef::U32 => {
                 U32::exec_type_method(method_token, args, return_type)
-                    .unwrap()
             }
             TypeDef::StringLiteral => StringLiteral::exec_type_method(
                 method_token,
                 args,
                 return_type,
-            )
-            .unwrap(),
+            ),
             TypeDef::Asn => {
                 Asn::exec_type_method(method_token, args, return_type)
-                    .unwrap()
             }
             TypeDef::IpAddress => {
                 IpAddress::exec_type_method(method_token, args, return_type)
-                    .unwrap()
             }
             TypeDef::Route => RawRouteWithDeltas::exec_type_method(
                 method_token,
                 args,
                 return_type,
-            )
-            .unwrap(),
+            ),
             TypeDef::Rib(_rib) => {
                 RibType::exec_type_method(method_token, args, return_type)
-                    .unwrap()
             }
             TypeDef::Table(_rec) => {
                 Table::exec_type_method(method_token, args, return_type)
-                    .unwrap()
             }
-            _ => panic!("No corresponding Type method found for {:?}.", self),
+            _ => Err(VmError::InvalidMethodCall)
         }
     }
 

@@ -2,9 +2,7 @@ use log::trace;
 use roto::compiler::Compiler;
 
 use roto::blocks::Scope;
-use roto::types::builtin::{
-    Asn, Community,
-};
+use roto::types::builtin::{Asn, Community};
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::datasources::DataSource;
 use roto::types::typedef::TypeDef;
@@ -20,10 +18,8 @@ fn test_data(
     println!("Evaluate filter-map {}...", name);
 
     // Type coercion doesn't work here...
-    let filter_map_arguments = vec![(
-        "extra_asn",
-        TypeValue::from(Asn::from(65534_u32))
-    )];
+    let filter_map_arguments =
+        vec![("extra_asn", TypeValue::from(Asn::from(65534_u32)))];
 
     let mut c = Compiler::new();
     c.with_arguments(&name, filter_map_arguments)?;
@@ -58,14 +54,12 @@ fn test_data(
         TypeDef::new_record_type(vec![("counter", Box::new(TypeDef::U32))])
             .unwrap();
 
-    let _my_nested_rec_instance = Record::create_instance_with_ordered_fields(
-        &my_nested_rec_type,
-        vec![(
-            "counter",
-            1_u32.into(),
-        )],
-    )
-    .unwrap();
+    let _my_nested_rec_instance =
+        Record::create_instance_with_ordered_fields(
+            &my_nested_rec_type,
+            vec![("counter", 1_u32.into())],
+        )
+        .unwrap();
 
     let my_rec_type = TypeDef::new_record_type(vec![
         ("prefix", Box::new(TypeDef::Prefix)),
@@ -94,10 +88,12 @@ fn test_data(
 
     trace!("PAYLOAD {:#?}", my_payload);
 
-    let source_asns_type = TypeDef::new_record_type(vec![("asn", Box::new(TypeDef::Asn))])?;
-    let new_sa_rec = Record::create_instance_with_ordered_fields(&source_asns_type, vec![
-        ("asn", Asn::from_u32(300).into())
-        ])?;
+    let source_asns_type =
+        TypeDef::new_record_type(vec![("asn", Box::new(TypeDef::Asn))])?;
+    let new_sa_rec = Record::create_instance_with_ordered_fields(
+        &source_asns_type,
+        vec![("asn", Asn::from_u32(300).into())],
+    )?;
 
     let mem = &mut vm::LinearMemory::uninit();
 
@@ -106,10 +102,11 @@ fn test_data(
     println!("Used Data Sources");
     println!("{:#?}", &roto_pack.data_sources);
 
-    // table source_asns contains AsnLines { 
+    // table source_asns contains AsnLines {
     //     asn: Asn
     // }
-    let sources_asns = DataSource::table_from_records("source_asns", vec![new_sa_rec])?;
+    let sources_asns =
+        DataSource::table_from_records("source_asns", vec![new_sa_rec])?;
     roto_pack.set_source(sources_asns)?;
 
     for mb in roto_pack.get_mir().iter() {
@@ -122,9 +119,7 @@ fn test_data(
         .with_mir_code(roto_pack.mir)
         .build()?;
 
-    let res = vm
-        .exec(my_payload, None::<Record>, None, mem)
-        .unwrap();
+    let res = vm.exec(my_payload, None::<Record>, None, mem).unwrap();
 
     println!("\nRESULT");
     println!("action: {}", res.accept_reject);

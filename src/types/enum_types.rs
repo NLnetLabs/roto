@@ -43,10 +43,6 @@ impl<T: Copy> EnumVariant<T> {
             value: enum_tv.1,
         }
     }
-
-    // fn get_value(&self) -> T {
-    //     let ge = global_enums(&self.enum_name).unwrap();
-    // }
 }
 
 //------------ EnumVariant---------------------------------------------------
@@ -167,7 +163,8 @@ impl GlobalEnumTypeDef {
     // GlobalEnum and returns it as Ok(GlobalEnumTypeDef) OR it returns a vec
     // with all the GlobalEnumTypeDefs that contain it as the name of a
     // variant, in the form of Err(Vec<GlobalEnumTypeDef>). If the Vec inside
-    // the Err is empty, than the variant name wasn't found at all.
+    // the Err is empty, than the variant name wasn't found at all. The outer
+    // result will return an Err if for some reason the name of the variant cannot be p
     pub(crate) fn get_enum_for_variant_as_token(
         variant: &str,
     ) -> Result<GlobalEnumTypeDef, Vec<&GlobalEnumTypeDef>> {
@@ -175,7 +172,7 @@ impl GlobalEnumTypeDef {
         (&ShortString::from(variant)).try_into().map_err(|_e| {
             Self::iter()
                 .filter(|t| {
-                    ShortString::try_from(*t).unwrap() == variant
+                    ShortString::from(*t) == variant
                         || t.get_value_for_variant(variant).is_ok()
                 })
                 .collect::<Vec<_>>()
@@ -341,7 +338,7 @@ impl GlobalEnumTypeDef {
                     symbols::SymbolKind::AccessReceiver,
                     TypeDef::GlobalEnum(t),
                     vec![],
-                    Some(Token::Enum(t)),
+                    Token::Enum(t),
                 ));
             }
         };
@@ -354,7 +351,7 @@ impl GlobalEnumTypeDef {
                 symbols::SymbolKind::AccessReceiver,
                 TypeDef::Unknown,
                 args,
-                None,
+                Token::AnonymousEnum,
             )),
         }
     }
@@ -409,6 +406,43 @@ impl TryFrom<&ShortString> for GlobalEnumTypeDef {
     type Error = CompileError;
     fn try_from(value: &ShortString) -> Result<Self, CompileError> {
         match value.as_str() {
+            "AFI" => Ok(GlobalEnumTypeDef::Afi),
+            "SAFI" => Ok(GlobalEnumTypeDef::Safi),
+            "WELL_KNOWN_COMMUNITIES" => {
+                Ok(GlobalEnumTypeDef::WellKnownCommunities)
+            }
+            "BMP_MESSAGE_TYPE" => Ok(GlobalEnumTypeDef::BmpMessageType),
+            _ => Err(CompileError::from(format!(
+                "Unknown variant name {} in global enums",
+                value
+            ))),
+        }
+    }
+}
+
+impl FromStr for GlobalEnumTypeDef {
+    type Err = CompileError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "AFI" => Ok(GlobalEnumTypeDef::Afi),
+            "SAFI" => Ok(GlobalEnumTypeDef::Safi),
+            "WELL_KNOWN_COMMUNITIES" => {
+                Ok(GlobalEnumTypeDef::WellKnownCommunities)
+            }
+            "BMP_MESSAGE_TYPE" => Ok(GlobalEnumTypeDef::BmpMessageType),
+            _ => Err(CompileError::from(format!(
+                "Unknown variant name {} in global enums",
+                s
+            ))),
+        }
+    }
+}
+
+impl TryFrom<&str> for GlobalEnumTypeDef {
+    type Error = CompileError;
+    fn try_from(value: &str) -> Result<Self, CompileError> {
+        match value {
             "AFI" => Ok(GlobalEnumTypeDef::Afi),
             "SAFI" => Ok(GlobalEnumTypeDef::Safi),
             "WELL_KNOWN_COMMUNITIES" => {

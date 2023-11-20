@@ -10,7 +10,7 @@ use roto::types::builtin::{
 use roto::types::collections::Record;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
-use routecore::bgp::message::nlri::{Nlri, BasicNlri};
+use routecore::bgp::message::nlri::{BasicNlri, Nlri};
 use routecore::bgp::message::SessionConfig;
 
 mod common;
@@ -46,14 +46,23 @@ fn test_data(
 
     let msg_id = (RotondaId(0), 0);
     let update: UpdateMessage =
-        UpdateMessage::new(buf.clone(), SessionConfig::modern());
+        UpdateMessage::new(buf.clone(), SessionConfig::modern()).unwrap();
 
     let first_prefix: Prefix = update
-    .0
-    .announcements()
-    .into_iter()
-    .next()
-    .and_then(|mut p| if let Some(Ok(Nlri::Unicast(BasicNlri { prefix, .. }))) = p.next() { Some(Prefix::from(prefix)) } else { None }).unwrap();
+        .0
+        .announcements()
+        .into_iter()
+        .next()
+        .and_then(|mut p| {
+            if let Some(Ok(Nlri::Unicast(BasicNlri { prefix, .. }))) =
+                p.next()
+            {
+                Some(Prefix::from(prefix))
+            } else {
+                None
+            }
+        })
+        .unwrap();
     let peer_ip = "fe80::1".parse().unwrap();
 
     let payload: RawRouteWithDeltas = RawRouteWithDeltas::new_with_message(
@@ -61,7 +70,8 @@ fn test_data(
         first_prefix,
         update,
         RouteStatus::InConvergence,
-    ).with_peer_ip(peer_ip);
+    )?
+    .with_peer_ip(peer_ip);
 
     trace!("prefix in route {:?}", payload.prefix);
     trace!("peer_ip {:?}", payload.peer_ip());
@@ -134,15 +144,29 @@ fn test_routes_1() {
 
     let test_run = test_data(Filter("rib-in-pre-filter".into()), src);
 
-    let (VmResult { accept_reject, output_stream_queue, .. }, prefix, peer_ip) = test_run.unwrap();
+    let (
+        VmResult {
+            accept_reject,
+            output_stream_queue,
+            ..
+        },
+        prefix,
+        peer_ip,
+    ) = test_run.unwrap();
     let output_record = output_stream_queue[0].get_record();
     trace!("{:#?}", output_record);
     assert_eq!(output_stream_queue.len(), 1);
 
     // The outputted record is an ordered_record, meaning it is sorted
     // alphabetically on the key, so [0] is "peer_ip" and [1] is "prefix"
-    assert_eq!(output_record.get_field_by_index(vec![1].into()).unwrap(), &prefix);
-    assert_eq!(output_record.get_field_by_index(vec![0].into()).unwrap(), &peer_ip);
+    assert_eq!(
+        output_record.get_field_by_index(vec![1].into()).unwrap(),
+        &prefix
+    );
+    assert_eq!(
+        output_record.get_field_by_index(vec![0].into()).unwrap(),
+        &peer_ip
+    );
     trace!("{:#?}", output_stream_queue);
     assert_eq!(accept_reject, AcceptReject::Accept);
 }
@@ -189,15 +213,29 @@ fn test_routes_2() {
 
     let test_run = test_data(Filter("rib-in-pre-filter".into()), src);
 
-    let (VmResult { accept_reject, output_stream_queue, .. }, prefix, peer_ip) = test_run.unwrap();
+    let (
+        VmResult {
+            accept_reject,
+            output_stream_queue,
+            ..
+        },
+        prefix,
+        peer_ip,
+    ) = test_run.unwrap();
     let output_record = output_stream_queue[0].get_record();
     trace!("{:#?}", output_record);
     assert_eq!(output_stream_queue.len(), 1);
 
     // The outputted record is an ordered_record, meaning it is sorted
     // alphabetically on the key, so [0] is "peer_ip" and [1] is "prefix"
-    assert_eq!(output_record.get_field_by_index(vec![1].into()).unwrap(), &prefix);
-    assert_eq!(output_record.get_field_by_index(vec![0].into()).unwrap(), &peer_ip);
+    assert_eq!(
+        output_record.get_field_by_index(vec![1].into()).unwrap(),
+        &prefix
+    );
+    assert_eq!(
+        output_record.get_field_by_index(vec![0].into()).unwrap(),
+        &peer_ip
+    );
     trace!("{:#?}", output_stream_queue);
     assert_eq!(accept_reject, AcceptReject::Accept);
 }
@@ -244,15 +282,29 @@ fn test_routes_3() {
 
     let test_run = test_data(Filter("rib-in-pre-filter".into()), src);
 
-    let (VmResult { accept_reject, output_stream_queue, .. }, prefix, peer_ip) = test_run.unwrap();
+    let (
+        VmResult {
+            accept_reject,
+            output_stream_queue,
+            ..
+        },
+        prefix,
+        peer_ip,
+    ) = test_run.unwrap();
     let output_record = output_stream_queue[0].get_record();
     trace!("{:#?}", output_record);
     assert_eq!(output_stream_queue.len(), 1);
 
     // The outputted record is an ordered_record, meaning it is sorted
     // alphabetically on the key, so [0] is "peer_ip" and [1] is "prefix"
-    assert_eq!(output_record.get_field_by_index(vec![1].into()).unwrap(), &prefix);
-    assert_eq!(output_record.get_field_by_index(vec![0].into()).unwrap(), &peer_ip);
+    assert_eq!(
+        output_record.get_field_by_index(vec![1].into()).unwrap(),
+        &prefix
+    );
+    assert_eq!(
+        output_record.get_field_by_index(vec![0].into()).unwrap(),
+        &peer_ip
+    );
     trace!("{:#?}", output_stream_queue);
     assert_eq!(accept_reject, AcceptReject::Accept);
 }
@@ -300,15 +352,29 @@ fn test_routes_4() {
 
     let test_run = test_data(Filter("rib-in-pre-filter".into()), src);
 
-    let (VmResult { accept_reject, output_stream_queue, .. }, prefix, peer_ip) = test_run.unwrap();
+    let (
+        VmResult {
+            accept_reject,
+            output_stream_queue,
+            ..
+        },
+        prefix,
+        peer_ip,
+    ) = test_run.unwrap();
     let output_record = output_stream_queue[0].get_record();
     trace!("{:#?}", output_record);
     assert_eq!(output_stream_queue.len(), 1);
 
     // The outputted record is an ordered_record, meaning it is sorted
     // alphabetically on the key, so [0] is "peer_ip" and [1] is "prefix"
-    assert_eq!(output_record.get_field_by_index(vec![1].into()).unwrap(), &prefix);
-    assert_eq!(output_record.get_field_by_index(vec![0].into()).unwrap(), &peer_ip);
+    assert_eq!(
+        output_record.get_field_by_index(vec![1].into()).unwrap(),
+        &prefix
+    );
+    assert_eq!(
+        output_record.get_field_by_index(vec![0].into()).unwrap(),
+        &peer_ip
+    );
     trace!("{:#?}", output_stream_queue);
     assert_eq!(accept_reject, AcceptReject::Accept);
 }
@@ -361,16 +427,33 @@ fn test_routes_5() {
 
     let test_run = test_data(Filter("rib-in-pre-filter".into()), src);
 
-    let (VmResult { accept_reject, output_stream_queue, .. }, prefix, peer_ip) = test_run.unwrap();
+    let (
+        VmResult {
+            accept_reject,
+            output_stream_queue,
+            ..
+        },
+        prefix,
+        peer_ip,
+    ) = test_run.unwrap();
     let output_record = output_stream_queue[0].get_record();
     trace!("{:#?}", output_record);
     assert_eq!(output_stream_queue.len(), 1);
 
     // The outputted record is an ordered_record, meaning it is sorted
     // alphabetically on the key, so [0] is "peer_ip" and [1] is "prefix"
-    trace!("output_rec {:?}", output_record.get_field_by_index(vec![0, 1].into()));
-    assert_eq!(output_record.get_field_by_index(vec![0, 1].into()).unwrap(), &prefix);
-    assert_eq!(output_record.get_field_by_index(vec![0, 0].into()).unwrap(), &peer_ip);
+    trace!(
+        "output_rec {:?}",
+        output_record.get_field_by_index(vec![0, 1].into())
+    );
+    assert_eq!(
+        output_record.get_field_by_index(vec![0, 1].into()).unwrap(),
+        &prefix
+    );
+    assert_eq!(
+        output_record.get_field_by_index(vec![0, 0].into()).unwrap(),
+        &peer_ip
+    );
     trace!("{:#?}", output_stream_queue);
     assert_eq!(accept_reject, AcceptReject::Accept);
 }

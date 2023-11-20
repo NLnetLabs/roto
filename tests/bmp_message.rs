@@ -234,9 +234,9 @@ fn compile_initiation_payload(
 
     // let rm_msg = i_msg.unwrap();
     let payload = TypeValue::Builtin(
-        roto::types::builtin::BuiltinTypeValue::BmpMessage(
-            Arc::new(roto::types::builtin::BytesRecord(buf)),
-        ),
+        roto::types::builtin::BuiltinTypeValue::BmpMessage(Arc::new(
+            roto::types::builtin::BytesRecord(buf),
+        )),
     );
 
     trace!("Used Arguments");

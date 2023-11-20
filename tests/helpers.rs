@@ -1,7 +1,8 @@
 use log::trace;
 use nom::error::convert_error;
 use roto::{
-    compiler::{CompileError, Compiler}, blocks::Scope,
+    blocks::Scope,
+    compiler::{CompileError, Compiler},
 };
 
 pub struct TestCompiler<'a> {
@@ -19,7 +20,7 @@ impl<'a> TestCompiler<'a> {
         }
     }
 
-    pub fn test_parse(mut self, expect_success: bool) -> Self {        
+    pub fn test_parse(mut self, expect_success: bool) -> Self {
         trace!("test parse {}", self.name);
 
         let parse_res = self.compiler.parse_source_code(self.source_code);
@@ -59,7 +60,7 @@ impl<'a> TestCompiler<'a> {
         expect_success: bool,
     ) -> Result<(), Vec<(Scope, CompileError)>> {
         trace!("compile eval {}", self.name);
-        let compile_res = self.compiler.compile();
+        let compile_res = self.compiler.compile().unwrap();
 
         let res = if compile_res.is_success() {
             Ok(())

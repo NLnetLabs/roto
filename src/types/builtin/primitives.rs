@@ -714,7 +714,7 @@ impl RotoType for StringLiteral {
                 let mut sub_str = format_str.splitn(2, "{}");
 
                 let new_string = String::from_iter([
-                    sub_str.next().unwrap(),
+                    sub_str.next().ok_or(VmError::InvalidMethodCall)?,
                     &args[1].as_ref().to_string(),
                     if let Some(s) = sub_str.next() { s } else { "" },
                 ]);
@@ -859,7 +859,11 @@ impl RotoType for IntegerLiteral {
                 }),
             TypeDef::ConstEnumVariant(e_num) => match self.0 {
                 0..=255 =>
-                    Ok(TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant { enum_name: e_num.clone(), value: u8::try_from(self.0).unwrap() }))),
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant { enum_name: e_num.clone(), value: u8::try_from(self.0)
+                        .map_err(|_| CompileError::from(
+                            format!("Cannot convert type IntegerLiteral with value '{}' into Enum Variant with name '{}'", self.0, e_num)))?
+                         })
+                    )),
                 _ => Err(CompileError::from(format!("Cannot convert type IntegerLiteral > 255 into ConstU8Variant of type {}", e_num)))
             }
             _ => Err(format!(
@@ -1518,9 +1522,28 @@ impl SerializeForOperators for StandardCommunity {
             .serialize(serializer),
 
             None if self.is_private() => {
-                let asn: u16 =
-                    self.asn().unwrap().into_u32().try_into().unwrap();
-                let tag: u16 = self.tag().unwrap().value();
+                let asn = if let Some(asn) = self.asn() {
+                    // ASNs can only be 2-byte in standard communities, so not
+                    // being able to parse it into one is a (weird) error.
+                    if let Ok(asn) = asn.try_into_u16() {
+                        asn
+                    } else {
+                        return Err(serde::ser::Error::custom(
+                            format!("ASN {} is not a 2-byte ASN and cannot be converted", asn))
+                        );
+                    }
+                } else {
+                    return Err(serde::ser::Error::custom(
+                        format!("ASN {:?} contains invalid characters", self.asn())
+                    ));
+                };
+                let tag: u16 = if let Some(tag) = self.tag() {
+                    tag.value()
+                } else {
+                    return Err(serde::ser::Error::custom(
+                        format!("Tag {:?} contains invalid characters", self.tag())
+                    ))
+                };
                 let formatted_asn = format!("AS{}", asn); // to match Routinator JSON style
                 ser::Community {
                     raw_fields: vec![
@@ -1602,8 +1625,20 @@ impl SerializeForOperators for ExtendedCommunity {
             // - 0x03 = Route Origin (RFC 4360)
             (TransitiveTwoOctetSpecific, RouteTarget)
             | (TransitiveTwoOctetSpecific, RouteOrigin) => {
-                let global_admin = self.as2().unwrap();
-                let local_admin = self.an4().unwrap();
+                let global_admin = if let Some(ga) = self.as2() {
+                    ga
+                } else {
+                    return Err(serde::ser::Error::custom(
+                        format!("Global Admin {:?} contains invalid characters", self.as2())
+                    ))
+                };
+                let local_admin = if let Some(la) = self.an4() {
+                    la
+                } else {
+                    return Err(serde::ser::Error::custom(
+                        format!("Local Admin {:?} contains invalid characters", self.an4())
+                    ))
+                };
                 raw_fields.push(format!("{:#04X}", self.type_raw()));
                 raw_fields.push(format!("{:#04X}", self.to_raw()[1]));
                 raw_fields.push(format!("{:#06X}", global_admin.to_u16()));
@@ -1637,8 +1672,20 @@ impl SerializeForOperators for ExtendedCommunity {
             // - 0x03 = Route Origin (RFC 4360)
             (TransitiveIp4Specific, RouteTarget)
             | (TransitiveIp4Specific, RouteOrigin) => {
-                let global_admin = self.ip4().unwrap();
-                let local_admin = self.an2().unwrap();
+                let global_admin = if let Some(ga) = self.ip4() {
+                    ga
+                } else {
+                    return Err(serde::ser::Error::custom(
+                        format!("global Admin {:?} contains invalid characters", self.ip4())
+                    ));
+                };
+                let local_admin = if let Some(la) = self.an2() {
+                    la 
+                } else {
+                    return Err(serde::ser::Error::custom(
+                        format!("Local Admin {:?} contains invalid characters", self.an2())
+                    ));
+                };
                 raw_fields.push(format!("{:#04X}", self.type_raw()));
                 raw_fields.push(format!("{:#04X}", self.to_raw()[1]));
                 raw_fields.push(format!("{:#010X}", u32::from(global_admin)));
@@ -1669,8 +1716,9 @@ impl SerializeForOperators for ExtendedCommunity {
             }
 
             _ => {
-                raw_fields
-                    .extend(self.to_raw().iter().map(|x| format!("{:#04X}", x)));
+                raw_fields.extend(
+                    self.to_raw().iter().map(|x| format!("{:#04X}", x)),
+                );
                 ser::Community {
                     raw_fields,
                     r#type: "extended",
@@ -2350,7 +2398,7 @@ impl RotoType for AsPath {
             AsPathToken::Origin => match self.0.origin().cloned() {
                 Some(origin_asn) => {
                     Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(
-                        origin_asn.try_into_asn().unwrap(),
+                        origin_asn.try_into_asn().map_err(|_| VmError::InvalidValueType)?,
                     ))))
                 }
                 None => Err(VmError::InvalidPayload),
@@ -3126,7 +3174,9 @@ impl From<routecore::bgp::path_attributes::AtomicAggregate> for TypeValue {
     }
 }
 
-impl From<routecore::bgp::path_attributes::AtomicAggregate> for BuiltinTypeValue {
+impl From<routecore::bgp::path_attributes::AtomicAggregate>
+    for BuiltinTypeValue
+{
     fn from(value: routecore::bgp::path_attributes::AtomicAggregate) -> Self {
         BuiltinTypeValue::AtomicAggregate(AtomicAggregate(value))
     }
@@ -3242,13 +3292,13 @@ impl From<Aggregator> for BuiltinTypeValue {
 
 impl From<routecore::bgp::path_attributes::AggregatorInfo> for TypeValue {
     fn from(value: routecore::bgp::path_attributes::AggregatorInfo) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Aggregator(
-            Aggregator(value),
-        ))
+        TypeValue::Builtin(BuiltinTypeValue::Aggregator(Aggregator(value)))
     }
 }
 
-impl From<routecore::bgp::path_attributes::AggregatorInfo> for BuiltinTypeValue {
+impl From<routecore::bgp::path_attributes::AggregatorInfo>
+    for BuiltinTypeValue
+{
     fn from(value: routecore::bgp::path_attributes::AggregatorInfo) -> Self {
         BuiltinTypeValue::Aggregator(Aggregator(value))
     }
@@ -3302,6 +3352,8 @@ pub enum RouteStatus {
     StartOfRouteRefresh,
     // After the reception of a withdrawal
     Withdrawn,
+    // A routecore::bgp::ParseError happened on a part of the PDU!
+    Unparsable,
     // Status not relevant, e.g. a RIB that holds archived routes.
     #[default]
     Empty,
@@ -3317,6 +3369,7 @@ impl std::fmt::Display for RouteStatus {
                 write!(f, "start of route refresh")
             }
             RouteStatus::Withdrawn => write!(f, "withdrawn"),
+            RouteStatus::Unparsable => write!(f, "UNPARSABLE"),
             RouteStatus::Empty => write!(f, "empty"),
         }
     }

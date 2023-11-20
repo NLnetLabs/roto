@@ -302,13 +302,7 @@ impl List {
         let mut elm = self.0.get(*field_index.first()?);
 
         for index in &field_index[1..] {
-            elm = elm
-                .or(None)?
-                .as_record()
-                .unwrap()
-                .0
-                .get(*index)
-                .map(|f| &f.1)
+            elm = elm.or(None)?.as_record().ok()?.0.get(*index).map(|f| &f.1)
         }
 
         elm
@@ -324,7 +318,7 @@ impl List {
             elm = elm
                 .or(None)?
                 .into_record()
-                .unwrap()
+                .ok()?
                 .0
                 .get_mut(*index)
                 .map(|f| std::mem::take(&mut f.1));
@@ -715,11 +709,9 @@ impl<'a> Record {
         ty: &TypeDef,
         // the sequential typevalue vec
         mut values: Vec<TypeValue>,
-    ) -> Result<Vec<(ShortString, ElementTypeValue)>, CompileError> {
+    ) -> Result<Vec<(ShortString, ElementTypeValue)>, VmError> {
         if values.is_empty() {
-            return Err(CompileError::new(
-                "Can't create empty instance.".into(),
-            ));
+            return Err(VmError::InvalidRecord);
         }
 
         trace!("ordered values {:?}", values);
@@ -728,16 +720,24 @@ impl<'a> Record {
             for (field_name, field_type) in rec.iter() {
                 if let TypeDef::Record(ref rec_type) = &**field_type {
                     let num_values = rec_type.level_0_len();
-                    let part_values = values.split_off(values.len() - num_values);
-                    kvs.extend(Self::_recurse_create(field_type, part_values).unwrap());
+                    let part_values =
+                        values.split_off(values.len() - num_values);
+                    kvs.extend(Self::_recurse_create(
+                        field_type,
+                        part_values,
+                    )?);
+                } else if let Some(value) = values.pop() {
+                    kvs.push((
+                        field_name.clone(),
+                        ElementTypeValue::Primitive(value),
+                    ));
                 } else {
-                    let value = values.pop().unwrap();
-                    kvs.push((field_name.clone(), ElementTypeValue::Primitive(value)));
+                    return Err(VmError::InvalidRecord);
                 }
             }
         } else {
             trace!("TypeDef for ordered fields {:?}", ty);
-            return Err(CompileError::new("Not a record type".into()));
+            return Err(VmError::InvalidRecord);
         }
         trace!("KVS {:#?}", kvs);
 
@@ -754,11 +754,9 @@ impl<'a> Record {
     pub fn create_instance_from_ordered_fields(
         ty: &TypeDef,
         mut values: Vec<TypeValue>,
-    ) -> Result<Record, CompileError> {
+    ) -> Result<Record, VmError> {
         if values.is_empty() {
-            return Err(CompileError::new(
-                "Can't create empty instance.".into(),
-            ));
+            return Err(VmError::InvalidRecord);
         }
 
         trace!("ordered values {:?}", values);
@@ -768,16 +766,25 @@ impl<'a> Record {
                 if let TypeDef::Record(ref rec_type) = &**field_type {
                     let num_values = rec_type.level_0_len();
                     let value = values.split_off(values.len() - num_values);
-                    let a = Record::new(Self::_recurse_create(field_type, value).unwrap());
-                    kvs.push((field_name.clone(), ElementTypeValue::Nested(Box::new(a.into()))));
+                    let a = Record::new(Self::_recurse_create(
+                        field_type, value,
+                    )?);
+                    kvs.push((
+                        field_name.clone(),
+                        ElementTypeValue::Nested(Box::new(a.into())),
+                    ));
+                } else if let Some(value) = values.pop() {
+                    kvs.push((
+                        field_name.clone(),
+                        ElementTypeValue::Primitive(value),
+                    ));
                 } else {
-                    let value = values.pop().unwrap();
-                    kvs.push((field_name.clone(), ElementTypeValue::from(value)));
+                    return Err(VmError::InvalidRecord);
                 }
             }
         } else {
             trace!("TypeDef for ordered fields {:?}", ty);
-            return Err(CompileError::new("Not a record type".into()));
+            return Err(VmError::InvalidRecord);
         }
         trace!("KVS {:#?}", kvs);
 
@@ -834,7 +841,7 @@ impl<'a> Record {
     pub fn get_field_by_index_owned(
         &mut self,
         field_index: SmallVec<[usize; 8]>,
-    ) -> ElementTypeValue {
+    ) -> Option<ElementTypeValue> {
         let mut elm = self
             .0
             .get_mut(field_index[0])
@@ -842,16 +849,15 @@ impl<'a> Record {
 
         for index in &field_index[1..] {
             elm = elm
-                .or(None)
-                .unwrap()
+                .or(None)?
                 .into_record()
-                .unwrap()
+                .ok()?
                 .0
                 .get_mut(*index)
                 .map(|f| std::mem::take(&mut f.1))
         }
 
-        elm.unwrap()
+        elm
     }
 
     pub fn get_field_by_single_index(
@@ -873,7 +879,7 @@ impl<'a> Record {
                 .ok_or(VmError::MemOutOfBounds)?
                 .1
                 .as_mut_record()
-                .unwrap()
+                .or(Err(VmError::InvalidValueType))?
                 .0
                 .get_mut(*index)
         }
@@ -1102,10 +1108,7 @@ pub trait EnumBytesRecord {
         field_index: &SmallVec<[usize; 8]>,
     ) -> Result<TypeValue, VmError>;
 
-    fn is_variant(
-        &self,
-        variant_token: Token
-    ) -> bool;
+    fn is_variant(&self, variant_token: Token) -> bool;
 }
 
 pub trait RecordType: AsRef<[u8]> {
@@ -1157,7 +1160,6 @@ impl<T: RecordType> std::hash::Hash for BytesRecord<T> {
         self.0.as_ref().hash(state);
     }
 }
-
 
 //------------- LazyElementTypeValue type -----------------------------------
 
@@ -1331,12 +1333,14 @@ impl<'a, T: std::fmt::Debug + RecordType> LazyRecord<'a, T> {
             self.value,
             field_index
         );
-        self.value.get(field_index[0]).map(|f| match &f.1 {
-            LazyElementTypeValue::Lazy(l_value) => l_value(raw_bytes),
-            LazyElementTypeValue::Materialized(m_value) => m_value.clone(),
-            LazyElementTypeValue::LazyRecord(rec) => rec
-                .get_field_by_index(&field_index[1..].into(), raw_bytes)
-                .unwrap(),
+        self.value.get(field_index[0]).and_then(|f| match &f.1 {
+            LazyElementTypeValue::Lazy(l_value) => Some(l_value(raw_bytes)),
+            LazyElementTypeValue::Materialized(m_value) => {
+                Some(m_value.clone())
+            }
+            LazyElementTypeValue::LazyRecord(rec) => {
+                rec.get_field_by_index(&field_index[1..].into(), raw_bytes)
+            }
         })
     }
 
@@ -1362,8 +1366,7 @@ impl<'a, T: std::fmt::Debug + RecordType> LazyRecord<'a, T> {
             elm = elm
                 .ok_or(VmError::MemOutOfBounds)?
                 .1
-                .as_mut_record()
-                .unwrap()
+                .as_mut_record()?
                 .value
                 .get_mut(*index)
         }

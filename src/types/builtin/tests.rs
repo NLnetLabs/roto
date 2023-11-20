@@ -34,7 +34,7 @@ mod route {
         ]);
 
         let update: UpdateMessage =
-            UpdateMessage::new(buf, SessionConfig::modern());
+            UpdateMessage::new(buf, SessionConfig::modern()).unwrap();
 
         let prefixes: Vec<Prefix> = update
             .0
@@ -51,7 +51,7 @@ mod route {
             prefixes[0],
             update,
             RouteStatus::InConvergence,
-        ));
+        )?);
 
         for prefix in &prefixes[1..] {
             roto_msgs.push(RawRouteWithDeltas::new_with_message_ref(
@@ -95,7 +95,7 @@ mod route {
 
         println!("materialize! {:#?}", roto_msgs[2].get_latest_attrs());
 
-        let attr_set = roto_msgs[2].get_latest_attrs();
+        let attr_set = roto_msgs[2].get_latest_attrs()?;
         assert_eq!(attr_set.as_path.len(), Some(2));
 
         println!(
@@ -142,7 +142,7 @@ mod route {
         ]);
 
         let update: UpdateMessage =
-            UpdateMessage::new(buf, SessionConfig::modern());
+            UpdateMessage::new(buf, SessionConfig::modern()).unwrap();
 
         let prefixes: Vec<Prefix> = update
             .0
@@ -160,7 +160,7 @@ mod route {
             prefixes[0],
             update,
             RouteStatus::InConvergence,
-        ));
+        )?);
 
         for prefix in &prefixes[1..] {
             roto_msgs.push(RawRouteWithDeltas::new_with_message_ref(
@@ -200,7 +200,7 @@ mod route {
         let res = roto_msgs[2].store_delta(new_change_set1);
         assert!(res.is_ok());
 
-        let attr_set = roto_msgs[2].get_latest_attrs();
+        let attr_set = roto_msgs[2].get_latest_attrs()?;
         assert_eq!(attr_set.as_path.len(), Some(2));
         assert_eq!(
             *attr_set.as_path.as_routecore_hops_vec()[0],
@@ -225,7 +225,7 @@ mod route {
         let res = roto_msgs[2].store_delta(new_change_set2);
         assert!(res.is_ok());
 
-        let attr_set = roto_msgs[2].get_latest_attrs();
+        let attr_set = roto_msgs[2].get_latest_attrs()?;
         assert_eq!(attr_set.as_path.len(), Some(3));
         assert_eq!(
             attr_set.as_path.as_routecore_hops_vec().get(0),

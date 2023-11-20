@@ -23,9 +23,9 @@ pub enum Token {
     Method(usize),
     Variant(usize),
     Argument(usize),
-    // Action Sections can have arguments passed in, a symbol labeled with
+    // Action Sections can have arguments passed in, a symbol labelled with
     // this token references that argument. The first usize represents the
-    // in of the TermSection for which it is the `with` argument. The
+    // index of the TermSection for which it is the `with` argument. The
     // second usize is the index of the `with` argument per TermSection. For
     // now this is always zero (only one argument per TermSection allowed).
     ActionArgument(usize, usize),
@@ -62,9 +62,14 @@ pub enum Token {
     TypedRecord,
     List,
     BuiltinType(u8),
-    // Enum
+    // A named, hard-coded global Enum 
     Enum(GlobalEnumTypeDef),
+    // Anonymous Enum
+    AnonymousEnum,
     ConstEnumVariant,
+    // Some structural symbols that are non-terminal, meaning they have
+    // children, may not have to need any Token.
+    NonTerminal
 }
 
 impl Token {

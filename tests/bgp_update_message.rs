@@ -54,7 +54,7 @@ fn test_data(
     // );
     let payload = BgpUpdateMessage::new(
         msg_id,
-        UpdateMessage::new(buf, SessionConfig::modern()),
+        UpdateMessage::new(buf, SessionConfig::modern()).unwrap(),
     );
 
     // let payload2 = TypeValue::Builtin(

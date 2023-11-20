@@ -219,8 +219,6 @@ macro_rules! lazy_data_enum {
                         )
                     )
                 )
-            } else {
-                panic!("MOFGO!!@E");
             }
             // TypeValue::Builtin(
             //     EnumVariant::<u8>::new((

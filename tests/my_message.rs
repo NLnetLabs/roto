@@ -52,11 +52,12 @@ fn test_data(
         TypeDef::new_record_type(vec![("counter", Box::new(TypeDef::U32))])
             .unwrap();
 
-    let _my_nested_rec_instance = Record::create_instance_with_ordered_fields(
-        &my_nested_rec_type,
-        vec![("counter", 1_u32.into())],
-    )
-    .unwrap();
+    let _my_nested_rec_instance =
+        Record::create_instance_with_ordered_fields(
+            &my_nested_rec_type,
+            vec![("counter", 1_u32.into())],
+        )
+        .unwrap();
 
     let my_rec_type = TypeDef::new_record_type(vec![
         ("prefix", Box::new(TypeDef::Prefix)),
@@ -398,7 +399,7 @@ fn test_filter_map_message_5() {
         }
         "#,
     ).unwrap();
-    
+
     assert_eq!(res.output_stream_queue.len(), 1);
     assert_eq!(res.output_stream_queue[0].get_name(), "My ASN");
     assert_eq!(res.output_stream_queue[0].get_topic(), "My Asn was Seen!");
@@ -458,11 +459,10 @@ fn test_filter_map_message_6() {
         }
         "#,
     ).unwrap();
-    
+
     for m in res.output_stream_queue.iter() {
         trace!("MESSAGE {:?}", m);
     }
     assert_eq!(res.output_stream_queue.len(), 1);
     assert_eq!(res.output_stream_queue[0].get_name(), "My ASN");
-
 }

@@ -1,5 +1,5 @@
-mod helpers;
 mod common;
+mod helpers;
 
 use helpers::TestCompiler;
 use log::trace;
@@ -7,7 +7,7 @@ use log::trace;
 #[test]
 fn test_filter_map_garbage_1() {
     common::init();
-    
+
     let _parsed_data = TestCompiler::create(
         "garbage_1",
         r"
@@ -129,7 +129,6 @@ fn test_filter_map_11() {
     .test_parse(true)
     .test_eval(true)
     .test_compile(true);
-
 }
 
 #[test]

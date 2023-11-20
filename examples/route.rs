@@ -37,7 +37,7 @@ fn test_data(
     ]);
 
     let update: UpdateMessage =
-        UpdateMessage::new(buf, SessionConfig::modern());
+        UpdateMessage::new(buf, SessionConfig::modern()).unwrap();
 
     let prefixes: Vec<Prefix> = update
         .0
@@ -52,7 +52,7 @@ fn test_data(
         prefixes[0],
         update,
         RouteStatus::InConvergence,
-    );
+    )?;
 
     // Create the VM
     println!("Used Arguments");

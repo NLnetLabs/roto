@@ -5,7 +5,9 @@ use nom::branch::{alt, permutation};
 use nom::bytes::complete::{is_not, take, take_while, take_while1};
 use nom::character::complete::{char, digit1, multispace0, multispace1};
 use nom::combinator::{all_consuming, cut, map_res, not, opt, recognize};
-use nom::error::{context, ErrorKind, ParseError, VerboseError};
+use nom::error::{
+    context, ErrorKind, FromExternalError, ParseError, VerboseError,
+};
 use nom::multi::{
     fold_many0, many0, many1, separated_list0, separated_list1,
 };
@@ -22,7 +24,7 @@ use nom::{
 use serde::{Serialize, Serializer};
 use smallvec::SmallVec;
 
-use crate::compiler::compile::CompileError;
+use crate::compiler::error::CompileError;
 use crate::parse_string;
 use crate::types::builtin::{Asn, Boolean};
 
@@ -1061,7 +1063,7 @@ impl PatternMatchActionExpr {
 // the name of the actions plus an optional arguments list of variable names,
 // whose values are to be passed in at runtime. The Action definition should
 // have all the variables defined in a `with` statement.
-// 
+//
 // The fields of this struct are the same as `MethodComputeExpr`, but it gets
 // treated differently at eval time.
 #[derive(Clone, Debug)]
@@ -1170,7 +1172,10 @@ impl PatternMatchActionArm {
                 // comma at the end. Cannot end with a
                 // accept_reject
                 map(
-                    terminated(opt_ws(ActionCallExpr::parse), opt_ws(char(','))),
+                    terminated(
+                        opt_ws(ActionCallExpr::parse),
+                        opt_ws(char(',')),
+                    ),
                     |l_e| vec![(Some(l_e), None)],
                 ),
             )),
@@ -1844,7 +1849,13 @@ impl IntegerLiteral {
             )),
         )(input)?;
 
-        let value = digits.parse().unwrap();
+        let value = digits.parse::<i64>().map_err(|e| {
+            nom::Err::Failure(VerboseError::from_external_error(
+                input,
+                nom::error::ErrorKind::Char,
+                e,
+            ))
+        })?;
         Ok((input, Self(value)))
     }
 }
@@ -1868,7 +1879,7 @@ impl From<&'_ IntegerLiteral> for i64 {
 ///
 /// We parse it as a string and then convert it to an integer.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PrefixLengthLiteral(pub usize);
+pub struct PrefixLengthLiteral(pub u8);
 
 impl PrefixLengthLiteral {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
@@ -1877,7 +1888,13 @@ impl PrefixLengthLiteral {
             preceded(char('/'), take_while1(|ch: char| ch.is_ascii_digit())),
         )(input)?;
 
-        let value = digits.parse().unwrap();
+        let value = digits.parse::<u8>().map_err(|e| {
+            nom::Err::Failure(VerboseError::from_external_error(
+                input,
+                nom::error::ErrorKind::Char,
+                e,
+            ))
+        })?;
         Ok((input, Self(value)))
     }
 }
@@ -1890,7 +1907,7 @@ impl From<&'_ PrefixLengthLiteral> for ShortString {
 
 impl From<&'_ PrefixLengthLiteral> for u8 {
     fn from(literal: &PrefixLengthLiteral) -> Self {
-        literal.0 as u8
+        literal.0
     }
 }
 
@@ -1912,7 +1929,13 @@ impl HexLiteral {
             )),
         )(input)?;
 
-        let value = u64::from_str_radix(&digits[2..], 16).unwrap();
+        let value = u64::from_str_radix(&digits[2..], 16).map_err(|e| {
+            nom::Err::Failure(VerboseError::from_external_error(
+                input,
+                nom::error::ErrorKind::HexDigit,
+                e,
+            ))
+        })?;
         Ok((input, Self(value)))
     }
 }
@@ -1948,7 +1971,13 @@ impl AsnLiteral {
             )),
         )(input)?;
 
-        let value = digits[2..].parse::<u32>().unwrap();
+        let value = digits[2..].parse::<u32>().map_err(|e| {
+            nom::Err::Failure(VerboseError::from_external_error(
+                input,
+                nom::error::ErrorKind::AlphaNumeric,
+                e,
+            ))
+        })?;
         Ok((input, Self(value)))
     }
 }
@@ -1985,7 +2014,13 @@ impl FloatLiteral {
             ))),
         )(input)?;
 
-        let value = digits.parse().unwrap();
+        let value = digits.parse::<f64>().map_err(|e| {
+            nom::Err::Failure(VerboseError::from_external_error(
+                input,
+                nom::error::ErrorKind::AlphaNumeric,
+                e,
+            ))
+        })?;
         Ok((input, Self(value)))
     }
 }

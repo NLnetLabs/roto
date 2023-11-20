@@ -15,9 +15,7 @@ fn test_logical_expr_1() {
 
 #[test]
 fn test_logical_expr_2() {
-    let r = LogicalExpr::parse(
-        r#"(0.0.0.0/0 prefix-length-range /12-/16)"#
-    );
+    let r = LogicalExpr::parse(r#"(0.0.0.0/0 prefix-length-range /12-/16)"#);
     println!("{:#?}", r);
     assert!(r.is_ok());
     if let Ok(expr) = r {
@@ -32,7 +30,7 @@ fn test_logical_expr_3() {
     );
     println!("{:#?}", r);
     assert!(r.is_ok());
-        if let Ok(expr) = r {
+    if let Ok(expr) = r {
         assert_eq!(expr.0, "");
     }
 }
@@ -114,9 +112,11 @@ fn test_compute_expr_5() {
 
 #[test]
 fn test_action_body() {
-    let r = ActionSectionBody::parse(r###"
+    let r = ActionSectionBody::parse(
+        r###"
         send_to(a,b);
-        pph_asn.asn.set(AS200);"###);
+        pph_asn.asn.set(AS200);"###,
+    );
     assert!(r.is_ok());
     if let Ok(expr) = r {
         assert_eq!(expr.0, "");
@@ -153,9 +153,7 @@ fn test_bytestring_literal_expr() {
 
 #[test]
 fn test_prefix_expr_1() {
-    let s = PrefixMatchExpr::parse(
-        r###"129.23.0.0/16 upto /18"###,
-    );
+    let s = PrefixMatchExpr::parse(r###"129.23.0.0/16 upto /18"###);
     println!("{:#?}", s);
     assert!(s.is_ok());
     if let Ok(expr) = s {
@@ -165,9 +163,7 @@ fn test_prefix_expr_1() {
 
 #[test]
 fn test_prefix_expr_2() {
-    let s = PrefixMatchExpr::parse(
-        r###"2001::1/48 orlonger"###,
-    );
+    let s = PrefixMatchExpr::parse(r###"2001::1/48 orlonger"###);
     println!("{:#?}", s);
     assert!(s.is_ok());
     if let Ok(expr) = s {
@@ -182,7 +178,7 @@ fn test_prefix_expr_3() {
     );
     println!("{:#?}", s);
     assert!(s.is_ok());
-        if let Ok(expr) = s {
+    if let Ok(expr) = s {
         assert_eq!(expr.0, "");
     }
 }

@@ -32,7 +32,7 @@ pub(crate) struct Symbol {
     ty: TypeDef,
     args: Vec<Symbol>,
     value: TypeValue,
-    token: Option<Token>, // location: Location,
+    token: Token, // location: Location,
 }
 
 impl Symbol {
@@ -43,7 +43,7 @@ impl Symbol {
         &self,
     ) -> Result<(SymbolKind, TypeDef, Token, Option<TypeValue>), CompileError>
     {
-        let token = self.get_token()?;
+        let token = self.get_token();
         Ok((
             self.kind,
             self.ty.clone(),
@@ -71,7 +71,7 @@ impl Symbol {
     pub fn get_kind_type_and_token(
         &self,
     ) -> Result<(SymbolKind, TypeDef, Token), CompileError> {
-        let token = self.get_token()?;
+        let token = self.get_token();
         Ok((self.kind, self.ty.clone(), token))
     }
 
@@ -84,10 +84,8 @@ impl Symbol {
         self.kind
     }
 
-    pub fn get_token(&self) -> Result<Token, CompileError> {
-        self.token.clone().ok_or_else(|| {
-            format!("No token found for symbol '{:?}'", self).into()
-        })
+    pub fn get_token(&self) -> Token {
+        self.token.clone()
     }
 
     pub fn get_type(&self) -> TypeDef {
@@ -100,7 +98,7 @@ impl Symbol {
     }
 
     pub fn set_token(mut self, token: Token) -> Self {
-        self.token = Some(token);
+        self.token = token;
         self
     }
 
@@ -276,14 +274,14 @@ impl Symbol {
         // }
     }
 
-    pub fn empty() -> Self {
+    pub fn empty(token: Token) -> Self {
         Symbol {
             name: "".into(),
             kind: SymbolKind::Empty,
             ty: TypeDef::Unknown,
             args: vec![],
             value: TypeValue::Unknown,
-            token: None,
+            token,
         }
     }
 
@@ -292,7 +290,7 @@ impl Symbol {
         kind: SymbolKind,
         ty: TypeDef,
         args: Vec<Symbol>,
-        token: Option<Token>,
+        token: Token,
     ) -> Self {
         Symbol {
             name,
@@ -317,7 +315,7 @@ impl Symbol {
             ty: (&value).into(),
             args,
             value,
-            token: Some(token),
+            token,
         }
     }
 
@@ -393,27 +391,19 @@ impl Symbol {
 
 impl std::cmp::PartialOrd for Symbol {
     fn partial_cmp(&self, other: &Symbol) -> Option<std::cmp::Ordering> {
-        Some(
-            self.token
-                .as_ref()
-                .unwrap()
-                .cmp(other.token.as_ref().unwrap()),
-        )
+        Some(self.token.cmp(&other.token))
     }
 }
 
 impl std::cmp::Ord for Symbol {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.token
-            .as_ref()
-            .unwrap()
-            .cmp(other.token.as_ref().unwrap())
+        self.token.cmp(&other.token)
     }
 }
 
 impl PartialEq for Symbol {
     fn eq(&self, other: &Symbol) -> bool {
-        self.token.as_ref().map(|t1| other.token.as_ref().map(|t2| t2 == t1)).unwrap_or(Some(false)).unwrap_or(false)
+        self.token == other.token && self.name == other.name
     }
 }
 
@@ -639,7 +629,7 @@ impl SymbolTable {
     pub(crate) fn new(filter_map: &Scope) -> Self {
         SymbolTable {
             scope: filter_map.clone(),
-            rx_type: Symbol::empty(),
+            rx_type: Symbol::empty(Token::NonTerminal),
             tx_type: None,
             arguments: HashMap::new(),
             variables: HashMap::new(),
@@ -741,7 +731,7 @@ impl SymbolTable {
 
         let token_int = self.variables.len();
 
-        let token = Some(match kind {
+        let token = match kind {
             SymbolKind::Rib => Token::Rib(token_int),
             // Treat PrefixList like a table, they share the same methods.
             SymbolKind::Table | SymbolKind::PrefixList => {
@@ -749,7 +739,7 @@ impl SymbolTable {
             }
             SymbolKind::OutputStream => Token::OutputStream(token_int),
             _ => Token::Variable(token_int),
-        });
+        };
 
         self.variables.insert(
             key,
@@ -803,12 +793,10 @@ impl SymbolTable {
         let token_int = self.arguments.len();
 
         let token = match kind {
-            SymbolKind::SplitRxType => Some(Token::RxType(ty.clone())),
-            SymbolKind::SplitTxType => Some(Token::TxType),
-            SymbolKind::PassThroughRxTxType => {
-                Some(Token::RxType(ty.clone()))
-            }
-            _ => Some(Token::Argument(token_int)),
+            SymbolKind::SplitRxType => Token::RxType(ty.clone()),
+            SymbolKind::SplitTxType => Token::TxType,
+            SymbolKind::PassThroughRxTxType => Token::RxType(ty.clone()),
+            _ => Token::Argument(token_int),
         };
 
         match kind {
@@ -852,13 +840,18 @@ impl SymbolTable {
                 ty: TypeDef::Boolean,
                 args: vec![child_symbol],
                 value: TypeValue::Unknown,
-                token: Some(Token::TermSection(term_section_index)),
+                token: Token::TermSection(term_section_index),
             });
         } else {
             let child_args = &mut self
                 .term_sections
                 .get_mut(&term_section_key)
-                .unwrap()
+                .ok_or_else(|| {
+                    CompileError::Internal(format!(
+                        "Cannot add logical formula from {:?}",
+                        term_section_key
+                    ))
+                })?
                 .args;
             child_args.push(child_symbol);
         }
@@ -872,7 +865,7 @@ impl SymbolTable {
         mut action: Symbol,
     ) -> Result<(), CompileError> {
         let token_int = self.action_sections.len();
-        let token = Some(Token::ActionSection(token_int));
+        let token = Token::ActionSection(token_int);
 
         action.token = token;
         self.action_sections.insert(key, action);
@@ -951,7 +944,7 @@ impl SymbolTable {
             Token::Variable(_token_int) => self
                 .variables
                 .values()
-                .find(|s| s.token == Some(token.clone()))
+                .find(|s| s.token == token.clone())
                 .unwrap_or_else(|| {
                     panic!("Fatal: Created Token does not exist.")
                 }),
@@ -986,7 +979,7 @@ impl SymbolTable {
             .ok_or_else(|| {
                 format!("Symbol '{}' not found as term", name).into()
             })
-            .map(|term| (term.ty.clone(), term.token.clone().unwrap()))
+            .map(|term| (term.ty.clone(), term.token.clone()))
     }
 
     // Return the type of the first argument of the symbol that lives in this
@@ -1018,7 +1011,7 @@ impl SymbolTable {
                 )
                 .into()
             })
-            .map(|action| (action.ty.clone(), action.token.clone().unwrap()))
+            .map(|action| (action.ty.clone(), action.token.clone()))
     }
 
     pub(crate) fn get_action_sections(&self) -> Vec<&Symbol> {
@@ -1053,11 +1046,11 @@ impl SymbolTable {
             });
 
         src.map(|r| match r.get_token() {
-            Ok(Token::Rib(_)) => {
+            Token::Rib(_) => {
                 r.get_kind_type_and_token().map(|ktt| (ktt.1, ktt.2))
             }
-            Ok(Token::Table(_)) => {
-                Ok((TypeDef::Table(Box::new(r.get_type())), r.get_token()?))
+            Token::Table(_) => {
+                Ok((TypeDef::Table(Box::new(r.get_type())), r.get_token()))
             }
             _ => Err(CompileError::new(format!(
                 "No data source named '{}' found.",
@@ -1092,11 +1085,8 @@ impl SymbolTable {
         // match actions.
         for ts in &self.term_sections {
             if deps_set.iter().any(|ma| {
-                if let Ok(token) = ts.1.get_token() {
-                    token.is_term() && ma.name == ts.0
-                } else {
-                    false
-                }
+                    ts.1.get_token().is_term() && ma.name == ts.0
+               
             }) {
                 deps_set.extend(ts.1.flatten_nodes());
             }
@@ -1106,11 +1096,7 @@ impl SymbolTable {
         // match actions.
         for ts in &self.action_sections {
             if deps_set.iter().any(|ma| {
-                if let Ok(token) = ts.1.get_token() {
-                    token.is_action() && ma.name == ts.0
-                } else {
-                    false
-                }
+                    ts.1.get_token().is_action() && ma.name == ts.0
             }) {
                 deps_set.extend(ts.1.flatten_nodes());
             }
@@ -1123,13 +1109,11 @@ impl SymbolTable {
             mut used_arguments,
             mut used_data_sources,
             ..
-        } = self
-            ._partition_deps_graph(deps_set)
-            .map_err(|_e| {
-                CompileError::new(
-                    "can't create dependencies graph for terms".into(),
-                )
-            })?;
+        } = self._partition_deps_graph(deps_set).map_err(|_e| {
+            CompileError::Internal(
+                "can't create dependencies graph for terms".into(),
+            )
+        })?;
 
         // Second, go over all the variables that we gathered in the last
         // step and see which variables, arguments and data-sources they
@@ -1181,14 +1165,14 @@ impl SymbolTable {
         mut deps_vec: Vec<&'a Symbol>,
     ) -> Result<DepsGraph, CompileError> {
         deps_vec.retain(|t| match t.get_token() {
-            Ok(t) => t.is_variable() || t.is_argument() || t.is_data_source(),
+            t => t.is_variable() || t.is_argument() || t.is_data_source(),
             _ => false,
         });
 
         let (args_vec, vars_srcs_vec): (Vec<&Symbol>, Vec<&Symbol>) =
             deps_vec
                 .into_iter()
-                .partition(|s| s.get_token().unwrap().is_argument());
+                .partition(|s| s.get_token().is_argument());
 
         let args_vec = args_vec
             .into_iter()
@@ -1203,7 +1187,7 @@ impl SymbolTable {
 
         let vars_src_vec: (Vec<_>, Vec<_>) = vars_srcs_vec
             .into_iter()
-            .partition(|s| s.get_token().unwrap().is_variable());
+            .partition(|s| s.get_token().is_variable());
 
         let (vars_vec, data_sources_vec): (Vec<_>, Vec<_>) = (
             vars_src_vec

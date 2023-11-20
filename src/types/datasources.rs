@@ -98,7 +98,7 @@ impl<M: Meta + 'static> From<Rib<M>> for DataSource {
 
 use std::sync::Arc;
 
-use log::trace;
+use log::{error, trace};
 use rotonda_store::{epoch, prelude::Meta, MatchOptions, MatchType};
 use smallvec::SmallVec;
 
@@ -237,10 +237,19 @@ impl<M: Meta> RotoRib for Rib<M> {
                 trace!("longest match on rib");
                 trace!("args {:?}", args);
                 let guard = epoch::pin();
+                let prefix = if let Ok(prefix) =
+                    routecore::addr::Prefix::try_from(args[0].as_ref())
+                {
+                    prefix
+                } else {
+                    error!("Ignoring failed type conversion from value '{:?}' to Prefix while executing Data Source method.", args[0]);
+                    return DataSourceMethodValue::TypeValue(
+                        TypeValue::Unknown,
+                    );
+                };
                 self.store
                     .match_prefix(
-                        &routecore::addr::Prefix::try_from(args[0].as_ref())
-                            .unwrap(),
+                        &prefix,
                         &MatchOptions {
                             match_type: MatchType::LongestMatch,
                             include_all_records: false,
@@ -315,10 +324,9 @@ impl Table {
         field_index: SmallVec<[usize; 8]>,
     ) -> Option<&TypeValue> {
         match field_index {
-            fi if fi.is_empty() => self
-                .records
-                .get(index)
-                .and_then(|r| r.get_field_by_single_index(index).map(|v| (&v.1).into())),
+            fi if fi.is_empty() => self.records.get(index).and_then(|r| {
+                r.get_field_by_single_index(index).map(|v| (&v.1).into())
+            }),
             field_index => match self.records.get(index) {
                 Some(r) => {
                     r.get_field_by_index(field_index).map(|v| v.into())

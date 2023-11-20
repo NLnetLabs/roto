@@ -27,7 +27,8 @@ use super::{
     },
     collections::{BytesRecord, ElementTypeValue, LazyRecord, List, Record},
     lazyrecord_types::{
-        PeerDownNotification, PeerUpNotification, RouteMonitoring, InitiationMessage,
+        InitiationMessage, PeerDownNotification, PeerUpNotification,
+        RouteMonitoring,
     },
     outputs::OutputStreamMessage,
     typedef::TypeDef,
@@ -336,7 +337,8 @@ impl RotoType for TypeValue {
                         BmpPeerDownNotification in TypeValue::into_type()"
                             .to_string(),
                     ))
-                }BuiltinTypeValue::BmpInitationMessage(_v) => {
+                }
+                BuiltinTypeValue::BmpInitationMessage(_v) => {
                     Err(CompileError::new(
                         "Unsupported TypeValue::\
                         BmpInitiationMessage in TypeValue::into_type()"
@@ -785,14 +787,14 @@ impl PartialEq for TypeValue {
                     false
                 } else {
                     r1.iter().enumerate().all(|(i, elm)| {
-                        if let Ok(tv) = r2
-                            .get_field_by_single_index(i)
-                            .unwrap()
-                            .1
-                            .clone()
-                            .into_type(&(&elm.1).into())
-                        {
-                            elm.1 == tv
+                        if let Some(ktv) = r2.get_field_by_single_index(i) {
+                            if let Ok(tv) =
+                                ktv.1.clone().into_type(&(&elm.1).into())
+                            {
+                                elm.1 == tv
+                            } else {
+                                false
+                            }
                         } else {
                             false
                         }
@@ -1214,7 +1216,7 @@ impl From<crate::ast::IntegerLiteral> for TypeValue {
 impl From<crate::ast::PrefixLengthLiteral> for TypeValue {
     fn from(value: crate::ast::PrefixLengthLiteral) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::PrefixLength(PrefixLength(
-            value.0 as u8,
+            value.0,
         )))
     }
 }

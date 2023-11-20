@@ -50,13 +50,13 @@ impl<'a> ast::SyntaxTree {
         let global_scope = Scope::Global;
 
         let global_symbols = if symbols_mut.contains_key(&global_scope) {
-            symbols_mut.get_mut(&global_scope).unwrap()
+            symbols_mut.get_mut(&global_scope).ok_or_else(|| CompileError::from("Cannot find global scope."))?
         } else {
             let mut global_table = symbols::SymbolTable::new(&global_scope);
             global_table.create_global_methods();
 
             symbols_mut.insert(global_scope.clone(), global_table);
-            symbols_mut.get_mut(&global_scope).unwrap()
+            symbols_mut.get_mut(&global_scope).ok_or_else(|| CompileError::from("Cannot find global scope."))?
         };
 
         for expr in &global {
@@ -83,15 +83,13 @@ impl<'a> ast::SyntaxTree {
                 }
             };
 
-            // Scope::FilterMap(filter_map_name.clone());
-
             if let std::collections::hash_map::Entry::Vacant(e) =
                 symbols_mut.entry(filter_map_scope.clone())
             {
                 e.insert(symbols::SymbolTable::new(&filter_map_scope));
-                symbols_mut.get_mut(&global_scope).unwrap()
+                symbols_mut.get_mut(&global_scope).ok_or_else(|| CompileError::from("Cannot find global scope."))?
             } else {
-                symbols_mut.get_mut(&filter_map_scope).unwrap()
+                symbols_mut.get_mut(&filter_map_scope).ok_or_else(|| CompileError::from("Cannot find global scope."))?
             };
         }
         drop(symbols_mut);
@@ -562,7 +560,7 @@ impl ast::Define {
             // it will be used: the type inferrence may lead to a different
             // type in different contexts, and then the type woudln't be
             // equal to itself, which doesn't sound good (pun!).
-            if let Ok(Token::AnonymousRecord) = s.get_token() {
+            if let Token::AnonymousRecord = s.get_token() {
                 return Err(CompileError::from(
                     format!(
                         "Assignment to Anonymous Record type not allowed in `define` section for variable '{}'.",
@@ -617,7 +615,7 @@ impl ast::TermSection {
                 SymbolKind::Constant,
                 argument_type.clone(),
                 vec![],
-                Some(Token::TermArgument(term_section_index, 0)),
+                Token::TermArgument(term_section_index, 0)
             ))
         }
 
@@ -680,7 +678,7 @@ impl ast::TermSection {
             // retrieving that argument.
             logical_formula = logical_formula.set_type(argument_type.clone());
             add_logical_formula(
-                Some(self.ident.ident.clone()),
+                self.ident.ident.clone(),
                 term_section_index,
                 logical_formula,
                 symbols.clone(),
@@ -734,11 +732,14 @@ impl ast::TermSection {
                         e_num.get_props_for_variant(&variant.variant_id)?;
 
                     let local_scope = vec![symbols::Symbol::new(
-                        variant.data_field.clone().unwrap().ident,
+                        variant.data_field.clone().ok_or(CompileError::from(
+                            format!("Variant: '{}' has no data field. This is currently not allowed.", 
+                            variant.variant_id)
+                        ))?.ident,
                         symbols::SymbolKind::VariableAssignment,
                         variant_type_def.clone(),
                         vec![],
-                        Some(variant_token.clone()),
+                        variant_token.clone(),
                     )];
 
                     // extract the logical expressions for this variant
@@ -803,22 +804,25 @@ impl ast::TermSection {
                         symbols::SymbolKind::Term,
                         TypeDef::Boolean,
                         logic_args,
-                        Some(Token::AnonymousTerm),
+                        Token::AnonymousTerm,
                     )];
 
                     enum_s.add_arg(symbols::Symbol::new(
-                        variant.data_field.clone().unwrap().ident,
+                        variant.data_field.clone().ok_or(CompileError::from(
+                            format!("Variant: '{}' has no data field. This is currently not allowed.", 
+                            variant.variant_id)
+                        ))?.ident,
                         symbols::SymbolKind::EnumVariant,
                         variant_type_def,
                         anon_term,
-                        Some(variant_token),
+                        variant_token,
                     ));
                 }
             }
         }
 
         add_logical_formula(
-            Some(self.ident.ident.clone()),
+            self.ident.ident.clone(),
             term_section_index,
             enum_s,
             symbols,
@@ -858,11 +862,11 @@ impl ast::ActionSection {
                 SymbolKind::Argument,
                 action_section_type.clone(),
                 vec![],
-                Some(Token::ActionArgument(action_section_index, 0)),
+                Token::ActionArgument(action_section_index, 0),
             ))
         }
 
-        trace!("action section {} with {:?}", self.ident, self.with_kv);
+        trace!("action section nunber {} {} with {:?}", action_section_index, self.ident, self.with_kv);
         trace!("local scope");
         trace!("{:#?}", local_scope);
 
@@ -873,7 +877,7 @@ impl ast::ActionSection {
                 symbols::SymbolKind::Argument,
                 TypeDef::try_from(kv.ty.clone())?,
                 vec![],
-                Some(Token::ActionArgument(action_section_index, i)),
+                Token::ActionArgument(action_section_index, i),
             ))
         }
 
@@ -881,15 +885,14 @@ impl ast::ActionSection {
             // The Access Receiver may have an identifier, in which case it
             // may be the incoming or outgoing variable name.
             //
-            // The incoming/outgoing payload variables are the only
-            // variables that can be used in the 'action' section. The
-            // incoming payload variable has either
-            // SymolKind::SplitRxType/SplitTxType OR PassthroughRxTxType as
-            // type.
+            // The incoming/outgoing payload variables are the only variables
+            // that can be used in the 'action' section. The incoming payload
+            // variable has either SymbolKind::SplitRxType/SplitTxType OR
+            // PassthroughRxTxType as type.
             //
             // If the Access Receiver does not have an identifier it is
-            // something global, in the context of an actions this can only
-            // be a global method call.
+            // something global, in the context of an actions this can only be
+            // a global method call.
             //
             // Method Calls on Roto Types are also allowed, e.g.
             // `String.format(..)`
@@ -912,17 +915,17 @@ impl ast::ActionSection {
 
         drop(_symbols);
 
-        let action_secion = symbols::Symbol::new(
+        let action_section = symbols::Symbol::new(
             self.ident.ident.clone(),
             symbols::SymbolKind::ActionSection,
             action_section_type,
             action_exprs,
-            None,
+            Token::ActionSection(action_section_index),
         );
 
         add_action_section(
             self.ident.ident.clone(),
-            action_secion,
+            action_section,
             symbols.clone(),
             &scope,
         )?;
@@ -979,7 +982,7 @@ impl ast::ApplySection {
                     &scope,
                 )?,
                 _ => {
-                    panic!("Cannot evaluate symbol {:#?}", s)
+                    return Err(CompileError::Internal(format!("Cannot evaluate symbol {:#?}", s)));
                 }
             };
         }
@@ -1033,7 +1036,7 @@ impl ast::ApplyScope {
                                     .unwrap_or(ast::AcceptReject::NoReturn),
                             ),
                             vec![],
-                            Some(token),
+                            token,
                         );
                         args_vec.push(s);
                     } else {
@@ -1054,7 +1057,7 @@ impl ast::ApplyScope {
                                 },
                             )?),
                             vec![],
-                            Some(Token::NoAction),
+                            Token::NoAction,
                         );
                         args_vec.push(s);
                     }
@@ -1076,7 +1079,7 @@ impl ast::ApplyScope {
                     // symboltable of the filter_map.
                     TypeDef::Unknown,
                     args_vec,
-                    Some(token),
+                    token,
                 ))
             }
             MatchActionExpr::PatternMatchAction(pma) => {
@@ -1117,11 +1120,14 @@ impl ast::ApplyScope {
                         // create a local scope with the data field variable
                         // for this variant.
                         let local_scope = vec![symbols::Symbol::new(
-                            variant.data_field.clone().unwrap().ident,
+                            variant.data_field.clone().ok_or(CompileError::from(
+                                format!("Variant: '{}' has no data field. This is currently not allowed.", 
+                                variant.variant_id)
+                            ))?.ident,
                             symbols::SymbolKind::VariableAssignment,
                             variant_type_def.clone(),
                             vec![],
-                            Some(variant_token.clone()),
+                            variant_token.clone(),
                         )];
                         trace!("-> local scope {:?}", local_scope);
 
@@ -1187,7 +1193,7 @@ impl ast::ApplyScope {
                                         symbols::SymbolKind::ActionCall,
                                         TypeDef::AcceptReject(*accept_reject),
                                         vec![],
-                                        Some(Token::NoAction),
+                                        Token::NoAction,
                                     );
                                     args_vec.push(s);
                                 }
@@ -1202,11 +1208,14 @@ impl ast::ApplyScope {
                         );
 
                         enum_s.add_arg(symbols::Symbol::new(
-                            variant.data_field.clone().unwrap().ident,
+                            variant.data_field.clone().ok_or(CompileError::from(
+                                format!("Variant: '{}' has no data field. This is currently not allowed.", 
+                                variant.variant_id)
+                            ))?.ident,
                             symbols::SymbolKind::EnumVariant,
                             variant_type_def,
                             args_vec,
-                            Some(variant_token),
+                            variant_token,
                         ));
                     }
                 }
@@ -1291,7 +1300,7 @@ impl ast::ComputeExpr {
                 // Is it  a global enum or a variant of a global enum?
                 .or_else(|_| {
                     GlobalEnumTypeDef::any_variant_as_symbol(
-                        &ar_s.get_ident().unwrap().ident,
+                        &ar_s.get_ident().ok_or(AccessReceiverError::Global)?.ident,
                     )
                 })
                 .map_err(|ar_err| match ar_err {
@@ -1308,7 +1317,7 @@ impl ast::ComputeExpr {
                     )),
                 })?;
 
-        let ar_token = ar_symbol.get_token().unwrap();
+        let ar_token = ar_symbol.get_token();
         let mut s = &mut ar_symbol;
 
         trace!("ACCESS EXPRESSION {:#?}", self.access_expr);
@@ -1416,7 +1425,7 @@ impl ast::MethodComputeExpr {
                 method_kind,
                 props.return_type,
                 vec![],
-                Some(props.method_token),
+                props.method_token,
             ));
         }
 
@@ -1459,7 +1468,7 @@ impl ast::MethodComputeExpr {
             method_kind,
             props.return_type,
             args,
-            Some(props.method_token),
+            props.method_token,
         ))
     }
 }
@@ -1492,7 +1501,7 @@ impl ast::AccessReceiver {
                             symbols::SymbolKind::AccessReceiver,
                             prim_ty,
                             vec![],
-                            Some(Token::BuiltinType(0)),
+                            Token::BuiltinType(0),
                         ));
                     };
                 }
@@ -1511,7 +1520,7 @@ impl ast::AccessReceiver {
                     symbols::SymbolKind::AccessReceiver,
                     arg.get_type(),
                     vec![],
-                    arg.get_token().ok(),
+                    arg.get_token(),
                 ));
             }
 
@@ -1529,7 +1538,7 @@ impl ast::AccessReceiver {
                     symbols::SymbolKind::AccessReceiver,
                     type_def,
                     vec![],
-                    Some(token),
+                    token,
                 ));
             }
 
@@ -1560,7 +1569,7 @@ impl ast::AccessReceiver {
                     SymbolKind::AccessReceiver,
                     ty,
                     vec![],
-                    Some(to),
+                    to,
                 )),
             }
         } else {
@@ -1681,7 +1690,7 @@ impl ast::ValueExpr {
                     symbols::SymbolKind::AnonymousType,
                     TypeDef::Record(RecordTypeDef::new(type_def)),
                     rec_value,
-                    Some(Token::AnonymousRecord),
+                    Token::AnonymousRecord,
                 ))
             }
             ast::ValueExpr::TypedRecordExpr(rec) => {
@@ -1737,7 +1746,7 @@ impl ast::ValueExpr {
                     symbols::SymbolKind::NamedType,
                     TypeDef::Record(checked_ty),
                     checked_values,
-                    Some(Token::TypedRecord),
+                    Token::TypedRecord,
                 ))
             }
             ast::ValueExpr::PrefixMatchExpr(_) => todo!(),
@@ -1750,7 +1759,7 @@ impl ast::ValueExpr {
                     symbols::SymbolKind::AnonymousType,
                     TypeDef::List(Box::new(type_def)),
                     list_value,
-                    Some(Token::List),
+                    Token::List,
                 ))
             }
         }
@@ -1808,7 +1817,7 @@ impl ast::FieldAccessExpr {
                         symbol_kind,
                         type_def,
                         vec![],
-                        Some(to),
+                        to,
                     ))
                 }
                 // preserve the TypeValue if set.
@@ -1922,7 +1931,7 @@ impl ast::ActionCallExpr {
             symbols::SymbolKind::ActionCall,
             ty,
             args,
-            Some(to),
+            to,
         ))
     }
 }
@@ -1965,7 +1974,7 @@ impl ast::TermCallExpr {
             symbols::SymbolKind::TermCall,
             ty,
             args,
-            Some(to),
+            to,
         ))
     }
 }
@@ -2117,7 +2126,7 @@ impl ast::CompareExpr {
             symbols::SymbolKind::CompareExpr(self.op),
             TypeDef::Boolean,
             vec![left_s, right_s],
-            None,
+            Token::NonTerminal,
         ))
     }
 }
@@ -2176,7 +2185,7 @@ impl ast::AndExpr {
             symbols::SymbolKind::AndExpr,
             TypeDef::Boolean,
             vec![left, right],
-            None,
+            Token::NonTerminal,
         ))
     }
 }
@@ -2200,7 +2209,7 @@ impl ast::OrExpr {
             symbols::SymbolKind::OrExpr,
             TypeDef::Boolean,
             vec![left, right],
-            None,
+            Token::NonTerminal,
         ))
     }
 }
@@ -2227,7 +2236,7 @@ impl ast::NotExpr {
             symbols::SymbolKind::NotExpr,
             TypeDef::Boolean,
             vec![expr],
-            None,
+            Token::NonTerminal,
         ))
     }
 }
@@ -2289,7 +2298,7 @@ impl ast::ListCompareExpr {
             symbols::SymbolKind::ListCompareExpr(self.op),
             TypeDef::Boolean,
             args,
-            None,
+            Token::NonTerminal,
         ))
     }
 }
@@ -2397,15 +2406,9 @@ fn get_props_for_scoped_variable(
                 .and_then(|gt| {
                     gt.get_variable(&search_str.as_str().into())
                         .map(|s| {
-                            s.get_props().unwrap_or_else(|_| {
-                                panic!(
-                                    "No token found for variable '{}' in \
-                                filter-map '{}'",
-                                    search_str, filter_map
-                                )
-                            })
+                            s.get_props().ok()
                         })
-                        .ok()
+                        .ok().flatten()
                 })
                 .map_or_else(
                     // No, let's go over the chain of fields to see if it's
@@ -2487,7 +2490,7 @@ impl
     ) -> Result<Self, CompileError> {
         match value {
             (id, sk, ty, to, None) => {
-                Ok(symbols::Symbol::new(id, sk, ty, vec![], Some(to)))
+                Ok(symbols::Symbol::new(id, sk, ty, vec![], to))
             }
             (id, sk, ty, to, Some(tv)) => {
                 let s =
@@ -2616,7 +2619,7 @@ fn declare_variable_from_symbol(
                 true => {
                     let type_def = arg_symbol.get_recursive_return_type();
 
-                    match arg_symbol.get_token()? {
+                    match arg_symbol.get_token() {
                         Token::TypedRecord | Token::AnonymousRecord => {
                             let fields = arg_symbol
                                 .get_recursive_values_primitive(
@@ -2639,7 +2642,7 @@ fn declare_variable_from_symbol(
                         symbols::SymbolKind::VariableAssignment,
                         type_def,
                         vec![arg_symbol],
-                        None,
+                        Token::NonTerminal
                     );
 
                     filter_map.move_var_or_const_into(symbol)
@@ -2710,7 +2713,7 @@ fn declare_variable_from_symbol(
 // Terms will be added as a vec of Logical Formulas to the `term` hashmap in
 // a filter_map's symbol table. So, a term is one element of the vec.
 fn add_logical_formula(
-    key: Option<ast::ShortString>,
+    key: ast::ShortString,
     // the index of the term section
     index: usize,
     symbol: symbols::Symbol,
@@ -2729,7 +2732,7 @@ fn add_logical_formula(
                 filter_map
             ))?;
 
-            filter_map.add_logical_formula(key.unwrap(), index, symbol)
+            filter_map.add_logical_formula(key, index, symbol)
         }
         Scope::Global => Err(format!(
             "Can't create a (sub-)term in the global scope (NEVER). Term \
@@ -2781,7 +2784,7 @@ fn add_match_action(
                 filter_map
             ))?;
 
-            match_action.get_token()?;
+            match_action.get_token();
 
             // filter_map.move_match_action_into(Symbol::new(
             //     name,
@@ -2850,7 +2853,7 @@ where
     fn get_args(&self) -> &[symbols::Symbol];
     fn get_type(&self) -> TypeDef;
     fn get_builtin_type(&self) -> Result<TypeDef, CompileError>;
-    fn get_token(&self) -> Result<Token, CompileError>;
+    fn get_token(&self) -> Token;
 }
 
 impl BooleanExpr for symbols::Symbol {
@@ -2862,7 +2865,7 @@ impl BooleanExpr for symbols::Symbol {
         symbols::Symbol::get_type(self)
     }
 
-    fn get_token(&self) -> Result<Token, CompileError> {
+    fn get_token(&self) -> Token {
         self.get_token()
     }
 

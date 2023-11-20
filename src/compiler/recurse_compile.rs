@@ -33,7 +33,7 @@ pub(crate) fn recurse_compile<'a>(
     // reference or assignment should always bef an AccessReceiver.
     trace!("recurse compile Symbol with name {} and token {:?}", symbol.get_name(), symbol.get_token());
     let is_ar = symbol.get_kind() == SymbolKind::AccessReceiver;
-    let token = symbol.get_token()?;
+    let token = symbol.get_token();
     let kind = symbol.get_kind();
 
     match token {
@@ -49,7 +49,11 @@ pub(crate) fn recurse_compile<'a>(
             assert!(symbol.get_kind() != SymbolKind::VariableAssignment);
 
             let var_ref =
-                state.variable_ref_table.get_by_token_value(var_to).unwrap();
+                state.variable_ref_table.get_by_token_value(var_to).ok_or_else(
+                    || CompileError::Internal(format!(
+                        "Cannot compile variable: '{}'", symbol.get_name()
+                    ))
+                )?;
 
             trace!("var ref {:#?}", var_ref);
 
@@ -165,7 +169,7 @@ pub(crate) fn recurse_compile<'a>(
                                         OpCode::StackOffset,
                                         vec![CommandArg::FieldIndex(
                                             args[0]
-                                                .get_token()?
+                                                .get_token()
                                                 .try_into()?,
                                         )],
                                     ),
@@ -182,7 +186,7 @@ pub(crate) fn recurse_compile<'a>(
                             Command::new(
                                 OpCode::StackOffset,
                                 vec![CommandArg::FieldIndex(
-                                    args[0].get_token()?.try_into()?,
+                                    args[0].get_token().try_into()?,
                                 )],
                             ),
                         ]);
@@ -275,11 +279,21 @@ pub(crate) fn recurse_compile<'a>(
                     arg_parent_token,
                     inc_mem_pos,
                 )?;
-                arg_parent_token = arg.get_token().ok();
+                arg_parent_token = Some(arg.get_token());
             }
+            let parent_token = if let Some(parent_token) = parent_token { 
+                parent_token
+            }
+            else {
+                return Err(
+                    CompileError::Internal(format!(
+                        "Cannot compile method: {:?}", symbol.get_name()
+                    ))
+                )
+            };
 
             // This symbol is a method, but what is the parent?
-            match parent_token.unwrap() {
+            match parent_token {
                 // The parent is a table, so this symbol is a method on a
                 // table.
                 Token::Table(t_to) => {
@@ -465,6 +479,18 @@ pub(crate) fn recurse_compile<'a>(
                         "Invalid data source: NoAction",
                     ))
                 }
+                Token::AnonymousEnum => {
+                    return Err(
+                        CompileError::Internal(
+                            format!("Cannot compile Anonymous Enum inside method in {}", symbol.get_name())
+                    ));
+                },
+                Token::NonTerminal => {
+                    return Err(
+                        CompileError::Internal(
+                            format!("Cannot compile method in {}", symbol.get_name())
+                    ));
+                }
             };
 
             // Push the result to the stack for an (optional) next Accessor
@@ -553,17 +579,20 @@ pub(crate) fn recurse_compile<'a>(
                         .used_arguments
                         .iter()
                         .find(|(to, _, _)| {
-                            to == parent_token.as_ref().unwrap()
+                            Some(to) == parent_token.as_ref()
                         })
                         .map(|a| a.1)
-                        .unwrap();
+                        .ok_or_else(|| 
+                            CompileError::Internal(
+                                format!("Cannot compile argument: {}", symbol.get_name())
+                        ))?;
 
                     trace!("stored argument {:?}", argument_s);
                     trace!("state arguments {:#?}", state.used_arguments);
                     state.cur_mir_block.extend(
                         generate_code_for_token_value(
                             &state,
-                            argument_s.get_token()?,
+                            argument_s.get_token(),
                         ),
                     );
 
@@ -834,15 +863,15 @@ pub(crate) fn recurse_compile<'a>(
                 .collect::<Vec<_>>();
 
             // trace!("values {:?}", values);
-            let unresolved_values = values
-                .clone()
-                .into_iter()
-                .filter(|v| v.1 == TypeValue::Unknown)
-                .collect::<Vec<_>>();
-            let unresolved_symbols = unresolved_values
-                .into_iter()
-                .map(|v| field_symbols.iter().find(|s| s.get_name() == v.0))
-                .collect::<Vec<_>>();
+            // let unresolved_values = values
+            //     .clone()
+            //     .into_iter()
+            //     .filter(|v| v.1 == TypeValue::Unknown)
+            //     .collect::<Vec<_>>();
+            // let unresolved_symbols = unresolved_values
+            //     .into_iter()
+            //     .map(|v| field_symbols.iter().find(|s| s.get_name() == v.0))
+            //     .collect::<Vec<_>>();
             // trace!("unresolved symbols {:#?}", unresolved_symbols);
             let value_type = Record::new(values);
             // trace!("value_type {:?}", value_type);
@@ -944,6 +973,18 @@ pub(crate) fn recurse_compile<'a>(
 
             return Ok(state);
         }
+        Token::AnonymousEnum => {
+            return Err(
+                CompileError::Internal(
+                    format!("Cannot compile Anonymous Enum in {:?}", symbol.get_name())
+            ));
+        },
+        Token::NonTerminal => {
+            return Err(
+                CompileError::Internal(
+                    format!("Cannot compile entity {:?}", symbol.get_name())
+            ));
+        },
     };
 
     // Arguments
@@ -965,13 +1006,13 @@ pub(crate) fn recurse_compile<'a>(
     trace!("parent token {:?}", parent_token);
     trace!("current token {:?}", symbol.get_token());
 
-    if let Ok(Token::ActionArgument(_, _)) = symbol.get_token() {
-        parent_token = symbol.get_token().ok();
+    if let Token::ActionArgument(_, _) = symbol.get_token() {
+        parent_token = Some(symbol.get_token());
     } else {
         parent_token = if parent_token.is_some() {
             parent_token
         } else {
-            symbol.get_token().ok()
+            Some(symbol.get_token())
         };
     }
     trace!("resulting token {:?}", parent_token);
@@ -979,7 +1020,7 @@ pub(crate) fn recurse_compile<'a>(
     // tail recursion
     for arg in symbol.get_args() {
         state = recurse_compile(arg, state, parent_token, inc_mem_pos)?;
-        parent_token = arg.get_token().ok();
+        parent_token = Some(arg.get_token());
     }
 
     Ok(state)

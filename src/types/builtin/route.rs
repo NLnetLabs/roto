@@ -11,7 +11,7 @@
 //               └─▶ Withdrawals │──change ──────┘
 //                 └─────────────┘  status
 
-use log::trace;
+use log::{debug, error, trace};
 use routecore::bgp::message::SessionConfig;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
@@ -65,7 +65,7 @@ use crate::attr_change_set::{
 
 #[derive(Debug, Eq, PartialEq, Clone, Hash, Serialize)]
 pub struct MaterializedRoute {
-    pub route: AttrChangeSet,
+    pub route: Option<AttrChangeSet>,
     pub status: RouteStatus,
     route_id: (RotondaId, LogicalTime),
 }
@@ -75,10 +75,18 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
         let status = raw_route.status_deltas.current();
         let route_id = raw_route.raw_message.message_id;
 
-        MaterializedRoute {
-            route: raw_route.take_latest_attrs(),
-            status: status.into(),
-            route_id,
+        if let Ok(route) = raw_route.take_latest_attrs() {
+            MaterializedRoute {
+                route: Some(route),
+                status: status.into(),
+                route_id,
+            }
+        } else {
+            MaterializedRoute {
+                route: None,
+                status: RouteStatus::Unparsable,
+                route_id,
+            }
         }
     }
 }
@@ -123,25 +131,23 @@ impl RawRouteWithDeltas {
         prefix: Prefix,
         raw_message: UpdateMessage,
         route_status: RouteStatus,
-    ) -> Self {
+    ) -> Result<Self, VmError> {
         let raw_message = BgpUpdateMessage::new(delta_id, raw_message);
         let mut attribute_deltas = AttributeDeltaList::new();
         let (peer_ip, peer_asn, router_id) = (None, None, None);
         // This stores the attributes in the raw message as the first delta.
-        attribute_deltas
-            .store_delta(AttributeDelta::new(
-                delta_id,
-                0,
-                raw_message.raw_message.create_changeset(
-                    prefix,
-                    peer_ip,
-                    peer_asn,
-                    router_id.clone(),
-                ),
-            ))
-            .unwrap();
+        attribute_deltas.store_delta(AttributeDelta::new(
+            delta_id,
+            0,
+            raw_message.raw_message.create_changeset(
+                prefix,
+                peer_ip,
+                peer_asn,
+                router_id.clone(),
+            )?,
+        ))?;
 
-        Self {
+        Ok(Self {
             prefix,
             raw_message: Arc::new(raw_message),
             peer_ip,
@@ -152,7 +158,7 @@ impl RawRouteWithDeltas {
                 delta_id,
                 route_status,
             )),
-        }
+        })
     }
 
     pub fn new_with_message_ref(
@@ -234,16 +240,16 @@ impl RawRouteWithDeltas {
 
     // Get a clone of the latest delta, or of the original attributes from
     // the raw message, if no delta has been added (yet).
-    fn clone_latest_attrs(&self) -> AttrChangeSet {
+    fn clone_latest_attrs(&self) -> Result<AttrChangeSet, VmError> {
         if let Some(attr_set) = self.attribute_deltas.deltas.last() {
-            attr_set.attributes.clone()
+            Ok(attr_set.attributes.clone())
         } else {
-            self.raw_message.raw_message.create_changeset(
+            Ok(self.raw_message.raw_message.create_changeset(
                 self.prefix,
                 self.peer_ip,
                 self.peer_asn,
                 self.router_id.clone(),
-            )
+            )?)
         }
     }
 
@@ -256,7 +262,7 @@ impl RawRouteWithDeltas {
         let delta_index = self.attribute_deltas.acquire_new_delta()?;
 
         Ok(AttributeDelta {
-            attributes: self.clone_latest_attrs(),
+            attributes: self.clone_latest_attrs()?,
             delta_id,
             delta_index,
         })
@@ -265,7 +271,7 @@ impl RawRouteWithDeltas {
     // Get either the moved last delta (it is removed from the Delta list), or
     // get a freshly rolled ChangeSet from the raw message, if there are no
     // deltas.
-    pub fn take_latest_attrs(mut self) -> AttrChangeSet {
+    pub fn take_latest_attrs(mut self) -> Result<AttrChangeSet, VmError> {
         if self.attribute_deltas.deltas.is_empty() {
             return self.raw_message.raw_message.create_changeset(
                 self.prefix,
@@ -275,32 +281,43 @@ impl RawRouteWithDeltas {
             );
         }
 
-        self.attribute_deltas
+        Ok(self
+            .attribute_deltas
             .deltas
             .remove(self.attribute_deltas.deltas.len() - 1)
-            .attributes
+            .attributes)
     }
 
     // Get a reference to the current state of the attributes, including the
     // original raw message. In the latter case it will copy the raw message
     // attributes into the attribute deltas, and return a reference from that,
     // hence the `&mut self`.
-    pub fn get_latest_attrs(&mut self) -> &AttrChangeSet {
+    pub fn get_latest_attrs(&mut self) -> Result<&AttrChangeSet, VmError> {
         if self.attribute_deltas.deltas.is_empty() {
-            self.attribute_deltas
-                .store_delta(AttributeDelta::new(
-                    self.raw_message.message_id,
-                    0,
-                    self.raw_message.raw_message.create_changeset(
-                        self.prefix,
-                        self.peer_ip,
-                        self.peer_asn,
-                        self.router_id.clone(),
-                    ),
-                ))
-                .unwrap();
+            self.attribute_deltas.store_delta(AttributeDelta::new(
+                self.raw_message.message_id,
+                0,
+                self.raw_message.raw_message.create_changeset(
+                    self.prefix,
+                    self.peer_ip,
+                    self.peer_asn,
+                    self.router_id.clone(),
+                )?,
+            ))?;
         }
-        self.attribute_deltas.get_latest_change_set().unwrap()
+        self.attribute_deltas
+            .get_latest_change_set()
+            .ok_or_else(|| {
+                // This is a serious, weird error. We just added the change set in
+                // the above code successfully! So we should NEVER end up here,
+                // but if we do we can still return a VmError, log an error, and
+                // keep on going. Something is (very) wrong though, internally.
+                error!(
+                    "Invalid Attribute Change Set: {:?}",
+                    self.attribute_deltas
+                );
+                VmError::InvalidPayload
+            })
     }
 
     // Get a ChangeSet that was added by a specific unit, e.g. a filter.
@@ -390,7 +407,9 @@ impl RawRouteWithDeltas {
         }
     }
 
-    pub(crate) fn get_field_num() -> usize { 12 }
+    pub(crate) fn get_field_num() -> usize {
+        12
+    }
 
     pub(crate) fn get_value_ref_for_field(
         &self,
@@ -432,9 +451,14 @@ impl RawRouteWithDeltas {
                 .flatten()
                 .map(|p| p.to_hop_path())
                 .map(TypeValue::from),
-            RouteToken::OriginType => {
-                self.raw_message.raw_message.0.origin().ok().flatten().map(TypeValue::from)
-            }
+            RouteToken::OriginType => self
+                .raw_message
+                .raw_message
+                .0
+                .origin()
+                .ok()
+                .flatten()
+                .map(TypeValue::from),
             RouteToken::NextHop => self
                 .raw_message
                 .raw_message
@@ -442,10 +466,14 @@ impl RawRouteWithDeltas {
                 .mp_next_hop()
                 .ok()
                 .flatten()
-                .or_else(|| { self
-                    .raw_message
-                    .raw_message
-                    .0.conventional_next_hop().ok().flatten() })
+                .or_else(|| {
+                    self.raw_message
+                        .raw_message
+                        .0
+                        .conventional_next_hop()
+                        .ok()
+                        .flatten()
+                })
                 .map(TypeValue::from),
             RouteToken::MultiExitDisc => self
                 .raw_message
@@ -464,7 +492,11 @@ impl RawRouteWithDeltas {
                 .flatten()
                 .map(TypeValue::from),
             RouteToken::AtomicAggregate => Some(TypeValue::from(
-                self.raw_message.raw_message.0.is_atomic_aggregate().unwrap(),
+                self.raw_message
+                    .raw_message
+                    .0
+                    .is_atomic_aggregate()
+                    .unwrap_or(false),
             )),
             RouteToken::Aggregator => self
                 .raw_message
@@ -543,9 +575,10 @@ impl RawRouteWithDeltas {
         {
             route_status
         } else {
-            unreachable!() // When we were constructed a RouteStatus was passed in so we always have at least one, and
-                           // there shouldn't be a way to store something other than a RouteStatus as a subsequent item
-                           // in the route status delta list so it also shouldn't be that we matched a different type.
+            debug!("Invalid route status in {:?}. Marking as Unparsable and continuing", self.status_deltas);
+            // If somehow can't parse a part one or more Path Attributes in
+            // the PDU, we mark the state and move on.
+            RouteStatus::Unparsable
         }
     }
 }
@@ -583,7 +616,7 @@ impl AttributeDeltaList {
     fn store_delta(&mut self, delta: AttributeDelta) -> Result<(), VmError> {
         if let Some(locked_delta) = self.locked_delta {
             if locked_delta != delta.delta_index {
-                trace!("{:?} {}", self.locked_delta, delta.delta_index);
+                debug!("Locked Attribute Delta {:?} with index {}. It cannot be written right now.", self.locked_delta, delta.delta_index);
                 return Err(VmError::DeltaLocked);
             }
         }
@@ -656,7 +689,14 @@ impl RouteStatusDeltaList {
     }
 
     pub fn current(&self) -> TypeValue {
-        self.0.iter().last().unwrap().status.into()
+        if let Some(status_delta) = self.0.iter().last() {
+            status_delta.status.into()
+        } else {
+            // This is an actual error, it should NOT happen and would be a
+            // logical internal error in Roto.
+            debug!("Ignoring empty Route Status Delta List: {:?}. Marking status and continuing", self.0);
+            RouteStatus::Unparsable.into()
+        }
     }
 
     pub fn current_as_ref(&self) -> Option<&TypeValue> {
@@ -753,30 +793,48 @@ impl BgpUpdateMessage {
         match field_token.into() {
             BgpUpdateMessageToken::Nlris => Some(TypeValue::Unknown),
             BgpUpdateMessageToken::Afi => {
-                if let Some(Ok(nlri)) =
-                    self.raw_message.0.announcements().unwrap().next()
-                {
-                    Some(TypeValue::Builtin(
-                        BuiltinTypeValue::ConstU16EnumVariant(EnumVariant {
-                            enum_name: "AFI".into(),
-                            value: nlri.afi_safi().0.into(),
-                        }),
-                    ))
+                if let Ok(mut nlri) = self.raw_message.0.announcements() {
+                    if let Some(Ok(announce)) = nlri.next() {
+                        Some(TypeValue::Builtin(
+                            BuiltinTypeValue::ConstU16EnumVariant(
+                                EnumVariant {
+                                    enum_name: "AFI".into(),
+                                    value: announce.afi_safi().0.into(),
+                                },
+                            ),
+                        ))
+                    } else {
+                        None
+                    }
                 } else {
+                    debug!(
+                        "Ignoring invalid announcements in BGP update \
+                        message with id ({},{})",
+                        self.message_id.0, self.message_id.1
+                    );
                     None
                 }
             }
             BgpUpdateMessageToken::Safi => {
-                if let Some(Ok(nlri)) =
-                    self.raw_message.0.announcements().unwrap().next()
-                {
-                    Some(TypeValue::Builtin(
-                        BuiltinTypeValue::ConstU16EnumVariant(EnumVariant {
-                            enum_name: "SAFI".into(),
-                            value: nlri.afi_safi().0.into(),
-                        }),
-                    ))
+                if let Ok(mut nlri) = self.raw_message.0.announcements() {
+                    if let Some(Ok(announce)) = nlri.next() {
+                        Some(TypeValue::Builtin(
+                            BuiltinTypeValue::ConstU8EnumVariant(
+                                EnumVariant {
+                                    enum_name: "SAFI".into(),
+                                    value: announce.afi_safi().1.into(),
+                                },
+                            ),
+                        ))
+                    } else {
+                        None
+                    }
                 } else {
+                    debug!(
+                        "Ignoring invalid announcements in BGP update \
+                        message with id ({},{})",
+                        self.message_id.0, self.message_id.1
+                    );
                     None
                 }
             }
@@ -819,29 +877,37 @@ impl RotoType for BgpUpdateMessage {
     ) -> Result<TypeValue, VmError> {
         match method_token.into() {
             BgpUpdateMessageToken::Afi => {
-                if let Some(Ok(nlri)) =
-                    self.raw_message.0.announcements().unwrap().next()
-                {
-                    Ok(TypeValue::Builtin(
-                        BuiltinTypeValue::ConstU16EnumVariant(EnumVariant {
-                            enum_name: "AFI".into(),
-                            value: nlri.afi_safi().0.into(),
-                        }),
-                    ))
+                if let Ok(mut nlri) = self.raw_message.0.announcements() {
+                    if let Some(Ok(announce)) = nlri.next() {
+                        Ok(TypeValue::Builtin(
+                            BuiltinTypeValue::ConstU16EnumVariant(
+                                EnumVariant {
+                                    enum_name: "AFI".into(),
+                                    value: announce.afi_safi().0.into(),
+                                },
+                            ),
+                        ))
+                    } else {
+                        Err(VmError::InvalidValueType)
+                    }
                 } else {
                     Err(VmError::InvalidValueType)
                 }
             }
             BgpUpdateMessageToken::Safi => {
-                if let Some(Ok(nlri)) =
-                    self.raw_message.0.announcements().unwrap().next()
-                {
-                    Ok(TypeValue::Builtin(
-                        BuiltinTypeValue::ConstU16EnumVariant(EnumVariant {
-                            enum_name: "SAFI".into(),
-                            value: nlri.afi_safi().0.into(),
-                        }),
-                    ))
+                if let Ok(mut nlri) = self.raw_message.0.announcements() {
+                    if let Some(Ok(announce)) = nlri.next() {
+                        Ok(TypeValue::Builtin(
+                            BuiltinTypeValue::ConstU8EnumVariant(
+                                EnumVariant {
+                                    enum_name: "SAFI".into(),
+                                    value: announce.afi_safi().1.into(),
+                                },
+                            ),
+                        ))
+                    } else {
+                        Err(VmError::InvalidValueType)
+                    }
                 } else {
                     Err(VmError::InvalidValueType)
                 }
@@ -1048,7 +1114,7 @@ impl std::fmt::Display for RawRouteWithDeltas {
         writeln!(f, "prefix : {}", self.prefix)?;
         writeln!(f, "raw    : {:#?}", self.raw_message)?;
         writeln!(f, "deltas : {:#?}", self.attribute_deltas)?;
-        writeln!(f, "status : {}", self.status_deltas.current())
+        writeln!(f, "status : {:?}", self.status_deltas.current())
     }
 }
 
@@ -1207,6 +1273,13 @@ impl From<RouteStatus> for usize {
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize)]
 pub struct RotondaId(pub usize);
 
+impl std::fmt::Display for RotondaId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let w = write!(f, "{}", self.0);
+        w
+    }
+}
+
 //------------ Modification & Creation of new Updates -----------------------
 
 #[derive(Debug, Hash, Serialize, Clone)]
@@ -1215,8 +1288,16 @@ pub struct UpdateMessage(
 );
 
 impl UpdateMessage {
-    pub fn new(bytes: bytes::Bytes, config: SessionConfig) -> Self {
-        Self(routecore::bgp::message::UpdateMessage::<bytes::Bytes>::from_octets(bytes, config).unwrap())
+    pub fn new(
+        bytes: bytes::Bytes,
+        config: SessionConfig,
+    ) -> Result<Self, VmError> {
+        Ok(
+            Self(
+                routecore::bgp::message::UpdateMessage::<bytes::Bytes>
+                    ::from_octets(bytes, config).map_err(|_| VmError::InvalidPayload)?
+                )
+            )
     }
 
     // Materialize a ChangeSet from the Update message. The materialized
@@ -1228,26 +1309,37 @@ impl UpdateMessage {
         peer_ip: Option<IpAddress>,
         peer_asn: Option<Asn>,
         router_id: Option<Arc<String>>,
-    ) -> AttrChangeSet {
-        let next_hop = self.0.mp_next_hop().ok().flatten().or_else(|| {
-            self.0.conventional_next_hop().ok().flatten()
-        });
-        AttrChangeSet {
+    ) -> Result<AttrChangeSet, VmError> {
+        let next_hop = self
+            .0
+            .mp_next_hop()
+            .ok()
+            .flatten()
+            .or_else(|| self.0.conventional_next_hop().ok().flatten());
+        Ok(AttrChangeSet {
             prefix: ReadOnlyScalarOption::<Prefix>::new(prefix.into()),
             as_path: VectorOption::<AsPath>::from(
-                self.0.aspath().ok().flatten().map(|p| { p.to_hop_path() }),
+                self.0.aspath().ok().flatten().map(|p| p.to_hop_path()),
             ),
-            origin_type: ScalarOption::<OriginType>::from(self.0.origin().unwrap()),
+            origin_type: ScalarOption::<OriginType>::from(
+                self.0.origin().map_err(VmError::from)?,
+            ),
             next_hop: ScalarOption::<NextHop>::from(next_hop),
             multi_exit_discriminator: ScalarOption::from(
-                self.0.multi_exit_disc().unwrap(),
+                self.0.multi_exit_disc().map_err(VmError::from)?,
             ),
-            local_pref: ScalarOption::from(self.0.local_pref().unwrap()),
+            local_pref: ScalarOption::from(
+                self.0.local_pref().map_err(VmError::from)?,
+            ),
             atomic_aggregate: ScalarOption::from(Some(
-                self.0.is_atomic_aggregate().unwrap(),
+                self.0.is_atomic_aggregate().map_err(VmError::from)?,
             )),
-            aggregator: ScalarOption::from(self.0.aggregator().unwrap()),
-            communities: VectorOption::from(self.0.all_communities().unwrap()),
+            aggregator: ScalarOption::from(
+                self.0.aggregator().map_err(VmError::from)?,
+            ),
+            communities: VectorOption::from(
+                self.0.all_communities().map_err(VmError::from)?,
+            ),
             peer_ip: peer_ip.into(),
             peer_asn: peer_asn.into(),
             router_id: router_id
@@ -1274,7 +1366,7 @@ impl UpdateMessage {
             attr_set: Todo,
             rsrvd_development: Todo,
             as4_aggregator: Todo,
-        }
+        })
     }
 
     // Create a new BGP Update message by applying the attributes changes

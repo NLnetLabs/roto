@@ -2,7 +2,7 @@ use log::trace;
 use roto::ast::AcceptReject;
 use roto::compiler::Compiler;
 
-use roto::blocks::Scope::{self, FilterMap, Filter};
+use roto::blocks::Scope::{self, Filter, FilterMap};
 use roto::types::builtin::{Asn, Community};
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::datasources::{DataSource, Rib};
@@ -53,7 +53,7 @@ fn test_data(
     name: Scope,
     source_code: &'static str,
     filter_args: Vec<(&str, TypeValue)>,
-    data_sources: Vec<DataSource>
+    data_sources: Vec<DataSource>,
 ) -> Result<VmResult, Box<dyn std::error::Error>> {
     trace!("Evaluate filter-map {}...", name);
 
@@ -86,11 +86,12 @@ fn test_data(
         TypeDef::new_record_type(vec![("counter", Box::new(TypeDef::U32))])
             .unwrap();
 
-    let _my_nested_rec_instance = Record::create_instance_with_ordered_fields(
-        &my_nested_rec_type,
-        vec![("counter", 1_u32.into())],
-    )
-    .unwrap();
+    let _my_nested_rec_instance =
+        Record::create_instance_with_ordered_fields(
+            &my_nested_rec_type,
+            vec![("counter", 1_u32.into())],
+        )
+        .unwrap();
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
@@ -131,15 +132,13 @@ fn test_data(
     )
     .unwrap();
 
-    
-    // Turn it into a DataSource.    
+    // Turn it into a DataSource.
     let mem = &mut vm::LinearMemory::uninit();
 
     trace!("Used Arguments");
     trace!("{:#?}", &roto_pack.arguments);
     trace!("Used Data Sources");
     trace!("{:#?}", &roto_pack.data_sources);
-
 
     for mb in roto_pack.get_mir().iter() {
         trace!("{}", mb);
@@ -148,7 +147,6 @@ fn test_data(
     for data_source in data_sources {
         roto_pack.set_source(data_source)?;
     }
-
 
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
@@ -175,14 +173,18 @@ fn test_filter_map_1() {
         vec![("extra_asn", TypeValue::from(Asn::from(65534_u32)))];
 
     let source_asns_type =
-        TypeDef::new_record_type(vec![("asn", Box::new(TypeDef::Asn))]).unwrap();
+        TypeDef::new_record_type(vec![("asn", Box::new(TypeDef::Asn))])
+            .unwrap();
     let new_sa_rec = Record::create_instance_with_ordered_fields(
         &source_asns_type,
         vec![("asn", Asn::from_u32(300).into())],
-    ).unwrap();
+    )
+    .unwrap();
     let mut data_sources =
-        vec![DataSource::table_from_records("source_asns", vec![new_sa_rec]).unwrap()];
-
+        vec![
+            DataSource::table_from_records("source_asns", vec![new_sa_rec])
+                .unwrap(),
+        ];
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
@@ -211,11 +213,14 @@ fn test_filter_map_1() {
     .unwrap();
 
     // external rib
-    data_sources.push(Rib::new(
-        "rib-rov",
-        my_rec_type,
-        rotonda_store::MultiThreadedStore::<RibValue>::new().unwrap(),
-    ).into());
+    data_sources.push(
+        Rib::new(
+            "rib-rov",
+            my_rec_type,
+            rotonda_store::MultiThreadedStore::<RibValue>::new().unwrap(),
+        )
+        .into(),
+    );
 
     test_data(
         FilterMap("in-filter-map".into()),
@@ -399,8 +404,9 @@ fn test_filter_map_2() {
         }
         "#,
         vec![],
-        vec![]
-    ).unwrap();
+        vec![],
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
@@ -432,8 +438,9 @@ fn test_filter_map_3() {
         }
         "#,
         vec![],
-        vec![]
-    ).unwrap();
+        vec![],
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -455,8 +462,9 @@ fn test_reject_all_filter() {
         }
         "#,
         vec![],
-        vec![]
-    ).unwrap();
+        vec![],
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -478,8 +486,9 @@ fn test_accept_all_filter() {
         }
         "#,
         vec![],
-        vec![]
-    ).unwrap();
+        vec![],
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }

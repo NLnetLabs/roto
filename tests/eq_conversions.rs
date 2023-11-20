@@ -82,10 +82,7 @@ fn src_code(code_line: &str, end_accept_reject: &str) -> String {
 fn test_data(
     name: Scope,
     source_code: &str,
-) -> Result<
-    VmResult,
-    Box<dyn std::error::Error>,
-> {
+) -> Result<VmResult, Box<dyn std::error::Error>> {
     println!("Evaluate filter-map {}...", name);
 
     let c = Compiler::new();
