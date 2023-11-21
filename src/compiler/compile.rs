@@ -1032,7 +1032,8 @@ pub(crate) fn generate_code_for_token_value(
             if let Some(var) = state
                 .used_variables
                 .iter()
-                .find(|(_, var)| var_to == var.get_token().into())
+                .find(|(_, var)| { 
+                    var.get_token().try_into().is_ok_and(|var: usize| var == var_to) })
             {
                 vec![Command::new(
                     OpCode::PushStack,
@@ -1190,26 +1191,32 @@ fn compile_filter_map(
 
     // Lookup all the data sources in the global symbol table. The filter_map
     // table does not have (the right) type defs for data sources.
-    let data_sources = state
-        .used_data_sources
-        .iter()
-        .map(|ds| {
-            let name = ds.1.get_name();
-            let resolved_ds =
-                global_table.get_data_source(&name).unwrap_or_else(|_| {
-                    panic!("Fatal: Cannot find Token for data source.");
-                });
+    let mut data_sources = vec![];
+    for ds in state.used_data_sources {
+        let name = ds.1.get_name();
+        let resolved_ds = if let Ok(ds) = global_table.get_data_source(&name)
+        {
+            ds
+        } else {
+            return Err(CompileError::from(format!(
+                "Cannot find data source '{}' in the Global Table",
+                name
+            )));
+        };
 
-            // W're only creating a data source with the name and token found
-            // in the declaration in the source code. he actual source data
-            // will only be needed at run-time
-            ExtDataSource::new(&name, resolved_ds.1, resolved_ds.0)
-        })
-        .collect::<Vec<_>>();
+        // W're only creating a data source with the name and token found
+        // in the declaration in the source code. he actual source data
+        // will only be needed at run-time
+        data_sources.push(ExtDataSource::new(
+            &name,
+            resolved_ds.1,
+            resolved_ds.0,
+        )?)
+    }
 
     Ok(RotoPack::new(
         filter_map.get_scope(),
-        filter_map.get_type(),
+        filter_map.get_type()?,
         mir,
         rx_type.map_or(TypeDef::Unknown, |rx| rx.1),
         tx_type.map(|tx| tx.1),
@@ -1246,7 +1253,7 @@ fn compile_assignments(
             state.cur_mem_pos
         );
 
-        let s = _filter_map.get_variable_by_token(&var.1.get_token());
+        let s = _filter_map.get_variable_by_token(&var.1.get_token())?;
 
         for arg in s.get_args() {
             trace!(
@@ -1319,7 +1326,7 @@ fn compile_assignments(
                         state.cur_partial_variable
                     );
                     state.variable_ref_table.set_primitive(
-                        var.1.get_token().into(),
+                        var.1.get_token().try_into()?,
                         state
                             .cur_partial_variable
                             .clone()
@@ -1653,7 +1660,9 @@ fn compile_apply_section(
                                 trace!("No action defined. Nothing to do.");
                             }
                             _ => {
-                                panic!("Invalid action section token found.");
+                                return Err(CompileError::Internal(
+                                    format!("No token found for action section: '{}'", action_section.get_name())
+                                ));
                             }
                         };
 
@@ -1663,7 +1672,9 @@ fn compile_apply_section(
                         {
                             accept_reject
                         } else {
-                            panic!("No Accept or Reject found in Action Section.");
+                            return Err(CompileError::Internal(
+                                format!("No Accept or Reject found in action section: '{}'", action_section.get_name())
+                            ));
                         };
 
                         // Add an early return if the type of the match
@@ -1788,7 +1799,9 @@ fn compile_apply_section(
                         ]);
                     }
                     MatchActionType::PatternMatchAction => {
-                        panic!("Illegal Value for Match Action Type encountered. This is fatal.")
+                        return Err(CompileError::Internal(
+                            format!("Illegal Type for Match Action '{}' Type encountered: PatternMatchAction", ma_name)
+                        ));
                     }
                 }
 

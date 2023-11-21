@@ -57,7 +57,7 @@ impl RotoType for OutputStreamMessage {
         mut args: Vec<TypeValue>,
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        match method_token.into() {
+        match method_token.try_into()? {
             OutputStreamToken::Send => {
                 trace!("Send: args for output stream message {}", args[0]);
                 Ok(args.remove(0))
@@ -85,11 +85,13 @@ pub(crate) enum OutputStreamToken {
     Send,
 }
 
-impl From<usize> for OutputStreamToken {
-    fn from(val: usize) -> Self {
+impl TryFrom<usize> for OutputStreamToken {
+    type Error = VmError;
+
+    fn try_from(val: usize) -> Result<Self, VmError> {
         match val {
-            0 => OutputStreamToken::Send,
-            _ => panic!("Unknown token value: {}", val),
+            0 => Ok(OutputStreamToken::Send),
+            _ => Err(VmError::InvalidDataSource),
         }
     }
 }

@@ -18,7 +18,7 @@ use crate::{
         enum_types::GlobalEnumTypeDef,
         typedef::TypeDef,
         typevalue::TypeValue,
-    },
+    }, vm::VmError,
 };
 
 //------------ Symbols ------------------------------------------------------
@@ -130,11 +130,11 @@ impl Symbol {
         &self.value
     }
 
-    fn _get_recursive_value(&self) -> TypeValue {
+    fn _get_recursive_value(&self) -> Result<TypeValue, VmError> {
         trace!("self {:?}", self);
         if let TypeValue::Record(_) = self.get_value() {
             trace!("already has value {:?}", self.value);
-            return self.value.clone();
+            return Ok(self.value.clone());
         }
 
         let mut rec_values: Vec<(ShortString, ElementTypeValue)> = vec![];
@@ -142,19 +142,19 @@ impl Symbol {
             trace!("Args {:?}", self.get_args());
             if let TypeDef::Record(mut _rec) = arg.get_type() {
                 trace!("arg {}", arg.get_type());
-                let v = arg._get_recursive_value();
+                let v = arg._get_recursive_value()?;
                 trace!("value {}: {:?}", arg.get_name(), v);
-                rec_values.push((arg.get_name(), v.into()));
+                rec_values.push((arg.get_name(), v.try_into()?));
             } else {
                 trace!("non-record value {:?}", arg.get_value());
                 rec_values
-                    .push((arg.get_name(), arg.get_value().clone().into()));
+                    .push((arg.get_name(), arg.get_value().clone().try_into()?));
             }
         }
 
         match self.get_type() {
-            TypeDef::Record(_) => TypeValue::Record(Record::new(rec_values)),
-            _ => self.value.clone(),
+            TypeDef::Record(_) => Ok(TypeValue::Record(Record::new(rec_values))),
+            _ => Ok(self.value.clone()),
         }
     }
 
@@ -178,16 +178,21 @@ impl Symbol {
                     let checked_val = arg.get_recursive_values_primitive(
                         checked_type.clone(),
                     )?;
+
+                    let mut checked_val_vec = vec![];
+                    for cv in checked_val {
+                        checked_val_vec.push((cv.0.clone(), cv.2.clone().try_into().map_err(|e: VmError| CompileError::from(e.to_string()))?));
+                    }
+
                     rec_values.push((
                         arg.get_name(),
                         checked_type,
                         TypeValue::Record(Record::new(
-                            checked_val
-                                .iter()
-                                .map(|cv| (cv.0.clone(), cv.2.clone().into()))
-                                .collect::<Vec<_>>(),
+                            checked_val_vec
                         )),
                     ));
+                    
+                    
                 } else {
                     return Err(
                         CompileError::from(
@@ -644,11 +649,13 @@ impl SymbolTable {
         self.scope.clone()
     }
 
-    pub(crate) fn get_type(&self) -> FilterType {
+    pub(crate) fn get_type(&self) -> Result<FilterType, CompileError> {
         match self.scope {
-            Scope::Filter(_) => FilterType::Filter,
-            Scope::FilterMap(_) => FilterType::FilterMap,
-            Scope::Global => panic!("Global scope is not a filter."),
+            Scope::Filter(_) => Ok(FilterType::Filter),
+            Scope::FilterMap(_) => Ok(FilterType::FilterMap),
+            Scope::Global => Err(CompileError::Internal(
+                "Global scope is not a filter.".into(),
+            )),
         }
     }
 
@@ -939,16 +946,27 @@ impl SymbolTable {
     // Used in the compile stage to build the command stack.
 
     // panics if the symbol is not found.
-    pub(crate) fn get_variable_by_token(&self, token: &Token) -> &Symbol {
+    pub(crate) fn get_variable_by_token(
+        &self,
+        token: &Token,
+    ) -> Result<&Symbol, CompileError> {
         match token {
-            Token::Variable(_token_int) => self
-                .variables
-                .values()
-                .find(|s| s.token == token.clone())
-                .unwrap_or_else(|| {
-                    panic!("Fatal: Created Token does not exist.")
-                }),
-            _ => panic!("Fatal: Created Token does represent a variable."),
+            Token::Variable(_token_int) => {
+                if let Some(found_var) =
+                    self.variables.values().find(|s| s.token == token.clone())
+                {
+                    Ok(found_var)
+                } else {
+                    Err(CompileError::Internal(format!(
+                        "Cannot find variable with token '{:?}'",
+                        token
+                    )))
+                }
+            }
+            _ => Err(CompileError::Internal(format!(
+                "Token '{:?}' does not represent a variable.",
+                token
+            ))),
         }
     }
 
@@ -1084,10 +1102,10 @@ impl SymbolTable {
         // collect all the symbols in all the term sections mentioned in the
         // match actions.
         for ts in &self.term_sections {
-            if deps_set.iter().any(|ma| {
-                    ts.1.get_token().is_term() && ma.name == ts.0
-               
-            }) {
+            if deps_set
+                .iter()
+                .any(|ma| ts.1.get_token().is_term() && ma.name == ts.0)
+            {
                 deps_set.extend(ts.1.flatten_nodes());
             }
         }
@@ -1095,9 +1113,10 @@ impl SymbolTable {
         // collect all the symbols in all the action sections mentioned in the
         // match actions.
         for ts in &self.action_sections {
-            if deps_set.iter().any(|ma| {
-                    ts.1.get_token().is_action() && ma.name == ts.0
-            }) {
+            if deps_set
+                .iter()
+                .any(|ma| ts.1.get_token().is_action() && ma.name == ts.0)
+            {
                 deps_set.extend(ts.1.flatten_nodes());
             }
         }

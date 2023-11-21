@@ -9,8 +9,9 @@ use crate::{
     types::{
         collections::Record,
         datasources::DataSourceMethodValue,
+        enum_types::GlobalEnumTypeDef,
         typedef::{MethodProps, TypeDef},
-        typevalue::TypeValue, enum_types::GlobalEnumTypeDef,
+        typevalue::TypeValue,
     },
     vm::{StackValue, VmError},
 };
@@ -41,7 +42,7 @@ pub enum Token {
     // A generic stream that can be used by Roto to send messages to and that
     // can be configured through a Roto script, e.g. a Kafka or a MQTT stream.
     OutputStream(usize),
-    // A mapping to the (recursive) field of a record, the first u8 is a 
+    // A mapping to the (recursive) field of a record, the first u8 is a
     // numbered field of the record, the second points into the first
     // sub-field etc.
     FieldAccess(Vec<u8>),
@@ -62,31 +63,29 @@ pub enum Token {
     TypedRecord,
     List,
     BuiltinType(u8),
-    // A named, hard-coded global Enum 
+    // A named, hard-coded global Enum
     Enum(GlobalEnumTypeDef),
     // Anonymous Enum
     AnonymousEnum,
     ConstEnumVariant,
     // Some structural symbols that are non-terminal, meaning they have
     // children, may not have to need any Token.
-    NonTerminal
+    NonTerminal,
 }
 
 impl Token {
-    pub fn new(ty: &str, value: usize) -> Self {
-        match ty {
-            "variable" => Token::Variable(value),
-            "method" => Token::Method(value),
-            "argument" => Token::Argument(value),
-            _ => panic!("Unknown token type"),
-        }
-    }
-
-    pub fn push(&mut self, value: u8) {
+    pub fn push(&mut self, value: u8) -> Result<(), CompileError> {
         match self {
             Token::FieldAccess(v) => v.push(value),
-            _ => panic!("Cannot push to this token"),
-        }
+            _ => {
+                return Err(CompileError::Internal(format!(
+                    "Cannot add value with type '{}' to FieldAccess",
+                    value
+                )));
+            }
+        };
+
+        Ok(())
     }
 
     pub fn is_term(&self) -> bool {
@@ -110,21 +109,21 @@ impl Token {
     }
 }
 
-impl From<Token> for usize {
-    fn from(token: Token) -> Self {
+impl TryFrom<Token> for usize {
+    type Error = CompileError;
+
+    fn try_from(token: Token) -> Result<Self, CompileError> {        
         match token {
-            Token::Table(v) | Token::Rib(v) => v,
-            Token::Method(v) => v,
-            Token::Variable(v) => v,
-            Token::RxType(_) => 0,
-            Token::TxType => 1,
-            Token::Variant(v) => v,
-            _ => {
-                panic!(
-                    "Cannot convert {:?} to usize, and that's fatal.",
+            Token::Table(v) | Token::Rib(v) => Ok(v),
+            Token::Method(v) => Ok(v),
+            Token::Variable(v) => Ok(v),
+            Token::RxType(_) => Ok(0),
+            Token::TxType => Ok(1),
+            Token::Variant(v) => Ok(v),
+            _ => Err(CompileError::Internal(
+                    format!("Cannot convert {:?} to usize",
                     token
-                );
-            }
+                )))
         }
     }
 }
@@ -136,13 +135,11 @@ impl TryFrom<Token> for SmallVec<[usize; 8]> {
     fn try_from(value: Token) -> Result<Self, Self::Error> {
         if let Token::FieldAccess(fa) = value {
             Ok(fa.iter().map(|fi| *fi as usize).collect::<Vec<_>>().into())
-        } else { 
-            Err(CompileError::from(
-                format!(
-                    "Cannot convert token {:?} into FieldIndex",
-                    value
-                ))
-            )
+        } else {
+            Err(CompileError::from(format!(
+                "Cannot convert token {:?} into FieldIndex",
+                value
+            )))
         }
     }
 }

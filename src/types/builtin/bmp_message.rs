@@ -137,8 +137,7 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
                     field_index,
                     &BytesRecord::<RouteMonitoring>(rm),
                 )
-                .map(|elm| elm.into())
-                .ok_or_else(|| VmError::InvalidPayload)?
+                .map(|elm| elm.into()).map_err(|_| VmError::InvalidPayload)?
             }
             LazyRecordTypeDef::PeerDownNotification => {
                 let pd =
@@ -154,8 +153,7 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
                     field_index,
                     &BytesRecord::<PeerDownNotification>(pd),
                 )
-                .map(|elm| elm.into())
-                .ok_or_else(|| VmError::InvalidPayload)?
+                .map(|elm| elm.into()).map_err(|_| VmError::InvalidPayload)?
             }
             LazyRecordTypeDef::PeerUpNotification => {
                 let pu =
@@ -171,8 +169,7 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
                     field_index,
                     &BytesRecord::<PeerUpNotification>(pu),
                 )
-                .map(|elm| elm.into())
-                .ok_or_else(|| VmError::InvalidPayload)?
+                .map(|elm| elm.into()).map_err(|_| VmError::InvalidPayload)?
             }
             LazyRecordTypeDef::InitiationMessage => {
                 let pu =
@@ -188,8 +185,7 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
                     field_index,
                     &BytesRecord::<InitiationMessage>(pu),
                 )
-                .map(|elm| elm.into())
-                .ok_or_else(|| VmError::InvalidPayload)?
+                .map(|elm| elm.into()).map_err(|_| VmError::InvalidPayload)?
             }
             LazyRecordTypeDef::StatisticsReport => {
                 let pu =
@@ -205,8 +201,7 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
                     field_index,
                     &BytesRecord::<StatisticsReport>(pu),
                 )
-                .map(|elm| elm.into())
-                .ok_or_else(|| VmError::InvalidPayload)?
+                .map(|elm| elm.into()).map_err(|_| VmError::InvalidPayload)?
             }
             _ => {
                 return Err(VmError::InvalidMethodCall);

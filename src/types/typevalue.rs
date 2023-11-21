@@ -72,10 +72,15 @@ impl TypeValue {
     pub fn create_record(
         type_ident_pairs: Vec<(&str, TypeValue)>,
     ) -> Result<Record, CompileError> {
-        let elems = type_ident_pairs
-            .into_iter()
-            .map(|(ident, ty)| (ShortString::from(ident), ty.into()))
-            .collect::<Vec<_>>();
+        let mut elems = vec![];
+
+        for (ident, ty) in type_ident_pairs {
+            elems.push((ShortString::from(ident), ty.try_into().map_err(|e: VmError| CompileError::from(e.to_string()))?));
+        }
+        // let elems = type_ident_pairs
+        //     .into_iter()
+        //     .map(|(ident, ty)| (ShortString::from(ident), ty.try_into().map_err(|e: VmError| CompileError::from("bla"))? ))
+        //     .collect::<Vec<_>>();
 
         Ok(Record::new(elems))
     }

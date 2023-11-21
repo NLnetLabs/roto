@@ -130,7 +130,7 @@ macro_rules! lazyfield {
                             .$base_call()$(.$method_call())*
                     )
                 )
-            ).into()
+            ).try_into().unwrap()
         )
         // LazyElementTypeValue::Lazy(
         //     Box::new(move |$raw_bytes: &BytesRecord<routecore::bmp::message::RouteMonitoring<bytes::Bytes>>| {
@@ -167,7 +167,7 @@ macro_rules! lazyenum {
                         .bytes_parser()
                         .$base_call()$(.$method_call())*.into(),
                 )).into(),
-        ).into() }))
+        ).try_into().unwrap() }))
         // (
         //     "peer_type".into(),
         //     LazyElementTypeValue::Lazy(Box::new(

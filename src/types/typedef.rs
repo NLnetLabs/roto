@@ -369,7 +369,7 @@ impl TypeDef {
                         // Add up all the type defs in the data field
                         // of self.
                         parent_type = (*ty.clone(), parent_type.1);
-                        parent_type.1.push(index as u8);
+                        parent_type.1.push(index as u8)?;
                     } else {
                         return Err(format!(
                             "No field named '{}'",

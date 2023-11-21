@@ -82,15 +82,6 @@ pub(crate) enum GlobalMethodsToken {
     Send,
 }
 
-impl From<usize> for GlobalMethodsToken {
-    fn from(val: usize) -> Self {
-        match val {
-            0 => GlobalMethodsToken::Send,
-            _ => panic!("Unknown token value: {}", val),
-        }
-    }
-}
-
 impl From<GlobalMethodsToken> for usize {
     fn from(val: GlobalMethodsToken) -> Self {
         val as usize

@@ -1,4 +1,4 @@
-use log::trace;
+use log::{trace, error};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Serializer};
 use smallvec::SmallVec;
@@ -109,20 +109,25 @@ impl ElementTypeValue {
     }
 }
 
-impl From<TypeValue> for ElementTypeValue {
-    fn from(t: TypeValue) -> Self {
+impl TryFrom<TypeValue> for ElementTypeValue {
+    type Error = VmError;
+
+    fn try_from(t: TypeValue) -> Result<Self, VmError> {
         match t {
-            TypeValue::Builtin(v) => ElementTypeValue::Primitive(v.into()),
+            TypeValue::Builtin(v) => Ok(ElementTypeValue::Primitive(v.into())),
             TypeValue::List(ty) => {
-                ElementTypeValue::Nested(Box::new(TypeValue::List(ty)))
+                Ok(ElementTypeValue::Nested(Box::new(TypeValue::List(ty))))
             }
             TypeValue::Record(kv_list) => {
-                ElementTypeValue::Nested(Box::new(TypeValue::Record(kv_list)))
+                Ok(ElementTypeValue::Nested(Box::new(TypeValue::Record(kv_list))))
             }
             TypeValue::Unknown => {
-                ElementTypeValue::Primitive(TypeValue::Unknown)
+                Ok(ElementTypeValue::Primitive(TypeValue::Unknown))
             }
-            ty => panic!("1. Unknown type {}", ty),
+            ty => {
+                error!("1. Unknown type {}", ty);
+                Err(VmError::InvalidValueType)
+            }
         }
     }
 }
@@ -302,7 +307,13 @@ impl List {
         let mut elm = self.0.get(*field_index.first()?);
 
         for index in &field_index[1..] {
-            elm = elm.or(None)?.as_record().ok()?.0.get(*index).map(|f| &f.1)
+            elm = elm
+                .or(None)?
+                .as_record()
+                .ok()?
+                .0
+                .get(*index)
+                .map(|f| &f.1)
         }
 
         elm
@@ -343,7 +354,7 @@ impl List {
         }
 
         let e_tv = elm.ok_or(VmError::MemOutOfBounds)?;
-        let new_field = &mut ElementTypeValue::from(value);
+        let new_field = &mut ElementTypeValue::try_from(value)?;
         std::mem::swap(e_tv, new_field);
         Ok(())
     }
@@ -351,7 +362,7 @@ impl List {
     pub fn prepend_value(&mut self, value: TypeValue) -> Result<(), VmError> {
         let exist_v = std::mem::take(&mut self.0);
         let mut new_v = Vec::with_capacity(exist_v.len() + 1);
-        new_v.push(ElementTypeValue::from(value));
+        new_v.push(ElementTypeValue::try_from(value)?);
         new_v.extend(exist_v);
         self.0 = new_v;
 
@@ -359,7 +370,7 @@ impl List {
     }
 
     pub fn append_value(&mut self, value: TypeValue) -> Result<(), VmError> {
-        self.0.push(ElementTypeValue::from(value));
+        self.0.push(ElementTypeValue::try_from(value)?);
         Ok(())
     }
 
@@ -371,7 +382,7 @@ impl List {
         let mut new_v = Vec::with_capacity(self.0.len() + 1);
 
         new_v.extend_from_slice(&self.0[..index]);
-        new_v.push(ElementTypeValue::from(value));
+        new_v.push(ElementTypeValue::try_from(value)?);
         new_v.extend_from_slice(&self.0[index..]);
         self.0 = new_v;
 
@@ -380,16 +391,15 @@ impl List {
 
     pub fn prepend_vec(
         &mut self,
-        value: Vec<TypeValue>,
+        values: Vec<TypeValue>,
     ) -> Result<(), VmError> {
         let exist_v = std::mem::take(&mut self.0);
-        let mut new_v = Vec::with_capacity(exist_v.len() + value.len());
-        new_v.extend(
-            value
-                .into_iter()
-                .map(ElementTypeValue::from)
-                .collect::<Vec<_>>(),
-        );
+        let mut new_v = Vec::with_capacity(exist_v.len() + values.len());
+
+        for v in values {
+            new_v.push(ElementTypeValue::try_from(v)?);
+        }
+
         new_v.extend(exist_v);
         self.0 = new_v;
 
@@ -398,14 +408,11 @@ impl List {
 
     pub fn append_vec(
         &mut self,
-        value: Vec<TypeValue>,
+        values: Vec<TypeValue>,
     ) -> Result<(), VmError> {
-        self.0.extend(
-            value
-                .into_iter()
-                .map(ElementTypeValue::from)
-                .collect::<Vec<_>>(),
-        );
+        for v in values {
+            self.0.push(ElementTypeValue::try_from(v)?)
+        }
 
         Ok(())
     }
@@ -413,17 +420,15 @@ impl List {
     pub fn insert_vec(
         &mut self,
         index: usize,
-        value: Vec<TypeValue>,
+        values: Vec<TypeValue>,
     ) -> Result<(), VmError> {
-        let mut new_v = Vec::with_capacity(self.0.len() + value.len());
+        let mut new_v = Vec::with_capacity(self.0.len() + values.len());
 
         new_v.extend_from_slice(&self.0[..index]);
-        new_v.extend(
-            value
-                .into_iter()
-                .map(ElementTypeValue::from)
-                .collect::<Vec<_>>(),
-        );
+
+        for v in values {
+            new_v.push(ElementTypeValue::try_from(v)?)
+        }
         new_v.extend_from_slice(&self.0[index..]);
         self.0 = new_v;
 
@@ -534,7 +539,7 @@ impl RotoType for List {
                 })
             }
             ListToken::Push => {
-                self.0.push((args.remove(0)).into());
+                self.0.push((args.remove(0)).try_into()?);
                 Ok(TypeValue::List(self))
             }
             ListToken::Pop => todo!(),
@@ -720,17 +725,10 @@ impl<'a> Record {
             for (field_name, field_type) in rec.iter() {
                 if let TypeDef::Record(ref rec_type) = &**field_type {
                     let num_values = rec_type.level_0_len();
-                    let part_values =
-                        values.split_off(values.len() - num_values);
-                    kvs.extend(Self::_recurse_create(
-                        field_type,
-                        part_values,
-                    )?);
+                    let part_values = values.split_off(values.len() - num_values);
+                    kvs.extend(Self::_recurse_create(field_type, part_values)?);
                 } else if let Some(value) = values.pop() {
-                    kvs.push((
-                        field_name.clone(),
-                        ElementTypeValue::Primitive(value),
-                    ));
+                    kvs.push((field_name.clone(), ElementTypeValue::Primitive(value)));
                 } else {
                     return Err(VmError::InvalidRecord);
                 }
@@ -766,18 +764,10 @@ impl<'a> Record {
                 if let TypeDef::Record(ref rec_type) = &**field_type {
                     let num_values = rec_type.level_0_len();
                     let value = values.split_off(values.len() - num_values);
-                    let a = Record::new(Self::_recurse_create(
-                        field_type, value,
-                    )?);
-                    kvs.push((
-                        field_name.clone(),
-                        ElementTypeValue::Nested(Box::new(a.into())),
-                    ));
+                    let a = Record::new(Self::_recurse_create(field_type, value)?);
+                    kvs.push((field_name.clone(), ElementTypeValue::Nested(Box::new(a.into()))));
                 } else if let Some(value) = values.pop() {
-                    kvs.push((
-                        field_name.clone(),
-                        ElementTypeValue::Primitive(value),
-                    ));
+                    kvs.push((field_name.clone(), ElementTypeValue::Primitive(value)));
                 } else {
                     return Err(VmError::InvalidRecord);
                 }
@@ -885,7 +875,7 @@ impl<'a> Record {
         }
 
         let e_tv = elm.ok_or(VmError::MemOutOfBounds)?;
-        let new_field = &mut (e_tv.0.clone(), ElementTypeValue::from(value));
+        let new_field = &mut (e_tv.0.clone(), ElementTypeValue::try_from(value)?);
         std::mem::swap(e_tv, new_field);
 
         Ok(())
@@ -1108,7 +1098,10 @@ pub trait EnumBytesRecord {
         field_index: &SmallVec<[usize; 8]>,
     ) -> Result<TypeValue, VmError>;
 
-    fn is_variant(&self, variant_token: Token) -> bool;
+    fn is_variant(
+        &self,
+        variant_token: Token
+    ) -> bool;
 }
 
 pub trait RecordType: AsRef<[u8]> {
@@ -1161,6 +1154,7 @@ impl<T: RecordType> std::hash::Hash for BytesRecord<T> {
     }
 }
 
+
 //------------- LazyElementTypeValue type -----------------------------------
 
 // The containing element of a LazyRecord, besides being able to store
@@ -1179,19 +1173,19 @@ impl<T: RecordType + std::fmt::Debug> LazyElementTypeValue<'_, T> {
     pub(crate) fn _into_materialized(
         self,
         raw_bytes: &BytesRecord<T>,
-    ) -> Self {
+    ) -> Result<Self, VmError> {
         match self {
             LazyElementTypeValue::LazyRecord(rec) => {
-                let rec = Record::from((&rec, raw_bytes));
+                let rec = Record::try_from((&rec, raw_bytes))?;
 
-                LazyElementTypeValue::Materialized(
+                Ok(LazyElementTypeValue::Materialized(
                     ElementTypeValue::Primitive(rec.into()),
-                )
+                ))
             }
             LazyElementTypeValue::Lazy(elm) => {
-                LazyElementTypeValue::Materialized(elm(raw_bytes))
+                Ok(LazyElementTypeValue::Materialized(elm(raw_bytes)))
             }
-            LazyElementTypeValue::Materialized(_) => self,
+            LazyElementTypeValue::Materialized(_) => Ok(self),
         }
     }
 
@@ -1207,37 +1201,41 @@ impl<T: RecordType + std::fmt::Debug> LazyElementTypeValue<'_, T> {
 }
 
 impl<T: RecordType + std::fmt::Debug>
-    From<(LazyElementTypeValue<'_, T>, &BytesRecord<T>)>
+    TryFrom<(LazyElementTypeValue<'_, T>, &BytesRecord<T>)>
     for ElementTypeValue
 {
-    fn from(value: (LazyElementTypeValue<'_, T>, &BytesRecord<T>)) -> Self {
+    type Error = VmError;
+
+    fn try_from(value: (LazyElementTypeValue<'_, T>, &BytesRecord<T>)) -> Result<Self, VmError> {
         match value {
             (LazyElementTypeValue::LazyRecord(rec), _) => {
-                ElementTypeValue::from(TypeValue::Record(Record::from((
+                ElementTypeValue::try_from(TypeValue::Record(Record::try_from((
                     &rec, value.1,
-                ))))
+                ))?))
             }
-            (LazyElementTypeValue::Lazy(elm), raw_bytes) => elm(raw_bytes),
-            (LazyElementTypeValue::Materialized(elm), _) => elm,
+            (LazyElementTypeValue::Lazy(elm), raw_bytes) => Ok(elm(raw_bytes)),
+            (LazyElementTypeValue::Materialized(elm), _) => Ok(elm),
         }
     }
 }
 
 impl<T: std::fmt::Debug + RecordType>
-    From<(&LazyElementTypeValue<'_, T>, &BytesRecord<T>)>
+    TryFrom<(&LazyElementTypeValue<'_, T>, &BytesRecord<T>)>
     for ElementTypeValue
 {
-    fn from(
+    type Error = VmError;
+
+    fn try_from(
         (value, raw_bytes): (&LazyElementTypeValue<'_, T>, &BytesRecord<T>),
-    ) -> Self {
+    ) -> Result<Self, VmError> {
         match (value, raw_bytes) {
             (LazyElementTypeValue::LazyRecord(rec), _) => {
-                ElementTypeValue::from(TypeValue::Record(Record::from((
+                ElementTypeValue::try_from(TypeValue::Record(Record::try_from((
                     rec, raw_bytes,
-                ))))
+                ))?))
             }
-            (LazyElementTypeValue::Lazy(elm), raw_bytes) => elm(raw_bytes),
-            (LazyElementTypeValue::Materialized(elm), _) => elm.clone(),
+            (LazyElementTypeValue::Lazy(elm), raw_bytes) => Ok(elm(raw_bytes)),
+            (LazyElementTypeValue::Materialized(elm), _) => Ok(elm.clone()),
         }
     }
 }
@@ -1277,7 +1275,7 @@ impl<'a, T: RecordType + std::fmt::Debug> LazyElementTypeValue<'a, T> {
     ) -> Result<ElementTypeValue, VmError> {
         match self {
             LazyElementTypeValue::LazyRecord(ref rec) => {
-                let rec = Record::from((rec, &raw_bytes));
+                let rec = Record::try_from((rec, &raw_bytes))?;
                 Ok(ElementTypeValue::Primitive(rec.into()))
             }
             LazyElementTypeValue::Lazy(elm) => Ok(elm(&raw_bytes)),
@@ -1315,33 +1313,31 @@ impl<'a, T: std::fmt::Debug + RecordType> LazyRecord<'a, T> {
 
     pub(crate) fn from_type_def(
         ty: LazyNamedTypeDef<'a, T>,
-    ) -> LazyRecord<'a, T> {
-        Self {
+    ) -> Result<LazyRecord<'a, T>, VmError> {
+        Ok(Self {
             value: ty,
             _is_materialized: false,
             _raw_message: PhantomData,
-        }
+        })
     }
 
     pub fn get_field_by_index(
         &self,
         field_index: &SmallVec<[usize; 8]>,
         raw_bytes: &BytesRecord<T>,
-    ) -> Option<ElementTypeValue> {
+    ) -> Result<ElementTypeValue, VmError> {
         trace!(
             "get_field_by_index for {:?} w/ field index {:?}",
             self.value,
             field_index
         );
-        self.value.get(field_index[0]).and_then(|f| match &f.1 {
+        let index = *field_index.get(0).ok_or(VmError::InvalidMemoryAccess(0))?;
+        self.value.get(index).and_then(|f| match &f.1 {
             LazyElementTypeValue::Lazy(l_value) => Some(l_value(raw_bytes)),
-            LazyElementTypeValue::Materialized(m_value) => {
-                Some(m_value.clone())
-            }
-            LazyElementTypeValue::LazyRecord(rec) => {
-                rec.get_field_by_index(&field_index[1..].into(), raw_bytes)
-            }
-        })
+            LazyElementTypeValue::Materialized(m_value) => Some(m_value.clone()),
+            LazyElementTypeValue::LazyRecord(rec) => rec
+                .get_field_by_index(&field_index[1..].into(), raw_bytes).ok(),
+        }).ok_or(VmError::InvalidFieldAccess)
     }
 
     pub fn exec_value_method(
@@ -1374,7 +1370,7 @@ impl<'a, T: std::fmt::Debug + RecordType> LazyRecord<'a, T> {
         let e_tv = elm.ok_or(VmError::MemOutOfBounds)?;
         let new_field = &mut (
             e_tv.0.clone(),
-            LazyElementTypeValue::Materialized(ElementTypeValue::from(value)),
+            LazyElementTypeValue::Materialized(ElementTypeValue::try_from(value)?),
         );
         std::mem::swap(e_tv, new_field);
 
@@ -1397,31 +1393,31 @@ impl<T: RecordType> Display for LazyRecord<'_, T> {
 }
 
 impl<T: std::fmt::Debug + RecordType>
-    From<(&LazyRecord<'_, T>, &BytesRecord<T>)> for Record
+    TryFrom<(&LazyRecord<'_, T>, &BytesRecord<T>)> for Record
 {
-    fn from(value: (&LazyRecord<T>, &BytesRecord<T>)) -> Self {
-        Record(
-            value
-                .0
-                .value
-                .iter()
-                .map(|(field, elm)| {
-                    (field.clone(), ElementTypeValue::from((elm, value.1)))
-                })
-                .collect::<Vec<_>>(),
-        )
+    type Error = VmError;
+
+    fn try_from(value: (&LazyRecord<T>, &BytesRecord<T>)) -> Result<Self, VmError> {
+        let mut fields = vec![];
+        for (field, elm) in &value.0.value {
+            fields.push((field.clone(), ElementTypeValue::try_from((elm, value.1))?));
+        }
+
+        Ok(Record(fields))
     }
 }
 
 impl<T: std::fmt::Debug + RecordType>
-    From<(LazyRecord<'_, T>, &BytesRecord<T>)> for TypeValue
+    TryFrom<(LazyRecord<'_, T>, &BytesRecord<T>)> for TypeValue
 {
-    fn from(value: (LazyRecord<T>, &BytesRecord<T>)) -> Self {
+    type Error = VmError;
+
+    fn try_from(value: (LazyRecord<T>, &BytesRecord<T>)) -> Result<Self, VmError> {
         let mut rec = vec![];
         for field in value.0.value {
-            rec.push((field.0, ElementTypeValue::from((field.1, value.1))));
+            rec.push((field.0, ElementTypeValue::try_from((field.1, value.1))?));
         }
-        TypeValue::Record(Record::new(rec))
+        Ok(TypeValue::Record(Record::new(rec)))
     }
 }
 

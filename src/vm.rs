@@ -25,7 +25,7 @@ use crate::{
 };
 
 use arc_swap::ArcSwapOption;
-use log::{log_enabled, trace, Level};
+use log::{log_enabled, trace, Level, error};
 use smallvec::SmallVec;
 
 //------------ Stack --------------------------------------------------------
@@ -151,7 +151,7 @@ impl LinearMemory {
         self.0.get(index)
     }
 
-    pub(crate) fn get_mp_field_as_bool(&self, stack_ref: &StackRef) -> bool {
+    pub(crate) fn get_mp_field_as_bool(&self, stack_ref: &StackRef) -> Result<bool, VmError> {
         trace!(
             "mp field pos: {:?}, field_index: {:?}",
             stack_ref.pos,
@@ -159,21 +159,21 @@ impl LinearMemory {
         );
         match stack_ref.pos {
             StackRefPos::MemPos(pos) => {
-                if let Some(StackValue::Owned(TypeValue::Builtin(
+                if let StackValue::Owned(TypeValue::Builtin(
                     BuiltinTypeValue::Boolean(Boolean(b)),
-                ))) = self
+                )) = self
                     .get_mp_field_by_index_as_stack_value(
                         pos as usize,
                         stack_ref.field_index.clone(),
-                    )
+                    )?
                 {
-                    b
+                    Ok(b)
                 } else {
-                    false
+                    Ok(false)
                 }
             }
-            StackRefPos::CompareResult(res) => res,
-            _ => false,
+            StackRefPos::CompareResult(res) => Ok(res),
+            _ => Ok(false),
         }
     }
 
@@ -249,7 +249,7 @@ impl LinearMemory {
         &self,
         mem_pos: usize,
         field_index: SmallVec<[usize; 8]>,
-    ) -> Option<StackValue> {
+    ) -> Result<StackValue, VmError> {
         trace!(
             "get_mp_field_by_index_as_stack_value {:?}",
             self.get_mem_pos(mem_pos).map(StackValue::Ref)
@@ -262,21 +262,21 @@ impl LinearMemory {
                         // Do not own AsPath and Communities, cloning is
                         // expensive!
                         TypeValue::Builtin(BuiltinTypeValue::AsPath(_)) => {
-                            Some(StackValue::Ref(tv))
+                            Ok(StackValue::Ref(tv))
                         }
                         TypeValue::Builtin(
                             BuiltinTypeValue::Communities(_),
-                        ) => Some(StackValue::Ref(tv)),
+                        ) => Ok(StackValue::Ref(tv)),
                         // Clone all other built-ins, they're cheap to clone
                         // (all copy) and the result is smaller than a pointer
                         TypeValue::Builtin(_) => {
                             trace!("builtin copy {}", tv);
-                            Some(StackValue::Owned(tv.clone()))
+                            Ok(StackValue::Owned(tv.clone()))
                         }
-                        _ => Some(StackValue::Ref(tv)),
+                        _ => Ok(StackValue::Ref(tv))
                     }
                 } else {
-                    None
+                    Err(VmError::InvalidMemoryAccess(mem_pos))
                 }
             }
             field_index => {
@@ -291,18 +291,18 @@ impl LinearMemory {
                         match rec.get_field_by_index(field_index) {
                             Some(ElementTypeValue::Nested(nested)) => {
                                 trace!("=> nested field {}", nested);
-                                Some(StackValue::Ref(nested))
+                                Ok(StackValue::Ref(nested))
                             }
                             Some(ElementTypeValue::Primitive(b)) => {
                                 trace!("=> primitive record field {:?}", b);
-                                Some(StackValue::Ref(b))
+                                Ok(StackValue::Ref(b))
                             }
                             unknown_rec_field => {
-                                trace!(
+                                error!(
                                     "=> unknown record field {:?}",
                                     unknown_rec_field
                                 );
-                                None
+                                Err(VmError::InvalidFieldAccess)
                             }
                         }
                     }
@@ -310,12 +310,12 @@ impl LinearMemory {
                         let field = l.get_field_by_index(field_index);
                         match field {
                             Some(ElementTypeValue::Nested(nested)) => {
-                                Some(StackValue::Ref(nested))
+                                Ok(StackValue::Ref(nested))
                             }
                             Some(ElementTypeValue::Primitive(b)) => {
-                                Some(StackValue::Ref(b))
+                                Ok(StackValue::Ref(b))
                             }
-                            _ => None,
+                            _ => Err(VmError::InvalidFieldAccess),
                         }
                     }
                     Some(TypeValue::Builtin(BuiltinTypeValue::Route(
@@ -324,13 +324,13 @@ impl LinearMemory {
                         if let Some(v) =
                             route.get_value_ref_for_field(field_index[0])
                         {
-                            Some(StackValue::Ref(v))
+                            Ok(StackValue::Ref(v))
                         } else if let Some(v) =
                             route.get_field_by_index(field_index[0])
                         {
-                            Some(StackValue::Owned(v))
+                            Ok(StackValue::Owned(v))
                         } else {
-                            Some(StackValue::Owned(TypeValue::Unknown))
+                            Ok(StackValue::Owned(TypeValue::Unknown))
                         }
                     }
                     Some(TypeValue::Builtin(
@@ -343,12 +343,12 @@ impl LinearMemory {
                             field_index
                         );
                         if let Some(v) = (*bgp_msg.as_ref())
-                            .get_value_owned_for_field(field_index[0])
+                            .get_value_owned_for_field(field_index[0])?
                         {
                             trace!("v {:?}", v);
-                            Some(StackValue::Owned(v))
+                            Ok(StackValue::Owned(v))
                         } else {
-                            Some(StackValue::Owned(TypeValue::Unknown))
+                            Ok(StackValue::Owned(TypeValue::Unknown))
                         }
                     }
                     Some(TypeValue::Builtin(
@@ -361,14 +361,14 @@ impl LinearMemory {
                             field_index
                         );
 
-                        LazyRecord::from_type_def(BytesRecord::<
+                        Ok(LazyRecord::from_type_def(BytesRecord::<
                             routecore::bmp::message::RouteMonitoring<
                                 bytes::Bytes,
                             >,
                         >::lazy_type_def(
-                        ))
+                        ))?
                         .get_field_by_index(&field_index, bmp_msg.as_ref())
-                        .map(|elm| StackValue::Owned(elm.into()))
+                        .map(|elm| StackValue::Owned(elm.into()))?)
                     }
                     Some(TypeValue::Builtin(
                         BuiltinTypeValue::BmpPeerDownNotification(bmp_msg),
@@ -380,34 +380,34 @@ impl LinearMemory {
                             field_index
                         );
 
-                        LazyRecord::from_type_def(BytesRecord::<
+                        Ok(LazyRecord::from_type_def(BytesRecord::<
                             routecore::bmp::message::PeerDownNotification<
                                 bytes::Bytes,
                             >,
                         >::lazy_type_def(
-                        ))
+                        ))?
                         .get_field_by_index(&field_index, bmp_msg.as_ref())
-                        .map(|elm| StackValue::Owned(elm.into()))
+                        .map(|elm| StackValue::Owned(elm.into()))?)
                     }
                     Some(tv) => match tv {
                         // Do not own AsPath and Communities, cloning is
                         // expensive!
                         TypeValue::Builtin(BuiltinTypeValue::AsPath(_)) => {
-                            Some(StackValue::Ref(tv))
+                            Ok(StackValue::Ref(tv))
                         }
                         TypeValue::Builtin(
                             BuiltinTypeValue::Communities(_),
-                        ) => Some(StackValue::Ref(tv)),
+                        ) => Ok(StackValue::Ref(tv)),
                         // Clone all other built-ins, they're cheap to clone
                         // (all copy) and the result is smaller than a pointer
                         TypeValue::Builtin(_) => {
                             trace!("builtin copy {}", tv);
-                            Some(StackValue::Owned(tv.clone()))
+                            Ok(StackValue::Owned(tv.clone()))
                         }
-                        _ => Some(StackValue::Ref(tv)),
+                        _ => Ok(StackValue::Ref(tv))
                     },
                     // This is apparently a type that does not have fields
-                    None => None,
+                    None => Err(VmError::InvalidFieldAccess),
                 }
             }
         }
@@ -470,7 +470,7 @@ impl LinearMemory {
         &self,
         mem_pos: usize,
         field_index: SmallVec<[usize; 8]>,
-    ) -> Option<TypeValue> {
+    ) -> Result<TypeValue, VmError> {
         trace!(
             "get_mp_field_by_index_as_bytes_record {:?}",
             self.get_mem_pos(mem_pos).map(StackValue::Ref)
@@ -482,34 +482,34 @@ impl LinearMemory {
                     match tv {
                         TypeValue::Builtin(BuiltinTypeValue::BmpMessage(
                             bytes_rec,
-                        )) => Some(TypeValue::Builtin(
+                        )) => Ok(TypeValue::Builtin(
                             BuiltinTypeValue::from(Arc::clone(bytes_rec)),
                         )),
                         TypeValue::Builtin(
                             BuiltinTypeValue::BmpRouteMonitoringMessage(
                                 bytes_rec,
                             ),
-                        ) => Some(TypeValue::Builtin(
+                        ) => Ok(TypeValue::Builtin(
                             BuiltinTypeValue::from(Arc::clone(bytes_rec)),
                         )),
                         TypeValue::Builtin(
                             BuiltinTypeValue::BmpPeerDownNotification(
                                 bytes_rec,
                             ),
-                        ) => Some(TypeValue::Builtin(
+                        ) => Ok(TypeValue::Builtin(
                             BuiltinTypeValue::from(Arc::clone(bytes_rec)),
                         )),
                         TypeValue::Builtin(
                             BuiltinTypeValue::BmpPeerUpNotification(
                                 bytes_rec,
                             ),
-                        ) => Some(TypeValue::Builtin(
+                        ) => Ok(TypeValue::Builtin(
                             BuiltinTypeValue::from(Arc::clone(bytes_rec)),
                         )),
-                        _ => None,
+                        _ => Err(VmError::InvalidValueType),
                     }
                 } else {
-                    None
+                    Err(VmError::InvalidFieldAccess)
                 }
             }
             field_index => {
@@ -534,7 +534,7 @@ impl LinearMemory {
                                 bytes::Bytes,
                             >,
                         >::lazy_type_def(
-                        ))
+                        ))?
                         .get_field_by_index(&field_index, bmp_msg.as_ref())
                         .map(|elm| elm.into())
                     }
@@ -553,7 +553,7 @@ impl LinearMemory {
                                 bytes::Bytes,
                             >,
                         >::lazy_type_def(
-                        ))
+                        ))?
                         .get_field_by_index(&field_index, bmp_msg.as_ref())
                         .map(|elm| elm.into())
                     }
@@ -572,12 +572,12 @@ impl LinearMemory {
                                 bytes::Bytes,
                             >,
                         >::lazy_type_def(
-                        ))
+                        ))?
                         .get_field_by_index(&field_index, bmp_msg.as_ref())
                         .map(|elm| elm.into())
                     }
                     // This is apparently a type that does not have fields
-                    _ => None,
+                    _ => Err(VmError::InvalidFieldAccess),
                 }
             }
         }
@@ -1256,7 +1256,7 @@ impl<
     fn _unwind_resolved_stack_into_vec(
         &'a self,
         mem: &'a LinearMemory,
-    ) -> Vec<StackValue> {
+    ) -> Result<Vec<StackValue>, VmError> {
         let stack = self.stack.borrow_mut().unwind();
         let mut unwind_stack: Vec<StackValue> =
             Vec::with_capacity(stack.len());
@@ -1267,18 +1267,13 @@ impl<
                         .get_mp_field_by_index_as_stack_value(
                             pos as usize,
                             sr.field_index,
-                        )
-                        .unwrap_or_else(|| {
-                            panic!(
-                                "Uninitialized memory in position {}",
-                                pos
-                            );
-                        });
+                        )?;
                     unwind_stack.push(v);
                 }
                 StackRefPos::TablePos(token, pos) => {
-                    let ds = &self.data_sources.as_ref()[token];
-                    match ds.get_at_field_index(pos, sr.field_index) {
+                    let ds = get_data_source(&self.data_sources.as_ref(), token)?;
+                    match ds.get_at_field_index(pos, sr.field_index)
+                        .map_err(|_| VmError::InvalidDataSourceAccess)? {
                         Some(v) => {
                             unwind_stack.push(StackValue::Arc(v.into()))
                         }
@@ -1297,7 +1292,7 @@ impl<
                 }
             }
         }
-        unwind_stack
+        Ok(unwind_stack)
     }
 
     // Take a `elem_num` elements on the stack and flush the rest, so we'll
@@ -1306,43 +1301,41 @@ impl<
         &'a self,
         elem_num: u32, // number of elements to take
         mem: &'a LinearMemory,
-    ) -> Vec<StackValue> {
+    ) -> Result<Vec<StackValue>, VmError> {
         let mut stack = self.stack.borrow_mut();
 
         let len = stack.0.len();
         let stack_part = stack.0.split_off(len - elem_num as usize);
+        let mut take_vec = vec![];
 
-        let take_vec = stack_part
-            .iter()
-            .map(|sr| match sr.pos.clone() {
-                StackRefPos::MemPos(pos) => mem
+        for sr in stack_part {
+            match sr.pos.clone() {
+                StackRefPos::MemPos(pos) => { take_vec.push(mem
                     .get_mp_field_by_index_as_stack_value(
                         pos as usize,
                         sr.field_index.clone(),
-                    )
-                    .unwrap_or_else(|| {
-                        panic!("Uninitialized memory in position {}", pos);
-                    }),
+                    )?) },
                 StackRefPos::TablePos(token, pos) => {
-                    let ds = &self.data_sources.as_ref()[token];
+                    let ds = get_data_source(&self.data_sources.as_ref(), token)?;
                     let v =
-                        ds.get_at_field_index(pos, sr.field_index.clone());
+                        ds.get_at_field_index(pos, sr.field_index.clone())
+                            .map_err(|_| VmError::InvalidDataSourceAccess)?;
                     if let Some(v) = v {
-                        StackValue::Arc(v.into())
+                        take_vec.push(StackValue::Arc(v.into()))
                     } else {
-                        StackValue::Owned(TypeValue::Unknown)
+                        take_vec.push(StackValue::Owned(TypeValue::Unknown))
                     }
                 }
                 StackRefPos::CompareResult(res) => {
-                    StackValue::Owned(res.into())
+                    take_vec.push(StackValue::Owned(res.into()))
                 }
-                StackRefPos::ConstantIndex(c) => StackValue::Owned(c.into()),
-                StackRefPos::ConstantValue(v) => StackValue::Owned(v),
-            })
-            .collect();
+                StackRefPos::ConstantIndex(c) => { take_vec.push(StackValue::Owned(c.into())) },
+                StackRefPos::ConstantValue(v) => { take_vec.push(StackValue::Owned(v)) },
+            };
+        }
 
         stack.clear();
-        take_vec
+        Ok(take_vec)
     }
 
     // Take a `elem_num` elements on the stack, leaving the rest of the stack
@@ -1351,44 +1344,41 @@ impl<
         &'a self,
         elem_num: u32, // number of elements to take
         mem: &'a LinearMemory,
-    ) -> Vec<StackValue> {
+    ) -> Result<Vec<StackValue>, VmError> {
         let mut stack = self.stack.borrow_mut();
 
         let len = stack.0.len();
         let stack_part = stack.0.split_off(len - elem_num as usize);
+        let mut take_vec = vec![];
 
-        let take_vec = stack_part
-            .iter()
-            .map(|sr| match sr.pos.clone() {
+        for sr in stack_part {
+           match sr.pos.clone() {
                 StackRefPos::MemPos(pos) => {
-                    mem.get_mp_field_by_index_as_stack_value(
+                    take_vec.push(mem.get_mp_field_by_index_as_stack_value(
                         pos as usize,
                         sr.field_index.clone(),
-                    )
-                    .unwrap_or_else(|| {
-                        panic!("Uninitialized memory in position {}", pos);
-                    })
+                    )?);
                     // StackValue::Ref(v)
                 }
                 StackRefPos::TablePos(token, pos) => {
-                    let ds = &self.data_sources.as_ref()[token];
+                    let ds = get_data_source(&self.data_sources.as_ref(), token)?;
                     let v =
-                        ds.get_at_field_index(pos, sr.field_index.clone());
+                        ds.get_at_field_index(pos, sr.field_index.clone()).map_err(|_| VmError::InvalidDataSourceAccess)?;
                     if let Some(v) = v {
-                        StackValue::Arc(v.into())
+                        take_vec.push(StackValue::Arc(v.into()));
                     } else {
-                        StackValue::Owned(TypeValue::Unknown)
+                        take_vec.push(StackValue::Owned(TypeValue::Unknown));
                     }
                 }
                 StackRefPos::CompareResult(res) => {
-                    StackValue::Owned(res.into())
+                    take_vec.push(StackValue::Owned(res.into()));
                 }
-                StackRefPos::ConstantIndex(c) => StackValue::Owned(c.into()),
-                StackRefPos::ConstantValue(v) => StackValue::Owned(v.into()),
-            })
-            .collect();
+                StackRefPos::ConstantIndex(c) => { take_vec.push(StackValue::Owned(c.into())); },
+                StackRefPos::ConstantValue(v) => { take_vec.push(StackValue::Owned(v)) },
+            };
+        }
 
-        take_vec
+        Ok(take_vec)
     }
 
     // Take a `elem_num` elements on the stack, leaving the rest of the stack
@@ -1397,35 +1387,32 @@ impl<
         &'a self,
         elem_num: u32, // number of elements to take
         mem: &'a mut LinearMemory,
-    ) -> Vec<TypeValue> {
+    ) -> Result<Vec<TypeValue>, VmError> {
         let mut stack = self.stack.borrow_mut();
 
         let len = stack.0.len();
         let stack_part = stack.0.split_off(len - elem_num as usize);
+        let mut take_vec = vec![];
 
-        let take_vec = stack_part
-            .iter()
-            .map(|sr| match sr.pos.clone() {
+        for sr in stack_part {
+            match sr.pos.clone() {
                 StackRefPos::MemPos(pos) => {
-                    mem.get_mp_field_by_stack_ref_owned(
-                        sr,
+                    take_vec.push(mem.get_mp_field_by_stack_ref_owned(
+                        &sr,
                         // sr.field_index.clone(),
-                    )
-                    .unwrap_or_else(|_| {
-                        panic!("Uninitialized memory in position {}", pos);
-                    })
+                    )?);
                     // StackValue::Ref(v)
                 }
                 StackRefPos::TablePos(_token, _pos) => {
-                    panic!("Attempt to move a value from a data-source");
+                    return Err(VmError::InvalidWrite);
                 }
-                StackRefPos::CompareResult(res) => res.into(),
-                StackRefPos::ConstantIndex(c) => c.into(),
-                StackRefPos::ConstantValue(v) => v.into(),
-            })
-            .collect();
+                StackRefPos::CompareResult(res) => { take_vec.push(res.into()); },
+                StackRefPos::ConstantIndex(c) => { take_vec.push(c.into()); },
+                StackRefPos::ConstantValue(v) => { take_vec.push(v.into()); },
+            }
+        }   
 
-        take_vec
+        Ok(take_vec)
     }
 
     fn as_vec(&'a self) -> Vec<StackRef> {
@@ -1522,11 +1509,11 @@ impl<
                     // args: [CompareOperator]
                     // stack args: [cmp1, cmp2]
                     OpCode::Cmp => {
-                        let stack_args = self._take_resolved(2, mem);
+                        let stack_args = self._take_resolved(2, mem)?;
 
                         trace!("raw stack args {:#?}", stack_args);
-                        let left = stack_args[0].as_ref();
-                        let right = stack_args[1].as_ref();
+                        let left: &TypeValue = stack_args.get(0).map_or(Err(VmError::InvalidCommand), |a| Ok(a.as_ref()))?;
+                        let right = stack_args.get(1).map_or(Err(VmError::InvalidCommand), |a| Ok(a.as_ref()))?;
 
                         if log_enabled!(Level::Trace) {
                             trace!(" {:?} <-> {:?}", left, right);
@@ -1632,7 +1619,9 @@ impl<
                                     .borrow_mut()
                                     .push(StackRefPos::CompareResult(res))?;
                             }
-                            _ => panic!("{:3} -> invalid compare op", pc),
+                            _ => { 
+                                return Err(VmError::InvalidCompareOp(pc)); 
+                            }
                         }
                     }
                     // stack args: [type, method_token, args, return memory
@@ -1653,16 +1642,16 @@ impl<
                         let (_args, method_t, return_type) = args.pop_3()?;
 
                         let stack_args = self
-                            ._take_resolved(_args.get_args_len() as u32, mem);
+                            ._take_resolved(_args.get_args_len() as u32, mem)?;
 
                         // We are going to call a method on a type, so we
                         // extract the type from the first argument on the
                         // stack.
                         if let CommandArg::Type(t) = return_type {
                             let val = t.exec_type_method(
-                                method_t.into(),
+                                method_t.try_into()?,
                                 &stack_args,
-                                return_type.into(),
+                                return_type.try_into()?,
                             )?;
                             mem.set_mem_pos(mem_pos, val);
                         }
@@ -1709,19 +1698,18 @@ impl<
                                     mem.get_mp_field_by_index_as_stack_value(
                                         pos as usize,
                                         sr.field_index,
-                                    ).ok_or_else(|| {
+                                    ).map_err(|_| {
                                         trace!("\nstack: {:?}", stack);
                                         trace!("mem: {:#?}", mem.0);
                                         VmError::InvalidMemoryAccess(pos as usize)
                                     })?
                                 },
                                 StackRefPos::TablePos(token, pos) => {
-                                    let ds = &self.data_sources.as_ref()
-                                        [token];
+                                    let ds = get_data_source(&self.data_sources.as_ref(), token)?;
                                     let v = ds.get_at_field_index(
                                         pos,
                                         sr.field_index,
-                                    );
+                                    ).map_err(|_| VmError::InvalidDataSourceAccess)?;
                                     if let Some(v) = v {
                                         StackValue::Arc(v.into())
                                     } else {
@@ -1751,9 +1739,9 @@ impl<
 
                         trace!("typevalue to call method on {}", call_value);
                         let v = call_value.exec_value_method(
-                            method_token.into(),
+                            method_token.try_into()?,
                             &stack_args[1..],
-                            return_type.into(),
+                            return_type.try_into()?,
                         )?;
 
                         mem.set_mem_pos(mem_pos, v);
@@ -1868,9 +1856,9 @@ impl<
                                     ).ok_or_else(|| VmError::InvalidRecord)?,
                                 )
                                 .exec_consume_value_method(
-                                    method_token.into(),
+                                    method_token.try_into()?,
                                     stack_args,
-                                    return_type.into(),
+                                    return_type.try_into()?,
                                     // target_field_index.clone(),
                                 )?;
                                 rec.set_value_on_field_index(
@@ -1887,9 +1875,9 @@ impl<
                                     .ok_or(VmError::InvalidFieldAccess)?,
                                 )
                                 .exec_consume_value_method(
-                                    method_token.into(),
+                                    method_token.try_into()?,
                                     stack_args,
-                                    return_type.into(),
+                                    return_type.try_into()?,
                                     // target_field_index.clone(),
                                 )?;
                                 list.set_field_for_index(
@@ -1950,15 +1938,11 @@ impl<
                                         pos as usize,
                                         sr.field_index,
                                     )
-                                    .unwrap_or_else(|| {
+                                    .map_err(|e| {
                                         trace!("\nstack: {:?}", stack);
                                         trace!("mem: {:#?}", mem.0);
-                                        panic!(
-                                            "Uninitialized memory in \
-                                            position {}",
-                                            pos
-                                        );
-                                    }),
+                                        e
+                                    })?,
                                 _ => {
                                     trace!("WHAT? {:?}", sr.pos);
                                     return Err(VmError::InvalidVariant);
@@ -2012,10 +1996,10 @@ impl<
                             | CommandArg::DataSourceRib(ds_s) => {
                                 let ds = self.get_data_source(*ds_s)?;
                                 let stack_args =
-                                    self._unwind_resolved_stack_into_vec(mem);
+                                    self._unwind_resolved_stack_into_vec(mem)?;
 
                                 let v = ds.exec_method(
-                                    method_token.into(),
+                                    method_token.try_into()?,
                                     &stack_args[..],
                                     TypeDef::Unknown,
                                 );
@@ -2222,7 +2206,7 @@ impl<
                     OpCode::CondFalseSkipToEOB => {
                         let s = self.stack.borrow();
                         let stack_ref = s.get_top_value()?;
-                        if !mem.get_mp_field_as_bool(stack_ref) {
+                        if !mem.get_mp_field_as_bool(stack_ref)? {
                             if log_enabled!(Level::Trace) {
                                 trace!(" skip to end of block");
                             }
@@ -2238,7 +2222,7 @@ impl<
                     OpCode::CondTrueSkipToEOB => {
                         let s = self.stack.borrow();
                         let stack_ref = s.get_top_value()?;
-                        if !mem.get_mp_field_as_bool(stack_ref) {
+                        if !mem.get_mp_field_as_bool(stack_ref)? {
                             if log_enabled!(Level::Trace) {
                                 trace!(" continue");
                             }
@@ -2268,7 +2252,7 @@ impl<
                     OpCode::CondFalseSkipToLabel => {
                         let s = self.stack.borrow();
                         let stack_ref = s.get_top_value()?;
-                        if mem.get_mp_field_as_bool(stack_ref) {
+                        if mem.get_mp_field_as_bool(stack_ref)? {
                             if log_enabled!(Level::Trace) {
                                 trace!(" continue");
                             }
@@ -2360,7 +2344,7 @@ impl<
                         );
 
                         let stack_args =
-                            self._take_resolved_as_owned(elem_num, mem);
+                            self._take_resolved_as_owned(elem_num, mem)?;
                         trace!("Stack args {:?}", stack_args);
 
                         if let CommandArg::MemPos(mem_pos) = args[3] {
@@ -2602,9 +2586,11 @@ pub enum VmError {
     ImpossibleComparison,
     InvalidDataSource,
     InvalidCommand,
+    InvalidCommandArg,
     InvalidWrite,
     InvalidConversion,
     InvalidMsgType,
+    InvalidCompareOp(usize),
     UnexpectedTermination,
     AsPathTooLong,
     DeltaLocked,
@@ -2660,8 +2646,10 @@ impl Display for VmError {
             }
             VmError::InvalidWrite => f.write_str("InvalidWrite"),
             VmError::InvalidCommand => f.write_str("InvalidCommand"),
+            VmError::InvalidCommandArg => f.write_str("InvalidCommandArg"),
             VmError::InvalidDataSource => f.write_str("InvalidDataSource"),
             VmError::InvalidConversion => f.write_str("InvalidConversion"),
+            VmError::InvalidCompareOp(_) => f.write_str("InvalidCompareOp"),
             VmError::UnexpectedTermination => {
                 f.write_str("UnexpectedTermination")
             }
@@ -2787,16 +2775,12 @@ pub enum CommandArg {
 }
 
 impl CommandArg {
-    pub fn as_token_value(&self) -> usize {
+    pub fn as_token_value(&self) -> Result<usize, VmError> {
         match self {
-            CommandArg::Argument(v) => *v,
-            CommandArg::Variable(v) => *v,
+            CommandArg::Argument(v) => Ok(*v),
+            CommandArg::Variable(v) => Ok(*v),
             _ => {
-                panic!(
-                    "Cannot get token value from this arg: {:?} and \
-                that's fatal",
-                    self
-                );
+                Err(VmError::InvalidCommandArg)
             }
         }
     }
@@ -2827,37 +2811,34 @@ impl Display for CommandArg {
     }
 }
 
-impl From<&CommandArg> for TypeDef {
-    fn from(value: &CommandArg) -> Self {
+impl TryFrom<&CommandArg> for TypeDef {
+    type Error = VmError;
+
+    fn try_from(value: &CommandArg) -> Result<Self, VmError> {
         match value {
-            CommandArg::Type(t) => t.clone(),
+            CommandArg::Type(t) => Ok(t.clone()),
             _ => {
-                panic!(
-                    "Cannot convert to TypeDef: {:?} and that's fatal.",
-                    value
-                );
+                error!("Cannot convert to TypeDef: {:?}", value);
+                Err(VmError::InvalidConversion)
             }
         }
     }
 }
 
 // extract the token value from an argument
-impl From<&CommandArg> for usize {
-    fn from(value: &CommandArg) -> Self {
+impl TryFrom<&CommandArg> for usize {
+    type Error = VmError;
+
+    fn try_from(value: &CommandArg) -> Result<Self, VmError> {
         match value {
-            CommandArg::Method(m) => *m,
-            CommandArg::DataSourceTable(d) => *d,
-            CommandArg::DataSourceRib(d) => *d,
-            CommandArg::FieldAccess(f) => *f,
-            CommandArg::BuiltinMethod(b) => *b,
-            CommandArg::Variable(v) => *v,
-            CommandArg::MemPos(m) => *m as usize,
-            _ => {
-                panic!(
-                    "Cannot convert {:?} to usize and that's fatal.",
-                    value
-                );
-            }
+            CommandArg::Method(m) => Ok(*m),
+            CommandArg::DataSourceTable(d) => Ok(*d),
+            CommandArg::DataSourceRib(d) => Ok(*d),
+            CommandArg::FieldAccess(f) => Ok(*f),
+            CommandArg::BuiltinMethod(b) => Ok(*b),
+            CommandArg::Variable(v) => Ok(*v),
+            CommandArg::MemPos(m) => Ok(*m as usize),
+            _ => Err(VmError::InvalidCommandArg)
         }
     }
 }
@@ -2868,14 +2849,17 @@ impl From<ast::CompareOp> for CommandArg {
     }
 }
 
-impl From<crate::traits::Token> for Vec<CommandArg> {
-    fn from(to: crate::traits::Token) -> Self {
+impl TryFrom<crate::traits::Token> for Vec<CommandArg> {
+    type Error = VmError;
+    
+    fn try_from(to: crate::traits::Token) -> Result<Self, VmError> {
         if let Token::FieldAccess(v) = to {
-            v.iter()
+            Ok(v.iter()
                 .map(|f| CommandArg::FieldAccess(*f as usize))
                 .collect::<Vec<_>>()
+            )
         } else {
-            panic!("PANIC")
+            Err(VmError::InvalidFieldAccess)
         }
     }
 }
@@ -2979,13 +2963,13 @@ impl Clone for ExtDataSource {
 }
 
 impl ExtDataSource {
-    pub fn new(name: &str, token: Token, ty: TypeDef) -> ExtDataSource {
-        ExtDataSource {
+    pub fn new(name: &str, token: Token, ty: TypeDef) -> Result<ExtDataSource, CompileError> {
+        Ok(ExtDataSource {
             name: name.into(),
-            token: token.into(),
+            token: token.try_into()?,
             source: ArcSwapOption::from(None),
             ty,
-        }
+        })
     }
 
     pub fn get_name(&self) -> ShortString {
@@ -3021,34 +3005,32 @@ impl ExtDataSource {
         &self,
         pos: usize,
         field_index: SmallVec<[usize; 8]>,
-    ) -> Option<TypeValue> {
+    ) -> Result<Option<TypeValue>, VmError> {
         self.source.load().as_ref().map(|ds| {
             match ds.get_at_field_index(pos, field_index) {
                 Some(TypeValue::SharedValue(sv)) => {
-                    TypeValue::SharedValue(Arc::clone(sv))
+                    Ok(Some(TypeValue::SharedValue(Arc::clone(sv))))
                 }
-                Some(_) => panic!("Fatal: Table contains non-shared value."),
-                None => TypeValue::Unknown,
+                Some(_) => Err(VmError::InvalidFieldAccess),
+                None => Ok(Some(TypeValue::Unknown)),
             }
-        })
+        }).ok_or(VmError::InvalidFieldAccess)?
     }
 }
 
-impl Index<Token> for [ExtDataSource] {
-    type Output = ExtDataSource;
-
-    fn index(&self, index: Token) -> &ExtDataSource {
-        match index {
-            Token::Table(token) => {
-                if let Some(s) = self.get(token) {
-                    s
-                } else {
-                    panic!("No source for {:?}", index);
-                }
+// I'd rather implement SliceIndex on [ExtDataSource], so you could just do
+// [..].get() etc, but that's experimental still.
+pub fn get_data_source(ext_ds: &[ExtDataSource], index: Token) -> Result<&ExtDataSource, VmError> {
+    match index {
+        Token::Table(token) => {
+            if let Some(s) = ext_ds.get(token) {
+                Ok(s)
+            } else {
+                Err(VmError::InvalidDataSource)
             }
-            _ => {
-                panic!("Cannot with {:?}", index);
-            }
+        }
+        _ => {
+            Err(VmError::InvalidDataSource)
         }
     }
 }

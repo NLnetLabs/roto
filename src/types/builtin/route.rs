@@ -789,22 +789,22 @@ impl BgpUpdateMessage {
     pub(crate) fn get_value_owned_for_field(
         &self,
         field_token: usize,
-    ) -> Option<TypeValue> {
-        match field_token.into() {
-            BgpUpdateMessageToken::Nlris => Some(TypeValue::Unknown),
+    ) -> Result<Option<TypeValue>, VmError> {
+        match field_token.try_into()? {
+            BgpUpdateMessageToken::Nlris => Ok(Some(TypeValue::Unknown)),
             BgpUpdateMessageToken::Afi => {
                 if let Ok(mut nlri) = self.raw_message.0.announcements() {
                     if let Some(Ok(announce)) = nlri.next() {
-                        Some(TypeValue::Builtin(
+                        Ok(Some(TypeValue::Builtin(
                             BuiltinTypeValue::ConstU16EnumVariant(
                                 EnumVariant {
                                     enum_name: "AFI".into(),
                                     value: announce.afi_safi().0.into(),
                                 },
                             ),
-                        ))
+                        )))
                     } else {
-                        None
+                        Ok(None)
                     }
                 } else {
                     debug!(
@@ -812,22 +812,22 @@ impl BgpUpdateMessage {
                         message with id ({},{})",
                         self.message_id.0, self.message_id.1
                     );
-                    None
+                    Err(VmError::InvalidPayload)
                 }
             }
             BgpUpdateMessageToken::Safi => {
                 if let Ok(mut nlri) = self.raw_message.0.announcements() {
                     if let Some(Ok(announce)) = nlri.next() {
-                        Some(TypeValue::Builtin(
+                        Ok(Some(TypeValue::Builtin(
                             BuiltinTypeValue::ConstU8EnumVariant(
                                 EnumVariant {
                                     enum_name: "SAFI".into(),
                                     value: announce.afi_safi().1.into(),
                                 },
                             ),
-                        ))
+                        )))
                     } else {
-                        None
+                        Ok(None)
                     }
                 } else {
                     debug!(
@@ -835,7 +835,7 @@ impl BgpUpdateMessage {
                         message with id ({},{})",
                         self.message_id.0, self.message_id.1
                     );
-                    None
+                    Err(VmError::InvalidPayload)
                 }
             }
         }
@@ -875,7 +875,7 @@ impl RotoType for BgpUpdateMessage {
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        match method_token.into() {
+        match method_token.try_into()? {
             BgpUpdateMessageToken::Afi => {
                 if let Ok(mut nlri) = self.raw_message.0.announcements() {
                     if let Some(Ok(announce)) = nlri.next() {
@@ -947,13 +947,15 @@ enum BgpUpdateMessageToken {
     Safi = 2,
 }
 
-impl From<usize> for BgpUpdateMessageToken {
-    fn from(val: usize) -> Self {
+impl TryFrom<usize> for BgpUpdateMessageToken {
+    type Error = VmError;
+
+    fn try_from(val: usize) -> Result<Self, VmError> {
         match val {
-            0 => BgpUpdateMessageToken::Nlris,
-            1 => BgpUpdateMessageToken::Afi,
-            2 => BgpUpdateMessageToken::Safi,
-            _ => panic!("Unknown token value: {}", val),
+            0 => Ok(BgpUpdateMessageToken::Nlris),
+            1 => Ok(BgpUpdateMessageToken::Afi),
+            2 => Ok(BgpUpdateMessageToken::Safi),
+            _ => Err(VmError::InvalidPayload),
         }
     }
 }
