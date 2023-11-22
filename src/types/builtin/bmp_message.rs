@@ -99,7 +99,7 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
         self.0.common_header().msg_type().into()
     }
 
-    // Returns the typevalue for a variant and field_index on this
+    // Returns the TypeValue for a variant and field_index on this
     // bytes_record. Returns a TypeValue::Unknown if the requested
     // variant does not match the bytes record. Returns an error if
     // no field_index was specified.

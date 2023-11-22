@@ -76,7 +76,7 @@ impl RecordTypeDef {
     }
 
     pub(crate) fn get_index_for_field_name(&self, name: &ShortString) -> Option<usize> {
-        self.0.iter().enumerate().find(|(i, td)| td.0 == name).map(|(i, _)| i)
+        self.0.iter().enumerate().find(|(_, td)| td.0 == name).map(|(i, _)| i)
     }
 }
 

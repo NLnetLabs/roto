@@ -10,7 +10,7 @@ macro_rules! typedefconversion {
         $( $no_conversion_no_data:ident ),* ;
         $( $no_conversion_data:ident ),*
     ) => {
-        pub fn test_type_conversion(
+        pub(crate) fn test_type_conversion(
             self,
             into_ty: TypeDef,
         ) -> bool {

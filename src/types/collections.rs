@@ -1,4 +1,4 @@
-use log::{trace, error, debug};
+use log::{trace, error};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Serializer};
 use smallvec::SmallVec;
@@ -26,9 +26,9 @@ use super::typevalue::TypeValue;
 
 // The materialized collection types are Record and List. The element type for
 // both is called ElementTypeValue. The latter has the ability to store nested
-// typevalues, so the roto user can create/modify things like Lists of lists,
+// TypeValues, so the roto user can create/modify things like Lists of lists,
 // or Record with List-typed fields. The collection types themselves are
-// straight-forward vecs of ElementTypeValues (with a ShortString added for
+// straight-forward vectors of ElementTypeValues (with a ShortString added for
 // the Record type). The List type is ordered (order of insert), the Record
 // type MUST be ordered alphabetically by key. The Roto user should not have
 // to worry about this, though.
@@ -47,7 +47,7 @@ use super::typevalue::TypeValue;
 // advisable to store the related BytesRecord, which *do* have
 // BuiltinTypeValue variants to store them in, e.g. BuiltinTypeValue::
 // BmpMessage. Each BytesRecord type has a variant in the `LazyRecordTypeDef`
-// enum, so this acts as a registry for them (see lazyrecord_types).
+// enum, so this acts as a registry for them (see LazyRecord_types).
 
 // There's also an `EnumBytesRecord` trait that should be implemented for
 // BytesRecord types that contain an enum, e.g. BytesRecord<BmpMessage>. This
@@ -659,8 +659,8 @@ impl<'a> Record {
     // Records are compared field-by-field in a simple zipped loop. Therefore
     // all the fields need to be sorted in the same way (aligned), otherwise
     // they'll be unequal, even if all the values are the same. This method
-    // assumes the typevalues are ordered, and DOESN"T CHECK THE SORTING, but
-    // it does check whether the typevalue of the record-to-be-created matches
+    // assumes the TypeValues are ordered, and DOES NOT CHECK THE SORTING, but
+    // it does check whether the TypeValue of the record-to-be-created matches
     // its type definition.
     pub fn create_instance_with_ordered_fields(
         ty: &TypeDef,
@@ -727,7 +727,7 @@ impl<'a> Record {
 
     pub fn _recurse_create(
         ty: &TypeDef,
-        // the sequential typevalue vec
+        // the sequential TypeValue vec
         mut values: Vec<TypeValue>,
     ) -> Result<Vec<(ShortString, ElementTypeValue)>, VmError> {
         if values.is_empty() {
@@ -1097,18 +1097,18 @@ impl From<RecordToken> for usize {
 // Unlike a normal record, a bytes record need to have its recursive field
 // resolved in one go, there can be no intermediary methods that return a
 // (sub)-field value and then other methods can take that as argument for the
-// next recursion IN THE VM, becuause that would mean having to clone the
+// next recursion IN THE VM, because that would mean having to clone the
 // (sub-)field and probably the whole bytes message. This would defy the
 // point of lazy evaluation. Therefore this method takes the bytes record AND
 // the complete field index vec to go to do all the recursion in this method.
 // The data-fields of the variants in this enum are handled as closely as
 // possible to actual lazy fields. Note that we're still copying bytes out
-// into the actual variant. Grrr, TODO.
+// into the actual variant. TODO.
 
 pub trait EnumBytesRecord {
     fn get_variant(&self) -> LazyRecordTypeDef;
 
-    // Returns the typevalue for a variant and field_index on this
+    // Returns the TypeValue for a variant and field_index on this
     // bytes_record. Returns a TypeValue::Unknown if the requested
     // variant does not match the bytes record. Returns an error if
     // no field_index was specified.
@@ -1179,7 +1179,7 @@ impl<T: RecordType> std::hash::Hash for BytesRecord<T> {
 
 // The containing element of a LazyRecord, besides being able to store
 // recursive and simple collections (like its counterpart the materialized
-// LazyElemenTypeValue), it can also host unevaluated expressions (as
+// LazyElementTypeValue), it can also host unevaluated expressions (as
 // closures) of field values, to be called by the VM at runtime.
 
 #[allow(clippy::type_complexity)]
@@ -1351,7 +1351,7 @@ impl<'a, T: std::fmt::Debug + RecordType> LazyRecord<'a, T> {
             self.value,
             field_index
         );
-        let index = *field_index.get(0).ok_or(VmError::InvalidMemoryAccess(0))?;
+        let index = *field_index.first().ok_or(VmError::InvalidMemoryAccess(0))?;
         self.value.get(index).and_then(|f| match &f.1 {
             LazyElementTypeValue::Lazy(l_value) => Some(l_value(raw_bytes)),
             LazyElementTypeValue::Materialized(m_value) => Some(m_value.clone()),
@@ -1366,7 +1366,7 @@ impl<'a, T: std::fmt::Debug + RecordType> LazyRecord<'a, T> {
         raw_bytes: &BytesRecord<T>
     ) -> Result<StackValue, VmError> {
         let v = self
-            .get_field_by_index(&field_index, raw_bytes)?;
+            .get_field_by_index(field_index, raw_bytes)?;
 
         Ok(StackValue::Owned(v.try_into()?))
     }

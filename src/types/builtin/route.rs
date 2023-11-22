@@ -11,7 +11,7 @@
 //               └─▶ Withdrawals │──change ──────┘
 //                 └─────────────┘  status
 
-use log::{debug, error, trace};
+use log::{debug, error};
 use routecore::bgp::message::SessionConfig;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;

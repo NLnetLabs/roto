@@ -98,7 +98,7 @@ impl<M: Meta + 'static> From<Rib<M>> for DataSource {
 
 use std::sync::Arc;
 
-use log::{error, trace, debug};
+use log::{error, trace};
 use rotonda_store::{epoch, prelude::Meta, MatchOptions, MatchType};
 use smallvec::SmallVec;
 
@@ -111,7 +111,7 @@ use crate::{
 
 use super::{
     builtin::{Boolean, BuiltinTypeValue},
-    collections::{Record, ElementTypeValue},
+    collections::Record,
     typedef::{MethodProps, TypeDef},
     typevalue::TypeValue,
 };

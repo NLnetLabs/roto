@@ -18,7 +18,8 @@ use crate::{
         enum_types::GlobalEnumTypeDef,
         typedef::TypeDef,
         typevalue::TypeValue,
-    }, vm::VmError,
+    },
+    vm::VmError,
 };
 
 //------------ Symbols ------------------------------------------------------
@@ -120,7 +121,7 @@ impl Symbol {
     }
 
     // This actually does NOT work with equality, since
-    // Unknown != Unknown accoring to the PartialEq
+    // Unknown != Unknown according to the PartialEq
     // impl, and that's correct!
     pub fn has_unknown_value(&self) -> bool {
         matches!(self.value, TypeValue::Unknown)
@@ -147,27 +148,32 @@ impl Symbol {
                 rec_values.push((arg.get_name(), v.try_into()?));
             } else {
                 trace!("non-record value {:?}", arg.get_value());
-                rec_values
-                    .push((arg.get_name(), arg.get_value().clone().try_into()?));
+                rec_values.push((
+                    arg.get_name(),
+                    arg.get_value().clone().try_into()?,
+                ));
             }
         }
 
         match self.get_type() {
-            TypeDef::Record(_) => Ok(TypeValue::Record(Record::new(rec_values))),
+            TypeDef::Record(_) => {
+                Ok(TypeValue::Record(Record::new(rec_values)))
+            }
             _ => Ok(self.value.clone()),
         }
     }
 
     // checks to see if the arguments (`args`) in this symbol match with the
     // supplied `type_def` or if all the subtypes can be converted into the
-    // subtypes of `type_def`. It will recognize anonymous sub-records.
-    // It it can work this out it will return the a Vec with the name of the
+    // subtypes of `type_def`. It will recognize anonymous sub-records. It it
+    // can work this out it will return the a Vec with the name of the
     // (sub)-field, its (converted) type and its (converted) typevalue.
     pub fn get_recursive_values_primitive(
         &self,
         type_def: TypeDef,
     ) -> Result<Vec<(ShortString, TypeDef, TypeValue)>, CompileError> {
-        // trace!("get_recursive_values_primitive with args {:#?} and type_def {:#?}", self.get_args(), type_def);
+        // trace!("get_recursive_values_primitive with args {:#?} and type_def
+        // {:#?}", self.get_args(), type_def);
         let mut rec_values: Vec<(ShortString, TypeDef, TypeValue)> = vec![];
         for arg in self.get_args() {
             // trace!("arg {:?}", arg);
@@ -181,28 +187,28 @@ impl Symbol {
 
                     let mut checked_val_vec = vec![];
                     for cv in checked_val {
-                        checked_val_vec.push((cv.0.clone(), cv.2.clone().try_into().map_err(|e: VmError| CompileError::from(e.to_string()))?));
+                        checked_val_vec.push((
+                            cv.0.clone(),
+                            cv.2.clone().try_into().map_err(
+                                |e: VmError| {
+                                    CompileError::from(e.to_string())
+                                },
+                            )?,
+                        ));
                     }
 
                     rec_values.push((
                         arg.get_name(),
                         checked_type,
-                        TypeValue::Record(Record::new(
-                            checked_val_vec
-                        )),
+                        TypeValue::Record(Record::new(checked_val_vec)),
                     ));
-                    
-                    
                 } else {
-                    return Err(
-                        CompileError::from(
-                            format!(
-                                "The sub-field name '{}' cannot be found in field '{}'", 
-                                &arg.get_name(),
-                                self.get_name()
-                            )
-                        )
-                    );
+                    return Err(CompileError::from(format!(
+                        "The sub-field name '{}' cannot be found in field \
+                        '{}'",
+                        &arg.get_name(),
+                        self.get_name()
+                    )));
                 }
             } else if let Some(checked_type) =
                 type_def.get_field(&arg.get_name())
@@ -215,7 +221,12 @@ impl Symbol {
 
                 if !arg.get_type().test_type_conversion(checked_type.clone())
                 {
-                    return Err(CompileError::from(format!("Cannot convert value of type {} into value of type {}", arg.get_type(), checked_type)));
+                    return Err(CompileError::from(format!(
+                        "Cannot convert value of type {} into value of type \
+                        {}",
+                        arg.get_type(),
+                        checked_type
+                    )));
                 };
                 // let checked_val =
                 //     arg.get_value().clone().into_type(&checked_type)?;
@@ -343,10 +354,10 @@ impl Symbol {
         }
     }
 
-    // This function tries to convert a symbol with a given type into a
-    // symbol with another type and set its value according to the new
-    // type, if it has a a value. If the conversion is not possible
-    // it returns an error. Used during the evaluation phase.
+    // This function tries to convert a symbol with a given type into a symbol
+    // with another type and set its value according to the new type, if it
+    // has a a value. If the conversion is not possible it returns an error.
+    // Used during the evaluation phase.
     pub fn try_convert_type_value_into(
         mut self,
         into_ty: TypeDef,
@@ -421,6 +432,7 @@ pub enum SymbolKind {
     // assignment and as root access receivers.
     Constant, // A literal value or a filter-map-level variable
     // Rx and Tx Types
+
     // The payload can be a mutable type, that comes in at the input of the
     // VM, and is mutated. In that case there is no separate Rx and Tx types:
     // they have to be the same type. These two types are the indicators for
@@ -430,12 +442,13 @@ pub enum SymbolKind {
     // incoming payload is *not* mutated, but instead a new outgoing, empty
     // payload of the SplitTxType is created and filled by the specified
     // filter.
-    // Note: this has the effect that specifying a `rx_tx: Route` results in
-    // a different outgoing payload that specifying `rx: Route; tx: Route`.
-    // In the first case, the incoming payload is mutated, that means that
-    // fields in the Route instance that are left alone by the filter will be
-    // there unchanged in the outgoing payload. In the second case only the
-    // fields that are filled by the filter will have a (non-default) value.
+
+    // Note: this has the effect that specifying a `rx_tx: Route` results in a
+    // different outgoing payload that specifying `rx: Route; tx: Route`. In
+    // the first case, the incoming payload is mutated, that means that fields
+    // in the Route instance that are left alone by the filter will be there
+    // unchanged in the outgoing payload. In the second case only the fields
+    // that are filled by the filter will have a (non-default) value.
     SplitRxType, // type of the incoming payload
     SplitTxType, // type of the outgoing payload
 
@@ -942,8 +955,8 @@ impl SymbolTable {
             })
     }
 
-    // Retrieve the symbol from the `variables` table of a filter_map the entry
-    // Used in the compile stage to build the command stack.
+    // Retrieve the symbol from the `variables` table of a filter_map the
+    // entry Used in the compile stage to build the command stack.
 
     // panics if the symbol is not found.
     pub(crate) fn get_variable_by_token(
@@ -1048,7 +1061,7 @@ impl SymbolTable {
     }
 
     pub(crate) fn get_match_action_sections(&self) -> Vec<&MatchAction> {
-        self.match_action_sections.iter().collect::<Vec<_>>() //.values().collect::<Vec<_>>()
+        self.match_action_sections.iter().collect::<Vec<_>>()
     }
 
     pub(crate) fn get_data_source(
@@ -1183,9 +1196,9 @@ impl SymbolTable {
         &'a self,
         mut deps_vec: Vec<&'a Symbol>,
     ) -> Result<DepsGraph, CompileError> {
-        deps_vec.retain(|t| match t.get_token() {
-            t => t.is_variable() || t.is_argument() || t.is_data_source(),
-            _ => false,
+        deps_vec.retain(|t| {
+            matches!(t.get_token(),
+            t if t.is_variable() || t.is_argument() || t.is_data_source())
         });
 
         let (args_vec, vars_srcs_vec): (Vec<&Symbol>, Vec<&Symbol>) =
