@@ -1,5 +1,4 @@
 use log::trace;
-use smallvec::SmallVec;
 
 use crate::compiler::compile::{
     compile_term, generate_code_for_token_value, CompileError, CompilerState,
@@ -10,7 +9,7 @@ use crate::types::collections::{ElementTypeValue, List, Record};
 use crate::types::lazyrecord_types::LazyRecordTypeDef;
 use crate::types::typedef::TypeDef;
 use crate::types::typevalue::TypeValue;
-use crate::vm::{Command, CommandArg, CompiledCollectionField, OpCode, VmError};
+use crate::vm::{Command, CommandArg, CompiledCollectionField, OpCode, VmError, FieldIndex};
 
 // This function is the heart of the compiler, all the recursion in the
 // compilation process happens here. The other compile_* functions just
@@ -152,17 +151,17 @@ pub(crate) fn recurse_compile<'a>(
         // rx instance reference
         Token::RxType(_) => {
             assert!(is_ar);
-            match symbol.get_args() {
-                a if a.is_empty() => {
+            match symbol.get_first_arg_checked() {
+                Err(_) => {
                     state.push_command(
                         OpCode::PushStack,
                         vec![CommandArg::MemPos(0)],
                     );
                     return Ok(state);
                 }
-                args => {
+                Ok(first_arg) => {
                     trace!("commands for RxType named {}", symbol.get_name());
-                    state.cur_record_field_name = Some(args[0].get_name());
+                    state.cur_record_field_name = Some(first_arg.get_name());
                     if let Some(v) = state.cur_partial_variable.as_mut() {
                         v.append_primitive(
                             crate::vm::CompiledPrimitiveField::new(
@@ -174,7 +173,7 @@ pub(crate) fn recurse_compile<'a>(
                                     Command::new(
                                         OpCode::StackOffset,
                                         vec![CommandArg::FieldIndex(
-                                            args[0].get_token().try_into()?,
+                                            first_arg.get_token().try_into()?,
                                         )],
                                     ),
                                 ],
@@ -190,7 +189,7 @@ pub(crate) fn recurse_compile<'a>(
                             Command::new(
                                 OpCode::StackOffset,
                                 vec![CommandArg::FieldIndex(
-                                    args[0].get_token().try_into()?,
+                                    first_arg.get_token().try_into()?,
                                 )],
                             ),
                         ]);
@@ -544,11 +543,7 @@ pub(crate) fn recurse_compile<'a>(
                     // lazy_record_type, variant_token, return type, store
                     // memory position]
                     let args = vec![
-                        CommandArg::FieldIndex(
-                            fa.iter()
-                                .map(|t| (*t as usize))
-                                .collect::<SmallVec<_>>(),
-                        ),
+                        CommandArg::FieldIndex(FieldIndex::from(fa)),
                         CommandArg::Type(TypeDef::LazyRecord(
                             LazyRecordTypeDef::from(_var_to),
                         )),
@@ -605,11 +600,7 @@ pub(crate) fn recurse_compile<'a>(
                     match symbol.get_kind() {
                         SymbolKind::LazyFieldAccess => {
                             let args = vec![
-                                CommandArg::FieldIndex(
-                                    fa.iter()
-                                        .map(|t| (*t as usize))
-                                        .collect::<SmallVec<_>>(),
-                                ),
+                                CommandArg::FieldIndex(FieldIndex::from(fa)),
                                 CommandArg::Type(argument_s.get_type()),
                                 CommandArg::Type(symbol.get_type()),
                                 CommandArg::MemPos(state.cur_mem_pos),
@@ -746,7 +737,7 @@ pub(crate) fn recurse_compile<'a>(
                 // lazy_record_type, variant_token, return type, store
                 // memory position]
                 let args = vec![
-                    CommandArg::FieldIndex(SmallVec::new()),
+                    CommandArg::FieldIndex(FieldIndex::new()),
                     CommandArg::Type(TypeDef::LazyRecord(
                         LazyRecordTypeDef::from(_var_to),
                     )),

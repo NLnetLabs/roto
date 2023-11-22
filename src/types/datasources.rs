@@ -35,7 +35,7 @@ impl DataSource {
     pub fn get_at_field_index(
         &self,
         index: usize,
-        field_index: SmallVec<[usize; 8]>,
+        field_index: FieldIndex,
     ) -> Option<&TypeValue> {
         match self {
             DataSource::Table(ref t) => {
@@ -100,13 +100,12 @@ use std::sync::Arc;
 
 use log::{error, trace};
 use rotonda_store::{epoch, prelude::Meta, MatchOptions, MatchType};
-use smallvec::SmallVec;
 
 use crate::{
     ast::ShortString,
     compiler::compile::CompileError,
     traits::{RotoRib, Token},
-    vm::{StackRefPos, StackValue, VmError},
+    vm::{StackRefPos, StackValue, VmError, FieldIndex}, first_into_vm_err,
 };
 
 use super::{
@@ -235,12 +234,12 @@ impl<M: Meta> RotoRib for Rib<M> {
             RibToken::Match => {
                 todo!()
             }
-            RibToken::LongestMatch => {
+            RibToken::LongestMatch if args.len() == 1 => {
                 trace!("longest match on rib");
                 trace!("args {:?}", args);
                 let guard = epoch::pin();
                 let prefix = if let Ok(prefix) =
-                    routecore::addr::Prefix::try_from(args[0].as_ref())
+                    routecore::addr::Prefix::try_from(first_into_vm_err!(args, InvalidMethodCall)?.as_ref())
                 {
                     prefix
                 } else {
@@ -275,6 +274,7 @@ impl<M: Meta> RotoRib for Rib<M> {
                 trace!("get on rib");
                 todo!()
             }
+            _ => Err(VmError::InvalidMethodCall)
         }
     }
 
@@ -324,7 +324,7 @@ impl Table {
     pub fn get_at_field_index(
         &self,
         index: usize,
-        field_index: SmallVec<[usize; 8]>,
+        field_index: FieldIndex,
     ) -> Result<&TypeValue, VmError> {
         match field_index {
             fi if fi.is_empty() => if let Some(r) = self.records.get(index) {
@@ -350,13 +350,13 @@ impl Table {
         _res_type: TypeDef,
     ) -> Result<Box<dyn FnOnce() -> DataSourceMethodValue + 'a>, VmError> {
         match method_token.try_into()? {
-            TableToken::Find => Ok(Box::new(|| {
+            TableToken::Find if args.len() == 1 => Ok(Box::new(|| {
                 self.records
                     .iter()
                     .enumerate()
                     .find(|v| {
                         if let Some(val) =
-                            v.1.get_field_by_index(&smallvec::smallvec![0])
+                            v.1.get_field_by_index(&FieldIndex::from(vec![0]))
                         {
                             val == args[0]
                         } else {
@@ -373,13 +373,13 @@ impl Table {
                         DataSourceMethodValue::TypeValue(TypeValue::Unknown)
                     })
             })),
-            TableToken::Contains => Ok(Box::new(|| {
+            TableToken::Contains if args.len() == 1 => Ok(Box::new(|| {
                 self.records
                     .iter()
                     .enumerate()
                     .find(|v| {
                         if let Some(val) =
-                            v.1.get_field_by_index(&smallvec::smallvec![0])
+                            v.1.get_field_by_index(&FieldIndex::from(vec![0]))
                         {
                             val == args[0]
                         } else {
@@ -397,6 +397,7 @@ impl Table {
                         ))
                     })
             })),
+            _ => Err(VmError::InvalidMethodCall)
         }
     }
 

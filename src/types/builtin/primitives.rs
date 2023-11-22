@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-use log::{trace, debug, error};
+use log::{debug, error, trace};
 use routecore::asn::LongSegmentError;
 use routecore::bgp::communities::{
     ExtendedCommunity, LargeCommunity, StandardCommunity, Wellknown,
@@ -10,6 +10,7 @@ use serde::{Serialize, Serializer};
 
 use crate::attr_change_set::VectorValue;
 use crate::compiler::compile::CompileError;
+use crate::first_into_vm_err;
 use crate::traits::RotoType;
 use crate::types::collections::{ElementTypeValue, List};
 use crate::types::enum_types::EnumVariant;
@@ -169,7 +170,7 @@ impl TryFrom<usize> for U16Token {
     fn try_from(val: usize) -> Result<Self, VmError> {
         match val {
             0 => Ok(U16Token::Set),
-            t => { 
+            t => {
                 error!("Cannot find method on U16 for token: {}", t);
                 Err(VmError::InvalidMethodCall)
             }
@@ -630,10 +631,10 @@ impl TryFrom<usize> for BooleanToken {
     fn try_from(val: usize) -> Result<Self, VmError> {
         match val {
             0 => Ok(BooleanToken::Set),
-            _ => { 
+            _ => {
                 debug!("Unknown token value: {}", val);
                 Err(VmError::InvalidMethodCall)
-            },
+            }
         }
     }
 }
@@ -723,7 +724,8 @@ impl RotoType for StringLiteral {
 
                 let format_str = if let TypeValue::Builtin(
                     BuiltinTypeValue::StringLiteral(StringLiteral(str)),
-                ) = args[0].as_ref()
+                ) =
+                    args.get(0).ok_or(VmError::InvalidMethodCall)?.as_ref()
                 {
                     str
                 } else {
@@ -734,7 +736,11 @@ impl RotoType for StringLiteral {
 
                 let new_string = String::from_iter([
                     sub_str.next().ok_or(VmError::InvalidMethodCall)?,
-                    &args[1].as_ref().to_string(),
+                    &args
+                        .get(1)
+                        .ok_or(VmError::InvalidMethodCall)?
+                        .as_ref()
+                        .to_string(),
                     if let Some(s) = sub_str.next() { s } else { "" },
                 ]);
 
@@ -904,9 +910,12 @@ impl RotoType for IntegerLiteral {
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         match method_token.try_into()? {
-            IntegerLiteralToken::Cmp => Ok(TypeValue::Builtin(
-                BuiltinTypeValue::Boolean(Boolean(args[0] == args[1])),
-            )),
+            IntegerLiteralToken::Cmp if args.len() == 2 => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
+                    args[0] == args[1],
+                ))))
+            }
+            _ => Err(VmError::InvalidMethodCall),
         }
     }
 
@@ -1222,7 +1231,7 @@ impl RotoType for Prefix {
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         match method_token.try_into()? {
-            PrefixToken::From => {
+            PrefixToken::From if args.len() == 2 => {
                 if let TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) =
                     args[0].as_ref()
                 {
@@ -1241,6 +1250,7 @@ impl RotoType for Prefix {
             PrefixToken::Address => unimplemented!(),
             PrefixToken::Len => unimplemented!(),
             PrefixToken::Matches => unimplemented!(),
+            _ => Err(VmError::InvalidMethodCall),
         }
     }
 }
@@ -1575,16 +1585,18 @@ impl SerializeForOperators for StandardCommunity {
                         );
                     }
                 } else {
-                    return Err(serde::ser::Error::custom(
-                        format!("ASN {:?} contains invalid characters", self.asn())
-                    ));
+                    return Err(serde::ser::Error::custom(format!(
+                        "ASN {:?} contains invalid characters",
+                        self.asn()
+                    )));
                 };
                 let tag: u16 = if let Some(tag) = self.tag() {
                     tag.value()
                 } else {
-                    return Err(serde::ser::Error::custom(
-                        format!("Tag {:?} contains invalid characters", self.tag())
-                    ))
+                    return Err(serde::ser::Error::custom(format!(
+                        "Tag {:?} contains invalid characters",
+                        self.tag()
+                    )));
                 };
                 let formatted_asn = format!("AS{}", asn); // to match Routinator JSON style
                 ser::Community {
@@ -1670,19 +1682,29 @@ impl SerializeForOperators for ExtendedCommunity {
                 let global_admin = if let Some(ga) = self.as2() {
                     ga
                 } else {
-                    return Err(serde::ser::Error::custom(
-                        format!("Global Admin {:?} contains invalid characters", self.as2())
-                    ))
+                    return Err(serde::ser::Error::custom(format!(
+                        "Global Admin {:?} contains invalid characters",
+                        self.as2()
+                    )));
                 };
                 let local_admin = if let Some(la) = self.an4() {
                     la
                 } else {
-                    return Err(serde::ser::Error::custom(
-                        format!("Local Admin {:?} contains invalid characters", self.an4())
-                    ))
+                    return Err(serde::ser::Error::custom(format!(
+                        "Local Admin {:?} contains invalid characters",
+                        self.an4()
+                    )));
                 };
                 raw_fields.push(format!("{:#04X}", self.type_raw()));
-                raw_fields.push(format!("{:#04X}", self.to_raw()[1]));
+                let field = if let Some(field) = self.to_raw().get(1) {
+                    *field
+                } else {
+                    return Err(serde::ser::Error::custom(format!(
+                        "Cannot parse extended community from: '{:?}'",
+                        self.to_raw()
+                    )));
+                };
+                raw_fields.push(format!("{:#04X}", field));
                 raw_fields.push(format!("{:#06X}", global_admin.to_u16()));
                 raw_fields.push(format!("{:#010X}", local_admin));
                 ser::Community {
@@ -1717,19 +1739,29 @@ impl SerializeForOperators for ExtendedCommunity {
                 let global_admin = if let Some(ga) = self.ip4() {
                     ga
                 } else {
-                    return Err(serde::ser::Error::custom(
-                        format!("global Admin {:?} contains invalid characters", self.ip4())
-                    ));
+                    return Err(serde::ser::Error::custom(format!(
+                        "global Admin {:?} contains invalid characters",
+                        self.ip4()
+                    )));
                 };
                 let local_admin = if let Some(la) = self.an2() {
-                    la 
+                    la
                 } else {
-                    return Err(serde::ser::Error::custom(
-                        format!("Local Admin {:?} contains invalid characters", self.an2())
-                    ));
+                    return Err(serde::ser::Error::custom(format!(
+                        "Local Admin {:?} contains invalid characters",
+                        self.an2()
+                    )));
                 };
                 raw_fields.push(format!("{:#04X}", self.type_raw()));
-                raw_fields.push(format!("{:#04X}", self.to_raw()[1]));
+                let field = if let Some(field) = self.to_raw().get(1) {
+                    *field
+                } else {
+                    return Err(serde::ser::Error::custom(format!(
+                        "Cannot parse extended community from: '{:?}'",
+                        self.to_raw()
+                    )));
+                };
+                raw_fields.push(format!("{:#04X}", field));
                 raw_fields.push(format!("{:#010X}", u32::from(global_admin)));
                 raw_fields.push(format!("{:#06X}", local_admin));
                 ser::Community {
@@ -2028,7 +2060,7 @@ pub enum CommunityToken {
 
 impl TryFrom<usize> for CommunityToken {
     type Error = VmError;
-    
+
     fn try_from(val: usize) -> Result<Self, VmError> {
         match val {
             0 => Ok(CommunityToken::From),
@@ -2251,7 +2283,7 @@ impl RotoType for Asn {
         match method_token.try_into()? {
             AsnToken::Set => {
                 if let TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) =
-                    args[0].as_ref()
+                    args.get(0).ok_or(VmError::InvalidMethodCall)?.as_ref()
                 {
                     Ok(TypeValue::from(Asn::new(asn.0)))
                 } else {
@@ -2453,17 +2485,17 @@ impl RotoType for AsPath {
     ) -> Result<TypeValue, VmError> {
         match method.try_into()? {
             AsPathToken::Origin => match self.0.origin().cloned() {
-                Some(origin_asn) => {
-                    Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(
-                        origin_asn.try_into_asn().map_err(|_| VmError::InvalidValueType)?,
-                    ))))
-                }
+                Some(origin_asn) => Ok(TypeValue::Builtin(
+                    BuiltinTypeValue::Asn(Asn(origin_asn
+                        .try_into_asn()
+                        .map_err(|_| VmError::InvalidValueType)?)),
+                )),
                 None => Err(VmError::InvalidPayload),
             },
             AsPathToken::Contains => {
                 if let TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(
                     search_asn,
-                ))) = args[0].as_ref()
+                ))) = first_into_vm_err!(args, InvalidMethodCall)?.as_ref()
                 {
                     let contains =
                         self.contains(&Hop(RoutecoreHop::from(*search_asn)));

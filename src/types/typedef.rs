@@ -4,16 +4,15 @@ use std::hash::{Hash, Hasher};
 
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
-use log::trace;
+use log::{trace, debug};
 use serde::Serialize;
-use smallvec::SmallVec;
 
 use crate::compiler::compile::CompileError;
 use crate::traits::Token;
 use crate::typedefconversion;
 use crate::types::builtin::BgpUpdateMessage;
 use crate::types::collections::ElementTypeValue;
-use crate::vm::{StackValue, VmError};
+use crate::vm::{StackValue, VmError, FieldIndex};
 use crate::{
     ast::{AcceptReject, ShortString},
     traits::RotoType,
@@ -37,7 +36,7 @@ use super::{
 // the type definition of the type that's stored in the RIB and the
 // vec of field_indexes that are used in the hash to calculate
 // uniqueness for an entry.
-pub type RibTypeDef = (Box<TypeDef>, Option<Vec<SmallVec<[usize; 8]>>>);
+pub type RibTypeDef = (Box<TypeDef>, Option<Vec<FieldIndex>>);
 pub type NamedTypeDef = (ShortString, Box<TypeDef>);
 pub type LazyNamedTypeDef<'a, T> =
     Vec<(ShortString, LazyElementTypeValue<'a, T>)>;
@@ -692,7 +691,7 @@ impl TypeDef {
     // Calculates the hash over the fields that are referenced in the unique
     // field indexes vec  that lives on the Rib typedef.
     // If there's no field indexes vec then simply calculate the hash over
-    // the (whole) typevalue that was passed in.
+    // the (whole) TypeValue that was passed in.
     pub fn hash_key_values<'a, H: Hasher>(
         &'a self,
         state: &'a mut H,
@@ -708,7 +707,7 @@ impl TypeDef {
                 }
                 TypeValue::Builtin(BuiltinTypeValue::Route(route)) => {
                     for field_index in uniq_field_indexes {
-                        route.get_field_by_index(field_index[0])?.hash(state);
+                        route.get_field_by_index(field_index.first()?)?.hash(state);
                     }
                 }
                 TypeValue::Builtin(btv) => {
@@ -875,14 +874,18 @@ impl PartialEq<TypeValue> for TypeDef {
             }
             (a, TypeValue::Builtin(b)) => a == b,
             (a, TypeValue::List(b)) => match (a, b) {
-                (TypeDef::List(aa), List(bb)) => match &bb[0] {
-                    ElementTypeValue::Nested(bb) => {
+                (TypeDef::List(aa), List(bb)) if !bb.is_empty() => match &bb.get(0) {
+                    Some(ElementTypeValue::Nested(bb)) => {
                         trace!("element type value nested {}", bb);
                         return aa.as_ref() == bb.as_ref();
                     }
-                    ElementTypeValue::Primitive(bb) => {
+                    Some(ElementTypeValue::Primitive(bb)) => {
                         trace!("compare {} with primitive type value nested {}; result {}", aa, bb, aa.as_ref() == bb);
                         return aa.as_ref() == bb;
+                    },
+                    _ => {
+                        debug!("Comparison involving empty list: '{}'", other);
+                        false
                     }
                 },
                 _ => {
@@ -1196,12 +1199,16 @@ impl From<&TypeValue> for TypeDef {
         match ty {
             TypeValue::Builtin(b) => b.into(),
             TypeValue::List(l) => match l {
-                List(l) => match &l[0] {
-                    ElementTypeValue::Nested(n) => {
+                List(l) => match &l.get(0) {
+                    Some(ElementTypeValue::Nested(n)) => {
                         TypeDef::List(Box::new((&(**n)).into()))
                     }
-                    ElementTypeValue::Primitive(p) => {
+                    Some(ElementTypeValue::Primitive(p)) => {
                         TypeDef::List(Box::new(p.into()))
+                    },
+                    _ => {
+                        debug!("Empty list type encountered in TypeValue '{}'", ty);
+                        TypeDef::List(Box::new(TypeDef::Unknown))
                     }
                 },
             },

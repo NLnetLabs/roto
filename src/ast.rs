@@ -25,8 +25,8 @@ use serde::{Serialize, Serializer};
 use smallvec::SmallVec;
 
 use crate::compiler::error::CompileError;
-use crate::parse_string;
 use crate::types::builtin::{Asn, Boolean};
+use crate::{first_into_compile_err, parse_string};
 
 /// ======== Root ===========================================================
 
@@ -2265,10 +2265,18 @@ impl AccessExpr {
         ))(input)
     }
 
-    pub fn get_ident(&self) -> &ShortString {
+    pub fn get_ident(&self) -> Result<&ShortString, CompileError> {
         match self {
-            AccessExpr::MethodComputeExpr(expr) => &expr.ident.ident,
-            AccessExpr::FieldAccessExpr(expr) => &expr.field_names[0].ident,
+            AccessExpr::MethodComputeExpr(expr) => Ok(&expr.ident.ident),
+            AccessExpr::FieldAccessExpr(expr)
+                if !expr.field_names.is_empty() =>
+            {
+                Ok(&first_into_compile_err!(expr.field_names)?.ident)
+            }
+            expr => Err(CompileError::Internal(format!(
+                "Cannot find ident in AccessExpr: {:?}",
+                expr
+            ))),
         }
     }
 }

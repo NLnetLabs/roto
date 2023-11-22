@@ -275,6 +275,51 @@ impl Symbol {
         self.args.as_slice()
     }
 
+    // Bounds checking #1: Check if the first actually exists before actually
+    // returning it.
+    pub fn get_first_arg_checked(&self) -> Result<&Symbol, CompileError> {
+        if let Some(first) = self.args.first() {
+            Ok(first)
+        } else {
+            Err(CompileError::Internal(
+                "Not enough arguments. Expected one argument, got none"
+                    .to_string(),
+            ))
+        }
+    }
+
+    // Bounds checking #2: Check if there are a specified number of arguments
+    // before returning the number of specified arguments.
+    pub fn get_args_checked(
+        &self,
+        num: usize,
+    ) -> Result<&[Symbol], CompileError> {
+        if self.args.len() >= num {
+            Ok(&self.args[0..num])
+        } else {
+            Err(CompileError::Internal(format!(
+                "Not enough arguments. Expected two arguments, got {}",
+                self.args.len()
+            )))
+        }
+    }
+
+    // Bounds checking #3: Check if a minimum number of arguments is present,
+    // and then returning all of the arguments.
+    pub fn get_args_with_checked_min_len(
+        &self,
+        min_len: usize,
+    ) -> Result<&[Symbol], CompileError> {
+        if self.args.len() >= min_len {
+            Ok(self.args.as_slice())
+        } else {
+            Err(CompileError::Internal(format!(
+                "Not enough arguments. Expected two arguments, got {}",
+                self.args.len()
+            )))
+        }
+    }
+
     pub fn get_args_mut(&mut self) -> &mut [Symbol] {
         &mut self.args
     }
@@ -282,12 +327,8 @@ impl Symbol {
     // Go into the first arg of a symbol until we find a empty args vec and
     // store it there.
     pub fn add_arg(&mut self, arg: Symbol) -> usize {
-        // if self.args.is_empty() {
         self.args.push(arg);
         self.args.len() - 1
-        // } else {
-        //     self.get_args_mut()[0].add_arg(arg)
-        // }
     }
 
     pub fn empty(token: Token) -> Self {
@@ -527,7 +568,9 @@ impl MatchAction {
         self.symbol.get_kind()
     }
 
-    pub fn get_kind_type_and_token(&self) -> Result<(SymbolKind, TypeDef, Token), CompileError> {
+    pub fn get_kind_type_and_token(
+        &self,
+    ) -> Result<(SymbolKind, TypeDef, Token), CompileError> {
         self.symbol.get_kind_type_and_token()
     }
 
@@ -774,9 +817,7 @@ impl SymbolTable {
         let token = match kind {
             SymbolKind::Rib => Token::Rib(token_int),
             // Treat PrefixList like a table, they share the same methods.
-            SymbolKind::Table => {
-                Token::Table(token_int)
-            }
+            SymbolKind::Table => Token::Table(token_int),
             SymbolKind::OutputStream => Token::OutputStream(token_int),
             _ => Token::Variable(token_int),
         };

@@ -1,7 +1,6 @@
 // =========== RotoFilter trait ============================================
 
 use serde::Serialize;
-use smallvec::SmallVec;
 
 use crate::{
     ast::ShortString,
@@ -13,7 +12,7 @@ use crate::{
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
     },
-    vm::{StackValue, VmError},
+    vm::{StackValue, VmError, FieldIndex},
 };
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize)]
@@ -129,7 +128,7 @@ impl TryFrom<Token> for usize {
 }
 
 // impl From for Field Index.
-impl TryFrom<Token> for SmallVec<[usize; 8]> {
+impl TryFrom<Token> for FieldIndex {
     type Error = CompileError;
 
     fn try_from(value: Token) -> Result<Self, Self::Error> {

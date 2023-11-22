@@ -6,7 +6,6 @@ use std::{
 
 use log::{log_enabled, trace, Level};
 use nom::error::VerboseError;
-use smallvec::SmallVec;
 
 use crate::{
     ast::{self, AcceptReject, FilterType, ShortString, SyntaxTree},
@@ -26,7 +25,7 @@ use crate::{
         compute_hash, Command, CommandArg, CompiledCollectionField,
         CompiledField, CompiledPrimitiveField, CompiledVariable,
         ExtDataSource, FilterMapArg, FilterMapArgs, OpCode, StackRefPos,
-        VariablesRefTable,
+        VariablesRefTable, FieldIndex,
     },
 };
 
@@ -653,7 +652,7 @@ pub(crate) struct CompilerState<'a> {
     // field index is an empty (small)vec.
     pub(crate) cur_partial_variable: Option<CompiledVariable>,
     pub(crate) cur_record_depth: usize,
-    pub(crate) cur_record_field_index: SmallVec<[usize; 8]>,
+    pub(crate) cur_record_field_index: FieldIndex,
     pub(crate) cur_record_field_name: Option<ShortString>,
     pub(crate) cur_record_type: Option<RecordTypeDef>,
     // the memory position that is currently empty and available to be
@@ -2000,7 +1999,7 @@ pub(crate) fn compile_term<'a>(
 
     match term.get_kind() {
         SymbolKind::CompareExpr(op) => {
-            let args = term.get_args();
+            let args = term.get_args_checked(2)?;
             state = recurse_compile(&args[0], state, None, false)?;
             state.cur_mem_pos += 1;
             state = recurse_compile(&args[1], state, None, false)?;
@@ -2011,7 +2010,7 @@ pub(crate) fn compile_term<'a>(
                 .push_back(Command::new(OpCode::Cmp, vec![op.into()]));
         }
         SymbolKind::OrExpr => {
-            let args = term.get_args();
+            let args = term.get_args_checked(2)?;
             state = compile_term(&args[0], state)?;
             state.cur_mem_pos += 1;
             state = compile_term(&args[1], state)?;
@@ -2022,7 +2021,7 @@ pub(crate) fn compile_term<'a>(
             ));
         }
         SymbolKind::AndExpr => {
-            let args = term.get_args();
+            let args = term.get_args_checked(2)?;
             state = compile_term(&args[0], state)?;
             state.cur_mem_pos += 1;
             state = compile_term(&args[1], state)?;
@@ -2037,7 +2036,9 @@ pub(crate) fn compile_term<'a>(
         }
         SymbolKind::ListCompareExpr(op) => {
             trace!("list compare");
-            let args = term.get_args();
+            // Retrieve all the arguments and check that the length is at
+            // least 2, so that we do not run afoul with indexing later on.
+            let args = term.get_args_with_checked_min_len(2)?;
             state.cur_mem_pos += 1;
             let orig_mem_pos = state.cur_mem_pos;
 

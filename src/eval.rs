@@ -9,6 +9,7 @@ use crate::ast::ShortString;
 use crate::ast::TypeIdentField;
 use crate::blocks::Scope;
 use crate::compiler::compile::CompileError;
+use crate::first_into_compile_err;
 use crate::symbols::GlobalSymbolTable;
 use crate::symbols::MatchActionType;
 use crate::symbols::Symbol;
@@ -50,13 +51,17 @@ impl<'a> ast::SyntaxTree {
         let global_scope = Scope::Global;
 
         let global_symbols = if symbols_mut.contains_key(&global_scope) {
-            symbols_mut.get_mut(&global_scope).ok_or_else(|| CompileError::from("Cannot find global scope."))?
+            symbols_mut.get_mut(&global_scope).ok_or_else(|| {
+                CompileError::from("Cannot find global scope.")
+            })?
         } else {
             let mut global_table = symbols::SymbolTable::new(&global_scope);
             global_table.create_global_methods();
 
             symbols_mut.insert(global_scope.clone(), global_table);
-            symbols_mut.get_mut(&global_scope).ok_or_else(|| CompileError::from("Cannot find global scope."))?
+            symbols_mut.get_mut(&global_scope).ok_or_else(|| {
+                CompileError::from("Cannot find global scope.")
+            })?
         };
 
         for expr in &global {
@@ -87,9 +92,13 @@ impl<'a> ast::SyntaxTree {
                 symbols_mut.entry(filter_map_scope.clone())
             {
                 e.insert(symbols::SymbolTable::new(&filter_map_scope));
-                symbols_mut.get_mut(&global_scope).ok_or_else(|| CompileError::from("Cannot find global scope."))?
+                symbols_mut.get_mut(&global_scope).ok_or_else(|| {
+                    CompileError::from("Cannot find global scope.")
+                })?
             } else {
-                symbols_mut.get_mut(&filter_map_scope).ok_or_else(|| CompileError::from("Cannot find global scope."))?
+                symbols_mut.get_mut(&filter_map_scope).ok_or_else(|| {
+                    CompileError::from("Cannot find global scope.")
+                })?
             };
         }
         drop(symbols_mut);
@@ -394,7 +403,7 @@ impl ast::FilterMap {
 
         for (index, term_section) in term_sections.into_iter().enumerate() {
             if let ast::FilterMapExpr::Term(t) = term_section {
-                match &t.body.scopes[0].operator {
+                match &first_into_compile_err!(t.body.scopes)?.operator {
                     // A regular term expression is basically a bunch
                     // of logical expressions.
                     MatchOperator::Match => {
@@ -557,8 +566,8 @@ impl ast::Define {
 
             // we only allow typed record instances, an anonymous type would
             // be ambiguous, since we don't know the different contexts where
-            // it will be used: the type inferrence may lead to a different
-            // type in different contexts, and then the type woudln't be
+            // it will be used: the type inference may lead to a different
+            // type in different contexts, and then the type wouldn't be
             // equal to itself, which doesn't sound good (pun!).
             if let Token::AnonymousRecord = s.get_token() {
                 return Err(CompileError::from(
@@ -615,7 +624,7 @@ impl ast::TermSection {
                 SymbolKind::Constant,
                 argument_type.clone(),
                 vec![],
-                Token::TermArgument(term_section_index, 0)
+                Token::TermArgument(term_section_index, 0),
             ))
         }
 
@@ -623,7 +632,8 @@ impl ast::TermSection {
         trace!("{:#?}", local_scope);
 
         // We currently only look at the first scope
-        let term_scopes = &self.body.scopes[0];
+        let term_scopes = first_into_compile_err!(self.body.scopes)?;
+
         for term in term_scopes.match_arms.iter().map(|me| &me.1[0]) {
             let mut logical_formula = match &term {
                 LogicalExpr::BooleanExpr(expr) => {
@@ -697,7 +707,7 @@ impl ast::TermSection {
     ) -> Result<(), CompileError> {
         // A match expressions is a collection of logical expressions, one
         // per variant.
-        let term_scopes = &self.body.scopes[0];
+        let term_scopes = first_into_compile_err!(self.body.scopes)?;
 
         trace!("enum {}", enum_ident);
 
@@ -866,7 +876,12 @@ impl ast::ActionSection {
             ))
         }
 
-        trace!("action section nunber {} {} with {:?}", action_section_index, self.ident, self.with_kv);
+        trace!(
+            "action section nunber {} {} with {:?}",
+            action_section_index,
+            self.ident,
+            self.with_kv
+        );
         trace!("local scope");
         trace!("{:#?}", local_scope);
 
@@ -898,7 +913,15 @@ impl ast::ActionSection {
             // `String.format(..)`
             let ar_name = match compute_expr.get_receiver_ident() {
                 Ok(name) => name,
-                Err(_) => compute_expr.access_expr[0].get_ident().clone(),
+                Err(_) => compute_expr
+                    .access_expr
+                    .get(0)
+                    .ok_or(CompileError::Internal(format!(
+                        "Cannot find access expr in: {:?}",
+                        compute_expr.access_expr
+                    )))?
+                    .get_ident()?
+                    .clone(),
             };
 
             let mut s = compute_expr.eval(
@@ -982,7 +1005,10 @@ impl ast::ApplySection {
                     &scope,
                 )?,
                 _ => {
-                    return Err(CompileError::Internal(format!("Cannot evaluate symbol {:#?}", s)));
+                    return Err(CompileError::Internal(format!(
+                        "Cannot evaluate symbol {:#?}",
+                        s
+                    )));
                 }
             };
         }
@@ -1284,7 +1310,14 @@ impl ast::ComputeExpr {
         // e.g. having a prefix 'action-'.
         let ar_name = self.get_receiver_ident().or_else(|_| {
             Ok::<ShortString, CompileError>(
-                self.access_expr[0].get_ident().clone(),
+                self.access_expr
+                    .get(0)
+                    .ok_or(CompileError::Internal(format!(
+                        "Cannot find access expr in: {:?}",
+                        self.access_expr
+                    )))?
+                    .get_ident()?
+                    .clone(),
             )
         })?;
 
@@ -1752,7 +1785,8 @@ impl ast::ValueExpr {
             ast::ValueExpr::PrefixMatchExpr(_) => todo!(),
             ast::ValueExpr::ListExpr(list_elm) => {
                 let list_value = list_elm.eval(symbols, scope)?;
-                let type_def = list_value[0].get_type();
+                let type_def =
+                    first_into_compile_err!(list_value)?.get_type();
 
                 Ok(symbols::Symbol::new(
                     "anonymous_list".into(),
@@ -2405,10 +2439,9 @@ fn get_props_for_scoped_variable(
                 .get(&Scope::Global)
                 .and_then(|gt| {
                     gt.get_variable(&search_str.as_str().into())
-                        .map(|s| {
-                            s.get_props().ok()
-                        })
-                        .ok().flatten()
+                        .map(|s| s.get_props().ok())
+                        .ok()
+                        .flatten()
                 })
                 .map_or_else(
                     // No, let's go over the chain of fields to see if it's
@@ -2642,7 +2675,7 @@ fn declare_variable_from_symbol(
                         symbols::SymbolKind::VariableAssignment,
                         type_def,
                         vec![arg_symbol],
-                        Token::NonTerminal
+                        Token::NonTerminal,
                     );
 
                     filter_map.move_var_or_const_into(symbol)
@@ -2818,12 +2851,12 @@ fn add_match_action(
             // };
 
             let quantifier = match match_action.get_kind() {
-                symbols::SymbolKind::MatchAction(
-                    MatchActionType::Filter,
-                ) => symbols::MatchActionQuantifier::Any,
-                symbols::SymbolKind::MatchAction(
-                    MatchActionType::Negate,
-                ) => symbols::MatchActionQuantifier::Any,
+                symbols::SymbolKind::MatchAction(MatchActionType::Filter) => {
+                    symbols::MatchActionQuantifier::Any
+                }
+                symbols::SymbolKind::MatchAction(MatchActionType::Negate) => {
+                    symbols::MatchActionQuantifier::Any
+                }
                 symbols::SymbolKind::GlobalEnum => {
                     symbols::MatchActionQuantifier::Variant
                 }

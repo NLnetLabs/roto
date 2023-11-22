@@ -58,10 +58,11 @@ impl RotoType for OutputStreamMessage {
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         match method_token.try_into()? {
-            OutputStreamToken::Send => {
+            OutputStreamToken::Send if !args.is_empty() => {
                 trace!("Send: args for output stream message {}", args[0]);
                 Ok(args.remove(0))
-            }
+            },
+            _ => Err(VmError::InvalidMethodCall)
         }
     }
 

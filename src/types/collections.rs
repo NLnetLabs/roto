@@ -1,7 +1,6 @@
-use log::{trace, error};
+use log::{trace, error, debug};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Serializer};
-use smallvec::SmallVec;
 
 use crate::ast::{
     AnonymousRecordValueExpr, Identifier, ListValueExpr, ShortString,
@@ -9,7 +8,7 @@ use crate::ast::{
 };
 use crate::compiler::compile::CompileError;
 use crate::traits::{RotoType, Token};
-use crate::vm::{StackValue, VmError};
+use crate::vm::{StackValue, VmError, FieldIndex};
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 
@@ -310,13 +309,22 @@ impl List {
         todo!()
     }
 
+    // Get a reference to a field on a List, indicated by the first index in
+    // the field index, and then descent into that field, based on the
+    // following indexes in the field_index. Returns None if the field index
+    // is empty.
     pub fn get_field_by_index(
         &self,
-        field_index: SmallVec<[usize; 8]>,
+        field_index: FieldIndex,
     ) -> Option<&ElementTypeValue> {
-        let mut elm = self.0.get(*field_index.first()?);
+        let mut elm = if let Ok(fi) = field_index.first() {
+            self.0.get(fi)
+        } else {
+            debug!("Cannot find field index {:?} in {:?}", field_index, self);
+            return None;
+        };
 
-        for index in &field_index[1..] {
+        for index in field_index.skip_first() {
             elm = elm
                 .or(None)?
                 .as_record()
@@ -329,13 +337,22 @@ impl List {
         elm
     }
 
+    // Get the owned value of a field on a List, indicated by the first index
+    // in the field index, and then descent into that field, based on the
+    // following indexes in the field_index. Returns None if the field index
+    // is empty.
     pub fn get_field_by_index_owned(
         &mut self,
-        field_index: SmallVec<[usize; 8]>,
+        field_index: FieldIndex,
     ) -> Option<ElementTypeValue> {
-        let mut elm = self.0.get_mut(field_index[0]).map(std::mem::take);
+        let mut elm = if let Ok(fi) = field_index.first() {
+            self.0.get_mut(fi).map(std::mem::take)
+        } else {
+            debug!("Cannot find field index {:?} in {:?}", field_index, self);
+            return None;
+        };
 
-        for index in &field_index[1..] {
+        for index in field_index.skip_first() {
             elm = elm
                 .or(None)?
                 .into_record()
@@ -349,12 +366,12 @@ impl List {
 
     pub fn set_field_for_index(
         &mut self,
-        field_index: SmallVec<[usize; 8]>,
+        field_index: FieldIndex,
         value: TypeValue,
     ) -> Result<(), VmError> {
-        let mut elm = self.0.get_mut(field_index[0]);
+        let mut elm = self.0.get_mut(field_index.first()?);
 
-        for index in &field_index[1..] {
+        for index in field_index.skip_first() {
             elm = elm
                 .ok_or(VmError::MemOutOfBounds)?
                 .as_mut_record()?
@@ -528,7 +545,7 @@ impl RotoType for List {
             ListToken::Len => Ok(TypeValue::Builtin(BuiltinTypeValue::U32(
                 U32(self.0.len() as u32),
             ))),
-            ListToken::Contains => {
+            ListToken::Contains if args.len() == 1=> {
                 Ok(self.iter().any(|e| e == args[0]).into())
             }
             _ => Err(VmError::InvalidMethodCall),
@@ -542,7 +559,7 @@ impl RotoType for List {
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         match method.try_into()? {
-            ListToken::Get => {
+            ListToken::Get if args.len() == 1 => {
                 Ok(match self.0.into_iter().find(|e| *e == args[0]) {
                     Some(e) => e.try_into()?,
                     None => TypeValue::Unknown,
@@ -831,28 +848,41 @@ impl<'a> Record {
             .map(|i| self.0.remove(i).1)
     }
 
+    // Get a reference to a field on a List, indicated by the first index in
+    // the field index, and then descent into that field, based on the
+    // following indexes in the field_index. Returns None if the field index
+    // is empty.
     pub fn get_field_by_index(
         &'a self,
-        field_index: &SmallVec<[usize; 8]>,
+        field_index: &FieldIndex,
     ) -> Option<&'a ElementTypeValue> {
-        let mut elm = self.0.get(field_index[0]).map(|f| &f.1);
+        let mut elm = if let Ok(fi) = field_index.first() {
+            self.0.get(fi).map(|f| &f.1)
+        } else {
+            return None;
+        };
 
-        for index in &field_index[1..] {
+        for index in field_index.skip_first() {
             elm = elm?.as_record().ok()?.0.get(*index).map(|f| &f.1)
         }
         elm
     }
 
+    // Get a reference to a field on a List, indicated by the first index in
+    // the field index, and then descent into that field, based on the
+    // following indexes in the field_index. Returns None if the field index
+    // is empty.
     pub fn get_field_by_index_owned(
         &mut self,
-        field_index: SmallVec<[usize; 8]>,
+        field_index: FieldIndex,
     ) -> Option<ElementTypeValue> {
-        let mut elm = self
-            .0
-            .get_mut(field_index[0])
-            .map(|f| std::mem::take(&mut f.1));
+        let mut elm = if let Ok(fi) = field_index.first() {
+            self.0.get_mut(fi).map(|f| std::mem::take(&mut f.1))
+        } else {
+            return None;
+        };
 
-        for index in &field_index[1..] {
+        for index in field_index.skip_first() {
             elm = elm
                 .or(None)?
                 .into_record()
@@ -874,12 +904,12 @@ impl<'a> Record {
 
     pub fn set_value_on_field_index(
         &mut self,
-        field_index: SmallVec<[usize; 8]>,
+        field_index: FieldIndex,
         value: TypeValue,
     ) -> Result<(), VmError> {
-        let mut elm = self.0.get_mut(field_index[0]);
+        let mut elm = self.0.get_mut(field_index.first()?);
 
-        for index in &field_index[1..] {
+        for index in field_index.skip_first() {
             elm = elm
                 .ok_or(VmError::MemOutOfBounds)?
                 .1
@@ -1115,7 +1145,7 @@ pub trait EnumBytesRecord {
     fn get_field_index_for_variant(
         &self,
         variant_token: LazyRecordTypeDef,
-        field_index: &SmallVec<[usize; 8]>,
+        field_index: &FieldIndex,
     ) -> Result<TypeValue, VmError>;
 
     fn is_variant(
@@ -1343,7 +1373,7 @@ impl<'a, T: std::fmt::Debug + RecordType> LazyRecord<'a, T> {
 
     pub fn get_field_by_index(
         &self,
-        field_index: &SmallVec<[usize; 8]>,
+        field_index: &FieldIndex,
         raw_bytes: &BytesRecord<T>,
     ) -> Result<ElementTypeValue, VmError> {
         trace!(
@@ -1351,18 +1381,18 @@ impl<'a, T: std::fmt::Debug + RecordType> LazyRecord<'a, T> {
             self.value,
             field_index
         );
-        let index = *field_index.first().ok_or(VmError::InvalidMemoryAccess(0))?;
+        let index = field_index.first().map_err(|_| VmError::InvalidMemoryAccess(0))?;
         self.value.get(index).and_then(|f| match &f.1 {
             LazyElementTypeValue::Lazy(l_value) => Some(l_value(raw_bytes)),
             LazyElementTypeValue::Materialized(m_value) => Some(m_value.clone()),
             LazyElementTypeValue::LazyRecord(rec) => rec
-                .get_field_by_index(&field_index[1..].into(), raw_bytes).ok(),
+                .get_field_by_index(&field_index.skip_first().into(), raw_bytes).ok(),
         }).ok_or(VmError::InvalidFieldAccess)
     }
 
     pub fn get_field_by_index_as_owned(
         &self,
-        field_index: &SmallVec<[usize; 8]>,
+        field_index: &FieldIndex,
         raw_bytes: &BytesRecord<T>
     ) -> Result<StackValue, VmError> {
         let v = self
@@ -1383,13 +1413,13 @@ impl<'a, T: std::fmt::Debug + RecordType> LazyRecord<'a, T> {
 
     pub fn set_value_on_field_index(
         &'a mut self,
-        field_index: SmallVec<[usize; 8]>,
+        field_index: FieldIndex,
         value: TypeValue,
     ) -> Result<(), VmError> {
         let mut elm: Option<&mut (ShortString, LazyElementTypeValue<'_, T>)> =
-            self.value.get_mut(field_index[0]);
+            self.value.get_mut(field_index.first()?);
 
-        for index in &field_index[1..] {
+        for index in field_index.skip_first() {
             elm = elm
                 .ok_or(VmError::MemOutOfBounds)?
                 .1

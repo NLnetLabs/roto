@@ -1,7 +1,6 @@
 use log::{trace, error};
 use paste::paste;
 use routecore::bmp::message::MessageType;
-use smallvec::SmallVec;
 
 use crate::{
     ast::ShortString,
@@ -20,7 +19,7 @@ use crate::{
         typedef::{LazyNamedTypeDef, RecordTypeDef, TypeDef},
         typevalue::TypeValue,
     },
-    vm::VmError,
+    vm::{VmError, FieldIndex},
 };
 
 pub use crate::types::collections::BytesRecord;
@@ -106,7 +105,7 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
     fn get_field_index_for_variant(
         &self,
         variant_token: LazyRecordTypeDef,
-        field_index: &SmallVec<[usize; 8]>,
+        field_index: &FieldIndex,
     ) -> Result<TypeValue, VmError> {
         if field_index.is_empty() {
             return Err(VmError::InvalidMethodCall);

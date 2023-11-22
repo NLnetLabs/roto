@@ -535,6 +535,29 @@ macro_rules! bytes_record_impl {
     }
 }
 
+// These are two small macros turn the Option<..> returned from first into an
+// appropriate error.
+#[macro_export]
+macro_rules! first_into_compile_err {
+    ( 
+        $method_call: expr
+    ) => {
+        $method_call.first().ok_or(CompileError::Internal(
+            format!("Cannot find: '{:?}'", $method_call)
+        ))
+    }
+}
+
+#[macro_export]
+macro_rules! first_into_vm_err {
+    ( 
+        $method_call: expr,
+        $err: ident
+    ) => {
+        $method_call.first().ok_or(VmError::$err)
+    }
+}
+
 // #[macro_export]
 // macro_rules! subrecord_impl {
 //     (

@@ -10,6 +10,7 @@ use std::{
 use crate::{
     ast::{self, AcceptReject, CompareOp, ShortString},
     compiler::compile::{CompileError, MirBlock},
+    first_into_vm_err,
     traits::{RotoType, Token},
     types::{
         builtin::{Boolean, BuiltinTypeValue},
@@ -26,7 +27,64 @@ use crate::{
 
 use arc_swap::ArcSwapOption;
 use log::{error, log_enabled, trace, Level};
+use serde::Serialize;
 use smallvec::SmallVec;
+
+//------------ FieldIndex ---------------------------------------------------
+
+// This is a compound index that hop from sub-field to sub-field into a
+// Collection, e.g. a Record { a: u8, b: u8, c: { d: u8, e: { x: u8, z: u8 }
+// }, f: u8 }, could be queried with a field index [2,1,0], that would point
+// the var field `x`.
+
+#[derive(
+    Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Serialize, Default,
+)]
+pub struct FieldIndex(SmallVec<[usize; 8]>);
+
+impl FieldIndex {
+    pub fn new() -> Self {
+        Self(SmallVec::<[usize; 8]>::new())
+    }
+
+    pub fn first(&self) -> Result<usize, VmError> {
+        self.0.first().ok_or(VmError::InvalidFieldAccess).copied()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn push(&mut self, index: usize) {
+        self.0.push(index);
+    }
+
+    pub fn skip_first(&self) -> &[usize] {
+        &self.0[1..]
+    }
+
+    pub fn last_mut(&mut self) -> Option<&mut usize> {
+        self.0.last_mut()
+    }
+}
+
+impl From<Vec<usize>> for FieldIndex {
+    fn from(value: Vec<usize>) -> Self {
+        Self(value.into())
+    }
+}
+
+impl From<&[usize]> for FieldIndex {
+    fn from(value: &[usize]) -> Self {
+        Self(value.into())
+    }
+}
+
+impl From<&Vec<u8>> for FieldIndex {
+    fn from(value: &Vec<u8>) -> Self {
+        Self(value.iter().map(|v| *v as usize).collect::<Vec<_>>().into())
+    }
+}
 
 //------------ Stack --------------------------------------------------------
 
@@ -56,7 +114,7 @@ pub(crate) struct StackRef {
     // nested field -> record.field sequences are expressed as a Vec of field
     // indexes, e.g. [1,2] on
     // Record { a: U8, b: Record { a: U8, b: U8, c: U8 }} would point to a.b
-    field_index: SmallVec<[usize; 8]>,
+    field_index: FieldIndex,
 }
 
 #[derive(Debug)]
@@ -70,7 +128,7 @@ impl<'a> Stack {
     fn push(&'a mut self, pos: StackRefPos) -> Result<(), VmError> {
         self.0.push(StackRef {
             pos,
-            field_index: smallvec::smallvec![],
+            field_index: FieldIndex::new(),
         });
         Ok(())
     }
@@ -97,7 +155,7 @@ impl<'a> Stack {
 
     fn push_with_field_index(
         &mut self,
-        field_index: SmallVec<[usize; 8]>,
+        field_index: FieldIndex,
     ) -> Result<(), VmError> {
         self.0
             .last_mut()
@@ -235,7 +293,7 @@ impl LinearMemory {
                     Some(TypeValue::Builtin(BuiltinTypeValue::Route(
                         route,
                     ))) => Ok(route
-                        .get_field_by_index(field_index[0])
+                        .get_field_by_index(field_index.first()?)
                         .unwrap_or(TypeValue::Unknown)),
                     _ => Err(VmError::MemOutOfBounds),
                 },
@@ -248,7 +306,7 @@ impl LinearMemory {
     pub fn get_mp_field_by_index_as_stack_value(
         &self,
         mem_pos: usize,
-        field_index: SmallVec<[usize; 8]>,
+        field_index: FieldIndex,
     ) -> Result<StackValue, VmError> {
         trace!(
             "get_mp_field_by_index_as_stack_value {:?}",
@@ -322,12 +380,12 @@ impl LinearMemory {
                     Some(TypeValue::Builtin(BuiltinTypeValue::Route(
                         route,
                     ))) => {
-                        if let Some(v) =
-                            route.get_value_ref_for_field(field_index[0])?
+                        if let Some(v) = route
+                            .get_value_ref_for_field(field_index.first()?)?
                         {
                             Ok(StackValue::Ref(v))
                         } else if let Ok(v) =
-                            route.get_field_by_index(field_index[0])
+                            route.get_field_by_index(field_index.first()?)
                         {
                             Ok(StackValue::Owned(v))
                         } else {
@@ -344,7 +402,7 @@ impl LinearMemory {
                             field_index
                         );
                         if let Some(v) = (*bgp_msg.as_ref())
-                            .get_value_owned_for_field(field_index[0])?
+                            .get_value_owned_for_field(field_index.first()?)?
                         {
                             trace!("v {:?}", v);
                             Ok(StackValue::Owned(v))
@@ -472,7 +530,7 @@ impl LinearMemory {
     pub fn get_mp_field_by_index_as_bytes_record(
         &self,
         mem_pos: usize,
-        field_index: SmallVec<[usize; 8]>,
+        field_index: FieldIndex,
     ) -> Result<TypeValue, VmError> {
         trace!(
             "get_mp_field_by_index_as_bytes_record {:?}",
@@ -661,6 +719,10 @@ impl<'a> CommandArgsStack<'a> {
     fn new(args: &'a mut VecDeque<CommandArg>) -> Self {
         let args_counter = args.len();
         Self { args, args_counter }
+    }
+
+    fn first(&self) -> Option<&CommandArg> {
+        self.args.get(0)
     }
 
     // Remove and return the first item, decrement the counter This returns
@@ -1036,15 +1098,12 @@ pub fn compute_hash(
 // section to memory positions in the VM.
 #[derive(Debug, Clone)]
 pub(crate) struct CompiledPrimitiveField {
-    field_index: SmallVec<[usize; 8]>,
+    field_index: FieldIndex,
     commands: Vec<Command>,
 }
 
 impl CompiledPrimitiveField {
-    pub fn new(
-        commands: Vec<Command>,
-        field_index: SmallVec<[usize; 8]>,
-    ) -> Self {
+    pub fn new(commands: Vec<Command>, field_index: FieldIndex) -> Self {
         Self {
             commands,
             field_index,
@@ -1063,22 +1122,22 @@ impl CompiledPrimitiveField {
         &self.commands
     }
 
-    pub fn get_field_index(&self) -> &SmallVec<[usize; 8]> {
+    pub fn get_field_index(&self) -> &FieldIndex {
         &self.field_index
     }
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct CompiledCollectionField {
-    field_index: SmallVec<[usize; 8]>,
+    field_index: FieldIndex,
 }
 
 impl CompiledCollectionField {
-    pub(crate) fn new(field_index: SmallVec<[usize; 8]>) -> Self {
+    pub(crate) fn new(field_index: FieldIndex) -> Self {
         Self { field_index }
     }
 
-    pub(crate) fn get_field_index(&self) -> &SmallVec<[usize; 8]> {
+    pub(crate) fn get_field_index(&self) -> &FieldIndex {
         &self.field_index
     }
 }
@@ -1090,7 +1149,7 @@ pub(crate) enum CompiledField {
 }
 
 impl CompiledField {
-    pub(crate) fn get_field_index(&self) -> &SmallVec<[usize; 8]> {
+    pub(crate) fn get_field_index(&self) -> &FieldIndex {
         match self {
             CompiledField::Primitive(p) => p.get_field_index(),
             CompiledField::Collection(c) => c.get_field_index(),
@@ -1131,7 +1190,7 @@ impl CompiledVariable {
     ) -> Result<Vec<Command>, VmError> {
         trace!("get_commands_for_field_index {:?} {:#?}", field_index, self);
 
-        let field_index = SmallVec::<[usize; 8]>::from(field_index);
+        let field_index = FieldIndex::from(field_index);
         // we need to know first what type this field has.
         let field = self
             .0
@@ -1212,7 +1271,7 @@ impl VariablesRefTable {
         &mut self,
         var_token_value: usize,
         commands: Vec<Command>,
-        field_index: SmallVec<[usize; 8]>,
+        field_index: FieldIndex,
     ) -> Result<(), CompileError> {
         self.0.insert(
             Token::Variable(var_token_value),
@@ -1314,8 +1373,8 @@ impl<
         Ok(unwind_stack)
     }
 
-    // Take a `elem_num` elements on the stack and flush the rest, so we'll
-    // end up with an empty stack.
+    // Take a number of elements on the stack and flush the rest, so we'll end
+    // up with an empty stack.
     fn _take_resolved_and_flush(
         &'a self,
         elem_num: u32, // number of elements to take
@@ -1363,7 +1422,7 @@ impl<
         Ok(take_vec)
     }
 
-    // Take a `elem_num` elements on the stack, leaving the rest of the stack
+    // Take a number of elements on the stack, leaving the rest of the stack
     // in place.
     fn _take_resolved(
         &'a self,
@@ -1411,7 +1470,7 @@ impl<
         Ok(take_vec)
     }
 
-    // Take a `elem_num` elements on the stack, leaving the rest of the stack
+    // Take a number of elements on the stack, leaving the rest of the stack
     // in place.
     fn _take_resolved_as_owned(
         &'a self,
@@ -1559,7 +1618,7 @@ impl<
                             trace!(" {:?} <-> {:?}", left, right);
                         }
 
-                        match args[0] {
+                        match first_into_vm_err!(args, InvalidCommandArg)? {
                             CommandArg::CompareOp(CompareOp::Eq) => {
                                 let res = left == right;
                                 self.stack
@@ -1832,7 +1891,7 @@ impl<
                         // stack, this is the field that will be consumed
                         // and returned by `exec_consume_value_method`
                         // later on.
-                        let mut target_field_index = smallvec::smallvec![];
+                        let mut target_field_index = FieldIndex::new();
 
                         trace!("\nargs_len {}", args_len);
                         trace!("Stack {:?}", stack);
@@ -2389,7 +2448,7 @@ impl<
                         trace!("Send: {:?}", args);
 
                         let elem_num =
-                            args[2].get_args_len_for_outputstream_record();
+                            args[2].get_args_len_for_outputstream_record()?;
 
                         trace!(
                             "no of fields {} elem_num {}",
@@ -2779,7 +2838,16 @@ impl Display for Command {
             OpCode::ArgToMemPos => "->",
             OpCode::StackOffset => "",
             OpCode::StackIsVariant => {
-                return write!(f, "{:?}=={:?}?", self.op, self.args[0]);
+                return write!(
+                    f,
+                    "{:?}=={:?}?",
+                    self.op,
+                    if let Some(arg) = self.args.get(0) {
+                        arg.to_string()
+                    } else {
+                        "(None)".to_string()
+                    }
+                );
             }
             OpCode::SkipToEOB => "-->",
             OpCode::CondFalseSkipToEOB => "-->",
@@ -2787,7 +2855,15 @@ impl Display for Command {
             OpCode::CondFalseSkipToLabel => "-->",
             OpCode::CondUnknownSkipToLabel => "-->",
             OpCode::Label => {
-                return write!(f, "🏷  {}", self.args[0]);
+                return write!(
+                    f,
+                    "🏷  {}",
+                    if let Some(arg) = self.args.get(0) {
+                        arg.to_string()
+                    } else {
+                        "(None)".to_string()
+                    }
+                );
             }
             OpCode::Exit(accept_reject) => {
                 return write!(f, "Exit::{}", accept_reject)
@@ -2829,7 +2905,7 @@ pub enum CommandArg {
     // field access token value
     FieldAccess(usize),
     // field index token value (for LazyRecord)
-    FieldIndex(SmallVec<[usize; 8]>),
+    FieldIndex(FieldIndex),
     // builtin method token value
     BuiltinMethod(usize),
     // memory position
@@ -2869,11 +2945,16 @@ impl CommandArg {
         }
     }
 
-    pub fn get_args_len_for_outputstream_record(&self) -> u32 {
+    pub fn get_args_len_for_outputstream_record(
+        &self,
+    ) -> Result<u32, VmError> {
         if let CommandArg::Arguments(fields) = &self {
-            fields[0].get_field_num() as u32
+            Ok(fields
+                .first()
+                .ok_or(VmError::InvalidDataSourceAccess)?
+                .get_field_num() as u32)
         } else {
-            0
+            Ok(0)
         }
     }
 }
@@ -3084,7 +3165,7 @@ impl ExtDataSource {
     pub fn get_at_field_index(
         &self,
         pos: usize,
-        field_index: SmallVec<[usize; 8]>,
+        field_index: FieldIndex,
     ) -> Result<Option<TypeValue>, VmError> {
         self.source
             .load()

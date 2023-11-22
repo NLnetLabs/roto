@@ -6,7 +6,6 @@ use primitives::{
     RouteStatus, U16,
 };
 use serde::Serialize;
-use smallvec::SmallVec;
 
 //============ TypeValue ====================================================
 use crate::{
@@ -17,7 +16,7 @@ use crate::{
     attr_change_set::ScalarValue,
     compiler::compile::CompileError,
     traits::RotoType,
-    vm::{StackValue, VmError},
+    vm::{StackValue, VmError, FieldIndex},
 };
 
 use super::{
@@ -125,7 +124,7 @@ impl TypeValue {
 
     pub fn get_field_by_index(
         &self,
-        index: SmallVec<[usize; 8]>,
+        index: FieldIndex,
     ) -> Result<&ElementTypeValue, CompileError> {
         match self {
             TypeValue::Record(r) => {
@@ -156,7 +155,7 @@ impl TypeValue {
 
     pub(crate) fn _set_field(
         mut self,
-        field_index: SmallVec<[usize; 8]>,
+        field_index: FieldIndex,
         value: TypeValue,
     ) -> Result<Self, VmError> {
         match self {
