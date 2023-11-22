@@ -38,7 +38,7 @@ pub(crate) struct Symbol {
 
 impl Symbol {
     // gets (a clone of) kind, type, token and a optional ref to the
-    // TypeValue. The last field will only contain a typevalue if it's a
+    // TypeValue. The last field will only contain a TypeValue if it's a
     // Constant.
     pub fn get_props(
         &self,
@@ -167,7 +167,7 @@ impl Symbol {
     // supplied `type_def` or if all the subtypes can be converted into the
     // subtypes of `type_def`. It will recognize anonymous sub-records. It it
     // can work this out it will return the a Vec with the name of the
-    // (sub)-field, its (converted) type and its (converted) typevalue.
+    // (sub)-field, its (converted) type and its (converted) TypeValue.
     pub fn get_recursive_values_primitive(
         &self,
         type_def: TypeDef,
@@ -456,7 +456,7 @@ pub enum SymbolKind {
     Rib,
     Table,
     OutputStream,
-    PrefixList,
+    // PrefixList,
 
     // access receiver symbols
     AccessReceiver,
@@ -472,23 +472,23 @@ pub enum SymbolKind {
     // accessor symbols
     // symbols that come after an access receiver in the args list.
 
-    // A method call, that will either mutate the typevalue this SymbolKind
+    // A method call, that will either mutate the TypeValue this SymbolKind
     // lives on when the data field is true, otherwise it will just read it
-    // (to produce a new typevalue).
+    // (to produce a new TypeValue).
     MethodCallbyRef,
     MethodCallByConsumedValue,
     // A method call on a built-in type, e.g. `AsPath.contains()`
     BuiltInTypeMethodCall,
     // A method call that's a builtin of the roto language, e.g.
     // `send-to-log`
-    GlobalMethodCall,
+    // GlobalMethodCall,
     FieldAccess,
     // (multi-)indexed access on a LazyRecord
     LazyFieldAccess,
 
     // term symbols
-    LogicalExpr,
-    BooleanExpr,
+    // LogicalExpr,
+    // BooleanExpr,
     CompareExpr(CompareOp),
     // The comparison of the one value against a list with, i.e. 'in'
     // or 'not in'
@@ -511,7 +511,7 @@ pub enum SymbolKind {
 #[derive(Debug)]
 pub struct MatchAction {
     pub(crate) _quantifier: MatchActionQuantifier,
-    pub(crate) symbol: Symbol,
+    symbol: Symbol,
 }
 
 impl MatchAction {
@@ -522,27 +522,47 @@ impl MatchAction {
     pub fn get_type(&self) -> TypeDef {
         self.symbol.get_type()
     }
+
+    pub fn get_kind(&self) -> SymbolKind {
+        self.symbol.get_kind()
+    }
+
+    pub fn get_kind_type_and_token(&self) -> Result<(SymbolKind, TypeDef, Token), CompileError> {
+        self.symbol.get_kind_type_and_token()
+    }
+
+    pub(crate) fn get_args(&self) -> &[Symbol] {
+        self.symbol.get_args()
+    }
+
+    pub(crate) fn get_token(&self) -> Token {
+        self.symbol.get_token()
+    }
+
+    pub(crate) fn get_match_action(&self) -> &Symbol {
+        &self.symbol
+    }
 }
 
-#[derive(Debug, Copy, Clone)]
-pub enum ActionType {
-    Named,
-    Empty,
-}
+// #[derive(Debug, Copy, Clone)]
+// pub enum ActionType {
+//     Named,
+//     Empty,
+// }
 
 #[derive(Debug, Copy, Clone)]
 pub enum MatchActionQuantifier {
-    MatchesAny,
-    MatchesVariant,
-    MatchesExactlyOne,
-    MatchesEvery,
+    Any,
+    Variant,
+    // ExactlyOne,
+    // Every,
 }
 
 #[derive(Debug, Hash, Copy, Clone, Eq, PartialEq)]
 pub enum MatchActionType {
-    FilterMatchAction,
-    PatternMatchAction,
-    NegateMatchAction,
+    Filter,
+    // PatternMatch,
+    Negate,
     // EmptyAction, // An MatchAction without an action, just a accept or reject
 }
 
@@ -754,7 +774,7 @@ impl SymbolTable {
         let token = match kind {
             SymbolKind::Rib => Token::Rib(token_int),
             // Treat PrefixList like a table, they share the same methods.
-            SymbolKind::Table | SymbolKind::PrefixList => {
+            SymbolKind::Table => {
                 Token::Table(token_int)
             }
             SymbolKind::OutputStream => Token::OutputStream(token_int),

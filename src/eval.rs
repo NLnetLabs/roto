@@ -1067,11 +1067,11 @@ impl ast::ApplyScope {
                     term.get_name(),
                     if fma.negate {
                         symbols::SymbolKind::MatchAction(
-                            MatchActionType::FilterMatchAction,
+                            MatchActionType::Filter,
                         )
                     } else {
                         symbols::SymbolKind::MatchAction(
-                            MatchActionType::NegateMatchAction,
+                            MatchActionType::Negate,
                         )
                     },
                     // The AcceptReject value from the Apply section does not end up
@@ -2819,13 +2819,13 @@ fn add_match_action(
 
             let quantifier = match match_action.get_kind() {
                 symbols::SymbolKind::MatchAction(
-                    MatchActionType::FilterMatchAction,
-                ) => symbols::MatchActionQuantifier::MatchesAny,
+                    MatchActionType::Filter,
+                ) => symbols::MatchActionQuantifier::Any,
                 symbols::SymbolKind::MatchAction(
-                    MatchActionType::NegateMatchAction,
-                ) => symbols::MatchActionQuantifier::MatchesAny,
+                    MatchActionType::Negate,
+                ) => symbols::MatchActionQuantifier::Any,
                 symbols::SymbolKind::GlobalEnum => {
-                    symbols::MatchActionQuantifier::MatchesVariant
+                    symbols::MatchActionQuantifier::Variant
                 }
                 _ => {
                     return Err(CompileError::from(format!(

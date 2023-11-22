@@ -1839,7 +1839,7 @@ impl<
 
                         let mut stack_args = vec![];
 
-                        for _arg_num in (0..args_len) {
+                        for _arg_num in 0..args_len {
                             let sr = stack.pop()?;
 
                             target_field_index =
@@ -2008,7 +2008,7 @@ impl<
                                     let v = (*bytes_rec)
                                         .get_field_index_for_variant(
                                             lazy_record_type,
-                                            &field_index,
+                                            field_index,
                                         )?;
 
                                     mem.set_mem_pos(mem_pos, v);

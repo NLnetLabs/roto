@@ -540,4 +540,8 @@ impl BytesRecord<StatisticsReport> {
             Err(VmError::InvalidMsgType)
         }
     }
+
+    pub fn _bogus_m(&self) -> RecordTypeDef {
+        BytesRecord::<StatisticsReport>::type_def()
+    }
 }

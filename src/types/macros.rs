@@ -10,6 +10,7 @@ macro_rules! typedefconversion {
         $( $no_conversion_no_data:ident ),* ;
         $( $no_conversion_data:ident ),*
     ) => {
+        #[allow(unreachable_patterns)]
         pub(crate) fn test_type_conversion(
             self,
             into_ty: TypeDef,
@@ -19,6 +20,9 @@ macro_rules! typedefconversion {
                 $(
                     TypeDef::$type_no_data => {
                         return match into_ty {
+                            // This arm is unreachable for some type conversion
+                            // created by this macro, clippy warns about this,
+                            // hence we're disabling `unreachable_patterns`.
                             $(
                                 TypeDef::$into_type => true,
                             )*
@@ -348,7 +352,6 @@ macro_rules! bytes_record_impl {
                                 ))
                             ),
                         )?
-                        // $(
                             $(
                                 lazyfield!(
                                     $next_field_name,
@@ -357,8 +360,6 @@ macro_rules! bytes_record_impl {
                                     $next_field_base_call$(.$next_field_method_call)*
                                 ),
                             )?
-                        // )?
-                        // $(
                             $( 
                                 lazy_data_enum!(
                                     $next_enum_data_field_name,
@@ -377,7 +378,6 @@ macro_rules! bytes_record_impl {
                                     $next_enum_base_call$(.$next_enum_method_call )*
                                 ),
                             )?
-                        // )?
                     )+
                 ]
             }

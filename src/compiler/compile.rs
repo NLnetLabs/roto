@@ -1367,7 +1367,7 @@ fn compile_apply_section(
     // Collect the terms that we need to compile.
     for match_action in match_action_sections {
         let ma_name = match_action.get_name();
-        let match_action = &match_action.symbol;
+        // let match_action = &match_action.symbol;
 
         match match_action.get_kind() {
             // A Pattern Match Action
@@ -1764,7 +1764,7 @@ fn compile_apply_section(
                 state.cur_mir_block = MirBlock::new();
 
                 match ma {
-                    MatchActionType::FilterMatchAction => {
+                    MatchActionType::Filter => {
                         state.extend_commands(vec![
                             Command::new(
                                 OpCode::Label,
@@ -1781,7 +1781,7 @@ fn compile_apply_section(
                             Command::new(OpCode::CondFalseSkipToEOB, vec![]),
                         ]);
                     }
-                    MatchActionType::NegateMatchAction => {
+                    MatchActionType::Negate => {
                         state.extend_commands(vec![
                             Command::new(
                                 OpCode::Label,
@@ -1798,14 +1798,9 @@ fn compile_apply_section(
                             Command::new(OpCode::CondTrueSkipToEOB, vec![]),
                         ]);
                     }
-                    MatchActionType::PatternMatchAction => {
-                        return Err(CompileError::Internal(
-                            format!("Illegal Type for Match Action '{}' Type encountered: PatternMatchAction", ma_name)
-                        ));
-                    }
                 }
 
-                state = compile_match_action(match_action, vec![], state)?;
+                state = compile_match_action(match_action.get_match_action(), vec![], state)?;
             }
             _ => {
                 return Err(CompileError::new("invalid match action".into()));
