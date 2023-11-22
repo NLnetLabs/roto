@@ -21,14 +21,8 @@ paste = "1.0.13"
 smallvec = { version = "1.8", features = [ "const_generics", "serde" ] }
 serde = { version = "1.0", features = [ "derive", "rc" ] }
 
-# routecore = { version = "0.4.0-dev", features = ["bgp", "serde", "bmp"], git = "https://github.com/NLnetLabs/routecore.git" }
-# routecore          = { version = "0.4.0-dev", features = ["bgp", "bmp", "serde"], git = "https://github.com/NLnetLabs/routecore.git", branch = "compose-messages-nlri-v2" }
-# routecore = { path = "../../routecore", features = ["bgp", "serde", "bmp"] }
-routecore          = { version = "0.4.0-dev", features = ["bgp", "bmp", "serde"], git = "https://github.com/NLnetLabs/routecore.git", branch = "compose-messages-nlri-v2" }
-
-# rotonda-store = { version = "0.3.0-pre.3", git = "https://github.com/NLnetLabs/rotonda-store.git" }
-# rotonda-store = { path = "../rotonda-store" }
-rotonda-store      = { version = "0.3.0-pre.3", git = "https://github.com/NLnetLabs/rotonda-store.git", branch = "compose-messages-nlri-v2" }
+routecore = { version = "0.4.0-dev", features = ["bgp", "bmp", "serde"], git = "https://github.com/NLnetLabs/routecore.git", branch = "compose-messages-ng" }
+rotonda-store = { version = "0.3.0-pre.3", git = "https://github.com/NLnetLabs/rotonda-store.git", branch = "compose-messages-ng" }
 
 [dev-dependencies]
 env_logger = "0.10"
