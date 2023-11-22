@@ -75,10 +75,16 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
         let status = raw_route.status_deltas.current();
         let route_id = raw_route.raw_message.message_id;
 
+        let status = if let Ok(status) = status.try_into() {
+            status
+        } else {
+            RouteStatus::Unparsable
+        };
+
         if let Ok(route) = raw_route.take_latest_attrs() {
             MaterializedRoute {
                 route: Some(route),
-                status: status.into(),
+                status,
                 route_id,
             }
         } else {
@@ -313,7 +319,7 @@ impl RawRouteWithDeltas {
                 // but if we do we can still return a VmError, log an error, and
                 // keep on going. Something is (very) wrong though, internally.
                 error!(
-                    "Invalid Attribute Change Set: {:?}",
+                    "Cannot find Attribute Change Set: {:?} on Route",
                     self.attribute_deltas
                 );
                 VmError::InvalidPayload
@@ -414,34 +420,39 @@ impl RawRouteWithDeltas {
     pub(crate) fn get_value_ref_for_field(
         &self,
         field_token: usize,
-    ) -> Option<&TypeValue> {
-        let current_set = self.attribute_deltas.get_latest_change_set()?;
+    ) -> Result<Option<&TypeValue>, VmError> {
+        let current_set = if let Some(atrd) = self.attribute_deltas.get_latest_change_set() {
+            atrd
+        } else {
+            return Err(VmError::InvalidRecord);
+        };
 
-        match field_token.into() {
-            RouteToken::Prefix => current_set.prefix.as_ref(),
-            RouteToken::AsPath => current_set.as_path.as_ref(),
-            RouteToken::OriginType => current_set.origin_type.as_ref(),
-            RouteToken::NextHop => current_set.next_hop.as_ref(),
+        match field_token.try_into()? {
+            RouteToken::Prefix => Ok(current_set.prefix.as_ref()),
+            RouteToken::AsPath => Ok(current_set.as_path.as_ref()),
+            RouteToken::OriginType => Ok(current_set.origin_type.as_ref()),
+            RouteToken::NextHop => Ok(current_set.next_hop.as_ref()),
             RouteToken::MultiExitDisc => {
-                current_set.multi_exit_discriminator.as_ref()
+                Ok(current_set.multi_exit_discriminator.as_ref())
             }
-            RouteToken::LocalPref => current_set.local_pref.as_ref(),
+            RouteToken::LocalPref => Ok(current_set.local_pref.as_ref()),
             RouteToken::AtomicAggregate => {
-                current_set.atomic_aggregate.as_ref()
+                Ok(current_set.atomic_aggregate.as_ref())
             }
-            RouteToken::Aggregator => current_set.aggregator.as_ref(),
-            RouteToken::Communities => current_set.communities.as_ref(),
-            RouteToken::Status => self.status_deltas.current_as_ref(),
-            RouteToken::PeerIp => current_set.peer_ip.as_ref(),
-            RouteToken::PeerAsn => current_set.peer_asn.as_ref(),
+            RouteToken::Aggregator => Ok(current_set.aggregator.as_ref()),
+            RouteToken::Communities => Ok(current_set.communities.as_ref()),
+            RouteToken::Status => Ok(self.status_deltas.current_as_ref()),
+            RouteToken::PeerIp => Ok(current_set.peer_ip.as_ref()),
+            RouteToken::PeerAsn => Ok(current_set.peer_asn.as_ref()),
         }
     }
 
     pub(crate) fn get_field_by_index(
         &self,
         field_token: usize,
-    ) -> Option<TypeValue> {
-        match field_token.into() {
+    ) -> Result<TypeValue, VmError> {
+
+        match field_token.try_into()? {
             RouteToken::AsPath => self
                 .raw_message
                 .raw_message
@@ -450,7 +461,8 @@ impl RawRouteWithDeltas {
                 .ok()
                 .flatten()
                 .map(|p| p.to_hop_path())
-                .map(TypeValue::from),
+                .map(TypeValue::from)
+                .ok_or(VmError::InvalidFieldAccess),
             RouteToken::OriginType => self
                 .raw_message
                 .raw_message
@@ -458,7 +470,8 @@ impl RawRouteWithDeltas {
                 .origin()
                 .ok()
                 .flatten()
-                .map(TypeValue::from),
+                .map(TypeValue::from)
+                .ok_or(VmError::InvalidFieldAccess),
             RouteToken::NextHop => self
                 .raw_message
                 .raw_message
@@ -474,7 +487,8 @@ impl RawRouteWithDeltas {
                         .ok()
                         .flatten()
                 })
-                .map(TypeValue::from),
+                .map(TypeValue::from)
+                .ok_or(VmError::InvalidFieldAccess),
             RouteToken::MultiExitDisc => self
                 .raw_message
                 .raw_message
@@ -482,7 +496,8 @@ impl RawRouteWithDeltas {
                 .multi_exit_disc()
                 .ok()
                 .flatten()
-                .map(TypeValue::from),
+                .map(TypeValue::from)
+                .ok_or(VmError::InvalidFieldAccess),
             RouteToken::LocalPref => self
                 .raw_message
                 .raw_message
@@ -490,14 +505,16 @@ impl RawRouteWithDeltas {
                 .local_pref()
                 .ok()
                 .flatten()
-                .map(TypeValue::from),
+                .map(TypeValue::from)
+                .ok_or(VmError::InvalidFieldAccess),
             RouteToken::AtomicAggregate => Some(TypeValue::from(
                 self.raw_message
                     .raw_message
                     .0
                     .is_atomic_aggregate()
                     .unwrap_or(false),
-            )),
+            ))
+            .ok_or(VmError::InvalidFieldAccess),
             RouteToken::Aggregator => self
                 .raw_message
                 .raw_message
@@ -505,7 +522,8 @@ impl RawRouteWithDeltas {
                 .aggregator()
                 .ok()
                 .flatten()
-                .map(TypeValue::from),
+                .map(TypeValue::from)
+                .ok_or(VmError::InvalidFieldAccess),
             RouteToken::Communities => self
                 .raw_message
                 .raw_message
@@ -513,11 +531,12 @@ impl RawRouteWithDeltas {
                 .all_communities()
                 .ok()
                 .flatten()
-                .map(TypeValue::from),
-            RouteToken::Prefix => Some(self.prefix.into()),
-            RouteToken::Status => Some(self.status_deltas.current()),
-            RouteToken::PeerIp => self.peer_ip.map(TypeValue::from),
-            RouteToken::PeerAsn => self.peer_asn.map(TypeValue::from),
+                .map(TypeValue::from)
+                .ok_or(VmError::InvalidFieldAccess),
+            RouteToken::Prefix => Ok(self.prefix.into()),
+            RouteToken::Status => Ok(self.status_deltas.current()),
+            RouteToken::PeerIp => self.peer_ip.map(TypeValue::from).ok_or(VmError::InvalidFieldAccess),
+            RouteToken::PeerAsn => self.peer_asn.map(TypeValue::from).ok_or(VmError::InvalidFieldAccess),
             // _ => None,
             // originator_id: ChangedOption {
             //     value: None,
@@ -1136,22 +1155,27 @@ pub enum RouteToken {
     PeerAsn = 11,
 }
 
-impl From<usize> for RouteToken {
-    fn from(value: usize) -> Self {
+impl TryFrom<usize> for RouteToken {
+    type Error = VmError;
+
+    fn try_from(value: usize) -> Result<Self, VmError> {
         match value {
-            0 => RouteToken::Prefix,
-            1 => RouteToken::AsPath,
-            2 => RouteToken::OriginType,
-            3 => RouteToken::NextHop,
-            4 => RouteToken::MultiExitDisc,
-            5 => RouteToken::LocalPref,
-            6 => RouteToken::AtomicAggregate,
-            7 => RouteToken::Aggregator,
-            8 => RouteToken::Communities,
-            9 => RouteToken::Status,
-            10 => RouteToken::PeerIp,
-            11 => RouteToken::PeerAsn,
-            _ => panic!("Unknown RouteToken value: {}", value),
+            0 => Ok(RouteToken::Prefix),
+            1 => Ok(RouteToken::AsPath),
+            2 => Ok(RouteToken::OriginType),
+            3 => Ok(RouteToken::NextHop),
+            4 => Ok(RouteToken::MultiExitDisc),
+            5 => Ok(RouteToken::LocalPref),
+            6 => Ok(RouteToken::AtomicAggregate),
+            7 => Ok(RouteToken::Aggregator),
+            8 => Ok(RouteToken::Communities),
+            9 => Ok(RouteToken::Status),
+            10 => Ok(RouteToken::PeerIp),
+            11 => Ok(RouteToken::PeerAsn),
+            _ => { 
+                debug!("Unknown RouteToken value: {}", value);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 }

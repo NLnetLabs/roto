@@ -702,13 +702,13 @@ impl TypeDef {
             match value {
                 TypeValue::Record(rec) => {
                     for field_index in uniq_field_indexes {
-                        rec.get_field_by_index(field_index.clone())
+                        rec.get_field_by_index(field_index)
                             .hash(state);
                     }
                 }
                 TypeValue::Builtin(BuiltinTypeValue::Route(route)) => {
                     for field_index in uniq_field_indexes {
-                        route.get_field_by_index(field_index[0]).hash(state);
+                        route.get_field_by_index(field_index[0])?.hash(state);
                     }
                 }
                 TypeValue::Builtin(btv) => {

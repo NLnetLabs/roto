@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-use log::trace;
+use log::{trace, debug, error};
 use routecore::asn::LongSegmentError;
 use routecore::bgp::communities::{
     ExtendedCommunity, LargeCommunity, StandardCommunity, Wellknown,
@@ -75,7 +75,7 @@ impl RotoType for U16 {
         mut args: Vec<TypeValue>,
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        match method_token.into() {
+        match method_token.try_into()? {
             U16Token::Set => {
                 if let Ok(TypeValue::Builtin(BuiltinTypeValue::U16(
                     int_u16,
@@ -163,11 +163,16 @@ pub enum U16Token {
     Set,
 }
 
-impl From<usize> for U16Token {
-    fn from(val: usize) -> Self {
+impl TryFrom<usize> for U16Token {
+    type Error = VmError;
+
+    fn try_from(val: usize) -> Result<Self, VmError> {
         match val {
-            0 => U16Token::Set,
-            _ => panic!("Unknown token value: {}", val),
+            0 => Ok(U16Token::Set),
+            t => { 
+                error!("Cannot find method on U16 for token: {}", t);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 }
@@ -235,7 +240,7 @@ impl RotoType for U32 {
         mut args: Vec<TypeValue>,
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        match method_token.into() {
+        match method_token.try_into()? {
             U32Token::Set => {
                 if let Ok(TypeValue::Builtin(BuiltinTypeValue::U32(
                     int_u32,
@@ -320,11 +325,16 @@ pub enum U32Token {
     Set,
 }
 
-impl From<usize> for U32Token {
-    fn from(val: usize) -> Self {
+impl TryFrom<usize> for U32Token {
+    type Error = VmError;
+
+    fn try_from(val: usize) -> Result<Self, VmError> {
         match val {
-            0 => U32Token::Set,
-            _ => panic!("Unknown token value: {}", val),
+            0 => Ok(U32Token::Set),
+            _ => {
+                debug!("Unknown token value: {}", val);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 }
@@ -387,7 +397,7 @@ impl RotoType for U8 {
         mut args: Vec<TypeValue>,
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        match method_token.into() {
+        match method_token.try_into()? {
             U32Token::Set => {
                 if let Ok(TypeValue::Builtin(BuiltinTypeValue::U8(int_u8))) =
                     args.remove(0).into_type(&TypeDef::U8)
@@ -474,11 +484,16 @@ pub enum U8Token {
     Set,
 }
 
-impl From<usize> for U8Token {
-    fn from(val: usize) -> Self {
+impl TryFrom<usize> for U8Token {
+    type Error = VmError;
+
+    fn try_from(val: usize) -> Result<Self, VmError> {
         match val {
-            0 => U8Token::Set,
-            _ => panic!("Unknown token value: {}", val),
+            0 => Ok(U8Token::Set),
+            _ => {
+                debug!("Unknown token value: {}", val);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 }
@@ -543,7 +558,7 @@ impl RotoType for Boolean {
         mut args: Vec<TypeValue>,
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        match method_token.into() {
+        match method_token.try_into()? {
             BooleanToken::Set => {
                 if let Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(b))) =
                     args.remove(0).into_type(&TypeDef::Boolean)
@@ -610,11 +625,15 @@ pub enum BooleanToken {
     Set,
 }
 
-impl From<usize> for BooleanToken {
-    fn from(val: usize) -> Self {
+impl TryFrom<usize> for BooleanToken {
+    type Error = VmError;
+    fn try_from(val: usize) -> Result<Self, VmError> {
         match val {
-            0 => BooleanToken::Set,
-            _ => panic!("Unknown token value: {}", val),
+            0 => Ok(BooleanToken::Set),
+            _ => { 
+                debug!("Unknown token value: {}", val);
+                Err(VmError::InvalidMethodCall)
+            },
         }
     }
 }
@@ -675,7 +694,7 @@ impl RotoType for StringLiteral {
         mut args: Vec<TypeValue>,
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        match method_token.into() {
+        match method_token.try_into()? {
             StringLiteralToken::Set => {
                 if let Ok(TypeValue::Builtin(
                     BuiltinTypeValue::StringLiteral(str),
@@ -698,7 +717,7 @@ impl RotoType for StringLiteral {
         args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        match method_token.into() {
+        match method_token.try_into()? {
             StringLiteralToken::Format => {
                 trace!("string arguments {:?}", args);
 
@@ -758,13 +777,17 @@ pub enum StringLiteralToken {
     Set = 2,
 }
 
-impl From<usize> for StringLiteralToken {
-    fn from(val: usize) -> Self {
+impl TryFrom<usize> for StringLiteralToken {
+    type Error = VmError;
+    fn try_from(val: usize) -> Result<Self, VmError> {
         match val {
-            0 => StringLiteralToken::Cmp,
-            1 => StringLiteralToken::Format,
-            2 => StringLiteralToken::Set,
-            _ => panic!("Unknown token value: {}", val),
+            0 => Ok(StringLiteralToken::Cmp),
+            1 => Ok(StringLiteralToken::Format),
+            2 => Ok(StringLiteralToken::Set),
+            _ => {
+                debug!("Unknown token value: {}", val);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 }
@@ -880,7 +903,7 @@ impl RotoType for IntegerLiteral {
         args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        match method_token.into() {
+        match method_token.try_into()? {
             IntegerLiteralToken::Cmp => Ok(TypeValue::Builtin(
                 BuiltinTypeValue::Boolean(Boolean(args[0] == args[1])),
             )),
@@ -925,11 +948,15 @@ pub(crate) enum IntegerLiteralToken {
     Cmp,
 }
 
-impl From<usize> for IntegerLiteralToken {
-    fn from(val: usize) -> Self {
+impl TryFrom<usize> for IntegerLiteralToken {
+    type Error = VmError;
+    fn try_from(val: usize) -> Result<Self, VmError> {
         match val {
-            0 => IntegerLiteralToken::Cmp,
-            _ => panic!("Unknown token value: {}", val),
+            0 => Ok(IntegerLiteralToken::Cmp),
+            _ => {
+                debug!("Unknown token value: {}", val);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 }
@@ -1055,11 +1082,16 @@ pub(crate) enum HexLiteralToken {
     Cmp,
 }
 
-impl From<usize> for HexLiteralToken {
-    fn from(val: usize) -> Self {
+impl TryFrom<usize> for HexLiteralToken {
+    type Error = VmError;
+
+    fn try_from(val: usize) -> Result<Self, VmError> {
         match val {
-            0 => HexLiteralToken::Cmp,
-            _ => panic!("Unknown token value: {}", val),
+            0 => Ok(HexLiteralToken::Cmp),
+            _ => {
+                debug!("Unknown token value: {}", val);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 }
@@ -1156,7 +1188,7 @@ impl RotoType for Prefix {
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        match method_token.into() {
+        match method_token.try_into()? {
             PrefixToken::Address => {
                 let prefix = self.0;
                 Ok(TypeValue::Builtin(BuiltinTypeValue::IpAddress(
@@ -1189,7 +1221,7 @@ impl RotoType for Prefix {
         args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        match method_token.into() {
+        match method_token.try_into()? {
             PrefixToken::From => {
                 if let TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) =
                     args[0].as_ref()
@@ -1247,15 +1279,20 @@ pub(crate) enum PrefixToken {
     Matches = 4,
 }
 
-impl From<usize> for PrefixToken {
-    fn from(val: usize) -> Self {
+impl TryFrom<usize> for PrefixToken {
+    type Error = VmError;
+
+    fn try_from(val: usize) -> Result<Self, VmError> {
         match val {
-            0 => PrefixToken::From,
-            1 => PrefixToken::Exists,
-            2 => PrefixToken::Address,
-            3 => PrefixToken::Len,
-            4 => PrefixToken::Matches,
-            _ => panic!("Unknown token value: {}", val),
+            0 => Ok(PrefixToken::From),
+            1 => Ok(PrefixToken::Exists),
+            2 => Ok(PrefixToken::Address),
+            3 => Ok(PrefixToken::Len),
+            4 => Ok(PrefixToken::Matches),
+            _ => {
+                debug!("Unknown token value: {}", val);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 }
@@ -1360,11 +1397,16 @@ pub(crate) enum PrefixLengthToken {
     From,
 }
 
-impl From<usize> for PrefixLengthToken {
-    fn from(val: usize) -> Self {
+impl TryFrom<usize> for PrefixLengthToken {
+    type Error = VmError;
+
+    fn try_from(val: usize) -> Result<Self, VmError> {
         match val {
-            0 => PrefixLengthToken::From,
-            _ => panic!("Unknown token value: {}", val),
+            0 => Ok(PrefixLengthToken::From),
+            _ => {
+                debug!("Unknown token value: {}", val);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 }
@@ -1984,17 +2026,22 @@ pub enum CommunityToken {
     Exists,
 }
 
-impl From<usize> for CommunityToken {
-    fn from(val: usize) -> Self {
+impl TryFrom<usize> for CommunityToken {
+    type Error = VmError;
+    
+    fn try_from(val: usize) -> Result<Self, VmError> {
         match val {
-            0 => CommunityToken::From,
-            1 => CommunityToken::Standard,
-            2 => CommunityToken::Extended,
-            3 => CommunityToken::Large,
-            4 => CommunityToken::As,
-            5 => CommunityToken::Value,
-            6 => CommunityToken::Exists,
-            _ => panic!("Unknown token value: {}", val),
+            0 => Ok(CommunityToken::From),
+            1 => Ok(CommunityToken::Standard),
+            2 => Ok(CommunityToken::Extended),
+            3 => Ok(CommunityToken::Large),
+            4 => Ok(CommunityToken::As),
+            5 => Ok(CommunityToken::Value),
+            6 => Ok(CommunityToken::Exists),
+            _ => {
+                debug!("Unknown token value: {}", val);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 }
@@ -2114,12 +2161,17 @@ pub(crate) enum IpAddressToken {
     Matches,
 }
 
-impl From<usize> for IpAddressToken {
-    fn from(val: usize) -> Self {
+impl TryFrom<usize> for IpAddressToken {
+    type Error = VmError;
+
+    fn try_from(val: usize) -> Result<Self, VmError> {
         match val {
-            0 => IpAddressToken::From,
-            1 => IpAddressToken::Matches,
-            _ => panic!("Unknown token value: {}", val),
+            0 => Ok(IpAddressToken::From),
+            1 => Ok(IpAddressToken::Matches),
+            _ => {
+                debug!("Unknown token value: {}", val);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 }
@@ -2196,7 +2248,7 @@ impl RotoType for Asn {
         args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        match method_token.into() {
+        match method_token.try_into()? {
             AsnToken::Set => {
                 if let TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) =
                     args[0].as_ref()
@@ -2256,11 +2308,16 @@ pub enum AsnToken {
     Set,
 }
 
-impl From<usize> for AsnToken {
-    fn from(val: usize) -> Self {
+impl TryFrom<usize> for AsnToken {
+    type Error = VmError;
+
+    fn try_from(val: usize) -> Result<Self, VmError> {
         match val {
-            0 => AsnToken::Set,
-            _ => panic!("Unknown token value: {} for Asn", val),
+            0 => Ok(AsnToken::Set),
+            _ => {
+                debug!("Unknown token value: {} for Asn", val);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 }
@@ -2394,7 +2451,7 @@ impl RotoType for AsPath {
         args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        match method.into() {
+        match method.try_into()? {
             AsPathToken::Origin => match self.0.origin().cloned() {
                 Some(origin_asn) => {
                     Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(
@@ -2545,13 +2602,18 @@ pub(crate) enum AsPathToken {
     Len = 3,
 }
 
-impl From<usize> for AsPathToken {
-    fn from(value: usize) -> Self {
+impl TryFrom<usize> for AsPathToken {
+    type Error = VmError;
+
+    fn try_from(value: usize) -> Result<Self, VmError> {
         match value {
-            1 => AsPathToken::Origin,
-            2 => AsPathToken::Contains,
-            3 => AsPathToken::Len,
-            _ => panic!("Unknown AsPathToken value: {}", value),
+            1 => Ok(AsPathToken::Origin),
+            2 => Ok(AsPathToken::Contains),
+            3 => Ok(AsPathToken::Len),
+            _ => {
+                debug!("Unknown AsPathToken value: {}", value);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 }
@@ -2953,11 +3015,16 @@ pub(crate) enum UnknownToken {
     IsUnknown,
 }
 
-impl From<usize> for UnknownToken {
-    fn from(val: usize) -> Self {
+impl TryFrom<usize> for UnknownToken {
+    type Error = VmError;
+
+    fn try_from(val: usize) -> Result<Self, VmError> {
         match val {
-            0 => UnknownToken::IsUnknown,
-            _ => panic!("Unknown token value: {}", val),
+            0 => Ok(UnknownToken::IsUnknown),
+            _ => {
+                debug!("Unknown token value: {}", val);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 }
@@ -3015,7 +3082,7 @@ impl RotoType for LocalPref {
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        match method_token.into() {
+        match method_token.try_into()? {
             LocalPrefToken::Set => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::LocalPref(*self)))
             } // _ => Err(VmError::InvalidMethodCall),
@@ -3069,11 +3136,16 @@ pub enum LocalPrefToken {
     Set,
 }
 
-impl From<usize> for LocalPrefToken {
-    fn from(val: usize) -> Self {
+impl TryFrom<usize> for LocalPrefToken {
+    type Error = VmError;
+
+    fn try_from(val: usize) -> Result<Self, VmError> {
         match val {
-            0 => LocalPrefToken::Set,
-            _ => panic!("Unknown token value: {}", val),
+            0 => Ok(LocalPrefToken::Set),
+            _ => {
+                debug!("Unknown token value: {}", val);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 }
@@ -3193,11 +3265,16 @@ pub enum AtomicAggregateToken {
     Set,
 }
 
-impl From<usize> for AtomicAggregateToken {
-    fn from(val: usize) -> Self {
+impl TryFrom<usize> for AtomicAggregateToken {
+    type Error = VmError;
+
+    fn try_from(val: usize) -> Result<Self, VmError> {
         match val {
-            0 => AtomicAggregateToken::Set,
-            _ => panic!("Unknown token value: {}", val),
+            0 => Ok(AtomicAggregateToken::Set),
+            _ => {
+                debug!("Unknown token value: {}", val);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 }
@@ -3315,11 +3392,16 @@ pub enum AggregatorToken {
     Set,
 }
 
-impl From<usize> for AggregatorToken {
-    fn from(val: usize) -> Self {
+impl TryFrom<usize> for AggregatorToken {
+    type Error = VmError;
+
+    fn try_from(val: usize) -> Result<Self, VmError> {
         match val {
-            0 => AggregatorToken::Set,
-            _ => panic!("Unknown token value: {}", val),
+            0 => Ok(AggregatorToken::Set),
+            _ => {
+                debug!("Unknown token value: {}", val);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 }
@@ -3375,14 +3457,17 @@ impl std::fmt::Display for RouteStatus {
     }
 }
 
-impl From<TypeValue> for RouteStatus {
-    fn from(value: TypeValue) -> Self {
+impl TryFrom<TypeValue> for RouteStatus {
+    type Error = VmError;
+
+    fn try_from(value: TypeValue) -> Result<Self, VmError> {
         if let TypeValue::Builtin(BuiltinTypeValue::RouteStatus(value)) =
             value
         {
-            value
+            Ok(value)
         } else {
-            panic!("invalid something");
+            debug!("invalid something");
+            Err(VmError::InvalidMethodCall)
         }
     }
 }

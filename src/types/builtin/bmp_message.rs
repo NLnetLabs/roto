@@ -1,4 +1,4 @@
-use log::trace;
+use log::{trace, error};
 use paste::paste;
 use routecore::bmp::message::MessageType;
 use smallvec::SmallVec;
@@ -11,7 +11,7 @@ use crate::{
     traits::Token,
     types::{
         builtin::{Asn, Boolean, BuiltinTypeValue, IpAddress, U8, U16},
-        collections::{EnumBytesRecord, LazyElementTypeValue, LazyRecord, RecordType},
+        collections::{ElementTypeValue, EnumBytesRecord, LazyElementTypeValue, LazyRecord, RecordType},
         enum_types::EnumVariant,
         lazyrecord_types::{
             BmpMessage, LazyRecordTypeDef, PeerDownNotification,
@@ -137,7 +137,7 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
                     field_index,
                     &BytesRecord::<RouteMonitoring>(rm),
                 )
-                .map(|elm| elm.into()).map_err(|_| VmError::InvalidPayload)?
+                .map(|elm| elm.try_into())?.map_err(|_| VmError::InvalidPayload)?
             }
             LazyRecordTypeDef::PeerDownNotification => {
                 let pd =
@@ -153,7 +153,7 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
                     field_index,
                     &BytesRecord::<PeerDownNotification>(pd),
                 )
-                .map(|elm| elm.into()).map_err(|_| VmError::InvalidPayload)?
+                .map(|elm| elm.try_into())?.map_err(|_| VmError::InvalidPayload)?
             }
             LazyRecordTypeDef::PeerUpNotification => {
                 let pu =
@@ -169,7 +169,7 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
                     field_index,
                     &BytesRecord::<PeerUpNotification>(pu),
                 )
-                .map(|elm| elm.into()).map_err(|_| VmError::InvalidPayload)?
+                .map(|elm| elm.try_into())?.map_err(|_| VmError::InvalidPayload)?
             }
             LazyRecordTypeDef::InitiationMessage => {
                 let pu =
@@ -185,7 +185,7 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
                     field_index,
                     &BytesRecord::<InitiationMessage>(pu),
                 )
-                .map(|elm| elm.into()).map_err(|_| VmError::InvalidPayload)?
+                .map(|elm| elm.try_into())?.map_err(|_| VmError::InvalidPayload)?
             }
             LazyRecordTypeDef::StatisticsReport => {
                 let pu =
@@ -201,7 +201,7 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
                     field_index,
                     &BytesRecord::<StatisticsReport>(pu),
                 )
-                .map(|elm| elm.into()).map_err(|_| VmError::InvalidPayload)?
+                .map(|elm| elm.try_into())?.map_err(|_| VmError::InvalidPayload)?
             }
             _ => {
                 return Err(VmError::InvalidMethodCall);

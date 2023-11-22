@@ -200,7 +200,7 @@ pub trait RotoRib: Send + Sync {
         method_token: usize,
         args: &[StackValue],
         res_type: TypeDef,
-    ) -> DataSourceMethodValue;
+    ) -> Result<DataSourceMethodValue, VmError>;
 
     fn get_by_key<'a>(&'a self, key: &str) -> Option<&'a Record>;
 

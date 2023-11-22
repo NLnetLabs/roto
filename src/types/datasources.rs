@@ -39,7 +39,7 @@ impl DataSource {
     ) -> Option<&TypeValue> {
         match self {
             DataSource::Table(ref t) => {
-                t.get_at_field_index(index, field_index)
+                t.get_at_field_index(index, field_index).ok()
             }
             DataSource::Rib(ref _r) => {
                 todo!()
@@ -55,10 +55,10 @@ impl DataSource {
         method_token: usize,
         args: &[StackValue],
         res_type: TypeDef,
-    ) -> DataSourceMethodValue {
+    ) -> Result<DataSourceMethodValue, VmError> {
         match self {
             DataSource::Table(t) => {
-                t.exec_ref_value_method(method_token, args, res_type)()
+                Ok(t.exec_ref_value_method(method_token, args, res_type)?())
             }
             DataSource::Rib(ref r) => {
                 r.exec_ref_value_method(method_token, args, res_type)
@@ -98,7 +98,7 @@ impl<M: Meta + 'static> From<Rib<M>> for DataSource {
 
 use std::sync::Arc;
 
-use log::{error, trace};
+use log::{error, trace, debug};
 use rotonda_store::{epoch, prelude::Meta, MatchOptions, MatchType};
 use smallvec::SmallVec;
 
@@ -111,7 +111,7 @@ use crate::{
 
 use super::{
     builtin::{Boolean, BuiltinTypeValue},
-    collections::Record,
+    collections::{Record, ElementTypeValue},
     typedef::{MethodProps, TypeDef},
     typevalue::TypeValue,
 };
@@ -169,14 +169,16 @@ pub enum RibToken {
     Contains,
 }
 
-impl From<usize> for RibToken {
-    fn from(token: usize) -> Self {
+impl TryFrom<usize> for RibToken {
+    type Error = VmError;
+
+    fn try_from(token: usize) -> Result<Self, VmError> {
         match token {
-            0 => RibToken::Match,
-            1 => RibToken::LongestMatch,
-            2 => RibToken::Get,
-            3 => RibToken::Contains,
-            _ => panic!("Unknown token"),
+            0 => Ok(RibToken::Match),
+            1 => Ok(RibToken::LongestMatch),
+            2 => Ok(RibToken::Get),
+            3 => Ok(RibToken::Contains),
+            _ => Err(VmError::InvalidDataSource)
         }
     }
 }
@@ -228,8 +230,8 @@ impl<M: Meta> RotoRib for Rib<M> {
         method: usize,
         args: &'a [StackValue],
         _res_type: TypeDef,
-    ) -> DataSourceMethodValue {
-        match RibToken::from(method) {
+    ) -> Result<DataSourceMethodValue, VmError> {
+        match RibToken::try_from(method)? {
             RibToken::Match => {
                 todo!()
             }
@@ -242,12 +244,12 @@ impl<M: Meta> RotoRib for Rib<M> {
                 {
                     prefix
                 } else {
-                    error!("Ignoring failed type conversion from value '{:?}' to Prefix while executing Data Source method.", args[0]);
-                    return DataSourceMethodValue::TypeValue(
+                    error!("Cannot convert Argument '{:?}' to Prefix while executing Data Source method.", args[0]);
+                    return Ok(DataSourceMethodValue::TypeValue(
                         TypeValue::Unknown,
-                    );
+                    ));
                 };
-                self.store
+                Ok(self.store
                     .match_prefix(
                         &prefix,
                         &MatchOptions {
@@ -263,6 +265,7 @@ impl<M: Meta> RotoRib for Rib<M> {
                     .unwrap_or_else(|| {
                         DataSourceMethodValue::TypeValue(TypeValue::Unknown)
                     })
+                )
             }
             RibToken::Contains => {
                 trace!("contains on rib");
@@ -322,16 +325,20 @@ impl Table {
         &self,
         index: usize,
         field_index: SmallVec<[usize; 8]>,
-    ) -> Option<&TypeValue> {
+    ) -> Result<&TypeValue, VmError> {
         match field_index {
-            fi if fi.is_empty() => self.records.get(index).and_then(|r| {
-                r.get_field_by_single_index(index).map(|v| (&v.1).into())
-            }),
+            fi if fi.is_empty() => if let Some(r) = self.records.get(index) {
+                if let Some((_, ref v)) = r.get_field_by_single_index(index) {
+                    v.try_into()
+                } else { Err(VmError::InvalidFieldAccess) }
+            } else { Err(VmError::InvalidFieldAccess) },
             field_index => match self.records.get(index) {
                 Some(r) => {
-                    r.get_field_by_index(field_index).map(|v| v.into())
+                    if let Some(v) = r.get_field_by_index(&field_index) {
+                        v.try_into()
+                    } else { Err(VmError::InvalidFieldAccess) }
                 }
-                _ => None,
+                _ => Ok(&TypeValue::Unknown),
             },
         }
     }
@@ -341,15 +348,15 @@ impl Table {
         method_token: usize,
         args: &'a [StackValue],
         _res_type: TypeDef,
-    ) -> Box<dyn FnOnce() -> DataSourceMethodValue + 'a> {
-        match method_token.into() {
-            TableToken::Find => Box::new(|| {
+    ) -> Result<Box<dyn FnOnce() -> DataSourceMethodValue + 'a>, VmError> {
+        match method_token.try_into()? {
+            TableToken::Find => Ok(Box::new(|| {
                 self.records
                     .iter()
                     .enumerate()
                     .find(|v| {
                         if let Some(val) =
-                            v.1.get_field_by_index(smallvec::smallvec![0])
+                            v.1.get_field_by_index(&smallvec::smallvec![0])
                         {
                             val == args[0]
                         } else {
@@ -365,14 +372,14 @@ impl Table {
                     .unwrap_or_else(|| {
                         DataSourceMethodValue::TypeValue(TypeValue::Unknown)
                     })
-            }),
-            TableToken::Contains => Box::new(|| {
+            })),
+            TableToken::Contains => Ok(Box::new(|| {
                 self.records
                     .iter()
                     .enumerate()
                     .find(|v| {
                         if let Some(val) =
-                            v.1.get_field_by_index(smallvec::smallvec![0])
+                            v.1.get_field_by_index(&smallvec::smallvec![0])
                         {
                             val == args[0]
                         } else {
@@ -389,7 +396,7 @@ impl Table {
                             BuiltinTypeValue::Boolean(Boolean(false)),
                         ))
                     })
-            }),
+            })),
         }
     }
 
@@ -434,12 +441,17 @@ pub enum TableToken {
     Contains,
 }
 
-impl From<usize> for TableToken {
-    fn from(token: usize) -> Self {
+impl TryFrom<usize> for TableToken {
+    type Error = VmError;
+
+    fn try_from(token: usize) -> Result<Self, VmError> {
         match token {
-            0 => TableToken::Find,
-            1 => TableToken::Contains,
-            t => panic!("Unknown method with token {}", t),
+            0 => Ok(TableToken::Find),
+            1 => Ok(TableToken::Contains),
+            t => {
+                error!("Cannot find method on Table for token: {}", t);
+                Err(VmError::InvalidDataSourceAccess)
+            }
         }
     }
 }

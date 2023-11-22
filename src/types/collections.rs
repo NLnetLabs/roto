@@ -1,4 +1,4 @@
-use log::{trace, error};
+use log::{trace, error, debug};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Serializer};
 use smallvec::SmallVec;
@@ -125,34 +125,44 @@ impl TryFrom<TypeValue> for ElementTypeValue {
                 Ok(ElementTypeValue::Primitive(TypeValue::Unknown))
             }
             ty => {
-                error!("1. Unknown type {}", ty);
+                error!("Cannot find ElementTypeValue for TypeValue: {}", ty);
                 Err(VmError::InvalidValueType)
             }
         }
     }
 }
 
-impl From<ElementTypeValue> for TypeValue {
-    fn from(t: ElementTypeValue) -> Self {
+impl TryFrom<ElementTypeValue> for TypeValue {
+    type Error = VmError;
+
+    fn try_from(t: ElementTypeValue) -> Result<Self, VmError> {
         match t {
-            ElementTypeValue::Primitive(v) => v,
+            ElementTypeValue::Primitive(v) => Ok(v),
             ElementTypeValue::Nested(ty) => match *ty {
-                TypeValue::List(ty) => TypeValue::List(ty),
-                TypeValue::Record(kv_list) => TypeValue::Record(kv_list),
-                ty => panic!("2. Unknown type {}", ty),
+                TypeValue::List(ty) => Ok(TypeValue::List(ty)),
+                TypeValue::Record(kv_list) => Ok(TypeValue::Record(kv_list)),
+                ty => {
+                    error!("Cannot find TypeValue for ElemenTypeValue: {}", ty);
+                    Err(VmError::InvalidValueType)
+                }
             },
         }
     }
 }
 
-impl<'a> From<&'a ElementTypeValue> for &'a TypeValue {
-    fn from(t: &'a ElementTypeValue) -> Self {
+impl<'a> TryFrom<&'a ElementTypeValue> for &'a TypeValue {
+    type Error = VmError;
+
+    fn try_from(t: &'a ElementTypeValue) -> Result<Self, VmError> {
         match t {
-            ElementTypeValue::Primitive(v) => v,
+            ElementTypeValue::Primitive(v) => Ok(v),
             ElementTypeValue::Nested(ty) => match ty.as_ref() {
-                TypeValue::List(_li) => ty,
-                TypeValue::Record(_kv_list) => ty,
-                ty => panic!("3. Unknown type {}", ty),
+                TypeValue::List(_li) => Ok(ty),
+                TypeValue::Record(_kv_list) => Ok(ty),
+                ty => {
+                    error!("Cannot find &TypeValue for &ElemenTypeValue: {}", ty);
+                    Err(VmError::InvalidValueType)
+                }
             },
         }
     }
@@ -514,7 +524,7 @@ impl RotoType for List {
         args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        match method.into() {
+        match method.try_into()? {
             ListToken::Len => Ok(TypeValue::Builtin(BuiltinTypeValue::U32(
                 U32(self.0.len() as u32),
             ))),
@@ -531,10 +541,10 @@ impl RotoType for List {
         mut args: Vec<TypeValue>,
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        match method.into() {
+        match method.try_into()? {
             ListToken::Get => {
                 Ok(match self.0.into_iter().find(|e| *e == args[0]) {
-                    Some(e) => e.into(),
+                    Some(e) => e.try_into()?,
                     None => TypeValue::Unknown,
                 })
             }
@@ -601,18 +611,23 @@ pub enum ListToken {
     Clear,
 }
 
-impl From<usize> for ListToken {
-    fn from(i: usize) -> Self {
+impl TryFrom<usize> for ListToken {
+    type Error = VmError;
+
+    fn try_from(i: usize) -> Result<Self, VmError> {
         match i {
-            0 => ListToken::Len,
-            1 => ListToken::Contains,
-            2 => ListToken::Get,
-            3 => ListToken::Push,
-            4 => ListToken::Pop,
-            5 => ListToken::Remove,
-            6 => ListToken::Insert,
-            7 => ListToken::Clear,
-            _ => panic!("Unknown ListToken"),
+            0 => Ok(ListToken::Len),
+            1 => Ok(ListToken::Contains),
+            2 => Ok(ListToken::Get),
+            3 => Ok(ListToken::Push),
+            4 => Ok(ListToken::Pop),
+            5 => Ok(ListToken::Remove),
+            6 => Ok(ListToken::Insert),
+            7 => Ok(ListToken::Clear),
+            t => {
+                error!("Cannot find method on List for token: {}", t);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 }
@@ -818,7 +833,7 @@ impl<'a> Record {
 
     pub fn get_field_by_index(
         &'a self,
-        field_index: SmallVec<[usize; 8]>,
+        field_index: &SmallVec<[usize; 8]>,
     ) -> Option<&'a ElementTypeValue> {
         let mut elm = self.0.get(field_index[0]).map(|f| &f.1);
 
@@ -1051,13 +1066,18 @@ pub enum RecordToken {
     Set = 3,
 }
 
-impl From<usize> for RecordToken {
-    fn from(i: usize) -> Self {
+impl TryFrom<usize> for RecordToken {
+    type Error = VmError;
+
+    fn try_from(i: usize) -> Result<Self, VmError> {
         match i {
-            0 => RecordToken::Get,
-            1 => RecordToken::GetAll,
-            2 => RecordToken::Contains,
-            _ => panic!("Unknown RecordToken"),
+            0 => Ok(RecordToken::Get),
+            1 => Ok(RecordToken::GetAll),
+            2 => Ok(RecordToken::Contains),
+            t => {
+                error!("Cannot find method on Record for token: {}", t);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 }
@@ -1340,6 +1360,17 @@ impl<'a, T: std::fmt::Debug + RecordType> LazyRecord<'a, T> {
         }).ok_or(VmError::InvalidFieldAccess)
     }
 
+    pub fn get_field_by_index_as_owned(
+        &self,
+        field_index: &SmallVec<[usize; 8]>,
+        raw_bytes: &BytesRecord<T>
+    ) -> Result<StackValue, VmError> {
+        let v = self
+            .get_field_by_index(&field_index, raw_bytes)?;
+
+        Ok(StackValue::Owned(v.try_into()?))
+    }
+
     pub fn exec_value_method(
         &self,
         _method: usize,
@@ -1430,13 +1461,18 @@ pub enum BytesRecordToken {
     Set = 3,
 }
 
-impl From<usize> for BytesRecordToken {
-    fn from(i: usize) -> Self {
+impl TryFrom<usize> for BytesRecordToken {
+    type Error = VmError;
+
+    fn try_from(i: usize) -> Result<Self, VmError> {
         match i {
-            0 => BytesRecordToken::Get,
-            1 => BytesRecordToken::GetAll,
-            2 => BytesRecordToken::Contains,
-            _ => panic!("Unknown RecordToken"),
+            0 => Ok(BytesRecordToken::Get),
+            1 => Ok(BytesRecordToken::GetAll),
+            2 => Ok(BytesRecordToken::Contains),
+            t => {
+                error!("Cannot find method on BytesRecord for token: {}", t);
+                Err(VmError::InvalidMethodCall)
+            }
         }
     }
 }

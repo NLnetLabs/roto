@@ -1,5 +1,6 @@
 use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
+use log::debug;
 use primitives::{
     AsPath, Community, Hop, LocalPref, MultiExitDisc, NextHop, OriginType,
     RouteStatus, U16,
@@ -128,7 +129,7 @@ impl TypeValue {
     ) -> Result<&ElementTypeValue, CompileError> {
         match self {
             TypeValue::Record(r) => {
-                let field = r.get_field_by_index(index.clone());
+                let field = r.get_field_by_index(&index);
                 field.ok_or_else(|| {
                     format!(
                         "Index {:?} out of bounds for record '{:?}'",
@@ -916,7 +917,8 @@ impl PartialOrd for TypeValue {
                 TypeValue::Builtin(BuiltinTypeValue::Community(_)),
                 TypeValue::Builtin(BuiltinTypeValue::Community(_)),
             ) => {
-                panic!("Communities have no ordering.")
+                debug!("Communities have no ordering.");
+                None
             }
             (
                 TypeValue::Builtin(BuiltinTypeValue::IpAddress(IpAddress(u))),
@@ -930,19 +932,22 @@ impl PartialOrd for TypeValue {
                 TypeValue::Builtin(BuiltinTypeValue::AsPath(_)),
                 TypeValue::Builtin(BuiltinTypeValue::AsPath(_)),
             ) => {
-                panic!("AS Paths have no ordering.")
+                debug!("AS Paths have no ordering.");
+                None
             }
             (
                 TypeValue::Builtin(BuiltinTypeValue::Route(_)),
                 TypeValue::Builtin(BuiltinTypeValue::Route(_)),
             ) => {
-                panic!("Routes have no ordering.")
+                debug!("Routes have no ordering.");
+                None
             }
             (
                 TypeValue::Builtin(BuiltinTypeValue::RouteStatus(_)),
                 TypeValue::Builtin(BuiltinTypeValue::RouteStatus(_)),
             ) => {
-                panic!("Route statuses have no ordering.")
+                debug!("Route statuses have no ordering.");
+                None
             }
             (
                 TypeValue::Builtin(BuiltinTypeValue::HexLiteral(HexLiteral(
@@ -953,64 +958,24 @@ impl PartialOrd for TypeValue {
                 ))),
             ) => Some(u.cmp(v)),
             (TypeValue::List(_), TypeValue::List(_)) => {
-                panic!("Lists are not comparable.")
+                debug!("Lists are not comparable.");
+                None
             }
             (TypeValue::Record(_), TypeValue::Record(_)) => {
-                panic!("Records are not comparable.")
+                debug!("Records are not comparable.");
+                None
             }
-            // (TypeValue::Rib(_), TypeValue::Rib(_)) => {
-            //     panic!("Ribs are not comparable.")
-            // }
-            // (TypeValue::Table(_), TypeValue::Table(_)) => {
-            //     panic!("Tables are not comparable.")
-            // }
             (TypeValue::Unknown, TypeValue::Unknown) => {
-                panic!("Unknown is unsortable.")
+                debug!("Unknown is unsortable.");
+                None
             }
             _ => {
-                panic!("Incomparable types.")
+                debug!("Incomparable types.");
+                None
             }
         }
     }
 }
-
-// impl Ord for TypeValue {
-//     fn cmp(&self, other: &Self) -> Ordering {
-//         match (self, other) {
-//             (
-//                 TypeValue::Builtin(BuiltinTypeValue::U8(U8(u1))),
-//                 TypeValue::Builtin(BuiltinTypeValue::U8(U8(u2))),
-//             ) => u1.cmp(u2),
-//             (
-//                 TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(il1)),
-//                 TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(il2)),
-//             ) => il1.cmp(il2),
-//             (TypeValue::List(_l1), TypeValue::List(_l2)) => {
-//                 panic!("Lists are not comparable.")
-//             }
-//             (TypeValue::Record(_r1), TypeValue::Record(_r2)) => {
-//                 panic!("Records are not comparable.")
-//             }
-//             (TypeValue::Unknown, TypeValue::Unknown) => Ordering::Equal,
-//             (_, TypeValue::Builtin(_)) => Ordering::Greater,
-//             (TypeValue::Builtin(_), _) => Ordering::Greater,
-//             (TypeValue::List(_), _) => Ordering::Less,
-//             (_, TypeValue::List(_)) => Ordering::Greater,
-//             (TypeValue::Record(_), _) => Ordering::Less,
-//             (_, TypeValue::Record(_)) => Ordering::Greater,
-//             (_, TypeValue::UnInit) => {
-//                 panic!("comparing with uninitialized memory.")
-//             }
-//             (TypeValue::UnInit, _) => {
-//                 panic!("comparing with uninitialized memory.")
-//             }
-//             (TypeValue::OutputStreamMessage(_), _) => todo!(),
-//             (_, TypeValue::OutputStreamMessage(_)) => todo!(),
-//             (TypeValue::SharedValue(_), _) => Ordering::Less,
-//             (_, TypeValue::SharedValue(_)) => Ordering::Greater,
-//         }
-//     }
-// }
 
 impl<'a> TryFrom<StackValue<'a>> for bool {
     type Error = VmError;

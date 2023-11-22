@@ -288,7 +288,7 @@ impl LinearMemory {
                 match self.get_mem_pos(mem_pos) {
                     Some(TypeValue::Record(rec)) => {
                         trace!("record -> {}", rec);
-                        match rec.get_field_by_index(field_index) {
+                        match rec.get_field_by_index(&field_index) {
                             Some(ElementTypeValue::Nested(nested)) => {
                                 trace!("=> nested field {}", nested);
                                 Ok(StackValue::Ref(nested))
@@ -299,7 +299,8 @@ impl LinearMemory {
                             }
                             unknown_rec_field => {
                                 error!(
-                                    "=> unknown record field {:?}",
+                                    "Cannot find field with index: {:?}, in record {:?}",
+                                    field_index,
                                     unknown_rec_field
                                 );
                                 Err(VmError::InvalidFieldAccess)
@@ -322,10 +323,10 @@ impl LinearMemory {
                         route,
                     ))) => {
                         if let Some(v) =
-                            route.get_value_ref_for_field(field_index[0])
+                            route.get_value_ref_for_field(field_index[0])?
                         {
                             Ok(StackValue::Ref(v))
-                        } else if let Some(v) =
+                        } else if let Ok(v) =
                             route.get_field_by_index(field_index[0])
                         {
                             Ok(StackValue::Owned(v))
@@ -361,14 +362,15 @@ impl LinearMemory {
                             field_index
                         );
 
-                        Ok(LazyRecord::from_type_def(BytesRecord::<
+                        let v = LazyRecord::from_type_def(BytesRecord::<
                             routecore::bmp::message::RouteMonitoring<
                                 bytes::Bytes,
                             >,
                         >::lazy_type_def(
                         ))?
-                        .get_field_by_index(&field_index, bmp_msg.as_ref())
-                        .map(|elm| StackValue::Owned(elm.into()))?)
+                        .get_field_by_index(&field_index, bmp_msg.as_ref())?;
+
+                        Ok(StackValue::Owned(v.try_into()?))
                     }
                     Some(TypeValue::Builtin(
                         BuiltinTypeValue::BmpPeerDownNotification(bmp_msg),
@@ -380,14 +382,15 @@ impl LinearMemory {
                             field_index
                         );
 
-                        Ok(LazyRecord::from_type_def(BytesRecord::<
+                        let v = LazyRecord::from_type_def(BytesRecord::<
                             routecore::bmp::message::PeerDownNotification<
                                 bytes::Bytes,
                             >,
                         >::lazy_type_def(
                         ))?
-                        .get_field_by_index(&field_index, bmp_msg.as_ref())
-                        .map(|elm| StackValue::Owned(elm.into()))?)
+                        .get_field_by_index(&field_index, bmp_msg.as_ref())?;
+
+                        Ok(StackValue::Owned(v.try_into()?))
                     }
                     Some(tv) => match tv {
                         // Do not own AsPath and Communities, cloning is
@@ -536,7 +539,7 @@ impl LinearMemory {
                         >::lazy_type_def(
                         ))?
                         .get_field_by_index(&field_index, bmp_msg.as_ref())
-                        .map(|elm| elm.into())
+                        .map(|elm| elm.try_into())?
                     }
                     Some(TypeValue::Builtin(
                         BuiltinTypeValue::BmpPeerDownNotification(bmp_msg),
@@ -555,7 +558,7 @@ impl LinearMemory {
                         >::lazy_type_def(
                         ))?
                         .get_field_by_index(&field_index, bmp_msg.as_ref())
-                        .map(|elm| elm.into())
+                        .map(|elm| elm.try_into())?
                     }
                     Some(TypeValue::Builtin(
                         BuiltinTypeValue::BmpPeerUpNotification(bmp_msg),
@@ -574,7 +577,7 @@ impl LinearMemory {
                         >::lazy_type_def(
                         ))?
                         .get_field_by_index(&field_index, bmp_msg.as_ref())
-                        .map(|elm| elm.into())
+                        .map(|elm| elm.try_into())?
                     }
                     // This is apparently a type that does not have fields
                     _ => Err(VmError::InvalidFieldAccess),
@@ -1850,11 +1853,11 @@ impl<
                         //   position.
                         let result_value = match collection_value {
                             TypeValue::Record(mut rec) => {
-                                let call_value = TypeValue::from(
+                                let call_value = TypeValue::try_from(
                                     rec.get_field_by_index_owned(
                                         target_field_index.clone(),
                                     ).ok_or_else(|| VmError::InvalidRecord)?,
-                                )
+                                )?
                                 .exec_consume_value_method(
                                     method_token.try_into()?,
                                     stack_args,
@@ -1868,12 +1871,12 @@ impl<
                                 TypeValue::Record(rec)
                             }
                             TypeValue::List(mut list) => {
-                                let call_value = TypeValue::from(
+                                let call_value = TypeValue::try_from(
                                     list.get_field_by_index_owned(
                                         target_field_index.clone(),
                                     )
                                     .ok_or(VmError::InvalidFieldAccess)?,
-                                )
+                                )?
                                 .exec_consume_value_method(
                                     method_token.try_into()?,
                                     stack_args,
@@ -2002,7 +2005,7 @@ impl<
                                     method_token.try_into()?,
                                     &stack_args[..],
                                     TypeDef::Unknown,
-                                );
+                                )?;
                                 let mut s = self.stack.borrow_mut();
                                 match v {
                                     DataSourceMethodValue::Ref(sr_pos) => {
@@ -2818,7 +2821,7 @@ impl TryFrom<&CommandArg> for TypeDef {
         match value {
             CommandArg::Type(t) => Ok(t.clone()),
             _ => {
-                error!("Cannot convert to TypeDef: {:?}", value);
+                error!("Cannot find TypeDef for command with token: {:?}", value);
                 Err(VmError::InvalidConversion)
             }
         }

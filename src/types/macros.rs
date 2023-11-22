@@ -65,12 +65,17 @@ macro_rules! createtoken {
                 $( [<$token:camel>] ),*
             }
 
-            impl From<usize> for [<$token_enum Token>] {
-                fn from(val: usize) -> Self {
+            impl TryFrom<usize> for [<$token_enum Token>] {
+                type Error = VmError;
+
+                fn try_from(val: usize) -> Result<Self, VmError> {
                     match val {
                         $( $value =>
-                            [<$token_enum Token>]::[<$token:camel>], )*
-                        _ => panic!("Unknown token value: {}", val),
+                            Ok([<$token_enum Token>]::[<$token:camel>]), )*
+                        t => {
+                            error!("Cannot find method for token: {}",  t);
+                            Err(VmError::InvalidMethodCall)
+                        }
                     }
                 }
             }
@@ -109,6 +114,12 @@ macro_rules! lazyrecord {
     };
 }
 
+// this macro produces a LazyField on a LazyRecord, i.e. a method that will be
+// invoked to retrieve the value for that field. For LazyRecords that are
+// backed by a BytesRecord these methods are parsers and these can fail. If
+// they do so we are NOT erroring out, but instead we return a
+// TypeValue::Unknown. Other LazyFields in the LazyRecord may parse just fine,
+// so we want to be able to keep going here.
 #[macro_export]
 macro_rules! lazyfield {
     (
@@ -130,7 +141,9 @@ macro_rules! lazyfield {
                             .$base_call()$(.$method_call())*
                     )
                 )
-            ).try_into().unwrap()
+            ).try_into().unwrap_or(
+                ElementTypeValue::Primitive(TypeValue::Unknown)
+            )
         )
         // LazyElementTypeValue::Lazy(
         //     Box::new(move |$raw_bytes: &BytesRecord<routecore::bmp::message::RouteMonitoring<bytes::Bytes>>| {
@@ -144,6 +157,12 @@ macro_rules! lazyfield {
     )}
 }
 
+// this macro produces a LazyEnum on a LazyRecord, i.e. a method that will be
+// invoked to retrieve the value for that field. For LazyRecords that are
+// backed by a BytesRecord these methods are parsers and these can fail. If
+// they do so we are NOT erroring out, but instead we return a
+// TypeValue::Unknown. Other LazyFields in the LazyRecord may parse just fine,
+// so we want to be able to keep going here.
 #[macro_export]
 macro_rules! lazyenum {
     (
@@ -167,13 +186,14 @@ macro_rules! lazyenum {
                         .bytes_parser()
                         .$base_call()$(.$method_call())*.into(),
                 )).into(),
-        ).try_into().unwrap() }))
+        ).try_into().unwrap_or(
+            ElementTypeValue::Primitive(TypeValue::Unknown)
+        )}))
         // (
         //     "peer_type".into(),
         //     LazyElementTypeValue::Lazy(Box::new(
         //         |raw_message: &BytesRecord<routecore::bmp::message::RouteMonitoring<bytes::Bytes>>| {
         //         TypeValue::Builtin(
-        //         // BuiltinTypeValue::ConstU8EnumVariant(
         //             EnumVariant::<u8>::new(
         //                 "BMP_PEER_TYPE".into(),
         //                 raw_message.bytes()
@@ -181,7 +201,6 @@ macro_rules! lazyenum {
         //                     .peer_type()
         //                     .into(),
         //         ).into(),
-        //         // )
         //     ).into() }))
         // ),
     )}
