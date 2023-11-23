@@ -232,9 +232,9 @@ impl From<Asn> for BuiltinTypeValue {
     }
 }
 
-impl From<u32> for BuiltinTypeValue {
-    fn from(val: u32) -> Self {
-        BuiltinTypeValue::U32(U32(val))
+impl From<U32> for BuiltinTypeValue {
+    fn from(value: U32) -> Self {
+        BuiltinTypeValue::U32(value)
     }
 }
 
@@ -247,6 +247,18 @@ impl From<U16> for BuiltinTypeValue {
 impl From<U8> for BuiltinTypeValue {
     fn from(value: U8) -> Self {
         BuiltinTypeValue::U8(value)
+    }
+}
+
+impl From<PrefixLength> for BuiltinTypeValue {
+    fn from(val: PrefixLength) -> Self {
+        BuiltinTypeValue::PrefixLength(val)
+    }
+}
+
+impl From<AsPath> for BuiltinTypeValue {
+    fn from(value: AsPath) -> Self {
+        BuiltinTypeValue::AsPath(value)
     }
 }
 

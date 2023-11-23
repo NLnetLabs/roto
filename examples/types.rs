@@ -13,7 +13,7 @@ fn main() {
     // .unwrap();
 
     let count =
-        BuiltinTypeValue::create_instance(TypeDef::U32, 1_u32).unwrap();
+        TypeValue::from(1_u32);
 
     let count2 = BuiltinTypeValue::create_instance(
         TypeDef::Prefix,

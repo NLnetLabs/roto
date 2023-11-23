@@ -195,13 +195,14 @@ pub enum TypeDef {
 }
 
 impl TypeDef {
-    // The function defined by this macro called `typedefconversion`
-    // indicates whether the self type can be converted into another
-    // specified type. This function is used during Evaluation.
-    // This happens ONLY ON THE UNBOUNDED TYPES, meaning that Type
-    // dependencies, e.g. a PrefixLength can't be converted from an U32 that
-    // holds a value bigger than 128, is NOT checked here. That check is done
-    // during compilation.
+    // The function defined by this macro called `typedefconversion` indicates
+    // whether the self type can be converted into another specified type.
+    // This function is used during Evaluation. This happens ONLY ON THE
+    // NON-REFINED VERSION OF THE TYPES, meaning that Type refinements, e.g. a
+    // PrefixLength can't be converted from an U32 that holds a value bigger
+    // than 128, is NOT checked here. That refinement type check is done
+    // during compilation, in the `into_type()` methods on the structs
+    // representing the types in `primitives.rs`.
 
     // For all types that are expressed as variants with a data field, where
     // the data field holds a sub-type definition, the sub-types names are
@@ -216,9 +217,9 @@ impl TypeDef {
         // have conversions, no data field
         // SOURCE TYPE(TARGET TYPE WITHOUT DATA FIELD, ..;
         // TARGET TYPE WITH DATA FIELD)
-        U8(StringLiteral,U16,U32,PrefixLength,IntegerLiteral;),
-        U16(StringLiteral,U32,PrefixLength,IntegerLiteral,LocalPref;),
-        U32(StringLiteral,IntegerLiteral;),
+        U8(StringLiteral,U16,U32,PrefixLength,Asn,IntegerLiteral;),
+        U16(StringLiteral,U32,PrefixLength,Asn,IntegerLiteral,LocalPref;),
+        U32(StringLiteral,Asn,IntegerLiteral;),
         Boolean(StringLiteral;),
         IpAddress(StringLiteral;),
         Prefix(StringLiteral;),

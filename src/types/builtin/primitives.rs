@@ -106,31 +106,39 @@ impl RotoType for U16 {
             TypeDef::U16 => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::U16(self)))
             }
-            TypeDef::U32 => {
-                Ok(TypeValue::Builtin((self.0 as u32).into()))
-            }
+            TypeDef::U32 => Ok(TypeValue::Builtin(U32(self.0 as u32).into())),
             TypeDef::Asn => Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(
                 Asn(routecore::asn::Asn::from(self.0 as u32)),
             ))),
-            TypeDef::PrefixLength => {
-                match self.0 {
-                    0..=128 => Ok(TypeValue::Builtin(BuiltinTypeValue::PrefixLength(PrefixLength(self.0 as u8)))),
-                    _ =>
-                    Err(format!("Cannot convert an instance of type U16 with a value greater than 128 into type {:?}", type_def)
-                    .into())
+            TypeDef::PrefixLength => match self.0 {
+                0..=128 => {
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
+                        PrefixLength(self.0 as u8),
+                    )))
                 }
+                _ => Err(format!(
+                    "Cannot convert an instance of type U16 with \
+                    a value greater than 128 into type {:?}",
+                    type_def
+                )
+                .into()),
             },
-            TypeDef::U8 => {
-                match self.0 {
-                    0..=255 => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(self.0 as u8)))),
-                    _ => Err(format!("Cannot convert an instance of type U16 with a value greater than 128 into type {:?}", type_def)
-                    .into())
-                }
-            }
-            _ => {
-                Err(format!("Cannot convert type U16 into type {:?}", type_def)
-                    .into())
-            }
+            TypeDef::U8 => match self.0 {
+                0..=255 => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(
+                    self.0 as u8,
+                )))),
+                _ => Err(format!(
+                    "Cannot convert an instance of type U16 \
+                    with a value greater than 128 into type {:?}",
+                    type_def
+                )
+                .into()),
+            },
+            _ => Err(format!(
+                "Cannot convert type U16 into type {:?}",
+                type_def
+            )
+            .into()),
         }
     }
 }
@@ -274,25 +282,35 @@ impl RotoType for U32 {
             TypeDef::Asn => Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(
                 Asn(routecore::asn::Asn::from(self.0)),
             ))),
-            TypeDef::PrefixLength => {
-                match self.0 {
-                    0..=128 => Ok(TypeValue::Builtin(BuiltinTypeValue::PrefixLength(PrefixLength(self.0 as u8)))),
-                    _ =>
-                    Err(format!("Cannot convert an instance of type U32 with a value greater than 128 into type {:?}", type_def)
-                    .into())
+            TypeDef::PrefixLength => match self.0 {
+                0..=128 => {
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
+                        PrefixLength(self.0 as u8),
+                    )))
                 }
+                _ => Err(format!(
+                    "Cannot convert an instance of type U32 with \
+                    a value greater than 128 into type {:?}",
+                    type_def
+                )
+                .into()),
             },
-            TypeDef::U8 => {
-                match self.0 {
-                    0..=255 => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(self.0 as u8)))),
-                    _ => Err(format!("Cannot convert an instance of type U32 with a value greater than 128 into type {:?}", type_def)
-                    .into())
-                }
-            }
-            _ => {
-                Err(format!("Cannot convert type U32 into type {:?}", type_def)
-                    .into())
-            }
+            TypeDef::U8 => match self.0 {
+                0..=255 => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(
+                    self.0 as u8,
+                )))),
+                _ => Err(format!(
+                    "Cannot convert an instance of type U32 \
+                    with a value greater than 128 into type {:?}",
+                    type_def
+                )
+                .into()),
+            },
+            _ => Err(format!(
+                "Cannot convert type U32 into type {:?}",
+                type_def
+            )
+            .into()),
         }
     }
 }
@@ -426,6 +444,12 @@ impl RotoType for U8 {
         match type_def {
             // Self
             TypeDef::U8 => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(self))),
+            TypeDef::U16 => {
+                let value = self.0;
+                Ok(TypeValue::Builtin(BuiltinTypeValue::U16(U16(
+                    value as u16
+                ))))
+            }
             TypeDef::U32 => {
                 let value = self.0;
                 Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(
@@ -874,7 +898,7 @@ impl RotoType for IntegerLiteral {
                 .map(|v| TypeValue::Builtin(BuiltinTypeValue::U32(U32(v))))
                 .map_err(|_| {
                     CompileError::from(format!(
-                        "Cannot convert type IntegerLiteral with {} into U32",
+                        "Cannot convert instanc of type IntegerLiteral with value {} into U32",
                         self.0
                     ))
                 }),
@@ -882,7 +906,15 @@ impl RotoType for IntegerLiteral {
                 .map(|v| TypeValue::Builtin(BuiltinTypeValue::U8(U8(v))))
                 .map_err(|_| {
                     CompileError::from(format!(
-                        "Cannot convert type IntegerLiteral with {} into U8",
+                        "Cannot convert instance of type IntegerLiteral with value {} into U8",
+                        self.0
+                    ))
+                }),
+            TypeDef::U16 => u16::try_from(self.0)
+                .map(|v| TypeValue::Builtin(BuiltinTypeValue::U16(U16(v))))
+                .map_err(|_| {
+                    CompileError::from(format!(
+                        "Cannot convert instance of type IntegerLiteral with value {} into U16",
                         self.0
                     ))
                 }),
@@ -890,10 +922,12 @@ impl RotoType for IntegerLiteral {
                 0..=255 =>
                     Ok(TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant { enum_name: e_num.clone(), value: u8::try_from(self.0)
                         .map_err(|_| CompileError::from(
-                            format!("Cannot convert type IntegerLiteral with value '{}' into Enum Variant with name '{}'", self.0, e_num)))?
+                            format!("Cannot convert type IntegerLiteral with \
+                            value '{}' into Enum Variant with name '{}'", self.0, e_num)))?
                          })
                     )),
-                _ => Err(CompileError::from(format!("Cannot convert type IntegerLiteral > 255 into ConstU8Variant of type {}", e_num)))
+                _ => Err(CompileError::from(format!("Cannot convert type \
+                IntegerLiteral > 255 into ConstU8Variant of type {}", e_num)))
             }
             _ => Err(format!(
                 "Cannot convert type IntegerLiteral to type {:?}",
@@ -1240,7 +1274,7 @@ impl RotoType for Prefix {
                         .try_into()
                         .map_err(|_e| VmError::InvalidConversion)?;
                     let ip = ip.0;
-                    Ok(routecore::addr::Prefix::new(ip, len.into())
+                    Ok(routecore::addr::Prefix::new(ip, len.0.into())
                         .map_or_else(|_| TypeValue::Unknown, |p| p.into()))
                 } else {
                     Err(VmError::AnonymousArgumentNotFound)
@@ -1354,6 +1388,15 @@ impl RotoType for PrefixLength {
             TypeDef::PrefixLength => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::PrefixLength(self)))
             }
+            TypeDef::U8 => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(self.0))))
+            }
+            TypeDef::U16 => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::U16(U16(self.0.into()))))
+            }
+            TypeDef::U32 => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(self.0.into()))))
+            }
             _ => Err(format!(
                 "Cannot convert type PrefixLength to type {:?}",
                 type_def
@@ -1456,11 +1499,6 @@ impl TryFrom<&TypeValue> for PrefixLength {
     }
 }
 
-impl From<PrefixLength> for u8 {
-    fn from(val: PrefixLength) -> Self {
-        val.0
-    }
-}
 
 // ----------- Community ----------------------------------------------------
 
@@ -1478,8 +1516,8 @@ impl From<PrefixLength> for u8 {
 /// e.g. as JSON served by a HTTP API or contained in an MQTT payload. The
 /// operators of the deployed application can be expected to be familiar with
 /// details of BGP and it is more useful to them if the rendered form of a BGP
-/// community is somewhat relatable to the way commnities are defined by and
-/// refered to in BGP RFCs and not exposing internally structural details of
+/// community is somewhat relatable to the way communities are defined by and
+/// referred to in BGP RFCs and not exposing internally structural details of
 /// how routecore stores communities (e.g. as raw byte vectors for example).
 ///
 /// We therefore provide our Serialize impl which will be used by callers when
@@ -1580,9 +1618,11 @@ impl SerializeForOperators for StandardCommunity {
                     if let Ok(asn) = asn.try_into_u16() {
                         asn
                     } else {
-                        return Err(serde::ser::Error::custom(
-                            format!("ASN {} is not a 2-byte ASN and cannot be converted", asn))
-                        );
+                        return Err(serde::ser::Error::custom(format!(
+                            "ASN {} is not a 2-byte ASN and cannot \
+                            be converted",
+                            asn
+                        )));
                     }
                 } else {
                     return Err(serde::ser::Error::custom(format!(
@@ -1663,10 +1703,13 @@ impl SerializeForOperators for ExtendedCommunity {
     where
         S: serde::Serializer,
     {
-        // The structure doesn't tell us if we have to look at the "type low" (subtyp()) value or not, we can only know
-        // that based on knowledge of the "type value" stored in the IANA BGP Extended Communities registry [1].
+        // The structure doesn't tell us if we have to look at the "type low"
+        // (subtype()) value or not, we can only know that based on knowledge
+        // of the "type value" stored in the IANA BGP Extended Communities
+        // registry [1].
         //
-        // [1]: https://www.iana.org/assignments/bgp-extended-communities/bgp-extended-communities.xhtml
+        // [1]: https://www.iana.org/assignments/bgp-extended-communities/
+        //      bgp-extended-communities.xhtml
         use routecore::bgp::communities::ExtendedCommunitySubType::*;
         use routecore::bgp::communities::ExtendedCommunityType::*;
 
@@ -2267,6 +2310,22 @@ impl RotoType for Asn {
             TypeDef::StringLiteral => Ok(TypeValue::Builtin(
                 BuiltinTypeValue::StringLiteral(self.into()),
             )),
+            TypeDef::U8 => match self.0.into_u32() {
+                0..=255 => {
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::U8(self.into())))
+                }
+                val => Err(format!(
+                    "Cannot convert an instance of type \
+                    Asn with a value {} into type ASN. It's greater than 255",
+                    val
+                )
+                .into()),
+            },
+            TypeDef::U32 => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(self
+                    .0
+                    .into_u32()))))
+            }
             _ => {
                 Err(format!("Cannot convert type Asn to type {:?}", type_def)
                     .into())
@@ -2326,6 +2385,12 @@ impl From<u32> for Asn {
 impl From<u16> for Asn {
     fn from(value: u16) -> Self {
         Asn((value as u32).into())
+    }
+}
+
+impl From<Asn> for U8 {
+    fn from(value: Asn) -> Self {
+        U8(value.0.into_u32() as u8).into()
     }
 }
 

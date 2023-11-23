@@ -4,4 +4,4 @@
 Cargo.lock
 /target
 
-/tarpaulin-report.html
+/tarpaulin-report*.html

@@ -1,15 +1,30 @@
+#![cfg(test)]
+
+use super::{PrefixLength, U16, U8, IntegerLiteral, AsPath, Asn};
+use crate::{
+    compiler::CompileError,
+    traits::RotoType,
+    types::builtin::U32,
+};
+use crate::types::builtin::BuiltinTypeValue;
+use crate::types::typedef::TypeDef;
+
 #[cfg(test)]
 mod route {
     use routecore::bgp::{
-        message::{SessionConfig, nlri::{BasicNlri, Nlri}},
+        message::{
+            nlri::{BasicNlri, Nlri},
+            SessionConfig,
+        },
         types::{NextHop, OriginType},
     };
 
     use crate::{
-        types::builtin::{
-            Asn, Prefix, RawRouteWithDeltas, RotondaId, RouteStatus,
-            UpdateMessage,
-        },
+        types::
+            builtin::{
+                Asn, Prefix, RawRouteWithDeltas, RotondaId,
+                RouteStatus, UpdateMessage,
+            },
         vm::VmError,
     };
 
@@ -40,7 +55,15 @@ mod route {
             .0
             .announcements()
             .into_iter()
-            .flat_map(|n| n.filter_map(|p| if let Ok(Nlri::Unicast(BasicNlri { prefix, .. })) = p { Some(Prefix::from(prefix)) } else { None }) )
+            .flat_map(|n| {
+                n.filter_map(|p| {
+                    if let Ok(Nlri::Unicast(BasicNlri { prefix, .. })) = p {
+                        Some(Prefix::from(prefix))
+                    } else {
+                        None
+                    }
+                })
+            })
             .collect();
         let msg_id = (RotondaId(0), 0);
 
@@ -76,7 +99,10 @@ mod route {
 
         let mut delta = roto_msgs[0].open_new_delta(delta_id)?;
         if let std::net::IpAddr::V6(v6) = prefixes[0].0.addr() {
-            delta.attributes.next_hop.set(NextHop::Unicast(std::net::IpAddr::V6(v6)));
+            delta
+                .attributes
+                .next_hop
+                .set(NextHop::Unicast(std::net::IpAddr::V6(v6)));
         }
 
         let res = delta.attributes.as_path.prepend(
@@ -148,7 +174,15 @@ mod route {
             .0
             .announcements()
             .into_iter()
-            .flat_map(|n| n.filter_map(|p| if let Ok(Nlri::Unicast(BasicNlri { prefix, .. })) = p { Some(Prefix::from(prefix)) } else { None }))
+            .flat_map(|n| {
+                n.filter_map(|p| {
+                    if let Ok(Nlri::Unicast(BasicNlri { prefix, .. })) = p {
+                        Some(Prefix::from(prefix))
+                    } else {
+                        None
+                    }
+                })
+            })
             .collect();
 
         let msg_id = (RotondaId(0), 0);
@@ -185,7 +219,10 @@ mod route {
 
         println!("change set {:#?}", new_change_set1);
         if let std::net::IpAddr::V6(v6) = prefixes[2].0.addr() {
-            new_change_set1.attributes.next_hop.set(NextHop::Unicast(std::net::IpAddr::V6(v6)));
+            new_change_set1
+                .attributes
+                .next_hop
+                .set(NextHop::Unicast(std::net::IpAddr::V6(v6)));
         }
 
         let res = new_change_set1.attributes.as_path.prepend(211321_u32); //].try_into().unwrap());
@@ -255,7 +292,7 @@ mod route {
 
         // Change Set 3
         // let mut new_change_set3 = roto_msgs[2].open_new_delta(delta_id)?;
-        // let res = new_change_set3.attributes.as_path.insert(1, vec![Asn::from(201)]);
+        // let res = new_change_set3.attributes.as_path.insert(1, AsPath::from(vec![Asn::from(201)]));
         // assert!(res.is_ok());
 
         // let res = roto_msgs[2].store_delta(new_change_set3);
@@ -273,4 +310,232 @@ mod route {
 
         Ok(())
     }
+}
+
+#[cfg(test)]
+fn test_method_on_type_value<RT: RotoType + Clone, TT: RotoType + Clone> (
+    from_value: RT,
+    method_name: &str,
+    arg_value: TT,
+) -> Result<(), CompileError> where BuiltinTypeValue: From<RT>, BuiltinTypeValue: From<TT> {
+
+    // The type definition of the from value
+    let src_ty: TypeDef = <BuiltinTypeValue>::from(from_value.clone()).into();
+    let m = RT::get_props_for_method(
+        TypeDef::Unknown,
+        &crate::ast::Identifier {
+            ident: method_name.into(),
+        },
+    )?;
+
+    // Establish the type of the argument value.
+    let arg_ty: TypeDef = <BuiltinTypeValue>::from(arg_value.clone()).into();
+
+    // Test the evaluation conversion (as defined in the typedefconversion
+    // macro in typedef.rs).
+    assert!(src_ty.clone().test_type_conversion(arg_ty));
+
+    // Test the compilation refinement type conversion.
+    let arg_value = arg_value.clone().into_type(&src_ty)?;
+
+    let set_op = from_value
+        .exec_consume_value_method(
+            m.method_token.try_into()?,
+            vec![arg_value.clone()],
+            src_ty,
+        )
+        .unwrap();
+    assert_eq!(set_op, arg_value);
+
+    Ok(())
+}
+
+#[cfg(test)]
+fn mk_converted_type_value<RT: RotoType, TT: RotoType + Clone>(
+    from_value: RT,
+    // new_type: TypeDef,
+    to_value: TT,
+) -> Result<(), CompileError> where BuiltinTypeValue: From<TT> {
+
+    let to_ty: TypeDef = <BuiltinTypeValue>::from(to_value.clone()).into();
+
+    let m = from_value.into_type(&to_ty)?;
+    assert_eq!(m, to_value.into());
+    Ok(())
+}
+
+// ----------- Test: U8 ------------------------------------------------------
+
+// From U8(StringLiteral,U16,U32,PrefixLength,IntegerLiteral;),
+#[test]
+fn test_u8() -> Result<(), CompileError> {
+    let test_value = U8::new(0_u8);
+    let res = U8::new(127);
+
+    test_method_on_type_value(test_value, "set", res)
+}
+
+#[test]
+fn test_u8_to_u16() -> Result<(), CompileError> {
+    let test_value = U8::new(0_u8);
+    let res = U16::new(127);
+
+    test_method_on_type_value(test_value, "set", res)
+}
+
+#[test]
+#[should_panic = "src_ty.clone().test_type_conversion(arg_ty)"]
+fn test_invalid_u8_to_as_path() {
+    let test_value = U8::new(0_u8);
+    let arg = AsPath::new(vec![24.into()]).unwrap();
+
+    test_method_on_type_value(test_value, "set", arg).unwrap();
+}
+
+#[test]
+fn test_u8_conversion_prefix_length() -> Result<(), CompileError> {
+    let test_value = U8::new(24_u8);
+    let res = PrefixLength::new(24);
+
+    mk_converted_type_value(test_value, res)
+}
+
+#[test]
+#[should_panic = "Prefix length must be between 0 and 128, not 255"]
+fn test_u8_conversion_invalid_prefix_length() {
+    let test_value = U8::new(255_u8);
+    let res = PrefixLength::new(255_u8);
+
+    mk_converted_type_value(test_value, res).unwrap();
+}
+
+#[test]
+fn test_u8_conversion_u16() -> Result<(), CompileError> {
+    let test_value = U8::new(24_u8);
+    let res = U16::new(24);
+
+    mk_converted_type_value(test_value, res)
+}
+
+#[test]
+fn test_conversion_integer_literal_u8() -> Result<(), CompileError> {
+    let res = U8::new(24_u8);
+    let test_value = IntegerLiteral::new(24);
+
+    mk_converted_type_value(test_value, res)
+}
+
+
+#[test]
+#[should_panic = "Cannot convert type U8 to type AsPath"]
+fn test_u8_conversion_as_path() {
+    let test_value = U8::new(24_u8);
+    let res = AsPath::new(vec![24.into()]).unwrap();
+
+    mk_converted_type_value(test_value, res).unwrap();
+}
+
+//------------ Test: U16 -----------------------------------------------------
+
+#[test]
+fn test_u16() -> Result<(), CompileError> {
+    let test_value = U16::new(0_u16);
+    let res = U16::new(127);
+
+    test_method_on_type_value(test_value, "set", res)
+}
+
+#[test]
+#[should_panic = "Cannot convert type U32 into type U16"]
+fn test_invalid_u16() {
+    let test_value = U16::new(0_u16);
+    let res = U32::new(127);
+
+    test_method_on_type_value(test_value, "set", res).unwrap();
+}
+
+#[test]
+fn test_u16_conversion_u32() -> Result<(), CompileError> {
+    let test_value = U16::new(127_u16);
+    let res = U32::new(127);
+
+    mk_converted_type_value(test_value, res)
+}
+
+#[test]
+fn test_u16_conversion_prefix_length() -> Result<(), CompileError> {
+    let test_value = U16::new(24_u16);
+    let res = PrefixLength::new(24);
+
+    mk_converted_type_value(test_value, res)
+}
+
+#[test]
+#[should_panic = "Cannot convert an instance of type U16 with a value greater \
+than 128 into type PrefixLength"]
+fn test_u16_conversion_invalid_prefix_length() {
+    let test_value = U16::new(255_u16);
+    let res = PrefixLength::new(255);
+
+    mk_converted_type_value(test_value, res).unwrap();
+}
+
+#[test]
+fn test_conversion_integer_literal_u16() -> Result<(), CompileError> {
+    let test_value = IntegerLiteral::new(32768);
+    let res = U16::new(32768_u16);
+
+    mk_converted_type_value(test_value, res)
+}
+
+//------------ Test: U32 -----------------------------------------------------
+
+#[test]
+fn test_u32() -> Result<(), CompileError> {
+    let test_value = U32::new(2377_u32);
+    let res = U32::new(12708786);
+
+    test_method_on_type_value(test_value, "set", res)
+}
+
+#[test]
+fn test_invalid_u32() {
+    let test_value = U32::new(710_u32);
+    let res = Asn::from(710_u32);
+
+    test_method_on_type_value(test_value, "set", res).unwrap();
+}
+
+#[test]
+fn test_u32_conversion_prefix_length() -> Result<(), CompileError> {
+    let test_value = U32::new(24_u32);
+    let res = PrefixLength::new(24);
+
+    mk_converted_type_value(test_value, res)
+}
+
+#[test]
+#[should_panic = "Cannot convert an instance of type U32 with a value \
+greater than 128 into type PrefixLength"]
+fn test_u32_conversion_invalid_prefix_length() {
+    let test_value = U32::new(122255_u32);
+    let res = PrefixLength::new(255);
+
+    mk_converted_type_value(test_value, res).unwrap();
+}
+
+#[test]
+fn test_conversion_integer_literal_u32() -> Result<(), CompileError> {
+    let res = U32::new(32768_u32);
+    let test_value = IntegerLiteral::new(32768);
+
+    mk_converted_type_value(test_value, res)
+}
+
+#[test]
+fn test_conversion_asn_u32() -> Result<(), CompileError> {
+    let test_value = U32::new(32768_u32);
+    let res = Asn::new(32768.into());
+
+    mk_converted_type_value(test_value, res)
 }
