@@ -194,7 +194,7 @@ impl From<U16Token> for usize {
     }
 }
 
-// ----------- A simple u32 type --------------------------------------------
+// ----------- U32 Type --------------------------------------------
 
 #[derive(Debug, Eq, Copy, Clone, Serialize)]
 pub struct U32(pub(crate) u32);
@@ -366,7 +366,7 @@ impl From<U32Token> for usize {
     }
 }
 
-// ----------- A simple u8 type ---------------------------------------------
+// ----------- U8 Type ---------------------------------------------
 
 #[derive(Debug, Eq, Copy, Clone, Serialize)]
 pub struct U8(pub(crate) u8);
@@ -531,7 +531,7 @@ impl From<U8Token> for usize {
     }
 }
 
-// ----------- Boolean type -------------------------------------------------
+// ----------- Boolean Type -------------------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Serialize)]
 pub struct Boolean(pub(crate) bool);
@@ -1274,7 +1274,7 @@ impl RotoType for Prefix {
                         .try_into()
                         .map_err(|_e| VmError::InvalidConversion)?;
                     let ip = ip.0;
-                    Ok(routecore::addr::Prefix::new(ip, len.0.into())
+                    Ok(routecore::addr::Prefix::new(ip, len.0)
                         .map_or_else(|_| TypeValue::Unknown, |p| p.into()))
                 } else {
                     Err(VmError::AnonymousArgumentNotFound)
@@ -1392,10 +1392,14 @@ impl RotoType for PrefixLength {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(self.0))))
             }
             TypeDef::U16 => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::U16(U16(self.0.into()))))
+                Ok(TypeValue::Builtin(BuiltinTypeValue::U16(U16(self
+                    .0
+                    .into()))))
             }
             TypeDef::U32 => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(self.0.into()))))
+                Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(self
+                    .0
+                    .into()))))
             }
             _ => Err(format!(
                 "Cannot convert type PrefixLength to type {:?}",
@@ -1499,7 +1503,6 @@ impl TryFrom<&TypeValue> for PrefixLength {
     }
 }
 
-
 // ----------- Community ----------------------------------------------------
 
 /// A BGP community.
@@ -1558,7 +1561,8 @@ impl Serialize for Community {
                     c.serialize_for_operator(serializer)
                 }
                 routecore::bgp::communities::Community::Ipv6Extended(c) => {
-                    // TODO: Also implement SerializeForOperators for IPv6 Extended Communities.
+                    // TODO: Also implement SerializeForOperators for IPv6
+                    // Extended Communities.
                     c.serialize(serializer)
                 }
             }
@@ -1853,8 +1857,8 @@ impl SerializeForOperators for ExtendedCommunity {
     }
 }
 
-// Types used only by our own Serialize implementation to structure the serialized output differently than is done by
-// routecore.
+// Types used only by our own Serialize implementation to structure the
+// serialized output differently than is done by routecore.
 mod ser {
     #[derive(serde::Serialize)]
     #[serde(rename = "value")]
@@ -2312,7 +2316,11 @@ impl RotoType for Asn {
             )),
             TypeDef::U8 => match self.0.into_u32() {
                 0..=255 => {
-                    Ok(TypeValue::Builtin(BuiltinTypeValue::U8(self.into())))
+                    // this should work, shouldn't it?
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(self
+                        .0
+                        .into_u32()
+                        as u8))))
                 }
                 val => Err(format!(
                     "Cannot convert an instance of type \
@@ -2385,12 +2393,6 @@ impl From<u32> for Asn {
 impl From<u16> for Asn {
     fn from(value: u16) -> Self {
         Asn((value as u32).into())
-    }
-}
-
-impl From<Asn> for U8 {
-    fn from(value: Asn) -> Self {
-        U8(value.0.into_u32() as u8).into()
     }
 }
 

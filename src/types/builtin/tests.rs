@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use super::{PrefixLength, U16, U8, IntegerLiteral, AsPath, Asn};
+use super::{PrefixLength, U16, U8, IntegerLiteral, AsPath, Asn, Boolean};
 use crate::{
     compiler::CompileError,
     traits::RotoType,
@@ -539,3 +539,33 @@ fn test_conversion_asn_u32() -> Result<(), CompileError> {
 
     mk_converted_type_value(test_value, res)
 }
+
+//------------ Test: Boolean -------------------------------------------------
+
+#[test]
+fn test_boolean() -> Result<(), CompileError> {
+    let test_value = Boolean::new(true);
+    let res = Boolean::new(false);
+
+    test_method_on_type_value(test_value, "set", res)
+}
+
+#[test]
+#[should_panic = "assertion failed: \
+src_ty.clone().test_type_conversion(arg_ty)"]
+fn test_invalid_boolean() {
+    let test_value = Boolean::new(true);
+    let res = Asn::from(710_u32);
+
+    test_method_on_type_value(test_value, "set", res).unwrap();
+}
+
+#[test]
+#[should_panic = "Unknown method: 'blaffer' for type Boolean"]
+fn test_invalid_method_boolean() {
+    let test_value = Boolean::new(true);
+    let res = Asn::from(710_u32);
+
+    test_method_on_type_value(test_value, "blaffer", res).unwrap();
+}
+
