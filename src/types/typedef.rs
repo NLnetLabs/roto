@@ -690,7 +690,7 @@ impl TypeDef {
     }
 
     // Calculates the hash over the fields that are referenced in the unique
-    // field indexes vec  that lives on the Rib typedef.
+    // field indexes vec that lives on the Rib typedef.
     // If there's no field indexes vec then simply calculate the hash over
     // the (whole) TypeValue that was passed in.
     pub fn hash_key_values<'a, H: Hasher>(
@@ -708,7 +708,13 @@ impl TypeDef {
                 }
                 TypeValue::Builtin(BuiltinTypeValue::Route(route)) => {
                     for field_index in uniq_field_indexes {
-                        route.get_field_by_index(field_index.first()?)?.hash(state);
+                        if let Ok(fi) = field_index.first() {
+                            if let Ok(f) = route.get_field_by_index(fi) {
+                                f.hash(state);
+                            }
+                        } else {
+                            route.hash(state);
+                        }
                     }
                 }
                 TypeValue::Builtin(btv) => {
