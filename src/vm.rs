@@ -380,8 +380,8 @@ impl LinearMemory {
                     Some(TypeValue::Builtin(BuiltinTypeValue::Route(
                         route,
                     ))) => {
-                        if let Some(v) = route
-                            .get_value_ref_for_field(field_index.first()?)?
+                        if let Ok(Some(v)) = route
+                            .get_value_ref_for_field(field_index.first()?)
                         {
                             Ok(StackValue::Ref(v))
                         } else if let Ok(v) =
