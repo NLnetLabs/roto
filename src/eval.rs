@@ -38,10 +38,32 @@ impl<'a> ast::SyntaxTree {
         &'a self,
         symbols: GlobalSymbolTable,
     ) -> Result<(), CompileError> {
+        // At this level there's no difference between a a roto `filter` and a
+        // `filter-map`. They are all FilterMap structs.
         let (filter_maps, global): (Vec<_>, Vec<_>) = self
             .expressions
             .iter()
             .partition(|e| matches!(e, ast::RootExpr::FilterMap(_)));
+
+        let mut acc = vec![];
+        for filter_map in &filter_maps {
+            if let Ok(fm) = filter_map.get_filter_map() {
+                if acc
+                    .iter()
+                    .any(|expr: &&ShortString| *expr == &fm.ident.ident)
+                {
+                    return Err(CompileError::from(format!(
+                        "Duplicate FilterMap with name '{}'",
+                        fm.ident.ident
+                    )));
+                }
+                acc.push(&fm.ident.ident);
+            } else {
+                return Err(CompileError::from(
+                    "Cannot accept FilterMap without a name",
+                ));
+            }
+        }
 
         // First, evaluate all the non-filter-map expressions, so that they are
         // available to the filter_maps.
@@ -80,6 +102,7 @@ impl<'a> ast::SyntaxTree {
 
         // For each filter_map, create a new symbol table if it does not exist.
         for filter_map in &filter_maps {
+            trace!("found filter_map: {:?}", filter_map);
             let filter_map_name = &filter_map.get_filter_map()?.ident.ident;
             let filter_map_scope = match filter_map.get_filter_map()?.ty {
                 FilterType::Filter => Scope::Filter(filter_map_name.clone()),
@@ -97,7 +120,10 @@ impl<'a> ast::SyntaxTree {
                 })?
             } else {
                 symbols_mut.get_mut(&filter_map_scope).ok_or_else(|| {
-                    CompileError::from("Cannot find global scope.")
+                    CompileError::from(format!(
+                        "Cannot find scope {}.",
+                        filter_map_scope
+                    ))
                 })?
             };
         }
