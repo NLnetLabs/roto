@@ -18,7 +18,7 @@ jobs:
         # according to Cargo.toml. Test against beta and nightly Rust to get
         # early warning of any problems that might occur with the upcoming Rust
         # release. Ordered oldest Rust to newest Rust.
-        rust: [1.70.0, stable, beta, nightly]
+        rust: [1.71.0, stable, beta, nightly]
 
         # Test with no features, default features ("") and all features.
         # Ordered fewest features to most features.
