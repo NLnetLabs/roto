@@ -368,7 +368,7 @@ impl From<U32Token> for usize {
 
 // ----------- U8 Type ---------------------------------------------
 
-#[derive(Debug, Eq, Copy, Clone, Serialize)]
+#[derive(Debug, Eq, Copy, Clone, Ord, PartialOrd, Serialize)]
 pub struct U8(pub(crate) u8);
 
 impl U8 {
@@ -533,7 +533,9 @@ impl From<U8Token> for usize {
 
 // ----------- Boolean Type -------------------------------------------------
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Serialize)]
+#[derive(
+    Debug, Eq, PartialEq, Copy, Clone, Hash, Ord, PartialOrd, Serialize,
+)]
 pub struct Boolean(pub(crate) bool);
 impl Boolean {
     pub fn new(val: bool) -> Self {
@@ -612,6 +614,10 @@ impl RotoType for Boolean {
             TypeDef::Boolean => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(self)))
             }
+            TypeDef::StringLiteral => match self.0 {
+                true => Ok(true.into()),
+                false => Ok(false.into()),
+            },
             _ => Err(format!(
                 "Cannot convert type Boolean to type {:?}",
                 type_def
@@ -671,7 +677,7 @@ impl From<BooleanToken> for usize {
 
 //------------ StringLiteral type -------------------------------------------
 
-#[derive(Debug, Eq, PartialEq, Clone, Hash, Serialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Hash, Ord, PartialOrd, Serialize)]
 pub struct StringLiteral(pub(crate) String);
 impl StringLiteral {
     pub fn new(val: String) -> Self {
@@ -686,7 +692,7 @@ impl RotoType for StringLiteral {
     ) -> Result<MethodProps, CompileError> {
         match method_name.ident.as_str() {
             "cmp" => Ok(MethodProps::new(
-                TypeDef::IntegerLiteral,
+                TypeDef::Boolean,
                 StringLiteralToken::Cmp.into(),
                 vec![TypeDef::StringLiteral, TypeDef::StringLiteral],
             )),
@@ -695,6 +701,12 @@ impl RotoType for StringLiteral {
                 StringLiteralToken::Format.into(),
                 vec![TypeDef::StringLiteral, TypeDef::StringLiteral],
             )),
+            "set" => Ok(MethodProps::new(
+                TypeDef::Unknown,
+                StringLiteralToken::Set.into(),
+                vec![TypeDef::StringLiteral],
+            )
+            .consume_value()),
             _ => Err(format!(
                 "Unknown method: '{}' for type StringLiteral",
                 method_name.ident
@@ -705,12 +717,25 @@ impl RotoType for StringLiteral {
 
     fn exec_value_method(
         &self,
-        _method_token: usize,
-
-        _args: &[StackValue],
+        method_token: usize,
+        args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        todo!()
+        match method_token.try_into()? {
+            StringLiteralToken::Cmp => {
+                if let TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
+                    sv,
+                )) =
+                    args.get(0).ok_or(VmError::InvalidMethodCall)?.as_ref()
+                {
+                    Ok(self.cmp(sv).is_eq().into())
+                } else {
+                    Err(VmError::InvalidMethodCall)
+                }
+            }
+            StringLiteralToken::Set => Err(VmError::InvalidMethodCall),
+            StringLiteralToken::Format => Err(VmError::InvalidMethodCall),
+        }
     }
 
     fn exec_consume_value_method(
@@ -772,7 +797,27 @@ impl RotoType for StringLiteral {
                     StringLiteral(new_string),
                 )))
             }
-            StringLiteralToken::Cmp => unimplemented!(),
+            StringLiteralToken::Cmp => {
+                if let TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
+                    sv_1,
+                )) =
+                    args.get(0).ok_or(VmError::InvalidMethodCall)?.as_ref()
+                {
+                    if let TypeValue::Builtin(
+                        BuiltinTypeValue::StringLiteral(sv_2),
+                    ) = args
+                        .get(1)
+                        .ok_or(VmError::InvalidMethodCall)?
+                        .as_ref()
+                    {
+                        Ok(sv_1.cmp(sv_2).is_eq().into())
+                    } else {
+                        Err(VmError::InvalidMethodCall)
+                    }
+                } else {
+                    Err(VmError::InvalidMethodCall)
+                }
+            }
             StringLiteralToken::Set => Err(VmError::InvalidMethodCall),
         }
     }
@@ -785,6 +830,19 @@ impl RotoType for StringLiteral {
             TypeDef::StringLiteral => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::StringLiteral(self)))
             }
+            TypeDef::Boolean => match self.0.as_str() {
+                "true" => Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(
+                    Boolean(true),
+                ))),
+                "false" => Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(
+                    Boolean(false),
+                ))),
+                _ => Err(format!(
+                    "String {} cannot be converted into Boolean",
+                    self.0
+                )
+                .into()),
+            },
             _ => Err(format!(
                 "Cannot convert type StringLiteral to type {:?}",
                 type_def
@@ -819,6 +877,12 @@ impl TryFrom<usize> for StringLiteralToken {
                 Err(VmError::InvalidMethodCall)
             }
         }
+    }
+}
+
+impl From<StringLiteral> for BuiltinTypeValue {
+    fn from(value: StringLiteral) -> Self {
+        BuiltinTypeValue::StringLiteral(value)
     }
 }
 
@@ -858,7 +922,7 @@ impl RotoType for IntegerLiteral {
                 vec![TypeDef::IntegerLiteral, TypeDef::IntegerLiteral],
             )),
             _ => Err(format!(
-                "Unknown method: '{}' for type Prefix",
+                "Unknown method: '{}' for type Integer",
                 method_name.ident
             )
             .into()),
@@ -892,6 +956,7 @@ impl RotoType for IntegerLiteral {
                 0..=4294967295 => {
                     Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(routecore::asn::Asn::from(self.0 as u32)))))
                 },
+                i if i < 0 => Err(CompileError::from("Cannot convert type IntegerLiteral < 0 into Asn".to_string())),
                 _ => Err(CompileError::from("Cannot convert type IntegerLiteral > 4294967295 into Asn".to_string()))
             }
             TypeDef::U32 => u32::try_from(self.0)
@@ -980,12 +1045,20 @@ impl From<IntegerLiteral> for TypeValue {
     }
 }
 
+impl From<IntegerLiteral> for BuiltinTypeValue {
+    fn from(value: IntegerLiteral) -> Self {
+        BuiltinTypeValue::IntegerLiteral(value)
+    }
+}
+
 impl Display for IntegerLiteral {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
+// There's no Set, because concrete integer types should be used to set things
+// like fields in collections, e.g. U8, etc.
 #[derive(Debug)]
 pub(crate) enum IntegerLiteralToken {
     Cmp,
@@ -1153,16 +1226,6 @@ pub struct Prefix(pub(crate) routecore::addr::Prefix);
 impl Prefix {
     pub fn new(prefix: routecore::addr::Prefix) -> Self {
         Self(prefix)
-    }
-
-    pub fn exec_method(
-        &self,
-        _method: usize,
-        _args: Vec<&TypeValue>,
-        _res_type: TypeDef,
-    ) -> Result<Box<dyn FnOnce(TypeValue) -> TypeValue + '_>, CompileError>
-    {
-        todo!()
     }
 }
 
@@ -3520,7 +3583,18 @@ impl From<AggregatorToken> for usize {
 // the logic in `rib-units` to decide whether routes should be send to its
 // output and to be able output this information to API clients, without
 // having to go back to the units that keep the per-peer session state.
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Default, Hash, Serialize)]
+#[derive(
+    Debug,
+    Eq,
+    PartialEq,
+    Copy,
+    Clone,
+    Default,
+    Hash,
+    Ord,
+    PartialOrd,
+    Serialize,
+)]
 pub enum RouteStatus {
     // Between start and EOR on a BGP peer-session
     InConvergence,

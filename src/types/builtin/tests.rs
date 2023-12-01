@@ -1,13 +1,19 @@
 #![cfg(test)]
 
-use super::{PrefixLength, U16, U8, IntegerLiteral, AsPath, Asn, Boolean};
-use crate::{
-    compiler::CompileError,
-    traits::RotoType,
-    types::builtin::U32,
+use super::{
+    AsPath, Asn, Boolean, IntegerLiteral, PrefixLength, StringLiteral, U16,
+    U8,
 };
 use crate::types::builtin::BuiltinTypeValue;
 use crate::types::typedef::TypeDef;
+use crate::types::typevalue::TypeValue;
+use crate::{compiler::CompileError, traits::RotoType, types::builtin::U32};
+
+enum MethodType {
+    Value,
+    Type,
+    Consume,
+}
 
 #[cfg(test)]
 mod route {
@@ -20,11 +26,10 @@ mod route {
     };
 
     use crate::{
-        types::
-            builtin::{
-                Asn, Prefix, RawRouteWithDeltas, RotondaId,
-                RouteStatus, UpdateMessage,
-            },
+        types::builtin::{
+            Asn, Prefix, RawRouteWithDeltas, RotondaId, RouteStatus,
+            UpdateMessage,
+        },
         vm::VmError,
     };
 
@@ -312,13 +317,23 @@ mod route {
     }
 }
 
+// This tests operates in the same order as the Roto Compiler, i.e. it first
+// extracts the typedef from the TypeValue,then tests a possible
+// typedefconversion (with the typedefconversion macro), and finally performs
+// the actual conversion. The typedefconversion macro is more lenient than the
+// value into typedef, whereas the `into_type()` is more strict than the first
+// step. So testing typedefconversion and into_type() in isolation is good,
+// but isn't the complete picture.
 #[cfg(test)]
-fn test_method_on_type_value<RT: RotoType + Clone, TT: RotoType + Clone> (
+fn test_consume_method_on_type_value<RT: RotoType + Clone, TT: RotoType + Clone>(
     from_value: RT,
     method_name: &str,
     arg_value: TT,
-) -> Result<(), CompileError> where BuiltinTypeValue: From<RT>, BuiltinTypeValue: From<TT> {
-
+) -> Result<(), CompileError>
+where
+    BuiltinTypeValue: From<RT>,
+    BuiltinTypeValue: From<TT>,
+{
     // The type definition of the from value
     let src_ty: TypeDef = <BuiltinTypeValue>::from(from_value.clone()).into();
     let m = RT::get_props_for_method(
@@ -351,12 +366,108 @@ fn test_method_on_type_value<RT: RotoType + Clone, TT: RotoType + Clone> (
 }
 
 #[cfg(test)]
+fn test_method_on_type_value_with_multiple_args<
+    RT: RotoType + Clone,
+    TT: RotoType + Clone,
+    UT: RotoType + Clone,
+>(
+    from_value: RT,
+    method_type: MethodType,
+    method_name: &str,
+    arg_values: &[TT],
+    expect: UT,
+) -> Result<(), CompileError>
+where
+    BuiltinTypeValue: From<RT>,
+    BuiltinTypeValue: From<TT>,
+{
+    // The type definition of the from value
+
+    use crate::vm::StackValue;
+    let src_ty: TypeDef = <BuiltinTypeValue>::from(from_value.clone()).into();
+    let m = RT::get_props_for_method(
+        TypeDef::Unknown,
+        &crate::ast::Identifier {
+            ident: method_name.into(),
+        },
+    )?;
+
+    // Establish the type of the argument value.
+    let validated_arg_values: Vec<TypeValue> = arg_values
+        .iter()
+        .map(|av| {
+            let arg_ty = <BuiltinTypeValue>::from(av.clone()).into();
+            assert!(src_ty.clone().test_type_conversion(arg_ty));
+            av.clone().into_type(&src_ty)
+        })
+        .filter_map(|av| if let Ok(av) = av { Some(av) } else { None })
+        .collect::<Vec<_>>();
+
+    assert_eq!(arg_values.len(), validated_arg_values.len());
+
+    // Test the evaluation conversion (as defined in the typedefconversion
+    // macro in typedef.rs).
+
+    // Test the compilation refinement type conversion.
+    // let arg_value = arg_value.clone().into_type(&src_ty)?;
+
+    let set_ops = match method_type {
+        MethodType::Consume => from_value
+            .exec_consume_value_method(
+                m.method_token.try_into()?,
+                validated_arg_values,
+                src_ty,
+            )
+            .unwrap(),
+        MethodType::Type => {
+            let stack_values = validated_arg_values
+                .iter()
+                .map(StackValue::Ref)
+                .collect::<Vec<_>>();
+            RT::exec_type_method(
+                m.method_token.try_into()?,
+                &stack_values,
+                src_ty,
+            )
+            .unwrap()
+        }
+        MethodType::Value => {
+            let stack_values = validated_arg_values
+                .iter()
+                .map(StackValue::Ref)
+                .collect::<Vec<_>>();
+            from_value
+                .exec_value_method(
+                    m.method_token.try_into()?,
+                    &stack_values,
+                    src_ty,
+                )
+                .unwrap()
+        }
+    };
+
+    assert_eq!(set_ops, expect.into());
+
+    Ok(())
+}
+
+// This test only performs the value -> value conversion. The caveat of this
+// test is that errors may be returned from it, that will never appear in the
+// compiler chain, since these cases would already be thrown out by it before
+// it reaches the conversion. The VM also uses the `into_type()` method tested
+// here, and although the same caveats apply, there is one notable exception:
+// values that are being passed in at runtime (from external data sources).
+// These are out of control of the compiler and the VM so that then the `bare`
+// `into_type()` method as tested here applies.
+#[cfg(test)]
 fn mk_converted_type_value<RT: RotoType, TT: RotoType + Clone>(
     from_value: RT,
     // new_type: TypeDef,
     to_value: TT,
-) -> Result<(), CompileError> where BuiltinTypeValue: From<TT> {
-
+) -> Result<(), CompileError>
+where
+    BuiltinTypeValue: From<TT>,
+{
     let to_ty: TypeDef = <BuiltinTypeValue>::from(to_value.clone()).into();
 
     let m = from_value.into_type(&to_ty)?;
@@ -372,7 +483,7 @@ fn test_u8() -> Result<(), CompileError> {
     let test_value = U8::new(0_u8);
     let res = U8::new(127);
 
-    test_method_on_type_value(test_value, "set", res)
+    test_consume_method_on_type_value(test_value, "set", res)
 }
 
 #[test]
@@ -380,7 +491,7 @@ fn test_u8_to_u16() -> Result<(), CompileError> {
     let test_value = U8::new(0_u8);
     let res = U16::new(127);
 
-    test_method_on_type_value(test_value, "set", res)
+    test_consume_method_on_type_value(test_value, "set", res)
 }
 
 #[test]
@@ -389,7 +500,7 @@ fn test_invalid_u8_to_as_path() {
     let test_value = U8::new(0_u8);
     let arg = AsPath::new(vec![24.into()]).unwrap();
 
-    test_method_on_type_value(test_value, "set", arg).unwrap();
+    test_consume_method_on_type_value(test_value, "set", arg).unwrap();
 }
 
 #[test]
@@ -425,7 +536,6 @@ fn test_conversion_integer_literal_u8() -> Result<(), CompileError> {
     mk_converted_type_value(test_value, res)
 }
 
-
 #[test]
 #[should_panic = "Cannot convert type U8 to type AsPath"]
 fn test_u8_conversion_as_path() {
@@ -442,7 +552,7 @@ fn test_u16() -> Result<(), CompileError> {
     let test_value = U16::new(0_u16);
     let res = U16::new(127);
 
-    test_method_on_type_value(test_value, "set", res)
+    test_consume_method_on_type_value(test_value, "set", res)
 }
 
 #[test]
@@ -451,7 +561,7 @@ fn test_invalid_u16() {
     let test_value = U16::new(0_u16);
     let res = U32::new(127);
 
-    test_method_on_type_value(test_value, "set", res).unwrap();
+    test_consume_method_on_type_value(test_value, "set", res).unwrap();
 }
 
 #[test]
@@ -488,6 +598,15 @@ fn test_conversion_integer_literal_u16() -> Result<(), CompileError> {
     mk_converted_type_value(test_value, res)
 }
 
+#[test]
+fn test_conversion_asn_literal_u16() -> Result<(), CompileError> {
+    let test_value = IntegerLiteral::new(32768);
+    let res = Asn::from(32768_u16);
+
+    mk_converted_type_value(test_value, res)
+}
+
+
 //------------ Test: U32 -----------------------------------------------------
 
 #[test]
@@ -495,7 +614,7 @@ fn test_u32() -> Result<(), CompileError> {
     let test_value = U32::new(2377_u32);
     let res = U32::new(12708786);
 
-    test_method_on_type_value(test_value, "set", res)
+    test_consume_method_on_type_value(test_value, "set", res)
 }
 
 #[test]
@@ -503,7 +622,7 @@ fn test_invalid_u32() {
     let test_value = U32::new(710_u32);
     let res = Asn::from(710_u32);
 
-    test_method_on_type_value(test_value, "set", res).unwrap();
+    test_consume_method_on_type_value(test_value, "set", res).unwrap();
 }
 
 #[test]
@@ -547,7 +666,7 @@ fn test_boolean() -> Result<(), CompileError> {
     let test_value = Boolean::new(true);
     let res = Boolean::new(false);
 
-    test_method_on_type_value(test_value, "set", res)
+    test_consume_method_on_type_value(test_value, "set", res)
 }
 
 #[test]
@@ -557,7 +676,7 @@ fn test_invalid_boolean() {
     let test_value = Boolean::new(true);
     let res = Asn::from(710_u32);
 
-    test_method_on_type_value(test_value, "set", res).unwrap();
+    test_consume_method_on_type_value(test_value, "set", res).unwrap();
 }
 
 #[test]
@@ -566,6 +685,199 @@ fn test_invalid_method_boolean() {
     let test_value = Boolean::new(true);
     let res = Asn::from(710_u32);
 
-    test_method_on_type_value(test_value, "blaffer", res).unwrap();
+    test_consume_method_on_type_value(test_value, "blaffer", res).unwrap();
 }
 
+#[test]
+fn test_conversion_to_string() -> Result<(), CompileError> {
+    let test_value = Boolean::new(true);
+    let res = StringLiteral::new("true".into());
+
+    mk_converted_type_value(test_value, res)
+}
+
+#[test]
+fn test_conversion_from_string() -> Result<(), CompileError> {
+    let test_value = StringLiteral::new("true".into());
+    let res = Boolean::new(true);
+
+    mk_converted_type_value(test_value, res)
+}
+
+//------------ Test: StringLiteral -------------------------------------------
+
+#[test]
+fn test_string_set() -> Result<(), CompileError> {
+    let test_value = StringLiteral::new("blaffer".into());
+    let res = StringLiteral::new("blaffer".into());
+
+    test_consume_method_on_type_value(test_value, "set", res)
+}
+
+#[test]
+fn test_string_format_1() -> Result<(), CompileError> {
+    let test_value = StringLiteral::new("blaffer {}".into());
+    let infix = StringLiteral::new("bluffer".into());
+    let res = StringLiteral::new("blaffer bluffer".into());
+
+    test_method_on_type_value_with_multiple_args(
+        test_value.clone(),
+        MethodType::Type,
+        "format",
+        &[test_value, infix],
+        res,
+    )
+}
+
+// this is kinda' weird, if the format method cannot find the `{}` symbol it
+// will just concatenate the replacement string to the end of the source
+// string.
+#[test]
+fn test_string_format_2() -> Result<(), CompileError> {
+    let test_value = StringLiteral::new("blaffer".into());
+    let infix = StringLiteral::new("bluffer".into());
+    let res = StringLiteral::new("blafferbluffer".into());
+
+    test_method_on_type_value_with_multiple_args(
+        test_value.clone(),
+        MethodType::Type,
+        "format",
+        &[test_value, infix],
+        res,
+    )
+}
+
+#[test]
+fn test_string_cmp_1() -> Result<(), CompileError> {
+    let test_value_1 = StringLiteral::new("blaffer".into());
+    let test_value_2 = StringLiteral::new("blaffer".into());
+
+    test_method_on_type_value_with_multiple_args(
+        test_value_1.clone(),
+        MethodType::Type,
+        "cmp",
+        &[test_value_1, test_value_2],
+        TypeValue::from(Boolean(true)),
+    )
+}
+
+#[test]
+fn test_string_cmp_2() -> Result<(), CompileError> {
+    let test_value_1 = StringLiteral::new("blaffer".into());
+    let test_value_2 = StringLiteral::new("blyffer".into());
+
+    test_method_on_type_value_with_multiple_args(
+        test_value_1.clone(),
+        MethodType::Type,
+        "cmp",
+        &[test_value_1, test_value_2],
+        TypeValue::from(Boolean(false)),
+    )
+}
+
+#[test]
+fn test_string_cmp_3() -> Result<(), CompileError> {
+    let test_value_1 = StringLiteral::new("blaffer".into());
+    let test_value_2 = StringLiteral::new("blaffer".into());
+
+    test_method_on_type_value_with_multiple_args(
+        test_value_1.clone(),
+        MethodType::Value,
+        "cmp",
+        &[test_value_2],
+        TypeValue::from(Boolean(true))
+    )
+}
+
+#[test]
+fn test_string_cmp_4() -> Result<(), CompileError> {
+    let test_value_1 = StringLiteral::new("blaffer".into());
+    let test_value_2 = StringLiteral::new("bloppper".into());
+
+    test_method_on_type_value_with_multiple_args(
+        test_value_1.clone(),
+        MethodType::Value,
+        "cmp",
+        &[test_value_2],
+        TypeValue::from(Boolean(false))
+    )
+}
+
+// We don't do crazy conversions from Boolean to StringLiteral in comparisons.
+#[test]
+#[should_panic = "assertion failed: \
+src_ty.clone().test_type_conversion(arg_ty)"]
+fn test_string_cmp_5() {
+    let test_value_1 = StringLiteral::new("blaffer".into());
+    let test_value_2 = Boolean(true);
+
+    test_method_on_type_value_with_multiple_args(
+        test_value_1.clone(),
+        MethodType::Value,
+        "cmp",
+        &[test_value_2],
+        TypeValue::from(Boolean(false))
+    ).unwrap();
+}
+
+#[test]
+fn test_string_cmp_6() -> Result<(), CompileError> {
+    let test_value_1 = StringLiteral::new("blaffer".into());
+    let test_value_2 = StringLiteral::new("bloppper".into());
+
+    test_consume_method_on_type_value(
+        test_value_1.clone(),
+        "set",
+        test_value_2,
+    )
+}
+
+#[test]
+#[should_panic = r#"called `Result::unwrap()` on an `Err` value: User("Unknown method: '\n\nsd9876ujklkf;j;jgkh' for type StringLiteral")"#]
+fn test_string_cmp_7() {
+    let test_value_1 = StringLiteral::new("blaffer".into());
+    let test_value_2 = StringLiteral::new("bloppper".into());
+
+    test_consume_method_on_type_value(
+        test_value_1.clone(),
+        "\n\nsd9876ujklkf;j;jgkh",
+        test_value_2,
+    ).unwrap();
+}
+
+//------------ Test: IntegerLiteral ------------------------------------------
+
+#[test]
+fn test_integer_literal_1() -> Result<(), CompileError> {
+    let test_value = IntegerLiteral::new(100);
+    let res = Asn::new(100.into());
+
+    mk_converted_type_value(test_value, res)
+}
+
+#[test]
+#[should_panic = r#"called `Result::unwrap()` on an `Err` value: User("Cannot convert type IntegerLiteral > 4294967295 into Asn")"#]
+fn test_integer_literal_2() {
+    let test_value = IntegerLiteral::new(1042949672950);
+    test_value.into_type(&TypeDef::Asn).unwrap();
+}
+
+#[test]
+#[should_panic = r#"called `Result::unwrap()` on an `Err` value: User("Cannot convert type IntegerLiteral < 0 into Asn")"#]
+fn test_integer_literal_3() {
+    let test_value = IntegerLiteral::new(-100);
+    test_value.into_type(&TypeDef::Asn).unwrap();
+}
+
+#[test]
+fn test_integer_literal_4() {
+    let test_value = IntegerLiteral::new(255);
+    test_value.into_type(&TypeDef::U8).unwrap();
+}
+
+#[test]
+#[should_panic = r#"called `Result::unwrap()` on an `Err` value: User("Cannot convert instance of type IntegerLiteral with value 256 into U8")"#]
+fn test_integer_literal_5() {
+    let test_value = IntegerLiteral::new(256);
+    test_value.into_type(&TypeDef::U8).unwrap();
+}
