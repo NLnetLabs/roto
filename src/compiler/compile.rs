@@ -1162,6 +1162,7 @@ fn compile_filter_map(
     // compile the variables used in the terms
     state = compile_assignments(state)?;
 
+    if state.cur_mem_pos == 0 { state.cur_mem_pos = 2 };
     (mir, state) = compile_apply_section(mir, state)?;
 
     state.cur_mir_block = MirBlock::new();
@@ -1243,8 +1244,11 @@ fn compile_assignments(
     {
         // set the mem_pos in state to the counter we use here. Recursive
         // `compile_expr` may increase state.mem_pos to temporarily store
-        // argument variables.
-        state.cur_mem_pos = 1 + state.used_variables.len() as u32;
+        // argument variables. If we already have variables set here, then we
+        // can just increase it, but if there are none, we're going to skip
+        // over 0 and 1, since they should host the RxType and TxType
+        // respectively.
+        state.cur_mem_pos = u32::max(2, 1 + state.used_variables.len() as u32);
         trace!(
             "VAR {:?} MEM POS {} TEMP POS START {}",
             var.0,

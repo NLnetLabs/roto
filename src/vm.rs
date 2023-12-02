@@ -1737,10 +1737,11 @@ impl<
                                 return Err(VmError::InvalidValueType);
                             };
 
-                        let (_args, method_t, return_type) = args.pop_3()?;
+                        let (command_args, method_t, return_type) =
+                            args.pop_3()?;
 
                         let stack_args = self._take_resolved(
-                            _args.get_args_len() as u32,
+                            command_args.get_args_len() as u32,
                             mem,
                         )?;
 
@@ -1839,21 +1840,31 @@ impl<
                         }
                         trace!("stack_args {:?}", stack_args);
 
-                        // The first value on the stack is the value which we
+                        // The last value on the stack is the value which we
                         // are going to call a method with.
                         let call_value = stack_args
-                            .get(0)
+                            .last()
                             .ok_or(VmError::InvalidMethodCall)?
                             .as_ref();
 
-                        trace!("typevalue to call method on {}", call_value);
+                        trace!(
+                            "typevalue to call method with token {:?} on \
+                        {:?} with args {:?}",
+                            method_token,
+                            call_value,
+                            &stack_args[..stack_args.len() - 1]
+                        );
                         let v = call_value.exec_value_method(
                             method_token.try_into()?,
-                            &stack_args[1..],
+                            // all the args on the command stack minus the
+                            // last one
+                            &stack_args[..stack_args.len() - 1],
                             return_type.try_into()?,
                         )?;
+                        trace!("result {v}");
 
                         mem.set_mem_pos(mem_pos, v);
+                        // stack.push(StackRefPos::ConstantValue(v))?;
                     }
                     // stack args: [
                     //      method_token, return_type,
