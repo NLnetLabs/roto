@@ -194,6 +194,14 @@ pub(crate) fn recurse_compile<'a>(
                             ),
                         ]);
                     };
+
+                    // local recursion on the children of the first argument.
+                    parent_token = Some(first_arg.get_token());
+                    for arg in first_arg.get_args() {
+                        trace!("locally recurse tx argument {:?}", arg);
+                        state = recurse_compile(arg, state, parent_token, inc_mem_pos)?;
+                        parent_token = Some(arg.get_token());
+                    }
                     return Ok(state);
                 }
             }
