@@ -15,7 +15,7 @@ use crate::{
     },
     attr_change_set::ScalarValue,
     compiler::compile::CompileError,
-    traits::RotoType,
+    traits::{RotoType, Token},
     vm::{StackValue, VmError, FieldIndex},
 };
 
@@ -25,7 +25,7 @@ use super::{
         HexLiteral, IntegerLiteral, IpAddress, Prefix, PrefixLength,
         RawRouteWithDeltas, StringLiteral, U32, U8,
     },
-    collections::{BytesRecord, ElementTypeValue, LazyRecord, List, Record},
+    collections::{BytesRecord, ElementTypeValue, LazyRecord, List, Record, EnumBytesRecord},
     lazyrecord_types::{
         InitiationMessage, PeerDownNotification, PeerUpNotification,
         RouteMonitoring,
@@ -169,6 +169,40 @@ impl TypeValue {
         };
         Ok(self)
     }
+
+    pub fn mp_is_variant(
+        &self,
+        variant_token: Token,
+    ) -> bool {
+        match self {
+            // We only know how to deal with BmpMessages currently.
+            TypeValue::Builtin(BuiltinTypeValue::BmpMessage(
+                bytes_rec,
+            )) => bytes_rec.is_variant(variant_token),
+            _ => false,
+        }
+    }
+
+    // Return a TypeValue if the memory holds the enum variant specified by
+    // the varian_token. If the memory position holds an enum, but not of the
+    // specified variant, then return TypeValue::Unknown.
+    pub fn get_mp_as_variant_or_unknown(
+        &self,
+        variant_token: Token,
+    ) -> Result<TypeValue, VmError> {
+            if let TypeValue::Builtin(BuiltinTypeValue::BmpMessage(
+                bytes_rec,
+            )) = self
+            {
+                if bytes_rec.is_variant(variant_token) {
+                    Ok(self.clone())
+                } else {
+                    Ok(TypeValue::Unknown)
+                }
+            } else {
+                Err(VmError::InvalidValueType)
+            }
+        }
 }
 
 impl RotoType for TypeValue {

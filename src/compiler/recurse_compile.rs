@@ -248,19 +248,16 @@ pub(crate) fn recurse_compile<'a>(
 
             let val = symbol.get_value();
 
+            // Push the result to the stack for an (optional) next Accessor
+            // to be used.
             state.push_command(
-                OpCode::MemPosSet,
+                OpCode::PushStack,
                 vec![
-                    CommandArg::MemPos(state.cur_mem_pos),
-                    CommandArg::ConstantIndex(
+                    // CommandArg::MemPos(state.cur_mem_pos),
+                    CommandArg::ConstantValue(
                         val.builtin_as_cloned_type_value()?,
                     ),
                 ],
-            );
-
-            state.push_command(
-                OpCode::PushStack,
-                vec![CommandArg::MemPos(state.cur_mem_pos)],
             );
 
             if inc_mem_pos {
@@ -506,13 +503,6 @@ pub(crate) fn recurse_compile<'a>(
                 }
             };
 
-            // Push the result to the stack for an (optional) next Accessor
-            // to be used.
-            state.push_command(
-                OpCode::PushStack,
-                vec![CommandArg::MemPos(state.cur_mem_pos)],
-            );
-
             state.cur_mem_pos += 1;
 
             // Since we already have compiled in the arguments of this symbol
@@ -563,10 +553,10 @@ pub(crate) fn recurse_compile<'a>(
 
                     // Push the computed variant value from the memory
                     // position onto the stack.
-                    state.push_command(
-                        OpCode::PushStack,
-                        vec![CommandArg::MemPos(state.cur_mem_pos)],
-                    );
+                    // state.push_command(
+                    //     OpCode::PushStack,
+                    //     vec![CommandArg::MemPos(state.cur_mem_pos)],
+                    // );
 
                     state
                         .push_command(OpCode::CondUnknownSkipToLabel, vec![]);
@@ -619,10 +609,10 @@ pub(crate) fn recurse_compile<'a>(
                                 args,
                             );
 
-                            state.push_command(
-                                OpCode::PushStack,
-                                vec![CommandArg::MemPos(state.cur_mem_pos)],
-                            );
+                            // state.push_command(
+                            //     OpCode::PushStack,
+                            //     vec![CommandArg::MemPos(state.cur_mem_pos)],
+                            // );
 
                             state.cur_mem_pos += 1;
                         }
@@ -757,10 +747,10 @@ pub(crate) fn recurse_compile<'a>(
 
                 state.push_command(OpCode::LoadLazyFieldValue, args);
 
-                state.push_command(
-                    OpCode::PushStack,
-                    vec![CommandArg::MemPos(state.cur_mem_pos)],
-                );
+                // state.push_command(
+                //     OpCode::PushStack,
+                //     vec![CommandArg::MemPos(state.cur_mem_pos)],
+                // );
 
                 state.push_command(OpCode::CondUnknownSkipToLabel, vec![]);
             };

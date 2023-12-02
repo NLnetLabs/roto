@@ -108,6 +108,12 @@ impl From<u32> for StackRefPos {
     }
 }
 
+impl From<TypeValue> for StackRefPos {
+    fn from(value: TypeValue) -> Self {
+        StackRefPos::ConstantValue(value)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct StackRef {
     pub(crate) pos: StackRefPos,
@@ -231,6 +237,8 @@ impl LinearMemory {
                     Ok(false)
                 }
             }
+            StackRefPos::ConstantValue(TypeValue::Builtin(
+                BuiltinTypeValue::Boolean(Boolean(b)))) => Ok(b),
             StackRefPos::CompareResult(res) => Ok(res),
             _ => Ok(false),
         }
@@ -1754,7 +1762,8 @@ impl<
                                 &stack_args,
                                 return_type.try_into()?,
                             )?;
-                            mem.set_mem_pos(mem_pos, val);
+                            // mem.set_mem_pos(mem_pos, val);
+                            self.stack.borrow_mut().push(val.into())?;
                         }
                     }
                     // stack args: [method_token, return_type,
@@ -1863,8 +1872,8 @@ impl<
                         )?;
                         trace!("result {v}");
 
-                        mem.set_mem_pos(mem_pos, v);
-                        // stack.push(StackRefPos::ConstantValue(v))?;
+                        // mem.set_mem_pos(mem_pos, v);
+                        stack.push(StackRefPos::ConstantValue(v))?;
                     }
                     // stack args: [
                     //      method_token, return_type,
@@ -2015,7 +2024,8 @@ impl<
                             _ => collection_value,
                         };
 
-                        mem.set_mem_pos(mem_pos, result_value);
+                        // mem.set_mem_pos(mem_pos, result_value);
+                        stack.push(StackRefPos::ConstantValue(result_value))?;
                     }
                     // args: [field_index_0, field_index_1, ...,
                     // lazy_record_type, variant_token, return type, store
@@ -2065,6 +2075,9 @@ impl<
                                         trace!("mem: {:#?}", mem.0);
                                         e
                                     })?,
+                                StackRefPos::ConstantValue(type_value) => {
+                                    type_value
+                                }
                                 _ => {
                                     trace!("WHAT? {:?}", sr.pos);
                                     return Err(VmError::InvalidVariant);
@@ -2081,7 +2094,8 @@ impl<
                                             field_index,
                                         )?;
 
-                                    mem.set_mem_pos(mem_pos, v);
+                                    // mem.set_mem_pos(mem_pos, v);
+                                    stack.push(v.into())?;
                                 }
                                 _ => {
                                     return Err(VmError::InvalidValueType);
@@ -2223,6 +2237,7 @@ impl<
                         if let CommandArg::MemPos(pos) = args[0] {
                             let v = args.take_arg_as_constant()?;
                             mem.set_mem_pos(pos as usize, v);
+                            // self.stack.borrow_mut().push(v.into())?;
                         } else {
                             return Err(VmError::InvalidValueType);
                         }
@@ -2261,10 +2276,30 @@ impl<
                         for arg in args.args.iter() {
                             if let CommandArg::Variant(variant_index) = arg {
                                 let mut s = self.stack.borrow_mut();
-                                match s.get_top_value()?.pos {
+                                match &s.get_top_value()?.pos {
+                                    StackRefPos::ConstantValue(type_value) => {
+                                        let val = type_value.mp_is_variant(Token::Variant(*variant_index));
+
+                                        if val {
+                                            let var_val = type_value
+                                                .get_mp_as_variant_or_unknown(
+                                                    Token::Variant(
+                                                        *variant_index,
+                                                    ),
+                                                )?;
+                                            trace!(
+                                                "variant value {:?}",
+                                                var_val
+                                            );
+                                            s.push(var_val.into())?;
+                                        }
+                                        s.push(StackRefPos::CompareResult(
+                                            val,
+                                        ))?;
+                                    }
                                     StackRefPos::MemPos(mem_pos) => {
                                         let val = mem.mp_is_variant(
-                                            mem_pos as usize,
+                                            *mem_pos as usize,
                                             Token::Variant(*variant_index),
                                         );
                                         trace!(
@@ -2274,7 +2309,7 @@ impl<
                                         if val {
                                             let var_val = mem
                                                 .get_mp_as_variant_or_unknown(
-                                                    mem_pos as usize,
+                                                    *mem_pos as usize,
                                                     Token::Variant(
                                                         *variant_index,
                                                     ),
@@ -2283,10 +2318,11 @@ impl<
                                                 "variant value {:?}",
                                                 var_val
                                             );
-                                            mem.set_mem_pos(
-                                                mem_pos as usize,
-                                                var_val,
-                                            );
+                                            // mem.set_mem_pos(
+                                            //     mem_pos as usize,
+                                            //     var_val,
+                                            // );
+                                            s.push(var_val.into())?;
                                         }
                                         s.push(StackRefPos::CompareResult(
                                             val,
@@ -2307,7 +2343,8 @@ impl<
                                         self.arguments.take_value_by_token(
                                             Token::Argument(token_value),
                                         )?;
-                                    mem.set_mem_pos(pos as usize, arg_value);
+                                    // mem.set_mem_pos(pos as usize, arg_value);
+                                    self.stack.borrow_mut().push(arg_value.into())?;
                                 }
                                 _ => {
                                     return Err(VmError::InvalidValueType);
