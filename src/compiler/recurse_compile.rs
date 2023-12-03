@@ -609,11 +609,6 @@ pub(crate) fn recurse_compile<'a>(
                                 args,
                             );
 
-                            // state.push_command(
-                            //     OpCode::PushStack,
-                            //     vec![CommandArg::MemPos(state.cur_mem_pos)],
-                            // );
-
                             state.cur_mem_pos += 1;
                         }
                         SymbolKind::FieldAccess => {
@@ -746,11 +741,6 @@ pub(crate) fn recurse_compile<'a>(
                 ];
 
                 state.push_command(OpCode::LoadLazyFieldValue, args);
-
-                // state.push_command(
-                //     OpCode::PushStack,
-                //     vec![CommandArg::MemPos(state.cur_mem_pos)],
-                // );
 
                 state.push_command(OpCode::CondUnknownSkipToLabel, vec![]);
             };

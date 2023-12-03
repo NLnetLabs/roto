@@ -1934,7 +1934,7 @@ impl<
                                         .get_mem_pos_as_owned(pos as usize)
                                         .ok_or_else(|| {
                                             trace!("\nstack: {:?}", stack);
-                                            trace!("mem: {:#?}", mem.0);
+                                            // trace!("mem: {:#?}", mem.0);
                                             VmError::InvalidMemoryAccess(
                                                 pos as usize,
                                             )
@@ -1956,13 +1956,8 @@ impl<
                                             VmError::InvalidValueType,
                                         );
                                     }
-                                    StackRefPos::ConstantValue(_v) => mem
-                                        .get_mem_pos_as_owned(mem_pos)
-                                        .ok_or_else(|| {
-                                            trace!("\nstack: {:?}", stack);
-                                            trace!("mem: {:#?}", mem.0);
-                                            VmError::InvalidValueType
-                                        })?,
+                                    StackRefPos::ConstantValue(v) => 
+                                        v
                                 }
                             };
 
