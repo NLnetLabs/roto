@@ -99,6 +99,7 @@ pub enum StackRefPos {
     CompareResult(bool),
     // Index pointing to a constant, used for indexing a match variant
     ConstantIndex(u32),
+    // An actual value
     ConstantValue(TypeValue),
 }
 
@@ -1084,7 +1085,7 @@ pub fn compute_hash(
     hasher.finish()
 }
 
-//------------ Variables ----------------------------------------------------
+//------------ CompiledPrimitiveField ----------------------------------------
 
 // Variable Assignments can be of any these types:
 // 1. literal primitive values: a = “AA”;
@@ -1172,6 +1173,8 @@ impl CompiledField {
         }
     }
 }
+
+//------------ CompiledVariable ----------------------------------------------
 
 // This is the data-structure that stores snippets of compiled code (sequences
 // of VM commands) that compute a variable, in a flat, stack-friendly way. For
@@ -1739,19 +1742,12 @@ impl<
                             }
                         }
                     }
-                    // stack args: [type, method_token, args, return memory
-                    // position]
+                    // stack args: [type, method_token, args]
                     OpCode::ExecuteTypeMethod => {
                         if log_enabled!(Level::Trace) {
                             trace!("Stack {:?}", self.stack);
                             trace!("Args {:?}", args);
                         }
-                        let mem_pos =
-                            if let CommandArg::MemPos(pos) = args.pop()? {
-                                *pos as usize
-                            } else {
-                                return Err(VmError::InvalidValueType);
-                            };
 
                         let (command_args, method_t, return_type) =
                             args.pop_3()?;
@@ -1774,17 +1770,9 @@ impl<
                             self.stack.borrow_mut().push(val.into())?;
                         }
                     }
-                    // stack args: [method_token, return_type,
-                    //      arguments, result memory position
-                    // ]
+                    // stack args: [method_token, return_type, arguments]
                     OpCode::ExecuteValueMethod => {
                         trace!("execute value method {:?}", args);
-                        let mem_pos =
-                            if let CommandArg::MemPos(pos) = args.pop()? {
-                                *pos as usize
-                            } else {
-                                return Err(VmError::InvalidValueType);
-                            };
 
                         let args_len: usize = if let CommandArg::Arguments(
                             args,
@@ -1883,18 +1871,9 @@ impl<
                         // mem.set_mem_pos(mem_pos, v);
                         stack.push(StackRefPos::ConstantValue(v))?;
                     }
-                    // stack args: [
-                    //      method_token, return_type,
-                    //      arguments, result memory position
-                    // ]
-                    // pops arguments from the stack
+                    // stack args: [ method_token, return_type, arguments]
+                    //      pops arguments from the stack
                     OpCode::ExecuteConsumeValueMethod => {
-                        let mem_pos =
-                            if let CommandArg::MemPos(pos) = args.pop()? {
-                                *pos as usize
-                            } else {
-                                return Err(VmError::InvalidValueType);
-                            };
 
                         let args_len: usize = if let CommandArg::Arguments(
                             args,
@@ -2031,16 +2010,9 @@ impl<
                         stack.push(StackRefPos::ConstantValue(result_value))?;
                     }
                     // args: [field_index_0, field_index_1, ...,
-                    // lazy_record_type, variant_token, return type, store
-                    // memory position]
+                    // lazy_record_type, variant_token, return type]
                     OpCode::LoadLazyFieldValue => {
                         trace!("load lazy field value {:?}", args);
-                        let mem_pos =
-                            if let CommandArg::MemPos(pos) = args.pop()? {
-                                *pos as usize
-                            } else {
-                                return Err(VmError::InvalidValueType);
-                            };
 
                         let return_type = args.pop();
                         trace!("return_type {:?}", return_type,);
@@ -2341,16 +2313,16 @@ impl<
                         trace!("argument {:#?}", self.arguments);
                         match args.get(0) {
                             Some(CommandArg::Argument(token_value)) => {
-                                    let arg_value =
+                                let arg_value =
                                     self.arguments.get_by_token_value(
                                         Token::Argument(*token_value),
                                     ).ok_or_else(|| VmError::AnonymousArgumentNotFound)?;
                                 // TODO: THIS SHOULD PROBABLY BE CHANGED TO USE AN INDEX TO THE arguments map ON THE VM!
                                 self.stack.borrow_mut().push(StackRefPos::ConstantValue(arg_value.clone()))?;
-                                }
-                                _ => {
-                                    return Err(VmError::InvalidValueType);
-                                }
+                            }
+                            _ => {
+                                return Err(VmError::InvalidValueType);
+                            }
                         }
                     }
                     OpCode::Label => {

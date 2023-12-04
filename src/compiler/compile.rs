@@ -651,9 +651,14 @@ pub(crate) struct CompilerState<'a> {
     // up until the current field index, if the variable is a scalar, then the
     // field index is an empty (small)vec.
     pub(crate) cur_partial_variable: Option<CompiledVariable>,
+    // This keeps track of the depth in the original record, while compiling
+    // recursively.
     pub(crate) cur_record_depth: usize,
+    // This keeps track of the current field we are recursively compiling,
     pub(crate) cur_record_field_index: FieldIndex,
+    // The name of the Record we are currently (recursively) compiling.
     pub(crate) cur_record_field_name: Option<ShortString>,
+    // The type of the Record we are currently (recursively) compiling.
     pub(crate) cur_record_type: Option<RecordTypeDef>,
     // the memory position that is currently empty and available to be
     // written to.

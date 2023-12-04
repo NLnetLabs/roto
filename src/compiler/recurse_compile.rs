@@ -370,8 +370,7 @@ pub(crate) fn recurse_compile<'a>(
                                     .iter()
                                     .map(|s| s.get_type())
                                     .collect::<Vec<_>>(),
-                            ), // argument types and number
-                            CommandArg::MemPos(state.cur_mem_pos),
+                            ),
                         ],
                     );
                 }
@@ -422,8 +421,7 @@ pub(crate) fn recurse_compile<'a>(
                 | Token::Constant(_) => {
                     match kind {
                         SymbolKind::MethodCallbyRef => {
-                            // args: [ method_call, type, arguments,
-                            //         return_type ]
+                            // args: [ method_call, type, arguments ]
                             state.push_command(
                                 OpCode::ExecuteValueMethod,
                                 vec![
@@ -436,14 +434,11 @@ pub(crate) fn recurse_compile<'a>(
                                             .map(|s| s.get_type())
                                             .collect::<Vec<_>>(),
                                     ),
-                                    // argument types and number
-                                    CommandArg::MemPos(state.cur_mem_pos),
                                 ],
                             );
                         }
                         SymbolKind::MethodCallByConsumedValue => {
-                            // args: [ method_call, type, arguments,
-                            //         return_type ]
+                            // args: [ method_call, type, argument]
                             state.push_command(
                                 OpCode::ExecuteConsumeValueMethod,
                                 vec![
@@ -455,9 +450,7 @@ pub(crate) fn recurse_compile<'a>(
                                             .iter()
                                             .map(|s| s.get_type())
                                             .collect::<Vec<_>>(),
-                                    ),
-                                    // argument types and number
-                                    CommandArg::MemPos(state.cur_mem_pos),
+                                    )
                                 ],
                             );
                         }
@@ -538,15 +531,13 @@ pub(crate) fn recurse_compile<'a>(
                     );
 
                     // args: [field_index_0, field_index_1, ...,
-                    // lazy_record_type, variant_token, return type, store
-                    // memory position]
+                    // lazy_record_type, variant_token]
                     let args = vec![
                         CommandArg::FieldIndex(FieldIndex::from(fa)),
                         CommandArg::Type(TypeDef::LazyRecord(
                             LazyRecordTypeDef::from(_var_to),
                         )),
                         CommandArg::Type(symbol.get_type()),
-                        CommandArg::MemPos(state.cur_mem_pos),
                     ];
 
                     state.push_command(OpCode::LoadLazyFieldValue, args);
@@ -601,7 +592,6 @@ pub(crate) fn recurse_compile<'a>(
                                 CommandArg::FieldIndex(FieldIndex::from(fa)),
                                 CommandArg::Type(argument_s.get_type()),
                                 CommandArg::Type(symbol.get_type()),
-                                CommandArg::MemPos(state.cur_mem_pos),
                             ];
 
                             state.push_command(
@@ -737,7 +727,6 @@ pub(crate) fn recurse_compile<'a>(
                     CommandArg::Type(TypeDef::LazyRecord(
                         LazyRecordTypeDef::from(_var_to),
                     )),
-                    CommandArg::MemPos(state.cur_mem_pos),
                 ];
 
                 state.push_command(OpCode::LoadLazyFieldValue, args);

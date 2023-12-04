@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
 use log::trace;
-use roto::{blocks::Scope, compiler::{CompileError, Compiler}, types::{builtin::{BgpUpdateMessage, UpdateMessage, RotondaId, RawRouteWithDeltas, RouteStatus}, collections::Record, typevalue::TypeValue}, vm::{VmResult, self}, types::builtin::Prefix, ast::AcceptReject};
-use routecore::bgp::{message::SessionConfig, self};
+use roto::{blocks::Scope, compiler::Compiler, types::{builtin::{UpdateMessage, RotondaId, RawRouteWithDeltas, RouteStatus}, collections::Record}, vm::{VmResult, self}, types::builtin::Prefix, ast::AcceptReject};
+use routecore::bgp::message::SessionConfig;
 use routes::bmp::encode::{mk_bgp_update, mk_per_peer_header, Prefixes, Announcements};
 
 mod common;

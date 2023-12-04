@@ -1,22 +1,19 @@
-#![cfg(test)]
-
-use super::{
-    AsPath, Asn, Boolean, IntegerLiteral, PrefixLength, StringLiteral, U16,
-    U8,
-};
-use crate::types::builtin::BuiltinTypeValue;
-use crate::types::typedef::TypeDef;
-use crate::types::typevalue::TypeValue;
-use crate::{compiler::CompileError, traits::RotoType, types::builtin::U32};
-
-enum MethodType {
-    Value,
-    Type,
-    Consume,
-}
-
 #[cfg(test)]
 mod route {
+    use super::super::{
+        AsPath, Asn, Boolean, IntegerLiteral, PrefixLength, StringLiteral, U16,
+        U8,
+    };
+    use crate::types::builtin::BuiltinTypeValue;
+    use crate::types::typedef::TypeDef;
+    use crate::types::typevalue::TypeValue;
+    use crate::{compiler::CompileError, traits::RotoType, types::builtin::U32};
+    
+    enum MethodType {
+        Value,
+        Type,
+        Consume,
+    }
     use routecore::bgp::{
         message::{
             nlri::{BasicNlri, Nlri},
@@ -27,11 +24,20 @@ mod route {
 
     use crate::{
         types::builtin::{
-            Asn, Prefix, RawRouteWithDeltas, RotondaId, RouteStatus,
+            Prefix, RawRouteWithDeltas, RotondaId, RouteStatus,
             UpdateMessage,
         },
         vm::VmError,
     };
+
+    use std::io::Write;
+
+    pub fn init() {
+        let _ = env_logger::builder()
+            .format(|buf, record| writeln!(buf, "{}", record.args()))
+            .is_test(true)
+            .try_init();
+    }
 
     #[test]
     fn create_update_msg() -> Result<(), VmError> {
@@ -315,7 +321,6 @@ mod route {
 
         Ok(())
     }
-}
 
 // This tests operates in the same order as the Roto Compiler, i.e. it first
 // extracts the typedef from the TypeValue,then tests a possible
@@ -334,6 +339,7 @@ where
     BuiltinTypeValue: From<RT>,
     BuiltinTypeValue: From<TT>,
 {
+    init();
     // The type definition of the from value
     let src_ty: TypeDef = <BuiltinTypeValue>::from(from_value.clone()).into();
     let m = RT::get_props_for_method(
@@ -480,6 +486,7 @@ where
 // From U8(StringLiteral,U16,U32,PrefixLength,IntegerLiteral;),
 #[test]
 fn test_u8() -> Result<(), CompileError> {
+    init();
     let test_value = U8::new(0_u8);
     let res = U8::new(127);
 
@@ -488,6 +495,8 @@ fn test_u8() -> Result<(), CompileError> {
 
 #[test]
 fn test_u8_to_u16() -> Result<(), CompileError> {
+    init();
+
     let test_value = U8::new(0_u8);
     let res = U16::new(127);
 
@@ -497,6 +506,8 @@ fn test_u8_to_u16() -> Result<(), CompileError> {
 #[test]
 #[should_panic = "src_ty.clone().test_type_conversion(arg_ty)"]
 fn test_invalid_u8_to_as_path() {
+    init();
+
     let test_value = U8::new(0_u8);
     let arg = AsPath::new(vec![24.into()]).unwrap();
 
@@ -505,6 +516,8 @@ fn test_invalid_u8_to_as_path() {
 
 #[test]
 fn test_u8_conversion_prefix_length() -> Result<(), CompileError> {
+    init();
+
     let test_value = U8::new(24_u8);
     let res = PrefixLength::new(24);
 
@@ -880,4 +893,5 @@ fn test_integer_literal_4() {
 fn test_integer_literal_5() {
     let test_value = IntegerLiteral::new(256);
     test_value.into_type(&TypeDef::U8).unwrap();
+}
 }
