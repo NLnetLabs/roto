@@ -820,6 +820,10 @@ impl<'a> CommandArgsStack<'a> {
 
         Err(VmError::StackUnderflow)
     }
+
+    pub(crate) fn get(&self, index: usize) -> Option<&CommandArg> {
+        self.args.get(index)
+    }
 }
 
 impl<'a> Index<usize> for CommandArgsStack<'a> {
@@ -968,6 +972,10 @@ impl FilterMapArgs {
             )
             .into());
         }
+
+        // Sort the arguments on the Token::Argument(), so that in the future
+        // the stack can use that index directly on the VMs arguments map.
+        arguments_map.0.sort_by_key(|a| a.get_index());
 
         Ok(arguments_map)
     }
@@ -2328,25 +2336,21 @@ impl<
                             }
                         }
                     }
-                    // stack args: [arg_token_value, mem_pos]
-                    OpCode::ArgToMemPos => {
+                    // stack args: [arg_token_value]
+                    OpCode::PushArgToStack => {
                         trace!("argument {:#?}", self.arguments);
-                        if let CommandArg::MemPos(pos) = args[1] {
-                            match args[0] {
-                                CommandArg::Argument(token_value) => {
+                        match args.get(0) {
+                            Some(CommandArg::Argument(token_value)) => {
                                     let arg_value =
-                                        self.arguments.take_value_by_token(
-                                            Token::Argument(token_value),
-                                        )?;
-                                    // mem.set_mem_pos(pos as usize, arg_value);
-                                    self.stack.borrow_mut().push(arg_value.into())?;
+                                    self.arguments.get_by_token_value(
+                                        Token::Argument(*token_value),
+                                    ).ok_or_else(|| VmError::AnonymousArgumentNotFound)?;
+                                // TODO: THIS SHOULD PROBABLY BE CHANGED TO USE AN INDEX TO THE arguments map ON THE VM!
+                                self.stack.borrow_mut().push(StackRefPos::ConstantValue(arg_value.clone()))?;
                                 }
                                 _ => {
                                     return Err(VmError::InvalidValueType);
                                 }
-                            }
-                        } else {
-                            return Err(VmError::InvalidValueType);
                         }
                     }
                     OpCode::Label => {
@@ -2878,7 +2882,7 @@ impl Display for Command {
             OpCode::PopStack => "->",
             OpCode::ClearStack => "::",
             OpCode::MemPosSet => "->",
-            OpCode::ArgToMemPos => "->",
+            OpCode::PushArgToStack => "->",
             OpCode::StackOffset => "",
             OpCode::StackIsVariant => {
                 return write!(
@@ -3088,7 +3092,8 @@ pub enum OpCode {
     // pop the enum instance of the stack.
     StackIsVariant,
     MemPosSet,
-    ArgToMemPos,
+    // Push a user-defined argument to the stack.
+    PushArgToStack,
     // Conditionally skip to the end ot the MIR block.
     SkipToEOB,
     // Skip to the end of the MIR block if the top of the stack holds a

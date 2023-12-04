@@ -116,10 +116,10 @@ pub(crate) fn recurse_compile<'a>(
                 );
             } else {
                 state.push_command(
-                    OpCode::ArgToMemPos,
+                    OpCode::PushArgToStack,
                     vec![
                         CommandArg::Argument(arg_to),
-                        CommandArg::MemPos(state.cur_mem_pos),
+                        // CommandArg::MemPos(state.cur_mem_pos),
                     ],
                 );
             }
