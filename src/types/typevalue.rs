@@ -1230,6 +1230,17 @@ impl From<crate::ast::AsnLiteral> for TypeValue {
     }
 }
 
+impl From<crate::ast::StandardCommunityLiteral> for TypeValue {
+    fn from(value: crate::ast::StandardCommunityLiteral) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::Community(
+            Community(
+                routecore::bgp::communities::StandardCommunity::new(value.0.into(), 
+                routecore::bgp::communities::Tag::new(value.1)).into()
+            )
+        ))
+    }
+}
+
 impl From<crate::ast::HexLiteral> for TypeValue {
     fn from(value: crate::ast::HexLiteral) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::HexLiteral(HexLiteral(value.0)))

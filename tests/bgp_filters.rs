@@ -78,6 +78,8 @@ fn test_data(
     Ok((res, payload))
 }
 
+//------------ Test: AS PATHS ------------------------------------------------
+
 #[test]
 fn test_as_path_1() {
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
@@ -136,4 +138,192 @@ fn test_as_path_2() {
     ).unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
+}
+
+#[test]
+fn test_as_path_3() {
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.as-path.origin() == AS456;
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
+}
+
+#[test]
+fn test_as_path_4() {
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.as-path.origin() == AS789;
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
+}
+
+#[test]
+fn test_as_path_5() {
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.as-path.origin() == AS123;
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
+}
+
+//------------ Test: Communities ---------------------------------------------
+
+#[test]
+fn test_as_path_6() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.communities.contains(123:44);
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
+}
+
+#[test]
+fn test_as_path_7() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.communities.contains(123:45);
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
+}
+
+#[test]
+fn test_as_path_8() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.communities.contains(122:45);
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
 }

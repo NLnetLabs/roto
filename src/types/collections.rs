@@ -218,6 +218,9 @@ impl From<ValueExpr> for ElementTypeValue {
             ValueExpr::AsnLiteral(asn_lit) => {
                 ElementTypeValue::Primitive(asn_lit.into())
             }
+            ValueExpr::StandardCommunityLiteral(s_comm_lit) => {
+                ElementTypeValue::Primitive(s_comm_lit.into())
+            }
             ValueExpr::HexLiteral(hex_lit) => {
                 ElementTypeValue::Primitive(hex_lit.into())
             }
@@ -515,7 +518,7 @@ impl RotoType for List {
                 "contains" => Ok(MethodProps::new(
                     TypeDef::Boolean,
                     ListToken::Contains.into(),
-                    vec![],
+                    vec![*list_ty_def.clone()],
                 )),
                 _ => Err(format!(
                     "Unknown method '{}' for list",
@@ -545,7 +548,8 @@ impl RotoType for List {
             ListToken::Len => Ok(TypeValue::Builtin(BuiltinTypeValue::U32(
                 U32(self.0.len() as u32),
             ))),
-            ListToken::Contains if args.len() == 1=> {
+            ListToken::Contains if args.len() == 1 => {
+                trace!("contains on collection, search: {:?}", args);
                 Ok(self.iter().any(|e| e == args[0]).into())
             }
             _ => Err(VmError::InvalidMethodCall),

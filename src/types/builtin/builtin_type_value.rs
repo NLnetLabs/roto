@@ -286,6 +286,12 @@ impl From<routecore::addr::Prefix> for BuiltinTypeValue {
     }
 }
 
+impl From<crate::types::builtin::primitives::Community> for BuiltinTypeValue {
+    fn from(value: crate::types::builtin::primitives::Community) -> Self {
+        BuiltinTypeValue::Community(value)
+    }
+}
+
 impl From<crate::types::builtin::primitives::IpAddress> for BuiltinTypeValue {
     fn from(value: crate::types::builtin::primitives::IpAddress) -> Self {
         BuiltinTypeValue::IpAddress(value)

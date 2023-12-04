@@ -2,7 +2,9 @@ use std::{borrow, cmp, fmt, hash, ops, str};
 
 use log::trace;
 use nom::branch::{alt, permutation};
-use nom::bytes::complete::{is_not, take, take_while, take_while1};
+use nom::bytes::complete::{
+    is_not, take, take_while, take_while1, take_while_m_n,
+};
 use nom::character::complete::{char, digit1, multispace0, multispace1};
 use nom::combinator::{all_consuming, cut, map_res, not, opt, recognize};
 use nom::error::{
@@ -14,7 +16,7 @@ use nom::multi::{
 use nom::sequence::{
     delimited, pair, preceded, separated_pair, terminated, tuple,
 };
-use nom::Finish;
+use nom::{Finish, AsChar};
 use nom::{
     bytes::complete::{tag, take_until},
     character::complete::char as tag_char,
@@ -25,7 +27,7 @@ use serde::{Serialize, Serializer};
 use smallvec::SmallVec;
 
 use crate::compiler::error::CompileError;
-use crate::types::builtin::{Asn, Boolean};
+use crate::types::builtin::{Asn, Boolean, Community};
 use crate::{first_into_compile_err, parse_string};
 
 /// ======== Root ===========================================================
@@ -1994,7 +1996,60 @@ impl From<&'_ AsnLiteral> for Asn {
     }
 }
 
-//------------ FloatLiteral -------------------------------------------------
+//------------ StandardCommunityLiteral --------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct StandardCommunityLiteral(pub u16, pub u16);
+
+impl StandardCommunityLiteral {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (asn, value)) = context(
+            "Standard Community Literal",
+            separated_pair(
+                take_while_m_n(1, 5, |ch: char| ch.is_dec_digit()),
+                tag(":"),
+                take_while_m_n(1, 5, |ch: char| ch.is_dec_digit()),
+            ),
+        )(input)?;
+
+        let asn = asn.parse::<u16>().map_err(|e| {
+            nom::Err::Failure(VerboseError::from_external_error(
+                input,
+                nom::error::ErrorKind::AlphaNumeric,
+                e,
+            ))
+        })?;
+
+        let value = value.parse::<u16>().map_err(|e| {
+            nom::Err::Failure(VerboseError::from_external_error(
+                input,
+                nom::error::ErrorKind::AlphaNumeric,
+                e,
+            ))
+        })?;
+        Ok((input, Self(asn, value)))
+    }
+}
+
+impl From<&'_ StandardCommunityLiteral> for ShortString {
+    fn from(literal: &StandardCommunityLiteral) -> Self {
+        ShortString::from(literal.0.to_string().as_str())
+    }
+}
+
+impl From<&'_ StandardCommunityLiteral> for Community {
+    fn from(literal: &StandardCommunityLiteral) -> Self {
+        Community(
+            routecore::bgp::communities::StandardCommunity::new(
+                literal.0.into(),
+                routecore::bgp::communities::Tag::new(literal.1),
+            )
+            .into(),
+        )
+    }
+}
+
+//------------ FloatLiteral --------------------------------------------------
 
 /// A float literal is a sequence of digits with a decimal point.
 /// FloatLiteral ::= [0-9]+ '.' [0-9]+
@@ -2148,6 +2203,7 @@ pub enum ValueExpr {
     IntegerLiteral(IntegerLiteral),
     PrefixLengthLiteral(PrefixLengthLiteral),
     AsnLiteral(AsnLiteral),
+    StandardCommunityLiteral(StandardCommunityLiteral),
     HexLiteral(HexLiteral),
     BooleanLit(BooleanLiteral),
     PrefixMatchExpr(PrefixMatchExpr),
@@ -2166,6 +2222,10 @@ impl ValueExpr {
         alt((
             map(StringLiteral::parse, ValueExpr::StringLiteral),
             map(HexLiteral::parse, ValueExpr::HexLiteral),
+            map(
+                StandardCommunityLiteral::parse,
+                ValueExpr::StandardCommunityLiteral,
+            ),
             map(IntegerLiteral::parse, ValueExpr::IntegerLiteral),
             map(PrefixLengthLiteral::parse, ValueExpr::PrefixLengthLiteral),
             map(AsnLiteral::parse, ValueExpr::AsnLiteral),

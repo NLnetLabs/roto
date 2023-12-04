@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 
 use log::{debug, error, trace};
 use routecore::asn::LongSegmentError;
@@ -937,9 +938,9 @@ impl RotoType for IntegerLiteral {
             TypeDef::IntegerLiteral => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(self)))
             }
-            TypeDef::StringLiteral => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::StringLiteral(self.into())))
-            }
+            TypeDef::StringLiteral => Ok(TypeValue::Builtin(
+                BuiltinTypeValue::StringLiteral(self.into()),
+            )),
             TypeDef::PrefixLength => match self.0 {
                 0..=128 => {
                     Ok(TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
@@ -954,16 +955,27 @@ impl RotoType for IntegerLiteral {
             },
             TypeDef::Asn => match self.0 {
                 0..=4294967295 => {
-                    Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(routecore::asn::Asn::from(self.0 as u32)))))
-                },
-                i if i < 0 => Err(CompileError::from("Cannot convert type IntegerLiteral < 0 into Asn".to_string())),
-                _ => Err(CompileError::from("Cannot convert type IntegerLiteral > 4294967295 into Asn".to_string()))
-            }
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(
+                        routecore::asn::Asn::from(self.0 as u32),
+                    ))))
+                }
+                i if i < 0 => Err(CompileError::from(
+                    "Cannot convert type \
+                IntegerLiteral < 0 into Asn"
+                        .to_string(),
+                )),
+                _ => Err(CompileError::from(
+                    "Cannot convert type \
+                IntegerLiteral > 4294967295 into Asn"
+                        .to_string(),
+                )),
+            },
             TypeDef::U32 => u32::try_from(self.0)
                 .map(|v| TypeValue::Builtin(BuiltinTypeValue::U32(U32(v))))
                 .map_err(|_| {
                     CompileError::from(format!(
-                        "Cannot convert instanc of type IntegerLiteral with value {} into U32",
+                        "Cannot convert instanc of type IntegerLiteral with \
+                        value {} into U32",
                         self.0
                     ))
                 }),
@@ -971,7 +983,8 @@ impl RotoType for IntegerLiteral {
                 .map(|v| TypeValue::Builtin(BuiltinTypeValue::U8(U8(v))))
                 .map_err(|_| {
                     CompileError::from(format!(
-                        "Cannot convert instance of type IntegerLiteral with value {} into U8",
+                        "Cannot convert instance of type IntegerLiteral with \
+                        value {} into U8",
                         self.0
                     ))
                 }),
@@ -979,21 +992,30 @@ impl RotoType for IntegerLiteral {
                 .map(|v| TypeValue::Builtin(BuiltinTypeValue::U16(U16(v))))
                 .map_err(|_| {
                     CompileError::from(format!(
-                        "Cannot convert instance of type IntegerLiteral with value {} into U16",
+                        "Cannot convert instance of type IntegerLiteral with \
+                        value {} into U16",
                         self.0
                     ))
                 }),
             TypeDef::ConstEnumVariant(e_num) => match self.0 {
-                0..=255 =>
-                    Ok(TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(EnumVariant { enum_name: e_num.clone(), value: u8::try_from(self.0)
-                        .map_err(|_| CompileError::from(
-                            format!("Cannot convert type IntegerLiteral with \
-                            value '{}' into Enum Variant with name '{}'", self.0, e_num)))?
-                         })
-                    )),
-                _ => Err(CompileError::from(format!("Cannot convert type \
-                IntegerLiteral > 255 into ConstU8Variant of type {}", e_num)))
-            }
+                0..=255 => Ok(TypeValue::Builtin(
+                    BuiltinTypeValue::ConstU8EnumVariant(EnumVariant {
+                        enum_name: e_num.clone(),
+                        value: u8::try_from(self.0).map_err(|_| {
+                            CompileError::from(format!(
+                                "Cannot convert type IntegerLiteral with \
+                            value '{}' into Enum Variant with name '{}'",
+                                self.0, e_num
+                            ))
+                        })?,
+                    }),
+                )),
+                _ => Err(CompileError::from(format!(
+                    "Cannot convert type \
+                IntegerLiteral > 255 into ConstU8Variant of type {}",
+                    e_num
+                ))),
+            },
             _ => Err(format!(
                 "Cannot convert type IntegerLiteral to type {:?}",
                 type_def
@@ -1121,7 +1143,8 @@ impl RotoType for HexLiteral {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::HexLiteral(self)))
             }
             TypeDef::Community => {
-                // still bogus, but at least it should convert from the hexliteral type.
+                // still bogus, but at least it should convert from the
+                // hexliteral type.
                 let c = routecore::bgp::communities::Community::from(
                     self.0.to_be_bytes(),
                 );
@@ -1218,7 +1241,7 @@ impl From<HexLiteralToken> for usize {
     }
 }
 
-// ----------- Prefix type --------------------------------------------------
+// ----------- Prefix type ---------------------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Serialize)]
 pub struct Prefix(pub(crate) routecore::addr::Prefix);
@@ -1410,7 +1433,7 @@ impl From<PrefixToken> for usize {
     }
 }
 
-//------------ PrefixLengthLiteral type -------------------------------------
+//------------ PrefixLengthLiteral type --------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Serialize)]
 pub struct PrefixLength(pub(crate) u8);
@@ -2022,10 +2045,15 @@ impl RotoType for Community {
         Self: std::marker::Sized,
     {
         match method_name.ident.as_str() {
+            "set" => Ok(MethodProps::new(
+                TypeDef::Community,
+                CommunityToken::Set.into(),
+                vec![TypeDef::Community],
+            )),
             "from" => Ok(MethodProps::new(
                 TypeDef::Community,
                 CommunityToken::From.into(),
-                vec![TypeDef::U32],
+                vec![TypeDef::StringLiteral],
             )),
             "standard" => Ok(MethodProps::new(
                 TypeDef::Community,
@@ -2073,6 +2101,9 @@ impl RotoType for Community {
             TypeDef::Community => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::Community(self)))
             }
+            TypeDef::StringLiteral => Ok(TypeValue::Builtin(
+                BuiltinTypeValue::StringLiteral(self.into()),
+            )),
             _ => Err(format!(
                 "Cannot convert type Community to type {:?}",
                 type_def
@@ -2083,21 +2114,55 @@ impl RotoType for Community {
 
     fn exec_value_method(
         &self,
-        _method_token: usize,
+        method_token: usize,
 
-        _args: &[StackValue],
+        args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        todo!()
+        match method_token.try_into()? {
+            CommunityToken::Set => {
+                if let TypeValue::Builtin(BuiltinTypeValue::Community(comm)) = 
+                    args.get(0).ok_or(VmError::InvalidMethodCall)?.as_ref() {
+                        Ok(TypeValue::from(*comm))
+                } else {
+                    Err(VmError::InvalidMethodCall)
+                }
+            }
+            CommunityToken::From => todo!(),
+            CommunityToken::Standard => todo!(),
+            CommunityToken::Extended => todo!(),
+            CommunityToken::Large => todo!(),
+            CommunityToken::As => todo!(),
+            CommunityToken::Value => todo!(),
+            CommunityToken::Exists => todo!(),
+        }
     }
 
     fn exec_consume_value_method(
         self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
+        method_token: usize,
+        mut args: Vec<TypeValue>,
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        todo!()
+        match method_token.try_into()? {  
+            CommunityToken::Set => {
+                if let Ok(TypeValue::Builtin(BuiltinTypeValue::Community(
+                    comm_lit,
+                ))) = args.remove(0).into_type(&TypeDef::Community)
+                {
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::Community(comm_lit)))
+                } else {
+                    Err(VmError::InvalidValueType)
+                }
+            }
+            CommunityToken::From => todo!(),
+            CommunityToken::Standard => todo!(),
+            CommunityToken::Extended => todo!(),
+            CommunityToken::Large => todo!(),
+            CommunityToken::As => todo!(),
+            CommunityToken::Value => todo!(),
+            CommunityToken::Exists => todo!(),
+        }
     }
 
     fn exec_type_method<'a>(
@@ -2147,6 +2212,15 @@ impl From<Vec<routecore::bgp::communities::Community>> for BuiltinTypeValue {
     }
 }
 
+impl TryFrom<&str> for Community {
+    type Error = VmError;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        routecore::bgp::communities::Community::from_str(value)
+            .map(Community::new)
+            .map_err(|_| VmError::InvalidConversion)
+    }
+}
+
 impl Display for Community {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if !f.alternate() {
@@ -2166,6 +2240,7 @@ pub enum CommunityToken {
     As,
     Value,
     Exists,
+    Set,
 }
 
 impl TryFrom<usize> for CommunityToken {
@@ -2180,6 +2255,7 @@ impl TryFrom<usize> for CommunityToken {
             4 => Ok(CommunityToken::As),
             5 => Ok(CommunityToken::Value),
             6 => Ok(CommunityToken::Exists),
+            7 => Ok(CommunityToken::Set),
             _ => {
                 debug!("Unknown token value: {}", val);
                 Err(VmError::InvalidMethodCall)

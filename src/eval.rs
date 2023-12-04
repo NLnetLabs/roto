@@ -1727,6 +1727,15 @@ impl ast::ValueExpr {
                     Token::Constant(None),
                 ))
             }
+            ast::ValueExpr::StandardCommunityLiteral(std_comm_lit) => {
+                Ok(symbols::Symbol::new_with_value(
+                    std_comm_lit.into(),
+                    SymbolKind::Constant,
+                    TypeValue::Builtin(BuiltinTypeValue::Community(std_comm_lit.into())),
+                    vec![],
+                    Token::Constant(None),
+                ))
+            }
             ast::ValueExpr::BooleanLit(bool_lit) => {
                 Ok(symbols::Symbol::new_with_value(
                     bool_lit.into(),
