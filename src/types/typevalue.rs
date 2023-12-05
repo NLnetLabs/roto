@@ -1230,14 +1230,25 @@ impl From<crate::ast::AsnLiteral> for TypeValue {
     }
 }
 
-impl From<crate::ast::StandardCommunityLiteral> for TypeValue {
-    fn from(value: crate::ast::StandardCommunityLiteral) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Community(
-            Community(
-                routecore::bgp::communities::StandardCommunity::new(value.0.into(), 
-                routecore::bgp::communities::Tag::new(value.1)).into()
-            )
-        ))
+impl TryFrom<crate::ast::StandardCommunityLiteral> for TypeValue {
+    type Error = CompileError;
+
+    fn try_from(value: crate::ast::StandardCommunityLiteral) -> Result<Self, Self::Error> {
+        let comm = (&value).try_into()?;
+        Ok(TypeValue::Builtin(BuiltinTypeValue::Community(
+                comm
+        )))
+    }
+}
+
+impl TryFrom<crate::ast::ExtendedCommunityLiteral> for TypeValue {
+    type Error = CompileError;
+
+    fn try_from(value: crate::ast::ExtendedCommunityLiteral) -> Result<Self, Self::Error> {
+        let comm = (&value).try_into()?;
+        Ok(TypeValue::Builtin(BuiltinTypeValue::Community(
+                comm
+        )))
     }
 }
 
@@ -1253,20 +1264,26 @@ impl From<crate::ast::BooleanLiteral> for TypeValue {
     }
 }
 
-impl From<ListValueExpr> for TypeValue {
-    fn from(value: ListValueExpr) -> Self {
-        TypeValue::List(value.into())
+impl TryFrom<ListValueExpr> for TypeValue {
+    type Error = CompileError;
+
+    fn try_from(value: ListValueExpr) -> Result<Self, Self::Error> {
+        Ok(TypeValue::List(value.try_into()?))
     }
 }
 
-impl From<AnonymousRecordValueExpr> for TypeValue {
-    fn from(value: AnonymousRecordValueExpr) -> Self {
-        TypeValue::Record(value.into())
+impl TryFrom<AnonymousRecordValueExpr> for TypeValue {
+    type Error = CompileError;
+
+    fn try_from(value: AnonymousRecordValueExpr) -> Result<Self, Self::Error> {
+        Ok(TypeValue::Record(value.try_into()?))
     }
 }
 
-impl From<TypedRecordValueExpr> for TypeValue {
-    fn from(value: TypedRecordValueExpr) -> Self {
-        TypeValue::Record(Record::from(value))
+impl TryFrom<TypedRecordValueExpr> for TypeValue {
+    type Error = CompileError;
+
+    fn try_from(value: TypedRecordValueExpr) -> Result<Self, Self::Error> {
+        Ok(TypeValue::Record(Record::try_from(value)?))
     }
 }

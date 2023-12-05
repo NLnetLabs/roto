@@ -16,7 +16,7 @@ mod route {
         Type,
         Consume,
     }
-    use routecore::bgp::communities::{StandardCommunity, Tag};
+    use routecore::bgp::communities::{StandardCommunity, Tag, ExtendedCommunity};
     use routecore::bgp::{
         message::{
             nlri::{BasicNlri, Nlri},
@@ -935,13 +935,33 @@ src_ty.clone().test_type_conversion(arg_ty)"]
     #[test]
     fn test_standard_community_3() -> Result<(), CompileError> {
         init();
-        
+
         let test_value: Community =
             Community(routecore::bgp::communities::Community::from(
                 StandardCommunity::new(
                     routecore::asn::Asn16::from(12500),
                     Tag::new(7890),
                 ),
+            ));
+        let res = Community(routecore::bgp::communities::Community::from(
+            StandardCommunity::new(
+                routecore::asn::Asn16::from(7500),
+                Tag::new(3000),
+            ),
+        ));
+
+        test_consume_method_on_type_value(test_value, "set", res)
+    }
+
+    #[test]
+    fn test_ext_community_1() -> Result<(), CompileError> {
+        init();
+        
+        let test_value: Community =
+            Community(routecore::bgp::communities::Community::from(
+                ExtendedCommunity::from_str(
+                    "ro:123:456"
+                ).unwrap(),
             ));
         let res = Community(routecore::bgp::communities::Community::from(
             StandardCommunity::new(

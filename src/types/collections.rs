@@ -202,42 +202,49 @@ impl Default for ElementTypeValue {
 }
 
 // Conversion for Records. Records hold `ElementTypeValue`s, the literals
-// provided by the user in a a Roto script need to be converted.
-impl From<ValueExpr> for ElementTypeValue {
-    fn from(value: ValueExpr) -> Self {
+// provided by the user in a a Roto script need to be converted. This returns
+// a Result because the conversion may fail in the eval() phase, where we have
+// syntactically correct structures, but they overflow or have unknown values.
+impl TryFrom<ValueExpr> for ElementTypeValue {
+    type Error = CompileError;
+
+    fn try_from(value: ValueExpr) -> Result<Self, Self::Error> {
         match value {
             ValueExpr::StringLiteral(s_lit) => {
-                ElementTypeValue::Primitive(s_lit.into())
+                Ok(ElementTypeValue::Primitive(s_lit.into()))
             }
             ValueExpr::IntegerLiteral(i_lit) => {
-                ElementTypeValue::Primitive(i_lit.into())
+                Ok(ElementTypeValue::Primitive(i_lit.into()))
             }
             ValueExpr::PrefixLengthLiteral(pl_lit) => {
-                ElementTypeValue::Primitive(pl_lit.into())
+                Ok(ElementTypeValue::Primitive(pl_lit.into()))
             }
             ValueExpr::AsnLiteral(asn_lit) => {
-                ElementTypeValue::Primitive(asn_lit.into())
+                Ok(ElementTypeValue::Primitive(asn_lit.into()))
             }
             ValueExpr::StandardCommunityLiteral(s_comm_lit) => {
-                ElementTypeValue::Primitive(s_comm_lit.into())
+                Ok(ElementTypeValue::Primitive(s_comm_lit.try_into()?))
+            }
+            ValueExpr::ExtendedCommunityLiteral(e_comm_lit) => {
+                Ok(ElementTypeValue::Primitive(e_comm_lit.try_into()?))
             }
             ValueExpr::HexLiteral(hex_lit) => {
-                ElementTypeValue::Primitive(hex_lit.into())
+                Ok(ElementTypeValue::Primitive(hex_lit.into()))
             }
             ValueExpr::BooleanLit(bool_lit) => {
-                ElementTypeValue::Primitive(bool_lit.into())
+                Ok(ElementTypeValue::Primitive(bool_lit.into()))
             }
             ValueExpr::PrefixMatchExpr(_) => todo!(),
             ValueExpr::ComputeExpr(_) => todo!(),
             ValueExpr::RootMethodCallExpr(_) => todo!(),
             ValueExpr::AnonymousRecordExpr(rec) => {
-                ElementTypeValue::Nested(Box::new(rec.into()))
+                Ok(ElementTypeValue::Nested(Box::new(rec.try_into()?)))
             }
             ValueExpr::TypedRecordExpr(rec) => {
-                ElementTypeValue::Nested(Box::new(rec.into()))
+                Ok(ElementTypeValue::Nested(Box::new(rec.try_into()?)))
             }
             ValueExpr::ListExpr(list) => {
-                ElementTypeValue::Nested(Box::new(list.into()))
+                Ok(ElementTypeValue::Nested(Box::new(list.try_into()?)))
             }
         }
     }
@@ -590,15 +597,19 @@ impl RotoType for List {
     }
 }
 
-impl From<ListValueExpr> for List {
-    fn from(value: ListValueExpr) -> Self {
-        List(
-            value
-                .values
-                .iter()
-                .map(|v| v.clone().into())
-                .collect::<Vec<_>>(),
-        )
+impl TryFrom<ListValueExpr> for List {
+    type Error = CompileError;
+
+    fn try_from(value: ListValueExpr) -> Result<Self, Self::Error> {
+        let mut lvs = vec![];
+        for v in value.values.iter() {
+            match v.clone().try_into() {
+                Ok(v) => { lvs.push(v) },
+                Err(e) => { return Err(e); }
+            };
+        }
+
+        Ok(List(lvs))
     }
 }
 
@@ -1049,29 +1060,39 @@ impl Serialize for Record {
 
 // Value Expressions that contain a Record parsed as a pair of
 // (field_name, value) pairs. This turns it into an actual Record.
-impl From<AnonymousRecordValueExpr> for Record {
-    fn from(value: AnonymousRecordValueExpr) -> Self {
+impl TryFrom<AnonymousRecordValueExpr> for Record {
+    type Error = CompileError;
+
+    fn try_from(value: AnonymousRecordValueExpr) -> Result<Self, Self::Error> {
         trace!("FROM ANONYMOUS RECORD VALUE EXPR");
-        let mut kvs: Vec<(ShortString, ElementTypeValue)> = value
-            .key_values
-            .iter()
-            .map(|(s, t)| (s.ident.clone(), t.clone().into()))
-            .collect::<Vec<_>>();
+
+        let mut kvs: Vec<(ShortString, ElementTypeValue)> = vec![];
+        for (s, t) in value.key_values.iter() {
+            match ElementTypeValue::try_from(t.clone()) {
+                Ok(t) => { kvs.push((s.ident.clone(),t)) },
+                Err(e) => { return Err(e); }
+            };
+        }
         kvs.sort_by(|a, b| a.0.cmp(&b.0));
-        Record(kvs)
+        Ok(Record(kvs))
     }
 }
 
-impl From<TypedRecordValueExpr> for Record {
-    fn from(value: TypedRecordValueExpr) -> Self {
+impl TryFrom<TypedRecordValueExpr> for Record {
+    type Error = CompileError;
+    
+    fn try_from(value: TypedRecordValueExpr) -> Result<Self, Self::Error> {
         trace!("FROM TYPED RECORD VALUE EXPR");
-        Record(
-            value
-                .key_values
-                .iter()
-                .map(|(s, t)| (s.ident.clone(), t.clone().into()))
-                .collect::<Vec<_>>(),
-        )
+        
+        let mut kvs: Vec<(ShortString, ElementTypeValue)> = vec![];
+        for (s, t) in value.key_values.iter() {
+            match ElementTypeValue::try_from(t.clone()) {
+                Ok(t) => { kvs.push((s.ident.clone(),t)) },
+                Err(e) => { return Err(e); }
+            };
+        }
+
+        Ok(Record(kvs))
     }
 }
 

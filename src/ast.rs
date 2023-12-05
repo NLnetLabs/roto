@@ -1999,35 +1999,28 @@ impl From<&'_ AsnLiteral> for Asn {
 //------------ StandardCommunityLiteral --------------------------------------
 
 #[derive(Clone, Debug)]
-pub struct StandardCommunityLiteral(pub u16, pub u16);
+pub struct StandardCommunityLiteral(pub String);
 
 impl StandardCommunityLiteral {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (asn, value)) = context(
+        let (input, std_comm) = context(
             "Standard Community Literal",
-            separated_pair(
+            recognize(separated_pair( 
                 take_while_m_n(1, 5, |ch: char| ch.is_dec_digit()),
                 tag(":"),
                 take_while_m_n(1, 5, |ch: char| ch.is_dec_digit()),
-            ),
+            )),
         )(input)?;
 
-        let asn = asn.parse::<u16>().map_err(|e| {
-            nom::Err::Failure(VerboseError::from_external_error(
-                input,
-                nom::error::ErrorKind::AlphaNumeric,
-                e,
-            ))
-        })?;
+        // Let routecore doing all the heavy lifting here: Not erroring out
+        // here on an invalid tag, or too big a AS, because the eval phase of
+        // the compilation (that uses routecore's `from_str` will error out
+        // with a way more useful error. Also syntactically it might not be
+        // wrong to have unknown tags, or too big a AS here.
 
-        let value = value.parse::<u16>().map_err(|e| {
-            nom::Err::Failure(VerboseError::from_external_error(
-                input,
-                nom::error::ErrorKind::AlphaNumeric,
-                e,
-            ))
-        })?;
-        Ok((input, Self(asn, value)))
+        // See tests in bgp_filters.rs for the kind of errors the eval() phase
+        // returns.
+        Ok((input, Self(std_comm.to_string())))
     }
 }
 
@@ -2037,17 +2030,73 @@ impl From<&'_ StandardCommunityLiteral> for ShortString {
     }
 }
 
-impl From<&'_ StandardCommunityLiteral> for Community {
-    fn from(literal: &StandardCommunityLiteral) -> Self {
-        Community(
-            routecore::bgp::communities::StandardCommunity::new(
-                literal.0.into(),
-                routecore::bgp::communities::Tag::new(literal.1),
-            )
-            .into(),
-        )
+impl TryFrom<&'_ StandardCommunityLiteral> for Community {
+    type Error = CompileError;
+
+    fn try_from(literal: &StandardCommunityLiteral) -> Result<Self, Self::Error> {
+        let comm = <routecore::bgp::communities::StandardCommunity as str::FromStr>::from_str(
+                &literal.0
+            ).map_err(
+                |e| CompileError::from(format!(
+                    "Cannot convert literal '{}' into Extended Community: {e}", literal.0,
+                )))?;
+        
+        Ok(Community(routecore::bgp::communities::Community::Standard(comm)))
     }
 }
+
+//------------ ExtendedCommunity ---------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct ExtendedCommunityLiteral(pub String);
+
+impl ExtendedCommunityLiteral {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, ext_comm) = context(
+            "Extended Community Literal",
+            recognize(tuple((
+                take_while1(|ch: char| ch.is_alpha()),
+                tag(":"),
+                take_while1(|ch: char| ch.is_dec_digit()),
+                tag(":"),
+                take_while_m_n(1, 5, |ch: char| ch.is_dec_digit()),
+            ))),
+        )(input)?;
+
+        // Let routecore doing all the heavy lifting here: Not erroring out
+        // here on an invalid tag, or too big a AS or AN, because the eval
+        // phase of the compilation (that uses routecore's `from_str` will
+        // error out with a way more useful error. Also syntactically it might
+        // not be wrong to have unknown tags, or too big a AS or AN here.
+
+        // See tests in bgp_filters.rs for the kind of errors the eval() phase
+        // returns.
+
+        Ok((input, Self(ext_comm.to_string())))
+    }
+}
+
+impl From<&'_ ExtendedCommunityLiteral> for ShortString {
+    fn from(literal: &ExtendedCommunityLiteral) -> Self {
+        ShortString::from(literal.0.to_string().as_str())
+    }
+}
+
+impl<'a> TryFrom<&'a ExtendedCommunityLiteral> for Community {
+    type Error = CompileError;
+
+    fn try_from(literal: &ExtendedCommunityLiteral) -> Result<Self, Self::Error> {
+        let comm = <routecore::bgp::communities::ExtendedCommunity as str::FromStr>::from_str(
+                &literal.0
+            ).map_err(
+                |e| CompileError::from(format!(
+                    "Cannot convert literal '{}' into Extended Community: {e}", literal.0,
+                )))?;
+        
+        Ok(Community(routecore::bgp::communities::Community::Extended(comm)))
+    }
+}
+
 
 //------------ FloatLiteral --------------------------------------------------
 
@@ -2203,6 +2252,7 @@ pub enum ValueExpr {
     IntegerLiteral(IntegerLiteral),
     PrefixLengthLiteral(PrefixLengthLiteral),
     AsnLiteral(AsnLiteral),
+    ExtendedCommunityLiteral(ExtendedCommunityLiteral),
     StandardCommunityLiteral(StandardCommunityLiteral),
     HexLiteral(HexLiteral),
     BooleanLit(BooleanLiteral),
@@ -2222,6 +2272,10 @@ impl ValueExpr {
         alt((
             map(StringLiteral::parse, ValueExpr::StringLiteral),
             map(HexLiteral::parse, ValueExpr::HexLiteral),
+            map(
+                ExtendedCommunityLiteral::parse,
+                ValueExpr::ExtendedCommunityLiteral,
+            ),
             map(
                 StandardCommunityLiteral::parse,
                 ValueExpr::StandardCommunityLiteral,

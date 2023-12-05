@@ -488,3 +488,134 @@ fn test_std_comms_5() {
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
+
+#[test]
+fn test_ext_comms_1() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,rt:123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.communities.contains(rt:123:44);
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
+}
+
+#[test]
+fn test_ext_comms_2() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,rt:123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.communities.contains(750:4500);
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
+}
+
+#[test]
+#[should_panic = r#"Result::unwrap()` on an `Err` value: "Eval error: Cannot convert literal 'XOTOR:4500:34' into Extended Community: unknown tag"#]
+fn test_ext_comms_3() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,rt:123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.communities.contains(XOTOR:4500:34);
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
+}
+
+
+#[test]
+#[should_panic = r#"Result::unwrap()` on an `Err` value: "Eval error: Cannot convert literal 'rt:450076876500:34' into Extended Community: invalid rt:AS:AN"#]
+fn test_ext_comms_4() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,rt:123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.communities.contains(rt:450076876500:34);
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
+}
