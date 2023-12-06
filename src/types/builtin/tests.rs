@@ -16,7 +16,7 @@ mod route {
         Type,
         Consume,
     }
-    use routecore::bgp::communities::{StandardCommunity, Tag, ExtendedCommunity};
+    use routecore::bgp::communities::{StandardCommunity, Tag, ExtendedCommunity, LargeCommunity};
     use routecore::bgp::{
         message::{
             nlri::{BasicNlri, Nlri},
@@ -971,5 +971,46 @@ src_ty.clone().test_type_conversion(arg_ty)"]
         ));
 
         test_consume_method_on_type_value(test_value, "set", res)
+    }
+
+    #[test]
+    fn test_large_community_1() -> Result<(), CompileError> {
+        init();
+        
+        let test_value: Community =
+            Community(routecore::bgp::communities::Community::from(
+                LargeCommunity::from_str(
+                    "234:123:456"
+                ).unwrap(),
+            ));
+        let res = Community(routecore::bgp::communities::Community::from(
+            StandardCommunity::new(
+                routecore::asn::Asn16::from(7500),
+                Tag::new(3000),
+            ),
+        ));
+
+        test_consume_method_on_type_value(test_value, "set", res)
+    }
+
+    #[test]
+    #[should_panic = "failed to parse global admin part"]
+    fn test_large_community_2() {
+        init();
+        
+        let test_value: Community =
+            Community(routecore::bgp::communities::Community::from(
+                LargeCommunity::from_str(
+                    "2456850985534:123:456"
+                ).unwrap(),
+            ));
+        let res = Community(routecore::bgp::communities::Community::from(
+            StandardCommunity::new(
+                routecore::asn::Asn16::from(7500),
+                Tag::new(3000),
+            ),
+        ));
+
+        test_consume_method_on_type_value(test_value, "set", res).unwrap();
     }
 }
