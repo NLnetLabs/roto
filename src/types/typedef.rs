@@ -249,7 +249,7 @@ impl TypeDef {
         LazyRecord(StringLiteral;Record,OutputStream),
         AcceptReject(StringLiteral;),
         List(StringLiteral;),
-        ConstEnumVariant(StringLiteral,U32;);
+        ConstEnumVariant(StringLiteral,U32,Community;);
         // no conversions, no data field
         // SOURCE TYPE
         Route,

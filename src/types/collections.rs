@@ -228,6 +228,9 @@ impl TryFrom<ValueExpr> for ElementTypeValue {
             ValueExpr::ExtendedCommunityLiteral(e_comm_lit) => {
                 Ok(ElementTypeValue::Primitive(e_comm_lit.try_into()?))
             }
+            ValueExpr::LargeCommunityLiteral(l_comm_lit) => {
+                Ok(ElementTypeValue::Primitive(l_comm_lit.try_into()?))
+            }
             ValueExpr::HexLiteral(hex_lit) => {
                 Ok(ElementTypeValue::Primitive(hex_lit.into()))
             }

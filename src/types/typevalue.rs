@@ -1252,6 +1252,18 @@ impl TryFrom<crate::ast::ExtendedCommunityLiteral> for TypeValue {
     }
 }
 
+impl TryFrom<crate::ast::LargeCommunityLiteral> for TypeValue {
+    type Error = CompileError;
+
+    fn try_from(value: crate::ast::LargeCommunityLiteral) -> Result<Self, Self::Error> {
+        let comm = (&value).try_into()?;
+        Ok(TypeValue::Builtin(BuiltinTypeValue::Community(
+                comm
+        )))
+    }
+
+}
+
 impl From<crate::ast::HexLiteral> for TypeValue {
     fn from(value: crate::ast::HexLiteral) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::HexLiteral(HexLiteral(value.0)))

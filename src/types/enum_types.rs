@@ -8,7 +8,7 @@ use routecore::bmp::message::MessageType;
 use serde::Serialize;
 
 use crate::compiler::compile::CompileError;
-use crate::types::builtin::BytesRecord;
+use crate::types::builtin::{BytesRecord, Community};
 use crate::types::lazyrecord_types::BmpMessage;
 use crate::vm::VmError;
 use crate::{
@@ -25,18 +25,18 @@ use super::{
 //------------ EnumVariant --------------------------------------------------
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize)]
-pub struct EnumVariant<T> {
+pub struct EnumVariant<T> where u32: From<T> {
     pub(crate) enum_name: ShortString,
     pub(crate) value: T,
 }
 
-impl<T> Display for EnumVariant<T> {
+impl<T> Display for EnumVariant<T> where u32: From<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.enum_name)
     }
 }
 
-impl<T: Copy> EnumVariant<T> {
+impl<T: Copy> EnumVariant<T> where u32: From<T> {
     pub fn new(enum_tv: (ShortString, T)) -> Self {
         Self {
             enum_name: enum_tv.0,
@@ -50,6 +50,7 @@ impl<T: Copy> EnumVariant<T> {
 impl<T: Copy + Debug> RotoType for EnumVariant<T>
 where
     BuiltinTypeValue: From<EnumVariant<T>>,
+    u32: From<T>
 {
     fn get_props_for_method(
         _ty: super::typedef::TypeDef,
@@ -71,6 +72,10 @@ where
         trace!("CONVERT ENUM");
         match type_def {
             TypeDef::ConstEnumVariant(_) => Ok(self.into()),
+            TypeDef::U32 => Ok(u32::from(self.value).into()),
+            TypeDef::Community => {
+                Ok(Community::from(<u32>::from(self.value)).into())
+            },
             _ => Err(format!(
                 "Cannot convert type EnumVariant to type {:?}",
                 type_def
@@ -110,6 +115,7 @@ where
 impl<T: Copy + Debug> From<EnumVariant<T>> for TypeValue
 where
     BuiltinTypeValue: From<EnumVariant<T>>,
+    u32: From<T>
 {
     fn from(value: EnumVariant<T>) -> Self {
         TypeValue::Builtin(value.into())

@@ -1143,14 +1143,21 @@ impl RotoType for HexLiteral {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::HexLiteral(self)))
             }
             TypeDef::Community => {
-                // still bogus, but at least it should convert from the
-                // hexliteral type.
-                let c = routecore::bgp::communities::Community::from(
-                    self.0.to_be_bytes(),
-                );
-                Ok(TypeValue::Builtin(BuiltinTypeValue::Community(
-                    Community(c),
-                )))
+                // Convert to either a StandardCommunity (if the hex literal
+                // fits into a u32), or..
+                match self.0 {
+                    v if v <= <u32>::MAX.into() => {
+                        Ok(TypeValue::Builtin(BuiltinTypeValue::Community(
+                            Community::from(v as u32)
+                        )))
+                    },
+                    // Convert to an ExtendedCommunity
+                    v => {
+                        Ok(TypeValue::Builtin(BuiltinTypeValue::Community(
+                            Community::from(v)
+                        )))
+                    }
+                }
             }
             TypeDef::U8 => u8::try_from(self.0)
                 .map(|v| TypeValue::Builtin(BuiltinTypeValue::U8(U8(v))))
@@ -2218,6 +2225,20 @@ impl TryFrom<&str> for Community {
         routecore::bgp::communities::Community::from_str(value)
             .map(Community::new)
             .map_err(|_| VmError::InvalidConversion)
+    }
+}
+
+// A U32 that we encounter in a source code as a literal gets cast to a
+// Standard Community.
+impl From<u32> for Community {
+    fn from(value: u32) -> Self {
+        Self(routecore::bgp::communities::StandardCommunity::from_u32(value).into())
+    }
+}
+
+impl From<u64> for Community {
+    fn from(value: u64) -> Self {
+        Self(routecore::bgp::communities::ExtendedCommunity::from(value.to_be_bytes()).into())
     }
 }
 

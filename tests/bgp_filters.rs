@@ -422,6 +422,39 @@ fn test_std_comms_3() {
 }
 
 #[test]
+fn test_std_comms_7() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                // (0x7b, 0x2c) = (123, 44)
+                route.communities.contains(0x7b:0x2c);
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
+}
+
+#[test]
 #[should_panic]
 fn test_std_comms_4() {
     common::init();
@@ -503,7 +536,7 @@ fn test_ext_comms_1() {
 
         term test {
             match {
-                route.communities.contains(rt:123:44);
+                route.communities.contains(rt:0x7b:0x2c);
             }
         }
     
@@ -603,6 +636,201 @@ fn test_ext_comms_4() {
         term test {
             match {
                 route.communities.contains(rt:450076876500:34);
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
+}
+
+#[test]
+fn test_l_comms_1() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,AS65536:123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.communities.contains(AS65536:123:44);
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
+}
+
+#[test]
+fn test_l_comms_2() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,65536:123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.communities.contains(AS65536:123:44);
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
+}
+
+#[test]
+fn test_l_comms_3() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,65536:123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.communities.contains(AS10:123:44);
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
+}
+
+#[test]
+fn test_wk_comms_1() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,65536:123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.communities.contains(BLACKHOLE);
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
+}
+
+#[test]
+fn test_wk_comms_2() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,65536:123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                // 0xFFFF029A is the binary value (two octets) for BLACKHOLE
+                route.communities.contains(0xFFFF029A);
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
+}
+
+#[test]
+fn test_wk_comms_3() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,65536:123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                // This binary value is turned into an extended community,
+                // it will never match BLACKHOLE
+                route.communities.contains(0xFFFF029A0000);
             }
         }
     

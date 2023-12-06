@@ -16,13 +16,13 @@ use nom::multi::{
 use nom::sequence::{
     delimited, pair, preceded, separated_pair, terminated, tuple,
 };
-use nom::{Finish, AsChar};
 use nom::{
     bytes::complete::{tag, take_until},
     character::complete::char as tag_char,
     combinator::map,
     IResult,
 };
+use nom::{AsChar, Finish};
 use serde::{Serialize, Serializer};
 use smallvec::SmallVec;
 
@@ -441,11 +441,10 @@ pub enum RxTxType {
 
 //------------ DefineBody ---------------------------------------------------
 
-// DefineBody ::=
-//     (( 'use' Identifier ';' )?
-//     (('rx' Identifier ':' TypeIdentifier ';') ('tx' Identifier ':' TypeIdentifier ';')) |
-//     ( 'rx_tx' Identifier ':' TypeIdentifier ';' ))?
-//     ( Identifier '=' ComputeExpr ';' )+ )+
+// DefineBody ::= (( 'use' Identifier ';' )? (('rx' Identifier ':'
+//     TypeIdentifier ';') ('tx' Identifier ':' TypeIdentifier ';')) | (
+//     'rx_tx' Identifier ':' TypeIdentifier ';' ))? ( Identifier '='
+//     ComputeExpr ';' )+ )+
 
 #[derive(Clone, Debug)]
 pub struct DefineBody {
@@ -755,8 +754,8 @@ impl ActionSectionBody {
 // ActionExpr ::= ComputeExpr | GlobalMethodExpr
 
 // An Optional Global Compute Expressions can be either an ordinary Compute
-// Expression, or a global method call, i.e. 'some-global-method(a, b)', so
-// an expression without any dots in it ending in a method call.
+// Expression, or a global method call, i.e. 'some-global-method(a, b)', so an
+// expression without any dots in it ending in a method call.
 
 // Action Expressions are always turned into regular Compute Expressions at
 // parse time (so: here), consequently there's no `eval()` for an Optional
@@ -882,11 +881,9 @@ impl ApplyBody {
 
 //------------ ApplyScope -----------------------------------------------------
 
-// ApplyScope ::=
-//      ( 'use' Identifier ';' )?
-//      'filter' MatchOperator ( ComputeExpr | Identifier )
-//      'not'? 'matching'
-//      '{' ( ( ComputeExpr | Identifier ) ';' ( AcceptReject ';' )? )+ '}' ';'
+// ApplyScope ::= ( 'use' Identifier ';' )? 'filter' MatchOperator (
+//      ComputeExpr | Identifier ) 'not'? 'matching' '{' ( ( ComputeExpr |
+//      Identifier ) ';' ( AcceptReject ';' )? )+ '}' ';'
 
 #[derive(Clone, Debug)]
 pub struct ApplyScope {
@@ -1197,16 +1194,16 @@ impl PatternMatchActionArm {
 
 //------------ TermMatchExpr ------------------------------------------------
 
-// A TermMatchExpr describes a variant of an enum together with its data
-// field and one or more logical expressions, that will evaluate to a boolean,
-// it may reference the data field. Note that this MatchExpr will be split out
-// in (variant_id, data_field) and the logical expressions to be able to store
-// it in a TermScope as `VariantMatchExpr`s.
-// Since it only store Logical Expressions it is only fit for use in a Term
-// section. In the Apply sections the PatternMatchActionExpr is used.
+// A TermMatchExpr describes a variant of an enum together with its data field
+// and one or more logical expressions, that will evaluate to a boolean, it
+// may reference the data field. Note that this MatchExpr will be split out in
+// (variant_id, data_field) and the logical expressions to be able to store it
+// in a TermScope as `VariantMatchExpr`s. Since it only store Logical
+// Expressions it is only fit for use in a Term section. In the Apply sections
+// the PatternMatchActionExpr is used.
 
-// MatchExpr := Identifier '(' Identifier ')' '->'
-//  (( LogicalExpr ';' ',' ) | '{'  ( LogicalExpr ';' )+ '}' ','? )
+// MatchExpr := Identifier '(' Identifier ')' '->' (( LogicalExpr ';' ',' ) |
+//  '{'  ( LogicalExpr ';' )+ '}' ','? )
 #[derive(Clone, Debug)]
 pub struct TermMatchExpr {
     pub variant_id: Identifier,
@@ -1342,8 +1339,8 @@ pub enum RibField {
 //------------ RibBody -------------------------------------------------------
 
 //
-// The body of a Rib consists of an (optional) enumeration of
-// (field_name, type) pairs.
+// The body of a Rib consists of an (optional) enumeration of (field_name,
+// type) pairs.
 
 // RibBody ::= ( Identifier ':' (
 //                 TypeIdentifier |
@@ -2005,22 +2002,65 @@ impl StandardCommunityLiteral {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, std_comm) = context(
             "Standard Community Literal",
-            recognize(separated_pair( 
-                take_while_m_n(1, 5, |ch: char| ch.is_dec_digit()),
+            tuple((
+                opt(tag("0x")),
+                take_while_m_n(1, 5, |ch: char| ch.is_hex_digit()),
                 tag(":"),
-                take_while_m_n(1, 5, |ch: char| ch.is_dec_digit()),
+                opt(tag("0x")),
+                take_while_m_n(1, 5, |ch: char| ch.is_hex_digit()),
             )),
         )(input)?;
 
-        // Let routecore doing all the heavy lifting here: Not erroring out
-        // here on an invalid tag, or too big a AS, because the eval phase of
+        // Let routecore do all the heavy lifting here: Not erroring out here
+        // on an invalid tag, or too big a AS or AN, because the eval phase of
         // the compilation (that uses routecore's `from_str` will error out
         // with a way more useful error. Also syntactically it might not be
-        // wrong to have unknown tags, or too big a AS here.
+        // wrong to have unknown tags, or too big a AS or AN here.
 
         // See tests in bgp_filters.rs for the kind of errors the eval() phase
         // returns.
-        Ok((input, Self(std_comm.to_string())))
+
+        // What we are doing here is catering for both decimal and hexadecimal
+        // literals provided. Hexadecimals will be converted into decimal, so
+        // that the from_str method from routecore can process them. Again, we
+        // are not trying to parse here as tightly fitted as possible (that
+        // would be a u16 here), we're parsing the largest possible type, so
+        // that the eval phase can optionally error out.
+        let value_1 = if let Some(_hex_tag) = std_comm.0 {
+            u64::from_str_radix(std_comm.1, 16).map_err(|e| {
+                nom::Err::Failure(VerboseError::from_external_error(
+                    input,
+                    nom::error::ErrorKind::HexDigit,
+                    e,
+                ))
+            })?
+        } else { std_comm.1.parse::<u64>().map_err(|e| {
+            nom::Err::Failure(VerboseError::from_external_error(
+                input,
+                nom::error::ErrorKind::Digit,
+                e,
+            ))
+        })? };
+
+        let value_2 = if let Some(_hex_tag) = std_comm.3 {
+            u64::from_str_radix(std_comm.4, 16).map_err(|e| {
+                nom::Err::Failure(VerboseError::from_external_error(
+                    input,
+                    nom::error::ErrorKind::HexDigit,
+                    e,
+                ))
+            })?
+        } else { std_comm.4.parse::<u64>().map_err(|e| {
+            nom::Err::Failure(VerboseError::from_external_error(
+                input,
+                nom::error::ErrorKind::Digit,
+                e,
+            ))
+        })? };
+
+        // See tests in bgp_filters.rs for the kind of errors the eval() phase
+        // returns.
+        Ok((input, Self(format!("{}:{}", value_1, value_2))))
     }
 }
 
@@ -2033,19 +2073,24 @@ impl From<&'_ StandardCommunityLiteral> for ShortString {
 impl TryFrom<&'_ StandardCommunityLiteral> for Community {
     type Error = CompileError;
 
-    fn try_from(literal: &StandardCommunityLiteral) -> Result<Self, Self::Error> {
+    // The aforementioned heavy lifting is here.
+    fn try_from(
+        literal: &StandardCommunityLiteral,
+    ) -> Result<Self, Self::Error> {
         let comm = <routecore::bgp::communities::StandardCommunity as str::FromStr>::from_str(
                 &literal.0
             ).map_err(
                 |e| CompileError::from(format!(
                     "Cannot convert literal '{}' into Extended Community: {e}", literal.0,
                 )))?;
-        
-        Ok(Community(routecore::bgp::communities::Community::Standard(comm)))
+
+        Ok(Community(routecore::bgp::communities::Community::Standard(
+            comm,
+        )))
     }
 }
 
-//------------ ExtendedCommunity ---------------------------------------------
+//------------ ExtendedCommunityLiteral --------------------------------------
 
 #[derive(Clone, Debug)]
 pub struct ExtendedCommunityLiteral(pub String);
@@ -2054,25 +2099,65 @@ impl ExtendedCommunityLiteral {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, ext_comm) = context(
             "Extended Community Literal",
-            recognize(tuple((
+            tuple((
                 take_while1(|ch: char| ch.is_alpha()),
                 tag(":"),
-                take_while1(|ch: char| ch.is_dec_digit()),
+                opt(tag("0x")), 
+                take_while1(|ch: char| ch.is_hex_digit()),
                 tag(":"),
-                take_while_m_n(1, 5, |ch: char| ch.is_dec_digit()),
-            ))),
+                opt(tag("0x")),
+                take_while_m_n(1, 5, |ch: char| ch.is_hex_digit()),
+            ))
         )(input)?;
 
-        // Let routecore doing all the heavy lifting here: Not erroring out
-        // here on an invalid tag, or too big a AS or AN, because the eval
-        // phase of the compilation (that uses routecore's `from_str` will
-        // error out with a way more useful error. Also syntactically it might
-        // not be wrong to have unknown tags, or too big a AS or AN here.
+        // Let routecore do all the heavy lifting here: Not erroring out here
+        // on an invalid tag, or too big a AS or AN, because the eval phase of
+        // the compilation (that uses routecore's `from_str` will error out
+        // with a way more useful error. Also syntactically it might not be
+        // wrong to have unknown tags, or too big a AS or AN here.
 
         // See tests in bgp_filters.rs for the kind of errors the eval() phase
         // returns.
 
-        Ok((input, Self(ext_comm.to_string())))
+        // What we are doing here is catering for both decimal and hexadecimal
+        // literals provided. Hexadecimals will be converted into decimal, so
+        // that the from_str method from routecore can process them. Again, we
+        // are not trying to parse here as tightly fitted as possible (that
+        // would be a u16 here), we're parsing the largest possible type, so
+        // that the eval phase can optionally error out.
+        let value_1 = if let Some(_hex_tag) = ext_comm.2 {
+            u64::from_str_radix(ext_comm.3, 16).map_err(|e| {
+                nom::Err::Failure(VerboseError::from_external_error(
+                    input,
+                    nom::error::ErrorKind::HexDigit,
+                    e,
+                ))
+            })?
+        } else { ext_comm.3.parse::<u64>().map_err(|e| {
+            nom::Err::Failure(VerboseError::from_external_error(
+                input,
+                nom::error::ErrorKind::Digit,
+                e,
+            ))
+        })? };
+
+        let value_2 = if let Some(_hex_tag) = ext_comm.5 {
+            u32::from_str_radix(ext_comm.6, 16).map_err(|e| {
+                nom::Err::Failure(VerboseError::from_external_error(
+                    input,
+                    nom::error::ErrorKind::HexDigit,
+                    e,
+                ))
+            })?
+        } else { ext_comm.6.parse::<u32>().map_err(|e| {
+            nom::Err::Failure(VerboseError::from_external_error(
+                input,
+                nom::error::ErrorKind::Digit,
+                e,
+            ))
+        })? };
+
+        Ok((input, Self(format!("{}:{value_1}:{value_2}", ext_comm.0))))
     }
 }
 
@@ -2085,18 +2170,141 @@ impl From<&'_ ExtendedCommunityLiteral> for ShortString {
 impl<'a> TryFrom<&'a ExtendedCommunityLiteral> for Community {
     type Error = CompileError;
 
-    fn try_from(literal: &ExtendedCommunityLiteral) -> Result<Self, Self::Error> {
+    // The aforementioned heavy lifting is here.
+    fn try_from(
+        literal: &ExtendedCommunityLiteral,
+    ) -> Result<Self, Self::Error> {
         let comm = <routecore::bgp::communities::ExtendedCommunity as str::FromStr>::from_str(
                 &literal.0
             ).map_err(
                 |e| CompileError::from(format!(
                     "Cannot convert literal '{}' into Extended Community: {e}", literal.0,
                 )))?;
-        
-        Ok(Community(routecore::bgp::communities::Community::Extended(comm)))
+
+        Ok(Community(routecore::bgp::communities::Community::Extended(
+            comm,
+        )))
     }
 }
 
+//------------ LargeCommunityLiteral -----------------------------------------
+
+
+#[derive(Clone, Debug)]
+pub struct LargeCommunityLiteral(pub String);
+
+impl LargeCommunityLiteral {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, l_comm) = context(
+            "Large Community Literal",
+            tuple((
+                opt(alt((tag("AS"), tag("0x")))),
+                take_while1(|ch: char| ch.is_hex_digit()),
+                tag(":"),
+                opt(tag("0x")),
+                take_while1(|ch: char| ch.is_hex_digit()),
+                tag(":"),
+                opt(tag("0x")),
+                take_while1(|ch: char| ch.is_hex_digit()),
+            ))
+        )(input)?;
+
+        // Let routecore do all the heavy lifting here: Not erroring out here
+        // on an invalid tag, or too big a AS or AN, because the eval phase of
+        // the compilation (that uses routecore's `from_str` will error out
+        // with a way more useful error. Also syntactically it might not be
+        // wrong to have unknown tags, or too big a AS or AN here.
+
+        // See tests in bgp_filters.rs for the kind of errors the eval() phase
+        // returns.
+
+        // What we are doing here is catering for both decimal and hexadecimal
+        // literals provided. Hexadecimals will be converted into decimal, so
+        // that the from_str method from routecore can process them. Again, we
+        // are not trying to parse here as tightly fitted as possible (that
+        // would be a u16 here), we're parsing the largest possible type, so
+        // that the eval phase can optionally error out.
+        let value_1 = match l_comm.0 {
+            Some("0x") => {
+                u64::from_str_radix(l_comm.1, 16).map_err(|e| {
+                    nom::Err::Failure(VerboseError::from_external_error(
+                        input,
+                        nom::error::ErrorKind::HexDigit,
+                        e,
+                    ))
+                })?
+            },
+            _ => { l_comm.1.parse::<u64>().map_err(|e| {
+                    nom::Err::Failure(VerboseError::from_external_error(
+                        input,
+                        nom::error::ErrorKind::Digit,
+                        e,
+                    ))
+                })?
+            }
+        };
+
+        let value_2 = if let Some(_hex_tag) = l_comm.3 {
+            u32::from_str_radix(l_comm.4, 16).map_err(|e| {
+                nom::Err::Failure(VerboseError::from_external_error(
+                    input,
+                    nom::error::ErrorKind::HexDigit,
+                    e,
+                ))
+            })?
+        } else { l_comm.4.parse::<u32>().map_err(|e| {
+            nom::Err::Failure(VerboseError::from_external_error(
+                input,
+                nom::error::ErrorKind::Digit,
+                e,
+            ))
+        })? };
+
+        let value_3 = if let Some(_hex_tag) = l_comm.6 {
+            u32::from_str_radix(l_comm.7, 16).map_err(|e| {
+                nom::Err::Failure(VerboseError::from_external_error(
+                    input,
+                    nom::error::ErrorKind::HexDigit,
+                    e,
+                ))
+            })?
+        } else { l_comm.7.parse::<u32>().map_err(|e| {
+            nom::Err::Failure(VerboseError::from_external_error(
+                input,
+                nom::error::ErrorKind::Digit,
+                e,
+            ))
+        })? };
+    
+        Ok((input, Self(format!("{}{value_1}:{value_2}:{value_3}", if let Some("AS") = l_comm.0 { "AS" } else { "" }))))
+    }
+}
+
+impl From<&'_ LargeCommunityLiteral> for ShortString {
+    fn from(literal: &LargeCommunityLiteral) -> Self {
+        ShortString::from(literal.0.to_string().as_str())
+    }
+}
+
+impl TryFrom<&'_ LargeCommunityLiteral> for Community {
+    type Error = CompileError;
+
+    // The aforementioned heavy lifting is here.
+    fn try_from(
+        literal: &LargeCommunityLiteral,
+    ) -> Result<Self, Self::Error> {
+        let comm = <routecore::bgp::communities::LargeCommunity as str::FromStr>::from_str(
+                &literal.0
+            ).map_err(
+                |e| CompileError::from(format!(
+                    "Cannot convert literal '{}' into Large Community: {e}", literal.0,
+                )))?;
+
+        Ok(Community(routecore::bgp::communities::Community::Large(
+            comm,
+        )))
+    }
+}
 
 //------------ FloatLiteral --------------------------------------------------
 
@@ -2254,6 +2462,7 @@ pub enum ValueExpr {
     AsnLiteral(AsnLiteral),
     ExtendedCommunityLiteral(ExtendedCommunityLiteral),
     StandardCommunityLiteral(StandardCommunityLiteral),
+    LargeCommunityLiteral(LargeCommunityLiteral),
     HexLiteral(HexLiteral),
     BooleanLit(BooleanLiteral),
     PrefixMatchExpr(PrefixMatchExpr),
@@ -2271,15 +2480,19 @@ impl ValueExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         alt((
             map(StringLiteral::parse, ValueExpr::StringLiteral),
-            map(HexLiteral::parse, ValueExpr::HexLiteral),
             map(
                 ExtendedCommunityLiteral::parse,
                 ValueExpr::ExtendedCommunityLiteral,
             ),
             map(
+                LargeCommunityLiteral::parse,
+                ValueExpr::LargeCommunityLiteral,
+            ),
+            map(
                 StandardCommunityLiteral::parse,
                 ValueExpr::StandardCommunityLiteral,
             ),
+            map(HexLiteral::parse, ValueExpr::HexLiteral),
             map(IntegerLiteral::parse, ValueExpr::IntegerLiteral),
             map(PrefixLengthLiteral::parse, ValueExpr::PrefixLengthLiteral),
             map(AsnLiteral::parse, ValueExpr::AsnLiteral),
@@ -2553,8 +2766,8 @@ impl MethodComputeExpr {
 
 // "No, no, you're not thinking. You're just being logical." -- Niels Bohr
 
-// A first-order logical formula is a sequence of (predicate) symbols,
-// logical connectives (a.k.a. logical operators), comparison operators, and
+// A first-order logical formula is a sequence of (predicate) symbols, logical
+// connectives (a.k.a. logical operators), comparison operators, and
 // quantifiers. Logical formulas can be grouped (for operator precedence) and
 // nested through the contained symbols. Nesting will raise the arity of the
 // formula.
@@ -2570,20 +2783,19 @@ impl MethodComputeExpr {
 //   bi-directional implication ('if and only if') from the given connectives
 //   (for an arity of 2 at least) or they can be constructed in code in the
 //   `apply` section.
-// - Use the logical connectives in a grouped fashion to reduce
-//   any number of Boolean expressions down to a binary formula, e.g.
-//   (A ∧ B) ∨ (C ∧ D) is equivalent to A ∧ B ∨ C ∧ D. This limits the number
-//   of boolean functions we have to consider when evaluating the formula,
-//   i.e. a fully complete set of boolean functions has 16 functions for an
-//   arity of 2.
+// - Use the logical connectives in a grouped fashion to reduce any number of
+//   Boolean expressions down to a binary formula, e.g. (A ∧ B) ∨ (C ∧ D) is
+//   equivalent to A ∧ B ∨ C ∧ D. This limits the number of boolean functions
+//   we have to consider when evaluating the formula, i.e. a fully complete
+//   set of boolean functions has 16 functions for an arity of 2.
 //
 // The first point above reduces the cognitive overhead by simplifying the
 // flow of the program and using familiar constructs, like 'if..then' and
 // early returns.
 //
-// The second point also reduces (perceived) ambiguity because we do not
-// allow using implicit logic operator precedence (that probably no one
-// knows anyway).
+// The second point also reduces (perceived) ambiguity because we do not allow
+// using implicit logic operator precedence (that probably no one knows
+// anyway).
 
 // https://en.wikipedia.org/wiki/First-order_logic#Formulas
 
@@ -2615,9 +2827,9 @@ impl MethodComputeExpr {
 //------------ LogicalExpr --------------------------------------------------
 
 // The Logical expression evaluates to a logical formula, that is a tuple of
-// (optional boolean expression, logical operator, boolean expression).
-// The first boolean expression is optional, only in the case of a negation
-// (not) operator. The second boolean expression is always present.
+// (optional boolean expression, logical operator, boolean expression). The
+// first boolean expression is optional, only in the case of a negation (not)
+// operator. The second boolean expression is always present.
 
 // LogicalExpr ::= OrExpr | AndExpr | NotExpr | BooleanExpr
 
@@ -2662,10 +2874,10 @@ impl CompareArg {
 //------------ BooleanExpr --------------------------------------------------
 
 // A Boolean expression is an expression that *may* evaluate to one of:
-// - a Boolean-valued function, which is a fn : X → B, where X is an
-//   arbitrary set and B is a boolean value. For example, an Integer
-//   expression can never evaluate to a boolean value, but a method call
-//   expression may evaluate to a method that returns a Boolean value.
+// - a Boolean-valued function, which is a fn : X → B, where X is an arbitrary
+//   set and B is a boolean value. For example, an Integer expression can
+//   never evaluate to a boolean value, but a method call expression may
+//   evaluate to a method that returns a Boolean value.
 // - a Literal Boolean value, "true" or "false"
 // - a Boolean-typed variable, including boolean-typed record fields
 // - an Expression containing a boolean-valued operator, such as '==', '!=',
