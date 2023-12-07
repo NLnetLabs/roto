@@ -1226,6 +1226,16 @@ impl TryFrom<&'_ crate::ast::IpAddressLiteral> for TypeValue {
     }
 }
 
+impl TryFrom<&'_ crate::ast::PrefixLiteral> for TypeValue {
+    type Error = CompileError;
+
+    fn try_from(value: &crate::ast::PrefixLiteral) -> Result<Self, Self::Error> {
+        Ok(TypeValue::Builtin(BuiltinTypeValue::Prefix(
+            value.try_into()?
+        )))
+    }
+}
+
 impl From<crate::ast::PrefixLengthLiteral> for TypeValue {
     fn from(value: crate::ast::PrefixLengthLiteral) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::PrefixLength(PrefixLength(

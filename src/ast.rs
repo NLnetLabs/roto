@@ -26,7 +26,7 @@ use nom::{
     combinator::map,
     IResult,
 };
-use nom::{AsChar, Finish};
+use nom::{AsChar, Finish, Parser};
 use serde::{Serialize, Serializer};
 use smallvec::SmallVec;
 
@@ -1893,7 +1893,7 @@ impl IpAddressLiteral {
                     terminated(digit1, char('.')),
                     terminated(digit1, char('.')),
                     take_while1(|ch: char| ch.is_dec_digit()),
-                    not(char(':')),
+                    not(char(':'))
                 ))),
                 recognize(tuple((
                     terminated(hex_digit0, char(':')),
@@ -1904,7 +1904,7 @@ impl IpAddressLiteral {
                     opt(terminated(hex_digit0, char(':'))),
                     opt(terminated(hex_digit0, char(':'))),
                     hex_digit0,
-                    not(char('.')),
+                    not(char('.'))
                 ))),
             )),
         )(input)?;
@@ -1920,6 +1920,25 @@ impl From<&'_ IpAddressLiteral> for ShortString {
 }
 
 //------------ PrefixLiteral -------------------------------------------------
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PrefixLiteral(pub String);
+
+impl PrefixLiteral {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, prefix_str) = context(
+            "prefix literal",
+            recognize(
+                tuple((
+                    IpAddressLiteral::parse,
+                    PrefixLengthLiteral::parse
+                )
+            ))
+        )(input)?;
+
+        Ok((input, Self(prefix_str.to_string())))
+    }
+}
 
 //------------ PrefixLengthLiteral -------------------------------------------
 
@@ -2267,12 +2286,13 @@ impl LargeCommunityLiteral {
             tuple((
                 opt(alt((tag("AS"), tag("0x")))),
                 take_while1(|ch: char| ch.is_hex_digit()),
-                tag(":"),
+                char(':'),
                 opt(tag("0x")),
                 take_while1(|ch: char| ch.is_hex_digit()),
-                tag(":"),
+                char(':'),
                 opt(tag("0x")),
                 take_while1(|ch: char| ch.is_hex_digit()),
+                not(char(':'))
             )),
         )(input)?;
 
@@ -2531,6 +2551,7 @@ impl std::fmt::Display for AcceptReject {
 #[derive(Clone, Debug)]
 pub enum ValueExpr {
     StringLiteral(StringLiteral),
+    PrefixLiteral(PrefixLiteral),
     PrefixLengthLiteral(PrefixLengthLiteral),
     AsnLiteral(AsnLiteral),
     IpAddressLiteral(IpAddressLiteral),
@@ -2567,6 +2588,7 @@ impl ValueExpr {
                 StandardCommunityLiteral::parse,
                 ValueExpr::StandardCommunityLiteral,
             ),
+            map(PrefixLiteral::parse, ValueExpr::PrefixLiteral),
             map(IpAddressLiteral::parse, ValueExpr::IpAddressLiteral),
             map(AsnLiteral::parse, ValueExpr::AsnLiteral),
             map(HexLiteral::parse, ValueExpr::HexLiteral),

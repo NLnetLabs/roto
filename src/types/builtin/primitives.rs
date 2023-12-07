@@ -9,7 +9,7 @@ use routecore::bgp::communities::{
 use serde::ser::SerializeSeq;
 use serde::{Serialize, Serializer};
 
-use crate::ast::IpAddressLiteral;
+use crate::ast::{IpAddressLiteral, PrefixLiteral};
 use crate::attr_change_set::VectorValue;
 use crate::compiler::compile::CompileError;
 use crate::first_into_vm_err;
@@ -1386,6 +1386,15 @@ impl RotoType for Prefix {
 impl From<Prefix> for TypeValue {
     fn from(val: Prefix) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::Prefix(val))
+    }
+}
+
+impl TryFrom<&'_ PrefixLiteral> for Prefix {
+    type Error = CompileError;
+
+    fn try_from(value: &PrefixLiteral) -> Result<Self, Self::Error> {
+        Ok(Prefix(<routecore::addr::Prefix as std::str::FromStr>::from_str(value.0.as_str())
+            .map_err(|e| CompileError::from(format!("Cannot parse '{:?}' as an IP Address: {}", value, e)))?))
     }
 }
 

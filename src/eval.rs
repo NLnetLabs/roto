@@ -20,6 +20,7 @@ use crate::types::builtin::BuiltinTypeValue;
 use crate::types::builtin::HexLiteral;
 use crate::types::builtin::IntegerLiteral;
 use crate::types::builtin::IpAddress;
+use crate::types::builtin::Prefix;
 use crate::types::builtin::PrefixLength;
 use crate::types::builtin::StringLiteral;
 use crate::types::enum_types::GlobalEnumTypeDef;
@@ -1706,6 +1707,15 @@ impl ast::ValueExpr {
                     )),
                     vec![],
                     Token::Constant(None),
+                ))
+            }
+            ast::ValueExpr::PrefixLiteral(pfx_lit) => {
+                Ok(symbols::Symbol::new_with_value(
+                    "prefix_lit".into(),
+                    symbols::SymbolKind::Constant,
+                    Prefix::try_from(pfx_lit)?.into(),
+                    vec![],
+                    Token::Constant(None)
                 ))
             }
             ast::ValueExpr::IpAddressLiteral(ip_address_lit) => {

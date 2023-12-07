@@ -77,6 +77,8 @@ fn test_data(
 
     Ok((res, payload))
 }
+
+
 //------------ Test: IpAddressLiteral ----------------------------------------
 
 #[test]
@@ -275,7 +277,235 @@ fn test_ip_address_literal_6() {
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
 
-//------------ Test: AS PATHS ------------------------------------------------
+#[test]
+fn test_ip_address_literal_7() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.prefix.address() == 2001:fa80:123::1;
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
+}
+
+
+//------------ Test: PrefixLiteral -------------------------------------------
+
+#[test]
+fn test_prefix_literal_1() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.prefix == 192.0.2.0/24;
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
+}
+
+#[test]
+fn test_prefix_literal_2() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.prefix == 10.0.0.0/8;
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
+}
+
+#[test]
+#[ignore = "method on literal value does not work yet"]
+fn test_prefix_literal_3() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                10.0.0.0/8.covers(route.prefix);
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
+}
+
+#[test]
+fn test_prefix_literal_4() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.prefix == ::/48;
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
+}
+
+#[test]
+fn test_prefix_literal_5() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.prefix == 2001::/48;
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
+}
+
+#[test]
+fn test_prefix_literal_6() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.prefix == 2001:ee34:23a0:123::/64;
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
+}
+
+//------------ Test: As Paths ------------------------------------------------
 
 #[test]
 fn test_as_path_1() {
