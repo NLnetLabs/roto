@@ -19,6 +19,8 @@ use crate::types::builtin::Boolean;
 use crate::types::builtin::BuiltinTypeValue;
 use crate::types::builtin::HexLiteral;
 use crate::types::builtin::IntegerLiteral;
+use crate::types::builtin::IpAddress;
+use crate::types::builtin::Prefix;
 use crate::types::builtin::PrefixLength;
 use crate::types::builtin::StringLiteral;
 use crate::types::enum_types::GlobalEnumTypeDef;
@@ -32,6 +34,7 @@ use super::types::typedef::TypeDef;
 use super::types::typevalue::TypeValue;
 
 use std::convert::From;
+use std::net::IpAddr;
 
 impl<'a> ast::SyntaxTree {
     pub fn eval(
@@ -1703,6 +1706,15 @@ impl ast::ValueExpr {
                     TypeValue::Builtin(BuiltinTypeValue::HexLiteral(
                         HexLiteral::new(hex_lit.into()),
                     )),
+                    vec![],
+                    Token::Constant(None),
+                ))
+            }
+            ast::ValueExpr::IpAddressLiteral(ip_address_lit) => {
+                Ok(symbols::Symbol::new_with_value(
+                    "ip_address_lit".into(),
+                    symbols::SymbolKind::Constant,
+                    IpAddress::try_from(ip_address_lit)?.into(),
                     vec![],
                     Token::Constant(None),
                 ))

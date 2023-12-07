@@ -246,6 +246,8 @@ fn test_filter_map_40() {
 
 #[test]
 fn test_filter_map_41() {
+    common::init();
+
     let src_line = &src_code(
         "filter match peer-asn-matches matching { set-asn; return accept; };",
         "AS0",

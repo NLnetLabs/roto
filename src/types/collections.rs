@@ -216,6 +216,9 @@ impl TryFrom<ValueExpr> for ElementTypeValue {
             ValueExpr::IntegerLiteral(i_lit) => {
                 Ok(ElementTypeValue::Primitive(i_lit.into()))
             }
+            ValueExpr::IpAddressLiteral(ip_lit) => {
+                Ok(ElementTypeValue::Primitive((&ip_lit).try_into()?))
+            }
             ValueExpr::PrefixLengthLiteral(pl_lit) => {
                 Ok(ElementTypeValue::Primitive(pl_lit.into()))
             }

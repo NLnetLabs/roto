@@ -5,8 +5,12 @@ use nom::branch::{alt, permutation};
 use nom::bytes::complete::{
     is_not, take, take_while, take_while1, take_while_m_n,
 };
-use nom::character::complete::{char, digit1, multispace0, multispace1};
-use nom::combinator::{all_consuming, cut, map_res, not, opt, recognize};
+use nom::character::complete::{
+    alpha1, char, digit0, digit1, hex_digit1, multispace0, multispace1, hex_digit0,
+};
+use nom::combinator::{
+    all_consuming, cut, iterator, map_res, not, opt, peek, recognize,
+};
 use nom::error::{
     context, ErrorKind, FromExternalError, ParseError, VerboseError,
 };
@@ -1871,7 +1875,53 @@ impl From<&'_ IntegerLiteral> for i64 {
     }
 }
 
-//------------ PrefixLengthLiteral ------------------------------------------
+//------------ IpAddressLiteral ----------------------------------------------
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct IpAddressLiteral(pub String);
+
+impl IpAddressLiteral {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        trace!("IP ADDRESS LITERAL");
+        trace!("input {:?}", input);
+
+        let (input, ip_addr_str) = context(
+            "IP address literal",
+            alt((
+                recognize(tuple((
+                    terminated(digit1, char('.')),
+                    terminated(digit1, char('.')),
+                    terminated(digit1, char('.')),
+                    take_while1(|ch: char| ch.is_dec_digit()),
+                    not(char(':')),
+                ))),
+                recognize(tuple((
+                    terminated(hex_digit0, char(':')),
+                    opt(terminated(hex_digit0, char(':'))),
+                    opt(terminated(hex_digit0, char(':'))),
+                    opt(terminated(hex_digit0, char(':'))),
+                    opt(terminated(hex_digit0, char(':'))),
+                    opt(terminated(hex_digit0, char(':'))),
+                    opt(terminated(hex_digit0, char(':'))),
+                    hex_digit0,
+                    not(char('.')),
+                ))),
+            )),
+        )(input)?;
+
+        Ok((input, Self(ip_addr_str.to_string())))
+    }
+}
+
+impl From<&'_ IpAddressLiteral> for ShortString {
+    fn from(literal: &IpAddressLiteral) -> Self {
+        ShortString::from(literal.0.to_string().as_str())
+    }
+}
+
+//------------ PrefixLiteral -------------------------------------------------
+
+//------------ PrefixLengthLiteral -------------------------------------------
 
 /// A prefix length literal is a sequence of digits preceded by a '/'.
 /// PrefixLengthLiteral ::= /[0-9]+
@@ -1960,17 +2010,22 @@ impl From<&'_ HexLiteral> for u64 {
 
 pub struct AsnLiteral(pub u32);
 
+// To avoid a parse collision with an extended community literal i.e
+// 'AS{}:{}:{}', we are checking that the literal is not followed by a ':'.
 impl AsnLiteral {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, digits) = context(
             "ASN literal",
-            recognize(pair(
-                tag("AS"),
-                take_while1(|ch: char| ch.is_ascii_hexdigit()),
+            tuple((
+                recognize(pair(
+                    tag("AS"),
+                    take_while1(|ch: char| ch.is_ascii_hexdigit()),
+                )),
+                not(char(':')),
             )),
         )(input)?;
 
-        let value = digits[2..].parse::<u32>().map_err(|e| {
+        let value = digits.0[2..].parse::<u32>().map_err(|e| {
             nom::Err::Failure(VerboseError::from_external_error(
                 input,
                 nom::error::ErrorKind::AlphaNumeric,
@@ -2005,9 +2060,10 @@ impl StandardCommunityLiteral {
             tuple((
                 opt(tag("0x")),
                 take_while_m_n(1, 5, |ch: char| ch.is_hex_digit()),
-                tag(":"),
+                char(':'),
                 opt(tag("0x")),
                 take_while_m_n(1, 5, |ch: char| ch.is_hex_digit()),
+                not(char(':')),
             )),
         )(input)?;
 
@@ -2034,13 +2090,15 @@ impl StandardCommunityLiteral {
                     e,
                 ))
             })?
-        } else { std_comm.1.parse::<u64>().map_err(|e| {
-            nom::Err::Failure(VerboseError::from_external_error(
-                input,
-                nom::error::ErrorKind::Digit,
-                e,
-            ))
-        })? };
+        } else {
+            std_comm.1.parse::<u64>().map_err(|e| {
+                nom::Err::Failure(VerboseError::from_external_error(
+                    input,
+                    nom::error::ErrorKind::Digit,
+                    e,
+                ))
+            })?
+        };
 
         let value_2 = if let Some(_hex_tag) = std_comm.3 {
             u64::from_str_radix(std_comm.4, 16).map_err(|e| {
@@ -2050,13 +2108,15 @@ impl StandardCommunityLiteral {
                     e,
                 ))
             })?
-        } else { std_comm.4.parse::<u64>().map_err(|e| {
-            nom::Err::Failure(VerboseError::from_external_error(
-                input,
-                nom::error::ErrorKind::Digit,
-                e,
-            ))
-        })? };
+        } else {
+            std_comm.4.parse::<u64>().map_err(|e| {
+                nom::Err::Failure(VerboseError::from_external_error(
+                    input,
+                    nom::error::ErrorKind::Digit,
+                    e,
+                ))
+            })?
+        };
 
         // See tests in bgp_filters.rs for the kind of errors the eval() phase
         // returns.
@@ -2095,6 +2155,9 @@ impl TryFrom<&'_ StandardCommunityLiteral> for Community {
 #[derive(Clone, Debug)]
 pub struct ExtendedCommunityLiteral(pub String);
 
+// To avoid a collision with a IPv6 address, which can never be three hex
+// blocks, we make sure that the ext. community here is never followed by a
+// ':'
 impl ExtendedCommunityLiteral {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, ext_comm) = context(
@@ -2102,12 +2165,13 @@ impl ExtendedCommunityLiteral {
             tuple((
                 take_while1(|ch: char| ch.is_alpha()),
                 tag(":"),
-                opt(tag("0x")), 
+                opt(tag("0x")),
                 take_while1(|ch: char| ch.is_hex_digit()),
                 tag(":"),
                 opt(tag("0x")),
                 take_while_m_n(1, 5, |ch: char| ch.is_hex_digit()),
-            ))
+                not(char(':')),
+            )),
         )(input)?;
 
         // Let routecore do all the heavy lifting here: Not erroring out here
@@ -2133,13 +2197,15 @@ impl ExtendedCommunityLiteral {
                     e,
                 ))
             })?
-        } else { ext_comm.3.parse::<u64>().map_err(|e| {
-            nom::Err::Failure(VerboseError::from_external_error(
-                input,
-                nom::error::ErrorKind::Digit,
-                e,
-            ))
-        })? };
+        } else {
+            ext_comm.3.parse::<u64>().map_err(|e| {
+                nom::Err::Failure(VerboseError::from_external_error(
+                    input,
+                    nom::error::ErrorKind::Digit,
+                    e,
+                ))
+            })?
+        };
 
         let value_2 = if let Some(_hex_tag) = ext_comm.5 {
             u32::from_str_radix(ext_comm.6, 16).map_err(|e| {
@@ -2149,13 +2215,15 @@ impl ExtendedCommunityLiteral {
                     e,
                 ))
             })?
-        } else { ext_comm.6.parse::<u32>().map_err(|e| {
-            nom::Err::Failure(VerboseError::from_external_error(
-                input,
-                nom::error::ErrorKind::Digit,
-                e,
-            ))
-        })? };
+        } else {
+            ext_comm.6.parse::<u32>().map_err(|e| {
+                nom::Err::Failure(VerboseError::from_external_error(
+                    input,
+                    nom::error::ErrorKind::Digit,
+                    e,
+                ))
+            })?
+        };
 
         Ok((input, Self(format!("{}:{value_1}:{value_2}", ext_comm.0))))
     }
@@ -2189,7 +2257,6 @@ impl<'a> TryFrom<&'a ExtendedCommunityLiteral> for Community {
 
 //------------ LargeCommunityLiteral -----------------------------------------
 
-
 #[derive(Clone, Debug)]
 pub struct LargeCommunityLiteral(pub String);
 
@@ -2206,7 +2273,7 @@ impl LargeCommunityLiteral {
                 tag(":"),
                 opt(tag("0x")),
                 take_while1(|ch: char| ch.is_hex_digit()),
-            ))
+            )),
         )(input)?;
 
         // Let routecore do all the heavy lifting here: Not erroring out here
@@ -2225,23 +2292,20 @@ impl LargeCommunityLiteral {
         // would be a u16 here), we're parsing the largest possible type, so
         // that the eval phase can optionally error out.
         let value_1 = match l_comm.0 {
-            Some("0x") => {
-                u64::from_str_radix(l_comm.1, 16).map_err(|e| {
-                    nom::Err::Failure(VerboseError::from_external_error(
-                        input,
-                        nom::error::ErrorKind::HexDigit,
-                        e,
-                    ))
-                })?
-            },
-            _ => { l_comm.1.parse::<u64>().map_err(|e| {
-                    nom::Err::Failure(VerboseError::from_external_error(
-                        input,
-                        nom::error::ErrorKind::Digit,
-                        e,
-                    ))
-                })?
-            }
+            Some("0x") => u64::from_str_radix(l_comm.1, 16).map_err(|e| {
+                nom::Err::Failure(VerboseError::from_external_error(
+                    input,
+                    nom::error::ErrorKind::HexDigit,
+                    e,
+                ))
+            })?,
+            _ => l_comm.1.parse::<u64>().map_err(|e| {
+                nom::Err::Failure(VerboseError::from_external_error(
+                    input,
+                    nom::error::ErrorKind::Digit,
+                    e,
+                ))
+            })?,
         };
 
         let value_2 = if let Some(_hex_tag) = l_comm.3 {
@@ -2252,13 +2316,15 @@ impl LargeCommunityLiteral {
                     e,
                 ))
             })?
-        } else { l_comm.4.parse::<u32>().map_err(|e| {
-            nom::Err::Failure(VerboseError::from_external_error(
-                input,
-                nom::error::ErrorKind::Digit,
-                e,
-            ))
-        })? };
+        } else {
+            l_comm.4.parse::<u32>().map_err(|e| {
+                nom::Err::Failure(VerboseError::from_external_error(
+                    input,
+                    nom::error::ErrorKind::Digit,
+                    e,
+                ))
+            })?
+        };
 
         let value_3 = if let Some(_hex_tag) = l_comm.6 {
             u32::from_str_radix(l_comm.7, 16).map_err(|e| {
@@ -2268,15 +2334,23 @@ impl LargeCommunityLiteral {
                     e,
                 ))
             })?
-        } else { l_comm.7.parse::<u32>().map_err(|e| {
-            nom::Err::Failure(VerboseError::from_external_error(
-                input,
-                nom::error::ErrorKind::Digit,
-                e,
-            ))
-        })? };
-    
-        Ok((input, Self(format!("{}{value_1}:{value_2}:{value_3}", if let Some("AS") = l_comm.0 { "AS" } else { "" }))))
+        } else {
+            l_comm.7.parse::<u32>().map_err(|e| {
+                nom::Err::Failure(VerboseError::from_external_error(
+                    input,
+                    nom::error::ErrorKind::Digit,
+                    e,
+                ))
+            })?
+        };
+
+        Ok((
+            input,
+            Self(format!(
+                "{}{value_1}:{value_2}:{value_3}",
+                if let Some("AS") = l_comm.0 { "AS" } else { "" }
+            )),
+        ))
     }
 }
 
@@ -2457,12 +2531,13 @@ impl std::fmt::Display for AcceptReject {
 #[derive(Clone, Debug)]
 pub enum ValueExpr {
     StringLiteral(StringLiteral),
-    IntegerLiteral(IntegerLiteral),
     PrefixLengthLiteral(PrefixLengthLiteral),
     AsnLiteral(AsnLiteral),
+    IpAddressLiteral(IpAddressLiteral),
     ExtendedCommunityLiteral(ExtendedCommunityLiteral),
     StandardCommunityLiteral(StandardCommunityLiteral),
     LargeCommunityLiteral(LargeCommunityLiteral),
+    IntegerLiteral(IntegerLiteral),
     HexLiteral(HexLiteral),
     BooleanLit(BooleanLiteral),
     PrefixMatchExpr(PrefixMatchExpr),
@@ -2492,10 +2567,11 @@ impl ValueExpr {
                 StandardCommunityLiteral::parse,
                 ValueExpr::StandardCommunityLiteral,
             ),
+            map(IpAddressLiteral::parse, ValueExpr::IpAddressLiteral),
+            map(AsnLiteral::parse, ValueExpr::AsnLiteral),
             map(HexLiteral::parse, ValueExpr::HexLiteral),
             map(IntegerLiteral::parse, ValueExpr::IntegerLiteral),
             map(PrefixLengthLiteral::parse, ValueExpr::PrefixLengthLiteral),
-            map(AsnLiteral::parse, ValueExpr::AsnLiteral),
             map(tag("true"), |_| ValueExpr::BooleanLit(BooleanLiteral(true))),
             map(tag("false"), |_| {
                 ValueExpr::BooleanLit(BooleanLiteral(false))

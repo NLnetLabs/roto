@@ -9,6 +9,7 @@ use routecore::bgp::communities::{
 use serde::ser::SerializeSeq;
 use serde::{Serialize, Serializer};
 
+use crate::ast::IpAddressLiteral;
 use crate::attr_change_set::VectorValue;
 use crate::compiler::compile::CompileError;
 use crate::first_into_vm_err;
@@ -2385,6 +2386,15 @@ impl RotoType for IpAddress {
 impl From<IpAddress> for TypeValue {
     fn from(val: IpAddress) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::IpAddress(val))
+    }
+}
+
+impl TryFrom<&'_ IpAddressLiteral> for IpAddress {
+    type Error = CompileError;
+
+    fn try_from(value: &IpAddressLiteral) -> Result<Self, Self::Error> {
+        Ok(IpAddress(<std::net::IpAddr as std::str::FromStr>::from_str(value.0.as_str())
+            .map_err(|e| CompileError::from(format!("Cannot parse '{:?}' as an IP Address: {}", value, e)))?))
     }
 }
 
