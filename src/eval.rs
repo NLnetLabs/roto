@@ -20,7 +20,6 @@ use crate::types::builtin::BuiltinTypeValue;
 use crate::types::builtin::HexLiteral;
 use crate::types::builtin::IntegerLiteral;
 use crate::types::builtin::IpAddress;
-use crate::types::builtin::Prefix;
 use crate::types::builtin::PrefixLength;
 use crate::types::builtin::StringLiteral;
 use crate::types::enum_types::GlobalEnumTypeDef;
@@ -34,7 +33,6 @@ use super::types::typedef::TypeDef;
 use super::types::typevalue::TypeValue;
 
 use std::convert::From;
-use std::net::IpAddr;
 
 impl<'a> ast::SyntaxTree {
     pub fn eval(

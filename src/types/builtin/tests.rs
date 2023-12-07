@@ -14,7 +14,7 @@ mod route {
     enum MethodType {
         Value,
         Type,
-        Consume,
+        _Consume,
     }
     use routecore::bgp::communities::{StandardCommunity, Tag, ExtendedCommunity, LargeCommunity};
     use routecore::bgp::{
@@ -428,7 +428,7 @@ mod route {
         // let arg_value = arg_value.clone().into_type(&src_ty)?;
 
         let set_ops = match method_type {
-            MethodType::Consume => from_value
+            MethodType::_Consume => from_value
                 .exec_consume_value_method(
                     m.method_token.try_into()?,
                     validated_arg_values,

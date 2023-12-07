@@ -6,10 +6,10 @@ use nom::bytes::complete::{
     is_not, take, take_while, take_while1, take_while_m_n,
 };
 use nom::character::complete::{
-    alpha1, char, digit0, digit1, hex_digit1, multispace0, multispace1, hex_digit0,
+    char, digit1, multispace0, multispace1, hex_digit0,
 };
 use nom::combinator::{
-    all_consuming, cut, iterator, map_res, not, opt, peek, recognize,
+    all_consuming, cut, map_res, not, opt, recognize,
 };
 use nom::error::{
     context, ErrorKind, FromExternalError, ParseError, VerboseError,
