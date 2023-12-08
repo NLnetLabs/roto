@@ -1149,15 +1149,13 @@ impl RotoType for HexLiteral {
                 match self.0 {
                     v if v <= <u32>::MAX.into() => {
                         Ok(TypeValue::Builtin(BuiltinTypeValue::Community(
-                            Community::from(v as u32)
-                        )))
-                    },
-                    // Convert to an ExtendedCommunity
-                    v => {
-                        Ok(TypeValue::Builtin(BuiltinTypeValue::Community(
-                            Community::from(v)
+                            Community::from(v as u32),
                         )))
                     }
+                    // Convert to an ExtendedCommunity
+                    v => Ok(TypeValue::Builtin(BuiltinTypeValue::Community(
+                        Community::from(v),
+                    ))),
                 }
             }
             TypeDef::U8 => u8::try_from(self.0)
@@ -1294,6 +1292,21 @@ impl RotoType for Prefix {
                 PrefixToken::Exists.into(),
                 vec![],
             )),
+            "covers" => Ok(MethodProps::new(
+                TypeDef::Boolean,
+                PrefixToken::Covers.into(),
+                vec![TypeDef::Prefix],
+            )),
+            "is_covered_by" => Ok(MethodProps::new(
+                TypeDef::Boolean,
+                PrefixToken::IsCoveredBy.into(),
+                vec![TypeDef::Prefix],
+            )),
+            "contains" => Ok(MethodProps::new(
+                TypeDef::Boolean,
+                PrefixToken::Contains.into(),
+                vec![TypeDef::IpAddress],
+            )),
             _ => Err(format!(
                 "Unknown method: '{}' for type Prefix",
                 method_name.ident
@@ -1322,7 +1335,7 @@ impl RotoType for Prefix {
         &self,
         method_token: usize,
 
-        _args: &[StackValue],
+        args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         match method_token.try_into()? {
@@ -1341,6 +1354,48 @@ impl RotoType for Prefix {
             PrefixToken::From => unimplemented!(),
             PrefixToken::Exists => Ok(true.into()),
             PrefixToken::Matches => todo!(),
+            PrefixToken::Covers => {
+                if let Some(other_pfx) = args.get(0) {
+                    if let TypeValue::Builtin(BuiltinTypeValue::Prefix(
+                        Prefix(other),
+                    )) = other_pfx.as_ref()
+                    {
+                        Ok(self.0.covers(*other).into())
+                    } else {
+                        Err(VmError::InvalidMethodCall)
+                    }
+                } else {
+                    Ok(TypeValue::Unknown)
+                }
+            }
+            PrefixToken::IsCoveredBy => {
+                if let Some(other_pfx) = args.get(0) {
+                    if let TypeValue::Builtin(BuiltinTypeValue::Prefix(
+                        Prefix(other),
+                    )) = other_pfx.as_ref()
+                    {
+                        Ok(other.covers(self.0).into())
+                    } else {
+                        Err(VmError::InvalidMethodCall)
+                    }
+                } else {
+                    Ok(TypeValue::Unknown)
+                }
+            }
+            PrefixToken::Contains => {
+                if let Some(other_ip) = args.get(0) {
+                    if let TypeValue::Builtin(BuiltinTypeValue::IpAddress(
+                        IpAddress(other),
+                    )) = other_ip.as_ref()
+                    {
+                        Ok(self.0.contains(*other).into())
+                    } else {
+                        Err(VmError::InvalidMethodCall)
+                    }
+                } else {
+                    Ok(TypeValue::Unknown)
+                }
+            }
         }
     }
 
@@ -1393,8 +1448,17 @@ impl TryFrom<&'_ PrefixLiteral> for Prefix {
     type Error = CompileError;
 
     fn try_from(value: &PrefixLiteral) -> Result<Self, Self::Error> {
-        Ok(Prefix(<routecore::addr::Prefix as std::str::FromStr>::from_str(value.0.as_str())
-            .map_err(|e| CompileError::from(format!("Cannot parse '{:?}' as an IP Address: {}", value, e)))?))
+        Ok(Prefix(
+            <routecore::addr::Prefix as std::str::FromStr>::from_str(
+                value.0.as_str(),
+            )
+            .map_err(|e| {
+                CompileError::from(format!(
+                    "Cannot parse '{:?}' as a Prefix: {}",
+                    value, e
+                ))
+            })?,
+        ))
     }
 }
 
@@ -1424,6 +1488,9 @@ pub(crate) enum PrefixToken {
     Address = 2,
     Len = 3,
     Matches = 4,
+    Covers = 5,
+    IsCoveredBy = 6,
+    Contains = 7,
 }
 
 impl TryFrom<usize> for PrefixToken {
@@ -1436,6 +1503,9 @@ impl TryFrom<usize> for PrefixToken {
             2 => Ok(PrefixToken::Address),
             3 => Ok(PrefixToken::Len),
             4 => Ok(PrefixToken::Matches),
+            5 => Ok(PrefixToken::Covers),
+            6 => Ok(PrefixToken::IsCoveredBy),
+            7 => Ok(PrefixToken::Contains),
             _ => {
                 debug!("Unknown token value: {}", val);
                 Err(VmError::InvalidMethodCall)
@@ -2138,9 +2208,10 @@ impl RotoType for Community {
     ) -> Result<TypeValue, VmError> {
         match method_token.try_into()? {
             CommunityToken::Set => {
-                if let TypeValue::Builtin(BuiltinTypeValue::Community(comm)) = 
-                    args.get(0).ok_or(VmError::InvalidMethodCall)?.as_ref() {
-                        Ok(TypeValue::from(*comm))
+                if let TypeValue::Builtin(BuiltinTypeValue::Community(comm)) =
+                    args.get(0).ok_or(VmError::InvalidMethodCall)?.as_ref()
+                {
+                    Ok(TypeValue::from(*comm))
                 } else {
                     Err(VmError::InvalidMethodCall)
                 }
@@ -2161,13 +2232,15 @@ impl RotoType for Community {
         mut args: Vec<TypeValue>,
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        match method_token.try_into()? {  
+        match method_token.try_into()? {
             CommunityToken::Set => {
                 if let Ok(TypeValue::Builtin(BuiltinTypeValue::Community(
                     comm_lit,
                 ))) = args.remove(0).into_type(&TypeDef::Community)
                 {
-                    Ok(TypeValue::Builtin(BuiltinTypeValue::Community(comm_lit)))
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::Community(
+                        comm_lit,
+                    )))
                 } else {
                     Err(VmError::InvalidValueType)
                 }
@@ -2242,13 +2315,21 @@ impl TryFrom<&str> for Community {
 // Standard Community.
 impl From<u32> for Community {
     fn from(value: u32) -> Self {
-        Self(routecore::bgp::communities::StandardCommunity::from_u32(value).into())
+        Self(
+            routecore::bgp::communities::StandardCommunity::from_u32(value)
+                .into(),
+        )
     }
 }
 
 impl From<u64> for Community {
     fn from(value: u64) -> Self {
-        Self(routecore::bgp::communities::ExtendedCommunity::from(value.to_be_bytes()).into())
+        Self(
+            routecore::bgp::communities::ExtendedCommunity::from(
+                value.to_be_bytes(),
+            )
+            .into(),
+        )
     }
 }
 
@@ -2402,8 +2483,17 @@ impl TryFrom<&'_ IpAddressLiteral> for IpAddress {
     type Error = CompileError;
 
     fn try_from(value: &IpAddressLiteral) -> Result<Self, Self::Error> {
-        Ok(IpAddress(<std::net::IpAddr as std::str::FromStr>::from_str(value.0.as_str())
-            .map_err(|e| CompileError::from(format!("Cannot parse '{:?}' as an IP Address: {}", value, e)))?))
+        Ok(IpAddress(
+            <std::net::IpAddr as std::str::FromStr>::from_str(
+                value.0.as_str(),
+            )
+            .map_err(|e| {
+                CompileError::from(format!(
+                    "Cannot parse '{:?}' as an IP Address: {}",
+                    value, e
+                ))
+            })?,
+        ))
     }
 }
 
