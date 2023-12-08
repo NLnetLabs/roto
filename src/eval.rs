@@ -1642,6 +1642,79 @@ impl ast::AccessReceiver {
     }
 }
 
+impl ast::LiteralExpr {
+    fn eval(
+        &self
+    ) -> Result<symbols::Symbol, CompileError> {
+        trace!("literal value {:?}", self);
+        Ok(symbols::Symbol::new_with_value(
+            "lit".into(),
+            symbols::SymbolKind::Constant,
+            self.try_into()?,
+            vec![],
+            Token::Constant(None),
+        ))
+    }
+}
+
+impl ast::LiteralAccessExpr {
+    fn eval(
+        &self,
+        symbols: symbols::GlobalSymbolTable,
+        scope: Scope,
+        local_scope: &[Symbol]
+    ) -> Result<symbols::Symbol, CompileError> {
+
+        let mut ar_symbol = self.literal.eval()?;
+        let mut ty = ar_symbol.get_type();
+
+        let ar_token = ar_symbol.get_token();
+        let mut s = &mut ar_symbol;
+
+        for a_e in &self.access_expr {
+            match a_e {
+                ast::AccessExpr::MethodComputeExpr(method_call) => {
+                    trace!("MC symbol (s) {:#?}", s);
+                    trace!("method call {:#?} on type {}", method_call, ty);
+                    trace!("local scope {:?}", local_scope);
+                    
+                    let arg_s = method_call.eval(
+                        // At this stage we don't know really whether the
+                        // method call will be mutating or not, but we're
+                        // setting the safe choice here (non-mutable).
+                        symbols::SymbolKind::MethodCallbyRef,
+                        ty,
+                        symbols.clone(),
+                        scope.clone(),
+                        local_scope,
+                    )?;
+                    // propagate the type of this argument to a possible next one
+                    ty = arg_s.get_type();
+                    s.add_arg(arg_s);
+                }
+                ast::AccessExpr::FieldAccessExpr(field_access) => {
+                    trace!("FA symbol (s) {:#?}", s);
+                    trace!(
+                        "all symbols in filter-map table {:#?}",
+                        symbols.borrow().get(&scope)
+                    );
+                    let arg_s = field_access.eval(ty)?;
+                    // propagate the type of this argument to a possible next one
+                    ty = arg_s.get_type();
+                    let i = s.add_arg(arg_s);
+                    trace!("symbol -> {:#?}", s);
+                    s = &mut s.get_args_mut()[i];
+                }
+            };
+        }
+
+        // The return type of a literal access expression is propagated from
+        // the last argument to its parent, the access receiver symbol.
+        ar_symbol = ar_symbol.set_type(ty).set_token(ar_token);
+        Ok(ar_symbol)
+    }
+}
+
 impl ast::ValueExpr {
     fn eval(
         &self,
@@ -1650,6 +1723,7 @@ impl ast::ValueExpr {
         local_scope: &[Symbol],
     ) -> Result<symbols::Symbol, CompileError> {
         match self {
+            ast::ValueExpr::LiteralAccessExpr(lit) => lit.eval(symbols, scope, local_scope),
             // an expression ending in a a method call (e.g. `foo.bar()`).
             // Note that the evaluation of the method call will check for
             // the existence of the method.
@@ -1673,117 +1747,6 @@ impl ast::ValueExpr {
                 } else {
                     Err(format!("Unknown built-in method call: {}", name))?
                 }
-            }
-            ast::ValueExpr::StringLiteral(str_lit) => {
-                Ok(symbols::Symbol::new_with_value(
-                    "string_lit".into(),
-                    symbols::SymbolKind::Constant,
-                    TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
-                        StringLiteral::new(str_lit.into()),
-                    )),
-                    vec![],
-                    Token::Constant(None),
-                ))
-            }
-            // Integers are special, we are keeping them as is, so that the
-            // receiver can decide how to cast them (into u8, u32 or i64).
-            ast::ValueExpr::IntegerLiteral(int_lit) => {
-                Ok(symbols::Symbol::new_with_value(
-                    int_lit.into(),
-                    symbols::SymbolKind::Constant,
-                    TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
-                        IntegerLiteral::new(int_lit.into()),
-                    )),
-                    vec![],
-                    Token::Constant(None),
-                ))
-            }
-            ast::ValueExpr::HexLiteral(hex_lit) => {
-                Ok(symbols::Symbol::new_with_value(
-                    "hex_lit".into(),
-                    symbols::SymbolKind::Constant,
-                    TypeValue::Builtin(BuiltinTypeValue::HexLiteral(
-                        HexLiteral::new(hex_lit.into()),
-                    )),
-                    vec![],
-                    Token::Constant(None),
-                ))
-            }
-            ast::ValueExpr::PrefixLiteral(pfx_lit) => {
-                Ok(symbols::Symbol::new_with_value(
-                    "prefix_lit".into(),
-                    symbols::SymbolKind::Constant,
-                    Prefix::try_from(pfx_lit)?.into(),
-                    vec![],
-                    Token::Constant(None)
-                ))
-            }
-            ast::ValueExpr::IpAddressLiteral(ip_address_lit) => {
-                Ok(symbols::Symbol::new_with_value(
-                    "ip_address_lit".into(),
-                    symbols::SymbolKind::Constant,
-                    IpAddress::try_from(ip_address_lit)?.into(),
-                    vec![],
-                    Token::Constant(None),
-                ))
-            }
-            ast::ValueExpr::PrefixLengthLiteral(prefix_len_lit) => {
-                Ok(symbols::Symbol::new_with_value(
-                    "prefix_len_lit".into(),
-                    symbols::SymbolKind::Constant,
-                    TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
-                        PrefixLength::new(prefix_len_lit.into()),
-                    )),
-                    vec![],
-                    Token::Constant(None),
-                ))
-            }
-            ast::ValueExpr::AsnLiteral(asn_lit) => {
-                Ok(symbols::Symbol::new_with_value(
-                    asn_lit.into(),
-                    symbols::SymbolKind::Constant,
-                    TypeValue::Builtin(BuiltinTypeValue::Asn(asn_lit.into())),
-                    vec![],
-                    Token::Constant(None),
-                ))
-            }
-            ast::ValueExpr::StandardCommunityLiteral(std_comm_lit) => {
-                Ok(symbols::Symbol::new_with_value(
-                    std_comm_lit.into(),
-                    SymbolKind::Constant,
-                    TypeValue::Builtin(BuiltinTypeValue::Community(std_comm_lit.try_into()?)),
-                    vec![],
-                    Token::Constant(None),
-                ))
-            }
-            ast::ValueExpr::ExtendedCommunityLiteral(std_comm_lit) => {
-                Ok(symbols::Symbol::new_with_value(
-                    std_comm_lit.into(),
-                    SymbolKind::Constant,
-                    TypeValue::Builtin(BuiltinTypeValue::Community(std_comm_lit.try_into()?)),
-                    vec![],
-                    Token::Constant(None),
-                ))
-            }
-            ast::ValueExpr::LargeCommunityLiteral(l_comm_lit) => {
-                Ok(symbols::Symbol::new_with_value(
-                    l_comm_lit.into(),
-                    SymbolKind::Constant,
-                    TypeValue::Builtin(BuiltinTypeValue::Community(l_comm_lit.try_into()?)),
-                    vec![],
-                    Token::Constant(None),
-                ))
-            }
-            ast::ValueExpr::BooleanLit(bool_lit) => {
-                Ok(symbols::Symbol::new_with_value(
-                    bool_lit.into(),
-                    symbols::SymbolKind::Constant,
-                    TypeValue::Builtin(BuiltinTypeValue::Boolean(
-                        bool_lit.into(),
-                    )),
-                    vec![],
-                    Token::Constant(None),
-                ))
             }
             ast::ValueExpr::AnonymousRecordExpr(rec) => {
                 let rec_value = rec.eval(symbols, scope, local_scope)?;
@@ -2168,6 +2131,14 @@ impl ast::BooleanExpr {
                     symbols,
                     scope.clone(),
                     local_scope,
+                )?;
+                Ok(s)
+            }
+            // like the call expression above, a literal, or a literal access
+            // (a method/field access on a literal) may return a boolean.
+            ast::BooleanExpr::LiteralAccessExpr(lit_access_expr) => {
+                let s = lit_access_expr.eval(
+                    symbols, scope.clone(), local_scope
                 )?;
                 Ok(s)
             }

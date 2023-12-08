@@ -210,39 +210,8 @@ impl TryFrom<ValueExpr> for ElementTypeValue {
 
     fn try_from(value: ValueExpr) -> Result<Self, Self::Error> {
         match value {
-            ValueExpr::StringLiteral(s_lit) => {
-                Ok(ElementTypeValue::Primitive(s_lit.into()))
-            }
-            ValueExpr::IntegerLiteral(i_lit) => {
-                Ok(ElementTypeValue::Primitive(i_lit.into()))
-            }
-            ValueExpr::PrefixLiteral(pfx_lit) => {
-                Ok(ElementTypeValue::Primitive((&pfx_lit).try_into()?))
-            }
-            ValueExpr::IpAddressLiteral(ip_lit) => {
-                Ok(ElementTypeValue::Primitive((&ip_lit).try_into()?))
-            }
-            ValueExpr::PrefixLengthLiteral(pl_lit) => {
-                Ok(ElementTypeValue::Primitive(pl_lit.into()))
-            }
-            ValueExpr::AsnLiteral(asn_lit) => {
-                Ok(ElementTypeValue::Primitive(asn_lit.into()))
-            }
-            ValueExpr::StandardCommunityLiteral(s_comm_lit) => {
-                Ok(ElementTypeValue::Primitive(s_comm_lit.try_into()?))
-            }
-            ValueExpr::ExtendedCommunityLiteral(e_comm_lit) => {
-                Ok(ElementTypeValue::Primitive(e_comm_lit.try_into()?))
-            }
-            ValueExpr::LargeCommunityLiteral(l_comm_lit) => {
-                Ok(ElementTypeValue::Primitive(l_comm_lit.try_into()?))
-            }
-            ValueExpr::HexLiteral(hex_lit) => {
-                Ok(ElementTypeValue::Primitive(hex_lit.into()))
-            }
-            ValueExpr::BooleanLit(bool_lit) => {
-                Ok(ElementTypeValue::Primitive(bool_lit.into()))
-            }
+            ValueExpr::LiteralAccessExpr(ref lit) => 
+                Ok(ElementTypeValue::Primitive((&lit.literal).try_into()?)),
             ValueExpr::PrefixMatchExpr(_) => todo!(),
             ValueExpr::ComputeExpr(_) => todo!(),
             ValueExpr::RootMethodCallExpr(_) => todo!(),

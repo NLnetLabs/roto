@@ -32,6 +32,7 @@ use smallvec::SmallVec;
 
 use crate::compiler::error::CompileError;
 use crate::types::builtin::{Asn, Boolean, Community};
+use crate::types::typevalue::TypeValue;
 use crate::{first_into_compile_err, parse_string};
 
 /// ======== Root ===========================================================
@@ -1767,9 +1768,9 @@ impl StringLiteral {
     }
 }
 
-impl From<&'_ StringLiteral> for String {
-    fn from(literal: &StringLiteral) -> Self {
-        literal.0.clone()
+impl From<StringLiteral> for String {
+    fn from(literal: StringLiteral) -> Self {
+        literal.0
     }
 }
 
@@ -1882,9 +1883,6 @@ pub struct IpAddressLiteral(pub String);
 
 impl IpAddressLiteral {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        trace!("IP ADDRESS LITERAL");
-        trace!("input {:?}", input);
-
         let (input, ip_addr_str) = context(
             "IP address literal",
             alt((
@@ -2541,15 +2539,10 @@ impl std::fmt::Display for AcceptReject {
     }
 }
 
-//------------ ValueExpr --------------------------------------------------
-
-// ValueExpr ::=
-//  *Literal |
-//  ComputeExpr |
-//  BuiltinMethodCallExpr
+//------------ LiteralExpr ---------------------------------------------------
 
 #[derive(Clone, Debug)]
-pub enum ValueExpr {
+pub enum LiteralExpr {
     StringLiteral(StringLiteral),
     PrefixLiteral(PrefixLiteral),
     PrefixLengthLiteral(PrefixLengthLiteral),
@@ -2560,44 +2553,117 @@ pub enum ValueExpr {
     LargeCommunityLiteral(LargeCommunityLiteral),
     IntegerLiteral(IntegerLiteral),
     HexLiteral(HexLiteral),
-    BooleanLit(BooleanLiteral),
+    BooleanLiteral(BooleanLiteral)
+}
+
+impl LiteralExpr {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        alt((
+            map(StringLiteral::parse, LiteralExpr::StringLiteral),
+            map(
+                ExtendedCommunityLiteral::parse,
+                LiteralExpr::ExtendedCommunityLiteral,
+            ),
+            map(
+                LargeCommunityLiteral::parse,
+                LiteralExpr::LargeCommunityLiteral,
+            ),
+            map(
+                StandardCommunityLiteral::parse,
+                LiteralExpr::StandardCommunityLiteral,
+            ),
+            map(PrefixLiteral::parse, LiteralExpr::PrefixLiteral),
+            map(IpAddressLiteral::parse, LiteralExpr::IpAddressLiteral),
+            map(AsnLiteral::parse, LiteralExpr::AsnLiteral),
+            map(HexLiteral::parse, LiteralExpr::HexLiteral),
+            map(IntegerLiteral::parse, LiteralExpr::IntegerLiteral),
+            map(PrefixLengthLiteral::parse, LiteralExpr::PrefixLengthLiteral),
+            map(tag("true"), |_| LiteralExpr::BooleanLiteral(BooleanLiteral(true))),
+            map(tag("false"), |_| {
+                LiteralExpr::BooleanLiteral(BooleanLiteral(false))
+            })
+        ))(input)
+    }
+}
+
+impl TryFrom<&'_ LiteralExpr> for TypeValue {
+    type Error = CompileError;
+
+    fn try_from(value: &'_ LiteralExpr) -> Result<Self, Self::Error> {
+        match value {
+            LiteralExpr::StringLiteral(v) => Ok(v.clone().into()),
+            LiteralExpr::PrefixLiteral(v) => v.try_into(),
+            LiteralExpr::PrefixLengthLiteral(v) => Ok(v.clone().into()),
+            LiteralExpr::AsnLiteral(v) => Ok(v.clone().into()),
+            LiteralExpr::IpAddressLiteral(v) => v.try_into(),
+            LiteralExpr::ExtendedCommunityLiteral(v) => v.clone().try_into(),
+            LiteralExpr::StandardCommunityLiteral(v) => v.clone().try_into(),
+            LiteralExpr::LargeCommunityLiteral(v) => v.clone().try_into(),
+            LiteralExpr::IntegerLiteral(v) => Ok(v.clone().into()),
+            LiteralExpr::HexLiteral(v) => Ok(v.clone().into()),
+            LiteralExpr::BooleanLiteral(v) => Ok(v.clone().into()),
+        }
+    }
+}
+
+//------------ LiteralAccessExpr ---------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct LiteralAccessExpr {
+    pub literal: LiteralExpr,
+    pub access_expr: Vec<AccessExpr>
+}
+
+impl LiteralAccessExpr {
+    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+        let (input, (literal, access_expr)) = tuple((
+            LiteralExpr::parse,
+            many0(preceded(char('.'), AccessExpr::parse)),
+        ))(input)?;
+
+        Ok((input, Self { literal, access_expr }))
+    }
+}
+
+//------------ ValueExpr -----------------------------------------------------
+
+// ValueExpr ::= LiteralAccessExpr | PrefixMatchExpr | ComputeExpr |
+// RootMethodCallExpr | TypedRecordExpr | ListExpr
+
+// An expression that ultimately will resolve into a TypeValue, e.g. the
+// right-hand of an assignment, or an argument to a method, etc.
+
+#[derive(Clone, Debug)]
+pub enum ValueExpr {
+    // a literal, or a chain of field accesses and/or methods on a literal,
+    // e.g. `10.0.0.0/8.covers(..)`
+    LiteralAccessExpr(LiteralAccessExpr),
+    // a JunOS style prefix match expression, e.g. `0.0.0.0/0
+    // prefix-length-range /12-/16`
     PrefixMatchExpr(PrefixMatchExpr),
+    // an access receiver (an expression named with a single identifier, e.g.
+    // `my_var`), or a chain of field accesses and/or methods on an access
+    // receiver.
     ComputeExpr(ComputeExpr),
     // an expression of the form `word(argument)`, so nothing in front of
     // `word`, this would be something like a builtin method call, or an
     // action or term with an argument.
     RootMethodCallExpr(MethodComputeExpr),
+    // a record that doesn't have a type mentioned in the assignment of it,
+    // e.g `{ value_1: 100, value_2: "bla" }`. This can also be a sub-record
+    // of a record that does have an explicit type.
     AnonymousRecordExpr(AnonymousRecordValueExpr),
+    // an expression of a record that does have a type, e.g. `MyType {
+    // value_1: 100, value_2: "bla" }`, where MyType is a user-defined Record
+    // Type.
     TypedRecordExpr(TypedRecordValueExpr),
+    // An expression that yields a list of values, e.g. `[100, 200, 300]`
     ListExpr(ListValueExpr),
 }
 
 impl ValueExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        alt((
-            map(StringLiteral::parse, ValueExpr::StringLiteral),
-            map(
-                ExtendedCommunityLiteral::parse,
-                ValueExpr::ExtendedCommunityLiteral,
-            ),
-            map(
-                LargeCommunityLiteral::parse,
-                ValueExpr::LargeCommunityLiteral,
-            ),
-            map(
-                StandardCommunityLiteral::parse,
-                ValueExpr::StandardCommunityLiteral,
-            ),
-            map(PrefixLiteral::parse, ValueExpr::PrefixLiteral),
-            map(IpAddressLiteral::parse, ValueExpr::IpAddressLiteral),
-            map(AsnLiteral::parse, ValueExpr::AsnLiteral),
-            map(HexLiteral::parse, ValueExpr::HexLiteral),
-            map(IntegerLiteral::parse, ValueExpr::IntegerLiteral),
-            map(PrefixLengthLiteral::parse, ValueExpr::PrefixLengthLiteral),
-            map(tag("true"), |_| ValueExpr::BooleanLit(BooleanLiteral(true))),
-            map(tag("false"), |_| {
-                ValueExpr::BooleanLit(BooleanLiteral(false))
-            }),
+        let (input, value_expr) = alt((
             map(ListValueExpr::parse, ValueExpr::ListExpr),
             map(
                 AnonymousRecordValueExpr::parse,
@@ -2605,9 +2671,12 @@ impl ValueExpr {
             ),
             map(TypedRecordValueExpr::parse, ValueExpr::TypedRecordExpr),
             map(PrefixMatchExpr::parse, ValueExpr::PrefixMatchExpr),
+            map(LiteralAccessExpr::parse, ValueExpr::LiteralAccessExpr),
             map(MethodComputeExpr::parse, ValueExpr::RootMethodCallExpr),
             map(ComputeExpr::parse, ValueExpr::ComputeExpr),
-        ))(input)
+        ))(input)?;
+
+        Ok((input, value_expr))
     }
 }
 
@@ -2996,6 +3065,9 @@ pub enum BooleanExpr {
     CompareExpr(Box<CompareExpr>),
     // A ComputeExpression *may* evaluate to a function that returns a boolean
     ComputeExpr(ComputeExpr),
+    // Just like a ComputeExpr, a Literal, or a Literal access, e.g.
+    // `10.0.0.0/16.covers()`, may return a boolean
+    LiteralAccessExpr(LiteralAccessExpr),
     // Set Compare expression, will *always* result in a boolean-valued
     // function. Syntactic sugar for a truth-function that performs
     // fn : a -> {a} ∩ B
@@ -3017,6 +3089,7 @@ impl BooleanExpr {
             }),
             map(OptionalGlobalComputeExpr::parse, BooleanExpr::ComputeExpr),
             map(PrefixMatchExpr::parse, BooleanExpr::PrefixMatchExpr),
+            map(LiteralAccessExpr::parse, BooleanExpr::LiteralAccessExpr),
             map(BooleanLiteral::parse, BooleanExpr::BooleanLiteral),
         ))(input)
     }
@@ -3035,7 +3108,6 @@ pub struct CompareExpr {
 
 impl CompareExpr {
     pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        trace!("compare expr");
         let (input, (left, op, right)) = context(
             "Compare Expression",
             tuple((
