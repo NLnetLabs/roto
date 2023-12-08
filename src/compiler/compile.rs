@@ -1500,7 +1500,8 @@ fn compile_apply_section(
                                 .find(|t| t.0 == action_section.get_name());
 
                             match term_name {
-                                // yes, it was, create a reference to the result on the stack
+                                // yes, it was, create a reference to the
+                                // result on the stack
                                 Some((_, stack_ref_pos)) => {
                                     if let StackRefPos::MemPos(mem_pos) =
                                         stack_ref_pos
