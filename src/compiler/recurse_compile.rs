@@ -217,6 +217,27 @@ pub(crate) fn recurse_compile<'a>(
             let val = symbol.get_value();
             trace!("encode constant value {:?}", val);
 
+            // constants referenced in a ValueExpr in the right-hand of an
+            // assignment (a variable definition), in the define section come
+            // here.
+            if let Some(v) = state.cur_partial_variable.as_mut() {
+                v.append_primitive(
+                    crate::vm::CompiledPrimitiveField::new(
+                        vec![
+                            Command::new(
+                                OpCode::PushStack,
+                                vec![CommandArg::ConstantValue(val.clone())],
+                            )
+                        ],
+                        FieldIndex::default(),
+                    ),
+                )
+            }
+
+            // every constant ends up here, the assignments above don't use
+            // this, they then discard the whole state.cur_mir_block. On the
+            // other hand direct entries of constants in other than the define
+            // section use this, they'll push this to the MIR code directly.
             state.push_command(
                 OpCode::PushStack,
                 vec![CommandArg::ConstantValue(val.clone())],
