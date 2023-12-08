@@ -377,7 +377,6 @@ fn test_prefix_literal_2() {
 }
 
 #[test]
-#[ignore = "method on literal value does not work yet"]
 fn test_prefix_literal_3() {
     common::init();
 
@@ -391,7 +390,7 @@ fn test_prefix_literal_3() {
 
         term test {
             match {
-                10.0.0.0/8.covers(route.prefix);
+                192.0.0.0/16.covers(route.prefix);
             }
         }
     
@@ -406,11 +405,43 @@ fn test_prefix_literal_3() {
      annc
     ).unwrap();
 
-    assert_eq!(res.accept_reject, AcceptReject::Reject);
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
 
 #[test]
 fn test_prefix_literal_4() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.prefix.is_covered_by(192.0.0.0/16);
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
+}
+
+#[test]
+fn test_prefix_literal_5() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
@@ -442,7 +473,7 @@ fn test_prefix_literal_4() {
 }
 
 #[test]
-fn test_prefix_literal_5() {
+fn test_prefix_literal_6() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
@@ -474,7 +505,7 @@ fn test_prefix_literal_5() {
 }
 
 #[test]
-fn test_prefix_literal_6() {
+fn test_prefix_literal_7() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
@@ -488,6 +519,103 @@ fn test_prefix_literal_6() {
         term test {
             match {
                 route.prefix == 2001:ee34:23a0:123::/64;
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
+}
+
+#[test]
+fn test_prefix_literal_8() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.prefix.contains(192.0.2.254);
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
+}
+
+#[test]
+fn test_prefix_literal_9() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.prefix.contains(192.0.3.254);
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
+}
+
+#[test]
+#[should_panic = r#"Eval error: Unknown method: 'blaffs' for type Prefix"#]
+fn test_prefix_literal_10() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+        }
+
+        term test {
+            match {
+                route.prefix.blaffs(192.0.3.254);
             }
         }
     
