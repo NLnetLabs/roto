@@ -1414,19 +1414,28 @@ impl RotoType for Prefix {
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         match method_token.try_into()? {
-            PrefixToken::From if args.len() == 2 => {
-                if let TypeValue::Builtin(BuiltinTypeValue::IpAddress(ip)) =
-                    args[0].as_ref()
-                {
-                    let len: PrefixLength = args[1]
-                        .as_ref()
-                        .try_into()
-                        .map_err(|_e| VmError::InvalidConversion)?;
-                    let ip = ip.0;
-                    Ok(routecore::addr::Prefix::new(ip, len.0)
-                        .map_or_else(|_| TypeValue::Unknown, |p| p.into()))
+            PrefixToken::From => {
+                if let (Some(addr), Some(len)) = (args.get(0), args.get(1)) {
+                    if let TypeValue::Builtin(BuiltinTypeValue::IpAddress(
+                        addr,
+                    )) = addr.as_ref()
+                    {
+                        let len: PrefixLength =
+                                len
+                                .as_ref()
+                                .try_into()
+                                .map_err(|_e| VmError::InvalidConversion)?;
+                        let ip = addr.0;
+                        Ok(routecore::addr::Prefix::new(ip, len.0)
+                            .map_or_else(
+                                |_| TypeValue::Unknown,
+                                |p| p.into(),
+                            ))
+                    } else {
+                        Err(VmError::AnonymousArgumentNotFound)
+                    }
                 } else {
-                    Err(VmError::AnonymousArgumentNotFound)
+                    Err(VmError::StackUnderflow)
                 }
             }
             PrefixToken::Exists => unimplemented!(),
