@@ -15,7 +15,6 @@ use crate::types::lazyrecord_types::{
     PeerDownNotification, PeerUpNotification, RouteMonitoring, BmpMessage, InitiationMessage,
 };
 
-use super::super::collections::List;
 use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 
@@ -46,7 +45,6 @@ pub enum BuiltinTypeValue {
     MultiExitDisc(MultiExitDisc),       // scalar
     RouteStatus(RouteStatus),           // scalar
     Community(Community),               // scalar
-    Communities(List),                  // vector
     Asn(Asn),                           // scalar
     AsPath(AsPath),                     // vector
     Hop(Hop),                           // read-only scalar
@@ -184,9 +182,6 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::Prefix(v) => v.into_type(ty),
             BuiltinTypeValue::PrefixLength(v) => v.into_type(ty),
             BuiltinTypeValue::Community(v) => v.into_type(ty),
-            BuiltinTypeValue::Communities(_v) => {
-                Err("Can't convert from communities list".into())
-            }
             BuiltinTypeValue::IpAddress(v) => v.into_type(ty),
             BuiltinTypeValue::AsPath(v) => v.into_type(ty),
             BuiltinTypeValue::Hop(h) => h.into_type(ty),
@@ -349,9 +344,6 @@ impl Display for BuiltinTypeValue {
                     write!(f, "{}", v)
                 }
                 BuiltinTypeValue::Community(v) => write!(f, "{}", v),
-                BuiltinTypeValue::Communities(v) => {
-                    write!(f, "{}", v)
-                }
                 BuiltinTypeValue::IpAddress(v) => write!(f, "{}", v),
                 BuiltinTypeValue::Asn(v) => write!(f, "{}", v),
                 BuiltinTypeValue::AsPath(v) => {
@@ -429,9 +421,6 @@ impl Display for BuiltinTypeValue {
                     write!(f, "{} (Prefix Length)", v)
                 }
                 BuiltinTypeValue::Community(v) => write!(f, "{} (Community)", v),
-                BuiltinTypeValue::Communities(v) => {
-                    write!(f, "{:?} (Communities)", v)
-                }
                 BuiltinTypeValue::IpAddress(v) => write!(f, "{} (IP Address)", v),
                 BuiltinTypeValue::Asn(v) => write!(f, "{} (ASN)", v),
                 BuiltinTypeValue::AsPath(v) => {

@@ -296,8 +296,7 @@ impl<V: VectorValue + Into<TypeValue> + std::fmt::Debug> VectorOption<V> {
     ) -> Result<(), LongSegmentError> {
         if let Some(tv) = self.value.as_mut() {
             match tv {
-                TypeValue::List(list)
-                | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
+                TypeValue::List(list) => {
                     list.prepend_vec(vec![value.into()])
                         .map_err(|_| LongSegmentError)?;
                 }
@@ -335,8 +334,7 @@ impl<V: VectorValue + Into<TypeValue> + std::fmt::Debug> VectorOption<V> {
     pub fn append(&mut self, value: V) -> Result<(), LongSegmentError> {
         if let Some(tv) = self.value.as_mut() {
             match tv {
-                TypeValue::List(list)
-                | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
+                TypeValue::List(list) => {
                     list.append_vec(vec![value.into()])
                         .map_err(|_| LongSegmentError)?;
                 }
@@ -368,8 +366,7 @@ impl<V: VectorValue + Into<TypeValue> + std::fmt::Debug> VectorOption<V> {
     ) -> Result<(), LongSegmentError> {
         if let Some(tv) = self.value.as_mut() {
             match tv {
-                TypeValue::List(list)
-                | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
+                TypeValue::List(list) => {
                     list.insert_vec(pos as usize, vec![value.into()])
                         .map_err(|_| LongSegmentError)?;
                 }
@@ -396,8 +393,7 @@ impl<V: VectorValue + Into<TypeValue> + std::fmt::Debug> VectorOption<V> {
 
     pub fn len(&self) -> Option<usize> {
         self.value.as_ref().and_then(|tv| match tv {
-            TypeValue::List(list)
-            | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
+            TypeValue::List(list) => {
                 Some(list.len())
             }
             TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {
@@ -411,8 +407,7 @@ impl<V: VectorValue + Into<TypeValue> + std::fmt::Debug> VectorOption<V> {
         self.value.as_ref().map_or_else(
             || true,
             |tv| match tv {
-                TypeValue::List(list)
-                | TypeValue::Builtin(BuiltinTypeValue::Communities(list)) => {
+                TypeValue::List(list) => {
                     list.is_empty()
                 }
                 TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path)) => {

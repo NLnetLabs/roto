@@ -330,7 +330,6 @@ impl RotoType for TypeValue {
                     ))
                 }
                 BuiltinTypeValue::Boolean(v) => v.into_type(ty),
-                BuiltinTypeValue::Communities(v) => v.into_type(ty),
                 BuiltinTypeValue::Community(v) => v.into_type(ty),
                 BuiltinTypeValue::ConstU16EnumVariant(v) => v.into_type(ty),
                 BuiltinTypeValue::ConstU32EnumVariant(v) => v.into_type(ty),
@@ -479,9 +478,6 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::Boolean(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::Communities(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
                 BuiltinTypeValue::Community(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
@@ -598,9 +594,6 @@ impl RotoType for TypeValue {
                     Err(VmError::InvalidValueType)
                 }
                 BuiltinTypeValue::Boolean(v) => {
-                    v.exec_consume_value_method(method_token, args, res_type)
-                }
-                BuiltinTypeValue::Communities(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::Community(v) => {
@@ -760,22 +753,6 @@ impl PartialEq for TypeValue {
                 }
             }
 
-            // Builtins::Communities to Lists
-            (
-                TypeValue::Builtin(BuiltinTypeValue::Communities(c)),
-                TypeValue::List(l),
-            ) => {
-                if c == l {
-                    return true;
-                }
-                if let Ok(TypeValue::List(l2)) =
-                    l.clone().into_type(&(self.into())).as_ref()
-                {
-                    c == l2
-                } else {
-                    false
-                }
-            }
             (TypeValue::Builtin(_), _) => false,
 
             // Lists
@@ -796,22 +773,6 @@ impl PartialEq for TypeValue {
                             false
                         }
                     })
-                }
-            }
-            // Lists to Builtin::Communities
-            (
-                TypeValue::List(l),
-                TypeValue::Builtin(BuiltinTypeValue::Communities(c)),
-            ) => {
-                if c == l {
-                    return true;
-                }
-                if let Ok(TypeValue::List(l2)) =
-                    l.clone().into_type(&(self.into())).as_ref()
-                {
-                    c == l2
-                } else {
-                    false
                 }
             }
             (TypeValue::List(_), _) => false,

@@ -1096,9 +1096,6 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::OriginType(_) => TypeDef::OriginType,
             BuiltinTypeValue::AsPath(_) => TypeDef::AsPath,
             BuiltinTypeValue::Community(_) => TypeDef::Community,
-            BuiltinTypeValue::Communities(_) => {
-                TypeDef::List(Box::new(TypeDef::Community))
-            }
             BuiltinTypeValue::Route(_) => TypeDef::Route,
             BuiltinTypeValue::BgpUpdateMessage(_) => {
                 TypeDef::BgpUpdateMessage
@@ -1156,9 +1153,6 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::Hop(_) => TypeDef::Hop,
             BuiltinTypeValue::AsPath(_) => TypeDef::AsPath,
             BuiltinTypeValue::Community(_) => TypeDef::Community,
-            BuiltinTypeValue::Communities(_) => {
-                TypeDef::List(Box::new(TypeDef::Community))
-            }
             BuiltinTypeValue::OriginType(_) => TypeDef::OriginType,
             BuiltinTypeValue::Route(_) => TypeDef::Route,
             BuiltinTypeValue::BgpUpdateMessage(_) => {

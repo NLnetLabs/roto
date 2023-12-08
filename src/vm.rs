@@ -332,9 +332,6 @@ impl LinearMemory {
                         TypeValue::Builtin(BuiltinTypeValue::AsPath(_)) => {
                             Ok(StackValue::Ref(tv))
                         }
-                        TypeValue::Builtin(
-                            BuiltinTypeValue::Communities(_),
-                        ) => Ok(StackValue::Ref(tv)),
                         // Clone all other built-ins, they're cheap to clone
                         // (all copy) and the result is smaller than a pointer
                         TypeValue::Builtin(_) => {
@@ -466,9 +463,6 @@ impl LinearMemory {
                         TypeValue::Builtin(BuiltinTypeValue::AsPath(_)) => {
                             Ok(StackValue::Ref(tv))
                         }
-                        TypeValue::Builtin(
-                            BuiltinTypeValue::Communities(_),
-                        ) => Ok(StackValue::Ref(tv)),
                         // Clone all other built-ins, they're cheap to clone
                         // (all copy) and the result is smaller than a pointer
                         TypeValue::Builtin(_) => {

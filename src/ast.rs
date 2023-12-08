@@ -26,7 +26,7 @@ use nom::{
     combinator::map,
     IResult,
 };
-use nom::{AsChar, Finish, Parser};
+use nom::{AsChar, Finish};
 use serde::{Serialize, Serializer};
 use smallvec::SmallVec;
 

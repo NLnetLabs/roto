@@ -14,7 +14,7 @@ use crate::attr_change_set::VectorValue;
 use crate::compiler::compile::CompileError;
 use crate::first_into_vm_err;
 use crate::traits::RotoType;
-use crate::types::collections::{ElementTypeValue, List};
+use crate::types::collections::ElementTypeValue;
 use crate::types::enum_types::EnumVariant;
 use crate::types::typedef::MethodProps;
 use crate::vm::{StackValue, VmError};
@@ -2301,15 +2301,6 @@ impl From<Vec<routecore::bgp::communities::Community>> for TypeValue {
     }
 }
 
-impl From<Vec<routecore::bgp::communities::Community>> for BuiltinTypeValue {
-    fn from(value: Vec<routecore::bgp::communities::Community>) -> Self {
-        let list: Vec<ElementTypeValue> = value
-            .iter()
-            .map(|c| ElementTypeValue::Primitive(TypeValue::from(*c)))
-            .collect::<Vec<_>>();
-        BuiltinTypeValue::Communities(List(list))
-    }
-}
 
 impl TryFrom<&str> for Community {
     type Error = VmError;
