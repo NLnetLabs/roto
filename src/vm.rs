@@ -26,7 +26,7 @@ use crate::{
 };
 
 use arc_swap::ArcSwapOption;
-use log::{error, log_enabled, trace, Level};
+use log::{debug, error, log_enabled, trace, Level};
 use serde::Serialize;
 use smallvec::SmallVec;
 
@@ -239,7 +239,8 @@ impl LinearMemory {
                 }
             }
             StackRefPos::ConstantValue(TypeValue::Builtin(
-                BuiltinTypeValue::Boolean(Boolean(b)))) => Ok(b),
+                BuiltinTypeValue::Boolean(Boolean(b)),
+            )) => Ok(b),
             StackRefPos::CompareResult(res) => Ok(res),
             _ => Ok(false),
         }
@@ -1451,7 +1452,16 @@ impl<
         let mut stack = self.stack.borrow_mut();
 
         let len = stack.0.len();
-        let stack_part = stack.0.split_off(len - elem_num as usize);
+        let stack_part = stack.0.split_off(
+            len.checked_sub(elem_num as usize).ok_or_else(|| {
+                debug!(
+                    "Stack underflow. Requested {} arguments, but {} were \
+                    present on the stack.",
+                    elem_num, len
+                );
+                VmError::StackUnderflow
+            })?,
+        );
         let mut take_vec = vec![];
 
         for sr in stack_part {
@@ -1874,7 +1884,6 @@ impl<
                     // stack args: [ method_token, return_type, arguments]
                     //      pops arguments from the stack
                     OpCode::ExecuteConsumeValueMethod => {
-
                         let args_len: usize = if let CommandArg::Arguments(
                             args,
                         ) = args.pop()?
@@ -1943,8 +1952,7 @@ impl<
                                             VmError::InvalidValueType,
                                         );
                                     }
-                                    StackRefPos::ConstantValue(v) => 
-                                        v
+                                    StackRefPos::ConstantValue(v) => v,
                                 }
                             };
 
@@ -2007,7 +2015,8 @@ impl<
                         };
 
                         // mem.set_mem_pos(mem_pos, result_value);
-                        stack.push(StackRefPos::ConstantValue(result_value))?;
+                        stack
+                            .push(StackRefPos::ConstantValue(result_value))?;
                     }
                     // args: [field_index_0, field_index_1, ...,
                     // lazy_record_type, variant_token, return type]
@@ -2252,8 +2261,12 @@ impl<
                             if let CommandArg::Variant(variant_index) = arg {
                                 let mut s = self.stack.borrow_mut();
                                 match &s.get_top_value()?.pos {
-                                    StackRefPos::ConstantValue(type_value) => {
-                                        let val = type_value.mp_is_variant(Token::Variant(*variant_index));
+                                    StackRefPos::ConstantValue(
+                                        type_value,
+                                    ) => {
+                                        let val = type_value.mp_is_variant(
+                                            Token::Variant(*variant_index),
+                                        );
 
                                         if val {
                                             let var_val = type_value
@@ -2313,12 +2326,20 @@ impl<
                         trace!("argument {:#?}", self.arguments);
                         match args.get(0) {
                             Some(CommandArg::Argument(token_value)) => {
-                                let arg_value =
-                                    self.arguments.get_by_token_value(
-                                        Token::Argument(*token_value),
-                                    ).ok_or_else(|| VmError::AnonymousArgumentNotFound)?;
+                                let arg_value = self
+                                    .arguments
+                                    .get_by_token_value(Token::Argument(
+                                        *token_value,
+                                    ))
+                                    .ok_or_else(|| {
+                                        VmError::AnonymousArgumentNotFound
+                                    })?;
                                 // TODO: THIS SHOULD PROBABLY BE CHANGED TO USE AN INDEX TO THE arguments map ON THE VM!
-                                self.stack.borrow_mut().push(StackRefPos::ConstantValue(arg_value.clone()))?;
+                                self.stack.borrow_mut().push(
+                                    StackRefPos::ConstantValue(
+                                        arg_value.clone(),
+                                    ),
+                                )?;
                             }
                             _ => {
                                 return Err(VmError::InvalidValueType);
