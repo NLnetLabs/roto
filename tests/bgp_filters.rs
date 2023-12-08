@@ -633,6 +633,72 @@ fn test_prefix_literal_10() {
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
 
+#[test]
+fn test_prefix_literal_11() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+            pfx = Prefix.from(192.0.2.128,/25);
+        }
+
+        term test {
+            match {
+                route.prefix.covers(pfx);
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
+}
+
+#[test]
+fn test_prefix_literal_12() {
+    common::init();
+
+    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
+    let (res,_) = test_data(Scope::Filter("test".into()),
+     r#"
+     filter test {
+        define {
+            rx route: Route;
+            pfx = Prefix.from(192.2.0.0,/16);
+        }
+
+        term test {
+            match {
+                route.prefix.covers(pfx);
+            }
+        }
+    
+        apply {
+            filter match test matching {
+                return accept;
+            };
+            reject;
+        }
+    }
+    "#,
+     annc
+    ).unwrap();
+
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
+}
+
 //------------ Test: As Paths ------------------------------------------------
 
 #[test]
