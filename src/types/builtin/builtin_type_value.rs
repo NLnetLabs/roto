@@ -3,7 +3,6 @@
 // The built-in types
 
 use std::fmt::Display;
-use std::sync::Arc;
 
 use serde::Serialize;
 

@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use log::trace;
 use roto::{
     ast::AcceptReject,

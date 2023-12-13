@@ -546,31 +546,17 @@ impl LinearMemory {
                 if let Some(tv) = self.get_mem_pos(mem_pos) {
                     match tv {
                         TypeValue::Builtin(BuiltinTypeValue::BmpMessage(
-                            bytes_rec,
-                        )) => Ok(TypeValue::Builtin(BuiltinTypeValue::from(
-                            bytes_rec.clone(),
-                        ))),
+                            _,
+                        )) => Ok(tv.clone()),
                         TypeValue::Builtin(
-                            BuiltinTypeValue::BmpRouteMonitoringMessage(
-                                bytes_rec,
-                            ),
-                        ) => Ok(TypeValue::Builtin(BuiltinTypeValue::from(
-                            bytes_rec.clone(),
-                        ))),
+                            BuiltinTypeValue::BmpRouteMonitoringMessage(_),
+                        ) => Ok(tv.clone()),
                         TypeValue::Builtin(
-                            BuiltinTypeValue::BmpPeerDownNotification(
-                                bytes_rec,
-                            ),
-                        ) => Ok(TypeValue::Builtin(BuiltinTypeValue::from(
-                            bytes_rec.clone(),
-                        ))),
+                            BuiltinTypeValue::BmpPeerDownNotification(_),
+                        ) => Ok(tv.clone()),
                         TypeValue::Builtin(
-                            BuiltinTypeValue::BmpPeerUpNotification(
-                                bytes_rec,
-                            ),
-                        ) => Ok(TypeValue::Builtin(BuiltinTypeValue::from(
-                            bytes_rec.clone(),
-                        ))),
+                            BuiltinTypeValue::BmpPeerUpNotification(_),
+                        ) => Ok(tv.clone()),
                         _ => Err(VmError::InvalidValueType),
                     }
                 } else {
