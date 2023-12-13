@@ -56,12 +56,12 @@ pub enum BuiltinTypeValue {
     ConstU32EnumVariant(EnumVariant<u32>),
     // Used for filtering on the properties of the whole message,
     // not taking into account any individual prefixes.
-    BgpUpdateMessage(Arc<BgpUpdateMessage>), // scalar
-    BmpMessage(Arc<BytesRecord<BmpMessage>>),
-    BmpRouteMonitoringMessage(Arc<BytesRecord<RouteMonitoring>>),
-    BmpPeerUpNotification(Arc<BytesRecord<PeerUpNotification>>),
-    BmpPeerDownNotification(Arc<BytesRecord<PeerDownNotification>>),
-    BmpInitationMessage(Arc<BytesRecord<InitiationMessage>>),
+    BgpUpdateMessage(BgpUpdateMessage), // scalar
+    BmpMessage(BytesRecord<BmpMessage>),
+    BmpRouteMonitoringMessage(BytesRecord<RouteMonitoring>),
+    BmpPeerUpNotification(BytesRecord<PeerUpNotification>),
+    BmpPeerDownNotification(BytesRecord<PeerDownNotification>),
+    BmpInitationMessage(BytesRecord<InitiationMessage>),
 }
 
 impl BuiltinTypeValue {
@@ -293,26 +293,26 @@ impl From<crate::types::builtin::primitives::IpAddress> for BuiltinTypeValue {
     }
 }
 
-impl From<Arc<BytesRecord<BmpMessage>>> for BuiltinTypeValue {
-    fn from(value: Arc<BytesRecord<BmpMessage>>) -> Self {
+impl From<BytesRecord<BmpMessage>> for BuiltinTypeValue {
+    fn from(value: BytesRecord<BmpMessage>) -> Self {
         BuiltinTypeValue::BmpMessage(value)
     }
 }
 
-impl From<Arc<BytesRecord<RouteMonitoring>>> for BuiltinTypeValue {
-    fn from(value: Arc<BytesRecord<RouteMonitoring>>) -> Self {
+impl From<BytesRecord<RouteMonitoring>> for BuiltinTypeValue {
+    fn from(value: BytesRecord<RouteMonitoring>) -> Self {
         BuiltinTypeValue::BmpRouteMonitoringMessage(value)
     }
 }
 
-impl From<Arc<BytesRecord<PeerDownNotification>>> for BuiltinTypeValue {
-    fn from(value: Arc<BytesRecord<PeerDownNotification>>) -> Self {
+impl From<BytesRecord<PeerDownNotification>> for BuiltinTypeValue {
+    fn from(value: BytesRecord<PeerDownNotification>) -> Self {
         BuiltinTypeValue::BmpPeerDownNotification(value)
     }
 }
 
-impl From<Arc<BytesRecord<PeerUpNotification>>> for BuiltinTypeValue {
-    fn from(value: Arc<BytesRecord<PeerUpNotification>>) -> Self {
+impl From<BytesRecord<PeerUpNotification>> for BuiltinTypeValue {
+    fn from(value: BytesRecord<PeerUpNotification>) -> Self {
         BuiltinTypeValue::BmpPeerUpNotification(value)
     }
 }
@@ -357,7 +357,7 @@ impl Display for BuiltinTypeValue {
                 }
                 BuiltinTypeValue::Route(r) => write!(f, "{}", r),
                 BuiltinTypeValue::BgpUpdateMessage(raw) => {
-                    write!(f, "{:X?}", **raw)
+                    write!(f, "{:X?}", *raw)
                 }
                 BuiltinTypeValue::BmpMessage(raw) => {
                     write!(f, "{:X?}", *raw)
@@ -434,7 +434,7 @@ impl Display for BuiltinTypeValue {
                 }
                 BuiltinTypeValue::Route(r) => write!(f, "{} (Route)", r),
                 BuiltinTypeValue::BgpUpdateMessage(raw) => {
-                    write!(f, "{:X?} (RawBgpMessage)", **raw)
+                    write!(f, "{:X?} (RawBgpMessage)", *raw)
                 }
                 BuiltinTypeValue::BmpMessage(raw) => {
                     write!(f, "{:X?} (RawBgpMessage)", *raw)

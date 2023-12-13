@@ -408,7 +408,7 @@ impl LinearMemory {
                             bgp_msg,
                             field_index
                         );
-                        if let Some(v) = (*bgp_msg.as_ref())
+                        if let Some(v) = (*bgp_msg)
                             .get_value_owned_for_field(field_index.first()?)?
                         {
                             trace!("v {:?}", v);
@@ -433,7 +433,7 @@ impl LinearMemory {
                             >,
                         >::lazy_type_def(
                         ))?
-                        .get_field_by_index(&field_index, bmp_msg.as_ref())?;
+                        .get_field_by_index(&field_index, bmp_msg)?;
 
                         Ok(StackValue::Owned(v.try_into()?))
                     }
@@ -453,7 +453,7 @@ impl LinearMemory {
                             >,
                         >::lazy_type_def(
                         ))?
-                        .get_field_by_index(&field_index, bmp_msg.as_ref())?;
+                        .get_field_by_index(&field_index, bmp_msg)?;
 
                         Ok(StackValue::Owned(v.try_into()?))
                     }
@@ -548,28 +548,28 @@ impl LinearMemory {
                         TypeValue::Builtin(BuiltinTypeValue::BmpMessage(
                             bytes_rec,
                         )) => Ok(TypeValue::Builtin(BuiltinTypeValue::from(
-                            Arc::clone(bytes_rec),
+                            bytes_rec.clone(),
                         ))),
                         TypeValue::Builtin(
                             BuiltinTypeValue::BmpRouteMonitoringMessage(
                                 bytes_rec,
                             ),
                         ) => Ok(TypeValue::Builtin(BuiltinTypeValue::from(
-                            Arc::clone(bytes_rec),
+                            bytes_rec.clone(),
                         ))),
                         TypeValue::Builtin(
                             BuiltinTypeValue::BmpPeerDownNotification(
                                 bytes_rec,
                             ),
                         ) => Ok(TypeValue::Builtin(BuiltinTypeValue::from(
-                            Arc::clone(bytes_rec),
+                            bytes_rec.clone(),
                         ))),
                         TypeValue::Builtin(
                             BuiltinTypeValue::BmpPeerUpNotification(
                                 bytes_rec,
                             ),
                         ) => Ok(TypeValue::Builtin(BuiltinTypeValue::from(
-                            Arc::clone(bytes_rec),
+                            bytes_rec.clone(),
                         ))),
                         _ => Err(VmError::InvalidValueType),
                     }
@@ -600,7 +600,7 @@ impl LinearMemory {
                             >,
                         >::lazy_type_def(
                         ))?
-                        .get_field_by_index(&field_index, bmp_msg.as_ref())
+                        .get_field_by_index(&field_index, bmp_msg)
                         .map(|elm| elm.try_into())?
                     }
                     Some(TypeValue::Builtin(
@@ -619,7 +619,7 @@ impl LinearMemory {
                             >,
                         >::lazy_type_def(
                         ))?
-                        .get_field_by_index(&field_index, bmp_msg.as_ref())
+                        .get_field_by_index(&field_index, bmp_msg)
                         .map(|elm| elm.try_into())?
                     }
                     Some(TypeValue::Builtin(
@@ -638,7 +638,7 @@ impl LinearMemory {
                             >,
                         >::lazy_type_def(
                         ))?
-                        .get_field_by_index(&field_index, bmp_msg.as_ref())
+                        .get_field_by_index(&field_index, bmp_msg)
                         .map(|elm| elm.try_into())?
                     }
                     // This is apparently a type that does not have fields
@@ -2066,7 +2066,7 @@ impl<
                         if let TypeValue::Builtin(b_tv) = bytes_rec_tv {
                             match b_tv {
                                 BuiltinTypeValue::BmpMessage(bytes_rec) => {
-                                    let v = (*bytes_rec)
+                                    let v = bytes_rec
                                         .get_field_index_for_variant(
                                             lazy_record_type,
                                             field_index,

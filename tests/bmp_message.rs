@@ -33,7 +33,7 @@ fn test_data(
     let rm_msg = rm_msg.unwrap();
     let payload = TypeValue::Builtin(
         roto::types::builtin::BuiltinTypeValue::BmpRouteMonitoringMessage(
-            Arc::new(rm_msg),
+            rm_msg,
         ),
     );
 
@@ -105,7 +105,7 @@ fn test_data_2(
     assert!(rm_msg.is_ok());
     let rm_msg = rm_msg.unwrap();
     let payload = TypeValue::Builtin(
-        roto::types::builtin::BuiltinTypeValue::BmpMessage(Arc::new(rm_msg)),
+        roto::types::builtin::BuiltinTypeValue::BmpMessage(rm_msg),
     );
 
     trace!("Used Arguments");
@@ -170,7 +170,7 @@ fn test_data_3(
     assert!(rm_msg.is_ok());
     let rm_msg = rm_msg.unwrap();
     let payload = TypeValue::Builtin(
-        roto::types::builtin::BuiltinTypeValue::BmpMessage(Arc::new(rm_msg)),
+        roto::types::builtin::BuiltinTypeValue::BmpMessage(rm_msg),
     );
 
     trace!("Used Arguments");
@@ -234,9 +234,9 @@ fn compile_initiation_payload(
 
     // let rm_msg = i_msg.unwrap();
     let payload = TypeValue::Builtin(
-        roto::types::builtin::BuiltinTypeValue::BmpMessage(Arc::new(
+        roto::types::builtin::BuiltinTypeValue::BmpMessage(
             roto::types::builtin::BytesRecord(buf),
-        )),
+        ),
     );
 
     trace!("Used Arguments");

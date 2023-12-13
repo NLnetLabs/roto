@@ -244,7 +244,7 @@ fn test_bgp_update_3() {
         res.rx,
         TypeValue::Builtin(
             roto::types::builtin::BuiltinTypeValue::BgpUpdateMessage(
-                Arc::new(payload),
+                payload,
             ),
         )
     );

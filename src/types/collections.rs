@@ -1167,7 +1167,7 @@ pub trait RecordType: AsRef<[u8]> {
 // actual mapping between routecore methods and Roto record field names and
 // values does not happen here, but in the LazyRecord type.
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct BytesRecord<T: RecordType>(pub T);
 
 impl<T: RecordType + std::fmt::Debug> BytesRecord<T> {

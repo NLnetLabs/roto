@@ -955,7 +955,7 @@ impl RotoType for BgpUpdateMessage {
 
 impl From<BgpUpdateMessage> for TypeValue {
     fn from(raw: BgpUpdateMessage) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::BgpUpdateMessage(Arc::new(raw)))
+        TypeValue::Builtin(BuiltinTypeValue::BgpUpdateMessage(raw))
     }
 }
 
