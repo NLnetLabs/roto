@@ -528,10 +528,10 @@ impl LinearMemory {
         }
     }
 
-    // Only return a TypeValue (Wrapping a BytesRecord arc) if the memory
-    // position and field index offset contain an actual bytes record,
-    // otherwise return None.
-    pub fn get_mp_field_by_index_as_bytes_record(
+    // Return the contents of the memory type as a TypeValue only if it is a
+    // LazyRecord, or a field on a LazyRecord (a LazyRecordElementTypeValue),
+    // otherwise return a VmError.
+    pub fn get_lazy_field_by_index(
         &self,
         mem_pos: usize,
         field_index: FieldIndex,
@@ -541,10 +541,15 @@ impl LinearMemory {
             self.get_mem_pos(mem_pos).map(StackValue::Ref)
         );
         match field_index {
+            // No field index, we want to whole bytes record
             fi if fi.is_empty() => {
                 trace!("empty field index on bytes record");
                 if let Some(tv) = self.get_mem_pos(mem_pos) {
                     match tv {
+                        // Cloning here is not a good look, but this
+                        // effectively only happens when the tx contains the
+                        // whole bytes record, in which case cloning is
+                        // inevitable.
                         TypeValue::Builtin(BuiltinTypeValue::BmpMessage(
                             _,
                         )) => Ok(tv.clone()),
@@ -2030,7 +2035,7 @@ impl<
 
                             match sr.pos {
                                 StackRefPos::MemPos(pos) => mem
-                                    .get_mp_field_by_index_as_bytes_record(
+                                    .get_lazy_field_by_index(
                                         pos as usize,
                                         sr.field_index,
                                     )
