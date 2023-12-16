@@ -1112,8 +1112,14 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::BmpPeerDownNotification(_) => {
                 TypeDef::LazyRecord(LazyRecordTypeDef::PeerDownNotification)
             }
-            BuiltinTypeValue::BmpInitationMessage(_) => {
+            BuiltinTypeValue::BmpInitiationMessage(_) => {
                 TypeDef::LazyRecord(LazyRecordTypeDef::InitiationMessage)
+            }
+            BuiltinTypeValue::BmpTerminationMessage(_) => {
+                TypeDef::LazyRecord(LazyRecordTypeDef::TerminationMessage)
+            }
+            BuiltinTypeValue::BmpStatisticsReport(_) => {
+                TypeDef::LazyRecord(LazyRecordTypeDef::StatisticsReport)
             }
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
@@ -1170,8 +1176,14 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::BmpPeerDownNotification(_) => {
                 TypeDef::LazyRecord(LazyRecordTypeDef::PeerDownNotification)
             }
-            BuiltinTypeValue::BmpInitationMessage(_) => {
+            BuiltinTypeValue::BmpInitiationMessage(_) => {
                 TypeDef::LazyRecord(LazyRecordTypeDef::InitiationMessage)
+            }
+            BuiltinTypeValue::BmpTerminationMessage(_) => {
+                TypeDef::LazyRecord(LazyRecordTypeDef::TerminationMessage)
+            }
+            BuiltinTypeValue::BmpStatisticsReport(_) => {
+                TypeDef::LazyRecord(LazyRecordTypeDef::StatisticsReport)
             }
             BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,

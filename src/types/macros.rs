@@ -262,6 +262,7 @@ macro_rules! lazy_data_enum {
 macro_rules! bytes_record_impl {
     (
         $bytes_record_type: ident,
+        $builtin_type_variant: ident,
         #[type_def($(
             $(
                 record_field(
@@ -319,6 +320,9 @@ macro_rules! bytes_record_impl {
         impl RecordType for $bytes_record_type {
             fn get_field_num() -> usize {
                 $field_num
+            }
+            fn into_typevalue(self) -> TypeValue {
+                TypeValue::Builtin(BuiltinTypeValue::$builtin_type_variant(BytesRecord(self)))
             }
         }
 

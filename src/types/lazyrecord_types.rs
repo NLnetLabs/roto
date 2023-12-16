@@ -1,7 +1,7 @@
 use log::trace;
 use serde::Serialize;
 
-use super::{typedef::{MethodProps, TypeDef, RecordTypeDef}, collections::RecordType};
+use super::{typedef::{MethodProps, TypeDef, RecordTypeDef}, collections::RecordType, builtin::BuiltinTypeValue, typevalue::TypeValue};
 use crate::{
     ast::Identifier, compiler::compile::CompileError, traits::Token,
     types::builtin::BytesRecord,
@@ -26,6 +26,9 @@ pub type TerminationMessage =
 impl RecordType for BmpMessage {
     fn get_field_num() -> usize {
         1
+    }
+    fn into_typevalue(self) -> super::typevalue::TypeValue {
+        TypeValue::Builtin(BuiltinTypeValue::BmpMessage(BytesRecord(self)))
     }
 }
 
@@ -61,7 +64,8 @@ impl LazyRecordTypeDef {
                 BytesRecord::<PeerDownNotification>::type_def()
             }
             LazyRecordTypeDef::RouteMirroring => todo!(),
-            LazyRecordTypeDef::TerminationMessage => todo!(),
+            LazyRecordTypeDef::TerminationMessage => 
+                BytesRecord::<TerminationMessage>::type_def(),
         }
     }
 
@@ -81,7 +85,9 @@ impl LazyRecordTypeDef {
                 PeerDownNotification::get_field_num()
             }
             LazyRecordTypeDef::RouteMirroring => todo!(),
-            LazyRecordTypeDef::TerminationMessage => todo!(),
+            LazyRecordTypeDef::TerminationMessage => {
+                TerminationMessage::get_field_num()
+            }
         }
     }
 
@@ -148,8 +154,13 @@ impl LazyRecordTypeDef {
                 trace!("BmpInitiationMessage w/ field '{}'", field);
                 BytesRecord::<InitiationMessage>::get_props_for_field(field)
             },
-            LazyRecordTypeDef::TerminationMessage => todo!(),
-            LazyRecordTypeDef::RouteMirroring => todo!(),
+            LazyRecordTypeDef::TerminationMessage => {
+                trace!("BmpTermintationMessage w/ field '{}'", field);
+                BytesRecord::<TerminationMessage>::get_props_for_field(field)
+            }
+            LazyRecordTypeDef::RouteMirroring => {
+                todo!()
+            }
         }
     }
 }

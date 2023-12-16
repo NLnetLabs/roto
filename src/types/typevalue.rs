@@ -16,7 +16,7 @@ use crate::{
     attr_change_set::ScalarValue,
     compiler::compile::CompileError,
     traits::{RotoType, Token},
-    vm::{StackValue, VmError, FieldIndex},
+    vm::{FieldIndex, StackValue, VmError},
 };
 
 use super::{
@@ -25,10 +25,13 @@ use super::{
         HexLiteral, IntegerLiteral, IpAddress, Prefix, PrefixLength,
         RawRouteWithDeltas, StringLiteral, U32, U8,
     },
-    collections::{BytesRecord, ElementTypeValue, LazyRecord, List, Record, EnumBytesRecord},
+    collections::{
+        BytesRecord, ElementTypeValue, EnumBytesRecord, LazyRecord, List,
+        Record, RecordType,
+    },
     lazyrecord_types::{
         InitiationMessage, PeerDownNotification, PeerUpNotification,
-        RouteMonitoring,
+        RouteMonitoring, StatisticsReport, TerminationMessage,
     },
     outputs::OutputStreamMessage,
     typedef::TypeDef,
@@ -75,7 +78,12 @@ impl TypeValue {
         let mut elems = vec![];
 
         for (ident, ty) in type_ident_pairs {
-            elems.push((ShortString::from(ident), ty.try_into().map_err(|e: VmError| CompileError::from(e.to_string()))?));
+            elems.push((
+                ShortString::from(ident),
+                ty.try_into().map_err(|e: VmError| {
+                    CompileError::from(e.to_string())
+                })?,
+            ));
         }
         // let elems = type_ident_pairs
         //     .into_iter()
@@ -170,15 +178,12 @@ impl TypeValue {
         Ok(self)
     }
 
-    pub fn mp_is_variant(
-        &self,
-        variant_token: Token,
-    ) -> bool {
+    pub fn mp_is_variant(&self, variant_token: Token) -> bool {
         match self {
             // We only know how to deal with BmpMessages currently.
-            TypeValue::Builtin(BuiltinTypeValue::BmpMessage(
-                bytes_rec,
-            )) => bytes_rec.is_variant(variant_token),
+            TypeValue::Builtin(BuiltinTypeValue::BmpMessage(bytes_rec)) => {
+                bytes_rec.is_variant(variant_token)
+            }
             _ => false,
         }
     }
@@ -189,21 +194,101 @@ impl TypeValue {
     pub fn get_mp_as_variant_or_unknown(
         &self,
         variant_token: Token,
-    ) -> Result<TypeValue, VmError> {
-            if let TypeValue::Builtin(BuiltinTypeValue::BmpMessage(
-                bytes_rec,
-            )) = self
-            {
-                if bytes_rec.is_variant(variant_token) {
-                    Ok(self.clone())
-                } else {
-                    Ok(TypeValue::Unknown)
-                }
+    ) -> Result<&TypeValue, VmError> {
+        if let TypeValue::Builtin(BuiltinTypeValue::BmpMessage(bytes_rec)) =
+            self
+        {
+            if bytes_rec.is_variant(variant_token) {
+                Ok(self)
             } else {
-                Err(VmError::InvalidValueType)
+                Ok(&TypeValue::Unknown)
             }
+        } else {
+            Err(VmError::InvalidValueType)
         }
+    }
+
+    pub fn is_bytes_record(&self) -> bool {
+        matches!(self, TypeValue::Builtin(BuiltinTypeValue::BmpMessage(_))
+        | TypeValue::Builtin(
+            BuiltinTypeValue::BmpRouteMonitoringMessage(_),
+        )
+        | TypeValue::Builtin(
+            BuiltinTypeValue::BmpPeerDownNotification(_),
+        )
+        | TypeValue::Builtin(BuiltinTypeValue::BmpPeerUpNotification(
+            _,
+        ))
+        | TypeValue::Builtin(BuiltinTypeValue::BmpInitiationMessage(_))
+        | TypeValue::Builtin(BuiltinTypeValue::BmpStatisticsReport(_))
+        | TypeValue::Builtin(BuiltinTypeValue::BmpTerminationMessage(
+            _,
+        )))
+    }
+
+    pub fn into_route_monitoring_bytes_record(self) -> Option<BytesRecord<RouteMonitoring>> {
+        if let TypeValue::Builtin(BuiltinTypeValue::BmpRouteMonitoringMessage(bytes_rec)) = self {
+            Some(bytes_rec)
+        } else {
+            None
+        }
+    }
+
+    pub fn into_initiation_message_bytes_record(self) -> Option<BytesRecord<InitiationMessage>> {
+        if let TypeValue::Builtin(BuiltinTypeValue::BmpInitiationMessage(bytes_rec)) = self {
+            Some(bytes_rec)
+        } else {
+            None
+        }
+    }
+
+    pub fn into_bytes(self) -> Option<bytes::Bytes> {
+        match self {
+            TypeValue::Builtin(BuiltinTypeValue::BmpInitiationMessage(bytes_rec)) => Some(bytes::Bytes::copy_from_slice(bytes_rec.as_ref())),
+            TypeValue::Builtin(BuiltinTypeValue::BmpRouteMonitoringMessage(bytes_rec)) => Some(bytes::Bytes::copy_from_slice(bytes_rec.as_ref())),
+            TypeValue::Builtin(BuiltinTypeValue::BmpPeerDownNotification(bytes_rec)) => Some(bytes::Bytes::copy_from_slice(bytes_rec.as_ref())),
+            TypeValue::Builtin(BuiltinTypeValue::BmpPeerUpNotification(bytes_rec)) => Some(bytes::Bytes::copy_from_slice(bytes_rec.as_ref())),
+            TypeValue::Builtin(BuiltinTypeValue::BmpStatisticsReport(bytes_rec)) => Some(bytes::Bytes::copy_from_slice(bytes_rec.as_ref())),
+            TypeValue::Builtin(BuiltinTypeValue::BmpTerminationMessage(bytes_rec)) => Some(bytes::Bytes::copy_from_slice(bytes_rec.as_ref())),
+            _ => None
+        }
+    }
+
+    // pub fn into_mp_variant_or_self(
+    //     self,
+    //     lazy_record_type: LazyRecordTypeDef,
+    //     variant_field_index: &FieldIndex
+    // ) -> Self {
+    //         match self {
+    //             TypeValue::Builtin(BuiltinTypeValue::BmpMessage(ref bytes_rec)) => {
+    //                 if let Ok(var) = bytes_rec
+    //                     .get_field_index_for_variant(
+    //                         lazy_record_type,
+    //                         variant_field_index,
+    //                     ) {
+    //                         var
+    //                     } else { self }
+    //                 // mem.set_mem_pos(mem_pos, v);
+    //                 // stack.push(v.into())?;
+    //             }
+    //             _ => {
+    //                 self
+    //             }
+    //         }
+    //     }
 }
+
+pub enum BytesRecordType {
+    InitiationMessage(routecore::bmp::message::InitiationMessage<bytes::Bytes>)
+}
+
+pub fn into_inner<T: RecordType>(tv: TypeValue) -> Option<BytesRecordType> {
+    match tv {
+        TypeValue::Builtin(BuiltinTypeValue::BmpInitiationMessage(msg)) => Some(BytesRecordType::InitiationMessage(msg.0)),
+        _ => None
+    }
+}
+
 
 impl RotoType for TypeValue {
     fn get_props_for_method(
@@ -376,10 +461,24 @@ impl RotoType for TypeValue {
                             .to_string(),
                     ))
                 }
-                BuiltinTypeValue::BmpInitationMessage(_v) => {
+                BuiltinTypeValue::BmpInitiationMessage(_v) => {
                     Err(CompileError::new(
                         "Unsupported TypeValue::\
                         BmpInitiationMessage in TypeValue::into_type()"
+                            .to_string(),
+                    ))
+                }
+                BuiltinTypeValue::BmpTerminationMessage(_v) => {
+                    Err(CompileError::new(
+                        "Unsupported TypeValue::\
+                        BmpTerminationMessage in TypeValue::into_type()"
+                            .to_string(),
+                    ))
+                }
+                BuiltinTypeValue::BmpStatisticsReport(_v) => {
+                    Err(CompileError::new(
+                        "Unsupported TypeValue::\
+                        BmpStatisticsReport in TypeValue::into_type()"
                             .to_string(),
                     ))
                 }
@@ -464,9 +563,31 @@ impl RotoType for TypeValue {
                         bytes_rec.0.as_ref(),
                     )
                 }
-                BuiltinTypeValue::BmpInitationMessage(bytes_rec) => {
+                BuiltinTypeValue::BmpInitiationMessage(bytes_rec) => {
                     LazyRecord::new(
                         BytesRecord::<InitiationMessage>::lazy_type_def(),
+                    )
+                    .exec_value_method(
+                        method_token,
+                        args,
+                        res_type,
+                        bytes_rec.0.as_ref(),
+                    )
+                }
+                BuiltinTypeValue::BmpTerminationMessage(bytes_rec) => {
+                    LazyRecord::new(
+                        BytesRecord::<TerminationMessage>::lazy_type_def(),
+                    )
+                    .exec_value_method(
+                        method_token,
+                        args,
+                        res_type,
+                        bytes_rec.0.as_ref(),
+                    )
+                }
+                BuiltinTypeValue::BmpStatisticsReport(bytes_rec) => {
+                    LazyRecord::new(
+                        BytesRecord::<StatisticsReport>::lazy_type_def(),
                     )
                     .exec_value_method(
                         method_token,
@@ -590,7 +711,13 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::BmpPeerDownNotification(_) => {
                     Err(VmError::InvalidValueType)
                 }
-                BuiltinTypeValue::BmpInitationMessage(_) => {
+                BuiltinTypeValue::BmpInitiationMessage(_) => {
+                    Err(VmError::InvalidValueType)
+                }
+                BuiltinTypeValue::BmpTerminationMessage(_) => {
+                    Err(VmError::InvalidValueType)
+                }
+                BuiltinTypeValue::BmpStatisticsReport(_) => {
                     Err(VmError::InvalidValueType)
                 }
                 BuiltinTypeValue::Boolean(v) => {
@@ -1180,9 +1307,11 @@ impl From<crate::ast::IntegerLiteral> for TypeValue {
 impl TryFrom<&'_ crate::ast::IpAddressLiteral> for TypeValue {
     type Error = CompileError;
 
-    fn try_from(value: &crate::ast::IpAddressLiteral) -> Result<Self, Self::Error> {
+    fn try_from(
+        value: &crate::ast::IpAddressLiteral,
+    ) -> Result<Self, Self::Error> {
         Ok(TypeValue::Builtin(BuiltinTypeValue::IpAddress(
-                value.try_into()?
+            value.try_into()?,
         )))
     }
 }
@@ -1190,9 +1319,11 @@ impl TryFrom<&'_ crate::ast::IpAddressLiteral> for TypeValue {
 impl TryFrom<&'_ crate::ast::PrefixLiteral> for TypeValue {
     type Error = CompileError;
 
-    fn try_from(value: &crate::ast::PrefixLiteral) -> Result<Self, Self::Error> {
+    fn try_from(
+        value: &crate::ast::PrefixLiteral,
+    ) -> Result<Self, Self::Error> {
         Ok(TypeValue::Builtin(BuiltinTypeValue::Prefix(
-            value.try_into()?
+            value.try_into()?,
         )))
     }
 }
@@ -1214,35 +1345,34 @@ impl From<crate::ast::AsnLiteral> for TypeValue {
 impl TryFrom<crate::ast::StandardCommunityLiteral> for TypeValue {
     type Error = CompileError;
 
-    fn try_from(value: crate::ast::StandardCommunityLiteral) -> Result<Self, Self::Error> {
+    fn try_from(
+        value: crate::ast::StandardCommunityLiteral,
+    ) -> Result<Self, Self::Error> {
         let comm = (&value).try_into()?;
-        Ok(TypeValue::Builtin(BuiltinTypeValue::Community(
-                comm
-        )))
+        Ok(TypeValue::Builtin(BuiltinTypeValue::Community(comm)))
     }
 }
 
 impl TryFrom<crate::ast::ExtendedCommunityLiteral> for TypeValue {
     type Error = CompileError;
 
-    fn try_from(value: crate::ast::ExtendedCommunityLiteral) -> Result<Self, Self::Error> {
+    fn try_from(
+        value: crate::ast::ExtendedCommunityLiteral,
+    ) -> Result<Self, Self::Error> {
         let comm = (&value).try_into()?;
-        Ok(TypeValue::Builtin(BuiltinTypeValue::Community(
-                comm
-        )))
+        Ok(TypeValue::Builtin(BuiltinTypeValue::Community(comm)))
     }
 }
 
 impl TryFrom<crate::ast::LargeCommunityLiteral> for TypeValue {
     type Error = CompileError;
 
-    fn try_from(value: crate::ast::LargeCommunityLiteral) -> Result<Self, Self::Error> {
+    fn try_from(
+        value: crate::ast::LargeCommunityLiteral,
+    ) -> Result<Self, Self::Error> {
         let comm = (&value).try_into()?;
-        Ok(TypeValue::Builtin(BuiltinTypeValue::Community(
-                comm
-        )))
+        Ok(TypeValue::Builtin(BuiltinTypeValue::Community(comm)))
     }
-
 }
 
 impl From<crate::ast::HexLiteral> for TypeValue {
@@ -1268,7 +1398,9 @@ impl TryFrom<ListValueExpr> for TypeValue {
 impl TryFrom<AnonymousRecordValueExpr> for TypeValue {
     type Error = CompileError;
 
-    fn try_from(value: AnonymousRecordValueExpr) -> Result<Self, Self::Error> {
+    fn try_from(
+        value: AnonymousRecordValueExpr,
+    ) -> Result<Self, Self::Error> {
         Ok(TypeValue::Record(value.try_into()?))
     }
 }
@@ -1278,5 +1410,41 @@ impl TryFrom<TypedRecordValueExpr> for TypeValue {
 
     fn try_from(value: TypedRecordValueExpr) -> Result<Self, Self::Error> {
         Ok(TypeValue::Record(Record::try_from(value)?))
+    }
+}
+
+impl From<RouteMonitoring> for TypeValue {
+    fn from(value: RouteMonitoring) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::BmpRouteMonitoringMessage(BytesRecord(value)))
+    }
+}
+
+impl From<InitiationMessage> for TypeValue {
+    fn from(value: InitiationMessage) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::BmpInitiationMessage(BytesRecord(value)))
+    }
+}
+
+impl From<TerminationMessage> for TypeValue {
+    fn from(value: TerminationMessage) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::BmpTerminationMessage(BytesRecord(value)))
+    }
+}
+
+impl From<PeerUpNotification> for TypeValue {
+    fn from(value: PeerUpNotification) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::BmpPeerUpNotification(BytesRecord(value)))
+    }
+}
+
+impl From<PeerDownNotification> for TypeValue {
+    fn from(value: PeerDownNotification) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::BmpPeerDownNotification(BytesRecord(value)))
+    }
+}
+
+impl From<StatisticsReport> for TypeValue {
+    fn from(value: StatisticsReport) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::BmpStatisticsReport(BytesRecord(value)))
     }
 }

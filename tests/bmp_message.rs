@@ -5,9 +5,9 @@ use roto::{
     blocks::Scope::{Filter, FilterMap},
     compiler::Compiler,
     types::{
-        builtin::BytesRecord,
+        builtin::{BytesRecord, BuiltinTypeValue},
         collections::Record,
-        lazyrecord_types::{BmpMessage, RouteMonitoring},
+        lazyrecord_types::{BmpMessage, RouteMonitoring, StatisticsReport, PeerDownNotification, PeerUpNotification, InitiationMessage, TerminationMessage},
         typevalue::TypeValue,
     },
     vm::{self, VmResult},
@@ -205,6 +205,52 @@ fn test_data_3(
     trace!("tx    : {:?}", res.tx);
 
     Ok(res)
+}
+
+fn test_data_4(
+    name: Scope,
+    payload: TypeValue,
+    source_code: &'static str,)  -> Result<VmResult, Box<dyn std::error::Error>> {
+        println!("Evaluate filter-map {}...", name);
+
+        // Compile the source code in this example
+        let rotolo = Compiler::build(source_code)?;
+        let roto_pack = rotolo.retrieve_pack_as_arcs(&name)?;
+    
+        trace!("Used Arguments");
+        trace!("{:#?}", &roto_pack.get_arguments());
+        trace!("Used Data Sources");
+        trace!("{:#?}", &roto_pack.get_data_sources());
+    
+        let ds_ref = roto_pack.get_data_sources();
+    
+        for mb in roto_pack.get_mir().iter() {
+            println!("{}", mb);
+        }
+    
+        let mut vm = vm::VmBuilder::new()
+            // .with_arguments(args)
+            .with_data_sources(ds_ref)
+            .with_mir_code(roto_pack.get_mir())
+            .build()?;
+    
+        let mem = &mut vm::LinearMemory::uninit();
+        let res = vm
+            .exec(
+                payload,
+                None::<Record>,
+                // Some(filter_map_arguments),
+                None,
+                mem,
+            )
+            .unwrap();
+    
+        trace!("\nRESULT");
+        trace!("action: {}", res.accept_reject);
+        trace!("rx    : {:?}", res.rx);
+        trace!("tx    : {:?}", res.tx);
+    
+        Ok(res)
 }
 
 fn initiation_payload_example() -> Vec<u8> {
@@ -855,4 +901,143 @@ fn bmp_message_8() {
     let mut str = res.unwrap_err().to_string();
     str.truncate(err.len());
     assert_eq!(str, err);
+}
+
+
+fn mk_filter_payload(msg_buf: bytes::Bytes) {
+    // let source_id =
+    //     SourceId::SocketAddr("127.0.0.1:8080".parse().unwrap());
+
+    let msg = BmpMessage::from_octets(msg_buf.clone()).unwrap();
+
+    let value = match msg {
+        routecore::bmp::message::Message::RouteMonitoring(_) => TypeValue::Builtin(BuiltinTypeValue::BmpRouteMonitoringMessage(BytesRecord(RouteMonitoring::from_octets(msg_buf).unwrap()))),
+        routecore::bmp::message::Message::StatisticsReport(_) => TypeValue::Builtin(BuiltinTypeValue::BmpStatisticsReport(BytesRecord(StatisticsReport::from_octets(msg_buf).unwrap()))),
+        routecore::bmp::message::Message::PeerDownNotification(_) => TypeValue::Builtin(BuiltinTypeValue::BmpPeerDownNotification(BytesRecord(PeerDownNotification::from_octets(msg_buf).unwrap()))),
+        routecore::bmp::message::Message::PeerUpNotification(_) => TypeValue::Builtin(BuiltinTypeValue::BmpPeerUpNotification(BytesRecord(PeerUpNotification::from_octets(msg_buf).unwrap()))),
+        routecore::bmp::message::Message::InitiationMessage(_) => TypeValue::Builtin(BuiltinTypeValue::BmpInitiationMessage(BytesRecord(InitiationMessage::from_octets(msg_buf).unwrap()))),
+        routecore::bmp::message::Message::TerminationMessage(_) => TypeValue::Builtin(BuiltinTypeValue::BmpTerminationMessage(BytesRecord(TerminationMessage::from_octets(msg_buf).unwrap()))),
+        routecore::bmp::message::Message::RouteMirroring(_) => TypeValue::Builtin(BuiltinTypeValue::BmpRouteMonitoringMessage(BytesRecord(RouteMonitoring::from_octets(msg_buf).unwrap()))),
+    };
+
+    // eprintln!("MK FILTER PAYLOAD {:?}", value);
+    // let bmp_msg = BytesRecord(BmpMessage::from_octets(msg_buf).unwrap());
+    // let value = TypeValue::Builtin(BuiltinTypeValue::BmpMessage(bmp_msg));
+
+    // Update::Single(Payload::new(source_id, value, None))
+}
+
+
+const TEST_ROUTER_SYS_NAME: &str = "test-router";
+const TEST_ROUTER_SYS_DESC: &str = "test-desc";
+const TEST_PEER_ASN: u32 = 12345;
+
+fn mk_initiation_msg() -> bytes::Bytes {
+    routes::bmp::encode::mk_initiation_msg(
+        TEST_ROUTER_SYS_NAME,
+        TEST_ROUTER_SYS_DESC,
+    )
+}
+
+
+#[test]
+fn bmp_message_9() {
+    common::init();
+
+    let buf = mk_initiation_msg();
+    let rm_msg = BytesRecord::<InitiationMessage>::new(buf);
+    assert!(rm_msg.is_ok());
+    let rm_msg = rm_msg.unwrap();
+    let payload = TypeValue::Builtin(
+        roto::types::builtin::BuiltinTypeValue::BmpInitiationMessage(rm_msg),
+    );
+
+    let res = test_data_4(
+        Filter("my-module".into()),
+        payload,
+        r#"
+        filter my-module {
+            define {
+                rx msg: BmpMessage;
+            }
+
+            term has_asn {
+                // Compare the ASN for BMP message types that have a Per Peer Header
+                // We can't omit the other message types as without the explicit
+                // 1 == 1 (true) check the resulting logic isn't what we want.
+                match msg with {
+                    InitiationMessage(i_msg) -> 1 == 1,
+                    PeerDownNotification(pd_msg) -> pd_msg.per_peer_header.asn == AS12345,
+                    PeerUpNotification(pu_msg) -> pu_msg.per_peer_header.asn == AS12345,
+                    RouteMonitoring(rm_msg) -> rm_msg.per_peer_header.asn == AS12345,
+                    StatisticsReport(sr_msg) -> sr_msg.per_peer_header.asn == AS12345,
+                    TerminationMessage(t_msg) -> 1 == 1,
+                }
+            }
+
+            apply {
+                filter match has_asn matching {
+                    return accept;
+                };
+                reject;
+            }
+        }"#
+    ).unwrap();
+
+    trace!("res : {:?}", res);
+    assert_eq!(res.accept_reject, AcceptReject::Reject);
+}
+
+#[test]
+fn bmp_message_10() {
+    common::init();
+
+    let buf = vec![0x03, 0x00, 0x00, 0x00, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x7f, 0x00, 0x00, 0x01, 0x00, 0x00, 0x30, 0x39, 0x01, 0x02, 0x03,
+    0x04, 0x65, 0x7c, 0x49, 0xa7, 0x00, 0x0a, 0x13, 0x82, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x17, 0x02, 
+    0x00, 0x00, 0x00, 0x00];
+    let rm_msg = BytesRecord::<BmpMessage>::new(buf.into());
+    assert!(rm_msg.is_ok());
+    let rm_msg = rm_msg.unwrap();
+    let payload = TypeValue::Builtin(
+        roto::types::builtin::BuiltinTypeValue::BmpMessage(rm_msg),
+    );
+
+    let res = test_data_4(
+        Filter("my-module".into()),
+        payload,
+        r#"
+        filter my-module {
+            define {
+                rx msg: BmpMessage;
+            }
+
+            term has_asn {
+                // Compare the ASN for BMP message types that have a Per Peer Header
+                // We can't omit the other message types as without the explicit
+                // 1 == 1 (true) check the resulting logic isn't what we want.
+                match msg with {
+                    InitiationMessage(i_msg) -> 1 == 1,
+                    PeerDownNotification(pd_msg) -> pd_msg.per_peer_header.asn == AS12345,
+                    PeerUpNotification(pu_msg) -> pu_msg.per_peer_header.asn == AS12345,
+                    RouteMonitoring(rm_msg) -> rm_msg.per_peer_header.asn == AS12345,
+                    StatisticsReport(sr_msg) -> sr_msg.per_peer_header.asn == AS12345,
+                    TerminationMessage(t_msg) -> 1 == 1,
+                }
+            }
+
+            apply {
+                filter match has_asn matching {
+                    return accept;
+                };
+                reject;
+            }
+        }"#
+    ).unwrap();
+
+    trace!("res : {:?}", res);
+
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
 }

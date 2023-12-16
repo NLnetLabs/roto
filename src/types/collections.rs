@@ -1159,6 +1159,7 @@ pub trait EnumBytesRecord {
 
 pub trait RecordType: AsRef<[u8]> {
     fn get_field_num() -> usize;
+    fn into_typevalue(self) -> TypeValue;
 }
 
 //------------ BytesRecord type ---------------------------------------------
@@ -1173,6 +1174,10 @@ pub struct BytesRecord<T: RecordType>(pub T);
 impl<T: RecordType + std::fmt::Debug> BytesRecord<T> {
     pub(crate) fn bytes_parser(&self) -> &T {
         &self.0
+    }
+
+    pub(crate) fn into_inner(self) -> T {
+        self.0
     }
 
     pub(crate) fn get_props_for_method(

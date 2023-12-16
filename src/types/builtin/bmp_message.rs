@@ -14,7 +14,7 @@ use crate::{
         enum_types::EnumVariant,
         lazyrecord_types::{
             BmpMessage, LazyRecordTypeDef, PeerDownNotification,
-            PeerUpNotification, RouteMonitoring, StatisticsReport, InitiationMessage,
+            PeerUpNotification, RouteMonitoring, StatisticsReport, InitiationMessage, TerminationMessage
         },
         typedef::{LazyNamedTypeDef, RecordTypeDef, TypeDef},
         typevalue::TypeValue,
@@ -257,6 +257,7 @@ impl From<MessageType> for LazyRecordTypeDef {
 
 bytes_record_impl!(
     RouteMonitoring,
+    BmpRouteMonitoringMessage,
     #[type_def(
         record_field(
             "per_peer_header"; 0,
@@ -318,6 +319,7 @@ impl BytesRecord<RouteMonitoring> {
 
 bytes_record_impl!(
     PeerUpNotification,
+    BmpPeerUpNotification,
     #[type_def(
         field(
             "local_address"; 0,
@@ -399,6 +401,7 @@ impl BytesRecord<PeerUpNotification> {
 
 bytes_record_impl!(
     PeerDownNotification,
+    BmpPeerDownNotification,
     #[type_def(
         record_field(
             "per_peer_header"; 0,
@@ -458,6 +461,7 @@ impl BytesRecord<PeerDownNotification> {
 
 bytes_record_impl!(
     InitiationMessage,
+    BmpInitiationMessage,
     #[type_def(
         record_field(
             "common_header"; 0,
@@ -483,10 +487,42 @@ impl BytesRecord<InitiationMessage> {
     }
 }
 
+
+//------------ TerminationMessage --------------------------------------------
+
+bytes_record_impl!(
+    TerminationMessage,
+    BmpTerminationMessage,
+    #[type_def(
+        record_field(
+            "common_header"; 0,
+            field("version"; 1, U8, common_header.version),
+        ),
+    )],
+    2
+);
+
+impl BytesRecord<TerminationMessage> {
+    pub fn new(bytes: bytes::Bytes) -> Result<Self, VmError> {
+        if let routecore::bmp::message::Message::TerminationMessage(
+            pd_msg,
+        ) = routecore::bmp::message::Message::<bytes::Bytes>::from_octets(
+            bytes,
+        )
+        .map_err(|_| VmError::InvalidPayload)?
+        {
+            Ok(Self(pd_msg))
+        } else {
+            Err(VmError::InvalidMsgType)
+        }
+    }
+}
+
 //------------ StatisticsReport ---------------------------------------------
 
 bytes_record_impl!(
     StatisticsReport,
+    BmpStatisticsReport,
     #[type_def(
         record_field(
             "per_peer_header"; 0,
