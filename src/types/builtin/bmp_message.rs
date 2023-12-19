@@ -211,9 +211,6 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
     }
 
     fn is_variant(&self, variant_token: Token) -> bool {
-        trace!("requested variant_token {:?}", variant_token);
-        trace!("actual variant {:?}", self.get_variant());
-        trace!("conversion {:?}", usize::from(self.get_variant()));
         if let Token::Variant(variant_index) = variant_token {
             variant_index == self.get_variant().into()
         } else {

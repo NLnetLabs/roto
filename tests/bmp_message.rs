@@ -939,7 +939,6 @@ fn mk_initiation_msg() -> bytes::Bytes {
     )
 }
 
-
 #[test]
 fn bmp_message_9() {
     common::init();
@@ -1007,7 +1006,7 @@ fn bmp_message_10() {
 
     let res = test_data_4(
         Filter("my-module".into()),
-        payload,
+        payload.clone(),
         r#"
         filter my-module {
             define {
@@ -1039,5 +1038,55 @@ fn bmp_message_10() {
 
     trace!("res : {:?}", res);
 
+    assert_eq!(res.accept_reject, AcceptReject::Accept);
+    assert_eq!(res.rx, payload);
+}
+
+
+#[test]
+fn bmp_message_11() {
+    common::init();
+
+    let buf = mk_initiation_msg();
+    let im_msg = BytesRecord::<BmpMessage>::new(buf);
+    assert!(im_msg.is_ok());
+    let im_msg = im_msg.unwrap();
+    let payload = TypeValue::Builtin(
+        roto::types::builtin::BuiltinTypeValue::BmpMessage(im_msg),
+    );
+
+    let res = test_data_4(
+        Filter("my-module".into()),
+        payload,
+        r#"
+        filter my-module {
+            define {
+                rx msg: BmpMessage;
+            }
+
+            term has_asn {
+                // Compare the ASN for BMP message types that have a Per Peer Header
+                // We can't omit the other message types as without the explicit
+                // 1 == 1 (true) check the resulting logic isn't what we want.
+                match msg with {
+                    PeerDownNotification(pd_msg) -> pd_msg.per_peer_header.asn == AS12345,
+                    PeerUpNotification(pu_msg) -> pu_msg.per_peer_header.asn == AS12345,
+                    InitiationMessage(i_msg) -> 1 == 1,
+                    RouteMonitoring(rm_msg) -> rm_msg.per_peer_header.asn == AS12345,
+                    StatisticsReport(sr_msg) -> sr_msg.per_peer_header.asn == AS12345,
+                    TerminationMessage(t_msg) -> 1 == 1,
+                }
+            }
+
+            apply {
+                filter match has_asn matching {
+                    return accept;
+                };
+                reject;
+            }
+        }"#
+    ).unwrap();
+
+    trace!("res : {:?}", res);
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }

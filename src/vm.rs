@@ -19,9 +19,13 @@ use crate::{
             Record,
         },
         datasources::{DataSource, DataSourceMethodValue},
-        lazyrecord_types::{RouteMonitoring, InitiationMessage, PeerDownNotification, PeerUpNotification, TerminationMessage, StatisticsReport, LazyRecordTypeDef, BmpMessage},
+        lazyrecord_types::{
+            InitiationMessage, LazyRecordTypeDef, PeerDownNotification,
+            PeerUpNotification, RouteMonitoring, StatisticsReport,
+            TerminationMessage,
+        },
         outputs::OutputStreamMessage,
-        typedef::{TypeDef, RecordTypeDef},
+        typedef::TypeDef,
         typevalue::TypeValue,
     },
 };
@@ -130,7 +134,6 @@ pub(crate) struct StackRef {
     // indexes, e.g. [1,2] on
     // Record { a: U8, b: Record { a: U8, b: U8, c: U8 }} would point to a.b
     field_index: FieldIndex,
-    // variant_index: Option<LazyRecordTypeDef>
 }
 
 #[derive(Debug)]
@@ -145,7 +148,6 @@ impl<'a> Stack {
         self.0.push(StackRef {
             pos,
             field_index: FieldIndex::new(),
-            variant_index: None
         });
         Ok(())
     }
@@ -217,95 +219,12 @@ pub struct LinearMemory([TypeValue; 512]);
 
 impl LinearMemory {
     pub fn uninit() -> Self {
-        // LinearMemory(std::array::from_fn(|_| TypeValue::UnInit))
         const V: TypeValue = TypeValue::UnInit;
         LinearMemory([V; 512])
     }
 
     pub fn get_mem_pos(&self, index: usize) -> Option<&TypeValue> {
         self.0.get(index)
-    }
-
-    fn take_mem_pos(&mut self, index: usize) -> Option<TypeValue> {
-        self.0.get_mut(index).map(std::mem::take)
-    }
-
-    // Replace the memory position with the actual contained variant, if any.
-    // Doesn't do anything if the memory position does not hold a Enum variant
-    // (or is already unpacked into it).
-    fn unpack_enum_variant(&mut self, index: usize) {
-        if let Some(TypeValue::Builtin(BuiltinTypeValue::BmpMessage(
-            bmp_msg,
-        ))) = self.take_mem_pos(index)
-        {
-            match bmp_msg.into_inner() {
-                routecore::bmp::message::Message::RouteMonitoring(rm) => {
-                    self.set_mem_pos(
-                        index,
-                        TypeValue::Builtin(
-                            BuiltinTypeValue::BmpRouteMonitoringMessage(
-                                BytesRecord(rm),
-                            ),
-                        ),
-                    );
-                }
-                routecore::bmp::message::Message::PeerDownNotification(
-                    pd,
-                ) => {
-                    self.set_mem_pos(
-                        index,
-                        TypeValue::Builtin(
-                            BuiltinTypeValue::BmpPeerDownNotification(
-                                BytesRecord(pd),
-                            ),
-                        ),
-                    );
-                }
-                routecore::bmp::message::Message::PeerUpNotification(pu) => {
-                    self.set_mem_pos(
-                        index,
-                        TypeValue::Builtin(
-                            BuiltinTypeValue::BmpPeerUpNotification(
-                                BytesRecord(pu),
-                            ),
-                        ),
-                    );
-                }
-                routecore::bmp::message::Message::InitiationMessage(im) => {
-                    self.set_mem_pos(
-                        index,
-                        TypeValue::Builtin(
-                            BuiltinTypeValue::BmpInitiationMessage(
-                                BytesRecord(im),
-                            ),
-                        ),
-                    );
-                }
-                routecore::bmp::message::Message::TerminationMessage(tm) => {
-                    self.set_mem_pos(
-                        index,
-                        TypeValue::Builtin(
-                            BuiltinTypeValue::BmpTerminationMessage(
-                                BytesRecord(tm),
-                            ),
-                        ),
-                    );
-                }
-                routecore::bmp::message::Message::StatisticsReport(tm) => {
-                    self.set_mem_pos(
-                        index,
-                        TypeValue::Builtin(
-                            BuiltinTypeValue::BmpStatisticsReport(
-                                BytesRecord(tm),
-                            ),
-                        ),
-                    );
-                }
-                routecore::bmp::message::Message::RouteMirroring(_rmi) => {
-                    todo!()
-                }
-            };
-        }
     }
 
     pub(crate) fn get_mp_field_as_bool(
@@ -550,6 +469,46 @@ impl LinearMemory {
 
                         Ok(StackValue::Owned(v.try_into()?))
                     }
+                    Some(TypeValue::Builtin(
+                        BuiltinTypeValue::BmpPeerUpNotification(bmp_msg),
+                    )) => {
+                        trace!(
+                            "get bmp_peer_up_notification \
+                        get_value_owned_for_field {:?} {:?}",
+                            bmp_msg,
+                            field_index
+                        );
+
+                        let v = LazyRecord::from_type_def(BytesRecord::<
+                            routecore::bmp::message::PeerUpNotification<
+                                bytes::Bytes,
+                            >,
+                        >::lazy_type_def(
+                        ))?
+                        .get_field_by_index(&field_index, bmp_msg)?;
+
+                        Ok(StackValue::Owned(v.try_into()?))
+                    }
+                    Some(TypeValue::Builtin(
+                        BuiltinTypeValue::BmpInitiationMessage(bmp_msg),
+                    )) => {
+                        trace!(
+                            "get bmp_initiation_message \
+                        get_value_owned_for_field {:?} {:?}",
+                            bmp_msg,
+                            field_index
+                        );
+
+                        let v = LazyRecord::from_type_def(BytesRecord::<
+                            routecore::bmp::message::InitiationMessage<
+                                bytes::Bytes,
+                            >,
+                        >::lazy_type_def(
+                        ))?
+                        .get_field_by_index(&field_index, bmp_msg)?;
+
+                        Ok(StackValue::Owned(v.try_into()?))
+                    }
                     Some(tv) => match tv {
                         // Do not own AsPath and Communities, cloning is
                         // expensive!
@@ -621,30 +580,17 @@ impl LinearMemory {
         }
     }
 
-    pub fn get_as_lazy_record_ref(
+    pub fn get_as_lazy_record_type(
         &self,
         mem_pos: usize,
-    ) -> Result<&TypeValue, VmError> {
-        if let Some(tv) = self.get_mem_pos(mem_pos) {
-            match tv {
-                // Cloning here is not a good look, but this
-                // effectively only happens when the tx contains the
-                // whole bytes record, in which case cloning is
-                // inevitable.
-                TypeValue::Builtin(BuiltinTypeValue::BmpMessage(_)) => Ok(tv),
-                TypeValue::Builtin(
-                    BuiltinTypeValue::BmpRouteMonitoringMessage(_),
-                ) => Ok(tv),
-                TypeValue::Builtin(
-                    BuiltinTypeValue::BmpPeerDownNotification(_),
-                ) => Ok(tv),
-                TypeValue::Builtin(
-                    BuiltinTypeValue::BmpPeerUpNotification(_),
-                ) => Ok(tv),
-                _ => Err(VmError::InvalidValueType),
-            }
-        } else {
-            Err(VmError::InvalidMemoryAccess(mem_pos))
+    ) -> Result<LazyRecordTypeDef, VmError> {
+        match self.get_mem_pos(mem_pos) {
+            // We only know how to deal with BmpMessages currently.
+            Some(TypeValue::Builtin(BuiltinTypeValue::BmpMessage(
+                bytes_rec,
+            ))) => Ok(bytes_rec.get_variant()),
+            Some(_) => Err(VmError::InvalidRecord),
+            _ => Err(VmError::InvalidMemoryAccess(mem_pos)),
         }
     }
 
@@ -664,9 +610,13 @@ impl LinearMemory {
             // No field index, we want the whole bytes record
             fi if fi.is_empty() => {
                 trace!("empty field index on bytes record");
-                // panic!("Art thou a lowly quitter? YES");
                 if let Some(tv) = self.get_mem_pos(mem_pos) {
                     match tv {
+                        // A BmpMessage is an EnumBytesRecord, you can use the
+                        // whole BytesRecord, e.g. to send it to an
+                        // OutputStreamQueue, but you can't index into it. You
+                        // can only index into its variants (see match arm
+                        // `field_index` below).
                         TypeValue::Builtin(BuiltinTypeValue::BmpMessage(
                             _,
                         )) => Ok(StackValue::Ref(tv)),
@@ -680,7 +630,13 @@ impl LinearMemory {
                             BuiltinTypeValue::BmpPeerUpNotification(_),
                         ) => Ok(StackValue::Ref(tv)),
                         TypeValue::Builtin(
-                            BuiltinTypeValue::BmpStatisticsReport(_)
+                            BuiltinTypeValue::BmpInitiationMessage(_),
+                        ) => Ok(StackValue::Ref(tv)),
+                        TypeValue::Builtin(
+                            BuiltinTypeValue::BmpTerminationMessage(_),
+                        ) => Ok(StackValue::Ref(tv)),
+                        TypeValue::Builtin(
+                            BuiltinTypeValue::BmpStatisticsReport(_),
                         ) => Ok(StackValue::Ref(tv)),
                         _ => Err(VmError::InvalidValueType),
                     }
@@ -694,7 +650,13 @@ impl LinearMemory {
                     mem_pos,
                     self.get_mem_pos(mem_pos)
                 );
+
                 match self.get_mem_pos(mem_pos) {
+                    // You can't index into the field of a BmpMessage, it's an
+                    // EnumBytesRecord: it doesn't have fields, only variants.
+                    Some(TypeValue::Builtin(
+                        BuiltinTypeValue::BmpMessage(_),
+                    )) => Err(VmError::InvalidRecord),
                     Some(TypeValue::Builtin(
                         BuiltinTypeValue::BmpRouteMonitoringMessage(bmp_msg),
                     )) => {
@@ -747,6 +709,26 @@ impl LinearMemory {
 
                         LazyRecord::from_type_def(BytesRecord::<
                             routecore::bmp::message::PeerUpNotification<
+                                bytes::Bytes,
+                            >,
+                        >::lazy_type_def(
+                        ))?
+                        .get_field_by_index(&field_index, bmp_msg)
+                        .map(|elm| elm.try_into())?
+                        .map(StackValue::Owned)
+                    }
+                    Some(TypeValue::Builtin(
+                        BuiltinTypeValue::BmpInitiationMessage(bmp_msg),
+                    )) => {
+                        trace!(
+                            "get bmp_peer_up_message \
+                        get_value_owned_for_field {:?} {:?}",
+                            bmp_msg,
+                            field_index
+                        );
+
+                        LazyRecord::from_type_def(BytesRecord::<
+                            routecore::bmp::message::InitiationMessage<
                                 bytes::Bytes,
                             >,
                         >::lazy_type_def(
@@ -2153,16 +2135,17 @@ impl<
                             };
 
                         let mut stack = self.stack.borrow_mut();
-                        let StackRef { field_index: v_field_index, pos, .. } = stack.pop()?;
-                        let mut mem_pos: Result<u32, _> =
-                            Err(VmError::InvalidMemoryAccess(0));
+                        let StackRef {
+                            field_index: v_field_index,
+                            pos,
+                            ..
+                        } = stack.pop()?;
 
                         let bytes_rec_sv = {
                             match pos {
                                 // Rx, Tx, and Arguments containing a
                                 // LazyRecord end up here.
                                 StackRefPos::MemPos(mp) => {
-                                    mem_pos = Ok(mp);
                                     mem.get_lazy_field_by_index(
                                         mp as usize,
                                         // The field index from the top of the
@@ -2464,9 +2447,12 @@ impl<
                                 match s.get_top_value()?.pos {
                                     // Indexed Variants on Enums only appear
                                     // as MemPos indexes, (rx, tx and
-                                    // arguments). As soon as an Enum is
-                                    // encountered it is replaced with the
-                                    // actual variant here.
+                                    // arguments). We are not doing anything
+                                    // to the enum, we are just establishing
+                                    // that the enum in this memory position
+                                    // holds the requested variant
+                                    // corresponding to the index. When it
+                                    // does we push it to the stack.
                                     StackRefPos::MemPos(mem_pos) => {
                                         let val = mem.mp_is_variant(
                                             mem_pos as usize,
@@ -2489,12 +2475,6 @@ impl<
                                                 var_val
                                             );
 
-                                            // Replace the Enum typed value in
-                                            // this memory position, with the
-                                            // variant it contains.
-                                            mem.unpack_enum_variant(
-                                                mem_pos as usize,
-                                            );
                                             s.push(StackRefPos::MemPos(
                                                 mem_pos,
                                             ))?;
@@ -2521,7 +2501,9 @@ impl<
                                     .ok_or_else(|| {
                                         VmError::AnonymousArgumentNotFound
                                     })?;
-                                // TODO: THIS SHOULD PROBABLY BE CHANGED TO USE AN INDEX TO THE arguments map ON THE VM!
+                                // TODO: THIS SHOULD PROBABLY BE CHANGED TO
+                                // USE AN INDEX TO THE arguments map ON THE
+                                // VM!
                                 self.stack.borrow_mut().push(
                                     StackRefPos::ConstantValue(
                                         arg_value.clone(),
@@ -2607,7 +2589,7 @@ impl<
                     OpCode::Exit(accept_reject) => {
                         // Make sure to TAKE the rx and optionally the tx
                         // value, so the references in LinearMemory are
-                        // broken and LM can be reused.
+                        // dropped and LM can be reused.
                         let rx = mem
                             .take_rx_value()
                             .ok_or(VmError::InvalidPayload)?;
