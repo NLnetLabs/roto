@@ -1,6 +1,8 @@
 //------------ Route Status -------------------------------------------------
 
 use routecore::asn::LongSegmentError;
+use routecore::bgp::message::nlri::PathId;
+use routecore::bgp::types::AfiSafi;
 use serde::Serialize;
 use std::marker::PhantomData;
 use std::ops::Index;
@@ -92,6 +94,10 @@ pub struct AttrChangeSet {
     pub peer_asn: ScalarOption<Asn>,
     #[serde(skip_serializing_if = "ScalarOption::is_none")]
     pub router_id: ScalarOption<StringLiteral>,
+    #[serde(skip_serializing_if = "ReadOnlyScalarOption::is_none")]
+    pub afi_safi: ReadOnlyScalarOption<AfiSafi>,
+    #[serde(skip_serializing_if = "ScalarOption::is_none")]
+    pub path_id: ScalarOption<PathId>,
     // mp_reach_nlri: Vec<Prefix>,
     // mp_unreach_nlri: Vec<Prefix>,
     #[serde(skip)]
@@ -121,6 +127,7 @@ pub struct AttrChangeSet {
     #[serde(skip)]
     pub rsrvd_development: Todo, // RsrvdDevelopment,
 }
+
 
 //------------ ScalarOption ------------------------------------------------
 

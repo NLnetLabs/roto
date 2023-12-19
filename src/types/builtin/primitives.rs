@@ -10,7 +10,7 @@ use serde::ser::SerializeSeq;
 use serde::{Serialize, Serializer};
 
 use crate::ast::{IpAddressLiteral, PrefixLiteral};
-use crate::attr_change_set::VectorValue;
+use crate::attr_change_set::{VectorValue, ScalarValue};
 use crate::compiler::compile::CompileError;
 use crate::first_into_vm_err;
 use crate::traits::RotoType;
@@ -1685,7 +1685,121 @@ impl TryFrom<&TypeValue> for PrefixLength {
     }
 }
 
-// ----------- Community ----------------------------------------------------
+
+//------------ AfiSafi Type --------------------------------------------------
+
+impl From<routecore::bgp::types::AfiSafi> for TypeValue {
+    fn from(value: routecore::bgp::types::AfiSafi) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::AfiSafi(value))
+    }
+}
+
+impl ScalarValue for routecore::bgp::types::AfiSafi {}
+
+impl RotoType for routecore::bgp::types::AfiSafi {
+    fn get_props_for_method(
+        ty: crate::types::typedef::TypeDef,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<crate::types::typedef::MethodProps, crate::compiler::CompileError>
+    where
+        Self: std::marker::Sized {
+        todo!()
+    }
+
+    fn into_type(
+        self,
+        type_value: &crate::types::typedef::TypeDef,
+    ) -> Result<TypeValue, crate::compiler::CompileError>
+    where
+        Self: std::marker::Sized {
+        todo!()
+    }
+
+    fn exec_value_method<'a>(
+        &'a self,
+        method_token: usize,
+        args: &'a [crate::vm::StackValue],
+        res_type: crate::types::typedef::TypeDef,
+    ) -> Result<TypeValue, crate::vm::VmError> {
+        todo!()
+    }
+
+    fn exec_consume_value_method(
+        self,
+        method_token: usize,
+        args: Vec<TypeValue>,
+        res_type: crate::types::typedef::TypeDef,
+    ) -> Result<TypeValue, crate::vm::VmError> {
+        todo!()
+    }
+
+    fn exec_type_method(
+        method_token: usize,
+        args: &[crate::vm::StackValue],
+        res_type: crate::types::typedef::TypeDef,
+    ) -> Result<TypeValue, crate::vm::VmError> {
+        todo!()
+    }
+}
+
+//------------ PathId Type ---------------------------------------------------
+
+impl From<routecore::bgp::message::nlri::PathId> for TypeValue {
+    fn from(value: routecore::bgp::message::nlri::PathId) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::PathId(value))
+    }
+}
+
+impl ScalarValue for routecore::bgp::message::nlri::PathId {}
+
+impl RotoType for routecore::bgp::message::nlri::PathId {
+    fn get_props_for_method(
+        ty: TypeDef,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, CompileError>
+    where
+        Self: std::marker::Sized {
+        todo!()
+    }
+
+    fn into_type(
+        self,
+        type_value: &TypeDef,
+    ) -> Result<TypeValue, CompileError>
+    where
+        Self: std::marker::Sized {
+        todo!()
+    }
+
+    fn exec_value_method<'a>(
+        &'a self,
+        method_token: usize,
+        args: &'a [StackValue],
+        res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        todo!()
+    }
+
+    fn exec_consume_value_method(
+        self,
+        method_token: usize,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        todo!()
+    }
+
+    fn exec_type_method(
+        method_token: usize,
+        args: &[StackValue],
+        res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        todo!()
+    }
+}
+
+
+// ----------- Community -----------------------------------------------------
 
 /// A BGP community.
 ///
@@ -2436,6 +2550,9 @@ impl RotoType for IpAddress {
         match type_def {
             TypeDef::IpAddress => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::IpAddress(self)))
+            }
+            TypeDef::StringLiteral => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::StringLiteral(self.into())))
             }
             _ => Err(format!(
                 "Cannot convert type IpAddress to type {:?}",

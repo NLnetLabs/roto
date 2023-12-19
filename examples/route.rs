@@ -51,6 +51,8 @@ fn test_data(
         msg_id,
         prefixes[0],
         update,
+        routecore::bgp::types::AfiSafi::Ipv6Unicast,
+        None,
         RouteStatus::InConvergence,
     )?;
 

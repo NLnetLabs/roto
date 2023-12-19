@@ -6,6 +6,7 @@ use std::hash::{Hash, Hasher};
 // `user defined` types.
 use log::{trace, debug};
 use serde::Serialize;
+use routecore::bgp::{types::AfiSafi, message::nlri::PathId};
 
 use crate::compiler::compile::CompileError;
 use crate::traits::Token;
@@ -162,7 +163,7 @@ pub enum TypeDef {
     BgpUpdateMessage,
     // A intermediate record where fields are only evaluated when called by
     // the VM, or when modified. This type doesn't have a corresponding
-    // typevalue, it needs to be materialzed into a record, or only be used
+    // typevalue, it needs to be materialized into a record, or only be used
     // read-only (for filter operations).
     LazyRecord(LazyRecordTypeDef),
     // Builtin Types
@@ -172,6 +173,8 @@ pub enum TypeDef {
     Boolean,
     Prefix,
     PrefixLength, // A u8 prefixes by a /
+    AfiSafi,
+    PathId,
     IpAddress,
     Asn,
     Route, // BGP Update path attributes
@@ -232,6 +235,8 @@ impl TypeDef {
         StringLiteral(Asn;),
         HexLiteral(StringLiteral,U8,U32,Community;),
         PrefixLength(StringLiteral,U8,U32;),
+        AfiSafi(StringLiteral;),
+        PathId(StringLiteral,IntegerLiteral,U32;),
         Asn(StringLiteral,U32;),
         AsPath(StringLiteral;List),
         LocalPref(StringLiteral,U8,U16,U32,IntegerLiteral;),
@@ -576,6 +581,12 @@ impl TypeDef {
             TypeDef::PrefixLength => {
                 PrefixLength::get_props_for_method(self.clone(), method_name)
             }
+            TypeDef::AfiSafi => {
+                AfiSafi::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::PathId => {
+                PathId::get_props_for_method(self.clone(), method_name)
+            }
             TypeDef::IpAddress => {
                 IpAddress::get_props_for_method(self.clone(), method_name)
             }
@@ -782,6 +793,8 @@ impl std::fmt::Display for TypeDef {
             TypeDef::AsPath => write!(f, "AsPath"),
             TypeDef::Hop => write!(f, "Hop"),
             TypeDef::Prefix => write!(f, "Prefix"),
+            TypeDef::AfiSafi => write!(f, "AFI SAFI"),
+            TypeDef::PathId => write!(f, "Path ID"),
             TypeDef::U32 => write!(f, "U32"),
             TypeDef::U16 => write!(f, "U16"),
             TypeDef::Asn => write!(f, "Asn"),
@@ -1089,6 +1102,8 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::StringLiteral(_) => TypeDef::StringLiteral,
             BuiltinTypeValue::Boolean(_) => TypeDef::Boolean,
             BuiltinTypeValue::Prefix(_) => TypeDef::Prefix,
+            BuiltinTypeValue::AfiSafi(_) => TypeDef::AfiSafi,
+            BuiltinTypeValue::PathId(_) => TypeDef::PathId,
             BuiltinTypeValue::PrefixLength(_) => TypeDef::PrefixLength,
             BuiltinTypeValue::IpAddress(_) => TypeDef::IpAddress,
             BuiltinTypeValue::Asn(_) => TypeDef::Asn,
@@ -1153,6 +1168,8 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::StringLiteral(_) => TypeDef::StringLiteral,
             BuiltinTypeValue::Boolean(_) => TypeDef::Boolean,
             BuiltinTypeValue::Prefix(_) => TypeDef::Prefix,
+            BuiltinTypeValue::AfiSafi(_) => TypeDef::AfiSafi,
+            BuiltinTypeValue::PathId(_) => TypeDef::PathId,
             BuiltinTypeValue::PrefixLength(_) => TypeDef::PrefixLength,
             BuiltinTypeValue::IpAddress(_) => TypeDef::IpAddress,
             BuiltinTypeValue::Asn(_) => TypeDef::Asn,

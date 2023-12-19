@@ -69,6 +69,8 @@ fn test_data(
         msg_id,
         first_prefix,
         update,
+        routecore::bgp::types::AfiSafi::Ipv6Unicast,
+        None,
         RouteStatus::InConvergence,
     )?
     .with_peer_ip(peer_ip);

@@ -12,7 +12,7 @@
 //                 └─────────────┘  status
 
 use log::{debug, error};
-use routecore::bgp::message::SessionConfig;
+use routecore::bgp::{message::{SessionConfig, nlri::PathId}, types::AfiSafi};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use std::{net::IpAddr, sync::Arc};
@@ -118,6 +118,9 @@ pub struct RawRouteWithDeltas {
     pub prefix: Prefix,
     // Arc'ed BGP message
     pub raw_message: Arc<BgpUpdateMessage>,
+    // AFI SAFI combination for the NLRI that the Prefix for this route
+    // belongs to.
+    afi_safi: routecore::bgp::types::AfiSafi,
     // The IP address of the BGP speaker that originated the route, if known.
     peer_ip: Option<IpAddress>,
     // The ASN of the BGP speaker that originated the route, if known.
@@ -125,6 +128,10 @@ pub struct RawRouteWithDeltas {
     // The ID (e.g. "<ip addr>:<port>", or "<BMP initiate sysName>") of the
     // connected router from which the route was received, if known.
     router_id: Option<Arc<String>>,
+    // The AddPath path Id, only valid for certain AFI SAFI combinations &
+    // note this ID is only supposed to be unique within one BGP peering
+    // session.
+    path_id: Option<routecore::bgp::message::nlri::PathId>,
     // history of recorded changes to the route
     attribute_deltas: AttributeDeltaList,
     // history of status changes to the route
@@ -136,6 +143,8 @@ impl RawRouteWithDeltas {
         delta_id: (RotondaId, LogicalTime),
         prefix: Prefix,
         raw_message: UpdateMessage,
+        afi_safi: routecore::bgp::types::AfiSafi,
+        path_id: Option<routecore::bgp::message::nlri::PathId>,
         route_status: RouteStatus,
     ) -> Result<Self, VmError> {
         let raw_message = BgpUpdateMessage::new(delta_id, raw_message);
@@ -150,12 +159,16 @@ impl RawRouteWithDeltas {
                 peer_ip,
                 peer_asn,
                 router_id.clone(),
+                afi_safi,
+                path_id
             )?,
         ))?;
 
         Ok(Self {
             prefix,
             raw_message: Arc::new(raw_message),
+            afi_safi,
+            path_id,
             peer_ip,
             peer_asn,
             router_id,
@@ -171,11 +184,15 @@ impl RawRouteWithDeltas {
         delta_id: (RotondaId, LogicalTime),
         prefix: Prefix,
         raw_message: &Arc<BgpUpdateMessage>,
+        afi_safi: routecore::bgp::types::AfiSafi,
+        path_id: Option<routecore::bgp::message::nlri::PathId>,
         route_status: RouteStatus,
     ) -> Self {
         Self {
             prefix,
             raw_message: Arc::clone(raw_message),
+            afi_safi,
+            path_id,
             peer_ip: None,
             peer_asn: None,
             router_id: None,
@@ -191,6 +208,8 @@ impl RawRouteWithDeltas {
         Self {
             prefix: self.prefix,
             raw_message: self.raw_message,
+            afi_safi: self.afi_safi,
+            path_id: self.path_id,
             peer_ip: Some(IpAddress::new(peer_ip)),
             peer_asn: self.peer_asn,
             router_id: self.router_id,
@@ -203,6 +222,8 @@ impl RawRouteWithDeltas {
         Self {
             prefix: self.prefix,
             raw_message: self.raw_message,
+            afi_safi: self.afi_safi,
+            path_id: self.path_id,
             peer_ip: self.peer_ip,
             peer_asn: Some(Asn::new(peer_asn)),
             router_id: self.router_id,
@@ -215,6 +236,8 @@ impl RawRouteWithDeltas {
         Self {
             prefix: self.prefix,
             raw_message: self.raw_message,
+            afi_safi: self.afi_safi,
+            path_id: self.path_id,
             peer_ip: self.peer_ip,
             peer_asn: self.peer_asn,
             router_id: Some(router_id),
@@ -255,6 +278,8 @@ impl RawRouteWithDeltas {
                 self.peer_ip,
                 self.peer_asn,
                 self.router_id.clone(),
+                self.afi_safi,
+                self.path_id
             )?)
         }
     }
@@ -284,6 +309,8 @@ impl RawRouteWithDeltas {
                 self.peer_ip,
                 self.peer_asn,
                 self.router_id,
+                self.afi_safi,
+                self.path_id
             );
         }
 
@@ -308,6 +335,8 @@ impl RawRouteWithDeltas {
                     self.peer_ip,
                     self.peer_asn,
                     self.router_id.clone(),
+                    self.afi_safi,
+                    self.path_id
                 )?,
             ))?;
         }
@@ -818,7 +847,7 @@ impl BgpUpdateMessage {
                             BuiltinTypeValue::ConstU16EnumVariant(
                                 EnumVariant {
                                     enum_name: "AFI".into(),
-                                    value: announce.afi_safi().0.into(),
+                                    value: announce.afi_safi().afi().into(),
                                 },
                             ),
                         )))
@@ -841,7 +870,7 @@ impl BgpUpdateMessage {
                             BuiltinTypeValue::ConstU8EnumVariant(
                                 EnumVariant {
                                     enum_name: "SAFI".into(),
-                                    value: announce.afi_safi().1.into(),
+                                    value: announce.afi_safi().safi().into(),
                                 },
                             ),
                         )))
@@ -902,7 +931,7 @@ impl RotoType for BgpUpdateMessage {
                             BuiltinTypeValue::ConstU16EnumVariant(
                                 EnumVariant {
                                     enum_name: "AFI".into(),
-                                    value: announce.afi_safi().0.into(),
+                                    value: announce.afi_safi().afi().into(),
                                 },
                             ),
                         ))
@@ -920,7 +949,7 @@ impl RotoType for BgpUpdateMessage {
                             BuiltinTypeValue::ConstU8EnumVariant(
                                 EnumVariant {
                                     enum_name: "SAFI".into(),
-                                    value: announce.afi_safi().1.into(),
+                                    value: announce.afi_safi().safi().into(),
                                 },
                             ),
                         ))
@@ -1335,6 +1364,8 @@ impl UpdateMessage {
         peer_ip: Option<IpAddress>,
         peer_asn: Option<Asn>,
         router_id: Option<Arc<String>>,
+        afi_safi: AfiSafi,
+        path_id: Option<PathId>,
     ) -> Result<AttrChangeSet, VmError> {
         let next_hop = self
             .0
@@ -1371,6 +1402,8 @@ impl UpdateMessage {
             router_id: router_id
                 .map(|v| StringLiteral(String::clone(&v)))
                 .into(),
+            afi_safi: ReadOnlyScalarOption::<AfiSafi>::new(afi_safi.into()),
+            path_id: path_id.into(),
             originator_id: Todo,
             cluster_list: Todo,
             extended_communities: Todo,

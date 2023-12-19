@@ -4,7 +4,8 @@ mod route {
         AsPath, Asn, Boolean, IntegerLiteral, PrefixLength, StringLiteral,
         U16, U8,
     };
-    use crate::types::builtin::{BuiltinTypeValue, Community};
+    use crate::ast::IpAddressLiteral;
+    use crate::types::builtin::{BuiltinTypeValue, Community, IpAddress};
     use crate::types::typedef::TypeDef;
     use crate::types::typevalue::TypeValue;
     use crate::{
@@ -88,6 +89,8 @@ mod route {
             msg_id,
             prefixes[0],
             update,
+            routecore::bgp::types::AfiSafi::Ipv6Unicast,
+            None,
             RouteStatus::InConvergence,
         )?);
 
@@ -96,6 +99,8 @@ mod route {
                 msg_id,
                 *prefix,
                 &roto_msgs[0].raw_message,
+                routecore::bgp::types::AfiSafi::Ipv6Unicast,
+                None,
                 RouteStatus::InConvergence,
             ))
         }
@@ -208,6 +213,8 @@ mod route {
             msg_id,
             prefixes[0],
             update,
+            routecore::bgp::types::AfiSafi::Ipv6Unicast,
+            None,
             RouteStatus::InConvergence,
         )?);
 
@@ -216,6 +223,8 @@ mod route {
                 msg_id,
                 *prefix,
                 &roto_msgs[0].raw_message,
+                routecore::bgp::types::AfiSafi::Ipv6Unicast,
+                None,
                 RouteStatus::InConvergence,
             ))
         }
@@ -1012,5 +1021,36 @@ src_ty.clone().test_type_conversion(arg_ty)"]
         ));
 
         test_consume_method_on_type_value(test_value, "set", res).unwrap();
+    }
+    
+    //------------ Test: IpAddress -------------------------------------------
+
+    #[test]
+    fn test_ip_address_literal_1() -> Result<(), CompileError> {
+        init();
+
+        let test_value = IpAddress::try_from(&IpAddressLiteral("24.0.2.0".to_string())).unwrap();
+        let res = IpAddress(std::net::IpAddr::from([24,0,2,0]));
+        mk_converted_type_value(test_value, res)
+    }
+
+    #[test]
+    fn test_ip_address_literal_2() -> Result<(), CompileError> {
+        init();
+
+        let test_value = IpAddress::try_from(&IpAddressLiteral("24.0.2.0".to_string())).unwrap();
+        let res = StringLiteral("24.0.2.0".into());
+        mk_converted_type_value(test_value, res)
+    }
+
+    #[test]
+    fn test_ip_address_literal_3() -> Result<(), CompileError> {
+        init();
+
+        let test_value = IpAddress::try_from(&IpAddressLiteral("2001::ffff".to_string())).unwrap();
+        let res = IpAddress(std::net::IpAddr::from([0x2001,0x0,0x0,0x0,0x0,0x0,0x0,0xffff]));
+
+        assert_eq!(TypeValue::from(test_value).into_builtin()?, BuiltinTypeValue::IpAddress(res));
+        mk_converted_type_value(test_value, res)
     }
 }

@@ -4,6 +4,8 @@
 
 use std::fmt::Display;
 
+use routecore::bgp::message::nlri::PathId;
+use routecore::bgp::types::AfiSafi;
 use serde::Serialize;
 
 use crate::compiler::compile::CompileError;
@@ -11,44 +13,47 @@ use crate::traits::RotoType;
 use crate::types::collections::BytesRecord;
 use crate::types::enum_types::EnumVariant;
 use crate::types::lazyrecord_types::{
-    PeerDownNotification, PeerUpNotification, RouteMonitoring, BmpMessage, InitiationMessage, TerminationMessage, StatisticsReport,
+    BmpMessage, InitiationMessage, PeerDownNotification, PeerUpNotification,
+    RouteMonitoring, StatisticsReport, TerminationMessage,
 };
 
 use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 
 use super::{
-    AsPath, Asn, BgpUpdateMessage, Boolean, Community,
-    HexLiteral, Hop, IntegerLiteral, IpAddress, LocalPref, MultiExitDisc,
-    NextHop, OriginType, Prefix, PrefixLength, RawRouteWithDeltas,
-    RouteStatus, StringLiteral, U16, U32, U8, AtomicAggregate, Aggregator
+    Aggregator, AsPath, Asn, AtomicAggregate, BgpUpdateMessage, Boolean,
+    Community, HexLiteral, Hop, IntegerLiteral, IpAddress, LocalPref,
+    MultiExitDisc, NextHop, OriginType, Prefix, PrefixLength,
+    RawRouteWithDeltas, RouteStatus, StringLiteral, U16, U32, U8,
 };
 
 #[derive(Debug, Eq, Clone, Hash, PartialEq, Serialize)]
 #[serde(untagged)]
 pub enum BuiltinTypeValue {
-    U32(U32),                           // scalar
-    U16(U16),                           // scalar
-    U8(U8),                             // scalar
-    IntegerLiteral(IntegerLiteral),     // scalar
-    StringLiteral(StringLiteral),       // scalar
-    Boolean(Boolean),                   // scalar
-    HexLiteral(HexLiteral),             // scalar
-    IpAddress(IpAddress),               // scalar
-    Prefix(Prefix),                     // scalar
-    PrefixLength(PrefixLength),         // scalar
-    LocalPref(LocalPref),               // scalar
-    AtomicAggregate(AtomicAggregate),   // scalar
-    Aggregator(Aggregator),             // scalar
-    NextHop(NextHop),                   // scalar
-    MultiExitDisc(MultiExitDisc),       // scalar
-    RouteStatus(RouteStatus),           // scalar
-    Community(Community),               // scalar
-    Asn(Asn),                           // scalar
-    AsPath(AsPath),                     // vector
-    Hop(Hop),                           // read-only scalar
-    OriginType(OriginType),             // scalar
-    Route(RawRouteWithDeltas),          // vector
+    U32(U32),                         // scalar
+    U16(U16),                         // scalar
+    U8(U8),                           // scalar
+    IntegerLiteral(IntegerLiteral),   // scalar
+    StringLiteral(StringLiteral),     // scalar
+    Boolean(Boolean),                 // scalar
+    HexLiteral(HexLiteral),           // scalar
+    IpAddress(IpAddress),             // scalar
+    Prefix(Prefix),                   // scalar
+    AfiSafi(AfiSafi),                 // scalar
+    PathId(PathId),                   // scalar
+    PrefixLength(PrefixLength),       // scalar
+    LocalPref(LocalPref),             // scalar
+    AtomicAggregate(AtomicAggregate), // scalar
+    Aggregator(Aggregator),           // scalar
+    NextHop(NextHop),                 // scalar
+    MultiExitDisc(MultiExitDisc),     // scalar
+    RouteStatus(RouteStatus),         // scalar
+    Community(Community),             // scalar
+    Asn(Asn),                         // scalar
+    AsPath(AsPath),                   // vector
+    Hop(Hop),                         // read-only scalar
+    OriginType(OriginType),           // scalar
+    Route(RawRouteWithDeltas),        // vector
     // A read-only enum variant for capturing constants
     ConstU8EnumVariant(EnumVariant<u8>),
     ConstU16EnumVariant(EnumVariant<u16>),
@@ -181,6 +186,8 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::IntegerLiteral(v) => v.into_type(ty),
             BuiltinTypeValue::StringLiteral(v) => v.into_type(ty),
             BuiltinTypeValue::Prefix(v) => v.into_type(ty),
+            BuiltinTypeValue::AfiSafi(v) => v.into_type(ty),
+            BuiltinTypeValue::PathId(v) => v.into_type(ty),
             BuiltinTypeValue::PrefixLength(v) => v.into_type(ty),
             BuiltinTypeValue::Community(v) => v.into_type(ty),
             BuiltinTypeValue::IpAddress(v) => v.into_type(ty),
@@ -347,6 +354,8 @@ impl Display for BuiltinTypeValue {
                     write!(f, "{}", v)
                 }
                 BuiltinTypeValue::Prefix(v) => write!(f, "{}", v),
+                BuiltinTypeValue::PathId(v) => write!(f, "{}", v),
+                BuiltinTypeValue::AfiSafi(v) => write!(f, "{}", v),
                 BuiltinTypeValue::PrefixLength(v) => {
                     write!(f, "{}", v)
                 }
@@ -430,11 +439,17 @@ impl Display for BuiltinTypeValue {
                     write!(f, "{} (Const U32 Enum Variant)", v.value)
                 }
                 BuiltinTypeValue::Prefix(v) => write!(f, "{} (Prefix)", v),
+                BuiltinTypeValue::AfiSafi(v) => write!(f, "{} (AFI SAFI)", v),
+                BuiltinTypeValue::PathId(v) => write!(f, "{} (Path ID)", v),
                 BuiltinTypeValue::PrefixLength(v) => {
                     write!(f, "{} (Prefix Length)", v)
                 }
-                BuiltinTypeValue::Community(v) => write!(f, "{} (Community)", v),
-                BuiltinTypeValue::IpAddress(v) => write!(f, "{} (IP Address)", v),
+                BuiltinTypeValue::Community(v) => {
+                    write!(f, "{} (Community)", v)
+                }
+                BuiltinTypeValue::IpAddress(v) => {
+                    write!(f, "{} (IP Address)", v)
+                }
                 BuiltinTypeValue::Asn(v) => write!(f, "{} (ASN)", v),
                 BuiltinTypeValue::AsPath(v) => {
                     write!(f, "{} (AS Path)", v)
@@ -490,7 +505,7 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::MultiExitDisc(v) => {
                     write!(f, "{} (Multi Exit Discriminator)", v)
                 }
-            } 
+            }
         }
     }
 }

@@ -38,6 +38,8 @@ fn test_data(
         (RotondaId(0),0),
         Prefix::new(routecore::addr::Prefix::from_str("192.0.2.0/24")?),
         bgp_msg,
+        routecore::bgp::types::AfiSafi::Ipv4Unicast,
+        None,
         RouteStatus::UpToDate
     )?;
 

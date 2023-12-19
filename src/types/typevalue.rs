@@ -5,6 +5,8 @@ use primitives::{
     AsPath, Community, Hop, LocalPref, MultiExitDisc, NextHop, OriginType,
     RouteStatus, U16,
 };
+
+use routecore::bgp::message::{update::AfiSafi, nlri::PathId};
 use serde::Serialize;
 
 //============ TypeValue ====================================================
@@ -368,6 +370,12 @@ impl RotoType for TypeValue {
             TypeDef::PrefixLength => {
                 PrefixLength::get_props_for_method(ty, method_name)
             }
+            TypeDef::AfiSafi => {
+                AfiSafi::get_props_for_method(ty, method_name)
+            }
+            TypeDef::PathId => {
+                PathId::get_props_for_method(ty, method_name)
+            }
             TypeDef::Record(_) => {
                 Record::get_props_for_method(ty, method_name)
             }
@@ -429,6 +437,8 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::OriginType(v) => v.into_type(ty),
                 BuiltinTypeValue::Prefix(v) => v.into_type(ty),
                 BuiltinTypeValue::PrefixLength(v) => v.into_type(ty),
+                BuiltinTypeValue::AfiSafi(v) => v.into_type(ty),
+                BuiltinTypeValue::PathId(v) => v.into_type(ty),
                 BuiltinTypeValue::Route(v) => v.into_type(ty),
                 BuiltinTypeValue::RouteStatus(v) => v.into_type(ty),
                 BuiltinTypeValue::StringLiteral(v) => v.into_type(ty),
@@ -638,6 +648,12 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::Prefix(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
+                BuiltinTypeValue::AfiSafi(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::PathId(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
                 BuiltinTypeValue::PrefixLength(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
@@ -760,6 +776,12 @@ impl RotoType for TypeValue {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::Prefix(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::AfiSafi(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::PathId(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::PrefixLength(v) => {
