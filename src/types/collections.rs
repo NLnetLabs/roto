@@ -1176,10 +1176,6 @@ impl<T: RecordType + std::fmt::Debug> BytesRecord<T> {
         &self.0
     }
 
-    pub(crate) fn into_inner(self) -> T {
-        self.0
-    }
-
     pub(crate) fn get_props_for_method(
         _type_def: TypeDef,
         method_name: &Identifier,
