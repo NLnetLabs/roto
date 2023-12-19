@@ -5,9 +5,9 @@ use roto::{
     blocks::Scope::{Filter, FilterMap},
     compiler::Compiler,
     types::{
-        builtin::{BytesRecord, BuiltinTypeValue},
+        builtin::BytesRecord,
         collections::Record,
-        lazyrecord_types::{BmpMessage, RouteMonitoring, StatisticsReport, PeerDownNotification, PeerUpNotification, InitiationMessage, TerminationMessage},
+        lazyrecord_types::{BmpMessage, RouteMonitoring, InitiationMessage},
         typevalue::TypeValue,
     },
     vm::{self, VmResult},
@@ -903,34 +903,8 @@ fn bmp_message_8() {
     assert_eq!(str, err);
 }
 
-
-fn mk_filter_payload(msg_buf: bytes::Bytes) {
-    // let source_id =
-    //     SourceId::SocketAddr("127.0.0.1:8080".parse().unwrap());
-
-    let msg = BmpMessage::from_octets(msg_buf.clone()).unwrap();
-
-    let value = match msg {
-        routecore::bmp::message::Message::RouteMonitoring(_) => TypeValue::Builtin(BuiltinTypeValue::BmpRouteMonitoringMessage(BytesRecord(RouteMonitoring::from_octets(msg_buf).unwrap()))),
-        routecore::bmp::message::Message::StatisticsReport(_) => TypeValue::Builtin(BuiltinTypeValue::BmpStatisticsReport(BytesRecord(StatisticsReport::from_octets(msg_buf).unwrap()))),
-        routecore::bmp::message::Message::PeerDownNotification(_) => TypeValue::Builtin(BuiltinTypeValue::BmpPeerDownNotification(BytesRecord(PeerDownNotification::from_octets(msg_buf).unwrap()))),
-        routecore::bmp::message::Message::PeerUpNotification(_) => TypeValue::Builtin(BuiltinTypeValue::BmpPeerUpNotification(BytesRecord(PeerUpNotification::from_octets(msg_buf).unwrap()))),
-        routecore::bmp::message::Message::InitiationMessage(_) => TypeValue::Builtin(BuiltinTypeValue::BmpInitiationMessage(BytesRecord(InitiationMessage::from_octets(msg_buf).unwrap()))),
-        routecore::bmp::message::Message::TerminationMessage(_) => TypeValue::Builtin(BuiltinTypeValue::BmpTerminationMessage(BytesRecord(TerminationMessage::from_octets(msg_buf).unwrap()))),
-        routecore::bmp::message::Message::RouteMirroring(_) => TypeValue::Builtin(BuiltinTypeValue::BmpRouteMonitoringMessage(BytesRecord(RouteMonitoring::from_octets(msg_buf).unwrap()))),
-    };
-
-    // eprintln!("MK FILTER PAYLOAD {:?}", value);
-    // let bmp_msg = BytesRecord(BmpMessage::from_octets(msg_buf).unwrap());
-    // let value = TypeValue::Builtin(BuiltinTypeValue::BmpMessage(bmp_msg));
-
-    // Update::Single(Payload::new(source_id, value, None))
-}
-
-
 const TEST_ROUTER_SYS_NAME: &str = "test-router";
 const TEST_ROUTER_SYS_DESC: &str = "test-desc";
-const TEST_PEER_ASN: u32 = 12345;
 
 fn mk_initiation_msg() -> bytes::Bytes {
     routes::bmp::encode::mk_initiation_msg(
