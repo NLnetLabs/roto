@@ -141,7 +141,7 @@ impl From<EnumVariant<u32>> for BuiltinTypeValue {
 }
 
 // Every possible enum type that can is available pre-defined should be
-// resigeterd here. This is used by the eveluator to figure out if the
+// registered here. This is used by the evaluator to figure out if the
 // name of the enum type, what variants it has, etc. It's not possible
 // for users to create enums currently (there's no syntax!).
 #[derive(
