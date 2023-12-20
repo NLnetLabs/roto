@@ -7,6 +7,7 @@ use std::fmt::Display;
 use routecore::bgp::message::nlri::PathId;
 use routecore::bgp::types::{AfiSafi, NextHop};
 use routecore::addr::Prefix;
+use routecore::bgp::communities::Community;
 use serde::Serialize;
 
 use crate::compiler::compile::CompileError;
@@ -22,8 +23,8 @@ use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 
 use super::{
-    Aggregator, AsPath, Asn, AtomicAggregate, BgpUpdateMessage, Boolean,
-    Community, HexLiteral, Hop, IntegerLiteral, IpAddress, LocalPref,
+    Aggregator, Asn, AtomicAggregate, BgpUpdateMessage, Boolean,
+    HexLiteral, Hop, IntegerLiteral, IpAddress, LocalPref,
     MultiExitDisc, OriginType, PrefixLength,
     RawRouteWithDeltas, RouteStatus, StringLiteral,
 };
@@ -51,7 +52,7 @@ pub enum BuiltinTypeValue {
     RouteStatus(RouteStatus),         // scalar
     Community(Community),             // scalar
     Asn(Asn),                         // scalar
-    AsPath(AsPath),                   // vector
+    AsPath(routecore::bgp::aspath::HopPath),                   // vector
     Hop(Hop),                         // read-only scalar
     OriginType(OriginType),           // scalar
     Route(RawRouteWithDeltas),        // vector
@@ -273,8 +274,8 @@ impl From<PrefixLength> for BuiltinTypeValue {
     }
 }
 
-impl From<AsPath> for BuiltinTypeValue {
-    fn from(value: AsPath) -> Self {
+impl From<routecore::bgp::aspath::HopPath> for BuiltinTypeValue {
+    fn from(value: routecore::bgp::aspath::HopPath) -> Self {
         BuiltinTypeValue::AsPath(value)
     }
 }
@@ -303,11 +304,11 @@ impl From<routecore::addr::Prefix> for BuiltinTypeValue {
     }
 }
 
-impl From<crate::types::builtin::primitives::Community> for BuiltinTypeValue {
-    fn from(value: crate::types::builtin::primitives::Community) -> Self {
-        BuiltinTypeValue::Community(value)
-    }
-}
+// impl From<crate::types::builtin::primitives::Community> for BuiltinTypeValue {
+//     fn from(value: crate::types::builtin::primitives::Community) -> Self {
+//         BuiltinTypeValue::Community(value)
+//     }
+// }
 
 impl From<crate::types::builtin::primitives::IpAddress> for BuiltinTypeValue {
     fn from(value: crate::types::builtin::primitives::IpAddress) -> Self {

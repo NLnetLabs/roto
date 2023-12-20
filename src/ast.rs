@@ -31,7 +31,7 @@ use serde::{Serialize, Serializer};
 use smallvec::SmallVec;
 
 use crate::compiler::error::CompileError;
-use crate::types::builtin::{Asn, Boolean, Community};
+use crate::types::builtin::{Asn, Boolean};
 use crate::types::typevalue::TypeValue;
 use crate::{first_into_compile_err, parse_string};
 
@@ -2147,7 +2147,7 @@ impl From<&'_ StandardCommunityLiteral> for ShortString {
     }
 }
 
-impl TryFrom<&'_ StandardCommunityLiteral> for Community {
+impl TryFrom<&'_ StandardCommunityLiteral> for routecore::bgp::communities::Community {
     type Error = CompileError;
 
     // The aforementioned heavy lifting is here.
@@ -2161,9 +2161,9 @@ impl TryFrom<&'_ StandardCommunityLiteral> for Community {
                     "Cannot convert literal '{}' into Extended Community: {e}", literal.0,
                 )))?;
 
-        Ok(Community(routecore::bgp::communities::Community::Standard(
+        Ok(routecore::bgp::communities::Community::Standard(
             comm,
-        )))
+        ))
     }
 }
 
@@ -2252,7 +2252,7 @@ impl From<&'_ ExtendedCommunityLiteral> for ShortString {
     }
 }
 
-impl<'a> TryFrom<&'a ExtendedCommunityLiteral> for Community {
+impl<'a> TryFrom<&'a ExtendedCommunityLiteral> for routecore::bgp::communities::Community {
     type Error = CompileError;
 
     // The aforementioned heavy lifting is here.
@@ -2266,9 +2266,9 @@ impl<'a> TryFrom<&'a ExtendedCommunityLiteral> for Community {
                     "Cannot convert literal '{}' into Extended Community: {e}", literal.0,
                 )))?;
 
-        Ok(Community(routecore::bgp::communities::Community::Extended(
+        Ok(routecore::bgp::communities::Community::Extended(
             comm,
-        )))
+        ))
     }
 }
 
@@ -2378,7 +2378,7 @@ impl From<&'_ LargeCommunityLiteral> for ShortString {
     }
 }
 
-impl TryFrom<&'_ LargeCommunityLiteral> for Community {
+impl TryFrom<&'_ LargeCommunityLiteral> for routecore::bgp::communities::Community {
     type Error = CompileError;
 
     // The aforementioned heavy lifting is here.
@@ -2392,9 +2392,9 @@ impl TryFrom<&'_ LargeCommunityLiteral> for Community {
                     "Cannot convert literal '{}' into Large Community: {e}", literal.0,
                 )))?;
 
-        Ok(Community(routecore::bgp::communities::Community::Large(
+        Ok(routecore::bgp::communities::Community::Large(
             comm,
-        )))
+        ))
     }
 }
 

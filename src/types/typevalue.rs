@@ -2,10 +2,11 @@ use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
 use log::debug;
 use primitives::{
-    AsPath, Community, Hop, LocalPref, MultiExitDisc, OriginType,
+    Hop, LocalPref, MultiExitDisc, OriginType,
     RouteStatus,
 };
 
+use routecore::bgp::aspath::HopPath;
 use routecore::bgp::message::nlri::PathId;
 use routecore::bgp::types::{AfiSafi, NextHop};
 use serde::Serialize;
@@ -315,7 +316,7 @@ impl RotoType for TypeValue {
                     .to_string(),
             )),
             TypeDef::Asn => Asn::get_props_for_method(ty, method_name),
-            TypeDef::AsPath => AsPath::get_props_for_method(ty, method_name),
+            TypeDef::AsPath => HopPath::get_props_for_method(ty, method_name),
             TypeDef::AtomicAggregate => Err(CompileError::new(
                 "Unsupported TypeDef::AtomicAggregator in TypeValue::\
                 get_props_for_method()"
@@ -336,7 +337,7 @@ impl RotoType for TypeValue {
                 Boolean::get_props_for_method(ty, method_name)
             }
             TypeDef::Community => {
-                Community::get_props_for_method(ty, method_name)
+                routecore::bgp::communities::Community::get_props_for_method(ty, method_name)
             }
             TypeDef::ConstEnumVariant(_) => Err(CompileError::new(
                 "Unsupported TypeDef::ConstEnumVariant in TypeValue::\
@@ -1255,16 +1256,16 @@ impl From<routecore::asn::Asn> for TypeValue {
 impl From<routecore::bgp::aspath::HopPath> for TypeValue {
     fn from(value: routecore::bgp::aspath::HopPath) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::AsPath(
-            primitives::AsPath::from(value),
+            value
         ))
     }
 }
 
-impl From<routecore::bgp::aspath::HopPath> for BuiltinTypeValue {
-    fn from(as_path: routecore::bgp::aspath::HopPath) -> Self {
-        BuiltinTypeValue::AsPath(primitives::AsPath::from(as_path))
-    }
-}
+// impl From<routecore::bgp::aspath::HopPath> for BuiltinTypeValue {
+//     fn from(as_path: routecore::bgp::aspath::HopPath) -> Self {
+//         BuiltinTypeValue::AsPath(primitives::AsPath::from(as_path))
+//     }
+// }
 
 impl From<Hop> for TypeValue {
     fn from(hop: Hop) -> Self {
@@ -1289,7 +1290,7 @@ impl From<Vec<Asn>> for TypeValue {
     fn from(as_path: Vec<Asn>) -> Self {
         let as_path: Vec<routecore::bgp::aspath::Hop<Vec<u8>>> =
             as_path.iter().map(|p| p.0.into()).collect();
-        let as_path = crate::types::builtin::AsPath::from(as_path);
+        let as_path = routecore::bgp::aspath::HopPath::from(as_path);
         TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path))
     }
 }
@@ -1300,16 +1301,16 @@ impl From<Vec<routecore::bgp::aspath::Hop<Vec<u8>>>> for TypeValue {
     }
 }
 
-impl From<Vec<crate::types::builtin::Community>> for TypeValue {
-    fn from(value: Vec<crate::types::builtin::Community>) -> Self {
-        TypeValue::List(List::new(
-            value
-                .iter()
-                .map(|v| ElementTypeValue::Primitive((*v).into()))
-                .collect::<Vec<_>>(),
-        ))
-    }
-}
+// impl From<Vec<routecore::bgp::communities::Community>> for TypeValue {
+//     fn from(value: Vec<routecore::bgp::communities::Community>) -> Self {
+//         TypeValue::List(List::new(
+//             value
+//                 .iter()
+//                 .map(|v| ElementTypeValue::Primitive((*v).into()))
+//                 .collect::<Vec<_>>(),
+//         ))
+//     }
+// }
 
 impl ScalarValue for TypeValue {}
 

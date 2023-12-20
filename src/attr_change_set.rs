@@ -1,16 +1,18 @@
 //------------ Route Status -------------------------------------------------
 
 use routecore::asn::LongSegmentError;
+use routecore::bgp::aspath::HopPath;
 use routecore::bgp::message::nlri::PathId;
 use routecore::bgp::types::AfiSafi;
 use routecore::addr::Prefix;
+use routecore::bgp::communities::Community;
 use serde::Serialize;
 use std::marker::PhantomData;
 use std::ops::Index;
 
 use crate::ast::StringLiteral;
 use crate::types::builtin::{
-    AsPath, Asn, AtomicAggregate, BuiltinTypeValue, Community, IpAddress,
+    Asn, AtomicAggregate, BuiltinTypeValue, IpAddress,
     LocalPref, MultiExitDisc, OriginType, RouteStatus,
 };
 use crate::types::collections::ElementTypeValue;
@@ -56,7 +58,6 @@ impl ScalarValue for bool {}
 impl ScalarValue for MultiExitDisc {}
 impl ScalarValue for LocalPref {}
 impl ScalarValue for AtomicAggregate {}
-impl ScalarValue for Community {}
 impl ScalarValue for Prefix {}
 impl ScalarValue for RouteStatus {}
 impl ScalarValue for IpAddress {}
@@ -73,7 +74,7 @@ pub struct AttrChangeSet {
     #[serde(skip_serializing_if = "ReadOnlyScalarOption::is_none")]
     pub prefix: ReadOnlyScalarOption<Prefix>, // Read-only prefix typevalue, for referencing it.
     #[serde(skip_serializing_if = "VectorOption::is_none")]
-    pub as_path: VectorOption<AsPath>,
+    pub as_path: VectorOption<HopPath>,
     #[serde(skip_serializing_if = "ScalarOption::is_none")]
     pub origin_type: ScalarOption<OriginType>,
     #[serde(skip_serializing_if = "ScalarOption::is_none")]
@@ -107,7 +108,7 @@ pub struct AttrChangeSet {
     #[serde(skip)]
     pub extended_communities: Todo,
     #[serde(skip_serializing_if = "VectorOption::is_none")]
-    pub as4_path: VectorOption<AsPath>,
+    pub as4_path: VectorOption<HopPath>,
     #[serde(skip)]
     pub as4_aggregator: Todo,
     #[serde(skip)]
@@ -426,14 +427,14 @@ impl<V: VectorValue + Into<TypeValue> + std::fmt::Debug> VectorOption<V> {
     }
 }
 
-impl VectorOption<AsPath> {
+impl VectorOption<HopPath> {
     pub fn as_routecore_hops_vec(
         &self,
     ) -> Vec<&routecore::bgp::aspath::Hop<Vec<u8>>> {
         if let Some(TypeValue::Builtin(BuiltinTypeValue::AsPath(hop_path))) =
             &self.value
         {
-            hop_path.0.iter().collect::<Vec<_>>()
+            hop_path.iter().collect::<Vec<_>>()
         } else {
             vec![]
         }
@@ -445,7 +446,7 @@ impl VectorOption<AsPath> {
         if let Some(TypeValue::Builtin(BuiltinTypeValue::AsPath(hop_path))) =
             self.value
         {
-            hop_path.0.into_iter().collect::<Vec<_>>()
+            hop_path.into_iter().collect::<Vec<_>>()
         } else {
             vec![]
         }
@@ -473,31 +474,31 @@ impl<V1: Into<TypeValue>, V2: VectorValue + Into<TypeValue>> From<Option<V1>>
     }
 }
 
-impl TryFrom<Vec<routecore::asn::Asn>> for AsPath {
-    type Error = LongSegmentError;
+// impl TryFrom<Vec<routecore::asn::Asn>> for AsPath {
+//     type Error = LongSegmentError;
 
-    fn try_from(
-        value: Vec<routecore::asn::Asn>,
-    ) -> Result<Self, LongSegmentError> {
-        routecore::bgp::aspath::HopPath::try_from(value.as_slice())
-            .map(AsPath::from)
-            .map_err(|_| LongSegmentError)
-    }
-}
+//     fn try_from(
+//         value: Vec<routecore::asn::Asn>,
+//     ) -> Result<Self, LongSegmentError> {
+//         routecore::bgp::aspath::HopPath::try_from(value.as_slice())
+//             .map(AsPath::from)
+//             .map_err(|_| LongSegmentError)
+//     }
+// }
 
-impl From<Vec<routecore::bgp::aspath::Hop<Vec<u8>>>> for AsPath {
-    fn from(value: Vec<routecore::bgp::aspath::Hop<Vec<u8>>>) -> Self {
-        AsPath(routecore::bgp::aspath::HopPath::from(value))
-    }
-}
+// impl From<Vec<routecore::bgp::aspath::Hop<Vec<u8>>>> for AsPath {
+//     fn from(value: Vec<routecore::bgp::aspath::Hop<Vec<u8>>>) -> Self {
+//         AsPath(routecore::bgp::aspath::HopPath::from(value))
+//     }
+// }
 
-impl std::ops::Index<usize> for AsPath {
-    type Output = routecore::bgp::aspath::Hop<std::vec::Vec<u8>>;
+// impl std::ops::Index<usize> for AsPath {
+//     type Output = routecore::bgp::aspath::Hop<std::vec::Vec<u8>>;
 
-    fn index(&self, index: usize) -> &Self::Output {
-        self.0.index(index)
-    }
-}
+//     fn index(&self, index: usize) -> &Self::Output {
+//         self.0.index(index)
+//     }
+// }
 
 impl<T: ScalarValue> VectorValue for Vec<T> {
     type WriteItem = T;

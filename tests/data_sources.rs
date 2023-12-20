@@ -2,7 +2,7 @@ use log::trace;
 use roto::compiler::Compiler;
 
 use roto::blocks::Scope;
-use roto::types::builtin::{Asn, Community};
+use roto::types::builtin::Asn;
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::datasources::DataSource;
 use roto::types::typedef::TypeDef;
@@ -39,11 +39,10 @@ fn test_data(
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            Community::new(routecore::bgp::communities::Community::from([
+            routecore::bgp::communities::Community::from([
                 127, 12, 13, 12,
-            ]))
-            .into(),
-        )]));
+            ]).into()),
+        ]));
 
     // let my_comms_type =
     //     TypeDef::List(Box::new(TypeDef::List(Box::new(TypeDef::Community))));

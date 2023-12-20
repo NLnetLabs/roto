@@ -1,7 +1,7 @@
 use roto::compiler::compile::Compiler;
 
 use roto::types::builtin::{
-    self, Asn, BuiltinTypeValue, Community,
+    self, Asn, BuiltinTypeValue,
 };
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
@@ -30,8 +30,8 @@ fn test_data(
     let asn = Asn::from_u32(211321).into();
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            Community::new(routecore::bgp::communities::Community::from([127, 12, 13, 12])).into(),
-        )]));
+            routecore::bgp::communities::Community::from([127, 12, 13, 12]).into())
+        ]));
     let my_comms_type =
         TypeDef::List(Box::new(TypeDef::List(Box::new(TypeDef::Community))));
 

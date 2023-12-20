@@ -2,7 +2,7 @@ use log::trace;
 use roto::compiler::Compiler;
 
 use roto::blocks::Scope;
-use roto::types::builtin::{Asn, BuiltinTypeValue, Community};
+use roto::types::builtin::{Asn, BuiltinTypeValue};
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::enum_types::EnumVariant;
 use roto::types::typedef::TypeDef;
@@ -98,18 +98,15 @@ fn test_data(
 
     let comms = TypeValue::List(List::new(vec![
         ElementTypeValue::Primitive(
-            Community::new(routecore::bgp::communities::Community::from([
+            routecore::bgp::communities::Community::from([
                 127, 12, 13, 12,
-            ]))
-            .into(),
-        ),
-        ElementTypeValue::Primitive(
-            Community::new(routecore::bgp::communities::Community::from([
-                127, 12, 13, 20,
-            ]))
-            .into(),
-        ),
-    ]));
+            ]).into()),
+            ElementTypeValue::Primitive(
+                routecore::bgp::communities::Community::from([
+                    127, 12, 13, 20,
+                ]).into())
+        ])
+    );
 
     let my_comms_type = (&comms).into();
 

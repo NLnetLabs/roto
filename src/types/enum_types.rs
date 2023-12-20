@@ -2,13 +2,13 @@ use std::fmt::{Debug, Display};
 use std::str::FromStr;
 
 use log::trace;
-use routecore::bgp::communities::Wellknown;
+use routecore::bgp::communities::{Wellknown, Community, StandardCommunity};
 use routecore::bgp::types::{Afi, Safi};
 use routecore::bmp::message::MessageType;
 use serde::Serialize;
 
 use crate::compiler::compile::CompileError;
-use crate::types::builtin::{BytesRecord, Community};
+use crate::types::builtin::BytesRecord;
 use crate::types::lazyrecord_types::BmpMessage;
 use crate::vm::VmError;
 use crate::{
@@ -74,7 +74,7 @@ where
             TypeDef::ConstEnumVariant(_) => Ok(self.into()),
             TypeDef::U32 => Ok(u32::from(self.value).into()),
             TypeDef::Community => {
-                Ok(Community::from(<u32>::from(self.value)).into())
+                Ok(Community::Standard(StandardCommunity::from(<u32>::from(self.value))).into())
             },
             _ => Err(format!(
                 "Cannot convert type EnumVariant to type {:?}",

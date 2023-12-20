@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod route {
     use super::super::{
-        AsPath, Asn, Boolean, IntegerLiteral, PrefixLength, StringLiteral,
+        Asn, Boolean, IntegerLiteral, PrefixLength, StringLiteral,
     };
     use crate::ast::IpAddressLiteral;
-    use crate::types::builtin::{BuiltinTypeValue, Community, IpAddress};
+    use crate::types::builtin::{BuiltinTypeValue, IpAddress};
     use crate::types::typedef::TypeDef;
     use crate::types::typevalue::TypeValue;
     use crate::{
@@ -16,7 +16,8 @@ mod route {
         Type,
         _Consume,
     }
-    use routecore::bgp::communities::{StandardCommunity, Tag, ExtendedCommunity, LargeCommunity};
+    use routecore::bgp::aspath::HopPath;
+    use routecore::bgp::communities::{Community, StandardCommunity, Tag, ExtendedCommunity, LargeCommunity};
     use routecore::bgp::{
         message::{
             nlri::{BasicNlri, Nlri},
@@ -531,7 +532,7 @@ mod route {
         init();
 
         let test_value = 0_u8;
-        let arg = AsPath::new(vec![24.into()]).unwrap();
+        let arg: HopPath = vec![routecore::asn::Asn::from(24)].into();
 
         test_consume_method_on_type_value(test_value, "set", arg).unwrap();
     }
@@ -575,7 +576,7 @@ mod route {
     #[should_panic = "Cannot convert type U8 to type AsPath"]
     fn test_u8_conversion_as_path() {
         let test_value = 24_u8;
-        let res = AsPath::new(vec![24.into()]).unwrap();
+        let res: HopPath = vec![routecore::asn::Asn::from(24)].into();
 
         mk_converted_type_value(test_value, res).unwrap();
     }
@@ -923,7 +924,7 @@ src_ty.clone().test_type_conversion(arg_ty)"]
 
     #[test]
     fn test_standard_community_1() {
-        let test_value: Community = "AS1234:7890".try_into().unwrap();
+        let test_value: Community = Community::from_str("AS1234:7890").unwrap();
         let res = StringLiteral::new("AS1234:7890".to_string());
 
         mk_converted_type_value(test_value, res).unwrap();
@@ -931,12 +932,11 @@ src_ty.clone().test_type_conversion(arg_ty)"]
 
     #[test]
     fn test_standard_community_2() {
-        let test_value = Community(
+        let test_value = Community::Standard(
             StandardCommunity::new(
                 routecore::asn::Asn16::from(12500),
                 Tag::new(7890),
-            )
-            .into(),
+            ),
         );
         let res = StringLiteral::new("AS12500:7890".to_string());
 
@@ -948,18 +948,15 @@ src_ty.clone().test_type_conversion(arg_ty)"]
         init();
 
         let test_value: Community =
-            Community(routecore::bgp::communities::Community::from(
                 StandardCommunity::new(
                     routecore::asn::Asn16::from(12500),
                     Tag::new(7890),
-                ),
-            ));
-        let res = Community(routecore::bgp::communities::Community::from(
+                ).into();
+        let res: Community = 
             StandardCommunity::new(
                 routecore::asn::Asn16::from(7500),
                 Tag::new(3000),
-            ),
-        ));
+            ).into();
 
         test_consume_method_on_type_value(test_value, "set", res)
     }
@@ -969,17 +966,14 @@ src_ty.clone().test_type_conversion(arg_ty)"]
         init();
         
         let test_value: Community =
-            Community(routecore::bgp::communities::Community::from(
                 ExtendedCommunity::from_str(
                     "ro:123:456"
-                ).unwrap(),
-            ));
-        let res = Community(routecore::bgp::communities::Community::from(
+                ).unwrap().into();
+        let res: Community = 
             StandardCommunity::new(
                 routecore::asn::Asn16::from(7500),
                 Tag::new(3000),
-            ),
-        ));
+            ).into();
 
         test_consume_method_on_type_value(test_value, "set", res)
     }
@@ -989,17 +983,15 @@ src_ty.clone().test_type_conversion(arg_ty)"]
         init();
         
         let test_value: Community =
-            Community(routecore::bgp::communities::Community::from(
                 LargeCommunity::from_str(
                     "234:123:456"
-                ).unwrap(),
-            ));
-        let res = Community(routecore::bgp::communities::Community::from(
+                ).unwrap().into();
+        let res = Community::Standard(
             StandardCommunity::new(
                 routecore::asn::Asn16::from(7500),
                 Tag::new(3000),
-            ),
-        ));
+            )
+        );
 
         test_consume_method_on_type_value(test_value, "set", res)
     }
@@ -1009,18 +1001,14 @@ src_ty.clone().test_type_conversion(arg_ty)"]
     fn test_large_community_2() {
         init();
         
-        let test_value: Community =
-            Community(routecore::bgp::communities::Community::from(
-                LargeCommunity::from_str(
+        let test_value: Community = LargeCommunity::from_str(
                     "2456850985534:123:456"
-                ).unwrap(),
-            ));
-        let res = Community(routecore::bgp::communities::Community::from(
+                ).unwrap().into();
+        let res: Community = 
             StandardCommunity::new(
                 routecore::asn::Asn16::from(7500),
                 Tag::new(3000),
-            ),
-        ));
+            ).into();
 
         test_consume_method_on_type_value(test_value, "set", res).unwrap();
     }

@@ -1,5 +1,5 @@
 use roto::types::builtin::{
-    AsPath, Asn, BuiltinTypeValue, Community,
+    Asn, BuiltinTypeValue,
 };
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
@@ -31,7 +31,7 @@ fn main() {
     let as_path = BuiltinTypeValue::create_instance(
         TypeDef::AsPath,
         BuiltinTypeValue::AsPath(
-            AsPath::new(vec![routecore::asn::Asn::from_u32(1)]).unwrap(),
+            vec![routecore::asn::Asn::from_u32(1)].into()
         ),
     )
     .unwrap();
@@ -45,8 +45,8 @@ fn main() {
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            Community::new(routecore::bgp::communities::Community::from([127, 12, 13, 12])).into(),
-        )]));
+            routecore::bgp::communities::Community::from([127, 12, 13, 12]).into())
+        ]));
 
     let my_comms_type =
         TypeDef::List(Box::new(TypeDef::List(Box::new(TypeDef::Community))));

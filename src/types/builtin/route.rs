@@ -12,7 +12,7 @@
 //                 └─────────────┘  status
 
 use log::{debug, error};
-use routecore::bgp::{message::{SessionConfig, nlri::PathId}, types::{AfiSafi, NextHop}};
+use routecore::bgp::{message::{SessionConfig, nlri::PathId}, types::{AfiSafi, NextHop}, aspath::HopPath};
 use routecore::addr::Prefix;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
@@ -36,7 +36,7 @@ use crate::{
 };
 
 use super::{
-    AsPath, Asn, BuiltinTypeValue, IpAddress, OriginType,
+    Asn, BuiltinTypeValue, IpAddress, OriginType,
     RouteStatus,
 };
 use crate::attr_change_set::{
@@ -1366,7 +1366,7 @@ impl UpdateMessage {
             .or_else(|| self.0.conventional_next_hop().ok().flatten());
         Ok(AttrChangeSet {
             prefix: ReadOnlyScalarOption::<Prefix>::new(prefix.into()),
-            as_path: VectorOption::<AsPath>::from(
+            as_path: VectorOption::<HopPath>::from(
                 self.0.aspath().ok().flatten().map(|p| p.to_hop_path()),
             ),
             origin_type: ScalarOption::<OriginType>::from(

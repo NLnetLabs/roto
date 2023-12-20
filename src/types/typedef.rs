@@ -5,6 +5,7 @@ use std::hash::{Hash, Hasher};
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 use log::{trace, debug};
+use routecore::bgp::aspath::HopPath;
 use serde::Serialize;
 use routecore::bgp::{types::AfiSafi, message::nlri::PathId};
 use routecore::addr::Prefix;
@@ -21,7 +22,7 @@ use crate::{
 };
 
 use super::builtin::{
-    AsPath, Asn, AtomicAggregate, Aggregator, Boolean, Community, HexLiteral, Hop,
+    Asn, AtomicAggregate, Aggregator, Boolean, HexLiteral, Hop,
     IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, OriginType,
     PrefixLength, RawRouteWithDeltas, RouteStatus, StringLiteral,
     Unknown,
@@ -595,13 +596,13 @@ impl TypeDef {
                 Asn::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::AsPath => {
-                AsPath::get_props_for_method(self.clone(), method_name)
+                HopPath::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::Hop => {
                 Hop::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::Community => {
-                Community::get_props_for_method(self.clone(), method_name)
+                routecore::bgp::communities::Community::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::OriginType => {
                 OriginType::get_props_for_method(self.clone(), method_name)
@@ -667,7 +668,7 @@ impl TypeDef {
                 List::exec_type_method(method_token, args, return_type)
             }
             TypeDef::AsPath => {
-                AsPath::exec_type_method(method_token, args, return_type)
+                HopPath::exec_type_method(method_token, args, return_type)
             }
             TypeDef::Prefix => {
                 Prefix::exec_type_method(method_token, args, return_type)

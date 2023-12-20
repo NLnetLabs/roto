@@ -3,7 +3,7 @@ use roto::ast::AcceptReject;
 use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self, Filter, FilterMap};
-use roto::types::builtin::{Asn, Community};
+use roto::types::builtin::Asn;
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::datasources::{DataSource, Rib};
 use roto::types::typedef::TypeDef;
@@ -74,9 +74,9 @@ fn test_data(
     trace!("ASN {:?}", asn);
 
     let comms_list = List::new(vec![ElementTypeValue::Primitive(
-        Community::new(routecore::bgp::communities::Community::from([
+        routecore::bgp::communities::Community::from([
             127, 12, 13, 12,
-        ]))
+        ])
         .into(),
     )]);
 
@@ -95,11 +95,10 @@ fn test_data(
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            Community::new(routecore::bgp::communities::Community::from([
+            routecore::bgp::communities::Community::from([
                 127, 12, 13, 12,
-            ]))
-            .into(),
-        )]));
+            ]).into()),
+        ]));
 
     trace!("comms instance {}", comms);
 
@@ -188,11 +187,10 @@ fn test_filter_map_1() {
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            Community::new(routecore::bgp::communities::Community::from([
+            routecore::bgp::communities::Community::from([
                 127, 12, 13, 12,
-            ]))
-            .into(),
-        )]));
+            ]).into()),
+        ]));
 
     trace!("comms instance {}", comms);
 

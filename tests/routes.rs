@@ -8,7 +8,6 @@ use roto::types::builtin::{
     UpdateMessage,
 };
 use roto::types::collections::Record;
-use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
 use routecore::bgp::message::nlri::{BasicNlri, Nlri};
@@ -60,7 +59,7 @@ fn test_data(
             if let Some(Ok(Nlri::Unicast(BasicNlri { prefix, .. }))) =
                 p.next()
             {
-                Some(Prefix::from(prefix))
+                Some(prefix)
             } else {
                 None
             }
@@ -559,7 +558,6 @@ fn test_routes_6() {
                     0xfe80, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10
                 )
             )
-            .into()
         ))
     );
     trace!("{:#?}", output_stream_queue);

@@ -13,7 +13,6 @@ use roto::{
     },
     vm::{self, VmResult},
 };
-use routecore::addr::Prefix;
 use routecore::bgp::message::SessionConfig;
 
 use routes::bmp::encode::{
