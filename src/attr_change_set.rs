@@ -3,6 +3,7 @@
 use routecore::asn::LongSegmentError;
 use routecore::bgp::message::nlri::PathId;
 use routecore::bgp::types::AfiSafi;
+use routecore::addr::Prefix;
 use serde::Serialize;
 use std::marker::PhantomData;
 use std::ops::Index;
@@ -10,7 +11,7 @@ use std::ops::Index;
 use crate::ast::StringLiteral;
 use crate::types::builtin::{
     AsPath, Asn, AtomicAggregate, BuiltinTypeValue, Community, IpAddress,
-    LocalPref, MultiExitDisc, NextHop, OriginType, Prefix, RouteStatus,
+    LocalPref, MultiExitDisc, OriginType, RouteStatus,
 };
 use crate::types::collections::ElementTypeValue;
 use crate::types::typevalue::TypeValue;
@@ -50,7 +51,6 @@ where
 
 pub trait ScalarValue: Clone + Into<TypeValue> {}
 
-impl ScalarValue for NextHop {}
 impl ScalarValue for OriginType {}
 impl ScalarValue for bool {}
 impl ScalarValue for MultiExitDisc {}
@@ -77,7 +77,7 @@ pub struct AttrChangeSet {
     #[serde(skip_serializing_if = "ScalarOption::is_none")]
     pub origin_type: ScalarOption<OriginType>,
     #[serde(skip_serializing_if = "ScalarOption::is_none")]
-    pub next_hop: ScalarOption<NextHop>,
+    pub next_hop: ScalarOption<routecore::bgp::types::NextHop>,
     #[serde(skip_serializing_if = "ScalarOption::is_none")]
     pub multi_exit_discriminator: ScalarOption<MultiExitDisc>,
     #[serde(skip_serializing_if = "ScalarOption::is_none")]
@@ -320,7 +320,7 @@ impl<V: VectorValue + Into<TypeValue> + std::fmt::Debug> VectorOption<V> {
                             vec![Asn(asn)]
                         }
                         TypeValue::Builtin(BuiltinTypeValue::U32(int)) => {
-                            vec![Asn::from_u32(int.0)]
+                            vec![Asn::from_u32(int)]
                         }
                         _ => {
                             return Err(LongSegmentError);

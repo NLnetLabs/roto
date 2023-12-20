@@ -1,7 +1,7 @@
 use roto::compiler::compile::Compiler;
 
 use roto::types::builtin::{
-    self, Asn, BuiltinTypeValue, Community, U32,
+    self, Asn, BuiltinTypeValue, Community,
 };
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
@@ -43,7 +43,7 @@ fn test_data(
         &my_nested_rec_type,
         vec![(
             "counter",
-            TypeValue::Builtin(BuiltinTypeValue::U32(U32::new(1))),
+            TypeValue::Builtin(BuiltinTypeValue::U32(1)),
         )],
     )
     .unwrap();
@@ -68,11 +68,11 @@ fn test_data(
             ("next-hop", next_hop),
             (
                 "med",
-                builtin::BuiltinTypeValue::U32(builtin::U32::new(80)).into(),
+                builtin::BuiltinTypeValue::U32(80).into(),
             ),
             (
                 "local-pref",
-                builtin::BuiltinTypeValue::U32(builtin::U32::new(20)).into(),
+                builtin::BuiltinTypeValue::U32(20).into(),
             ),
             ("communities", comms),
         ],

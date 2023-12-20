@@ -5,7 +5,8 @@
 use std::fmt::Display;
 
 use routecore::bgp::message::nlri::PathId;
-use routecore::bgp::types::AfiSafi;
+use routecore::bgp::types::{AfiSafi, NextHop};
+use routecore::addr::Prefix;
 use serde::Serialize;
 
 use crate::compiler::compile::CompileError;
@@ -23,16 +24,16 @@ use super::super::typevalue::TypeValue;
 use super::{
     Aggregator, AsPath, Asn, AtomicAggregate, BgpUpdateMessage, Boolean,
     Community, HexLiteral, Hop, IntegerLiteral, IpAddress, LocalPref,
-    MultiExitDisc, NextHop, OriginType, Prefix, PrefixLength,
-    RawRouteWithDeltas, RouteStatus, StringLiteral, U16, U32, U8,
+    MultiExitDisc, OriginType, PrefixLength,
+    RawRouteWithDeltas, RouteStatus, StringLiteral,
 };
 
 #[derive(Debug, Eq, Clone, Hash, PartialEq, Serialize)]
 #[serde(untagged)]
 pub enum BuiltinTypeValue {
-    U32(U32),                         // scalar
-    U16(U16),                         // scalar
-    U8(U8),                           // scalar
+    U32(u32),                         // scalar
+    U16(u16),                         // scalar
+    U8(u8),                           // scalar
     IntegerLiteral(IntegerLiteral),   // scalar
     StringLiteral(StringLiteral),     // scalar
     Boolean(Boolean),                 // scalar
@@ -232,8 +233,9 @@ impl BuiltinTypeValue {
     }
 }
 
-// These From impls allow the user to use the create_instance function with
-// simple types like u32, u8, etc. (without the nested variants).
+// These From implementations allow the user to use the create_instance
+// function with simple types like u32, u8, etc. (without the nested
+// variants).
 
 impl From<Asn> for BuiltinTypeValue {
     fn from(val: Asn) -> Self {
@@ -241,23 +243,29 @@ impl From<Asn> for BuiltinTypeValue {
     }
 }
 
-impl From<U32> for BuiltinTypeValue {
-    fn from(value: U32) -> Self {
+impl From<u32> for BuiltinTypeValue {
+    fn from(value: u32) -> Self {
         BuiltinTypeValue::U32(value)
     }
 }
 
-impl From<U16> for BuiltinTypeValue {
-    fn from(value: U16) -> Self {
+impl From<u16> for BuiltinTypeValue {
+    fn from(value: u16) -> Self {
         BuiltinTypeValue::U16(value)
     }
 }
 
-impl From<U8> for BuiltinTypeValue {
-    fn from(value: U8) -> Self {
+impl From<u8> for BuiltinTypeValue {
+    fn from(value: u8) -> Self {
         BuiltinTypeValue::U8(value)
     }
 }
+
+// impl From<U8> for BuiltinTypeValue {
+//     fn from(value: U8) -> Self {
+//         BuiltinTypeValue::U8(value)
+//     }
+// }
 
 impl From<PrefixLength> for BuiltinTypeValue {
     fn from(val: PrefixLength) -> Self {
@@ -290,8 +298,8 @@ impl From<std::net::IpAddr> for BuiltinTypeValue {
 }
 
 impl From<routecore::addr::Prefix> for BuiltinTypeValue {
-    fn from(val: routecore::addr::Prefix) -> Self {
-        BuiltinTypeValue::Prefix(Prefix(val))
+    fn from(value: routecore::addr::Prefix) -> Self {
+        BuiltinTypeValue::Prefix(value)
     }
 }
 

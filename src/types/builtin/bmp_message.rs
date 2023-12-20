@@ -9,7 +9,7 @@ use crate::{
     createtoken, lazyelmtypevalue, lazyenum, lazyfield, lazyrecord,
     traits::Token,
     types::{
-        builtin::{Asn, Boolean, BuiltinTypeValue, IpAddress, U8, U16},
+        builtin::BuiltinTypeValue,
         collections::{ElementTypeValue, EnumBytesRecord, LazyElementTypeValue, LazyRecord, RecordType},
         enum_types::EnumVariant,
         lazyrecord_types::{

@@ -2,11 +2,12 @@ use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
 use log::debug;
 use primitives::{
-    AsPath, Community, Hop, LocalPref, MultiExitDisc, NextHop, OriginType,
-    RouteStatus, U16,
+    AsPath, Community, Hop, LocalPref, MultiExitDisc, OriginType,
+    RouteStatus,
 };
 
-use routecore::bgp::message::{update::AfiSafi, nlri::PathId};
+use routecore::bgp::message::nlri::PathId;
+use routecore::bgp::types::{AfiSafi, NextHop};
 use serde::Serialize;
 
 //============ TypeValue ====================================================
@@ -24,8 +25,8 @@ use crate::{
 use super::{
     builtin::{
         primitives, Asn, BgpUpdateMessage, Boolean, BuiltinTypeValue,
-        HexLiteral, IntegerLiteral, IpAddress, Prefix, PrefixLength,
-        RawRouteWithDeltas, StringLiteral, U32, U8,
+        HexLiteral, IntegerLiteral, IpAddress, PrefixLength,
+        RawRouteWithDeltas, StringLiteral,
     },
     collections::{
         BytesRecord, ElementTypeValue, EnumBytesRecord, LazyRecord, List,
@@ -373,7 +374,7 @@ impl RotoType for TypeValue {
             TypeDef::OutputStream(ty) => {
                 Self::get_props_for_method(*ty, method_name)
             }
-            TypeDef::Prefix => Prefix::get_props_for_method(ty, method_name),
+            TypeDef::Prefix => routecore::addr::Prefix::get_props_for_method(ty, method_name),
             TypeDef::PrefixLength => {
                 PrefixLength::get_props_for_method(ty, method_name)
             }
@@ -401,9 +402,9 @@ impl RotoType for TypeValue {
             TypeDef::Table(ty) => {
                 Self::get_props_for_method(*ty, method_name)
             }
-            TypeDef::U32 => U32::get_props_for_method(ty, method_name),
-            TypeDef::U16 => U16::get_props_for_method(ty, method_name),
-            TypeDef::U8 => U8::get_props_for_method(ty, method_name),
+            TypeDef::U32 => u32::get_props_for_method(ty, method_name),
+            TypeDef::U16 => u16::get_props_for_method(ty, method_name),
+            TypeDef::U8 => u8::get_props_for_method(ty, method_name),
             TypeDef::Unknown => Err(CompileError::new(
                 "Unsupported TypeDef::Unknown in TypeValue::\
                 get_props_for_method()"
@@ -1024,12 +1025,12 @@ impl PartialOrd for TypeValue {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
             (
-                TypeValue::Builtin(BuiltinTypeValue::U8(U8(u))),
-                TypeValue::Builtin(BuiltinTypeValue::U8(U8(v))),
+                TypeValue::Builtin(BuiltinTypeValue::U8(u)),
+                TypeValue::Builtin(BuiltinTypeValue::U8(v)),
             ) => Some(u.cmp(v)),
             (
-                TypeValue::Builtin(BuiltinTypeValue::U32(U32(u))),
-                TypeValue::Builtin(BuiltinTypeValue::U32(U32(v))),
+                TypeValue::Builtin(BuiltinTypeValue::U32(u)),
+                TypeValue::Builtin(BuiltinTypeValue::U32(v)),
             ) => Some(u.cmp(v)),
             (
                 TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(
@@ -1052,8 +1053,8 @@ impl PartialOrd for TypeValue {
                 TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(v))),
             ) => Some(u.cmp(v)),
             (
-                TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(u))),
-                TypeValue::Builtin(BuiltinTypeValue::Prefix(Prefix(v))),
+                TypeValue::Builtin(BuiltinTypeValue::Prefix(u)),
+                TypeValue::Builtin(BuiltinTypeValue::Prefix(v)),
             ) => Some(u.cmp(v)),
             (
                 TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
@@ -1174,7 +1175,7 @@ impl From<BuiltinTypeValue> for TypeValue {
 
 impl From<u32> for TypeValue {
     fn from(value: u32) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::U32(U32(value)))
+        TypeValue::Builtin(BuiltinTypeValue::U32(value))
     }
 }
 
@@ -1182,7 +1183,7 @@ impl TryInto<u32> for &TypeValue {
     type Error = VmError;
 
     fn try_into(self) -> Result<u32, Self::Error> {
-        if let TypeValue::Builtin(BuiltinTypeValue::U32(U32(value))) = self {
+        if let TypeValue::Builtin(BuiltinTypeValue::U32(value)) = self {
             Ok(*value)
         } else {
             Err(VmError::InvalidValueType)
@@ -1192,7 +1193,7 @@ impl TryInto<u32> for &TypeValue {
 
 impl From<u8> for TypeValue {
     fn from(value: u8) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::U8(U8(value)))
+        TypeValue::Builtin(BuiltinTypeValue::U8(value))
     }
 }
 
@@ -1214,20 +1215,20 @@ impl From<primitives::RouteStatus> for TypeValue {
     }
 }
 
-impl From<routecore::addr::Prefix> for TypeValue {
-    fn from(value: routecore::addr::Prefix) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Prefix(primitives::Prefix(
-            value,
-        )))
-    }
-}
+// impl From<routecore::addr::Prefix> for TypeValue {
+//     fn from(value: routecore::addr::Prefix) -> Self {
+//         TypeValue::Builtin(BuiltinTypeValue::Prefix(primitives::Prefix(
+//             value,
+//         )))
+//     }
+// }
 
 impl TryFrom<&TypeValue> for routecore::addr::Prefix {
     type Error = VmError;
 
     fn try_from(value: &TypeValue) -> Result<Self, Self::Error> {
         if let TypeValue::Builtin(BuiltinTypeValue::Prefix(
-            primitives::Prefix(pfx),
+            pfx,
         )) = value
         {
             Ok(*pfx)

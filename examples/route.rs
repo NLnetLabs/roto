@@ -1,12 +1,13 @@
 use roto::compiler::Compiler;
 
-use roto::types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage, Prefix, RouteStatus};
+use roto::types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage, RouteStatus};
 use roto::types::collections::Record;
 use roto::types::typevalue::TypeValue;
 use roto::vm;
 use roto::blocks::Scope::{self, FilterMap};
 use routecore::bgp::message::SessionConfig;
 use routecore::bgp::message::nlri::{Nlri, BasicNlri};
+use routecore::addr::Prefix;
 
 fn test_data(
     name: Scope,

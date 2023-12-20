@@ -12,7 +12,8 @@
 //                 └─────────────┘  status
 
 use log::{debug, error};
-use routecore::bgp::{message::{SessionConfig, nlri::PathId}, types::AfiSafi};
+use routecore::bgp::{message::{SessionConfig, nlri::PathId}, types::{AfiSafi, NextHop}};
+use routecore::addr::Prefix;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use std::{net::IpAddr, sync::Arc};
@@ -35,7 +36,7 @@ use crate::{
 };
 
 use super::{
-    AsPath, Asn, BuiltinTypeValue, IpAddress, NextHop, OriginType, Prefix,
+    AsPath, Asn, BuiltinTypeValue, IpAddress, OriginType,
     RouteStatus,
 };
 use crate::attr_change_set::{

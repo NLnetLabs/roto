@@ -1,5 +1,5 @@
 use roto::types::builtin::{
-    AsPath, Asn, BuiltinTypeValue, Community, U32,
+    AsPath, Asn, BuiltinTypeValue, Community,
 };
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
@@ -59,7 +59,7 @@ fn main() {
         &my_nested_rec_type,
         vec![(
             "counter",
-            TypeValue::Builtin(BuiltinTypeValue::U32(U32::new(1))),
+            TypeValue::Builtin(BuiltinTypeValue::U32(1)),
         )],
     )
     .unwrap();

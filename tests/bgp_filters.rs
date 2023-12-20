@@ -1,16 +1,31 @@
 use std::str::FromStr;
 
 use log::trace;
-use roto::{blocks::Scope, compiler::Compiler, types::{builtin::{UpdateMessage, RotondaId, RawRouteWithDeltas, RouteStatus}, collections::Record}, vm::{VmResult, self}, types::builtin::Prefix, ast::AcceptReject};
+use roto::{
+    ast::AcceptReject,
+    blocks::Scope,
+    compiler::Compiler,
+    types::{
+        builtin::{
+            RawRouteWithDeltas, RotondaId, RouteStatus, UpdateMessage,
+        },
+        collections::Record,
+    },
+    vm::{self, VmResult},
+};
+use routecore::addr::Prefix;
 use routecore::bgp::message::SessionConfig;
-use routes::bmp::encode::{mk_bgp_update, mk_per_peer_header, Prefixes, Announcements};
+
+use routes::bmp::encode::{
+    mk_bgp_update, mk_per_peer_header, Announcements, Prefixes,
+};
 
 mod common;
 
 fn test_data(
     name: Scope,
     source_code: &str,
-    announce_str: &str
+    announce_str: &str,
 ) -> Result<(VmResult, RawRouteWithDeltas), Box<dyn std::error::Error>> {
     common::init();
     println!("Evaluate filter-map {}...", name);
@@ -25,22 +40,18 @@ fn test_data(
     let withdrawals = Prefixes::default();
     let announcements = Announcements::from_str(announce_str).unwrap();
 
-    let msg_buf = mk_bgp_update(
-        &per_peer_header,
-        &withdrawals,
-        &announcements,
-        &[],
-    );
+    let msg_buf =
+        mk_bgp_update(&per_peer_header, &withdrawals, &announcements, &[]);
 
     let bgp_msg = UpdateMessage::new(msg_buf.0, SessionConfig::modern())?;
 
     let payload = RawRouteWithDeltas::new_with_message(
-        (RotondaId(0),0),
-        Prefix::new(routecore::addr::Prefix::from_str("192.0.2.0/24")?),
+        (RotondaId(0), 0),
+        routecore::addr::Prefix::from_str("192.0.2.0/24")?,
         bgp_msg,
         routecore::bgp::types::AfiSafi::Ipv4Unicast,
         None,
-        RouteStatus::UpToDate
+        RouteStatus::UpToDate,
     )?;
 
     // Create the VM
@@ -80,7 +91,6 @@ fn test_data(
     Ok((res, payload))
 }
 
-
 //------------ Test: IpAddressLiteral ----------------------------------------
 
 #[test]
@@ -88,8 +98,9 @@ fn test_ip_address_literal_1() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -109,8 +120,9 @@ fn test_ip_address_literal_1() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -120,8 +132,9 @@ fn test_ip_address_literal_2() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -141,8 +154,9 @@ fn test_ip_address_literal_2() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
@@ -152,8 +166,9 @@ fn test_ip_address_literal_3() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let res = test_data(Scope::Filter("test".into()),
-     r#"
+    let res = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -173,14 +188,12 @@ fn test_ip_address_literal_3() {
         }
     }
     "#,
-     annc
+        annc,
     );
 
     assert!(res.is_err());
     trace!("res {:?}", res);
-    assert!(format!("{}", res.err().unwrap()).starts_with(
-        r#"Parse error"#
-    ));
+    assert!(format!("{}", res.err().unwrap()).starts_with(r#"Parse error"#));
 }
 
 #[test]
@@ -188,8 +201,9 @@ fn test_ip_address_literal_4() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -209,8 +223,9 @@ fn test_ip_address_literal_4() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -220,8 +235,9 @@ fn test_ip_address_literal_5() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -241,8 +257,9 @@ fn test_ip_address_literal_5() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -252,8 +269,9 @@ fn test_ip_address_literal_6() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -273,8 +291,9 @@ fn test_ip_address_literal_6() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -284,8 +303,9 @@ fn test_ip_address_literal_7() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -305,12 +325,12 @@ fn test_ip_address_literal_7() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
-
 
 //------------ Test: PrefixLiteral -------------------------------------------
 
@@ -319,8 +339,9 @@ fn test_prefix_literal_1() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -340,8 +361,9 @@ fn test_prefix_literal_1() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
@@ -351,8 +373,9 @@ fn test_prefix_literal_2() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -372,8 +395,9 @@ fn test_prefix_literal_2() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -383,8 +407,9 @@ fn test_prefix_literal_3() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -404,8 +429,9 @@ fn test_prefix_literal_3() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
@@ -415,8 +441,9 @@ fn test_prefix_literal_4() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -436,8 +463,9 @@ fn test_prefix_literal_4() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
@@ -447,8 +475,9 @@ fn test_prefix_literal_5() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -468,8 +497,9 @@ fn test_prefix_literal_5() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -479,8 +509,9 @@ fn test_prefix_literal_6() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -500,8 +531,9 @@ fn test_prefix_literal_6() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -511,8 +543,9 @@ fn test_prefix_literal_7() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -532,8 +565,9 @@ fn test_prefix_literal_7() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -543,8 +577,9 @@ fn test_prefix_literal_8() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -564,8 +599,9 @@ fn test_prefix_literal_8() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
@@ -575,8 +611,9 @@ fn test_prefix_literal_9() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -596,8 +633,9 @@ fn test_prefix_literal_9() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -608,8 +646,9 @@ fn test_prefix_literal_10() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -629,8 +668,9 @@ fn test_prefix_literal_10() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -640,8 +680,9 @@ fn test_prefix_literal_11() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -662,8 +703,9 @@ fn test_prefix_literal_11() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
@@ -673,8 +715,9 @@ fn test_prefix_literal_12() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -695,8 +738,9 @@ fn test_prefix_literal_12() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -706,8 +750,9 @@ fn test_prefix_literal_12() {
 #[test]
 fn test_as_path_1() {
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -727,8 +772,9 @@ fn test_as_path_1() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -736,8 +782,9 @@ fn test_as_path_1() {
 #[test]
 fn test_as_path_2() {
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -757,8 +804,9 @@ fn test_as_path_2() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
@@ -766,8 +814,9 @@ fn test_as_path_2() {
 #[test]
 fn test_as_path_3() {
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -787,8 +836,9 @@ fn test_as_path_3() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -796,8 +846,9 @@ fn test_as_path_3() {
 #[test]
 fn test_as_path_4() {
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -817,8 +868,9 @@ fn test_as_path_4() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
@@ -826,8 +878,9 @@ fn test_as_path_4() {
 #[test]
 fn test_as_path_5() {
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -847,8 +900,9 @@ fn test_as_path_5() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -856,8 +910,9 @@ fn test_as_path_5() {
 #[test]
 fn test_as_path_6() {
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -877,8 +932,9 @@ fn test_as_path_6() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
@@ -886,8 +942,9 @@ fn test_as_path_6() {
 #[test]
 fn test_as_path_7() {
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -907,20 +964,20 @@ fn test_as_path_7() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
-
-
 
 #[test]
 #[should_panic = r#"Result::unwrap()` on an `Err` value: "Eval error: Unknown method 'the_unknown_method' for type AsPath"#]
 fn test_as_path_8() {
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -940,8 +997,9 @@ fn test_as_path_8() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -953,8 +1011,9 @@ fn test_std_comms_1() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -974,8 +1033,9 @@ fn test_std_comms_1() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
@@ -985,8 +1045,9 @@ fn test_std_comms_2() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -1006,8 +1067,9 @@ fn test_std_comms_2() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -1017,8 +1079,9 @@ fn test_std_comms_3() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -1038,8 +1101,9 @@ fn test_std_comms_3() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -1049,8 +1113,9 @@ fn test_std_comms_7() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -1071,8 +1136,9 @@ fn test_std_comms_7() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
@@ -1083,8 +1149,9 @@ fn test_std_comms_4() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -1105,8 +1172,9 @@ fn test_std_comms_4() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -1117,8 +1185,9 @@ fn test_std_comms_5() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -1139,8 +1208,9 @@ fn test_std_comms_5() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -1150,8 +1220,9 @@ fn test_ext_comms_1() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,rt:123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -1171,8 +1242,9 @@ fn test_ext_comms_1() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
@@ -1182,8 +1254,9 @@ fn test_ext_comms_2() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,rt:123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -1203,8 +1276,9 @@ fn test_ext_comms_2() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -1215,8 +1289,9 @@ fn test_ext_comms_3() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,rt:123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -1236,12 +1311,12 @@ fn test_ext_comms_3() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
-
 
 #[test]
 #[should_panic = r#"Result::unwrap()` on an `Err` value: "Eval error: Cannot convert literal 'rt:450076876500:34' into Extended Community: invalid rt:AS:AN"#]
@@ -1249,8 +1324,9 @@ fn test_ext_comms_4() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,rt:123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -1270,8 +1346,9 @@ fn test_ext_comms_4() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -1280,9 +1357,11 @@ fn test_ext_comms_4() {
 fn test_l_comms_1() {
     common::init();
 
-    let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,AS65536:123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let annc =
+        "e [123,456,789] 10.0.0.1 BLACKHOLE,AS65536:123:44 192.0.2.0/24";
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -1302,8 +1381,9 @@ fn test_l_comms_1() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
@@ -1313,8 +1393,9 @@ fn test_l_comms_2() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,65536:123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -1334,8 +1415,9 @@ fn test_l_comms_2() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
@@ -1345,8 +1427,9 @@ fn test_l_comms_3() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,65536:123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -1366,8 +1449,9 @@ fn test_l_comms_3() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -1377,8 +1461,9 @@ fn test_wk_comms_1() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,65536:123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -1398,8 +1483,9 @@ fn test_wk_comms_1() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
@@ -1409,8 +1495,9 @@ fn test_wk_comms_2() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,65536:123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -1431,8 +1518,9 @@ fn test_wk_comms_2() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Accept);
 }
@@ -1442,8 +1530,9 @@ fn test_wk_comms_3() {
     common::init();
 
     let annc = "e [123,456,789] 10.0.0.1 BLACKHOLE,65536:123:44 192.0.2.0/24";
-    let (res,_) = test_data(Scope::Filter("test".into()),
-     r#"
+    let (res, _) = test_data(
+        Scope::Filter("test".into()),
+        r#"
      filter test {
         define {
             rx route: Route;
@@ -1465,8 +1554,9 @@ fn test_wk_comms_3() {
         }
     }
     "#,
-     annc
-    ).unwrap();
+        annc,
+    )
+    .unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }

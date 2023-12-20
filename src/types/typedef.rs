@@ -7,6 +7,7 @@ use std::hash::{Hash, Hasher};
 use log::{trace, debug};
 use serde::Serialize;
 use routecore::bgp::{types::AfiSafi, message::nlri::PathId};
+use routecore::addr::Prefix;
 
 use crate::compiler::compile::CompileError;
 use crate::traits::Token;
@@ -21,9 +22,9 @@ use crate::{
 
 use super::builtin::{
     AsPath, Asn, AtomicAggregate, Aggregator, Boolean, Community, HexLiteral, Hop,
-    IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, NextHop, OriginType,
-    Prefix, PrefixLength, RawRouteWithDeltas, RouteStatus, StringLiteral,
-    Unknown, U16, U32, U8,
+    IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, OriginType,
+    PrefixLength, RawRouteWithDeltas, RouteStatus, StringLiteral,
+    Unknown,
 };
 use super::collections::{LazyElementTypeValue, Record};
 use super::datasources::{RibType, Table};
@@ -564,13 +565,13 @@ impl TypeDef {
                 lazy_type_def.get_props_for_method(self.clone(), method_name)
             }
             TypeDef::U32 => {
-                U32::get_props_for_method(self.clone(), method_name)
+                u32::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::U16 => {
-                U16::get_props_for_method(self.clone(), method_name)
+                u16::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::U8 => {
-                U8::get_props_for_method(self.clone(), method_name)
+                u8::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::Boolean => {
                 Boolean::get_props_for_method(self.clone(), method_name)
@@ -635,7 +636,7 @@ impl TypeDef {
                 MultiExitDisc::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::NextHop => {
-                NextHop::get_props_for_method(self.clone(), method_name)
+                routecore::bgp::types::NextHop::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::AtomicAggregate => {
                 AtomicAggregate::get_props_for_method(
@@ -672,7 +673,7 @@ impl TypeDef {
                 Prefix::exec_type_method(method_token, args, return_type)
             }
             TypeDef::U32 => {
-                U32::exec_type_method(method_token, args, return_type)
+                u32::exec_type_method(method_token, args, return_type)
             }
             TypeDef::StringLiteral => StringLiteral::exec_type_method(
                 method_token,

@@ -139,11 +139,11 @@ macro_rules! lazyfield {
             $raw_ty;
             TypeValue::Builtin(
                 BuiltinTypeValue::from(
-                    $ty::new(
+                    // $ty::new(
                         raw_bytes
                             .bytes_parser()
                             .$base_call()$(.$method_call())*
-                    )
+                    // )
                 )
             ).try_into().unwrap_or(
                 ElementTypeValue::Primitive(TypeValue::Unknown)

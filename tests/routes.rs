@@ -3,7 +3,6 @@ use roto::ast::AcceptReject;
 use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self, Filter};
-use roto::types::builtin::Prefix;
 use roto::types::builtin::{
     BuiltinTypeValue, RawRouteWithDeltas, RotondaId, RouteStatus, RouteToken,
     UpdateMessage,
@@ -15,6 +14,7 @@ use roto::vm::{self, VmResult};
 use routecore::bgp::message::nlri::{BasicNlri, Nlri};
 use routecore::bgp::message::SessionConfig;
 use routecore::bgp::types::{AfiSafi, NextHop};
+use routecore::addr::Prefix;
 
 mod common;
 

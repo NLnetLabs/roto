@@ -25,22 +25,22 @@ use super::builtin_type_value::BuiltinTypeValue;
 
 //------------ U16 Type -----------------------------------------------------
 
-#[derive(Debug, Eq, Copy, Clone, Serialize)]
-pub struct U16(pub(crate) u16);
+// #[derive(Debug, Eq, Copy, Clone, Serialize)]
+// pub struct U16(pub(crate) u16);
 
-impl U16 {
-    pub fn new(val: u16) -> Self {
-        U16(val)
-    }
-}
+// impl U16 {
+//     pub fn new(val: u16) -> Self {
+//         U16(val)
+//     }
+// }
 
-impl From<U16> for TypeValue {
-    fn from(val: U16) -> Self {
+impl From<u16> for TypeValue {
+    fn from(val: u16) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::U16(val))
     }
 }
 
-impl RotoType for U16 {
+impl RotoType for u16 {
     fn get_props_for_method(
         _ty: TypeDef,
         method_name: &crate::ast::Identifier,
@@ -108,14 +108,14 @@ impl RotoType for U16 {
             TypeDef::U16 => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::U16(self)))
             }
-            TypeDef::U32 => Ok(TypeValue::Builtin(U32(self.0 as u32).into())),
+            TypeDef::U32 => Ok(TypeValue::Builtin(BuiltinTypeValue::U32(self as u32))),
             TypeDef::Asn => Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(
-                Asn(routecore::asn::Asn::from(self.0 as u32)),
+                Asn(routecore::asn::Asn::from(self as u32)),
             ))),
-            TypeDef::PrefixLength => match self.0 {
+            TypeDef::PrefixLength => match self {
                 0..=128 => {
                     Ok(TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
-                        PrefixLength(self.0 as u8),
+                        PrefixLength(self as u8),
                     )))
                 }
                 _ => Err(format!(
@@ -125,10 +125,10 @@ impl RotoType for U16 {
                 )
                 .into()),
             },
-            TypeDef::U8 => match self.0 {
-                0..=255 => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(
-                    self.0 as u8,
-                )))),
+            TypeDef::U8 => match self {
+                0..=255 => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(
+                    self as u8,
+                ))),
                 _ => Err(format!(
                     "Cannot convert an instance of type U16 \
                     with a value greater than 128 into type {:?}",
@@ -145,29 +145,29 @@ impl RotoType for U16 {
     }
 }
 
-impl PartialEq for U16 {
-    fn eq(&self, other: &Self) -> bool {
-        if let Ok(TypeValue::Builtin(BuiltinTypeValue::U16(U16(o)))) =
-            other.into_type(&TypeDef::U16)
-        {
-            o == self.0
-        } else {
-            false
-        }
-    }
-}
+// impl PartialEq for U16 {
+//     fn eq(&self, other: &Self) -> bool {
+//         if let Ok(TypeValue::Builtin(BuiltinTypeValue::U16(16(o)))) =
+//             other.into_type(&TypeDef::U16)
+//         {
+//             o == self.0
+//         } else {
+//             false
+//         }
+//     }
+// }
 
-impl std::hash::Hash for U16 {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
-    }
-}
+// impl std::hash::Hash for U16 {
+//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+//         self.0.hash(state);
+//     }
+// }
 
-impl Display for U16 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+// impl Display for U16 {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{}", self.0)
+//     }
+// }
 
 #[derive(Debug)]
 pub enum U16Token {
@@ -198,22 +198,22 @@ impl From<U16Token> for usize {
 
 // ----------- U32 Type --------------------------------------------
 
-#[derive(Debug, Eq, Copy, Clone, Serialize)]
-pub struct U32(pub(crate) u32);
+// #[derive(Debug, Eq, Copy, Clone, Serialize)]
+// pub struct U32(pub(crate) u32);
 
-impl U32 {
-    pub fn new(val: u32) -> Self {
-        U32(val)
-    }
-}
+// impl U32 {
+//     pub fn new(val: u32) -> Self {
+//         U32(val)
+//     }
+// }
 
-impl From<U32> for TypeValue {
-    fn from(val: U32) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::U32(val))
-    }
-}
+// impl From<U32> for TypeValue {
+//     fn from(val: U32) -> Self {
+//         TypeValue::Builtin(BuiltinTypeValue::U32(val))
+//     }
+// }
 
-impl RotoType for U32 {
+impl RotoType for u32 {
     fn get_props_for_method(
         _ty: TypeDef,
         method_name: &crate::ast::Identifier,
@@ -282,12 +282,12 @@ impl RotoType for U32 {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::U32(self)))
             }
             TypeDef::Asn => Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(
-                Asn(routecore::asn::Asn::from(self.0)),
+                Asn(routecore::asn::Asn::from(self)),
             ))),
-            TypeDef::PrefixLength => match self.0 {
+            TypeDef::PrefixLength => match self {
                 0..=128 => {
                     Ok(TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
-                        PrefixLength(self.0 as u8),
+                        PrefixLength(self as u8),
                     )))
                 }
                 _ => Err(format!(
@@ -297,10 +297,10 @@ impl RotoType for U32 {
                 )
                 .into()),
             },
-            TypeDef::U8 => match self.0 {
-                0..=255 => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(
-                    self.0 as u8,
-                )))),
+            TypeDef::U8 => match self {
+                0..=255 => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(
+                    self as u8,
+                ))),
                 _ => Err(format!(
                     "Cannot convert an instance of type U32 \
                     with a value greater than 128 into type {:?}",
@@ -317,29 +317,29 @@ impl RotoType for U32 {
     }
 }
 
-impl PartialEq for U32 {
-    fn eq(&self, other: &Self) -> bool {
-        if let Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(o)))) =
-            other.into_type(&TypeDef::U32)
-        {
-            o == self.0
-        } else {
-            false
-        }
-    }
-}
+// impl PartialEq for U32 {
+//     fn eq(&self, other: &Self) -> bool {
+//         if let Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(o)))) =
+//             other.into_type(&TypeDef::U32)
+//         {
+//             o == self.0
+//         } else {
+//             false
+//         }
+//     }
+// }
 
-impl std::hash::Hash for U32 {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
-    }
-}
+// impl std::hash::Hash for U32 {
+//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+//         self.0.hash(state);
+//     }
+// }
 
-impl Display for U32 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+// impl Display for U32 {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{}", self.0)
+//     }
+// }
 
 #[derive(Debug)]
 pub enum U32Token {
@@ -370,16 +370,16 @@ impl From<U32Token> for usize {
 
 // ----------- U8 Type ---------------------------------------------
 
-#[derive(Debug, Eq, Copy, Clone, Ord, PartialOrd, Serialize)]
-pub struct U8(pub(crate) u8);
+// #[derive(Debug, Eq, Copy, Clone, Ord, PartialOrd, Serialize)]
+// pub struct U8(pub(crate) u8);
 
-impl U8 {
-    pub fn new(val: u8) -> Self {
-        U8(val)
-    }
-}
+// impl U8 {
+//     pub fn new(val: u8) -> Self {
+//         U8(val)
+//     }
+// }
 
-impl RotoType for U8 {
+impl RotoType for u8 {
     fn get_props_for_method(
         _ty: TypeDef,
         method_name: &crate::ast::Identifier,
@@ -447,24 +447,22 @@ impl RotoType for U8 {
             // Self
             TypeDef::U8 => Ok(TypeValue::Builtin(BuiltinTypeValue::U8(self))),
             TypeDef::U16 => {
-                let value = self.0;
-                Ok(TypeValue::Builtin(BuiltinTypeValue::U16(U16(
-                    value as u16
-                ))))
+                Ok(TypeValue::Builtin(BuiltinTypeValue::U16(
+                    self as u16
+                )))
             }
             TypeDef::U32 => {
-                let value = self.0;
-                Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(
-                    value as u32
-                ))))
+                Ok(TypeValue::Builtin(BuiltinTypeValue::U32(
+                    self as u32
+                )))
             }
-            TypeDef::PrefixLength => match self.0 {
+            TypeDef::PrefixLength => match self {
                 0..=128 => Ok(TypeValue::Builtin(
-                    BuiltinTypeValue::PrefixLength(PrefixLength(self.0)),
+                    BuiltinTypeValue::PrefixLength(PrefixLength(self)),
                 )),
                 _ => Err(format!(
                     "Prefix length must be between 0 and 128, not {}",
-                    self.0
+                    self
                 )
                 .into()),
             },
@@ -476,35 +474,35 @@ impl RotoType for U8 {
     }
 }
 
-impl PartialEq for U8 {
-    fn eq(&self, other: &Self) -> bool {
-        if let Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(o)))) =
-            other.into_type(&TypeDef::U8)
-        {
-            o == self.0
-        } else {
-            false
-        }
-    }
-}
+// impl PartialEq for U8 {
+//     fn eq(&self, other: &Self) -> bool {
+//         if let Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(o)))) =
+//             other.into_type(&TypeDef::U8)
+//         {
+//             o == self.0
+//         } else {
+//             false
+//         }
+//     }
+// }
 
-impl std::hash::Hash for U8 {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
-    }
-}
+// impl std::hash::Hash for U8 {
+//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+//         self.0.hash(state);
+//     }
+// }
 
-impl Display for U8 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+// impl Display for U8 {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{}", self.0)
+//     }
+// }
 
-impl From<U8> for TypeValue {
-    fn from(val: U8) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::U8(val))
-    }
-}
+// impl From<U8> for TypeValue {
+//     fn from(val: U8) -> Self {
+//         TypeValue::Builtin(BuiltinTypeValue::U8(val))
+//     }
+// }
 
 #[derive(Debug)]
 pub enum U8Token {
@@ -972,7 +970,7 @@ impl RotoType for IntegerLiteral {
                 )),
             },
             TypeDef::U32 => u32::try_from(self.0)
-                .map(|v| TypeValue::Builtin(BuiltinTypeValue::U32(U32(v))))
+                .map(|v| TypeValue::Builtin(BuiltinTypeValue::U32(v)))
                 .map_err(|_| {
                     CompileError::from(format!(
                         "Cannot convert instanc of type IntegerLiteral with \
@@ -981,7 +979,7 @@ impl RotoType for IntegerLiteral {
                     ))
                 }),
             TypeDef::U8 => u8::try_from(self.0)
-                .map(|v| TypeValue::Builtin(BuiltinTypeValue::U8(U8(v))))
+                .map(|v| TypeValue::Builtin(BuiltinTypeValue::U8(v)))
                 .map_err(|_| {
                     CompileError::from(format!(
                         "Cannot convert instance of type IntegerLiteral with \
@@ -990,7 +988,7 @@ impl RotoType for IntegerLiteral {
                     ))
                 }),
             TypeDef::U16 => u16::try_from(self.0)
-                .map(|v| TypeValue::Builtin(BuiltinTypeValue::U16(U16(v))))
+                .map(|v| TypeValue::Builtin(BuiltinTypeValue::U16(v)))
                 .map_err(|_| {
                     CompileError::from(format!(
                         "Cannot convert instance of type IntegerLiteral with \
@@ -1159,7 +1157,7 @@ impl RotoType for HexLiteral {
                 }
             }
             TypeDef::U8 => u8::try_from(self.0)
-                .map(|v| TypeValue::Builtin(BuiltinTypeValue::U8(U8(v))))
+                .map(|v| TypeValue::Builtin(BuiltinTypeValue::U8(v)))
                 .map_err(|_| {
                     CompileError::from(format!(
                         "Cannot convert type IntegerLiteral with {} into U8",
@@ -1167,7 +1165,7 @@ impl RotoType for HexLiteral {
                     ))
                 }),
             TypeDef::U32 => u32::try_from(self.0)
-                .map(|v| TypeValue::Builtin(BuiltinTypeValue::U32(U32(v))))
+                .map(|v| TypeValue::Builtin(BuiltinTypeValue::U32(v)))
                 .map_err(|_| {
                     CompileError::from(format!(
                         "Cannot convert type IntegerLiteral with {} into U8",
@@ -1249,16 +1247,16 @@ impl From<HexLiteralToken> for usize {
 
 // ----------- Prefix type ---------------------------------------------------
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Serialize)]
-pub struct Prefix(pub(crate) routecore::addr::Prefix);
+// #[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Serialize)]
+// pub struct Prefix(pub(crate) routecore::addr::Prefix);
 
-impl Prefix {
-    pub fn new(prefix: routecore::addr::Prefix) -> Self {
-        Self(prefix)
-    }
-}
+// impl Prefix {
+//     pub fn new(prefix: routecore::addr::Prefix) -> Self {
+//         Self(prefix)
+//     }
+// }
 
-impl RotoType for Prefix {
+impl RotoType for routecore::addr::Prefix {
     fn get_props_for_method(
         _ty: TypeDef,
         method_name: &crate::ast::Identifier,
@@ -1340,13 +1338,13 @@ impl RotoType for Prefix {
     ) -> Result<TypeValue, VmError> {
         match method_token.try_into()? {
             PrefixToken::Address => {
-                let prefix = self.0;
+                let prefix = self;
                 Ok(TypeValue::Builtin(BuiltinTypeValue::IpAddress(
                     IpAddress(prefix.addr()),
                 )))
             }
             PrefixToken::Len => {
-                let Prefix(pfx) = self;
+                let pfx = self;
                 Ok(TypeValue::Builtin(BuiltinTypeValue::PrefixLength(
                     PrefixLength(pfx.len()),
                 )))
@@ -1357,10 +1355,10 @@ impl RotoType for Prefix {
             PrefixToken::Covers => {
                 if let Some(other_pfx) = args.get(0) {
                     if let TypeValue::Builtin(BuiltinTypeValue::Prefix(
-                        Prefix(other),
+                        other
                     )) = other_pfx.as_ref()
                     {
-                        Ok(self.0.covers(*other).into())
+                        Ok(self.covers(*other).into())
                     } else {
                         Err(VmError::InvalidMethodCall)
                     }
@@ -1371,10 +1369,10 @@ impl RotoType for Prefix {
             PrefixToken::IsCoveredBy => {
                 if let Some(other_pfx) = args.get(0) {
                     if let TypeValue::Builtin(BuiltinTypeValue::Prefix(
-                        Prefix(other),
+                        other,
                     )) = other_pfx.as_ref()
                     {
-                        Ok(other.covers(self.0).into())
+                        Ok(other.covers(*self).into())
                     } else {
                         Err(VmError::InvalidMethodCall)
                     }
@@ -1388,7 +1386,7 @@ impl RotoType for Prefix {
                         IpAddress(other),
                     )) = other_ip.as_ref()
                     {
-                        Ok(self.0.contains(*other).into())
+                        Ok(self.contains(*other).into())
                     } else {
                         Err(VmError::InvalidMethodCall)
                     }
@@ -1447,17 +1445,17 @@ impl RotoType for Prefix {
     }
 }
 
-impl From<Prefix> for TypeValue {
-    fn from(val: Prefix) -> Self {
+impl From<routecore::addr::Prefix> for TypeValue {
+    fn from(val: routecore::addr::Prefix) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::Prefix(val))
     }
 }
 
-impl TryFrom<&'_ PrefixLiteral> for Prefix {
+impl TryFrom<&'_ PrefixLiteral> for routecore::addr::Prefix {
     type Error = CompileError;
 
     fn try_from(value: &PrefixLiteral) -> Result<Self, Self::Error> {
-        Ok(Prefix(
+        Ok(
             <routecore::addr::Prefix as std::str::FromStr>::from_str(
                 value.0.as_str(),
             )
@@ -1467,27 +1465,27 @@ impl TryFrom<&'_ PrefixLiteral> for Prefix {
                     value, e
                 ))
             })?,
-        ))
+        )
     }
 }
 
-impl From<routecore::addr::Prefix> for Prefix {
-    fn from(val: routecore::addr::Prefix) -> Self {
-        Prefix(val)
-    }
-}
+// impl From<routecore::addr::Prefix> for rPrefix {
+//     fn from(val: routecore::addr::Prefix) -> Self {
+//         Prefix(val)
+//     }
+// }
 
-impl Display for Prefix {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+// impl Display for Prefix {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{}", self.0)
+//     }
+// }
 
-impl From<Prefix> for routecore::addr::Prefix {
-    fn from(val: Prefix) -> Self {
-        val.0
-    }
-}
+// impl From<Prefix> for routecore::addr::Prefix {
+//     fn from(val: Prefix) -> Self {
+//         val.0
+//     }
+// }
 
 #[derive(Debug)]
 #[repr(u8)]
@@ -1571,17 +1569,17 @@ impl RotoType for PrefixLength {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::PrefixLength(self)))
             }
             TypeDef::U8 => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(self.0))))
+                Ok(TypeValue::Builtin(BuiltinTypeValue::U8(self.0)))
             }
             TypeDef::U16 => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::U16(U16(self
+                Ok(TypeValue::Builtin(BuiltinTypeValue::U16(self
                     .0
-                    .into()))))
+                    .into())))
             }
             TypeDef::U32 => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(self
+                Ok(TypeValue::Builtin(BuiltinTypeValue::U32(self
                     .0
-                    .into()))))
+                    .into())))
             }
             _ => Err(format!(
                 "Cannot convert type PrefixLength to type {:?}",
@@ -1598,7 +1596,7 @@ impl RotoType for PrefixLength {
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        todo!()
+        Err(VmError::InvalidMethodCall)
     }
 
     fn exec_consume_value_method(
@@ -1607,7 +1605,8 @@ impl RotoType for PrefixLength {
         _args: Vec<TypeValue>,
         _type_def: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        todo!()
+        Err(VmError::InvalidMethodCall)
+
     }
 
     fn exec_type_method<'a>(
@@ -1615,7 +1614,7 @@ impl RotoType for PrefixLength {
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        todo!()
+        Err(VmError::InvalidMethodCall)
     }
 }
 
@@ -1712,8 +1711,20 @@ impl RotoType for routecore::bgp::types::AfiSafi {
     ) -> Result<TypeValue, crate::compiler::CompileError>
     where
         Self: std::marker::Sized {
-        todo!()
-    }
+            match type_value {
+                TypeDef::AfiSafi => {
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::AfiSafi(self)))
+                }
+                TypeDef::StringLiteral => {
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::StringLiteral(self.into())))
+                }
+                _ => Err(format!(
+                    "Cannot convert type PrefixLength to type {:?}",
+                    type_value
+                )
+                .into()),
+            }
+        }
 
     fn exec_value_method<'a>(
         &'a self,
@@ -2703,10 +2714,10 @@ impl RotoType for Asn {
             TypeDef::U8 => match self.0.into_u32() {
                 0..=255 => {
                     // this should work, shouldn't it?
-                    Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(self
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::U8(self
                         .0
                         .into_u32()
-                        as u8))))
+                        as u8)))
                 }
                 val => Err(format!(
                     "Cannot convert an instance of type \
@@ -2716,9 +2727,9 @@ impl RotoType for Asn {
                 .into()),
             },
             TypeDef::U32 => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(self
+                Ok(TypeValue::Builtin(BuiltinTypeValue::U32(self
                     .0
-                    .into_u32()))))
+                    .into_u32())))
             }
             _ => {
                 Err(format!("Cannot convert type Asn to type {:?}", type_def)
@@ -2767,6 +2778,12 @@ impl RotoType for Asn {
 impl From<Asn> for TypeValue {
     fn from(value: Asn) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::Asn(value))
+    }
+}
+
+impl From<routecore::asn::Asn> for BuiltinTypeValue {
+    fn from(value: routecore::asn::Asn) -> Self {
+        BuiltinTypeValue::Asn(Asn(value))
     }
 }
 
@@ -2961,7 +2978,7 @@ impl RotoType for AsPath {
             }
             AsPathToken::Len => {
                 let len = self.0.hop_count();
-                Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(len as u8))))
+                Ok(TypeValue::Builtin(BuiltinTypeValue::U8(len as u8)))
             }
         }
     }
@@ -3265,12 +3282,10 @@ impl Display for OriginType {
     }
 }
 
+
 //------------ NextHop type -------------------------------------------------
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize)]
-pub struct NextHop(pub routecore::bgp::types::NextHop);
-
-impl RotoType for NextHop {
+impl RotoType for routecore::bgp::types::NextHop {
     fn get_props_for_method(
         _ty: TypeDef,
         _method_name: &crate::ast::Identifier,
@@ -3304,7 +3319,7 @@ impl RotoType for NextHop {
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        todo!()
+        Err(VmError::InvalidMethodCall)
     }
 
     fn exec_consume_value_method(
@@ -3313,7 +3328,8 @@ impl RotoType for NextHop {
         _args: Vec<TypeValue>,
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        todo!()
+        Err(VmError::InvalidMethodCall)
+
     }
 
     fn exec_type_method<'a>(
@@ -3321,37 +3337,22 @@ impl RotoType for NextHop {
         _args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        todo!()
+        Err(VmError::InvalidMethodCall)
+
     }
 }
 
-impl From<routecore::bgp::types::NextHop> for NextHop {
-    fn from(value: routecore::bgp::types::NextHop) -> Self {
-        NextHop(value)
-    }
-}
-
-impl From<NextHop> for TypeValue {
-    fn from(value: NextHop) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::NextHop(value))
-    }
-}
+impl ScalarValue for routecore::bgp::types::NextHop {}
 
 impl From<routecore::bgp::types::NextHop> for TypeValue {
     fn from(value: routecore::bgp::types::NextHop) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::NextHop(NextHop(value)))
+        TypeValue::Builtin(BuiltinTypeValue::NextHop(value))
     }
 }
 
 impl From<routecore::bgp::types::NextHop> for BuiltinTypeValue {
     fn from(value: routecore::bgp::types::NextHop) -> Self {
-        BuiltinTypeValue::NextHop(NextHop(value))
-    }
-}
-
-impl Display for NextHop {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        BuiltinTypeValue::NextHop(value)
     }
 }
 

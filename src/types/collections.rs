@@ -12,7 +12,7 @@ use crate::vm::{StackValue, VmError, FieldIndex};
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 
-use super::builtin::{BuiltinTypeValue, U32};
+use super::builtin::BuiltinTypeValue;
 use super::lazyrecord_types::LazyRecordTypeDef;
 use super::typedef::{LazyNamedTypeDef, MethodProps, TypeDef};
 use super::typevalue::TypeValue;
@@ -531,8 +531,8 @@ impl RotoType for List {
     ) -> Result<TypeValue, VmError> {
         match method.try_into()? {
             ListToken::Len => Ok(TypeValue::Builtin(BuiltinTypeValue::U32(
-                U32(self.0.len() as u32),
-            ))),
+                self.0.len() as u32),
+            )),
             ListToken::Contains if args.len() == 1 => {
                 trace!("contains on collection, search: {:?}", args);
                 Ok(self.iter().any(|e| e == args[0]).into())
