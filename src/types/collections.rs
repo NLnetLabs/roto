@@ -97,7 +97,7 @@ impl ElementTypeValue {
         Err(VmError::InvalidValueType)
     }
 
-    pub(crate) fn into_type(
+    pub fn into_type(
         self,
         ty: &TypeDef,
     ) -> Result<TypeValue, CompileError> {

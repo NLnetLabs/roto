@@ -120,7 +120,7 @@ pub struct RawRouteWithDeltas {
     pub raw_message: Arc<BgpUpdateMessage>,
     // AFI SAFI combination for the NLRI that the Prefix for this route
     // belongs to.
-    afi_safi: routecore::bgp::types::AfiSafi,
+    pub afi_safi: routecore::bgp::types::AfiSafi,
     // The IP address of the BGP speaker that originated the route, if known.
     peer_ip: Option<IpAddress>,
     // The ASN of the BGP speaker that originated the route, if known.
@@ -476,7 +476,7 @@ impl RawRouteWithDeltas {
         }
     }
 
-    pub(crate) fn get_field_by_index(
+    pub fn get_field_by_index(
         &self,
         field_token: usize,
     ) -> Result<TypeValue, VmError> {
@@ -505,19 +505,9 @@ impl RawRouteWithDeltas {
                 .raw_message
                 .raw_message
                 .0
-                .mp_next_hop()
-                .ok()
-                .flatten()
-                .or_else(|| {
-                    self.raw_message
-                        .raw_message
-                        .0
-                        .conventional_next_hop()
-                        .ok()
-                        .flatten()
-                })
-                .map(TypeValue::from)
-                .ok_or(VmError::InvalidFieldAccess),
+                .find_next_hop(self.afi_safi)
+                .map_err(|_| VmError::InvalidFieldAccess)
+                .map(TypeValue::from),
             RouteToken::MultiExitDisc => self
                 .raw_message
                 .raw_message

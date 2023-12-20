@@ -5,13 +5,16 @@ use roto::compiler::Compiler;
 use roto::blocks::Scope::{self, Filter};
 use roto::types::builtin::Prefix;
 use roto::types::builtin::{
-    RawRouteWithDeltas, RotondaId, RouteStatus, UpdateMessage,
+    BuiltinTypeValue, RawRouteWithDeltas, RotondaId, RouteStatus, RouteToken,
+    UpdateMessage,
 };
 use roto::types::collections::Record;
+use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
 use routecore::bgp::message::nlri::{BasicNlri, Nlri};
 use routecore::bgp::message::SessionConfig;
+use routecore::bgp::types::{AfiSafi, NextHop};
 
 mod common;
 
@@ -455,6 +458,109 @@ fn test_routes_5() {
     assert_eq!(
         output_record.get_field_by_index(vec![0, 0].into()).unwrap(),
         &peer_ip
+    );
+    trace!("{:#?}", output_stream_queue);
+    assert_eq!(accept_reject, AcceptReject::Accept);
+}
+
+#[test]
+fn test_routes_6() {
+    common::init();
+    let src = r#"
+        filter rib-in-pre-filter {
+            define {
+                rx route: Route;
+
+                msg = Message {
+                    text: "Some text",
+                    data: {
+                        pfx: route.prefix,
+                        peer_ip: route.peer_ip
+                    }
+                };
+            }
+        
+            term always {
+                match {
+                    msg.data.pfx.exists();
+                }
+            }
+        
+            // A typed named record
+            action send_msg {
+                mqtt.send(msg);
+            }
+        
+            apply {
+                filter match always matching {
+                    send_msg;
+                    return accept;
+                };
+                reject;
+            }
+        }
+        
+        output-stream mqtt contains Message {
+            text: String, 
+            data: { 
+                pfx: Prefix,
+                peer_ip: IpAddress
+            }
+        }
+    "#;
+
+    let test_run = test_data(Filter("rib-in-pre-filter".into()), src);
+
+    let (
+        VmResult {
+            accept_reject,
+            output_stream_queue,
+            rx,
+            ..
+        },
+        prefix,
+        peer_ip,
+    ) = test_run.unwrap();
+    let output_record = output_stream_queue[0].get_record();
+    trace!("{:#?}", output_record);
+    assert_eq!(output_stream_queue.len(), 1);
+
+    // The outputted record is an ordered_record, meaning it is sorted
+    // alphabetically on the key, so [0] is "peer_ip" and [1] is "prefix"
+    trace!(
+        "output_rec {:?}",
+        output_record.get_field_by_index(vec![0, 1].into())
+    );
+    assert_eq!(
+        output_record.get_field_by_index(vec![0, 1].into()).unwrap(),
+        &prefix
+    );
+    assert_eq!(
+        output_record.get_field_by_index(vec![0, 0].into()).unwrap(),
+        &peer_ip
+    );
+
+    let route = rx.clone().into_route().unwrap();
+    assert_eq!(route.afi_safi, AfiSafi::Ipv6Unicast);
+
+    let next_hop = route
+        .get_field_by_index(RouteToken::NextHop.into())
+        .unwrap();
+    trace!("next hop in route {:?}", next_hop);
+
+    assert_eq!(
+        next_hop,
+        TypeValue::Builtin(BuiltinTypeValue::NextHop(
+            NextHop::Ipv6LL(
+                std::net::Ipv6Addr::new(
+                    0xfc00, 0x10, 0x01, 0x10, 0x0, 0x0, 0x0, 0x10
+                ),
+                std::net::Ipv6Addr::new(
+                    0xfe80, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10
+                )
+            )
+            .into()
+        ))
     );
     trace!("{:#?}", output_stream_queue);
     assert_eq!(accept_reject, AcceptReject::Accept);

@@ -256,6 +256,13 @@ impl TypeValue {
         }
     }
 
+    pub fn into_route(self) -> Result<RawRouteWithDeltas, Self> {
+        if let TypeValue::Builtin(BuiltinTypeValue::Route(route)) = self {
+            Ok(route)
+        } else {
+            Err(self)
+        }
+    }
     // pub fn into_mp_variant_or_self(
     //     self,
     //     lazy_record_type: LazyRecordTypeDef,

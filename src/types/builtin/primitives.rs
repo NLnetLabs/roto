@@ -3268,7 +3268,7 @@ impl Display for OriginType {
 //------------ NextHop type -------------------------------------------------
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize)]
-pub struct NextHop(pub(crate) routecore::bgp::types::NextHop);
+pub struct NextHop(pub routecore::bgp::types::NextHop);
 
 impl RotoType for NextHop {
     fn get_props_for_method(
@@ -3283,12 +3283,18 @@ impl RotoType for NextHop {
 
     fn into_type(
         self,
-        _type_value: &TypeDef,
-    ) -> Result<TypeValue, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        todo!()
+        type_def: &TypeDef,
+    ) -> Result<TypeValue, CompileError> {
+        match type_def {
+            TypeDef::NextHop => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::NextHop(self)))
+            }
+            _ => Err(format!(
+                "Cannot convert type NextHop to type {:?}",
+                type_def
+            )
+            .into()),
+        }
     }
 
     fn exec_value_method<'a>(
@@ -3316,6 +3322,12 @@ impl RotoType for NextHop {
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         todo!()
+    }
+}
+
+impl From<routecore::bgp::types::NextHop> for NextHop {
+    fn from(value: routecore::bgp::types::NextHop) -> Self {
+        NextHop(value)
     }
 }
 
