@@ -1,10 +1,11 @@
 use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self, FilterMap};
-use roto::types::builtin::Asn;
 use roto::types::collections::Record;
 use roto::types::typedef::TypeDef;
 use roto::vm;
+
+use routecore::asn::Asn;
 
 fn test_data(
     name: Scope,

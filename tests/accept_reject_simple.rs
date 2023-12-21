@@ -3,10 +3,11 @@ use roto::ast::AcceptReject;
 use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self, FilterMap};
-use roto::types::builtin::Asn;
 use roto::types::collections::Record;
 use roto::types::typedef::TypeDef;
 use roto::vm::{self, VmResult};
+
+use routecore::asn::Asn;
 
 mod common;
 

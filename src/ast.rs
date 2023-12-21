@@ -32,9 +32,10 @@ use smallvec::SmallVec;
 
 use routecore::bgp::communities::HumanReadableCommunity as Community;
 use routecore::bgp::communities::{ExtendedCommunity, LargeCommunity, StandardCommunity};
+use routecore::asn::Asn;
 
 use crate::compiler::error::CompileError;
-use crate::types::builtin::{Asn, Boolean};
+use crate::types::builtin::Boolean;
 use crate::types::typevalue::TypeValue;
 use crate::{first_into_compile_err, parse_string};
 

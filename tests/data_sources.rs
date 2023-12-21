@@ -2,13 +2,13 @@ use log::trace;
 use roto::compiler::Compiler;
 
 use roto::blocks::Scope;
-use roto::types::builtin::Asn;
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::datasources::DataSource;
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
 use roto::vm;
 
+use routecore::asn::Asn;
 use routecore::bgp::communities::HumanReadableCommunity as Community;
 
 mod common;

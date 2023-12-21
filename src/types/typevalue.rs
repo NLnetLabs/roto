@@ -6,6 +6,7 @@ use primitives::{
     RouteStatus,
 };
 
+use routecore::asn::Asn;
 use routecore::bgp::aspath::HopPath;
 use routecore::bgp::message::nlri::PathId;
 use routecore::bgp::types::{AfiSafi, NextHop};
@@ -26,7 +27,7 @@ use crate::{
 
 use super::{
     builtin::{
-        primitives, Asn, BgpUpdateMessage, Boolean, BuiltinTypeValue,
+        primitives, BgpUpdateMessage, Boolean, BuiltinTypeValue,
         HexLiteral, IntegerLiteral, IpAddress, PrefixLength,
         RawRouteWithDeltas, StringLiteral,
     },
@@ -1078,8 +1079,8 @@ impl PartialOrd for TypeValue {
                 TypeValue::Builtin(BuiltinTypeValue::IpAddress(IpAddress(v))),
             ) => Some(u.cmp(v)),
             (
-                TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(u))),
-                TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(v))),
+                TypeValue::Builtin(BuiltinTypeValue::Asn(u)),
+                TypeValue::Builtin(BuiltinTypeValue::Asn(v)),
             ) => Some(u.cmp(v)),
             (
                 TypeValue::Builtin(BuiltinTypeValue::AsPath(_)),
@@ -1248,11 +1249,11 @@ impl From<std::net::IpAddr> for TypeValue {
     }
 }
 
-impl From<routecore::asn::Asn> for TypeValue {
-    fn from(value: routecore::asn::Asn) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(value)))
-    }
-}
+// impl From<routecore::asn::Asn> for TypeValue {
+//     fn from(value: routecore::asn::Asn) -> Self {
+//         TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(value)))
+//     }
+// }
 
 impl From<routecore::bgp::aspath::HopPath> for TypeValue {
     fn from(value: routecore::bgp::aspath::HopPath) -> Self {
@@ -1290,7 +1291,7 @@ impl From<routecore::bgp::aspath::Hop<Vec<u8>>> for BuiltinTypeValue {
 impl From<Vec<Asn>> for TypeValue {
     fn from(as_path: Vec<Asn>) -> Self {
         let as_path: Vec<routecore::bgp::aspath::Hop<Vec<u8>>> =
-            as_path.iter().map(|p| p.0.into()).collect();
+            as_path.iter().map(|p| (*p).into()).collect();
         let as_path = routecore::bgp::aspath::HopPath::from(as_path);
         TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path))
     }
@@ -1370,7 +1371,7 @@ impl From<crate::ast::PrefixLengthLiteral> for TypeValue {
 
 impl From<crate::ast::AsnLiteral> for TypeValue {
     fn from(value: crate::ast::AsnLiteral) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(value.0.into())))
+        TypeValue::Builtin(BuiltinTypeValue::Asn(value.0.into()))
     }
 }
 

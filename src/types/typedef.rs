@@ -5,6 +5,7 @@ use std::hash::{Hash, Hasher};
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 use log::{trace, debug};
+use routecore::asn::Asn;
 use routecore::bgp::aspath::HopPath;
 use serde::Serialize;
 use routecore::bgp::{types::AfiSafi, message::nlri::PathId};
@@ -23,7 +24,7 @@ use crate::{
 };
 
 use super::builtin::{
-    Asn, AtomicAggregate, Aggregator, Boolean, HexLiteral, Hop,
+    AtomicAggregate, Aggregator, Boolean, HexLiteral, Hop,
     IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, OriginType,
     PrefixLength, RawRouteWithDeltas, RouteStatus, StringLiteral,
     Unknown,
@@ -237,7 +238,7 @@ impl TypeDef {
         IntegerLiteral(StringLiteral,U8,U32,StringLiteral,PrefixLength,LocalPref,Asn;ConstEnumVariant),
         StringLiteral(Asn;),
         HexLiteral(StringLiteral,U8,U32,Community;),
-        PrefixLength(StringLiteral,U8,U32;),
+        PrefixLength(StringLiteral,IntegerLiteral,U8,U32;),
         AfiSafi(StringLiteral;),
         PathId(StringLiteral,IntegerLiteral,U32;),
         Asn(StringLiteral,U32;),

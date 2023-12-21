@@ -1,8 +1,9 @@
 use std::fmt::{Display, Formatter};
 
 use log::{debug, error, trace};
-use routecore::asn::LongSegmentError;
+use routecore::asn::{LongSegmentError, Asn};
 use routecore::bgp::aspath::OwnedHop;
+use routecore::bgp::message::nlri::PathId;
 use serde::Serialize;
 
 use crate::ast::{IpAddressLiteral, PrefixLiteral};
@@ -110,8 +111,8 @@ impl RotoType for u16 {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::U32(self as u32)))
             }
             TypeDef::Asn => Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(
-                Asn(routecore::asn::Asn::from(self as u32)),
-            ))),
+                routecore::asn::Asn::from(self as u32)),
+            )),
             TypeDef::PrefixLength => match self {
                 0..=128 => Ok(TypeValue::Builtin(
                     BuiltinTypeValue::PrefixLength(PrefixLength(self as u8)),
@@ -280,7 +281,7 @@ impl RotoType for u32 {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::U32(self)))
             }
             TypeDef::Asn => Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(
-                Asn(routecore::asn::Asn::from(self)),
+                routecore::asn::Asn::from(self),
             ))),
             TypeDef::PrefixLength => match self {
                 0..=128 => Ok(TypeValue::Builtin(
@@ -946,9 +947,9 @@ impl RotoType for IntegerLiteral {
             },
             TypeDef::Asn => match self.0 {
                 0..=4294967295 => {
-                    Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(
                         routecore::asn::Asn::from(self.0 as u32),
-                    ))))
+                    )))
                 }
                 i if i < 0 => Err(CompileError::from(
                     "Cannot convert type \
@@ -1566,6 +1567,9 @@ impl RotoType for PrefixLength {
             TypeDef::U32 => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::U32(self.0.into())))
             }
+            TypeDef::IntegerLiteral => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(self.0 as i64))))
+            }
             _ => Err(format!(
                 "Cannot convert type PrefixLength to type {:?}",
                 type_def
@@ -1594,11 +1598,20 @@ impl RotoType for PrefixLength {
     }
 
     fn exec_type_method<'a>(
-        _method_token: usize,
-        _args: &[StackValue],
+        method_token: usize,
+        args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        Err(VmError::InvalidMethodCall)
+        match method_token.try_into()? {
+            PrefixLengthToken::From => {
+                if let Some(StackValue::Ref(TypeValue::Builtin(BuiltinTypeValue::U32(val)))) = args.get(0) {
+                    Ok(PrefixLength((*val).try_into().map_err(|_| VmError::InvalidConversion)?).into())
+                } else {
+                    Err(VmError::InvalidCommandArg)
+                }
+            }
+            _ => Err(VmError::InvalidMethodCall),
+        }
     }
 }
 
@@ -1716,28 +1729,29 @@ impl RotoType for routecore::bgp::types::AfiSafi {
 
     fn exec_value_method<'a>(
         &'a self,
-        method_token: usize,
-        args: &'a [crate::vm::StackValue],
-        res_type: crate::types::typedef::TypeDef,
+        _method_token: usize,
+        _args: &'a [crate::vm::StackValue],
+        _res_type: crate::types::typedef::TypeDef,
     ) -> Result<TypeValue, crate::vm::VmError> {
-        todo!()
+        Err(VmError::InvalidMethodCall)
     }
 
     fn exec_consume_value_method(
         self,
-        method_token: usize,
-        args: Vec<TypeValue>,
-        res_type: crate::types::typedef::TypeDef,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: crate::types::typedef::TypeDef,
     ) -> Result<TypeValue, crate::vm::VmError> {
-        todo!()
+        Err(VmError::InvalidMethodCall)
     }
 
     fn exec_type_method(
-        method_token: usize,
-        args: &[crate::vm::StackValue],
-        res_type: crate::types::typedef::TypeDef,
+        _method_token: usize,
+        _args: &[crate::vm::StackValue],
+        _res_type: crate::types::typedef::TypeDef,
     ) -> Result<TypeValue, crate::vm::VmError> {
-        todo!()
+        Err(VmError::InvalidMethodCall)
+
     }
 }
 
@@ -1753,23 +1767,49 @@ impl ScalarValue for routecore::bgp::message::nlri::PathId {}
 
 impl RotoType for routecore::bgp::message::nlri::PathId {
     fn get_props_for_method(
-        ty: TypeDef,
+        _ty: TypeDef,
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
     {
-        todo!()
+        match method_name.ident.as_str() {
+            "from" => Ok(MethodProps::new(
+                TypeDef::PathId,
+                PathIdToken::From.into(),
+                vec![TypeDef::U32],
+            )),
+            _ => Err(format!(
+                "Unknown method: '{}' for type PrefixLength",
+                method_name.ident
+            )
+            .into()),
+        }
+
     }
 
     fn into_type(
         self,
-        type_value: &TypeDef,
-    ) -> Result<TypeValue, CompileError>
+        type_value: &crate::types::typedef::TypeDef,
+    ) -> Result<TypeValue, crate::compiler::CompileError>
     where
         Self: std::marker::Sized,
     {
-        todo!()
+        match type_value {
+            TypeDef::PathId => Ok(TypeValue::Builtin(BuiltinTypeValue::PathId(self))),
+            TypeDef::IntegerLiteral => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(<u32>::from(self) as i64))))
+            }
+            TypeDef::StringLiteral => Ok(TypeValue::Builtin(
+                BuiltinTypeValue::StringLiteral(self.into()),
+            )),
+            TypeDef::U32 => Ok(TypeValue::Builtin(BuiltinTypeValue::U32(self.into()))),
+            _ => Err(format!(
+                "Cannot convert type PrefixLength to type {:?}",
+                type_value
+            )
+            .into()),
+        }
     }
 
     fn exec_value_method<'a>(
@@ -1778,8 +1818,11 @@ impl RotoType for routecore::bgp::message::nlri::PathId {
         args: &'a [StackValue],
         res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        todo!()
+        Err(VmError::InvalidMethodCall)
+
     }
+
+    
 
     fn exec_consume_value_method(
         self,
@@ -1787,17 +1830,53 @@ impl RotoType for routecore::bgp::message::nlri::PathId {
         args: Vec<TypeValue>,
         res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        todo!()
+        Err(VmError::InvalidMethodCall)
+
     }
 
-    fn exec_type_method(
+    fn exec_type_method<'a>(
         method_token: usize,
         args: &[StackValue],
-        res_type: TypeDef,
+        _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        todo!()
+        match method_token.try_into()? {
+            PathIdToken::From => {
+                if let Some(StackValue::Owned(TypeValue::Builtin(BuiltinTypeValue::U32(val)))) = args.get(0) {
+                    Ok(PathId::from_u32(*val).into())
+                } else {
+                    Err(VmError::StackUnderflow)
+                }
+            }
+            _ => Err(VmError::InvalidMethodCall),
+        }
     }
 }
+
+#[derive(Debug)]
+pub(crate) enum PathIdToken {
+    From,
+}
+
+impl TryFrom<usize> for PathIdToken {
+    type Error = VmError;
+
+    fn try_from(val: usize) -> Result<Self, VmError> {
+        match val {
+            0 => Ok(PathIdToken::From),
+            _ => {
+                debug!("Unknown token value: {}", val);
+                Err(VmError::InvalidMethodCall)
+            }
+        }
+    }
+}
+
+impl From<PathIdToken> for usize {
+    fn from(val: PathIdToken) -> Self {
+        val as usize
+    }
+}
+
 
 // ----------- Community -----------------------------------------------------
 
@@ -2645,24 +2724,24 @@ impl From<IpAddressToken> for usize {
 
 // ----------- Asn type -----------------------------------------------------
 
-#[derive(Debug, Eq, Copy, Clone, Hash, PartialEq, Serialize)]
-pub struct Asn(pub(crate) routecore::asn::Asn);
+// #[derive(Debug, Eq, Copy, Clone, Hash, PartialEq, Serialize)]
+// pub struct Asn(pub(crate) routecore::asn::Asn);
 
-impl Asn {
-    pub fn new(asn: routecore::asn::Asn) -> Self {
-        Asn(asn)
-    }
+// impl Asn {
+//     pub fn new(asn: routecore::asn::Asn) -> Self {
+//         Asn(asn)
+//     }
 
-    pub fn from_u32(asn: u32) -> Self {
-        Asn(routecore::asn::Asn::from(asn))
-    }
+//     pub fn from_u32(asn: u32) -> Self {
+//         Asn(routecore::asn::Asn::from(asn))
+//     }
 
-    pub fn get_asn(&self) -> routecore::asn::Asn {
-        self.0
-    }
-}
+//     pub fn get_asn(&self) -> routecore::asn::Asn {
+//         self.0
+//     }
+// }
 
-impl RotoType for Asn {
+impl RotoType for routecore::asn::Asn {
     fn get_props_for_method(
         _ty: TypeDef,
         method_name: &crate::ast::Identifier,
@@ -2696,11 +2775,11 @@ impl RotoType for Asn {
             TypeDef::StringLiteral => Ok(TypeValue::Builtin(
                 BuiltinTypeValue::StringLiteral(self.into()),
             )),
-            TypeDef::U8 => match self.0.into_u32() {
+            TypeDef::U8 => match self.into_u32() {
                 0..=255 => {
                     // this should work, shouldn't it?
                     Ok(TypeValue::Builtin(BuiltinTypeValue::U8(
-                        self.0.into_u32() as u8,
+                        self.into_u32() as u8,
                     )))
                 }
                 val => Err(format!(
@@ -2711,7 +2790,7 @@ impl RotoType for Asn {
                 .into()),
             },
             TypeDef::U32 => Ok(TypeValue::Builtin(BuiltinTypeValue::U32(
-                self.0.into_u32(),
+                self.into_u32(),
             ))),
             _ => {
                 Err(format!("Cannot convert type Asn to type {:?}", type_def)
@@ -2731,7 +2810,7 @@ impl RotoType for Asn {
                 if let TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) =
                     args.get(0).ok_or(VmError::InvalidMethodCall)?.as_ref()
                 {
-                    Ok(TypeValue::from(Asn::new(asn.0)))
+                    Ok(TypeValue::from(*asn))
                 } else {
                     Err(VmError::AnonymousArgumentNotFound)
                 }
@@ -2763,29 +2842,29 @@ impl From<Asn> for TypeValue {
     }
 }
 
-impl From<routecore::asn::Asn> for BuiltinTypeValue {
-    fn from(value: routecore::asn::Asn) -> Self {
-        BuiltinTypeValue::Asn(Asn(value))
-    }
-}
+// impl From<routecore::asn::Asn> for BuiltinTypeValue {
+//     fn from(value: routecore::asn::Asn) -> Self {
+//         BuiltinTypeValue::Asn(value)
+//     }
+// }
 
-impl From<u32> for Asn {
-    fn from(value: u32) -> Self {
-        Asn(value.into())
-    }
-}
+// impl From<u32> for Asn {
+//     fn from(value: u32) -> Self {
+//         value.into()
+//     }
+// }
 
-impl From<u16> for Asn {
-    fn from(value: u16) -> Self {
-        Asn((value as u32).into())
-    }
-}
+// impl From<u16> for Asn {
+//     fn from(value: u16) -> Self {
+//         (value as u32).into()
+//     }
+// }
 
-impl Display for Asn {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+// impl Display for Asn {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{}", self.0)
+//     }
+// }
 
 #[derive(Debug)]
 pub enum AsnToken {
@@ -2938,16 +3017,16 @@ impl RotoType for routecore::bgp::aspath::HopPath {
         match method.try_into()? {
             AsPathToken::Origin => match self.origin().cloned() {
                 Some(origin_asn) => Ok(TypeValue::Builtin(
-                    BuiltinTypeValue::Asn(Asn(origin_asn
+                    BuiltinTypeValue::Asn(origin_asn
                         .try_into_asn()
                         .map_err(|_| VmError::InvalidValueType)?)),
-                )),
+                ),
                 None => Err(VmError::InvalidPayload),
             },
             AsPathToken::Contains => {
-                if let TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(
+                if let TypeValue::Builtin(BuiltinTypeValue::Asn(
                     search_asn,
-                ))) = first_into_vm_err!(args, InvalidMethodCall)?.as_ref()
+                )) = first_into_vm_err!(args, InvalidMethodCall)?.as_ref()
                 {
                     let contains =
                         self.contains(&RoutecoreHop::from(*search_asn));
@@ -2985,7 +3064,7 @@ impl RotoType for routecore::bgp::aspath::HopPath {
 
 impl VectorValue for routecore::bgp::aspath::HopPath {
     type ReadItem = routecore::bgp::aspath::OwnedHop;
-    type WriteItem = Asn;
+    type WriteItem = routecore::asn::Asn;
 
     fn prepend_vec(
         &mut self,
@@ -2993,7 +3072,7 @@ impl VectorValue for routecore::bgp::aspath::HopPath {
     ) -> Result<(), LongSegmentError> {
         let mut as_path = vector
             .iter()
-            .map(|a| routecore::bgp::aspath::OwnedHop::Asn(a.0))
+            .map(|a| routecore::bgp::aspath::OwnedHop::Asn(*a))
             .collect::<Vec<_>>();
         as_path.extend_from_slice(std::mem::take(self).iter().as_slice());
 
@@ -3007,7 +3086,7 @@ impl VectorValue for routecore::bgp::aspath::HopPath {
         vector: Vec<Self::WriteItem>,
     ) -> Result<(), LongSegmentError> {
         for asn in vector {
-            self.append(OwnedHop::Asn(asn.0));
+            self.append(OwnedHop::Asn(asn));
         }
 
         Ok(())
@@ -3027,7 +3106,7 @@ impl VectorValue for routecore::bgp::aspath::HopPath {
         left_path.extend_from_slice(
             vector
                 .into_iter()
-                .map(|a| a.0.into())
+                .map(|a| a.into())
                 .collect::<Vec<_>>()
                 .as_slice(),
         );
@@ -3162,11 +3241,11 @@ impl Display for Hop {
     }
 }
 
-impl From<Asn> for Hop {
-    fn from(value: Asn) -> Self {
-        Hop(value.0.into())
-    }
-}
+// impl From<Asn> for Hop {
+//     fn from(value: Asn) -> Self {
+//         Hop(value.0.into())
+//     }
+// }
 
 //------------ OriginType type ----------------------------------------------
 

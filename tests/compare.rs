@@ -2,12 +2,13 @@ use roto::ast::AcceptReject;
 use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self, FilterMap};
-use roto::types::builtin::Asn;
 use roto::types::collections::Record;
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
 use rotonda_store::prelude::MergeUpdate;
+
+use routecore::asn::Asn;
 
 mod common;
 

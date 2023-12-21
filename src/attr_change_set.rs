@@ -6,13 +6,14 @@ use routecore::bgp::message::nlri::PathId;
 use routecore::bgp::types::AfiSafi;
 use routecore::addr::Prefix;
 use routecore::bgp::communities::HumanReadableCommunity as Community;
+use routecore::asn::Asn;
 use serde::Serialize;
 use std::marker::PhantomData;
 use std::ops::Index;
 
 use crate::ast::StringLiteral;
 use crate::types::builtin::{
-    Asn, AtomicAggregate, BuiltinTypeValue, IpAddress,
+    AtomicAggregate, BuiltinTypeValue, IpAddress,
     LocalPref, MultiExitDisc, OriginType, RouteStatus,
 };
 use crate::types::collections::ElementTypeValue;
@@ -318,7 +319,7 @@ impl<V: VectorValue + Into<TypeValue> + std::fmt::Debug> VectorOption<V> {
                                 .0
                                 .try_into_asn()
                                 .map_err(|_| LongSegmentError)?;
-                            vec![Asn(asn)]
+                            vec![asn]
                         }
                         TypeValue::Builtin(BuiltinTypeValue::U32(int)) => {
                             vec![Asn::from_u32(int)]

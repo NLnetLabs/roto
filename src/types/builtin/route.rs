@@ -13,6 +13,7 @@
 
 use log::{debug, error};
 use routecore::addr::Prefix;
+use routecore::asn::Asn;
 use routecore::bgp::{
     aspath::HopPath,
     communities::HumanReadableCommunity as Community,
@@ -40,7 +41,7 @@ use crate::{
     vm::{StackValue, VmError},
 };
 
-use super::{Asn, BuiltinTypeValue, IpAddress, OriginType, RouteStatus};
+use super::{BuiltinTypeValue, IpAddress, OriginType, RouteStatus};
 use crate::attr_change_set::{
     AttrChangeSet, ScalarOption, ScalarValue, VectorOption, VectorValue,
 };
@@ -228,7 +229,7 @@ impl RawRouteWithDeltas {
             afi_safi: self.afi_safi,
             path_id: self.path_id,
             peer_ip: self.peer_ip,
-            peer_asn: Some(Asn::new(peer_asn)),
+            peer_asn: Some(peer_asn),
             router_id: self.router_id,
             attribute_deltas: self.attribute_deltas,
             status_deltas: self.status_deltas,
@@ -254,7 +255,7 @@ impl RawRouteWithDeltas {
     }
 
     pub fn peer_asn(&self) -> Option<routecore::asn::Asn> {
-        self.peer_asn.map(|asn| asn.0)
+        self.peer_asn
     }
 
     pub fn router_id(&self) -> Option<Arc<String>> {
@@ -551,7 +552,7 @@ impl RawRouteWithDeltas {
                 .raw_message
                 .raw_message
                 .0
-                .all_communities::<Community>()
+                .all_human_readable_communities()
                 .ok()
                 .flatten()
                 .map(TypeValue::from)
@@ -1396,7 +1397,7 @@ impl UpdateMessage {
             ),
             communities: VectorOption::from(
                 self.0
-                    .all_communities::<Community>()
+                    .all_human_readable_communities()
                     .map_err(VmError::from)?,
             ),
             peer_ip: peer_ip.into(),

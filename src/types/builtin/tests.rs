@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod route {
     use super::super::{
-        Asn, Boolean, IntegerLiteral, PrefixLength, StringLiteral,
+        Boolean, IntegerLiteral, PrefixLength, StringLiteral,
     };
     use crate::ast::IpAddressLiteral;
     use crate::types::builtin::{BuiltinTypeValue, IpAddress};
@@ -17,6 +17,7 @@ mod route {
         _Consume,
     }
     use routecore::bgp::aspath::HopPath;
+    use routecore::asn::{Asn, Asn16};
     use routecore::bgp::communities::{HumanReadableCommunity as Community, StandardCommunity, Tag, ExtendedCommunity, LargeCommunity};
     use routecore::bgp::{
         message::{
@@ -126,7 +127,7 @@ mod route {
         }
 
         let res = delta.attributes.as_path.prepend(
-            crate::types::builtin::primitives::Asn::from(211321_u32),
+            Asn::from(211321_u32),
         );
         assert!(res.is_ok());
 
@@ -152,7 +153,7 @@ mod route {
             attr_set.as_path.as_routecore_hops_vec().get(0),
             Asn::try_from(211321_u32)
                 .ok()
-                .map(move |a| routecore::bgp::aspath::Hop::from(a.0))
+                .map(routecore::bgp::aspath::Hop::from)
                 .as_ref()
                 .as_ref()
         );
@@ -160,7 +161,7 @@ mod route {
             attr_set.as_path.as_routecore_hops_vec().get(1),
             Asn::try_from(200_u32)
                 .ok()
-                .map(move |a| routecore::bgp::aspath::Hop::from(a.0))
+                .map(routecore::bgp::aspath::Hop::from)
                 .as_ref()
                 .as_ref()
         );
@@ -266,14 +267,14 @@ mod route {
         assert_eq!(
             *attr_set.as_path.as_routecore_hops_vec()[0],
             routecore::bgp::aspath::Hop::from(
-                Asn::try_from(211321_u32).unwrap().0
+                Asn::try_from(211321_u32).unwrap()
             )
         );
         assert_eq!(
             attr_set.as_path.as_routecore_hops_vec().get(1),
-            Asn::try_from(200_u16)
+            Asn::try_from(200_u32)
                 .ok()
-                .map(move |a| routecore::bgp::aspath::Hop::from(a.0))
+                .map(routecore::bgp::aspath::Hop::from)
                 .as_ref()
                 .as_ref()
         );
@@ -292,7 +293,7 @@ mod route {
             attr_set.as_path.as_routecore_hops_vec().get(0),
             Asn::try_from(211322_u32)
                 .ok()
-                .map(move |a| routecore::bgp::aspath::Hop::from(a.0))
+                .map(routecore::bgp::aspath::Hop::from)
                 .as_ref()
                 .as_ref()
         );
@@ -300,15 +301,15 @@ mod route {
             attr_set.as_path.as_routecore_hops_vec().get(1),
             Asn::try_from(211321_u32)
                 .ok()
-                .map(move |a| routecore::bgp::aspath::Hop::from(a.0))
+                .map(routecore::bgp::aspath::Hop::from)
                 .as_ref()
                 .as_ref()
         );
         assert_eq!(
             attr_set.as_path.as_routecore_hops_vec().get(2),
-            Asn::try_from(200_u32)
+            routecore::asn::Asn::try_from(200_u32)
                 .ok()
-                .map(move |a| routecore::bgp::aspath::Hop::from(a.0))
+                .map(routecore::bgp::aspath::Hop::from)
                 .as_ref()
                 .as_ref()
         );
@@ -532,7 +533,7 @@ mod route {
         init();
 
         let test_value = 0_u8;
-        let arg: HopPath = vec![routecore::asn::Asn::from(24)].into();
+        let arg: HopPath = vec![Asn::from(24)].into();
 
         test_consume_method_on_type_value(test_value, "set", arg).unwrap();
     }
@@ -576,7 +577,7 @@ mod route {
     #[should_panic = "Cannot convert type U8 to type AsPath"]
     fn test_u8_conversion_as_path() {
         let test_value = 24_u8;
-        let res: HopPath = vec![routecore::asn::Asn::from(24)].into();
+        let res: HopPath = vec![Asn::from(24)].into();
 
         mk_converted_type_value(test_value, res).unwrap();
     }
@@ -637,7 +638,7 @@ than 128 into type PrefixLength"]
     #[test]
     fn test_conversion_asn_literal_u16() -> Result<(), CompileError> {
         let test_value = IntegerLiteral::new(32768);
-        let res = Asn::from(32768_u16);
+        let res = Asn::from(32768_u32);
 
         mk_converted_type_value(test_value, res)
     }
@@ -689,7 +690,7 @@ greater than 128 into type PrefixLength"]
     #[test]
     fn test_conversion_asn_u32() -> Result<(), CompileError> {
         let test_value = 32768_u32;
-        let res = Asn::new(32768.into());
+        let res = Asn::from(32768);
 
         mk_converted_type_value(test_value, res)
     }
@@ -888,7 +889,7 @@ src_ty.clone().test_type_conversion(arg_ty)"]
     #[test]
     fn test_integer_literal_1() -> Result<(), CompileError> {
         let test_value = IntegerLiteral::new(100);
-        let res = Asn::new(100.into());
+        let res = Asn::from(100);
 
         mk_converted_type_value(test_value, res)
     }
@@ -920,6 +921,27 @@ src_ty.clone().test_type_conversion(arg_ty)"]
         test_value.into_type(&TypeDef::U8).unwrap();
     }
 
+    //-------- Test: PrefixLengthLiteral -------------------------------------
+
+    #[test]
+    fn test_prefix_length_literal_1() {
+        let test_value: PrefixLength = PrefixLength(23);
+        let res = IntegerLiteral::new(23);
+
+        mk_converted_type_value(test_value, res).unwrap();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_prefix_length_literal_2() {
+        let test_value: PrefixLength = PrefixLength(23);
+        let res = IntegerLiteral::new(23);
+
+        test_method_on_type_value_with_multiple_args(test_value, MethodType::Type, "from", &[23_u32], res).unwrap();
+    }
+
+
+
     //-------- Test: Communities ---------------------------------------------
 
     #[test]
@@ -934,7 +956,7 @@ src_ty.clone().test_type_conversion(arg_ty)"]
     fn test_standard_community_2() {
         let test_value: Community = 
             StandardCommunity::new(
-                routecore::asn::Asn16::from(12500),
+                Asn16::from(12500),
                 Tag::new(7890),
             ).into();
         let res = StringLiteral::new("AS12500:7890".to_string());
@@ -948,12 +970,12 @@ src_ty.clone().test_type_conversion(arg_ty)"]
 
         let test_value: Community =
                 StandardCommunity::new(
-                    routecore::asn::Asn16::from(12500),
+                    Asn16::from(12500),
                     Tag::new(7890),
                 ).into();
         let res: Community = 
             StandardCommunity::new(
-                routecore::asn::Asn16::from(7500),
+                Asn16::from(7500),
                 Tag::new(3000),
             ).into();
 
@@ -970,7 +992,7 @@ src_ty.clone().test_type_conversion(arg_ty)"]
                 ).unwrap().into();
         let res: Community = 
             StandardCommunity::new(
-                routecore::asn::Asn16::from(7500),
+                Asn16::from(7500),
                 Tag::new(3000),
             ).into();
 
@@ -987,7 +1009,7 @@ src_ty.clone().test_type_conversion(arg_ty)"]
                 ).unwrap().into();
         let res: Community =
             StandardCommunity::new(
-                routecore::asn::Asn16::from(7500),
+                Asn16::from(7500),
                 Tag::new(3000),
             ).into();
 
@@ -1004,7 +1026,7 @@ src_ty.clone().test_type_conversion(arg_ty)"]
                 ).unwrap().into();
         let res: Community = 
             StandardCommunity::new(
-                routecore::asn::Asn16::from(7500),
+                Asn16::from(7500),
                 Tag::new(3000),
             ).into();
 

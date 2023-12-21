@@ -1,11 +1,10 @@
-use roto::types::builtin::{
-    Asn, BuiltinTypeValue,
-};
+use roto::types::builtin::BuiltinTypeValue;
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
 
 use routecore::bgp::communities::HumanReadableCommunity as Community;
+use routecore::asn::Asn;
 
 fn main() {
     // let count = RotoType::create_primitive_var(

@@ -4,6 +4,7 @@
 
 use std::fmt::Display;
 
+use routecore::asn::Asn;
 use routecore::bgp::message::nlri::PathId;
 use routecore::bgp::types::{AfiSafi, NextHop};
 use routecore::addr::Prefix;
@@ -23,7 +24,7 @@ use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 
 use super::{
-    Aggregator, Asn, AtomicAggregate, BgpUpdateMessage, Boolean,
+    Aggregator, AtomicAggregate, BgpUpdateMessage, Boolean,
     HexLiteral, Hop, IntegerLiteral, IpAddress, LocalPref,
     MultiExitDisc, OriginType, PrefixLength,
     RawRouteWithDeltas, RouteStatus, StringLiteral,

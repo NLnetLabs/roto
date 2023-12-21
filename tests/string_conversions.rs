@@ -2,7 +2,7 @@ use log::trace;
 use roto::compiler::Compiler;
 
 use roto::blocks::Scope;
-use roto::types::builtin::{Asn, BuiltinTypeValue};
+use roto::types::builtin::BuiltinTypeValue;
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::enum_types::EnumVariant;
 use roto::types::typedef::TypeDef;
@@ -10,6 +10,7 @@ use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
 
 use routecore::bgp::communities::HumanReadableCommunity as Community;
+use routecore::asn::Asn;
 
 mod common;
 
