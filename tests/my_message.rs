@@ -8,6 +8,8 @@ use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
 
+use routecore::bgp::communities::HumanReadableCommunity as Community;
+
 mod common;
 
 fn test_data(
@@ -40,7 +42,7 @@ fn test_data(
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            routecore::bgp::communities::Community::from([
+            Community::from([
                 127, 12, 13, 12,
             ])
             .into())

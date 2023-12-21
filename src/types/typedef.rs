@@ -9,6 +9,7 @@ use routecore::bgp::aspath::HopPath;
 use serde::Serialize;
 use routecore::bgp::{types::AfiSafi, message::nlri::PathId};
 use routecore::addr::Prefix;
+use routecore::bgp::communities::HumanReadableCommunity as Community;
 
 use crate::compiler::compile::CompileError;
 use crate::traits::Token;
@@ -602,7 +603,7 @@ impl TypeDef {
                 Hop::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::Community => {
-                routecore::bgp::communities::Community::get_props_for_method(self.clone(), method_name)
+                Community::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::OriginType => {
                 OriginType::get_props_for_method(self.clone(), method_name)

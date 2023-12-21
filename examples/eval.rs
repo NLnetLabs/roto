@@ -9,6 +9,8 @@ use roto::types::typevalue::TypeValue;
 use roto::vm;
 use roto::blocks::Scope::{self, FilterMap};
 
+use routecore::bgp::communities::HumanReadableCommunity as Community;
+
 fn test_data(
     name: Scope,
     source_code: &'static str,
@@ -30,7 +32,7 @@ fn test_data(
     let asn = Asn::from_u32(211321).into();
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            routecore::bgp::communities::Community::from([127, 12, 13, 12]).into())
+            Community::from([127, 12, 13, 12]).into())
         ]));
     let my_comms_type =
         TypeDef::List(Box::new(TypeDef::List(Box::new(TypeDef::Community))));

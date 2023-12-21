@@ -5,6 +5,8 @@ use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
 
+use routecore::bgp::communities::HumanReadableCommunity as Community;
+
 fn main() {
     // let count = RotoType::create_primitive_var(
     //     RotoType::Asn,
@@ -45,7 +47,7 @@ fn main() {
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            routecore::bgp::communities::Community::from([127, 12, 13, 12]).into())
+            Community::from([127, 12, 13, 12]).into())
         ]));
 
     let my_comms_type =

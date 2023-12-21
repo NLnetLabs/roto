@@ -19,6 +19,8 @@ use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 use super::builtin_type_value::BuiltinTypeValue;
 
+use routecore::bgp::communities::HumanReadableCommunity as Community;
+
 //------------ U16 Type -----------------------------------------------------
 
 // #[derive(Debug, Eq, Copy, Clone, Serialize)]
@@ -2244,7 +2246,7 @@ impl RotoType for routecore::bgp::message::nlri::PathId {
 //     }
 // }
 
-impl RotoType for routecore::bgp::communities::Community {
+impl RotoType for Community {
     fn get_props_for_method(
         _ty: TypeDef,
         method_name: &crate::ast::Identifier,
@@ -2385,28 +2387,23 @@ impl RotoType for routecore::bgp::communities::Community {
     }
 }
 
-impl ScalarValue for routecore::bgp::communities::Community {}
+impl ScalarValue for Community {}
 
-impl From<routecore::bgp::communities::Community> for TypeValue {
-    fn from(val: routecore::bgp::communities::Community) -> Self {
+impl From<Community> for TypeValue {
+    fn from(val: Community) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::Community(val))
     }
 }
 
-// impl From<routecore::bgp::communities::Community> for TypeValue {
-//     fn from(val: routecore::bgp::communities::Community) -> Self {
-//         TypeValue::Builtin(BuiltinTypeValue::Community(val))
-//     }
-// }
 
-impl From<routecore::bgp::communities::Community> for BuiltinTypeValue {
-    fn from(value: routecore::bgp::communities::Community) -> Self {
+impl From<Community> for BuiltinTypeValue {
+    fn from(value: Community) -> Self {
         BuiltinTypeValue::Community(value)
     }
 }
 
-impl From<Vec<routecore::bgp::communities::Community>> for TypeValue {
-    fn from(value: Vec<routecore::bgp::communities::Community>) -> Self {
+impl From<Vec<Community>> for TypeValue {
+    fn from(value: Vec<Community>) -> Self {
         let list: Vec<ElementTypeValue> = value
             .iter()
             .map(|c| ElementTypeValue::Primitive(TypeValue::from(*c)))
@@ -3009,7 +3006,6 @@ impl VectorValue for routecore::bgp::aspath::HopPath {
         &mut self,
         vector: Vec<Self::WriteItem>,
     ) -> Result<(), LongSegmentError> {
-        
         for asn in vector {
             self.append(OwnedHop::Asn(asn.0));
         }

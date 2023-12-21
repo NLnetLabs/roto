@@ -30,6 +30,9 @@ use nom::{AsChar, Finish};
 use serde::{Serialize, Serializer};
 use smallvec::SmallVec;
 
+use routecore::bgp::communities::HumanReadableCommunity as Community;
+use routecore::bgp::communities::{ExtendedCommunity, LargeCommunity, StandardCommunity};
+
 use crate::compiler::error::CompileError;
 use crate::types::builtin::{Asn, Boolean};
 use crate::types::typevalue::TypeValue;
@@ -2147,23 +2150,23 @@ impl From<&'_ StandardCommunityLiteral> for ShortString {
     }
 }
 
-impl TryFrom<&'_ StandardCommunityLiteral> for routecore::bgp::communities::Community {
+impl TryFrom<&'_ StandardCommunityLiteral> for Community {
     type Error = CompileError;
 
     // The aforementioned heavy lifting is here.
     fn try_from(
         literal: &StandardCommunityLiteral,
     ) -> Result<Self, Self::Error> {
-        let comm = <routecore::bgp::communities::StandardCommunity as str::FromStr>::from_str(
+        let comm = <StandardCommunity as str::FromStr>::from_str(
                 &literal.0
             ).map_err(
                 |e| CompileError::from(format!(
                     "Cannot convert literal '{}' into Extended Community: {e}", literal.0,
                 )))?;
 
-        Ok(routecore::bgp::communities::Community::Standard(
-            comm,
-        ))
+        Ok(
+            comm.into(),
+        )
     }
 }
 
@@ -2252,23 +2255,23 @@ impl From<&'_ ExtendedCommunityLiteral> for ShortString {
     }
 }
 
-impl<'a> TryFrom<&'a ExtendedCommunityLiteral> for routecore::bgp::communities::Community {
+impl<'a> TryFrom<&'a ExtendedCommunityLiteral> for Community {
     type Error = CompileError;
 
     // The aforementioned heavy lifting is here.
     fn try_from(
         literal: &ExtendedCommunityLiteral,
     ) -> Result<Self, Self::Error> {
-        let comm = <routecore::bgp::communities::ExtendedCommunity as str::FromStr>::from_str(
+        let comm = <ExtendedCommunity as str::FromStr>::from_str(
                 &literal.0
             ).map_err(
                 |e| CompileError::from(format!(
                     "Cannot convert literal '{}' into Extended Community: {e}", literal.0,
                 )))?;
 
-        Ok(routecore::bgp::communities::Community::Extended(
-            comm,
-        ))
+        Ok(
+            comm.into()
+        )
     }
 }
 
@@ -2378,23 +2381,21 @@ impl From<&'_ LargeCommunityLiteral> for ShortString {
     }
 }
 
-impl TryFrom<&'_ LargeCommunityLiteral> for routecore::bgp::communities::Community {
+impl TryFrom<&'_ LargeCommunityLiteral> for Community {
     type Error = CompileError;
 
     // The aforementioned heavy lifting is here.
     fn try_from(
         literal: &LargeCommunityLiteral,
     ) -> Result<Self, Self::Error> {
-        let comm = <routecore::bgp::communities::LargeCommunity as str::FromStr>::from_str(
+        let comm = <LargeCommunity as str::FromStr>::from_str(
                 &literal.0
             ).map_err(
                 |e| CompileError::from(format!(
                     "Cannot convert literal '{}' into Large Community: {e}", literal.0,
                 )))?;
 
-        Ok(routecore::bgp::communities::Community::Large(
-            comm,
-        ))
+        Ok(comm.into())
     }
 }
 

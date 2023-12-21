@@ -2,7 +2,7 @@ use std::fmt::{Debug, Display};
 use std::str::FromStr;
 
 use log::trace;
-use routecore::bgp::communities::{Wellknown, Community, StandardCommunity};
+use routecore::bgp::communities::{Wellknown, HumanReadableCommunity as Community, StandardCommunity};
 use routecore::bgp::types::{Afi, Safi};
 use routecore::bmp::message::MessageType;
 use serde::Serialize;
@@ -74,7 +74,7 @@ where
             TypeDef::ConstEnumVariant(_) => Ok(self.into()),
             TypeDef::U32 => Ok(u32::from(self.value).into()),
             TypeDef::Community => {
-                Ok(Community::Standard(StandardCommunity::from(<u32>::from(self.value))).into())
+                Ok(Community(StandardCommunity::from(<u32>::from(self.value)).into()).into())
             },
             _ => Err(format!(
                 "Cannot convert type EnumVariant to type {:?}",

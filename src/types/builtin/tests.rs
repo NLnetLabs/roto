@@ -17,7 +17,7 @@ mod route {
         _Consume,
     }
     use routecore::bgp::aspath::HopPath;
-    use routecore::bgp::communities::{Community, StandardCommunity, Tag, ExtendedCommunity, LargeCommunity};
+    use routecore::bgp::communities::{HumanReadableCommunity as Community, StandardCommunity, Tag, ExtendedCommunity, LargeCommunity};
     use routecore::bgp::{
         message::{
             nlri::{BasicNlri, Nlri},
@@ -932,12 +932,11 @@ src_ty.clone().test_type_conversion(arg_ty)"]
 
     #[test]
     fn test_standard_community_2() {
-        let test_value = Community::Standard(
+        let test_value: Community = 
             StandardCommunity::new(
                 routecore::asn::Asn16::from(12500),
                 Tag::new(7890),
-            ),
-        );
+            ).into();
         let res = StringLiteral::new("AS12500:7890".to_string());
 
         mk_converted_type_value(test_value, res).unwrap();
@@ -986,12 +985,11 @@ src_ty.clone().test_type_conversion(arg_ty)"]
                 LargeCommunity::from_str(
                     "234:123:456"
                 ).unwrap().into();
-        let res = Community::Standard(
+        let res: Community =
             StandardCommunity::new(
                 routecore::asn::Asn16::from(7500),
                 Tag::new(3000),
-            )
-        );
+            ).into();
 
         test_consume_method_on_type_value(test_value, "set", res)
     }

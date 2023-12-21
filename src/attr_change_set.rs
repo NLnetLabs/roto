@@ -5,7 +5,7 @@ use routecore::bgp::aspath::HopPath;
 use routecore::bgp::message::nlri::PathId;
 use routecore::bgp::types::AfiSafi;
 use routecore::addr::Prefix;
-use routecore::bgp::communities::Community;
+use routecore::bgp::communities::HumanReadableCommunity as Community;
 use serde::Serialize;
 use std::marker::PhantomData;
 use std::ops::Index;

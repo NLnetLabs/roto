@@ -1,7 +1,7 @@
 use log::trace;
+
 use roto::ast::AcceptReject;
 use roto::compiler::Compiler;
-
 use roto::blocks::Scope::{self, Filter, FilterMap};
 use roto::types::builtin::Asn;
 use roto::types::collections::{ElementTypeValue, List, Record};
@@ -10,6 +10,7 @@ use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
 use rotonda_store::prelude::MergeUpdate;
+use routecore::bgp::communities::HumanReadableCommunity as Community;
 
 mod common;
 
@@ -74,10 +75,9 @@ fn test_data(
     trace!("ASN {:?}", asn);
 
     let comms_list = List::new(vec![ElementTypeValue::Primitive(
-        routecore::bgp::communities::Community::from([
+        Community::from([
             127, 12, 13, 12,
-        ])
-        .into(),
+        ]).into(),
     )]);
 
     trace!("comms list {}", comms_list);
@@ -95,7 +95,7 @@ fn test_data(
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            routecore::bgp::communities::Community::from([
+            Community::from([
                 127, 12, 13, 12,
             ]).into()),
         ]));
@@ -187,7 +187,7 @@ fn test_filter_map_1() {
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            routecore::bgp::communities::Community::from([
+            Community::from([
                 127, 12, 13, 12,
             ]).into()),
         ]));

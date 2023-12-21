@@ -9,6 +9,7 @@ use primitives::{
 use routecore::bgp::aspath::HopPath;
 use routecore::bgp::message::nlri::PathId;
 use routecore::bgp::types::{AfiSafi, NextHop};
+use routecore::bgp::communities::HumanReadableCommunity as Community;
 use serde::Serialize;
 
 //============ TypeValue ====================================================
@@ -337,7 +338,7 @@ impl RotoType for TypeValue {
                 Boolean::get_props_for_method(ty, method_name)
             }
             TypeDef::Community => {
-                routecore::bgp::communities::Community::get_props_for_method(ty, method_name)
+                Community::get_props_for_method(ty, method_name)
             }
             TypeDef::ConstEnumVariant(_) => Err(CompileError::new(
                 "Unsupported TypeDef::ConstEnumVariant in TypeValue::\

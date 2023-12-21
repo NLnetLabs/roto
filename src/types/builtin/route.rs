@@ -12,8 +12,13 @@
 //                 └─────────────┘  status
 
 use log::{debug, error};
-use routecore::bgp::{message::{SessionConfig, nlri::PathId}, types::{AfiSafi, NextHop}, aspath::HopPath};
 use routecore::addr::Prefix;
+use routecore::bgp::{
+    aspath::HopPath,
+    communities::HumanReadableCommunity as Community,
+    message::{nlri::PathId, SessionConfig},
+    types::{AfiSafi, NextHop},
+};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use std::{net::IpAddr, sync::Arc};
@@ -35,10 +40,7 @@ use crate::{
     vm::{StackValue, VmError},
 };
 
-use super::{
-    Asn, BuiltinTypeValue, IpAddress, OriginType,
-    RouteStatus,
-};
+use super::{Asn, BuiltinTypeValue, IpAddress, OriginType, RouteStatus};
 use crate::attr_change_set::{
     AttrChangeSet, ScalarOption, ScalarValue, VectorOption, VectorValue,
 };
@@ -161,7 +163,7 @@ impl RawRouteWithDeltas {
                 peer_asn,
                 router_id.clone(),
                 afi_safi,
-                path_id
+                path_id,
             )?,
         ))?;
 
@@ -280,7 +282,7 @@ impl RawRouteWithDeltas {
                 self.peer_asn,
                 self.router_id.clone(),
                 self.afi_safi,
-                self.path_id
+                self.path_id,
             )?)
         }
     }
@@ -311,7 +313,7 @@ impl RawRouteWithDeltas {
                 self.peer_asn,
                 self.router_id,
                 self.afi_safi,
-                self.path_id
+                self.path_id,
             );
         }
 
@@ -337,7 +339,7 @@ impl RawRouteWithDeltas {
                     self.peer_asn,
                     self.router_id.clone(),
                     self.afi_safi,
-                    self.path_id
+                    self.path_id,
                 )?,
             ))?;
         }
@@ -451,7 +453,9 @@ impl RawRouteWithDeltas {
         &self,
         field_token: usize,
     ) -> Result<Option<&TypeValue>, VmError> {
-        let current_set = if let Some(atrd) = self.attribute_deltas.get_latest_change_set() {
+        let current_set = if let Some(atrd) =
+            self.attribute_deltas.get_latest_change_set()
+        {
             atrd
         } else {
             return Err(VmError::InvalidRecord);
@@ -481,7 +485,6 @@ impl RawRouteWithDeltas {
         &self,
         field_token: usize,
     ) -> Result<TypeValue, VmError> {
-
         match field_token.try_into()? {
             RouteToken::AsPath => self
                 .raw_message
@@ -548,15 +551,21 @@ impl RawRouteWithDeltas {
                 .raw_message
                 .raw_message
                 .0
-                .all_communities()
+                .all_communities::<Community>()
                 .ok()
                 .flatten()
                 .map(TypeValue::from)
                 .ok_or(VmError::InvalidFieldAccess),
             RouteToken::Prefix => Ok(self.prefix.into()),
             RouteToken::Status => Ok(self.status_deltas.current()),
-            RouteToken::PeerIp => self.peer_ip.map(TypeValue::from).ok_or(VmError::InvalidFieldAccess),
-            RouteToken::PeerAsn => self.peer_asn.map(TypeValue::from).ok_or(VmError::InvalidFieldAccess),
+            RouteToken::PeerIp => self
+                .peer_ip
+                .map(TypeValue::from)
+                .ok_or(VmError::InvalidFieldAccess),
+            RouteToken::PeerAsn => self
+                .peer_asn
+                .map(TypeValue::from)
+                .ok_or(VmError::InvalidFieldAccess),
             // _ => None,
             // originator_id: ChangedOption {
             //     value: None,
@@ -1192,7 +1201,7 @@ impl TryFrom<usize> for RouteToken {
             9 => Ok(RouteToken::Status),
             10 => Ok(RouteToken::PeerIp),
             11 => Ok(RouteToken::PeerAsn),
-            _ => { 
+            _ => {
                 debug!("Unknown RouteToken value: {}", value);
                 Err(VmError::InvalidMethodCall)
             }
@@ -1386,7 +1395,9 @@ impl UpdateMessage {
                 self.0.aggregator().map_err(VmError::from)?,
             ),
             communities: VectorOption::from(
-                self.0.all_communities().map_err(VmError::from)?,
+                self.0
+                    .all_communities::<Community>()
+                    .map_err(VmError::from)?,
             ),
             peer_ip: peer_ip.into(),
             peer_asn: peer_asn.into(),

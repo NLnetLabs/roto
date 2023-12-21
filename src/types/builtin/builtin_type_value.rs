@@ -7,7 +7,7 @@ use std::fmt::Display;
 use routecore::bgp::message::nlri::PathId;
 use routecore::bgp::types::{AfiSafi, NextHop};
 use routecore::addr::Prefix;
-use routecore::bgp::communities::Community;
+use routecore::bgp::communities::HumanReadableCommunity as Community;
 use serde::Serialize;
 
 use crate::compiler::compile::CompileError;

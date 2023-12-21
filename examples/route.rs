@@ -44,7 +44,7 @@ fn test_data(
         .0
         .announcements()
         .unwrap()
-        .filter_map(|p| if let Ok(Nlri::Unicast(BasicNlri { prefix, .. })) = p { Some(Prefix::from(prefix)) } else { None })
+        .filter_map(|p| if let Ok(Nlri::Unicast(BasicNlri { prefix, .. })) = p { Some(prefix) } else { None })
         .collect();
     let msg_id = (RotondaId(0), 0);
 
