@@ -22,16 +22,8 @@ use super::builtin_type_value::BuiltinTypeValue;
 
 use routecore::bgp::communities::HumanReadableCommunity as Community;
 
+
 //------------ U16 Type -----------------------------------------------------
-
-// #[derive(Debug, Eq, Copy, Clone, Serialize)]
-// pub struct U16(pub(crate) u16);
-
-// impl U16 {
-//     pub fn new(val: u16) -> Self {
-//         U16(val)
-//     }
-// }
 
 impl From<u16> for TypeValue {
     fn from(val: u16) -> Self {
@@ -144,30 +136,6 @@ impl RotoType for u16 {
     }
 }
 
-// impl PartialEq for U16 {
-//     fn eq(&self, other: &Self) -> bool {
-//         if let Ok(TypeValue::Builtin(BuiltinTypeValue::U16(16(o)))) =
-//             other.into_type(&TypeDef::U16)
-//         {
-//             o == self.0
-//         } else {
-//             false
-//         }
-//     }
-// }
-
-// impl std::hash::Hash for U16 {
-//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-//         self.0.hash(state);
-//     }
-// }
-
-// impl Display for U16 {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{}", self.0)
-//     }
-// }
-
 #[derive(Debug)]
 pub enum U16Token {
     Set,
@@ -195,22 +163,8 @@ impl From<U16Token> for usize {
     }
 }
 
+
 // ----------- U32 Type --------------------------------------------
-
-// #[derive(Debug, Eq, Copy, Clone, Serialize)]
-// pub struct U32(pub(crate) u32);
-
-// impl U32 {
-//     pub fn new(val: u32) -> Self {
-//         U32(val)
-//     }
-// }
-
-// impl From<U32> for TypeValue {
-//     fn from(val: U32) -> Self {
-//         TypeValue::Builtin(BuiltinTypeValue::U32(val))
-//     }
-// }
 
 impl RotoType for u32 {
     fn get_props_for_method(
@@ -314,29 +268,6 @@ impl RotoType for u32 {
     }
 }
 
-// impl PartialEq for U32 {
-//     fn eq(&self, other: &Self) -> bool {
-//         if let Ok(TypeValue::Builtin(BuiltinTypeValue::U32(U32(o)))) =
-//             other.into_type(&TypeDef::U32)
-//         {
-//             o == self.0
-//         } else {
-//             false
-//         }
-//     }
-// }
-
-// impl std::hash::Hash for U32 {
-//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-//         self.0.hash(state);
-//     }
-// }
-
-// impl Display for U32 {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{}", self.0)
-//     }
-// }
 
 #[derive(Debug)]
 pub enum U32Token {
@@ -365,16 +296,8 @@ impl From<U32Token> for usize {
     }
 }
 
+
 // ----------- U8 Type ---------------------------------------------
-
-// #[derive(Debug, Eq, Copy, Clone, Ord, PartialOrd, Serialize)]
-// pub struct U8(pub(crate) u8);
-
-// impl U8 {
-//     pub fn new(val: u8) -> Self {
-//         U8(val)
-//     }
-// }
 
 impl RotoType for u8 {
     fn get_props_for_method(
@@ -467,36 +390,6 @@ impl RotoType for u8 {
     }
 }
 
-// impl PartialEq for U8 {
-//     fn eq(&self, other: &Self) -> bool {
-//         if let Ok(TypeValue::Builtin(BuiltinTypeValue::U8(U8(o)))) =
-//             other.into_type(&TypeDef::U8)
-//         {
-//             o == self.0
-//         } else {
-//             false
-//         }
-//     }
-// }
-
-// impl std::hash::Hash for U8 {
-//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-//         self.0.hash(state);
-//     }
-// }
-
-// impl Display for U8 {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{}", self.0)
-//     }
-// }
-
-// impl From<U8> for TypeValue {
-//     fn from(val: U8) -> Self {
-//         TypeValue::Builtin(BuiltinTypeValue::U8(val))
-//     }
-// }
-
 #[derive(Debug)]
 pub enum U8Token {
     Set,
@@ -523,6 +416,7 @@ impl From<U8Token> for usize {
         }
     }
 }
+
 
 // ----------- Boolean Type -------------------------------------------------
 
@@ -1238,16 +1132,8 @@ impl From<HexLiteralToken> for usize {
     }
 }
 
+
 // ----------- Prefix type ---------------------------------------------------
-
-// #[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Serialize)]
-// pub struct Prefix(pub(crate) routecore::addr::Prefix);
-
-// impl Prefix {
-//     pub fn new(prefix: routecore::addr::Prefix) -> Self {
-//         Self(prefix)
-//     }
-// }
 
 impl RotoType for routecore::addr::Prefix {
     fn get_props_for_method(
@@ -1458,24 +1344,6 @@ impl TryFrom<&'_ PrefixLiteral> for routecore::addr::Prefix {
         })
     }
 }
-
-// impl From<routecore::addr::Prefix> for rPrefix {
-//     fn from(val: routecore::addr::Prefix) -> Self {
-//         Prefix(val)
-//     }
-// }
-
-// impl Display for Prefix {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{}", self.0)
-//     }
-// }
-
-// impl From<Prefix> for routecore::addr::Prefix {
-//     fn from(val: Prefix) -> Self {
-//         val.0
-//     }
-// }
 
 #[derive(Debug)]
 #[repr(u8)]
@@ -1751,7 +1619,6 @@ impl RotoType for routecore::bgp::types::AfiSafi {
         _res_type: crate::types::typedef::TypeDef,
     ) -> Result<TypeValue, crate::vm::VmError> {
         Err(VmError::InvalidMethodCall)
-
     }
 }
 
@@ -1877,453 +1744,6 @@ impl From<PathIdToken> for usize {
     }
 }
 
-
-// ----------- Community -----------------------------------------------------
-
-/// A BGP community.
-///
-/// # Serialization
-///
-/// The routecore types implement the Serialize trait but do so in a way
-/// suitable for machine <-> machine interaction where the consuming code is
-/// also routecore, i.e. the details of how (de)serialization is done are not
-/// important to nor intended to be visible to anyone except routecore itself.
-///
-/// In roto however, a TypeValue (which may contain a Community) can be
-/// serialized in order to render it to consumers outside the application,
-/// e.g. as JSON served by a HTTP API or contained in an MQTT payload. The
-/// operators of the deployed application can be expected to be familiar with
-/// details of BGP and it is more useful to them if the rendered form of a BGP
-/// community is somewhat relatable to the way communities are defined by and
-/// referred to in BGP RFCs and not exposing internally structural details of
-/// how routecore stores communities (e.g. as raw byte vectors for example).
-///
-/// We therefore provide our Serialize impl which will be used by callers when
-/// serializing our Community type and in turn the contained routecore
-/// Community type and its children.
-// #[derive(Debug, Eq, PartialEq, Copy, Clone, Hash)]
-// pub struct Community(pub(crate) routecore::bgp::communities::Community);
-
-// impl Community {
-//     pub fn new(com: routecore::bgp::communities::Community) -> Self {
-//         Self(com)
-//     }
-// }
-
-// pub trait SerializeForOperators: Serialize {
-//     fn serialize_for_operator<S>(
-//         &self,
-//         serializer: S,
-//     ) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer;
-// }
-
-// impl Serialize for Community {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer,
-//     {
-//         if serializer.is_human_readable() {
-//             match &self.0 {
-//                 routecore::bgp::communities::Community::Standard(c) => {
-//                     c.serialize_for_operator(serializer)
-//                 }
-//                 routecore::bgp::communities::Community::Large(c) => {
-//                     c.serialize_for_operator(serializer)
-//                 }
-//                 routecore::bgp::communities::Community::Extended(c) => {
-//                     c.serialize_for_operator(serializer)
-//                 }
-//                 routecore::bgp::communities::Community::Ipv6Extended(c) => {
-//                     // TODO: Also implement SerializeForOperators for IPv6
-//                     // Extended Communities.
-//                     c.serialize(serializer)
-//                 }
-//             }
-//         } else {
-//             self.0.serialize(serializer)
-//         }
-//     }
-// }
-
-// impl SerializeForOperators for StandardCommunity {
-//     fn serialize_for_operator<S>(
-//         &self,
-//         serializer: S,
-//     ) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer,
-//     {
-//         match self.to_wellknown() {
-//             Some(Wellknown::Unrecognized(_)) => ser::Community {
-//                 raw_fields: vec![format!("{:#010X}", self.to_u32())],
-//                 r#type: "standard",
-//                 parsed: ser::Parsed::ExplicitValue {
-//                     value: ser::Value::Plain(ser::PlainValue {
-//                         r#type: "well-known-unrecognised",
-//                     }),
-//                 },
-//             }
-//             .serialize(serializer),
-
-//             Some(wk) => ser::Community {
-//                 raw_fields: vec![format!("{:#010X}", self.to_u32())],
-//                 r#type: "standard",
-//                 parsed: ser::Parsed::ExplicitValue {
-//                     value: ser::Value::Attribute(ser::AttributeValue {
-//                         r#type: "well-known",
-//                         attribute: format!("{}", wk),
-//                     }),
-//                 },
-//             }
-//             .serialize(serializer),
-
-//             None if self.is_reserved() => ser::Community {
-//                 raw_fields: vec![format!("{:#010X}", self.to_u32())],
-//                 r#type: "standard",
-//                 parsed: ser::Parsed::ExplicitValue {
-//                     value: ser::Value::Plain(ser::PlainValue {
-//                         r#type: "reserved",
-//                     }),
-//                 },
-//             }
-//             .serialize(serializer),
-
-//             None if self.is_private() => {
-//                 let asn = if let Some(asn) = self.asn() {
-//                     // ASNs can only be 2-byte in standard communities, so not
-//                     // being able to parse it into one is a (weird) error.
-//                     if let Ok(asn) = asn.try_into_u16() {
-//                         asn
-//                     } else {
-//                         return Err(serde::ser::Error::custom(format!(
-//                             "ASN {} is not a 2-byte ASN and cannot \
-//                             be converted",
-//                             asn
-//                         )));
-//                     }
-//                 } else {
-//                     return Err(serde::ser::Error::custom(format!(
-//                         "ASN {:?} contains invalid characters",
-//                         self.asn()
-//                     )));
-//                 };
-//                 let tag: u16 = if let Some(tag) = self.tag() {
-//                     tag.value()
-//                 } else {
-//                     return Err(serde::ser::Error::custom(format!(
-//                         "Tag {:?} contains invalid characters",
-//                         self.tag()
-//                     )));
-//                 };
-//                 let formatted_asn = format!("AS{}", asn); // to match Routinator JSON style
-//                 ser::Community {
-//                     raw_fields: vec![
-//                         format!("{:#06X}", asn),
-//                         format!("{:#06X}", tag),
-//                     ],
-//                     r#type: "standard",
-//                     parsed: ser::Parsed::ExplicitValue {
-//                         value: ser::Value::AsnTag(ser::AsnTagValue {
-//                             r#type: "private",
-//                             asn: formatted_asn,
-//                             tag,
-//                         }),
-//                     },
-//                 }
-//                 .serialize(serializer)
-//             }
-
-//             _ => serializer.serialize_none(),
-//         }
-//     }
-// }
-
-// impl SerializeForOperators for LargeCommunity {
-//     fn serialize_for_operator<S>(
-//         &self,
-//         serializer: S,
-//     ) -> Result<S::Ok, S::Error>
-//     where
-//         S: serde::Serializer,
-//     {
-//         let asn = format!("AS{}", self.global());
-
-//         ser::Community {
-//             raw_fields: vec![
-//                 format!("{:#06X}", self.global()),
-//                 format!("{:#06X}", self.local1()),
-//                 format!("{:#06X}", self.local2()),
-//             ],
-//             r#type: "large",
-//             parsed: ser::Parsed::InlineValue(
-//                 ser::Value::GlobalLocalDataParts(
-//                     ser::GlobalLocalDataPartsValue {
-//                         globalAdmin: ser::GlobalAdmin {
-//                             r#type: "asn",
-//                             value: asn,
-//                         },
-//                         localDataPart1: self.local1(),
-//                         localDataPart2: self.local2(),
-//                     },
-//                 ),
-//             ),
-//         }
-//         .serialize(serializer)
-//     }
-// }
-
-// impl SerializeForOperators for ExtendedCommunity {
-//     fn serialize_for_operator<S>(
-//         &self,
-//         serializer: S,
-//     ) -> Result<S::Ok, S::Error>
-//     where
-//         S: serde::Serializer,
-//     {
-//         // The structure doesn't tell us if we have to look at the "type low"
-//         // (subtype()) value or not, we can only know that based on knowledge
-//         // of the "type value" stored in the IANA BGP Extended Communities
-//         // registry [1].
-//         //
-//         // [1]: https://www.iana.org/assignments/bgp-extended-communities/
-//         //      bgp-extended-communities.xhtml
-//         use routecore::bgp::communities::ExtendedCommunitySubType::*;
-//         use routecore::bgp::communities::ExtendedCommunityType::*;
-
-//         let mut raw_fields = Vec::new();
-//         let (typ, subtyp) = self.types();
-
-//         match (typ, subtyp) {
-//             // 0x00 = Transitive Two-Octet AS-Specific Extended Community (RFC 7153)
-//             // - 0x02 = Route Target (RFC 4360)
-//             // - 0x03 = Route Origin (RFC 4360)
-//             (TransitiveTwoOctetSpecific, RouteTarget)
-//             | (TransitiveTwoOctetSpecific, RouteOrigin) => {
-//                 let global_admin = if let Some(ga) = self.as2() {
-//                     ga
-//                 } else {
-//                     return Err(serde::ser::Error::custom(format!(
-//                         "Global Admin {:?} contains invalid characters",
-//                         self.as2()
-//                     )));
-//                 };
-//                 let local_admin = if let Some(la) = self.an4() {
-//                     la
-//                 } else {
-//                     return Err(serde::ser::Error::custom(format!(
-//                         "Local Admin {:?} contains invalid characters",
-//                         self.an4()
-//                     )));
-//                 };
-//                 raw_fields.push(format!("{:#04X}", self.type_raw()));
-//                 let field = if let Some(field) = self.to_raw().get(1) {
-//                     *field
-//                 } else {
-//                     return Err(serde::ser::Error::custom(format!(
-//                         "Cannot parse extended community from: '{:?}'",
-//                         self.to_raw()
-//                     )));
-//                 };
-//                 raw_fields.push(format!("{:#04X}", field));
-//                 raw_fields.push(format!("{:#06X}", global_admin.to_u16()));
-//                 raw_fields.push(format!("{:#010X}", local_admin));
-//                 ser::Community {
-//                     raw_fields,
-//                     r#type: "extended",
-//                     parsed: ser::Parsed::InlineValue(ser::Value::Extended(
-//                         ser::ExtendedValue {
-//                             r#type: "as2-specific",
-//                             transitive: self.is_transitive(),
-//                             inner: ser::TypedValueInner::As2Specific {
-//                                 rfc7153SubType: match subtyp {
-//                                     RouteTarget => "route-target",
-//                                     RouteOrigin => "route-origin",
-//                                     _ => unreachable!(),
-//                                 },
-//                                 globalAdmin: ser::GlobalAdmin {
-//                                     r#type: "asn",
-//                                     value: global_admin.to_string(),
-//                                 },
-//                                 localAdmin: local_admin,
-//                             },
-//                         },
-//                     )),
-//                 }
-//             }
-
-//             // 0x01 = Transitive IPv4-Address-Specific Extended Community (RFC 7153)
-//             // - 0x02 = Route Target (RFC 4360)
-//             // - 0x03 = Route Origin (RFC 4360)
-//             (TransitiveIp4Specific, RouteTarget)
-//             | (TransitiveIp4Specific, RouteOrigin) => {
-//                 let global_admin = if let Some(ga) = self.ip4() {
-//                     ga
-//                 } else {
-//                     return Err(serde::ser::Error::custom(format!(
-//                         "global Admin {:?} contains invalid characters",
-//                         self.ip4()
-//                     )));
-//                 };
-//                 let local_admin = if let Some(la) = self.an2() {
-//                     la
-//                 } else {
-//                     return Err(serde::ser::Error::custom(format!(
-//                         "Local Admin {:?} contains invalid characters",
-//                         self.an2()
-//                     )));
-//                 };
-//                 raw_fields.push(format!("{:#04X}", self.type_raw()));
-//                 let field = if let Some(field) = self.to_raw().get(1) {
-//                     *field
-//                 } else {
-//                     return Err(serde::ser::Error::custom(format!(
-//                         "Cannot parse extended community from: '{:?}'",
-//                         self.to_raw()
-//                     )));
-//                 };
-//                 raw_fields.push(format!("{:#04X}", field));
-//                 raw_fields.push(format!("{:#010X}", u32::from(global_admin)));
-//                 raw_fields.push(format!("{:#06X}", local_admin));
-//                 ser::Community {
-//                     raw_fields,
-//                     r#type: "extended",
-//                     parsed: ser::Parsed::InlineValue(ser::Value::Extended(
-//                         ser::ExtendedValue {
-//                             r#type: "ipv4-address-specific",
-//                             transitive: self.is_transitive(),
-//                             inner:
-//                                 ser::TypedValueInner::Ipv4AddressSpecific {
-//                                     rfc7153SubType: match subtyp {
-//                                         RouteTarget => "route-target",
-//                                         RouteOrigin => "route-origin",
-//                                         _ => unreachable!(),
-//                                     },
-//                                     globalAdmin: ser::GlobalAdmin {
-//                                         r#type: "ipv4-address",
-//                                         value: global_admin.to_string(),
-//                                     },
-//                                     localAdmin: local_admin,
-//                                 },
-//                         },
-//                     )),
-//                 }
-//             }
-
-//             _ => {
-//                 raw_fields.extend(
-//                     self.to_raw().iter().map(|x| format!("{:#04X}", x)),
-//                 );
-//                 ser::Community {
-//                     raw_fields,
-//                     r#type: "extended",
-//                     parsed: ser::Parsed::InlineValue(ser::Value::Extended(
-//                         ser::ExtendedValue {
-//                             r#type: "unrecognised",
-//                             transitive: self.is_transitive(),
-//                             inner: ser::TypedValueInner::Unrecognised,
-//                         },
-//                     )),
-//                 }
-//             }
-//         }
-//         .serialize(serializer)
-//     }
-// }
-
-// Types used only by our own Serialize implementation to structure the
-// serialized output differently than is done by routecore.
-// mod ser {
-//     #[derive(serde::Serialize)]
-//     #[serde(rename = "value")]
-//     pub struct PlainValue {
-//         pub r#type: &'static str,
-//     }
-
-//     #[derive(serde::Serialize)]
-//     #[serde(rename = "value")]
-//     pub struct AsnTagValue {
-//         pub r#type: &'static str,
-//         pub asn: String,
-//         pub tag: u16,
-//     }
-
-//     #[derive(serde::Serialize)]
-//     #[serde(rename = "value")]
-//     pub struct AttributeValue {
-//         pub r#type: &'static str,
-//         pub attribute: String,
-//     }
-
-//     #[derive(serde::Serialize)]
-//     #[serde(rename = "value")]
-//     pub struct GlobalAdmin {
-//         pub r#type: &'static str,
-//         pub value: String,
-//     }
-
-//     #[derive(serde::Serialize)]
-//     #[serde(rename = "value")]
-//     #[allow(non_snake_case)]
-//     pub struct GlobalLocalDataPartsValue {
-//         pub globalAdmin: GlobalAdmin,
-//         pub localDataPart1: u32,
-//         pub localDataPart2: u32,
-//     }
-
-//     #[derive(serde::Serialize)]
-//     #[serde(rename = "value")]
-//     pub struct ExtendedValue {
-//         pub r#type: &'static str,
-//         pub transitive: bool,
-//         #[serde(flatten)]
-//         pub inner: TypedValueInner,
-//     }
-
-//     #[derive(serde::Serialize)]
-//     #[serde(untagged)]
-//     #[allow(non_snake_case)]
-//     pub enum TypedValueInner {
-//         As2Specific {
-//             rfc7153SubType: &'static str,
-//             globalAdmin: GlobalAdmin,
-//             localAdmin: u32,
-//         },
-//         Ipv4AddressSpecific {
-//             rfc7153SubType: &'static str,
-//             globalAdmin: GlobalAdmin,
-//             localAdmin: u16,
-//         },
-//         Unrecognised,
-//     }
-
-//     #[derive(serde::Serialize)]
-//     #[serde(untagged)]
-//     pub enum Value {
-//         AsnTag(AsnTagValue),
-//         Attribute(AttributeValue),
-//         GlobalLocalDataParts(GlobalLocalDataPartsValue),
-//         Plain(PlainValue),
-//         Extended(ExtendedValue),
-//     }
-
-//     #[derive(serde::Serialize)]
-//     #[serde(rename = "parsed", untagged)]
-//     pub enum Parsed {
-//         ExplicitValue { value: Value },
-//         InlineValue(Value),
-//     }
-
-//     #[derive(serde::Serialize)]
-//     #[serde(rename = "Community")]
-//     pub struct Community {
-//         #[serde(rename = "rawFields")]
-//         pub raw_fields: Vec<String>,
-//         pub r#type: &'static str,
-//         pub parsed: Parsed,
-//     }
-// }
 
 impl RotoType for Community {
     fn get_props_for_method(
@@ -2490,47 +1910,6 @@ impl From<Vec<Community>> for TypeValue {
         TypeValue::List(crate::types::collections::List(list))
     }
 }
-
-// impl TryFrom<&str> for routecore::bgp::communities::Community {
-//     type Error = VmError;
-//     fn try_from(value: &str) -> Result<Self, Self::Error> {
-//         routecore::bgp::communities::Community::from_str(value)
-//             .map(Community::new)
-//             .map_err(|_| VmError::InvalidConversion)
-//     }
-// }
-
-// A U32 that we encounter in a source code as a literal gets cast to a
-// Standard Community.
-// impl From<u32> for Community {
-//     fn from(value: u32) -> Self {
-//         Self(
-//             routecore::bgp::communities::StandardCommunity::from_u32(value)
-//                 .into(),
-//         )
-//     }
-// }
-
-// impl From<u64> for Community {
-//     fn from(value: u64) -> Self {
-//         Self(
-//             routecore::bgp::communities::ExtendedCommunity::from(
-//                 value.to_be_bytes(),
-//             )
-//             .into(),
-//         )
-//     }
-// }
-
-// impl Display for Community {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-//         if !f.alternate() {
-//             write!(f, "{}", self.0)
-//         } else {
-//             write!(f, "{:#?}", self.0)
-//         }
-//     }
-// }
 
 #[derive(Debug)]
 pub enum CommunityToken {
@@ -2722,24 +2101,8 @@ impl From<IpAddressToken> for usize {
     }
 }
 
+
 // ----------- Asn type -----------------------------------------------------
-
-// #[derive(Debug, Eq, Copy, Clone, Hash, PartialEq, Serialize)]
-// pub struct Asn(pub(crate) routecore::asn::Asn);
-
-// impl Asn {
-//     pub fn new(asn: routecore::asn::Asn) -> Self {
-//         Asn(asn)
-//     }
-
-//     pub fn from_u32(asn: u32) -> Self {
-//         Asn(routecore::asn::Asn::from(asn))
-//     }
-
-//     pub fn get_asn(&self) -> routecore::asn::Asn {
-//         self.0
-//     }
-// }
 
 impl RotoType for routecore::asn::Asn {
     fn get_props_for_method(
@@ -2842,30 +2205,6 @@ impl From<Asn> for TypeValue {
     }
 }
 
-// impl From<routecore::asn::Asn> for BuiltinTypeValue {
-//     fn from(value: routecore::asn::Asn) -> Self {
-//         BuiltinTypeValue::Asn(value)
-//     }
-// }
-
-// impl From<u32> for Asn {
-//     fn from(value: u32) -> Self {
-//         value.into()
-//     }
-// }
-
-// impl From<u16> for Asn {
-//     fn from(value: u16) -> Self {
-//         (value as u32).into()
-//     }
-// }
-
-// impl Display for Asn {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{}", self.0)
-//     }
-// }
-
 #[derive(Debug)]
 pub enum AsnToken {
     Set,
@@ -2891,73 +2230,10 @@ impl From<AsnToken> for usize {
     }
 }
 
+
 // ----------- AsPath type --------------------------------------------------
 
 type RoutecoreHop = routecore::bgp::aspath::Hop<Vec<u8>>;
-
-// #[derive(Debug, Eq, PartialEq, Clone, Default, Hash)]
-// pub struct AsPath(pub(crate) routecore::bgp::aspath::HopPath);
-
-// impl AsPath {
-//     pub fn new(
-//         as_path: Vec<routecore::asn::Asn>,
-//     ) -> Result<Self, LongSegmentError> {
-//         let path = routecore::bgp::aspath::HopPath::try_from(as_path)
-//             .map_err(|_| LongSegmentError)?;
-//         Ok(AsPath(path))
-//     }
-
-//     pub fn from_vec_u32(as_path: Vec<u32>) -> Result<Self, LongSegmentError> {
-//         let as_path = as_path
-//             .into_iter()
-//             .map(routecore::asn::Asn::from_u32)
-//             .collect();
-//         AsPath::new(as_path)
-//     }
-
-//     pub fn into_hops(self) -> Vec<Hop> {
-//         self.0.into_iter().map(Hop).collect::<Vec<_>>()
-//     }
-
-//     fn into_routecore_hops(
-//         self,
-//     ) -> Vec<routecore::bgp::aspath::Hop<Vec<u8>>> {
-//         self.0.into_iter().collect::<Vec<_>>()
-//     }
-
-//     pub fn contains(&self, hop: &Hop) -> bool {
-//         self.0.contains(&hop.0)
-//     }
-// }
-
-// impl Serialize for AsPath {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer,
-//     {
-//         if serializer.is_human_readable() {
-//             self.serialize_for_operator(serializer)
-//         } else {
-//             self.0.serialize(serializer)
-//         }
-//     }
-// }
-
-// impl SerializeForOperators for AsPath {
-//     fn serialize_for_operator<S>(
-//         &self,
-//         serializer: S,
-//     ) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer,
-//     {
-//         let mut seq = serializer.serialize_seq(Some(self.0.hop_count()))?;
-//         for hop in self.0.iter() {
-//             seq.serialize_element(&format!("{}", hop))?;
-//         }
-//         seq.end()
-//     }
-// }
 
 impl RotoType for routecore::bgp::aspath::HopPath {
     fn get_props_for_method(
@@ -3068,7 +2344,7 @@ impl VectorValue for routecore::bgp::aspath::HopPath {
 
     fn prepend_vec(
         &mut self,
-        mut vector: Vec<Self::WriteItem>,
+        vector: Vec<Self::WriteItem>,
     ) -> Result<(), LongSegmentError> {
         let mut as_path = vector
             .iter()
@@ -3129,24 +2405,6 @@ impl VectorValue for routecore::bgp::aspath::HopPath {
         self.into_iter().collect::<Vec<_>>()
     }
 }
-
-// impl From<AsPath> for TypeValue {
-//     fn from(val: AsPath) -> Self {
-//         TypeValue::Builtin(BuiltinTypeValue::AsPath(val))
-//     }
-// }
-
-// impl From<routecore::bgp::aspath::HopPath> for AsPath {
-//     fn from(value: routecore::bgp::aspath::HopPath) -> Self {
-//         AsPath(value)
-//     }
-// }
-
-// impl Display for AsPath {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{}", self.0)
-//     }
-// }
 
 #[repr(u8)]
 #[derive(Debug)]
@@ -3241,11 +2499,6 @@ impl Display for Hop {
     }
 }
 
-// impl From<Asn> for Hop {
-//     fn from(value: Asn) -> Self {
-//         Hop(value.0.into())
-//     }
-// }
 
 //------------ OriginType type ----------------------------------------------
 

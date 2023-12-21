@@ -16,7 +16,6 @@ use routecore::addr::Prefix;
 use routecore::asn::Asn;
 use routecore::bgp::{
     aspath::HopPath,
-    communities::HumanReadableCommunity as Community,
     message::{nlri::PathId, SessionConfig},
     types::{AfiSafi, NextHop},
 };
