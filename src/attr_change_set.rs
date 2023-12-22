@@ -3,7 +3,7 @@
 use routecore::asn::LongSegmentError;
 use routecore::bgp::aspath::HopPath;
 use routecore::bgp::message::nlri::PathId;
-use routecore::bgp::types::AfiSafi;
+use routecore::bgp::types::{AfiSafi, LocalPref};
 use routecore::addr::Prefix;
 use routecore::bgp::communities::HumanReadableCommunity as Community;
 use routecore::asn::Asn;
@@ -14,7 +14,7 @@ use std::ops::Index;
 use crate::ast::StringLiteral;
 use crate::types::builtin::{
     AtomicAggregate, BuiltinTypeValue, IpAddress,
-    LocalPref, MultiExitDisc, OriginType, RouteStatus,
+    MultiExitDisc, OriginType, RouteStatus,
 };
 use crate::types::collections::ElementTypeValue;
 use crate::types::typevalue::TypeValue;
@@ -57,7 +57,6 @@ pub trait ScalarValue: Clone + Into<TypeValue> {}
 impl ScalarValue for OriginType {}
 impl ScalarValue for bool {}
 impl ScalarValue for MultiExitDisc {}
-impl ScalarValue for LocalPref {}
 impl ScalarValue for AtomicAggregate {}
 impl ScalarValue for Prefix {}
 impl ScalarValue for RouteStatus {}

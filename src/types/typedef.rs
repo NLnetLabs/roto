@@ -8,7 +8,7 @@ use log::{trace, debug};
 use routecore::asn::Asn;
 use routecore::bgp::aspath::HopPath;
 use serde::Serialize;
-use routecore::bgp::{types::AfiSafi, message::nlri::PathId};
+use routecore::bgp::{types::{AfiSafi, LocalPref}, message::nlri::PathId};
 use routecore::addr::Prefix;
 use routecore::bgp::communities::HumanReadableCommunity as Community;
 
@@ -25,7 +25,7 @@ use crate::{
 
 use super::builtin::{
     AtomicAggregate, Aggregator, Boolean, HexLiteral, Hop,
-    IntegerLiteral, IpAddress, LocalPref, MultiExitDisc, OriginType,
+    IntegerLiteral, IpAddress, MultiExitDisc, OriginType,
     PrefixLength, RawRouteWithDeltas, RouteStatus, StringLiteral,
     Unknown,
 };

@@ -19,6 +19,7 @@ mod route {
     use routecore::bgp::aspath::HopPath;
     use routecore::asn::{Asn, Asn16};
     use routecore::bgp::communities::{HumanReadableCommunity as Community, StandardCommunity, Tag, ExtendedCommunity, LargeCommunity};
+    use routecore::bgp::types::LocalPref;
     use routecore::bgp::{
         message::{
             nlri::{BasicNlri, Nlri},
@@ -921,7 +922,7 @@ src_ty.clone().test_type_conversion(arg_ty)"]
         test_value.into_type(&TypeDef::U8).unwrap();
     }
 
-    //-------- Test: PrefixLengthLiteral -------------------------------------
+    //-------- Test: PrefixLength --------------------------------------------
 
     #[test]
     fn test_prefix_length_literal_1() {
@@ -934,13 +935,27 @@ src_ty.clone().test_type_conversion(arg_ty)"]
     #[test]
     #[ignore]
     fn test_prefix_length_literal_2() {
-        let test_value: PrefixLength = PrefixLength(23);
+        let test_value: PrefixLength = PrefixLength(18);
         let res = IntegerLiteral::new(23);
 
-        test_method_on_type_value_with_multiple_args(test_value, MethodType::Type, "from", &[23_u32], res).unwrap();
+        test_method_on_type_value_with_multiple_args(test_value, MethodType::Value, "set", &[23_u32], res).unwrap();
     }
 
+    #[test]
+    fn test_local_pref_1() {
+        let test_value: LocalPref = LocalPref(100);
+        let res = IntegerLiteral::new(100);
 
+        mk_converted_type_value(test_value, res).unwrap();
+    }
+
+    #[test]
+    fn test_local_pref_2() {
+        let test_value: LocalPref = LocalPref(100);
+        let res = 100_u32;
+
+        mk_converted_type_value(test_value, res).unwrap();
+    }
 
     //-------- Test: Communities ---------------------------------------------
 

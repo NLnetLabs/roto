@@ -25,7 +25,7 @@ use super::super::typevalue::TypeValue;
 
 use super::{
     Aggregator, AtomicAggregate, BgpUpdateMessage, Boolean,
-    HexLiteral, Hop, IntegerLiteral, IpAddress, LocalPref,
+    HexLiteral, Hop, IntegerLiteral, IpAddress,
     MultiExitDisc, OriginType, PrefixLength,
     RawRouteWithDeltas, RouteStatus, StringLiteral,
 };
@@ -45,7 +45,7 @@ pub enum BuiltinTypeValue {
     AfiSafi(AfiSafi),                 // scalar
     PathId(PathId),                   // scalar
     PrefixLength(PrefixLength),       // scalar
-    LocalPref(LocalPref),             // scalar
+    LocalPref(routecore::bgp::types::LocalPref),    // scalar
     AtomicAggregate(AtomicAggregate), // scalar
     Aggregator(Aggregator),           // scalar
     NextHop(NextHop),                 // scalar
@@ -53,7 +53,7 @@ pub enum BuiltinTypeValue {
     RouteStatus(RouteStatus),         // scalar
     Community(Community),             // scalar
     Asn(Asn),                         // scalar
-    AsPath(routecore::bgp::aspath::HopPath),                   // vector
+    AsPath(routecore::bgp::aspath::HopPath),        // vector
     Hop(Hop),                         // read-only scalar
     OriginType(OriginType),           // scalar
     Route(RawRouteWithDeltas),        // vector

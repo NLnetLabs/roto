@@ -2,14 +2,14 @@ use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
 use log::debug;
 use primitives::{
-    Hop, LocalPref, MultiExitDisc, OriginType,
+    Hop, MultiExitDisc, OriginType,
     RouteStatus,
 };
 
 use routecore::asn::Asn;
 use routecore::bgp::aspath::HopPath;
 use routecore::bgp::message::nlri::PathId;
-use routecore::bgp::types::{AfiSafi, NextHop};
+use routecore::bgp::types::{AfiSafi, NextHop, LocalPref};
 use routecore::bgp::communities::HumanReadableCommunity as Community;
 use serde::Serialize;
 

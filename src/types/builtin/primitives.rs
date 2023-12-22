@@ -5,11 +5,13 @@ use routecore::asn::{LongSegmentError, Asn};
 use routecore::bgp::aspath::OwnedHop;
 use routecore::bgp::message::nlri::PathId;
 use serde::Serialize;
+use paste::paste;
 
 use crate::ast::{IpAddressLiteral, PrefixLiteral};
 use crate::attr_change_set::{ScalarValue, VectorValue};
 use crate::compiler::compile::CompileError;
-use crate::first_into_vm_err;
+use crate::{first_into_vm_err, createtoken, noconversioninto, setmethodonly, 
+    intotype, minimalscalartype, integerscalartype};
 use crate::traits::RotoType;
 use crate::types::collections::ElementTypeValue;
 use crate::types::enum_types::EnumVariant;
@@ -21,6 +23,7 @@ use super::super::typevalue::TypeValue;
 use super::builtin_type_value::BuiltinTypeValue;
 
 use routecore::bgp::communities::HumanReadableCommunity as Community;
+use routecore::bgp::types::{NextHop, LocalPref, AfiSafi};
 
 
 //------------ U16 Type -----------------------------------------------------
@@ -166,65 +169,10 @@ impl From<U16Token> for usize {
 
 // ----------- U32 Type --------------------------------------------
 
+createtoken!(U32; Set = 0);
+
 impl RotoType for u32 {
-    fn get_props_for_method(
-        _ty: TypeDef,
-        method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        match method_name.ident.as_str() {
-            "set" => Ok(MethodProps::new(
-                TypeDef::Unknown,
-                U32Token::Set.into(),
-                vec![TypeDef::IntegerLiteral],
-            )
-            .consume_value()),
-            _ => Err(format!(
-                "Unknown method: '{}' for type U32",
-                method_name.ident
-            )
-            .into()),
-        }
-    }
-
-    fn exec_value_method(
-        &self,
-        _method_token: usize,
-        _args: &[StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        Err(VmError::InvalidMethodCall)
-    }
-
-    fn exec_consume_value_method(
-        self,
-        method_token: usize,
-        mut args: Vec<TypeValue>,
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        match method_token.try_into()? {
-            U32Token::Set => {
-                if let Ok(TypeValue::Builtin(BuiltinTypeValue::U32(
-                    int_u32,
-                ))) = args.remove(0).into_type(&TypeDef::U32)
-                {
-                    Ok(TypeValue::Builtin(BuiltinTypeValue::U32(int_u32)))
-                } else {
-                    Err(VmError::InvalidValueType)
-                }
-            }
-        }
-    }
-
-    fn exec_type_method<'a>(
-        _method_token: usize,
-        _args: &[StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        Err(VmError::InvalidMethodCall)
-    }
+    setmethodonly!(U32);
 
     fn into_type(
         self,
@@ -268,33 +216,32 @@ impl RotoType for u32 {
     }
 }
 
+// #[derive(Debug)]
+// pub enum U32Token {
+//     Set,
+// }
 
-#[derive(Debug)]
-pub enum U32Token {
-    Set,
-}
+// impl TryFrom<usize> for U32Token {
+//     type Error = VmError;
 
-impl TryFrom<usize> for U32Token {
-    type Error = VmError;
+//     fn try_from(val: usize) -> Result<Self, VmError> {
+//         match val {
+//             0 => Ok(U32Token::Set),
+//             _ => {
+//                 debug!("Unknown token value: {}", val);
+//                 Err(VmError::InvalidMethodCall)
+//             }
+//         }
+//     }
+// }
 
-    fn try_from(val: usize) -> Result<Self, VmError> {
-        match val {
-            0 => Ok(U32Token::Set),
-            _ => {
-                debug!("Unknown token value: {}", val);
-                Err(VmError::InvalidMethodCall)
-            }
-        }
-    }
-}
-
-impl From<U32Token> for usize {
-    fn from(val: U32Token) -> Self {
-        match val {
-            U32Token::Set => 0,
-        }
-    }
-}
+// impl From<U32Token> for usize {
+//     fn from(val: U32Token) -> Self {
+//         match val {
+//             U32Token::Set => 0,
+//         }
+//     }
+// }
 
 
 // ----------- U8 Type ---------------------------------------------
@@ -1385,7 +1332,7 @@ impl From<PrefixToken> for usize {
     }
 }
 
-//------------ PrefixLengthLiteral type --------------------------------------
+//------------ PrefixLength type ---------------------------------------------
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Serialize)]
 pub struct PrefixLength(pub(crate) u8);
@@ -1551,199 +1498,13 @@ impl TryFrom<&TypeValue> for PrefixLength {
 
 //------------ AfiSafi Type --------------------------------------------------
 
-impl From<routecore::bgp::types::AfiSafi> for TypeValue {
-    fn from(value: routecore::bgp::types::AfiSafi) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::AfiSafi(value))
-    }
-}
-
-impl ScalarValue for routecore::bgp::types::AfiSafi {}
-
-impl RotoType for routecore::bgp::types::AfiSafi {
-    fn get_props_for_method(
-        ty: crate::types::typedef::TypeDef,
-        method_name: &crate::ast::Identifier,
-    ) -> Result<
-        crate::types::typedef::MethodProps,
-        crate::compiler::CompileError,
-    >
-    where
-        Self: std::marker::Sized,
-    {
-        todo!()
-    }
-
-    fn into_type(
-        self,
-        type_value: &crate::types::typedef::TypeDef,
-    ) -> Result<TypeValue, crate::compiler::CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        match type_value {
-            TypeDef::AfiSafi => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::AfiSafi(self)))
-            }
-            TypeDef::StringLiteral => Ok(TypeValue::Builtin(
-                BuiltinTypeValue::StringLiteral(self.into()),
-            )),
-            _ => Err(format!(
-                "Cannot convert type PrefixLength to type {:?}",
-                type_value
-            )
-            .into()),
-        }
-    }
-
-    fn exec_value_method<'a>(
-        &'a self,
-        _method_token: usize,
-        _args: &'a [crate::vm::StackValue],
-        _res_type: crate::types::typedef::TypeDef,
-    ) -> Result<TypeValue, crate::vm::VmError> {
-        Err(VmError::InvalidMethodCall)
-    }
-
-    fn exec_consume_value_method(
-        self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
-        _res_type: crate::types::typedef::TypeDef,
-    ) -> Result<TypeValue, crate::vm::VmError> {
-        Err(VmError::InvalidMethodCall)
-    }
-
-    fn exec_type_method(
-        _method_token: usize,
-        _args: &[crate::vm::StackValue],
-        _res_type: crate::types::typedef::TypeDef,
-    ) -> Result<TypeValue, crate::vm::VmError> {
-        Err(VmError::InvalidMethodCall)
-    }
-}
+minimalscalartype!(AfiSafi);
 
 //------------ PathId Type ---------------------------------------------------
 
-impl From<routecore::bgp::message::nlri::PathId> for TypeValue {
-    fn from(value: routecore::bgp::message::nlri::PathId) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::PathId(value))
-    }
-}
+minimalscalartype!(PathId);
 
-impl ScalarValue for routecore::bgp::message::nlri::PathId {}
-
-impl RotoType for routecore::bgp::message::nlri::PathId {
-    fn get_props_for_method(
-        _ty: TypeDef,
-        method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        match method_name.ident.as_str() {
-            "from" => Ok(MethodProps::new(
-                TypeDef::PathId,
-                PathIdToken::From.into(),
-                vec![TypeDef::U32],
-            )),
-            _ => Err(format!(
-                "Unknown method: '{}' for type PrefixLength",
-                method_name.ident
-            )
-            .into()),
-        }
-
-    }
-
-    fn into_type(
-        self,
-        type_value: &crate::types::typedef::TypeDef,
-    ) -> Result<TypeValue, crate::compiler::CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        match type_value {
-            TypeDef::PathId => Ok(TypeValue::Builtin(BuiltinTypeValue::PathId(self))),
-            TypeDef::IntegerLiteral => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(<u32>::from(self) as i64))))
-            }
-            TypeDef::StringLiteral => Ok(TypeValue::Builtin(
-                BuiltinTypeValue::StringLiteral(self.into()),
-            )),
-            TypeDef::U32 => Ok(TypeValue::Builtin(BuiltinTypeValue::U32(self.into()))),
-            _ => Err(format!(
-                "Cannot convert type PrefixLength to type {:?}",
-                type_value
-            )
-            .into()),
-        }
-    }
-
-    fn exec_value_method<'a>(
-        &'a self,
-        method_token: usize,
-        args: &'a [StackValue],
-        res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        Err(VmError::InvalidMethodCall)
-
-    }
-
-    
-
-    fn exec_consume_value_method(
-        self,
-        method_token: usize,
-        args: Vec<TypeValue>,
-        res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        Err(VmError::InvalidMethodCall)
-
-    }
-
-    fn exec_type_method<'a>(
-        method_token: usize,
-        args: &[StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        match method_token.try_into()? {
-            PathIdToken::From => {
-                if let Some(StackValue::Owned(TypeValue::Builtin(BuiltinTypeValue::U32(val)))) = args.get(0) {
-                    Ok(PathId::from_u32(*val).into())
-                } else {
-                    Err(VmError::StackUnderflow)
-                }
-            }
-            _ => Err(VmError::InvalidMethodCall),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub(crate) enum PathIdToken {
-    From,
-}
-
-impl TryFrom<usize> for PathIdToken {
-    type Error = VmError;
-
-    fn try_from(val: usize) -> Result<Self, VmError> {
-        match val {
-            0 => Ok(PathIdToken::From),
-            _ => {
-                debug!("Unknown token value: {}", val);
-                Err(VmError::InvalidMethodCall)
-            }
-        }
-    }
-}
-
-impl From<PathIdToken> for usize {
-    fn from(val: PathIdToken) -> Self {
-        val as usize
-    }
-}
-
+//------------ Community Type ------------------------------------------------
 
 impl RotoType for Community {
     fn get_props_for_method(
@@ -2267,21 +2028,7 @@ impl RotoType for routecore::bgp::aspath::HopPath {
         }
     }
 
-    fn into_type(
-        self,
-        type_def: &TypeDef,
-    ) -> Result<TypeValue, CompileError> {
-        match type_def {
-            TypeDef::AsPath => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::AsPath(self)))
-            }
-            _ => Err(format!(
-                "Cannot convert type AsPath to type {:?}",
-                type_def
-            )
-            .into()),
-        }
-    }
+    noconversioninto!(AsPath);
 
     fn exec_value_method<'a>(
         &'a self,
@@ -2583,127 +2330,21 @@ impl Display for OriginType {
 
 //------------ NextHop type -------------------------------------------------
 
-impl RotoType for routecore::bgp::types::NextHop {
-    fn get_props_for_method(
-        _ty: TypeDef,
-        _method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        todo!()
-    }
-
-    fn into_type(
-        self,
-        type_def: &TypeDef,
-    ) -> Result<TypeValue, CompileError> {
-        match type_def {
-            TypeDef::NextHop => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::NextHop(self)))
-            }
-            _ => Err(format!(
-                "Cannot convert type NextHop to type {:?}",
-                type_def
-            )
-            .into()),
-        }
-    }
-
-    fn exec_value_method<'a>(
-        &'a self,
-        _method_token: usize,
-
-        _args: &'a [StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        Err(VmError::InvalidMethodCall)
-    }
-
-    fn exec_consume_value_method(
-        self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        Err(VmError::InvalidMethodCall)
-    }
-
-    fn exec_type_method<'a>(
-        _method_token: usize,
-        _args: &[StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        Err(VmError::InvalidMethodCall)
-    }
-}
-
-impl ScalarValue for routecore::bgp::types::NextHop {}
-
-impl From<routecore::bgp::types::NextHop> for TypeValue {
-    fn from(value: routecore::bgp::types::NextHop) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::NextHop(value))
-    }
-}
-
-impl From<routecore::bgp::types::NextHop> for BuiltinTypeValue {
-    fn from(value: routecore::bgp::types::NextHop) -> Self {
-        BuiltinTypeValue::NextHop(value)
-    }
-}
+minimalscalartype!(NextHop);
 
 //------------ Multi Exit Discriminator type --------------------------------
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize)]
 pub struct MultiExitDisc(pub(crate) routecore::bgp::types::MultiExitDisc);
 
+createtoken!(
+    MultiExitDisc;
+    Set = 0
+);
+
 impl RotoType for MultiExitDisc {
-    fn get_props_for_method(
-        _ty: TypeDef,
-        _method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        todo!()
-    }
-
-    fn into_type(
-        self,
-        _type_value: &TypeDef,
-    ) -> Result<TypeValue, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        todo!()
-    }
-
-    fn exec_value_method<'a>(
-        &'a self,
-        _method_token: usize,
-
-        _args: &'a [StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
-
-    fn exec_consume_value_method(
-        self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
-
-    fn exec_type_method<'a>(
-        _method_token: usize,
-        _args: &[StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
+    setmethodonly!(MultiExitDisc);
+    noconversioninto!(MultiExitDisc);
 }
 
 impl From<MultiExitDisc> for TypeValue {
@@ -2833,124 +2474,131 @@ impl From<UnknownToken> for usize {
 
 //------------ Local Preference type ----------------------------------------
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize)]
-pub struct LocalPref(pub(crate) routecore::bgp::types::LocalPref);
+integerscalartype!(LocalPref; IntegerLiteral, U32);
 
-impl RotoType for LocalPref {
-    fn get_props_for_method(
-        _ty: TypeDef,
-        method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        match method_name.ident.as_str() {
-            "set" => Ok(MethodProps::new(
-                TypeDef::Unknown,
-                LocalPrefToken::Set.into(),
-                vec![TypeDef::IntegerLiteral],
-            )
-            .consume_value()),
-            _ => Err(format!(
-                "Unknown method: '{}' for type LocalPref",
-                method_name.ident
-            )
-            .into()),
-        }
-    }
-
-    fn into_type(
-        self,
-        _type_value: &TypeDef,
-    ) -> Result<TypeValue, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        todo!()
-    }
-
-    fn exec_value_method<'a>(
-        &'a self,
-        method_token: usize,
-
-        _args: &'a [StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        match method_token.try_into()? {
-            LocalPrefToken::Set => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::LocalPref(*self)))
-            } // _ => Err(VmError::InvalidMethodCall),
-        }
-    }
-
-    fn exec_consume_value_method(
-        self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
-
-    fn exec_type_method<'a>(
-        _method_token: usize,
-        _args: &[StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
-}
-
-impl From<LocalPref> for TypeValue {
+impl From<LocalPref> for IntegerLiteral {
     fn from(value: LocalPref) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::LocalPref(value))
+        IntegerLiteral(value.0 as i64)
     }
 }
+// #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize)]
+// pub struct LocalPref(pub(crate) routecore::bgp::types::LocalPref);
 
-impl From<routecore::bgp::types::LocalPref> for TypeValue {
-    fn from(value: routecore::bgp::types::LocalPref) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::LocalPref(LocalPref(value)))
-    }
-}
+// impl RotoType for LocalPref {
+//     fn get_props_for_method(
+//         _ty: TypeDef,
+//         method_name: &crate::ast::Identifier,
+//     ) -> Result<MethodProps, CompileError>
+//     where
+//         Self: std::marker::Sized,
+//     {
+//         match method_name.ident.as_str() {
+//             "set" => Ok(MethodProps::new(
+//                 TypeDef::Unknown,
+//                 LocalPrefToken::Set.into(),
+//                 vec![TypeDef::IntegerLiteral],
+//             )
+//             .consume_value()),
+//             _ => Err(format!(
+//                 "Unknown method: '{}' for type LocalPref",
+//                 method_name.ident
+//             )
+//             .into()),
+//         }
+//     }
 
-impl From<routecore::bgp::types::LocalPref> for BuiltinTypeValue {
-    fn from(value: routecore::bgp::types::LocalPref) -> Self {
-        BuiltinTypeValue::LocalPref(LocalPref(value))
-    }
-}
+//     fn into_type(
+//         self,
+//         _type_value: &TypeDef,
+//     ) -> Result<TypeValue, CompileError>
+//     where
+//         Self: std::marker::Sized,
+//     {
+//         todo!()
+//     }
 
-impl Display for LocalPref {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+//     fn exec_value_method<'a>(
+//         &'a self,
+//         method_token: usize,
 
-#[derive(Debug)]
-pub enum LocalPrefToken {
-    Set,
-}
+//         _args: &'a [StackValue],
+//         _res_type: TypeDef,
+//     ) -> Result<TypeValue, VmError> {
+//         match method_token.try_into()? {
+//             LocalPrefToken::Set => {
+//                 Ok(TypeValue::Builtin(BuiltinTypeValue::LocalPref(*self)))
+//             } // _ => Err(VmError::InvalidMethodCall),
+//         }
+//     }
 
-impl TryFrom<usize> for LocalPrefToken {
-    type Error = VmError;
+//     fn exec_consume_value_method(
+//         self,
+//         _method_token: usize,
+//         _args: Vec<TypeValue>,
+//         _res_type: TypeDef,
+//     ) -> Result<TypeValue, VmError> {
+//         todo!()
+//     }
 
-    fn try_from(val: usize) -> Result<Self, VmError> {
-        match val {
-            0 => Ok(LocalPrefToken::Set),
-            _ => {
-                debug!("Unknown token value: {}", val);
-                Err(VmError::InvalidMethodCall)
-            }
-        }
-    }
-}
+//     fn exec_type_method<'a>(
+//         _method_token: usize,
+//         _args: &[StackValue],
+//         _res_type: TypeDef,
+//     ) -> Result<TypeValue, VmError> {
+//         todo!()
+//     }
+// }
 
-impl From<LocalPrefToken> for usize {
-    fn from(val: LocalPrefToken) -> Self {
-        match val {
-            LocalPrefToken::Set => 0,
-        }
-    }
-}
+// impl From<LocalPref> for TypeValue {
+//     fn from(value: LocalPref) -> Self {
+//         TypeValue::Builtin(BuiltinTypeValue::LocalPref(value))
+//     }
+// }
+
+// impl From<routecore::bgp::types::LocalPref> for TypeValue {
+//     fn from(value: routecore::bgp::types::LocalPref) -> Self {
+//         TypeValue::Builtin(BuiltinTypeValue::LocalPref(LocalPref(value)))
+//     }
+// }
+
+// impl From<routecore::bgp::types::LocalPref> for BuiltinTypeValue {
+//     fn from(value: routecore::bgp::types::LocalPref) -> Self {
+//         BuiltinTypeValue::LocalPref(LocalPref(value))
+//     }
+// }
+
+// impl Display for LocalPref {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{}", self.0)
+//     }
+// }
+
+// #[derive(Debug)]
+// pub enum LocalPrefToken {
+//     Set,
+// }
+
+// impl TryFrom<usize> for LocalPrefToken {
+//     type Error = VmError;
+
+//     fn try_from(val: usize) -> Result<Self, VmError> {
+//         match val {
+//             0 => Ok(LocalPrefToken::Set),
+//             _ => {
+//                 debug!("Unknown token value: {}", val);
+//                 Err(VmError::InvalidMethodCall)
+//             }
+//         }
+//     }
+// }
+
+// impl From<LocalPrefToken> for usize {
+//     fn from(val: LocalPrefToken) -> Self {
+//         match val {
+//             LocalPrefToken::Set => 0,
+//         }
+//     }
+// }
 
 //------------ AtomicAggregate type -----------------------------------------
 

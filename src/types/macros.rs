@@ -97,6 +97,212 @@ macro_rules! createtoken {
 }
 
 #[macro_export]
+macro_rules! noconversioninto {
+    (
+        $type_def: ident
+    ) => {
+        fn into_type(
+            self,
+            type_def: &TypeDef,
+        ) -> Result<TypeValue, CompileError> {
+            match type_def {
+                TypeDef::$type_def => {
+                    Ok(TypeValue::Builtin(
+                        BuiltinTypeValue::$type_def(self)
+                    ))
+                }
+                _ => Err(format!(
+                    concat!("Cannot convert type ",
+                        stringify!($type_def)," to type {:?}"),
+                    type_def
+                )
+                .into()),
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! intotype {
+    (
+        $my_type: ident;
+        $( $into_type_def: ident ),*
+    ) => {
+        fn into_type(
+            self,
+            type_def: &TypeDef,
+        ) -> Result<TypeValue, CompileError> {
+            match type_def {
+                $( 
+                    TypeDef::$into_type_def => Ok(TypeValue::Builtin(
+                        BuiltinTypeValue::$into_type_def(self.into()))), 
+                )*
+                _ => {
+                    Err(format!(
+                        concat!(
+                            "Cannot convert type ", 
+                            stringify!($my_type), 
+                            " to type {:?}"),
+                            type_def
+                        ).into()
+                    )
+                }
+            }
+        }
+    };
+}
+
+
+#[macro_export]
+macro_rules! setmethodonly {
+    (
+        $type_def: ident
+    ) => {
+        fn get_props_for_method(
+            _ty: TypeDef,
+            method_name: &$crate::ast::Identifier,
+        ) -> Result<MethodProps, CompileError>
+        where
+            Self: std::marker::Sized,
+        {
+            paste! {
+                match method_name.ident.as_str() {
+                    "set" => Ok(MethodProps::new(
+                        TypeDef::Unknown,
+                        [<$type_def Token>]::Set.into(),
+                        vec![TypeDef::$type_def],
+                    )
+                    .consume_value()),
+                    _ => Err(format!(
+                        concat!("Unknown method: '{}' for type ",
+                            stringify!($type_def)),
+                        method_name.ident
+                    )
+                    .into()),
+                }
+            }
+        }
+
+        fn exec_value_method<'a>(
+            &'a self,
+            method_token: usize,
+            args: &'a [StackValue],
+            _res_type: TypeDef,
+        ) -> Result<TypeValue, VmError> {
+            paste! {
+                match method_token.try_into()? {
+                    [<$type_def Token>]::Set => {
+                        if let TypeValue::Builtin(
+                                BuiltinTypeValue::$type_def(value)
+                            ) = args
+                                    .get(0)
+                                    .ok_or(VmError::InvalidMethodCall)?
+                                    .as_ref() {
+                            Ok(TypeValue::from(*value))
+                        } else {
+                            Err(VmError::AnonymousArgumentNotFound)
+                        }
+                    }
+                }
+            }
+        }
+
+        fn exec_consume_value_method(
+            self,
+            method_token: usize,
+            mut args: Vec<TypeValue>,
+            _res_type: TypeDef,
+        ) -> Result<TypeValue, VmError> {
+            paste! {
+                match method_token.try_into()? {
+                    [<$type_def Token>]::Set => {
+                        if let Ok(TypeValue::Builtin(BuiltinTypeValue::$type_def(
+                            value,
+                        ))) = args.remove(0).into_type(&TypeDef::$type_def)
+                        {
+                            Ok(TypeValue::Builtin(BuiltinTypeValue::$type_def(value)))
+                        } else {
+                            Err(VmError::InvalidValueType)
+                        }
+                    }
+                }
+            }
+        }
+    
+        fn exec_type_method(
+            _method_token: usize,
+            _args: &[$crate::vm::StackValue],
+            _res_type: $crate::types::typedef::TypeDef,
+        ) -> Result<TypeValue, $crate::vm::VmError> {
+            Err(VmError::InvalidMethodCall)
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! integerscalartype {
+    (
+        $type_def: ident;
+        $( $into_type_def: ident ),*
+    ) => {
+        createtoken!(LocalPref;Set = 0);
+
+        impl RotoType for $type_def {
+            setmethodonly!($type_def);
+
+            intotype!($type_def;
+                $( $into_type_def ),* 
+            );
+        }
+
+        impl From<$type_def> for TypeValue {
+            fn from(value: $type_def) -> Self {
+                TypeValue::Builtin(BuiltinTypeValue::$type_def(value))
+            }
+        }
+
+        impl From<$type_def> for BuiltinTypeValue {
+            fn from(value: $type_def) -> Self {
+                BuiltinTypeValue::$type_def(value)
+            }
+        }
+
+        impl ScalarValue for $type_def {}
+    }
+}
+
+
+#[macro_export]
+macro_rules! minimalscalartype {
+    (
+        $type_def: ident
+    ) => {
+  
+        createtoken!($type_def; Set = 0);
+
+        impl RotoType for $type_def {
+            setmethodonly!($type_def);
+            noconversioninto!($type_def);
+        }
+
+        impl From<$type_def> for TypeValue {
+            fn from(value: $type_def) -> Self {
+                TypeValue::Builtin(BuiltinTypeValue::$type_def(value))
+            }
+        }
+
+        impl From<$type_def> for BuiltinTypeValue {
+            fn from(value: $type_def) -> Self {
+                BuiltinTypeValue::$type_def(value)
+            }
+        }
+
+        impl ScalarValue for $type_def {}
+    };
+}
+
+
+#[macro_export]
 macro_rules! lazyelmtypevalue {
     (
         $raw_bytes: ident;
