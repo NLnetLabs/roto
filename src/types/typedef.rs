@@ -24,7 +24,7 @@ use crate::{
 };
 
 use super::builtin::{
-    AtomicAggregate, Aggregator, Boolean, HexLiteral, Hop,
+    AtomicAggregate, Aggregator, HexLiteral, Hop,
     IntegerLiteral, IpAddress, MultiExitDisc, OriginType,
     PrefixLength, RawRouteWithDeltas, RouteStatus, StringLiteral,
     Unknown,
@@ -174,7 +174,7 @@ pub enum TypeDef {
     U32,
     U16,
     U8,
-    Boolean,
+    Bool,
     Prefix,
     PrefixLength, // A u8 prefixes by a /
     AfiSafi,
@@ -227,7 +227,7 @@ impl TypeDef {
         U8(StringLiteral,U16,U32,PrefixLength,Asn,IntegerLiteral;),
         U16(StringLiteral,U32,PrefixLength,Asn,IntegerLiteral,LocalPref;),
         U32(StringLiteral,Asn,IntegerLiteral;),
-        Boolean(StringLiteral;),
+        Bool(StringLiteral;),
         IpAddress(StringLiteral;),
         Prefix(StringLiteral;),
         Hop(StringLiteral;),
@@ -245,7 +245,7 @@ impl TypeDef {
         AsPath(StringLiteral;List),
         LocalPref(StringLiteral,U8,U16,U32,IntegerLiteral;),
         MultiExitDisc(StringLiteral,U8,IntegerLiteral;),
-        AtomicAggregate(StringLiteral,Boolean;),
+        AtomicAggregate(StringLiteral,Bool;),
         Aggregator(StringLiteral,U8;);
         // have conversions, have data field
         // Records can be converted to other type of Records under certain
@@ -576,8 +576,8 @@ impl TypeDef {
             TypeDef::U8 => {
                 u8::get_props_for_method(self.clone(), method_name)
             }
-            TypeDef::Boolean => {
-                Boolean::get_props_for_method(self.clone(), method_name)
+            TypeDef::Bool => {
+                bool::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::Prefix => {
                 Prefix::get_props_for_method(self.clone(), method_name)
@@ -816,7 +816,7 @@ impl std::fmt::Display for TypeDef {
             TypeDef::PrefixLength => write!(f, "PrefixLength"),
             TypeDef::IntegerLiteral => write!(f, "IntegerLiteral"),
             TypeDef::U8 => write!(f, "U8"),
-            TypeDef::Boolean => write!(f, "Boolean"),
+            TypeDef::Bool => write!(f, "Boolean"),
             TypeDef::Community => write!(f, "Community"),
             TypeDef::OriginType => write!(f, "OriginType"),
             TypeDef::RouteStatus => write!(f, "RouteStatus"),
@@ -1104,7 +1104,7 @@ impl From<&BuiltinTypeValue> for TypeDef {
             }
             BuiltinTypeValue::IntegerLiteral(_) => TypeDef::IntegerLiteral,
             BuiltinTypeValue::StringLiteral(_) => TypeDef::StringLiteral,
-            BuiltinTypeValue::Boolean(_) => TypeDef::Boolean,
+            BuiltinTypeValue::Bool(_) => TypeDef::Bool,
             BuiltinTypeValue::Prefix(_) => TypeDef::Prefix,
             BuiltinTypeValue::AfiSafi(_) => TypeDef::AfiSafi,
             BuiltinTypeValue::PathId(_) => TypeDef::PathId,
@@ -1170,7 +1170,7 @@ impl From<BuiltinTypeValue> for TypeDef {
             }
             BuiltinTypeValue::IntegerLiteral(_) => TypeDef::IntegerLiteral,
             BuiltinTypeValue::StringLiteral(_) => TypeDef::StringLiteral,
-            BuiltinTypeValue::Boolean(_) => TypeDef::Boolean,
+            BuiltinTypeValue::Bool(_) => TypeDef::Bool,
             BuiltinTypeValue::Prefix(_) => TypeDef::Prefix,
             BuiltinTypeValue::AfiSafi(_) => TypeDef::AfiSafi,
             BuiltinTypeValue::PathId(_) => TypeDef::PathId,

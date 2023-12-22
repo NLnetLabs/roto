@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod route {
     use super::super::{
-        Boolean, IntegerLiteral, PrefixLength, StringLiteral,
+        IntegerLiteral, PrefixLength, StringLiteral,
     };
     use crate::ast::IpAddressLiteral;
     use crate::types::builtin::{BuiltinTypeValue, IpAddress};
@@ -16,6 +16,7 @@ mod route {
         Type,
         _Consume,
     }
+    use routecore::addr::Prefix;
     use routecore::bgp::aspath::HopPath;
     use routecore::asn::{Asn, Asn16};
     use routecore::bgp::communities::{HumanReadableCommunity as Community, StandardCommunity, Tag, ExtendedCommunity, LargeCommunity};
@@ -529,6 +530,16 @@ mod route {
     }
 
     #[test]
+    fn test_u8_to_u32() -> Result<(), CompileError> {
+        init();
+
+        let test_value = 0_u8;
+        let res = 127_u32;
+
+        test_consume_method_on_type_value(test_value, "set", res)
+    }
+
+    #[test]
     #[should_panic = "src_ty.clone().test_type_conversion(arg_ty)"]
     fn test_invalid_u8_to_as_path() {
         init();
@@ -700,8 +711,8 @@ greater than 128 into type PrefixLength"]
 
     #[test]
     fn test_boolean() -> Result<(), CompileError> {
-        let test_value = Boolean::new(true);
-        let res = Boolean::new(false);
+        let test_value = true;
+        let res = false;
 
         test_consume_method_on_type_value(test_value, "set", res)
     }
@@ -710,16 +721,16 @@ greater than 128 into type PrefixLength"]
     #[should_panic = "assertion failed: \
 src_ty.clone().test_type_conversion(arg_ty)"]
     fn test_invalid_boolean() {
-        let test_value = Boolean::new(true);
+        let test_value = true;
         let res = Asn::from(710_u32);
 
         test_consume_method_on_type_value(test_value, "set", res).unwrap();
     }
 
     #[test]
-    #[should_panic = "Unknown method: 'blaffer' for type Boolean"]
+    #[should_panic = "Unknown method: 'blaffer' for type Bool"]
     fn test_invalid_method_boolean() {
-        let test_value = Boolean::new(true);
+        let test_value = true;
         let res = Asn::from(710_u32);
 
         test_consume_method_on_type_value(test_value, "blaffer", res)
@@ -728,7 +739,7 @@ src_ty.clone().test_type_conversion(arg_ty)"]
 
     #[test]
     fn test_conversion_to_string() -> Result<(), CompileError> {
-        let test_value = Boolean::new(true);
+        let test_value = true;
         let res = StringLiteral::new("true".into());
 
         mk_converted_type_value(test_value, res)
@@ -737,7 +748,7 @@ src_ty.clone().test_type_conversion(arg_ty)"]
     #[test]
     fn test_conversion_from_string() -> Result<(), CompileError> {
         let test_value = StringLiteral::new("true".into());
-        let res = Boolean::new(true);
+        let res = true;
 
         mk_converted_type_value(test_value, res)
     }
@@ -795,7 +806,7 @@ src_ty.clone().test_type_conversion(arg_ty)"]
             MethodType::Type,
             "cmp",
             &[test_value_1, test_value_2],
-            TypeValue::from(Boolean(true)),
+            TypeValue::from(true),
         )
     }
 
@@ -809,7 +820,7 @@ src_ty.clone().test_type_conversion(arg_ty)"]
             MethodType::Type,
             "cmp",
             &[test_value_1, test_value_2],
-            TypeValue::from(Boolean(false)),
+            TypeValue::from(false),
         )
     }
 
@@ -823,7 +834,7 @@ src_ty.clone().test_type_conversion(arg_ty)"]
             MethodType::Value,
             "cmp",
             &[test_value_2],
-            TypeValue::from(Boolean(true)),
+            TypeValue::from(true),
         )
     }
 
@@ -837,7 +848,7 @@ src_ty.clone().test_type_conversion(arg_ty)"]
             MethodType::Value,
             "cmp",
             &[test_value_2],
-            TypeValue::from(Boolean(false)),
+            TypeValue::from(false),
         )
     }
 
@@ -847,14 +858,14 @@ src_ty.clone().test_type_conversion(arg_ty)"]
 src_ty.clone().test_type_conversion(arg_ty)"]
     fn test_string_cmp_5() {
         let test_value_1 = StringLiteral::new("blaffer".into());
-        let test_value_2 = Boolean(true);
+        let test_value_2 = true;
 
         test_method_on_type_value_with_multiple_args(
             test_value_1.clone(),
             MethodType::Value,
             "cmp",
             &[test_value_2],
-            TypeValue::from(Boolean(false)),
+            TypeValue::from(false),
         )
         .unwrap();
     }
@@ -922,6 +933,21 @@ src_ty.clone().test_type_conversion(arg_ty)"]
         test_value.into_type(&TypeDef::U8).unwrap();
     }
 
+    //-------- Test: StringLiteral -------------------------------------------
+
+    #[test]
+    fn test_prefix_1() {
+        let test_value: Prefix = Prefix::new("10.1.1.0".parse().unwrap(), 24).unwrap();
+        test_value.into_type(&TypeDef::StringLiteral).unwrap();
+    }
+
+    #[test]
+    #[should_panic = r#"Result::unwrap()` on an `Err` value: User("Cannot convert type Prefix to type AsPath")"#]
+    fn test_prefix_2() {
+        let test_value: Prefix = Prefix::new("10.1.1.0".parse().unwrap(), 24).unwrap();
+        test_value.into_type(&TypeDef::AsPath).unwrap();
+    }
+
     //-------- Test: PrefixLength --------------------------------------------
 
     #[test]
@@ -933,8 +959,31 @@ src_ty.clone().test_type_conversion(arg_ty)"]
     }
 
     #[test]
-    #[ignore]
     fn test_prefix_length_literal_2() {
+        let test_value: PrefixLength = PrefixLength(23);
+        let res = 23_u8;
+
+        mk_converted_type_value(test_value, res).unwrap();
+    }
+
+    #[test]
+    fn test_prefix_length_literal_3() {
+        let test_value: PrefixLength = PrefixLength(23);
+        let res = 23_u16;
+
+        mk_converted_type_value(test_value, res).unwrap();
+    }
+
+    #[test]
+    fn test_prefix_length_literal_4() {
+        let test_value: PrefixLength = PrefixLength(23);
+        let res = 23_u32;
+
+        mk_converted_type_value(test_value, res).unwrap();
+    }
+
+    #[test]
+    fn test_prefix_length_literal_5() {
         let test_value: PrefixLength = PrefixLength(18);
         let res = IntegerLiteral::new(23);
 

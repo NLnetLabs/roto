@@ -24,7 +24,7 @@ use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 
 use super::{
-    Aggregator, AtomicAggregate, BgpUpdateMessage, Boolean,
+    Aggregator, AtomicAggregate, BgpUpdateMessage,
     HexLiteral, Hop, IntegerLiteral, IpAddress,
     MultiExitDisc, OriginType, PrefixLength,
     RawRouteWithDeltas, RouteStatus, StringLiteral,
@@ -38,7 +38,7 @@ pub enum BuiltinTypeValue {
     U8(u8),                           // scalar
     IntegerLiteral(IntegerLiteral),   // scalar
     StringLiteral(StringLiteral),     // scalar
-    Boolean(Boolean),                 // scalar
+    Bool(bool),                    // scalar
     HexLiteral(HexLiteral),           // scalar
     IpAddress(IpAddress),             // scalar
     Prefix(Prefix),                   // scalar
@@ -223,7 +223,7 @@ impl BuiltinTypeValue {
                 "Cannot convert raw BMP Statistics Report into any other type.",
             )),
             BuiltinTypeValue::RouteStatus(v) => v.into_type(ty),
-            BuiltinTypeValue::Boolean(v) => v.into_type(ty),
+            BuiltinTypeValue::Bool(v) => v.into_type(ty),
             BuiltinTypeValue::HexLiteral(v) => v.into_type(ty),
             BuiltinTypeValue::Asn(v) => v.into_type(ty),
             BuiltinTypeValue::LocalPref(v) => v.into_type(ty),
@@ -245,23 +245,23 @@ impl From<Asn> for BuiltinTypeValue {
     }
 }
 
-impl From<u32> for BuiltinTypeValue {
-    fn from(value: u32) -> Self {
-        BuiltinTypeValue::U32(value)
-    }
-}
+// impl From<u32> for BuiltinTypeValue {
+//     fn from(value: u32) -> Self {
+//         BuiltinTypeValue::U32(value)
+//     }
+// }
 
-impl From<u16> for BuiltinTypeValue {
-    fn from(value: u16) -> Self {
-        BuiltinTypeValue::U16(value)
-    }
-}
+// impl From<u16> for BuiltinTypeValue {
+//     fn from(value: u16) -> Self {
+//         BuiltinTypeValue::U16(value)
+//     }
+// }
 
-impl From<u8> for BuiltinTypeValue {
-    fn from(value: u8) -> Self {
-        BuiltinTypeValue::U8(value)
-    }
-}
+// impl From<u8> for BuiltinTypeValue {
+//     fn from(value: u8) -> Self {
+//         BuiltinTypeValue::U8(value)
+//     }
+// }
 
 // impl From<U8> for BuiltinTypeValue {
 //     fn from(value: U8) -> Self {
@@ -269,11 +269,11 @@ impl From<u8> for BuiltinTypeValue {
 //     }
 // }
 
-impl From<PrefixLength> for BuiltinTypeValue {
-    fn from(val: PrefixLength) -> Self {
-        BuiltinTypeValue::PrefixLength(val)
-    }
-}
+// impl From<PrefixLength> for BuiltinTypeValue {
+//     fn from(val: PrefixLength) -> Self {
+//         BuiltinTypeValue::PrefixLength(val)
+//     }
+// }
 
 impl From<routecore::bgp::aspath::HopPath> for BuiltinTypeValue {
     fn from(value: routecore::bgp::aspath::HopPath) -> Self {
@@ -409,7 +409,7 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::RouteStatus(v) => {
                     write!(f, "{}", v)
                 }
-                BuiltinTypeValue::Boolean(v) => write!(f, "{}", v),
+                BuiltinTypeValue::Bool(v) => write!(f, "{}", v),
                 BuiltinTypeValue::HexLiteral(v) => {
                     write!(f, "{}", v)
                 }
@@ -498,7 +498,7 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::RouteStatus(v) => {
                     write!(f, "{} (Route Status)", v)
                 }
-                BuiltinTypeValue::Boolean(v) => write!(f, "{} (Boolean)", v),
+                BuiltinTypeValue::Bool(v) => write!(f, "{} (Boolean)", v),
                 BuiltinTypeValue::HexLiteral(v) => {
                     write!(f, "{} (Hex)", v)
                 }

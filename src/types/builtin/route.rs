@@ -32,7 +32,6 @@ use crate::{
     compiler::compile::CompileError,
     traits::{RotoType, Token},
     types::{
-        builtin::Boolean,
         enum_types::EnumVariant,
         typedef::{MethodProps, TypeDef},
         typevalue::TypeValue,
@@ -414,7 +413,7 @@ impl RawRouteWithDeltas {
                 Token::FieldAccess(vec![RouteToken::LocalPref.into()]),
             )),
             "atomic-aggregate" => Ok((
-                TypeDef::Boolean,
+                TypeDef::Bool,
                 Token::FieldAccess(vec![RouteToken::AtomicAggregate.into()]),
             )),
             "aggregator" => Ok((
@@ -1082,7 +1081,7 @@ impl RotoType for RawRouteWithDeltas {
                 vec![],
             )),
             "atomic-aggregate" => Ok(MethodProps::new(
-                TypeDef::Boolean,
+                TypeDef::Bool,
                 RouteToken::AtomicAggregate.into(),
                 vec![],
             )),
@@ -1234,32 +1233,32 @@ impl RotoType for RouteStatus {
     {
         match method_name.ident.as_str() {
             "is_in_convergence" => Ok(MethodProps::new(
-                TypeDef::Boolean,
+                TypeDef::Bool,
                 usize::from(RouteStatus::InConvergence),
                 vec![],
             )),
             "is_up_to_date" => Ok(MethodProps::new(
-                TypeDef::Boolean,
+                TypeDef::Bool,
                 usize::from(RouteStatus::UpToDate),
                 vec![],
             )),
             "is_stale" => Ok(MethodProps::new(
-                TypeDef::Boolean,
+                TypeDef::Bool,
                 usize::from(RouteStatus::Stale),
                 vec![],
             )),
             "is_start_of_route_refresh" => Ok(MethodProps::new(
-                TypeDef::Boolean,
+                TypeDef::Bool,
                 usize::from(RouteStatus::StartOfRouteRefresh),
                 vec![],
             )),
             "is_withdrawn" => Ok(MethodProps::new(
-                TypeDef::Boolean,
+                TypeDef::Bool,
                 usize::from(RouteStatus::Withdrawn),
                 vec![],
             )),
             "is_empty" => Ok(MethodProps::new(
-                TypeDef::Boolean,
+                TypeDef::Bool,
                 usize::from(RouteStatus::Empty),
                 vec![],
             )),
@@ -1294,11 +1293,11 @@ impl RotoType for RouteStatus {
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        Ok(TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
+        Ok(TypeValue::Builtin(BuiltinTypeValue::Bool(
             method_token
                 == usize::try_from(*self)
                     .map_err(|_e| VmError::InvalidVariant)?,
-        ))))
+        )))
     }
 
     fn exec_consume_value_method(

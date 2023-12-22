@@ -918,7 +918,7 @@ impl SymbolTable {
             term.insert(Symbol {
                 name: term_section_key.clone(),
                 kind: SymbolKind::Term,
-                ty: TypeDef::Boolean,
+                ty: TypeDef::Bool,
                 args: vec![child_symbol],
                 value: TypeValue::Unknown,
                 token: Token::TermSection(term_section_index),

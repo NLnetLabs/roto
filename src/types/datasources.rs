@@ -109,7 +109,7 @@ use crate::{
 };
 
 use super::{
-    builtin::{Boolean, BuiltinTypeValue},
+    builtin::BuiltinTypeValue,
     collections::Record,
     typedef::{MethodProps, TypeDef},
     typevalue::TypeValue,
@@ -139,7 +139,7 @@ impl RibType {
                 vec![TypeDef::Prefix],
             )),
             "contains" => Ok(MethodProps::new(
-                TypeDef::Boolean,
+                TypeDef::Bool,
                 RibToken::Contains.into(),
                 vec![TypeDef::Prefix],
             )),
@@ -388,12 +388,12 @@ impl Table {
                     })
                     .map(|_v| {
                         DataSourceMethodValue::TypeValue(TypeValue::Builtin(
-                            BuiltinTypeValue::Boolean(Boolean(true)),
+                            BuiltinTypeValue::Bool(true),
                         ))
                     })
                     .unwrap_or_else(|| {
                         DataSourceMethodValue::TypeValue(TypeValue::Builtin(
-                            BuiltinTypeValue::Boolean(Boolean(false)),
+                            BuiltinTypeValue::Bool(false),
                         ))
                     })
             })),
@@ -415,7 +415,7 @@ impl Table {
                 vec![TypeDef::Asn],
             )),
             "contains" => Ok(MethodProps::new(
-                TypeDef::Boolean,
+                TypeDef::Bool,
                 TableToken::Contains.into(),
                 vec![TypeDef::Asn],
             )),

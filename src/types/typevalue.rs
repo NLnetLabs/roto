@@ -27,7 +27,7 @@ use crate::{
 
 use super::{
     builtin::{
-        primitives, BgpUpdateMessage, Boolean, BuiltinTypeValue,
+        primitives, BgpUpdateMessage, BuiltinTypeValue,
         HexLiteral, IntegerLiteral, IpAddress, PrefixLength,
         RawRouteWithDeltas, StringLiteral,
     },
@@ -100,13 +100,13 @@ impl TypeValue {
     }
 
     pub fn is_boolean_type(&self) -> bool {
-        matches!(self, TypeValue::Builtin(BuiltinTypeValue::Boolean(_)))
+        matches!(self, TypeValue::Builtin(BuiltinTypeValue::Bool(_)))
     }
 
     pub fn is_false(&self) -> Result<bool, VmError> {
-        if let TypeValue::Builtin(BuiltinTypeValue::Boolean(bool_val)) = self
+        if let TypeValue::Builtin(BuiltinTypeValue::Bool(bool_val)) = self
         {
-            Ok(bool_val.is_false())
+            Ok(!bool_val)
         } else {
             Err(VmError::InvalidValueType)
         }
@@ -335,8 +335,8 @@ impl RotoType for TypeValue {
             TypeDef::LazyRecord(ref bytes_parser) => {
                 bytes_parser.get_props_for_method(ty.clone(), method_name)
             }
-            TypeDef::Boolean => {
-                Boolean::get_props_for_method(ty, method_name)
+            TypeDef::Bool => {
+                bool::get_props_for_method(ty, method_name)
             }
             TypeDef::Community => {
                 Community::get_props_for_method(ty, method_name)
@@ -433,7 +433,7 @@ impl RotoType for TypeValue {
                             .to_string(),
                     ))
                 }
-                BuiltinTypeValue::Boolean(v) => v.into_type(ty),
+                BuiltinTypeValue::Bool(v) => v.into_type(ty),
                 BuiltinTypeValue::Community(v) => v.into_type(ty),
                 BuiltinTypeValue::ConstU16EnumVariant(v) => v.into_type(ty),
                 BuiltinTypeValue::ConstU32EnumVariant(v) => v.into_type(ty),
@@ -617,7 +617,7 @@ impl RotoType for TypeValue {
                         bytes_rec.0.as_ref(),
                     )
                 }
-                BuiltinTypeValue::Boolean(v) => {
+                BuiltinTypeValue::Bool(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::Community(v) => {
@@ -747,7 +747,7 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::BmpStatisticsReport(_) => {
                     Err(VmError::InvalidValueType)
                 }
-                BuiltinTypeValue::Boolean(v) => {
+                BuiltinTypeValue::Bool(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::Community(v) => {
@@ -1052,8 +1052,8 @@ impl PartialOrd for TypeValue {
                 )),
             ) => Some(u.cmp(v)),
             (
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(u))),
-                TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(v))),
+                TypeValue::Builtin(BuiltinTypeValue::Bool(u)),
+                TypeValue::Builtin(BuiltinTypeValue::Bool(v)),
             ) => Some(u.cmp(v)),
             (
                 TypeValue::Builtin(BuiltinTypeValue::Prefix(u)),
@@ -1137,13 +1137,13 @@ impl<'a> TryFrom<StackValue<'a>> for bool {
     fn try_from(t: StackValue) -> Result<Self, Self::Error> {
         match t {
             StackValue::Ref(TypeValue::Builtin(
-                BuiltinTypeValue::Boolean(ref b),
-            )) => Ok(b.0),
+                BuiltinTypeValue::Bool(ref b),
+            )) => Ok(*b),
             StackValue::Arc(bv) => {
-                if let TypeValue::Builtin(BuiltinTypeValue::Boolean(ref b)) =
+                if let TypeValue::Builtin(BuiltinTypeValue::Bool(ref b)) =
                     *bv
                 {
-                    Ok(b.0)
+                    Ok(*b)
                 } else {
                     Err(VmError::ImpossibleComparison)
                 }
@@ -1158,7 +1158,7 @@ impl<'a> TryFrom<&'a TypeValue> for bool {
 
     fn try_from(t: &TypeValue) -> Result<Self, Self::Error> {
         match t {
-            TypeValue::Builtin(BuiltinTypeValue::Boolean(ref b)) => Ok(b.0),
+            TypeValue::Builtin(BuiltinTypeValue::Bool(ref b)) => Ok(*b),
             _ => Err(VmError::ImpossibleComparison),
         }
     }
@@ -1176,11 +1176,11 @@ impl From<BuiltinTypeValue> for TypeValue {
 // `TypeValue::from(my_value)`, where `my_value` is the Rust primitive type
 // (u, u32, bool, etc.) or the routecore type (Prefix, Asn, etc.)
 
-impl From<u32> for TypeValue {
-    fn from(value: u32) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::U32(value))
-    }
-}
+// impl From<u32> for TypeValue {
+//     fn from(value: u32) -> Self {
+//         TypeValue::Builtin(BuiltinTypeValue::U32(value))
+//     }
+// }
 
 impl TryInto<u32> for &TypeValue {
     type Error = VmError;
@@ -1194,17 +1194,17 @@ impl TryInto<u32> for &TypeValue {
     }
 }
 
-impl From<u8> for TypeValue {
-    fn from(value: u8) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::U8(value))
-    }
-}
+// impl From<u8> for TypeValue {
+//     fn from(value: u8) -> Self {
+//         TypeValue::Builtin(BuiltinTypeValue::U8(value))
+//     }
+// }
 
-impl From<bool> for TypeValue {
-    fn from(val: bool) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(val)))
-    }
-}
+// impl From<bool> for TypeValue {
+//     fn from(val: bool) -> Self {
+//         TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(val)))
+//     }
+// }
 
 impl From<&'_ str> for TypeValue {
     fn from(value: &str) -> Self {
@@ -1416,7 +1416,7 @@ impl From<crate::ast::HexLiteral> for TypeValue {
 
 impl From<crate::ast::BooleanLiteral> for TypeValue {
     fn from(value: crate::ast::BooleanLiteral) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(value.0)))
+        TypeValue::Builtin(BuiltinTypeValue::Bool(value.0))
     }
 }
 

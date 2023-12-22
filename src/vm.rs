@@ -13,7 +13,7 @@ use crate::{
     first_into_vm_err,
     traits::{RotoType, Token},
     types::{
-        builtin::{Boolean, BuiltinTypeValue},
+        builtin::BuiltinTypeValue,
         collections::{
             BytesRecord, ElementTypeValue, EnumBytesRecord, LazyRecord, List,
             Record,
@@ -239,7 +239,7 @@ impl LinearMemory {
         match stack_ref.pos {
             StackRefPos::MemPos(pos) => {
                 if let StackValue::Owned(TypeValue::Builtin(
-                    BuiltinTypeValue::Boolean(Boolean(b)),
+                    BuiltinTypeValue::Bool(b),
                 )) = self.get_mp_field_by_index_as_stack_value(
                     pos as usize,
                     stack_ref.field_index.clone(),
@@ -250,7 +250,7 @@ impl LinearMemory {
                 }
             }
             StackRefPos::ConstantValue(TypeValue::Builtin(
-                BuiltinTypeValue::Boolean(Boolean(b)),
+                BuiltinTypeValue::Bool(b),
             )) => Ok(b),
             StackRefPos::CompareResult(res) => Ok(res),
             _ => Ok(false),

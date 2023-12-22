@@ -501,7 +501,7 @@ impl RotoType for List {
                 )
                 .consume_value()),
                 "contains" => Ok(MethodProps::new(
-                    TypeDef::Boolean,
+                    TypeDef::Bool,
                     ListToken::Contains.into(),
                     vec![*list_ty_def.clone()],
                 )),
@@ -955,7 +955,7 @@ impl RotoType for Record {
                 Ok(MethodProps::new(ty, RecordToken::GetAll.into(), vec![]))
             }
             "contains" => Ok(MethodProps::new(
-                TypeDef::Boolean,
+                TypeDef::Bool,
                 RecordToken::Contains.into(),
                 vec![ty],
             )),

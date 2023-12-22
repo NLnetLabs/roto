@@ -35,7 +35,6 @@ use routecore::bgp::communities::{ExtendedCommunity, LargeCommunity, StandardCom
 use routecore::asn::Asn;
 
 use crate::compiler::error::CompileError;
-use crate::types::builtin::Boolean;
 use crate::types::typevalue::TypeValue;
 use crate::{first_into_compile_err, parse_string};
 
@@ -2455,9 +2454,9 @@ impl From<&'_ BooleanLiteral> for ShortString {
     }
 }
 
-impl From<&'_ BooleanLiteral> for Boolean {
+impl From<&'_ BooleanLiteral> for bool {
     fn from(literal: &BooleanLiteral) -> Self {
-        Boolean(literal.0)
+        literal.0
     }
 }
 

@@ -15,7 +15,6 @@ use crate::symbols::MatchActionType;
 use crate::symbols::Symbol;
 use crate::symbols::SymbolKind;
 use crate::traits::Token;
-use crate::types::builtin::Boolean;
 use crate::types::builtin::BuiltinTypeValue;
 use crate::types::enum_types::GlobalEnumTypeDef;
 use crate::types::typedef::NamedTypeDef;
@@ -669,10 +668,10 @@ impl ast::TermSection {
                         &scope,
                         &local_scope,
                     )?;
-                    if expr.get_type() == TypeDef::Boolean
+                    if expr.get_type() == TypeDef::Bool
                         || expr
                             .get_type()
-                            .test_type_conversion(TypeDef::Boolean)
+                            .test_type_conversion(TypeDef::Bool)
                     {
                         expr
                     } else {
@@ -789,9 +788,9 @@ impl ast::TermSection {
                                     &scope,
                                     &local_scope,
                                 )?;
-                                if expr.get_type() == TypeDef::Boolean
+                                if expr.get_type() == TypeDef::Bool
                                     || expr.get_type().test_type_conversion(
-                                        TypeDef::Boolean,
+                                        TypeDef::Bool,
                                     )
                                 {
                                     logic_args.push(expr);
@@ -834,7 +833,7 @@ impl ast::TermSection {
                     let anon_term = vec![symbols::Symbol::new(
                         "anonymous_term".into(),
                         symbols::SymbolKind::Term,
-                        TypeDef::Boolean,
+                        TypeDef::Bool,
                         logic_args,
                         Token::AnonymousTerm,
                     )];
@@ -2098,9 +2097,9 @@ impl ast::BooleanExpr {
                 Ok(symbols::Symbol::new_with_value(
                     "boolean_constant".into(),
                     symbols::SymbolKind::Constant,
-                    TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(
+                    TypeValue::Builtin(BuiltinTypeValue::Bool(
                         bool_lit.0,
-                    ))),
+                    )),
                     vec![],
                     Token::Constant(None),
                 ))
@@ -2196,7 +2195,7 @@ impl ast::CompareExpr {
         Ok(symbols::Symbol::new(
             "compare_expr".into(),
             symbols::SymbolKind::CompareExpr(self.op),
-            TypeDef::Boolean,
+            TypeDef::Bool,
             vec![left_s, right_s],
             Token::NonTerminal,
         ))
@@ -2217,7 +2216,7 @@ impl ast::CompareArg {
                 // This is a grouped expression that will return a boolean.
                 let s = expr.eval(symbols, scope, local_scope)?;
 
-                if s.get_type() == TypeDef::Boolean {
+                if s.get_type() == TypeDef::Bool {
                     Ok(s)
                 } else {
                     Err("Cannot return Non-Boolean in ( )".to_string().into())
@@ -2255,7 +2254,7 @@ impl ast::AndExpr {
         Ok(symbols::Symbol::new(
             "and_expr".into(),
             symbols::SymbolKind::AndExpr,
-            TypeDef::Boolean,
+            TypeDef::Bool,
             vec![left, right],
             Token::NonTerminal,
         ))
@@ -2279,7 +2278,7 @@ impl ast::OrExpr {
         Ok(symbols::Symbol::new(
             "or_expr".into(),
             symbols::SymbolKind::OrExpr,
-            TypeDef::Boolean,
+            TypeDef::Bool,
             vec![left, right],
             Token::NonTerminal,
         ))
@@ -2297,7 +2296,7 @@ impl ast::NotExpr {
 
         let expr = self.expr.eval(_symbols, scope, local_scope)?;
 
-        if expr.get_type() != TypeDef::Boolean {
+        if expr.get_type() != TypeDef::Bool {
             return Err("Expression doesn't evaluate to a Boolean"
                 .to_string()
                 .into());
@@ -2306,7 +2305,7 @@ impl ast::NotExpr {
         Ok(symbols::Symbol::new(
             "not_expr".into(),
             symbols::SymbolKind::NotExpr,
-            TypeDef::Boolean,
+            TypeDef::Bool,
             vec![expr],
             Token::NonTerminal,
         ))
@@ -2368,7 +2367,7 @@ impl ast::ListCompareExpr {
         Ok(symbols::Symbol::new(
             "list_compare_expr".into(),
             symbols::SymbolKind::ListCompareExpr(self.op),
-            TypeDef::Boolean,
+            TypeDef::Bool,
             args,
             Token::NonTerminal,
         ))
@@ -2952,11 +2951,11 @@ fn is_boolean_function(
     right: &impl BooleanExpr,
 ) -> Result<(), CompileError> {
     let left = (
-        left.get_builtin_type()? == TypeDef::Boolean,
+        left.get_builtin_type()? == TypeDef::Bool,
         left.get_args().get(0).map(|a| a.get_value()),
     );
     let right = (
-        right.get_builtin_type()? == TypeDef::Boolean,
+        right.get_builtin_type()? == TypeDef::Bool,
         right.get_args().get(0).map(|a| a.get_value()),
     );
 
@@ -2981,7 +2980,7 @@ fn is_boolean_function(
 fn _is_boolean_expression(
     expr: &impl BooleanExpr,
 ) -> Result<(), CompileError> {
-    if expr.get_type() == TypeDef::Boolean {
+    if expr.get_type() == TypeDef::Bool {
         return Ok(());
     };
 

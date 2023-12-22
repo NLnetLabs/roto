@@ -65,17 +65,17 @@ macro_rules! createtoken {
     ) => {
         paste! {
             #[derive(Debug)]
-            enum [<$token_enum Token>] {
+            enum [<$token_enum:camel Token>] {
                 $( [<$token:camel>] ),*
             }
 
-            impl TryFrom<usize> for [<$token_enum Token>] {
+            impl TryFrom<usize> for [<$token_enum:camel Token>] {
                 type Error = VmError;
 
                 fn try_from(val: usize) -> Result<Self, VmError> {
                     match val {
                         $( $value =>
-                            Ok([<$token_enum Token>]::[<$token:camel>]), )*
+                            Ok([<$token_enum:camel Token>]::[<$token:camel>]), )*
                         t => {
                             error!("Cannot find method for token: {}",  t);
                             Err(VmError::InvalidMethodCall)
@@ -84,10 +84,10 @@ macro_rules! createtoken {
                 }
             }
 
-            impl From<[<$token_enum Token>]> for usize {
-                fn from(val: [<$token_enum Token>]) -> Self {
+            impl From<[<$token_enum:camel Token>]> for usize {
+                fn from(val: [<$token_enum:camel Token>]) -> Self {
                     match val {
-                        $( [<$token_enum Token>]::[<$token:camel>] =>
+                        $( [<$token_enum:camel Token>]::[<$token:camel>] =>
                             $value, )*
                     }
                 }
@@ -96,6 +96,12 @@ macro_rules! createtoken {
     }
 }
 
+
+// into_type() method that only features a `set` method, for use in a RotoType
+// implementation.
+//
+// takes the TypeDef variant as its input. Can be lowercase, will be
+// transformed into CamelCase.
 #[macro_export]
 macro_rules! noconversioninto {
     (
@@ -105,54 +111,73 @@ macro_rules! noconversioninto {
             self,
             type_def: &TypeDef,
         ) -> Result<TypeValue, CompileError> {
-            match type_def {
-                TypeDef::$type_def => {
-                    Ok(TypeValue::Builtin(
-                        BuiltinTypeValue::$type_def(self)
-                    ))
+            paste! {
+                match type_def {
+                    TypeDef::[<$type_def:camel>] => {
+                        Ok(TypeValue::Builtin(
+                            BuiltinTypeValue::[<$type_def:camel>](self)
+                        ))
+                    }
+                    _ => Err(format!(
+                        concat!("Cannot convert type ",
+                            stringify!($type_def)," to type {:?}"),
+                        type_def
+                    )
+                    .into()),
                 }
-                _ => Err(format!(
-                    concat!("Cannot convert type ",
-                        stringify!($type_def)," to type {:?}"),
-                    type_def
-                )
-                .into()),
             }
         }
     };
 }
 
+
+// into_type() method for a TypeDef that only has 'standard' conversions,
+// using the From implementation of the TypeDef variant.
+//
+// Takes the TypeDef variant as its input, as well as two lists of TypeDef
+// variants it can convert into.
 #[macro_export]
 macro_rules! intotype {
     (
         $my_type: ident;
-        $( $into_type_def: ident ),*
+        $( $into_type_def: ident ),*;
+        $( $wrapped_into_type: ident ),*
     ) => {
         fn into_type(
             self,
             type_def: &TypeDef,
         ) -> Result<TypeValue, CompileError> {
-            match type_def {
-                $( 
-                    TypeDef::$into_type_def => Ok(TypeValue::Builtin(
-                        BuiltinTypeValue::$into_type_def(self.into()))), 
-                )*
-                _ => {
-                    Err(format!(
-                        concat!(
-                            "Cannot convert type ", 
-                            stringify!($my_type), 
-                            " to type {:?}"),
-                            type_def
-                        ).into()
-                    )
+            paste! {
+                match type_def {
+                    TypeDef::[<$my_type:camel>] => Ok(TypeValue::Builtin(
+                        BuiltinTypeValue::[<$my_type:camel>](self)
+                    )),
+                    $( 
+                        TypeDef::[<$into_type_def:camel>] => Ok(TypeValue::Builtin(
+                            BuiltinTypeValue::[<$into_type_def:camel>](self.into()))),
+                    )*
+                    $( 
+                        TypeDef::[<$wrapped_into_type:camel>] => Ok(TypeValue::Builtin(
+                            BuiltinTypeValue::[<$wrapped_into_type:camel>](self.into()))), 
+                    )*
+                    _ => {
+                        Err(format!(
+                            concat!(
+                                "Cannot convert type ", 
+                                stringify!($my_type), 
+                                " to type {:?}"),
+                                type_def
+                            ).into()
+                        )
+                    }
                 }
             }
         }
     };
 }
 
-
+// Methods for the RotoType implementation of a TypeDef variant that only
+// features a `set` method.
 #[macro_export]
 macro_rules! setmethodonly {
     (
@@ -169,13 +194,13 @@ macro_rules! setmethodonly {
                 match method_name.ident.as_str() {
                     "set" => Ok(MethodProps::new(
                         TypeDef::Unknown,
-                        [<$type_def Token>]::Set.into(),
-                        vec![TypeDef::$type_def],
+                        [<$type_def:camel Token>]::Set.into(),
+                        vec![TypeDef::[<$type_def:camel>]],
                     )
                     .consume_value()),
                     _ => Err(format!(
                         concat!("Unknown method: '{}' for type ",
-                            stringify!($type_def)),
+                            stringify!([<$type_def:camel>])),
                         method_name.ident
                     )
                     .into()),
@@ -191,9 +216,9 @@ macro_rules! setmethodonly {
         ) -> Result<TypeValue, VmError> {
             paste! {
                 match method_token.try_into()? {
-                    [<$type_def Token>]::Set => {
+                    [<$type_def:camel Token>]::Set => {
                         if let TypeValue::Builtin(
-                                BuiltinTypeValue::$type_def(value)
+                                BuiltinTypeValue::[<$type_def:camel>](value)
                             ) = args
                                     .get(0)
                                     .ok_or(VmError::InvalidMethodCall)?
@@ -215,12 +240,12 @@ macro_rules! setmethodonly {
         ) -> Result<TypeValue, VmError> {
             paste! {
                 match method_token.try_into()? {
-                    [<$type_def Token>]::Set => {
-                        if let Ok(TypeValue::Builtin(BuiltinTypeValue::$type_def(
+                    [<$type_def:camel Token>]::Set => {
+                        if let Ok(TypeValue::Builtin(BuiltinTypeValue::[<$type_def:camel>](
                             value,
-                        ))) = args.remove(0).into_type(&TypeDef::$type_def)
+                        ))) = args.remove(0).into_type(&TypeDef::[<$type_def:camel>])
                         {
-                            Ok(TypeValue::Builtin(BuiltinTypeValue::$type_def(value)))
+                            Ok(TypeValue::Builtin(BuiltinTypeValue::[<$type_def:camel>](value)))
                         } else {
                             Err(VmError::InvalidValueType)
                         }
@@ -240,38 +265,109 @@ macro_rules! setmethodonly {
 }
 
 #[macro_export]
-macro_rules! integerscalartype {
+macro_rules! typevaluefromimpls {
+    (
+        $type_def: ident
+    ) => {
+        paste! {
+            impl From<$type_def> for TypeValue {
+                fn from(value: $type_def) -> Self {
+                    TypeValue::Builtin(BuiltinTypeValue::[<$type_def:camel>](value))
+                }
+            }
+        }
+
+        paste! {
+            impl From<$type_def> for BuiltinTypeValue {
+                fn from(value: $type_def) -> Self {
+                    BuiltinTypeValue::[<$type_def:camel>](value)
+                }
+            }
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! primitivefromimpls {
     (
         $type_def: ident;
-        $( $into_type_def: ident ),*
+        $( $into_wrapped_type: ident = $into_inner_type: ident),*
     ) => {
-        createtoken!(LocalPref;Set = 0);
+        typevaluefromimpls!($type_def);
+
+        $(
+            impl From<$type_def> for $into_wrapped_type {
+                fn from(value: $type_def) -> Self {
+                    $into_wrapped_type(value as $into_inner_type)
+                }
+            }
+        )*
+    }
+}
+
+#[macro_export]
+macro_rules! wrappedfromimpls {
+    (
+        $type_def: ident;
+        $( $into_type_def: ident ),*;
+        $( $into_wrapped_type: ident = $into_inner_type: ident),*
+    ) => {
+        typevaluefromimpls!($type_def);
+
+        $(
+            impl From<$type_def> for $into_type_def {
+                fn from(value: $type_def) -> Self {
+                    value.0 as $into_type_def
+                }
+            }
+        )*
+
+        $(
+            impl From<$type_def> for $into_wrapped_type {
+                fn from(value: $type_def) -> Self {
+                    $into_wrapped_type(value.0 as $into_inner_type)
+                }
+            }
+        )*
+    }
+}
+
+#[macro_export]
+macro_rules! scalartype {
+    (
+        $type_def: ident;
+        $( $into_type_def: ident ),*;
+        $( $wrapped_into_type: ident = $into_inner_type: ident),*
+    ) => {
+        createtoken!($type_def; Set = 0);
 
         impl RotoType for $type_def {
             setmethodonly!($type_def);
 
             intotype!($type_def;
-                $( $into_type_def ),* 
+                $( $into_type_def ),*;
+                $( $wrapped_into_type ),*
             );
         }
+        
+        typevaluefromimpls!($type_def);
 
-        impl From<$type_def> for TypeValue {
-            fn from(value: $type_def) -> Self {
-                TypeValue::Builtin(BuiltinTypeValue::$type_def(value))
+        $(
+            impl From<$type_def> for $wrapped_into_type {
+                fn from(value: $type_def) -> Self {
+                    $wrapped_into_type(value.0 as $into_inner_type)
+                }
             }
-        }
-
-        impl From<$type_def> for BuiltinTypeValue {
-            fn from(value: $type_def) -> Self {
-                BuiltinTypeValue::$type_def(value)
-            }
-        }
+        )*
 
         impl ScalarValue for $type_def {}
     }
 }
 
-
+// An implementation for a TypeDef variant, that has/is:
+// - a ScalarValue
+// - only has a `set` method
+// - has no type conversions.
 #[macro_export]
 macro_rules! minimalscalartype {
     (
@@ -285,17 +381,7 @@ macro_rules! minimalscalartype {
             noconversioninto!($type_def);
         }
 
-        impl From<$type_def> for TypeValue {
-            fn from(value: $type_def) -> Self {
-                TypeValue::Builtin(BuiltinTypeValue::$type_def(value))
-            }
-        }
-
-        impl From<$type_def> for BuiltinTypeValue {
-            fn from(value: $type_def) -> Self {
-                BuiltinTypeValue::$type_def(value)
-            }
-        }
+        typevaluefromimpls!($type_def);
 
         impl ScalarValue for $type_def {}
     };

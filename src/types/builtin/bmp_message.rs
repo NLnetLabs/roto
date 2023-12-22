@@ -266,21 +266,21 @@ bytes_record_impl!(
                 per_peer_header.adj_rib_type
             ),
             field("asn"; 3, Asn, per_peer_header.asn),
-            field("is_ipv4"; 4, Boolean, per_peer_header.is_ipv4),
-            field("is_ipv6"; 5, Boolean, per_peer_header.is_ipv6),
+            field("is_ipv4"; 4, Bool, per_peer_header.is_ipv4),
+            field("is_ipv6"; 5, Bool, per_peer_header.is_ipv6),
             field(
                 "is_legacy_format"; 6,
-                Boolean,
+                Bool,
                 per_peer_header.is_legacy_format
             ),
             field(
                 "is_post_policy"; 7,
-                Boolean,
+                Bool,
                 per_peer_header.is_post_policy
             ),
             field(
                 "is_pre_policy"; 8,
-                Boolean,
+                Bool,
                 per_peer_header.is_pre_policy
             ),
             enum_field(
@@ -338,21 +338,21 @@ bytes_record_impl!(
                 per_peer_header.adj_rib_type
             ),
             field("asn"; 5, Asn, per_peer_header.asn),
-            field("is_ipv4"; 6, Boolean, per_peer_header.is_ipv4),
-            field("is_ipv6"; 7, Boolean, per_peer_header.is_ipv6),
+            field("is_ipv4"; 6, Bool, per_peer_header.is_ipv4),
+            field("is_ipv6"; 7, Bool, per_peer_header.is_ipv6),
             field(
                 "is_legacy_format"; 8,
-                Boolean,
+                Bool,
                 per_peer_header.is_legacy_format
             ),
             field(
                 "is_post_policy"; 9,
-                Boolean,
+                Bool,
                 per_peer_header.is_post_policy
             ),
             field(
                 "is_pre_policy"; 10,
-                Boolean,
+                Bool,
                 per_peer_header.is_pre_policy
             ),
             enum_field(
@@ -371,7 +371,7 @@ bytes_record_impl!(
             "session_config"; 13,
             field(
                 "has_four_octet_asn"; 14,
-                Boolean,
+                Bool,
                 session_config.has_four_octet_asn
             ),
         ),
@@ -410,21 +410,21 @@ bytes_record_impl!(
                 per_peer_header.adj_rib_type
             ),
             field("asn"; 3, Asn, per_peer_header.asn),
-            field("is_ipv4"; 4, Boolean, per_peer_header.is_ipv4),
-            field("is_ipv6"; 5, Boolean, per_peer_header.is_ipv6),
+            field("is_ipv4"; 4, Bool, per_peer_header.is_ipv4),
+            field("is_ipv6"; 5, Bool, per_peer_header.is_ipv6),
             field(
                 "is_legacy_format"; 6,
-                Boolean,
+                Bool,
                 per_peer_header.is_legacy_format
             ),
             field(
                 "is_post_policy"; 7,
-                Boolean,
+                Bool,
                 per_peer_header.is_post_policy
             ),
             field(
                 "is_pre_policy"; 8,
-                Boolean,
+                Bool,
                 per_peer_header.is_pre_policy
             ),
             enum_field(
@@ -531,21 +531,21 @@ bytes_record_impl!(
                 per_peer_header.adj_rib_type
             ),
             field("asn"; 3, Asn, per_peer_header.asn),
-            field("is_ipv4"; 4, Boolean, per_peer_header.is_ipv4),
-            field("is_ipv6"; 5, Boolean, per_peer_header.is_ipv6),
+            field("is_ipv4"; 4, Bool, per_peer_header.is_ipv4),
+            field("is_ipv6"; 5, Bool, per_peer_header.is_ipv6),
             field(
                 "is_legacy_format"; 6,
-                Boolean,
+                Bool,
                 per_peer_header.is_legacy_format
             ),
             field(
                 "is_post_policy"; 7,
-                Boolean,
+                Bool,
                 per_peer_header.is_post_policy
             ),
             field(
                 "is_pre_policy"; 8,
-                Boolean,
+                Bool,
                 per_peer_header.is_pre_policy
             ),
             enum_field(
