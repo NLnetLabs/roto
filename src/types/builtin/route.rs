@@ -14,6 +14,7 @@
 use log::{debug, error};
 use routecore::addr::Prefix;
 use routecore::asn::Asn;
+use routecore::bgp::types::OriginType;
 use routecore::bgp::{
     aspath::HopPath,
     message::{nlri::PathId, SessionConfig},
@@ -39,7 +40,7 @@ use crate::{
     vm::{StackValue, VmError},
 };
 
-use super::{BuiltinTypeValue, OriginType, RouteStatus};
+use super::{BuiltinTypeValue, RouteStatus};
 use crate::attr_change_set::{
     AttrChangeSet, ScalarOption, ScalarValue, VectorOption, VectorValue,
 };
@@ -417,7 +418,7 @@ impl RawRouteWithDeltas {
                 Token::FieldAccess(vec![RouteToken::AtomicAggregate.into()]),
             )),
             "aggregator" => Ok((
-                TypeDef::Aggregator,
+                TypeDef::AggregatorInfo,
                 Token::FieldAccess(vec![RouteToken::Aggregator.into()]),
             )),
             "communities" => Ok((
@@ -1086,7 +1087,7 @@ impl RotoType for RawRouteWithDeltas {
                 vec![],
             )),
             "aggregator" => Ok(MethodProps::new(
-                TypeDef::Aggregator,
+                TypeDef::AggregatorInfo,
                 RouteToken::Aggregator.into(),
                 vec![],
             )),

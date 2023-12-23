@@ -3,9 +3,6 @@ use std::net::IpAddr;
 
 use log::{debug, error, trace};
 use paste::paste;
-use routecore::asn::{Asn, LongSegmentError};
-use routecore::bgp::aspath::OwnedHop;
-use routecore::bgp::message::nlri::PathId;
 use serde::Serialize;
 
 use crate::ast::{IpAddressLiteral, PrefixLiteral};
@@ -26,8 +23,13 @@ use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 use super::builtin_type_value::BuiltinTypeValue;
 
+use routecore::asn::{Asn, LongSegmentError};
+use routecore::bgp::aspath::OwnedHop;
+use routecore::bgp::message::nlri::PathId;
+use routecore::bgp::path_attributes::{AtomicAggregate, AggregatorInfo};
 use routecore::bgp::communities::HumanReadableCommunity as Community;
-use routecore::bgp::types::{AfiSafi, LocalPref, NextHop};
+use routecore::addr::Prefix;
+use routecore::bgp::types::{AfiSafi, LocalPref, NextHop, OriginType, MultiExitDisc};
 
 //------------ U16 Type -----------------------------------------------------
 
@@ -134,6 +136,18 @@ impl RotoType for u32 {
 
 typevaluefromimpls!(u32);
 
+impl TryInto<u32> for &TypeValue {
+    type Error = VmError;
+
+    fn try_into(self) -> Result<u32, Self::Error> {
+        if let TypeValue::Builtin(BuiltinTypeValue::U32(value)) = self {
+            Ok(*value)
+        } else {
+            Err(VmError::InvalidValueType)
+        }
+    }
+}
+
 // ----------- U8 Type -------------------------------------------------------
 
 createtoken!(U8; Set = 0);
@@ -177,19 +191,6 @@ typevaluefromimpls!(u8);
 // ----------- Boolean Type --------------------------------------------------
 
 createtoken!(bool; Set = 0);
-// #[derive(
-//     Debug, Eq, PartialEq, Copy, Clone, Hash, Ord, PartialOrd, Serialize,
-// )]
-// pub struct Boolean(pub(crate) bool);
-// impl Boolean {
-//     pub fn new(val: bool) -> Self {
-//         Boolean(val)
-//     }
-
-//     pub fn is_false(&self) -> bool {
-//         !self.0
-//     }
-// }
 
 impl RotoType for bool {
     setmethodonly!(bool);
@@ -407,6 +408,8 @@ pub enum StringLiteralToken {
     Set = 2,
 }
 
+impl ScalarValue for StringLiteral {}
+
 impl TryFrom<usize> for StringLiteralToken {
     type Error = VmError;
     fn try_from(val: usize) -> Result<Self, VmError> {
@@ -614,6 +617,12 @@ impl From<IntegerLiteral> for BuiltinTypeValue {
     }
 }
 
+impl From<i64> for BuiltinTypeValue {
+    fn from(val: i64) -> Self {
+        BuiltinTypeValue::IntegerLiteral(IntegerLiteral(val))
+    }
+}
+
 impl Display for IntegerLiteral {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
@@ -756,6 +765,12 @@ impl From<HexLiteral> for TypeValue {
     }
 }
 
+impl From<HexLiteral> for BuiltinTypeValue {
+    fn from(value: HexLiteral) -> Self {
+        BuiltinTypeValue::HexLiteral(value)
+    }
+}
+
 impl Display for HexLiteral {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
@@ -787,7 +802,19 @@ impl From<HexLiteralToken> for usize {
     }
 }
 
+
 // ----------- Prefix type ---------------------------------------------------
+
+createtoken!(Prefix;
+    From = 0
+    Exists = 1
+    Address = 2
+    Len = 3
+    Matches = 4
+    Covers = 5
+    IsCoveredBy = 6
+    Contains = 7
+);
 
 impl RotoType for routecore::addr::Prefix {
     fn get_props_for_method(
@@ -847,22 +874,6 @@ impl RotoType for routecore::addr::Prefix {
     }
 
     intotype!(Prefix;StringLiteral);
-
-    // fn into_type(
-    //     self,
-    //     type_def: &TypeDef,
-    // ) -> Result<TypeValue, CompileError> {
-    //     match type_def {
-    //         TypeDef::Prefix => {
-    //             Ok(TypeValue::Builtin(BuiltinTypeValue::Prefix(self)))
-    //         }
-    //         _ => Err(format!(
-    //             "Cannot convert type Prefix to type {:?}",
-    //             type_def
-    //         )
-    //         .into()),
-    //     }
-    // }
 
     fn exec_value_method(
         &self,
@@ -979,17 +990,13 @@ impl RotoType for routecore::addr::Prefix {
     }
 }
 
-impl From<routecore::addr::Prefix> for TypeValue {
-    fn from(val: routecore::addr::Prefix) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Prefix(val))
-    }
-}
+typevaluefromimpls!(Prefix);
 
 impl TryFrom<&'_ PrefixLiteral> for routecore::addr::Prefix {
     type Error = CompileError;
 
     fn try_from(value: &PrefixLiteral) -> Result<Self, Self::Error> {
-        <routecore::addr::Prefix as std::str::FromStr>::from_str(
+        <Prefix as std::str::FromStr>::from_str(
             value.0.as_str(),
         )
         .map_err(|e| {
@@ -1001,16 +1008,20 @@ impl TryFrom<&'_ PrefixLiteral> for routecore::addr::Prefix {
     }
 }
 
-createtoken!(Prefix;
-    From = 0
-    Exists = 1
-    Address = 2
-    Len = 3
-    Matches = 4
-    Covers = 5
-    IsCoveredBy = 6
-    Contains = 7
-);
+impl TryFrom<&TypeValue> for routecore::addr::Prefix {
+    type Error = VmError;
+
+    fn try_from(value: &TypeValue) -> Result<Self, Self::Error> {
+        if let TypeValue::Builtin(BuiltinTypeValue::Prefix(
+            pfx,
+        )) = value
+        {
+            Ok(*pfx)
+        } else {
+            Err(VmError::InvalidConversion)
+        }
+    }
+}
 
 
 //------------ PrefixLength type ---------------------------------------------
@@ -1068,15 +1079,29 @@ impl TryFrom<&TypeValue> for PrefixLength {
     }
 }
 
+
 //------------ AfiSafi Type --------------------------------------------------
 
 minimalscalartype!(AfiSafi);
+
 
 //------------ PathId Type ---------------------------------------------------
 
 minimalscalartype!(PathId);
 
+
 //------------ Community Type ------------------------------------------------
+
+createtoken!(Community;
+    From = 0
+    Standard = 1
+    Extended = 2
+    Large = 3
+    As = 4
+    Value = 5
+    Exists = 6
+    Set = 7
+);
 
 impl RotoType for Community {
     fn get_props_for_method(
@@ -1243,17 +1268,6 @@ impl From<Vec<Community>> for TypeValue {
     }
 }
 
-createtoken!(Community;
-    From = 0
-    Standard = 1
-    Extended = 2
-    Large = 3
-    As = 4
-    Value = 5
-    Exists = 6
-    Set = 7
-);
-
 
 //------------ MatchType ----------------------------------------------------
 
@@ -1303,21 +1317,68 @@ impl RotoType for IpAddr {
 
     fn exec_value_method(
         &self,
-        _method_token: usize,
+        method_token: usize,
 
-        _args: &[StackValue],
+        args: &[StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        todo!();
+        match method_token.try_into()? {
+            IpAddrToken::From => {
+                if let TypeValue::Builtin(BuiltinTypeValue::StringLiteral(str_lit)) =
+                    args.get(0).ok_or(VmError::InvalidMethodCall)?.as_ref()
+                {
+                   str_lit.clone().into_type(&TypeDef::IpAddr).map_err(|_| VmError::InvalidConversion)
+                } else {
+                    Err(VmError::InvalidCommandArg)
+                }
+            },
+            IpAddrToken::Matches => {
+                if let TypeValue::Builtin(BuiltinTypeValue::Prefix(pfx)) =
+                    args.get(0).ok_or(VmError::InvalidMethodCall)?.as_ref()
+                {
+                   Ok(TypeValue::Builtin(
+                        BuiltinTypeValue::Bool(pfx.contains(*self))
+                        )
+                    )
+                } else {
+                    Err(VmError::InvalidCommandArg)
+                }
+            }
+        }
     }
 
     fn exec_consume_value_method(
         self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
+        method_token: usize,
+        mut args: Vec<TypeValue>,
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        todo!()
+        match method_token.try_into()? {
+            IpAddrToken::From if args.len() == 1 => {
+                if let TypeValue::Builtin(BuiltinTypeValue::StringLiteral(str_lit)) =
+                    args.remove(0)
+                {
+                   str_lit.into_type(&TypeDef::IpAddr).map_err(|_| VmError::InvalidConversion)
+                } else {
+                    Err(VmError::InvalidCommandArg)
+                }
+            },
+            IpAddrToken::Matches => {
+                if let TypeValue::Builtin(BuiltinTypeValue::Prefix(pfx)) =
+                    args.get(0).ok_or(VmError::InvalidMethodCall)?
+                {
+                   Ok(TypeValue::Builtin(
+                        BuiltinTypeValue::Bool(pfx.contains(self))
+                        )
+                    )
+                } else {
+                    Err(VmError::InvalidCommandArg)
+                }
+            },
+            _ => {
+                Err(VmError::InvalidMethodCall)
+            }
+        }
     }
 
     fn exec_type_method<'a>(
@@ -1330,8 +1391,6 @@ impl RotoType for IpAddr {
 }
 
 typevaluefromimpls!(IpAddr);
-
-impl ScalarValue for IpAddr {}
 
 impl TryFrom<&'_ IpAddressLiteral> for IpAddr {
     type Error = CompileError;
@@ -1352,28 +1411,10 @@ impl TryFrom<&'_ IpAddressLiteral> for IpAddr {
 
 // ----------- Asn type -----------------------------------------------------
 
+createtoken!(Asn; Set = 0);
+
 impl RotoType for routecore::asn::Asn {
-    fn get_props_for_method(
-        _ty: TypeDef,
-        method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        match method_name.ident.as_str() {
-            "set" => Ok(MethodProps::new(
-                TypeDef::Unknown,
-                AsnToken::Set.into(),
-                vec![TypeDef::Asn],
-            )
-            .consume_value()),
-            _ => Err(format!(
-                "Unknown method: '{}' for type Asn",
-                method_name.ident
-            )
-            .into()),
-        }
-    }
+    setmethodonly!(Asn);
 
     fn into_type(
         self,
@@ -1395,7 +1436,7 @@ impl RotoType for routecore::asn::Asn {
                 }
                 val => Err(format!(
                     "Cannot convert an instance of type \
-                    Asn with a value {} into type ASN. It's greater than 255",
+                    Asn with a value {} into type U8. It's greater than 255",
                     val
                 )
                 .into()),
@@ -1409,74 +1450,10 @@ impl RotoType for routecore::asn::Asn {
             }
         }
     }
-
-    fn exec_value_method<'a>(
-        &'a self,
-        method_token: usize,
-        args: &'a [StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        match method_token.try_into()? {
-            AsnToken::Set => {
-                if let TypeValue::Builtin(BuiltinTypeValue::Asn(asn)) =
-                    args.get(0).ok_or(VmError::InvalidMethodCall)?.as_ref()
-                {
-                    Ok(TypeValue::from(*asn))
-                } else {
-                    Err(VmError::AnonymousArgumentNotFound)
-                }
-            }
-        }
-    }
-
-    fn exec_consume_value_method(
-        self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
-
-    fn exec_type_method<'a>(
-        _method_token: usize,
-        _args: &[StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
 }
 
-impl From<Asn> for TypeValue {
-    fn from(value: Asn) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Asn(value))
-    }
-}
+typevaluefromimpls!(Asn);
 
-#[derive(Debug)]
-pub enum AsnToken {
-    Set,
-}
-
-impl TryFrom<usize> for AsnToken {
-    type Error = VmError;
-
-    fn try_from(val: usize) -> Result<Self, VmError> {
-        match val {
-            0 => Ok(AsnToken::Set),
-            _ => {
-                debug!("Unknown token value: {} for Asn", val);
-                Err(VmError::InvalidMethodCall)
-            }
-        }
-    }
-}
-
-impl From<AsnToken> for usize {
-    fn from(val: AsnToken) -> Self {
-        val as usize
-    }
-}
 
 // ----------- AsPath type --------------------------------------------------
 
@@ -1638,6 +1615,35 @@ impl VectorValue for routecore::bgp::aspath::HopPath {
     }
 }
 
+impl From<routecore::bgp::aspath::HopPath> for BuiltinTypeValue {
+    fn from(value: routecore::bgp::aspath::HopPath) -> Self {
+        BuiltinTypeValue::AsPath(value)
+    }
+}
+
+impl From<routecore::bgp::aspath::HopPath> for TypeValue {
+    fn from(value: routecore::bgp::aspath::HopPath) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::AsPath(
+            value
+        ))
+    }
+}
+
+impl From<Vec<Asn>> for TypeValue {
+    fn from(as_path: Vec<Asn>) -> Self {
+        let as_path: Vec<routecore::bgp::aspath::Hop<Vec<u8>>> =
+            as_path.iter().map(|p| (*p).into()).collect();
+        let as_path = routecore::bgp::aspath::HopPath::from(as_path);
+        TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path))
+    }
+}
+
+impl From<Vec<routecore::bgp::aspath::Hop<Vec<u8>>>> for TypeValue {
+    fn from(as_path: Vec<routecore::bgp::aspath::Hop<Vec<u8>>>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path.into()))
+    }
+}
+
 #[repr(u8)]
 #[derive(Debug)]
 pub(crate) enum AsPathToken {
@@ -1668,149 +1674,83 @@ impl From<AsPathToken> for usize {
     }
 }
 
+
 //------------ Hop type -----------------------------------------------------
 
 // A read-only type that contains an ASN or a more complex segment of a AS
 // PATH, e.g. an AS_SET.
+use routecore::bgp::aspath::OwnedHop as Hop;
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize)]
-pub struct Hop(pub(crate) routecore::bgp::aspath::OwnedHop);
+createtoken!(Hop; Set = 0);
 
 impl RotoType for Hop {
+    intotype!(Hop; StringLiteral);
+
     fn get_props_for_method(
         _ty: TypeDef,
-        _method_name: &crate::ast::Identifier,
+        method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
     {
-        todo!()
-    }
-
-    fn into_type(
-        self,
-        _type_value: &TypeDef,
-    ) -> Result<TypeValue, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        todo!()
+        match method_name.ident.as_str() {
+            "set" => Ok(MethodProps::new(
+                TypeDef::Unknown,
+                HopToken::Set.into(),
+                vec![TypeDef::Hop],
+            )
+            .consume_value()),
+            _ => Err(format!("Unknown method: '{}' for type Hop",
+                method_name.ident
+            )
+            .into()),
+        }
     }
 
     fn exec_value_method<'a>(
         &'a self,
         _method_token: usize,
-
         _args: &'a [StackValue],
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        todo!()
+        Err(VmError::InvalidMethodCall)
     }
 
     fn exec_consume_value_method(
         self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
+        method_token: usize,
+        mut args: Vec<TypeValue>,
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        todo!()
+        match method_token.try_into()? {
+            HopToken::Set => {
+                if let Ok(TypeValue::Builtin(BuiltinTypeValue::Hop(
+                    value,
+                ))) = args.remove(0).into_type(&TypeDef::Hop)
+                {
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::Hop(value)))
+                } else {
+                    Err(VmError::InvalidValueType)
+                }
+            }
+        }
     }
 
-    fn exec_type_method<'a>(
+    fn exec_type_method(
         _method_token: usize,
-        _args: &[StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
+        _args: &[crate::vm::StackValue],
+        _res_type: crate::types::typedef::TypeDef,
+    ) -> Result<TypeValue, crate::vm::VmError> {
+        Err(VmError::InvalidMethodCall)
     }
 }
 
-impl Display for Hop {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+typevaluefromimpls!(Hop);
+
 
 //------------ OriginType type ----------------------------------------------
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize)]
-pub struct OriginType(pub(crate) routecore::bgp::types::OriginType);
-
-impl OriginType {
-    pub fn into_inner(self) -> routecore::bgp::types::OriginType {
-        self.0
-    }
-}
-
-impl RotoType for OriginType {
-    fn get_props_for_method(
-        _ty: TypeDef,
-        _method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        todo!()
-    }
-
-    fn into_type(self, _type_def: &TypeDef) -> Result<TypeValue, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        todo!()
-    }
-
-    fn exec_value_method<'a>(
-        &'a self,
-        _method_token: usize,
-
-        _args: &'a [StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
-
-    fn exec_consume_value_method(
-        self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
-
-    fn exec_type_method<'a>(
-        _method_token: usize,
-        _args: &[StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
-}
-
-impl From<OriginType> for TypeValue {
-    fn from(value: OriginType) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::OriginType(value))
-    }
-}
-
-impl From<routecore::bgp::types::OriginType> for TypeValue {
-    fn from(value: routecore::bgp::types::OriginType) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::OriginType(OriginType(value)))
-    }
-}
-
-impl From<routecore::bgp::types::OriginType> for BuiltinTypeValue {
-    fn from(value: routecore::bgp::types::OriginType) -> Self {
-        BuiltinTypeValue::OriginType(OriginType(value))
-    }
-}
-
-impl Display for OriginType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+minimalscalartype!(OriginType);
 
 //------------ NextHop type -------------------------------------------------
 
@@ -1818,44 +1758,7 @@ minimalscalartype!(NextHop);
 
 //------------ Multi Exit Discriminator type --------------------------------
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize)]
-pub struct MultiExitDisc(pub(crate) routecore::bgp::types::MultiExitDisc);
-
-createtoken!(
-    MultiExitDisc;
-    Set = 0
-);
-
-impl RotoType for MultiExitDisc {
-    setmethodonly!(MultiExitDisc);
-    noconversioninto!(MultiExitDisc);
-}
-
-impl From<MultiExitDisc> for TypeValue {
-    fn from(value: MultiExitDisc) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::MultiExitDisc(value))
-    }
-}
-
-impl From<routecore::bgp::types::MultiExitDisc> for TypeValue {
-    fn from(value: routecore::bgp::types::MultiExitDisc) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::MultiExitDisc(MultiExitDisc(
-            value,
-        )))
-    }
-}
-
-impl From<routecore::bgp::types::MultiExitDisc> for BuiltinTypeValue {
-    fn from(value: routecore::bgp::types::MultiExitDisc) -> Self {
-        BuiltinTypeValue::MultiExitDisc(MultiExitDisc(value))
-    }
-}
-
-impl Display for MultiExitDisc {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+minimalscalartype!(MultiExitDisc);
 
 //------------ Unknown type -------------------------------------------------
 
@@ -1956,265 +1859,21 @@ impl From<UnknownToken> for usize {
     }
 }
 
+
 //------------ Local Preference type ----------------------------------------
 
 scalartype!(LocalPref; u32; IntegerLiteral = i64);
 
+
 //------------ AtomicAggregate type -----------------------------------------
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize)]
-pub struct AtomicAggregate(
-    pub(crate) routecore::bgp::path_attributes::AtomicAggregate,
-);
+minimalscalartype!(AtomicAggregate);
 
-impl RotoType for AtomicAggregate {
-    fn get_props_for_method(
-        _ty: TypeDef,
-        method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        match method_name.ident.as_str() {
-            "set" => Ok(MethodProps::new(
-                TypeDef::Unknown,
-                AtomicAggregateToken::Set.into(),
-                vec![TypeDef::Asn, TypeDef::IpAddr],
-            )
-            .consume_value()),
-            _ => Err(format!(
-                "Unknown method: '{}' for type Atomic Aggregator",
-                method_name.ident
-            )
-            .into()),
-        }
-    }
 
-    fn into_type(
-        self,
-        _type_value: &TypeDef,
-    ) -> Result<TypeValue, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        todo!()
-    }
+//------------ Aggregator type -----------------------------------------------
 
-    fn exec_value_method<'a>(
-        &'a self,
-        _method_token: usize,
+minimalscalartype!(AggregatorInfo);
 
-        _args: &'a [StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
-
-    fn exec_consume_value_method(
-        self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
-
-    fn exec_type_method<'a>(
-        _method_token: usize,
-        _args: &[StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
-}
-
-impl From<AtomicAggregate> for TypeValue {
-    fn from(value: AtomicAggregate) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::AtomicAggregate(value))
-    }
-}
-
-impl From<AtomicAggregate> for BuiltinTypeValue {
-    fn from(value: AtomicAggregate) -> Self {
-        BuiltinTypeValue::AtomicAggregate(value)
-    }
-}
-
-impl From<routecore::bgp::path_attributes::AtomicAggregate> for TypeValue {
-    fn from(value: routecore::bgp::path_attributes::AtomicAggregate) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::AtomicAggregate(
-            AtomicAggregate(value),
-        ))
-    }
-}
-
-impl From<routecore::bgp::path_attributes::AtomicAggregate>
-    for BuiltinTypeValue
-{
-    fn from(value: routecore::bgp::path_attributes::AtomicAggregate) -> Self {
-        BuiltinTypeValue::AtomicAggregate(AtomicAggregate(value))
-    }
-}
-
-impl std::fmt::Display for AtomicAggregate {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
-}
-
-#[derive(Debug)]
-pub enum AtomicAggregateToken {
-    Set,
-}
-
-impl TryFrom<usize> for AtomicAggregateToken {
-    type Error = VmError;
-
-    fn try_from(val: usize) -> Result<Self, VmError> {
-        match val {
-            0 => Ok(AtomicAggregateToken::Set),
-            _ => {
-                debug!("Unknown token value: {}", val);
-                Err(VmError::InvalidMethodCall)
-            }
-        }
-    }
-}
-
-impl From<AtomicAggregateToken> for usize {
-    fn from(val: AtomicAggregateToken) -> Self {
-        match val {
-            AtomicAggregateToken::Set => 0,
-        }
-    }
-}
-
-//------------ Aggregator type ----------------------------------------------
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize)]
-pub struct Aggregator(
-    pub(crate) routecore::bgp::path_attributes::AggregatorInfo,
-);
-
-impl RotoType for Aggregator {
-    fn get_props_for_method(
-        _ty: TypeDef,
-        method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        match method_name.ident.as_str() {
-            "set" => Ok(MethodProps::new(
-                TypeDef::Unknown,
-                AtomicAggregateToken::Set.into(),
-                vec![TypeDef::Asn, TypeDef::IpAddr],
-            )
-            .consume_value()),
-            _ => Err(format!(
-                "Unknown method: '{}' for type Aggregator",
-                method_name.ident
-            )
-            .into()),
-        }
-    }
-
-    fn into_type(
-        self,
-        _type_value: &TypeDef,
-    ) -> Result<TypeValue, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        todo!()
-    }
-
-    fn exec_value_method<'a>(
-        &'a self,
-        _method_token: usize,
-
-        _args: &'a [StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
-
-    fn exec_consume_value_method(
-        self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
-
-    fn exec_type_method<'a>(
-        _method_token: usize,
-        _args: &[StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        todo!()
-    }
-}
-
-impl From<Aggregator> for TypeValue {
-    fn from(value: Aggregator) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Aggregator(value))
-    }
-}
-
-impl From<Aggregator> for BuiltinTypeValue {
-    fn from(value: Aggregator) -> Self {
-        BuiltinTypeValue::Aggregator(value)
-    }
-}
-
-impl From<routecore::bgp::path_attributes::AggregatorInfo> for TypeValue {
-    fn from(value: routecore::bgp::path_attributes::AggregatorInfo) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Aggregator(Aggregator(value)))
-    }
-}
-
-impl From<routecore::bgp::path_attributes::AggregatorInfo>
-    for BuiltinTypeValue
-{
-    fn from(value: routecore::bgp::path_attributes::AggregatorInfo) -> Self {
-        BuiltinTypeValue::Aggregator(Aggregator(value))
-    }
-}
-
-impl std::fmt::Display for Aggregator {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
-}
-
-#[derive(Debug)]
-pub enum AggregatorToken {
-    Set,
-}
-
-impl TryFrom<usize> for AggregatorToken {
-    type Error = VmError;
-
-    fn try_from(val: usize) -> Result<Self, VmError> {
-        match val {
-            0 => Ok(AggregatorToken::Set),
-            _ => {
-                debug!("Unknown token value: {}", val);
-                Err(VmError::InvalidMethodCall)
-            }
-        }
-    }
-}
-
-impl From<AggregatorToken> for usize {
-    fn from(val: AggregatorToken) -> Self {
-        match val {
-            AggregatorToken::Set => 0,
-        }
-    }
-}
 
 //------------ RouteStatus type ---------------------------------------------
 
@@ -2269,6 +1928,8 @@ impl std::fmt::Display for RouteStatus {
         }
     }
 }
+
+typevaluefromimpls!(RouteStatus);
 
 impl TryFrom<TypeValue> for RouteStatus {
     type Error = VmError;

@@ -3,7 +3,8 @@
 use routecore::asn::LongSegmentError;
 use routecore::bgp::aspath::HopPath;
 use routecore::bgp::message::nlri::PathId;
-use routecore::bgp::types::{AfiSafi, LocalPref};
+use routecore::bgp::path_attributes::AtomicAggregate;
+use routecore::bgp::types::{AfiSafi, LocalPref, OriginType, MultiExitDisc};
 use routecore::addr::Prefix;
 use routecore::bgp::communities::HumanReadableCommunity as Community;
 use routecore::asn::Asn;
@@ -12,10 +13,9 @@ use std::marker::PhantomData;
 use std::ops::Index;
 use std::net::IpAddr;
 
-use crate::ast::StringLiteral;
 use crate::types::builtin::{
-    AtomicAggregate, BuiltinTypeValue,
-    MultiExitDisc, OriginType, RouteStatus,
+    BuiltinTypeValue,
+    StringLiteral
 };
 use crate::types::collections::ElementTypeValue;
 use crate::types::typevalue::TypeValue;
@@ -55,16 +55,6 @@ where
 
 pub trait ScalarValue: Clone + Into<TypeValue> {}
 
-impl ScalarValue for OriginType {}
-impl ScalarValue for bool {}
-impl ScalarValue for MultiExitDisc {}
-impl ScalarValue for AtomicAggregate {}
-impl ScalarValue for Prefix {}
-impl ScalarValue for RouteStatus {}
-// impl ScalarValue for IpAddress {}
-impl ScalarValue for Asn {}
-impl ScalarValue for StringLiteral {}
-// impl ScalarValue for (u8, u32) {}
 
 //------------ Attributes Change Set ----------------------------------------
 
@@ -316,7 +306,6 @@ impl<V: VectorValue + Into<TypeValue> + std::fmt::Debug> VectorOption<V> {
                         }
                         TypeValue::Builtin(BuiltinTypeValue::Hop(hop)) => {
                             let asn: routecore::asn::Asn = hop
-                                .0
                                 .try_into_asn()
                                 .map_err(|_| LongSegmentError)?;
                             vec![asn]

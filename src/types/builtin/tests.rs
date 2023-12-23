@@ -5,7 +5,7 @@ mod route {
     use super::super::{
         IntegerLiteral, PrefixLength, StringLiteral,
     };
-    use crate::ast::IpAddressLiteral;
+    use crate::ast::{IpAddressLiteral, AsnLiteral};
     use crate::types::builtin::BuiltinTypeValue;
     use crate::types::typedef::TypeDef;
     use crate::types::typevalue::TypeValue;
@@ -1099,7 +1099,7 @@ src_ty.clone().test_type_conversion(arg_ty)"]
         test_consume_method_on_type_value(test_value, "set", res).unwrap();
     }
     
-    //------------ Test: IpAddress -------------------------------------------
+    //------------ Test: IpAddr ----------------------------------------------
 
     #[test]
     fn test_ip_address_literal_1() -> Result<(), CompileError> {
@@ -1128,5 +1128,27 @@ src_ty.clone().test_type_conversion(arg_ty)"]
 
         assert_eq!(TypeValue::from(test_value).into_builtin()?, BuiltinTypeValue::IpAddr(res));
         mk_converted_type_value(test_value, res)
+    }
+
+    //-------- Test: Asn -----------------------------------------------------
+
+    #[test]
+    fn test_asn_1() -> Result<(), CompileError> {
+        init();
+
+        let test_value = Asn::try_from(&AsnLiteral(65534)).unwrap();
+        let res = StringLiteral::from("AS65534");
+
+        assert_eq!(TypeValue::from(test_value).into_builtin()?, BuiltinTypeValue::Asn(Asn::from(65534)));
+        mk_converted_type_value(test_value, res)
+    }
+
+    #[test]
+    #[should_panic = r#"Result::unwrap()` on an `Err` value: User("Cannot convert an instance of type Asn with a value 65534 into type U8. It's greater than 255")"#]
+    fn test_asn_2() {
+        init();
+
+        let test_value = Asn::try_from(&AsnLiteral(65534)).unwrap();
+        let _res = test_value.into_type(&TypeDef::U8).unwrap();
     }
 }

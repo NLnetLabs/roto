@@ -2,15 +2,12 @@ use std::net::IpAddr;
 use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
 use log::debug;
-use primitives::{
-    Hop, MultiExitDisc, OriginType,
-    RouteStatus,
-};
+use primitives::RouteStatus;
 
 use routecore::asn::Asn;
-use routecore::bgp::aspath::HopPath;
+use routecore::bgp::aspath::{HopPath, OwnedHop as Hop};
 use routecore::bgp::message::nlri::PathId;
-use routecore::bgp::types::{AfiSafi, NextHop, LocalPref};
+use routecore::bgp::types::{AfiSafi, NextHop, LocalPref, OriginType, MultiExitDisc};
 use routecore::bgp::communities::HumanReadableCommunity as Community;
 use serde::Serialize;
 
@@ -325,7 +322,7 @@ impl RotoType for TypeValue {
                 get_props_for_method()"
                     .to_string(),
             )),
-            TypeDef::Aggregator => Err(CompileError::new(
+            TypeDef::AggregatorInfo => Err(CompileError::new(
                 "Unsupported TypeDef::Aggregator in TypeValue::\
                 get_props_for_method()"
                     .to_string(),
@@ -425,7 +422,7 @@ impl RotoType for TypeValue {
             TypeValue::Builtin(builtin) => match builtin {
                 BuiltinTypeValue::Asn(v) => v.into_type(ty),
                 BuiltinTypeValue::AsPath(v) => v.into_type(ty),
-                BuiltinTypeValue::Aggregator(v) => v.into_type(ty),
+                BuiltinTypeValue::AggregatorInfo(v) => v.into_type(ty),
                 BuiltinTypeValue::AtomicAggregate(v) => v.into_type(ty),
                 BuiltinTypeValue::BgpUpdateMessage(_) => {
                     Err(CompileError::new(
@@ -540,7 +537,7 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::AsPath(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::Aggregator(v) => {
+                BuiltinTypeValue::AggregatorInfo(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::AtomicAggregate(v) => {
@@ -719,7 +716,7 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::AsPath(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::Aggregator(v) => {
+                BuiltinTypeValue::AggregatorInfo(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::AtomicAggregate(v) => {
@@ -1171,156 +1168,18 @@ impl From<BuiltinTypeValue> for TypeValue {
     }
 }
 
-//------------ Client-side From implementations -----------------------------
-
-// These are the impl's for the end-users sake, so they can use:
-// `TypeValue::from(my_value)`, where `my_value` is the Rust primitive type
-// (u, u32, bool, etc.) or the routecore type (Prefix, Asn, etc.)
-
-// impl From<u32> for TypeValue {
-//     fn from(value: u32) -> Self {
-//         TypeValue::Builtin(BuiltinTypeValue::U32(value))
-//     }
-// }
-
-impl TryInto<u32> for &TypeValue {
-    type Error = VmError;
-
-    fn try_into(self) -> Result<u32, Self::Error> {
-        if let TypeValue::Builtin(BuiltinTypeValue::U32(value)) = self {
-            Ok(*value)
-        } else {
-            Err(VmError::InvalidValueType)
-        }
-    }
-}
-
-// impl From<u8> for TypeValue {
-//     fn from(value: u8) -> Self {
-//         TypeValue::Builtin(BuiltinTypeValue::U8(value))
-//     }
-// }
-
-// impl From<bool> for TypeValue {
-//     fn from(val: bool) -> Self {
-//         TypeValue::Builtin(BuiltinTypeValue::Boolean(Boolean(val)))
-//     }
-// }
-
 impl From<&'_ str> for TypeValue {
     fn from(value: &str) -> Self {
         StringLiteral(String::from(value)).into()
     }
 }
 
-impl From<primitives::RouteStatus> for TypeValue {
-    fn from(val: primitives::RouteStatus) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::RouteStatus(val))
-    }
-}
-
-// impl From<routecore::addr::Prefix> for TypeValue {
-//     fn from(value: routecore::addr::Prefix) -> Self {
-//         TypeValue::Builtin(BuiltinTypeValue::Prefix(primitives::Prefix(
-//             value,
-//         )))
-//     }
-// }
-
-impl TryFrom<&TypeValue> for routecore::addr::Prefix {
-    type Error = VmError;
-
-    fn try_from(value: &TypeValue) -> Result<Self, Self::Error> {
-        if let TypeValue::Builtin(BuiltinTypeValue::Prefix(
-            pfx,
-        )) = value
-        {
-            Ok(*pfx)
-        } else {
-            Err(VmError::InvalidConversion)
-        }
-    }
-}
-
-// impl From<std::net::IpAddr> for TypeValue {
-//     fn from(ip_addr: std::net::IpAddr) -> Self {
-//         TypeValue::Builtin(BuiltinTypeValue::IpAddress(
-//             primitives::IpAddress(ip_addr),
-//         ))
-//     }
-// }
-
-// impl From<routecore::asn::Asn> for TypeValue {
-//     fn from(value: routecore::asn::Asn) -> Self {
-//         TypeValue::Builtin(BuiltinTypeValue::Asn(Asn(value)))
-//     }
-// }
-
-impl From<routecore::bgp::aspath::HopPath> for TypeValue {
-    fn from(value: routecore::bgp::aspath::HopPath) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::AsPath(
-            value
-        ))
-    }
-}
-
-// impl From<routecore::bgp::aspath::HopPath> for BuiltinTypeValue {
-//     fn from(as_path: routecore::bgp::aspath::HopPath) -> Self {
-//         BuiltinTypeValue::AsPath(primitives::AsPath::from(as_path))
-//     }
-// }
-
-impl From<Hop> for TypeValue {
-    fn from(hop: Hop) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Hop(hop))
-    }
-}
-
-impl From<routecore::bgp::aspath::Hop<Vec<u8>>> for BuiltinTypeValue {
-    fn from(hop: routecore::bgp::aspath::Hop<Vec<u8>>) -> Self {
-        BuiltinTypeValue::Hop(primitives::Hop(hop))
-    }
-}
-
-// impl From<routecore::bgp::communities::Communities> for TypeValue {
-//     fn from(value: routecore::bgp::communities::Communities) -> Self {
-//         let list = List(value.communities.iter().map(|c| ElementTypeValue::Primitive((*c).into())).collect());
-//         TypeValue::Builtin(BuiltinTypeValue::Communities(list))
-//     }
-// }
-
-impl From<Vec<Asn>> for TypeValue {
-    fn from(as_path: Vec<Asn>) -> Self {
-        let as_path: Vec<routecore::bgp::aspath::Hop<Vec<u8>>> =
-            as_path.iter().map(|p| (*p).into()).collect();
-        let as_path = routecore::bgp::aspath::HopPath::from(as_path);
-        TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path))
-    }
-}
-
-impl From<Vec<routecore::bgp::aspath::Hop<Vec<u8>>>> for TypeValue {
-    fn from(as_path: Vec<routecore::bgp::aspath::Hop<Vec<u8>>>) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::AsPath(as_path.into()))
-    }
-}
-
-// impl From<Vec<routecore::bgp::communities::Community>> for TypeValue {
-//     fn from(value: Vec<routecore::bgp::communities::Community>) -> Self {
-//         TypeValue::List(List::new(
-//             value
-//                 .iter()
-//                 .map(|v| ElementTypeValue::Primitive((*v).into()))
-//                 .collect::<Vec<_>>(),
-//         ))
-//     }
-// }
-
 impl ScalarValue for TypeValue {}
 
 // Type conversions for Records
 
-// Records do not know how their literals are going to be used/converted, so
-// they store them as actual TypeValue::*Literal variants
+// Records do not know how their String- and Integerliterals are going to be
+// used/converted, so they store them as actual TypeValue::*Literal variants
 
 impl From<crate::ast::StringLiteral> for TypeValue {
     fn from(value: crate::ast::StringLiteral) -> Self {

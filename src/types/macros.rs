@@ -321,6 +321,8 @@ macro_rules! typevaluefromimpls {
                 }
             }
         }
+
+        impl ScalarValue for $type_def {}
     }
 }
 
@@ -396,8 +398,6 @@ macro_rules! scalartype {
                 }
             }
         )*
-
-        impl ScalarValue for $type_def {}
     }
 }
 
@@ -415,12 +415,10 @@ macro_rules! minimalscalartype {
 
         impl RotoType for $type_def {
             setmethodonly!($type_def);
-            noconversioninto!($type_def);
+            intotype!($type_def; StringLiteral);
         }
 
         typevaluefromimpls!($type_def);
-
-        impl ScalarValue for $type_def {}
     };
 }
 

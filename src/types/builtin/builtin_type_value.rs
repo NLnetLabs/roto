@@ -7,7 +7,9 @@ use std::net::IpAddr;
 
 use routecore::asn::Asn;
 use routecore::bgp::message::nlri::PathId;
-use routecore::bgp::types::{AfiSafi, NextHop};
+use routecore::bgp::path_attributes::AtomicAggregate;
+use routecore::bgp::types::{AfiSafi, NextHop, OriginType, MultiExitDisc};
+use routecore::bgp::path_attributes::AggregatorInfo;
 use routecore::addr::Prefix;
 use routecore::bgp::communities::HumanReadableCommunity as Community;
 use serde::Serialize;
@@ -25,9 +27,9 @@ use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 
 use super::{
-    Aggregator, AtomicAggregate, BgpUpdateMessage,
-    HexLiteral, Hop, IntegerLiteral,
-    MultiExitDisc, OriginType, PrefixLength,
+    BgpUpdateMessage,
+    HexLiteral, IntegerLiteral,
+    PrefixLength,
     RawRouteWithDeltas, RouteStatus, StringLiteral,
 };
 
@@ -48,14 +50,14 @@ pub enum BuiltinTypeValue {
     PrefixLength(PrefixLength),       // scalar
     LocalPref(routecore::bgp::types::LocalPref),    // scalar
     AtomicAggregate(AtomicAggregate), // scalar
-    Aggregator(Aggregator),           // scalar
+    AggregatorInfo(AggregatorInfo),           // scalar
     NextHop(NextHop),                 // scalar
     MultiExitDisc(MultiExitDisc),     // scalar
     RouteStatus(RouteStatus),         // scalar
     Community(Community),             // scalar
     Asn(Asn),                         // scalar
     AsPath(routecore::bgp::aspath::HopPath),        // vector
-    Hop(Hop),                         // read-only scalar
+    Hop(routecore::bgp::aspath::OwnedHop), // read-only scalar
     OriginType(OriginType),           // scalar
     Route(RawRouteWithDeltas),        // vector
     // A read-only enum variant for capturing constants
@@ -229,94 +231,12 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::Asn(v) => v.into_type(ty),
             BuiltinTypeValue::LocalPref(v) => v.into_type(ty),
             BuiltinTypeValue::AtomicAggregate(v) => v.into_type(ty),
-            BuiltinTypeValue::Aggregator(v) => v.into_type(ty),
+            BuiltinTypeValue::AggregatorInfo(v) => v.into_type(ty),
             BuiltinTypeValue::NextHop(v) => v.into_type(ty),
             BuiltinTypeValue::MultiExitDisc(v) => v.into_type(ty),
         }
     }
 }
-
-// These From implementations allow the user to use the create_instance
-// function with simple types like u32, u8, etc. (without the nested
-// variants).
-
-impl From<Asn> for BuiltinTypeValue {
-    fn from(val: Asn) -> Self {
-        BuiltinTypeValue::Asn(val)
-    }
-}
-
-// impl From<u32> for BuiltinTypeValue {
-//     fn from(value: u32) -> Self {
-//         BuiltinTypeValue::U32(value)
-//     }
-// }
-
-// impl From<u16> for BuiltinTypeValue {
-//     fn from(value: u16) -> Self {
-//         BuiltinTypeValue::U16(value)
-//     }
-// }
-
-// impl From<u8> for BuiltinTypeValue {
-//     fn from(value: u8) -> Self {
-//         BuiltinTypeValue::U8(value)
-//     }
-// }
-
-// impl From<U8> for BuiltinTypeValue {
-//     fn from(value: U8) -> Self {
-//         BuiltinTypeValue::U8(value)
-//     }
-// }
-
-// impl From<PrefixLength> for BuiltinTypeValue {
-//     fn from(val: PrefixLength) -> Self {
-//         BuiltinTypeValue::PrefixLength(val)
-//     }
-// }
-
-impl From<routecore::bgp::aspath::HopPath> for BuiltinTypeValue {
-    fn from(value: routecore::bgp::aspath::HopPath) -> Self {
-        BuiltinTypeValue::AsPath(value)
-    }
-}
-
-impl From<HexLiteral> for BuiltinTypeValue {
-    fn from(value: HexLiteral) -> Self {
-        BuiltinTypeValue::HexLiteral(value)
-    }
-}
-
-impl From<i64> for BuiltinTypeValue {
-    fn from(val: i64) -> Self {
-        BuiltinTypeValue::IntegerLiteral(IntegerLiteral(val))
-    }
-}
-
-// impl From<std::net::IpAddr> for BuiltinTypeValue {
-//     fn from(val: std::net::IpAddr) -> Self {
-//         BuiltinTypeValue::IpAddress(val)
-//     }
-// }
-
-impl From<routecore::addr::Prefix> for BuiltinTypeValue {
-    fn from(value: routecore::addr::Prefix) -> Self {
-        BuiltinTypeValue::Prefix(value)
-    }
-}
-
-// impl From<crate::types::builtin::primitives::Community> for BuiltinTypeValue {
-//     fn from(value: crate::types::builtin::primitives::Community) -> Self {
-//         BuiltinTypeValue::Community(value)
-//     }
-// }
-
-// impl From<crate::types::builtin::primitives::IpAddress> for BuiltinTypeValue {
-//     fn from(value: crate::types::builtin::primitives::IpAddress) -> Self {
-//         BuiltinTypeValue::IpAddress(value)
-//     }
-// }
 
 impl From<BytesRecord<BmpMessage>> for BuiltinTypeValue {
     fn from(value: BytesRecord<BmpMessage>) -> Self {
@@ -418,10 +338,10 @@ impl Display for BuiltinTypeValue {
                     write!(f, "{}", v)
                 }
                 BuiltinTypeValue::AtomicAggregate(v) => {
-                    write!(f, "{}", v)
+                    write!(f, "{:?}", v)
                 }
-                BuiltinTypeValue::Aggregator(v) => {
-                    write!(f, "{}", v)
+                BuiltinTypeValue::AggregatorInfo(v) => {
+                    write!(f, "{:?}", v)
                 }
                 BuiltinTypeValue::NextHop(v) => write!(f, "{}", v),
                 BuiltinTypeValue::MultiExitDisc(v) => {
@@ -506,11 +426,11 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::LocalPref(v) => {
                     write!(f, "{} (Local Preference)", v)
                 }
-                BuiltinTypeValue::Aggregator(v) => {
-                    write!(f, "{} (Aggregator)", v)
+                BuiltinTypeValue::AggregatorInfo(v) => {
+                    write!(f, "{:?} (Aggregator)", v)
                 }
                 BuiltinTypeValue::AtomicAggregate(v) => {
-                    write!(f, "{} (Atomic Aggregate)", v)
+                    write!(f, "{:?} (Atomic Aggregate)", v)
                 }
                 BuiltinTypeValue::NextHop(v) => write!(f, "{} (Next Hop)", v),
                 BuiltinTypeValue::MultiExitDisc(v) => {
