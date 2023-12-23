@@ -3,6 +3,7 @@
 // The built-in types
 
 use std::fmt::Display;
+use std::net::IpAddr;
 
 use routecore::asn::Asn;
 use routecore::bgp::message::nlri::PathId;
@@ -25,7 +26,7 @@ use super::super::typevalue::TypeValue;
 
 use super::{
     Aggregator, AtomicAggregate, BgpUpdateMessage,
-    HexLiteral, Hop, IntegerLiteral, IpAddress,
+    HexLiteral, Hop, IntegerLiteral,
     MultiExitDisc, OriginType, PrefixLength,
     RawRouteWithDeltas, RouteStatus, StringLiteral,
 };
@@ -38,9 +39,9 @@ pub enum BuiltinTypeValue {
     U8(u8),                           // scalar
     IntegerLiteral(IntegerLiteral),   // scalar
     StringLiteral(StringLiteral),     // scalar
-    Bool(bool),                    // scalar
+    Bool(bool),                       // scalar
     HexLiteral(HexLiteral),           // scalar
-    IpAddress(IpAddress),             // scalar
+    IpAddr(IpAddr),                   // scalar
     Prefix(Prefix),                   // scalar
     AfiSafi(AfiSafi),                 // scalar
     PathId(PathId),                   // scalar
@@ -128,9 +129,9 @@ impl BuiltinTypeValue {
                     return Err("Not a Prefix".into());
                 }
             }
-            TypeDef::IpAddress => {
-                if let BuiltinTypeValue::IpAddress(v) = value.into() {
-                    BuiltinTypeValue::IpAddress(v)
+            TypeDef::IpAddr => {
+                if let BuiltinTypeValue::IpAddr(v) = value.into() {
+                    BuiltinTypeValue::IpAddr(v)
                 } else {
                     return Err("Not an IP address".into());
                 }
@@ -193,7 +194,7 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::PathId(v) => v.into_type(ty),
             BuiltinTypeValue::PrefixLength(v) => v.into_type(ty),
             BuiltinTypeValue::Community(v) => v.into_type(ty),
-            BuiltinTypeValue::IpAddress(v) => v.into_type(ty),
+            BuiltinTypeValue::IpAddr(v) => v.into_type(ty),
             BuiltinTypeValue::AsPath(v) => v.into_type(ty),
             BuiltinTypeValue::Hop(h) => h.into_type(ty),
             BuiltinTypeValue::OriginType(v) => v.into_type(ty),
@@ -293,11 +294,11 @@ impl From<i64> for BuiltinTypeValue {
     }
 }
 
-impl From<std::net::IpAddr> for BuiltinTypeValue {
-    fn from(val: std::net::IpAddr) -> Self {
-        BuiltinTypeValue::IpAddress(IpAddress(val))
-    }
-}
+// impl From<std::net::IpAddr> for BuiltinTypeValue {
+//     fn from(val: std::net::IpAddr) -> Self {
+//         BuiltinTypeValue::IpAddress(val)
+//     }
+// }
 
 impl From<routecore::addr::Prefix> for BuiltinTypeValue {
     fn from(value: routecore::addr::Prefix) -> Self {
@@ -311,11 +312,11 @@ impl From<routecore::addr::Prefix> for BuiltinTypeValue {
 //     }
 // }
 
-impl From<crate::types::builtin::primitives::IpAddress> for BuiltinTypeValue {
-    fn from(value: crate::types::builtin::primitives::IpAddress) -> Self {
-        BuiltinTypeValue::IpAddress(value)
-    }
-}
+// impl From<crate::types::builtin::primitives::IpAddress> for BuiltinTypeValue {
+//     fn from(value: crate::types::builtin::primitives::IpAddress) -> Self {
+//         BuiltinTypeValue::IpAddress(value)
+//     }
+// }
 
 impl From<BytesRecord<BmpMessage>> for BuiltinTypeValue {
     fn from(value: BytesRecord<BmpMessage>) -> Self {
@@ -370,7 +371,7 @@ impl Display for BuiltinTypeValue {
                     write!(f, "{}", v)
                 }
                 BuiltinTypeValue::Community(v) => write!(f, "{}", v),
-                BuiltinTypeValue::IpAddress(v) => write!(f, "{}", v),
+                BuiltinTypeValue::IpAddr(v) => write!(f, "{}", v),
                 BuiltinTypeValue::Asn(v) => write!(f, "{}", v),
                 BuiltinTypeValue::AsPath(v) => {
                     write!(f, "{}", v)
@@ -457,7 +458,7 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::Community(v) => {
                     write!(f, "{} (Community)", v)
                 }
-                BuiltinTypeValue::IpAddress(v) => {
+                BuiltinTypeValue::IpAddr(v) => {
                     write!(f, "{} (IP Address)", v)
                 }
                 BuiltinTypeValue::Asn(v) => write!(f, "{} (ASN)", v),

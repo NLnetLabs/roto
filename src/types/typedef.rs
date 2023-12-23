@@ -1,6 +1,7 @@
 //------------ TypeDef -----------------------------------------------------
 
 use std::hash::{Hash, Hasher};
+use std::net::IpAddr;
 
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
@@ -25,7 +26,7 @@ use crate::{
 
 use super::builtin::{
     AtomicAggregate, Aggregator, HexLiteral, Hop,
-    IntegerLiteral, IpAddress, MultiExitDisc, OriginType,
+    IntegerLiteral, MultiExitDisc, OriginType,
     PrefixLength, RawRouteWithDeltas, RouteStatus, StringLiteral,
     Unknown,
 };
@@ -179,7 +180,7 @@ pub enum TypeDef {
     PrefixLength, // A u8 prefixes by a /
     AfiSafi,
     PathId,
-    IpAddress,
+    IpAddr,
     Asn,
     Route, // BGP Update path attributes
     AsPath,
@@ -228,7 +229,7 @@ impl TypeDef {
         U16(StringLiteral,U32,PrefixLength,Asn,IntegerLiteral,LocalPref;),
         U32(StringLiteral,Asn,IntegerLiteral;),
         Bool(StringLiteral;),
-        IpAddress(StringLiteral;),
+        IpAddr(StringLiteral;),
         Prefix(StringLiteral;),
         Hop(StringLiteral;),
         Community(StringLiteral;),
@@ -591,8 +592,8 @@ impl TypeDef {
             TypeDef::PathId => {
                 PathId::get_props_for_method(self.clone(), method_name)
             }
-            TypeDef::IpAddress => {
-                IpAddress::get_props_for_method(self.clone(), method_name)
+            TypeDef::IpAddr => {
+                IpAddr::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::Asn => {
                 Asn::get_props_for_method(self.clone(), method_name)
@@ -686,8 +687,8 @@ impl TypeDef {
             TypeDef::Asn => {
                 Asn::exec_type_method(method_token, args, return_type)
             }
-            TypeDef::IpAddress => {
-                IpAddress::exec_type_method(method_token, args, return_type)
+            TypeDef::IpAddr => {
+                IpAddr::exec_type_method(method_token, args, return_type)
             }
             TypeDef::Route => RawRouteWithDeltas::exec_type_method(
                 method_token,
@@ -802,7 +803,7 @@ impl std::fmt::Display for TypeDef {
             TypeDef::U32 => write!(f, "U32"),
             TypeDef::U16 => write!(f, "U16"),
             TypeDef::Asn => write!(f, "Asn"),
-            TypeDef::IpAddress => write!(f, "IpAddress"),
+            TypeDef::IpAddr => write!(f, "IpAddress"),
             TypeDef::Route => write!(f, "Route"),
             TypeDef::BgpUpdateMessage => write!(f, "BgpUpdateMessage"),
             TypeDef::LazyRecord(lazy_type_def) => {
@@ -856,8 +857,8 @@ impl PartialEq<BuiltinTypeValue> for TypeDef {
             TypeDef::PrefixLength => {
                 matches!(other, BuiltinTypeValue::PrefixLength(_))
             }
-            TypeDef::IpAddress => {
-                matches!(other, BuiltinTypeValue::IpAddress(_))
+            TypeDef::IpAddr => {
+                matches!(other, BuiltinTypeValue::IpAddr(_))
             }
             TypeDef::Asn => {
                 matches!(other, BuiltinTypeValue::Asn(_))
@@ -1017,7 +1018,7 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             "String" => Ok(TypeDef::StringLiteral),
             "Prefix" => Ok(TypeDef::Prefix),
             "PrefixLength" => Ok(TypeDef::PrefixLength),
-            "IpAddress" => Ok(TypeDef::IpAddress),
+            "IpAddress" => Ok(TypeDef::IpAddr),
             "Asn" => Ok(TypeDef::Asn),
             "AsPath" => Ok(TypeDef::AsPath),
             "Community" => Ok(TypeDef::Community),
@@ -1059,7 +1060,7 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
             "String" => Ok(TypeDef::StringLiteral),
             "Prefix" => Ok(TypeDef::Prefix),
             "PrefixLength" => Ok(TypeDef::PrefixLength),
-            "IpAddress" => Ok(TypeDef::IpAddress),
+            "IpAddress" => Ok(TypeDef::IpAddr),
             "Asn" => Ok(TypeDef::Asn),
             "AsPath" => Ok(TypeDef::AsPath),
             "Community" => Ok(TypeDef::Community),
@@ -1109,7 +1110,7 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::AfiSafi(_) => TypeDef::AfiSafi,
             BuiltinTypeValue::PathId(_) => TypeDef::PathId,
             BuiltinTypeValue::PrefixLength(_) => TypeDef::PrefixLength,
-            BuiltinTypeValue::IpAddress(_) => TypeDef::IpAddress,
+            BuiltinTypeValue::IpAddr(_) => TypeDef::IpAddr,
             BuiltinTypeValue::Asn(_) => TypeDef::Asn,
             BuiltinTypeValue::Hop(_) => TypeDef::Hop,
             BuiltinTypeValue::OriginType(_) => TypeDef::OriginType,
@@ -1175,7 +1176,7 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::AfiSafi(_) => TypeDef::AfiSafi,
             BuiltinTypeValue::PathId(_) => TypeDef::PathId,
             BuiltinTypeValue::PrefixLength(_) => TypeDef::PrefixLength,
-            BuiltinTypeValue::IpAddress(_) => TypeDef::IpAddress,
+            BuiltinTypeValue::IpAddr(_) => TypeDef::IpAddr,
             BuiltinTypeValue::Asn(_) => TypeDef::Asn,
             BuiltinTypeValue::Hop(_) => TypeDef::Hop,
             BuiltinTypeValue::AsPath(_) => TypeDef::AsPath,

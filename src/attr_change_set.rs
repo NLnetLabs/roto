@@ -10,10 +10,11 @@ use routecore::asn::Asn;
 use serde::Serialize;
 use std::marker::PhantomData;
 use std::ops::Index;
+use std::net::IpAddr;
 
 use crate::ast::StringLiteral;
 use crate::types::builtin::{
-    AtomicAggregate, BuiltinTypeValue, IpAddress,
+    AtomicAggregate, BuiltinTypeValue,
     MultiExitDisc, OriginType, RouteStatus,
 };
 use crate::types::collections::ElementTypeValue;
@@ -60,7 +61,7 @@ impl ScalarValue for MultiExitDisc {}
 impl ScalarValue for AtomicAggregate {}
 impl ScalarValue for Prefix {}
 impl ScalarValue for RouteStatus {}
-impl ScalarValue for IpAddress {}
+// impl ScalarValue for IpAddress {}
 impl ScalarValue for Asn {}
 impl ScalarValue for StringLiteral {}
 // impl ScalarValue for (u8, u32) {}
@@ -90,7 +91,7 @@ pub struct AttrChangeSet {
     #[serde(skip_serializing_if = "VectorOption::is_none")]
     pub communities: VectorOption<Vec<Community>>,
     #[serde(skip_serializing_if = "ScalarOption::is_none")]
-    pub peer_ip: ScalarOption<IpAddress>,
+    pub peer_ip: ScalarOption<IpAddr>,
     #[serde(skip_serializing_if = "ScalarOption::is_none")]
     pub peer_asn: ScalarOption<Asn>,
     #[serde(skip_serializing_if = "ScalarOption::is_none")]

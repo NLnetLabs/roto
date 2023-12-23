@@ -1,3 +1,4 @@
+use std::net::IpAddr;
 use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
 use log::debug;
@@ -28,7 +29,7 @@ use crate::{
 use super::{
     builtin::{
         primitives, BgpUpdateMessage, BuiltinTypeValue,
-        HexLiteral, IntegerLiteral, IpAddress, PrefixLength,
+        HexLiteral, IntegerLiteral, PrefixLength,
         RawRouteWithDeltas, StringLiteral,
     },
     collections::{
@@ -358,8 +359,8 @@ impl RotoType for TypeValue {
             TypeDef::IntegerLiteral => {
                 IntegerLiteral::get_props_for_method(ty, method_name)
             }
-            TypeDef::IpAddress => {
-                IpAddress::get_props_for_method(ty, method_name)
+            TypeDef::IpAddr => {
+                IpAddr::get_props_for_method(ty, method_name)
             }
             TypeDef::List(ty) => Self::get_props_for_method(*ty, method_name),
             TypeDef::LocalPref => {
@@ -441,7 +442,7 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::HexLiteral(v) => v.into_type(ty),
                 BuiltinTypeValue::Hop(v) => v.into_type(ty),
                 BuiltinTypeValue::IntegerLiteral(v) => v.into_type(ty),
-                BuiltinTypeValue::IpAddress(v) => v.into_type(ty),
+                BuiltinTypeValue::IpAddr(v) => v.into_type(ty),
                 BuiltinTypeValue::LocalPref(v) => v.into_type(ty),
                 BuiltinTypeValue::MultiExitDisc(v) => v.into_type(ty),
                 BuiltinTypeValue::NextHop(v) => v.into_type(ty),
@@ -641,7 +642,7 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::IntegerLiteral(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::IpAddress(v) => {
+                BuiltinTypeValue::IpAddr(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::LocalPref(v) => {
@@ -771,7 +772,7 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::IntegerLiteral(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::IpAddress(v) => {
+                BuiltinTypeValue::IpAddr(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::LocalPref(v) => {
@@ -1075,8 +1076,8 @@ impl PartialOrd for TypeValue {
                 None
             }
             (
-                TypeValue::Builtin(BuiltinTypeValue::IpAddress(IpAddress(u))),
-                TypeValue::Builtin(BuiltinTypeValue::IpAddress(IpAddress(v))),
+                TypeValue::Builtin(BuiltinTypeValue::IpAddr(u)),
+                TypeValue::Builtin(BuiltinTypeValue::IpAddr(v)),
             ) => Some(u.cmp(v)),
             (
                 TypeValue::Builtin(BuiltinTypeValue::Asn(u)),
@@ -1241,13 +1242,13 @@ impl TryFrom<&TypeValue> for routecore::addr::Prefix {
     }
 }
 
-impl From<std::net::IpAddr> for TypeValue {
-    fn from(ip_addr: std::net::IpAddr) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::IpAddress(
-            primitives::IpAddress(ip_addr),
-        ))
-    }
-}
+// impl From<std::net::IpAddr> for TypeValue {
+//     fn from(ip_addr: std::net::IpAddr) -> Self {
+//         TypeValue::Builtin(BuiltinTypeValue::IpAddress(
+//             primitives::IpAddress(ip_addr),
+//         ))
+//     }
+// }
 
 // impl From<routecore::asn::Asn> for TypeValue {
 //     fn from(value: routecore::asn::Asn) -> Self {
@@ -1343,7 +1344,7 @@ impl TryFrom<&'_ crate::ast::IpAddressLiteral> for TypeValue {
     fn try_from(
         value: &crate::ast::IpAddressLiteral,
     ) -> Result<Self, Self::Error> {
-        Ok(TypeValue::Builtin(BuiltinTypeValue::IpAddress(
+        Ok(TypeValue::Builtin(BuiltinTypeValue::IpAddr(
             value.try_into()?,
         )))
     }

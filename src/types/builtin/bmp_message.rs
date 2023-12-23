@@ -258,7 +258,7 @@ bytes_record_impl!(
     #[type_def(
         record_field(
             "per_peer_header"; 0,
-            field("address"; 1, IpAddress, per_peer_header.address),
+            field("address"; 1, IpAddr, per_peer_header.address),
             enum_field(
                 "adj_rib_type"; 2,
                 EnumVariant<U8> = "BMP_ADJ_RIB_TYPE",
@@ -320,7 +320,7 @@ bytes_record_impl!(
     #[type_def(
         field(
             "local_address"; 0,
-            IpAddress,
+            IpAddr,
             local_address
         ),
         field(
@@ -330,7 +330,7 @@ bytes_record_impl!(
         ),
         record_field(
             "per_peer_header"; 2,
-            field("address"; 3, IpAddress, per_peer_header.address),
+            field("address"; 3, IpAddr, per_peer_header.address),
             enum_field(
                 "adj_rib_type"; 4,
                 EnumVariant<U8> = "BMP_ADJ_RIB_TYPE",
@@ -402,7 +402,7 @@ bytes_record_impl!(
     #[type_def(
         record_field(
             "per_peer_header"; 0,
-            field("address"; 1, IpAddress, per_peer_header.address),
+            field("address"; 1, IpAddr, per_peer_header.address),
             enum_field(
                 "adj_rib_type"; 2,
                 EnumVariant<U8> = "BMP_ADJ_RIB_TYPE",
@@ -523,7 +523,7 @@ bytes_record_impl!(
     #[type_def(
         record_field(
             "per_peer_header"; 0,
-            field("address"; 1, IpAddress, per_peer_header.address),
+            field("address"; 1, IpAddr, per_peer_header.address),
             enum_field(
                 "adj_rib_type"; 2,
                 EnumVariant<U8> = "BMP_ADJ_RIB_TYPE",

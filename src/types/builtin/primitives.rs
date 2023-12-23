@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use std::net::IpAddr;
 
 use log::{debug, error, trace};
 use paste::paste;
@@ -16,7 +17,7 @@ use crate::types::enum_types::EnumVariant;
 use crate::types::typedef::MethodProps;
 use crate::vm::{StackValue, VmError};
 use crate::{
-    createtoken, first_into_vm_err, intotype, minimalscalartype,
+    createtoken, first_into_vm_err, intotype, _intotype, minimalscalartype,
     noconversioninto, setmethodonly, typevaluefromimpls,
     wrappedfromimpls, scalartype,
 };
@@ -800,10 +801,10 @@ impl RotoType for routecore::addr::Prefix {
             "from" => Ok(MethodProps::new(
                 TypeDef::Prefix,
                 PrefixToken::From.into(),
-                vec![TypeDef::IpAddress, TypeDef::PrefixLength],
+                vec![TypeDef::IpAddr, TypeDef::PrefixLength],
             )),
             "address" => Ok(MethodProps::new(
-                TypeDef::IpAddress,
+                TypeDef::IpAddr,
                 PrefixToken::Address.into(),
                 vec![],
             )),
@@ -835,7 +836,7 @@ impl RotoType for routecore::addr::Prefix {
             "contains" => Ok(MethodProps::new(
                 TypeDef::Bool,
                 PrefixToken::Contains.into(),
-                vec![TypeDef::IpAddress],
+                vec![TypeDef::IpAddr],
             )),
             _ => Err(format!(
                 "Unknown method: '{}' for type Prefix",
@@ -845,7 +846,7 @@ impl RotoType for routecore::addr::Prefix {
         }
     }
 
-    intotype!(Prefix;;StringLiteral);
+    intotype!(Prefix;StringLiteral);
 
     // fn into_type(
     //     self,
@@ -873,8 +874,8 @@ impl RotoType for routecore::addr::Prefix {
         match method_token.try_into()? {
             PrefixToken::Address => {
                 let prefix = self;
-                Ok(TypeValue::Builtin(BuiltinTypeValue::IpAddress(
-                    IpAddress(prefix.addr()),
+                Ok(TypeValue::Builtin(BuiltinTypeValue::IpAddr(
+                    prefix.addr(),
                 )))
             }
             PrefixToken::Len => {
@@ -916,8 +917,8 @@ impl RotoType for routecore::addr::Prefix {
             }
             PrefixToken::Contains => {
                 if let Some(other_ip) = args.get(0) {
-                    if let TypeValue::Builtin(BuiltinTypeValue::IpAddress(
-                        IpAddress(other),
+                    if let TypeValue::Builtin(BuiltinTypeValue::IpAddr(
+                        other,
                     )) = other_ip.as_ref()
                     {
                         Ok(self.contains(*other).into())
@@ -948,7 +949,7 @@ impl RotoType for routecore::addr::Prefix {
         match method_token.try_into()? {
             PrefixToken::From => {
                 if let (Some(addr), Some(len)) = (args.get(0), args.get(1)) {
-                    if let TypeValue::Builtin(BuiltinTypeValue::IpAddress(
+                    if let TypeValue::Builtin(BuiltinTypeValue::IpAddr(
                         addr,
                     )) = addr.as_ref()
                     {
@@ -956,8 +957,8 @@ impl RotoType for routecore::addr::Prefix {
                             .as_ref()
                             .try_into()
                             .map_err(|_e| VmError::InvalidConversion)?;
-                        let ip = addr.0;
-                        Ok(routecore::addr::Prefix::new(ip, len.0)
+                        // let ip = addr;
+                        Ok(routecore::addr::Prefix::new(*addr, len.0)
                             .map_or_else(
                                 |_| TypeValue::Unknown,
                                 |p| p.into(),
@@ -1027,7 +1028,7 @@ impl PrefixLength {
 
 impl RotoType for PrefixLength {
     setmethodonly!(PrefixLength);
-    intotype!(PrefixLength; U8, U16, U32, IntegerLiteral;);
+    intotype!(PrefixLength; U8, U16, U32, IntegerLiteral);
 }
 
 wrappedfromimpls!(PrefixLength; u32, u16, u8; IntegerLiteral = i64);
@@ -1263,18 +1264,15 @@ pub enum MatchType {
     EmptyMatch,
 }
 
-// ----------- IpAddress type -----------------------------------------------
+// ----------- IpAddr type ---------------------------------------------------
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash, Serialize)]
-pub struct IpAddress(pub(crate) std::net::IpAddr);
+createtoken!(
+    IpAddr;
+    From = 0
+    Matches = 1
+);
 
-impl IpAddress {
-    pub fn new(addr: std::net::IpAddr) -> Self {
-        IpAddress(addr)
-    }
-}
-
-impl RotoType for IpAddress {
+impl RotoType for IpAddr {
     fn get_props_for_method(
         _ty: TypeDef,
         method_name: &crate::ast::Identifier,
@@ -1284,13 +1282,13 @@ impl RotoType for IpAddress {
     {
         match method_name.ident.as_str() {
             "from" => Ok(MethodProps::new(
-                TypeDef::IpAddress,
-                IpAddressToken::From.into(),
+                TypeDef::IpAddr,
+                IpAddrToken::From.into(),
                 vec![TypeDef::StringLiteral],
             )),
             "matches" => Ok(MethodProps::new(
                 TypeDef::Bool,
-                IpAddressToken::Matches.into(),
+                IpAddrToken::Matches.into(),
                 vec![TypeDef::Prefix],
             )),
             _ => Err(format!(
@@ -1301,24 +1299,7 @@ impl RotoType for IpAddress {
         }
     }
 
-    fn into_type(
-        self,
-        type_def: &TypeDef,
-    ) -> Result<TypeValue, CompileError> {
-        match type_def {
-            TypeDef::IpAddress => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::IpAddress(self)))
-            }
-            TypeDef::StringLiteral => Ok(TypeValue::Builtin(
-                BuiltinTypeValue::StringLiteral(self.into()),
-            )),
-            _ => Err(format!(
-                "Cannot convert type IpAddress to type {:?}",
-                type_def
-            )
-            .into()),
-        }
-    }
+    intotype!(IpAddr;StringLiteral);
 
     fn exec_value_method(
         &self,
@@ -1348,18 +1329,15 @@ impl RotoType for IpAddress {
     }
 }
 
-impl From<IpAddress> for TypeValue {
-    fn from(val: IpAddress) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::IpAddress(val))
-    }
-}
+typevaluefromimpls!(IpAddr);
 
-impl TryFrom<&'_ IpAddressLiteral> for IpAddress {
+impl ScalarValue for IpAddr {}
+
+impl TryFrom<&'_ IpAddressLiteral> for IpAddr {
     type Error = CompileError;
 
     fn try_from(value: &IpAddressLiteral) -> Result<Self, Self::Error> {
-        Ok(IpAddress(
-            <std::net::IpAddr as std::str::FromStr>::from_str(
+        <std::net::IpAddr as std::str::FromStr>::from_str(
                 value.0.as_str(),
             )
             .map_err(|e| {
@@ -1367,43 +1345,10 @@ impl TryFrom<&'_ IpAddressLiteral> for IpAddress {
                     "Cannot parse '{:?}' as an IP Address: {}",
                     value, e
                 ))
-            })?,
-        ))
+            })
     }
 }
 
-impl Display for IpAddress {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-#[derive(Debug)]
-pub(crate) enum IpAddressToken {
-    From,
-    Matches,
-}
-
-impl TryFrom<usize> for IpAddressToken {
-    type Error = VmError;
-
-    fn try_from(val: usize) -> Result<Self, VmError> {
-        match val {
-            0 => Ok(IpAddressToken::From),
-            1 => Ok(IpAddressToken::Matches),
-            _ => {
-                debug!("Unknown token value: {}", val);
-                Err(VmError::InvalidMethodCall)
-            }
-        }
-    }
-}
-
-impl From<IpAddressToken> for usize {
-    fn from(val: IpAddressToken) -> Self {
-        val as usize
-    }
-}
 
 // ----------- Asn type -----------------------------------------------------
 
@@ -2034,7 +1979,7 @@ impl RotoType for AtomicAggregate {
             "set" => Ok(MethodProps::new(
                 TypeDef::Unknown,
                 AtomicAggregateToken::Set.into(),
-                vec![TypeDef::Asn, TypeDef::IpAddress],
+                vec![TypeDef::Asn, TypeDef::IpAddr],
             )
             .consume_value()),
             _ => Err(format!(
@@ -2163,7 +2108,7 @@ impl RotoType for Aggregator {
             "set" => Ok(MethodProps::new(
                 TypeDef::Unknown,
                 AtomicAggregateToken::Set.into(),
-                vec![TypeDef::Asn, TypeDef::IpAddress],
+                vec![TypeDef::Asn, TypeDef::IpAddr],
             )
             .consume_value()),
             _ => Err(format!(

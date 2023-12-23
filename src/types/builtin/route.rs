@@ -39,7 +39,7 @@ use crate::{
     vm::{StackValue, VmError},
 };
 
-use super::{BuiltinTypeValue, IpAddress, OriginType, RouteStatus};
+use super::{BuiltinTypeValue, OriginType, RouteStatus};
 use crate::attr_change_set::{
     AttrChangeSet, ScalarOption, ScalarValue, VectorOption, VectorValue,
 };
@@ -124,7 +124,7 @@ pub struct RawRouteWithDeltas {
     // belongs to.
     pub afi_safi: routecore::bgp::types::AfiSafi,
     // The IP address of the BGP speaker that originated the route, if known.
-    peer_ip: Option<IpAddress>,
+    peer_ip: Option<IpAddr>,
     // The ASN of the BGP speaker that originated the route, if known.
     peer_asn: Option<Asn>,
     // The ID (e.g. "<ip addr>:<port>", or "<BMP initiate sysName>") of the
@@ -212,7 +212,7 @@ impl RawRouteWithDeltas {
             raw_message: self.raw_message,
             afi_safi: self.afi_safi,
             path_id: self.path_id,
-            peer_ip: Some(IpAddress::new(peer_ip)),
+            peer_ip: Some(peer_ip),
             peer_asn: self.peer_asn,
             router_id: self.router_id,
             attribute_deltas: self.attribute_deltas,
@@ -249,7 +249,7 @@ impl RawRouteWithDeltas {
     }
 
     pub fn peer_ip(&self) -> Option<IpAddr> {
-        self.peer_ip.map(|ip| ip.0)
+        self.peer_ip
     }
 
     pub fn peer_asn(&self) -> Option<routecore::asn::Asn> {
@@ -429,7 +429,7 @@ impl RawRouteWithDeltas {
                 Token::FieldAccess(vec![RouteToken::Status.into()]),
             )),
             "peer_ip" => Ok((
-                TypeDef::IpAddress,
+                TypeDef::IpAddr,
                 Token::FieldAccess(vec![RouteToken::PeerIp.into()]),
             )),
             "peer_asn" => Ok((
@@ -1360,7 +1360,7 @@ impl UpdateMessage {
     pub fn create_changeset(
         &self,
         prefix: Prefix,
-        peer_ip: Option<IpAddress>,
+        peer_ip: Option<IpAddr>,
         peer_asn: Option<Asn>,
         router_id: Option<Arc<String>>,
         afi_safi: AfiSafi,

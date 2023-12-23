@@ -65,7 +65,7 @@ fn test_data(
         ("prefix", Box::new(TypeDef::Prefix)),
         ("as-path", Box::new(TypeDef::AsPath)),
         ("origin", Box::new(TypeDef::Asn)),
-        ("next-hop", Box::new(TypeDef::IpAddress)),
+        ("next-hop", Box::new(TypeDef::IpAddr)),
         ("med", Box::new(TypeDef::U32)),
         ("local-pref", Box::new(TypeDef::U32)),
         ("community", Box::new(my_comms_type)),

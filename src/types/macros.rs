@@ -130,14 +130,51 @@ macro_rules! noconversioninto {
     };
 }
 
-
 // into_type() method for a TypeDef that only has 'standard' conversions,
 // using the From implementation of the TypeDef variant.
 //
-// Takes the TypeDef variant as its input, as well as two lists of TypeDef
+// Takes the TypeDef variant as its input, as well as a list of TypeDef
 // variants it can convert into.
 #[macro_export]
 macro_rules! intotype {
+    (
+        $my_type: ident;
+        $( $into_type_def: ident ),*
+    ) => {
+        fn into_type(
+            self,
+            type_def: &TypeDef,
+        ) -> Result<TypeValue, CompileError> {
+            paste! {
+                match type_def {
+                    TypeDef::[<$my_type:camel>] => Ok(TypeValue::Builtin(
+                        BuiltinTypeValue::[<$my_type:camel>](self)
+                    )),
+                    $( 
+                        TypeDef::[<$into_type_def:camel>] => Ok(TypeValue::Builtin(
+                            BuiltinTypeValue::[<$into_type_def:camel>](self.into()))),
+                    )*
+                    _ => {
+                        Err(format!(
+                            concat!(
+                                "Cannot convert type ", 
+                                stringify!($my_type), 
+                                " to type {:?}"),
+                                type_def
+                            ).into()
+                        )
+                    }
+                }
+            }
+        }
+    };
+}
+
+
+// This is the same as intotype!, but it takes two lists, that come out of the
+// scalartype macro. You probably don't want to use this.
+#[macro_export]
+macro_rules! _intotype {
     (
         $my_type: ident;
         $( $into_type_def: ident ),*;
@@ -344,7 +381,7 @@ macro_rules! scalartype {
         impl RotoType for $type_def {
             setmethodonly!($type_def);
 
-            intotype!($type_def;
+            _intotype!($type_def;
                 $( $into_type_def ),*;
                 $( $wrapped_into_type ),*
             );
