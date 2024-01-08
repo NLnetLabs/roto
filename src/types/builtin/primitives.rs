@@ -168,6 +168,11 @@ impl RotoType for u8 {
             TypeDef::U32 => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::U32(self as u32)))
             }
+            TypeDef::StringLiteral => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
+                    self.into()
+                )))
+            }
             TypeDef::PrefixLength => match self {
                 0..=128 => Ok(TypeValue::Builtin(
                     BuiltinTypeValue::PrefixLength(PrefixLength(self)),

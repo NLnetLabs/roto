@@ -522,6 +522,12 @@ mod route {
     }
 
     #[test]
+    fn test_u8_to_string_literal() {
+        let tv = BuiltinTypeValue::from(132_u8);
+        assert_eq!(tv.into_type(&TypeDef::StringLiteral).unwrap(), TypeValue::from("132"));
+    }
+
+    #[test]
     fn test_u8_to_u16() -> Result<(), CompileError> {
         init();
 
