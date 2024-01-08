@@ -16,32 +16,24 @@ fn main() {
     let count =
         TypeValue::from(1_u32);
 
-    let count2 = BuiltinTypeValue::create_instance(
-        TypeDef::Prefix,
+    let count2 = TypeValue::from(
         routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)
             .unwrap(),
-    )
-    .unwrap();
+    );
 
-    let ip_address = BuiltinTypeValue::create_instance(
-        TypeDef::IpAddr,
+    let ip_address = TypeValue::from(
         std::net::IpAddr::V4(std::net::Ipv4Addr::new(193, 0, 0, 23)),
-    )
-    .unwrap();
+    );
 
-    let as_path = BuiltinTypeValue::create_instance(
-        TypeDef::AsPath,
+    let as_path = TypeValue::from(
         BuiltinTypeValue::AsPath(
             vec![routecore::asn::Asn::from_u32(1)].into()
-        ),
-    )
-    .unwrap();
+        )
+    );
 
-    let asn = BuiltinTypeValue::create_instance(
-        TypeDef::Asn,
-        Asn::from_u32(211321),
-    )
-    .unwrap();
+    let asn = TypeValue::from(
+        Asn::from_u32(211321)
+    );
     println!("{:?}", asn);
 
     let comms =
