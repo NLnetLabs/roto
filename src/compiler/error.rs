@@ -1,4 +1,4 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompileError {
     // An error that we - the Roto compiler - think is caused by the Roto
     // end-user, through a Roto script.
