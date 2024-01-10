@@ -13,7 +13,8 @@ Key:
 | Proposal | ✅ | this document |
 | Experimental | ✅ | this repo |
 | Development | 🦀 | this repo |
-| Feature complete | 💤 | |
+| Feature complete | 🦀 | this repo |
 | Stabilized | 💤 | |
 
-`roto` is the dynamic, interpreted language for data modeling (programmable RIBs), querying and filtering routes, used by Rotonda.
+`roto` is the strongly-typed, compiled language for creating route filters,
+used by Rotonda.
