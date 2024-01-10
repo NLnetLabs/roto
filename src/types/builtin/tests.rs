@@ -154,20 +154,12 @@ mod route {
             attr_set.as_path.as_routecore_hops_vec()
         );
         assert_eq!(
-            attr_set.as_path.as_routecore_hops_vec().get(0),
-            Asn::try_from(211321_u32)
-                .ok()
-                .map(routecore::bgp::aspath::Hop::from)
-                .as_ref()
-                .as_ref()
+            *attr_set.as_path.as_routecore_hops_vec().first().unwrap(),
+            &routecore::bgp::aspath::Hop::from(Asn::from(211321_u32))
         );
         assert_eq!(
-            attr_set.as_path.as_routecore_hops_vec().get(1),
-            Asn::try_from(200_u32)
-                .ok()
-                .map(routecore::bgp::aspath::Hop::from)
-                .as_ref()
-                .as_ref()
+            *attr_set.as_path.as_routecore_hops_vec().get(1).unwrap(),
+            &routecore::bgp::aspath::Hop::from(Asn::from(200_u32))
         );
         Ok(())
     }
@@ -271,16 +263,12 @@ mod route {
         assert_eq!(
             *attr_set.as_path.as_routecore_hops_vec()[0],
             routecore::bgp::aspath::Hop::from(
-                Asn::try_from(211321_u32).unwrap()
+                Asn::from(211321_u32)
             )
         );
         assert_eq!(
-            attr_set.as_path.as_routecore_hops_vec().get(1),
-            Asn::try_from(200_u32)
-                .ok()
-                .map(routecore::bgp::aspath::Hop::from)
-                .as_ref()
-                .as_ref()
+            *attr_set.as_path.as_routecore_hops_vec().get(1).unwrap(),
+            &routecore::bgp::aspath::Hop::from(Asn::from(200_u32))
         );
 
         // Change Set 2
@@ -294,28 +282,16 @@ mod route {
         let attr_set = roto_msgs[2].get_latest_attrs()?;
         assert_eq!(attr_set.as_path.len(), Some(3));
         assert_eq!(
-            attr_set.as_path.as_routecore_hops_vec().get(0),
-            Asn::try_from(211322_u32)
-                .ok()
-                .map(routecore::bgp::aspath::Hop::from)
-                .as_ref()
-                .as_ref()
+            *attr_set.as_path.as_routecore_hops_vec().first().unwrap(),
+            &routecore::bgp::aspath::Hop::from(Asn::from(211322_u32))
         );
         assert_eq!(
-            attr_set.as_path.as_routecore_hops_vec().get(1),
-            Asn::try_from(211321_u32)
-                .ok()
-                .map(routecore::bgp::aspath::Hop::from)
-                .as_ref()
-                .as_ref()
+            *attr_set.as_path.as_routecore_hops_vec().get(1).unwrap(),
+            &routecore::bgp::aspath::Hop::from(Asn::from(211321_u32))
         );
         assert_eq!(
-            attr_set.as_path.as_routecore_hops_vec().get(2),
-            routecore::asn::Asn::try_from(200_u32)
-                .ok()
-                .map(routecore::bgp::aspath::Hop::from)
-                .as_ref()
-                .as_ref()
+            *attr_set.as_path.as_routecore_hops_vec().get(2).unwrap(),
+            &routecore::bgp::aspath::Hop::from(routecore::asn::Asn::from(200_u32))
         );
         println!("Before changeset3 {:#?}", &attr_set);
 
@@ -1142,7 +1118,7 @@ src_ty.clone().test_type_conversion(arg_ty)"]
     fn test_asn_1() -> Result<(), CompileError> {
         init();
 
-        let test_value = Asn::try_from(&AsnLiteral(65534)).unwrap();
+        let test_value = Asn::from(&AsnLiteral(65534));
         let res = StringLiteral::from("AS65534");
 
         assert_eq!(TypeValue::from(test_value).into_builtin()?, BuiltinTypeValue::Asn(Asn::from(65534)));
@@ -1154,7 +1130,7 @@ src_ty.clone().test_type_conversion(arg_ty)"]
     fn test_asn_2() {
         init();
 
-        let test_value = Asn::try_from(&AsnLiteral(65534)).unwrap();
+        let test_value = Asn::from(&AsnLiteral(65534));
         let _res = test_value.into_type(&TypeDef::U8).unwrap();
     }
 }

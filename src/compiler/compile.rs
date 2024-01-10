@@ -676,7 +676,7 @@ impl<'a> CompilerState<'a> {
                     if let Some(
                         CommandArg::ConstantValue(_)
                         | CommandArg::FieldIndex(_),
-                    ) = args.get(0)
+                    ) = args.first()
                     {
                         if let Some(_field_name) =
                             self.cur_record_field_name.clone()
@@ -1963,7 +1963,7 @@ fn compile_term_section<'a>(
 
     // Push the code block that retrieves the argument for this section to
     // the cache.
-    if let Some(s) = term_section.get_args().get(0) {
+    if let Some(s) = term_section.get_args().first() {
         state.used_arguments.push((
             s.get_token(),
             s,

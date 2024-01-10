@@ -10,7 +10,7 @@ impl DataSource {
         name: &str,
         records: Vec<Record>,
     ) -> Result<Self, VmError> {
-        match records.get(0) {
+        match records.first() {
             Some(rec) => {
                 let ty = TypeDef::from(&TypeValue::Record(rec.clone()));
                 Ok(Self::Table(Table {

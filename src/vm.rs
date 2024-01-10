@@ -822,7 +822,7 @@ impl<'a> CommandArgsStack<'a> {
     }
 
     fn first(&self) -> Option<&CommandArg> {
-        self.args.get(0)
+        self.args.front()
     }
 
     // Remove and return the first item, decrement the counter This returns
@@ -1723,7 +1723,7 @@ impl<
 
                         trace!("raw stack args {:#?}", stack_args);
                         let left: &TypeValue = stack_args
-                            .get(0)
+                            .first()
                             .map_or(Err(VmError::InvalidCommand), |a| {
                                 Ok(a.as_ref())
                             })?;
@@ -3051,7 +3051,7 @@ impl Display for Command {
                     f,
                     "{:?}=={:?}?",
                     self.op,
-                    if let Some(arg) = self.args.get(0) {
+                    if let Some(arg) = self.args.front() {
                         arg.to_string()
                     } else {
                         "(None)".to_string()
@@ -3067,7 +3067,7 @@ impl Display for Command {
                 return write!(
                     f,
                     "🏷  {}",
-                    if let Some(arg) = self.args.get(0) {
+                    if let Some(arg) = self.args.front() {
                         arg.to_string()
                     } else {
                         "(None)".to_string()

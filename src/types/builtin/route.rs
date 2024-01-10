@@ -1296,8 +1296,7 @@ impl RotoType for RouteStatus {
     ) -> Result<TypeValue, VmError> {
         Ok(TypeValue::Builtin(BuiltinTypeValue::Bool(
             method_token
-                == usize::try_from(*self)
-                    .map_err(|_e| VmError::InvalidVariant)?,
+                == usize::from(*self),
         )))
     }
 

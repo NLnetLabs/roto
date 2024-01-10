@@ -274,7 +274,7 @@ impl RotoType for StringLiteral {
                 if let TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
                     sv,
                 )) =
-                    args.get(0).ok_or(VmError::InvalidMethodCall)?.as_ref()
+                    args.first().ok_or(VmError::InvalidMethodCall)?.as_ref()
                 {
                     Ok(self.cmp(sv).is_eq().into())
                 } else {
@@ -322,7 +322,7 @@ impl RotoType for StringLiteral {
                 let format_str = if let TypeValue::Builtin(
                     BuiltinTypeValue::StringLiteral(StringLiteral(str)),
                 ) =
-                    args.get(0).ok_or(VmError::InvalidMethodCall)?.as_ref()
+                    args.first().ok_or(VmError::InvalidMethodCall)?.as_ref()
                 {
                     str
                 } else {
@@ -349,7 +349,7 @@ impl RotoType for StringLiteral {
                 if let TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
                     sv_1,
                 )) =
-                    args.get(0).ok_or(VmError::InvalidMethodCall)?.as_ref()
+                    args.first().ok_or(VmError::InvalidMethodCall)?.as_ref()
                 {
                     if let TypeValue::Builtin(
                         BuiltinTypeValue::StringLiteral(sv_2),
@@ -904,7 +904,7 @@ impl RotoType for routecore::addr::Prefix {
             PrefixToken::Exists => Ok(true.into()),
             PrefixToken::Matches => todo!(),
             PrefixToken::Covers => {
-                if let Some(other_pfx) = args.get(0) {
+                if let Some(other_pfx) = args.first() {
                     if let TypeValue::Builtin(BuiltinTypeValue::Prefix(
                         other,
                     )) = other_pfx.as_ref()
@@ -918,7 +918,7 @@ impl RotoType for routecore::addr::Prefix {
                 }
             }
             PrefixToken::IsCoveredBy => {
-                if let Some(other_pfx) = args.get(0) {
+                if let Some(other_pfx) = args.first() {
                     if let TypeValue::Builtin(BuiltinTypeValue::Prefix(
                         other,
                     )) = other_pfx.as_ref()
@@ -932,7 +932,7 @@ impl RotoType for routecore::addr::Prefix {
                 }
             }
             PrefixToken::Contains => {
-                if let Some(other_ip) = args.get(0) {
+                if let Some(other_ip) = args.first() {
                     if let TypeValue::Builtin(BuiltinTypeValue::IpAddr(
                         other,
                     )) = other_ip.as_ref()
@@ -964,7 +964,7 @@ impl RotoType for routecore::addr::Prefix {
     ) -> Result<TypeValue, VmError> {
         match method_token.try_into()? {
             PrefixToken::From => {
-                if let (Some(addr), Some(len)) = (args.get(0), args.get(1)) {
+                if let (Some(addr), Some(len)) = (args.first(), args.get(1)) {
                     if let TypeValue::Builtin(BuiltinTypeValue::IpAddr(
                         addr,
                     )) = addr.as_ref()
@@ -1194,7 +1194,7 @@ impl RotoType for Community {
         match method_token.try_into()? {
             CommunityToken::Set => {
                 if let TypeValue::Builtin(BuiltinTypeValue::Community(comm)) =
-                    args.get(0).ok_or(VmError::InvalidMethodCall)?.as_ref()
+                    args.first().ok_or(VmError::InvalidMethodCall)?.as_ref()
                 {
                     Ok(TypeValue::from(*comm))
                 } else {
@@ -1330,7 +1330,7 @@ impl RotoType for IpAddr {
         match method_token.try_into()? {
             IpAddrToken::From => {
                 if let TypeValue::Builtin(BuiltinTypeValue::StringLiteral(str_lit)) =
-                    args.get(0).ok_or(VmError::InvalidMethodCall)?.as_ref()
+                    args.first().ok_or(VmError::InvalidMethodCall)?.as_ref()
                 {
                    str_lit.clone().into_type(&TypeDef::IpAddr).map_err(|_| VmError::InvalidConversion)
                 } else {
@@ -1339,7 +1339,7 @@ impl RotoType for IpAddr {
             },
             IpAddrToken::Matches => {
                 if let TypeValue::Builtin(BuiltinTypeValue::Prefix(pfx)) =
-                    args.get(0).ok_or(VmError::InvalidMethodCall)?.as_ref()
+                    args.first().ok_or(VmError::InvalidMethodCall)?.as_ref()
                 {
                    Ok(TypeValue::Builtin(
                         BuiltinTypeValue::Bool(pfx.contains(*self))
@@ -1370,7 +1370,7 @@ impl RotoType for IpAddr {
             },
             IpAddrToken::Matches => {
                 if let TypeValue::Builtin(BuiltinTypeValue::Prefix(pfx)) =
-                    args.get(0).ok_or(VmError::InvalidMethodCall)?
+                    args.first().ok_or(VmError::InvalidMethodCall)?
                 {
                    Ok(TypeValue::Builtin(
                         BuiltinTypeValue::Bool(pfx.contains(self))

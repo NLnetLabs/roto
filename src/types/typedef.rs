@@ -901,7 +901,7 @@ impl PartialEq<TypeValue> for TypeDef {
             }
             (a, TypeValue::Builtin(b)) => a == b,
             (a, TypeValue::List(b)) => match (a, b) {
-                (TypeDef::List(aa), List(bb)) if !bb.is_empty() => match &bb.get(0) {
+                (TypeDef::List(aa), List(bb)) if !bb.is_empty() => match &bb.first() {
                     Some(ElementTypeValue::Nested(bb)) => {
                         trace!("element type value nested {}", bb);
                         return aa.as_ref() == bb.as_ref();
@@ -1236,7 +1236,7 @@ impl From<&TypeValue> for TypeDef {
         match ty {
             TypeValue::Builtin(b) => b.into(),
             TypeValue::List(l) => match l {
-                List(l) => match &l.get(0) {
+                List(l) => match &l.first() {
                     Some(ElementTypeValue::Nested(n)) => {
                         TypeDef::List(Box::new((&(**n)).into()))
                     }

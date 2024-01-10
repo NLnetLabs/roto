@@ -632,7 +632,7 @@ impl ast::TermSection {
         let mut argument_type = TypeDef::Unknown;
         // There may be a local scope defined in a `with <ARGUMENT_ID>`
         // in the term header.
-        if let Some(TypeIdentField { field_name, ty }) = self.with_kv.get(0) {
+        if let Some(TypeIdentField { field_name, ty }) = self.with_kv.first() {
             // Does the supplied type exist in our scope?
             argument_type =
                 check_type_identifier(ty.clone(), symbols.clone(), &scope)?;
@@ -883,7 +883,7 @@ impl ast::ActionSection {
         let mut local_scope: Vec<Symbol> = vec![];
         // There may be a local scope defined in a `with <ARGUMENT_ID>`
         // in the term header.
-        if let Some(TypeIdentField { field_name, ty }) = self.with_kv.get(0) {
+        if let Some(TypeIdentField { field_name, ty }) = self.with_kv.first() {
             // Does the supplied type exist in our scope?
             action_section_type =
                 check_type_identifier(ty.clone(), symbols.clone(), &scope)?;
@@ -936,7 +936,7 @@ impl ast::ActionSection {
                 Ok(name) => name,
                 Err(_) => compute_expr
                     .access_expr
-                    .get(0)
+                    .first()
                     .ok_or(CompileError::Internal(format!(
                         "Cannot find access expr in: {:?}",
                         compute_expr.access_expr
@@ -1332,7 +1332,7 @@ impl ast::ComputeExpr {
         let ar_name = self.get_receiver_ident().or_else(|_| {
             Ok::<ShortString, CompileError>(
                 self.access_expr
-                    .get(0)
+                    .first()
                     .ok_or(CompileError::Internal(format!(
                         "Cannot find access expr in: {:?}",
                         self.access_expr
@@ -2952,11 +2952,11 @@ fn is_boolean_function(
 ) -> Result<(), CompileError> {
     let left = (
         left.get_builtin_type()? == TypeDef::Bool,
-        left.get_args().get(0).map(|a| a.get_value()),
+        left.get_args().first().map(|a| a.get_value()),
     );
     let right = (
         right.get_builtin_type()? == TypeDef::Bool,
-        right.get_args().get(0).map(|a| a.get_value()),
+        right.get_args().first().map(|a| a.get_value()),
     );
 
     match (left, right) {
@@ -2984,7 +2984,7 @@ fn _is_boolean_expression(
         return Ok(());
     };
 
-    if let Some(value) = expr.get_args().get(0).map(|a| a.get_value()) {
+    if let Some(value) = expr.get_args().first().map(|a| a.get_value()) {
         if value.is_boolean_type() {
             return Ok(());
         };
