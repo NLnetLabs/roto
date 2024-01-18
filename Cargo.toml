@@ -1,6 +1,6 @@
 [package]
 name = "roto"
-version = "0.2.0"
+version = "0.2.1-dev"
 edition = "2021"
 authors = ["NLnet Labs <routing-team@nlnetlabs.nl>"]
 description = "strongly-typed, compiled language for Rotonda"
