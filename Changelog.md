@@ -1,8 +1,10 @@
 # Changelog
 
-## 0.2.0-rc0
+## 0.2.0
 
-Released 2024-01-10.
+Released 2024-01-18.
+
+First release.
 
 Other changes
 
