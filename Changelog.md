@@ -4,6 +4,8 @@
 
 Released 2024-01-18.
 
+First release.
+
 Other changes
 
 No changes compared to 0.1.0-rc0, but due to an error in the versioning of the
