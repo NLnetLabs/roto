@@ -6,6 +6,7 @@ authors = ["NLnet Labs <routing-team@nlnetlabs.nl>"]
 description = "strongly-typed, compiled language for Rotonda"
 documentation = "https://docs.rs/roto/"
 repository = "https://github.com/NLnetLabs/roto/"
+homepage = "https://www.nlnetlabs.nl/projects/routing/rotonda/"
 keywords = ["routing", "bgp"]
 categories = ["network-programming"]
 license = "BSD-3-Clause"
