@@ -296,7 +296,7 @@ impl RotoType for StringLiteral {
             StringLiteralToken::Set => {
                 if let Ok(TypeValue::Builtin(
                     BuiltinTypeValue::StringLiteral(str),
-                )) = args.remove(0).into_type(&TypeDef::StringLiteral)
+                )) = args.swap_remove(0).into_type(&TypeDef::StringLiteral)
                 {
                     Ok(TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
                         str,
@@ -1488,6 +1488,11 @@ impl RotoType for routecore::bgp::aspath::HopPath {
                 AsPathToken::Len.into(),
                 vec![],
             )),
+            "set" => Ok(MethodProps::new(
+                TypeDef::Unknown,
+                AsPathToken::Set.into(),
+                vec![TypeDef::AsPath],
+            )),
             _ => Err(format!(
                 "Unknown method '{}' for type AsPath",
                 method_name.ident
@@ -1531,16 +1536,22 @@ impl RotoType for routecore::bgp::aspath::HopPath {
                 let len = self.hop_count();
                 Ok(TypeValue::Builtin(BuiltinTypeValue::U8(len as u8)))
             }
+            AsPathToken::Set => Err(VmError::InvalidMethodCall),
         }
     }
 
     fn exec_consume_value_method(
         self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
+        method_token: usize,
+        mut args: Vec<TypeValue>,
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
-        todo!()
+        match method_token.try_into()? {
+            AsPathToken::Set => try_remove_first(&mut args),
+            AsPathToken::Origin => Err(VmError::InvalidMethodCall),
+            AsPathToken::Contains => Err(VmError::InvalidMethodCall),
+            AsPathToken::Len => Err(VmError::InvalidMethodCall),
+        }
     }
 
     fn exec_type_method<'a>(
@@ -1549,6 +1560,14 @@ impl RotoType for routecore::bgp::aspath::HopPath {
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         todo!()
+    }
+}
+
+fn try_remove_first<T>(vec: &mut Vec::<T>) -> Result<T, VmError> {
+    if vec.is_empty() {
+        Ok(vec.swap_remove(0))
+    } else {
+        Err(VmError::InvalidMethodCall)
     }
 }
 
@@ -1655,6 +1674,7 @@ pub(crate) enum AsPathToken {
     Origin = 1,
     Contains = 2,
     Len = 3,
+    Set = 4,
 }
 
 impl TryFrom<usize> for AsPathToken {
@@ -1665,6 +1685,7 @@ impl TryFrom<usize> for AsPathToken {
             1 => Ok(AsPathToken::Origin),
             2 => Ok(AsPathToken::Contains),
             3 => Ok(AsPathToken::Len),
+            4 => Ok(AsPathToken::Set),
             _ => {
                 debug!("Unknown AsPathToken value: {}", value);
                 Err(VmError::InvalidMethodCall)
