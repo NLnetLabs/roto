@@ -6,7 +6,14 @@ Breaking changes
 
 New
 
+* 'set' method for AsPath type
+* Better error message for BytesRecord types
+
 Bug fixes
+
+* Parse all available type definitions
+
+    Several types that could be used inside blocks, weren't available in Type and Anonymous Record definitions.
 
 Other changes
 
