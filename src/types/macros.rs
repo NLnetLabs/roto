@@ -651,6 +651,9 @@ macro_rules! bytes_record_impl {
             fn into_typevalue(self) -> TypeValue {
                 TypeValue::Builtin(BuiltinTypeValue::$builtin_type_variant(BytesRecord(self)))
             }
+            fn get_name() -> & 'static str {
+                stringify!($bytes_record_type)
+            }
         }
 
         impl BytesRecord<$bytes_record_type> {

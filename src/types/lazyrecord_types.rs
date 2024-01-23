@@ -30,6 +30,9 @@ impl RecordType for BmpMessage {
     fn into_typevalue(self) -> super::typevalue::TypeValue {
         TypeValue::Builtin(BuiltinTypeValue::BmpMessage(BytesRecord(self)))
     }
+    fn get_name() -> &'static str {
+        "BmpMessage"
+    }
 }
 
 // This is the complete enumeration of all Lazy Record types available to

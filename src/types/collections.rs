@@ -1160,6 +1160,7 @@ pub trait EnumBytesRecord {
 pub trait RecordType: AsRef<[u8]> {
     fn get_field_num() -> usize;
     fn into_typevalue(self) -> TypeValue;
+    fn get_name() -> & 'static str;
 }
 
 //------------ BytesRecord type ---------------------------------------------
@@ -1182,8 +1183,9 @@ impl<T: RecordType + std::fmt::Debug> BytesRecord<T> {
     ) -> Result<MethodProps, CompileError> {
         Err(CompileError::from(format!(
             "Cannot find field/method/\
-        variant {} in this BytesRecord type",
-            method_name
+        variant '{}' in BytesRecord with type '{}'",
+            method_name,
+            T::get_name()
         )))
     }
 }
