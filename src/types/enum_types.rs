@@ -470,7 +470,7 @@ impl From<GlobalEnumTypeDef> for TypeDef {
             GlobalEnumTypeDef::Safi => TypeDef::U8,
             GlobalEnumTypeDef::WellKnownCommunities => TypeDef::U8,
             GlobalEnumTypeDef::BmpMessageType => TypeDef::LazyRecord(
-                super::lazyrecord_types::LazyRecordTypeDef::RouteMirroring,
+                super::lazyrecord_types::LazyRecordTypeDef::RouteMonitoring,
             ),
         }
     }

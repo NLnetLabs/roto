@@ -532,7 +532,7 @@ impl TypeDef {
                 Record::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::GlobalEnum(_) => {
-                Err(CompileError::from("GlobalEnum type has no methods"))
+                Err(CompileError::from(format!("Requested method '{}', but {} has no methods", method_name, self)))
             }
             TypeDef::ConstEnumVariant(_) => {
                 EnumVariant::<u8>::get_props_for_method(
@@ -1012,24 +1012,36 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
     ) -> Result<TypeDef, CompileError> {
         match ty.ident.as_str() {
             "U32" => Ok(TypeDef::U32),
+            "U16" => Ok(TypeDef::U16),
             "U8" => Ok(TypeDef::U8),
             "IntegerLiteral" => Ok(TypeDef::IntegerLiteral),
             // StringLiterals are referred to as 'String' in roto. To avond
             // confusion with the Rust `String` it called `StringLiteral`
             // internally
             "String" => Ok(TypeDef::StringLiteral),
-            "Prefix" => Ok(TypeDef::Prefix),
-            "PrefixLength" => Ok(TypeDef::PrefixLength),
+            "Bool" => Ok(TypeDef::Bool),
+            "HexLiteral" => Ok(TypeDef::HexLiteral),
             "IpAddress" => Ok(TypeDef::IpAddr),
+            "Prefix" => Ok(TypeDef::Prefix),
+            "AfiSafi" => Ok(TypeDef::AfiSafi),
+            "PathId" => Ok(TypeDef::PathId),
+            "PrefixLength" => Ok(TypeDef::PrefixLength),
+            "LocalPref" => Ok(TypeDef::LocalPref),
+            "AtomicAggregate" => Ok(TypeDef::AtomicAggregate),
+            "AggregatorInfo" => Ok(TypeDef::AggregatorInfo),
+            "NextHop" => Ok(TypeDef::NextHop),
+            "MultiExitDisc" => Ok(TypeDef::MultiExitDisc),
+            "RouteStatus" => Ok(TypeDef::RouteStatus),
+            "Community" => Ok(TypeDef::Community),
             "Asn" => Ok(TypeDef::Asn),
             "AsPath" => Ok(TypeDef::AsPath),
-            "Community" => Ok(TypeDef::Community),
+            "Hop" => Ok(TypeDef::Hop),
+            "OriginType" => Ok(TypeDef::OriginType),
             "Route" => Ok(TypeDef::Route),
-            "RouteStatus" => Ok(TypeDef::RouteStatus),
+            "BgpUpdateMessage" => Ok(TypeDef::BgpUpdateMessage),
             "BmpMessage" => {
                 Ok(TypeDef::GlobalEnum(GlobalEnumTypeDef::BmpMessageType))
             }
-            "BgpUpdateMessage" => Ok(TypeDef::BgpUpdateMessage),
             "BmpRouteMonitoringMessage" => {
                 Ok(TypeDef::LazyRecord(LazyRecordTypeDef::RouteMonitoring))
             }
@@ -1038,8 +1050,16 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             )),
             "BmpPeerUpNotification" => {
                 Ok(TypeDef::LazyRecord(LazyRecordTypeDef::PeerUpNotification))
+            },
+            "BmpInitationMessage" => {
+                Ok(TypeDef::LazyRecord(LazyRecordTypeDef::InitiationMessage))
             }
-            "HexLiteral" => Ok(TypeDef::HexLiteral),
+            "BmpTerminationMessage" => {
+                Ok(TypeDef::LazyRecord(LazyRecordTypeDef::TerminationMessage))
+            }
+            "BmpStatisticsReport" => {
+                Ok(TypeDef::LazyRecord(LazyRecordTypeDef::StatisticsReport))
+            }
             "BmpMessageType" => {
                 Ok(TypeDef::ConstEnumVariant("BMP_MESSAGE_TYPE".into()))
             }
@@ -1048,9 +1068,13 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
     }
 }
 
+// This From impl creates the link between the AST and the TypeDef enum
+// for built-in types.
 impl TryFrom<crate::ast::Identifier> for TypeDef {
     type Error = CompileError;
-    fn try_from(ty: crate::ast::Identifier) -> Result<TypeDef, CompileError> {
+    fn try_from(
+        ty: crate::ast::Identifier,
+    ) -> Result<TypeDef, CompileError> {
         match ty.ident.as_str() {
             "U32" => Ok(TypeDef::U32),
             "U16" => Ok(TypeDef::U16),
@@ -1060,14 +1084,25 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
             // confusion with the Rust `String` it called `StringLiteral`
             // internally
             "String" => Ok(TypeDef::StringLiteral),
-            "Prefix" => Ok(TypeDef::Prefix),
-            "PrefixLength" => Ok(TypeDef::PrefixLength),
+            "Bool" => Ok(TypeDef::Bool),
+            "HexLiteral" => Ok(TypeDef::HexLiteral),
             "IpAddress" => Ok(TypeDef::IpAddr),
+            "Prefix" => Ok(TypeDef::Prefix),
+            "AfiSafi" => Ok(TypeDef::AfiSafi),
+            "PathId" => Ok(TypeDef::PathId),
+            "PrefixLength" => Ok(TypeDef::PrefixLength),
+            "LocalPref" => Ok(TypeDef::LocalPref),
+            "AtomicAggregate" => Ok(TypeDef::AtomicAggregate),
+            "AggregatorInfo" => Ok(TypeDef::AggregatorInfo),
+            "NextHop" => Ok(TypeDef::NextHop),
+            "MultiExitDisc" => Ok(TypeDef::MultiExitDisc),
+            "RouteStatus" => Ok(TypeDef::RouteStatus),
+            "Community" => Ok(TypeDef::Community),
             "Asn" => Ok(TypeDef::Asn),
             "AsPath" => Ok(TypeDef::AsPath),
-            "Community" => Ok(TypeDef::Community),
+            "Hop" => Ok(TypeDef::Hop),
+            "OriginType" => Ok(TypeDef::OriginType),
             "Route" => Ok(TypeDef::Route),
-            "RouteStatus" => Ok(TypeDef::RouteStatus),
             "BgpUpdateMessage" => Ok(TypeDef::BgpUpdateMessage),
             "BmpMessage" => {
                 Ok(TypeDef::GlobalEnum(GlobalEnumTypeDef::BmpMessageType))
@@ -1080,8 +1115,16 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
             )),
             "BmpPeerUpNotification" => {
                 Ok(TypeDef::LazyRecord(LazyRecordTypeDef::PeerUpNotification))
+            },
+            "BmpInitationMessage" => {
+                Ok(TypeDef::LazyRecord(LazyRecordTypeDef::InitiationMessage))
             }
-            "HexLiteral" => Ok(TypeDef::HexLiteral),
+            "BmpTerminationMessage" => {
+                Ok(TypeDef::LazyRecord(LazyRecordTypeDef::TerminationMessage))
+            }
+            "BmpStatisticsReport" => {
+                Ok(TypeDef::LazyRecord(LazyRecordTypeDef::StatisticsReport))
+            }
             "BmpMessageType" => {
                 Ok(TypeDef::ConstEnumVariant("BMP_MESSAGE_TYPE".into()))
             }
