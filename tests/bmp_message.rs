@@ -280,7 +280,7 @@ fn compile_initiation_payload(
     // let rm_msg = i_msg.unwrap();
     let payload = TypeValue::Builtin(
         roto::types::builtin::BuiltinTypeValue::BmpMessage(
-            roto::types::builtin::BytesRecord(buf),
+            buf.into(),
         ),
     );
 

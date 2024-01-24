@@ -28,7 +28,7 @@ impl RecordType for BmpMessage {
         1
     }
     fn into_typevalue(self) -> super::typevalue::TypeValue {
-        TypeValue::Builtin(BuiltinTypeValue::BmpMessage(BytesRecord(self)))
+        TypeValue::Builtin(BuiltinTypeValue::BmpMessage(self.into()))
     }
     fn get_name() -> &'static str {
         "BmpMessage"

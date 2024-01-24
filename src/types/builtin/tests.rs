@@ -103,7 +103,7 @@ mod route {
             roto_msgs.push(RawRouteWithDeltas::new_with_message_ref(
                 msg_id,
                 *prefix,
-                &roto_msgs[0].raw_message,
+                roto_msgs[0].raw_message.clone(),
                 routecore::bgp::types::AfiSafi::Ipv6Unicast,
                 None,
                 RouteStatus::InConvergence,
@@ -219,7 +219,7 @@ mod route {
             roto_msgs.push(RawRouteWithDeltas::new_with_message_ref(
                 msg_id,
                 *prefix,
-                &roto_msgs[0].raw_message,
+                roto_msgs[0].raw_message.clone(),
                 routecore::bgp::types::AfiSafi::Ipv6Unicast,
                 None,
                 RouteStatus::InConvergence,

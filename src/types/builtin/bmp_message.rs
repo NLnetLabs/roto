@@ -39,12 +39,12 @@ createtoken!(
 
 impl BytesRecord<BmpMessage> {
     pub fn new(bytes: bytes::Bytes) -> Result<Self, VmError> {
-        Ok(Self(
+        Ok(
             routecore::bmp::message::Message::<bytes::Bytes>::from_octets(
                 bytes,
             )
-            .map_err(|_| VmError::InvalidMsgType)?,
-        ))
+            .map_err(|_| VmError::InvalidMsgType)?.into()
+        )
     }
 
     pub fn exec_consume_value_method(
@@ -94,8 +94,8 @@ impl BytesRecord<BmpMessage> {
 
 impl EnumBytesRecord for BytesRecord<BmpMessage> {
     fn get_variant(&self) -> LazyRecordTypeDef {
-        trace!("this variant is {:?}", LazyRecordTypeDef::from(self.0.common_header().msg_type()));
-        self.0.common_header().msg_type().into()
+        trace!("this variant is {:?}", LazyRecordTypeDef::from(self.bytes_parser().common_header().msg_type()));
+        self.bytes_parser().common_header().msg_type().into()
     }
 
     // Returns the TypeValue for a variant and field_index on this
@@ -115,7 +115,7 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
             return Ok(TypeValue::Unknown);
         };
 
-        let raw_bytes = self.0.as_ref();
+        let raw_bytes = self.as_ref();
         let lazy_rec: TypeValue = match variant_token {
             LazyRecordTypeDef::RouteMonitoring => {
                 trace!("get_field_index_for_variant on Route Monitoring");
@@ -134,7 +134,7 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
                 ))
                 .get_field_by_index(
                     field_index,
-                    &BytesRecord::<RouteMonitoring>(rm),
+                    &BytesRecord::<RouteMonitoring>::from(rm),
                 )
                 .map(|elm| elm.try_into())?.map_err(|_| VmError::InvalidPayload)?
             }
@@ -150,7 +150,7 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
                 ))
                 .get_field_by_index(
                     field_index,
-                    &BytesRecord::<PeerDownNotification>(pd),
+                    &BytesRecord::<PeerDownNotification>::from(pd),
                 )
                 .map(|elm| elm.try_into())?.map_err(|_| VmError::InvalidPayload)?
             }
@@ -166,7 +166,7 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
                 ))
                 .get_field_by_index(
                     field_index,
-                    &BytesRecord::<PeerUpNotification>(pu),
+                    &BytesRecord::<PeerUpNotification>::from(pu),
                 )
                 .map(|elm| elm.try_into())?.map_err(|_| VmError::InvalidPayload)?
             }
@@ -182,7 +182,7 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
                 ))
                 .get_field_by_index(
                     field_index,
-                    &BytesRecord::<InitiationMessage>(pu),
+                    &BytesRecord::<InitiationMessage>::from(pu),
                 )
                 .map(|elm| elm.try_into())?.map_err(|_| VmError::InvalidPayload)?
             }
@@ -198,7 +198,7 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
                 ))
                 .get_field_by_index(
                     field_index,
-                    &BytesRecord::<StatisticsReport>(pu),
+                    &BytesRecord::<StatisticsReport>::from(pu),
                 )
                 .map(|elm| elm.try_into())?.map_err(|_| VmError::InvalidPayload)?
             }
@@ -302,7 +302,7 @@ impl BytesRecord<RouteMonitoring> {
             )
             .map_err(|_| VmError::InvalidPayload)?
         {
-            Ok(Self(rm_msg))
+            Ok(rm_msg.into())
         } else {
             Err(VmError::InvalidMsgType)
         }
@@ -387,7 +387,7 @@ impl BytesRecord<PeerUpNotification> {
             )
             .map_err(|_| VmError::InvalidPayload)?
         {
-            Ok(Self(pu_msg))
+            Ok(pu_msg.into())
         } else {
             Err(VmError::InvalidMsgType)
         }
@@ -447,7 +447,7 @@ impl BytesRecord<PeerDownNotification> {
         )
         .map_err(|_| VmError::InvalidPayload)?
         {
-            Ok(Self(pd_msg))
+            Ok(pd_msg.into())
         } else {
             Err(VmError::InvalidMsgType)
         }
@@ -477,7 +477,7 @@ impl BytesRecord<InitiationMessage> {
         )
         .map_err(|_| VmError::InvalidPayload)?
         {
-            Ok(Self(pd_msg))
+            Ok(pd_msg.into())
         } else {
             Err(VmError::InvalidMsgType)
         }
@@ -508,7 +508,7 @@ impl BytesRecord<TerminationMessage> {
         )
         .map_err(|_| VmError::InvalidPayload)?
         {
-            Ok(Self(pd_msg))
+            Ok(pd_msg.into())
         } else {
             Err(VmError::InvalidMsgType)
         }
@@ -567,7 +567,7 @@ impl BytesRecord<StatisticsReport> {
             )
             .map_err(|_| VmError::InvalidPayload)?
         {
-            Ok(Self(sr_msg))
+            Ok(sr_msg.into())
         } else {
             Err(VmError::InvalidMsgType)
         }

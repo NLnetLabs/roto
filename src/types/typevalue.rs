@@ -295,7 +295,7 @@ pub enum BytesRecordType {
 
 pub fn into_inner<T: RecordType>(tv: TypeValue) -> Option<BytesRecordType> {
     match tv {
-        TypeValue::Builtin(BuiltinTypeValue::BmpInitiationMessage(msg)) => Some(BytesRecordType::InitiationMessage(msg.0)),
+        TypeValue::Builtin(BuiltinTypeValue::BmpInitiationMessage(msg)) => Some(BytesRecordType::InitiationMessage(msg.into_inner())),
         _ => None
     }
 }
@@ -557,7 +557,7 @@ impl RotoType for TypeValue {
                         method_token,
                         args,
                         res_type,
-                        bytes_rec.0.as_ref(),
+                        bytes_rec.as_ref(),
                     )
                 }
                 BuiltinTypeValue::BmpPeerUpNotification(bytes_rec) => {
@@ -568,7 +568,7 @@ impl RotoType for TypeValue {
                         method_token,
                         args,
                         res_type,
-                        bytes_rec.0.as_ref(),
+                        bytes_rec.as_ref(),
                     )
                 }
                 BuiltinTypeValue::BmpPeerDownNotification(bytes_rec) => {
@@ -579,7 +579,7 @@ impl RotoType for TypeValue {
                         method_token,
                         args,
                         res_type,
-                        bytes_rec.0.as_ref(),
+                        bytes_rec.as_ref(),
                     )
                 }
                 BuiltinTypeValue::BmpInitiationMessage(bytes_rec) => {
@@ -590,7 +590,7 @@ impl RotoType for TypeValue {
                         method_token,
                         args,
                         res_type,
-                        bytes_rec.0.as_ref(),
+                        bytes_rec.as_ref(),
                     )
                 }
                 BuiltinTypeValue::BmpTerminationMessage(bytes_rec) => {
@@ -601,7 +601,7 @@ impl RotoType for TypeValue {
                         method_token,
                         args,
                         res_type,
-                        bytes_rec.0.as_ref(),
+                        bytes_rec.as_ref(),
                     )
                 }
                 BuiltinTypeValue::BmpStatisticsReport(bytes_rec) => {
@@ -612,7 +612,7 @@ impl RotoType for TypeValue {
                         method_token,
                         args,
                         res_type,
-                        bytes_rec.0.as_ref(),
+                        bytes_rec.as_ref(),
                     )
                 }
                 BuiltinTypeValue::Bool(v) => {
@@ -1308,36 +1308,36 @@ impl TryFrom<TypedRecordValueExpr> for TypeValue {
 
 impl From<RouteMonitoring> for TypeValue {
     fn from(value: RouteMonitoring) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::BmpRouteMonitoringMessage(BytesRecord(value)))
+        TypeValue::Builtin(BuiltinTypeValue::BmpRouteMonitoringMessage(value.into()))
     }
 }
 
 impl From<InitiationMessage> for TypeValue {
     fn from(value: InitiationMessage) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::BmpInitiationMessage(BytesRecord(value)))
+        TypeValue::Builtin(BuiltinTypeValue::BmpInitiationMessage(value.into()))
     }
 }
 
 impl From<TerminationMessage> for TypeValue {
     fn from(value: TerminationMessage) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::BmpTerminationMessage(BytesRecord(value)))
+        TypeValue::Builtin(BuiltinTypeValue::BmpTerminationMessage(value.into()))
     }
 }
 
 impl From<PeerUpNotification> for TypeValue {
     fn from(value: PeerUpNotification) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::BmpPeerUpNotification(BytesRecord(value)))
+        TypeValue::Builtin(BuiltinTypeValue::BmpPeerUpNotification(value.into()))
     }
 }
 
 impl From<PeerDownNotification> for TypeValue {
     fn from(value: PeerDownNotification) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::BmpPeerDownNotification(BytesRecord(value)))
+        TypeValue::Builtin(BuiltinTypeValue::BmpPeerDownNotification(value.into()))
     }
 }
 
 impl From<StatisticsReport> for TypeValue {
     fn from(value: StatisticsReport) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::BmpStatisticsReport(BytesRecord(value)))
+        TypeValue::Builtin(BuiltinTypeValue::BmpStatisticsReport(value.into()))
     }
 }

@@ -11,6 +11,7 @@
 //               └─▶ Withdrawals │──change ──────┘
 //                 └─────────────┘  status
 
+use chrono::Utc;
 use log::{debug, error};
 use routecore::addr::Prefix;
 use routecore::asn::Asn;
@@ -22,6 +23,7 @@ use routecore::bgp::{
 };
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
+use std::net::SocketAddr;
 use std::{net::IpAddr, sync::Arc};
 
 /// Lamport Timestamp. Used to order messages between units/systems.
@@ -76,7 +78,7 @@ pub struct MaterializedRoute {
 impl From<RawRouteWithDeltas> for MaterializedRoute {
     fn from(raw_route: RawRouteWithDeltas) -> Self {
         let status = raw_route.status_deltas.current();
-        let route_id = raw_route.raw_message.message_id;
+        let route_id = (RotondaId(0), 0);
 
         let status = if let Ok(status) = status.try_into() {
             status
@@ -100,6 +102,174 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
     }
 }
 
+//------------ RouteContext --------------------------------------------------
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RouteProperties {
+    pub prefix: Prefix,
+    pub path_id: Option<routecore::bgp::message::nlri::PathId>,
+    pub afi_safi: routecore::bgp::types::AfiSafi,
+    pub status: RouteStatus,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Provenance {
+    pub timestamp: chrono::DateTime<Utc>,
+    pub router_id: Arc<String>,
+    pub source_id: SourceId,
+    pub peer_id: PeerId,
+    pub peer_bgp_id: routecore::bgp::path_attributes::BgpIdentifier,
+    pub peer_distuingisher: [u8; 8],
+    pub peer_rib_type: PeerRibType,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Default)]
+pub enum PeerRibType {
+    AdjRibInPre,
+    AdjRibInPost,
+    AdjRibLoc,
+    AdjRibOutPre,
+    #[default]
+    AdjRibOutPost, // This is the default for BGP messages
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub struct PeerId {
+    pub addr: IpAddr,
+    pub asn: Asn,
+}
+
+impl From<(bool, routecore::bmp::message::RibType)> for PeerRibType {
+    fn from(
+        (is_post_policy, rib_type): (bool, routecore::bmp::message::RibType),
+    ) -> Self {
+        match rib_type {
+            routecore::bmp::message::RibType::AdjRibIn => {
+                if is_post_policy {
+                    PeerRibType::AdjRibInPost
+                } else {
+                    PeerRibType::AdjRibInPre
+                }
+            }
+            routecore::bmp::message::RibType::AdjRibOut => {
+                if is_post_policy {
+                    PeerRibType::AdjRibOutPost
+                } else {
+                    PeerRibType::AdjRibOutPre
+                }
+            }
+            routecore::bmp::message::RibType::Unimplemented(_) => {
+                PeerRibType::AdjRibOutPost
+            }
+        }
+    }
+}
+
+impl PeerId {
+    pub fn new(addr: IpAddr, asn: Asn) -> Self {
+        Self { addr, asn }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct RouteContext {
+    pub msg: routecore::bgp::message::UpdateMessage<bytes::Bytes>,
+    pub provenance: Provenance,
+    pub route_properties: RouteProperties,
+}
+
+//------------ SourceId ------------------------------------------------------
+
+/// The source of received updates.
+///
+/// Not all incoming data has to come from a TCP/IP connection. This enum
+/// exists to represent both the TCP/IP type of incoming connection that we
+/// receive data from today as well as other connection types in future, and
+/// can also be used to represent alternate sources of incoming data such as
+/// replay from file or test data created on the fly.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum SourceId {
+    SocketAddr(SocketAddr),
+    Named(Arc<String>),
+}
+
+impl Default for SourceId {
+    fn default() -> Self {
+        "unknown".into()
+    }
+}
+
+impl SourceId {
+    pub fn generated() -> Self {
+        Self::from("generated")
+    }
+
+    pub fn socket_addr(&self) -> Option<&SocketAddr> {
+        match self {
+            SourceId::SocketAddr(addr) => Some(addr),
+            SourceId::Named(_) => None,
+        }
+    }
+
+    pub fn ip(&self) -> Option<IpAddr> {
+        match self {
+            SourceId::SocketAddr(addr) => Some(addr.ip()),
+            SourceId::Named(_) => None,
+        }
+    }
+
+    pub fn name(&self) -> Option<&str> {
+        match self {
+            SourceId::SocketAddr(_) => None,
+            SourceId::Named(name) => Some(name),
+        }
+    }
+}
+
+impl std::fmt::Display for SourceId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SourceId::SocketAddr(addr) => addr.fmt(f),
+            SourceId::Named(name) => name.fmt(f),
+        }
+    }
+}
+
+impl From<SocketAddr> for SourceId {
+    fn from(addr: SocketAddr) -> Self {
+        SourceId::SocketAddr(addr)
+    }
+}
+
+impl From<String> for SourceId {
+    fn from(name: String) -> Self {
+        SourceId::Named(name.into())
+    }
+}
+
+impl From<&str> for SourceId {
+    fn from(name: &str) -> Self {
+        SourceId::Named(name.to_string().into())
+    }
+}
+
+impl From<RouteContext> for RawRouteWithDeltas {
+    fn from(value: RouteContext) -> Self {
+        let delta_id = (RotondaId(0), 0); // TODO
+        RawRouteWithDeltas::new_with_message_ref(
+            delta_id,
+            value.route_properties.prefix,
+            value.msg.into(),
+            value.route_properties.afi_safi,
+            value.route_properties.path_id,
+            value.route_properties.status,
+        )
+        .with_peer_ip(value.provenance.peer_id.addr)
+        .with_peer_asn(value.provenance.peer_id.asn)
+        .with_router_id(value.provenance.router_id)
+    }
+}
+
 //------------ RawRouteWithDelta ============================================
 
 // This is the default storage data-structure for a RIB, it will store the
@@ -120,7 +290,7 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
 pub struct RawRouteWithDeltas {
     pub prefix: Prefix,
     // Arc'ed BGP message
-    pub raw_message: Arc<BgpUpdateMessage>,
+    pub raw_message: UpdateMessage,
     // AFI SAFI combination for the NLRI that the Prefix for this route
     // belongs to.
     pub afi_safi: routecore::bgp::types::AfiSafi,
@@ -150,14 +320,13 @@ impl RawRouteWithDeltas {
         path_id: Option<routecore::bgp::message::nlri::PathId>,
         route_status: RouteStatus,
     ) -> Result<Self, VmError> {
-        let raw_message = BgpUpdateMessage::new(delta_id, raw_message);
         let mut attribute_deltas = AttributeDeltaList::new();
         let (peer_ip, peer_asn, router_id) = (None, None, None);
         // This stores the attributes in the raw message as the first delta.
         attribute_deltas.store_delta(AttributeDelta::new(
-            delta_id,
+            // delta_id,
             0,
-            raw_message.raw_message.create_changeset(
+            raw_message.create_changeset(
                 prefix,
                 peer_ip,
                 peer_asn,
@@ -169,7 +338,7 @@ impl RawRouteWithDeltas {
 
         Ok(Self {
             prefix,
-            raw_message: Arc::new(raw_message),
+            raw_message,
             afi_safi,
             path_id,
             peer_ip,
@@ -186,14 +355,14 @@ impl RawRouteWithDeltas {
     pub fn new_with_message_ref(
         delta_id: (RotondaId, LogicalTime),
         prefix: Prefix,
-        raw_message: &Arc<BgpUpdateMessage>,
+        raw_message: UpdateMessage,
         afi_safi: routecore::bgp::types::AfiSafi,
         path_id: Option<routecore::bgp::message::nlri::PathId>,
         route_status: RouteStatus,
     ) -> Self {
         Self {
             prefix,
-            raw_message: Arc::clone(raw_message),
+            raw_message,
             afi_safi,
             path_id,
             peer_ip: None,
@@ -276,7 +445,7 @@ impl RawRouteWithDeltas {
         if let Some(attr_set) = self.attribute_deltas.deltas.last() {
             Ok(attr_set.attributes.clone())
         } else {
-            Ok(self.raw_message.raw_message.create_changeset(
+            Ok(self.raw_message.create_changeset(
                 self.prefix,
                 self.peer_ip,
                 self.peer_asn,
@@ -297,7 +466,7 @@ impl RawRouteWithDeltas {
 
         Ok(AttributeDelta {
             attributes: self.clone_latest_attrs()?,
-            delta_id,
+            // delta_id,
             delta_index,
         })
     }
@@ -307,7 +476,7 @@ impl RawRouteWithDeltas {
     // deltas.
     pub fn take_latest_attrs(mut self) -> Result<AttrChangeSet, VmError> {
         if self.attribute_deltas.deltas.is_empty() {
-            return self.raw_message.raw_message.create_changeset(
+            return self.raw_message.create_changeset(
                 self.prefix,
                 self.peer_ip,
                 self.peer_asn,
@@ -331,9 +500,8 @@ impl RawRouteWithDeltas {
     pub fn get_latest_attrs(&mut self) -> Result<&AttrChangeSet, VmError> {
         if self.attribute_deltas.deltas.is_empty() {
             self.attribute_deltas.store_delta(AttributeDelta::new(
-                self.raw_message.message_id,
                 0,
-                self.raw_message.raw_message.create_changeset(
+                self.raw_message.create_changeset(
                     self.prefix,
                     self.peer_ip,
                     self.peer_asn,
@@ -359,16 +527,16 @@ impl RawRouteWithDeltas {
     }
 
     // Get a ChangeSet that was added by a specific unit, e.g. a filter.
-    pub fn get_delta_for_rotonda_id(
-        &self,
-        rotonda_id: RotondaId,
-    ) -> Option<&AttrChangeSet> {
-        self.attribute_deltas
-            .deltas
-            .iter()
-            .find(|d| d.delta_id.0 == rotonda_id)
-            .map(|d| &d.attributes)
-    }
+    // pub fn get_delta_for_rotonda_id(
+    //     &self,
+    //     rotonda_id: RotondaId,
+    // ) -> Option<&AttrChangeSet> {
+    //     self.attribute_deltas
+    //         .deltas
+    //         .iter()
+    //         .find(|d| d.delta_id.0 == rotonda_id)
+    //         .map(|d| &d.attributes)
+    // }
 
     // Add a ChangeSet with some metadata to this RawRouteWithDelta.
     pub fn store_delta(
@@ -488,7 +656,6 @@ impl RawRouteWithDeltas {
         match field_token.try_into()? {
             RouteToken::AsPath => self
                 .raw_message
-                .raw_message
                 .0
                 .aspath()
                 .ok()
@@ -498,7 +665,6 @@ impl RawRouteWithDeltas {
                 .ok_or(VmError::InvalidFieldAccess),
             RouteToken::OriginType => self
                 .raw_message
-                .raw_message
                 .0
                 .origin()
                 .ok()
@@ -507,13 +673,11 @@ impl RawRouteWithDeltas {
                 .ok_or(VmError::InvalidFieldAccess),
             RouteToken::NextHop => self
                 .raw_message
-                .raw_message
                 .0
                 .find_next_hop(self.afi_safi)
                 .map_err(|_| VmError::InvalidFieldAccess)
                 .map(TypeValue::from),
             RouteToken::MultiExitDisc => self
-                .raw_message
                 .raw_message
                 .0
                 .multi_exit_disc()
@@ -523,7 +687,6 @@ impl RawRouteWithDeltas {
                 .ok_or(VmError::InvalidFieldAccess),
             RouteToken::LocalPref => self
                 .raw_message
-                .raw_message
                 .0
                 .local_pref()
                 .ok()
@@ -531,15 +694,10 @@ impl RawRouteWithDeltas {
                 .map(TypeValue::from)
                 .ok_or(VmError::InvalidFieldAccess),
             RouteToken::AtomicAggregate => Some(TypeValue::from(
-                self.raw_message
-                    .raw_message
-                    .0
-                    .is_atomic_aggregate()
-                    .unwrap_or(false),
+                self.raw_message.0.is_atomic_aggregate().unwrap_or(false),
             ))
             .ok_or(VmError::InvalidFieldAccess),
             RouteToken::Aggregator => self
-                .raw_message
                 .raw_message
                 .0
                 .aggregator()
@@ -548,7 +706,6 @@ impl RawRouteWithDeltas {
                 .map(TypeValue::from)
                 .ok_or(VmError::InvalidFieldAccess),
             RouteToken::Communities => self
-                .raw_message
                 .raw_message
                 .0
                 .all_human_readable_communities()
@@ -692,19 +849,19 @@ impl AttributeDeltaList {
 // unit in one go (with one logical timestamp).
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize)]
 pub struct AttributeDelta {
-    delta_id: (RotondaId, LogicalTime),
+    // delta_id: (RotondaId, LogicalTime),
     delta_index: usize,
     pub attributes: AttrChangeSet,
 }
 
 impl AttributeDelta {
     fn new(
-        delta_id: (RotondaId, LogicalTime),
+        // delta_id: (RotondaId, LogicalTime),
         delta_index: usize,
         attributes: AttrChangeSet,
     ) -> Self {
         Self {
-            delta_id,
+            // delta_id,
             delta_index,
             attributes,
         }
@@ -1295,8 +1452,7 @@ impl RotoType for RouteStatus {
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         Ok(TypeValue::Builtin(BuiltinTypeValue::Bool(
-            method_token
-                == usize::from(*self),
+            method_token == usize::from(*self),
         )))
     }
 
@@ -1336,7 +1492,7 @@ impl std::fmt::Display for RotondaId {
 
 //------------ Modification & Creation of new Updates -----------------------
 
-#[derive(Debug, Hash, Serialize, Clone)]
+#[derive(Debug, Hash, Serialize, Clone, PartialEq, Eq)]
 pub struct UpdateMessage(
     pub routecore::bgp::message::UpdateMessage<bytes::Bytes>,
 );
@@ -1435,5 +1591,15 @@ impl UpdateMessage {
         _change_set: &AttrChangeSet,
     ) -> Self {
         todo!()
+    }
+}
+
+impl From<routecore::bgp::message::UpdateMessage<bytes::Bytes>>
+    for UpdateMessage
+{
+    fn from(
+        value: routecore::bgp::message::UpdateMessage<bytes::Bytes>,
+    ) -> Self {
+        UpdateMessage(value)
     }
 }

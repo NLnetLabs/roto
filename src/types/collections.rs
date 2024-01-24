@@ -1170,7 +1170,7 @@ pub trait RecordType: AsRef<[u8]> {
 // values does not happen here, but in the LazyRecord type.
 
 #[derive(Debug, Serialize, Clone)]
-pub struct BytesRecord<T: RecordType>(pub T);
+pub struct BytesRecord<T: RecordType>(T);
 
 impl<T: RecordType + std::fmt::Debug> BytesRecord<T> {
     pub(crate) fn bytes_parser(&self) -> &T {
@@ -1187,6 +1187,10 @@ impl<T: RecordType + std::fmt::Debug> BytesRecord<T> {
             method_name,
             T::get_name()
         )))
+    }
+
+    pub fn into_inner(self) -> T {
+        self.0
     }
 }
 
@@ -1210,6 +1214,11 @@ impl<T: RecordType> std::hash::Hash for BytesRecord<T> {
     }
 }
 
+impl<T: RecordType> From<T> for BytesRecord<T> {
+    fn from(value: T) -> Self {
+        BytesRecord(value)
+    }
+} 
 
 //------------- LazyElementTypeValue type -----------------------------------
 
