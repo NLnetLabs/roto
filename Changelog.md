@@ -6,14 +6,25 @@ Breaking changes
 
 New
 
-* 'set' method for AsPath type
-* Better error message for BytesRecord types
+* `set` method for AsPath type.
+* Better error message for BytesRecord types.
+
+  Errors on BytesMessage now return the actual type of BytesRecord we're talking about.
+
+* `len`, `first` and `pop` methods for List types.
+* Nlri type added, with `set`, `afi`, `safi` methods.
+
+  Nlri is now a first-class citizen, that can be interrogated.
+
+* `announcements` (returning [Nlri]) method on BgpMessage.
+
+  announcements is a pass-through to the routecore method on a BgpUpdateMessage.
 
 Bug fixes
 
-* Parse all available type definitions
+* Parse all available type definitions.
 
-    Several types that could be used inside blocks, weren't available in Type and Anonymous Record definitions.
+  Several types that could be used inside blocks, weren't available in Type and Anonymous Record definitions.
 
 Other changes
 
