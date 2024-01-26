@@ -12,7 +12,7 @@ use crate::vm::{StackValue, VmError, FieldIndex};
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
 
-use super::builtin::BuiltinTypeValue;
+use super::builtin::{BuiltinTypeValue, IntegerLiteral};
 use super::lazyrecord_types::LazyRecordTypeDef;
 use super::typedef::{LazyNamedTypeDef, MethodProps, TypeDef};
 use super::typevalue::TypeValue;
@@ -297,6 +297,35 @@ impl List {
         todo!()
     }
 
+    fn exec_value_ref_method<'a>(
+        &'a self,
+        method: usize,
+        args: &'a [StackValue],
+        _res_type: TypeDef,
+    ) -> Result<&'a TypeValue, VmError> {
+        match method.try_into()? {
+            ListToken::First => {
+                match self.0.first() {
+                    Some(ElementTypeValue::Nested(n)) => Ok(n.as_ref()),
+                    Some(ElementTypeValue::Primitive(p)) => Ok(p),
+                    None => Ok(&TypeValue::Unknown)
+                }
+            }
+            ListToken::Get => {
+                if let TypeValue::Builtin(BuiltinTypeValue::IntegerLiteral(IntegerLiteral(index))) = args[0].as_ref() {
+                    match self.0.get(*index as usize) {
+                        Some(ElementTypeValue::Nested(n)) => Ok(n.as_ref()),
+                        Some(ElementTypeValue::Primitive(p)) => Ok(p),
+                        None => Ok(&TypeValue::Unknown)
+                    }
+                } else {
+                    Err(VmError::InvalidMethodCall)
+                }
+            }
+            _ => Err(VmError::InvalidMethodCall),
+        }
+    }
+
     // Get a reference to a field on a List, indicated by the first index in
     // the field index, and then descent into that field, based on the
     // following indexes in the field_index. Returns None if the field index
@@ -505,9 +534,26 @@ impl RotoType for List {
                     ListToken::Contains.into(),
                     vec![*list_ty_def.clone()],
                 )),
+                "len" => Ok(MethodProps::new(
+                    TypeDef::U32,
+                    ListToken::Contains.into(),
+                    vec![],
+                )),
+                "first" => Ok(MethodProps::new(
+                    *list_ty_def.clone(),
+                    ListToken::First.into(),
+                    vec![]
+                )),
+                "pop" => Ok(MethodProps::new(
+                    *list_ty_def.clone(),
+                    ListToken::Pop.into(),
+                    vec![]
+                )
+                .consume_value()),
                 _ => Err(format!(
-                    "Unknown method '{}' for list",
-                    method_name.ident
+                    "Unknown method '{}' for {}",
+                    method_name.ident,
+                    ty
                 )
                 .into()),
             }
@@ -537,6 +583,13 @@ impl RotoType for List {
                 trace!("contains on collection, search: {:?}", args);
                 Ok(self.iter().any(|e| e == args[0]).into())
             }
+            ListToken::First => {
+                match self.0.first() {
+                    Some(ElementTypeValue::Nested(n)) => Ok(*n.clone()),
+                    Some(ElementTypeValue::Primitive(p)) => Ok(p.clone()),
+                    None => Ok(TypeValue::Unknown)
+                }
+            }
             _ => Err(VmError::InvalidMethodCall),
         }
     }
@@ -558,7 +611,12 @@ impl RotoType for List {
                 self.0.push((args.remove(0)).try_into()?);
                 Ok(TypeValue::List(self))
             }
-            ListToken::Pop => todo!(),
+            ListToken::Pop if !self.0.is_empty() => {
+                match self.0.remove(0) {
+                    ElementTypeValue::Nested(n) => Ok(*n),
+                    ElementTypeValue::Primitive(p) => Ok(p),
+                }
+            },
             ListToken::Remove => todo!(),
             ListToken::Insert => todo!(),
             ListToken::Clear => todo!(),
@@ -611,14 +669,15 @@ impl From<Vec<TypeValue>> for List {
 #[derive(Debug)]
 #[repr(u8)]
 pub enum ListToken {
-    Len,
-    Contains,
-    Get,
-    Push,
-    Pop,
-    Remove,
-    Insert,
-    Clear,
+    Len = 0,
+    Contains = 1,
+    Get = 2,
+    Push = 3,
+    Pop = 4,
+    Remove = 5,
+    Insert = 6,
+    Clear = 7,
+    First = 8
 }
 
 impl TryFrom<usize> for ListToken {
@@ -634,6 +693,7 @@ impl TryFrom<usize> for ListToken {
             5 => Ok(ListToken::Remove),
             6 => Ok(ListToken::Insert),
             7 => Ok(ListToken::Clear),
+            8 => Ok(ListToken::First),
             t => {
                 error!("Cannot find method on List for token: {}", t);
                 Err(VmError::InvalidMethodCall)
@@ -1173,7 +1233,7 @@ pub trait RecordType: AsRef<[u8]> {
 pub struct BytesRecord<T: RecordType>(T);
 
 impl<T: RecordType + std::fmt::Debug> BytesRecord<T> {
-    pub(crate) fn bytes_parser(&self) -> &T {
+    pub fn bytes_parser(&self) -> &T {
         &self.0
     }
 

@@ -8,6 +8,7 @@ use std::net::IpAddr;
 use log::{trace, debug};
 use routecore::asn::Asn;
 use routecore::bgp::aspath::{HopPath, OwnedHop as Hop};
+use routecore::bgp::message::nlri::Nlri;
 use routecore::bgp::path_attributes::{AtomicAggregate, AggregatorInfo};
 use routecore::bgp::types::{OriginType, MultiExitDisc};
 use serde::Serialize;
@@ -188,6 +189,7 @@ pub enum TypeDef {
     AsPath,
     Hop,
     Community,
+    Nlri,
     OriginType,
     LocalPref,
     MultiExitDisc,
@@ -235,6 +237,7 @@ impl TypeDef {
         Prefix(StringLiteral;),
         Hop(StringLiteral;),
         Community(StringLiteral;),
+        Nlri(StringLiteral;),
         OriginType(StringLiteral;),
         NextHop(StringLiteral;),
         RouteStatus(StringLiteral;),
@@ -609,6 +612,9 @@ impl TypeDef {
             TypeDef::Community => {
                 Community::get_props_for_method(self.clone(), method_name)
             }
+            TypeDef::Nlri => {
+                Nlri::get_props_for_method(self.clone(), method_name)
+            }
             TypeDef::OriginType => {
                 OriginType::get_props_for_method(self.clone(), method_name)
             }
@@ -821,6 +827,7 @@ impl std::fmt::Display for TypeDef {
             TypeDef::U8 => write!(f, "U8"),
             TypeDef::Bool => write!(f, "Boolean"),
             TypeDef::Community => write!(f, "Community"),
+            TypeDef::Nlri => write!(f, "NLRI"),
             TypeDef::OriginType => write!(f, "OriginType"),
             TypeDef::RouteStatus => write!(f, "RouteStatus"),
             TypeDef::HexLiteral => write!(f, "HexLiteral"),
@@ -873,6 +880,9 @@ impl PartialEq<BuiltinTypeValue> for TypeDef {
             }
             TypeDef::Community => {
                 matches!(other, BuiltinTypeValue::Community(_))
+            }
+            TypeDef::Nlri => {
+                matches!(other, BuiltinTypeValue::Nlri(_))
             }
             TypeDef::ConstEnumVariant(name) => match other {
                 BuiltinTypeValue::ConstU8EnumVariant(o_enum) => {
@@ -1098,6 +1108,7 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
             "MultiExitDisc" => Ok(TypeDef::MultiExitDisc),
             "RouteStatus" => Ok(TypeDef::RouteStatus),
             "Community" => Ok(TypeDef::Community),
+            "Nlri" => Ok(TypeDef::Nlri),
             "Asn" => Ok(TypeDef::Asn),
             "AsPath" => Ok(TypeDef::AsPath),
             "Hop" => Ok(TypeDef::Hop),
@@ -1161,6 +1172,7 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::OriginType(_) => TypeDef::OriginType,
             BuiltinTypeValue::AsPath(_) => TypeDef::AsPath,
             BuiltinTypeValue::Community(_) => TypeDef::Community,
+            BuiltinTypeValue::Nlri(_) => TypeDef::Nlri,
             BuiltinTypeValue::Route(_) => TypeDef::Route,
             BuiltinTypeValue::BgpUpdateMessage(_) => {
                 TypeDef::BgpUpdateMessage
@@ -1226,6 +1238,7 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::Hop(_) => TypeDef::Hop,
             BuiltinTypeValue::AsPath(_) => TypeDef::AsPath,
             BuiltinTypeValue::Community(_) => TypeDef::Community,
+            BuiltinTypeValue::Nlri(_) => TypeDef::Nlri,
             BuiltinTypeValue::OriginType(_) => TypeDef::OriginType,
             BuiltinTypeValue::Route(_) => TypeDef::Route,
             BuiltinTypeValue::BgpUpdateMessage(_) => {

@@ -6,7 +6,7 @@ use primitives::RouteStatus;
 
 use routecore::asn::Asn;
 use routecore::bgp::aspath::{HopPath, OwnedHop as Hop};
-use routecore::bgp::message::nlri::PathId;
+use routecore::bgp::message::nlri::{Nlri, PathId};
 use routecore::bgp::types::{AfiSafi, NextHop, LocalPref, OriginType, MultiExitDisc};
 use routecore::bgp::communities::HumanReadableCommunity as Community;
 use serde::Serialize;
@@ -339,6 +339,9 @@ impl RotoType for TypeValue {
             TypeDef::Community => {
                 Community::get_props_for_method(ty, method_name)
             }
+            TypeDef::Nlri => {
+                Nlri::get_props_for_method(ty, method_name)
+            }
             TypeDef::ConstEnumVariant(_) => Err(CompileError::new(
                 "Unsupported TypeDef::ConstEnumVariant in TypeValue::\
                 get_props_for_method()"
@@ -433,6 +436,7 @@ impl RotoType for TypeValue {
                 }
                 BuiltinTypeValue::Bool(v) => v.into_type(ty),
                 BuiltinTypeValue::Community(v) => v.into_type(ty),
+                BuiltinTypeValue::Nlri(v) => v.into_type(ty),
                 BuiltinTypeValue::ConstU16EnumVariant(v) => v.into_type(ty),
                 BuiltinTypeValue::ConstU32EnumVariant(v) => v.into_type(ty),
                 BuiltinTypeValue::ConstU8EnumVariant(v) => v.into_type(ty),
@@ -621,6 +625,9 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::Community(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
+                BuiltinTypeValue::Nlri(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
                 BuiltinTypeValue::ConstU16EnumVariant(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
@@ -749,6 +756,9 @@ impl RotoType for TypeValue {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::Community(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::Nlri(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::ConstU16EnumVariant(v) => {

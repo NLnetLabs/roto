@@ -6,7 +6,7 @@ use std::fmt::Display;
 use std::net::IpAddr;
 
 use routecore::asn::Asn;
-use routecore::bgp::message::nlri::PathId;
+use routecore::bgp::message::nlri::{Nlri, PathId};
 use routecore::bgp::path_attributes::AtomicAggregate;
 use routecore::bgp::types::{AfiSafi, NextHop, OriginType, MultiExitDisc};
 use routecore::bgp::path_attributes::AggregatorInfo;
@@ -55,6 +55,7 @@ pub enum BuiltinTypeValue {
     MultiExitDisc(MultiExitDisc),     // scalar
     RouteStatus(RouteStatus),         // scalar
     Community(Community),             // scalar
+    Nlri(Nlri<bytes::Bytes>),                       // scalar
     Asn(Asn),                         // scalar
     AsPath(routecore::bgp::aspath::HopPath),        // vector
     Hop(routecore::bgp::aspath::OwnedHop), // read-only scalar
@@ -95,6 +96,7 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::PathId(v) => v.into_type(ty),
             BuiltinTypeValue::PrefixLength(v) => v.into_type(ty),
             BuiltinTypeValue::Community(v) => v.into_type(ty),
+            BuiltinTypeValue::Nlri(v) => v.into_type(ty),
             BuiltinTypeValue::IpAddr(v) => v.into_type(ty),
             BuiltinTypeValue::AsPath(v) => v.into_type(ty),
             BuiltinTypeValue::Hop(h) => h.into_type(ty),
@@ -190,6 +192,7 @@ impl Display for BuiltinTypeValue {
                     write!(f, "{}", v)
                 }
                 BuiltinTypeValue::Community(v) => write!(f, "{}", v),
+                BuiltinTypeValue::Nlri(v) => write!(f, "{}", v),
                 BuiltinTypeValue::IpAddr(v) => write!(f, "{}", v),
                 BuiltinTypeValue::Asn(v) => write!(f, "{}", v),
                 BuiltinTypeValue::AsPath(v) => {
@@ -277,6 +280,7 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::Community(v) => {
                     write!(f, "{} (Community)", v)
                 }
+                BuiltinTypeValue::Nlri(v) => { write!(f, "{} (NLRI)", v) }
                 BuiltinTypeValue::IpAddr(v) => {
                     write!(f, "{} (IP Address)", v)
                 }

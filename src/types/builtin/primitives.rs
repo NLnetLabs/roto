@@ -18,6 +18,7 @@ use crate::{
     noconversioninto, setmethodonly, typevaluefromimpls,
     wrappedfromimpls, scalartype,
 };
+use crate::types::typedef::TypeDef::ConstEnumVariant;
 
 use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
@@ -27,9 +28,9 @@ use routecore::asn::{Asn, LongSegmentError};
 use routecore::bgp::aspath::OwnedHop;
 use routecore::bgp::message::nlri::PathId;
 use routecore::bgp::path_attributes::{AtomicAggregate, AggregatorInfo};
-use routecore::bgp::communities::HumanReadableCommunity as Community;
+use routecore::bgp::communities::{ExtendedCommunity, HumanReadableCommunity as Community};
 use routecore::addr::Prefix;
-use routecore::bgp::types::{AfiSafi, LocalPref, NextHop, OriginType, MultiExitDisc};
+use routecore::bgp::types::{AfiSafi, LocalPref, MultiExitDisc, NextHop, OriginType};
 
 //------------ U16 Type -----------------------------------------------------
 
@@ -1273,6 +1274,191 @@ impl From<Vec<Community>> for TypeValue {
     }
 }
 
+//------------ ExtendedCommunity ---------------------------------------------
+
+// createtoken!(ExtendedCommunity; Set = 0);
+
+// impl RotoType for ExtendedCommunity {
+//     setmethodonly!(ExtendedCommunity);
+
+//     fn into_type(
+//         self,
+//         type_def: &TypeDef,
+//     ) -> Result<TypeValue, CompileError> {
+//         match type_def {
+//             TypeDef::ExtendedCommunity => {
+//                 Ok(TypeValue::Builtin(BuiltinTypeValue::ExtendedCommunity(self)))
+//             }
+//             TypeDef::Community => Ok(
+//                 TypeValue::Builtin(BuiltinTypeValue::Community(self))
+//             ),
+//             _ => Err(format!(
+//                 "Cannot convert type Boolean to type {:?}",
+//                 type_def
+//             )
+//             .into()),
+//         }
+//     }
+// }
+
+// typevaluefromimpls!(ExtendedCommunity);
+
+//------------ Nlri ----------------------------------------------------------
+
+type Nlri = routecore::bgp::message::nlri::Nlri<bytes::Bytes>;
+
+createtoken!(
+    Nlri;
+    Set = 0
+    Afi = 1
+    Safi = 2
+);
+
+impl RotoType for Nlri {
+
+    fn get_props_for_method(
+        _ty: TypeDef,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, CompileError>
+    where
+        Self: std::marker::Sized,
+    {
+        match method_name.ident.as_str() {
+            "set" => Ok(MethodProps::new(
+                TypeDef::Nlri,
+                NlriToken::Set.into(),
+                vec![TypeDef::Nlri],
+            )),
+            "afi" => Ok(MethodProps::new(
+                ConstEnumVariant("AFI".into()),
+                NlriToken::Afi.into(),
+                vec![]
+            )),
+            "safi" => Ok(MethodProps::new(
+                ConstEnumVariant("SAFI".into()),
+                NlriToken::Safi.into(),
+                vec![]
+            )),
+            _ => Err(format!(
+                "Unknown method: '{}' for type Nlri",
+                method_name.ident
+            )
+            .into()),
+        }
+    }
+
+    fn into_type(
+        self,
+        type_def: &TypeDef,
+    ) -> Result<TypeValue, CompileError> {
+        match type_def {
+            TypeDef::Nlri => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::Nlri(self)))
+            }
+            TypeDef::StringLiteral => Ok(TypeValue::Builtin(
+                BuiltinTypeValue::StringLiteral(self.into()),
+            )),
+            _ => Err(format!(
+                "Cannot convert type Nlri to type {:?}",
+                type_def
+            )
+            .into()),
+        }
+    }
+
+    fn exec_value_method(
+        &self,
+        method_token: usize,
+
+        args: &[StackValue],
+        _res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        match method_token.try_into()? {
+            NlriToken::Set => {
+                if let TypeValue::Builtin(BuiltinTypeValue::Nlri(nlri)) =
+                    args.first().ok_or(VmError::InvalidMethodCall)?.as_ref()
+                {
+                    Ok(TypeValue::from(nlri.clone()))
+                } else {
+                    Err(VmError::InvalidMethodCall)
+                }
+            }
+            NlriToken::Afi => {
+                Ok(TypeValue::Builtin(
+                    BuiltinTypeValue::ConstU16EnumVariant(
+                        EnumVariant::<u16>::new(
+                            ("AFI".into(), self.afi_safi().afi().into())
+                        )
+                    )
+                ))
+            }
+            NlriToken::Safi => {
+                Ok(TypeValue::Builtin(
+                    BuiltinTypeValue::ConstU8EnumVariant(
+                        EnumVariant::<u8>::new(
+                            ("SAFI".into(), self.afi_safi().safi().into())
+                        )
+                    )
+                ))
+            }
+        }
+    }
+
+    fn exec_consume_value_method(
+        self,
+        method_token: usize,
+        mut args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        match method_token.try_into()? {
+            NlriToken::Set => {
+                if let Ok(TypeValue::Builtin(BuiltinTypeValue::Nlri(
+                    comm_lit,
+                ))) = args.remove(0).into_type(&TypeDef::Nlri)
+                {
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::Nlri(
+                        comm_lit,
+                    )))
+                } else {
+                    Err(VmError::InvalidValueType)
+                }
+            },
+            NlriToken::Afi => Err(VmError::InvalidMethodCall),
+            NlriToken::Safi => Err(VmError::InvalidMethodCall)
+        }
+    }
+
+    fn exec_type_method<'a>(
+        _method_token: usize,
+        _args: &[StackValue],
+        _res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        todo!()
+    }
+}
+impl ScalarValue for Nlri {}
+
+impl From<Nlri> for TypeValue {
+    fn from(val: Nlri) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::Nlri(val))
+    }
+}
+
+impl From<Nlri> for BuiltinTypeValue {
+    fn from(value: Nlri) -> Self {
+        BuiltinTypeValue::Nlri(value)
+    }
+}
+
+impl From<Vec<Nlri>> for TypeValue {
+    fn from(value: Vec<Nlri>) -> Self {
+        let list: Vec<ElementTypeValue> = value
+            .iter()
+            .map(|c| ElementTypeValue::Primitive(TypeValue::from(c.clone())))
+            .collect::<Vec<_>>();
+        TypeValue::List(crate::types::collections::List(list))
+    }
+}
 
 //------------ MatchType ----------------------------------------------------
 

@@ -62,7 +62,7 @@ fn test_filter_map_10() {
         
             term afi-safi-unicast {
                 match {
-                    bgp_msg.nlris.afi != IPV4;
+                    bgp_msg.announcements.first().afi() != IPV4;
                 }
             }
         
@@ -104,7 +104,7 @@ fn test_filter_map_11() {
         
             term afi-safi-unicast {
                 match {
-                    bgp_msg.nlris.afi != IPV4;
+                    bgp_msg.announcements.first().afi() != IPV4;
                 }
             }
         

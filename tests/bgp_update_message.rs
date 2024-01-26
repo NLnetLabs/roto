@@ -3,8 +3,9 @@ use roto::ast::AcceptReject;
 use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self, FilterMap};
-use roto::types::builtin::{BgpUpdateMessage, RotondaId, UpdateMessage};
-use roto::types::collections::Record;
+use roto::types::builtin::RotondaId;
+use roto::types::collections::{BytesRecord, Record};
+use roto::types::lazyrecord_types::BgpUpdateMessage;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
 use routecore::bgp::message::SessionConfig;
@@ -14,7 +15,7 @@ mod common;
 fn test_data(
     name: Scope,
     source_code: &str,
-) -> Result<(VmResult, BgpUpdateMessage), Box<dyn std::error::Error>> {
+) -> Result<(VmResult, BytesRecord<BgpUpdateMessage>), Box<dyn std::error::Error>> {
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
@@ -50,10 +51,8 @@ fn test_data(
     //     prefixes[0],
     //     update,
     // );
-    let payload = BgpUpdateMessage::new(
-        msg_id,
-        UpdateMessage::new(buf, SessionConfig::modern()).unwrap(),
-    );
+    let payload = 
+        BytesRecord::<BgpUpdateMessage>::new(buf, SessionConfig::modern()).unwrap();
 
     // let payload2 = TypeValue::Builtin(
     //     roto::types::builtin::BuiltinTypeValue::BgpUpdateMessage(
@@ -86,7 +85,7 @@ fn test_data(
     let mem = &mut vm::LinearMemory::uninit();
     let res = vm
         .exec(
-            payload.clone(),
+            TypeValue::from(payload.clone()),
             None::<Record>,
             // Some(filter_map_arguments),
             None,
@@ -136,10 +135,18 @@ fn test_bgp_update_1() {
                     // bgp_msg.nlris.afi in [AFI_IPV4, AFI_IPV6];
                     // bgp_msg.nlris.afi in [Ipv4, Ipv6];
                     // bgp_msg.nlris.afi in [AFI.Ipv4, AFI.Ipv6];
-                    bgp_msg.nlris.afi in [AFI.IPV4, IPV6];
+                    
+                    //
+                    //bgp_msg.announcements.first().afi() in [AFI.IPV4, IPV6];
+                    //
+                    
                     // bgp_msg.nlris.afi in [afi.IPV4, afi.IPV6];
-                    // bgp_msg.nlris.afi == IPV4 | IPV6;
-                    bgp_msg.nlris.safi == UNICAST;
+                    // bgp_msg.announcements.first().afi == IPV4 | IPV6;
+                    
+                    //
+                    bgp_msg.announcements.first().safi() == UNICAST;
+                    //
+                    
                     // IPV4 == 150;
                 }
             }
@@ -172,8 +179,8 @@ fn test_bgp_update_2() {
 
             term afi-safi-unicast {
                 match {
-                    bgp_msg.nlris.afi in [IPV6, IPV4];
-                    bgp_msg.nlris.safi == UNICAST;
+                    bgp_msg.announcements.first().afi() in [IPV6, IPV4];
+                    bgp_msg.announcements.first().safi() == UNICAST;
                 }
             }
         
@@ -204,7 +211,7 @@ fn test_bgp_update_3() {
         
             term afi-safi-unicast {
                 match {
-                    bgp_msg.nlris.afi != IPV4;
+                    bgp_msg.announcements.first().afi() != IPV4;
                 }
             }
         
