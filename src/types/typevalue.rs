@@ -23,9 +23,10 @@ use crate::{
     vm::{FieldIndex, StackValue, VmError},
 };
 
+use super::lazyrecord_types::BgpUpdateMessage;
 use super::{
     builtin::{
-        primitives, BgpUpdateMessage, BuiltinTypeValue,
+        primitives, BuiltinTypeValue,
         HexLiteral, IntegerLiteral, PrefixLength,
         RawRouteWithDeltas, StringLiteral,
     },
@@ -327,9 +328,9 @@ impl RotoType for TypeValue {
                 get_props_for_method()"
                     .to_string(),
             )),
-            TypeDef::BgpUpdateMessage => {
-                BgpUpdateMessage::get_props_for_method(ty, method_name)
-            }
+            // TypeDef::BgpUpdateMessage => {
+            //     BytesRecord::<BgpUpdateMessage>::get_props_for_method(ty, method_name)
+            // }
             TypeDef::LazyRecord(ref bytes_parser) => {
                 bytes_parser.get_props_for_method(ty.clone(), method_name)
             }
@@ -547,8 +548,16 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::AtomicAggregate(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::BgpUpdateMessage(v) => {
-                    v.exec_value_method(method_token, args, res_type)
+                BuiltinTypeValue::BgpUpdateMessage(bytes_rec) => {
+                    LazyRecord::new(
+                        BytesRecord::<BgpUpdateMessage>::lazy_type_def(),
+                    )
+                    .exec_value_method(
+                        method_token,
+                        args,
+                        res_type,
+                        bytes_rec.as_ref(),
+                    )
                 }
                 BuiltinTypeValue::BmpMessage(_bytes_rec) => {
                     Err(VmError::InvalidValueType)

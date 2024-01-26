@@ -7,9 +7,8 @@ use roto::{
     compiler::Compiler,
     types::{
         builtin::{
-            RawRouteWithDeltas, RotondaId, RouteStatus, UpdateMessage,
-        },
-        collections::Record,
+            RawRouteWithDeltas, RotondaId, RouteStatus,
+        }, collections::{BytesRecord, Record}, lazyrecord_types::BgpUpdateMessage
     },
     vm::{self, VmResult},
 };
@@ -42,7 +41,7 @@ fn test_data(
     let msg_buf =
         mk_bgp_update(&per_peer_header, &withdrawals, &announcements, &[]);
 
-    let bgp_msg = UpdateMessage::new(msg_buf.0, SessionConfig::modern())?;
+    let bgp_msg = BytesRecord::<BgpUpdateMessage>::new(msg_buf.0, SessionConfig::modern())?;
 
     let payload = RawRouteWithDeltas::new_with_message(
         (RotondaId(0), 0),

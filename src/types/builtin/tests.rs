@@ -6,7 +6,8 @@ mod route {
         IntegerLiteral, PrefixLength, StringLiteral,
     };
     use crate::ast::{IpAddressLiteral, AsnLiteral};
-    use crate::types::builtin::BuiltinTypeValue;
+    use crate::types::builtin::{BuiltinTypeValue, BytesRecord};
+    use crate::types::lazyrecord_types::BgpUpdateMessage;
     use crate::types::typedef::TypeDef;
     use crate::types::typevalue::TypeValue;
     use crate::{
@@ -35,7 +36,7 @@ mod route {
 
     use crate::{
         types::builtin::{
-            RawRouteWithDeltas, RotondaId, RouteStatus, UpdateMessage,
+            RawRouteWithDeltas, RotondaId, RouteStatus,
         },
         vm::VmError,
     };
@@ -69,11 +70,11 @@ mod route {
             0x00, 0x00, 0x00, 0x00,
         ]);
 
-        let update: UpdateMessage =
-            UpdateMessage::new(buf, SessionConfig::modern()).unwrap();
+        let update: BytesRecord<BgpUpdateMessage> =
+            BytesRecord::<BgpUpdateMessage>::new(buf, SessionConfig::modern()).unwrap();
 
         let prefixes: Vec<routecore::addr::Prefix> = update
-            .0
+            .bytes_parser()
             .announcements()
             .into_iter()
             .flat_map(|n| {
@@ -184,11 +185,11 @@ mod route {
             0x00, 0x00, 0x00, 0x00,
         ]);
 
-        let update: UpdateMessage =
-            UpdateMessage::new(buf, SessionConfig::modern()).unwrap();
+        let update =
+            BytesRecord::<BgpUpdateMessage>::new(buf, SessionConfig::modern()).unwrap();
 
         let prefixes: Vec<routecore::addr::Prefix> = update
-            .0
+            .bytes_parser()
             .announcements()
             .into_iter()
             .flat_map(|n| {

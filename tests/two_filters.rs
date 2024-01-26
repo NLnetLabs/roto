@@ -3,8 +3,9 @@ use roto::ast::AcceptReject;
 use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self};
-use roto::types::builtin::{BgpUpdateMessage, RotondaId, UpdateMessage};
-use roto::types::collections::Record;
+use roto::types::collections::{BytesRecord, Record};
+use roto::types::lazyrecord_types::BgpUpdateMessage;
+use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
 use routecore::bgp::message::SessionConfig;
 
@@ -13,7 +14,7 @@ mod common;
 fn test_data(
     name: Scope,
     source_code: &str,
-) -> Result<(VmResult, BgpUpdateMessage), Box<dyn std::error::Error>> {
+) -> Result<(VmResult, BytesRecord<BgpUpdateMessage>), Box<dyn std::error::Error>> {
     println!("Evaluate filter {}...", name);
 
     // Compile the source code in this example
@@ -38,12 +39,7 @@ fn test_data(
         0x00, 0x00, 0x00, 0x00,
     ]);
 
-    let msg_id = (RotondaId(0), 0);
-
-    let payload = BgpUpdateMessage::new(
-        msg_id,
-        UpdateMessage::new(buf, SessionConfig::modern()).unwrap(),
-    );
+    let payload = BytesRecord::<BgpUpdateMessage>::new(buf, SessionConfig::modern()).unwrap();
 
     // Create the VM
     trace!("Used Arguments");
@@ -66,7 +62,7 @@ fn test_data(
     let mem = &mut vm::LinearMemory::uninit();
     let res = vm
         .exec(
-            payload.clone(),
+            TypeValue::from(payload.clone()),
             None::<Record>,
             // Some(filter_map_arguments),
             None,

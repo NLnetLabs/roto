@@ -420,14 +420,15 @@ impl LinearMemory {
                             bgp_msg,
                             field_index
                         );
-                        if let Some(v) = (*bgp_msg)
-                            .get_value_owned_for_field(field_index.first()?)?
-                        {
-                            trace!("v {:?}", v);
-                            Ok(StackValue::Owned(v))
-                        } else {
-                            Ok(StackValue::Owned(TypeValue::Unknown))
-                        }
+                        let v = LazyRecord::from_type_def(BytesRecord::<
+                            routecore::bgp::message::UpdateMessage<
+                                bytes::Bytes,
+                            >,
+                        >::lazy_type_def(
+                        ))?
+                        .get_field_by_index(&field_index, bgp_msg)?;
+
+                        Ok(StackValue::Owned(v.try_into()?))
                     }
                     Some(TypeValue::Builtin(
                         BuiltinTypeValue::BmpRouteMonitoringMessage(bmp_msg),

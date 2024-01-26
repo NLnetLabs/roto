@@ -19,7 +19,6 @@ use routecore::bgp::communities::HumanReadableCommunity as Community;
 use crate::compiler::compile::CompileError;
 use crate::traits::Token;
 use crate::typedefconversion;
-use crate::types::builtin::BgpUpdateMessage;
 use crate::types::collections::ElementTypeValue;
 use crate::vm::{StackValue, VmError, FieldIndex};
 use crate::{
@@ -28,10 +27,7 @@ use crate::{
 };
 
 use super::builtin::{
-    HexLiteral,
-    IntegerLiteral,
-    PrefixLength, RawRouteWithDeltas, RouteStatus, StringLiteral,
-    Unknown,
+    BytesRecord, HexLiteral, IntegerLiteral, PrefixLength, RawRouteWithDeltas, RouteStatus, StringLiteral, Unknown
 };
 use super::collections::{LazyElementTypeValue, Record};
 use super::datasources::{RibType, Table};
@@ -168,7 +164,7 @@ pub enum TypeDef {
     // ConstU16EnumVariant(ShortString),
     // ConstU32EnumVariant(ShortString),
     // A raw BGP message as bytes (a so called BytesRecord)
-    BgpUpdateMessage,
+    // BgpUpdateMessage,
     // A intermediate record where fields are only evaluated when called by
     // the VM, or when modified. This type doesn't have a corresponding
     // typevalue, it needs to be materialized into a record, or only be used
@@ -268,7 +264,7 @@ impl TypeDef {
         // no conversions, no data field
         // SOURCE TYPE
         Route,
-        BgpUpdateMessage,
+        // BgpUpdateMessage,
         Unknown;
         // no conversions, have data field
         // SOURCE TYPE
@@ -421,26 +417,26 @@ impl TypeDef {
                 }
                 // Another special case: BgpUpdateMessage also doesn't have
                 // actual fields, they are all simulated
-                (TypeDef::BgpUpdateMessage, _) => {
-                    trace!("BgpUpdateMessage w/ field '{}'", field);
-                    parent_type =
-                        BgpUpdateMessage::get_props_for_field(field)?;
+                // (TypeDef::BgpUpdateMessage, _) => {
+                //     trace!("BgpUpdateMessage w/ field '{}'", field);
+                //     parent_type =
+                //         BytesRecord::<BgpUpdateMessage>::get_props_for_field(field)?;
 
-                    // Add the token to the FieldAccess vec.
-                    result_type = if let Token::FieldAccess(to_f) =
-                        &result_type.1
-                    {
-                        if let Token::FieldAccess(fa) = &parent_type.1 {
-                            let mut to_f1 = to_f.clone();
-                            to_f1.extend(fa);
-                            (parent_type.0.clone(), Token::FieldAccess(to_f1))
-                        } else {
-                            result_type
-                        }
-                    } else {
-                        result_type
-                    };
-                }
+                //     // Add the token to the FieldAccess vec.
+                //     result_type = if let Token::FieldAccess(to_f) =
+                //         &result_type.1
+                //     {
+                //         if let Token::FieldAccess(fa) = &parent_type.1 {
+                //             let mut to_f1 = to_f.clone();
+                //             to_f1.extend(fa);
+                //             (parent_type.0.clone(), Token::FieldAccess(to_f1))
+                //         } else {
+                //             result_type
+                //         }
+                //     } else {
+                //         result_type
+                //     };
+                // }
                 (TypeDef::LazyRecord(lazy_type_def), _) => {
                     parent_type = lazy_type_def.get_props_for_field(field)?;
                     // Add the token to the FieldAccess vec, rewrite the 
@@ -564,12 +560,12 @@ impl TypeDef {
             TypeDef::List(_) => {
                 List::get_props_for_method(self.clone(), method_name)
             }
-            TypeDef::BgpUpdateMessage => {
-                BgpUpdateMessage::get_props_for_method(
-                    self.clone(),
-                    method_name,
-                )
-            }
+            // TypeDef::BgpUpdateMessage => {
+            //     BytesRecord::<BgpUpdateMessage>::get_props_for_method(
+            //         self.clone(),
+            //         method_name,
+            //     )
+            // }
             TypeDef::LazyRecord(lazy_type_def) => {
                 lazy_type_def.get_props_for_method(self.clone(), method_name)
             }
@@ -813,7 +809,7 @@ impl std::fmt::Display for TypeDef {
             TypeDef::Asn => write!(f, "Asn"),
             TypeDef::IpAddr => write!(f, "IpAddress"),
             TypeDef::Route => write!(f, "Route"),
-            TypeDef::BgpUpdateMessage => write!(f, "BgpUpdateMessage"),
+            // TypeDef::BgpUpdateMessage => write!(f, "BgpUpdateMessage"),
             TypeDef::LazyRecord(lazy_type_def) => {
                 write!(f, "Lazy Record {}", lazy_type_def.type_def())
             }
@@ -1048,7 +1044,8 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             "Hop" => Ok(TypeDef::Hop),
             "OriginType" => Ok(TypeDef::OriginType),
             "Route" => Ok(TypeDef::Route),
-            "BgpUpdateMessage" => Ok(TypeDef::BgpUpdateMessage),
+            "BgpUpdateMessage" => 
+                Ok(TypeDef::LazyRecord(LazyRecordTypeDef::UpdateMessage)),
             "BmpMessage" => {
                 Ok(TypeDef::GlobalEnum(GlobalEnumTypeDef::BmpMessageType))
             }
@@ -1114,7 +1111,7 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
             "Hop" => Ok(TypeDef::Hop),
             "OriginType" => Ok(TypeDef::OriginType),
             "Route" => Ok(TypeDef::Route),
-            "BgpUpdateMessage" => Ok(TypeDef::BgpUpdateMessage),
+            "BgpUpdateMessage" => Ok(TypeDef::LazyRecord(LazyRecordTypeDef::UpdateMessage)),
             "BmpMessage" => {
                 Ok(TypeDef::GlobalEnum(GlobalEnumTypeDef::BmpMessageType))
             }
@@ -1175,7 +1172,7 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::Nlri(_) => TypeDef::Nlri,
             BuiltinTypeValue::Route(_) => TypeDef::Route,
             BuiltinTypeValue::BgpUpdateMessage(_) => {
-                TypeDef::BgpUpdateMessage
+                TypeDef::LazyRecord(LazyRecordTypeDef::UpdateMessage)
             }
             BuiltinTypeValue::BmpMessage(_) => {
                 TypeDef::GlobalEnum(GlobalEnumTypeDef::BmpMessageType)
@@ -1242,7 +1239,7 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::OriginType(_) => TypeDef::OriginType,
             BuiltinTypeValue::Route(_) => TypeDef::Route,
             BuiltinTypeValue::BgpUpdateMessage(_) => {
-                TypeDef::BgpUpdateMessage
+                TypeDef::LazyRecord(LazyRecordTypeDef::UpdateMessage)
             }
             BuiltinTypeValue::BmpMessage(_) => {
                 TypeDef::GlobalEnum(GlobalEnumTypeDef::BmpMessageType)

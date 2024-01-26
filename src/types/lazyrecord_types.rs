@@ -7,6 +7,8 @@ use crate::{
     types::builtin::BytesRecord,
 };
 
+pub type BgpUpdateMessage =
+    routecore::bgp::message::UpdateMessage<bytes::Bytes>;
 pub type BmpMessage =
     routecore::bmp::message::Message<bytes::Bytes>;
 pub type InitiationMessage =
@@ -36,7 +38,7 @@ impl RecordType for BmpMessage {
 }
 
 // This is the complete enumeration of all Lazy Record types available to
-// roto users. Note that this does *NOT* include BgpMessage, which is a
+// roto users. Note that this does *NOT* include BmpMessage, which is a
 // BytesRecord, by it's also an Enum, therefore it contains a Lazy Record,
 // but it isn't one itself.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
@@ -48,6 +50,7 @@ pub enum LazyRecordTypeDef {
     PeerDownNotification,
     RouteMirroring,
     TerminationMessage,
+    UpdateMessage
 }
 
 impl LazyRecordTypeDef {
@@ -69,6 +72,8 @@ impl LazyRecordTypeDef {
             LazyRecordTypeDef::RouteMirroring => todo!(),
             LazyRecordTypeDef::TerminationMessage => 
                 BytesRecord::<TerminationMessage>::type_def(),
+            LazyRecordTypeDef::UpdateMessage =>
+                BytesRecord::<BgpUpdateMessage>::type_def()
         }
     }
 
@@ -91,6 +96,8 @@ impl LazyRecordTypeDef {
             LazyRecordTypeDef::TerminationMessage => {
                 TerminationMessage::get_field_num()
             }
+            LazyRecordTypeDef::UpdateMessage =>
+                BgpUpdateMessage::get_field_num()
         }
     }
 
@@ -127,6 +134,11 @@ impl LazyRecordTypeDef {
             },
             LazyRecordTypeDef::RouteMirroring => todo!(),
             LazyRecordTypeDef::TerminationMessage => todo!(),
+            LazyRecordTypeDef::UpdateMessage =>
+                BytesRecord::<BgpUpdateMessage>::get_props_for_method(
+                    ty,
+                    method_name
+                )
         }
     }
 
@@ -164,6 +176,10 @@ impl LazyRecordTypeDef {
             LazyRecordTypeDef::RouteMirroring => {
                 todo!()
             }
+            LazyRecordTypeDef::UpdateMessage => {
+                trace!("LRT BgpUpdateMessage w/ field '{}'", field);
+                BytesRecord::<BgpUpdateMessage>::get_props_for_field(field)
+            }
         }
     }
 }
@@ -200,6 +216,7 @@ impl std::fmt::Display for LazyRecordTypeDef {
             LazyRecordTypeDef::PeerDownNotification => write!(f, "PeerDownNotification"),
             LazyRecordTypeDef::RouteMirroring => write!(f, "RouteMirroring"),
             LazyRecordTypeDef::TerminationMessage => write!(f, "TerminationMessage"),
+            LazyRecordTypeDef::UpdateMessage => write!(f, "BgpUpdateMessage"),
         }
     }
 }
@@ -214,6 +231,7 @@ impl From<LazyRecordTypeDef> for usize {
             LazyRecordTypeDef::InitiationMessage => 4,
             LazyRecordTypeDef::TerminationMessage => 5,
             LazyRecordTypeDef::RouteMirroring => 6,
+            LazyRecordTypeDef::UpdateMessage => 7
         }
     }
 }
@@ -228,6 +246,7 @@ impl From<usize> for LazyRecordTypeDef {
             4 => LazyRecordTypeDef::InitiationMessage,
             5 => LazyRecordTypeDef::TerminationMessage,
             6 => LazyRecordTypeDef::RouteMonitoring,
+            7 => LazyRecordTypeDef::UpdateMessage,
             _ => unimplemented!()
         }
     }

@@ -7,6 +7,7 @@ use routecore::bgp::path_attributes::AtomicAggregate;
 use routecore::bgp::types::{AfiSafi, LocalPref, OriginType, MultiExitDisc};
 use routecore::addr::Prefix;
 use routecore::bgp::communities::HumanReadableCommunity as Community;
+use routecore::bgp::communities::ExtendedCommunity;
 use routecore::asn::Asn;
 use serde::Serialize;
 use std::marker::PhantomData;
@@ -60,7 +61,7 @@ pub trait ScalarValue: Clone + Into<TypeValue> {}
 
 // A attributes Change Set allows a user to create a set of changes to an
 // existing (raw) BGP Update message.
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Hash, Default)]
 pub struct AttrChangeSet {
     #[serde(skip_serializing_if = "ReadOnlyScalarOption::is_none")]
     pub prefix: ReadOnlyScalarOption<Prefix>, // Read-only prefix typevalue, for referencing it.
@@ -98,6 +99,55 @@ pub struct AttrChangeSet {
     pub cluster_list: Todo,
     #[serde(skip)]
     pub extended_communities: Todo,
+    #[serde(skip_serializing_if = "VectorOption::is_none")]
+    pub as4_path: VectorOption<HopPath>,
+    #[serde(skip)]
+    pub as4_aggregator: Todo,
+    #[serde(skip)]
+    pub connector: Todo, // Connector,
+    #[serde(skip)]
+    pub as_path_limit: Todo,
+    #[serde(skip)]
+    pub pmsi_tunnel: Todo, // PmsiTunnel,
+    #[serde(skip)]
+    pub ipv6_extended_communities: Todo,
+    #[serde(skip)]
+    pub large_communities: Todo,
+    #[serde(skip)]
+    pub bgpsec_as_path: Todo, // BgpsecAsPath,
+    #[serde(skip)]
+    pub attr_set: Todo, // AttrSet,
+    #[serde(skip)]
+    pub rsrvd_development: Todo, // RsrvdDevelopment,
+}
+
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Hash, Default)]
+pub struct AttrChangeSet2 {
+    #[serde(skip_serializing_if = "VectorOption::is_none")]
+    pub as_path: VectorOption<HopPath>,
+    #[serde(skip_serializing_if = "ScalarOption::is_none")]
+    pub origin_type: ScalarOption<OriginType>,
+    #[serde(skip_serializing_if = "ScalarOption::is_none")]
+    pub next_hop: ScalarOption<routecore::bgp::types::NextHop>,
+    #[serde(skip_serializing_if = "ScalarOption::is_none")]
+    pub multi_exit_discriminator: ScalarOption<MultiExitDisc>,
+    #[serde(skip_serializing_if = "ScalarOption::is_none")]
+    pub local_pref: ScalarOption<LocalPref>,
+    #[serde(skip_serializing_if = "ScalarOption::is_none")]
+    pub atomic_aggregate: ScalarOption<bool>,
+    #[serde(skip_serializing_if = "ScalarOption::is_none")]
+    pub aggregator: ScalarOption<AtomicAggregate>,
+    #[serde(skip_serializing_if = "VectorOption::is_none")]
+    pub communities: VectorOption<Vec<Community>>,
+    #[serde(skip)]
+    pub originator_id: Todo,
+    #[serde(skip)]
+    pub cluster_list: Todo,
+    #[serde(skip)]
+    pub extended_communities: Todo, 
+    // #[serde(skip_serializing_if = "VectorOption::is_none")]
+    // pub extended_communities: VectorOption<Vec<ExtendedCommunity>>,
     #[serde(skip_serializing_if = "VectorOption::is_none")]
     pub as4_path: VectorOption<HopPath>,
     #[serde(skip)]
@@ -197,6 +247,12 @@ impl<S1: Into<TypeValue>, S2: ScalarValue + Into<TypeValue>> From<Option<S1>>
     }
 }
 
+impl<T: ScalarValue> Default for ScalarOption<T> {
+    fn default() -> Self {
+        Self { value: None, changed: false, _pd: PhantomData }
+    }
+}
+
 //------------ ReadOnlyScalarOption -----------------------------------------
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize)]
@@ -225,14 +281,23 @@ impl<T: ScalarValue + Into<TypeValue>> ReadOnlyScalarOption<T> {
     }
 }
 
+impl<T: ScalarValue + Into<TypeValue>> Default for ReadOnlyScalarOption<T> {
+    fn default() -> Self {
+        Self {
+            value: None,
+            _pd: PhantomData
+        }
+    }
+}
+
 //------------ TodoOption ---------------------------------------------------
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Hash)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Hash, Default)]
 pub struct Todo;
 
 //------------ VectorOption -------------------------------------------------
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Default)]
 #[serde(transparent)]
 pub struct VectorOption<V: VectorValue + Into<TypeValue>> {
     #[serde(skip_serializing_if = "Option::is_none")]

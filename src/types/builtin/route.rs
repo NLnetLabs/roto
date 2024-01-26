@@ -29,6 +29,9 @@ use std::{net::IpAddr, sync::Arc};
 /// Lamport Timestamp. Used to order messages between units/systems.
 pub type LogicalTime = u64;
 
+use crate::types::collections::RecordType;
+use crate::types::lazyrecord_types::BgpUpdateMessage;
+use crate::types::builtin::bgp_update_message::BytesRecord;
 use crate::{
     ast::StringLiteral,
     attr_change_set::{ReadOnlyScalarOption, Todo},
@@ -44,7 +47,7 @@ use crate::{
 
 use super::{BuiltinTypeValue, RouteStatus};
 use crate::attr_change_set::{
-    AttrChangeSet, ScalarOption, ScalarValue, VectorOption, VectorValue,
+    AttrChangeSet, AttrChangeSet2, ScalarOption, ScalarValue, VectorOption, VectorValue
 };
 
 //============ MaterializedRoute ============================================
@@ -94,6 +97,41 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
             }
         } else {
             MaterializedRoute {
+                route: None,
+                status: RouteStatus::Unparsable,
+                route_id,
+            }
+        }
+    }
+}
+
+
+#[derive(Debug, Eq, PartialEq, Clone, Hash, Serialize)]
+pub struct MaterializedRoute2 {
+    pub route: Option<AttrChangeSet2>,
+    pub status: RouteStatus,
+    route_id: (RotondaId, LogicalTime),
+}
+
+impl From<MutableRoute> for MaterializedRoute2 {
+    fn from(raw_route: MutableRoute) -> Self {
+        let status = raw_route.context.route_properties.status;
+        let route_id = (RotondaId(0), 0);
+
+        // let status = if let Ok(status) = status.try_into() {
+        //     status
+        // } else {
+        //     RouteStatus::Unparsable
+        // };
+
+        if let Ok(route) = raw_route.take_attrs() {
+            MaterializedRoute2 {
+                route: Some(route),
+                status,
+                route_id,
+            }
+        } else {
+            MaterializedRoute2 {
                 route: None,
                 status: RouteStatus::Unparsable,
                 route_id,
@@ -173,10 +211,11 @@ impl PeerId {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct RouteContext {
-    pub msg: routecore::bgp::message::UpdateMessage<bytes::Bytes>,
+    pub msg: BytesRecord<routecore::bgp::message::UpdateMessage<bytes::Bytes>>,
     pub provenance: Provenance,
     pub route_properties: RouteProperties,
 }
+
 
 //------------ SourceId ------------------------------------------------------
 
@@ -259,7 +298,7 @@ impl From<RouteContext> for RawRouteWithDeltas {
         RawRouteWithDeltas::new_with_message_ref(
             delta_id,
             value.route_properties.prefix,
-            value.msg.into(),
+            value.msg,
             value.route_properties.afi_safi,
             value.route_properties.path_id,
             value.route_properties.status,
@@ -269,6 +308,39 @@ impl From<RouteContext> for RawRouteWithDeltas {
         .with_router_id(value.provenance.router_id)
     }
 }
+
+
+//------------ MutableRoute -------------------------------------------------
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+#[serde(into = "MaterializedRoute2")]
+pub struct MutableRoute {
+    #[serde(skip)]
+    context: RouteContext,
+    changes: Option<AttrChangeSet2>
+}
+
+impl MutableRoute {
+    // Get either the moved last delta (it is removed from the Delta list), or
+    // get a freshly rolled ChangeSet from the raw message, if there are no
+    // deltas.
+    pub fn take_attrs(mut self) -> Result<AttrChangeSet2, VmError> {
+        match &mut self.changes {
+            None => self.context.msg.create_changeset2(
+                // self.context.route_properties.prefix,
+                // Some(self.context.provenance.peer_id.addr),
+                // Some(self.context.provenance.peer_id.asn),
+                // Some(self.context.provenance.router_id),
+                self.context.route_properties.afi_safi,
+                // self.context.route_properties.path_id,
+            ),
+            Some(attr_list) => {
+                Ok(std::mem::take(attr_list))
+            }
+        }
+    }
+}
+
 
 //------------ RawRouteWithDelta ============================================
 
@@ -290,7 +362,7 @@ impl From<RouteContext> for RawRouteWithDeltas {
 pub struct RawRouteWithDeltas {
     pub prefix: Prefix,
     // Arc'ed BGP message
-    pub raw_message: UpdateMessage,
+    pub raw_message: BytesRecord<BgpUpdateMessage>,
     // AFI SAFI combination for the NLRI that the Prefix for this route
     // belongs to.
     pub afi_safi: routecore::bgp::types::AfiSafi,
@@ -315,7 +387,7 @@ impl RawRouteWithDeltas {
     pub fn new_with_message(
         delta_id: (RotondaId, LogicalTime),
         prefix: Prefix,
-        raw_message: UpdateMessage,
+        raw_message: BytesRecord<BgpUpdateMessage>,
         afi_safi: routecore::bgp::types::AfiSafi,
         path_id: Option<routecore::bgp::message::nlri::PathId>,
         route_status: RouteStatus,
@@ -355,7 +427,7 @@ impl RawRouteWithDeltas {
     pub fn new_with_message_ref(
         delta_id: (RotondaId, LogicalTime),
         prefix: Prefix,
-        raw_message: UpdateMessage,
+        raw_message: BytesRecord<BgpUpdateMessage>,
         afi_safi: routecore::bgp::types::AfiSafi,
         path_id: Option<routecore::bgp::message::nlri::PathId>,
         route_status: RouteStatus,
@@ -656,7 +728,7 @@ impl RawRouteWithDeltas {
         match field_token.try_into()? {
             RouteToken::AsPath => self
                 .raw_message
-                .0
+                .bytes_parser()
                 .aspath()
                 .ok()
                 .flatten()
@@ -665,7 +737,7 @@ impl RawRouteWithDeltas {
                 .ok_or(VmError::InvalidFieldAccess),
             RouteToken::OriginType => self
                 .raw_message
-                .0
+                .bytes_parser()
                 .origin()
                 .ok()
                 .flatten()
@@ -673,13 +745,13 @@ impl RawRouteWithDeltas {
                 .ok_or(VmError::InvalidFieldAccess),
             RouteToken::NextHop => self
                 .raw_message
-                .0
+                .bytes_parser()
                 .find_next_hop(self.afi_safi)
                 .map_err(|_| VmError::InvalidFieldAccess)
                 .map(TypeValue::from),
             RouteToken::MultiExitDisc => self
                 .raw_message
-                .0
+                .bytes_parser()
                 .multi_exit_disc()
                 .ok()
                 .flatten()
@@ -687,19 +759,19 @@ impl RawRouteWithDeltas {
                 .ok_or(VmError::InvalidFieldAccess),
             RouteToken::LocalPref => self
                 .raw_message
-                .0
+                .bytes_parser()
                 .local_pref()
                 .ok()
                 .flatten()
                 .map(TypeValue::from)
                 .ok_or(VmError::InvalidFieldAccess),
             RouteToken::AtomicAggregate => Some(TypeValue::from(
-                self.raw_message.0.is_atomic_aggregate().unwrap_or(false),
+                self.raw_message.bytes_parser().is_atomic_aggregate().unwrap_or(false),
             ))
             .ok_or(VmError::InvalidFieldAccess),
             RouteToken::Aggregator => self
                 .raw_message
-                .0
+                .bytes_parser()
                 .aggregator()
                 .ok()
                 .flatten()
@@ -707,7 +779,7 @@ impl RawRouteWithDeltas {
                 .ok_or(VmError::InvalidFieldAccess),
             RouteToken::Communities => self
                 .raw_message
-                .0
+                .bytes_parser()
                 .all_human_readable_communities()
                 .ok()
                 .flatten()
@@ -918,262 +990,263 @@ impl RouteStatusDeltaList {
 // The `attr_cache` AttributeList allows readers to get a reference to a path
 // attribute. This avoids having to clone from the AttributeLists in the
 // iterator over the latest attributes.
-#[derive(Debug, Clone, Serialize)]
-pub struct BgpUpdateMessage {
-    message_id: (RotondaId, LogicalTime),
-    raw_message: UpdateMessage,
-}
+// #[derive(Debug, Clone, Serialize)]
+// pub struct BgpUpdateMessageOld {
+//     pub(crate) message_id: (RotondaId, LogicalTime),
+//     pub(crate) raw_message: BgpUpdateMessage,
+// }
 
-impl BgpUpdateMessage {
-    pub fn new(
-        message_id: (RotondaId, u64),
-        raw_message: UpdateMessage,
-    ) -> Self {
-        Self {
-            message_id,
-            raw_message,
-        }
-    }
+// impl BgpUpdateMessageOld {
+//     pub fn new(
+//         message_id: (RotondaId, u64),
+//         raw_message: BgpUpdateMessage,
+//     ) -> Self {
+//         Self {
+//             message_id,
+//             raw_message,
+//         }
+//     }
 
-    pub fn message_id(&self) -> (RotondaId, u64) {
-        self.message_id
-    }
+//     pub fn message_id(&self) -> (RotondaId, u64) {
+//         self.message_id
+//     }
 
-    pub fn raw_message(&self) -> &UpdateMessage {
-        &self.raw_message
-    }
-}
+//     pub fn raw_message(&self) -> &BgpUpdateMessage {
+//         &self.raw_message
+//     }
+// }
 
-impl PartialEq for BgpUpdateMessage {
-    fn eq(&self, other: &Self) -> bool {
-        self.message_id == other.message_id
-    }
-}
+// impl PartialEq for BgpUpdateMessageOld {
+//     fn eq(&self, other: &Self) -> bool {
+//         self.message_id == other.message_id
+//     }
+// }
 
-impl std::hash::Hash for BgpUpdateMessage {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.raw_message.hash(state);
-    }
-}
+// impl std::hash::Hash for BgpUpdateMessageOld {
+//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+//         self.raw_message.hash(state);
+//     }
+// }
 
-impl Eq for BgpUpdateMessage {}
+// impl Eq for BgpUpdateMessageOld {}
 
-impl BgpUpdateMessage {
-    pub(crate) fn get_props_for_field(
-        field_name: &crate::ast::Identifier,
-    ) -> Result<(TypeDef, crate::traits::Token), CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        match field_name.ident.as_str() {
-            // `nlris` is a fake field (at least for now), it just serves to
-            // host the `afi` and `safi` field.
-            "nlris" => {
-                Ok((TypeDef::BgpUpdateMessage, Token::FieldAccess(vec![])))
-            }
-            "afi" => Ok((
-                TypeDef::ConstEnumVariant("AFI".into()),
-                Token::FieldAccess(vec![usize::from(
-                    BgpUpdateMessageToken::Afi,
-                ) as u8]),
-            )),
-            "safi" => Ok((
-                TypeDef::ConstEnumVariant("SAFI".into()),
-                Token::FieldAccess(vec![usize::from(
-                    BgpUpdateMessageToken::Safi,
-                ) as u8]),
-            )),
-            _ => Err(format!(
-                "Unknown field '{}' for type BgpUpdateMessage",
-                field_name.ident
-            )
-            .into()),
-        }
-    }
+// impl BgpUpdateMessageOld {
+//     pub(crate) fn get_props_for_field(
+//         field_name: &crate::ast::Identifier,
+//     ) -> Result<(TypeDef, crate::traits::Token), CompileError>
+//     where
+//         Self: std::marker::Sized,
+//     {
+//         match field_name.ident.as_str() {
+//             // `nlris` is a fake field (at least for now), it just serves to
+//             // host the `afi` and `safi` field.
+//             "nlris" => {
+//                 Ok((TypeDef::BgpUpdateMessage, Token::FieldAccess(vec![])))
+//             }
+//             "afi" => Ok((
+//                 TypeDef::ConstEnumVariant("AFI".into()),
+//                 Token::FieldAccess(vec![usize::from(
+//                     OldBgpUpdateMessageToken::Afi,
+//                 ) as u8]),
+//             )),
+//             "safi" => Ok((
+//                 TypeDef::ConstEnumVariant("SAFI".into()),
+//                 Token::FieldAccess(vec![usize::from(
+//                     OldBgpUpdateMessageToken::Safi,
+//                 ) as u8]),
+//             )),
+//             _ => Err(format!(
+//                 "Unknown field '{}' for type BgpUpdateMessage",
+//                 field_name.ident
+//             )
+//             .into()),
+//         }
+//     }
 
-    pub(crate) fn get_value_owned_for_field(
-        &self,
-        field_token: usize,
-    ) -> Result<Option<TypeValue>, VmError> {
-        match field_token.try_into()? {
-            BgpUpdateMessageToken::Nlris => Ok(Some(TypeValue::Unknown)),
-            BgpUpdateMessageToken::Afi => {
-                if let Ok(mut nlri) = self.raw_message.0.announcements() {
-                    if let Some(Ok(announce)) = nlri.next() {
-                        Ok(Some(TypeValue::Builtin(
-                            BuiltinTypeValue::ConstU16EnumVariant(
-                                EnumVariant {
-                                    enum_name: "AFI".into(),
-                                    value: announce.afi_safi().afi().into(),
-                                },
-                            ),
-                        )))
-                    } else {
-                        Ok(None)
-                    }
-                } else {
-                    debug!(
-                        "Ignoring invalid announcements in BGP update \
-                        message with id ({},{})",
-                        self.message_id.0, self.message_id.1
-                    );
-                    Err(VmError::InvalidPayload)
-                }
-            }
-            BgpUpdateMessageToken::Safi => {
-                if let Ok(mut nlri) = self.raw_message.0.announcements() {
-                    if let Some(Ok(announce)) = nlri.next() {
-                        Ok(Some(TypeValue::Builtin(
-                            BuiltinTypeValue::ConstU8EnumVariant(
-                                EnumVariant {
-                                    enum_name: "SAFI".into(),
-                                    value: announce.afi_safi().safi().into(),
-                                },
-                            ),
-                        )))
-                    } else {
-                        Ok(None)
-                    }
-                } else {
-                    debug!(
-                        "Ignoring invalid announcements in BGP update \
-                        message with id ({},{})",
-                        self.message_id.0, self.message_id.1
-                    );
-                    Err(VmError::InvalidPayload)
-                }
-            }
-        }
-    }
-}
+//     pub(crate) fn get_value_owned_for_field(
+//         &self,
+//         field_token: usize,
+//     ) -> Result<Option<TypeValue>, VmError> {
+//         match field_token.try_into()? {
+//             OldBgpUpdateMessageToken::Nlris => Ok(Some(TypeValue::Unknown)),
+//             OldBgpUpdateMessageToken::Afi => {
+//                 if let Ok(mut nlri) = self.raw_message.announcements() {
+//                     if let Some(Ok(announce)) = nlri.next() {
+//                         Ok(Some(TypeValue::Builtin(
+//                             BuiltinTypeValue::ConstU16EnumVariant(
+//                                 EnumVariant {
+//                                     enum_name: "AFI".into(),
+//                                     value: announce.afi_safi().afi().into(),
+//                                 },
+//                             ),
+//                         )))
+//                     } else {
+//                         Ok(None)
+//                     }
+//                 } else {
+//                     debug!(
+//                         "Ignoring invalid announcements in BGP update \
+//                         message with id ({},{})",
+//                         self.message_id.0, self.message_id.1
+//                     );
+//                     Err(VmError::InvalidPayload)
+//                 }
+//             }
+//             OldBgpUpdateMessageToken::Safi => {
+//                 if let Ok(mut nlri) = self.raw_message.announcements() {
+//                     if let Some(Ok(announce)) = nlri.next() {
+//                         Ok(Some(TypeValue::Builtin(
+//                             BuiltinTypeValue::ConstU8EnumVariant(
+//                                 EnumVariant {
+//                                     enum_name: "SAFI".into(),
+//                                     value: announce.afi_safi().safi().into(),
+//                                 },
+//                             ),
+//                         )))
+//                     } else {
+//                         Ok(None)
+//                     }
+//                 } else {
+//                     debug!(
+//                         "Ignoring invalid announcements in BGP update \
+//                         message with id ({},{})",
+//                         self.message_id.0, self.message_id.1
+//                     );
+//                     Err(VmError::InvalidPayload)
+//                 }
+//             }
+//         }
+//     }
+// }
 
-impl RotoType for BgpUpdateMessage {
-    fn get_props_for_method(
-        _ty: TypeDef,
-        method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        Err(format!(
-            "Unknown method: '{}' for type BgpUpdateMessage",
-            method_name.ident
-        )
-        .into())
-    }
+// impl RotoType for routecore::bgp::message::UpdateMessage<bytes::Bytes> {
+//     fn get_props_for_method(
+//         _ty: TypeDef,
+//         method_name: &crate::ast::Identifier,
+//     ) -> Result<MethodProps, CompileError>
+//     where
+//         Self: std::marker::Sized,
+//     {
+//         Err(format!(
+//             "Unknown method: '{}' for type BgpUpdateMessage",
+//             method_name.ident
+//         )
+//         .into())
+//     }
 
-    fn into_type(self, ty: &TypeDef) -> Result<TypeValue, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        Err(format!(
-            "BgpUpdateMessage cannot be converted to type {} (or any other type)",
-            ty
-        )
-        .into())
-    }
+//     fn into_type(self, ty: &TypeDef) -> Result<TypeValue, CompileError>
+//     where
+//         Self: std::marker::Sized,
+//     {
+//         Err(format!(
+//             "BgpUpdateMessage cannot be converted to type {} (or any other type)",
+//             ty
+//         )
+//         .into())
+//     }
 
-    fn exec_value_method<'a>(
-        &'a self,
-        method_token: usize,
+//     fn exec_value_method<'a>(
+//         &'a self,
+//         method_token: usize,
 
-        _args: &'a [StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        match method_token.try_into()? {
-            BgpUpdateMessageToken::Afi => {
-                if let Ok(mut nlri) = self.raw_message.0.announcements() {
-                    if let Some(Ok(announce)) = nlri.next() {
-                        Ok(TypeValue::Builtin(
-                            BuiltinTypeValue::ConstU16EnumVariant(
-                                EnumVariant {
-                                    enum_name: "AFI".into(),
-                                    value: announce.afi_safi().afi().into(),
-                                },
-                            ),
-                        ))
-                    } else {
-                        Err(VmError::InvalidValueType)
-                    }
-                } else {
-                    Err(VmError::InvalidValueType)
-                }
-            }
-            BgpUpdateMessageToken::Safi => {
-                if let Ok(mut nlri) = self.raw_message.0.announcements() {
-                    if let Some(Ok(announce)) = nlri.next() {
-                        Ok(TypeValue::Builtin(
-                            BuiltinTypeValue::ConstU8EnumVariant(
-                                EnumVariant {
-                                    enum_name: "SAFI".into(),
-                                    value: announce.afi_safi().safi().into(),
-                                },
-                            ),
-                        ))
-                    } else {
-                        Err(VmError::InvalidValueType)
-                    }
-                } else {
-                    Err(VmError::InvalidValueType)
-                }
-            }
-            _ => Err(VmError::InvalidMethodCall),
-        }
-    }
+//         _args: &'a [StackValue],
+//         _res_type: TypeDef,
+//     ) -> Result<TypeValue, VmError> {
+//         panic!("STOP BEFORE EXEC THIS THING!");
+//         match method_token.try_into()? {
+//             OldBgpUpdateMessageToken::Afi => {
+//                 if let Ok(mut nlri) = self.announcements() {
+//                     if let Some(Ok(announce)) = nlri.next() {
+//                         Ok(TypeValue::Builtin(
+//                             BuiltinTypeValue::ConstU16EnumVariant(
+//                                 EnumVariant {
+//                                     enum_name: "AFI".into(),
+//                                     value: announce.afi_safi().afi().into(),
+//                                 },
+//                             ),
+//                         ))
+//                     } else {
+//                         Err(VmError::InvalidValueType)
+//                     }
+//                 } else {
+//                     Err(VmError::InvalidValueType)
+//                 }
+//             }
+//             OldBgpUpdateMessageToken::Safi => {
+//                 if let Ok(mut nlri) = self.announcements() {
+//                     if let Some(Ok(announce)) = nlri.next() {
+//                         Ok(TypeValue::Builtin(
+//                             BuiltinTypeValue::ConstU8EnumVariant(
+//                                 EnumVariant {
+//                                     enum_name: "SAFI".into(),
+//                                     value: announce.afi_safi().safi().into(),
+//                                 },
+//                             ),
+//                         ))
+//                     } else {
+//                         Err(VmError::InvalidValueType)
+//                     }
+//                 } else {
+//                     Err(VmError::InvalidValueType)
+//                 }
+//             }
+//             _ => Err(VmError::InvalidMethodCall),
+//         }
+//     }
 
-    fn exec_consume_value_method(
-        self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        Err(VmError::InvalidMethodCall)
-    }
+//     fn exec_consume_value_method(
+//         self,
+//         _method_token: usize,
+//         _args: Vec<TypeValue>,
+//         _res_type: TypeDef,
+//     ) -> Result<TypeValue, VmError> {
+//         Err(VmError::InvalidMethodCall)
+//     }
 
-    fn exec_type_method<'a>(
-        _method_token: usize,
-        _args: &[StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        Err(VmError::InvalidMethodCall)
-    }
-}
+//     fn exec_type_method<'a>(
+//         _method_token: usize,
+//         _args: &[StackValue],
+//         _res_type: TypeDef,
+//     ) -> Result<TypeValue, VmError> {
+//         Err(VmError::InvalidMethodCall)
+//     }
+// }
 
-impl From<BgpUpdateMessage> for TypeValue {
-    fn from(raw: BgpUpdateMessage) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::BgpUpdateMessage(raw))
-    }
-}
+// impl From<routecore::bgp::message::UpdateMessage<bytes::Bytes>> for TypeValue {
+//     fn from(raw: routecore::bgp::message::UpdateMessage<bytes::Bytes>) -> Self {
+//         TypeValue::Builtin(BuiltinTypeValue::BgpUpdateMessage(BytesRecord::from(raw)))
+//     }
+// }
 
-#[derive(Debug)]
-enum BgpUpdateMessageToken {
-    Nlris = 0,
-    Afi = 1,
-    Safi = 2,
-}
+// #[derive(Debug)]
+// enum OldBgpUpdateMessageToken {
+//     Nlris = 0,
+//     Afi = 1,
+//     Safi = 2,
+// }
 
-impl TryFrom<usize> for BgpUpdateMessageToken {
-    type Error = VmError;
+// impl TryFrom<usize> for OldBgpUpdateMessageToken {
+//     type Error = VmError;
 
-    fn try_from(val: usize) -> Result<Self, VmError> {
-        match val {
-            0 => Ok(BgpUpdateMessageToken::Nlris),
-            1 => Ok(BgpUpdateMessageToken::Afi),
-            2 => Ok(BgpUpdateMessageToken::Safi),
-            _ => Err(VmError::InvalidPayload),
-        }
-    }
-}
+//     fn try_from(val: usize) -> Result<Self, VmError> {
+//         match val {
+//             0 => Ok(OldBgpUpdateMessageToken::Nlris),
+//             1 => Ok(OldBgpUpdateMessageToken::Afi),
+//             2 => Ok(OldBgpUpdateMessageToken::Safi),
+//             _ => Err(VmError::InvalidPayload),
+//         }
+//     }
+// }
 
-impl From<BgpUpdateMessageToken> for usize {
-    fn from(val: BgpUpdateMessageToken) -> Self {
-        match val {
-            BgpUpdateMessageToken::Nlris => 0,
-            BgpUpdateMessageToken::Afi => 1,
-            BgpUpdateMessageToken::Safi => 2,
-        }
-    }
-}
+// impl From<OldBgpUpdateMessageToken> for usize {
+//     fn from(val: OldBgpUpdateMessageToken) -> Self {
+//         match val {
+//             OldBgpUpdateMessageToken::Nlris => 0,
+//             OldBgpUpdateMessageToken::Afi => 1,
+//             OldBgpUpdateMessageToken::Safi => 2,
+//         }
+//     }
+// }
 
 // pub as_path: ChangedOption<AsPath<Vec<MaterializedPathSegment>>>,
 //     pub origin_type: ChangedOption<OriginType>,
@@ -1492,114 +1565,179 @@ impl std::fmt::Display for RotondaId {
 
 //------------ Modification & Creation of new Updates -----------------------
 
-#[derive(Debug, Hash, Serialize, Clone, PartialEq, Eq)]
-pub struct UpdateMessage(
-    pub routecore::bgp::message::UpdateMessage<bytes::Bytes>,
-);
+// #[derive(Debug, Hash, Serialize, Clone, PartialEq, Eq)]
+// pub struct BgpUpdateMessage(
+//     pub routecore::bgp::message::UpdateMessage<bytes::Bytes>,
+// );
 
-impl UpdateMessage {
-    pub fn new(
-        bytes: bytes::Bytes,
-        config: SessionConfig,
-    ) -> Result<Self, VmError> {
-        Ok(
-            Self(
-                routecore::bgp::message::UpdateMessage::<bytes::Bytes>
-                    ::from_octets(bytes, config).map_err(|_| VmError::InvalidPayload)?
-                )
-            )
-    }
+// impl BgpUpdateMessage {
+//     pub fn new(
+//         bytes: bytes::Bytes,
+//         config: SessionConfig,
+//     ) -> Result<Self, VmError> {
+//         Ok(
+//             Self(
+//                 routecore::bgp::message::UpdateMessage::<bytes::Bytes>
+//                     ::from_octets(bytes, config).map_err(|_| VmError::InvalidPayload)?
+//                 )
+//             )
+//     }
 
-    // Materialize a ChangeSet from the Update message. The materialized
-    // Change set is completely self-contained (no references of any kind) &
-    // holds all the attributes of the current BGP Update message.
-    pub fn create_changeset(
-        &self,
-        prefix: Prefix,
-        peer_ip: Option<IpAddr>,
-        peer_asn: Option<Asn>,
-        router_id: Option<Arc<String>>,
-        afi_safi: AfiSafi,
-        path_id: Option<PathId>,
-    ) -> Result<AttrChangeSet, VmError> {
-        let next_hop = self
-            .0
-            .mp_next_hop()
-            .ok()
-            .flatten()
-            .or_else(|| self.0.conventional_next_hop().ok().flatten());
-        Ok(AttrChangeSet {
-            prefix: ReadOnlyScalarOption::<Prefix>::new(prefix.into()),
-            as_path: VectorOption::<HopPath>::from(
-                self.0.aspath().ok().flatten().map(|p| p.to_hop_path()),
-            ),
-            origin_type: ScalarOption::<OriginType>::from(
-                self.0.origin().map_err(VmError::from)?,
-            ),
-            next_hop: ScalarOption::<NextHop>::from(next_hop),
-            multi_exit_discriminator: ScalarOption::from(
-                self.0.multi_exit_disc().map_err(VmError::from)?,
-            ),
-            local_pref: ScalarOption::from(
-                self.0.local_pref().map_err(VmError::from)?,
-            ),
-            atomic_aggregate: ScalarOption::from(Some(
-                self.0.is_atomic_aggregate().map_err(VmError::from)?,
-            )),
-            aggregator: ScalarOption::from(
-                self.0.aggregator().map_err(VmError::from)?,
-            ),
-            communities: VectorOption::from(
-                self.0
-                    .all_human_readable_communities()
-                    .map_err(VmError::from)?,
-            ),
-            peer_ip: peer_ip.into(),
-            peer_asn: peer_asn.into(),
-            router_id: router_id
-                .map(|v| StringLiteral(String::clone(&v)))
-                .into(),
-            afi_safi: ReadOnlyScalarOption::<AfiSafi>::new(afi_safi.into()),
-            path_id: path_id.into(),
-            originator_id: Todo,
-            cluster_list: Todo,
-            extended_communities: Todo,
-            // value: self
-            //     .ext_communities()
-            //     .map(|c| c.collect::<Vec<ExtendedCommunity>>()),
-            as4_path: VectorOption::from(
-                self.0.as4path().ok().flatten().map(|p| p.to_hop_path()),
-            ),
-            connector: Todo,
-            as_path_limit: Todo,
-            pmsi_tunnel: Todo,
-            ipv6_extended_communities: Todo,
-            large_communities: Todo,
-            // value: T::try_from(self
-            //     .large_communities()
-            //     .map(|c| c.collect::<Vec<LargeCommunity>>())),
-            bgpsec_as_path: Todo,
-            attr_set: Todo,
-            rsrvd_development: Todo,
-            as4_aggregator: Todo,
-        })
-    }
+//     // Materialize a ChangeSet from the Update message. The materialized
+//     // Change set is completely self-contained (no references of any kind) &
+//     // holds all the attributes of the current BGP Update message.
+//     pub fn create_changeset(
+//         &self,
+//         prefix: Prefix,
+//         peer_ip: Option<IpAddr>,
+//         peer_asn: Option<Asn>,
+//         router_id: Option<Arc<String>>,
+//         afi_safi: AfiSafi,
+//         path_id: Option<PathId>,
+//     ) -> Result<AttrChangeSet, VmError> {
+//         let next_hop = self
+//             .0
+//             .mp_next_hop()
+//             .ok()
+//             .flatten()
+//             .or_else(|| self.0.conventional_next_hop().ok().flatten());
+//         Ok(AttrChangeSet {
+//             prefix: ReadOnlyScalarOption::<Prefix>::new(prefix.into()),
+//             as_path: VectorOption::<HopPath>::from(
+//                 self.0.aspath().ok().flatten().map(|p| p.to_hop_path()),
+//             ),
+//             origin_type: ScalarOption::<OriginType>::from(
+//                 self.0.origin().map_err(VmError::from)?,
+//             ),
+//             next_hop: ScalarOption::<NextHop>::from(next_hop),
+//             multi_exit_discriminator: ScalarOption::from(
+//                 self.0.multi_exit_disc().map_err(VmError::from)?,
+//             ),
+//             local_pref: ScalarOption::from(
+//                 self.0.local_pref().map_err(VmError::from)?,
+//             ),
+//             atomic_aggregate: ScalarOption::from(Some(
+//                 self.0.is_atomic_aggregate().map_err(VmError::from)?,
+//             )),
+//             aggregator: ScalarOption::from(
+//                 self.0.aggregator().map_err(VmError::from)?,
+//             ),
+//             communities: VectorOption::from(
+//                 self.0
+//                     .all_human_readable_communities()
+//                     .map_err(VmError::from)?,
+//             ),
+//             peer_ip: peer_ip.into(),
+//             peer_asn: peer_asn.into(),
+//             router_id: router_id
+//                 .map(|v| StringLiteral(String::clone(&v)))
+//                 .into(),
+//             afi_safi: ReadOnlyScalarOption::<AfiSafi>::new(afi_safi.into()),
+//             path_id: path_id.into(),
+//             originator_id: Todo,
+//             cluster_list: Todo,
+//             extended_communities: Todo,
+//             // value: self
+//             //     .ext_communities()
+//             //     .map(|c| c.collect::<Vec<ExtendedCommunity>>()),
+//             as4_path: VectorOption::from(
+//                 self.0.as4path().ok().flatten().map(|p| p.to_hop_path()),
+//             ),
+//             connector: Todo,
+//             as_path_limit: Todo,
+//             pmsi_tunnel: Todo,
+//             ipv6_extended_communities: Todo,
+//             large_communities: Todo,
+//             // large_communities: VectorOption::from(self.0
+//             //     .large_communities()
+//             //     .map(|c| c.collect::<Vec<LargeCommunity>>())),
+//             bgpsec_as_path: Todo,
+//             attr_set: Todo,
+//             rsrvd_development: Todo,
+//             as4_aggregator: Todo,
+//         })
+//     }
 
-    // Create a new BGP Update message by applying the attributes changes
-    // in the supplied change set to our current Update message.
-    pub fn create_update_from_changeset<T: ScalarValue, V: VectorValue>(
-        _change_set: &AttrChangeSet,
-    ) -> Self {
-        todo!()
-    }
-}
+//     pub fn create_changeset2(
+//         &self,
+//         // prefix: Prefix,
+//         // peer_ip: Option<IpAddr>,
+//         // peer_asn: Option<Asn>,
+//         // router_id: Option<Arc<String>>,
+//         afi_safi: AfiSafi,
+//         // path_id: Option<PathId>,
+//     ) -> Result<AttrChangeSet2, VmError> {
+//         let next_hop = self
+//             .0
+//             .find_next_hop(afi_safi)
+//             // .mp_next_hop()
+//             .ok();
+//             // .flatten()
+//             // .or_else(|| self.0.conventional_next_hop().ok().flatten());
+//         Ok(AttrChangeSet2 {
+//             as_path: VectorOption::<HopPath>::from(
+//                 self.0.aspath().ok().flatten().map(|p| p.to_hop_path()),
+//             ),
+//             origin_type: ScalarOption::<OriginType>::from(
+//                 self.0.origin().map_err(VmError::from)?,
+//             ),
+//             next_hop: ScalarOption::<NextHop>::from(next_hop),
+//             multi_exit_discriminator: ScalarOption::from(
+//                 self.0.multi_exit_disc().map_err(VmError::from)?,
+//             ),
+//             local_pref: ScalarOption::from(
+//                 self.0.local_pref().map_err(VmError::from)?,
+//             ),
+//             atomic_aggregate: ScalarOption::from(Some(
+//                 self.0.is_atomic_aggregate().map_err(VmError::from)?,
+//             )),
+//             aggregator: ScalarOption::from(
+//                 self.0.aggregator().map_err(VmError::from)?,
+//             ),
+//             communities: VectorOption::from(
+//                 self.0
+//                     .all_human_readable_communities()
+//                     .map_err(VmError::from)?,
+//             ),
+//             originator_id: Todo,
+//             cluster_list: Todo,
+//             extended_communities: Todo,
+//             // value: self
+//             //     .ext_communities()
+//             //     .map(|c| c.collect::<Vec<ExtendedCommunity>>()),
+//             as4_path: VectorOption::from(
+//                 self.0.as4path().ok().flatten().map(|p| p.to_hop_path()),
+//             ),
+//             connector: Todo,
+//             as_path_limit: Todo,
+//             pmsi_tunnel: Todo,
+//             ipv6_extended_communities: Todo,
+//             large_communities: Todo,
+//             // large_communities: VectorOption::from(self.0
+//             //     .large_communities()
+//             //     .map(|c| c.collect::<Vec<LargeCommunity>>())),
+//             bgpsec_as_path: Todo,
+//             attr_set: Todo,
+//             rsrvd_development: Todo,
+//             as4_aggregator: Todo,
+//         })
+//     }
 
-impl From<routecore::bgp::message::UpdateMessage<bytes::Bytes>>
-    for UpdateMessage
-{
-    fn from(
-        value: routecore::bgp::message::UpdateMessage<bytes::Bytes>,
-    ) -> Self {
-        UpdateMessage(value)
-    }
-}
+//     // Create a new BGP Update message by applying the attributes changes
+//     // in the supplied change set to our current Update message.
+//     pub fn create_update_from_changeset<T: ScalarValue, V: VectorValue>(
+//         _change_set: &AttrChangeSet,
+//     ) -> Self {
+//         todo!()
+//     }
+// }
+
+// impl From<routecore::bgp::message::UpdateMessage<bytes::Bytes>>
+//     for BgpUpdateMessage
+// {
+//     fn from(
+//         value: routecore::bgp::message::UpdateMessage<bytes::Bytes>,
+//     ) -> Self {
+//         BgpUpdateMessage(value)
+//     }
+// }

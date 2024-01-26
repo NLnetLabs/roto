@@ -27,7 +27,6 @@ use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 
 use super::{
-    BgpUpdateMessage,
     HexLiteral, IntegerLiteral,
     PrefixLength,
     RawRouteWithDeltas, RouteStatus, StringLiteral,
@@ -67,7 +66,7 @@ pub enum BuiltinTypeValue {
     ConstU32EnumVariant(EnumVariant<u32>),
     // Used for filtering on the properties of the whole message,
     // not taking into account any individual prefixes.
-    BgpUpdateMessage(BgpUpdateMessage), // scalar
+    BgpUpdateMessage(BytesRecord<routecore::bgp::message::UpdateMessage<bytes::Bytes>>),
     BmpMessage(BytesRecord<BmpMessage>),
     BmpRouteMonitoringMessage(BytesRecord<RouteMonitoring>),
     BmpPeerUpNotification(BytesRecord<PeerUpNotification>),

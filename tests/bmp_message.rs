@@ -7,7 +7,7 @@ use roto::{
     types::{
         builtin::{BytesRecord, BuiltinTypeValue},
         collections::Record,
-        lazyrecord_types::{BmpMessage, RouteMonitoring, InitiationMessage},
+        lazyrecord_types::{BmpMessage, InitiationMessage, LazyRecordTypeDef, RouteMonitoring},
         typevalue::TypeValue, typedef::TypeDef,
     },
     vm::{self, VmResult},
@@ -1159,7 +1159,7 @@ fn termination_message_1() {
     let expected: Result<TypeValue, CompileError> = Err(CompileError::from(
         "Cannot convert raw BMP message into any other type.",
     ));
-    assert_eq!(btv.clone().into_type(&TypeDef::BgpUpdateMessage), expected);
+    assert_eq!(btv.clone().into_type(&TypeDef::LazyRecord(LazyRecordTypeDef::UpdateMessage)), expected);
     let payload: TypeValue = TypeValue::Builtin(btv);
     println!("payload {:?}", payload);
 

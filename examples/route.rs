@@ -1,7 +1,8 @@
 use roto::compiler::Compiler;
 
-use roto::types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage, RouteStatus};
-use roto::types::collections::Record;
+use roto::types::builtin::{RawRouteWithDeltas, RotondaId, RouteStatus};
+use roto::types::collections::{BytesRecord, Record};
+use roto::types::lazyrecord_types::BgpUpdateMessage;
 use roto::types::typevalue::TypeValue;
 use roto::vm;
 use roto::blocks::Scope::{self, FilterMap};
@@ -37,11 +38,11 @@ fn test_data(
         0x00, 0x00, 0x00, 0x00,
     ]);
 
-    let update: UpdateMessage =
-        UpdateMessage::new(buf, SessionConfig::modern()).unwrap();
+    let update =
+        BytesRecord::<BgpUpdateMessage>::new(buf, SessionConfig::modern()).unwrap();
 
     let prefixes: Vec<Prefix> = update
-        .0
+        .bytes_parser()
         .announcements()
         .unwrap()
         .filter_map(|p| if let Ok(Nlri::Unicast(BasicNlri { prefix, .. })) = p { Some(prefix) } else { None })

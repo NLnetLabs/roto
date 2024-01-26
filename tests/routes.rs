@@ -5,9 +5,9 @@ use roto::compiler::Compiler;
 use roto::blocks::Scope::{self, Filter};
 use roto::types::builtin::{
     BuiltinTypeValue, RawRouteWithDeltas, RotondaId, RouteStatus, RouteToken,
-    UpdateMessage,
 };
-use roto::types::collections::Record;
+use roto::types::collections::{BytesRecord, Record};
+use roto::types::lazyrecord_types::BgpUpdateMessage;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
 use routecore::bgp::message::nlri::{BasicNlri, Nlri};
@@ -47,11 +47,11 @@ fn test_data(
     ]);
 
     let msg_id = (RotondaId(0), 0);
-    let update: UpdateMessage =
-        UpdateMessage::new(buf.clone(), SessionConfig::modern()).unwrap();
+    let update =
+        BytesRecord::<BgpUpdateMessage>::new(buf.clone(), SessionConfig::modern()).unwrap();
 
     let first_prefix: Prefix = update
-        .0
+        .bytes_parser()
         .announcements()
         .into_iter()
         .next()
