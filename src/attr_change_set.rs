@@ -121,9 +121,13 @@ pub struct AttrChangeSet {
     pub rsrvd_development: Todo, // RsrvdDevelopment,
 }
 
+//------------ PathAttributeSet ----------------------------------------------
+
+// PathAttributeSet describes the diff between the path attributes from a
+// message from the changes a user made.
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Hash, Default)]
-pub struct AttrChangeSet2 {
+pub struct PathAttributeSet {
     #[serde(skip_serializing_if = "VectorOption::is_none")]
     pub as_path: VectorOption<HopPath>,
     #[serde(skip_serializing_if = "ScalarOption::is_none")]

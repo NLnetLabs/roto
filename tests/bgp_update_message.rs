@@ -3,7 +3,6 @@ use roto::ast::AcceptReject;
 use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self, FilterMap};
-use roto::types::builtin::RotondaId;
 use roto::types::collections::{BytesRecord, Record};
 use roto::types::lazyrecord_types::BgpUpdateMessage;
 use roto::types::typevalue::TypeValue;
@@ -44,7 +43,7 @@ fn test_data(
     //     UpdateMessage::new(buf.clone(), SessionConfig::modern());
     // let prefixes: Vec<Prefix> =
     //         update.0.nlris().iter().filter_map(|n| n.prefix().map(|p| p.into())).collect();
-    let msg_id = (RotondaId(0), 0);
+    // let msg_id = (RotondaId(0), 0);
 
     // let payload: RawRouteWithDeltas = RawRouteWithDeltas::new_with_message(
     //     msg_id,

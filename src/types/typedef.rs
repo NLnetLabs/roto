@@ -26,8 +26,10 @@ use crate::{
     traits::RotoType,
 };
 
+use super::builtin::path_attributes::{BasicRoute, PeerId, PeerRibType, Provenance};
 use super::builtin::{
-    BytesRecord, HexLiteral, IntegerLiteral, PrefixLength, RawRouteWithDeltas, RouteStatus, StringLiteral, Unknown
+    HexLiteral, IntegerLiteral, NlriStatus, PrefixLength, 
+    StringLiteral, Unknown
 };
 use super::collections::{LazyElementTypeValue, Record};
 use super::datasources::{RibType, Table};
@@ -167,7 +169,7 @@ pub enum TypeDef {
     // BgpUpdateMessage,
     // A intermediate record where fields are only evaluated when called by
     // the VM, or when modified. This type doesn't have a corresponding
-    // typevalue, it needs to be materialized into a record, or only be used
+    // TypeValue, it needs to be materialized into a record, or only be used
     // read-only (for filter operations).
     LazyRecord(LazyRecordTypeDef),
     // Builtin Types
@@ -192,7 +194,10 @@ pub enum TypeDef {
     NextHop,
     AtomicAggregate,
     AggregatorInfo,
-    RouteStatus,
+    Provenance,
+    NlriStatus,
+    PeerId,
+    PeerRibType,
     // Literals
     HexLiteral,
     IntegerLiteral,
@@ -236,12 +241,15 @@ impl TypeDef {
         Nlri(StringLiteral;),
         OriginType(StringLiteral;),
         NextHop(StringLiteral;),
-        RouteStatus(StringLiteral;),
+        NlriStatus(StringLiteral;),
         IntegerLiteral(StringLiteral,U8,U32,StringLiteral,PrefixLength,LocalPref,Asn;ConstEnumVariant),
         StringLiteral(Asn;),
         HexLiteral(StringLiteral,U8,U32,Community;),
         PrefixLength(StringLiteral,IntegerLiteral,U8,U32;),
+        Provenance(StringLiteral;),
         AfiSafi(StringLiteral;),
+        PeerId(StringLiteral;),
+        PeerRibType(StringLiteral;),
         PathId(StringLiteral,IntegerLiteral,U32;),
         Asn(StringLiteral,U32;),
         AsPath(StringLiteral;List),
@@ -328,7 +336,7 @@ impl TypeDef {
             TypeDef::Record(rec_type) => rec_type.recursive_len(),
             TypeDef::LazyRecord(l_rec) => l_rec.get_field_num(),
             TypeDef::List(list) => list.get_field_num(),
-            TypeDef::Route => RawRouteWithDeltas::get_field_num(),
+            TypeDef::Route => BasicRoute::get_field_num(),
             TypeDef::OutputStream(rec) => rec.get_field_num(),
             _ => 1
         }
@@ -398,7 +406,7 @@ impl TypeDef {
                 (TypeDef::Route, _) => {
                     trace!("Route w/ field '{}'", field);
                     let this_token =
-                        RawRouteWithDeltas::get_props_for_field(field)?;
+                        BasicRoute::get_props_for_field(field)?;
 
                     // Add the token to the FieldAccess vec.
                     result_type = if let Token::FieldAccess(to_f) =
@@ -407,6 +415,59 @@ impl TypeDef {
                         if let Token::FieldAccess(fa) = &this_token.1 {
                             let mut to_f1 = to_f.clone();
                             to_f1.extend(fa);
+
+                            parent_type = (this_token.0.clone(), parent_type.1);
+                            parent_type.1.push(index as u8)?;
+
+                            (this_token.0.clone(), Token::FieldAccess(to_f1))
+                        } else {
+                            result_type
+                        }
+                    } else {
+                        result_type
+                    };
+                }
+                (TypeDef::Provenance, _) => {
+                    trace!("Provenance w/ field '{}'", field);
+                    let this_token =
+                        Provenance::get_props_for_field(field)?;
+
+                    // Add the token to the FieldAccess vec.
+                    result_type = if let Token::FieldAccess(to_f) =
+                        &result_type.1
+                    {
+                        if let Token::FieldAccess(fa) = &this_token.1 {
+                            let mut to_f1 = to_f.clone();
+                            to_f1.extend(fa);
+
+                            parent_type = (this_token.0.clone(), parent_type.1);
+                            parent_type.1.push(index as u8)?;
+
+                            trace!("Returning {:?}", (this_token.0.clone(), Token::FieldAccess(to_f1.clone())));
+                            (this_token.0.clone(), Token::FieldAccess(to_f1))
+                        } else {
+                            result_type
+                        }
+                    } else {
+                        result_type
+                    };
+                }
+                (TypeDef::PeerId, _) => {
+                    trace!("PeerId w/ field '{}'", field);
+                    let this_token =
+                        PeerId::get_props_for_field(field)?;
+
+                    // Add the token to the FieldAccess vec.
+                    result_type = if let Token::FieldAccess(to_f) =
+                        &result_type.1
+                    {
+                        if let Token::FieldAccess(fa) = &this_token.1 {
+                            let mut to_f1 = to_f.clone();
+                            to_f1.extend(fa);
+
+                            parent_type = (this_token.0.clone(), parent_type.1);
+                            parent_type.1.push(index as u8)?;
+
                             (this_token.0.clone(), Token::FieldAccess(to_f1))
                         } else {
                             result_type
@@ -473,8 +534,8 @@ impl TypeDef {
                         ((&btv).into(), Token::ConstEnumVariant);
                     existing_tv = Some(btv.into());
                 }
-                _ => {
-                    trace!("can't find field '{}'", field.ident.as_str());
+                (ty, _) => {
+                    trace!("can't find field '{}' on {}", field.ident.as_str(), ty);
                     return Err(format!(
                         "No field named '{}'",
                         field.ident.as_str()
@@ -614,12 +675,16 @@ impl TypeDef {
             TypeDef::OriginType => {
                 OriginType::get_props_for_method(self.clone(), method_name)
             }
-            TypeDef::Route => RawRouteWithDeltas::get_props_for_method(
+            TypeDef::Route => BasicRoute::get_props_for_method(
                 self.clone(),
                 method_name,
             ),
-            TypeDef::RouteStatus => {
-                RouteStatus::get_props_for_method(self.clone(), method_name)
+            TypeDef::Provenance => Provenance::get_props_for_method(
+                self.clone(),
+                method_name,
+            ),
+            TypeDef::NlriStatus => {
+                NlriStatus::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::HexLiteral => {
                 HexLiteral::get_props_for_method(self.clone(), method_name)
@@ -658,6 +723,12 @@ impl TypeDef {
                     method_name,
                 )
             }
+            TypeDef::PeerId => {
+                PeerId::get_props_for_method(self.clone(), method_name)
+            },
+            TypeDef::PeerRibType => {
+                PeerRibType::get_props_for_method(self.clone(), method_name)
+            }
         }
     }
 
@@ -694,7 +765,7 @@ impl TypeDef {
             TypeDef::IpAddr => {
                 IpAddr::exec_type_method(method_token, args, return_type)
             }
-            TypeDef::Route => RawRouteWithDeltas::exec_type_method(
+            TypeDef::Route => BasicRoute::exec_type_method(
                 method_token,
                 args,
                 return_type,
@@ -728,8 +799,8 @@ impl TypeDef {
                 }
                 TypeValue::Builtin(BuiltinTypeValue::Route(route)) => {
                     for field_index in uniq_field_indexes {
-                        if let Ok(fi) = field_index.first() {
-                            if let Ok(f) = route.get_field_by_index(fi) {
+                        if !field_index.is_empty() {
+                            if let Ok(f) = route.get_field_by_index(field_index) {
                                 f.hash(state);
                             }
                         } else {
@@ -818,6 +889,7 @@ impl std::fmt::Display for TypeDef {
             TypeDef::OutputStream(stream) => {
                 write!(f, "Output Stream of {}", stream)
             }
+            TypeDef::Provenance => write!(f, "Provenance Record"),
             TypeDef::PrefixLength => write!(f, "PrefixLength"),
             TypeDef::IntegerLiteral => write!(f, "IntegerLiteral"),
             TypeDef::U8 => write!(f, "U8"),
@@ -825,7 +897,7 @@ impl std::fmt::Display for TypeDef {
             TypeDef::Community => write!(f, "Community"),
             TypeDef::Nlri => write!(f, "NLRI"),
             TypeDef::OriginType => write!(f, "OriginType"),
-            TypeDef::RouteStatus => write!(f, "RouteStatus"),
+            TypeDef::NlriStatus => write!(f, "RouteStatus"),
             TypeDef::HexLiteral => write!(f, "HexLiteral"),
             TypeDef::StringLiteral => write!(f, "String"),
             TypeDef::AcceptReject(_) => write!(f, "AcceptReject"),
@@ -835,6 +907,8 @@ impl std::fmt::Display for TypeDef {
             TypeDef::NextHop => write!(f, "Next Hop"),
             TypeDef::AtomicAggregate => write!(f, "Atomic Aggregate"),
             TypeDef::AggregatorInfo => write!(f, "AggregatorInfo"),
+            TypeDef::PeerId => write!(f, "PeerId"),
+            TypeDef::PeerRibType => write!(f, "PeerRibType")
         }
     }
 }
@@ -871,8 +945,8 @@ impl PartialEq<BuiltinTypeValue> for TypeDef {
             TypeDef::AsPath => {
                 matches!(other, BuiltinTypeValue::AsPath(_))
             }
-            TypeDef::RouteStatus => {
-                matches!(other, BuiltinTypeValue::RouteStatus(_))
+            TypeDef::NlriStatus => {
+                matches!(other, BuiltinTypeValue::NlriStatus(_))
             }
             TypeDef::Community => {
                 matches!(other, BuiltinTypeValue::Community(_))
@@ -1037,13 +1111,17 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             "AggregatorInfo" => Ok(TypeDef::AggregatorInfo),
             "NextHop" => Ok(TypeDef::NextHop),
             "MultiExitDisc" => Ok(TypeDef::MultiExitDisc),
-            "RouteStatus" => Ok(TypeDef::RouteStatus),
+            "RouteStatus" => Ok(TypeDef::NlriStatus),
             "Community" => Ok(TypeDef::Community),
             "Asn" => Ok(TypeDef::Asn),
             "AsPath" => Ok(TypeDef::AsPath),
             "Hop" => Ok(TypeDef::Hop),
             "OriginType" => Ok(TypeDef::OriginType),
             "Route" => Ok(TypeDef::Route),
+            "Provenance" => Ok(TypeDef::Provenance),
+            "Nlri" => Ok(TypeDef::Nlri),
+            "PeerId" => Ok(TypeDef::PeerId),
+            "PeerRibType" => Ok(TypeDef::PeerRibType),
             "BgpUpdateMessage" => 
                 Ok(TypeDef::LazyRecord(LazyRecordTypeDef::UpdateMessage)),
             "BmpMessage" => {
@@ -1103,7 +1181,7 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
             "AggregatorInfo" => Ok(TypeDef::AggregatorInfo),
             "NextHop" => Ok(TypeDef::NextHop),
             "MultiExitDisc" => Ok(TypeDef::MultiExitDisc),
-            "RouteStatus" => Ok(TypeDef::RouteStatus),
+            "RouteStatus" => Ok(TypeDef::NlriStatus),
             "Community" => Ok(TypeDef::Community),
             "Nlri" => Ok(TypeDef::Nlri),
             "Asn" => Ok(TypeDef::Asn),
@@ -1111,6 +1189,9 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
             "Hop" => Ok(TypeDef::Hop),
             "OriginType" => Ok(TypeDef::OriginType),
             "Route" => Ok(TypeDef::Route),
+            "Provenance" => Ok(TypeDef::Provenance),
+            "PeerId" => Ok(TypeDef::PeerId),
+            "PeerRibType" => Ok(TypeDef::PeerRibType),
             "BgpUpdateMessage" => Ok(TypeDef::LazyRecord(LazyRecordTypeDef::UpdateMessage)),
             "BmpMessage" => {
                 Ok(TypeDef::GlobalEnum(GlobalEnumTypeDef::BmpMessageType))
@@ -1171,6 +1252,9 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::Community(_) => TypeDef::Community,
             BuiltinTypeValue::Nlri(_) => TypeDef::Nlri,
             BuiltinTypeValue::Route(_) => TypeDef::Route,
+            BuiltinTypeValue::Provenance(_) => TypeDef::Provenance,
+            BuiltinTypeValue::PeerId(_) => TypeDef::PeerId,
+            BuiltinTypeValue::PeerRibType(_) => TypeDef::PeerRibType,
             BuiltinTypeValue::BgpUpdateMessage(_) => {
                 TypeDef::LazyRecord(LazyRecordTypeDef::UpdateMessage)
             }
@@ -1195,7 +1279,7 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::BmpStatisticsReport(_) => {
                 TypeDef::LazyRecord(LazyRecordTypeDef::StatisticsReport)
             }
-            BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
+            BuiltinTypeValue::NlriStatus(_) => TypeDef::NlriStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
             BuiltinTypeValue::LocalPref(_) => TypeDef::LocalPref,
             BuiltinTypeValue::AtomicAggregate(_) => TypeDef::AtomicAggregate,
@@ -1238,6 +1322,9 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::Nlri(_) => TypeDef::Nlri,
             BuiltinTypeValue::OriginType(_) => TypeDef::OriginType,
             BuiltinTypeValue::Route(_) => TypeDef::Route,
+            BuiltinTypeValue::Provenance(_) => TypeDef::Provenance,
+            BuiltinTypeValue::PeerId(_) => TypeDef::PeerId,
+            BuiltinTypeValue::PeerRibType(_) => TypeDef::PeerRibType,
             BuiltinTypeValue::BgpUpdateMessage(_) => {
                 TypeDef::LazyRecord(LazyRecordTypeDef::UpdateMessage)
             }
@@ -1262,7 +1349,7 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::BmpStatisticsReport(_) => {
                 TypeDef::LazyRecord(LazyRecordTypeDef::StatisticsReport)
             }
-            BuiltinTypeValue::RouteStatus(_) => TypeDef::RouteStatus,
+            BuiltinTypeValue::NlriStatus(_) => TypeDef::NlriStatus,
             BuiltinTypeValue::HexLiteral(_) => TypeDef::HexLiteral,
             BuiltinTypeValue::LocalPref(_) => TypeDef::LocalPref,
             BuiltinTypeValue::AtomicAggregate(_) => TypeDef::AtomicAggregate,

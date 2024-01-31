@@ -314,9 +314,12 @@ impl LinearMemory {
                     }
                     Some(TypeValue::Builtin(BuiltinTypeValue::Route(
                         route,
-                    ))) => Ok(route
-                        .get_field_by_index(field_index.first()?)
-                        .unwrap_or(TypeValue::Unknown)),
+                    ))) => {
+                        Ok(route
+                                .get_field_by_index(field_index)
+                                .unwrap_or(TypeValue::Unknown)
+                            )
+                    },
                     _ => Err(VmError::MemOutOfBounds),
                 },
             },
@@ -404,7 +407,7 @@ impl LinearMemory {
                         {
                             Ok(StackValue::Ref(v))
                         } else if let Ok(v) =
-                            route.get_field_by_index(field_index.first()?)
+                            route.get_field_by_index(&field_index)
                         {
                             Ok(StackValue::Owned(v))
                         } else {

@@ -6,6 +6,7 @@ mod route {
         IntegerLiteral, PrefixLength, StringLiteral,
     };
     use crate::ast::{IpAddressLiteral, AsnLiteral};
+    use crate::types::builtin::path_attributes::{BasicRoute, PeerId, PeerRibType, Provenance, RotondaId};
     use crate::types::builtin::{BuiltinTypeValue, BytesRecord};
     use crate::types::lazyrecord_types::BgpUpdateMessage;
     use crate::types::typedef::TypeDef;
@@ -23,7 +24,7 @@ mod route {
     use routecore::bgp::aspath::HopPath;
     use routecore::asn::{Asn, Asn16};
     use routecore::bgp::communities::{HumanReadableCommunity as Community, StandardCommunity, Tag, ExtendedCommunity, LargeCommunity};
-    use routecore::bgp::types::LocalPref;
+    use routecore::bgp::types::{AfiSafi, LocalPref};
     use routecore::bgp::{
         message::{
             nlri::{BasicNlri, Nlri},
@@ -35,9 +36,7 @@ mod route {
     use std::str::FromStr;
 
     use crate::{
-        types::builtin::{
-            RawRouteWithDeltas, RotondaId, RouteStatus,
-        },
+        types::builtin::NlriStatus,
         vm::VmError,
     };
 
@@ -87,67 +86,74 @@ mod route {
                 })
             })
             .collect();
-        let msg_id = (RotondaId(0), 0);
 
         let mut roto_msgs = vec![];
 
-        roto_msgs.push(RawRouteWithDeltas::new_with_message(
-            msg_id,
+        let provenance = Provenance {
+            timestamp: chrono::Utc::now(),
+            router_id: 0,
+            connection_id: 0,
+            peer_id: PeerId { addr: "172.0.0.1".parse().unwrap(), asn: Asn::from(65530)},
+            peer_bgp_id: [0,0,0,0].into(),
+            peer_distuingisher: [0; 8],
+            peer_rib_type: PeerRibType::OutPost,
+        };
+
+        roto_msgs.push(BasicRoute::new(
             prefixes[0],
             update,
-            routecore::bgp::types::AfiSafi::Ipv6Unicast,
+            AfiSafi::Ipv6Unicast,
             None,
-            RouteStatus::InConvergence,
+            NlriStatus::InConvergence,
+            provenance
         )?);
 
         for prefix in &prefixes[1..] {
-            roto_msgs.push(RawRouteWithDeltas::new_with_message_ref(
-                msg_id,
+            roto_msgs.push(BasicRoute::new(
                 *prefix,
-                roto_msgs[0].raw_message.clone(),
+                roto_msgs[0].message().clone(),
                 routecore::bgp::types::AfiSafi::Ipv6Unicast,
                 None,
-                RouteStatus::InConvergence,
-            ))
+                NlriStatus::InConvergence,
+                provenance
+            )?)
         }
 
         println!("{:?}", roto_msgs);
-        println!("{:#?}", roto_msgs[2].get_latest_attrs());
+        println!("{:#?}", *roto_msgs[2].get_attrs().unwrap());
 
-        assert_eq!(roto_msgs[0].prefix, prefixes[0]);
-        assert_eq!(roto_msgs[1].prefix, prefixes[1]);
-        assert_eq!(roto_msgs[2].prefix, prefixes[2]);
-        assert_eq!(roto_msgs[3].prefix, prefixes[3]);
-        assert_eq!(roto_msgs[4].prefix, prefixes[4]);
+        assert_eq!(roto_msgs[0].prefix(), prefixes[0]);
+        assert_eq!(roto_msgs[1].prefix(), prefixes[1]);
+        assert_eq!(roto_msgs[2].prefix(), prefixes[2]);
+        assert_eq!(roto_msgs[3].prefix(), prefixes[3]);
+        assert_eq!(roto_msgs[4].prefix(), prefixes[4]);
         assert_eq!(roto_msgs.len(), 5);
 
-        let delta_id = (RotondaId(0), 1);
-
-        let mut delta = roto_msgs[0].open_new_delta(delta_id)?;
+        // let mut delta = roto_msgs[0].open_new_delta(delta_id)?;
+        let mut path_attrs = roto_msgs.remove(0).take_attrs()?;
         if let std::net::IpAddr::V6(v6) = prefixes[0].addr() {
-            delta
-                .attributes
+            path_attrs
                 .next_hop
                 .set(NextHop::Unicast(std::net::IpAddr::V6(v6)));
         }
 
-        let res = delta.attributes.as_path.prepend(
+        let res = path_attrs.as_path.prepend(
             Asn::from(211321_u32),
         );
         assert!(res.is_ok());
 
-        let res = delta.attributes.origin_type.set(OriginType::Incomplete);
+        let res = path_attrs.origin_type.set(OriginType::Incomplete);
         assert_eq!(res, Some(OriginType::Igp.into()));
 
-        println!("change set {:?}", delta);
-        println!("as_path {:?}", &delta.attributes.as_path);
+        println!("change set {:?}", path_attrs);
+        println!("as_path {:?}", &path_attrs.as_path);
 
-        let res = roto_msgs[2].store_delta(delta);
-        assert!(res.is_ok());
+        let mut msg_1 = roto_msgs.remove(1);
+        msg_1.store_attrs(path_attrs);
 
-        println!("materialize! {:#?}", roto_msgs[2].get_latest_attrs());
+        println!("materialize! {:#?}", msg_1.get_attrs());
 
-        let attr_set = roto_msgs[2].get_latest_attrs()?;
+        let attr_set = msg_1.get_attrs()?.as_deref().unwrap();
         assert_eq!(attr_set.as_path.len(), Some(2));
 
         println!(
@@ -203,63 +209,67 @@ mod route {
             })
             .collect();
 
-        let msg_id = (RotondaId(0), 0);
-
         let mut roto_msgs = vec![];
+        
+        let provenance = Provenance {
+            timestamp: chrono::Utc::now(),
+            router_id: 0,
+            connection_id: 0,
+            peer_id: PeerId { addr: "172.0.0.1".parse().unwrap(), asn: Asn::from(65530)},
+            peer_bgp_id: [0,0,0,0].into(),
+            peer_distuingisher: [0; 8],
+            peer_rib_type: PeerRibType::OutPost,
+        };
 
-        roto_msgs.push(RawRouteWithDeltas::new_with_message(
-            msg_id,
+        roto_msgs.push(BasicRoute::new(
             prefixes[0],
             update,
             routecore::bgp::types::AfiSafi::Ipv6Unicast,
             None,
-            RouteStatus::InConvergence,
+            NlriStatus::InConvergence,
+            provenance
         )?);
 
         for prefix in &prefixes[1..] {
-            roto_msgs.push(RawRouteWithDeltas::new_with_message_ref(
-                msg_id,
+            roto_msgs.push(BasicRoute::new(
                 *prefix,
-                roto_msgs[0].raw_message.clone(),
+                roto_msgs[0].message().clone(),
                 routecore::bgp::types::AfiSafi::Ipv6Unicast,
                 None,
-                RouteStatus::InConvergence,
-            ))
+                NlriStatus::InConvergence,
+                provenance
+            )?)
         }
 
-        assert_eq!(roto_msgs[0].prefix, prefixes[0]);
-        assert_eq!(roto_msgs[1].prefix, prefixes[1]);
-        assert_eq!(roto_msgs[2].prefix, prefixes[2]);
-        assert_eq!(roto_msgs[3].prefix, prefixes[3]);
-        assert_eq!(roto_msgs[4].prefix, prefixes[4]);
+        assert_eq!(roto_msgs[0].prefix(), prefixes[0]);
+        assert_eq!(roto_msgs[1].prefix(), prefixes[1]);
+        assert_eq!(roto_msgs[2].prefix(), prefixes[2]);
+        assert_eq!(roto_msgs[3].prefix(), prefixes[3]);
+        assert_eq!(roto_msgs[4].prefix(), prefixes[4]);
         assert_eq!(roto_msgs.len(), 5);
 
-        let delta_id = (RotondaId(0), 1);
-
+        // let mut msg = roto_msgs.remove(2);
         // Change Set 1
-        let mut new_change_set1 = roto_msgs[2].open_new_delta(delta_id)?;
+        let attr_set = roto_msgs[2].get_attrs_mut()?.as_mut().unwrap();
 
-        println!("change set {:#?}", new_change_set1);
+        println!("change set {:#?}", attr_set);
         if let std::net::IpAddr::V6(v6) = prefixes[2].addr() {
-            new_change_set1
-                .attributes
+            attr_set
                 .next_hop
                 .set(NextHop::Unicast(std::net::IpAddr::V6(v6)));
         }
 
-        let res = new_change_set1.attributes.as_path.prepend(211321_u32); //].try_into().unwrap());
+        let res = attr_set.as_path.prepend(211321_u32); //].try_into().unwrap());
         assert!(res.is_ok());
 
-        let res = new_change_set1
-            .attributes
+        let res = attr_set
             .origin_type
             .set(OriginType::Incomplete);
         assert_eq!(res, Some(OriginType::Igp.into()));
 
-        let res = roto_msgs[2].store_delta(new_change_set1);
-        assert!(res.is_ok());
+        // msg.store_attrs(new_change_set1);
 
-        let attr_set = roto_msgs[2].get_latest_attrs()?;
+        // let attr_set = roto_msgs[2].get_attrs_mut()?.as_mut().unwrap();
         assert_eq!(attr_set.as_path.len(), Some(2));
         assert_eq!(
             *attr_set.as_path.as_routecore_hops_vec()[0],
@@ -273,14 +283,13 @@ mod route {
         );
 
         // Change Set 2
-        let mut new_change_set2 = roto_msgs[2].open_new_delta(delta_id)?;
-        let res = new_change_set2.attributes.as_path.prepend(211322_u32); //.try_into().unwrap());
+        // let mut new_change_set2 = roto_msgs[2].take_attrs()?;
+        let res = attr_set.as_path.prepend(211322_u32); //.try_into().unwrap());
         assert!(res.is_ok());
 
-        let res = roto_msgs[2].store_delta(new_change_set2);
-        assert!(res.is_ok());
+        // roto_msgs[2].store_attrs(new_change_set2);
 
-        let attr_set = roto_msgs[2].get_latest_attrs()?;
+        // let attr_set = *roto_msgs[2].get_attrs()?.unwrap();
         assert_eq!(attr_set.as_path.len(), Some(3));
         assert_eq!(
             *attr_set.as_path.as_routecore_hops_vec().first().unwrap(),

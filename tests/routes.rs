@@ -3,13 +3,15 @@ use roto::ast::AcceptReject;
 use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self, Filter};
+use roto::types::builtin::path_attributes::{BasicRoute, BasicRouteToken, PeerId, PeerRibType, Provenance};
 use roto::types::builtin::{
-    BuiltinTypeValue, RawRouteWithDeltas, RotondaId, RouteStatus, RouteToken,
+    BuiltinTypeValue, NlriStatus,
 };
 use roto::types::collections::{BytesRecord, Record};
 use roto::types::lazyrecord_types::BgpUpdateMessage;
 use roto::types::typevalue::TypeValue;
-use roto::vm::{self, VmResult};
+use roto::vm::{self, FieldIndex, VmResult};
+use routecore::asn::Asn;
 use routecore::bgp::message::nlri::{BasicNlri, Nlri};
 use routecore::bgp::message::SessionConfig;
 use routecore::bgp::types::{AfiSafi, NextHop};
@@ -46,7 +48,6 @@ fn test_data(
         0x00, 0x00, 0x00, 0x00,
     ]);
 
-    let msg_id = (RotondaId(0), 0);
     let update =
         BytesRecord::<BgpUpdateMessage>::new(buf.clone(), SessionConfig::modern()).unwrap();
 
@@ -67,18 +68,25 @@ fn test_data(
         .unwrap();
     let peer_ip = "fe80::1".parse().unwrap();
 
-    let payload: RawRouteWithDeltas = RawRouteWithDeltas::new_with_message(
-        msg_id,
+    let payload = BasicRoute::new(
         first_prefix,
         update,
         routecore::bgp::types::AfiSafi::Ipv6Unicast,
         None,
-        RouteStatus::InConvergence,
-    )?
-    .with_peer_ip(peer_ip);
+        NlriStatus::InConvergence,
+        Provenance {
+            timestamp: chrono::Utc::now(),
+            router_id: 0,
+            connection_id: 0,
+            peer_id: PeerId { addr: peer_ip, asn: Asn::from(65534) },
+            peer_bgp_id: [0; 4].into(),
+            peer_distuingisher: [0; 8],
+            peer_rib_type: PeerRibType::OutPost,
+        }
+    )?;
 
-    trace!("prefix in route {:?}", payload.prefix);
-    trace!("peer_ip {:?}", payload.peer_ip());
+    trace!("prefix in route {:?}", payload.prefix());
+    trace!("peer_ip {:?}", payload.provenance().peer_ip());
 
     let mem = &mut vm::LinearMemory::uninit();
 
@@ -126,7 +134,7 @@ fn test_routes_1() {
                 mqtt.send(
                     {
                         prefix: route.prefix,
-                        peer_ip: route.peer_ip
+                        peer_ip: route.provenance.peer-id.addr
                     }
                 );
             }
@@ -195,7 +203,7 @@ fn test_routes_2() {
                 mqtt.send(
                     Message {
                         prefix: route.prefix,
-                        peer_ip: route.peer_ip
+                        peer_ip: route.provenance.peer-id.addr
                     }
                 );
             }
@@ -254,7 +262,7 @@ fn test_routes_3() {
 
                 msg = Message {
                     prefix: route.prefix,
-                    peer_ip: route.peer_ip
+                    peer_ip: route.provenance.peer-id.addr
                 };
             }
         
@@ -322,7 +330,7 @@ fn test_routes_4() {
                 rx route: Route;
 
                 pfx = route.prefix;
-                peer = route.peer_ip;
+                peer = route.provenance.peer-id.addr;
             }
         
             term always {
@@ -395,7 +403,7 @@ fn test_routes_5() {
                     text: "Some text",
                     data: {
                         pfx: route.prefix,
-                        peer_ip: route.peer_ip
+                        peer_ip: route.provenance.peer-id.addr
                     }
                 };
             }
@@ -474,7 +482,7 @@ fn test_routes_6() {
                     text: "Some text",
                     data: {
                         pfx: route.prefix,
-                        peer_ip: route.peer_ip
+                        peer_ip: route.provenance.peer-id.addr
                     }
                 };
             }
@@ -540,10 +548,10 @@ fn test_routes_6() {
     );
 
     let route = rx.clone().into_route().unwrap();
-    assert_eq!(route.afi_safi, AfiSafi::Ipv6Unicast);
+    assert_eq!(route.afi_safi(), AfiSafi::Ipv6Unicast);
 
     let next_hop = route
-        .get_field_by_index(RouteToken::NextHop.into())
+        .get_field_by_index(&FieldIndex::from(vec![BasicRouteToken::NextHop.into()]))
         .unwrap();
     trace!("next hop in route {:?}", next_hop);
 

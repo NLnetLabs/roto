@@ -9,7 +9,7 @@ use routecore::{
         aspath::{AsPath, HopPath},
         communities::HumanReadableCommunity,
         message::nlri::PathId,
-        message::{nlri::Nlri, update::LocalPref, SessionConfig},
+        message::{update::LocalPref, SessionConfig},
         path_attributes::AggregatorInfo,
         types::MultiExitDisc,
         types::{AfiSafi, NextHop, OriginType},
@@ -19,7 +19,7 @@ use routecore::{
 use crate::{
     ast::ShortString,
     attr_change_set::{
-        AttrChangeSet, AttrChangeSet2, ReadOnlyScalarOption, ScalarOption,
+        AttrChangeSet, PathAttributeSet, ReadOnlyScalarOption, ScalarOption,
         Todo, VectorOption,
     },
     bytes_record_impl,
@@ -37,12 +37,12 @@ use crate::{
         typedef::{LazyNamedTypeDef, RecordTypeDef, TypeDef},
         typevalue::TypeValue,
     },
-    vm::VmError,
+    vm::{StackValue, VmError},
 };
 
 pub use crate::types::collections::BytesRecord;
 
-use super::StringLiteral;
+use super::{Nlri, StringLiteral};
 
 // 0 aggregator_type
 // 1 announcements
@@ -96,6 +96,13 @@ impl BytesRecord<routecore::bgp::message::UpdateMessage<bytes::Bytes>> {
         )
         .map(|msg| msg.into())
         .map_err(|_| VmError::InvalidPayload)
+    }
+
+    pub fn exec_value_method(method_token: usize,
+        args: &[StackValue],
+        res_type: TypeDef,
+        record: &BytesRecord<BgpUpdateMessage>) -> Result<TypeValue, VmError> {
+            todo!()
     }
 }
 
@@ -204,11 +211,11 @@ impl
     }
 }
 
-impl From<Result<Vec<Nlri<bytes::Bytes>>, routecore::bgp::ParseError>>
+impl From<Result<Vec<Nlri>, routecore::bgp::ParseError>>
     for List
 {
     fn from(
-        value: Result<Vec<Nlri<bytes::Bytes>>, routecore::bgp::ParseError>,
+        value: Result<Vec<Nlri>, routecore::bgp::ParseError>,
     ) -> Self {
         List(
             value
@@ -370,7 +377,7 @@ impl BytesRecord<routecore::bgp::message::UpdateMessage<bytes::Bytes>> {
         })
     }
 
-    pub fn create_changeset2(
+    pub fn create_path_attributes_set(
         &self,
         // prefix: Prefix,
         // peer_ip: Option<IpAddr>,
@@ -378,7 +385,7 @@ impl BytesRecord<routecore::bgp::message::UpdateMessage<bytes::Bytes>> {
         // router_id: Option<Arc<String>>,
         afi_safi: AfiSafi,
         // path_id: Option<PathId>,
-    ) -> Result<AttrChangeSet2, VmError> {
+    ) -> Result<PathAttributeSet, VmError> {
         let next_hop = self
             .bytes_parser()
             .find_next_hop(afi_safi)
@@ -386,7 +393,7 @@ impl BytesRecord<routecore::bgp::message::UpdateMessage<bytes::Bytes>> {
             .ok();
         // .flatten()
         // .or_else(|| self.0.conventional_next_hop().ok().flatten());
-        Ok(AttrChangeSet2 {
+        Ok(PathAttributeSet {
             as_path: VectorOption::<HopPath>::from(
                 self.bytes_parser()
                     .aspath()

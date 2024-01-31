@@ -7,12 +7,12 @@ use roto::{
     compiler::Compiler,
     types::{
         builtin::{
-            RawRouteWithDeltas, RotondaId, RouteStatus,
+            path_attributes::{BasicRoute, PeerId, PeerRibType, Provenance}, NlriStatus,
         }, collections::{BytesRecord, Record}, lazyrecord_types::BgpUpdateMessage
     },
     vm::{self, VmResult},
 };
-use routecore::bgp::message::SessionConfig;
+use routecore::{asn::Asn, bgp::message::SessionConfig};
 
 use routes::bmp::encode::{
     mk_bgp_update, mk_per_peer_header, Announcements, Prefixes,
@@ -24,7 +24,7 @@ fn test_data(
     name: Scope,
     source_code: &str,
     announce_str: &str,
-) -> Result<(VmResult, RawRouteWithDeltas), Box<dyn std::error::Error>> {
+) -> Result<(VmResult, BasicRoute), Box<dyn std::error::Error>> {
     common::init();
     println!("Evaluate filter-map {}...", name);
 
@@ -43,13 +43,23 @@ fn test_data(
 
     let bgp_msg = BytesRecord::<BgpUpdateMessage>::new(msg_buf.0, SessionConfig::modern())?;
 
-    let payload = RawRouteWithDeltas::new_with_message(
-        (RotondaId(0), 0),
+    let prov = Provenance {
+        timestamp: chrono::Utc::now(),
+        router_id: 0,
+        connection_id: 0,
+        peer_id: PeerId { addr: "172.0.0.1".parse().unwrap(), asn: Asn::from(65530)},
+        peer_bgp_id: [0,0,0,0].into(),
+        peer_distuingisher: [0; 8],
+        peer_rib_type: PeerRibType::OutPost,
+    };
+
+    let payload = BasicRoute::new(
         routecore::addr::Prefix::from_str("192.0.2.0/24")?,
         bgp_msg,
         routecore::bgp::types::AfiSafi::Ipv4Unicast,
         None,
-        RouteStatus::UpToDate,
+        NlriStatus::UpToDate,
+        prov
     )?;
 
     // Create the VM

@@ -2,7 +2,7 @@ use std::net::IpAddr;
 use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
 use log::debug;
-use primitives::RouteStatus;
+use primitives::NlriStatus;
 
 use routecore::asn::Asn;
 use routecore::bgp::aspath::{HopPath, OwnedHop as Hop};
@@ -23,12 +23,13 @@ use crate::{
     vm::{FieldIndex, StackValue, VmError},
 };
 
+use super::builtin::path_attributes::{BasicRoute, PeerId, PeerRibType, Provenance};
 use super::lazyrecord_types::BgpUpdateMessage;
 use super::{
     builtin::{
         primitives, BuiltinTypeValue,
         HexLiteral, IntegerLiteral, PrefixLength,
-        RawRouteWithDeltas, StringLiteral,
+        StringLiteral,
     },
     collections::{
         BytesRecord, ElementTypeValue, EnumBytesRecord, LazyRecord, List,
@@ -259,7 +260,7 @@ impl TypeValue {
         }
     }
 
-    pub fn into_route(self) -> Result<RawRouteWithDeltas, Self> {
+    pub fn into_route(self) -> Result<BasicRoute, Self> {
         if let TypeValue::Builtin(BuiltinTypeValue::Route(route)) = self {
             Ok(route)
         } else {
@@ -396,10 +397,15 @@ impl RotoType for TypeValue {
                 Self::get_props_for_method(*ty.0, method_name)
             }
             TypeDef::Route => {
-                RawRouteWithDeltas::get_props_for_method(ty, method_name)
+                BasicRoute::get_props_for_method(ty, method_name)
             }
-            TypeDef::RouteStatus => {
-                RouteStatus::get_props_for_method(ty, method_name)
+            TypeDef::Provenance => {
+                Provenance::get_props_for_method(ty, method_name)
+            }
+            TypeDef::PeerId => PeerId::get_props_for_method(ty, method_name),
+            TypeDef::PeerRibType => PeerRibType::get_props_for_method(ty, method_name),
+            TypeDef::NlriStatus => {
+                NlriStatus::get_props_for_method(ty, method_name)
             }
             TypeDef::StringLiteral => {
                 StringLiteral::get_props_for_method(ty, method_name)
@@ -454,11 +460,14 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::AfiSafi(v) => v.into_type(ty),
                 BuiltinTypeValue::PathId(v) => v.into_type(ty),
                 BuiltinTypeValue::Route(v) => v.into_type(ty),
-                BuiltinTypeValue::RouteStatus(v) => v.into_type(ty),
+                BuiltinTypeValue::Provenance(v) => v.into_type(ty),
+                BuiltinTypeValue::NlriStatus(v) => v.into_type(ty),
                 BuiltinTypeValue::StringLiteral(v) => v.into_type(ty),
                 BuiltinTypeValue::U32(v) => v.into_type(ty),
                 BuiltinTypeValue::U16(v) => v.into_type(ty),
                 BuiltinTypeValue::U8(v) => v.into_type(ty),
+                BuiltinTypeValue::PeerId(v) => v.into_type(ty),
+                BuiltinTypeValue::PeerRibType(v) => v.into_type(ty),
                 BuiltinTypeValue::BmpMessage(_v) => Err(CompileError::new(
                     "Unsupported TypeValue::BmpMessage in TypeValue::\
                     into_type()"
@@ -549,15 +558,13 @@ impl RotoType for TypeValue {
                     v.exec_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::BgpUpdateMessage(bytes_rec) => {
-                    LazyRecord::new(
-                        BytesRecord::<BgpUpdateMessage>::lazy_type_def(),
-                    )
-                    .exec_value_method(
-                        method_token,
-                        args,
-                        res_type,
-                        bytes_rec.as_ref(),
-                    )
+                    BytesRecord::<BgpUpdateMessage>::
+                        exec_value_method(
+                            method_token,
+                            args,
+                            res_type,
+                            bytes_rec,
+                        )
                 }
                 BuiltinTypeValue::BmpMessage(_bytes_rec) => {
                     Err(VmError::InvalidValueType)
@@ -685,7 +692,10 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::Route(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::RouteStatus(v) => {
+                BuiltinTypeValue::Provenance(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::NlriStatus(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::StringLiteral(v) => {
@@ -700,6 +710,8 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::U8(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
+                BuiltinTypeValue::PeerId(v) => v.exec_value_method(method_token, args, res_type),
+                BuiltinTypeValue::PeerRibType(v) => v.exec_value_method(method_token, args, res_type),
             },
             TypeValue::List(v) => {
                 v.exec_value_method(method_token, args, res_type)
@@ -818,7 +830,10 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::Route(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::RouteStatus(v) => {
+                BuiltinTypeValue::Provenance(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::NlriStatus(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::StringLiteral(v) => {
@@ -832,7 +847,9 @@ impl RotoType for TypeValue {
                 }
                 BuiltinTypeValue::U8(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
-                }
+                },
+                BuiltinTypeValue::PeerId(v) => v.exec_consume_value_method(method_token, args, res_type),
+                BuiltinTypeValue::PeerRibType(v) => v.exec_consume_value_method(method_token, args, res_type),
             },
             // TypeValue::Enum(v) => {
             //     v.exec_consume_value_method(method_token, args, res_type)
@@ -1114,8 +1131,8 @@ impl PartialOrd for TypeValue {
                 None
             }
             (
-                TypeValue::Builtin(BuiltinTypeValue::RouteStatus(_)),
-                TypeValue::Builtin(BuiltinTypeValue::RouteStatus(_)),
+                TypeValue::Builtin(BuiltinTypeValue::NlriStatus(_)),
+                TypeValue::Builtin(BuiltinTypeValue::NlriStatus(_)),
             ) => {
                 debug!("Route statuses have no ordering.");
                 None

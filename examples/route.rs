@@ -1,11 +1,13 @@
 use roto::compiler::Compiler;
 
-use roto::types::builtin::{RawRouteWithDeltas, RotondaId, RouteStatus};
+use roto::types::builtin::path_attributes::{BasicRoute, PeerId, PeerRibType, Provenance};
+use roto::types::builtin::NlriStatus;
 use roto::types::collections::{BytesRecord, Record};
 use roto::types::lazyrecord_types::BgpUpdateMessage;
 use roto::types::typevalue::TypeValue;
 use roto::vm;
 use roto::blocks::Scope::{self, FilterMap};
+use routecore::asn::Asn;
 use routecore::bgp::message::SessionConfig;
 use routecore::bgp::message::nlri::{Nlri, BasicNlri};
 use routecore::addr::Prefix;
@@ -47,15 +49,24 @@ fn test_data(
         .unwrap()
         .filter_map(|p| if let Ok(Nlri::Unicast(BasicNlri { prefix, .. })) = p { Some(prefix) } else { None })
         .collect();
-    let msg_id = (RotondaId(0), 0);
 
-    let payload: RawRouteWithDeltas = RawRouteWithDeltas::new_with_message(
-        msg_id,
+    let prov = Provenance {
+        timestamp: chrono::Utc::now(),
+        router_id: 0,
+        connection_id: 0,
+        peer_id: PeerId { addr: "172.0.0.1".parse().unwrap(), asn: Asn::from(65530)},
+        peer_bgp_id: [0,0,0,0].into(),
+        peer_distuingisher: [0; 8],
+        peer_rib_type: PeerRibType::OutPost,
+    };
+
+    let payload = BasicRoute::new(
         prefixes[0],
         update,
         routecore::bgp::types::AfiSafi::Ipv6Unicast,
         None,
-        RouteStatus::InConvergence,
+        NlriStatus::InConvergence,
+        prov
     )?;
 
     // Create the VM

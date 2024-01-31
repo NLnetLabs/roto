@@ -26,10 +26,11 @@ use crate::types::lazyrecord_types::{
 use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 
+use super::path_attributes::{BasicRoute, PeerId, PeerRibType, Provenance};
 use super::{
     HexLiteral, IntegerLiteral,
     PrefixLength,
-    RawRouteWithDeltas, RouteStatus, StringLiteral,
+    NlriStatus, StringLiteral,
 };
 
 #[derive(Debug, Eq, Clone, Hash, PartialEq, Serialize)]
@@ -52,14 +53,17 @@ pub enum BuiltinTypeValue {
     AggregatorInfo(AggregatorInfo),           // scalar
     NextHop(NextHop),                 // scalar
     MultiExitDisc(MultiExitDisc),     // scalar
-    RouteStatus(RouteStatus),         // scalar
+    NlriStatus(NlriStatus),         // scalar
     Community(Community),             // scalar
     Nlri(Nlri<bytes::Bytes>),                       // scalar
+    Provenance(Provenance),           // scalar
     Asn(Asn),                         // scalar
     AsPath(routecore::bgp::aspath::HopPath),        // vector
     Hop(routecore::bgp::aspath::OwnedHop), // read-only scalar
     OriginType(OriginType),           // scalar
-    Route(RawRouteWithDeltas),        // vector
+    Route(BasicRoute),        // vector
+    PeerId(PeerId),                    // scalar
+    PeerRibType(PeerRibType),          // scalar
     // A read-only enum variant for capturing constants
     ConstU8EnumVariant(EnumVariant<u8>),
     ConstU16EnumVariant(EnumVariant<u16>),
@@ -101,6 +105,9 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::Hop(h) => h.into_type(ty),
             BuiltinTypeValue::OriginType(v) => v.into_type(ty),
             BuiltinTypeValue::Route(r) => r.into_type(ty),
+            BuiltinTypeValue::PeerId(r) => r.into_type(ty),
+            BuiltinTypeValue::PeerRibType(p) => p.into_type(ty),
+            BuiltinTypeValue::Provenance(p) => p.into_type(ty),
             BuiltinTypeValue::BgpUpdateMessage(_raw) => Err(CompileError::from(
                 "Cannot convert raw BGP message into any other type.",
             )),
@@ -125,7 +132,7 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::BmpStatisticsReport(_raw) => Err(CompileError::from(
                 "Cannot convert raw BMP Statistics Report into any other type.",
             )),
-            BuiltinTypeValue::RouteStatus(v) => v.into_type(ty),
+            BuiltinTypeValue::NlriStatus(v) => v.into_type(ty),
             BuiltinTypeValue::Bool(v) => v.into_type(ty),
             BuiltinTypeValue::HexLiteral(v) => v.into_type(ty),
             BuiltinTypeValue::Asn(v) => v.into_type(ty),
@@ -228,7 +235,10 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::BmpStatisticsReport(raw) => {
                     write!(f, "{:X?}", *raw)
                 }
-                BuiltinTypeValue::RouteStatus(v) => {
+                BuiltinTypeValue::NlriStatus(v) => {
+                    write!(f, "{}", v)
+                }
+                BuiltinTypeValue::Provenance(v) => {
                     write!(f, "{}", v)
                 }
                 BuiltinTypeValue::Bool(v) => write!(f, "{}", v),
@@ -248,6 +258,8 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::MultiExitDisc(v) => {
                     write!(f, "{}", v)
                 }
+                BuiltinTypeValue::PeerId(p) => write!(f, "{}", p),
+                BuiltinTypeValue::PeerRibType(v) => write!(f, "{}", v)
             }
         } else {
             // This is the pretty printer: "{:#?}"
@@ -280,6 +292,7 @@ impl Display for BuiltinTypeValue {
                     write!(f, "{} (Community)", v)
                 }
                 BuiltinTypeValue::Nlri(v) => { write!(f, "{} (NLRI)", v) }
+                BuiltinTypeValue::Provenance(v) => { write!(f, "{} (Provenance Record)", v) }
                 BuiltinTypeValue::IpAddr(v) => {
                     write!(f, "{} (IP Address)", v)
                 }
@@ -318,7 +331,7 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::BmpStatisticsReport(raw) => {
                     write!(f, "{:X?} (BmpStatisticsReport)", *raw)
                 }
-                BuiltinTypeValue::RouteStatus(v) => {
+                BuiltinTypeValue::NlriStatus(v) => {
                     write!(f, "{} (Route Status)", v)
                 }
                 BuiltinTypeValue::Bool(v) => write!(f, "{} (Boolean)", v),
@@ -338,6 +351,8 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::MultiExitDisc(v) => {
                     write!(f, "{} (Multi Exit Discriminator)", v)
                 }
+                BuiltinTypeValue::PeerId(v) => write!(f,"{} (Peer ID)", v),
+                BuiltinTypeValue::PeerRibType(v) => write!(f, "{} (Peer Rib Type)", v),
             }
         }
     }

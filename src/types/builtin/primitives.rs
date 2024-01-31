@@ -1305,7 +1305,7 @@ impl From<Vec<Community>> for TypeValue {
 
 //------------ Nlri ----------------------------------------------------------
 
-type Nlri = routecore::bgp::message::nlri::Nlri<bytes::Bytes>;
+pub type Nlri = routecore::bgp::message::nlri::Nlri<bytes::Bytes>;
 
 createtoken!(
     Nlri;
@@ -1436,6 +1436,7 @@ impl RotoType for Nlri {
         todo!()
     }
 }
+
 impl ScalarValue for Nlri {}
 
 impl From<Nlri> for TypeValue {
@@ -2087,7 +2088,7 @@ minimalscalartype!(AtomicAggregate);
 minimalscalartype!(AggregatorInfo);
 
 
-//------------ RouteStatus type ---------------------------------------------
+//------------ NlriStatus type -----------------------------------------------
 
 // Status is piece of metadata that writes some (hopefully) relevant state of
 // per-peer BGP session into every route. The goal is to be able to enable
@@ -2106,7 +2107,7 @@ minimalscalartype!(AggregatorInfo);
     PartialOrd,
     Serialize,
 )]
-pub enum RouteStatus {
+pub enum NlriStatus {
     // Between start and EOR on a BGP peer-session
     InConvergence,
     // After EOR for a BGP peer-session, either `Graceful Restart` or EOR
@@ -2125,29 +2126,29 @@ pub enum RouteStatus {
     Empty,
 }
 
-impl std::fmt::Display for RouteStatus {
+impl std::fmt::Display for NlriStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RouteStatus::InConvergence => write!(f, "in convergence"),
-            RouteStatus::UpToDate => write!(f, "up to date"),
-            RouteStatus::Stale => write!(f, "stale"),
-            RouteStatus::StartOfRouteRefresh => {
+            NlriStatus::InConvergence => write!(f, "in convergence"),
+            NlriStatus::UpToDate => write!(f, "up to date"),
+            NlriStatus::Stale => write!(f, "stale"),
+            NlriStatus::StartOfRouteRefresh => {
                 write!(f, "start of route refresh")
             }
-            RouteStatus::Withdrawn => write!(f, "withdrawn"),
-            RouteStatus::Unparsable => write!(f, "UNPARSABLE"),
-            RouteStatus::Empty => write!(f, "empty"),
+            NlriStatus::Withdrawn => write!(f, "withdrawn"),
+            NlriStatus::Unparsable => write!(f, "UNPARSABLE"),
+            NlriStatus::Empty => write!(f, "empty"),
         }
     }
 }
 
-typevaluefromimpls!(RouteStatus);
+typevaluefromimpls!(NlriStatus);
 
-impl TryFrom<TypeValue> for RouteStatus {
+impl TryFrom<TypeValue> for NlriStatus {
     type Error = VmError;
 
     fn try_from(value: TypeValue) -> Result<Self, VmError> {
-        if let TypeValue::Builtin(BuiltinTypeValue::RouteStatus(value)) =
+        if let TypeValue::Builtin(BuiltinTypeValue::NlriStatus(value)) =
             value
         {
             Ok(value)
