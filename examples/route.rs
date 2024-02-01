@@ -1,6 +1,6 @@
 use roto::compiler::Compiler;
 
-use roto::types::builtin::path_attributes::{BasicRoute, PeerId, PeerRibType, Provenance};
+use roto::types::builtin::basic_route::{BasicRoute, PeerId, PeerRibType, Provenance};
 use roto::types::builtin::NlriStatus;
 use roto::types::collections::{BytesRecord, Record};
 use roto::types::lazyrecord_types::BgpUpdateMessage;

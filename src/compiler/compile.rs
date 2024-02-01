@@ -1251,13 +1251,13 @@ fn compile_assignments(
         // `compile_expr` may increase state.mem_pos to temporarily store
         // argument variables. If we already have variables set here, then we
         // can just increase it, but if there are none, we're going to skip
-        // over 0 and 1, since they should host the RxType and TxType
-        // respectively.
-        state.cur_mem_pos = u32::max(2, 1 + state.used_variables.len() as u32);
+        // over 0, 1, 2, and 3 since they should host the RxType, TxType, the
+        // BgpUpdateMessage and the Provenance object respectively.
+        state.cur_mem_pos = u32::max(4, 1 + state.used_variables.len() as u32);
         trace!(
             "VAR {:?} MEM POS {} TEMP POS START {}",
             var.0,
-            var_mem_pos + 2,
+            var_mem_pos + 4,
             state.cur_mem_pos
         );
 

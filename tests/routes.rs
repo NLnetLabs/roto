@@ -3,7 +3,7 @@ use roto::ast::AcceptReject;
 use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self, Filter};
-use roto::types::builtin::path_attributes::{BasicRoute, BasicRouteToken, PeerId, PeerRibType, Provenance};
+use roto::types::builtin::basic_route::{BasicRoute, BasicRouteToken, PeerId, PeerRibType, Provenance};
 use roto::types::builtin::{
     BuiltinTypeValue, NlriStatus,
 };

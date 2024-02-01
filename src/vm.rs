@@ -13,16 +13,14 @@ use crate::{
     first_into_vm_err,
     traits::{RotoType, Token},
     types::{
-        builtin::BuiltinTypeValue,
+        builtin::{basic_route::Provenance, BuiltinTypeValue},
         collections::{
             BytesRecord, ElementTypeValue, EnumBytesRecord, LazyRecord, List,
             Record,
         },
         datasources::{DataSource, DataSourceMethodValue},
         lazyrecord_types::{
-            InitiationMessage, LazyRecordTypeDef, PeerDownNotification,
-            PeerUpNotification, RouteMonitoring, StatisticsReport,
-            TerminationMessage,
+            BgpUpdateMessage, InitiationMessage, LazyRecordTypeDef, PeerDownNotification, PeerUpNotification, RouteMonitoring, StatisticsReport, TerminationMessage
         },
         outputs::OutputStreamMessage,
         typedef::TypeDef,
@@ -292,7 +290,7 @@ impl LinearMemory {
                 {
                     Some(TypeValue::Record(mut r)) => {
                         let field =
-                            r.get_field_by_index_owned(field_index.clone());
+                            r.get_field_by_index_owned(field_index);
                         match field {
                             Some(ElementTypeValue::Nested(nested)) => {
                                 Ok(*nested)
@@ -313,10 +311,10 @@ impl LinearMemory {
                         }
                     }
                     Some(TypeValue::Builtin(BuiltinTypeValue::Route(
-                        route,
+                        mut route,
                     ))) => {
                         Ok(route
-                                .get_field_by_index(field_index)
+                                .take_field_by_index(&field_index)
                                 .unwrap_or(TypeValue::Unknown)
                             )
                     },
@@ -402,17 +400,23 @@ impl LinearMemory {
                     Some(TypeValue::Builtin(BuiltinTypeValue::Route(
                         route,
                     ))) => {
-                        if let Ok(Some(v)) = route
-                            .get_value_ref_for_field(field_index.first()?)
-                        {
-                            Ok(StackValue::Ref(v))
-                        } else if let Ok(v) =
-                            route.get_field_by_index(&field_index)
-                        {
-                            Ok(StackValue::Owned(v))
+                        let bgp_msg = self.get_mem_pos(3);
+                        if let Some(&TypeValue::Builtin(BuiltinTypeValue::BgpUpdateMessage(ref message))) = bgp_msg {
+                            route.overlay_field_as_stack_value(&field_index, message)
                         } else {
                             Ok(StackValue::Owned(TypeValue::Unknown))
                         }
+                        // if let Ok(Some(v)) = route
+                        //     .get_value_ref_for_field(field_index.first()?)
+                        // {
+                        //     Ok(StackValue::Ref(v))
+                        // } else if let Ok(v) =
+                        //     route.take_field_by_index(&field_index)
+                        // {
+                        //     Ok(StackValue::Owned(v))
+                        // } else {
+                        //     Ok(StackValue::Owned(TypeValue::Unknown))
+                        // }
                     }
                     Some(TypeValue::Builtin(
                         BuiltinTypeValue::BgpUpdateMessage(bgp_msg),
@@ -2070,7 +2074,7 @@ impl<
                             TypeValue::Record(mut rec) => {
                                 let call_value = TypeValue::try_from(
                                     rec.get_field_by_index_owned(
-                                        target_field_index.clone(),
+                                        &target_field_index,
                                     )
                                     .ok_or_else(|| VmError::InvalidRecord)?,
                                 )?

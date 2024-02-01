@@ -927,7 +927,7 @@ impl<'a> Record {
     // is empty.
     pub fn get_field_by_index_owned(
         &mut self,
-        field_index: FieldIndex,
+        field_index: &FieldIndex,
     ) -> Option<ElementTypeValue> {
         let mut elm = if let Ok(fi) = field_index.first() {
             self.0.get_mut(fi).map(|f| std::mem::take(&mut f.1))

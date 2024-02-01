@@ -3,7 +3,7 @@
 use routecore::asn::LongSegmentError;
 use routecore::bgp::aspath::HopPath;
 use routecore::bgp::message::nlri::PathId;
-use routecore::bgp::path_attributes::AtomicAggregate;
+use routecore::bgp::path_attributes::{Aggregator, AggregatorInfo, AtomicAggregate};
 use routecore::bgp::types::{AfiSafi, LocalPref, OriginType, MultiExitDisc};
 use routecore::addr::Prefix;
 use routecore::bgp::communities::HumanReadableCommunity as Community;
@@ -15,11 +15,12 @@ use std::ops::Index;
 use std::net::IpAddr;
 
 use crate::types::builtin::{
-    BuiltinTypeValue,
-    StringLiteral
+    BuiltinTypeValue, BytesRecord, StringLiteral
 };
 use crate::types::collections::ElementTypeValue;
+use crate::types::lazyrecord_types::BgpUpdateMessage;
 use crate::types::typevalue::TypeValue;
+use crate::vm::{StackValue, VmError};
 
 // The values that live in a BGP Update message can be either Scalars or
 // Vectors. The two traits, ScalarValue and VectorValue, supply the methods
@@ -63,8 +64,8 @@ pub trait ScalarValue: Clone + Into<TypeValue> {}
 // existing (raw) BGP Update message.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Hash, Default)]
 pub struct AttrChangeSet {
-    #[serde(skip_serializing_if = "ReadOnlyScalarOption::is_none")]
-    pub prefix: ReadOnlyScalarOption<Prefix>, // Read-only prefix typevalue, for referencing it.
+    // #[serde(skip_serializing_if = "ReadOnlyScalarOption::is_none")]
+    // pub prefix: ReadOnlyScalarOption<Prefix>, // Read-only prefix typevalue, for referencing it.
     #[serde(skip_serializing_if = "VectorOption::is_none")]
     pub as_path: VectorOption<HopPath>,
     #[serde(skip_serializing_if = "ScalarOption::is_none")]
@@ -121,13 +122,59 @@ pub struct AttrChangeSet {
     pub rsrvd_development: Todo, // RsrvdDevelopment,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
+pub struct OverlayValue<T>(Option<T>);
+
+impl<T: Into<TypeValue> + Clone> OverlayValue<T> {
+    // pub fn as_ref(&self) -> Option<&TypeValue> {
+    //     self.0.map(|v| v).as_ref()
+    // }
+
+    pub fn is_changed(&self) -> bool {
+        self.0.is_some()
+    }
+
+    pub fn into_opt(self) -> Option<T> {
+        self.0
+    }
+
+    pub fn as_stack_value_or<'a, F: FnOnce() -> Result<StackValue<'a>, VmError>>(&'a self, f: F) -> Result<StackValue, VmError> {
+        if self.is_changed() {
+            self.0.clone().map(|v| StackValue::Owned(v.into())).ok_or(VmError::InvalidFieldAccess)
+        } else {
+            f()
+        }
+    }
+
+    pub fn into_owned_or<F: FnOnce() -> Result<T, VmError>>(self, f: F) -> Result<T, VmError> {
+        if self.is_changed() {
+            self.into_opt().ok_or(VmError::InvalidFieldAccess)
+        } else {
+            f()
+        }
+    }
+}
+
+impl<T> Default for OverlayValue<T> {
+    fn default() -> Self {
+        Self(None)
+    }
+}
+
+impl<T: Into<TypeValue>> From<Option<T>> for OverlayValue<T> {
+    fn from(value: Option<T>) -> Self {
+        Self(value)
+    }
+}
+
+
 //------------ PathAttributeSet ----------------------------------------------
 
 // PathAttributeSet describes the diff between the path attributes from a
 // message from the changes a user made.
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Hash, Default)]
-pub struct PathAttributeSet {
+pub struct PathAttributeSetOld {
     #[serde(skip_serializing_if = "VectorOption::is_none")]
     pub as_path: VectorOption<HopPath>,
     #[serde(skip_serializing_if = "ScalarOption::is_none")]
@@ -154,6 +201,46 @@ pub struct PathAttributeSet {
     // pub extended_communities: VectorOption<Vec<ExtendedCommunity>>,
     #[serde(skip_serializing_if = "VectorOption::is_none")]
     pub as4_path: VectorOption<HopPath>,
+    #[serde(skip)]
+    pub as4_aggregator: Todo,
+    #[serde(skip)]
+    pub connector: Todo, // Connector,
+    #[serde(skip)]
+    pub as_path_limit: Todo,
+    #[serde(skip)]
+    pub pmsi_tunnel: Todo, // PmsiTunnel,
+    #[serde(skip)]
+    pub ipv6_extended_communities: Todo,
+    #[serde(skip)]
+    pub large_communities: Todo,
+    #[serde(skip)]
+    pub bgpsec_as_path: Todo, // BgpsecAsPath,
+    #[serde(skip)]
+    pub attr_set: Todo, // AttrSet,
+    #[serde(skip)]
+    pub rsrvd_development: Todo, // RsrvdDevelopment,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Hash, Default)]
+pub struct PathAttributeSet {
+    pub as_path: OverlayValue<HopPath>,
+    pub origin_type: OverlayValue<OriginType>,
+    pub next_hop: OverlayValue<routecore::bgp::types::NextHop>,
+    pub multi_exit_discriminator: OverlayValue<MultiExitDisc>,
+    pub local_pref: OverlayValue<LocalPref>,
+    pub atomic_aggregate: OverlayValue<bool>,
+    pub aggregator: OverlayValue<AggregatorInfo>,
+    pub communities: OverlayValue<Vec<Community>>,
+    #[serde(skip)]
+    pub originator_id: Todo,
+    #[serde(skip)]
+    pub cluster_list: Todo,
+    #[serde(skip)]
+    pub extended_communities: Todo, 
+    // #[serde(skip_serializing_if = "VectorOption::is_none")]
+    // pub extended_communities: VectorOption<Vec<ExtendedCommunity>>,
+    // #[serde(skip_serializing_if = "VectorOption::is_none")]
+    pub as4_path: OverlayValue<HopPath>,
     #[serde(skip)]
     pub as4_aggregator: Todo,
     #[serde(skip)]
@@ -329,8 +416,28 @@ impl<V: VectorValue + Into<TypeValue> + std::fmt::Debug> VectorOption<V> {
         self.value
     }
 
+    pub fn as_stack_value_or<'a, F: FnOnce() -> Result<StackValue<'a>, VmError>>(&'a self, f: F) -> Result<StackValue, VmError> {
+        if self.is_changed() {
+            self.as_ref().map(StackValue::Ref).ok_or(VmError::InvalidFieldAccess)
+        } else {
+            f()
+        }
+    }
+
+    pub fn into_owned_or<F: FnOnce() -> Result<TypeValue, VmError>>(self, f: F) -> Result<TypeValue, VmError> {
+        if self.is_changed() {
+            self.into_opt().ok_or(VmError::InvalidFieldAccess)
+        } else {
+            f()
+        }
+    }
+
     pub fn as_ref(&self) -> Option<&TypeValue> {
         self.value.as_ref()
+    }
+
+    pub fn is_changed(&self) -> bool {
+        self.changed
     }
 
     // Only generic lists can iterator into a vector. There are specialized

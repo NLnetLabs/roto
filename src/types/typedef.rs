@@ -26,7 +26,7 @@ use crate::{
     traits::RotoType,
 };
 
-use super::builtin::path_attributes::{BasicRoute, PeerId, PeerRibType, Provenance};
+use super::builtin::basic_route::{BasicRoute, MutableBasicRoute, PeerId, PeerRibType, Provenance};
 use super::builtin::{
     HexLiteral, IntegerLiteral, NlriStatus, PrefixLength, 
     StringLiteral, Unknown
@@ -675,7 +675,7 @@ impl TypeDef {
             TypeDef::OriginType => {
                 OriginType::get_props_for_method(self.clone(), method_name)
             }
-            TypeDef::Route => BasicRoute::get_props_for_method(
+            TypeDef::Route => MutableBasicRoute::get_props_for_method(
                 self.clone(),
                 method_name,
             ),
@@ -765,7 +765,7 @@ impl TypeDef {
             TypeDef::IpAddr => {
                 IpAddr::exec_type_method(method_token, args, return_type)
             }
-            TypeDef::Route => BasicRoute::exec_type_method(
+            TypeDef::Route => MutableBasicRoute::exec_type_method(
                 method_token,
                 args,
                 return_type,
@@ -800,9 +800,7 @@ impl TypeDef {
                 TypeValue::Builtin(BuiltinTypeValue::Route(route)) => {
                     for field_index in uniq_field_indexes {
                         if !field_index.is_empty() {
-                            if let Ok(f) = route.get_field_by_index(field_index) {
-                                f.hash(state);
-                            }
+                            route.hash_field(state, &field_index)?;
                         } else {
                             route.hash(state);
                         }

@@ -26,7 +26,7 @@ use crate::types::lazyrecord_types::{
 use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 
-use super::path_attributes::{BasicRoute, PeerId, PeerRibType, Provenance};
+use super::basic_route::{BasicRoute, MutableBasicRoute, PeerId, PeerRibType, Provenance};
 use super::{
     HexLiteral, IntegerLiteral,
     PrefixLength,
@@ -61,7 +61,7 @@ pub enum BuiltinTypeValue {
     AsPath(routecore::bgp::aspath::HopPath),        // vector
     Hop(routecore::bgp::aspath::OwnedHop), // read-only scalar
     OriginType(OriginType),           // scalar
-    Route(BasicRoute),        // vector
+    Route(MutableBasicRoute),        // vector
     PeerId(PeerId),                    // scalar
     PeerRibType(PeerRibType),          // scalar
     // A read-only enum variant for capturing constants

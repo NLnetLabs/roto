@@ -6,7 +6,7 @@ mod route {
         IntegerLiteral, PrefixLength, StringLiteral,
     };
     use crate::ast::{IpAddressLiteral, AsnLiteral};
-    use crate::types::builtin::path_attributes::{BasicRoute, PeerId, PeerRibType, Provenance, RotondaId};
+    use crate::types::builtin::basic_route::{BasicRoute, PeerId, PeerRibType, Provenance, RotondaId};
     use crate::types::builtin::{BuiltinTypeValue, BytesRecord};
     use crate::types::lazyrecord_types::BgpUpdateMessage;
     use crate::types::typedef::TypeDef;

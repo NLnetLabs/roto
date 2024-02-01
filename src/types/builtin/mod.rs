@@ -4,7 +4,7 @@ mod builtin_type_value;
 mod global_methods;
 pub(crate) mod primitives;
 // mod route;
-pub mod path_attributes;
+pub mod basic_route;
 mod tests;
 
 pub use bmp_message::*;

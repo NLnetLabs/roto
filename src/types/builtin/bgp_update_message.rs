@@ -19,8 +19,7 @@ use routecore::{
 use crate::{
     ast::ShortString,
     attr_change_set::{
-        AttrChangeSet, PathAttributeSet, ReadOnlyScalarOption, ScalarOption,
-        Todo, VectorOption,
+        AttrChangeSet, OverlayValue, PathAttributeSet, ReadOnlyScalarOption, ScalarOption, Todo, VectorOption
     },
     bytes_record_impl,
     compiler::compile::CompileError,
@@ -291,154 +290,45 @@ impl BytesRecord<routecore::bgp::message::UpdateMessage<bytes::Bytes>> {
     // Materialize a ChangeSet from the Update message. The materialized
     // Change set is completely self-contained (no references of any kind) &
     // holds all the attributes of the current BGP Update message.
-    pub fn create_changeset(
+    pub fn materialize_path_attributes(
         &self,
-        prefix: Prefix,
-        peer_ip: Option<IpAddr>,
-        peer_asn: Option<Asn>,
-        router_id: Option<Arc<String>>,
         afi_safi: AfiSafi,
-        path_id: Option<PathId>,
-    ) -> Result<AttrChangeSet, VmError> {
-        let next_hop = self
-            .bytes_parser()
-            .mp_next_hop()
-            .ok()
-            .flatten()
-            .or_else(|| {
-                self.bytes_parser().conventional_next_hop().ok().flatten()
-            });
-        Ok(AttrChangeSet {
-            prefix: ReadOnlyScalarOption::<Prefix>::new(prefix.into()),
-            as_path: VectorOption::<HopPath>::from(
-                self.bytes_parser()
-                    .aspath()
-                    .ok()
-                    .flatten()
-                    .map(|p| p.to_hop_path()),
-            ),
-            origin_type: ScalarOption::<OriginType>::from(
-                self.bytes_parser().origin().map_err(VmError::from)?,
-            ),
-            next_hop: ScalarOption::<NextHop>::from(next_hop),
-            multi_exit_discriminator: ScalarOption::from(
-                self.bytes_parser()
-                    .multi_exit_disc()
-                    .map_err(VmError::from)?,
-            ),
-            local_pref: ScalarOption::from(
-                self.bytes_parser().local_pref().map_err(VmError::from)?,
-            ),
-            atomic_aggregate: ScalarOption::from(Some(
-                self.bytes_parser()
-                    .is_atomic_aggregate()
-                    .map_err(VmError::from)?,
-            )),
-            aggregator: ScalarOption::from(
-                self.bytes_parser().aggregator().map_err(VmError::from)?,
-            ),
-            communities: VectorOption::from(
-                self.bytes_parser()
-                    .all_human_readable_communities()
-                    .map_err(VmError::from)?,
-            ),
-            peer_ip: peer_ip.into(),
-            peer_asn: peer_asn.into(),
-            router_id: router_id
-                .map(|v| StringLiteral(String::clone(&v)))
-                .into(),
-            afi_safi: ReadOnlyScalarOption::<AfiSafi>::new(afi_safi.into()),
-            path_id: path_id.into(),
-            originator_id: Todo,
-            cluster_list: Todo,
-            extended_communities: Todo,
-            // value: self
-            //     .ext_communities()
-            //     .map(|c| c.collect::<Vec<ExtendedCommunity>>()),
-            as4_path: VectorOption::from(
-                self.bytes_parser()
-                    .as4path()
-                    .ok()
-                    .flatten()
-                    .map(|p| p.to_hop_path()),
-            ),
-            connector: Todo,
-            as_path_limit: Todo,
-            pmsi_tunnel: Todo,
-            ipv6_extended_communities: Todo,
-            large_communities: Todo,
-            // large_communities: VectorOption::from(self.0
-            //     .large_communities()
-            //     .map(|c| c.collect::<Vec<LargeCommunity>>())),
-            bgpsec_as_path: Todo,
-            attr_set: Todo,
-            rsrvd_development: Todo,
-            as4_aggregator: Todo,
-        })
-    }
-
-    pub fn create_path_attributes_set(
-        &self,
-        // prefix: Prefix,
-        // peer_ip: Option<IpAddr>,
-        // peer_asn: Option<Asn>,
-        // router_id: Option<Arc<String>>,
-        afi_safi: AfiSafi,
-        // path_id: Option<PathId>,
     ) -> Result<PathAttributeSet, VmError> {
         let next_hop = self
             .bytes_parser()
             .find_next_hop(afi_safi)
-            // .mp_next_hop()
             .ok();
-        // .flatten()
-        // .or_else(|| self.0.conventional_next_hop().ok().flatten());
         Ok(PathAttributeSet {
-            as_path: VectorOption::<HopPath>::from(
+            as_path: 
                 self.bytes_parser()
                     .aspath()
                     .ok()
                     .flatten()
-                    .map(|p| p.to_hop_path()),
-            ),
-            origin_type: ScalarOption::<OriginType>::from(
-                self.bytes_parser().origin().map_err(VmError::from)?,
-            ),
-            next_hop: ScalarOption::<NextHop>::from(next_hop),
-            multi_exit_discriminator: ScalarOption::from(
+                    .map(|p| p.to_hop_path()).into(),
+            origin_type: 
+                self.bytes_parser().origin().ok().flatten().into(),
+            next_hop: next_hop.into(),
+            multi_exit_discriminator: 
                 self.bytes_parser()
                     .multi_exit_disc()
-                    .map_err(VmError::from)?,
-            ),
-            local_pref: ScalarOption::from(
-                self.bytes_parser().local_pref().map_err(VmError::from)?,
-            ),
-            atomic_aggregate: ScalarOption::from(Some(
-                self.bytes_parser()
-                    .is_atomic_aggregate()
-                    .map_err(VmError::from)?,
-            )),
-            aggregator: ScalarOption::from(
-                self.bytes_parser().aggregator().map_err(VmError::from)?,
-            ),
-            communities: VectorOption::from(
-                self.bytes_parser()
-                    .all_human_readable_communities()
-                    .map_err(VmError::from)?,
-            ),
+                    .ok().flatten().into(),
+            local_pref: self.bytes_parser().local_pref().ok().flatten().into(),
+            atomic_aggregate: self.bytes_parser()
+                    .is_atomic_aggregate().ok().into(),
+            aggregator: self.bytes_parser().aggregator().ok().flatten().into(),
+            communities: self.bytes_parser()
+                    .all_human_readable_communities().ok().flatten().into(),
             originator_id: Todo,
             cluster_list: Todo,
             extended_communities: Todo,
             // value: self
             //     .ext_communities()
             //     .map(|c| c.collect::<Vec<ExtendedCommunity>>()),
-            as4_path: VectorOption::from(
-                self.bytes_parser()
+            as4_path: self.bytes_parser()
                     .as4path()
                     .ok()
                     .flatten()
-                    .map(|p| p.to_hop_path()),
-            ),
+                    .map(|p| p.to_hop_path()).into(),
             connector: Todo,
             as_path_limit: Todo,
             pmsi_tunnel: Todo,

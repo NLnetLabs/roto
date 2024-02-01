@@ -29,6 +29,7 @@ use std::{net::IpAddr, sync::Arc};
 /// Lamport Timestamp. Used to order messages between units/systems.
 pub type LogicalTime = u64;
 
+
 use crate::types::collections::RecordType;
 use crate::types::lazyrecord_types::BgpUpdateMessage;
 use crate::types::builtin::bgp_update_message::BytesRecord;
@@ -45,9 +46,10 @@ use crate::{
     vm::{StackValue, VmError},
 };
 
-use super::{BuiltinTypeValue, RouteStatus};
+use super::path_attributes::{BasicRoute, BasicRouteToken};
+use super::{BuiltinTypeValue, Nlri, NlriStatus};
 use crate::attr_change_set::{
-    AttrChangeSet, AttrChangeSet2, ScalarOption, ScalarValue, VectorOption, VectorValue
+    AttrChangeSet, PathAttributeSet, ScalarOption, ScalarValue, VectorOption, VectorValue
 };
 
 //============ MaterializedRoute ============================================
@@ -74,7 +76,7 @@ use crate::attr_change_set::{
 #[derive(Debug, Eq, PartialEq, Clone, Hash, Serialize)]
 pub struct MaterializedRoute {
     pub route: Option<AttrChangeSet>,
-    pub status: RouteStatus,
+    pub status: NlriStatus,
     route_id: (RotondaId, LogicalTime),
 }
 
@@ -86,7 +88,7 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
         let status = if let Ok(status) = status.try_into() {
             status
         } else {
-            RouteStatus::Unparsable
+            NlriStatus::Unparsable
         };
 
         if let Ok(route) = raw_route.take_latest_attrs() {
@@ -98,249 +100,29 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
         } else {
             MaterializedRoute {
                 route: None,
-                status: RouteStatus::Unparsable,
+                status: NlriStatus::Unparsable,
                 route_id,
             }
         }
     }
 }
 
-
-#[derive(Debug, Eq, PartialEq, Clone, Hash, Serialize)]
-pub struct MaterializedRoute2 {
-    pub route: Option<AttrChangeSet2>,
-    pub status: RouteStatus,
-    route_id: (RotondaId, LogicalTime),
-}
-
-impl From<MutableRoute> for MaterializedRoute2 {
-    fn from(raw_route: MutableRoute) -> Self {
-        let status = raw_route.context.route_properties.status;
-        let route_id = (RotondaId(0), 0);
-
-        // let status = if let Ok(status) = status.try_into() {
-        //     status
-        // } else {
-        //     RouteStatus::Unparsable
-        // };
-
-        if let Ok(route) = raw_route.take_attrs() {
-            MaterializedRoute2 {
-                route: Some(route),
-                status,
-                route_id,
-            }
-        } else {
-            MaterializedRoute2 {
-                route: None,
-                status: RouteStatus::Unparsable,
-                route_id,
-            }
-        }
-    }
-}
-
-//------------ RouteContext --------------------------------------------------
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct RouteProperties {
-    pub prefix: Prefix,
-    pub path_id: Option<routecore::bgp::message::nlri::PathId>,
-    pub afi_safi: routecore::bgp::types::AfiSafi,
-    pub status: RouteStatus,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Provenance {
-    pub timestamp: chrono::DateTime<Utc>,
-    pub router_id: Arc<String>,
-    pub source_id: SourceId,
-    pub peer_id: PeerId,
-    pub peer_bgp_id: routecore::bgp::path_attributes::BgpIdentifier,
-    pub peer_distuingisher: [u8; 8],
-    pub peer_rib_type: PeerRibType,
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Default)]
-pub enum PeerRibType {
-    AdjRibInPre,
-    AdjRibInPost,
-    AdjRibLoc,
-    AdjRibOutPre,
-    #[default]
-    AdjRibOutPost, // This is the default for BGP messages
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub struct PeerId {
-    pub addr: IpAddr,
-    pub asn: Asn,
-}
-
-impl From<(bool, routecore::bmp::message::RibType)> for PeerRibType {
-    fn from(
-        (is_post_policy, rib_type): (bool, routecore::bmp::message::RibType),
-    ) -> Self {
-        match rib_type {
-            routecore::bmp::message::RibType::AdjRibIn => {
-                if is_post_policy {
-                    PeerRibType::AdjRibInPost
-                } else {
-                    PeerRibType::AdjRibInPre
-                }
-            }
-            routecore::bmp::message::RibType::AdjRibOut => {
-                if is_post_policy {
-                    PeerRibType::AdjRibOutPost
-                } else {
-                    PeerRibType::AdjRibOutPre
-                }
-            }
-            routecore::bmp::message::RibType::Unimplemented(_) => {
-                PeerRibType::AdjRibOutPost
-            }
-        }
-    }
-}
-
-impl PeerId {
-    pub fn new(addr: IpAddr, asn: Asn) -> Self {
-        Self { addr, asn }
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct RouteContext {
-    pub msg: BytesRecord<routecore::bgp::message::UpdateMessage<bytes::Bytes>>,
-    pub provenance: Provenance,
-    pub route_properties: RouteProperties,
-}
-
-
-//------------ SourceId ------------------------------------------------------
-
-/// The source of received updates.
-///
-/// Not all incoming data has to come from a TCP/IP connection. This enum
-/// exists to represent both the TCP/IP type of incoming connection that we
-/// receive data from today as well as other connection types in future, and
-/// can also be used to represent alternate sources of incoming data such as
-/// replay from file or test data created on the fly.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum SourceId {
-    SocketAddr(SocketAddr),
-    Named(Arc<String>),
-}
-
-impl Default for SourceId {
-    fn default() -> Self {
-        "unknown".into()
-    }
-}
-
-impl SourceId {
-    pub fn generated() -> Self {
-        Self::from("generated")
-    }
-
-    pub fn socket_addr(&self) -> Option<&SocketAddr> {
-        match self {
-            SourceId::SocketAddr(addr) => Some(addr),
-            SourceId::Named(_) => None,
-        }
-    }
-
-    pub fn ip(&self) -> Option<IpAddr> {
-        match self {
-            SourceId::SocketAddr(addr) => Some(addr.ip()),
-            SourceId::Named(_) => None,
-        }
-    }
-
-    pub fn name(&self) -> Option<&str> {
-        match self {
-            SourceId::SocketAddr(_) => None,
-            SourceId::Named(name) => Some(name),
-        }
-    }
-}
-
-impl std::fmt::Display for SourceId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SourceId::SocketAddr(addr) => addr.fmt(f),
-            SourceId::Named(name) => name.fmt(f),
-        }
-    }
-}
-
-impl From<SocketAddr> for SourceId {
-    fn from(addr: SocketAddr) -> Self {
-        SourceId::SocketAddr(addr)
-    }
-}
-
-impl From<String> for SourceId {
-    fn from(name: String) -> Self {
-        SourceId::Named(name.into())
-    }
-}
-
-impl From<&str> for SourceId {
-    fn from(name: &str) -> Self {
-        SourceId::Named(name.to_string().into())
-    }
-}
-
-impl From<RouteContext> for RawRouteWithDeltas {
-    fn from(value: RouteContext) -> Self {
-        let delta_id = (RotondaId(0), 0); // TODO
-        RawRouteWithDeltas::new_with_message_ref(
-            delta_id,
-            value.route_properties.prefix,
-            value.msg,
-            value.route_properties.afi_safi,
-            value.route_properties.path_id,
-            value.route_properties.status,
-        )
-        .with_peer_ip(value.provenance.peer_id.addr)
-        .with_peer_asn(value.provenance.peer_id.asn)
-        .with_router_id(value.provenance.router_id)
-    }
-}
-
-
-//------------ MutableRoute -------------------------------------------------
-
-#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
-#[serde(into = "MaterializedRoute2")]
-pub struct MutableRoute {
-    #[serde(skip)]
-    context: RouteContext,
-    changes: Option<AttrChangeSet2>
-}
-
-impl MutableRoute {
-    // Get either the moved last delta (it is removed from the Delta list), or
-    // get a freshly rolled ChangeSet from the raw message, if there are no
-    // deltas.
-    pub fn take_attrs(mut self) -> Result<AttrChangeSet2, VmError> {
-        match &mut self.changes {
-            None => self.context.msg.create_changeset2(
-                // self.context.route_properties.prefix,
-                // Some(self.context.provenance.peer_id.addr),
-                // Some(self.context.provenance.peer_id.asn),
-                // Some(self.context.provenance.router_id),
-                self.context.route_properties.afi_safi,
-                // self.context.route_properties.path_id,
-            ),
-            Some(attr_list) => {
-                Ok(std::mem::take(attr_list))
-            }
-        }
-    }
-}
-
+// impl From<NlriContext> for RawRouteWithDeltas {
+//     fn from(value: NlriContext) -> Self {
+//         let delta_id = (RotondaId(0), 0); // TODO
+//         RawRouteWithDeltas::new_with_message_ref(
+//             delta_id,
+//             value.nlri.prefix,
+//             value.msg,
+//             value.nlri.afi_safi,
+//             value.nlri.path_id,
+//             value.nlri.status,
+//         )
+//         .with_peer_ip(value.provenance.peer_id.addr)
+//         .with_peer_asn(value.provenance.peer_id.asn)
+//         .with_router_id(value.provenance.router_id)
+//     }
+// }
 
 //------------ RawRouteWithDelta ============================================
 
@@ -390,7 +172,7 @@ impl RawRouteWithDeltas {
         raw_message: BytesRecord<BgpUpdateMessage>,
         afi_safi: routecore::bgp::types::AfiSafi,
         path_id: Option<routecore::bgp::message::nlri::PathId>,
-        route_status: RouteStatus,
+        route_status: NlriStatus,
     ) -> Result<Self, VmError> {
         let mut attribute_deltas = AttributeDeltaList::new();
         let (peer_ip, peer_asn, router_id) = (None, None, None);
@@ -430,7 +212,7 @@ impl RawRouteWithDeltas {
         raw_message: BytesRecord<BgpUpdateMessage>,
         afi_safi: routecore::bgp::types::AfiSafi,
         path_id: Option<routecore::bgp::message::nlri::PathId>,
-        route_status: RouteStatus,
+        route_status: NlriStatus,
     ) -> Self {
         Self {
             prefix,
@@ -505,7 +287,7 @@ impl RawRouteWithDeltas {
     pub fn update_status(
         &mut self,
         delta_id: (RotondaId, LogicalTime),
-        new_status: RouteStatus,
+        new_status: NlriStatus,
     ) {
         let delta = RouteStatusDelta::new(delta_id, new_status);
         self.status_deltas.0.push(delta);
@@ -631,52 +413,52 @@ impl RawRouteWithDeltas {
         match field_name.ident.as_str() {
             "prefix" => Ok((
                 TypeDef::Prefix,
-                Token::FieldAccess(vec![RouteToken::Prefix.into()]),
+                Token::FieldAccess(vec![BasicRouteToken::Prefix.into()]),
             )),
             "as-path" => Ok((
                 TypeDef::AsPath,
-                Token::FieldAccess(vec![RouteToken::AsPath.into()]),
+                Token::FieldAccess(vec![BasicRouteToken::AsPath.into()]),
             )),
             "origin-type" => Ok((
                 TypeDef::OriginType,
-                Token::FieldAccess(vec![RouteToken::OriginType.into()]),
+                Token::FieldAccess(vec![BasicRouteToken::OriginType.into()]),
             )),
             "next-hop" => Ok((
                 TypeDef::NextHop,
-                Token::FieldAccess(vec![RouteToken::NextHop.into()]),
+                Token::FieldAccess(vec![BasicRouteToken::NextHop.into()]),
             )),
             "multi-exit-disc" => Ok((
                 TypeDef::MultiExitDisc,
-                Token::FieldAccess(vec![RouteToken::MultiExitDisc.into()]),
+                Token::FieldAccess(vec![BasicRouteToken::MultiExitDisc.into()]),
             )),
             "local-pref" => Ok((
                 TypeDef::LocalPref,
-                Token::FieldAccess(vec![RouteToken::LocalPref.into()]),
+                Token::FieldAccess(vec![BasicRouteToken::LocalPref.into()]),
             )),
             "atomic-aggregate" => Ok((
                 TypeDef::Bool,
-                Token::FieldAccess(vec![RouteToken::AtomicAggregate.into()]),
+                Token::FieldAccess(vec![BasicRouteToken::AtomicAggregate.into()]),
             )),
             "aggregator" => Ok((
                 TypeDef::AggregatorInfo,
-                Token::FieldAccess(vec![RouteToken::Aggregator.into()]),
+                Token::FieldAccess(vec![BasicRouteToken::Aggregator.into()]),
             )),
             "communities" => Ok((
                 TypeDef::List(Box::new(TypeDef::Community)),
-                Token::FieldAccess(vec![RouteToken::Communities.into()]),
+                Token::FieldAccess(vec![BasicRouteToken::Communities.into()]),
             )),
             "status" => Ok((
-                TypeDef::RouteStatus,
-                Token::FieldAccess(vec![RouteToken::Status.into()]),
+                TypeDef::NlriStatus,
+                Token::FieldAccess(vec![BasicRouteToken::Status.into()]),
             )),
-            "peer_ip" => Ok((
-                TypeDef::IpAddr,
-                Token::FieldAccess(vec![RouteToken::PeerIp.into()]),
-            )),
-            "peer_asn" => Ok((
-                TypeDef::Asn,
-                Token::FieldAccess(vec![RouteToken::PeerAsn.into()]),
-            )),
+            // "peer_ip" => Ok((
+            //     TypeDef::IpAddr,
+            //     Token::FieldAccess(vec![RouteToken::PeerIp.into()]),
+            // )),
+            // "peer_asn" => Ok((
+            //     TypeDef::Asn,
+            //     Token::FieldAccess(vec![RouteToken::PeerAsn.into()]),
+            // )),
             _ => Err(format!(
                 "Unknown method '{}' for type Route",
                 field_name.ident
@@ -702,22 +484,23 @@ impl RawRouteWithDeltas {
         };
 
         match field_token.try_into()? {
-            RouteToken::Prefix => Ok(current_set.prefix.as_ref()),
-            RouteToken::AsPath => Ok(current_set.as_path.as_ref()),
-            RouteToken::OriginType => Ok(current_set.origin_type.as_ref()),
-            RouteToken::NextHop => Ok(current_set.next_hop.as_ref()),
-            RouteToken::MultiExitDisc => {
+            BasicRouteToken::Prefix => Ok(current_set.prefix.as_ref()),
+            BasicRouteToken::AsPath => Ok(current_set.as_path.as_ref()),
+            BasicRouteToken::OriginType => Ok(current_set.origin_type.as_ref()),
+            BasicRouteToken::NextHop => Ok(current_set.next_hop.as_ref()),
+            BasicRouteToken::MultiExitDisc => {
                 Ok(current_set.multi_exit_discriminator.as_ref())
             }
-            RouteToken::LocalPref => Ok(current_set.local_pref.as_ref()),
-            RouteToken::AtomicAggregate => {
+            BasicRouteToken::LocalPref => Ok(current_set.local_pref.as_ref()),
+            BasicRouteToken::AtomicAggregate => {
                 Ok(current_set.atomic_aggregate.as_ref())
             }
-            RouteToken::Aggregator => Ok(current_set.aggregator.as_ref()),
-            RouteToken::Communities => Ok(current_set.communities.as_ref()),
-            RouteToken::Status => Ok(self.status_deltas.current_as_ref()),
-            RouteToken::PeerIp => Ok(current_set.peer_ip.as_ref()),
-            RouteToken::PeerAsn => Ok(current_set.peer_asn.as_ref()),
+            BasicRouteToken::Aggregator => Ok(current_set.aggregator.as_ref()),
+            BasicRouteToken::Communities => Ok(current_set.communities.as_ref()),
+            BasicRouteToken::Status => Ok(self.status_deltas.current_as_ref()),
+            BasicRouteToken::Provenance => todo!(),
+            // RouteToken::PeerIp => Ok(current_set.peer_ip.as_ref()),
+            // RouteToken::PeerAsn => Ok(current_set.peer_asn.as_ref()),
         }
     }
 
@@ -726,7 +509,7 @@ impl RawRouteWithDeltas {
         field_token: usize,
     ) -> Result<TypeValue, VmError> {
         match field_token.try_into()? {
-            RouteToken::AsPath => self
+            BasicRouteToken::AsPath => self
                 .raw_message
                 .bytes_parser()
                 .aspath()
@@ -735,7 +518,7 @@ impl RawRouteWithDeltas {
                 .map(|p| p.to_hop_path())
                 .map(TypeValue::from)
                 .ok_or(VmError::InvalidFieldAccess),
-            RouteToken::OriginType => self
+            BasicRouteToken::OriginType => self
                 .raw_message
                 .bytes_parser()
                 .origin()
@@ -743,13 +526,13 @@ impl RawRouteWithDeltas {
                 .flatten()
                 .map(TypeValue::from)
                 .ok_or(VmError::InvalidFieldAccess),
-            RouteToken::NextHop => self
+            BasicRouteToken::NextHop => self
                 .raw_message
                 .bytes_parser()
                 .find_next_hop(self.afi_safi)
                 .map_err(|_| VmError::InvalidFieldAccess)
                 .map(TypeValue::from),
-            RouteToken::MultiExitDisc => self
+            BasicRouteToken::MultiExitDisc => self
                 .raw_message
                 .bytes_parser()
                 .multi_exit_disc()
@@ -757,7 +540,7 @@ impl RawRouteWithDeltas {
                 .flatten()
                 .map(TypeValue::from)
                 .ok_or(VmError::InvalidFieldAccess),
-            RouteToken::LocalPref => self
+            BasicRouteToken::LocalPref => self
                 .raw_message
                 .bytes_parser()
                 .local_pref()
@@ -765,11 +548,11 @@ impl RawRouteWithDeltas {
                 .flatten()
                 .map(TypeValue::from)
                 .ok_or(VmError::InvalidFieldAccess),
-            RouteToken::AtomicAggregate => Some(TypeValue::from(
+            BasicRouteToken::AtomicAggregate => Some(TypeValue::from(
                 self.raw_message.bytes_parser().is_atomic_aggregate().unwrap_or(false),
             ))
             .ok_or(VmError::InvalidFieldAccess),
-            RouteToken::Aggregator => self
+            BasicRouteToken::Aggregator => self
                 .raw_message
                 .bytes_parser()
                 .aggregator()
@@ -777,7 +560,7 @@ impl RawRouteWithDeltas {
                 .flatten()
                 .map(TypeValue::from)
                 .ok_or(VmError::InvalidFieldAccess),
-            RouteToken::Communities => self
+            BasicRouteToken::Communities => self
                 .raw_message
                 .bytes_parser()
                 .all_human_readable_communities()
@@ -785,16 +568,17 @@ impl RawRouteWithDeltas {
                 .flatten()
                 .map(TypeValue::from)
                 .ok_or(VmError::InvalidFieldAccess),
-            RouteToken::Prefix => Ok(self.prefix.into()),
-            RouteToken::Status => Ok(self.status_deltas.current()),
-            RouteToken::PeerIp => self
-                .peer_ip
-                .map(TypeValue::from)
-                .ok_or(VmError::InvalidFieldAccess),
-            RouteToken::PeerAsn => self
-                .peer_asn
-                .map(TypeValue::from)
-                .ok_or(VmError::InvalidFieldAccess),
+            BasicRouteToken::Prefix => Ok(self.prefix.into()),
+            BasicRouteToken::Status => Ok(self.status_deltas.current()),
+            BasicRouteToken::Provenance => todo!(),
+            // RouteToken::PeerIp => self
+            //     .peer_ip
+            //     .map(TypeValue::from)
+            //     .ok_or(VmError::InvalidFieldAccess),
+            // RouteToken::PeerAsn => self
+            //     .peer_asn
+            //     .map(TypeValue::from)
+            //     .ok_or(VmError::InvalidFieldAccess),
             // _ => None,
             // originator_id: ChangedOption {
             //     value: None,
@@ -845,8 +629,8 @@ impl RawRouteWithDeltas {
         }
     }
 
-    pub fn status(&self) -> RouteStatus {
-        if let TypeValue::Builtin(BuiltinTypeValue::RouteStatus(
+    pub fn status(&self) -> NlriStatus {
+        if let TypeValue::Builtin(BuiltinTypeValue::NlriStatus(
             route_status,
         )) = self.status_deltas.current()
         {
@@ -855,7 +639,7 @@ impl RawRouteWithDeltas {
             debug!("Invalid route status in {:?}. Marking as Unparsable and continuing", self.status_deltas);
             // If somehow can't parse a part one or more Path Attributes in
             // the PDU, we mark the state and move on.
-            RouteStatus::Unparsable
+            NlriStatus::Unparsable
         }
     }
 }
@@ -943,13 +727,13 @@ impl AttributeDelta {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize)]
 struct RouteStatusDelta {
     delta_id: (RotondaId, LogicalTime),
-    status: RouteStatus,
+    status: NlriStatus,
 }
 
 impl RouteStatusDelta {
     pub fn new(
         delta_id: (RotondaId, LogicalTime),
-        status: RouteStatus,
+        status: NlriStatus,
     ) -> Self {
         Self { delta_id, status }
     }
@@ -972,7 +756,7 @@ impl RouteStatusDeltaList {
             // This is an actual error, it should NOT happen and would be a
             // logical internal error in Roto.
             debug!("Ignoring empty Route Status Delta List: {:?}. Marking status and continuing", self.0);
-            RouteStatus::Unparsable.into()
+            NlriStatus::Unparsable.into()
         }
     }
 
@@ -1149,7 +933,7 @@ impl RouteStatusDeltaList {
 //         &'a self,
 //         method_token: usize,
 
-//         _args: &'a [StackValue],
+//         _args: &'a [StackValue<T>],
 //         _res_type: TypeDef,
 //     ) -> Result<TypeValue, VmError> {
 //         panic!("STOP BEFORE EXEC THIS THING!");
@@ -1205,7 +989,7 @@ impl RouteStatusDeltaList {
 
 //     fn exec_type_method<'a>(
 //         _method_token: usize,
-//         _args: &[StackValue],
+//         _args: &[StackValue<T>],
 //         _res_type: TypeDef,
 //     ) -> Result<TypeValue, VmError> {
 //         Err(VmError::InvalidMethodCall)
@@ -1272,296 +1056,23 @@ impl RouteStatusDeltaList {
 //     pub attr_set: ChangedOption<Todo>,       // AttrSet,
 //     pub rsrvd_development: ChangedOption<Todo>
 
-impl RotoType for RawRouteWithDeltas {
-    fn get_props_for_method(
-        _ty: TypeDef,
-        method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        match method_name.ident.as_str() {
-            "prefix" => Ok(MethodProps::new(
-                TypeDef::Prefix,
-                RouteToken::Prefix.into(),
-                vec![],
-            )),
-            "as-path" => Ok(MethodProps::new(
-                TypeDef::AsPath,
-                RouteToken::AsPath.into(),
-                vec![],
-            )),
-            "origin-type" => Ok(MethodProps::new(
-                TypeDef::OriginType,
-                RouteToken::OriginType.into(),
-                vec![],
-            )),
-            "next-hop" => Ok(MethodProps::new(
-                TypeDef::NextHop,
-                RouteToken::NextHop.into(),
-                vec![],
-            )),
-            "multi-exit-disc" => Ok(MethodProps::new(
-                TypeDef::MultiExitDisc,
-                RouteToken::MultiExitDisc.into(),
-                vec![],
-            )),
-            "local-pref" => Ok(MethodProps::new(
-                TypeDef::LocalPref,
-                RouteToken::LocalPref.into(),
-                vec![],
-            )),
-            "atomic-aggregate" => Ok(MethodProps::new(
-                TypeDef::Bool,
-                RouteToken::AtomicAggregate.into(),
-                vec![],
-            )),
-            "aggregator" => Ok(MethodProps::new(
-                TypeDef::AggregatorInfo,
-                RouteToken::Aggregator.into(),
-                vec![],
-            )),
-            "communities" => Ok(MethodProps::new(
-                TypeDef::List(Box::new(TypeDef::Community)),
-                RouteToken::Communities.into(),
-                vec![],
-            )),
-            "status" => Ok(MethodProps::new(
-                TypeDef::RouteStatus,
-                RouteToken::Status.into(),
-                vec![],
-            )),
-            _ => Err(format!(
-                "Unknown method '{}' for type Route",
-                method_name.ident
-            )
-            .into()),
-        }
-    }
+// impl From<BasicRoute> for TypeValue {
+//     fn from(val: BasicRoute) -> Self {
+//         TypeValue::Builtin(BuiltinTypeValue::Route(val))
+//     }
+// }
 
-    fn into_type(
-        self,
-        type_def: &TypeDef,
-    ) -> Result<TypeValue, CompileError> {
-        match type_def {
-            TypeDef::Route => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::Route(self)))
-            }
-            _ => Err(format!(
-                "Cannot convert type Route to type {:?}",
-                type_def
-            )
-            .into()),
-        }
-    }
+// impl std::fmt::Display for RawRouteWithDeltas {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         writeln!(f, "prefix : {}", self.prefix)?;
+//         writeln!(f, "raw    : {:#?}", self.raw_message)?;
+//         writeln!(f, "deltas : {:#?}", self.attribute_deltas)?;
+//         writeln!(f, "status : {:?}", self.status_deltas.current())
+//     }
+// }
 
-    fn exec_value_method<'a>(
-        &'a self,
-        _method: usize,
 
-        _args: &'a [StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        Err(VmError::InvalidMethodCall)
-    }
 
-    fn exec_consume_value_method(
-        self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        Err(VmError::InvalidMethodCall)
-    }
-
-    fn exec_type_method<'a>(
-        _method_token: usize,
-        _args: &[StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        Err(VmError::InvalidMethodCall)
-    }
-}
-
-impl From<RawRouteWithDeltas> for TypeValue {
-    fn from(val: RawRouteWithDeltas) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Route(val))
-    }
-}
-
-impl std::fmt::Display for RawRouteWithDeltas {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "prefix : {}", self.prefix)?;
-        writeln!(f, "raw    : {:#?}", self.raw_message)?;
-        writeln!(f, "deltas : {:#?}", self.attribute_deltas)?;
-        writeln!(f, "status : {:?}", self.status_deltas.current())
-    }
-}
-
-#[derive(Copy, Clone, Debug, Deserialize, PartialEq, Eq)]
-pub enum RouteToken {
-    Prefix = 0,
-    AsPath = 1,
-    OriginType = 2,
-    NextHop = 3,
-    MultiExitDisc = 4,
-    LocalPref = 5,
-    AtomicAggregate = 6,
-    Aggregator = 7,
-    Communities = 8,
-    Status = 9,
-    PeerIp = 10,
-    PeerAsn = 11,
-}
-
-impl TryFrom<usize> for RouteToken {
-    type Error = VmError;
-
-    fn try_from(value: usize) -> Result<Self, VmError> {
-        match value {
-            0 => Ok(RouteToken::Prefix),
-            1 => Ok(RouteToken::AsPath),
-            2 => Ok(RouteToken::OriginType),
-            3 => Ok(RouteToken::NextHop),
-            4 => Ok(RouteToken::MultiExitDisc),
-            5 => Ok(RouteToken::LocalPref),
-            6 => Ok(RouteToken::AtomicAggregate),
-            7 => Ok(RouteToken::Aggregator),
-            8 => Ok(RouteToken::Communities),
-            9 => Ok(RouteToken::Status),
-            10 => Ok(RouteToken::PeerIp),
-            11 => Ok(RouteToken::PeerAsn),
-            _ => {
-                debug!("Unknown RouteToken value: {}", value);
-                Err(VmError::InvalidMethodCall)
-            }
-        }
-    }
-}
-
-impl From<RouteToken> for usize {
-    fn from(val: RouteToken) -> Self {
-        val as usize
-    }
-}
-
-impl From<RouteToken> for u8 {
-    fn from(val: RouteToken) -> Self {
-        val as u8
-    }
-}
-
-// We are abusing the method_token to convey the requested RouteStatus
-// from the invoked method. So instead of creating all 'is_*' methods
-// separately, we can just compare the method_token with self.
-impl RotoType for RouteStatus {
-    fn get_props_for_method(
-        _ty: TypeDef,
-        method_name: &crate::ast::Identifier,
-    ) -> Result<MethodProps, CompileError>
-    where
-        Self: std::marker::Sized,
-    {
-        match method_name.ident.as_str() {
-            "is_in_convergence" => Ok(MethodProps::new(
-                TypeDef::Bool,
-                usize::from(RouteStatus::InConvergence),
-                vec![],
-            )),
-            "is_up_to_date" => Ok(MethodProps::new(
-                TypeDef::Bool,
-                usize::from(RouteStatus::UpToDate),
-                vec![],
-            )),
-            "is_stale" => Ok(MethodProps::new(
-                TypeDef::Bool,
-                usize::from(RouteStatus::Stale),
-                vec![],
-            )),
-            "is_start_of_route_refresh" => Ok(MethodProps::new(
-                TypeDef::Bool,
-                usize::from(RouteStatus::StartOfRouteRefresh),
-                vec![],
-            )),
-            "is_withdrawn" => Ok(MethodProps::new(
-                TypeDef::Bool,
-                usize::from(RouteStatus::Withdrawn),
-                vec![],
-            )),
-            "is_empty" => Ok(MethodProps::new(
-                TypeDef::Bool,
-                usize::from(RouteStatus::Empty),
-                vec![],
-            )),
-            _ => Err(format!(
-                "Unknown method '{}' for type RouteStatus",
-                method_name.ident
-            )
-            .into()),
-        }
-    }
-
-    fn into_type(
-        self,
-        type_def: &TypeDef,
-    ) -> Result<TypeValue, CompileError> {
-        match type_def {
-            TypeDef::RouteStatus => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::RouteStatus(self)))
-            }
-            _ => Err(format!(
-                "Cannot convert type RouteStatus to type {:?}",
-                type_def
-            )
-            .into()),
-        }
-    }
-
-    // The abuse happens here.
-    fn exec_value_method<'a>(
-        &'a self,
-        method_token: usize,
-        _args: &'a [StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        Ok(TypeValue::Builtin(BuiltinTypeValue::Bool(
-            method_token == usize::from(*self),
-        )))
-    }
-
-    fn exec_consume_value_method(
-        self,
-        _method_token: usize,
-        _args: Vec<TypeValue>,
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        Err(VmError::InvalidMethodCall)
-    }
-
-    fn exec_type_method<'a>(
-        _method_token: usize,
-        _args: &[StackValue],
-        _res_type: TypeDef,
-    ) -> Result<TypeValue, VmError> {
-        Err(VmError::InvalidMethodCall)
-    }
-}
-
-impl From<RouteStatus> for usize {
-    fn from(val: RouteStatus) -> Self {
-        val as usize
-    }
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize)]
-pub struct RotondaId(pub usize);
-
-impl std::fmt::Display for RotondaId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let w = write!(f, "{}", self.0);
-        w
-    }
-}
 
 //------------ Modification & Creation of new Updates -----------------------
 

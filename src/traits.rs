@@ -194,7 +194,7 @@ pub trait RotoRib: Send + Sync {
         res_type: TypeDef,
     ) -> Result<TypeValue, VmError>;
 
-    fn exec_ref_value_method(
+    fn exec_ref_value_method<'a>(
         &self,
         method_token: usize,
         args: &[StackValue],

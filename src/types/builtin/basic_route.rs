@@ -1,7 +1,10 @@
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::net::IpAddr;
 use std::net::SocketAddr;
 
 use chrono::Utc;
+use routecore::bgp::path_attributes::PathAttributes;
 use serde::Deserialize;
 use std::fmt::{Display, Formatter};
 
@@ -29,10 +32,7 @@ use crate::{
 
 use super::super::typevalue::TypeValue;
 use super::builtin_type_value::BuiltinTypeValue;
-use super::{
-    super::typedef::TypeDef, BytesRecord, Nlri,
-    NlriStatus
-};
+use super::{super::typedef::TypeDef, BytesRecord, Nlri, NlriStatus};
 
 use routecore::addr::Prefix;
 use routecore::asn::Asn;
@@ -40,7 +40,6 @@ use routecore::bgp::message::nlri::PathId;
 use routecore::bgp::types::AfiSafi;
 
 pub type LogicalTime = u64;
-
 
 //------------ MutableNlri ---------------------------------------------------
 
@@ -64,7 +63,7 @@ impl MutableNlri {
         match &mut self.changes {
             None => self
                 .message
-                .create_path_attributes_set(self.nlri.afi_safi()),
+                .materialize_path_attributes(self.nlri.afi_safi()),
             Some(attr_list) => Ok(std::mem::take(attr_list)),
         }
     }
@@ -98,6 +97,289 @@ impl From<MutableNlri> for MaterializedRoute2 {
     }
 }
 
+//------------ MutableBasicRoute ---------------------------------------------
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
+pub struct MutableBasicRoute {
+    path_attributes: PathAttributeSet, 
+    prefix: Prefix,
+    path_id: Option<PathId>,
+    afi_safi: AfiSafi,
+    status: NlriStatus,
+}
+
+impl MutableBasicRoute {
+    pub fn materialize(
+        self,
+        status: NlriStatus,
+        route_id: (RotondaId, u64),
+    ) -> MaterializedRoute2 {
+        MaterializedRoute2 {
+            route: Some(self.path_attributes),
+            route_id,
+            status: self.status
+        }
+    }
+
+    // pub(crate) fn get_value_ref_for_field(
+    //     &self,
+    //     field_token: usize,
+    // ) -> Result<Option<&TypeValue>, VmError> {
+    //     // let current_set = if let Some(atrd) = &self.changes {
+    //     //     atrd
+    //     // } else {
+    //     //     return Err(VmError::InvalidRecord);
+    //     // };
+
+    //     match field_token.try_into()? {
+    //         BasicRouteToken::AsPath => Ok(self.path_attributes.as_path.map(TypeValue::from).as_ref()),
+    //         BasicRouteToken::OriginType => {
+    //             Ok(self.path_attributes.origin_type.as_ref())
+    //         }
+    //         BasicRouteToken::NextHop => Ok(self.path_attributes.next_hop.as_ref()),
+    //         BasicRouteToken::MultiExitDisc => {
+    //             Ok(self.path_attributes.multi_exit_discriminator.as_ref())
+    //         }
+    //         BasicRouteToken::LocalPref => Ok(self.path_attributes.local_pref.as_ref()),
+    //         BasicRouteToken::AtomicAggregate => {
+    //             Ok(self.path_attributes.atomic_aggregate.as_ref())
+    //         }
+    //         BasicRouteToken::Aggregator => {
+    //             Ok(self.path_attributes.aggregator.as_ref())
+    //         }
+    //         BasicRouteToken::Communities => {
+    //             Ok(self.path_attributes.communities.as_ref())
+    //         }
+    //         BasicRouteToken::Prefix => Err(VmError::InvalidCommandArg),
+    //         BasicRouteToken::Status => Err(VmError::InvalidCommandArg),
+    //         BasicRouteToken::Provenance => Err(VmError::InvalidCommandArg),
+    //     }
+    // }
+
+    pub fn take_field_by_index(&mut self, field_index: &FieldIndex) -> Result<TypeValue, VmError> {
+        match field_index.first()?.try_into()? {
+            BasicRouteToken::AsPath => std::mem::take(&mut self.path_attributes.as_path).into_opt().map(TypeValue::from).ok_or(VmError::InvalidFieldAccess),
+            BasicRouteToken::OriginType => {
+                std::mem::take(&mut self.path_attributes.origin_type).into_opt().map(TypeValue::from).ok_or(VmError::InvalidFieldAccess)
+            }
+            BasicRouteToken::NextHop => std::mem::take(&mut self.path_attributes.next_hop).into_opt().map(TypeValue::from).ok_or(VmError::InvalidFieldAccess),
+            BasicRouteToken::MultiExitDisc => {
+                std::mem::take(&mut self.path_attributes.multi_exit_discriminator).into_opt().map(TypeValue::from).ok_or(VmError::InvalidFieldAccess)
+            }
+            BasicRouteToken::LocalPref => std::mem::take(&mut self.path_attributes.local_pref).into_opt().map(TypeValue::from).ok_or(VmError::InvalidFieldAccess),
+            BasicRouteToken::AtomicAggregate => {
+                std::mem::take(&mut self.path_attributes.atomic_aggregate).into_opt().map(TypeValue::from).ok_or(VmError::InvalidFieldAccess)
+            }
+            BasicRouteToken::Aggregator => {
+                std::mem::take(&mut self.path_attributes.aggregator).into_opt().map(TypeValue::from).ok_or(VmError::InvalidFieldAccess)
+            }
+            BasicRouteToken::Communities => {
+                std::mem::take(&mut self.path_attributes.communities).into_opt().map(TypeValue::from).ok_or(VmError::InvalidFieldAccess)
+            }
+            BasicRouteToken::Prefix => Err(VmError::InvalidCommandArg),
+            BasicRouteToken::Status => Err(VmError::InvalidCommandArg),
+            BasicRouteToken::Provenance => Err(VmError::InvalidCommandArg),
+        }
+    }
+
+    pub fn overlay_field_as_stack_value(
+        &self,
+        field_index: &FieldIndex,
+        message: &BytesRecord<BgpUpdateMessage>,
+    ) -> Result<StackValue, VmError> {
+        match field_index.first()?.try_into()? {
+            BasicRouteToken::AsPath => {
+                self.path_attributes.as_path.as_stack_value_or(|| {
+                    message
+                        .bytes_parser()
+                        .aspath()
+                        .ok()
+                        .flatten()
+                        .map(|tv| {
+                            StackValue::Owned(TypeValue::from(
+                                tv.to_hop_path(),
+                            ))
+                        })
+                        .ok_or(VmError::InvalidFieldAccess)
+                })
+            }
+            BasicRouteToken::OriginType => {
+                self.path_attributes.as_path.as_stack_value_or(|| {
+                    message
+                        .bytes_parser()
+                        .origin()
+                        .ok()
+                        .flatten()
+                        .map(|tv| StackValue::Owned(TypeValue::from(tv)))
+                        .ok_or(VmError::InvalidFieldAccess)
+                })
+            }
+            BasicRouteToken::NextHop => {
+                self.path_attributes.as_path.as_stack_value_or(|| {
+                    message
+                        .bytes_parser()
+                        .find_next_hop(self.afi_safi)
+                        .map_err(|_| VmError::InvalidFieldAccess)
+                        .map(|tv| StackValue::Owned(TypeValue::from(tv)))
+                })
+            }
+            BasicRouteToken::MultiExitDisc => {
+                self.path_attributes.as_path.as_stack_value_or(|| {
+                    message
+                        .bytes_parser()
+                        .multi_exit_disc()
+                        .ok()
+                        .flatten()
+                        .map(|tv| StackValue::Owned(TypeValue::from(tv)))
+                        .ok_or(VmError::InvalidFieldAccess)
+                })
+            }
+            BasicRouteToken::LocalPref => {
+                self.path_attributes.as_path.as_stack_value_or(|| {
+                    message
+                        .bytes_parser()
+                        .local_pref()
+                        .ok()
+                        .flatten()
+                        .map(|tv| StackValue::Owned(TypeValue::from(tv)))
+                        .ok_or(VmError::InvalidFieldAccess)
+                })
+            }
+            BasicRouteToken::AtomicAggregate => {
+                self.path_attributes.as_path.as_stack_value_or(|| {
+                    message
+                        .bytes_parser()
+                        .is_atomic_aggregate()
+                        .ok()
+                        .map(|tv| StackValue::Owned(TypeValue::from(tv)))
+                        .ok_or(VmError::InvalidFieldAccess)
+                })
+            }
+            BasicRouteToken::Aggregator => {
+                self.path_attributes.as_path.as_stack_value_or(|| {
+                    message
+                        .bytes_parser()
+                        .aggregator()
+                        .ok()
+                        .flatten()
+                        .map(|tv| StackValue::Owned(TypeValue::from(tv)))
+                        .ok_or(VmError::InvalidFieldAccess)
+                })
+            }
+            BasicRouteToken::Communities => {
+                self.path_attributes.as_path.as_stack_value_or(|| {
+                    message
+                        .bytes_parser()
+                        .all_human_readable_communities()
+                        .ok()
+                        .flatten()
+                        .map(|tv| StackValue::Owned(TypeValue::from(tv)))
+                        .ok_or(VmError::InvalidFieldAccess)
+                })
+            }
+            BasicRouteToken::Prefix => Err(VmError::InvalidFieldAccess),
+            BasicRouteToken::Status => Err(VmError::InvalidFieldAccess),
+            BasicRouteToken::Provenance => Err(VmError::InvalidFieldAccess),
+        }
+    }
+
+    pub fn hash_field<'a, H: Hasher>(&self, state: &'a mut H, field_index: &FieldIndex) -> Result<(), VmError> {
+        match field_index.first()?.try_into()? {
+            BasicRouteToken::AsPath => {
+                self.path_attributes.as_path.hash(state);
+            },
+            BasicRouteToken::OriginType => {
+                self.path_attributes.origin_type.hash(state);
+            }
+            BasicRouteToken::NextHop => self.path_attributes.next_hop.hash(state),
+            BasicRouteToken::MultiExitDisc => {
+                self.path_attributes.multi_exit_discriminator.hash(state);
+            }
+            BasicRouteToken::LocalPref => { self.path_attributes.local_pref.hash(state); }
+            BasicRouteToken::AtomicAggregate => {
+                self.path_attributes.atomic_aggregate.hash(state);
+            }
+            BasicRouteToken::Aggregator => {
+                self.path_attributes.aggregator.hash(state);
+            }
+            BasicRouteToken::Communities => {
+                self.path_attributes.communities.hash(state);
+            }
+            _ => { return Err(VmError::InvalidFieldAccess); }
+        }
+        Ok(())
+    }
+
+    // Get either the moved last delta (it is removed from the Delta list), or
+    // get a freshly rolled ChangeSet from the raw message, if there are no
+    // deltas.
+    pub fn take_attrs(mut self) -> PathAttributeSet {
+        self.path_attributes
+    }
+
+    pub fn store_attrs(&mut self, path_attribues: PathAttributeSet) {
+        self.path_attributes = path_attribues
+    }
+
+    pub fn get_attrs(
+        &mut self,
+    ) -> &PathAttributeSet {
+        &self.path_attributes
+    }
+
+    pub fn get_attrs_mut(
+        &mut self,
+    ) -> &mut PathAttributeSet {
+        &mut self.path_attributes
+    }
+}
+
+impl TryFrom<BasicRoute> for MutableBasicRoute {
+    type Error = VmError;
+
+    fn try_from(value: BasicRoute) -> Result<Self, VmError> {
+        Ok(Self {
+            path_attributes: value.message.materialize_path_attributes(value.afi_safi)?,
+            prefix: value.prefix,
+            path_id: value.path_id,
+            afi_safi: value.afi_safi,
+            status: value.status,
+        })
+    }
+}
+
+impl Display for MutableBasicRoute {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            writeln!(f, "prefix  : {}", self.prefix)?;
+            writeln!(f, "status  : {}", self.status);
+            writeln!(f, "path_id : {:?}", self.path_id);
+            writeln!(f, "afi_safi: {}", self.afi_safi);
+            writeln!(f, "path_attributes: {:?}", self.path_attributes)
+    }
+}
+
+
+// impl From<MutableBasicRoute> for MaterializedRoute2 {
+//     fn from(raw_route: MutableBasicRoute) -> Self {
+//         let status = raw_route.0.status;
+//         let route_id = (RotondaId(0), 0);
+
+//         if let Ok(route) = raw_route.take_attrs() {
+//             MaterializedRoute2 {
+//                 route: Some(route),
+//                 status,
+//                 route_id,
+//             }
+//         } else {
+//             MaterializedRoute2 {
+//                 route: None,
+//                 status: NlriStatus::Unparsable,
+//                 route_id,
+//             }
+//         }
+//     }
+// }
+
 //------------ BasicRoute ----------------------------------------------------
 
 // BasicRoute is the variant of routecore's `Nlri` enum that only has a
@@ -116,12 +398,13 @@ impl From<MutableNlri> for MaterializedRoute2 {
 pub struct BasicRoute {
     #[serde(skip)]
     message: BytesRecord<BgpUpdateMessage>,
+    #[serde(skip)]
     provenance: Provenance,
     prefix: Prefix,
     path_id: Option<PathId>,
     afi_safi: AfiSafi,
     status: NlriStatus,
-    changes: Option<Box<PathAttributeSet>>,
+    // changes: Option<Box<PathAttributeSet>>,
 }
 
 impl BasicRoute {
@@ -138,7 +421,7 @@ impl BasicRoute {
             message,
             afi_safi,
             path_id,
-            changes: None,
+            // changes: None,
             status,
             provenance,
         })
@@ -163,36 +446,59 @@ impl BasicRoute {
     // Get either the moved last delta (it is removed from the Delta list), or
     // get a freshly rolled ChangeSet from the raw message, if there are no
     // deltas.
-    pub fn take_attrs(mut self) -> Result<PathAttributeSet, VmError> {
-        match &mut self.changes {
-            None => self.message.create_path_attributes_set(self.afi_safi),
-            Some(attr_list) => Ok(std::mem::take(attr_list)),
+    // pub fn take_attrs(mut self) -> Result<PathAttributeSet, VmError> {
+    //     match &mut self.changes {
+    //         None => self.message.materialize_path_attributes(self.afi_safi),
+    //         Some(attr_list) => Ok(std::mem::take(attr_list)),
+    //     }
+    // }
+
+    // pub fn store_attrs(&mut self, path_attribues: PathAttributeSet) {
+    //     self.changes = Some(Box::new(path_attribues))
+    // }
+
+    pub fn get_attrs(
+        &self,
+    ) -> PathAttributeSet {
+        PathAttributeSet {
+            as_path: todo!(),
+            origin_type: todo!(),
+            next_hop: todo!(),
+            multi_exit_discriminator: todo!(),
+            local_pref: todo!(),
+            atomic_aggregate: todo!(),
+            aggregator: todo!(),
+            communities: todo!(),
+            originator_id: crate::attr_change_set::Todo,
+            cluster_list: crate::attr_change_set::Todo,
+            extended_communities: crate::attr_change_set::Todo,
+            as4_path: todo!(),
+            as4_aggregator: crate::attr_change_set::Todo,
+            connector: crate::attr_change_set::Todo,
+            as_path_limit: crate::attr_change_set::Todo,
+            pmsi_tunnel: crate::attr_change_set::Todo,
+            ipv6_extended_communities: crate::attr_change_set::Todo,
+            large_communities: crate::attr_change_set::Todo,
+            bgpsec_as_path: crate::attr_change_set::Todo,
+            attr_set: crate::attr_change_set::Todo,
+            rsrvd_development: crate::attr_change_set::Todo,
         }
     }
 
-    pub fn store_attrs(&mut self, path_attribues: PathAttributeSet) {
-        self.changes = Some(Box::new(path_attribues))
-    }
-
-    pub fn get_attrs(&mut self) -> Result<&Option<Box<PathAttributeSet>>, VmError> {
-        match &self.changes {
-            None => { 
-                self.changes = Some(Box::new(self.message.create_path_attributes_set(self.afi_safi)?));
-                Ok(&self.changes)
-            },
-            Some(_) => Ok(&self.changes)
-        }
-    }
-
-    pub fn get_attrs_mut(&mut self) -> Result<&mut Option<Box<PathAttributeSet>>, VmError> {
-        match &mut self.changes {
-            None => { 
-                self.changes = Some(Box::new(self.message.create_path_attributes_set(self.afi_safi)?));
-                Ok(&mut self.changes)
-            },
-            Some(_) => Ok(&mut self.changes)
-        }
-    }
+    // pub fn get_attrs_mut(
+    //     &mut self,
+    // ) -> Result<&mut Option<Box<PathAttributeSet>>, VmError> {
+    //     match &mut self.changes {
+    //         None => {
+    //             self.changes = Some(Box::new(
+    //                 self.message
+    //                     .materialize_path_attributes(self.afi_safi)?,
+    //             ));
+    //             Ok(&mut self.changes)
+    //         }
+    //         Some(_) => Ok(&mut self.changes),
+    //     }
+    // }
 
     pub fn get_field_by_index(
         &self,
@@ -275,59 +581,51 @@ impl BasicRoute {
         }
     }
 
-    pub(crate) fn get_value_ref_for_field(
-        &self,
-        field_token: usize,
-    ) -> Result<Option<&TypeValue>, VmError> {
-        let current_set = if let Some(atrd) = &self.changes {
-            atrd
-        } else {
-            return Err(VmError::InvalidRecord);
-        };
+    // pub(crate) fn get_value_ref_for_field(
+    //     &self,
+    //     field_token: usize,
+    // ) -> Result<Option<&TypeValue>, VmError> {
+    //     let current_set = if let Some(atrd) = &self.changes {
+    //         atrd
+    //     } else {
+    //         return Err(VmError::InvalidRecord);
+    //     };
 
-        match field_token.try_into()? {
-            BasicRouteToken::AsPath => Ok(current_set.as_path.as_ref()),
-            BasicRouteToken::OriginType => {
-                Ok(current_set.origin_type.as_ref())
-            }
-            BasicRouteToken::NextHop => Ok(current_set.next_hop.as_ref()),
-            BasicRouteToken::MultiExitDisc => {
-                Ok(current_set.multi_exit_discriminator.as_ref())
-            }
-            BasicRouteToken::LocalPref => Ok(current_set.local_pref.as_ref()),
-            BasicRouteToken::AtomicAggregate => {
-                Ok(current_set.atomic_aggregate.as_ref())
-            }
-            BasicRouteToken::Aggregator => {
-                Ok(current_set.aggregator.as_ref())
-            }
-            BasicRouteToken::Communities => {
-                Ok(current_set.communities.as_ref())
-            }
-            BasicRouteToken::Prefix => Err(VmError::InvalidCommandArg),
-            BasicRouteToken::Status => Err(VmError::InvalidCommandArg),
-            BasicRouteToken::Provenance => Err(VmError::InvalidCommandArg),
-        }
-    }
+    //     match field_token.try_into()? {
+    //         BasicRouteToken::AsPath => Ok(current_set.as_path.as_ref()),
+    //         BasicRouteToken::OriginType => {
+    //             Ok(current_set.origin_type.as_ref())
+    //         }
+    //         BasicRouteToken::NextHop => Ok(current_set.next_hop.as_ref()),
+    //         BasicRouteToken::MultiExitDisc => {
+    //             Ok(current_set.multi_exit_discriminator.as_ref())
+    //         }
+    //         BasicRouteToken::LocalPref => Ok(current_set.local_pref.as_ref()),
+    //         BasicRouteToken::AtomicAggregate => {
+    //             Ok(current_set.atomic_aggregate.as_ref())
+    //         }
+    //         BasicRouteToken::Aggregator => {
+    //             Ok(current_set.aggregator.as_ref())
+    //         }
+    //         BasicRouteToken::Communities => {
+    //             Ok(current_set.communities.as_ref())
+    //         }
+    //         BasicRouteToken::Prefix => Err(VmError::InvalidCommandArg),
+    //         BasicRouteToken::Status => Err(VmError::InvalidCommandArg),
+    //         BasicRouteToken::Provenance => Err(VmError::InvalidCommandArg),
+    //     }
+    // }
 }
 
 impl From<BasicRoute> for MaterializedRoute2 {
-    fn from(raw_route: BasicRoute) -> Self {
-        let status = raw_route.status;
+    fn from(route: BasicRoute) -> Self {
+        let status = route.status;
         let route_id = (RotondaId(0), 0);
-
-        if let Ok(route) = raw_route.take_attrs() {
-            MaterializedRoute2 {
-                route: Some(route),
+        
+        MaterializedRoute2 {
+                route: Some(route.get_attrs()),
                 status,
                 route_id,
-            }
-        } else {
-            MaterializedRoute2 {
-                route: None,
-                status: NlriStatus::Unparsable,
-                route_id,
-            }
         }
     }
 }
@@ -336,7 +634,7 @@ impl std::fmt::Display for BasicRoute {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "prefix  : {}", self.prefix)?;
         writeln!(f, "raw     : {:#?}", self.message)?;
-        writeln!(f, "changes : {:#?}", self.changes)?;
+        // writeln!(f, "changes : {:#?}", self.changes)?;
         writeln!(f, "status  : {:?}", self.status)
     }
 }
@@ -413,7 +711,7 @@ impl BasicRoute {
     }
 }
 
-impl RotoType for BasicRoute {
+impl RotoType for MutableBasicRoute {
     fn get_props_for_method(
         _ty: TypeDef,
         method_name: &crate::ast::Identifier,
@@ -475,7 +773,7 @@ impl RotoType for BasicRoute {
             "provenance" => Ok(MethodProps::new(
                 TypeDef::Provenance,
                 BasicRouteToken::Provenance.into(),
-                vec![]
+                vec![],
             )),
             _ => Err(format!(
                 "Unknown method '{}' for type Route",
@@ -491,7 +789,16 @@ impl RotoType for BasicRoute {
     ) -> Result<TypeValue, CompileError> {
         match type_def {
             TypeDef::Route => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::Route(self)))
+                Ok(TypeValue::Builtin(BuiltinTypeValue::Route(
+                    self
+                        .try_into()
+                        .map_err(
+                            |_| CompileError::from(
+                                "Cannot extract route from BGP message"
+                            )
+                        )?
+                    )
+                ))
             }
             _ => Err(format!(
                 "Cannot convert type Route to type {:?}",
@@ -529,12 +836,11 @@ impl RotoType for BasicRoute {
     }
 }
 
-impl From<BasicRoute> for TypeValue {
-    fn from(value: BasicRoute) -> Self {
+impl From<MutableBasicRoute> for TypeValue {
+    fn from(value: MutableBasicRoute) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::Route(value))
     }
 }
-
 
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq, Eq)]
 pub enum BasicRouteToken {

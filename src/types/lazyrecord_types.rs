@@ -1,7 +1,7 @@
 use log::trace;
 use serde::Serialize;
 
-use super::{typedef::{MethodProps, TypeDef, RecordTypeDef}, collections::RecordType, builtin::{path_attributes::BasicRoute, BuiltinTypeValue}, typevalue::TypeValue};
+use super::{typedef::{MethodProps, TypeDef, RecordTypeDef}, collections::RecordType, builtin::{basic_route::{BasicRoute, MutableBasicRoute}, BuiltinTypeValue}, typevalue::TypeValue};
 use crate::{
     ast::Identifier, compiler::compile::CompileError, traits::{RotoType, Token},
     types::builtin::BytesRecord,
@@ -144,7 +144,7 @@ impl LazyRecordTypeDef {
                     ty,
                     method_name
                 ),
-            LazyRecordTypeDef::BasicRoute => BasicRoute::get_props_for_method(ty, method_name),
+            LazyRecordTypeDef::BasicRoute => MutableBasicRoute::get_props_for_method(ty, method_name),
         }
     }
 

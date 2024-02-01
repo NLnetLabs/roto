@@ -7,7 +7,7 @@ use roto::{
     compiler::Compiler,
     types::{
         builtin::{
-            path_attributes::{BasicRoute, PeerId, PeerRibType, Provenance}, NlriStatus,
+            basic_route::{BasicRoute, PeerId, PeerRibType, Provenance}, NlriStatus,
         }, collections::{BytesRecord, Record}, lazyrecord_types::BgpUpdateMessage
     },
     vm::{self, VmResult},

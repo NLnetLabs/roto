@@ -23,7 +23,7 @@ use crate::{
     vm::{FieldIndex, StackValue, VmError},
 };
 
-use super::builtin::path_attributes::{BasicRoute, PeerId, PeerRibType, Provenance};
+use super::builtin::basic_route::{BasicRoute, MutableBasicRoute, PeerId, PeerRibType, Provenance};
 use super::lazyrecord_types::BgpUpdateMessage;
 use super::{
     builtin::{
@@ -260,7 +260,7 @@ impl TypeValue {
         }
     }
 
-    pub fn into_route(self) -> Result<BasicRoute, Self> {
+    pub fn into_route(self) -> Result<MutableBasicRoute, Self> {
         if let TypeValue::Builtin(BuiltinTypeValue::Route(route)) = self {
             Ok(route)
         } else {
@@ -397,7 +397,7 @@ impl RotoType for TypeValue {
                 Self::get_props_for_method(*ty.0, method_name)
             }
             TypeDef::Route => {
-                BasicRoute::get_props_for_method(ty, method_name)
+                MutableBasicRoute::get_props_for_method(ty, method_name)
             }
             TypeDef::Provenance => {
                 Provenance::get_props_for_method(ty, method_name)
