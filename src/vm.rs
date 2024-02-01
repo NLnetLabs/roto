@@ -292,7 +292,7 @@ impl LinearMemory {
                 {
                     Some(TypeValue::Record(mut r)) => {
                         let field =
-                            r.get_field_by_index_owned(field_index.clone());
+                            r.get_field_by_index_owned(field_index);
                         match field {
                             Some(ElementTypeValue::Nested(nested)) => {
                                 Ok(*nested)
@@ -2070,7 +2070,7 @@ impl<
                             TypeValue::Record(mut rec) => {
                                 let call_value = TypeValue::try_from(
                                     rec.get_field_by_index_owned(
-                                        target_field_index.clone(),
+                                        &target_field_index
                                     )
                                     .ok_or_else(|| VmError::InvalidRecord)?,
                                 )?
