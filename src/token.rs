@@ -31,6 +31,8 @@ pub enum Token<'s> {
     Comma,
     #[token(".")]
     Period,
+    #[token("/")]
+    Slash,
 
     // === Delimiters ===
     #[token("{")]
@@ -77,6 +79,8 @@ pub enum Token<'s> {
     Import,
     #[token("longer")]
     Longer,
+    #[token("match")]
+    Match,
     #[token("matching")]
     Matching,
     #[token("module")]
@@ -130,19 +134,17 @@ pub enum Token<'s> {
     #[regex(r"[0-9][0-9_]*")]
     Integer(&'s str),
     #[regex(r"0x[0-9A-Fa-f]+")]
-    Hex,
+    Hex(&'s str),
     #[regex(r"AS[0-9]+")]
-    Asn,
-    #[regex(r"[0-9]+\.")]
+    Asn(&'s str),
+    #[regex(r"[0-9]+\.[0-9]*")]
     Float,
-    // IpV4,
-    // IpV6,
-    // PrefixV4,
-    // PrefixV6,
-    #[regex("/[0-9]+")]
-    PrefixLength,
-    #[token("true")]
-    True,
-    #[token("false")]
-    False,
+    #[regex(r"([0-9]+\.){3}[0-9]+")]
+    IpV4(&'s str),
+    #[regex(r"([0-9a-zA-Z]+:){6}[0-9a-zA-Z]+")]
+    IpV6(&'s str),
+
+    #[token("true", |_| true)]
+    #[token("false", |_| false)]
+    Bool(bool),
 }

@@ -2544,7 +2544,6 @@ impl TryFrom<&'_ LiteralExpr> for TypeValue {
 }
 
 //------------ LiteralAccessExpr ---------------------------------------------
-
 #[derive(Clone, Debug)]
 pub struct LiteralAccessExpr {
     pub literal: LiteralExpr,

@@ -1,5 +1,5 @@
 // one comment
 rib unrib contains Blaffer {
     // another comment
-    blaffer: Blaf
+    blaffer: Blaf,
 }
