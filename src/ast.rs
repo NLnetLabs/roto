@@ -3,14 +3,12 @@ use std::{borrow, cmp, fmt, hash, ops, str};
 use log::trace;
 use nom::branch::{alt, permutation};
 use nom::bytes::complete::{
-    is_not, take, take_while, take_while1, take_while_m_n,
+    take, take_while, take_while1, take_while_m_n,
 };
 use nom::character::complete::{
-    char, digit1, multispace0, multispace1, hex_digit0,
+    char, digit1, hex_digit0, multispace0, multispace1,
 };
-use nom::combinator::{
-    all_consuming, cut, map_res, not, opt, recognize,
-};
+use nom::combinator::{all_consuming, cut, not, opt, recognize};
 use nom::error::{
     context, ErrorKind, FromExternalError, ParseError, VerboseError,
 };
@@ -1879,68 +1877,6 @@ impl From<&'_ IntegerLiteral> for i64 {
     }
 }
 
-//------------ IpAddressLiteral ----------------------------------------------
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct IpAddressLiteral(pub String);
-
-impl IpAddressLiteral {
-    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, ip_addr_str) = context(
-            "IP address literal",
-            alt((
-                recognize(tuple((
-                    terminated(digit1, char('.')),
-                    terminated(digit1, char('.')),
-                    terminated(digit1, char('.')),
-                    take_while1(|ch: char| ch.is_dec_digit()),
-                    not(char(':'))
-                ))),
-                recognize(tuple((
-                    terminated(hex_digit0, char(':')),
-                    opt(terminated(hex_digit0, char(':'))),
-                    opt(terminated(hex_digit0, char(':'))),
-                    opt(terminated(hex_digit0, char(':'))),
-                    opt(terminated(hex_digit0, char(':'))),
-                    opt(terminated(hex_digit0, char(':'))),
-                    opt(terminated(hex_digit0, char(':'))),
-                    hex_digit0,
-                    not(char('.'))
-                ))),
-            )),
-        )(input)?;
-
-        Ok((input, Self(ip_addr_str.to_string())))
-    }
-}
-
-impl From<&'_ IpAddressLiteral> for ShortString {
-    fn from(literal: &IpAddressLiteral) -> Self {
-        ShortString::from(literal.0.to_string().as_str())
-    }
-}
-
-//------------ PrefixLiteral -------------------------------------------------
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PrefixLiteral(pub String);
-
-impl PrefixLiteral {
-    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, prefix_str) = context(
-            "prefix literal",
-            recognize(
-                tuple((
-                    IpAddressLiteral::parse,
-                    PrefixLengthLiteral::parse
-                )
-            ))
-        )(input)?;
-
-        Ok((input, Self(prefix_str.to_string())))
-    }
-}
-
 //------------ PrefixLengthLiteral -------------------------------------------
 
 /// A prefix length literal is a sequence of digits preceded by a '/'.
@@ -2545,10 +2481,10 @@ impl std::fmt::Display for AcceptReject {
 #[derive(Clone, Debug)]
 pub enum LiteralExpr {
     StringLiteral(StringLiteral),
-    PrefixLiteral(PrefixLiteral),
+    PrefixLiteral(Prefix),
     PrefixLengthLiteral(PrefixLengthLiteral),
     AsnLiteral(AsnLiteral),
-    IpAddressLiteral(IpAddressLiteral),
+    IpAddressLiteral(IpAddress),
     ExtendedCommunityLiteral(ExtendedCommunityLiteral),
     StandardCommunityLiteral(StandardCommunityLiteral),
     LargeCommunityLiteral(LargeCommunityLiteral),
@@ -2573,8 +2509,8 @@ impl LiteralExpr {
                 StandardCommunityLiteral::parse,
                 LiteralExpr::StandardCommunityLiteral,
             ),
-            map(PrefixLiteral::parse, LiteralExpr::PrefixLiteral),
-            map(IpAddressLiteral::parse, LiteralExpr::IpAddressLiteral),
+            map(Prefix::parse, LiteralExpr::PrefixLiteral),
+            map(IpAddress::parse, LiteralExpr::IpAddressLiteral),
             map(AsnLiteral::parse, LiteralExpr::AsnLiteral),
             map(HexLiteral::parse, LiteralExpr::HexLiteral),
             map(IntegerLiteral::parse, LiteralExpr::IntegerLiteral),
@@ -2593,10 +2529,10 @@ impl TryFrom<&'_ LiteralExpr> for TypeValue {
     fn try_from(value: &'_ LiteralExpr) -> Result<Self, Self::Error> {
         match value {
             LiteralExpr::StringLiteral(v) => Ok(v.clone().into()),
-            LiteralExpr::PrefixLiteral(v) => v.try_into(),
+            LiteralExpr::PrefixLiteral(v) => Ok(v.try_into()?),
             LiteralExpr::PrefixLengthLiteral(v) => Ok(v.clone().into()),
             LiteralExpr::AsnLiteral(v) => Ok(v.clone().into()),
-            LiteralExpr::IpAddressLiteral(v) => v.try_into(),
+            LiteralExpr::IpAddressLiteral(v) => Ok(v.into()),
             LiteralExpr::ExtendedCommunityLiteral(v) => v.clone().try_into(),
             LiteralExpr::StandardCommunityLiteral(v) => v.clone().try_into(),
             LiteralExpr::LargeCommunityLiteral(v) => v.clone().try_into(),
@@ -3381,13 +3317,21 @@ pub enum IpAddress {
 }
 
 impl IpAddress {
-    fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+    pub fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, res) = alt((
             map(Ipv4Addr::parse, IpAddress::Ipv4),
             map(Ipv6Addr::parse, IpAddress::Ipv6),
         ))(input)?;
-
         Ok((input, res))
+    }
+}
+
+impl std::fmt::Display for IpAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            IpAddress::Ipv4(Ipv4Addr(v4)) => write!(f, "{v4}"),
+            IpAddress::Ipv6(Ipv6Addr(v6)) => write!(f, "{v6}"),
+        }
     }
 }
 
@@ -3395,19 +3339,30 @@ impl IpAddress {
 
 // Ipv4Addr ::= <ipv4 address>
 #[derive(Clone, Debug)]
-pub struct Ipv4Addr(std::net::Ipv4Addr);
+pub struct Ipv4Addr(pub std::net::Ipv4Addr);
 
 impl Ipv4Addr {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        input
-            .parse::<std::net::Ipv4Addr>()
-            .map(|addr| (input, Self(addr)))
-            .map_err(|_| {
+        let (input, ip_addr_str) = context(
+            "IpV4 Literal",
+            recognize(tuple((
+                terminated(digit1, char('.')),
+                terminated(digit1, char('.')),
+                terminated(digit1, char('.')),
+                take_while1(|ch: char| ch.is_dec_digit()),
+                not(char(':')),
+            ))),
+        )(input)?;
+
+        let addr =
+            ip_addr_str.parse::<std::net::Ipv4Addr>().map_err(|_| {
                 nom::Err::Error(VerboseError::from_error_kind(
                     input,
                     ErrorKind::Digit,
                 ))
-            })
+            })?;
+
+        Ok((input, Self(addr)))
     }
 }
 
@@ -3416,19 +3371,34 @@ impl Ipv4Addr {
 // Ipv6Addr ::= <ipv6 address>
 
 #[derive(Clone, Debug)]
-pub struct Ipv6Addr(std::net::Ipv6Addr);
+pub struct Ipv6Addr(pub std::net::Ipv6Addr);
 
 impl Ipv6Addr {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        input
-            .parse::<std::net::Ipv6Addr>()
-            .map(|addr| (input, Self(addr)))
-            .map_err(|_| {
+        let (input, ip_addr_str) = context(
+            "IpV6 Literal",
+            recognize(tuple((
+                terminated(hex_digit0, char(':')),
+                opt(terminated(hex_digit0, char(':'))),
+                opt(terminated(hex_digit0, char(':'))),
+                opt(terminated(hex_digit0, char(':'))),
+                opt(terminated(hex_digit0, char(':'))),
+                opt(terminated(hex_digit0, char(':'))),
+                opt(terminated(hex_digit0, char(':'))),
+                hex_digit0,
+                not(char('.')),
+            ))),
+        )(input)?;
+
+        let addr =
+            ip_addr_str.parse::<std::net::Ipv6Addr>().map_err(|_| {
                 nom::Err::Error(VerboseError::from_error_kind(
                     input,
                     ErrorKind::Digit,
                 ))
-            })
+            })?;
+
+        Ok((input, Self(addr)))
     }
 }
 
@@ -3444,8 +3414,8 @@ pub struct Prefix {
 
 impl Prefix {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, ((_, addr), len)) = tuple((
-            map_res(opt_ws(is_not("/")), IpAddress::parse),
+        let (input, (addr, len)) = tuple((
+            opt_ws(IpAddress::parse),
             opt_ws(PrefixLength::parse),
         ))(input)?;
 
@@ -3458,7 +3428,7 @@ impl Prefix {
 // PrefixLength ::= '/' <u8>
 
 #[derive(Clone, Debug)]
-pub struct PrefixLength(u8);
+pub struct PrefixLength(pub u8);
 
 impl PrefixLength {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
