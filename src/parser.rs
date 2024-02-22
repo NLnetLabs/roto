@@ -6,11 +6,11 @@ use crate::ast::{
     FilterType, HexLiteral, Identifier, IntegerLiteral, IpAddress, Ipv4Addr,
     Ipv6Addr, ListTypeIdentifier, ListValueExpr, LiteralAccessExpr,
     LiteralExpr, MatchActionExpr, MatchOperator, MethodComputeExpr,
-    OutputStream, Prefix, PrefixLength, PrefixLengthLiteral,
+    OutputStream, PrefixLength, PrefixLengthLiteral,
     PrefixLengthRange, PrefixMatchExpr, PrefixMatchType,
-    RecordTypeIdentifier, Rib, RibBody, RibField, RootExpr, RxTxType,
-    StringLiteral, SyntaxTree, Table, TypeIdentField, TypeIdentifier,
-    TypedRecordValueExpr, ValueExpr,
+    RecordTypeAssignment, RecordTypeIdentifier, Rib, RibBody, RibField,
+    RootExpr, RxTxType, StringLiteral, SyntaxTree, Table, TypeIdentField,
+    TypeIdentifier, TypedRecordValueExpr, ValueExpr,
 };
 use crate::token::Token;
 use logos::{Lexer, Span, SpannedIter};
@@ -73,6 +73,7 @@ impl<'source> Parser<'source> {
     /// Check for an optional token
     fn accept_optional(&mut self, token: Token) -> ParseResult<Option<Span>> {
         if self.peek_is(token) {
+            // TODO: this should probably be an unwrap?
             Ok(Some(self.next()?.1))
         } else {
             Ok(None)
@@ -170,8 +171,8 @@ impl<'source> Parser<'source> {
             Token::FilterMap | Token::Filter => {
                 RootExpr::FilterMap(Box::new(self.filter_map()?))
             }
-            // Token::Type => RootExpr::Ty(self.record_type_assignment()),
-            t => panic!("{:?}", t),
+            Token::Type => RootExpr::Ty(self.record_type_assignment()?),
+            _ => return Err(ParseError::Todo),
         };
         Ok(expr)
     }
@@ -330,10 +331,10 @@ impl<'source> Parser<'source> {
     /// ```
     ///
     /// Not shown in the EBNF above, but the location of the define and apply
-    /// sections doesn't matter, but they can both only appear once. 
+    /// sections doesn't matter, but they can both only appear once.
     fn filter_map_body(&mut self) -> ParseResult<FilterMapBody> {
         let mut define = None;
-        let mut expressions: Option<Vec<FilterMapExpr>> = None;
+        let mut _expressions: Option<Vec<FilterMapExpr>> = None;
         let mut apply = None;
 
         self.accept_required(Token::CurlyLeft)?;
@@ -366,14 +367,13 @@ impl<'source> Parser<'source> {
                     body,
                 });
             } else {
-                let _ = expressions;
                 todo!("parse expr")
             }
         }
 
         Ok(FilterMapBody {
             define: define.ok_or(ParseError::Todo)?,
-            expressions: expressions.unwrap_or_default(),
+            expressions: _expressions.unwrap_or_default(),
             apply,
         })
     }
@@ -411,7 +411,7 @@ impl<'source> Parser<'source> {
                     RxTxType::RxOnly(rx_field)
                 }
             }
-            t => return Err(ParseError::Todo),
+            _ => return Err(ParseError::Todo),
         };
 
         let mut use_ext_data = Vec::new();
@@ -634,10 +634,7 @@ impl<'source> Parser<'source> {
         if let LiteralExpr::PrefixLiteral(prefix) = literal {
             if let Some(ty) = self.prefix_match_type()? {
                 return Ok(ValueExpr::PrefixMatchExpr(PrefixMatchExpr {
-                    prefix: Prefix {
-                        addr: todo!(),
-                        len: todo!(),
-                    },
+                    prefix,
                     ty,
                 }));
             }
@@ -681,7 +678,13 @@ impl<'source> Parser<'source> {
 
         Ok(access_expr)
     }
-    
+
+    fn record_type_assignment(
+        &mut self,
+    ) -> ParseResult<RecordTypeAssignment> {
+        todo!()
+    }
+
     /// Parse any literal, including prefixes, ip addresses and communities
     fn literal(&mut self) -> ParseResult<LiteralExpr> {
         // TODO: Implement the following literals:
