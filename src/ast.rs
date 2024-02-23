@@ -3344,7 +3344,7 @@ pub struct Ipv4Addr(pub std::net::Ipv4Addr);
 impl Ipv4Addr {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, ip_addr_str) = context(
-            "IpV4 Literal",
+            "IPv4 Literal",
             recognize(tuple((
                 terminated(digit1, char('.')),
                 terminated(digit1, char('.')),
@@ -3376,7 +3376,7 @@ pub struct Ipv6Addr(pub std::net::Ipv6Addr);
 impl Ipv6Addr {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, ip_addr_str) = context(
-            "IpV6 Literal",
+            "IPv6 Literal",
             recognize(tuple((
                 terminated(hex_digit0, char(':')),
                 opt(terminated(hex_digit0, char(':'))),
