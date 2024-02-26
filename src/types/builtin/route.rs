@@ -270,8 +270,8 @@ impl RawRouteWithDeltas {
         self.status_deltas.0.push(delta);
     }
 
-    // Get a clone of the latest delta, or of the original attributes from
-    // the raw message, if no delta has been added (yet).
+    /// Get a clone of the latest delta, or of the original attributes from
+    /// the raw message, if no delta has been added (yet).
     fn clone_latest_attrs(&self) -> Result<AttrChangeSet, VmError> {
         if let Some(attr_set) = self.attribute_deltas.deltas.last() {
             Ok(attr_set.attributes.clone())
@@ -287,8 +287,8 @@ impl RawRouteWithDeltas {
         }
     }
 
-    // Return a clone of the latest attribute set, so that changes can be
-    // made to it by the caller.
+    //// Return a clone of the latest attribute set, so that changes can be
+    //// made to it by the caller.
     pub fn open_new_delta(
         &mut self,
         delta_id: (RotondaId, LogicalTime),
@@ -302,9 +302,9 @@ impl RawRouteWithDeltas {
         })
     }
 
-    // Get either the moved last delta (it is removed from the Delta list), or
-    // get a freshly rolled ChangeSet from the raw message, if there are no
-    // deltas.
+    /// Get either the moved last delta (it is removed from the Delta list), or
+    /// get a freshly rolled ChangeSet from the raw message, if there are no
+    /// deltas.
     pub fn take_latest_attrs(mut self) -> Result<AttrChangeSet, VmError> {
         if self.attribute_deltas.deltas.is_empty() {
             return self.raw_message.raw_message.create_changeset(
@@ -358,7 +358,7 @@ impl RawRouteWithDeltas {
             })
     }
 
-    // Get a ChangeSet that was added by a specific unit, e.g. a filter.
+    /// Get an [`AttrChangeSet`] that was added by a specific unit, e.g. a filter.
     pub fn get_delta_for_rotonda_id(
         &self,
         rotonda_id: RotondaId,
@@ -370,7 +370,7 @@ impl RawRouteWithDeltas {
             .map(|d| &d.attributes)
     }
 
-    // Add a ChangeSet with some metadata to this RawRouteWithDelta.
+    /// Add a [`AttributeDelta`] with some metadata to this [`RawRouteWithDeltas`].
     pub fn store_delta(
         &mut self,
         attr_delta: AttributeDelta,
@@ -633,17 +633,17 @@ impl RawRouteWithDeltas {
 
 //------------ RouteDeltas --------------------------------------------------
 
-// The history of changes to this route. Each Delta holds the attributes that
-// were originally present in the raw message, their modifications and newly
-// created ones.
-//
-// The list of deltas describes the changes that were made by one Rotonda
-// unit along the way.
+/// The history of changes to this route. Each Delta holds the attributes that
+/// were originally present in the raw message, their modifications and newly
+/// created ones.
+///
+/// The list of deltas describes the changes that were made by one Rotonda
+/// unit along the way.
 #[derive(Debug, Clone, Eq, PartialEq, Default, Hash, Serialize)]
 struct AttributeDeltaList {
     deltas: Vec<AttributeDelta>,
-    // The delta that was handed out the most recently. This is the only
-    // delta that can be written back!
+    /// The delta that was handed out the most recently. This is the only
+    /// delta that can be written back!
     locked_delta: Option<usize>,
 }
 
@@ -655,12 +655,12 @@ impl AttributeDeltaList {
         }
     }
 
-    // Gets the most recently added delta in this list.
+    /// Gets the most recently added delta in this list.
     fn get_latest_change_set(&self) -> Option<&AttrChangeSet> {
         self.deltas.last().map(|d| &d.attributes)
     }
 
-    // Adds a new delta to the list.
+    /// Adds a new delta to the list.
     fn store_delta(&mut self, delta: AttributeDelta) -> Result<(), VmError> {
         if let Some(locked_delta) = self.locked_delta {
             if locked_delta != delta.delta_index {
@@ -688,8 +688,8 @@ impl AttributeDeltaList {
 
 //------------ AttributeDelta ----------------------------------------------
 
-// A set of attribute changes that were atomically created by a Rotonda
-// unit in one go (with one logical timestamp).
+/// A set of attribute changes that were atomically created by a Rotonda
+/// unit in one go (with one logical timestamp).
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize)]
 pub struct AttributeDelta {
     delta_id: (RotondaId, LogicalTime),
@@ -754,13 +754,13 @@ impl RouteStatusDeltaList {
 
 //------------ BgpUpdateMessage ------------------------------------------------
 
-// A data-structure that stores the array of bytes of the incoming BGP Update
-// message, together with its logical timestamp and an ID of the instance
-// and/or unit that received it originally.
-//
-// The `attr_cache` AttributeList allows readers to get a reference to a path
-// attribute. This avoids having to clone from the AttributeLists in the
-// iterator over the latest attributes.
+/// A data-structure that stores the array of bytes of the incoming BGP Update
+/// message, together with its logical timestamp and an ID of the instance
+/// and/or unit that received it originally.
+///
+/// The `attr_cache` `AttributeList` allows readers to get a reference to a path
+/// attribute. This avoids having to clone from the `AttributeList`s in the
+/// iterator over the latest attributes.
 #[derive(Debug, Clone, Serialize)]
 pub struct BgpUpdateMessage {
     message_id: (RotondaId, LogicalTime),
@@ -1354,9 +1354,9 @@ impl UpdateMessage {
             )
     }
 
-    // Materialize a ChangeSet from the Update message. The materialized
-    // Change set is completely self-contained (no references of any kind) &
-    // holds all the attributes of the current BGP Update message.
+    /// Materialize a [`AttrChangeSet`] from the Update message. The materialized
+    /// change-set is completely self-contained (no references of any kind) &
+    /// holds all the attributes of the current BGP Update message.
     pub fn create_changeset(
         &self,
         prefix: Prefix,
@@ -1429,8 +1429,8 @@ impl UpdateMessage {
         })
     }
 
-    // Create a new BGP Update message by applying the attributes changes
-    // in the supplied change set to our current Update message.
+    /// Create a new BGP Update message by applying the attributes changes
+    /// in the supplied change set to our current Update message.
     pub fn create_update_from_changeset<T: ScalarValue, V: VectorValue>(
         _change_set: &AttrChangeSet,
     ) -> Self {

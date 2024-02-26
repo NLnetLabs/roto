@@ -11,9 +11,9 @@ use crate::types::typedef::TypeDef;
 use crate::types::typevalue::TypeValue;
 use crate::vm::{Command, CommandArg, CompiledCollectionField, OpCode, VmError, FieldIndex};
 
-// This function is the heart of the compiler, all the recursion in the
-// compilation process happens here. The other compile_* functions just
-// trigger this function to recurse into the symbols map.
+/// This function is the heart of the compiler, all the recursion in the
+/// compilation process happens here. The other compile_* functions just
+/// trigger this function to recurse into the symbols map.
 pub(crate) fn recurse_compile<'a>(
     symbol: &'a Symbol,
     mut state: CompilerState<'a>,

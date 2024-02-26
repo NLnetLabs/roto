@@ -44,29 +44,28 @@ use super::{
 /// These are the actual types that are used in the Roto language. This enum
 /// holds both the type-level information and the value. The collection
 /// variants can hold multiple values recursively, e.g. a List of Records.
-
 #[derive(Debug, Eq, Default, Clone, Serialize)]
 #[serde(untagged)]
 pub enum TypeValue {
-    // All the built-in scalars and vectors
+    /// All the built-in scalars and vectors
     Builtin(BuiltinTypeValue),
-    // An ordered list of one user-defined type
+    /// An ordered list of one user-defined type
     List(List),
-    // A map of (key, value) pairs, where value can be any of the other types.
-    // Always user-defined.
+    /// A map of (key, value) pairs, where value can be any of the other types.
+    /// Always user-defined.
     Record(Record),
     // Enum(Enum),
-    // A Record meant to be handled by an Output stream.
+    /// A Record meant to be handled by an Output stream.
     OutputStreamMessage(Arc<OutputStreamMessage>),
-    // A wrapper around an immutable value that lives in an external
-    // datasource, i.e. a table or a rib
+    /// A wrapper around an immutable value that lives in an external
+    /// datasource, i.e. a table or a rib
     SharedValue(Arc<TypeValue>),
-    // Unknown is NOT EQUAL to empty or unitialized, e.g. it may be the
-    // result of a search. A ternary logic value, if you will.
+    /// Unknown is NOT EQUAL to empty or unitialized, e.g. it may be the
+    /// result of a search. A ternary logic value, if you will.
     Unknown,
-    // Used for LinearMemory only, it's the initial state of all positions
-    // except the first two positions (rx and tx). Taking a typevalue in the
-    // vm runtime, also puts this value in its place.
+    /// Used for LinearMemory only, it's the initial state of all positions
+    /// except the first two positions (rx and tx). Taking a typevalue in the
+    /// vm runtime, also puts this value in its place.
     #[default]
     UnInit,
 }
@@ -192,9 +191,9 @@ impl TypeValue {
         }
     }
 
-    // Return a TypeValue if the memory holds the enum variant specified by
-    // the varian_token. If the memory position holds an enum, but not of the
-    // specified variant, then return TypeValue::Unknown.
+    /// Return a TypeValue if the memory holds the enum variant specified by
+    /// the varian_token. If the memory position holds an enum, but not of the
+    /// specified variant, then return TypeValue::Unknown.
     pub fn get_mp_as_variant_or_unknown(
         &self,
         variant_token: Token,

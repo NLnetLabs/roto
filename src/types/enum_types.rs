@@ -140,10 +140,12 @@ impl From<EnumVariant<u32>> for BuiltinTypeValue {
     }
 }
 
-// Every possible enum type that can is available pre-defined should be
-// registered here. This is used by the evaluator to figure out if the
-// name of the enum type, what variants it has, etc. It's not possible
-// for users to create enums currently (there's no syntax!).
+/// Every possible enum type that can is available pre-defined should be
+/// registered here.
+///
+/// This is used by the evaluator to figure out if the
+/// name of the enum type, what variants it has, etc. It's not possible
+/// for users to create enums currently (there's no syntax!).
 #[derive(
     Debug, Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Serialize,
 )]
@@ -165,12 +167,12 @@ impl GlobalEnumTypeDef {
         .iter()
     }
 
-    // This method checks if the supplied variant exists as the name of a
-    // GlobalEnum and returns it as Ok(GlobalEnumTypeDef) OR it returns a vec
-    // with all the GlobalEnumTypeDefs that contain it as the name of a
-    // variant, in the form of Err(Vec<GlobalEnumTypeDef>). If the Vec inside
-    // the Err is empty, than the variant name wasn't found at all. The outer
-    // result will return an Err if for some reason the name of the variant cannot be p
+    /// This method checks if the supplied variant exists as the name of a
+    /// `GlobalEnum` and returns it as `Ok(GlobalEnumTypeDef)` OR it returns a [`Vec`]
+    /// with all the [`GlobalEnumTypeDef`]s that contain it as the name of a
+    /// variant, in the form of `Err(Vec<GlobalEnumTypeDef>)`. If the [`Vec`] inside
+    /// the `Err` is empty, than the variant name wasn't found at all. The outer
+    /// result will return an `Err` if for some reason the name of the variant cannot be p
     pub(crate) fn get_enum_for_variant_as_token(
         variant: &str,
     ) -> Result<GlobalEnumTypeDef, Vec<&GlobalEnumTypeDef>> {
@@ -185,8 +187,8 @@ impl GlobalEnumTypeDef {
         })
     }
 
-    // This is the equivalent for a Lazy Enum of the `get_props_for_field`
-    // method of a Lazy Record.
+    /// This is the equivalent for a Lazy Enum of the `get_props_for_field`
+    /// method of a Lazy Record.
     pub(crate) fn get_props_for_variant(
         &self,
         field: &crate::ast::Identifier,
@@ -200,8 +202,8 @@ impl GlobalEnumTypeDef {
         }
     }
 
-    // This method returns the data field of a Variant of the GlobalEnum that
-    // is represented by self.
+    /// This method returns the data field of a Variant of the GlobalEnum that
+    /// is represented by self.
     pub(crate) fn get_value_for_variant(
         &self,
         variant: &str,
@@ -299,9 +301,9 @@ impl GlobalEnumTypeDef {
         }
     }
 
-    // This method checks if any variant of any enum of any global enum itself
-    // has the name `variant`, if so it creates and returns a symbol, that
-    // may have some arguments.
+    /// This method checks if any variant of any enum of any global enum itself
+    /// has the name `variant`, if so it creates and returns a symbol, that
+    /// may have some arguments.
     pub(crate) fn any_variant_as_symbol(
         variant: &str,
     ) -> Result<symbols::Symbol, AccessReceiverError> {

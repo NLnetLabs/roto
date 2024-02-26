@@ -17,58 +17,58 @@ use crate::{
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize)]
 pub enum Token {
-    // A value represented by the index of the entry in the `local_variables`
-    // VariableRefTable of the CompilerState.
+    /// A value represented by the index of the entry in the `variables`
+    /// field of the [`SymbolTable`](crate::symbols::SymbolTable).
     Variable(usize),
     Method(usize),
     Variant(usize),
     Argument(usize),
-    // Action Sections can have arguments passed in, a symbol labelled with
-    // this token references that argument. The first usize represents the
-    // index of the TermSection for which it is the `with` argument. The
-    // second usize is the index of the `with` argument per TermSection. For
-    // now this is always zero (only one argument per TermSection allowed).
+    /// Action Sections can have arguments passed in, a symbol labelled with
+    /// this token references that argument. The first usize represents the
+    /// index of the TermSection for which it is the `with` argument. The
+    /// second usize is the index of the `with` argument per `TermSection`. For
+    /// now this is always zero (only one argument per `TermSection` allowed).
     ActionArgument(usize, usize),
-    // Idem but for Terms
+    /// Terms, similar to `Token::ActionArgument`
     TermArgument(usize, usize),
-    // There can only ever be one RxType
+    /// There can only ever be one RxType
     RxType(TypeDef),
-    // There can only ever be one TxType too
+    /// There can only ever be one TxType too
     TxType,
-    // External Data Sources
+    /// External Data Sources
     Table(usize),
     Rib(usize),
-    // A generic stream that can be used by Roto to send messages to and that
-    // can be configured through a Roto script, e.g. a Kafka or a MQTT stream.
+    /// A generic stream that can be used by Roto to send messages to and that
+    /// can be configured through a Roto script, e.g. a Kafka or a MQTT stream.
     OutputStream(usize),
-    // A mapping to the (recursive) field of a record, the first u8 is a
-    // numbered field of the record, the second points into the first
-    // sub-field etc.
+    /// A mapping to the (recursive) field of a record, the first `u8` is a
+    /// numbered field of the record, the second points into the first
+    /// sub-field etc.
     FieldAccess(Vec<u8>),
-    // A numbered term section that was found in the evaluated symbol map.
+    /// A numbered term section that was found in the evaluated symbol map.
     TermSection(usize),
-    // A term that is used only once (in a match expression) and will be
-    // compiled at the spot.
+    /// A term that is used only once (in a match expression) and will be
+    /// compiled at the spot.
     AnonymousTerm,
     ActionSection(usize),
     NoAction,
     MatchAction(usize),
-    // None as data indicates a constant that wasn't stored (yet) in the
-    // symbol table.
+    /// `None`` as data indicates a constant that wasn't stored (yet) in the
+    /// symbol table.
     Constant(Option<usize>),
-    // An anonymous record, the fields live in the `args` vec of the
-    // symbol.
+    /// An anonymous record, the fields live in the `args` vec of the
+    /// symbol.
     AnonymousRecord,
     TypedRecord,
     List,
     BuiltinType(u8),
-    // A named, hard-coded global Enum
+    /// A named, hard-coded global Enum
     Enum(GlobalEnumTypeDef),
-    // Anonymous Enum
+    /// Anonymous Enum
     AnonymousEnum,
     ConstEnumVariant,
-    // Some structural symbols that are non-terminal, meaning they have
-    // children, may not have to need any Token.
+    /// Some structural symbols that are non-terminal, meaning they have
+    /// children, may not have to need any Token.
     NonTerminal,
 }
 
@@ -127,7 +127,6 @@ impl TryFrom<Token> for usize {
     }
 }
 
-// impl From for Field Index.
 impl TryFrom<Token> for FieldIndex {
     type Error = CompileError;
 

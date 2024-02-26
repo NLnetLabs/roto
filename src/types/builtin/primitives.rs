@@ -1601,10 +1601,11 @@ impl VectorValue for routecore::bgp::aspath::HopPath {
         Ok(())
     }
 
-    // Naïve insert that will try to append to the segment that is already in
-    // place at the specified position. Fancier, more conditional ways are
-    // available to the roto user, but those methods are implemented directly
-    // on builtin::AsPath.
+    /// Naïve insert that will try to append to the segment that is already in
+    /// place at the specified position.
+    /// 
+    /// Fancier, more conditional ways are available to the roto user, but
+    /// those methods are implemented directly on [`builtin::AsPath`].
     fn insert_vec(
         &mut self,
         pos: u8,

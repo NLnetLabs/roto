@@ -1,3 +1,32 @@
+//! # The Compiler (Filter creation time)
+//!
+//! Our starting point here is the Global Symbol Table that falls out of the
+//! evaluation of the AST.
+//!
+//! First, the `arguments` map is left alone, all of the values for the
+//! arguments supplied by the caller at filter runtime. All the entries in the
+//! `variables` map could now be compiled to their tokenized values. But, that
+//! may be too much, since a user can declare variables that are never used
+//! anywhere. Therefore we start from the other side, and go over the terms
+//! first and then tokenize all the arguments encountered there. That way we
+//! can signal to the user which variables are actually not used.
+//!
+//! # The Virtual Machine (Filter RunTime)
+//!
+//! The virtual machine starts at each run of a filter and will be called with
+//! the input payload and the with arguments from the `define` section of the
+//! filter-filter-map.
+//!
+//! Our starting point here is the Global Symbol Table that falls out of the
+//! evaluation of the AST.
+//!
+//! First, the `arguments` map is left alone, all of its values should be
+//! supplied by the caller. All the entries in the `variables` map could now
+//! be interpreted to their final values. But that could be too much work,
+//! since users may specify any number of variables that are not actually used
+//! in the filter run-time. If we start from interpreting the terms then we'll
+//! bump only into the variables that are actually used.
+
 use std::{
     collections::{HashMap, VecDeque},
     fmt::{Display, Formatter},
@@ -30,33 +59,6 @@ use crate::{
 };
 
 pub use crate::compiler::error::CompileError;
-
-//============ The Compiler (Filter creation time) ==========================
-
-// Our starting point here is the Global Symbol Table that falls out of the
-// evaluation of the AST.
-// First, the `arguments` map is left alone, all of the values for the
-// arguments supplied by the caller at filter runtime. All the entries in the
-// `variables` map could now be compiled to their tokenized values. But, that
-// may be too much, since a user can declare variables that are never used
-// anywhere. Therefore we start from the other side, and go over the terms
-// first and then tokenize all the arguments encountered there. That way we
-// can signal to the user which variables are actually not used.
-
-//============ The Virtual Machine (Filter RunTime) =========================
-
-// The virtual machine starts at each run of a filter and will be called with
-// the input payload and the with arguments from the `define` section of the
-// filter-filter-map.
-
-// Our starting point here is the Global Symbol Table that falls out of the
-// evaluation of the AST.
-// First, the `arguments` map are left alone, all of their values should be
-// supplied by the caller. All the entries in the `variables` map could now
-// be interpreted to their final values. But that could be too much work,
-// since users may specify any number of variables that are not actually used
-// in the filter run-time. If we start from interpreting the terms then we'll
-// bump only into the variables that are actually used.
 
 //========================== Compiler ========================================
 
@@ -618,50 +620,50 @@ pub(crate) type Action<'a> = &'a Symbol;
 #[derive(Debug)]
 pub(crate) struct CompilerState<'a> {
     cur_filter_map: &'a SymbolTable,
-    // the vec of symbols that hold all the variables that were referenced in
-    // the actions -> terms -> define chain in the source code, i.e. only
-    // actions that reference terms that reference variables that we're
-    // defined in the `Define` section are stored here (as symbols). These
-    // variables are guaranteed to be necessary, no matter how the code
-    // branches. The compiler will unconditionally compile these symbols and
-    // store them at the start of the MIR code.
+    /// the vec of symbols that hold all the variables that were referenced in
+    /// the actions -> terms -> define chain in the source code, i.e. only
+    /// actions that reference terms that reference variables that we're
+    /// defined in the `Define` section are stored here (as symbols). These
+    /// variables are guaranteed to be necessary, no matter how the code
+    /// branches. The compiler will unconditionally compile these symbols and
+    /// store them at the start of the MIR code.
     used_variables: Variables<'a>,
-    // map of variable tokens -> memory positions to use when reading a
-    // variable, filled by the compiler when compiling the `used_variables`.
+    /// map of variable tokens -> memory positions to use when reading a
+    /// variable, filled by the compiler when compiling the `used_variables`.
     pub(crate) variable_ref_table: VariablesRefTable,
     used_data_sources: DataSources<'a>,
-    // The cache of all arguments, global or local with their associated
-    // symbol and code block to generate the retrieval of its value. Note
-    // that this cache cannot be used to figure out if a argument is defined
-    // in a particular scope. For the latter purpose the local_scope vec that
-    // is passed around from eval to nested eval method is used. When the
-    // compiler kicks in, this should already been all solved by the
-    // evaluator. Having said that each argument for each scope has a unique
-    // index, the first element in the tuples it stores is a
-    // Token::ActionArgument or Token::TermArgument. That token has *two*
-    // usize in it, one that corresponds to the ACtionSection or TermSection
-    // it was defined in (it is the value of the token of the section, which
-    // is an index from the enumeration of sections in the source code). The
-    // second usize is the index of the `with` argument of the enumeration of
-    // all the `with` arguments in that section. Currently only one is
-    // allowed, btw.
+    /// The cache of all arguments, global or local with their associated
+    /// symbol and code block to generate the retrieval of its value. Note
+    /// that this cache cannot be used to figure out if a argument is defined
+    /// in a particular scope. For the latter purpose the local_scope vec that
+    /// is passed around from eval to nested eval method is used. When the
+    /// compiler kicks in, this should already been all solved by the
+    /// evaluator. Having said that each argument for each scope has a unique
+    /// index, the first element in the tuples it stores is a
+    /// Token::ActionArgument or Token::TermArgument. That token has *two*
+    /// usize in it, one that corresponds to the ACtionSection or TermSection
+    /// it was defined in (it is the value of the token of the section, which
+    /// is an index from the enumeration of sections in the source code). The
+    /// second usize is the index of the `with` argument of the enumeration of
+    /// all the `with` arguments in that section. Currently only one is
+    /// allowed, btw.
     pub(crate) used_arguments: Arguments<'a>,
     pub(crate) cur_mir_block: MirBlock,
-    // This holds the flattened stack-friendly data-structure for a variable,
-    // up until the current field index, if the variable is a scalar, then the
-    // field index is an empty (small)vec.
+    /// This holds the flattened stack-friendly data-structure for a variable,
+    /// up until the current field index, if the variable is a scalar, then the
+    /// field index is an empty (small)vec.
     pub(crate) cur_partial_variable: Option<CompiledVariable>,
-    // This keeps track of the depth in the original record, while compiling
-    // recursively.
+    /// This keeps track of the depth in the original record, while compiling
+    /// recursively.
     pub(crate) cur_record_depth: usize,
-    // This keeps track of the current field we are recursively compiling,
+    /// This keeps track of the current field we are recursively compiling,
     pub(crate) cur_record_field_index: FieldIndex,
-    // The name of the Record we are currently (recursively) compiling.
+    /// The name of the Record we are currently (recursively) compiling.
     pub(crate) cur_record_field_name: Option<ShortString>,
-    // The type of the Record we are currently (recursively) compiling.
+    /// The type of the Record we are currently (recursively) compiling.
     pub(crate) cur_record_type: Option<RecordTypeDef>,
-    // the memory position that is currently empty and available to be
-    // written to.
+    /// the memory position that is currently empty and available to be
+    /// written to.
     pub(crate) cur_mem_pos: u32,
     var_read_only: bool,
     compiled_terms: TermSections<'a>,
@@ -1230,12 +1232,12 @@ fn compile_filter_map(
     ))
 }
 
-// Compiles the variable assignments, creates a MirBlock that retrieves and/or
-// computes the value of the variable and stores it in the
-// `variables_ref_table` map. Note that in cases where the variables
-// assignments points to a field access, the access receiver of the assignment
-// is stored together with the field_index on the access receiver that points
-// to the actual variable assignment.
+/// Compiles the variable assignments, creates a MirBlock that retrieves and/or
+/// computes the value of the variable and stores it in the
+/// `variables_ref_table` map. Note that in cases where the variables
+/// assignments points to a field access, the access receiver of the assignment
+/// is stored together with the field_index on the access receiver that points
+/// to the actual variable assignment.
 fn compile_assignments(
     mut state: CompilerState<'_>,
 ) -> Result<CompilerState<'_>, CompileError> {
