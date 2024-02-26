@@ -31,7 +31,7 @@ fn test_data(
     }
 
     let rotolo = compile_res?;
-    let roto_pack = rotolo.retrieve_pack_as_arcs(&name)?;
+    let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     let rm_msg = BytesRecord::<RouteMonitoring>::new(buf.clone().into());
     assert!(rm_msg.is_ok());
@@ -96,7 +96,7 @@ fn test_data_2(
     }
 
     let rotolo = compile_res?;
-    let roto_pack = rotolo.retrieve_pack_as_arcs(&name)?;
+    let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     let buf = vec![
         0x03, 0x00, 0x00, 0x00, 0x67, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -169,7 +169,7 @@ fn test_data_3(
     }
 
     let rotolo = compile_res?;
-    let roto_pack = rotolo.retrieve_pack_as_arcs(&name)?;
+    let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     // BMP PeerDownNotification type 3, containing a BGP NOTIFICATION.
     let buf = vec![
@@ -240,7 +240,7 @@ fn test_data_4(
         }
 
         let rotolo = compile_res?;
-        let roto_pack = rotolo.retrieve_pack_as_arcs(&name)?;
+        let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
     
         trace!("Used Arguments");
         trace!("{:#?}", &roto_pack.get_arguments());
@@ -303,7 +303,7 @@ fn compile_initiation_payload(
     }
 
     let rotolo = compile_res?;
-    let roto_pack = rotolo.retrieve_pack_as_arcs(&name)?;
+    let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     // assert!(i_msg.is_ok());
 

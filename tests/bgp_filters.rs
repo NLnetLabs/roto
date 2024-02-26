@@ -38,7 +38,7 @@ fn test_data(
     }
 
     let rotolo = compile_res?;
-    let roto_pack = rotolo.retrieve_pack_as_arcs(&name)?;
+    let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     // Create a BGP packet
     let prefix_str = "192.0.2.1";

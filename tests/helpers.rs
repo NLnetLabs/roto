@@ -61,11 +61,7 @@ impl<'a> TestCompiler<'a> {
         trace!("compile eval {}", self.name);
         let compile_res = self.compiler.compile().unwrap();
 
-        let res = if compile_res.is_success() {
-            Ok(())
-        } else {
-            Err(compile_res.get_mis_compilations().to_vec())
-        };
+        let res = compile_res.packs().map(|_| ());
 
         match expect_success {
             false => assert!(res.is_err()),

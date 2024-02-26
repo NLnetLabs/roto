@@ -252,7 +252,8 @@ fn test_records_compare_6() {
         .to_string();
     assert_eq!(
         test_run,
-        "This record: {\n\tasn: AS100\n   } is of type Record {asn: Asn, i: U8, }, but we got a record with type Record {asn: Asn, }. It's not the same and cannot be converted."
+        "The filter-map filter-map 'in-filter-map' was defined for but contained the following error:\n\
+        This record: {\n\tasn: AS100\n   } is of type Record {asn: Asn, i: U8, }, but we got a record with type Record {asn: Asn, }. It's not the same and cannot be converted."
     );
 }
 
