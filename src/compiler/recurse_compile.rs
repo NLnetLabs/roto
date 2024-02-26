@@ -33,12 +33,12 @@ pub(crate) fn recurse_compile<'a>(
     // reference or assignment should always bef an AccessReceiver.
     trace!(
         "recurse compile Symbol with name {} and token {:?}",
-        symbol.get_name(),
-        symbol.get_token()
+        symbol.name,
+        symbol.token
     );
-    let is_ar = symbol.get_kind() == SymbolKind::AccessReceiver;
-    let token = symbol.get_token();
-    let kind = symbol.get_kind();
+    let is_ar = symbol.kind == SymbolKind::AccessReceiver;
+    let token = &symbol.token;
+    let kind = symbol.kind;
 
     match token {
         // ACCESS RECEIVERS
@@ -48,28 +48,28 @@ pub(crate) fn recurse_compile<'a>(
         // level of the children of an assignment.
         Token::Variable(var_to) => {
             trace!("var_to {}", var_to);
-            trace!("kind {:?}", symbol.get_kind());
+            trace!("kind {:?}", symbol.kind);
             assert!(is_ar);
-            assert!(symbol.get_kind() != SymbolKind::VariableAssignment);
+            assert!(symbol.kind != SymbolKind::VariableAssignment);
 
             let var_ref = state
                 .variable_ref_table
-                .get_by_token_value(var_to)
+                .get_by_token_value(*var_to)
                 .ok_or_else(|| {
                     CompileError::Internal(format!(
                         "Cannot compile variable: '{}'",
-                        symbol.get_name()
+                        symbol.name
                     ))
                 })?;
 
             trace!("var ref {:#?}", var_ref);
 
             // start a new record or increase the depth level.
-            let var_type = &symbol.get_type();
+            let var_type = &symbol.ty;
 
             match var_type {
                 TypeDef::Record(_rec_type) => {
-                    match symbol.get_kind() {
+                    match symbol.kind {
                         SymbolKind::NamedType => {}
                         SymbolKind::AnonymousType => {}
                         kind => {
@@ -90,8 +90,8 @@ pub(crate) fn recurse_compile<'a>(
             // A referenced variable can only have zero or one child. Zero
             // children means that we're going to push all the fields of the
             // variable unto the stack.
-            assert!(symbol.get_args().iter().count() < 2);
-            if symbol.get_args().is_empty() {
+            assert!(symbol.args.iter().count() < 2);
+            if symbol.args.is_empty() {
                 state.extend_commands(var_ref.get_accumulated_commands());
             }
         }
@@ -105,20 +105,20 @@ pub(crate) fn recurse_compile<'a>(
             if let Some((_, arg, _)) = state
                 .used_arguments
                 .iter()
-                .find(|(to, arg, _)| to == &token && !arg.has_unknown_value())
+                .find(|(to, arg, _)| to == token && !arg.has_unknown_value())
             {
                 state.push_command(
                     OpCode::MemPosSet,
                     vec![
                         CommandArg::MemPos(state.cur_mem_pos),
-                        CommandArg::ConstantIndex(arg.get_value().clone()),
+                        CommandArg::ConstantIndex(arg.value.clone()),
                     ],
                 );
             } else {
                 state.push_command(
                     OpCode::PushArgToStack,
                     vec![
-                        CommandArg::Argument(arg_to),
+                        CommandArg::Argument(*arg_to),
                         // CommandArg::MemPos(state.cur_mem_pos),
                     ],
                 );
@@ -143,8 +143,8 @@ pub(crate) fn recurse_compile<'a>(
         // An enum variant mentioned in an arm of a match expression
         Token::Variant(_var_to) => {
             assert!(
-                symbol.get_kind() == SymbolKind::EnumVariant
-                    || symbol.get_kind() == SymbolKind::AccessReceiver
+                symbol.kind == SymbolKind::EnumVariant
+                    || symbol.kind == SymbolKind::AccessReceiver
             );
             trace!("VARIANT {}", _var_to);
         }
@@ -160,8 +160,8 @@ pub(crate) fn recurse_compile<'a>(
                     return Ok(state);
                 }
                 Ok(first_arg) => {
-                    trace!("commands for RxType named {}", symbol.get_name());
-                    state.cur_record_field_name = Some(first_arg.get_name());
+                    trace!("commands for RxType named {}", symbol.name);
+                    state.cur_record_field_name = Some(first_arg.name.clone());
                     if let Some(v) = state.cur_partial_variable.as_mut() {
                         v.append_primitive(
                             crate::vm::CompiledPrimitiveField::new(
@@ -173,7 +173,7 @@ pub(crate) fn recurse_compile<'a>(
                                     Command::new(
                                         OpCode::StackOffset,
                                         vec![CommandArg::FieldIndex(
-                                            first_arg.get_token().try_into()?,
+                                            first_arg.token.clone().try_into()?,
                                         )],
                                     ),
                                 ],
@@ -189,18 +189,18 @@ pub(crate) fn recurse_compile<'a>(
                             Command::new(
                                 OpCode::StackOffset,
                                 vec![CommandArg::FieldIndex(
-                                    first_arg.get_token().try_into()?,
+                                    first_arg.token.clone().try_into()?,
                                 )],
                             ),
                         ]);
                     };
 
                     // local recursion on the children of the first argument.
-                    parent_token = Some(first_arg.get_token());
-                    for arg in first_arg.get_args() {
+                    parent_token = Some(first_arg.token.clone());
+                    for arg in &first_arg.args {
                         trace!("locally recurse tx argument {:?}", arg);
                         state = recurse_compile(arg, state, parent_token, inc_mem_pos)?;
-                        parent_token = Some(arg.get_token());
+                        parent_token = Some(arg.token.clone());
                     }
                     return Ok(state);
                 }
@@ -214,7 +214,7 @@ pub(crate) fn recurse_compile<'a>(
         }
         // a constant value
         Token::Constant(_) => {
-            let val = symbol.get_value();
+            let val = &symbol.value;
             trace!("encode constant value {:?}", val);
 
             // constants referenced in a ValueExpr in the right-hand of an
@@ -261,13 +261,13 @@ pub(crate) fn recurse_compile<'a>(
         // disambiguate variant of Global Enums that have the same name.
         Token::Enum(_) => {
             trace!("ENUM {:?}", symbol);
-            trace!("ENUM VALUES {:?}", symbol.get_args());
+            trace!("ENUM VALUES {:?}", symbol.args);
             assert!(is_ar);
         }
         Token::ConstEnumVariant => {
-            trace!("ENUM VARIANT VALUE {:?}", symbol.get_value());
+            trace!("ENUM VARIANT VALUE {:?}", symbol.value);
 
-            let val = symbol.get_value();
+            let val = &symbol.value;
 
             // Push the result to the stack for an (optional) next Accessor
             // to be used.
@@ -301,21 +301,21 @@ pub(crate) fn recurse_compile<'a>(
             // (parent, argument)  : (None, arg1), (Token(arg1), arg2) ->
             // (token(arg2), arg3), etc.
             let mut arg_parent_token = None;
-            for arg in symbol.get_args() {
+            for arg in &symbol.args {
                 state = recurse_compile(
                     arg,
                     state,
                     arg_parent_token,
                     inc_mem_pos,
                 )?;
-                arg_parent_token = Some(arg.get_token());
+                arg_parent_token = Some(arg.token.clone());
             }
             let parent_token = if let Some(parent_token) = parent_token {
                 parent_token
             } else {
                 return Err(CompileError::Internal(format!(
                     "Cannot compile method: {:?}",
-                    symbol.get_name()
+                    symbol.name
                 )));
             };
 
@@ -328,12 +328,12 @@ pub(crate) fn recurse_compile<'a>(
                         OpCode::ExecuteDataStoreMethod,
                         vec![
                             CommandArg::DataSourceTable(t_to),
-                            CommandArg::Method(m_to),
+                            CommandArg::Method(*m_to),
                             CommandArg::Arguments(
                                 symbol
-                                    .get_args()
+                                    .args
                                     .iter()
-                                    .map(|s| s.get_type())
+                                    .map(|s| s.ty.clone())
                                     .collect::<Vec<_>>(),
                             ), // argument types and number
                             CommandArg::MemPos(state.cur_mem_pos),
@@ -346,12 +346,12 @@ pub(crate) fn recurse_compile<'a>(
                         OpCode::ExecuteDataStoreMethod,
                         vec![
                             CommandArg::DataSourceRib(r_to),
-                            CommandArg::Method(m_to),
+                            CommandArg::Method(*m_to),
                             CommandArg::Arguments(
                                 symbol
-                                    .get_args()
+                                    .args
                                     .iter()
-                                    .map(|s| s.get_type())
+                                    .map(|s| s.ty.clone())
                                     .collect::<Vec<_>>(),
                             ), // argument types and number
                             CommandArg::MemPos(state.cur_mem_pos),
@@ -368,9 +368,9 @@ pub(crate) fn recurse_compile<'a>(
                             CommandArg::Method(o_s),
                             CommandArg::Arguments(
                                 symbol
-                                    .get_args()
+                                    .args
                                     .iter()
-                                    .map(|s| s.get_type())
+                                    .map(|s| s.ty.clone())
                                     .collect::<Vec<_>>(),
                             ), // argument types and number
                             CommandArg::MemPos(state.cur_mem_pos),
@@ -383,13 +383,13 @@ pub(crate) fn recurse_compile<'a>(
                     state.push_command(
                         OpCode::ExecuteTypeMethod,
                         vec![
-                            CommandArg::Type(symbol.get_type()), // return type
-                            CommandArg::Method(token.try_into()?), // method token
+                            CommandArg::Type(symbol.ty.clone()), // return type
+                            CommandArg::Method(token.clone().try_into()?), // method token
                             CommandArg::Arguments(
                                 symbol
-                                    .get_args()
+                                    .args
                                     .iter()
-                                    .map(|s| s.get_type())
+                                    .map(|s| s.ty.clone())
                                     .collect::<Vec<_>>(),
                             ),
                         ],
@@ -397,31 +397,31 @@ pub(crate) fn recurse_compile<'a>(
                 }
                 // The parent is a List
                 Token::List => {
-                    trace!("LIST PARENT ARGS {:#?}", symbol.get_args());
+                    trace!("LIST PARENT ARGS {:#?}", symbol.args);
                 }
                 // The parent is a Record
                 Token::AnonymousRecord => {
                     trace!(
                         "ANONYMOUS RECORD PARENT ARGS {:#?}",
-                        symbol.get_args()
+                        symbol.args
                     );
                 }
                 Token::TypedRecord => {
                     trace!(
                         "TYPED RECORD PARENT ARGS {:#?}",
-                        symbol.get_args()
+                        symbol.args
                     );
                 }
                 Token::Enum(_) => {
-                    trace!("ENUM PARENT ARGS {:#?}", symbol.get_args());
+                    trace!("ENUM PARENT ARGS {:#?}", symbol.args);
                 }
                 Token::Variant(_) => {
-                    trace!("VARIANT {:?}", symbol.get_args());
+                    trace!("VARIANT {:?}", symbol.args);
                 }
                 Token::ConstEnumVariant => {
                     trace!(
                         "CONST ENUM VARIANT PARENT ARGS {:#?}",
-                        symbol.get_args()
+                        symbol.args
                     );
                 }
                 // The parent is a Field Access, this symbol is one of:
@@ -446,13 +446,13 @@ pub(crate) fn recurse_compile<'a>(
                             state.push_command(
                                 OpCode::ExecuteValueMethod,
                                 vec![
-                                    CommandArg::Method(token.try_into()?),
-                                    CommandArg::Type(symbol.get_type()),
+                                    CommandArg::Method(token.clone().try_into()?),
+                                    CommandArg::Type(symbol.ty.clone()),
                                     CommandArg::Arguments(
                                         symbol
-                                            .get_args()
+                                            .args
                                             .iter()
-                                            .map(|s| s.get_type())
+                                            .map(|s| s.ty.clone())
                                             .collect::<Vec<_>>(),
                                     ),
                                 ],
@@ -463,13 +463,13 @@ pub(crate) fn recurse_compile<'a>(
                             state.push_command(
                                 OpCode::ExecuteConsumeValueMethod,
                                 vec![
-                                    CommandArg::Method(token.try_into()?),
-                                    CommandArg::Type(symbol.get_type()),
+                                    CommandArg::Method(token.clone().try_into()?),
+                                    CommandArg::Type(symbol.ty.clone()),
                                     CommandArg::Arguments(
                                         symbol
-                                            .get_args()
+                                            .args
                                             .iter()
-                                            .map(|s| s.get_type())
+                                            .map(|s| s.ty.clone())
                                             .collect::<Vec<_>>(),
                                     )
                                 ],
@@ -478,7 +478,7 @@ pub(crate) fn recurse_compile<'a>(
                         kind => {
                             return Err(CompileError::Internal(format!(
                                 "Invalid Method Call: '{}' with kind {:?}",
-                                symbol.get_name(),
+                                symbol.name,
                                 kind
                             )));
                         }
@@ -506,13 +506,13 @@ pub(crate) fn recurse_compile<'a>(
                 Token::AnonymousEnum => {
                     return Err(CompileError::Internal(format!(
                         "Cannot compile Anonymous Enum inside method in {}",
-                        symbol.get_name()
+                        symbol.name
                     )));
                 }
                 Token::NonTerminal => {
                     return Err(CompileError::Internal(format!(
                         "Cannot compile method in {}",
-                        symbol.get_name()
+                        symbol.name
                     )));
                 }
             };
@@ -542,7 +542,7 @@ pub(crate) fn recurse_compile<'a>(
                 // LazyFieldAccess as its kind.
                 Some(Token::Variant(_var_to)) => {
                     assert_eq!(
-                        symbol.get_kind(),
+                        symbol.kind,
                         SymbolKind::LazyFieldAccess
                     );
                     trace!(
@@ -558,7 +558,7 @@ pub(crate) fn recurse_compile<'a>(
                         CommandArg::Type(TypeDef::LazyRecord(
                             LazyRecordTypeDef::from(_var_to),
                         )),
-                        CommandArg::Type(symbol.get_type()),
+                        CommandArg::Type(symbol.ty.clone()),
                     ];
 
                     state.push_command(OpCode::LoadLazyFieldValue, args);
@@ -577,7 +577,7 @@ pub(crate) fn recurse_compile<'a>(
                 // FieldAccess, or a LazyFieldAccess kind.
                 Some(Token::ActionArgument(_, _))
                 | Some(Token::TermArgument(_, _)) => {
-                    trace!("name {}", symbol.get_name());
+                    trace!("name {}", symbol.name);
                     trace!(
                         "LazyFieldAccess {:?} with action argument {:?}",
                         fa,
@@ -594,7 +594,7 @@ pub(crate) fn recurse_compile<'a>(
                         .ok_or_else(|| {
                             CompileError::Internal(format!(
                                 "Cannot compile argument: {}",
-                                symbol.get_name()
+                                symbol.name
                             ))
                         })?;
 
@@ -603,16 +603,16 @@ pub(crate) fn recurse_compile<'a>(
                     state.cur_mir_block.extend(
                         generate_code_for_token_value(
                             &state,
-                            argument_s.get_token(),
+                            &argument_s.token,
                         ),
                     );
 
-                    match symbol.get_kind() {
+                    match symbol.kind {
                         SymbolKind::LazyFieldAccess => {
                             let args = vec![
                                 CommandArg::FieldIndex(FieldIndex::from(fa)),
-                                CommandArg::Type(argument_s.get_type()),
-                                CommandArg::Type(symbol.get_type()),
+                                CommandArg::Type(argument_s.ty.clone()),
+                                CommandArg::Type(symbol.ty.clone()),
                             ];
 
                             state.push_command(
@@ -628,7 +628,7 @@ pub(crate) fn recurse_compile<'a>(
                         _ => {
                             return Err(CompileError::from(format!(
                                 "Invalid FieldAccess Kind in {:#?}",
-                                symbol.get_name()
+                                symbol.name
                             )));
                         }
                     };
@@ -700,7 +700,7 @@ pub(crate) fn recurse_compile<'a>(
         // blocks for a variant in a match expressions (at least for now).
         Token::AnonymousTerm => {
             trace!("TOKEN ANONYMOUS SYMBOL {:#?}", symbol);
-            let sub_terms = symbol.get_args();
+            let sub_terms = &symbol.args;
 
             let mut sub_terms = sub_terms.iter().peekable();
             while let Some(sub_term) = &mut sub_terms.next() {
@@ -768,12 +768,12 @@ pub(crate) fn recurse_compile<'a>(
 
             // A new record increases the depth of the record current we are
             // tracking.
-            state.inc_record_field_depth(symbol.get_name())?;
+            state.inc_record_field_depth(symbol.name.clone())?;
 
             if let Some(var) = state.cur_partial_variable.as_mut() {
                 trace!("new collection {:?}", state.cur_record_field_name);
                 trace!("compiled var {:?}", var);
-                trace!("TYPE {:#?}", symbol.get_type());
+                trace!("TYPE {:#?}", symbol.ty);
 
                 var.append_collection(CompiledCollectionField::new(
                     state.cur_record_field_index.clone(),
@@ -782,8 +782,8 @@ pub(crate) fn recurse_compile<'a>(
 
             state.cur_record_field_index.push(0);
             state.cur_record_type =
-                if let TypeDef::Record(rec_type) = symbol.get_type() {
-                    Some(rec_type)
+                if let TypeDef::Record(rec_type) = &symbol.ty {
+                    Some(rec_type.clone())
                 } else {
                     None
                 };
@@ -797,14 +797,14 @@ pub(crate) fn recurse_compile<'a>(
             // from the original &[Symbol]. The vec can then be re-ordered
             // and we're writing the state in the order of the vec elements.
             let mut field_symbols =
-                symbol.get_args().iter().collect::<Vec<_>>();
-            field_symbols.sort_by_key(|a| a.get_name());
+                symbol.args.iter().collect::<Vec<_>>();
+            field_symbols.sort_by_key(|a| &a.name);
             trace!("field index {:?}", state.cur_record_field_index);
             trace!("ANONYMOUS RECORD FIELDS {:#?}", field_symbols);
 
             // Local recursion
             for arg in field_symbols {
-                let new_field_name = arg.get_name();
+                let new_field_name = &arg.name;
                 state.cur_record_field_name = Some(new_field_name.clone());
                 if let Some(rec_type) = state.cur_record_type.clone() {
                     trace!("field name {:?}", new_field_name);
@@ -821,13 +821,13 @@ pub(crate) fn recurse_compile<'a>(
                     }
                 };
 
-                state.cur_record_field_name = Some(arg.get_name());
+                state.cur_record_field_name = Some(arg.name.clone());
                 state = recurse_compile(arg, state, None, true)?;
             }
 
             state.cur_record_type =
-                if let TypeDef::Record(rec_type) = symbol.get_type() {
-                    Some(rec_type)
+                if let TypeDef::Record(rec_type) = &symbol.ty {
+                    Some(rec_type.clone())
                 } else {
                     None
                 };
@@ -843,9 +843,9 @@ pub(crate) fn recurse_compile<'a>(
             assert!(!is_ar);
 
             let mut field_symbols =
-                symbol.get_args().iter().collect::<Vec<_>>();
-            field_symbols.sort_by_key(|a| a.get_name());
-            trace!("TYPED RECORD FIELDS {:#?}", symbol.get_args());
+                symbol.args.iter().collect::<Vec<_>>();
+            field_symbols.sort_by_key(|a| &a.name);
+            trace!("TYPED RECORD FIELDS {:#?}", symbol.args);
 
             // See if the supplied typedef lines up with the typedef of the
             // name of the type that was also supplied.
@@ -853,7 +853,7 @@ pub(crate) fn recurse_compile<'a>(
             let mut values = vec![];
 
             for v in symbol
-                .get_recursive_values_primitive(symbol.get_type())? {
+                .get_recursive_values_primitive(&symbol.ty)? {
                 values.push((v.0.clone(), v.2.clone().try_into().map_err(|e: VmError| CompileError::from(e.to_string()))?))
             }
 
@@ -871,16 +871,16 @@ pub(crate) fn recurse_compile<'a>(
             let value_type = Record::new(values);
             // trace!("value_type {:?}", value_type);
 
-            if symbol.get_type() != TypeValue::Record(value_type.clone()) {
+            if symbol.ty != TypeValue::Record(value_type.clone()) {
                 return Err(CompileError::from(format!(
                     "This record: {} is of type {}, but we got a record with \
                     type {}. It's not the same and cannot be converted.",
                     value_type,
-                    symbol.get_type(),
+                    symbol.ty,
                     TypeDef::Record(
                         field_symbols
                             .iter()
-                            .map(|v| (v.get_name(), Box::new(v.get_type())))
+                            .map(|v| (v.name.clone(), Box::new(v.ty.clone())))
                             .collect::<Vec<_>>()
                             .into()
                     )
@@ -891,12 +891,12 @@ pub(crate) fn recurse_compile<'a>(
 
             // A new record increases the depth of the record current we are
             // tracking.
-            state.inc_record_field_depth(symbol.get_name())?;
+            state.inc_record_field_depth(symbol.name.clone())?;
 
             if let Some(var) = state.cur_partial_variable.as_mut() {
                 trace!("new collection {:?}", state.cur_record_field_name);
                 trace!("compiled var {:?}", var);
-                trace!("TYPE {:#?}", symbol.get_type());
+                trace!("TYPE {:#?}", symbol.ty);
 
                 var.append_collection(CompiledCollectionField::new(
                     state.cur_record_field_index.clone(),
@@ -905,15 +905,15 @@ pub(crate) fn recurse_compile<'a>(
 
             state.cur_record_field_index.push(0);
             state.cur_record_type =
-                if let TypeDef::Record(rec_type) = symbol.get_type() {
-                    Some(rec_type)
+                if let TypeDef::Record(rec_type) = &symbol.ty {
+                    Some(rec_type.clone())
                 } else {
                     None
                 };
 
             // Local recursion
             for arg in field_symbols {
-                let new_field_name = arg.get_name();
+                let new_field_name = &arg.name;
                 state.cur_record_field_name = Some(new_field_name.clone());
                 if let Some(rec_type) = state.cur_record_type.clone() {
                     trace!("field name {:?}", new_field_name);
@@ -930,13 +930,13 @@ pub(crate) fn recurse_compile<'a>(
                     }
                 };
 
-                state.cur_record_field_name = Some(arg.get_name());
+                state.cur_record_field_name = Some(arg.name.clone());
                 state = recurse_compile(arg, state, None, true)?;
             }
 
             state.cur_record_type =
-                if let TypeDef::Record(rec_type) = symbol.get_type() {
-                    Some(rec_type)
+                if let TypeDef::Record(rec_type) = &symbol.ty {
+                    Some(rec_type.clone())
                 } else {
                     None
                 };
@@ -954,8 +954,8 @@ pub(crate) fn recurse_compile<'a>(
             assert!(!is_ar);
             let mut values: Vec<ElementTypeValue> = vec![];
 
-            for v in symbol.get_args() {
-                values.push(v.get_value().clone().try_into().map_err(|e: VmError| CompileError::from(e.to_string()))?);
+            for v in &symbol.args {
+                values.push(v.value.clone().try_into().map_err(|e: VmError| CompileError::from(e.to_string()))?);
             }
 
             trace!("LIST VALUES {:?}", values);
@@ -970,13 +970,13 @@ pub(crate) fn recurse_compile<'a>(
         Token::AnonymousEnum => {
             return Err(CompileError::Internal(format!(
                 "Cannot compile Anonymous Enum in {:?}",
-                symbol.get_name()
+                symbol.name
             )));
         }
         Token::NonTerminal => {
             return Err(CompileError::Internal(format!(
                 "Cannot compile entity {:?}",
-                symbol.get_name()
+                symbol.name
             )));
         }
     };
@@ -998,23 +998,23 @@ pub(crate) fn recurse_compile<'a>(
     // (token(arg2), arg3), etc.
 
     trace!("parent token {:?}", parent_token);
-    trace!("current token {:?}", symbol.get_token());
+    trace!("current token {:?}", symbol.token);
 
-    if let Token::ActionArgument(_, _) = symbol.get_token() {
-        parent_token = Some(symbol.get_token());
+    if let Token::ActionArgument(_, _) = symbol.token {
+        parent_token = Some(symbol.token.clone());
     } else {
         parent_token = if parent_token.is_some() {
             parent_token
         } else {
-            Some(symbol.get_token())
+            Some(symbol.token.clone())
         };
     }
     trace!("resulting token {:?}", parent_token);
 
     // tail recursion
-    for arg in symbol.get_args() {
+    for arg in &symbol.args {
         state = recurse_compile(arg, state, parent_token, inc_mem_pos)?;
-        parent_token = Some(arg.get_token());
+        parent_token = Some(arg.token.clone());
     }
 
     Ok(state)
