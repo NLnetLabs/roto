@@ -5,7 +5,7 @@ mod route {
     use super::super::{
         IntegerLiteral, PrefixLength, StringLiteral,
     };
-    use crate::ast::{IpAddressLiteral, AsnLiteral};
+    use crate::ast::{AsnLiteral, IpAddress};
     use crate::types::builtin::BuiltinTypeValue;
     use crate::types::typedef::TypeDef;
     use crate::types::typevalue::TypeValue;
@@ -1087,7 +1087,7 @@ src_ty.clone().test_type_conversion(arg_ty)"]
     fn test_ip_address_literal_1() -> Result<(), CompileError> {
         init();
 
-        let test_value = IpAddr::try_from(&IpAddressLiteral("24.0.2.0".to_string())).unwrap();
+        let test_value = IpAddr::from(&IpAddress::parse("24.0.2.0").unwrap().1);
         let res = std::net::IpAddr::from([24,0,2,0]);
         mk_converted_type_value(test_value, res)
     }
@@ -1096,7 +1096,7 @@ src_ty.clone().test_type_conversion(arg_ty)"]
     fn test_ip_address_literal_2() -> Result<(), CompileError> {
         init();
 
-        let test_value = IpAddr::try_from(&IpAddressLiteral("24.0.2.0".to_string())).unwrap();
+        let test_value = IpAddr::from(&IpAddress::parse("24.0.2.0").unwrap().1);
         let res = StringLiteral("24.0.2.0".into());
         mk_converted_type_value(test_value, res)
     }
@@ -1105,7 +1105,7 @@ src_ty.clone().test_type_conversion(arg_ty)"]
     fn test_ip_address_literal_3() -> Result<(), CompileError> {
         init();
 
-        let test_value = IpAddr::try_from(&IpAddressLiteral("2001::ffff".to_string())).unwrap();
+        let test_value = IpAddr::from(&IpAddress::parse("2001::ffff").unwrap().1);
         let res = std::net::IpAddr::from([0x2001,0x0,0x0,0x0,0x0,0x0,0x0,0xffff]);
 
         assert_eq!(TypeValue::from(test_value).into_builtin()?, BuiltinTypeValue::IpAddr(res));

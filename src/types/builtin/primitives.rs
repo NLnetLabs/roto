@@ -5,7 +5,7 @@ use log::{debug, error, trace};
 use paste::paste;
 use serde::Serialize;
 
-use crate::ast::{IpAddressLiteral, PrefixLiteral};
+use crate::ast;
 use crate::attr_change_set::{ScalarValue, VectorValue};
 use crate::compiler::compile::CompileError;
 use crate::traits::RotoType;
@@ -997,17 +997,16 @@ impl RotoType for routecore::addr::Prefix {
 
 typevaluefromimpls!(Prefix);
 
-impl TryFrom<&'_ PrefixLiteral> for routecore::addr::Prefix {
+impl TryFrom<&'_ ast::Prefix> for routecore::addr::Prefix {
     type Error = CompileError;
-
-    fn try_from(value: &PrefixLiteral) -> Result<Self, Self::Error> {
-        <Prefix as std::str::FromStr>::from_str(
-            value.0.as_str(),
-        )
-        .map_err(|e| {
+    fn try_from(value: &ast::Prefix) -> Result<Self, Self::Error> {
+        let ast::Prefix {
+            addr,
+            len: ast::PrefixLength(len),
+        } = value;
+        Prefix::new(addr.into(), *len).map_err(|_| {
             CompileError::from(format!(
-                "Cannot parse '{:?}' as a Prefix: {}",
-                value, e
+                "Cannot construct prefix from address {addr} and length {len}"
             ))
         })
     }
@@ -1397,22 +1396,14 @@ impl RotoType for IpAddr {
 
 typevaluefromimpls!(IpAddr);
 
-impl TryFrom<&'_ IpAddressLiteral> for IpAddr {
-    type Error = CompileError;
-
-    fn try_from(value: &IpAddressLiteral) -> Result<Self, Self::Error> {
-        <std::net::IpAddr as std::str::FromStr>::from_str(
-                value.0.as_str(),
-            )
-            .map_err(|e| {
-                CompileError::from(format!(
-                    "Cannot parse '{:?}' as an IP Address: {}",
-                    value, e
-                ))
-            })
+impl From<&'_ ast::IpAddress> for IpAddr {
+    fn from(value: &ast::IpAddress) -> Self {
+        match value {
+            ast::IpAddress::Ipv4(ast::Ipv4Addr(v4)) => Self::V4(v4.clone()),
+            ast::IpAddress::Ipv6(ast::Ipv6Addr(v6)) => Self::V6(v6.clone()),
+        }
     }
 }
-
 
 // ----------- Asn type -----------------------------------------------------
 
