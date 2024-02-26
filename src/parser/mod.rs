@@ -1,20 +1,20 @@
 use crate::ast::{
     AcceptReject, AccessExpr, AccessReceiver, AnonymousRecordValueExpr,
-    ApplyBody, ApplyScope, ApplySection, ArgExprList, AsnLiteral,
-    BooleanLiteral, ComputeExpr, Define, DefineBody, FieldAccessExpr,
-    FilterMap, FilterMapBody, FilterMapExpr, FilterMatchActionExpr,
-    FilterType, HexLiteral, Identifier, IntegerLiteral, IpAddress, Ipv4Addr,
-    Ipv6Addr, ListTypeIdentifier, ListValueExpr, LiteralAccessExpr,
-    LiteralExpr, MatchActionExpr, MatchOperator, MethodComputeExpr,
-    OutputStream, PrefixLength, PrefixLengthLiteral,
+    ApplyBody, ApplyScope, ArgExprList, AsnLiteral, BooleanLiteral,
+    ComputeExpr, DefineBody, FieldAccessExpr, FilterMatchActionExpr,
+    HexLiteral, Identifier, IntegerLiteral, IpAddress, Ipv4Addr, Ipv6Addr,
+    ListValueExpr, LiteralAccessExpr, LiteralExpr, MatchActionExpr,
+    MatchOperator, MethodComputeExpr, PrefixLength, PrefixLengthLiteral,
     PrefixLengthRange, PrefixMatchExpr, PrefixMatchType,
-    RecordTypeAssignment, RecordTypeIdentifier, Rib, RibBody, RibField,
-    RootExpr, RxTxType, StringLiteral, SyntaxTree, Table, TypeIdentField,
-    TypeIdentifier, TypedRecordValueExpr, ValueExpr,
+    RecordTypeAssignment, RootExpr, RxTxType, StringLiteral, SyntaxTree,
+    TypeIdentField, TypeIdentifier, TypedRecordValueExpr, ValueExpr,
 };
 use crate::token::Token;
 use logos::{Lexer, Span, SpannedIter};
 use std::iter::Peekable;
+
+mod rib_like;
+mod filter_map;
 
 type ParseResult<T> = Result<T, ParseError>;
 
@@ -175,207 +175,6 @@ impl<'source> Parser<'source> {
             _ => return Err(ParseError::Todo),
         };
         Ok(expr)
-    }
-
-    /// Parse a rib expression
-    ///
-    /// ```ebnf
-    /// Rib ::= 'rib' Identifier
-    ///         'contains' TypeIdentifier
-    ///         RibBody
-    /// ```
-    fn rib(&mut self) -> ParseResult<Rib> {
-        self.accept_required(Token::Rib)?;
-        let ident = self.identifier()?;
-        self.accept_required(Token::Contains)?;
-        let contain_ty = self.type_identifier()?;
-        let body = self.rib_body()?;
-
-        Ok(Rib {
-            ident,
-            contain_ty,
-            body,
-        })
-    }
-
-    /// Parse a table expression
-    ///
-    /// ```ebnf
-    /// Table ::= 'table' Identifier
-    ///           'contains' TypeIdentifier
-    ///           RibBody
-    /// ```
-    fn table(&mut self) -> ParseResult<Table> {
-        self.accept_required(Token::Table)?;
-        let ident = self.identifier()?;
-        self.accept_required(Token::Contains)?;
-        let contain_ty = self.type_identifier()?;
-        let body = self.rib_body()?;
-
-        Ok(Table {
-            ident,
-            contain_ty,
-            body,
-        })
-    }
-
-    /// Parse an output stream expression
-    ///
-    /// ```ebnf
-    /// OutputStream ::= 'output-stream' Identifier
-    ///                  'contains' TypeIdentifier
-    ///                  RibBody
-    /// ```
-    fn output_stream(&mut self) -> ParseResult<OutputStream> {
-        self.accept_required(Token::OutputStream)?;
-        let ident = self.identifier()?;
-        self.accept_required(Token::Contains)?;
-        let contain_ty = self.type_identifier()?;
-        let body = self.rib_body()?;
-
-        Ok(OutputStream {
-            ident,
-            contain_ty,
-            body,
-        })
-    }
-
-    /// Parse a rib body
-    ///
-    /// A rib body is enclosed in curly braces and the fields are separated
-    /// by commas. A trailing comma is allowed.
-    ///
-    /// ```ebnf
-    /// RibBody ::= '{' ( RibField ( ',' RibField )* ','? ) '}'
-    /// ```
-    fn rib_body(&mut self) -> ParseResult<RibBody> {
-        let key_values = self.separated(
-            Token::CurlyLeft,
-            Token::CurlyRight,
-            Token::Comma,
-            Self::rib_field,
-        )?;
-
-        Ok(RibBody { key_values })
-    }
-
-    /// Parse a rib field
-    ///
-    /// ```ebnf
-    /// RibField ::= Identifier ':'
-    ///              (RibBody | '[' TypeIdentifier ']' | TypeIdentifier)
-    /// ```
-    fn rib_field(&mut self) -> ParseResult<RibField> {
-        let key = self.identifier()?;
-        self.accept_required(Token::Colon)?;
-
-        let field = if self.peek_is(Token::CurlyLeft) {
-            // TODO: This recursion seems to be the right thing to do, maybe
-            // the syntax tree should reflect that.
-            let RibBody { key_values } = self.rib_body()?;
-            RibField::RecordField(Box::new((
-                key,
-                RecordTypeIdentifier { key_values },
-            )))
-        } else if self.accept_optional(Token::SquareLeft)?.is_some() {
-            let inner_type = self.type_identifier()?;
-            self.accept_required(Token::SquareRight)?;
-            RibField::ListField(Box::new((
-                key,
-                ListTypeIdentifier { inner_type },
-            )))
-        } else {
-            RibField::PrimitiveField(TypeIdentField {
-                field_name: key,
-                ty: self.type_identifier()?,
-            })
-        };
-
-        Ok(field)
-    }
-
-    /// Parse a filter-map or filter expression
-    ///
-    /// ```ebnf
-    /// FilterMap ::= ( 'filter-map' | 'filter' ) Identifier
-    ///               For With FilterMapBody
-    /// ```
-    fn filter_map(&mut self) -> ParseResult<FilterMap> {
-        let (token, _span) = self.next()?;
-        let ty = match token {
-            Token::FilterMap => FilterType::FilterMap,
-            Token::Filter => FilterType::Filter,
-            _ => return Err(ParseError::Todo),
-        };
-
-        let ident = self.identifier()?;
-        let for_ident = self.for_statement()?;
-        let with_kv = self.with_statement()?;
-        let body = self.filter_map_body()?;
-
-        Ok(FilterMap {
-            ty,
-            ident,
-            for_ident,
-            with_kv,
-            body,
-        })
-    }
-
-    /// Parse the body of a filter-map or filter
-    ///
-    /// ```ebnf
-    /// FilterMapBody ::= '{' Define? FilterMapExpr+ Apply? '}'
-    /// Define        ::= 'define' For With DefineBody
-    /// Apply         ::= 'apply' For With ApplyBody
-    /// ```
-    ///
-    /// Not shown in the EBNF above, but the location of the define and apply
-    /// sections doesn't matter, but they can both only appear once.
-    fn filter_map_body(&mut self) -> ParseResult<FilterMapBody> {
-        let mut define = None;
-        let mut _expressions: Option<Vec<FilterMapExpr>> = None;
-        let mut apply = None;
-
-        self.accept_required(Token::CurlyLeft)?;
-
-        while self.accept_optional(Token::CurlyRight)?.is_none() {
-            if self.accept_optional(Token::Define)?.is_some() {
-                if define.is_some() {
-                    // Cannot have multiple define sections
-                    return Err(ParseError::Todo);
-                }
-                let for_kv = self.for_statement()?;
-                let with_kv = self.with_statement()?;
-                let body = self.define_body()?;
-                define = Some(Define {
-                    for_kv,
-                    with_kv,
-                    body,
-                });
-            } else if self.accept_optional(Token::Apply)?.is_some() {
-                if apply.is_some() {
-                    // Cannot have multiple apply sections
-                    return Err(ParseError::Todo);
-                }
-                let for_kv = self.for_statement()?;
-                let with_kv = self.with_statement()?;
-                let body = self.apply_body()?;
-                apply = Some(ApplySection {
-                    for_kv,
-                    with_kv,
-                    body,
-                });
-            } else {
-                todo!("parse expr")
-            }
-        }
-
-        Ok(FilterMapBody {
-            define: define.ok_or(ParseError::Todo)?,
-            expressions: _expressions.unwrap_or_default(),
-            apply,
-        })
     }
 
     /// Parse the body of a define section

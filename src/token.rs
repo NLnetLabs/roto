@@ -21,6 +21,8 @@ pub enum Token<'s> {
     AngleRightEq,
     #[token("<=")]
     AngleLeftEq,
+    #[token("->")]
+    Arrow,
     #[token("-")]
     Hyphen,
     #[token(":")]
@@ -33,6 +35,8 @@ pub enum Token<'s> {
     Period,
     #[token("/")]
     Slash,
+    #[token("!")]
+    Bang,
 
     // === Delimiters ===
     #[token("{")]
@@ -77,6 +81,8 @@ pub enum Token<'s> {
     For,
     #[token("import")]
     Import,
+    #[token("in")]
+    In,
     #[token("longer")]
     Longer,
     #[token("match")]
