@@ -3547,11 +3547,6 @@ impl borrow::Borrow<str> for ShortString {
     }
 }
 
-impl borrow::Borrow<[u8]> for ShortString {
-    fn borrow(&self) -> &[u8] {
-        self.as_bytes()
-    }
-}
 
 impl<T: AsRef<str>> PartialEq<T> for ShortString {
     fn eq(&self, other: &T) -> bool {

@@ -1,14 +1,10 @@
 use log::trace;
 use roto::{
     ast::AcceptReject,
-    blocks::Scope,
-    blocks::Scope::{Filter, FilterMap},
-    compiler::{Compiler, CompileError},
+    blocks::Scope::{self, Filter, FilterMap},
+    compiler::{CompileError, Compiler},
     types::{
-        builtin::{BytesRecord, BuiltinTypeValue},
-        collections::Record,
-        lazyrecord_types::{BmpMessage, InitiationMessage, LazyRecordTypeDef, RouteMonitoring},
-        typevalue::TypeValue, typedef::TypeDef,
+        builtin::{BuiltinTypeValue, BytesRecord, Provenance}, collections::Record, lazyrecord_types::{BmpMessage, InitiationMessage, LazyRecordTypeDef, RouteMonitoring}, typedef::TypeDef, typevalue::TypeValue
     },
     vm::{self, VmResult},
 };
@@ -229,9 +225,20 @@ fn test_data_4(
             println!("{}", mb);
         }
     
+        let prov = Provenance {
+            timestamp: chrono::Utc::now(),
+            router_id: 0,
+            connection_id: 0,
+            peer_id: PeerId { addr: "172.0.0.1".parse().unwrap(), asn: Asn::from(65530)},
+            peer_bgp_id: [0,0,0,0].into(),
+            peer_distuingisher: [0; 8],
+            peer_rib_type: PeerRibType::OutPost,
+        };
+
         let mut vm = vm::VmBuilder::new()
             // .with_arguments(args)
             .with_data_sources(ds_ref)
+            .with_context(context)
             .with_mir_code(roto_pack.get_mir())
             .build()?;
     

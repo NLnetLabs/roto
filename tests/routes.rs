@@ -5,7 +5,7 @@ use roto::compiler::Compiler;
 use roto::blocks::Scope::{self, Filter};
 use roto::types::builtin::basic_route::{BasicRoute, BasicRouteToken, PeerId, PeerRibType, Provenance};
 use roto::types::builtin::{
-    BuiltinTypeValue, NlriStatus,
+    BuiltinTypeValue, NlriStatus, RouteContext,
 };
 use roto::types::collections::{BytesRecord, Record};
 use roto::types::lazyrecord_types::BgpUpdateMessage;
@@ -14,8 +14,10 @@ use roto::vm::{self, FieldIndex, VmResult};
 use routecore::asn::Asn;
 use routecore::bgp::message::nlri::{BasicNlri, Nlri};
 use routecore::bgp::message::SessionConfig;
-use routecore::bgp::types::{AfiSafi, NextHop};
+use routecore::bgp::types::NextHop;
 use routecore::addr::Prefix;
+use routecore::bgp::workshop::afisafi_nlri::Ipv6UnicastNlri;
+use routecore::bgp::workshop::route::RouteWorkshop;
 
 mod common;
 
@@ -68,25 +70,37 @@ fn test_data(
         .unwrap();
     let peer_ip = "fe80::1".parse().unwrap();
 
-    let payload = BasicRoute::new(
-        first_prefix,
-        update,
-        routecore::bgp::types::AfiSafi::Ipv6Unicast,
-        None,
-        NlriStatus::InConvergence,
-        Provenance {
-            timestamp: chrono::Utc::now(),
-            router_id: 0,
-            connection_id: 0,
-            peer_id: PeerId { addr: peer_ip, asn: Asn::from(65534) },
-            peer_bgp_id: [0; 4].into(),
-            peer_distuingisher: [0; 8],
-            peer_rib_type: PeerRibType::OutPost,
-        }
-    )?;
+    let provenance = Provenance {
+        timestamp: chrono::Utc::now(),
+        router_id: 0,
+        connection_id: 0,
+        peer_id: PeerId { addr: peer_ip, asn: Asn::from(65534) },
+        peer_bgp_id: [0; 4].into(),
+        peer_distuingisher: [0; 8],
+        peer_rib_type: PeerRibType::OutPost,
+    };
 
+    let nlri: Ipv6UnicastNlri = update
+        .bytes_parser()
+        .announcements_vec().unwrap()
+        .first().unwrap().clone().try_into().unwrap();
+
+    let context= Box::new(RouteContext::new(
+        Some(update.clone()),
+        // nlri.clone(),
+        // routecore::bgp::types::AfiSafi::Ipv6Unicast,
+        // None,
+        NlriStatus::InConvergence,
+        provenance
+    ));
+
+    let payload = BasicRoute::new(
+        RouteWorkshop::from_update_pdu(nlri, &update.into_inner())?
+    );
+
+    // let nlri: BasicNlri = payload.nlri();
     trace!("prefix in route {:?}", payload.prefix());
-    trace!("peer_ip {:?}", payload.provenance().peer_ip());
+    trace!("peer_ip {:?}", context.provenance().peer_ip());
 
     let mem = &mut vm::LinearMemory::uninit();
 
@@ -102,6 +116,7 @@ fn test_data(
     let mut vm = vm::VmBuilder::new()
         .with_data_sources(roto_pack.data_sources)
         .with_mir_code(roto_pack.mir)
+        .with_context(context)
         .build()?;
 
     let res = vm.exec(payload, None::<Record>, None, mem).unwrap();
@@ -165,6 +180,8 @@ fn test_routes_1() {
         prefix,
         peer_ip,
     ) = test_run.unwrap();
+
+    trace!("OUTPUT RECORD");    
     let output_record = output_stream_queue[0].get_record();
     trace!("{:#?}", output_record);
     assert_eq!(output_stream_queue.len(), 1);
@@ -548,7 +565,7 @@ fn test_routes_6() {
     );
 
     let route = rx.clone().into_route().unwrap();
-    assert_eq!(route.afi_safi(), AfiSafi::Ipv6Unicast);
+    // assert_eq!(route.afi_safi(), AfiSafi::Ipv6Unicast);
 
     let next_hop = route
         .get_field_by_index(&FieldIndex::from(vec![BasicRouteToken::NextHop.into()]))

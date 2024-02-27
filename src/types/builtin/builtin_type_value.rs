@@ -19,18 +19,15 @@ use crate::traits::RotoType;
 use crate::types::collections::BytesRecord;
 use crate::types::enum_types::EnumVariant;
 use crate::types::lazyrecord_types::{
-    BmpMessage, InitiationMessage, PeerDownNotification, PeerUpNotification,
-    RouteMonitoring, StatisticsReport, TerminationMessage,
+    BgpUpdateMessage, BmpMessage, InitiationMessage, PeerDownNotification, PeerUpNotification, RouteMonitoring, StatisticsReport, TerminationMessage
 };
 
 use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 
-use super::basic_route::{BasicRoute, MutableBasicRoute, PeerId, PeerRibType, Provenance};
+use super::basic_route::{PeerId, PeerRibType, Provenance};
 use super::{
-    HexLiteral, IntegerLiteral,
-    PrefixLength,
-    NlriStatus, StringLiteral,
+    BasicRoute, HexLiteral, IntegerLiteral, NlriStatus, PrefixLength, RouteContext, StringLiteral
 };
 
 #[derive(Debug, Eq, Clone, Hash, PartialEq, Serialize)]
@@ -61,7 +58,8 @@ pub enum BuiltinTypeValue {
     AsPath(routecore::bgp::aspath::HopPath),        // vector
     Hop(routecore::bgp::aspath::OwnedHop), // read-only scalar
     OriginType(OriginType),           // scalar
-    Route(MutableBasicRoute),        // vector
+    Route(BasicRoute),
+    RouteContext(RouteContext),
     PeerId(PeerId),                    // scalar
     PeerRibType(PeerRibType),          // scalar
     // A read-only enum variant for capturing constants
@@ -70,7 +68,7 @@ pub enum BuiltinTypeValue {
     ConstU32EnumVariant(EnumVariant<u32>),
     // Used for filtering on the properties of the whole message,
     // not taking into account any individual prefixes.
-    BgpUpdateMessage(BytesRecord<routecore::bgp::message::UpdateMessage<bytes::Bytes>>),
+    BgpUpdateMessage(BytesRecord<BgpUpdateMessage>),
     BmpMessage(BytesRecord<BmpMessage>),
     BmpRouteMonitoringMessage(BytesRecord<RouteMonitoring>),
     BmpPeerUpNotification(BytesRecord<PeerUpNotification>),
@@ -105,6 +103,7 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::Hop(h) => h.into_type(ty),
             BuiltinTypeValue::OriginType(v) => v.into_type(ty),
             BuiltinTypeValue::Route(r) => r.into_type(ty),
+            BuiltinTypeValue::RouteContext(c) => c.into_type(ty),
             BuiltinTypeValue::PeerId(r) => r.into_type(ty),
             BuiltinTypeValue::PeerRibType(p) => p.into_type(ty),
             BuiltinTypeValue::Provenance(p) => p.into_type(ty),
@@ -210,7 +209,8 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::OriginType(v) => {
                     write!(f, "{}", v)
                 }
-                BuiltinTypeValue::Route(r) => write!(f, "{}", r),
+                BuiltinTypeValue::Route(r) => write!(f, "{:?}", r),
+                BuiltinTypeValue::RouteContext(c) => write!(f, "{:?}", c),
                 BuiltinTypeValue::BgpUpdateMessage(raw) => {
                     write!(f, "{:X?}", *raw)
                 }
@@ -306,7 +306,8 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::OriginType(v) => {
                     write!(f, "{} (Origin Type)", v)
                 }
-                BuiltinTypeValue::Route(r) => write!(f, "{} (Route)", r),
+                BuiltinTypeValue::Route(r) => write!(f, "{:?} (Route)", r),
+                BuiltinTypeValue::RouteContext(c) => write!(f, "{:?} (Context)", c),
                 BuiltinTypeValue::BgpUpdateMessage(raw) => {
                     write!(f, "{:X?} (RawBgpMessage)", *raw)
                 }

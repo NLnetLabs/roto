@@ -1,8 +1,10 @@
+use chrono::Utc;
 use log::{info, trace};
 use roto::ast::AcceptReject;
 use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self, FilterMap};
+use roto::types::builtin::{Provenance, RouteContext};
 use roto::types::collections::Record;
 use roto::types::typedef::TypeDef;
 use roto::vm::{self, VmResult};
@@ -33,8 +35,23 @@ fn test_data(
         println!("{}", mb);
     }
 
+    let provenance = Provenance {
+        timestamp: Utc::now(),
+        router_id: RouterId::default(),
+        connection_id: 0,
+        peer_id: 0,
+        peer_bgp_id: [0,0,0,0].into(),
+        peer_distuingisher: [0,0,0,0,0,0,0,0],
+        peer_rib_type: roto::types::builtin::PeerRibType::InPost,
+    };
+
+    let context = RouteContext::new(
+        None, provenance, NlriStatus::Empty
+    );
+
     let mut vm = vm::VmBuilder::new()
         .with_data_sources(roto_pack.data_sources)
+        .with_context(&context)
         .with_mir_code(roto_pack.mir)
         .build()?;
 

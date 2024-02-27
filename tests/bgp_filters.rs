@@ -7,12 +7,12 @@ use roto::{
     compiler::Compiler,
     types::{
         builtin::{
-            basic_route::{BasicRoute, PeerId, PeerRibType, Provenance}, NlriStatus,
+            basic_route::{BasicRoute, PeerId, PeerRibType, Provenance}, NlriStatus, RouteContext,
         }, collections::{BytesRecord, Record}, lazyrecord_types::BgpUpdateMessage
     },
     vm::{self, VmResult},
 };
-use routecore::{asn::Asn, bgp::message::SessionConfig};
+use routecore::{asn::Asn, bgp::{message::{nlri::BasicNlri, SessionConfig}, workshop::{afisafi_nlri::Ipv4UnicastNlri, route::RouteWorkshop}}};
 
 use routes::bmp::encode::{
     mk_bgp_update, mk_per_peer_header, Announcements, Prefixes,
@@ -53,13 +53,24 @@ fn test_data(
         peer_rib_type: PeerRibType::OutPost,
     };
 
-    let payload = BasicRoute::new(
-        routecore::addr::Prefix::from_str("192.0.2.0/24")?,
-        bgp_msg,
-        routecore::bgp::types::AfiSafi::Ipv4Unicast,
-        None,
+    let nlri = Ipv4UnicastNlri(BasicNlri {
+        prefix: prefix_str.parse().unwrap(),
+        path_id: None
+    });
+
+    let context = RouteContext::new(
+        // routecore::addr::Prefix::from_str("192.0.2.0/24")?,
+        Some(bgp_msg.clone()),
+        // routecore::bgp::types::AfiSafi::Ipv4Unicast,
+        // None,
+        // nlri.clone(),
         NlriStatus::UpToDate,
         prov
+    );
+
+    let payload = RouteWorkshop::from_update_pdu(
+        nlri,
+        &bgp_msg.into_inner()
     )?;
 
     // Create the VM
@@ -77,13 +88,14 @@ fn test_data(
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
         .with_data_sources(ds_ref)
+        .with_context(&context)
         .with_mir_code(roto_pack.get_mir())
         .build()?;
-
+    
     let mem = &mut vm::LinearMemory::uninit();
     let res = vm
         .exec(
-            payload.clone(),
+            roto::types::builtin::BasicRoute::new(payload.clone()),
             None::<Record>,
             // Some(filter_map_arguments),
             None,
@@ -96,7 +108,7 @@ fn test_data(
     trace!("rx    : {:?}", res.rx);
     trace!("tx    : {:?}", res.tx);
 
-    Ok((res, payload))
+    Ok((res, BasicRoute::new(payload)))
 }
 
 //------------ Test: IpAddressLiteral ----------------------------------------

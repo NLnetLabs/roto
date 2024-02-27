@@ -13,7 +13,7 @@ use crate::{
     first_into_vm_err,
     traits::{RotoType, Token},
     types::{
-        builtin::{basic_route::Provenance, BuiltinTypeValue},
+        builtin::{basic_route::Provenance, BuiltinTypeValue, NlriStatus, RouteContext},
         collections::{
             BytesRecord, ElementTypeValue, EnumBytesRecord, LazyRecord, List,
             Record,
@@ -30,6 +30,7 @@ use crate::{
 
 use arc_swap::ArcSwapOption;
 use log::{debug, error, log_enabled, trace, Level};
+use routecore::bgp::message::nlri;
 use serde::Serialize;
 use smallvec::SmallVec;
 
@@ -68,6 +69,10 @@ impl FieldIndex {
 
     pub fn last_mut(&mut self) -> Option<&mut usize> {
         self.0.last_mut()
+    }
+    
+    pub fn iter(&self) -> impl Iterator<Item = u8> + '_ {
+        self.0.iter().map(|i| *i as u8)
     }
 }
 
@@ -313,10 +318,66 @@ impl LinearMemory {
                     Some(TypeValue::Builtin(BuiltinTypeValue::Route(
                         mut route,
                     ))) => {
-                        Ok(route
-                                .take_field_by_index(&field_index)
-                                .unwrap_or(TypeValue::Unknown)
-                            )
+                        trace!("found route");
+                        match field_index.first() {
+                            // Fixed Memory Positions
+                            // 0: rx
+                            // 1: tx
+                            // 2: bgp_msg 
+                            // 3: provenance
+                            // 4: nlri_status
+
+                            // Virtual Attribute Token Positions
+                            // 9: NlriStatus
+                            // 10: Provenance
+                            // 11: BgpUpdateMessage
+                            Ok(i) if (9..=11).contains(&i) => {
+                                trace!("virtual route attributes {:?}", field_index);
+
+                                let mut field_index = field_index.clone();
+                                field_index.0.remove(0);
+                                match i {
+                                    9 => { 
+                                        if let Some(tv) = self.get_mem_pos(4) {
+                                            if let TypeValue::Builtin(BuiltinTypeValue::NlriStatus(_n)) = tv {
+                                            Ok(tv.clone())
+                                        }  else { Ok(TypeValue::Unknown) }
+                                        } else {
+                                                Err(VmError::IncompleteContext)
+                                            }
+                                        }
+                                    10 => { 
+                                        if let Some(tv) = self.get_mem_pos(3) {
+                                            if let TypeValue::Builtin(BuiltinTypeValue::Provenance(p)) = tv {
+                                                trace!("for provenance {:?}", field_index);
+                                                p.get_field_by_index(&field_index.0)
+                                            } else { Ok(TypeValue::Unknown) }
+                                        } else {
+                                            Err(VmError::IncompleteContext)
+                                        }
+                                    }
+                                    11 => { 
+                                        if let Some(tv) = self.get_mem_pos(2) {
+                                            if let TypeValue::Builtin(BuiltinTypeValue::BgpUpdateMessage(msg)) = tv {
+                                            LazyRecord::from_type_def(BytesRecord::<
+                                                BgpUpdateMessage
+                                            >::lazy_type_def(
+                                            ))?
+                                            .get_field_by_index(&field_index, msg).map(|v| v.try_into().map_err(|_| VmError::InvalidFieldAccess))?
+                                        } else {
+                                            Err(VmError::IncompleteContext)
+                                        }
+                                    } else { Ok(TypeValue::Unknown) }}
+                                    _ => Err(VmError::InvalidFieldAccess)
+                                }
+                            }
+                            _ => {
+                                Ok(route
+                                    .get_mut_field_by_index(field_index)
+                                    .unwrap_or(TypeValue::Unknown)
+                                )
+                            },
+                        }
                     },
                     _ => Err(VmError::MemOutOfBounds),
                 },
@@ -400,23 +461,23 @@ impl LinearMemory {
                     Some(TypeValue::Builtin(BuiltinTypeValue::Route(
                         route,
                     ))) => {
-                        let bgp_msg = self.get_mem_pos(3);
-                        if let Some(&TypeValue::Builtin(BuiltinTypeValue::BgpUpdateMessage(ref message))) = bgp_msg {
-                            route.overlay_field_as_stack_value(&field_index, message)
-                        } else {
-                            Ok(StackValue::Owned(TypeValue::Unknown))
-                        }
-                        // if let Ok(Some(v)) = route
-                        //     .get_value_ref_for_field(field_index.first()?)
-                        // {
-                        //     Ok(StackValue::Ref(v))
+                        // let bgp_msg = self.get_mem_pos(3);
+                        // if let Some(&TypeValue::Builtin(BuiltinTypeValue::BgpUpdateMessage(ref message))) = bgp_msg {
+                        //     route.overlay_field_as_stack_value(&field_index, message)
+                        // } else {
+                        //     Ok(StackValue::Owned(TypeValue::Unknown))
+                        // }
+                        if let Ok(v) = route
+                            .get_field_by_index(&field_index)
+                        {
+                            Ok(StackValue::Owned(v))
                         // } else if let Ok(v) =
                         //     route.take_field_by_index(&field_index)
                         // {
                         //     Ok(StackValue::Owned(v))
-                        // } else {
-                        //     Ok(StackValue::Owned(TypeValue::Unknown))
-                        // }
+                        } else {
+                            Ok(StackValue::Owned(TypeValue::Unknown))
+                        }
                     }
                     Some(TypeValue::Builtin(
                         BuiltinTypeValue::BgpUpdateMessage(bgp_msg),
@@ -428,9 +489,7 @@ impl LinearMemory {
                             field_index
                         );
                         let v = LazyRecord::from_type_def(BytesRecord::<
-                            routecore::bgp::message::UpdateMessage<
-                                bytes::Bytes,
-                            >,
+                            BgpUpdateMessage
                         >::lazy_type_def(
                         ))?
                         .get_field_by_index(&field_index, bgp_msg)?;
@@ -1415,10 +1474,12 @@ impl VariablesRefTable {
 
 //------------ Virtual Machine ----------------------------------------------
 
-pub struct VirtualMachine<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
+pub struct VirtualMachine<MB: AsRef<[MirBlock]>, C: AsRef<RouteContext>, EDS: AsRef<[ExtDataSource]>>
 {
     // _rx_type: TypeDef,
     // _tx_type: Option<TypeDef>,
+    // bgp_msg: BgpUpdateMessage,
+    context: C,
     mir_code: MB,
     data_sources: EDS,
     arguments: FilterMapArgs,
@@ -1429,8 +1490,9 @@ pub struct VirtualMachine<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>>
 impl<
         'a,
         MB: AsRef<[MirBlock]> + std::hash::Hash,
+        C: AsRef<RouteContext> + std::hash::Hash,
         EDS: AsRef<[ExtDataSource]> + std::hash::Hash,
-    > VirtualMachine<MB, EDS>
+    > VirtualMachine<MB, C, EDS>
 {
     fn _move_rx_tx_to_mem(
         &'a mut self,
@@ -1445,6 +1507,16 @@ impl<
             let tx = tx.take_value();
             mem.set_mem_pos(1, tx.into());
         }
+
+    }
+
+    fn copy_context_to_mem(&self, mem: &mut LinearMemory) {
+        let RouteContext { bgp_msg, provenance, nlri_status } = self.context.as_ref();
+        if let Some(bgp_msg) = bgp_msg {
+            mem.set_mem_pos(2, bgp_msg.clone().into());
+        }
+        mem.set_mem_pos(3, BuiltinTypeValue::Provenance(*provenance).into());
+        mem.set_mem_pos(4, (*nlri_status).into());
     }
 
     fn _unwind_resolved_stack_into_vec(
@@ -1701,6 +1773,8 @@ impl<
         let mut commands_num: usize = 0;
 
         self._move_rx_tx_to_mem(rx, tx, mem);
+        self.copy_context_to_mem(mem);
+
         let mut output_stream_queue: OutputStreamQueue =
             OutputStreamQueue::new();
 
@@ -2719,10 +2793,11 @@ impl<
     }
 }
 
-impl<
+impl<'a,
         MB: AsRef<[MirBlock]> + std::hash::Hash,
+        C: AsRef<RouteContext> + std::hash::Hash,
         EDS: AsRef<[ExtDataSource]> + std::hash::Hash,
-    > std::hash::Hash for VirtualMachine<MB, EDS>
+    > std::hash::Hash for VirtualMachine<MB, C, EDS>
 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.mir_code.hash(state);
@@ -2731,28 +2806,46 @@ impl<
     }
 }
 
-pub struct VmBuilder<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> {
+pub struct VmBuilder<MB, C, EDS> {
     rx_type: TypeDef,
     tx_type: Option<TypeDef>,
+    context: Option<C>,
     mir_code: Option<MB>,
     arguments: FilterMapArgs,
     data_sources: Option<EDS>,
 }
 
-impl<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> VmBuilder<MB, EDS> {
+impl<MB, C: AsRef<RouteContext>, EDS> VmBuilder<MB, C, EDS> {
+    pub fn with_context(mut self, context: C) -> Self {
+        self.context = Some(context);
+        self
+    }
+}
+
+impl<MB, C, EDS: AsRef<[ExtDataSource]>> VmBuilder<MB, C, EDS> {
+    pub fn with_data_sources(mut self, data_sources: EDS) -> Self {
+        self.data_sources = Some(data_sources);
+        self
+    }
+}
+
+impl<MB: AsRef<[MirBlock]>, C, EDS> VmBuilder<MB, C, EDS> {
+    pub fn with_mir_code(mut self, mir_code: MB) -> Self {
+        self.mir_code = Some(mir_code);
+        self
+    }
+}
+
+impl<MB: AsRef<[MirBlock]>, C: AsRef<RouteContext>, EDS: AsRef<[ExtDataSource]>> VmBuilder<MB, C, EDS> {
     pub fn new() -> Self {
         Self {
             rx_type: TypeDef::default(),
             tx_type: None,
             mir_code: None,
+            context: None,
             arguments: FilterMapArgs::default(),
             data_sources: None,
         }
-    }
-
-    pub fn with_mir_code(mut self, mir_code: MB) -> Self {
-        self.mir_code = Some(mir_code);
-        self
     }
 
     pub fn with_arguments(mut self, args: FilterMapArgs) -> Self {
@@ -2760,10 +2853,6 @@ impl<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> VmBuilder<MB, EDS> {
         self
     }
 
-    pub fn with_data_sources(mut self, data_sources: EDS) -> Self {
-        self.data_sources = Some(data_sources);
-        self
-    }
 
     pub fn with_rx(mut self, rx_type: TypeDef) -> Self {
         self.rx_type = rx_type;
@@ -2775,7 +2864,7 @@ impl<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> VmBuilder<MB, EDS> {
         self
     }
 
-    pub fn build(self) -> Result<VirtualMachine<MB, EDS>, VmError> {
+    pub fn build(self) -> Result<VirtualMachine<MB, C, EDS>, VmError> {
         // data sources need to be complete. Check that.
         trace!("data sources in builder");
         let data_sources = if let Some(data_sources) = self.data_sources {
@@ -2799,13 +2888,18 @@ impl<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> VmBuilder<MB, EDS> {
             let hash_id =
                 compute_hash(mir_code.as_ref(), data_sources.as_ref());
 
-            Ok(VirtualMachine {
-                mir_code,
-                data_sources,
-                arguments: self.arguments,
-                stack: RefCell::new(Stack::new()),
-                hash_id,
-            })
+            if let Some(context) = self.context {
+                    Ok(VirtualMachine { 
+                        mir_code,
+                        data_sources,
+                        context,
+                        arguments: self.arguments,
+                        stack: RefCell::new(Stack::new()),
+                        hash_id,
+                    })
+                } else {
+                    Err(VmError::IncompleteContext)
+                }
         } else {
             Err(VmError::NoMir)
         }
@@ -2814,8 +2908,9 @@ impl<MB: AsRef<[MirBlock]>, EDS: AsRef<[ExtDataSource]>> VmBuilder<MB, EDS> {
 
 impl<
         MB: AsRef<[MirBlock]> + std::hash::Hash,
+        C: AsRef<RouteContext> + std::hash::Hash,
         EDS: AsRef<[ExtDataSource]> + std::hash::Hash,
-    > Default for VmBuilder<MB, EDS>
+    > Default for VmBuilder<MB, C, EDS>
 {
     fn default() -> Self {
         Self::new()
@@ -2914,17 +3009,20 @@ pub enum VmError {
     InvalidDataSourceAccess,
     DataSourcesNotReady,
     ImpossibleComparison,
+    InvalidContext,
     InvalidDataSource,
     InvalidCommand,
     InvalidCommandArg,
     InvalidWrite,
     InvalidConversion,
     InvalidMsgType,
+    InvalidPathAttribute,
     InvalidCompareOp(usize),
     UnexpectedTermination,
     AsPathTooLong,
     DeltaLocked,
     NoMir,
+    IncompleteContext,
     ParseError(routecore::bgp::ParseError),
 }
 
@@ -2978,6 +3076,7 @@ impl Display for VmError {
             VmError::InvalidDataSource => f.write_str("InvalidDataSource"),
             VmError::InvalidConversion => f.write_str("InvalidConversion"),
             VmError::InvalidCompareOp(_) => f.write_str("InvalidCompareOp"),
+            VmError::InvalidPathAttribute => f.write_str("InvalidPathAttribute"),
             VmError::UnexpectedTermination => {
                 f.write_str("UnexpectedTermination")
             }
@@ -2986,10 +3085,12 @@ impl Display for VmError {
             VmError::AsPathTooLong => f.write_str("AsPathTooLong"),
             VmError::DeltaLocked => f.write_str("DeltaLocked"),
             VmError::NoMir => f.write_str("NoMir"),
+            VmError::IncompleteContext => f.write_str("IncompleteContext"),
             VmError::ParseError(e) => {
                 let w = write!(f, "{}", e);
                 w
             }
+            VmError::InvalidContext => f.write_str("InvalidContext"),
         }
     }
 }

@@ -126,6 +126,14 @@ pub struct AttrChangeSet {
 pub struct OverlayValue<T>(Option<T>);
 
 impl<T: Into<TypeValue> + Clone> OverlayValue<T> {
+    pub fn new(value: T) -> Self {
+        Self(Some(value))
+    }
+
+    pub fn new_from_opt(value: Option<T>) -> Self {
+        Self(value)
+    }
+
     // pub fn as_ref(&self) -> Option<&TypeValue> {
     //     self.0.map(|v| v).as_ref()
     // }

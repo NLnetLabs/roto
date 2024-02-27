@@ -1,13 +1,13 @@
 #[cfg(test)]
 mod route {
-    use std::net::IpAddr;
+    use std::net::{IpAddr, Ipv4Addr};
 
     use super::super::{
         IntegerLiteral, PrefixLength, StringLiteral,
     };
     use crate::ast::{IpAddressLiteral, AsnLiteral};
-    use crate::types::builtin::basic_route::{BasicRoute, PeerId, PeerRibType, Provenance, RotondaId};
-    use crate::types::builtin::{BuiltinTypeValue, BytesRecord};
+    use crate::types::builtin::basic_route::{PeerId, PeerRibType, Provenance, RotondaId};
+    use crate::types::builtin::{BytesRecord, RouteContext, BuiltinTypeValue};
     use crate::types::lazyrecord_types::BgpUpdateMessage;
     use crate::types::typedef::TypeDef;
     use crate::types::typevalue::TypeValue;
@@ -21,16 +21,19 @@ mod route {
         _Consume,
     }
     use routecore::addr::Prefix;
-    use routecore::bgp::aspath::HopPath;
+    use routecore::bgp::aspath::HopPath as AsPath;
     use routecore::asn::{Asn, Asn16};
-    use routecore::bgp::communities::{HumanReadableCommunity as Community, StandardCommunity, Tag, ExtendedCommunity, LargeCommunity};
-    use routecore::bgp::types::{AfiSafi, LocalPref};
+    use routecore::bgp::communities::{Community, HumanReadableCommunity, StandardCommunity, Tag, ExtendedCommunity, LargeCommunity};
+    use routecore::bgp::message::update_builder::StandardCommunitiesList;
+    use routecore::bgp::path_attributes::{OriginatorId, StandardCommunities};
+    use routecore::bgp::types::{LocalPref, MultiExitDisc};
+    use routecore::bgp::workshop::afisafi_nlri::{Ipv4UnicastNlri, Ipv6UnicastNlri};
     use routecore::bgp::{
         message::{
             nlri::{BasicNlri, Nlri},
             SessionConfig,
         },
-        types::{NextHop, OriginType},
+        types::OriginType,
     };
 
     use std::str::FromStr;
@@ -48,6 +51,8 @@ mod route {
             .is_test(true)
             .try_init();
     }
+
+    // type AsPath = CoreAsPath<bytes::Bytes>;
 
     #[test]
     fn create_update_msg() -> Result<(), VmError> {
@@ -99,28 +104,29 @@ mod route {
             peer_rib_type: PeerRibType::OutPost,
         };
 
-        roto_msgs.push(BasicRoute::new(
-            prefixes[0],
-            update,
-            AfiSafi::Ipv6Unicast,
-            None,
+        let nlri = Ipv6UnicastNlri(BasicNlri { prefix: prefixes[0], path_id: None });
+        roto_msgs.push(RouteContext::new(
+            Some(update),
+            // nlri,
             NlriStatus::InConvergence,
             provenance
-        )?);
+        ));
 
         for prefix in &prefixes[1..] {
-            roto_msgs.push(BasicRoute::new(
-                *prefix,
+            let nlri = Ipv6UnicastNlri(BasicNlri { prefix: *prefix, path_id: None });
+
+            roto_msgs.push(RouteContext::new(
                 roto_msgs[0].message().clone(),
-                routecore::bgp::types::AfiSafi::Ipv6Unicast,
-                None,
+                // nlri,
+                // routecore::bgp::types::AfiSafi::Ipv6Unicast,
+                // None,
                 NlriStatus::InConvergence,
                 provenance
-            )?)
+            ))
         }
 
         println!("{:?}", roto_msgs);
-        println!("{:#?}", *roto_msgs[2].get_attrs().unwrap());
+        println!("{:#?}", roto_msgs[2].clone_attrs().unwrap());
 
         assert_eq!(roto_msgs[0].prefix(), prefixes[0]);
         assert_eq!(roto_msgs[1].prefix(), prefixes[1]);
@@ -130,42 +136,54 @@ mod route {
         assert_eq!(roto_msgs.len(), 5);
 
         // let mut delta = roto_msgs[0].open_new_delta(delta_id)?;
-        let mut path_attrs = roto_msgs.remove(0).take_attrs()?;
+        let mut path_attrs = roto_msgs.remove(0).workshop()?;
         if let std::net::IpAddr::V6(v6) = prefixes[0].addr() {
-            path_attrs
-                .next_hop
-                .set(NextHop::Unicast(std::net::IpAddr::V6(v6)));
+
+        let next_hop = routecore::bgp::types::NextHop::Unicast(prefixes[0].addr());
+        let _ = path_attrs.set_attr::<routecore::bgp::types::NextHop>(next_hop);
         }
 
-        let res = path_attrs.as_path.prepend(
-            Asn::from(211321_u32),
-        );
-        assert!(res.is_ok());
+        let asp = path_attrs.get_attr::<AsPath>();
+        assert!(asp.is_some());
+        let mut asp = asp.unwrap();
+        asp.prepend(Asn::from(211321_u32));
+        let _ = path_attrs.set_attr(asp);
 
-        let res = path_attrs.origin_type.set(OriginType::Incomplete);
-        assert_eq!(res, Some(OriginType::Igp.into()));
+        let _ = path_attrs.set_attr(OriginType::Incomplete);
+        let _ = path_attrs.set_attr(LocalPref(100));
+        let res: Option<OriginType> = path_attrs.get_attr::<OriginType>();
+        assert_eq!(res, Some(OriginType::Igp));
 
+        let as_path = path_attrs.get_attr::<AsPath>().unwrap();
         println!("change set {:?}", path_attrs);
-        println!("as_path {:?}", &path_attrs.as_path);
+        println!("as_path {:?}", as_path);
 
-        let mut msg_1 = roto_msgs.remove(1);
-        msg_1.store_attrs(path_attrs);
+        let mut communities = path_attrs.get_attr::<Vec<routecore::bgp::communities::Community>>().unwrap();
+        communities.push(StandardCommunity::from_u32(666).into());
+        communities.push(ExtendedCommunity::from_str("rt: 192.0.2.0:65536").unwrap().into());
+        let _ = path_attrs.set_attr(communities);
 
-        println!("materialize! {:#?}", msg_1.get_attrs());
+        let mut std_communities = path_attrs.get_attr::<Vec<Community>>().unwrap();
 
-        let attr_set = msg_1.get_attrs()?.as_deref().unwrap();
-        assert_eq!(attr_set.as_path.len(), Some(2));
+        let _ = path_attrs.set_attr(routecore::bgp::types::OriginatorId(Ipv4Addr::from([127,0,0,1])));
+        // let mut msg_1 = roto_msgs.remove(1);
+        // msg_1.store_attrs(path_attrs);
+
+        // println!("materialize! {:#?}", msg_1.clone_attrs());
+
+        // let attr_set = msg_1.clone_attrs();
+        assert_eq!(path_attrs.get_attr::<AsPath>().map(|asp| asp.hop_count()), Some(2));
 
         println!(
             "ATTR_SET_AS_PATH {:?}",
-            attr_set.as_path.as_routecore_hops_vec()
+            path_attrs.get_attr::<MultiExitDisc>().unwrap()
         );
         assert_eq!(
-            *attr_set.as_path.as_routecore_hops_vec().first().unwrap(),
+            path_attrs.get_attr::<AsPath>().unwrap().origin().unwrap(),
             &routecore::bgp::aspath::Hop::from(Asn::from(211321_u32))
         );
         assert_eq!(
-            *attr_set.as_path.as_routecore_hops_vec().get(1).unwrap(),
+            path_attrs.get_attr::<AsPath>().unwrap().get_hop(1).unwrap(),
             &routecore::bgp::aspath::Hop::from(Asn::from(200_u32))
         );
         Ok(())
@@ -221,86 +239,92 @@ mod route {
             peer_rib_type: PeerRibType::OutPost,
         };
 
-        roto_msgs.push(BasicRoute::new(
-            prefixes[0],
-            update,
-            routecore::bgp::types::AfiSafi::Ipv6Unicast,
-            None,
+        // roto_msgs.push(RouteContext::new(
+        //     Some(update),
+        //     &Ipv6UnicastNlri(BasicNlri { prefix: prefixes[0], path_id: None }),
+        //     NlriStatus::InConvergence,
+        //     &provenance
+        // ));
+
+        roto_msgs.push(RouteContext::new(
+            Some(update),
+            Ipv6UnicastNlri( BasicNlri { prefix: prefixes[0], path_id: None }),
             NlriStatus::InConvergence,
-            provenance
-        )?);
+            &provenance
+        ));
 
         for prefix in &prefixes[1..] {
-            roto_msgs.push(BasicRoute::new(
-                *prefix,
+            roto_msgs.push(RouteContext::new(
                 roto_msgs[0].message().clone(),
-                routecore::bgp::types::AfiSafi::Ipv6Unicast,
-                None,
+                Ipv6UnicastNlri(BasicNlri { prefix: *prefix, path_id: None }),
                 NlriStatus::InConvergence,
-                provenance
-            )?)
+                &provenance
+            ))
         }
 
-        assert_eq!(roto_msgs[0].prefix(), prefixes[0]);
-        assert_eq!(roto_msgs[1].prefix(), prefixes[1]);
-        assert_eq!(roto_msgs[2].prefix(), prefixes[2]);
-        assert_eq!(roto_msgs[3].prefix(), prefixes[3]);
-        assert_eq!(roto_msgs[4].prefix(), prefixes[4]);
+        assert_eq!(roto_msgs[0].nlri().prefix(), prefixes[0]);
+        assert_eq!(roto_msgs[1].nlri().prefix(), prefixes[1]);
+        assert_eq!(roto_msgs[2].nlri().prefix(), prefixes[2]);
+        assert_eq!(roto_msgs[3].nlri().prefix(), prefixes[3]);
+        assert_eq!(roto_msgs[4].nlri().prefix(), prefixes[4]);
         assert_eq!(roto_msgs.len(), 5);
 
         // let mut msg = roto_msgs.remove(2);
         // Change Set 1
-        let attr_set = roto_msgs[2].get_attrs_mut()?.as_mut().unwrap();
+        let mut attr_set = roto_msgs[2].workshop()?;
 
         println!("change set {:#?}", attr_set);
         if let std::net::IpAddr::V6(v6) = prefixes[2].addr() {
-            attr_set
-                .next_hop
-                .set(NextHop::Unicast(std::net::IpAddr::V6(v6)));
+            let _ = attr_set
+                .set_attr(routecore::bgp::types::NextHop::Unicast(std::net::IpAddr::V6(v6)));
         }
 
-        let res = attr_set.as_path.prepend(211321_u32); //].try_into().unwrap());
-        assert!(res.is_ok());
+        let mut as_path = attr_set.get_attr::<AsPath>().unwrap();
+        as_path.prepend(Asn::from(211321_u32)); //].try_into().unwrap());
+        let _ = attr_set.set_attr::<AsPath>(as_path);
+        let res = attr_set.get_attr::<AsPath>();
+        assert!(res.is_some());
 
-        let res = attr_set
-            .origin_type
-            .set(OriginType::Incomplete);
-        assert_eq!(res, Some(OriginType::Igp.into()));
+        let _ =attr_set
+            .set_attr(routecore::bgp::types::OriginType::Incomplete);
+        let res = attr_set.get_attr::<OriginType>();
+        assert_eq!(res, Some(OriginType::Igp));
 
         // msg.store_attrs(new_change_set1);
 
         // let attr_set = roto_msgs[2].get_attrs_mut()?.as_mut().unwrap();
-        assert_eq!(attr_set.as_path.len(), Some(2));
+        assert_eq!(attr_set.get_attr::<AsPath>().unwrap().hop_count(), 2_usize);
         assert_eq!(
-            *attr_set.as_path.as_routecore_hops_vec()[0],
-            routecore::bgp::aspath::Hop::from(
+            attr_set.get_attr::<AsPath>().unwrap().get_hop(0).unwrap(),
+            &routecore::bgp::aspath::Hop::from(
                 Asn::from(211321_u32)
             )
         );
         assert_eq!(
-            *attr_set.as_path.as_routecore_hops_vec().get(1).unwrap(),
+            attr_set.get_attr::<AsPath>().unwrap().get_hop(1).unwrap(),
             &routecore::bgp::aspath::Hop::from(Asn::from(200_u32))
         );
 
         // Change Set 2
         // let mut new_change_set2 = roto_msgs[2].take_attrs()?;
-        let res = attr_set.as_path.prepend(211322_u32); //.try_into().unwrap());
-        assert!(res.is_ok());
+        attr_set.get_attr::<AsPath>().unwrap().prepend(Asn::from(211322_u32)); //.try_into().unwrap());
+        let res = attr_set.get_attr::<AsPath>();
+        assert!(res.is_some());
 
         // roto_msgs[2].store_attrs(new_change_set2);
 
         // let attr_set = *roto_msgs[2].get_attrs()?.unwrap();
-        assert_eq!(attr_set.as_path.len(), Some(3));
+        assert_eq!(attr_set.get_attr::<AsPath>().map(|asp| asp.hop_count()), Some(3));
         assert_eq!(
-            *attr_set.as_path.as_routecore_hops_vec().first().unwrap(),
+            attr_set.get_attr::<AsPath>().unwrap().origin().unwrap(),
             &routecore::bgp::aspath::Hop::from(Asn::from(211322_u32))
         );
         assert_eq!(
-            *attr_set.as_path.as_routecore_hops_vec().get(1).unwrap(),
+            attr_set.get_attr::<AsPath>().unwrap().get_hop(1).unwrap(),
             &routecore::bgp::aspath::Hop::from(Asn::from(211321_u32))
         );
         assert_eq!(
-            *attr_set.as_path.as_routecore_hops_vec().get(2).unwrap(),
+            attr_set.get_attr::<AsPath>().unwrap().get_hop(2).unwrap(),
             &routecore::bgp::aspath::Hop::from(routecore::asn::Asn::from(200_u32))
         );
         println!("Before changeset3 {:#?}", &attr_set);
@@ -346,6 +370,8 @@ mod route {
         BuiltinTypeValue: From<RT>,
         BuiltinTypeValue: From<TT>,
     {
+        use crate::types::builtin::BuiltinTypeValue;
+
         init();
         // The type definition of the from value
         let src_ty: TypeDef =
@@ -398,7 +424,7 @@ mod route {
     {
         // The type definition of the from value
 
-        use crate::vm::StackValue;
+        use crate::{types::builtin::BuiltinTypeValue, vm::StackValue};
         let src_ty: TypeDef =
             <BuiltinTypeValue>::from(from_value.clone()).into();
         let m = RT::get_props_for_method(
@@ -539,7 +565,7 @@ mod route {
         init();
 
         let test_value = 0_u8;
-        let arg: HopPath = vec![Asn::from(24)].into();
+        let arg: routecore::bgp::aspath::HopPath = vec![Asn::from(24)].into();
 
         test_consume_method_on_type_value(test_value, "set", arg).unwrap();
     }
@@ -583,7 +609,7 @@ mod route {
     #[should_panic = "Cannot convert type U8 to type AsPath"]
     fn test_u8_conversion_as_path() {
         let test_value = 24_u8;
-        let res: HopPath = vec![Asn::from(24)].into();
+        let res: routecore::bgp::aspath::HopPath = vec![Asn::from(24)].into();
 
         mk_converted_type_value(test_value, res).unwrap();
     }
@@ -1004,7 +1030,7 @@ src_ty.clone().test_type_conversion(arg_ty)"]
 
     #[test]
     fn test_standard_community_1() {
-        let test_value: Community = Community::from_str("AS1234:7890").unwrap();
+        let test_value: HumanReadableCommunity = HumanReadableCommunity::from_str("AS1234:7890").unwrap();
         let res = StringLiteral::new("AS1234:7890".to_string());
 
         mk_converted_type_value(test_value, res).unwrap();
@@ -1012,7 +1038,7 @@ src_ty.clone().test_type_conversion(arg_ty)"]
 
     #[test]
     fn test_standard_community_2() {
-        let test_value: Community = 
+        let test_value: HumanReadableCommunity = 
             StandardCommunity::new(
                 Asn16::from(12500),
                 Tag::new(7890),
@@ -1026,12 +1052,12 @@ src_ty.clone().test_type_conversion(arg_ty)"]
     fn test_standard_community_3() -> Result<(), CompileError> {
         init();
 
-        let test_value: Community =
+        let test_value: HumanReadableCommunity =
                 StandardCommunity::new(
                     Asn16::from(12500),
                     Tag::new(7890),
                 ).into();
-        let res: Community = 
+        let res: HumanReadableCommunity = 
             StandardCommunity::new(
                 Asn16::from(7500),
                 Tag::new(3000),
@@ -1044,11 +1070,11 @@ src_ty.clone().test_type_conversion(arg_ty)"]
     fn test_ext_community_1() -> Result<(), CompileError> {
         init();
         
-        let test_value: Community =
+        let test_value: HumanReadableCommunity =
                 ExtendedCommunity::from_str(
                     "ro:123:456"
                 ).unwrap().into();
-        let res: Community = 
+        let res: HumanReadableCommunity = 
             StandardCommunity::new(
                 Asn16::from(7500),
                 Tag::new(3000),
@@ -1061,11 +1087,11 @@ src_ty.clone().test_type_conversion(arg_ty)"]
     fn test_large_community_1() -> Result<(), CompileError> {
         init();
         
-        let test_value: Community =
+        let test_value: HumanReadableCommunity =
                 LargeCommunity::from_str(
                     "234:123:456"
                 ).unwrap().into();
-        let res: Community =
+        let res: HumanReadableCommunity =
             StandardCommunity::new(
                 Asn16::from(7500),
                 Tag::new(3000),
@@ -1079,10 +1105,10 @@ src_ty.clone().test_type_conversion(arg_ty)"]
     fn test_large_community_2() {
         init();
         
-        let test_value: Community = LargeCommunity::from_str(
+        let test_value: HumanReadableCommunity = LargeCommunity::from_str(
                     "2456850985534:123:456"
                 ).unwrap().into();
-        let res: Community = 
+        let res: HumanReadableCommunity = 
             StandardCommunity::new(
                 Asn16::from(7500),
                 Tag::new(3000),

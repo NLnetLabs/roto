@@ -1,16 +1,22 @@
 use log::trace;
 use serde::Serialize;
 
-use super::{typedef::{MethodProps, TypeDef, RecordTypeDef}, collections::RecordType, builtin::{basic_route::{BasicRoute, MutableBasicRoute}, BuiltinTypeValue}, typevalue::TypeValue};
+use super::{
+    builtin::{basic_route::BasicRoute, BuiltinTypeValue},
+    collections::RecordType,
+    typedef::{MethodProps, RecordTypeDef, TypeDef},
+    typevalue::TypeValue,
+};
 use crate::{
-    ast::Identifier, compiler::compile::CompileError, traits::{RotoType, Token},
+    ast::Identifier,
+    compiler::compile::CompileError,
+    traits::{RotoType, Token},
     types::builtin::BytesRecord,
 };
 
 pub type BgpUpdateMessage =
     routecore::bgp::message::UpdateMessage<bytes::Bytes>;
-pub type BmpMessage =
-    routecore::bmp::message::Message<bytes::Bytes>;
+pub type BmpMessage = routecore::bmp::message::Message<bytes::Bytes>;
 pub type InitiationMessage =
     routecore::bmp::message::InitiationMessage<bytes::Bytes>;
 pub type StatisticsReport =
@@ -23,7 +29,6 @@ pub type PeerDownNotification =
     routecore::bmp::message::PeerDownNotification<bytes::Bytes>;
 pub type TerminationMessage =
     routecore::bmp::message::TerminationMessage<bytes::Bytes>;
-
 
 impl RecordType for BmpMessage {
     fn get_field_num() -> usize {
@@ -41,7 +46,9 @@ impl RecordType for BmpMessage {
 // roto users. Note that this does *NOT* include BmpMessage, which is a
 // BytesRecord, by it's also an Enum, therefore it contains a Lazy Record,
 // but it isn't one itself.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
+#[derive(
+    Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize,
+)]
 pub enum LazyRecordTypeDef {
     InitiationMessage,
     RouteMonitoring,
@@ -51,7 +58,7 @@ pub enum LazyRecordTypeDef {
     RouteMirroring,
     TerminationMessage,
     UpdateMessage,
-    BasicRoute
+    BasicRoute,
 }
 
 impl LazyRecordTypeDef {
@@ -59,7 +66,7 @@ impl LazyRecordTypeDef {
         match &self {
             LazyRecordTypeDef::InitiationMessage => {
                 BytesRecord::<InitiationMessage>::type_def()
-            },
+            }
             LazyRecordTypeDef::RouteMonitoring => {
                 BytesRecord::<RouteMonitoring>::type_def()
             }
@@ -71,12 +78,13 @@ impl LazyRecordTypeDef {
                 BytesRecord::<PeerDownNotification>::type_def()
             }
             LazyRecordTypeDef::RouteMirroring => todo!(),
-            LazyRecordTypeDef::TerminationMessage => 
-                BytesRecord::<TerminationMessage>::type_def(),
-            LazyRecordTypeDef::UpdateMessage =>
-                BytesRecord::<BgpUpdateMessage>::type_def(),
-            LazyRecordTypeDef::BasicRoute =>
-                BasicRoute::type_def(),
+            LazyRecordTypeDef::TerminationMessage => {
+                BytesRecord::<TerminationMessage>::type_def()
+            }
+            LazyRecordTypeDef::UpdateMessage => {
+                BytesRecord::<BgpUpdateMessage>::type_def()
+            }
+            LazyRecordTypeDef::BasicRoute => BasicRoute::type_def(),
         }
     }
 
@@ -84,7 +92,7 @@ impl LazyRecordTypeDef {
         match &self {
             LazyRecordTypeDef::InitiationMessage => {
                 InitiationMessage::get_field_num()
-            },
+            }
             LazyRecordTypeDef::RouteMonitoring => {
                 RouteMonitoring::get_field_num()
             }
@@ -99,10 +107,10 @@ impl LazyRecordTypeDef {
             LazyRecordTypeDef::TerminationMessage => {
                 TerminationMessage::get_field_num()
             }
-            LazyRecordTypeDef::UpdateMessage =>
-                BgpUpdateMessage::get_field_num(),
-            LazyRecordTypeDef::BasicRoute =>
-                BasicRoute::get_field_num()
+            LazyRecordTypeDef::UpdateMessage => {
+                BgpUpdateMessage::get_field_num()
+            }
+            LazyRecordTypeDef::BasicRoute => BasicRoute::get_field_num(),
         }
     }
 
@@ -112,39 +120,38 @@ impl LazyRecordTypeDef {
         method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError> {
         match self {
-            LazyRecordTypeDef::InitiationMessage => {
-                BytesRecord::<InitiationMessage>::get_props_for_method(
-                    ty,
-                    method_name,
-                )
-            },
-            LazyRecordTypeDef::RouteMonitoring => {
-                BytesRecord::<RouteMonitoring>::get_props_for_method(
+            LazyRecordTypeDef::InitiationMessage => BytesRecord::<
+                InitiationMessage,
+            >::get_props_for_method(
+                ty, method_name
+            ),
+            LazyRecordTypeDef::RouteMonitoring => BytesRecord::<
+                RouteMonitoring,
+            >::get_props_for_method(
+                ty, method_name
+            ),
+            LazyRecordTypeDef::StatisticsReport => todo!(),
+            LazyRecordTypeDef::PeerUpNotification => BytesRecord::<
+                PeerUpNotification,
+            >::get_props_for_method(
+                ty, method_name
+            ),
+            LazyRecordTypeDef::PeerDownNotification => BytesRecord::<
+                PeerDownNotification,
+            >::get_props_for_method(
+                ty, method_name
+            ),
+            LazyRecordTypeDef::RouteMirroring => todo!(),
+            LazyRecordTypeDef::TerminationMessage => todo!(),
+            LazyRecordTypeDef::UpdateMessage => {
+                BytesRecord::<BgpUpdateMessage>::get_props_for_method(
                     ty,
                     method_name,
                 )
             }
-            LazyRecordTypeDef::StatisticsReport => todo!(),
-            LazyRecordTypeDef::PeerUpNotification => {
-                BytesRecord::<PeerUpNotification>::get_props_for_method(
-                    ty,
-                    method_name,
-                )
-            },
-            LazyRecordTypeDef::PeerDownNotification => {
-                BytesRecord::<PeerDownNotification>::get_props_for_method(
-                    ty,
-                    method_name,
-                )
-            },
-            LazyRecordTypeDef::RouteMirroring => todo!(),
-            LazyRecordTypeDef::TerminationMessage => todo!(),
-            LazyRecordTypeDef::UpdateMessage =>
-                BytesRecord::<BgpUpdateMessage>::get_props_for_method(
-                    ty,
-                    method_name
-                ),
-            LazyRecordTypeDef::BasicRoute => MutableBasicRoute::get_props_for_method(ty, method_name),
+            LazyRecordTypeDef::BasicRoute => {
+                BasicRoute::get_props_for_method(ty, method_name)
+            }
         }
     }
 
@@ -174,7 +181,7 @@ impl LazyRecordTypeDef {
             LazyRecordTypeDef::InitiationMessage => {
                 trace!("BmpInitiationMessage w/ field '{}'", field);
                 BytesRecord::<InitiationMessage>::get_props_for_field(field)
-            },
+            }
             LazyRecordTypeDef::TerminationMessage => {
                 trace!("BmpTermintationMessage w/ field '{}'", field);
                 BytesRecord::<TerminationMessage>::get_props_for_field(field)
@@ -188,8 +195,8 @@ impl LazyRecordTypeDef {
             }
             LazyRecordTypeDef::BasicRoute => {
                 trace!("LRT Basic Route w/ field '{}'", field);
-                BasicRoute::get_props_for_field(field) 
-            },
+                BasicRoute::get_props_for_field(field)
+            }
         }
     }
 }
@@ -219,13 +226,25 @@ impl PartialEq<Box<TypeDef>> for LazyRecordTypeDef {
 impl std::fmt::Display for LazyRecordTypeDef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LazyRecordTypeDef::InitiationMessage => write!(f, "InitiationMessage"),
-            LazyRecordTypeDef::RouteMonitoring => write!(f, "RouteMonitoring"),
-            LazyRecordTypeDef::StatisticsReport => write!(f, "StatisticsReport"),
-            LazyRecordTypeDef::PeerUpNotification => write!(f, "PeerUpNotification"),
-            LazyRecordTypeDef::PeerDownNotification => write!(f, "PeerDownNotification"),
+            LazyRecordTypeDef::InitiationMessage => {
+                write!(f, "InitiationMessage")
+            }
+            LazyRecordTypeDef::RouteMonitoring => {
+                write!(f, "RouteMonitoring")
+            }
+            LazyRecordTypeDef::StatisticsReport => {
+                write!(f, "StatisticsReport")
+            }
+            LazyRecordTypeDef::PeerUpNotification => {
+                write!(f, "PeerUpNotification")
+            }
+            LazyRecordTypeDef::PeerDownNotification => {
+                write!(f, "PeerDownNotification")
+            }
             LazyRecordTypeDef::RouteMirroring => write!(f, "RouteMirroring"),
-            LazyRecordTypeDef::TerminationMessage => write!(f, "TerminationMessage"),
+            LazyRecordTypeDef::TerminationMessage => {
+                write!(f, "TerminationMessage")
+            }
             LazyRecordTypeDef::UpdateMessage => write!(f, "BgpUpdateMessage"),
             LazyRecordTypeDef::BasicRoute => write!(f, "BasicRoute"),
         }
@@ -260,7 +279,7 @@ impl From<usize> for LazyRecordTypeDef {
             6 => LazyRecordTypeDef::RouteMonitoring,
             7 => LazyRecordTypeDef::UpdateMessage,
             8 => LazyRecordTypeDef::BasicRoute,
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
     }
 }

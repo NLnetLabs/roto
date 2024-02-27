@@ -29,10 +29,9 @@ use std::{net::IpAddr, sync::Arc};
 /// Lamport Timestamp. Used to order messages between units/systems.
 pub type LogicalTime = u64;
 
-
+use crate::types::builtin::bgp_update_message::BytesRecord;
 use crate::types::collections::RecordType;
 use crate::types::lazyrecord_types::BgpUpdateMessage;
-use crate::types::builtin::bgp_update_message::BytesRecord;
 use crate::{
     ast::StringLiteral,
     attr_change_set::{ReadOnlyScalarOption, Todo},
@@ -49,7 +48,8 @@ use crate::{
 use super::path_attributes::{BasicRoute, BasicRouteToken};
 use super::{BuiltinTypeValue, Nlri, NlriStatus};
 use crate::attr_change_set::{
-    AttrChangeSet, PathAttributeSet, ScalarOption, ScalarValue, VectorOption, VectorValue
+    AttrChangeSet, PathAttributeSet, ScalarOption, ScalarValue, VectorOption,
+    VectorValue,
 };
 
 //============ MaterializedRoute ============================================
@@ -429,7 +429,9 @@ impl RawRouteWithDeltas {
             )),
             "multi-exit-disc" => Ok((
                 TypeDef::MultiExitDisc,
-                Token::FieldAccess(vec![BasicRouteToken::MultiExitDisc.into()]),
+                Token::FieldAccess(vec![
+                    BasicRouteToken::MultiExitDisc.into()
+                ]),
             )),
             "local-pref" => Ok((
                 TypeDef::LocalPref,
@@ -437,7 +439,9 @@ impl RawRouteWithDeltas {
             )),
             "atomic-aggregate" => Ok((
                 TypeDef::Bool,
-                Token::FieldAccess(vec![BasicRouteToken::AtomicAggregate.into()]),
+                Token::FieldAccess(vec![
+                    BasicRouteToken::AtomicAggregate.into()
+                ]),
             )),
             "aggregator" => Ok((
                 TypeDef::AggregatorInfo,
@@ -486,7 +490,9 @@ impl RawRouteWithDeltas {
         match field_token.try_into()? {
             BasicRouteToken::Prefix => Ok(current_set.prefix.as_ref()),
             BasicRouteToken::AsPath => Ok(current_set.as_path.as_ref()),
-            BasicRouteToken::OriginType => Ok(current_set.origin_type.as_ref()),
+            BasicRouteToken::OriginType => {
+                Ok(current_set.origin_type.as_ref())
+            }
             BasicRouteToken::NextHop => Ok(current_set.next_hop.as_ref()),
             BasicRouteToken::MultiExitDisc => {
                 Ok(current_set.multi_exit_discriminator.as_ref())
@@ -495,9 +501,15 @@ impl RawRouteWithDeltas {
             BasicRouteToken::AtomicAggregate => {
                 Ok(current_set.atomic_aggregate.as_ref())
             }
-            BasicRouteToken::Aggregator => Ok(current_set.aggregator.as_ref()),
-            BasicRouteToken::Communities => Ok(current_set.communities.as_ref()),
-            BasicRouteToken::Status => Ok(self.status_deltas.current_as_ref()),
+            BasicRouteToken::Aggregator => {
+                Ok(current_set.aggregator.as_ref())
+            }
+            BasicRouteToken::Communities => {
+                Ok(current_set.communities.as_ref())
+            }
+            BasicRouteToken::Status => {
+                Ok(self.status_deltas.current_as_ref())
+            }
             BasicRouteToken::Provenance => todo!(),
             // RouteToken::PeerIp => Ok(current_set.peer_ip.as_ref()),
             // RouteToken::PeerAsn => Ok(current_set.peer_asn.as_ref()),
@@ -549,7 +561,10 @@ impl RawRouteWithDeltas {
                 .map(TypeValue::from)
                 .ok_or(VmError::InvalidFieldAccess),
             BasicRouteToken::AtomicAggregate => Some(TypeValue::from(
-                self.raw_message.bytes_parser().is_atomic_aggregate().unwrap_or(false),
+                self.raw_message
+                    .bytes_parser()
+                    .is_atomic_aggregate()
+                    .unwrap_or(false),
             ))
             .ok_or(VmError::InvalidFieldAccess),
             BasicRouteToken::Aggregator => self
@@ -1070,9 +1085,6 @@ impl RouteStatusDeltaList {
 //         writeln!(f, "status : {:?}", self.status_deltas.current())
 //     }
 // }
-
-
-
 
 //------------ Modification & Creation of new Updates -----------------------
 

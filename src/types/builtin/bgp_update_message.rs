@@ -1,26 +1,19 @@
-use std::{net::IpAddr, sync::Arc};
-
 use log::{error, trace};
 use paste::paste;
-use routecore::{
-    addr::Prefix,
-    asn::Asn,
+
+use routecore::
     bgp::{
-        aspath::{AsPath, HopPath},
+        aspath::AsPath,
         communities::HumanReadableCommunity,
-        message::nlri::PathId,
         message::{update::LocalPref, SessionConfig},
         path_attributes::AggregatorInfo,
         types::MultiExitDisc,
         types::{AfiSafi, NextHop, OriginType},
-    },
-};
+    };
 
 use crate::{
     ast::ShortString,
-    attr_change_set::{
-        AttrChangeSet, OverlayValue, PathAttributeSet, ReadOnlyScalarOption, ScalarOption, Todo, VectorOption
-    },
+    attr_change_set::{PathAttributeSet, Todo},
     bytes_record_impl,
     compiler::compile::CompileError,
     createtoken, lazy_list_field, lazyelmtypevalue, lazyfield,
@@ -41,7 +34,7 @@ use crate::{
 
 pub use crate::types::collections::BytesRecord;
 
-use super::{Nlri, StringLiteral};
+use super::Nlri;
 
 // 0 aggregator_type
 // 1 announcements
@@ -84,12 +77,12 @@ bytes_record_impl!(
     10
 );
 
-impl BytesRecord<routecore::bgp::message::UpdateMessage<bytes::Bytes>> {
+impl BytesRecord<BgpUpdateMessage> {
     pub fn new(
         bytes: bytes::Bytes,
         session_config: SessionConfig,
     ) -> Result<Self, VmError> {
-        routecore::bgp::message::UpdateMessage::<bytes::Bytes>::from_octets(
+        BgpUpdateMessage::from_octets(
             bytes,
             session_config,
         )
@@ -286,7 +279,7 @@ impl From<Result<Option<OriginType>, routecore::bgp::ParseError>>
     }
 }
 
-impl BytesRecord<routecore::bgp::message::UpdateMessage<bytes::Bytes>> {
+impl BytesRecord<BgpUpdateMessage> {
     // Materialize a ChangeSet from the Update message. The materialized
     // Change set is completely self-contained (no references of any kind) &
     // holds all the attributes of the current BGP Update message.

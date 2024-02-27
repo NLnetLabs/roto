@@ -3,6 +3,7 @@ use roto::ast::AcceptReject;
 use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self, FilterMap};
+use roto::types::builtin::{NlriStatus, PeerId, PeerRibType, Provenance, RouteContext};
 use roto::types::collections::{BytesRecord, Record};
 use roto::types::lazyrecord_types::BgpUpdateMessage;
 use roto::types::typevalue::TypeValue;
@@ -75,9 +76,22 @@ fn test_data(
         println!("{}", mb);
     }
 
+    let prov = Provenance {
+        timestamp: chrono::Utc::now(),
+        router_id: 0,
+        connection_id: 0,
+        peer_id: PeerId { addr: "172.0.0.1".parse().unwrap(), asn: Asn::from(65530)},
+        peer_bgp_id: [0,0,0,0].into(),
+        peer_distuingisher: [0; 8],
+        peer_rib_type: PeerRibType::OutPost,
+    };
+
+    let context = &RouteContext::new(None, NlriStatus::Empty, prov);
+
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
         .with_data_sources(ds_ref)
+        .with_context(context)
         .with_mir_code(roto_pack.get_mir())
         .build()?;
 

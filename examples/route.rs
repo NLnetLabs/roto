@@ -1,7 +1,7 @@
 use roto::compiler::Compiler;
 
 use roto::types::builtin::basic_route::{BasicRoute, PeerId, PeerRibType, Provenance};
-use roto::types::builtin::NlriStatus;
+use roto::types::builtin::{NlriStatus, RouteContext};
 use roto::types::collections::{BytesRecord, Record};
 use roto::types::lazyrecord_types::BgpUpdateMessage;
 use roto::types::typevalue::TypeValue;
@@ -11,6 +11,8 @@ use routecore::asn::Asn;
 use routecore::bgp::message::SessionConfig;
 use routecore::bgp::message::nlri::{Nlri, BasicNlri};
 use routecore::addr::Prefix;
+use routecore::bgp::workshop::afisafi_nlri::Ipv4UnicastNlri;
+use routecore::bgp::workshop::route::RouteWorkshop;
 
 fn test_data(
     name: Scope,
@@ -60,14 +62,16 @@ fn test_data(
         peer_rib_type: PeerRibType::OutPost,
     };
 
-    let payload = BasicRoute::new(
-        prefixes[0],
-        update,
-        routecore::bgp::types::AfiSafi::Ipv6Unicast,
-        None,
+    let nlri = Ipv4UnicastNlri(BasicNlri { prefix: prefixes[0], path_id: None });
+
+    let context = RouteContext::new(
+        Some(update.clone()),
+        // nlri.clone(),
         NlriStatus::InConvergence,
-        prov
-    )?;
+        prov,
+    );
+
+    let payload = BasicRoute::new(RouteWorkshop::from_update_pdu(nlri, &update.into_inner())?);
 
     // Create the VM
     println!("Used Arguments");

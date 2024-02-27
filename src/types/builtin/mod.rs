@@ -8,6 +8,7 @@ pub mod basic_route;
 mod tests;
 
 pub use bmp_message::*;
+pub use basic_route::*;
 pub use builtin_type_value::*;
 pub use global_methods::*;
 pub use primitives::*;
