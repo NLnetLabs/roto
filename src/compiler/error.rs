@@ -1,11 +1,11 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompileError {
-    // An error that we - the Roto compiler - think is caused by the Roto
-    // end-user, through a Roto script.
+    /// An error that we - the Roto compiler - think is caused by the Roto
+    /// end-user, through a Roto script.
     User(String),
-    // A logical error caused by internal inconsistency in the Roto compiler.
+    /// A logical error caused by internal inconsistency in the Roto compiler.
     Internal(String),
-    // An error with no discernable cause, this is very worrying, btw.
+    /// An error with no discernable cause, this is very worrying, btw.
     Unspecified
 }
 

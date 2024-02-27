@@ -4,19 +4,19 @@ use crate::ast::ShortString;
 
 //------------ Scope --------------------------------------------------------
 
-// A scope identifies a roto block (its quality: Unit, Module, Filter,
-// FilterMap, Module) and describes its scope.
-
+/// A scope identifies a roto block (its quality: Unit, Module, Filter,
+/// FilterMap, Module) and describes its scope.
 #[derive(Debug, Eq, Clone)]
 pub enum Scope {
-    // The Global Scope. Holds all user-defined types,
-    // global constant enums. May also get some
-    // methods in the long run.
+    /// The Global Scope.
+    ///
+    /// Holds all user-defined types, global constant enums.
+    /// May also get some methods in the long run.
     Global,
-    // The Scope of one FilterMap block, holds everyth ing
-    // from its define section
+    /// The Scope of one FilterMap block, holds everything
+    /// from its define section
     FilterMap(ShortString),
-    // The Scope of a Filter, idem.
+    /// The Scope of a Filter, holds everthing form its define section
     Filter(ShortString),
 }
 
@@ -40,9 +40,9 @@ impl Display for Scope {
     }
 }
 
-// Define equivalence for two Scopes if their names match, meaning a user
-// should not be allowed to create two blocks with the same name even though
-// they are different block types.
+/// Define equivalence for two Scopes if their names match, meaning a user
+/// should not be allowed to create two blocks with the same name even though
+/// they are different block types.
 impl PartialEq for Scope {
     fn eq(&self, other: &Self) -> bool {
         match self {

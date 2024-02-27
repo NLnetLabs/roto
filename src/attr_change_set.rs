@@ -58,8 +58,8 @@ pub trait ScalarValue: Clone + Into<TypeValue> {}
 
 //------------ Attributes Change Set ----------------------------------------
 
-// A attributes Change Set allows a user to create a set of changes to an
-// existing (raw) BGP Update message.
+/// A attributes Change Set allows a user to create a set of changes to an
+/// existing (raw) BGP Update message.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Hash)]
 pub struct AttrChangeSet {
     #[serde(skip_serializing_if = "ReadOnlyScalarOption::is_none")]

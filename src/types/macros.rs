@@ -401,10 +401,10 @@ macro_rules! scalartype {
     }
 }
 
-// An implementation for a TypeDef variant, that has/is:
-// - a ScalarValue
-// - only has a `set` method
-// - has no type conversions.
+/// An implementation for a TypeDef variant, that has/is:
+/// - a ScalarValue
+/// - only has a `set` method
+/// - has no type conversions.
 #[macro_export]
 macro_rules! minimalscalartype {
     (
@@ -445,12 +445,12 @@ macro_rules! lazyrecord {
     };
 }
 
-// this macro produces a LazyField on a LazyRecord, i.e. a method that will be
-// invoked to retrieve the value for that field. For LazyRecords that are
-// backed by a BytesRecord these methods are parsers and these can fail. If
-// they do so we are NOT erroring out, but instead we return a
-// TypeValue::Unknown. Other LazyFields in the LazyRecord may parse just fine,
-// so we want to be able to keep going here.
+/// this macro produces a LazyField on a LazyRecord, i.e. a method that will be
+/// invoked to retrieve the value for that field. For LazyRecords that are
+/// backed by a BytesRecord these methods are parsers and these can fail. If
+/// they do so we are NOT erroring out, but instead we return a
+/// TypeValue::Unknown. Other LazyFields in the LazyRecord may parse just fine,
+/// so we want to be able to keep going here.
 #[macro_export]
 macro_rules! lazyfield {
     (
@@ -488,12 +488,12 @@ macro_rules! lazyfield {
     )}
 }
 
-// this macro produces a LazyEnum on a LazyRecord, i.e. a method that will be
-// invoked to retrieve the value for that field. For LazyRecords that are
-// backed by a BytesRecord these methods are parsers and these can fail. If
-// they do so we are NOT erroring out, but instead we return a
-// TypeValue::Unknown. Other LazyFields in the LazyRecord may parse just fine,
-// so we want to be able to keep going here.
+/// this macro produces a LazyEnum on a LazyRecord, i.e. a method that will be
+/// invoked to retrieve the value for that field. For LazyRecords that are
+/// backed by a BytesRecord these methods are parsers and these can fail. If
+/// they do so we are NOT erroring out, but instead we return a
+/// TypeValue::Unknown. Other LazyFields in the LazyRecord may parse just fine,
+/// so we want to be able to keep going here.
 #[macro_export]
 macro_rules! lazyenum {
     (
@@ -869,8 +869,8 @@ macro_rules! bytes_record_impl {
     }
 }
 
-// These are two small macros turn the Option<..> returned from first into an
-// appropriate error.
+/// These are two small macros turn the Option<..> returned from first into an
+/// appropriate error.
 #[macro_export]
 macro_rules! first_into_compile_err {
     ( 

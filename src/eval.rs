@@ -2442,19 +2442,22 @@ fn check_type_identifier(
     .into())
 }
 
-// This function checks if a variable exists in the scope of the filter_map,
-// but not in the global scope (variables in the global scope are not
-// allowed). The variables can be of form:
-// <var_name>
-// <var of type Record>[.<field>]+
-//
-// In the last case the whole form may live in the filter_map scope as an
-// anonymous type (deducted from user-defined record-types), but in the case
-// of a primitive type they live in the user-defined record-type itself.
-//
-// The last value in the return tuple is a builtin-typed value in case it's
-// present in the symbol, this should only be the case with a Constant,
-// containing a literal value.
+/// Retrieve a variable that is not in the global scope
+///
+/// This function checks if a variable exists in the scope of the `filter_map`,
+/// but not in the global scope (variables in the global scope are not
+/// allowed). The variables can be of form:
+///
+/// - `<var_name>`
+/// - `<var of type Record>[.<field>]+`
+///
+/// In the last case the whole form may live in the `filter_map` scope as an
+/// anonymous type (deducted from user-defined record-types), but in the case
+/// of a primitive type they live in the user-defined record-type itself.
+///
+/// The last value in the return tuple is a builtin-typed value in case it's
+/// present in the symbol, this should only be the case with a Constant,
+/// containing a literal value.
 fn get_props_for_scoped_variable(
     fields: &[ast::Identifier],
     symbols: GlobalSymbolTable,
@@ -2975,8 +2978,8 @@ fn is_boolean_function(
     }
 }
 
-// A boolean expression only accepts on expression, that should return a
-// boolean value.
+/// A boolean expression only accepts on expression, that should return a
+/// boolean value.
 fn _is_boolean_expression(
     expr: &impl BooleanExpr,
 ) -> Result<(), CompileError> {

@@ -35,10 +35,10 @@ impl RecordType for BmpMessage {
     }
 }
 
-// This is the complete enumeration of all Lazy Record types available to
-// roto users. Note that this does *NOT* include BgpMessage, which is a
-// BytesRecord, by it's also an Enum, therefore it contains a Lazy Record,
-// but it isn't one itself.
+/// This is the complete enumeration of all Lazy Record types available to
+/// roto users. Note that this does *NOT* include BgpMessage, which is a
+/// [`BytesRecord`], by it's also an Enum, therefore it contains a Lazy Record,
+/// but it isn't one itself.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
 pub enum LazyRecordTypeDef {
     InitiationMessage,

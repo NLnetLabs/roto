@@ -24,8 +24,7 @@ use crate::{
 
 //------------ Symbols ------------------------------------------------------
 
-// The only symbols we really have are variables & (user-defined) types.
-
+/// The only symbols we really have are variables & (user-defined) types.
 #[derive(Debug, Eq)]
 pub(crate) struct Symbol {
     name: ShortString,
@@ -163,11 +162,11 @@ impl Symbol {
         }
     }
 
-    // checks to see if the arguments (`args`) in this symbol match with the
-    // supplied `type_def` or if all the subtypes can be converted into the
-    // subtypes of `type_def`. It will recognize anonymous sub-records. It it
-    // can work this out it will return the a Vec with the name of the
-    // (sub)-field, its (converted) type and its (converted) TypeValue.
+    /// Checks to see if the arguments (`args`) in this symbol match with the
+    /// supplied `type_def` or if all the subtypes can be converted into the
+    /// subtypes of `type_def`. It will recognize anonymous sub-records. If it
+    /// can work this out it will return the a `Vec` with the name of the
+    /// (sub)-field, its (converted) type and its (converted) [`TypeValue`].
     pub fn get_recursive_values_primitive(
         &self,
         type_def: TypeDef,
@@ -275,8 +274,8 @@ impl Symbol {
         self.args.as_slice()
     }
 
-    // Bounds checking #1: Check if the first actually exists before actually
-    // returning it.
+    /// Bounds checking #1: Check if the first actually exists before actually
+    /// returning it.
     pub fn get_first_arg_checked(&self) -> Result<&Symbol, CompileError> {
         if let Some(first) = self.args.first() {
             Ok(first)
@@ -288,8 +287,8 @@ impl Symbol {
         }
     }
 
-    // Bounds checking #2: Check if there are a specified number of arguments
-    // before returning the number of specified arguments.
+    /// Bounds checking #2: Check if there are a specified number of arguments
+    /// before returning the number of specified arguments.
     pub fn get_args_checked(
         &self,
         num: usize,
@@ -304,8 +303,8 @@ impl Symbol {
         }
     }
 
-    // Bounds checking #3: Check if a minimum number of arguments is present,
-    // and then returning all of the arguments.
+    /// Bounds checking #3: Check if a minimum number of arguments is present,
+    /// and then returning all of the arguments.
     pub fn get_args_with_checked_min_len(
         &self,
         min_len: usize,
@@ -324,8 +323,8 @@ impl Symbol {
         &mut self.args
     }
 
-    // Go into the first arg of a symbol until we find a empty args vec and
-    // store it there.
+    /// Go into the first arg of a symbol until we find a empty args vec and
+    /// store it there.
     pub fn add_arg(&mut self, arg: Symbol) -> usize {
         self.args.push(arg);
         self.args.len() - 1
@@ -376,12 +375,12 @@ impl Symbol {
         }
     }
 
-    // Return the type of:
-    // - this symbol if it represents a Record OR
-    // - this symbol if it's a leaf node (args are empty) OR
-    // - the last symbol of the args, if that's a leaf node OR
-    // Used to construct the return type of a variable that is being
-    // assigned.
+    /// Return the type of:
+    /// - this symbol if it represents a Record OR
+    /// - this symbol if it's a leaf node (args are empty) OR
+    /// - the last symbol of the args, if that's a leaf node OR
+    /// Used to construct the return type of a variable that is being
+    /// assigned.
     pub(crate) fn get_recursive_return_type(&self) -> TypeDef {
         if let TypeDef::Record(_ty) = self.get_type() {
             return self.ty.clone();
@@ -395,10 +394,10 @@ impl Symbol {
         }
     }
 
-    // This function tries to convert a symbol with a given type into a symbol
-    // with another type and set its value according to the new type, if it
-    // has a a value. If the conversion is not possible it returns an error.
-    // Used during the evaluation phase.
+    /// This function tries to convert a symbol with a given type into a symbol
+    /// with another type and set its value according to the new type, if it
+    /// has a a value. If the conversion is not possible it returns an error.
+    /// Used during the evaluation phase.
     pub fn try_convert_type_value_into(
         mut self,
         into_ty: TypeDef,
@@ -623,33 +622,33 @@ impl TryFrom<SymbolKind> for MatchActionType {
 
 //------------ SymbolTable --------------------------------------------------
 
-// A per-filter-map symbol table.
+/// A per-filter-map symbol table.
 #[derive(Debug)]
 pub struct SymbolTable {
     scope: Scope,
-    // The input payload type of the filter_map.
+    /// The input payload type of the `filter_map`.
     rx_type: Symbol,
-    // The output payload type of the filter_map. If it's none its identical
-    // to the input payload type.
+    /// The output payload type of the `filter_map`. If it's none its identical
+    /// to the input payload type.
     tx_type: Option<Symbol>,
-    // The special symbols that will be filled in at runtime, once per filter
-    // run.
+    /// The special symbols that will be filled in at runtime, once per filter
+    /// run.
     arguments: HashMap<ShortString, Symbol>,
-    // The variables and constants that are defined in the filter_map.
+    /// The variables and constants that are defined in the `filter_map`.
     variables: HashMap<ShortString, Symbol>,
-    // The evaluated `term` sections that are defined in the filter_map.
+    /// The evaluated `term` sections that are defined in the `filter_map`.
     term_sections: HashMap<ShortString, Symbol>,
-    // The evaluated `action` sections that are defined in the filter_map.
+    /// The evaluated `action` sections that are defined in the `filter_map`.
     action_sections: HashMap<ShortString, Symbol>,
-    // All the `filter` clauses in the `apply` section, the tie actions to
-    // terms.
+    /// All the `filter` clauses in the `apply` section, the tie actions to
+    /// terms.
     match_action_sections: Vec<MatchAction>,
-    // the action that will be activated when all of the match_actions are
-    // processed and no early return has been issued
+    /// The action that will be activated when all of the match_actions are
+    /// processed and no early return has been issued
     default_action: crate::ast::AcceptReject,
 }
 
-// The global symbol table.
+/// The global symbol table.
 #[derive(Debug)]
 pub struct GlobalSymbolTable(
     Rc<
@@ -1016,10 +1015,12 @@ impl SymbolTable {
             })
     }
 
-    // Retrieve the symbol from the `variables` table of a filter_map the
-    // entry Used in the compile stage to build the command stack.
-
-    // panics if the symbol is not found.
+    /// Retrieve the symbol from the `variables` table of a `filter_map` the
+    /// entry.
+    ///
+    /// Used in the compile stage to build the command stack.
+    ///
+    /// Panics if the symbol is not found.
     pub(crate) fn get_variable_by_token(
         &self,
         token: &Token,
@@ -1074,8 +1075,8 @@ impl SymbolTable {
             .map(|term| (term.ty.clone(), term.token.clone()))
     }
 
-    // Return the type of the first argument of the symbol that lives in this
-    // hashmap, used by the evaluator when looking to resolve arguments.
+    /// Return the type of the first argument of the symbol that lives in this
+    /// hashmap, used by the evaluator when looking to resolve arguments.
     pub(crate) fn get_type_of_argument(
         &self,
         name: &ShortString,
@@ -1151,9 +1152,9 @@ impl SymbolTable {
         })?
     }
 
-    // retrieve all the unique arguments, variables and data-sources that are
-    // referenced in the terms field of a symbol table (i.e. the terms
-    // sections in a filter_map)
+    /// Retrieve all the unique arguments, variables and data-sources that are
+    /// referenced in the terms field of a symbol table (i.e. the terms
+    /// sections in a `filter_map`)
     pub(crate) fn create_deps_graph(
         &self,
     ) -> Result<
