@@ -12,7 +12,7 @@ use crate::traits::RotoType;
 use crate::types::collections::ElementTypeValue;
 use crate::types::enum_types::EnumVariant;
 use crate::types::typedef::MethodProps;
-use crate::vm::{StackValue, VmError};
+use crate::vm::{FieldIndex, StackValue, VmError};
 use crate::{
     createtoken, first_into_vm_err, intotype, _intotype, minimalscalartype,
     noconversioninto, setmethodonly, typevaluefromimpls,
@@ -2109,21 +2109,28 @@ minimalscalartype!(AggregatorInfo);
 )]
 pub enum NlriStatus {
     // Between start and EOR on a BGP peer-session
-    InConvergence,
+    InConvergence = 0,
     // After EOR for a BGP peer-session, either `Graceful Restart` or EOR
-    UpToDate,
+    UpToDate = 1,
     // After hold-timer expiry
-    Stale,
+    Stale = 2,
     // After the request for a Route Refresh to a peer and the reception of a
     // new route
-    StartOfRouteRefresh,
+    StartOfRouteRefresh = 3,
     // After the reception of a withdrawal
-    Withdrawn,
+    Withdrawn = 4,
     // A routecore::bgp::ParseError happened on a part of the PDU!
-    Unparsable,
+    Unparsable = 5,
     // Status not relevant, e.g. a RIB that holds archived routes.
     #[default]
     Empty,
+}
+
+impl NlriStatus {
+    pub fn get_field_by_index(&self, field_index: &[usize]) -> Result<TypeValue, VmError> {
+        let tv: NlriStatus = FieldIndex::from(field_index).first()?.try_into()?;
+        Ok(tv.into())
+    }
 }
 
 impl std::fmt::Display for NlriStatus {
@@ -2155,6 +2162,22 @@ impl TryFrom<TypeValue> for NlriStatus {
         } else {
             debug!("invalid something");
             Err(VmError::InvalidMethodCall)
+        }
+    }
+}
+
+impl TryFrom<usize> for NlriStatus {
+    type Error = VmError;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(NlriStatus::InConvergence),
+            1 => Ok(NlriStatus::UpToDate),
+            2 => Ok(NlriStatus::UpToDate),
+            3 => Ok(NlriStatus::StartOfRouteRefresh),
+            4 => Ok(NlriStatus::Withdrawn),
+            5 => Ok(NlriStatus::Unparsable),
+            _ => Err(VmError::InvalidContext)
         }
     }
 }
