@@ -1,20 +1,22 @@
 use crate::ast::{
     AcceptReject, AccessExpr, AccessReceiver, AnonymousRecordValueExpr,
     ApplyBody, ApplyScope, ArgExprList, AsnLiteral, BooleanLiteral,
-    ComputeExpr, DefineBody, FieldAccessExpr, FilterMatchActionExpr,
-    HexLiteral, Identifier, IntegerLiteral, IpAddress, Ipv4Addr, Ipv6Addr,
-    ListValueExpr, LiteralAccessExpr, LiteralExpr, MatchActionExpr,
-    MatchOperator, MethodComputeExpr, PrefixLength, PrefixLengthLiteral,
+    ComputeExpr, DefineBody, ExtendedCommunityLiteral, FieldAccessExpr,
+    FilterMatchActionExpr, HexLiteral, Identifier, IntegerLiteral, IpAddress,
+    Ipv4Addr, Ipv6Addr, LargeCommunityLiteral, ListValueExpr,
+    LiteralAccessExpr, LiteralExpr, MatchActionExpr, MatchOperator,
+    MethodComputeExpr, Prefix, PrefixLength, PrefixLengthLiteral,
     PrefixLengthRange, PrefixMatchExpr, PrefixMatchType,
-    RecordTypeAssignment, RootExpr, RxTxType, StringLiteral, SyntaxTree,
-    TypeIdentField, TypeIdentifier, TypedRecordValueExpr, ValueExpr,
+    RecordTypeAssignment, RootExpr, RxTxType, StandardCommunityLiteral,
+    StringLiteral, SyntaxTree, TypeIdentField, TypeIdentifier,
+    TypedRecordValueExpr, ValueExpr,
 };
 use crate::token::Token;
 use logos::{Lexer, Span, SpannedIter};
 use std::iter::Peekable;
 
-mod rib_like;
 mod filter_map;
+mod rib_like;
 
 type ParseResult<T> = Result<T, ParseError>;
 
@@ -261,60 +263,41 @@ impl<'source> Parser<'source> {
     /// Parse a scope of the body of apply
     ///
     /// ```ebnf
-    /// ApplyScope ::= Use?
-    ///                'filter' MatchOperator ValueExpr
+    /// ApplyScope ::= 'filter' 'match' ValueExpr
     ///                'not'? 'matching'
     ///                Actions ';'
     ///
-    /// ApplyUse   ::= 'use' Identifier ';'
-    /// Actions    ::= '{' Action* '}'
-    /// Action     ::= ValueExpr ';' ( AcceptReject ';' )?
+    /// Actions    ::= '{' (ValueExpr ';')* ( AcceptReject ';' )? '}'
     /// ```
     fn apply_scope(&mut self) -> ParseResult<ApplyScope> {
-        let scope = self
-            .accept_optional(Token::Use)?
-            .map(|_| {
-                let id = self.identifier()?;
-                self.accept_required(Token::SemiColon)?;
-                Ok(id)
-            })
-            .transpose()?;
-
         self.accept_required(Token::Filter)?;
-        let operator = self.match_operator()?;
+        self.accept_required(Token::Match)?;
+
         let filter_ident = self.value_expr()?;
         let negate = self.accept_optional(Token::Not)?.is_some();
         self.accept_required(Token::Matching)?;
         self.accept_required(Token::CurlyLeft)?;
 
-        // TODO: This part needs to be checked by Jasper
-        // The original seems to have been:
-        // (ValueExpr ';' (AcceptReject ';')? )+ | AcceptReject ';'
-        // That does not seem to make a whole lot of sense. Probably,
-        // some filter is applied later, but we could probably be more
-        // precise while parsing.
         let mut actions = Vec::new();
         while self.accept_optional(Token::CurlyRight)?.is_none() {
-            // We can try to parse a value expr first
-            let val = if !matches!(self.peek(), Some(Token::Return)) {
-                let val = self.value_expr()?;
-                self.accept_required(Token::SemiColon)?;
-                Some(val)
-            } else {
-                None
-            };
+            if let Some(accept_reject) = self.accept_reject()? {
+                self.accept_required(Token::CurlyRight)?;
+                actions.push((None, Some(accept_reject)));
+                break;
+            }
 
-            let accept_reject = self.accept_reject()?;
-            actions.push((val, accept_reject));
+            let val = self.value_expr()?;
+            self.accept_required(Token::SemiColon)?; 
+            actions.push((Some(val), None));
         }
 
         self.accept_required(Token::SemiColon)?;
 
         Ok(ApplyScope {
-            scope,
+            scope: None,
             match_action: MatchActionExpr::FilterMatchAction(
                 FilterMatchActionExpr {
-                    operator,
+                    operator: MatchOperator::Match,
                     negate,
                     actions,
                     filter_ident,
@@ -430,14 +413,14 @@ impl<'source> Parser<'source> {
         let literal = self.literal()?;
 
         // If we parsed a prefix, it may be followed by a prefix match
-        if let LiteralExpr::PrefixLiteral(prefix) = literal {
+        // If not, it can be an access expression
+        if let LiteralExpr::PrefixLiteral(prefix) = &literal {
             if let Some(ty) = self.prefix_match_type()? {
                 return Ok(ValueExpr::PrefixMatchExpr(PrefixMatchExpr {
-                    prefix,
+                    prefix: prefix.clone(),
                     ty,
                 }));
             }
-            todo!()
         }
 
         let access_expr = self.access_expr()?;
@@ -478,12 +461,6 @@ impl<'source> Parser<'source> {
         Ok(access_expr)
     }
 
-    fn record_type_assignment(
-        &mut self,
-    ) -> ParseResult<RecordTypeAssignment> {
-        todo!()
-    }
-
     /// Parse any literal, including prefixes, ip addresses and communities
     fn literal(&mut self) -> ParseResult<LiteralExpr> {
         // TODO: Implement the following literals:
@@ -502,12 +479,12 @@ impl<'source> Parser<'source> {
         // If we see an IpAddress, we need to check whether it is followed by a
         // slash and is therefore a prefix instead.
         if matches!(self.peek(), Some(Token::IpV4(_) | Token::IpV6(_))) {
-            let _ip = self.ip_address()?;
-            if self.accept_optional(Token::Slash)?.is_some() {
-                let _prefix_len = self.prefix_length()?;
-                todo!("return prefix literal")
+            let addr = self.ip_address()?;
+            if self.peek_is(Token::Slash) {
+                let len = self.prefix_length()?;
+                return Ok(LiteralExpr::PrefixLiteral(Prefix { addr, len }));
             } else {
-                todo!("return ip literal")
+                return Ok(LiteralExpr::IpAddressLiteral(addr));
             }
         }
 
@@ -535,6 +512,33 @@ impl<'source> Parser<'source> {
             Token::Bool(b) => LiteralExpr::BooleanLiteral(BooleanLiteral(b)),
             Token::Float => {
                 unimplemented!("Floating point numbers are not supported yet")
+            }
+            Token::Community(s) => {
+                // We offload the validation of the community to routecore
+                // TODO: Change the AST so that it doesn't contain strings, but
+                // routecore communities.
+                use routecore::bgp::communities::Community;
+                let c: Community = s.parse().map_err(|_| ParseError::Todo)?;
+                match c {
+                    Community::Standard(x) => {
+                        LiteralExpr::StandardCommunityLiteral(
+                            StandardCommunityLiteral(x.to_string()),
+                        )
+                    }
+                    Community::Extended(x) => {
+                        LiteralExpr::ExtendedCommunityLiteral(
+                            ExtendedCommunityLiteral(x.to_string()),
+                        )
+                    }
+                    Community::Large(x) => {
+                        LiteralExpr::LargeCommunityLiteral(
+                            LargeCommunityLiteral(x.to_string()),
+                        )
+                    }
+                    Community::Ipv6Extended(_) => {
+                        unimplemented!("IPv6 extended communities are not supported yet")
+                    }
+                }
             }
             _ => return Err(ParseError::Todo),
         })
@@ -698,10 +702,6 @@ impl<'source> Parser<'source> {
         })
     }
 
-    // TODO: I'm ignoring the grammar difference between identifiers and type
-    // identifiers because it doesn't really make sense, I think. But this
-    // comment is here to remind me of that before I put this thing up for
-    // review. Otherwise the lexer will get a bit more complicated.
     fn identifier(&mut self) -> ParseResult<Identifier> {
         let (token, span) = self.next()?;
         match token {

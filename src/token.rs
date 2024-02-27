@@ -150,6 +150,11 @@ pub enum Token<'s> {
     #[regex(r"([0-9a-zA-Z]+:){6}[0-9a-zA-Z]+")]
     IpV6(&'s str),
 
+    // This regex is a super set of all the forms of communities:
+    // standard, large and extended.
+    #[regex(r"([0-9a-zA-Z]+:)?(0x)?[0-9a-fA-F]+:(0x)?[0-9a-fA-F]+")]
+    Community(&'s str),
+
     #[token("true", |_| true)]
     #[token("false", |_| false)]
     Bool(bool),

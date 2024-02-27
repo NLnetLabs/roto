@@ -1,5 +1,11 @@
-use super::{Parser, ParseResult};
-use crate::{token::Token, ast::{Rib, Table, OutputStream, RibField, RecordTypeIdentifier, RibBody, ListTypeIdentifier, TypeIdentField}};
+use super::{ParseResult, Parser};
+use crate::{
+    ast::{
+        ListTypeIdentifier, OutputStream, RecordTypeAssignment,
+        RecordTypeIdentifier, Rib, RibBody, RibField, Table, TypeIdentField,
+    },
+    token::Token,
+};
 
 impl<'source> Parser<'source> {
     /// Parse a rib expression
@@ -63,6 +69,19 @@ impl<'source> Parser<'source> {
             contain_ty,
             body,
         })
+    }
+
+    pub(super) fn record_type_assignment(
+        &mut self,
+    ) -> ParseResult<RecordTypeAssignment> {
+        self.accept_required(Token::Type)?;
+        let ident = self.type_identifier()?;
+        let body = self.rib_body()?;
+        let record_type = RecordTypeIdentifier {
+            key_values: body.key_values,
+        };
+
+        Ok(RecordTypeAssignment { ident, record_type })
     }
 
     /// Parse a rib body
