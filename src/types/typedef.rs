@@ -440,6 +440,37 @@ impl TypeDef {
                         result_type
                     };
                 }
+                (TypeDef::RouteContext, _) => {
+                    trace!("RouteContext w/ field '{}'", field);
+                    let this_token = RouteContext::get_props_for_field(field)?;
+
+                    // Add the token to the FieldAccess vec.
+                    result_type = if let Token::FieldAccess(to_f) =
+                    &result_type.1
+                    {
+                    if let Token::FieldAccess(fa) = &this_token.1 {
+                        let mut to_f1 = to_f.clone();
+                        to_f1.extend(fa);
+
+                        parent_type =
+                            (this_token.0.clone(), parent_type.1);
+                        parent_type.1.push(index as u8)?;
+
+                        trace!(
+                            "Returning {:?}",
+                            (
+                                this_token.0.clone(),
+                                Token::FieldAccess(to_f1.clone())
+                            )
+                        );
+                        (this_token.0.clone(), Token::FieldAccess(to_f1))
+                    } else {
+                        result_type
+                    }
+                    } else {
+                    result_type
+                    };
+                }
                 (TypeDef::Provenance, _) => {
                     trace!("Provenance w/ field '{}'", field);
                     let this_token = Provenance::get_props_for_field(field)?;
@@ -901,8 +932,7 @@ impl std::fmt::Display for TypeDef {
             TypeDef::Asn => write!(f, "Asn"),
             TypeDef::IpAddr => write!(f, "IpAddress"),
             TypeDef::Route => write!(f, "Route"),
-            TypeDef::RouteContext => write!(f, "Context"),
-            // TypeDef::BgpUpdateMessage => write!(f, "BgpUpdateMessage"),
+            TypeDef::RouteContext => write!(f, "RouteContext"),
             TypeDef::LazyRecord(lazy_type_def) => {
                 write!(f, "Lazy Record {}", lazy_type_def.type_def())
             }
@@ -1147,6 +1177,7 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             "Hop" => Ok(TypeDef::Hop),
             "OriginType" => Ok(TypeDef::OriginType),
             "Route" => Ok(TypeDef::Route),
+            "RouteContext" => Ok(TypeDef::RouteContext),
             "Provenance" => Ok(TypeDef::Provenance),
             "Nlri" => Ok(TypeDef::Nlri),
             "PeerId" => Ok(TypeDef::PeerId),
@@ -1217,7 +1248,7 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
             "Hop" => Ok(TypeDef::Hop),
             "OriginType" => Ok(TypeDef::OriginType),
             "Route" => Ok(TypeDef::Route),
-            "Context" => Ok(TypeDef::RouteContext),
+            "RouteContext" => Ok(TypeDef::RouteContext),
             "Provenance" => Ok(TypeDef::Provenance),
             "PeerId" => Ok(TypeDef::PeerId),
             "PeerRibType" => Ok(TypeDef::PeerRibType),

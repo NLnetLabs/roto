@@ -206,6 +206,63 @@ pub(crate) fn recurse_compile<'a>(
                 }
             }
         }
+        Token::RouteContext(_) => {
+            assert!(is_ar);
+            match symbol.get_first_arg_checked() {
+                Err(_) => {
+                    state.push_command(
+                        OpCode::PushStack,
+                        vec![CommandArg::MemPos(2)],
+                    );
+                    return Ok(state);
+                }
+                Ok(first_arg) => {
+                    trace!("commands for RouteContext named {}", symbol.get_name());
+                    state.cur_record_field_name = Some(first_arg.get_name());
+                    if let Some(v) = state.cur_partial_variable.as_mut() {
+                        v.append_primitive(
+                            crate::vm::CompiledPrimitiveField::new(
+                                vec![
+                                    Command::new(
+                                        OpCode::PushStack,
+                                        vec![CommandArg::MemPos(2)],
+                                    ),
+                                    Command::new(
+                                        OpCode::StackOffset,
+                                        vec![CommandArg::FieldIndex(
+                                            first_arg.get_token().try_into()?,
+                                        )],
+                                    ),
+                                ],
+                                state.cur_record_field_index.clone(),
+                            ),
+                        )
+                    } else {
+                        state.extend_commands(vec![
+                            Command::new(
+                                OpCode::PushStack,
+                                vec![CommandArg::MemPos(2)],
+                            ),
+                            Command::new(
+                                OpCode::StackOffset,
+                                vec![CommandArg::FieldIndex(
+                                    first_arg.get_token().try_into()?,
+                                )],
+                            ),
+                        ]);
+                    };
+
+                    // local recursion on the children of the first argument.
+                    parent_token = Some(first_arg.get_token());
+                    for arg in first_arg.get_args() {
+                        trace!("locally recurse context argument {:?}", arg);
+                        state = recurse_compile(arg, state, parent_token, inc_mem_pos)?;
+                        parent_token = Some(arg.get_token());
+                    }
+                    return Ok(state);
+                }
+            }
+        }
         // tx instance reference
         Token::TxType => {
             assert!(is_ar);
@@ -439,6 +496,7 @@ pub(crate) fn recurse_compile<'a>(
                 | Token::TermArgument(_, _)
                 | Token::RxType(_)
                 | Token::TxType
+                | Token::RouteContext(_)
                 | Token::Constant(_) => {
                     match kind {
                         SymbolKind::MethodCallbyRef => {

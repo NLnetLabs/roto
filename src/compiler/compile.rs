@@ -1032,6 +1032,9 @@ pub(crate) fn generate_code_for_token_value(
         Token::TxType => {
             vec![Command::new(OpCode::PushStack, vec![CommandArg::MemPos(1)])]
         }
+        Token::RouteContext(_) => {
+            vec![Command::new(OpCode::PushStack, vec![CommandArg::MemPos(2)])]
+        }
         Token::Variable(var_to) => {
             if let Some(var) = state
                 .used_variables

@@ -315,71 +315,23 @@ impl LinearMemory {
                             _ => Err(VmError::MemOutOfBounds),
                         }
                     }
+                    Some(TypeValue::Builtin(BuiltinTypeValue::RouteContext(context))) => {
+                        trace!("found context for index {:?}", field_index);
+                        Ok(context.get_field_by_index(field_index).unwrap_or(TypeValue::Unknown))
+                    }
                     Some(TypeValue::Builtin(BuiltinTypeValue::Route(
                         mut route,
                     ))) => {
                         trace!("found route");
-                        match field_index.first() {
-                            // Fixed Memory Positions
-                            // 0: rx
-                            // 1: tx
-                            // 2: bgp_msg 
-                            // 3: provenance
-                            // 4: nlri_status
-
-                            // Virtual Attribute Token Positions
-                            // 9: NlriStatus
-                            // 10: Provenance
-                            // 11: BgpUpdateMessage
-                            Ok(i) if (9..=11).contains(&i) => {
-                                trace!("virtual route attributes {:?}", field_index);
-
-                                let mut field_index = field_index.clone();
-                                field_index.0.remove(0);
-                                match i {
-                                    9 => { 
-                                        if let Some(tv) = self.get_mem_pos(4) {
-                                            if let TypeValue::Builtin(BuiltinTypeValue::NlriStatus(_n)) = tv {
-                                            Ok(tv.clone())
-                                        }  else { Ok(TypeValue::Unknown) }
-                                        } else {
-                                                Err(VmError::IncompleteContext)
-                                            }
-                                        }
-                                    10 => { 
-                                        if let Some(tv) = self.get_mem_pos(3) {
-                                            if let TypeValue::Builtin(BuiltinTypeValue::Provenance(p)) = tv {
-                                                trace!("for provenance {:?}", field_index);
-                                                p.get_field_by_index(&field_index.0)
-                                            } else { Ok(TypeValue::Unknown) }
-                                        } else {
-                                            Err(VmError::IncompleteContext)
-                                        }
-                                    }
-                                    11 => { 
-                                        if let Some(tv) = self.get_mem_pos(2) {
-                                            if let TypeValue::Builtin(BuiltinTypeValue::BgpUpdateMessage(msg)) = tv {
-                                            LazyRecord::from_type_def(BytesRecord::<
-                                                BgpUpdateMessage
-                                            >::lazy_type_def(
-                                            ))?
-                                            .get_field_by_index(&field_index, msg).map(|v| v.try_into().map_err(|_| VmError::InvalidFieldAccess))?
-                                        } else {
-                                            Err(VmError::IncompleteContext)
-                                        }
-                                    } else { Ok(TypeValue::Unknown) }}
-                                    _ => Err(VmError::InvalidFieldAccess)
-                                }
-                            }
-                            _ => {
-                                Ok(route
-                                    .get_mut_field_by_index(field_index)
-                                    .unwrap_or(TypeValue::Unknown)
-                                )
-                            },
-                        }
+                        Ok(route
+                            .get_mut_field_by_index(field_index)
+                            .unwrap_or(TypeValue::Unknown)
+                        )
                     },
-                    _ => Err(VmError::MemOutOfBounds),
+                    m => {   
+                        trace!("no found for {:?}", m);
+                        Err(VmError::MemOutOfBounds)
+                    }
                 },
             },
             StackRefPos::CompareResult(res) => Ok((*res).into()),
@@ -1511,12 +1463,7 @@ impl<
     }
 
     fn copy_context_to_mem(&self, mem: &mut LinearMemory) {
-        let RouteContext { bgp_msg, provenance, nlri_status } = self.context.as_ref();
-        if let Some(bgp_msg) = bgp_msg {
-            mem.set_mem_pos(2, bgp_msg.clone().into());
-        }
-        mem.set_mem_pos(3, BuiltinTypeValue::Provenance(*provenance).into());
-        mem.set_mem_pos(4, (*nlri_status).into());
+        mem.set_mem_pos(2, TypeValue::Builtin(BuiltinTypeValue::RouteContext(self.context.as_ref().clone())));
     }
 
     fn _unwind_resolved_stack_into_vec(

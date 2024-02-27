@@ -28,6 +28,7 @@ use crate::attr_change_set::ScalarValue;
 use crate::compiler::compile::CompileError;
 use crate::traits::RotoType;
 use crate::types::collections::ElementTypeValue;
+use crate::types::collections::LazyRecord;
 use crate::types::collections::List;
 use crate::types::typedef::MethodProps;
 use crate::types::typedef::RecordTypeDef;
@@ -868,6 +869,65 @@ impl RouteContext
         todo!()
     }
 
+
+    pub fn get_props_for_field(
+        field: &ast::Identifier,
+    ) -> Result<(TypeDef, Token), CompileError> {
+        match field.ident.as_str() {
+            "update-message" => Ok((
+                TypeDef::LazyRecord(crate::types::lazyrecord_types::LazyRecordTypeDef::UpdateMessage),
+                Token::FieldAccess(vec![RouteContextToken::BgpMessage.into()])
+            )),
+            "provenance" => Ok((
+                TypeDef::Provenance,
+                Token::FieldAccess(vec![RouteContextToken::Provenance.into()])
+            )),
+            "status" => Ok((
+                TypeDef::NlriStatus,
+                Token::FieldAccess(vec![RouteContextToken::Status.into()])
+            )),
+            _ => Err(CompileError::from("bla"))
+        }
+    }
+
+    pub fn get_field_by_index(
+        &self,
+        field_index: &FieldIndex,
+    ) -> Result<TypeValue, VmError> {
+        trace!("get_field_by_index {:?} for RouteContext {:?}", field_index, self);
+        
+        match RouteContextToken::try_from(field_index.first()?) {
+            Ok(RouteContextToken::Provenance) => {
+                trace!("provenance w/ field index {:?}", field_index);
+                // recurse into provenance.
+                self.provenance().get_field_by_index(field_index.skip_first())
+            },
+            Ok(RouteContextToken::Status) => { 
+                self.nlri_status().get_field_by_index(field_index.skip_first())
+            },
+            Ok(RouteContextToken::BgpMessage) => { 
+                // recurse into Update Message.
+                if let Some(bgp_msg) = &self.bgp_msg {
+                    let tv = LazyRecord::from_type_def(BytesRecord::<
+                        BgpUpdateMessage
+                    >::lazy_type_def(
+                    ))?
+                    .get_field_by_index(&field_index.skip_first().into(), bgp_msg)?;
+
+                // There are no deeper nested records in a Update message
+                // (just attributes + prefix), so we can stop t this level.
+                if let ElementTypeValue::Primitive(tv) = tv {
+                    Ok(tv)
+                } else {
+                    Err(VmError::InvalidContext)
+                }
+                } else {
+                    Err(VmError::InvalidContext)
+                }
+            },
+            _ => Err(VmError::InvalidFieldAccess)
+        }
+    }
     // pub fn workshop<N>(
     //     &self,
     // ) -> Result<RouteWorkshop<bytes::Bytes, N>, VmError> where N: Clone
@@ -1404,14 +1464,6 @@ impl BasicRoute {
                 TypeDef::List(Box::new(TypeDef::Community)),
                 Token::FieldAccess(vec![1, BasicRouteToken::Communities.into()]),
             )),
-            "status" => Ok((
-                TypeDef::NlriStatus,
-                Token::FieldAccess(vec![RouteContextToken::Status.into()]),
-            )),
-            "provenance" => Ok((
-                TypeDef::Provenance,
-                Token::FieldAccess(vec![RouteContextToken::Provenance.into()]),
-            )),
             _ => Err(format!(
                 "Unknown method '{}' for type Route",
                 field_name.ident
@@ -1478,16 +1530,6 @@ impl RotoType for BasicRoute {
             "communities" => Ok(MethodProps::new(
                 TypeDef::List(Box::new(TypeDef::Community)),
                 BasicRouteToken::Communities.into(),
-                vec![],
-            )),
-            "status" => Ok(MethodProps::new(
-                TypeDef::NlriStatus,
-                RouteContextToken::Status.into(),
-                vec![],
-            )),
-            "provenance" => Ok(MethodProps::new(
-                TypeDef::Provenance,
-                RouteContextToken::Provenance.into(),
                 vec![],
             )),
             _ => Err(format!(
@@ -1566,8 +1608,9 @@ pub enum BasicRouteToken {
 
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq, Eq)]
 pub enum RouteContextToken {
-    Status = 9,
-    Provenance = 10,
+    BgpMessage = 0,
+    Provenance = 1,
+    Status = 2,
 }
 
 impl TryFrom<usize> for BasicRouteToken {
@@ -1611,7 +1654,7 @@ impl TryFrom<usize> for BasicNlriToken {
             0 => Ok(BasicNlriToken::Prefix),
             1 => Ok(BasicNlriToken::PathId),
             _ => {
-                debug!("Unknown RouteToken value: {}", value);
+                debug!("Unknown BasicNlriToken value: {}", value);
                 Err(VmError::InvalidMethodCall)
             }
         }
@@ -1635,10 +1678,11 @@ impl TryFrom<usize> for RouteContextToken {
 
     fn try_from(value: usize) -> Result<Self, VmError> {
         match value {
-            9 => Ok(RouteContextToken::Status),
-            10 => Ok(RouteContextToken::Provenance),
+            0 => Ok(RouteContextToken::BgpMessage),
+            1 => Ok(RouteContextToken::Provenance),
+            2 => Ok(RouteContextToken::Status),
             _ => {
-                debug!("Unknown RouteToken value: {}", value);
+                debug!("Unknown RouteContextToken value: {}", value);
                 Err(VmError::InvalidMethodCall)
             }
         }

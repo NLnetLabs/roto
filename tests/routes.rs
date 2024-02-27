@@ -136,6 +136,7 @@ fn test_routes_1() {
         filter rib-in-pre-filter {
             define {
                 rx route: Route;
+                context ctx: RouteContext;
             }
         
             term always {
@@ -149,7 +150,7 @@ fn test_routes_1() {
                 mqtt.send(
                     {
                         prefix: route.prefix,
-                        peer_ip: route.provenance.peer-id.addr
+                        peer_ip: ctx.provenance.peer-id.addr
                     }
                 );
             }
