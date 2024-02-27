@@ -457,13 +457,14 @@ pub enum RxTxType {
 #[derive(Clone, Debug)]
 pub struct DefineBody {
     pub rx_tx_type: RxTxType,
+    pub route_context: Option<TypeIdentField>,
     pub use_ext_data: Vec<(Identifier, Identifier)>,
     pub assignments: Vec<(Identifier, ValueExpr)>,
 }
 
 impl DefineBody {
     fn parse(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
-        let (input, (rx_tx_type, use_ext_data, assignments)) = tuple((
+        let (input, (rx_tx_type, route_context, use_ext_data, assignments)) = tuple((
             alt((
                 map(
                     delimited(
@@ -497,6 +498,13 @@ impl DefineBody {
                     RxTxType::RxOnly,
                 ),
             )),
+            opt(
+                delimited(
+                    opt_ws(tag("context")),
+                    opt_ws(TypeIdentField::parse),
+                    opt_ws(char(';'))
+                )
+            ),
             many0(delimited(
                 opt_ws(tag("use")),
                 tuple((opt_ws(Identifier::parse), opt_ws(Identifier::parse))),
@@ -520,6 +528,7 @@ impl DefineBody {
             input,
             Self {
                 rx_tx_type,
+                route_context,
                 use_ext_data,
                 assignments,
             },
