@@ -7,8 +7,7 @@ use routecore::
         communities::HumanReadableCommunity,
         message::{update::LocalPref, SessionConfig},
         path_attributes::AggregatorInfo,
-        types::MultiExitDisc,
-        types::{AfiSafi, NextHop, OriginType},
+        types::{AfiSafi, MultiExitDisc, NextHop, Origin, OriginType},
     };
 
 use crate::{
@@ -72,7 +71,7 @@ bytes_record_impl!(
         field("local_pref"; 6, LocalPref, local_pref),
         field("multi_exit_discriminator"; 7, MultiExitDisc, multi_exit_disc),
         method_field("next_hop"; 8, NextHop, find_next_hop(self.afi_safi)),
-        field("origin_type"; 9, OriginType, origin),
+        field("origin"; 9, Origin, origin),
     )],
     10
 );
@@ -274,8 +273,14 @@ impl From<Result<Option<OriginType>, routecore::bgp::ParseError>>
         value
             .ok()
             .flatten()
-            .map(TypeValue::from)
+            .map(|v| TypeValue::from(Origin::from(v)))
             .unwrap_or(TypeValue::Unknown)
+    }
+}
+
+impl From<OriginType> for TypeValue {
+    fn from(value: OriginType) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::Origin(Origin::from(value)))
     }
 }
 

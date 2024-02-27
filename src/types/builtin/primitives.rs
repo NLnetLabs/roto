@@ -27,10 +27,10 @@ use super::builtin_type_value::BuiltinTypeValue;
 use routecore::asn::{Asn, LongSegmentError};
 use routecore::bgp::aspath::OwnedHop;
 use routecore::bgp::message::nlri::PathId;
-use routecore::bgp::path_attributes::{AtomicAggregate, AggregatorInfo};
+use routecore::bgp::path_attributes::AggregatorInfo;
 use routecore::bgp::communities::{ExtendedCommunity, HumanReadableCommunity as Community};
 use routecore::addr::Prefix;
-use routecore::bgp::types::{AfiSafi, LocalPref, MultiExitDisc, NextHop, OriginType};
+use routecore::bgp::types::{AfiSafi, AtomicAggregate, LocalPref, MultiExitDisc, NextHop, Origin, OriginType};
 
 //------------ U16 Type -----------------------------------------------------
 
@@ -1963,7 +1963,7 @@ typevaluefromimpls!(Hop);
 
 //------------ OriginType type ----------------------------------------------
 
-minimalscalartype!(OriginType);
+minimalscalartype!(Origin);
 
 //------------ NextHop type -------------------------------------------------
 

@@ -11,8 +11,8 @@ use routecore::asn::Asn;
 use routecore::bgp::aspath::{HopPath, OwnedHop as Hop};
 use routecore::bgp::communities::HumanReadableCommunity as Community;
 use routecore::bgp::message::nlri::Nlri;
-use routecore::bgp::path_attributes::{AggregatorInfo, AtomicAggregate};
-use routecore::bgp::types::{MultiExitDisc, OriginType};
+use routecore::bgp::path_attributes::AggregatorInfo;
+use routecore::bgp::types::{AtomicAggregate, MultiExitDisc, Origin, OriginType};
 use routecore::bgp::{
     message::nlri::PathId,
     types::{AfiSafi, LocalPref},
@@ -200,7 +200,7 @@ pub enum TypeDef {
     Hop,
     Community,
     Nlri,
-    OriginType,
+    Origin,
     LocalPref,
     MultiExitDisc,
     NextHop,
@@ -251,7 +251,7 @@ impl TypeDef {
         Hop(StringLiteral;),
         Community(StringLiteral;),
         Nlri(StringLiteral;),
-        OriginType(StringLiteral;),
+        Origin(StringLiteral;),
         NextHop(StringLiteral;),
         NlriStatus(StringLiteral;),
         IntegerLiteral(StringLiteral,U8,U32,StringLiteral,PrefixLength,LocalPref,Asn;ConstEnumVariant),
@@ -727,8 +727,8 @@ impl TypeDef {
             TypeDef::Nlri => {
                 Nlri::get_props_for_method(self.clone(), method_name)
             }
-            TypeDef::OriginType => {
-                OriginType::get_props_for_method(self.clone(), method_name)
+            TypeDef::Origin => {
+                Origin::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::Route => {
                 BasicRoute::get_props_for_method(self.clone(), method_name)
@@ -948,7 +948,7 @@ impl std::fmt::Display for TypeDef {
             TypeDef::Bool => write!(f, "Boolean"),
             TypeDef::Community => write!(f, "Community"),
             TypeDef::Nlri => write!(f, "NLRI"),
-            TypeDef::OriginType => write!(f, "OriginType"),
+            TypeDef::Origin => write!(f, "Origin"),
             TypeDef::NlriStatus => write!(f, "RouteStatus"),
             TypeDef::HexLiteral => write!(f, "HexLiteral"),
             TypeDef::StringLiteral => write!(f, "String"),
@@ -1175,7 +1175,7 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             "Asn" => Ok(TypeDef::Asn),
             "AsPath" => Ok(TypeDef::AsPath),
             "Hop" => Ok(TypeDef::Hop),
-            "OriginType" => Ok(TypeDef::OriginType),
+            "Origin" => Ok(TypeDef::Origin),
             "Route" => Ok(TypeDef::Route),
             "RouteContext" => Ok(TypeDef::RouteContext),
             "Provenance" => Ok(TypeDef::Provenance),
@@ -1246,7 +1246,7 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
             "Asn" => Ok(TypeDef::Asn),
             "AsPath" => Ok(TypeDef::AsPath),
             "Hop" => Ok(TypeDef::Hop),
-            "OriginType" => Ok(TypeDef::OriginType),
+            "Origin" => Ok(TypeDef::Origin),
             "Route" => Ok(TypeDef::Route),
             "RouteContext" => Ok(TypeDef::RouteContext),
             "Provenance" => Ok(TypeDef::Provenance),
@@ -1309,7 +1309,7 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::IpAddr(_) => TypeDef::IpAddr,
             BuiltinTypeValue::Asn(_) => TypeDef::Asn,
             BuiltinTypeValue::Hop(_) => TypeDef::Hop,
-            BuiltinTypeValue::OriginType(_) => TypeDef::OriginType,
+            BuiltinTypeValue::Origin(_) => TypeDef::Origin,
             BuiltinTypeValue::AsPath(_) => TypeDef::AsPath,
             BuiltinTypeValue::Community(_) => TypeDef::Community,
             BuiltinTypeValue::Nlri(_) => TypeDef::Nlri,
@@ -1381,7 +1381,7 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::AsPath(_) => TypeDef::AsPath,
             BuiltinTypeValue::Community(_) => TypeDef::Community,
             BuiltinTypeValue::Nlri(_) => TypeDef::Nlri,
-            BuiltinTypeValue::OriginType(_) => TypeDef::OriginType,
+            BuiltinTypeValue::Origin(_) => TypeDef::Origin,
             BuiltinTypeValue::Route(_) => TypeDef::Route,
             BuiltinTypeValue::RouteContext(_) => TypeDef::RouteContext,
             BuiltinTypeValue::Provenance(_) => TypeDef::Provenance,

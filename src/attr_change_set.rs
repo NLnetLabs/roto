@@ -3,11 +3,10 @@
 use routecore::asn::LongSegmentError;
 use routecore::bgp::aspath::HopPath;
 use routecore::bgp::message::nlri::PathId;
-use routecore::bgp::path_attributes::{Aggregator, AggregatorInfo, AtomicAggregate};
+use routecore::bgp::path_attributes::AggregatorInfo;
+use routecore::bgp::types::{AtomicAggregate, Origin};
 use routecore::bgp::types::{AfiSafi, LocalPref, OriginType, MultiExitDisc};
-use routecore::addr::Prefix;
 use routecore::bgp::communities::HumanReadableCommunity as Community;
-use routecore::bgp::communities::ExtendedCommunity;
 use routecore::asn::Asn;
 use serde::Serialize;
 use std::marker::PhantomData;
@@ -69,7 +68,7 @@ pub struct AttrChangeSet {
     #[serde(skip_serializing_if = "VectorOption::is_none")]
     pub as_path: VectorOption<HopPath>,
     #[serde(skip_serializing_if = "ScalarOption::is_none")]
-    pub origin_type: ScalarOption<OriginType>,
+    pub origin_type: ScalarOption<Origin>,
     #[serde(skip_serializing_if = "ScalarOption::is_none")]
     pub next_hop: ScalarOption<routecore::bgp::types::NextHop>,
     #[serde(skip_serializing_if = "ScalarOption::is_none")]
@@ -186,7 +185,7 @@ pub struct PathAttributeSetOld {
     #[serde(skip_serializing_if = "VectorOption::is_none")]
     pub as_path: VectorOption<HopPath>,
     #[serde(skip_serializing_if = "ScalarOption::is_none")]
-    pub origin_type: ScalarOption<OriginType>,
+    pub origin_type: ScalarOption<Origin>,
     #[serde(skip_serializing_if = "ScalarOption::is_none")]
     pub next_hop: ScalarOption<routecore::bgp::types::NextHop>,
     #[serde(skip_serializing_if = "ScalarOption::is_none")]

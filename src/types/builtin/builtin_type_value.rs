@@ -7,8 +7,8 @@ use std::net::IpAddr;
 
 use routecore::asn::Asn;
 use routecore::bgp::message::nlri::{Nlri, PathId};
-use routecore::bgp::path_attributes::AtomicAggregate;
-use routecore::bgp::types::{AfiSafi, NextHop, OriginType, MultiExitDisc};
+// use routecore::bgp::path_attributes::AtomicAggregate;
+use routecore::bgp::types::{AfiSafi, AtomicAggregate, MultiExitDisc, NextHop, Origin, OriginType};
 use routecore::bgp::path_attributes::AggregatorInfo;
 use routecore::addr::Prefix;
 use routecore::bgp::communities::HumanReadableCommunity as Community;
@@ -57,7 +57,7 @@ pub enum BuiltinTypeValue {
     Asn(Asn),                         // scalar
     AsPath(routecore::bgp::aspath::HopPath),        // vector
     Hop(routecore::bgp::aspath::OwnedHop), // read-only scalar
-    OriginType(OriginType),           // scalar
+    Origin(Origin),           // scalar
     Route(BasicRoute),
     RouteContext(RouteContext),
     PeerId(PeerId),                    // scalar
@@ -101,7 +101,7 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::IpAddr(v) => v.into_type(ty),
             BuiltinTypeValue::AsPath(v) => v.into_type(ty),
             BuiltinTypeValue::Hop(h) => h.into_type(ty),
-            BuiltinTypeValue::OriginType(v) => v.into_type(ty),
+            BuiltinTypeValue::Origin(v) => v.into_type(ty),
             BuiltinTypeValue::Route(r) => r.into_type(ty),
             BuiltinTypeValue::RouteContext(c) => c.into_type(ty),
             BuiltinTypeValue::PeerId(r) => r.into_type(ty),
@@ -206,8 +206,8 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::Hop(h) => {
                     write!(f, "{}", h)
                 }
-                BuiltinTypeValue::OriginType(v) => {
-                    write!(f, "{}", v)
+                BuiltinTypeValue::Origin(v) => {
+                    write!(f, "{:?}", v)
                 }
                 BuiltinTypeValue::Route(r) => write!(f, "{:?}", r),
                 BuiltinTypeValue::RouteContext(c) => write!(f, "{:?}", c),
@@ -303,8 +303,8 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::Hop(h) => {
                     write!(f, "{} (Hop)", h)
                 }
-                BuiltinTypeValue::OriginType(v) => {
-                    write!(f, "{} (Origin Type)", v)
+                BuiltinTypeValue::Origin(v) => {
+                    write!(f, "{:?} (Origin Type)", v)
                 }
                 BuiltinTypeValue::Route(r) => write!(f, "{:?} (Route)", r),
                 BuiltinTypeValue::RouteContext(c) => write!(f, "{:?} (Context)", c),

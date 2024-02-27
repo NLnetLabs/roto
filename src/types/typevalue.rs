@@ -9,7 +9,7 @@ use routecore::bgp::aspath::{HopPath, OwnedHop as Hop};
 use routecore::bgp::communities::HumanReadableCommunity as Community;
 use routecore::bgp::message::nlri::{Nlri, PathId};
 use routecore::bgp::types::{
-    AfiSafi, LocalPref, MultiExitDisc, NextHop, OriginType,
+    AfiSafi, LocalPref, MultiExitDisc, NextHop, Origin, OriginType
 };
 use serde::Serialize;
 
@@ -402,8 +402,8 @@ impl RotoType for TypeValue {
             TypeDef::NextHop => {
                 NextHop::get_props_for_method(ty, method_name)
             }
-            TypeDef::OriginType => {
-                OriginType::get_props_for_method(ty, method_name)
+            TypeDef::Origin => {
+                Origin::get_props_for_method(ty, method_name)
             }
             TypeDef::OutputStream(ty) => {
                 Self::get_props_for_method(*ty, method_name)
@@ -487,7 +487,7 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::LocalPref(v) => v.into_type(ty),
                 BuiltinTypeValue::MultiExitDisc(v) => v.into_type(ty),
                 BuiltinTypeValue::NextHop(v) => v.into_type(ty),
-                BuiltinTypeValue::OriginType(v) => v.into_type(ty),
+                BuiltinTypeValue::Origin(v) => v.into_type(ty),
                 BuiltinTypeValue::Prefix(v) => v.into_type(ty),
                 BuiltinTypeValue::PrefixLength(v) => v.into_type(ty),
                 BuiltinTypeValue::AfiSafi(v) => v.into_type(ty),
@@ -707,7 +707,7 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::NextHop(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::OriginType(v) => {
+                BuiltinTypeValue::Origin(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::Prefix(v) => {
@@ -852,7 +852,7 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::NextHop(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::OriginType(v) => {
+                BuiltinTypeValue::Origin(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::Prefix(v) => {

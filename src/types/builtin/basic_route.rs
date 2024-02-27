@@ -14,6 +14,7 @@ use routecore::bgp::path_attributes::PathAttribute;
 use routecore::bgp::types::LocalPref;
 use routecore::bgp::types::MultiExitDisc;
 use routecore::bgp::types::NextHop;
+use routecore::bgp::types::OriginType;
 use routecore::bgp::workshop::afisafi_nlri::AfiSafiNlri;
 use routecore::bgp::workshop::afisafi_nlri::HasBasicNlri;
 use routecore::bgp::workshop::route::RouteWorkshop;
@@ -225,32 +226,32 @@ impl From<PathAttribute> for TypeValue {
     fn from(value: PathAttribute) -> Self {
         match value {
             PathAttribute::Origin(v) => {
-                TypeValue::Builtin(BuiltinTypeValue::OriginType(v.inner()))
+                TypeValue::Builtin(BuiltinTypeValue::Origin(v))
             }
             PathAttribute::AsPath(hop_path) => {
-                TypeValue::Builtin(BuiltinTypeValue::AsPath(hop_path.inner()))
+                TypeValue::Builtin(BuiltinTypeValue::AsPath(hop_path))
             }
             PathAttribute::ConventionalNextHop(next_hop) => {
                 TypeValue::Builtin(BuiltinTypeValue::NextHop(
                     NextHop::Unicast(std::net::IpAddr::V4(
-                        next_hop.inner().0,
+                        next_hop.0,
                     )),
                 ))
             }
             PathAttribute::MultiExitDisc(med) => TypeValue::Builtin(
-                BuiltinTypeValue::MultiExitDisc(MultiExitDisc(med.inner().0)),
+                BuiltinTypeValue::MultiExitDisc(MultiExitDisc(med.0)),
             ),
             PathAttribute::LocalPref(lp) => TypeValue::Builtin(
-                BuiltinTypeValue::LocalPref(LocalPref(lp.inner().into())),
+                BuiltinTypeValue::LocalPref(LocalPref(lp.into())),
             ),
             PathAttribute::AtomicAggregate(aa) => {
                 TypeValue::Builtin(BuiltinTypeValue::AtomicAggregate(aa))
             }
             PathAttribute::Aggregator(a) => TypeValue::Builtin(
-                BuiltinTypeValue::AggregatorInfo(a.inner()),
+                BuiltinTypeValue::AggregatorInfo(a),
             ),
             PathAttribute::StandardCommunities(comms) => {
-                TypeValue::List(List(comms.inner().fmap(|c| {
+                TypeValue::List(List(comms.fmap(|c| {
                     ElementTypeValue::Primitive(
                         HumanReadableCommunity::from(*c).into(),
                     )
@@ -261,7 +262,7 @@ impl From<PathAttribute> for TypeValue {
             PathAttribute::MpReachNlri(_) => todo!(),
             PathAttribute::MpUnreachNlri(_) => todo!(),
             PathAttribute::ExtendedCommunities(comms) => {
-                TypeValue::List(List(comms.inner().fmap(|c| {
+                TypeValue::List(List(comms.fmap(|c| {
                     ElementTypeValue::Primitive(
                         HumanReadableCommunity::from(c).into(),
                     )
@@ -273,7 +274,7 @@ impl From<PathAttribute> for TypeValue {
             PathAttribute::AsPathLimit(_) => todo!(),
             PathAttribute::Ipv6ExtendedCommunities(_) => todo!(),
             PathAttribute::LargeCommunities(comms) => {
-                TypeValue::List(List(comms.inner().fmap(|c| {
+                TypeValue::List(List(comms.fmap(|c| {
                     ElementTypeValue::Primitive(
                         HumanReadableCommunity::from(c).into(),
                     )
@@ -1431,7 +1432,7 @@ impl BasicRoute {
                 Token::FieldAccess(vec![1, BasicRouteToken::AsPath.into()]),
             )),
             "origin-type" => Ok((
-                TypeDef::OriginType,
+                TypeDef::Origin,
                 Token::FieldAccess(vec![1, BasicRouteToken::OriginType.into()]),
             )),
             "next-hop" => Ok((
@@ -1498,7 +1499,7 @@ impl RotoType for BasicRoute {
                 vec![],
             )),
             "origin-type" => Ok(MethodProps::new(
-                TypeDef::OriginType,
+                TypeDef::Origin,
                 BasicRouteToken::OriginType.into(),
                 vec![],
             )),
