@@ -27,12 +27,12 @@ use crate::{
 /// The only symbols we really have are variables & (user-defined) types.
 #[derive(Debug, Eq)]
 pub(crate) struct Symbol {
-    name: ShortString,
-    kind: SymbolKind,
-    ty: TypeDef,
-    args: Vec<Symbol>,
-    value: TypeValue,
-    token: Token, // location: Location,
+    pub name: ShortString,
+    pub kind: SymbolKind,
+    pub ty: TypeDef,
+    pub args: Vec<Symbol>,
+    pub value: TypeValue,
+    pub token: Token, // location: Location,
 }
 
 impl Symbol {
@@ -43,12 +43,11 @@ impl Symbol {
         &self,
     ) -> Result<(SymbolKind, TypeDef, Token, Option<TypeValue>), CompileError>
     {
-        let token = self.get_token();
         Ok((
             self.kind,
             self.ty.clone(),
-            token,
-            self.get_value().builtin_as_cloned_type_value().ok(),
+            self.token.clone(),
+            self.value.builtin_as_cloned_type_value().ok(),
         ))
     }
 
@@ -71,52 +70,7 @@ impl Symbol {
     pub fn get_kind_type_and_token(
         &self,
     ) -> Result<(SymbolKind, TypeDef, Token), CompileError> {
-        let token = self.get_token();
-        Ok((self.kind, self.ty.clone(), token))
-    }
-
-    pub fn set_kind(mut self, kind: SymbolKind) -> Symbol {
-        self.kind = kind;
-        self
-    }
-
-    pub fn get_kind(&self) -> SymbolKind {
-        self.kind
-    }
-
-    pub fn get_token(&self) -> Token {
-        self.token.clone()
-    }
-
-    pub fn get_type(&self) -> TypeDef {
-        self.ty.clone()
-    }
-
-    pub fn set_type(mut self, ty: TypeDef) -> Self {
-        self.ty = ty;
-        self
-    }
-
-    pub fn set_token(mut self, token: Token) -> Self {
-        self.token = token;
-        self
-    }
-
-    pub fn has_name(&self, name: &str) -> Option<&Self> {
-        if self.name == name {
-            Some(self)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_name(&self) -> ShortString {
-        self.name.clone()
-    }
-
-    pub fn set_name(mut self, name: ShortString) -> Self {
-        self.name = name;
-        self
+        Ok((self.kind, self.ty.clone(), self.token.clone()))
     }
 
     // This actually does NOT work with equality, since
@@ -126,35 +80,31 @@ impl Symbol {
         matches!(self.value, TypeValue::Unknown)
     }
 
-    pub fn get_value(&self) -> &TypeValue {
-        &self.value
-    }
-
     fn _get_recursive_value(&self) -> Result<TypeValue, VmError> {
         trace!("self {:?}", self);
-        if let TypeValue::Record(_) = self.get_value() {
+        if let TypeValue::Record(_) = self.value {
             trace!("already has value {:?}", self.value);
             return Ok(self.value.clone());
         }
 
         let mut rec_values: Vec<(ShortString, ElementTypeValue)> = vec![];
-        for arg in self.get_args() {
-            trace!("Args {:?}", self.get_args());
-            if let TypeDef::Record(mut _rec) = arg.get_type() {
-                trace!("arg {}", arg.get_type());
+        for arg in &self.args {
+            trace!("Args {:?}", self.args);
+            if let TypeDef::Record(_) = &arg.ty {
+                trace!("arg {}", arg.ty);
                 let v = arg._get_recursive_value()?;
-                trace!("value {}: {:?}", arg.get_name(), v);
-                rec_values.push((arg.get_name(), v.try_into()?));
+                trace!("value {}: {:?}", arg.name, v);
+                rec_values.push((arg.name.clone(), v.try_into()?));
             } else {
-                trace!("non-record value {:?}", arg.get_value());
+                trace!("non-record value {:?}", arg.value);
                 rec_values.push((
-                    arg.get_name(),
-                    arg.get_value().clone().try_into()?,
+                    arg.name.clone(),
+                    arg.value.clone().try_into()?,
                 ));
             }
         }
 
-        match self.get_type() {
+        match self.ty {
             TypeDef::Record(_) => {
                 Ok(TypeValue::Record(Record::new(rec_values)))
             }
@@ -169,20 +119,17 @@ impl Symbol {
     /// (sub)-field, its (converted) type and its (converted) [`TypeValue`].
     pub fn get_recursive_values_primitive(
         &self,
-        type_def: TypeDef,
+        type_def: &TypeDef,
     ) -> Result<Vec<(ShortString, TypeDef, TypeValue)>, CompileError> {
         // trace!("get_recursive_values_primitive with args {:#?} and type_def
         // {:#?}", self.get_args(), type_def);
         let mut rec_values: Vec<(ShortString, TypeDef, TypeValue)> = vec![];
-        for arg in self.get_args() {
+        for arg in &self.args {
             // trace!("arg {:?}", arg);
-            if let TypeDef::Record(_rec) = arg.get_type() {
-                if let Some(checked_type) =
-                    type_def.get_field(&arg.get_name())
-                {
-                    let checked_val = arg.get_recursive_values_primitive(
-                        checked_type.clone(),
-                    )?;
+            if let TypeDef::Record(_) = &arg.ty {
+                if let Some(checked_type) = type_def.get_field(&arg.name) {
+                    let checked_val =
+                        arg.get_recursive_values_primitive(&checked_type)?;
 
                     let mut checked_val_vec = vec![];
                     for cv in checked_val {
@@ -197,7 +144,7 @@ impl Symbol {
                     }
 
                     rec_values.push((
-                        arg.get_name(),
+                        arg.name.clone(),
                         checked_type,
                         TypeValue::Record(Record::new(checked_val_vec)),
                     ));
@@ -205,73 +152,47 @@ impl Symbol {
                     return Err(CompileError::from(format!(
                         "The sub-field name '{}' cannot be found in field \
                         '{}'",
-                        &arg.get_name(),
-                        self.get_name()
+                        &arg.name, self.name
                     )));
                 }
-            } else if let Some(checked_type) =
-                type_def.get_field(&arg.get_name())
-            {
+            } else if let Some(checked_type) = type_def.get_field(&arg.name) {
                 // trace!(
                 //     "field with name '{}' found in type_def",
                 //     arg.get_name()
                 // );
                 // trace!("checked type {:?}", checked_type);
 
-                if !arg.get_type().test_type_conversion(checked_type.clone())
-                {
+                if !arg.ty.clone().test_type_conversion(checked_type.clone()) {
                     return Err(CompileError::from(format!(
                         "Cannot convert value of type {} into value of type \
                         {}",
-                        arg.get_type(),
-                        checked_type
+                        arg.ty, checked_type
                     )));
                 };
                 // let checked_val =
                 //     arg.get_value().clone().into_type(&checked_type)?;
                 rec_values.push((
-                    arg.get_name(),
+                    arg.name.clone(),
                     checked_type,
-                    arg.get_value().clone(),
+                    arg.value.clone(),
                 ));
             } else {
-                trace!("arg.get_name()=\"{}\"", arg.get_name());
+                trace!("arg.get_name()=\"{}\"", arg.name);
                 trace!(
                     "type_def.get_field()=\"{:?}\"",
-                    type_def.get_field(&arg.get_name())
+                    type_def.get_field(&arg.name)
                 );
                 trace!("type_def {:?}", type_def);
                 trace!("checked values {:?}", rec_values);
                 return Err(CompileError::from(format!(
                     "'{}' cannot be found in '{}'",
-                    arg.get_name(),
-                    type_def
+                    arg.name, type_def
                 )));
             }
             trace!("recursive value {:?}", rec_values);
         }
 
         Ok(rec_values)
-    }
-
-    pub fn get_value_owned(self) -> TypeValue {
-        self.value
-    }
-
-    pub fn _take_value(&mut self) -> TypeValue {
-        std::mem::take(&mut self.value)
-    }
-
-    pub fn set_value(&mut self, value: TypeValue) {
-        self.value = value;
-    }
-
-    pub fn get_args_owned(self) -> Vec<Symbol> {
-        self.args
-    }
-
-    pub fn get_args(&self) -> &[Symbol] {
-        self.args.as_slice()
     }
 
     /// Bounds checking #1: Check if the first actually exists before actually
@@ -317,10 +238,6 @@ impl Symbol {
                 self.args.len()
             )))
         }
-    }
-
-    pub fn get_args_mut(&mut self) -> &mut [Symbol] {
-        &mut self.args
     }
 
     /// Go into the first arg of a symbol until we find a empty args vec and
@@ -382,13 +299,13 @@ impl Symbol {
     /// Used to construct the return type of a variable that is being
     /// assigned.
     pub(crate) fn get_recursive_return_type(&self) -> TypeDef {
-        if let TypeDef::Record(_ty) = self.get_type() {
+        if let TypeDef::Record(_ty) = &self.ty {
             return self.ty.clone();
         }
         if self.args.is_empty() {
             self.ty.clone()
         } else if let Some(last_arg) = self.args.last() {
-            last_arg.get_type()
+            last_arg.ty.clone()
         } else {
             unreachable!()
         }
@@ -435,7 +352,7 @@ impl Symbol {
 
     pub(crate) fn flatten_nodes(&self) -> Vec<&Symbol> {
         let mut new_nodes = vec![];
-        for arg in self.get_args() {
+        for arg in &self.args {
             new_nodes.extend(arg.flatten_nodes());
         }
 
@@ -556,15 +473,15 @@ pub struct MatchAction {
 
 impl MatchAction {
     pub fn get_name(&self) -> ShortString {
-        self.symbol.get_name()
+        self.symbol.name.clone()
     }
 
     pub fn get_type(&self) -> TypeDef {
-        self.symbol.get_type()
+        self.symbol.ty.clone()
     }
 
     pub fn get_kind(&self) -> SymbolKind {
-        self.symbol.get_kind()
+        self.symbol.kind
     }
 
     pub fn get_kind_type_and_token(
@@ -574,11 +491,11 @@ impl MatchAction {
     }
 
     pub(crate) fn get_args(&self) -> &[Symbol] {
-        self.symbol.get_args()
+        &self.symbol.args
     }
 
     pub(crate) fn get_token(&self) -> Token {
-        self.symbol.get_token()
+        self.symbol.token.clone()
     }
 
     pub(crate) fn get_match_action(&self) -> &Symbol {
@@ -773,16 +690,14 @@ impl SymbolTable {
         &mut self,
         mut symbol: Symbol,
     ) -> Result<(), CompileError> {
-        let key = symbol.get_name();
+        self.validate_variable_name(&symbol.name)?;
 
-        self.validate_variable_name(&key)?;
-
-        symbol = match symbol.get_kind() {
+        match symbol.kind {
             SymbolKind::VariableAssignment => {
-                symbol.set_token(Token::Variable(self.variables.len()))
+                symbol.token = Token::Variable(self.variables.len());
             }
             SymbolKind::Constant => {
-                symbol.set_token(Token::Constant(Some(self.variables.len())))
+                symbol.token = Token::Constant(Some(self.variables.len()));
             }
             _ => {
                 return Err(CompileError::new(
@@ -790,7 +705,7 @@ impl SymbolTable {
                 ));
             }
         };
-        self.variables.insert(key, symbol);
+        self.variables.insert(symbol.name.clone(), symbol);
         Ok(())
     }
 
@@ -959,7 +874,7 @@ impl SymbolTable {
         quantifier: MatchActionQuantifier,
     ) -> Result<(), CompileError> {
         if let SymbolKind::MatchAction(_) | SymbolKind::GlobalEnum =
-            symbol.get_kind()
+            symbol.kind
         {
             self.match_action_sections.push(MatchAction {
                 symbol,
@@ -968,7 +883,7 @@ impl SymbolTable {
         } else {
             return Err(CompileError::from(format!(
                 "Symbol with name {} is not a match-action",
-                symbol.get_name()
+                symbol.name
             )));
         }
         Ok(())
@@ -976,12 +891,12 @@ impl SymbolTable {
 
     pub(crate) fn get_symbol(&self, name: &Identifier) -> Option<&Symbol> {
         let name = &name.ident;
-        if let Some(symbol) = self.rx_type.has_name(name) {
-            return Some(symbol);
+        if self.rx_type.name == name {
+            return Some(&self.rx_type);
         }
         if let Some(tx_type) = self.tx_type.as_ref() {
-            if let Some(symbol) = tx_type.has_name(name) {
-                return Some(symbol);
+            if tx_type.name == name {
+                return Some(&tx_type);
             }
         }
         if let Some(symbol) = self.variables.get(name) {
@@ -1084,7 +999,7 @@ impl SymbolTable {
     ) -> Option<TypeDef> {
         self.term_sections
             .get(name)
-            .and_then(|kv| kv.get_args().get(index).map(|kv| kv.get_type()))
+            .and_then(|kv| kv.args.get(index).map(|kv| kv.ty.clone()))
     }
 
     pub(crate) fn get_terms(&self) -> Vec<&Symbol> {
@@ -1133,17 +1048,17 @@ impl SymbolTable {
         let src: Result<&Symbol, CompileError> = self
             .variables
             .values()
-            .find(|kv| kv.get_name() == name)
+            .find(|kv| kv.name == name)
             .ok_or_else(|| {
                 format!("Symbol '{}' not found as data source", name).into()
             });
 
-        src.map(|r| match r.get_token() {
+        src.map(|r| match r.token {
             Token::Rib(_) => {
                 r.get_kind_type_and_token().map(|ktt| (ktt.1, ktt.2))
             }
             Token::Table(_) => {
-                Ok((TypeDef::Table(Box::new(r.get_type())), r.get_token()))
+                Ok((TypeDef::Table(Box::new(r.ty.clone())), r.token.clone()))
             }
             _ => Err(CompileError::new(format!(
                 "No data source named '{}' found.",
@@ -1179,7 +1094,7 @@ impl SymbolTable {
         for ts in &self.term_sections {
             if deps_set
                 .iter()
-                .any(|ma| ts.1.get_token().is_term() && ma.name == ts.0)
+                .any(|ma| ts.1.token.is_term() && ma.name == ts.0)
             {
                 deps_set.extend(ts.1.flatten_nodes());
             }
@@ -1190,7 +1105,7 @@ impl SymbolTable {
         for ts in &self.action_sections {
             if deps_set
                 .iter()
-                .any(|ma| ts.1.get_token().is_action() && ma.name == ts.0)
+                .any(|ma| ts.1.token.is_action() && ma.name == ts.0)
             {
                 deps_set.extend(ts.1.flatten_nodes());
             }
@@ -1243,11 +1158,8 @@ impl SymbolTable {
         }
 
         Ok(DepsGraph {
-            rx_type: Some((self.rx_type.get_name(), self.rx_type.get_type())),
-            tx_type: self
-                .tx_type
-                .as_ref()
-                .map(|s| (s.get_name(), s.get_type())),
+            rx_type: Some((self.rx_type.name.clone(), self.rx_type.ty.clone())),
+            tx_type: self.tx_type.as_ref().map(|s| (s.name.clone(), s.ty.clone())),
             used_variables,
             used_arguments,
             used_data_sources,
@@ -1259,45 +1171,45 @@ impl SymbolTable {
         mut deps_vec: Vec<&'a Symbol>,
     ) -> Result<DepsGraph, CompileError> {
         deps_vec.retain(|t| {
-            matches!(t.get_token(),
+            matches!(&t.token,
             t if t.is_variable() || t.is_argument() || t.is_data_source())
         });
 
         let (args_vec, vars_srcs_vec): (Vec<&Symbol>, Vec<&Symbol>) =
-            deps_vec
-                .into_iter()
-                .partition(|s| s.get_token().is_argument());
+            deps_vec.into_iter().partition(|s| s.token.is_argument());
 
         let args_vec = args_vec
             .into_iter()
             .map(|s| {
-                if let Some(s) = self.arguments.get_key_value(&s.get_name()) {
+                if let Some(s) = self.arguments.get_key_value(&s.name) {
                     (s.0.clone(), s.1)
                 } else {
-                    (s.get_name(), s)
+                    (s.name.clone(), s)
                 }
             })
             .collect::<Vec<(ShortString, &Symbol)>>();
 
         let vars_src_vec: (Vec<_>, Vec<_>) = vars_srcs_vec
             .into_iter()
-            .partition(|s| s.get_token().is_variable());
+            .partition(|s| s.token.is_variable());
 
         let (vars_vec, data_sources_vec): (Vec<_>, Vec<_>) = (
             vars_src_vec
                 .0
                 .into_iter()
                 .map(|s| {
-                    if let Some(s) =
-                        self.variables.get_key_value(&s.get_name())
-                    {
+                    if let Some(s) = self.variables.get_key_value(&s.name) {
                         (s.0.clone(), s.1)
                     } else {
-                        (s.get_name(), s)
+                        (s.name.clone(), s)
                     }
                 })
                 .collect(),
-            vars_src_vec.1.iter().map(|s| (s.get_name(), *s)).collect(),
+            vars_src_vec
+                .1
+                .iter()
+                .map(|s| (s.name.clone(), *s))
+                .collect(),
         );
 
         Ok(DepsGraph {

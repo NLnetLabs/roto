@@ -590,7 +590,7 @@ impl ast::Define {
             // it will be used: the type inference may lead to a different
             // type in different contexts, and then the type wouldn't be
             // equal to itself, which doesn't sound good (pun!).
-            if let Token::AnonymousRecord = s.get_token() {
+            if let Token::AnonymousRecord = s.token {
                 return Err(CompileError::from(
                     format!(
                         "Assignment to Anonymous Record type not allowed in `define` section for variable '{}'.",
@@ -668,16 +668,17 @@ impl ast::TermSection {
                         &scope,
                         &local_scope,
                     )?;
-                    if expr.get_type() == TypeDef::Bool
+                    if expr.ty == TypeDef::Bool
                         || expr
-                            .get_type()
+                            .ty
+                            .clone()
                             .test_type_conversion(TypeDef::Bool)
                     {
                         expr
                     } else {
                         return Err(CompileError::from(format!(
                             "Cannot convert value with type {} into Boolean",
-                            expr.get_type()
+                            expr.ty
                         )));
                     }
                 }
@@ -707,7 +708,7 @@ impl ast::TermSection {
             // hold the type of the `with` argument for this section. So that
             // that type can be used when invoking a code block for
             // retrieving that argument.
-            logical_formula = logical_formula.set_type(argument_type.clone());
+            logical_formula.ty = argument_type.clone();
             add_logical_formula(
                 self.ident.ident.clone(),
                 term_section_index,
@@ -742,9 +743,8 @@ impl ast::TermSection {
                     enum_ident
                 ))
             })?;
-        enum_s = enum_s
-            .set_type(TypeDef::GlobalEnum(GlobalEnumTypeDef::BmpMessageType));
-        enum_s = enum_s.set_kind(symbols::SymbolKind::GlobalEnum);
+        enum_s.ty = TypeDef::GlobalEnum(GlobalEnumTypeDef::BmpMessageType);
+        enum_s.kind = symbols::SymbolKind::GlobalEnum;
         trace!("symbol {:#?}", enum_s);
 
         // loop over all the variants for this enum. AccessReceiver::eval
@@ -758,7 +758,7 @@ impl ast::TermSection {
                     logic_exprs
                 );
 
-                if let TypeDef::GlobalEnum(e_num) = enum_s.get_type() {
+                if let TypeDef::GlobalEnum(e_num) = enum_s.ty {
                     let (variant_type_def, variant_token) =
                         e_num.get_props_for_variant(&variant.variant_id)?;
 
@@ -788,8 +788,8 @@ impl ast::TermSection {
                                     &scope,
                                     &local_scope,
                                 )?;
-                                if expr.get_type() == TypeDef::Bool
-                                    || expr.get_type().test_type_conversion(
+                                if expr.ty == TypeDef::Bool
+                                    || expr.ty.clone().test_type_conversion(
                                         TypeDef::Bool,
                                     )
                                 {
@@ -798,7 +798,7 @@ impl ast::TermSection {
                                     return Err(CompileError::from(format!(
                                         "Cannot convert value with type {} \
                                         into Boolean",
-                                        expr.get_type()
+                                        expr.ty
                                     )));
                                 }
                             }
@@ -952,7 +952,7 @@ impl ast::ActionSection {
                 &local_scope,
             )?;
 
-            s = s.set_kind(SymbolKind::AccessReceiver);
+            s.kind = SymbolKind::AccessReceiver;
 
             action_exprs.push(s);
         }
@@ -1006,21 +1006,21 @@ impl ast::ApplySection {
             let s = a_scope.eval(symbols.clone(), scope.clone())?;
 
             trace!("apply body symbol {:#?}", s);
-            match s.get_kind() {
+            match s.kind {
                 symbols::SymbolKind::GlobalEnum => {
-                    // for ma in s.get_args_owned() {
+                    // for ma in s.args {
                     //     trace!("match action symbol {:?}", ma);
                     //     add_match_action(ma.get_name(), ma, symbols.clone(), &scope)?
                     // }
                     add_match_action(
-                        s.get_name(),
+                        s.name.clone(),
                         s,
                         symbols.clone(),
                         &scope,
                     )?
                 }
                 symbols::SymbolKind::MatchAction(_ma) => add_match_action(
-                    s.get_name(),
+                    s.name.clone(),
                     s,
                     symbols.clone(),
                     &scope,
@@ -1061,7 +1061,7 @@ impl ast::ApplyScope {
                     &[],
                 )?;
                 let (_ty, token) = filter_map_symbols
-                    .get_term_section_type_and_token(&term.get_name())?;
+                    .get_term_section_type_and_token(&term.name)?;
 
                 let mut args_vec = vec![];
                 for (action_expr, accept_reject) in &fma.actions {
@@ -1070,7 +1070,7 @@ impl ast::ApplyScope {
                         // will store them as args in the vector.
                         let action_name = action_call
                             .eval(symbols.clone(), scope.clone(), &[])?
-                            .get_name();
+                            .name;
 
                         let (_ty, token) = filter_map_symbols
                             .get_action_section(&action_name)?;
@@ -1093,7 +1093,7 @@ impl ast::ApplyScope {
                         // symbol gets to have the name of the term, but it is never
                         // inspected, since it doesn't exist in any symbol map.
                         let s = symbols::Symbol::new(
-                            term.get_name(),
+                            term.name.clone(),
                             symbols::SymbolKind::ActionCall,
                             TypeDef::AcceptReject(accept_reject.ok_or_else(
                                 || {
@@ -1111,7 +1111,7 @@ impl ast::ApplyScope {
                 }
 
                 Ok(symbols::Symbol::new(
-                    term.get_name(),
+                    term.name,
                     if fma.negate {
                         symbols::SymbolKind::MatchAction(
                             MatchActionType::Filter,
@@ -1145,7 +1145,7 @@ impl ast::ApplyScope {
                         ))
                     })?;
 
-                enum_s = enum_s.set_kind(symbols::SymbolKind::GlobalEnum);
+                enum_s.kind = symbols::SymbolKind::GlobalEnum;
 
                 trace!("enum symbol");
                 trace!("{:#?}", enum_s);
@@ -1160,7 +1160,7 @@ impl ast::ApplyScope {
                         variant.actions
                     );
 
-                    if let TypeDef::GlobalEnum(e_num) = enum_s.get_type() {
+                    if let TypeDef::GlobalEnum(e_num) = enum_s.ty {
                         let (variant_type_def, variant_token) = e_num
                             .get_props_for_variant(&variant.variant_id)?;
 
@@ -1195,7 +1195,7 @@ impl ast::ApplyScope {
                             )?;
                             let (_ty, _token) = filter_map_symbols
                                 .get_term_section_type_and_token(
-                                    &term.get_name(),
+                                    &term.name,
                                 )?;
                             trace!(
                                 "evaluated guard {:?} as term with {} and\
@@ -1217,19 +1217,18 @@ impl ast::ApplyScope {
                                         "eval action call in match arm {}",
                                         action_call.action_id
                                     );
-                                    let action_s = action_call.eval(
+                                    let mut action_s = action_call.eval(
                                         symbols.clone(),
                                         scope.clone(),
                                         &local_scope,
                                     )?;
 
-                                    args_vec.push(action_s.set_type(
-                                        TypeDef::AcceptReject(
-                                            accept_reject.unwrap_or(
-                                                ast::AcceptReject::NoReturn,
-                                            ),
+                                    action_s.ty = TypeDef::AcceptReject(
+                                        accept_reject.unwrap_or(
+                                            ast::AcceptReject::NoReturn,
                                         ),
-                                    ));
+                                    );
+                                    args_vec.push(action_s);
                                 }
                                 // There are no action calls in the variant
                                 // body, but there is an AcceptReject
@@ -1371,19 +1370,19 @@ impl ast::ComputeExpr {
                     )),
                 })?;
 
-        let ar_token = ar_symbol.get_token();
+        let ar_token = ar_symbol.token.clone();
         let mut s = &mut ar_symbol;
 
         trace!("ACCESS EXPRESSION {:#?}", self.access_expr);
 
         // Use the type of the access receiver to put on the arguments.
         let mut ty = match ar_token {
-            Token::Table(_) => TypeDef::Table(Box::new(s.get_type())),
-            Token::Rib(_) => TypeDef::Rib((Box::new(s.get_type()), None)),
+            Token::Table(_) => TypeDef::Table(Box::new(s.ty.clone())),
+            Token::Rib(_) => TypeDef::Rib((Box::new(s.ty.clone()), None)),
             Token::OutputStream(_) => {
-                TypeDef::OutputStream(Box::new(s.get_type()))
+                TypeDef::OutputStream(Box::new(s.ty.clone()))
             }
-            _ => s.get_type(),
+            _ => s.ty.clone(),
         };
 
         for a_e in &self.access_expr {
@@ -1404,7 +1403,7 @@ impl ast::ComputeExpr {
                         local_scope,
                     )?;
                     // propagate the type of this argument to a possible next one
-                    ty = arg_s.get_type();
+                    ty = arg_s.ty.clone();
                     s.add_arg(arg_s);
                 }
                 ast::AccessExpr::FieldAccessExpr(field_access) => {
@@ -1415,27 +1414,28 @@ impl ast::ComputeExpr {
                     );
                     let arg_s = field_access.eval(ty)?;
                     // propagate the type of this argument to a possible next one
-                    ty = arg_s.get_type();
+                    ty = arg_s.ty.clone();
                     let i = s.add_arg(arg_s);
                     trace!("symbol -> {:#?}", s);
-                    s = &mut s.get_args_mut()[i];
+                    s = &mut s.args[i];
                 }
             };
         }
 
         // The return type of a compute expression is propagated from the
         // last argument to its parent, the access receiver symbol.
-        ar_symbol = ar_symbol.set_type(ty).set_token(ar_token);
+        ar_symbol.ty = ty;
+        ar_symbol.token = ar_token;
 
-        if let Some(name) = name {
-            ar_symbol = ar_symbol.set_name(name);
+        ar_symbol.name = if let Some(name) = name {
+            name
         } else {
-            ar_symbol = ar_symbol.set_name(self.get_receiver_ident()?);
-        }
+            self.get_receiver_ident()?
+        };
 
         trace!(
             "finished eval compute expression {:?}",
-            ar_symbol.get_name()
+            ar_symbol.name
         );
         Ok(ar_symbol)
     }
@@ -1566,15 +1566,15 @@ impl ast::AccessReceiver {
             trace!("local scope {:#?}", local_scope);
             if let Some(arg) = local_scope
                 .iter()
-                .find(move |s| s.get_name() == search_ar.ident)
+                .find(move |s| s.name == search_ar.ident)
             {
                 trace!("local variable {} found", search_ar.ident);
                 return Ok(symbols::Symbol::new(
                     search_ar.ident.clone(),
                     symbols::SymbolKind::AccessReceiver,
-                    arg.get_type(),
+                    arg.ty.clone(),
                     vec![],
-                    arg.get_token(),
+                    arg.token.clone(),
                 ));
             }
 
@@ -1659,9 +1659,9 @@ impl ast::LiteralAccessExpr {
     ) -> Result<symbols::Symbol, CompileError> {
 
         let mut ar_symbol = self.literal.eval()?;
-        let mut ty = ar_symbol.get_type();
+        let mut ty = ar_symbol.ty.clone();
 
-        let ar_token = ar_symbol.get_token();
+        let ar_token = ar_symbol.token.clone();
         let mut s = &mut ar_symbol;
 
         for a_e in &self.access_expr {
@@ -1682,7 +1682,7 @@ impl ast::LiteralAccessExpr {
                         local_scope,
                     )?;
                     // propagate the type of this argument to a possible next one
-                    ty = arg_s.get_type();
+                    ty = arg_s.ty.clone();
                     s.add_arg(arg_s);
                 }
                 ast::AccessExpr::FieldAccessExpr(field_access) => {
@@ -1693,17 +1693,18 @@ impl ast::LiteralAccessExpr {
                     );
                     let arg_s = field_access.eval(ty)?;
                     // propagate the type of this argument to a possible next one
-                    ty = arg_s.get_type();
+                    ty = arg_s.ty.clone();
                     let i = s.add_arg(arg_s);
                     trace!("symbol -> {:#?}", s);
-                    s = &mut s.get_args_mut()[i];
+                    s = &mut s.args[i];
                 }
             };
         }
 
         // The return type of a literal access expression is propagated from
         // the last argument to its parent, the access receiver symbol.
-        ar_symbol = ar_symbol.set_type(ty).set_token(ar_token);
+        ar_symbol.ty = ty;
+        ar_symbol.token = ar_token;
         Ok(ar_symbol)
     }
 }
@@ -1745,7 +1746,7 @@ impl ast::ValueExpr {
                 let rec_value = rec.eval(symbols, scope, local_scope)?;
                 let type_def: Vec<_> = rec_value
                     .iter()
-                    .map(|v| (v.get_name(), Box::new(v.get_type())))
+                    .map(|v| (v.name.clone(), Box::new(v.ty.clone())))
                     .collect();
                 Ok(symbols::Symbol::new(
                     "anonymous_record".into(),
@@ -1776,10 +1777,10 @@ impl ast::ValueExpr {
                 let mut checked_values = vec![];
                 for field_s in rec_value {
                     let cur_ty =
-                        checked_ty.iter().find(|v| v.0 == field_s.get_name());
+                        checked_ty.iter().find(|v| v.0 == field_s.name);
                     if let Some(cur_ty) = cur_ty {
-                        let field_name = field_s.get_name();
-                        let field_ty = field_s.get_type();
+                        let field_name = field_s.name.clone();
+                        let field_ty = field_s.ty.clone();
                         checked_values.push(
                             field_s
                                 .try_convert_type_value_into(
@@ -1797,7 +1798,7 @@ impl ast::ValueExpr {
                         return Err(CompileError::from(format!(
                             "The field \
                         name '{}' cannot be found in type '{}'",
-                            field_s.get_name(),
+                            field_s.name,
                             type_id.ident
                         )));
                     }
@@ -1815,7 +1816,7 @@ impl ast::ValueExpr {
             ast::ValueExpr::ListExpr(list_elm) => {
                 let list_value = list_elm.eval(symbols, scope)?;
                 let type_def =
-                    first_into_compile_err!(list_value)?.get_type();
+                    first_into_compile_err!(list_value)?.ty.clone();
 
                 Ok(symbols::Symbol::new(
                     "anonymous_list".into(),
@@ -1928,9 +1929,10 @@ impl ast::AnonymousRecordValueExpr {
         trace!("anonymous record");
         let mut s: Vec<symbols::Symbol> = vec![];
         for (key, value) in &self.key_values {
-            let arg =
+            let mut arg =
                 value.eval(symbols.clone(), scope.clone(), local_scope)?;
-            s.push(arg.set_name(key.ident.clone()));
+            arg.name = key.ident.clone();
+            s.push(arg);
         }
 
         Ok(s)
@@ -1948,9 +1950,10 @@ impl ast::TypedRecordValueExpr {
         trace!("typed record");
         let mut s: Vec<symbols::Symbol> = vec![];
         for (key, value) in &self.key_values {
-            let arg =
+            let mut arg =
                 value.eval(symbols.clone(), scope.clone(), local_scope)?;
-            s.push(arg.set_name(key.ident.clone()));
+            arg.name = key.ident.clone();
+            s.push(arg);
         }
 
         Ok((self.type_id.clone(), s))
@@ -2175,10 +2178,10 @@ impl ast::CompareExpr {
         // Compare Argument. It has to end in a leaf node, otherwise it's
         // an error.
         let left_s = self.left.eval(_symbols, scope, local_scope)?;
-        let left_type = left_s.get_type();
+        let left_type = &left_s.ty;
 
         let mut right_s = self.right.eval(symbols, scope, local_scope)?;
-        let right_type = right_s.get_type();
+        let right_type = &right_s.ty;
 
         // Either the left and right hand sides are of the same type OR the
         // right hand side value can be converted into a type of the left
@@ -2216,7 +2219,7 @@ impl ast::CompareArg {
                 // This is a grouped expression that will return a boolean.
                 let s = expr.eval(symbols, scope, local_scope)?;
 
-                if s.get_type() == TypeDef::Bool {
+                if s.ty == TypeDef::Bool {
                     Ok(s)
                 } else {
                     Err("Cannot return Non-Boolean in ( )".to_string().into())
@@ -2296,7 +2299,7 @@ impl ast::NotExpr {
 
         let expr = self.expr.eval(_symbols, scope, local_scope)?;
 
-        if expr.get_type() != TypeDef::Bool {
+        if expr.ty != TypeDef::Bool {
             return Err("Expression doesn't evaluate to a Boolean"
                 .to_string()
                 .into());
@@ -2335,13 +2338,13 @@ impl ast::ListCompareExpr {
         // Compare Argument. It has to end in a leaf node, otherwise it's
         // an error.
         let left_s = self.left.eval(_symbols, scope.clone(), &[])?;
-        let left_type = left_s.get_type();
+        let left_type = &left_s.ty.clone();
 
         let right_s = self.right.eval(symbols, scope.clone(), &[])?;
 
         let mut l_args = vec![];
-        if let TypeDef::List(_) = right_s.get_type() {
-            l_args = right_s.get_args_owned();
+        if let TypeDef::List(_) = right_s.ty {
+            l_args = right_s.args;
         } else {
             l_args.push(right_s);
         }
@@ -2349,7 +2352,7 @@ impl ast::ListCompareExpr {
         let mut args = vec![left_s];
 
         for s in l_args {
-            let right_type = s.get_type();
+            let right_type = &s.ty;
             // Either the left and right hand sides are of the same type OR the
             // right hand side value can be converted into a type of the left
             // hand side. For example, a comparison of PrefixLength and
@@ -2391,13 +2394,13 @@ fn check_type_identifier(
     let global_ty = symbols.get(&Scope::Global).and_then(|gt| {
         gt.get_variable(&ty.ident)
             .ok()
-            .map(|s| (s.get_type(), s.get_kind()))
+            .map(|s| (&s.ty, s.kind))
     });
     if let Some(ty) = global_ty {
         if ty.1 == symbols::SymbolKind::AnonymousType
             || ty.1 == symbols::SymbolKind::NamedType
         {
-            return Ok(ty.0);
+            return Ok(ty.0.clone());
         }
     }
 
@@ -2409,7 +2412,7 @@ fn check_type_identifier(
                 .and_then(|gt| {
                     gt.get_variable(&ty.ident)
                         .ok()
-                        .map(|s| (s.get_type(), s.get_kind()))
+                        .map(|s| (&s.ty, s.kind))
                 })
                 .ok_or(format!(
                     "No type named '{}' found in filter-map '{}'",
@@ -2420,7 +2423,7 @@ fn check_type_identifier(
                 if ty.1 == symbols::SymbolKind::AnonymousType
                     || ty.1 == symbols::SymbolKind::NamedType
                 {
-                    return Ok(ty.0);
+                    return Ok(ty.0.clone());
                 }
             }
         }
@@ -2568,7 +2571,7 @@ impl
             (id, sk, ty, to, Some(tv)) => {
                 let s =
                     symbols::Symbol::new_with_value(id, sk, tv, vec![], to);
-                if s.get_type() != ty {
+                if s.ty != ty {
                     return Err(CompileError::from(format!(
                         "Type and value do not match for {:?}",
                         s
@@ -2692,17 +2695,15 @@ fn declare_variable_from_symbol(
                 true => {
                     let type_def = arg_symbol.get_recursive_return_type();
 
-                    match arg_symbol.get_token() {
+                    match arg_symbol.token {
                         Token::TypedRecord | Token::AnonymousRecord => {
                             let fields = arg_symbol
-                                .get_recursive_values_primitive(
-                                    type_def.clone(),
-                                )
+                                .get_recursive_values_primitive(&type_def)
                                 .map_err(|e| {
                                     format!(
                                         "{} in type '{}'",
                                         e,
-                                        arg_symbol.get_name()
+                                        arg_symbol.name
                                     )
                                 })?;
                             trace!("fields {:?}", fields);
@@ -2726,7 +2727,7 @@ fn declare_variable_from_symbol(
                     let symbol = symbols::Symbol::new_with_value(
                         key,
                         symbols::SymbolKind::Constant,
-                        arg_symbol.get_value_owned(),
+                        arg_symbol.value,
                         vec![],
                         Token::Constant(None),
                     );
@@ -2737,7 +2738,7 @@ fn declare_variable_from_symbol(
         Scope::Global => Err(format!(
             "Can't create a variable in the global scope (NEVER). \
                 Variable '{}'",
-            arg_symbol.get_name()
+            arg_symbol.name
         )
         .into()),
     }
@@ -2763,7 +2764,7 @@ fn declare_variable_from_symbol(
 //             let symbol = symbols::Symbol::new_with_value(
 //                 "const".into(),
 //                 symbols::SymbolKind::Constant,
-//                 arg_symbol.get_value_owned(),
+//                 arg_symbol.value,
 //                 vec![],
 //                 Token::Constant,
 //             );
@@ -2810,7 +2811,7 @@ fn add_logical_formula(
         Scope::Global => Err(format!(
             "Can't create a (sub-)term in the global scope (NEVER). Term \
                 '{}'",
-            symbol.get_name()
+            symbol.name
         )
         .into()),
     }
@@ -2818,7 +2819,7 @@ fn add_logical_formula(
 
 fn add_action_section(
     name: ShortString,
-    action_section: symbols::Symbol,
+    mut action_section: symbols::Symbol,
     symbols: symbols::GlobalSymbolTable,
     scope: &Scope,
 ) -> Result<(), CompileError> {
@@ -2830,13 +2831,13 @@ fn add_action_section(
                 filter_map
             ))?;
 
-            let action = action_section.set_name(name.clone());
+            action_section.name = name.clone();
 
-            filter_map.add_action_section(name, action)
+            filter_map.add_action_section(name, action_section)
         }
         Scope::Global => Err(format!(
             "Can't create an action section in the global scope (NEVER). Action '{}'",
-            action_section.get_name()
+            action_section.name
         )
         .into()),
     }
@@ -2857,13 +2858,11 @@ fn add_match_action(
                 filter_map
             ))?;
 
-            match_action.get_token();
-
             // filter_map.move_match_action_into(Symbol::new(
             //     name,
             //     match_action.get_kind(),
             //     match_action.get_type(),
-            //     match_action.get_args_owned(),
+            //     match_action.args,
             //     Some(token),
             // ))
             // let quantifier = if let symbols::SymbolKind::MatchAction(kind) =
@@ -2890,7 +2889,7 @@ fn add_match_action(
             //     )));
             // };
 
-            let quantifier = match match_action.get_kind() {
+            let quantifier = match match_action.kind {
                 symbols::SymbolKind::MatchAction(MatchActionType::Filter) => {
                     symbols::MatchActionQuantifier::Any
                 }
@@ -2913,7 +2912,7 @@ fn add_match_action(
         Scope::Global => Err(format!(
             "Can't create a match action in the global scope (NEVER). Action \
             '{}'",
-            match_action.get_name()
+            match_action.name
         )
         .into()),
     }
@@ -2931,15 +2930,15 @@ where
 
 impl BooleanExpr for symbols::Symbol {
     fn get_args(&self) -> &[symbols::Symbol] {
-        symbols::Symbol::get_args(self)
+        &self.args
     }
 
     fn get_type(&self) -> TypeDef {
-        symbols::Symbol::get_type(self)
+        self.ty.clone()
     }
 
     fn get_token(&self) -> Token {
-        self.get_token()
+        self.token.clone()
     }
 
     fn get_builtin_type(&self) -> Result<TypeDef, CompileError> {
@@ -2955,11 +2954,11 @@ fn is_boolean_function(
 ) -> Result<(), CompileError> {
     let left = (
         left.get_builtin_type()? == TypeDef::Bool,
-        left.get_args().first().map(|a| a.get_value()),
+        left.get_args().first().map(|a| &a.value),
     );
     let right = (
         right.get_builtin_type()? == TypeDef::Bool,
-        right.get_args().first().map(|a| a.get_value()),
+        right.get_args().first().map(|a| &a.value),
     );
 
     match (left, right) {
@@ -2987,7 +2986,7 @@ fn _is_boolean_expression(
         return Ok(());
     };
 
-    if let Some(value) = expr.get_args().first().map(|a| a.get_value()) {
+    if let Some(value) = expr.get_args().first().map(|a| &a.value) {
         if value.is_boolean_type() {
             return Ok(());
         };
