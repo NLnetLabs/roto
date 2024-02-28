@@ -1,9 +1,11 @@
+use std::fmt::Display;
+
 use logos::Logos;
 
 #[derive(Logos, Clone, Debug, PartialEq)]
 #[logos(skip r"([ \t\n\f]|(//[^\n]*))+")]
 pub enum Token<'s> {
-    #[regex("[a-zA-Z_][a-zA-Z0-9_]*")]
+    #[regex("[a-zA-Z_][a-zA-Z0-9_-]*")]
     Ident(&'s str),
 
     // === Punctuation ===
@@ -158,4 +160,81 @@ pub enum Token<'s> {
     #[token("true", |_| true)]
     #[token("false", |_| false)]
     Bool(bool),
+}
+
+impl<'source> Display for Token<'source> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Token::Ident(_) => "identifier",
+            Token::EqEq => "==",
+            Token::Eq => "=",
+            Token::BangEq => "!=",
+            Token::AmpAmp => "&&",
+            Token::PipePipe => "||",
+            Token::AngleRightEq => ">=",
+            Token::AngleLeftEq => "<=",
+            Token::Arrow => "->",
+            Token::Hyphen => "-",
+            Token::Colon => ":",
+            Token::SemiColon => ";",
+            Token::Comma => ",",
+            Token::Period => ".",
+            Token::Slash => "/",
+            Token::Bang => "!",
+            Token::CurlyLeft => "{",
+            Token::CurlyRight => "}",
+            Token::SquareLeft => "[",
+            Token::SquareRight => "]",
+            Token::RoundLeft => "(",
+            Token::RoundRight => ")",
+            Token::AngleLeft => "<",
+            Token::AngleRight => ">",
+            Token::Accept => "accept",
+            Token::Action => "action",
+            Token::All => "all",
+            Token::Apply => "apply",
+            Token::Contains => "contains",
+            Token::Define => "define",
+            Token::Exact => "exact",
+            Token::ExactlyOne => "exactly-one",
+            Token::FilterMap => "filter-map",
+            Token::Filter => "filter",
+            Token::For => "for",
+            Token::Import => "import",
+            Token::In => "in",
+            Token::Longer => "longer",
+            Token::Match => "match",
+            Token::Matching => "matching",
+            Token::Module => "module",
+            Token::NetMask => "net-mask",
+            Token::Not => "not",
+            Token::OrLonger => "or-longer",
+            Token::OutputStream => "output-stream",
+            Token::PrefixLengthRange => "prefix-length-range",
+            Token::Reject => "reject",
+            Token::Return => "return",
+            Token::Rib => "rib",
+            Token::Rx => "rx",
+            Token::RxTx => "rx_tx",
+            Token::Some => "some",
+            Token::Table => "table",
+            Token::Term => "term",
+            Token::Tx => "tx",
+            Token::Through => "through",
+            Token::Type => "type",
+            Token::UpTo => "up-to",
+            Token::Use => "use",
+            Token::With => "with",
+            Token::String(_) => "<string>",
+            Token::Integer(_) => "<integer>",
+            Token::Hex(_) => "hex literal",
+            Token::Asn(_) => "ASN",
+            Token::Float => "float",
+            Token::IpV4(_) => "IPv4",
+            Token::IpV6(_) => "IPv6",
+            Token::Community(_) => "community",
+            Token::Bool(_) => "bool",
+        };
+        write!(f, "{s}")
+    }
 }

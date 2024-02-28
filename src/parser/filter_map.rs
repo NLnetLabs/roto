@@ -1,7 +1,8 @@
 use crate::{
     ast::{
-        ActionSection, AndExpr, ApplySection, BooleanExpr, CompareArg,
-        CompareExpr, CompareOp, Define, FilterMap, FilterMapBody,
+        AccessExpr, AccessReceiver, ActionSection, ActionSectionBody,
+        AndExpr, ApplySection, BooleanExpr, CompareArg, CompareExpr,
+        CompareOp, ComputeExpr, Define, FilterMap, FilterMapBody,
         FilterMapExpr, FilterType, GroupedLogicalExpr, LogicalExpr,
         MatchOperator, NotExpr, OrExpr, TermBody, TermPatternMatchArm,
         TermScope, TermSection, ValueExpr,
@@ -23,7 +24,7 @@ impl<'source> Parser<'source> {
         let ty = match token {
             Token::FilterMap => FilterType::FilterMap,
             Token::Filter => FilterType::Filter,
-            _ => return Err(ParseError::Todo),
+            _ => return Err(ParseError::Todo(1)),
         };
 
         let ident = self.identifier()?;
@@ -61,7 +62,7 @@ impl<'source> Parser<'source> {
             if self.accept_optional(Token::Define)?.is_some() {
                 if define.is_some() {
                     // Cannot have multiple define sections
-                    return Err(ParseError::Todo);
+                    return Err(ParseError::Todo(2));
                 }
                 let for_kv = self.for_statement()?;
                 let with_kv = self.with_statement()?;
@@ -74,7 +75,7 @@ impl<'source> Parser<'source> {
             } else if self.accept_optional(Token::Apply)?.is_some() {
                 if apply.is_some() {
                     // Cannot have multiple apply sections
-                    return Err(ParseError::Todo);
+                    return Err(ParseError::Todo(3));
                 }
                 let for_kv = self.for_statement()?;
                 let with_kv = self.with_statement()?;
@@ -90,7 +91,7 @@ impl<'source> Parser<'source> {
         }
 
         Ok(FilterMapBody {
-            define: define.ok_or(ParseError::Todo)?,
+            define: define.ok_or(ParseError::Todo(4))?,
             expressions,
             apply,
         })
@@ -107,7 +108,7 @@ impl<'source> Parser<'source> {
         } else if self.peek_is(Token::Action) {
             Ok(FilterMapExpr::Action(self.action()?))
         } else {
-            Err(ParseError::Todo)
+            Err(ParseError::Todo(5))
         }
     }
 
@@ -150,8 +151,10 @@ impl<'source> Parser<'source> {
                 match_arms,
             })
         } else {
+            self.accept_required(Token::CurlyLeft)?;
             let expr = self.logical_expr()?;
             self.accept_required(Token::SemiColon)?;
+            self.accept_required(Token::CurlyRight)?;
             Ok(TermScope {
                 scope: None,
                 operator,
@@ -271,7 +274,7 @@ impl<'source> Parser<'source> {
             ValueExpr::RootMethodCallExpr(_)
             | ValueExpr::AnonymousRecordExpr(_)
             | ValueExpr::TypedRecordExpr(_)
-            | ValueExpr::ListExpr(_) => return Err(ParseError::Todo),
+            | ValueExpr::ListExpr(_) => return Err(ParseError::Todo(6)),
         })
     }
 
@@ -325,6 +328,31 @@ impl<'source> Parser<'source> {
     }
 
     fn action(&mut self) -> ParseResult<ActionSection> {
-        todo!()
+        self.accept_required(Token::Action)?;
+        let ident = self.identifier()?;
+        let with_kv = self.with_statement()?;
+
+        let mut expressions = Vec::new();
+        self.accept_required(Token::CurlyLeft)?;
+        while self.accept_optional(Token::CurlyRight)?.is_none() {
+            let value_expr = self.value_expr()?;
+            self.accept_required(Token::SemiColon)?;
+            match value_expr {
+                ValueExpr::ComputeExpr(x) => expressions.push(x),
+                ValueExpr::RootMethodCallExpr(x) => {
+                    expressions.push(ComputeExpr {
+                        receiver: AccessReceiver::GlobalScope,
+                        access_expr: vec![AccessExpr::MethodComputeExpr(x)],
+                    })
+                }
+                _ => return Err(ParseError::Todo(7)),
+            }
+        }
+
+        Ok(ActionSection {
+            ident,
+            with_kv,
+            body: ActionSectionBody { expressions },
+        })
     }
 }

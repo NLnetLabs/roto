@@ -40,21 +40,22 @@ use crate::{
     ast::{self, AcceptReject, FilterType, ShortString, SyntaxTree},
     blocks::Scope,
     compiler::recurse_compile::recurse_compile,
+    parser::ParseError,
     symbols::{
         self, DepsGraph, GlobalSymbolTable, MatchActionType, Symbol,
         SymbolKind, SymbolTable,
     },
     traits::Token,
-    types::{datasources::DataSource, typevalue::TypeValue},
     types::{
-        datasources::Table,
+        datasources::{DataSource, Table},
         typedef::{RecordTypeDef, TypeDef},
+        typevalue::TypeValue,
     },
     vm::{
         compute_hash, Command, CommandArg, CompiledCollectionField,
         CompiledField, CompiledPrimitiveField, CompiledVariable,
-        ExtDataSource, FilterMapArg, FilterMapArgs, OpCode, StackRefPos,
-        VariablesRefTable, FieldIndex,
+        ExtDataSource, FieldIndex, FilterMapArg, FilterMapArgs, OpCode,
+        StackRefPos, VariablesRefTable,
     },
 };
 
@@ -818,8 +819,20 @@ impl<'a> Compiler {
     pub fn parse_source_code(
         &mut self,
         source_code: &'a str,
-    ) -> Result<(), VerboseError<&'a str>> {
-        self.ast = SyntaxTree::parse_str(source_code)?.1;
+    ) -> Result<(), miette::Report> {
+        match SyntaxTree::parse_str(source_code) {
+            Ok((_, ast)) => {
+                let ast2 = SyntaxTree::parse_str(source_code).unwrap().1;
+                eprintln!("{ast:?}");
+                eprintln!();
+                eprintln!("{ast2:?}");
+                self.ast = ast;
+            }
+            Err(e) => {
+                return Err(miette::Report::new(e)
+                    .with_source_code(source_code.to_string()));
+            }
+        };
 
         Ok(())
     }
@@ -946,7 +959,7 @@ impl<'a> Compiler {
         source_code: &'a str,
     ) -> Result<Rotolo, CompileError> {
         self.parse_source_code(source_code)
-            .map_err(|err| format!("Parse error: {err}"))?;
+            .map_err(|err| format!("{:?}", err))?;
         self.eval_ast()
             .map_err(|err| format!("Eval error: {err}"))?;
         self.inject_compile_time_arguments()
@@ -1169,7 +1182,9 @@ fn compile_filter_map(
     // compile the variables used in the terms
     state = compile_assignments(state)?;
 
-    if state.cur_mem_pos == 0 { state.cur_mem_pos = 2 };
+    if state.cur_mem_pos == 0 {
+        state.cur_mem_pos = 2
+    };
     (mir, state) = compile_apply_section(mir, state)?;
 
     state.cur_mir_block = MirBlock::new();
@@ -1255,7 +1270,8 @@ fn compile_assignments(
         // can just increase it, but if there are none, we're going to skip
         // over 0 and 1, since they should host the RxType and TxType
         // respectively.
-        state.cur_mem_pos = u32::max(2, 1 + state.used_variables.len() as u32);
+        state.cur_mem_pos =
+            u32::max(2, 1 + state.used_variables.len() as u32);
         trace!(
             "VAR {:?} MEM POS {} TEMP POS START {}",
             var.0,
@@ -1811,7 +1827,11 @@ fn compile_apply_section(
                     }
                 }
 
-                state = compile_match_action(match_action.get_match_action(), vec![], state)?;
+                state = compile_match_action(
+                    match_action.get_match_action(),
+                    vec![],
+                    state,
+                )?;
             }
             _ => {
                 return Err(CompileError::new("invalid match action".into()));

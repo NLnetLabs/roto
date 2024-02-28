@@ -6,13 +6,13 @@ use crate::ast::{
     Ipv4Addr, Ipv6Addr, LargeCommunityLiteral, ListValueExpr,
     LiteralAccessExpr, LiteralExpr, MatchActionExpr, MatchOperator,
     MethodComputeExpr, Prefix, PrefixLength, PrefixLengthLiteral,
-    PrefixLengthRange, PrefixMatchExpr, PrefixMatchType,
-    RecordTypeAssignment, RootExpr, RxTxType, StandardCommunityLiteral,
-    StringLiteral, SyntaxTree, TypeIdentField, TypeIdentifier,
-    TypedRecordValueExpr, ValueExpr,
+    PrefixLengthRange, PrefixMatchExpr, PrefixMatchType, RootExpr, RxTxType,
+    StandardCommunityLiteral, StringLiteral, SyntaxTree, TypeIdentField,
+    TypeIdentifier, TypedRecordValueExpr, ValueExpr,
 };
 use crate::token::Token;
 use logos::{Lexer, Span, SpannedIter};
+use miette::Diagnostic;
 use std::iter::Peekable;
 
 mod filter_map;
@@ -20,25 +20,40 @@ mod rib_like;
 
 type ParseResult<T> = Result<T, ParseError>;
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Diagnostic)]
 pub enum ParseError {
     EndOfInput,
     InvalidToken(Span),
     /// Dummy variant where more precise messages should be made
-    Todo,
-    Expected(Span),
+    ///
+    /// The argument is just a unique identifier
+    Todo(usize),
+    Expected {
+        expected: String,
+        got: String,
+        #[label("expected {expected}")]
+        span: Span,
+    },
 }
 
 impl std::fmt::Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::EndOfInput => write!(f, "reached end of input"),
+            Self::EndOfInput => write!(f, "unexpected end of input"),
             Self::InvalidToken(_) => write!(f, "invalid token"),
-            Self::Todo => write!(f, "add a nice message here"),
-            Self::Expected(s) => write!(f, "expected at {s:?}"),
+            Self::Todo(n) => write!(f, "add a nice message here {n}"),
+            Self::Expected {
+                expected,
+                got,
+                span,
+            } => {
+                write!(f, "expected '{expected}' but got '{got}' at {span:?}")
+            }
         }
     }
 }
+
+impl std::error::Error for ParseError {}
 
 pub struct Parser<'source> {
     lexer: Peekable<SpannedIter<'source, Token<'source>>>,
@@ -88,7 +103,11 @@ impl<'source> Parser<'source> {
         if next == token {
             Ok(())
         } else {
-            Err(ParseError::Expected(span))
+            Err(ParseError::Expected {
+                expected: token.to_string(),
+                got: next.to_string(),
+                span,
+            })
         }
     }
 
@@ -174,7 +193,16 @@ impl<'source> Parser<'source> {
                 RootExpr::FilterMap(Box::new(self.filter_map()?))
             }
             Token::Type => RootExpr::Ty(self.record_type_assignment()?),
-            _ => return Err(ParseError::Todo),
+            _ => {
+                let (token, span) = self.next()?;
+                return Err(ParseError::Expected {
+                    expected:
+                        "a rib, table, output-stream, filter or filter-map"
+                            .into(),
+                    got: token.to_string(),
+                    span,
+                });
+            }
         };
         Ok(expr)
     }
@@ -212,7 +240,7 @@ impl<'source> Parser<'source> {
                     RxTxType::RxOnly(rx_field)
                 }
             }
-            _ => return Err(ParseError::Todo),
+            _ => return Err(ParseError::Todo(9)),
         };
 
         let mut use_ext_data = Vec::new();
@@ -253,7 +281,7 @@ impl<'source> Parser<'source> {
         }
 
         let accept_reject = self.accept_reject()?;
-
+        self.accept_required(Token::CurlyRight)?;
         Ok(ApplyBody {
             scopes,
             accept_reject,
@@ -287,7 +315,7 @@ impl<'source> Parser<'source> {
             }
 
             let val = self.value_expr()?;
-            self.accept_required(Token::SemiColon)?; 
+            self.accept_required(Token::SemiColon)?;
             actions.push((Some(val), None));
         }
 
@@ -320,7 +348,7 @@ impl<'source> Parser<'source> {
             let value = match self.next()?.0 {
                 Token::Accept => AcceptReject::Accept,
                 Token::Reject => AcceptReject::Reject,
-                _ => return Err(ParseError::Todo),
+                _ => return Err(ParseError::Todo(10)),
             };
             self.accept_required(Token::SemiColon)?;
             Ok(Some(value))
@@ -349,7 +377,7 @@ impl<'source> Parser<'source> {
             Token::Some => MatchOperator::Some,
             Token::ExactlyOne => MatchOperator::ExactlyOne,
             Token::All => MatchOperator::All,
-            _ => return Err(ParseError::Todo),
+            _ => return Err(ParseError::Todo(11)),
         };
 
         Ok(op)
@@ -385,22 +413,24 @@ impl<'source> Parser<'source> {
         }
 
         if let Some(Token::Ident(_)) = self.peek() {
+            let id = self.identifier()?;
             if self.peek_is(Token::CurlyLeft) {
+                let Identifier { ident: s } = id;
                 return Ok(ValueExpr::TypedRecordExpr(
                     TypedRecordValueExpr {
-                        type_id: self.type_identifier()?,
+                        type_id: TypeIdentifier { ident: s },
                         key_values: self.record()?,
                     },
                 ));
             }
 
             if self.peek_is(Token::RoundLeft) {
+                let args = self.arg_expr_list()?;
                 return Ok(ValueExpr::RootMethodCallExpr(
-                    self.method_call()?,
+                    MethodComputeExpr { ident: id, args },
                 ));
             }
 
-            let id = self.identifier()?;
             let receiver = AccessReceiver::Ident(id);
             let access_expr = self.access_expr()?;
 
@@ -440,7 +470,7 @@ impl<'source> Parser<'source> {
 
         while self.accept_optional(Token::Period)?.is_some() {
             let ident = self.identifier()?;
-            if self.peek_is(Token::CurlyLeft) {
+            if self.peek_is(Token::RoundLeft) {
                 let args = self.arg_expr_list()?;
                 access_expr.push(AccessExpr::MethodComputeExpr(
                     MethodComputeExpr { ident, args },
@@ -494,7 +524,8 @@ impl<'source> Parser<'source> {
     /// Parse literals that need no complex parsing, just one token
     fn simple_literal(&mut self) -> ParseResult<LiteralExpr> {
         // TODO: Make proper errors using the spans
-        Ok(match self.next()?.0 {
+        let (token, span) = self.next()?;
+        Ok(match token {
             Token::String(s) => {
                 LiteralExpr::StringLiteral(StringLiteral(s.into()))
             }
@@ -518,7 +549,8 @@ impl<'source> Parser<'source> {
                 // TODO: Change the AST so that it doesn't contain strings, but
                 // routecore communities.
                 use routecore::bgp::communities::Community;
-                let c: Community = s.parse().map_err(|_| ParseError::Todo)?;
+                let c: Community =
+                    s.parse().map_err(|_| ParseError::Todo(12))?;
                 match c {
                     Community::Standard(x) => {
                         LiteralExpr::StandardCommunityLiteral(
@@ -536,11 +568,19 @@ impl<'source> Parser<'source> {
                         )
                     }
                     Community::Ipv6Extended(_) => {
-                        unimplemented!("IPv6 extended communities are not supported yet")
+                        unimplemented!(
+                            "IPv6 extended communities are not supported yet"
+                        )
                     }
                 }
             }
-            _ => return Err(ParseError::Todo),
+            t => {
+                return Err(ParseError::Expected {
+                    expected: "a literal".into(),
+                    got: t.to_string(),
+                    span,
+                })
+            }
         })
     }
 
@@ -675,7 +715,7 @@ impl<'source> Parser<'source> {
         return match self.next()?.0 {
             Token::Integer(s) => Ok(PrefixLength(s.parse().unwrap())),
 
-            _ => Err(ParseError::Todo),
+            _ => Err(ParseError::Todo(14)),
         };
     }
 
@@ -698,7 +738,7 @@ impl<'source> Parser<'source> {
         Ok(match self.next()?.0 {
             Token::IpV4(s) => IpAddress::Ipv4(Ipv4Addr(s.parse().unwrap())),
             Token::IpV6(s) => IpAddress::Ipv6(Ipv6Addr(s.parse().unwrap())),
-            _ => return Err(ParseError::Todo),
+            _ => return Err(ParseError::Todo(14)),
         })
     }
 
@@ -706,7 +746,11 @@ impl<'source> Parser<'source> {
         let (token, span) = self.next()?;
         match token {
             Token::Ident(s) => Ok(Identifier { ident: s.into() }),
-            _ => Err(ParseError::Expected(span)),
+            _ => Err(ParseError::Expected {
+                expected: "an identifier".into(),
+                got: token.to_string(),
+                span,
+            }),
         }
     }
 
@@ -714,7 +758,11 @@ impl<'source> Parser<'source> {
         let (token, span) = self.next()?;
         match token {
             Token::Ident(s) => Ok(TypeIdentifier { ident: s.into() }),
-            _ => Err(ParseError::Expected(span)),
+            _ => Err(ParseError::Expected {
+                expected: "an identifier".into(),
+                got: token.to_string(),
+                span,
+            }),
         }
     }
 }

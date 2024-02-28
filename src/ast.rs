@@ -10,7 +10,7 @@ use nom::character::complete::{
 };
 use nom::combinator::{all_consuming, cut, not, opt, recognize};
 use nom::error::{
-    context, ErrorKind, FromExternalError, ParseError, VerboseError,
+    context, ErrorKind, FromExternalError, ParseError as _, VerboseError,
 };
 use nom::multi::{
     fold_many0, many0, many1, separated_list0, separated_list1,
@@ -33,6 +33,7 @@ use routecore::bgp::communities::{ExtendedCommunity, LargeCommunity, StandardCom
 use routecore::asn::Asn;
 
 use crate::compiler::error::CompileError;
+use crate::parser::{Parser, ParseError};
 use crate::types::typevalue::TypeValue;
 use crate::{first_into_compile_err, parse_string};
 
@@ -50,8 +51,9 @@ pub struct SyntaxTree {
 impl SyntaxTree {
     pub fn parse_str(
         input: &str,
-    ) -> Result<(&str, Self), VerboseError<&str>> {
-        Self::parse_root(input).finish()
+    ) -> Result<(&str, Self), ParseError> {
+        Parser::parse(input).map(|tree| ("", tree))
+        // Self::parse_root(input).finish()
     }
 
     fn parse_root(input: &str) -> IResult<&str, Self, VerboseError<&str>> {

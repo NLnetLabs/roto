@@ -101,7 +101,10 @@ fn test_filter_map_10() {
     );
     let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
-    assert!(test_run.is_ok());
+    if let Err(e) = &test_run {
+        println!("{}", e);
+        assert!(false);
+    }
 
     let VmResult { accept_reject, .. } = test_run.unwrap();
     assert_eq!(accept_reject, AcceptReject::Accept);

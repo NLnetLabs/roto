@@ -26,8 +26,8 @@ impl<'a> TestCompiler<'a> {
         let parse_res = self.compiler.parse_source_code(self.source_code);
 
         trace!("{} {:#?}", self.name, self.compiler.ast);
-        if let Err(e) = parse_res.clone() {
-            trace!("{}", convert_error(self.source_code, e));
+        if let Err(e) = &parse_res {
+            trace!("{:?}", e);
         }
 
         match expect_success {

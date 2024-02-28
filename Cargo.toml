@@ -23,6 +23,7 @@ smallvec        = { version = "1.11", features = [ "const_generics", "serde" ] }
 serde           = { version = "1.0", features = [ "derive", "rc" ] }
 routecore       = { version = "0.4.0", features = ["bgp", "bmp", "serde"] }
 rotonda-store   = { version = "0.3.0" }
+miette = { version = "7.1.0", features = ["fancy"] }
 
 [dev-dependencies]
 env_logger  = "0.10"
