@@ -822,7 +822,8 @@ impl<'a> Compiler {
     ) -> Result<(), miette::Report> {
         match SyntaxTree::parse_str(source_code) {
             Ok((_, ast)) => {
-                let ast2 = SyntaxTree::parse_str(source_code).unwrap().1;
+                use nom::Finish;
+                let ast2 = SyntaxTree::parse_root(source_code).finish().unwrap().1;
                 eprintln!("{ast:?}");
                 eprintln!();
                 eprintln!("{ast2:?}");

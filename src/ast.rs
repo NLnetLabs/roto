@@ -56,7 +56,7 @@ impl SyntaxTree {
         // Self::parse_root(input).finish()
     }
 
-    fn parse_root(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
+    pub fn parse_root(input: &str) -> IResult<&str, Self, VerboseError<&str>> {
         let (input, expressions) = all_consuming(many1(preceded(
             skip_opt_ws,
             terminated(RootExpr::parse, skip_opt_ws),
