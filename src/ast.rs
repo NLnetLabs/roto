@@ -963,7 +963,7 @@ impl ApplyScope {
                                 FilterMatchActionExpr {
                                     operator: expr.0,
                                     negate: if let Some(negate) = expr.1 .1 {
-                                        negate.is_none()
+                                        negate.is_some()
                                     } else {
                                         false
                                     },
@@ -1977,7 +1977,7 @@ impl AsnLiteral {
             tuple((
                 recognize(pair(
                     tag("AS"),
-                    take_while1(|ch: char| ch.is_ascii_hexdigit()),
+                    take_while1(|ch: char| ch.is_ascii_digit()),
                 )),
                 not(char(':')),
             )),
