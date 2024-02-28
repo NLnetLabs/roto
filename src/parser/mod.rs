@@ -538,7 +538,7 @@ impl<'source> Parser<'source> {
                 u64::from_str_radix(&s[2..], 16).unwrap(),
             )),
             Token::Asn(s) => LiteralExpr::AsnLiteral(AsnLiteral(
-                u32::from_str_radix(&s[2..], 16).unwrap(),
+                s[2..].parse::<u32>().unwrap(),
             )),
             Token::Bool(b) => LiteralExpr::BooleanLiteral(BooleanLiteral(b)),
             Token::Float => {
