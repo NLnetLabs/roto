@@ -1,14 +1,15 @@
 use crate::ast::{
-    AcceptReject, AccessExpr, AccessReceiver, AnonymousRecordValueExpr,
-    ApplyBody, ApplyScope, ArgExprList, AsnLiteral, BooleanLiteral,
-    ComputeExpr, DefineBody, ExtendedCommunityLiteral, FieldAccessExpr,
-    FilterMatchActionExpr, HexLiteral, Identifier, IntegerLiteral, IpAddress,
-    Ipv4Addr, Ipv6Addr, LargeCommunityLiteral, ListValueExpr,
-    LiteralAccessExpr, LiteralExpr, MatchActionExpr, MatchOperator,
-    MethodComputeExpr, Prefix, PrefixLength, PrefixLengthLiteral,
+    AcceptReject, AccessExpr, AccessReceiver, ActionCallExpr,
+    AnonymousRecordValueExpr, ApplyBody, ApplyScope, ArgExprList, AsnLiteral,
+    BooleanLiteral, ComputeExpr, DefineBody, ExtendedCommunityLiteral,
+    FieldAccessExpr, FilterMatchActionExpr, HexLiteral, Identifier,
+    IntegerLiteral, IpAddress, Ipv4Addr, Ipv6Addr, LargeCommunityLiteral,
+    ListValueExpr, LiteralAccessExpr, LiteralExpr, MatchActionExpr,
+    MatchOperator, MethodComputeExpr, PatternMatchActionArm,
+    PatternMatchActionExpr, Prefix, PrefixLength, PrefixLengthLiteral,
     PrefixLengthRange, PrefixMatchExpr, PrefixMatchType, RootExpr, RxTxType,
-    StandardCommunityLiteral, StringLiteral, SyntaxTree, TypeIdentField,
-    TypeIdentifier, TypedRecordValueExpr, ValueExpr,
+    StandardCommunityLiteral, StringLiteral, SyntaxTree, TermCallExpr,
+    TypeIdentField, TypeIdentifier, TypedRecordValueExpr, ValueExpr,
 };
 use crate::token::Token;
 use logos::{Lexer, Span, SpannedIter};
@@ -22,8 +23,9 @@ type ParseResult<T> = Result<T, ParseError>;
 
 #[derive(Clone, Debug, Diagnostic)]
 pub enum ParseError {
+    EmptyInput,
     EndOfInput,
-    InvalidToken(Span),
+    InvalidToken(#[label("invalid token")] Span),
     /// Dummy variant where more precise messages should be made
     ///
     /// The argument is just a unique identifier
@@ -34,20 +36,33 @@ pub enum ParseError {
         #[label("expected {expected}")]
         span: Span,
     },
+    InvalidLiteral {
+        description: String,
+        token: String,
+        #[label("invalid {description} literal")]
+        span: Span,
+        inner_error: String,
+    },
 }
 
 impl std::fmt::Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Parse error: ")?;
         match self {
+            Self::EmptyInput => write!(f, "input was empty"),
             Self::EndOfInput => write!(f, "unexpected end of input"),
             Self::InvalidToken(_) => write!(f, "invalid token"),
             Self::Todo(n) => write!(f, "add a nice message here {n}"),
-            Self::Expected {
-                expected,
-                got,
-                span,
+            Self::Expected { expected, got, .. } => {
+                write!(f, "expected '{expected}' but got '{got}'")
+            }
+            Self::InvalidLiteral {
+                description,
+                token,
+                inner_error,
+                ..
             } => {
-                write!(f, "expected '{expected}' but got '{got}' at {span:?}")
+                write!(f, "found an invalid {description} literal '{token}': {inner_error}")
             }
         }
     }
@@ -275,6 +290,8 @@ impl<'source> Parser<'source> {
         let mut scopes = Vec::new();
 
         while !(self.peek_is(Token::Return)
+            || self.peek_is(Token::Accept)
+            || self.peek_is(Token::Reject)
             || self.peek_is(Token::CurlyRight))
         {
             scopes.push(self.apply_scope()?);
@@ -298,8 +315,25 @@ impl<'source> Parser<'source> {
     /// Actions    ::= '{' (ValueExpr ';')* ( AcceptReject ';' )? '}'
     /// ```
     fn apply_scope(&mut self) -> ParseResult<ApplyScope> {
+        if self.peek_is(Token::Match) {
+            return self.apply_match();
+        }
+
         self.accept_required(Token::Filter)?;
-        self.accept_required(Token::Match)?;
+
+        // This is not exactly self.match_operator because match ... with is
+        // not allowed.
+        let operator = if self.accept_optional(Token::Match)?.is_some() {
+            MatchOperator::Match
+        } else if self.accept_optional(Token::ExactlyOne)?.is_some() {
+            MatchOperator::ExactlyOne
+        } else if self.accept_optional(Token::Some)?.is_some() {
+            MatchOperator::Some
+        } else if self.accept_optional(Token::All)?.is_some() {
+            MatchOperator::All
+        } else {
+            return Err(ParseError::Todo(20));
+        };
 
         let filter_ident = self.value_expr()?;
         let negate = self.accept_optional(Token::Not)?.is_some();
@@ -325,7 +359,7 @@ impl<'source> Parser<'source> {
             scope: None,
             match_action: MatchActionExpr::FilterMatchAction(
                 FilterMatchActionExpr {
-                    operator: MatchOperator::Match,
+                    operator,
                     negate,
                     actions,
                     filter_ident,
@@ -334,16 +368,87 @@ impl<'source> Parser<'source> {
         })
     }
 
+    fn apply_match(&mut self) -> ParseResult<ApplyScope> {
+        let operator = self.match_operator()?;
+        let mut match_arms = Vec::new();
+        self.accept_required(Token::CurlyLeft)?;
+        while self.accept_optional(Token::CurlyRight)?.is_none() {
+            let variant_id = self.identifier()?;
+            let data_field =
+                if self.accept_optional(Token::RoundLeft)?.is_some() {
+                    let id = self.identifier()?;
+                    self.accept_required(Token::RoundRight)?;
+                    Some(id)
+                } else {
+                    None
+                };
+
+            let guard = if self.accept_optional(Token::Pipe)?.is_some() {
+                let term_id = self.identifier()?;
+                let args = if self.peek_is(Token::RoundLeft) {
+                    Some(self.arg_expr_list()?)
+                } else {
+                    None
+                };
+                Some(TermCallExpr { term_id, args })
+            } else {
+                None
+            };
+
+            self.accept_required(Token::Arrow)?;
+
+            let mut actions = Vec::new();
+            if self.accept_optional(Token::CurlyLeft)?.is_some() {
+                while self.accept_optional(Token::CurlyRight)?.is_none() {
+                    if let Some(ar) = self.accept_reject()? {
+                        self.accept_required(Token::CurlyRight)?;
+                        actions.push((None, Some(ar)));
+                        break;
+                    }
+                    actions.push((Some(self.action_call_expr()?), None));
+                    self.accept_required(Token::SemiColon)?;
+                }
+                self.accept_optional(Token::Comma)?;
+            } else {
+                let expr = self.action_call_expr()?;
+                self.accept_required(Token::Comma)?;
+                actions.push((Some(expr), None));
+            }
+
+            match_arms.push(PatternMatchActionArm {
+                variant_id,
+                data_field,
+                guard,
+                actions,
+            });
+        }
+        Ok(ApplyScope {
+            scope: None,
+            match_action: MatchActionExpr::PatternMatchAction(
+                PatternMatchActionExpr {
+                    operator,
+                    match_arms,
+                },
+            ),
+        })
+    }
+
+    fn action_call_expr(&mut self) -> ParseResult<ActionCallExpr> {
+        let action_id = self.identifier()?;
+        let args = if self.peek_is(Token::RoundLeft) {
+            Some(self.arg_expr_list()?)
+        } else {
+            None
+        };
+        Ok(ActionCallExpr { action_id, args })
+    }
+
     /// Parse a statement returning accept or reject
     ///
     /// ```ebnf
-    /// AcceptReject ::= ('return' ( 'accept' | 'reject' ) ';')?
+    /// AcceptReject ::= ('return'? ( 'accept' | 'reject' ) ';')?
     /// ```
     fn accept_reject(&mut self) -> ParseResult<Option<AcceptReject>> {
-        // Note: this is different from the original parser
-        // In the original, the return is optional, but all the examples seem to
-        // require it, so it is now required,
-        // We could choose to remove it entirely as well.
         if self.accept_optional(Token::Return)?.is_some() {
             let value = match self.next()?.0 {
                 Token::Accept => AcceptReject::Accept,
@@ -351,10 +456,20 @@ impl<'source> Parser<'source> {
                 _ => return Err(ParseError::Todo(10)),
             };
             self.accept_required(Token::SemiColon)?;
-            Ok(Some(value))
-        } else {
-            Ok(None)
+            return Ok(Some(value));
         }
+
+        if self.accept_optional(Token::Accept)?.is_some() {
+            self.accept_required(Token::SemiColon)?;
+            return Ok(Some(AcceptReject::Accept));
+        }
+
+        if self.accept_optional(Token::Reject)?.is_some() {
+            self.accept_required(Token::SemiColon)?;
+            return Ok(Some(AcceptReject::Reject));
+        }
+
+        Ok(None)
     }
 
     /// Parse a match operator
@@ -476,15 +591,18 @@ impl<'source> Parser<'source> {
                     MethodComputeExpr { ident, args },
                 ))
             } else {
-                // TODO: This is technically different from the nom
-                // parser, because the nom parser will eagerly get
-                // multiple fields. This is not necessary and the
-                // Vec in FieldAccessExpr can probably be removed.
-                access_expr.push(AccessExpr::FieldAccessExpr(
-                    FieldAccessExpr {
-                        field_names: vec![ident],
-                    },
-                ))
+                if let Some(AccessExpr::FieldAccessExpr(FieldAccessExpr {
+                    field_names,
+                })) = access_expr.last_mut()
+                {
+                    field_names.push(ident);
+                } else {
+                    access_expr.push(AccessExpr::FieldAccessExpr(
+                        FieldAccessExpr {
+                            field_names: vec![ident],
+                        },
+                    ))
+                }
             }
         }
 
@@ -493,13 +611,8 @@ impl<'source> Parser<'source> {
 
     /// Parse any literal, including prefixes, ip addresses and communities
     fn literal(&mut self) -> ParseResult<LiteralExpr> {
-        // TODO: Implement the following literals:
-        //  - StandardCommunity
-        //  - LargeCommunity
-        //  - ExtendedCommunity
-
         // A prefix length, it requires two tokens
-        if self.accept_optional(Token::Slash)?.is_some() {
+        if let Some(Token::PrefixLength(..)) = self.peek() {
             let PrefixLength(len) = self.prefix_length()?;
             return Ok(LiteralExpr::PrefixLengthLiteral(
                 PrefixLengthLiteral(len),
@@ -510,7 +623,7 @@ impl<'source> Parser<'source> {
         // slash and is therefore a prefix instead.
         if matches!(self.peek(), Some(Token::IpV4(_) | Token::IpV6(_))) {
             let addr = self.ip_address()?;
-            if self.peek_is(Token::Slash) {
+            if let Some(Token::PrefixLength(..)) = self.peek() {
                 let len = self.prefix_length()?;
                 return Ok(LiteralExpr::PrefixLiteral(Prefix { addr, len }));
             } else {
@@ -527,7 +640,9 @@ impl<'source> Parser<'source> {
         let (token, span) = self.next()?;
         Ok(match token {
             Token::String(s) => {
-                LiteralExpr::StringLiteral(StringLiteral(s.into()))
+                // Trim the quotes from the string literal
+                let trimmed = &s[1..s.len() - 1];
+                LiteralExpr::StringLiteral(StringLiteral(trimmed.into()))
             }
             Token::Integer(s) => LiteralExpr::IntegerLiteral(IntegerLiteral(
                 // This parse fails if the literal is too big,
@@ -546,11 +661,33 @@ impl<'source> Parser<'source> {
             }
             Token::Community(s) => {
                 // We offload the validation of the community to routecore
+                // but routecore doesn't do all the hex numbers correctly,
+                // so we transform those first.
+
                 // TODO: Change the AST so that it doesn't contain strings, but
                 // routecore communities.
-                use routecore::bgp::communities::Community;
-                let c: Community =
-                    s.parse().map_err(|_| ParseError::Todo(12))?;
+                use routecore::bgp::communities::{self, Community};
+                let parts: Vec<_> = s
+                    .split(':')
+                    .map(|p| {
+                        if let Some(hex) = p.strip_prefix("0x") {
+                            u32::from_str_radix(hex, 16).unwrap().to_string()
+                        } else {
+                            p.to_string()
+                        }
+                    })
+                    .collect();
+
+                let transformed = parts.join(":");
+
+                let c: Community = transformed.parse().map_err(
+                    |e: communities::ParseError| ParseError::InvalidLiteral {
+                        description: "community".into(),
+                        token: token.to_string(),
+                        span,
+                        inner_error: e.to_string(),
+                    },
+                )?;
                 match c {
                     Community::Standard(x) => {
                         LiteralExpr::StandardCommunityLiteral(
@@ -596,23 +733,15 @@ impl<'source> Parser<'source> {
             Token::CurlyRight,
             Token::Comma,
             |parser| {
+                dbg!(parser.peek());
                 let key = parser.identifier()?;
+                dbg!(parser.peek());
                 parser.accept_required(Token::Colon)?;
+                dbg!("here?");
                 let value = parser.value_expr()?;
                 Ok((key, value))
             },
         )
-    }
-
-    /// Parse a method call: an identifier followed by an argument list
-    ///
-    /// ```ebnf
-    /// MethodCall ::= Identifier ArgExprList
-    /// ```
-    fn method_call(&mut self) -> ParseResult<MethodComputeExpr> {
-        let ident = self.identifier()?;
-        let args = self.arg_expr_list()?;
-        Ok(MethodComputeExpr { ident, args })
     }
 
     /// Parse a list of arguments to a method
@@ -711,12 +840,16 @@ impl<'source> Parser<'source> {
     /// PrefixLength ::= '/' Integer
     /// ```
     fn prefix_length(&mut self) -> ParseResult<PrefixLength> {
-        self.accept_required(Token::Slash)?;
-        return match self.next()?.0 {
-            Token::Integer(s) => Ok(PrefixLength(s.parse().unwrap())),
-
-            _ => Err(ParseError::Todo(14)),
+        let (token, span) = self.next()?;
+        let Token::PrefixLength(s) = token else {
+            return Err(ParseError::InvalidLiteral {
+                description: "prefix length".into(),
+                token: token.to_string(),
+                span,
+                inner_error: String::new(),
+            });
         };
+        Ok(PrefixLength(s[1..].parse().unwrap()))
     }
 
     /// Parse an identifier and a type identifier separated by a colon
@@ -738,7 +871,7 @@ impl<'source> Parser<'source> {
         Ok(match self.next()?.0 {
             Token::IpV4(s) => IpAddress::Ipv4(Ipv4Addr(s.parse().unwrap())),
             Token::IpV6(s) => IpAddress::Ipv6(Ipv6Addr(s.parse().unwrap())),
-            _ => return Err(ParseError::Todo(14)),
+            _ => return Err(ParseError::Todo(15)),
         })
     }
 
@@ -746,6 +879,13 @@ impl<'source> Parser<'source> {
         let (token, span) = self.next()?;
         match token {
             Token::Ident(s) => Ok(Identifier { ident: s.into() }),
+            // 'contains' and `type` is already used as both a keyword and an identifier
+            Token::Contains => Ok(Identifier {
+                ident: "contains".into(),
+            }),
+            Token::Type => Ok(Identifier {
+                ident: "type".into(),
+            }),
             _ => Err(ParseError::Expected {
                 expected: "an identifier".into(),
                 got: token.to_string(),
@@ -758,6 +898,13 @@ impl<'source> Parser<'source> {
         let (token, span) = self.next()?;
         match token {
             Token::Ident(s) => Ok(TypeIdentifier { ident: s.into() }),
+            // 'contains' and `type` already used as both a keyword and an identifier
+            Token::Contains => Ok(TypeIdentifier {
+                ident: "contains".into(),
+            }),
+            Token::Type => Ok(TypeIdentifier {
+                ident: "type".into(),
+            }),
             _ => Err(ParseError::Expected {
                 expected: "an identifier".into(),
                 got: token.to_string(),

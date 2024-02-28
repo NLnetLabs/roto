@@ -3,9 +3,9 @@ use crate::{
         AccessExpr, AccessReceiver, ActionSection, ActionSectionBody,
         AndExpr, ApplySection, BooleanExpr, CompareArg, CompareExpr,
         CompareOp, ComputeExpr, Define, FilterMap, FilterMapBody,
-        FilterMapExpr, FilterType, GroupedLogicalExpr, LogicalExpr,
-        MatchOperator, NotExpr, OrExpr, TermBody, TermPatternMatchArm,
-        TermScope, TermSection, ValueExpr,
+        FilterMapExpr, FilterType, GroupedLogicalExpr, ListCompareExpr,
+        LogicalExpr, MatchOperator, NotExpr, OrExpr, TermBody,
+        TermPatternMatchArm, TermScope, TermSection, ValueExpr,
     },
     token::Token,
 };
@@ -141,7 +141,8 @@ impl<'source> Parser<'source> {
             let mut match_arms = Vec::new();
             self.accept_required(Token::CurlyLeft)?;
             while self.accept_optional(Token::CurlyRight)?.is_none() {
-                match_arms.push(self.match_arm()?);
+                let (pattern, expr) = self.match_arm()?;
+                match_arms.push((Some(pattern), expr));
             }
 
             Ok(TermScope {
@@ -152,20 +153,22 @@ impl<'source> Parser<'source> {
             })
         } else {
             self.accept_required(Token::CurlyLeft)?;
-            let expr = self.logical_expr()?;
-            self.accept_required(Token::SemiColon)?;
-            self.accept_required(Token::CurlyRight)?;
+            let mut match_arms = Vec::new();
+            while self.accept_optional(Token::CurlyRight)?.is_none() {
+                match_arms.push((None, vec![self.logical_expr()?]));
+                self.accept_required(Token::SemiColon)?;
+            }
             Ok(TermScope {
                 scope: None,
                 operator,
-                match_arms: vec![(None, vec![expr])],
+                match_arms,
             })
         }
     }
 
-    fn match_arm(
+    pub(super) fn match_arm(
         &mut self,
-    ) -> ParseResult<(Option<TermPatternMatchArm>, Vec<LogicalExpr>)> {
+    ) -> ParseResult<(TermPatternMatchArm, Vec<LogicalExpr>)> {
         let variant_id = self.identifier()?;
 
         let data_field = self
@@ -185,6 +188,7 @@ impl<'source> Parser<'source> {
                 expr.push(self.logical_expr()?);
                 self.accept_required(Token::SemiColon)?;
             }
+            self.accept_optional(Token::Comma)?;
         } else {
             expr.push(self.logical_expr()?);
             // This comma might need to be optional, but it's probably good
@@ -193,10 +197,10 @@ impl<'source> Parser<'source> {
         }
 
         Ok((
-            Some(TermPatternMatchArm {
+            TermPatternMatchArm {
                 variant_id,
                 data_field,
-            }),
+            },
             expr,
         ))
     }
@@ -244,12 +248,22 @@ impl<'source> Parser<'source> {
         let left = self.logical_or_value_expr()?;
 
         if let Some(op) = self.try_compare_operator()? {
-            let right = self.logical_or_value_expr()?;
-            return Ok(BooleanExpr::CompareExpr(Box::new(CompareExpr {
-                left,
-                op,
-                right,
-            })));
+            if op == CompareOp::In || op == CompareOp::NotIn {
+                let CompareArg::ValueExpr(left) = left else {
+                    return Err(ParseError::Todo(16));
+                };
+                let right = self.value_expr()?;
+                return Ok(BooleanExpr::ListCompareExpr(Box::new(
+                    ListCompareExpr { left, op, right },
+                )));
+            } else {
+                let right = self.logical_or_value_expr()?;
+                return Ok(BooleanExpr::CompareExpr(Box::new(CompareExpr {
+                    left,
+                    op,
+                    right,
+                })));
+            }
         }
 
         // If it's not a compare expression, we need to filter out some
@@ -308,8 +322,9 @@ impl<'source> Parser<'source> {
             Token::AngleRightEq => CompareOp::Ge,
             Token::In => CompareOp::In,
             Token::Not => {
+                self.accept_required(Token::Not)?;
                 self.accept_required(Token::In)?;
-                CompareOp::NotIn
+                return Ok(Some(CompareOp::NotIn));
             }
             _ => return Ok(None),
         };
@@ -326,7 +341,7 @@ impl<'source> Parser<'source> {
             expr: Box::new(expr),
         })
     }
-
+    
     fn action(&mut self) -> ParseResult<ActionSection> {
         self.accept_required(Token::Action)?;
         let ident = self.identifier()?;

@@ -24,7 +24,7 @@ use nom::{
     combinator::map,
     IResult,
 };
-use nom::{AsChar, Finish};
+use nom::AsChar;
 use serde::{Serialize, Serializer};
 use smallvec::SmallVec;
 
@@ -51,9 +51,12 @@ pub struct SyntaxTree {
 impl SyntaxTree {
     pub fn parse_str(
         input: &str,
-    ) -> Result<(&str, Self), ParseError> {
-        Parser::parse(input).map(|tree| ("", tree))
-        // Self::parse_root(input).finish()
+    ) -> Result<Self, ParseError> {
+        let tree = Parser::parse(input)?;
+        if tree.expressions.is_empty() {
+            return Err(ParseError::EmptyInput);
+        }
+        Ok(tree)
     }
 
     pub fn parse_root(input: &str) -> IResult<&str, Self, VerboseError<&str>> {

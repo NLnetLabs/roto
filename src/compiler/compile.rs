@@ -34,13 +34,11 @@ use std::{
 };
 
 use log::{log_enabled, trace, Level};
-use nom::error::VerboseError;
 
 use crate::{
     ast::{self, AcceptReject, FilterType, ShortString, SyntaxTree},
     blocks::Scope,
     compiler::recurse_compile::recurse_compile,
-    parser::ParseError,
     symbols::{
         self, DepsGraph, GlobalSymbolTable, MatchActionType, Symbol,
         SymbolKind, SymbolTable,
@@ -821,14 +819,7 @@ impl<'a> Compiler {
         source_code: &'a str,
     ) -> Result<(), miette::Report> {
         match SyntaxTree::parse_str(source_code) {
-            Ok((_, ast)) => {
-                use nom::Finish;
-                let ast2 = SyntaxTree::parse_root(source_code).finish().unwrap().1;
-                eprintln!("{ast:?}");
-                eprintln!();
-                eprintln!("{ast2:?}");
-                self.ast = ast;
-            }
+            Ok(ast) => self.ast = ast,
             Err(e) => {
                 return Err(miette::Report::new(e)
                     .with_source_code(source_code.to_string()));

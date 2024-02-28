@@ -17,6 +17,8 @@ pub enum Token<'s> {
     BangEq,
     #[token("&&")]
     AmpAmp,
+    #[token("|")]
+    Pipe,
     #[token("||")]
     PipePipe,
     #[token(">=")]
@@ -141,17 +143,21 @@ pub enum Token<'s> {
     // Integers can contain underscores, but cannot start with them.
     #[regex(r"[0-9][0-9_]*")]
     Integer(&'s str),
+    
     #[regex(r"0x[0-9A-Fa-f]+")]
     Hex(&'s str),
     #[regex(r"AS[0-9]+")]
     Asn(&'s str),
     #[regex(r"[0-9]+\.[0-9]*")]
     Float,
+
     #[regex(r"([0-9]+\.){3}[0-9]+")]
     IpV4(&'s str),
-    #[regex(r"([0-9a-zA-Z]+:){6}[0-9a-zA-Z]+")]
+    #[regex(r"([0-9a-zA-Z]*:){2,6}[0-9a-zA-Z]*")]
     IpV6(&'s str),
 
+    #[regex(r"/[0-9]+")]
+    PrefixLength(&'s str),
     // This regex is a super set of all the forms of communities:
     // standard, large and extended.
     #[regex(r"([0-9a-zA-Z]+:)?(0x)?[0-9a-fA-F]+:(0x)?[0-9a-fA-F]+")]
@@ -165,11 +171,12 @@ pub enum Token<'s> {
 impl<'source> Display for Token<'source> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
-            Token::Ident(_) => "identifier",
+            Token::Ident(s) => s,
             Token::EqEq => "==",
             Token::Eq => "=",
             Token::BangEq => "!=",
             Token::AmpAmp => "&&",
+            Token::Pipe => "|",
             Token::PipePipe => "||",
             Token::AngleRightEq => ">=",
             Token::AngleLeftEq => "<=",
@@ -225,15 +232,17 @@ impl<'source> Display for Token<'source> {
             Token::UpTo => "up-to",
             Token::Use => "use",
             Token::With => "with",
-            Token::String(_) => "<string>",
-            Token::Integer(_) => "<integer>",
-            Token::Hex(_) => "hex literal",
-            Token::Asn(_) => "ASN",
+            Token::String(s) => s,
+            Token::Integer(s) => s,
+            Token::Hex(s) => s,
+            Token::Asn(s) => s,
             Token::Float => "float",
-            Token::IpV4(_) => "IPv4",
-            Token::IpV6(_) => "IPv6",
-            Token::Community(_) => "community",
-            Token::Bool(_) => "bool",
+            Token::IpV4(s) => s,
+            Token::IpV6(s) => s,
+            Token::Community(s) => s,
+            Token::Bool(true) => "true",
+            Token::Bool(false) => "false",
+            Token::PrefixLength(s) => s,
         };
         write!(f, "{s}")
     }

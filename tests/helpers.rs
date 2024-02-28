@@ -27,7 +27,7 @@ impl<'a> TestCompiler<'a> {
 
         trace!("{} {:#?}", self.name, self.compiler.ast);
         if let Err(e) = &parse_res {
-            trace!("{:?}", e);
+            eprintln!("{:?}", e);
         }
 
         match expect_success {
