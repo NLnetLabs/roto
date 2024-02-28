@@ -25,7 +25,7 @@ use log::{debug, error, trace};
 use paste::paste;
 use serde::{self, Serialize};
 
-use crate::attr_change_set::ScalarValue;
+// use crate::attr_change_set::ScalarValue;
 use crate::compiler::compile::CompileError;
 use crate::traits::RotoType;
 use crate::types::collections::ElementTypeValue;

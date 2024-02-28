@@ -322,7 +322,7 @@ macro_rules! typevaluefromimpls {
             }
         }
 
-        impl ScalarValue for $type_def {}
+        // impl ScalarValue for $type_def {}
     }
 }
 

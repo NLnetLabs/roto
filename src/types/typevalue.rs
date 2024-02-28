@@ -19,7 +19,7 @@ use crate::{
         AnonymousRecordValueExpr, ListValueExpr, ShortString,
         TypedRecordValueExpr,
     },
-    attr_change_set::ScalarValue,
+    // attr_change_set::ScalarValue,
     compiler::compile::CompileError,
     traits::{RotoType, Token},
     vm::{FieldIndex, StackValue, VmError},
@@ -1256,7 +1256,7 @@ impl From<&'_ str> for TypeValue {
     }
 }
 
-impl ScalarValue for TypeValue {}
+// impl ScalarValue for TypeValue {}
 
 // Type conversions for Records
 

@@ -6,7 +6,7 @@ use paste::paste;
 use serde::Serialize;
 
 use crate::ast::{IpAddressLiteral, PrefixLiteral};
-use crate::attr_change_set::{ScalarValue, VectorValue};
+// use crate::attr_change_set::{ScalarValue};
 use crate::compiler::compile::CompileError;
 use crate::traits::RotoType;
 use crate::types::collections::ElementTypeValue;
@@ -414,7 +414,7 @@ pub enum StringLiteralToken {
     Set = 2,
 }
 
-impl ScalarValue for StringLiteral {}
+// impl ScalarValue for StringLiteral {}
 
 impl TryFrom<usize> for StringLiteralToken {
     type Error = VmError;
@@ -1250,7 +1250,7 @@ impl RotoType for Community {
     }
 }
 
-impl ScalarValue for Community {}
+// impl ScalarValue for Community {}
 
 impl From<Community> for TypeValue {
     fn from(val: Community) -> Self {
@@ -1437,7 +1437,7 @@ impl RotoType for Nlri {
     }
 }
 
-impl ScalarValue for Nlri {}
+// impl ScalarValue for Nlri {}
 
 impl From<Nlri> for TypeValue {
     fn from(val: Nlri) -> Self {
@@ -1758,73 +1758,73 @@ fn try_remove_first<T>(vec: &mut Vec::<T>) -> Result<T, VmError> {
     }
 }
 
-impl VectorValue for routecore::bgp::aspath::HopPath {
-    type ReadItem = routecore::bgp::aspath::OwnedHop;
-    type WriteItem = routecore::asn::Asn;
+// impl VectorValue for routecore::bgp::aspath::HopPath {
+//     type ReadItem = routecore::bgp::aspath::OwnedHop;
+//     type WriteItem = routecore::asn::Asn;
 
-    fn prepend_vec(
-        &mut self,
-        vector: Vec<Self::WriteItem>,
-    ) -> Result<(), LongSegmentError> {
-        let mut as_path = vector
-            .iter()
-            .map(|a| routecore::bgp::aspath::OwnedHop::Asn(*a))
-            .collect::<Vec<_>>();
-        as_path.extend_from_slice(std::mem::take(self).iter().as_slice());
+//     fn prepend_vec(
+//         &mut self,
+//         vector: Vec<Self::WriteItem>,
+//     ) -> Result<(), LongSegmentError> {
+//         let mut as_path = vector
+//             .iter()
+//             .map(|a| routecore::bgp::aspath::OwnedHop::Asn(*a))
+//             .collect::<Vec<_>>();
+//         as_path.extend_from_slice(std::mem::take(self).iter().as_slice());
 
-        std::mem::swap(self, &mut as_path.into());
+//         std::mem::swap(self, &mut as_path.into());
 
-        Ok(())
-    }
+//         Ok(())
+//     }
 
-    fn append_vec(
-        &mut self,
-        vector: Vec<Self::WriteItem>,
-    ) -> Result<(), LongSegmentError> {
-        for asn in vector {
-            self.append(OwnedHop::Asn(asn));
-        }
+//     fn append_vec(
+//         &mut self,
+//         vector: Vec<Self::WriteItem>,
+//     ) -> Result<(), LongSegmentError> {
+//         for asn in vector {
+//             self.append(OwnedHop::Asn(asn));
+//         }
 
-        Ok(())
-    }
+//         Ok(())
+//     }
 
-    // Naïve insert that will try to append to the segment that is already in
-    // place at the specified position. Fancier, more conditional ways are
-    // available to the roto user, but those methods are implemented directly
-    // on builtin::AsPath.
-    fn insert_vec(
-        &mut self,
-        pos: u8,
-        vector: Vec<Self::WriteItem>,
-    ) -> Result<(), LongSegmentError> {
-        let mut as_path = std::mem::take(self);
-        let mut left_path = as_path[..pos as usize].to_vec();
-        left_path.extend_from_slice(
-            vector
-                .into_iter()
-                .map(|a| a.into())
-                .collect::<Vec<_>>()
-                .as_slice(),
-        );
-        left_path.extend_from_slice(&self[pos as usize..]);
+//     // Naïve insert that will try to append to the segment that is already in
+//     // place at the specified position. Fancier, more conditional ways are
+//     // available to the roto user, but those methods are implemented directly
+//     // on builtin::AsPath.
+//     fn insert_vec(
+//         &mut self,
+//         pos: u8,
+//         vector: Vec<Self::WriteItem>,
+//     ) -> Result<(), LongSegmentError> {
+//         let mut as_path = std::mem::take(self);
+//         let mut left_path = as_path[..pos as usize].to_vec();
+//         left_path.extend_from_slice(
+//             vector
+//                 .into_iter()
+//                 .map(|a| a.into())
+//                 .collect::<Vec<_>>()
+//                 .as_slice(),
+//         );
+//         left_path.extend_from_slice(&self[pos as usize..]);
 
-        std::mem::swap(self, &mut as_path);
+//         std::mem::swap(self, &mut as_path);
 
-        Ok(())
-    }
+//         Ok(())
+//     }
 
-    fn vec_len(&self) -> Option<usize> {
-        Some(self.hop_count())
-    }
+//     fn vec_len(&self) -> Option<usize> {
+//         Some(self.hop_count())
+//     }
 
-    fn vec_is_empty(&self) -> bool {
-        self.hop_count() == 0
-    }
+//     fn vec_is_empty(&self) -> bool {
+//         self.hop_count() == 0
+//     }
 
-    fn into_vec(self) -> Vec<Self::ReadItem> {
-        self.into_iter().collect::<Vec<_>>()
-    }
-}
+//     fn into_vec(self) -> Vec<Self::ReadItem> {
+//         self.into_iter().collect::<Vec<_>>()
+//     }
+// }
 
 impl From<routecore::bgp::aspath::HopPath> for BuiltinTypeValue {
     fn from(value: routecore::bgp::aspath::HopPath) -> Self {
