@@ -2740,7 +2740,7 @@ impl<
     }
 }
 
-impl<'a,
+impl<
         MB: AsRef<[MirBlock]> + std::hash::Hash,
         C: AsRef<RouteContext> + std::hash::Hash,
         EDS: AsRef<[ExtDataSource]> + std::hash::Hash,
