@@ -21,8 +21,8 @@ mod rib_like;
 
 #[cfg(test)]
 mod test_expressions;
-// #[cfg(test)]
-// mod test_sections;
+#[cfg(test)]
+mod test_sections;
 
 type ParseResult<T> = Result<T, ParseError>;
 
