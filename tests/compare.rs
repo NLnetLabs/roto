@@ -1,5 +1,5 @@
 use roto::ast::AcceptReject;
-use roto::compiler::{compile, Compiler};
+use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self, FilterMap};
 use roto::types::collections::Record;

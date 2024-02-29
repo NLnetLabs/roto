@@ -1,7 +1,7 @@
 use log::trace;
 
 use roto::ast::AcceptReject;
-use roto::compiler::{compile, Compiler};
+use roto::compiler::Compiler;
 use roto::blocks::Scope::{self, Filter, FilterMap};
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::datasources::{DataSource, Rib};

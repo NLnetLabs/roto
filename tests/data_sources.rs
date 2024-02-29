@@ -1,5 +1,5 @@
 use log::trace;
-use roto::compiler::{compile, Compiler};
+use roto::compiler::Compiler;
 
 use roto::blocks::Scope;
 use roto::types::collections::{ElementTypeValue, List, Record};

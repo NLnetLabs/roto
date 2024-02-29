@@ -10,13 +10,17 @@ fn test_logical_expr_1() {
             send-to(a,b);
         }"###,
     );
-
-    if r.is_err() {
-        println!("{:?}", r);
-    }
     assert!(r.is_ok());
-    if let Ok(expr) = r {
-        println!("{:?}", expr.1);
-        assert_eq!(expr.0, "");
-    }
+}
+
+#[test]
+fn test_logical_expr_1() {
+    let r = ActionSection::parse(
+        r###"
+                action my-action {
+                    send_to(a,b);
+                    pph_asn.asn.set(AS200);
+                }"###,
+    );
+    assert!(r.is_ok());
 }

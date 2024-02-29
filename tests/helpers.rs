@@ -1,5 +1,4 @@
 use log::trace;
-use nom::error::convert_error;
 use roto::{
     blocks::Scope,
     compiler::{CompileError, Compiler},

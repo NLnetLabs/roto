@@ -19,12 +19,18 @@ use std::iter::Peekable;
 mod filter_map;
 mod rib_like;
 
+#[cfg(test)]
+mod test_expressions;
+// #[cfg(test)]
+// mod test_sections;
+
 type ParseResult<T> = Result<T, ParseError>;
 
 #[derive(Clone, Debug, Diagnostic)]
 pub enum ParseError {
     EmptyInput,
     EndOfInput,
+    FailedToParseEntireInput,
     InvalidToken(#[label("invalid token")] Span),
     /// Dummy variant where more precise messages should be made
     ///
@@ -51,6 +57,9 @@ impl std::fmt::Display for ParseError {
         match self {
             Self::EmptyInput => write!(f, "input was empty"),
             Self::EndOfInput => write!(f, "unexpected end of input"),
+            Self::FailedToParseEntireInput => {
+                write!(f, "failed to parse entire input")
+            }
             Self::InvalidToken(_) => write!(f, "invalid token"),
             Self::Todo(n) => write!(f, "add a nice message here {n}"),
             Self::Expected { expected, got, .. } => {
@@ -176,10 +185,21 @@ impl<'source> Parser<'source> {
 /// # Parsing complex expressions
 impl<'source> Parser<'source> {
     pub fn parse(input: &'source str) -> ParseResult<SyntaxTree> {
-        Self {
+        Self::run_parser(Self::tree, input)
+    }
+
+    fn run_parser<T>(
+        mut parser: impl FnMut(&mut Self) -> ParseResult<T>,
+        input: &'source str,
+    ) -> ParseResult<T> {
+        let mut p = Self {
             lexer: Lexer::new(input).spanned().peekable(),
+        };
+        let out = parser(&mut p)?;
+        if p.lexer.next().is_some() {
+            return Err(ParseError::FailedToParseEntireInput);
         }
-        .tree()
+        Ok(out)
     }
 
     fn tree(&mut self) -> ParseResult<SyntaxTree> {

@@ -213,7 +213,7 @@ impl<'source> Parser<'source> {
     ///               | BooleanExpr '&&' BooleanExpr
     ///               | BooleanExpr
     /// ```
-    fn logical_expr(&mut self) -> ParseResult<LogicalExpr> {
+    pub(super) fn logical_expr(&mut self) -> ParseResult<LogicalExpr> {
         if self.accept_optional(Token::Bang)?.is_some() {
             let expr = self.boolean_expr()?;
             return Ok(LogicalExpr::NotExpr(NotExpr { expr }));
@@ -342,7 +342,7 @@ impl<'source> Parser<'source> {
         })
     }
     
-    fn action(&mut self) -> ParseResult<ActionSection> {
+    pub(super) fn action(&mut self) -> ParseResult<ActionSection> {
         self.accept_required(Token::Action)?;
         let ident = self.identifier()?;
         let with_kv = self.with_statement()?;
