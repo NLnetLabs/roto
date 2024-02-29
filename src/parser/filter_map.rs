@@ -1,11 +1,6 @@
 use crate::{
     ast::{
-        AccessExpr, AccessReceiver, ActionSection, ActionSectionBody,
-        AndExpr, ApplySection, BooleanExpr, CompareArg, CompareExpr,
-        CompareOp, ComputeExpr, Define, FilterMap, FilterMapBody,
-        FilterMapExpr, FilterType, GroupedLogicalExpr, ListCompareExpr,
-        LogicalExpr, MatchOperator, NotExpr, OrExpr, TermBody,
-        TermPatternMatchArm, TermScope, TermSection, ValueExpr,
+        AcceptReject, AccessExpr, AccessReceiver, ActionCallExpr, ActionSection, ActionSectionBody, AndExpr, ApplyBody, ApplyScope, ApplySection, BooleanExpr, CompareArg, CompareExpr, CompareOp, ComputeExpr, Define, DefineBody, FilterMap, FilterMapBody, FilterMapExpr, FilterMatchActionExpr, FilterType, GroupedLogicalExpr, ListCompareExpr, LogicalExpr, MatchActionExpr, MatchOperator, NotExpr, OrExpr, PatternMatchActionArm, PatternMatchActionExpr, RxTxType, TermBody, TermCallExpr, TermPatternMatchArm, TermScope, TermSection, TypeIdentField, ValueExpr
     },
     token::Token,
 };
@@ -95,6 +90,282 @@ impl<'source> Parser<'source> {
             expressions,
             apply,
         })
+    }
+
+    /// Parse the body of a define section
+    ///
+    /// ```ebnf
+    /// DefineBody ::= '{' RxTxType Use? Assignment* '}'
+    ///
+    /// RxTxType   ::= ( 'rx_tx' TypeIdentField ';'
+    ///                | 'rx' TypeIdentField ';' 'tx' TypeIdentField ';'
+    ///                | 'rx' TypeIdentField )
+    ///
+    /// Use        ::= 'use' Identifier Identifier
+    ///
+    /// Assignment ::= Identifier '=' ValueExpr ';'
+    /// ```
+    fn define_body(&mut self) -> ParseResult<DefineBody> {
+        self.accept_required(Token::CurlyLeft)?;
+
+        let rx_tx_type = match self.next()?.0 {
+            Token::RxTx => {
+                let field = self.type_ident_field()?;
+                self.accept_required(Token::SemiColon)?;
+                RxTxType::PassThrough(field)
+            }
+            Token::Rx => {
+                let rx_field = self.type_ident_field()?;
+                self.accept_required(Token::SemiColon)?;
+                if self.accept_optional(Token::Tx)?.is_some() {
+                    let tx_field = self.type_ident_field()?;
+                    self.accept_required(Token::SemiColon)?;
+                    RxTxType::Split(rx_field, tx_field)
+                } else {
+                    RxTxType::RxOnly(rx_field)
+                }
+            }
+            _ => return Err(ParseError::Todo(9)),
+        };
+
+        let mut use_ext_data = Vec::new();
+        while self.accept_optional(Token::Use)?.is_some() {
+            use_ext_data.push((self.identifier()?, self.identifier()?));
+            self.accept_required(Token::SemiColon)?;
+        }
+
+        let mut assignments = Vec::new();
+        while self.accept_optional(Token::CurlyRight)?.is_none() {
+            let id = self.identifier()?;
+            self.accept_required(Token::Eq)?;
+            let value = self.value_expr()?;
+            self.accept_required(Token::SemiColon)?;
+            assignments.push((id, value));
+        }
+
+        Ok(DefineBody {
+            rx_tx_type,
+            use_ext_data,
+            assignments,
+        })
+    }
+
+    /// Parse the body of an apply section
+    ///
+    /// ```ebnf
+    /// ApplyBody ::= ApplyScope* (AcceptReject ';')?
+    /// ```
+    fn apply_body(&mut self) -> ParseResult<ApplyBody> {
+        self.accept_required(Token::CurlyLeft)?;
+        let mut scopes = Vec::new();
+
+        while !(self.peek_is(Token::Return)
+            || self.peek_is(Token::Accept)
+            || self.peek_is(Token::Reject)
+            || self.peek_is(Token::CurlyRight))
+        {
+            scopes.push(self.apply_scope()?);
+        }
+
+        let accept_reject = self.accept_reject()?;
+        self.accept_required(Token::CurlyRight)?;
+        Ok(ApplyBody {
+            scopes,
+            accept_reject,
+        })
+    }
+
+    /// Parse a scope of the body of apply
+    ///
+    /// ```ebnf
+    /// ApplyScope ::= 'filter' 'match' ValueExpr
+    ///                'not'? 'matching'
+    ///                Actions ';'
+    ///
+    /// Actions    ::= '{' (ValueExpr ';')* ( AcceptReject ';' )? '}'
+    /// ```
+    fn apply_scope(&mut self) -> ParseResult<ApplyScope> {
+        if self.peek_is(Token::Match) {
+            return self.apply_match();
+        }
+
+        self.accept_required(Token::Filter)?;
+
+        // This is not exactly self.match_operator because match ... with is
+        // not allowed.
+        let operator = if self.accept_optional(Token::Match)?.is_some() {
+            MatchOperator::Match
+        } else if self.accept_optional(Token::ExactlyOne)?.is_some() {
+            MatchOperator::ExactlyOne
+        } else if self.accept_optional(Token::Some)?.is_some() {
+            MatchOperator::Some
+        } else if self.accept_optional(Token::All)?.is_some() {
+            MatchOperator::All
+        } else {
+            return Err(ParseError::Todo(20));
+        };
+
+        let filter_ident = self.value_expr()?;
+        let negate = self.accept_optional(Token::Not)?.is_some();
+        self.accept_required(Token::Matching)?;
+        self.accept_required(Token::CurlyLeft)?;
+
+        let mut actions = Vec::new();
+        while self.accept_optional(Token::CurlyRight)?.is_none() {
+            if let Some(accept_reject) = self.accept_reject()? {
+                self.accept_required(Token::CurlyRight)?;
+                actions.push((None, Some(accept_reject)));
+                break;
+            }
+
+            let val = self.value_expr()?;
+            self.accept_required(Token::SemiColon)?;
+            actions.push((Some(val), None));
+        }
+
+        self.accept_required(Token::SemiColon)?;
+
+        Ok(ApplyScope {
+            scope: None,
+            match_action: MatchActionExpr::FilterMatchAction(
+                FilterMatchActionExpr {
+                    operator,
+                    negate,
+                    actions,
+                    filter_ident,
+                },
+            ),
+        })
+    }
+
+    fn apply_match(&mut self) -> ParseResult<ApplyScope> {
+        let operator = self.match_operator()?;
+        let mut match_arms = Vec::new();
+        self.accept_required(Token::CurlyLeft)?;
+        while self.accept_optional(Token::CurlyRight)?.is_none() {
+            let variant_id = self.identifier()?;
+            let data_field =
+                if self.accept_optional(Token::RoundLeft)?.is_some() {
+                    let id = self.identifier()?;
+                    self.accept_required(Token::RoundRight)?;
+                    Some(id)
+                } else {
+                    None
+                };
+
+            let guard = if self.accept_optional(Token::Pipe)?.is_some() {
+                let term_id = self.identifier()?;
+                let args = if self.peek_is(Token::RoundLeft) {
+                    Some(self.arg_expr_list()?)
+                } else {
+                    None
+                };
+                Some(TermCallExpr { term_id, args })
+            } else {
+                None
+            };
+
+            self.accept_required(Token::Arrow)?;
+
+            let mut actions = Vec::new();
+            if self.accept_optional(Token::CurlyLeft)?.is_some() {
+                while self.accept_optional(Token::CurlyRight)?.is_none() {
+                    if let Some(ar) = self.accept_reject()? {
+                        self.accept_required(Token::CurlyRight)?;
+                        actions.push((None, Some(ar)));
+                        break;
+                    }
+                    actions.push((Some(self.action_call_expr()?), None));
+                    self.accept_required(Token::SemiColon)?;
+                }
+                self.accept_optional(Token::Comma)?;
+            } else {
+                let expr = self.action_call_expr()?;
+                self.accept_required(Token::Comma)?;
+                actions.push((Some(expr), None));
+            }
+
+            match_arms.push(PatternMatchActionArm {
+                variant_id,
+                data_field,
+                guard,
+                actions,
+            });
+        }
+        Ok(ApplyScope {
+            scope: None,
+            match_action: MatchActionExpr::PatternMatchAction(
+                PatternMatchActionExpr {
+                    operator,
+                    match_arms,
+                },
+            ),
+        })
+    }
+
+    fn action_call_expr(&mut self) -> ParseResult<ActionCallExpr> {
+        let action_id = self.identifier()?;
+        let args = if self.peek_is(Token::RoundLeft) {
+            Some(self.arg_expr_list()?)
+        } else {
+            None
+        };
+        Ok(ActionCallExpr { action_id, args })
+    }
+
+    /// Parse a statement returning accept or reject
+    ///
+    /// ```ebnf
+    /// AcceptReject ::= ('return'? ( 'accept' | 'reject' ) ';')?
+    /// ```
+    fn accept_reject(&mut self) -> ParseResult<Option<AcceptReject>> {
+        if self.accept_optional(Token::Return)?.is_some() {
+            let value = match self.next()?.0 {
+                Token::Accept => AcceptReject::Accept,
+                Token::Reject => AcceptReject::Reject,
+                _ => return Err(ParseError::Todo(10)),
+            };
+            self.accept_required(Token::SemiColon)?;
+            return Ok(Some(value));
+        }
+
+        if self.accept_optional(Token::Accept)?.is_some() {
+            self.accept_required(Token::SemiColon)?;
+            return Ok(Some(AcceptReject::Accept));
+        }
+
+        if self.accept_optional(Token::Reject)?.is_some() {
+            self.accept_required(Token::SemiColon)?;
+            return Ok(Some(AcceptReject::Reject));
+        }
+
+        Ok(None)
+    }
+
+    /// Parse a match operator
+    ///
+    /// ```ebnf
+    /// MatchOperator ::= 'match' ( Identifier 'with' )?
+    ///                 | 'some' | 'exactly-one' | 'all'
+    /// ```
+    fn match_operator(&mut self) -> ParseResult<MatchOperator> {
+        let op = match self.next()?.0 {
+            Token::Match => {
+                if matches!(self.peek(), Some(Token::Ident(_))) {
+                    let ident = self.identifier()?;
+                    self.accept_required(Token::With)?;
+                    MatchOperator::MatchValueWith(ident)
+                } else {
+                    MatchOperator::Match
+                }
+            }
+            Token::Some => MatchOperator::Some,
+            Token::ExactlyOne => MatchOperator::ExactlyOne,
+            Token::All => MatchOperator::All,
+            _ => return Err(ParseError::Todo(11)),
+        };
+
+        Ok(op)
     }
 
     /// Parse a filter map expression, which is a term or an action
@@ -302,7 +573,7 @@ impl<'source> Parser<'source> {
 
     /// Optionally parse a compare operator
     ///
-    /// This method returns option, because we are never sure that there is
+    /// This method returns [`Option`], because we are never sure that there is
     /// going to be a comparison operator.
     ///
     /// ```ebnf
@@ -369,5 +640,50 @@ impl<'source> Parser<'source> {
             with_kv,
             body: ActionSectionBody { expressions },
         })
+    }
+
+        /// Parse an optional for clause for filter-map, define and apply
+    ///
+    /// ```ebnf
+    /// For ::= ( 'for' TypeIdentField)?
+    /// ```
+    fn for_statement(&mut self) -> ParseResult<Option<TypeIdentField>> {
+        if self.accept_optional(Token::For)?.is_some() {
+            Ok(Some(self.type_ident_field()?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Parse an optional with clause for filter-map, define and apply
+    ///
+    /// ```ebnf
+    /// With ::= ( 'with' TypeIdentField (',' TypeIdentField)*)?
+    /// ```
+    fn with_statement(&mut self) -> ParseResult<Vec<TypeIdentField>> {
+        let mut key_values = Vec::new();
+
+        if self.accept_optional(Token::With)?.is_none() {
+            return Ok(key_values);
+        }
+
+        key_values.push(self.type_ident_field()?);
+        while self.accept_optional(Token::Comma)?.is_some() {
+            key_values.push(self.type_ident_field()?);
+        }
+
+        Ok(key_values)
+    }
+
+    /// Parse an identifier and a type identifier separated by a colon
+    ///
+    /// ```ebnf
+    /// TypeIdentField ::= Identifier ':' TypeIdentifier
+    /// ```
+    fn type_ident_field(&mut self) -> ParseResult<TypeIdentField> {
+        let field_name = self.identifier()?;
+        self.accept_required(Token::Colon)?;
+        let ty = self.type_identifier()?;
+        Ok(TypeIdentField { field_name, ty })
     }
 }
