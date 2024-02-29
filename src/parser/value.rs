@@ -1,6 +1,13 @@
 use crate::{
     ast::{
-        AccessExpr, AccessReceiver, AnonymousRecordValueExpr, ArgExprList, AsnLiteral, BooleanLiteral, ComputeExpr, ExtendedCommunityLiteral, FieldAccessExpr, HexLiteral, Identifier, IntegerLiteral, IpAddress, Ipv4Addr, Ipv6Addr, LargeCommunityLiteral, ListValueExpr, LiteralAccessExpr, LiteralExpr, MethodComputeExpr, Prefix, PrefixLength, PrefixLengthLiteral, PrefixLengthRange, PrefixMatchExpr, PrefixMatchType, StandardCommunityLiteral, StringLiteral, TypeIdentifier, TypedRecordValueExpr, ValueExpr
+        AccessExpr, AccessReceiver, AnonymousRecordValueExpr, ArgExprList,
+        AsnLiteral, BooleanLiteral, ComputeExpr, ExtendedCommunityLiteral,
+        FieldAccessExpr, HexLiteral, Identifier, IntegerLiteral, IpAddress,
+        Ipv4Addr, Ipv6Addr, LargeCommunityLiteral, ListValueExpr,
+        LiteralAccessExpr, LiteralExpr, MethodComputeExpr, Prefix,
+        PrefixLength, PrefixLengthLiteral, PrefixLengthRange,
+        PrefixMatchExpr, PrefixMatchType, StandardCommunityLiteral,
+        StringLiteral, TypeIdentifier, TypedRecordValueExpr, ValueExpr,
     },
     parser::ParseError,
     token::Token,
@@ -146,10 +153,17 @@ impl<'source> Parser<'source> {
     }
 
     fn ip_address(&mut self) -> ParseResult<IpAddress> {
-        Ok(match self.next()?.0 {
+        let (token, span) = self.next()?;
+        Ok(match token {
             Token::IpV4(s) => IpAddress::Ipv4(Ipv4Addr(s.parse().unwrap())),
             Token::IpV6(s) => IpAddress::Ipv6(Ipv6Addr(s.parse().unwrap())),
-            _ => return Err(ParseError::Todo(15)),
+            _ => {
+                return Err(ParseError::Expected {
+                    expected: "an IP address".into(),
+                    got: token.to_string(),
+                    span,
+                })
+            }
         })
     }
 
@@ -288,7 +302,9 @@ impl<'source> Parser<'source> {
     ///                   | 'upto' PrefixLength
     ///                   | 'netmask' IpAddress
     /// ```
-    fn try_prefix_match_type(&mut self) -> ParseResult<Option<PrefixMatchType>> {
+    fn try_prefix_match_type(
+        &mut self,
+    ) -> ParseResult<Option<PrefixMatchType>> {
         let match_type = if self.next_is(Token::Exact) {
             PrefixMatchType::Exact
         } else if self.next_is(Token::Longer) {

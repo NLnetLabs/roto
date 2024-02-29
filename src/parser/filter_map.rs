@@ -1,6 +1,16 @@
+use logos::Span;
+
 use crate::{
     ast::{
-        AcceptReject, AccessExpr, AccessReceiver, ActionCallExpr, ActionSection, ActionSectionBody, AndExpr, ApplyBody, ApplyScope, ApplySection, BooleanExpr, CompareArg, CompareExpr, CompareOp, ComputeExpr, Define, DefineBody, FilterMap, FilterMapBody, FilterMapExpr, FilterMatchActionExpr, FilterType, GroupedLogicalExpr, ListCompareExpr, LogicalExpr, MatchActionExpr, MatchOperator, NotExpr, OrExpr, PatternMatchActionArm, PatternMatchActionExpr, RxTxType, TermBody, TermCallExpr, TermPatternMatchArm, TermScope, TermSection, TypeIdentField, ValueExpr
+        AcceptReject, AccessExpr, AccessReceiver, ActionCallExpr,
+        ActionSection, ActionSectionBody, AndExpr, ApplyBody, ApplyScope,
+        ApplySection, BooleanExpr, CompareArg, CompareExpr, CompareOp,
+        ComputeExpr, Define, DefineBody, FilterMap, FilterMapBody,
+        FilterMapExpr, FilterMatchActionExpr, FilterType, GroupedLogicalExpr,
+        ListCompareExpr, LogicalExpr, MatchActionExpr, MatchOperator,
+        NotExpr, OrExpr, PatternMatchActionArm, PatternMatchActionExpr,
+        RxTxType, TermBody, TermCallExpr, TermPatternMatchArm, TermScope,
+        TermSection, TypeIdentField, ValueExpr,
     },
     token::Token,
 };
@@ -15,17 +25,23 @@ impl<'source> Parser<'source> {
     ///               For With FilterMapBody
     /// ```
     pub(super) fn filter_map(&mut self) -> ParseResult<FilterMap> {
-        let (token, _span) = self.next()?;
+        let (token, span) = self.next()?;
         let ty = match token {
             Token::FilterMap => FilterType::FilterMap,
             Token::Filter => FilterType::Filter,
-            _ => return Err(ParseError::Todo(1)),
+            _ => {
+                return Err(ParseError::Expected {
+                    expected: "'filter-map' or 'filter'".into(),
+                    got: token.to_string(),
+                    span,
+                })
+            }
         };
 
         let ident = self.identifier()?;
         let for_ident = self.for_clause()?;
         let with_kv = self.with_clause()?;
-        let body = self.filter_map_body()?;
+        let body = self.filter_map_body(span)?;
 
         Ok(FilterMap {
             ty,
@@ -46,7 +62,7 @@ impl<'source> Parser<'source> {
     ///
     /// Not shown in the EBNF above, but the location of the define and apply
     /// sections doesn't matter, but they can both only appear once.
-    fn filter_map_body(&mut self) -> ParseResult<FilterMapBody> {
+    fn filter_map_body(&mut self, span: Span) -> ParseResult<FilterMapBody> {
         let mut define = None;
         let mut expressions: Vec<FilterMapExpr> = Vec::new();
         let mut apply = None;
@@ -54,10 +70,15 @@ impl<'source> Parser<'source> {
         self.take(Token::CurlyLeft)?;
 
         while !self.next_is(Token::CurlyRight) {
-            if self.next_is(Token::Define) {
+            if self.peek_is(Token::Define) {
+                let (_, span) = self.next()?;
                 if define.is_some() {
                     // Cannot have multiple define sections
-                    return Err(ParseError::Todo(2));
+                    return Err(ParseError::Custom {
+                        description: "a filter or filter-map cannot have multiple define sections".into(),
+                        label: "merge this define section with the previous one".into(),
+                        span,
+                    });
                 }
                 let for_kv = self.for_clause()?;
                 let with_kv = self.with_clause()?;
@@ -67,10 +88,15 @@ impl<'source> Parser<'source> {
                     with_kv,
                     body,
                 });
-            } else if self.next_is(Token::Apply) {
+            } else if self.peek_is(Token::Apply) {
+                let (_, span) = self.next()?;
                 if apply.is_some() {
                     // Cannot have multiple apply sections
-                    return Err(ParseError::Todo(3));
+                    return Err(ParseError::Custom {
+                        description: "a filter or filter-map cannot have multiple apply sections".into(),
+                        label: "merge this apply section with the previous one".into(),
+                        span,
+                    });
                 }
                 let for_kv = self.for_clause()?;
                 let with_kv = self.with_clause()?;
@@ -85,8 +111,19 @@ impl<'source> Parser<'source> {
             }
         }
 
+        let Some(define) = define else {
+            return Err(ParseError::Custom {
+                description: "a filter or filter-map requires at\
+                    least one define section"
+                    .into(),
+                label:
+                    "this filter or filter-map is missing a define section"
+                        .into(),
+                span,
+            });
+        };
         Ok(FilterMapBody {
-            define: define.ok_or(ParseError::Todo(4))?,
+            define,
             expressions,
             apply,
         })
@@ -108,7 +145,8 @@ impl<'source> Parser<'source> {
     fn define_body(&mut self) -> ParseResult<DefineBody> {
         self.take(Token::CurlyLeft)?;
 
-        let rx_tx_type = match self.next()?.0 {
+        let (token, span) = self.next()?;
+        let rx_tx_type = match token {
             Token::RxTx => {
                 let field = self.type_ident_field()?;
                 self.take(Token::SemiColon)?;
@@ -125,7 +163,13 @@ impl<'source> Parser<'source> {
                     RxTxType::RxOnly(rx_field)
                 }
             }
-            _ => return Err(ParseError::Todo(9)),
+            _ => {
+                return Err(ParseError::Expected {
+                    expected: "'rx' or 'rx_tx'".into(),
+                    got: token.to_string(),
+                    span,
+                })
+            }
         };
 
         let mut use_ext_data = Vec::new();
@@ -202,7 +246,12 @@ impl<'source> Parser<'source> {
         } else if self.next_is(Token::All) {
             MatchOperator::All
         } else {
-            return Err(ParseError::Todo(20));
+            let (token, span) = self.next()?;
+            return Err(ParseError::Expected {
+                expected: "'match', 'exactly-one', 'some' or 'all'".into(),
+                got: token.to_string(),
+                span,
+            });
         };
 
         let filter_ident = self.value_expr()?;
@@ -244,14 +293,13 @@ impl<'source> Parser<'source> {
         self.take(Token::CurlyLeft)?;
         while !self.next_is(Token::CurlyRight) {
             let variant_id = self.identifier()?;
-            let data_field =
-                if self.next_is(Token::RoundLeft) {
-                    let id = self.identifier()?;
-                    self.take(Token::RoundRight)?;
-                    Some(id)
-                } else {
-                    None
-                };
+            let data_field = if self.next_is(Token::RoundLeft) {
+                let id = self.identifier()?;
+                self.take(Token::RoundRight)?;
+                Some(id)
+            } else {
+                None
+            };
 
             let guard = if self.next_is(Token::Pipe) {
                 let term_id = self.identifier()?;
@@ -320,10 +368,18 @@ impl<'source> Parser<'source> {
     /// ```
     fn try_accept_reject(&mut self) -> ParseResult<Option<AcceptReject>> {
         if self.next_is(Token::Return) {
-            let value = match self.next()?.0 {
+            let (token, span) = self.next()?;
+            let value = match token {
                 Token::Accept => AcceptReject::Accept,
                 Token::Reject => AcceptReject::Reject,
-                _ => return Err(ParseError::Todo(10)),
+                _ => {
+                    return Err(ParseError::Expected {
+                        expected: "'accept' or 'reject' after 'return'"
+                            .into(),
+                        got: token.to_string(),
+                        span,
+                    })
+                }
             };
             self.take(Token::SemiColon)?;
             return Ok(Some(value));
@@ -349,7 +405,8 @@ impl<'source> Parser<'source> {
     ///                 | 'some' | 'exactly-one' | 'all'
     /// ```
     fn match_operator(&mut self) -> ParseResult<MatchOperator> {
-        let op = match self.next()?.0 {
+        let (token, span) = self.next()?;
+        let op = match token {
             Token::Match => {
                 if matches!(self.peek(), Some(Token::Ident(_))) {
                     let ident = self.identifier()?;
@@ -362,7 +419,14 @@ impl<'source> Parser<'source> {
             Token::Some => MatchOperator::Some,
             Token::ExactlyOne => MatchOperator::ExactlyOne,
             Token::All => MatchOperator::All,
-            _ => return Err(ParseError::Todo(11)),
+            _ => {
+                return Err(ParseError::Expected {
+                    expected: "'match', 'exactly-one', 'some' or 'all'"
+                        .into(),
+                    got: token.to_string(),
+                    span,
+                })
+            }
         };
 
         Ok(op)
@@ -379,7 +443,12 @@ impl<'source> Parser<'source> {
         } else if self.peek_is(Token::Action) {
             Ok(FilterMapExpr::Action(self.action()?))
         } else {
-            Err(ParseError::Todo(5))
+            let (token, span) = self.next()?;
+            Err(ParseError::Expected {
+                expected: "'term' or 'action'".into(),
+                got: token.to_string(),
+                span,
+            })
         }
     }
 
@@ -517,10 +586,19 @@ impl<'source> Parser<'source> {
     fn boolean_expr(&mut self) -> ParseResult<BooleanExpr> {
         let left = self.logical_or_value_expr()?;
 
-        if let Some(op) = self.try_compare_operator()? {
+        if let Some((op, span)) = self.try_compare_operator()? {
             if op == CompareOp::In || op == CompareOp::NotIn {
                 let CompareArg::ValueExpr(left) = left else {
-                    return Err(ParseError::Todo(16));
+                    let op = if op == CompareOp::NotIn {
+                        "not in"
+                    } else {
+                        "in"
+                    };
+                    return Err(ParseError::Custom {
+                        description: format!("the {op} operator cannot take a logical expression as an argument"),
+                        label: "this operator only acts on lists".into(),
+                        span,
+                    });
                 };
                 let right = self.value_expr()?;
                 return Ok(BooleanExpr::ListCompareExpr(Box::new(
@@ -558,7 +636,15 @@ impl<'source> Parser<'source> {
             ValueExpr::RootMethodCallExpr(_)
             | ValueExpr::AnonymousRecordExpr(_)
             | ValueExpr::TypedRecordExpr(_)
-            | ValueExpr::ListExpr(_) => return Err(ParseError::Todo(6)),
+            | ValueExpr::ListExpr(_) => {
+                // TODO: the span information should be better here.
+                let (_token, span) = self.next()?;
+                return Err(ParseError::Custom {
+                    description: "not a valid boolean expression".into(),
+                    label: "the expression ending here is not a valid boolean expression".into(),
+                    span: span.start-1..span.end-1,
+                });
+            }
         })
     }
 
@@ -573,12 +659,17 @@ impl<'source> Parser<'source> {
     /// Optionally parse a compare operator
     ///
     /// This method returns [`Option`], because we are never sure that there is
-    /// going to be a comparison operator.
+    /// going to be a comparison operator. A span is included with the operator
+    /// to allow error messages to be attached to the parsed operator.
     ///
     /// ```ebnf
     /// CompareOp ::= '==' | '!=' | '<' | '<=' | '>' | '>=' | 'not'? 'in'
     /// ```
-    fn try_compare_operator(&mut self) -> ParseResult<Option<CompareOp>> {
+    ///
+    /// This function returns a span
+    fn try_compare_operator(
+        &mut self,
+    ) -> ParseResult<Option<(CompareOp, Span)>> {
         let Some(tok) = self.peek() else {
             return Ok(None);
         };
@@ -592,15 +683,15 @@ impl<'source> Parser<'source> {
             Token::AngleRightEq => CompareOp::Ge,
             Token::In => CompareOp::In,
             Token::Not => {
-                self.take(Token::Not)?;
-                self.take(Token::In)?;
-                return Ok(Some(CompareOp::NotIn));
+                let span1 = self.take(Token::Not)?;
+                let span2 = self.take(Token::In)?;
+                return Ok(Some((CompareOp::NotIn, span1.start..span2.end)));
             }
             _ => return Ok(None),
         };
 
-        self.next()?;
-        Ok(Some(op))
+        let (_, span) = self.next()?;
+        Ok(Some((op, span)))
     }
 
     fn grouped_logical_expr(&mut self) -> ParseResult<GroupedLogicalExpr> {
@@ -611,7 +702,7 @@ impl<'source> Parser<'source> {
             expr: Box::new(expr),
         })
     }
-    
+
     pub(super) fn action(&mut self) -> ParseResult<ActionSection> {
         self.take(Token::Action)?;
         let ident = self.identifier()?;
@@ -621,7 +712,7 @@ impl<'source> Parser<'source> {
         self.take(Token::CurlyLeft)?;
         while !self.next_is(Token::CurlyRight) {
             let value_expr = self.value_expr()?;
-            self.take(Token::SemiColon)?;
+            let span1 = self.take(Token::SemiColon)?;
             match value_expr {
                 ValueExpr::ComputeExpr(x) => expressions.push(x),
                 ValueExpr::RootMethodCallExpr(x) => {
@@ -630,7 +721,15 @@ impl<'source> Parser<'source> {
                         access_expr: vec![AccessExpr::MethodComputeExpr(x)],
                     })
                 }
-                _ => return Err(ParseError::Todo(7)),
+                _ => {
+                    // TODO: span information could be better
+                    let (_, span2) = self.next()?;
+                    return Err(ParseError::Custom {
+                        description: "an action can only be a compute epression or root method call".into(),
+                        label: "invalid action".into(),
+                        span: span1.start..span2.end, 
+                    });
+                }
             }
         }
 
@@ -641,7 +740,7 @@ impl<'source> Parser<'source> {
         })
     }
 
-        /// Parse an optional for clause for filter-map, define and apply
+    /// Parse an optional for clause for filter-map, define and apply
     ///
     /// ```ebnf
     /// For ::= ( 'for' TypeIdentField)?

@@ -24,10 +24,6 @@ pub enum ParseError {
     EndOfInput,
     FailedToParseEntireInput,
     InvalidToken(#[label("invalid token")] Span),
-    /// Dummy variant where more precise messages should be made
-    ///
-    /// The argument is just a unique identifier
-    Todo(usize),
     Expected {
         expected: String,
         got: String,
@@ -41,6 +37,12 @@ pub enum ParseError {
         span: Span,
         inner_error: String,
     },
+    Custom {
+        description: String,
+        label: String,
+        #[label("{label}")]
+        span: Span,
+    },
 }
 
 impl std::fmt::Display for ParseError {
@@ -53,9 +55,8 @@ impl std::fmt::Display for ParseError {
                 write!(f, "failed to parse entire input")
             }
             Self::InvalidToken(_) => write!(f, "invalid token"),
-            Self::Todo(n) => write!(f, "add a nice message here {n}"),
             Self::Expected { expected, got, .. } => {
-                write!(f, "expected '{expected}' but got '{got}'")
+                write!(f, "expected {expected} but got '{got}'")
             }
             Self::InvalidLiteral {
                 description,
@@ -64,6 +65,12 @@ impl std::fmt::Display for ParseError {
                 ..
             } => {
                 write!(f, "found an invalid {description} literal '{token}': {inner_error}")
+            }
+            Self::Custom {
+                description,
+                ..
+            } => {
+                write!(f, "{description}")
             }
         }
     }
@@ -114,10 +121,10 @@ impl<'source> Parser<'source> {
     }
 
     /// Move the lexer forward and assert that it matches the token
-    fn take(&mut self, token: Token) -> ParseResult<()> {
+    fn take(&mut self, token: Token) -> ParseResult<Span> {
         let (next, span) = self.next()?;
         if next == token {
-            Ok(())
+            Ok(span)
         } else {
             Err(ParseError::Expected {
                 expected: token.to_string(),
