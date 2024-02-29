@@ -4,6 +4,7 @@ use std::net::IpAddr;
 use std::net::SocketAddr;
 
 use chrono::Utc;
+use routecore::bgp::communities::Community;
 use routecore::bgp::communities::HumanReadableCommunity;
 use routecore::bgp::message::nlri::BasicNlri;
 use routecore::bgp::message::nlri::FlowSpecNlri;
@@ -84,29 +85,65 @@ impl BasicRoute {
         &self,
         field_index: &FieldIndex,
     ) -> Result<TypeValue, VmError> {
-        trace!("get_field_by_index {:?} for BasicRoute {:?}", field_index, self);
+        trace!(
+            "get_field_by_index {:?} for BasicRoute {:?}",
+            field_index,
+            self
+        );
         let mut index_iter = field_index.iter();
         let index = index_iter.next();
-        
+
         match index {
             // The NLRI
             Some(0) => match index_iter.next() {
                 Some(0) => Ok(TypeValue::from(self.0.nlri().prefix)),
-                Some(1) => self.0.nlri().path_id.map(TypeValue::from).ok_or_else(|| VmError::InvalidPathAttribute),
-                _ => Err(VmError::InvalidPathAttribute)
-            }
+                Some(1) => self
+                    .0
+                    .nlri()
+                    .path_id
+                    .map(TypeValue::from)
+                    .ok_or_else(|| VmError::InvalidPathAttribute),
+                _ => Err(VmError::InvalidPathAttribute),
+            },
             // The Path Attributes
+            
+            // BEWARE! Not all tokens used on BasicRoute are mapped one-to-one
+            // to the IANA assignment codes for path attributes.
+            // - `NextHop`` uses type code 3, which is the CONVENTIONAL next
+            //   hop in the IANA assignments, but we are using it for the next
+            //   hop, wherever it lives.
+            // - `Vec<Community>` (the list of ALL communities) uses type code
+            //   8, which in the IANA assignments is used for STANDARD
+            //   communities only.
             Some(1) => {
                 if let Some(index) = index_iter.next() {
-                    let attr = self.0.attributes().get_by_type_code(index);
-
-                    attr.map(|pa| TypeValue::from(pa.clone()))
-                        .ok_or(VmError::InvalidPathAttribute)
+                    let attr: Option<TypeValue> = match index {
+                        3 => {
+                            self.0.get_attr::<NextHop>().map(TypeValue::from)
+                        }
+                        8 => self.0.get_attr::<Vec<Community>>().map(|c| {
+                            TypeValue::List(List(
+                                c.into_iter()
+                                    .map(|c| {
+                                        ElementTypeValue::Primitive(
+                                            HumanReadableCommunity(c).into(),
+                                        )
+                                    })
+                                    .collect::<Vec<_>>(),
+                            ))
+                        }),
+                        _ => self
+                            .0
+                            .attributes()
+                            .get_by_type_code(index)
+                            .map(|pa| TypeValue::from(pa.clone())),
+                    };
+                    attr.ok_or(VmError::InvalidPathAttribute)
                 } else {
                     Err(VmError::InvalidPathAttribute)
                 }
             }
-            _ => Err(VmError::InvalidFieldAccess)
+            _ => Err(VmError::InvalidFieldAccess),
         }
     }
 
@@ -114,32 +151,42 @@ impl BasicRoute {
         &mut self,
         field_index: &FieldIndex,
     ) -> Result<TypeValue, VmError> {
-        trace!("get_mut_field_by_index ({:?}) for BasicRoute {:?}", field_index, self);
+        trace!(
+            "get_mut_field_by_index ({:?}) for BasicRoute {:?}",
+            field_index,
+            self
+        );
         let mut index_iter = field_index.iter();
         let index = index_iter.next();
-        
+
         match index {
             // The NLRI
             Some(0) => match index_iter.next() {
-                Some(0) => { 
+                Some(0) => {
                     trace!("index {:?}", index);
                     trace!("PREFIX! {:?}", self.0.nlri().prefix);
                     Ok(TypeValue::from(self.0.nlri().prefix))
-                },
-                Some(1) => self.0.nlri().path_id.map(TypeValue::from).ok_or_else(|| VmError::InvalidPathAttribute),
-                _ => Err(VmError::InvalidPathAttribute)
-            }
+                }
+                Some(1) => self
+                    .0
+                    .nlri()
+                    .path_id
+                    .map(TypeValue::from)
+                    .ok_or_else(|| VmError::InvalidPathAttribute),
+                _ => Err(VmError::InvalidPathAttribute),
+            },
             // The Path Attributes
             Some(1) => {
                 if let Some(index) = index_iter.next() {
-                    let attr = self.0.attributes_mut().get_mut_by_type_code(index);
+                    let attr =
+                        self.0.attributes_mut().get_mut_by_type_code(index);
                     attr.map(|pa| TypeValue::from(pa.clone()))
                         .ok_or(VmError::InvalidPathAttribute)
                 } else {
                     Err(VmError::InvalidPathAttribute)
                 }
             }
-            _ => Err(VmError::InvalidFieldAccess)
+            _ => Err(VmError::InvalidFieldAccess),
         }
     }
 
@@ -182,9 +229,7 @@ impl From<PathAttribute> for TypeValue {
             }
             PathAttribute::ConventionalNextHop(next_hop) => {
                 TypeValue::Builtin(BuiltinTypeValue::NextHop(
-                    NextHop::Unicast(std::net::IpAddr::V4(
-                        next_hop.0,
-                    )),
+                    NextHop::Unicast(std::net::IpAddr::V4(next_hop.0)),
                 ))
             }
             PathAttribute::MultiExitDisc(med) => TypeValue::Builtin(
@@ -196,9 +241,9 @@ impl From<PathAttribute> for TypeValue {
             PathAttribute::AtomicAggregate(aa) => {
                 TypeValue::Builtin(BuiltinTypeValue::AtomicAggregate(aa))
             }
-            PathAttribute::Aggregator(a) => TypeValue::Builtin(
-                BuiltinTypeValue::AggregatorInfo(a),
-            ),
+            PathAttribute::Aggregator(a) => {
+                TypeValue::Builtin(BuiltinTypeValue::AggregatorInfo(a))
+            }
             PathAttribute::StandardCommunities(comms) => {
                 TypeValue::List(List(comms.fmap(|c| {
                     ElementTypeValue::Primitive(
@@ -326,7 +371,6 @@ impl RouteContext {
         todo!()
     }
 
-
     pub fn get_props_for_field(
         field: &ast::Identifier,
     ) -> Result<(TypeDef, Token), CompileError> {
@@ -351,38 +395,46 @@ impl RouteContext {
         &self,
         field_index: &FieldIndex,
     ) -> Result<TypeValue, VmError> {
-        trace!("get_field_by_index {:?} for RouteContext {:?}", field_index, self);
-        
+        trace!(
+            "get_field_by_index {:?} for RouteContext {:?}",
+            field_index,
+            self
+        );
+
         match RouteContextToken::try_from(field_index.first()?) {
             Ok(RouteContextToken::Provenance) => {
                 trace!("provenance w/ field index {:?}", field_index);
                 // recurse into provenance.
-                self.provenance().get_field_by_index(field_index.skip_first())
-            },
-            Ok(RouteContextToken::Status) => { 
-                self.nlri_status().get_field_by_index(field_index.skip_first())
-            },
-            Ok(RouteContextToken::BgpMessage) => { 
+                self.provenance()
+                    .get_field_by_index(field_index.skip_first())
+            }
+            Ok(RouteContextToken::Status) => self
+                .nlri_status()
+                .get_field_by_index(field_index.skip_first()),
+            Ok(RouteContextToken::BgpMessage) => {
                 // recurse into Update Message.
                 if let Some(bgp_msg) = &self.bgp_msg {
                     let tv = LazyRecord::from_type_def(BytesRecord::<
-                        BgpUpdateMessage
+                        BgpUpdateMessage,
                     >::lazy_type_def(
                     ))?
-                    .get_field_by_index(&field_index.skip_first().into(), bgp_msg)?;
+                    .get_field_by_index(
+                        &field_index.skip_first().into(),
+                        bgp_msg,
+                    )?;
 
-                // There are no deeper nested records in a Update message
-                // (just attributes + prefix), so we can stop t this level.
-                if let ElementTypeValue::Primitive(tv) = tv {
-                    Ok(tv)
+                    // There are no deeper nested records in a Update message
+                    // (just attributes + prefix), so we can stop t this level.
+                    if let ElementTypeValue::Primitive(tv) = tv {
+                        Ok(tv)
+                    } else {
+                        Err(VmError::InvalidContext)
+                    }
                 } else {
                     Err(VmError::InvalidContext)
                 }
-                } else {
-                    Err(VmError::InvalidContext)
-                }
-            },
-            _ => Err(VmError::InvalidFieldAccess)
+            }
+            _ => Err(VmError::InvalidFieldAccess),
         }
     }
 }
@@ -433,7 +485,10 @@ impl BasicRoute {
             )),
             "origin" => Ok((
                 TypeDef::Origin,
-                Token::FieldAccess(vec![1, BasicRouteToken::OriginType.into()]),
+                Token::FieldAccess(vec![
+                    1,
+                    BasicRouteToken::OriginType.into(),
+                ]),
             )),
             "next-hop" => Ok((
                 TypeDef::NextHop,
@@ -443,27 +498,36 @@ impl BasicRoute {
                 TypeDef::MultiExitDisc,
                 Token::FieldAccess(vec![
                     1,
-                    BasicRouteToken::MultiExitDisc.into()
+                    BasicRouteToken::MultiExitDisc.into(),
                 ]),
             )),
             "local-pref" => Ok((
                 TypeDef::LocalPref,
-                Token::FieldAccess(vec![1, BasicRouteToken::LocalPref.into()]),
+                Token::FieldAccess(vec![
+                    1,
+                    BasicRouteToken::LocalPref.into(),
+                ]),
             )),
             "atomic-aggregate" => Ok((
                 TypeDef::Bool,
                 Token::FieldAccess(vec![
                     1,
-                    BasicRouteToken::AtomicAggregate.into()
+                    BasicRouteToken::AtomicAggregate.into(),
                 ]),
             )),
             "aggregator" => Ok((
                 TypeDef::AggregatorInfo,
-                Token::FieldAccess(vec![1, BasicRouteToken::Aggregator.into()]),
+                Token::FieldAccess(vec![
+                    1,
+                    BasicRouteToken::Aggregator.into(),
+                ]),
             )),
             "communities" => Ok((
                 TypeDef::List(Box::new(TypeDef::Community)),
-                Token::FieldAccess(vec![1, BasicRouteToken::Communities.into()]),
+                Token::FieldAccess(vec![
+                    1,
+                    BasicRouteToken::Communities.into(),
+                ]),
             )),
             _ => Err(format!(
                 "Unknown method '{}' for type Route",
@@ -546,9 +610,9 @@ impl RotoType for BasicRoute {
         type_def: &TypeDef,
     ) -> Result<TypeValue, CompileError> {
         match type_def {
-            TypeDef::Route => Ok(TypeValue::Builtin(
-                BuiltinTypeValue::Route(self),
-            )),
+            TypeDef::Route => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::Route(self)))
+            }
             _ => Err(format!(
                 "Cannot convert type Route to type {:?}",
                 type_def
@@ -595,6 +659,18 @@ pub enum BasicNlriToken {
     PathId = 1,
 }
 
+
+//------------ BasicRouteToken -----------------------------------------------
+
+// This token is mapped to the IANA assignment codes
+// (https://www.iana.org/assignments/bgp-parameters/bgp-parameters.xhtml)
+// With a few major exceptions:
+// - `NextHop`` uses type code 3, which is the CONVENTIONAL next hop in the
+//   IANA assignments, but we are using it for the next hop, wherever it
+//   lives.
+// - `Vec<Community>` (the list of ALL communities) uses type code 8, which in
+//   the IANA assignments is used for STANDARD communities only.
+
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq, Eq)]
 pub enum BasicRouteToken {
     OriginType = 1,
@@ -605,13 +681,6 @@ pub enum BasicRouteToken {
     AtomicAggregate = 6,
     Aggregator = 7,
     Communities = 8,
-}
-
-#[derive(Copy, Clone, Debug, Deserialize, PartialEq, Eq)]
-pub enum RouteContextToken {
-    BgpMessage = 0,
-    Provenance = 1,
-    Status = 2,
 }
 
 impl TryFrom<usize> for BasicRouteToken {
@@ -647,31 +716,11 @@ impl From<BasicRouteToken> for u8 {
     }
 }
 
-impl TryFrom<usize> for BasicNlriToken {
-    type Error = VmError;
-
-    fn try_from(value: usize) -> Result<Self, VmError> {
-        match value {
-            0 => Ok(BasicNlriToken::Prefix),
-            1 => Ok(BasicNlriToken::PathId),
-            _ => {
-                debug!("Unknown BasicNlriToken value: {}", value);
-                Err(VmError::InvalidMethodCall)
-            }
-        }
-    }
-}
-
-impl From<BasicNlriToken> for usize {
-    fn from(val: BasicNlriToken) -> Self {
-        val as usize
-    }
-}
-
-impl From<BasicNlriToken> for u8 {
-    fn from(val: BasicNlriToken) -> Self {
-        val as u8
-    }
+#[derive(Copy, Clone, Debug, Deserialize, PartialEq, Eq)]
+pub enum RouteContextToken {
+    BgpMessage = 0,
+    Provenance = 1,
+    Status = 2,
 }
 
 impl TryFrom<usize> for RouteContextToken {
@@ -698,6 +747,33 @@ impl From<RouteContextToken> for usize {
 
 impl From<RouteContextToken> for u8 {
     fn from(val: RouteContextToken) -> Self {
+        val as u8
+    }
+}
+
+impl TryFrom<usize> for BasicNlriToken {
+    type Error = VmError;
+
+    fn try_from(value: usize) -> Result<Self, VmError> {
+        match value {
+            0 => Ok(BasicNlriToken::Prefix),
+            1 => Ok(BasicNlriToken::PathId),
+            _ => {
+                debug!("Unknown BasicNlriToken value: {}", value);
+                Err(VmError::InvalidMethodCall)
+            }
+        }
+    }
+}
+
+impl From<BasicNlriToken> for usize {
+    fn from(val: BasicNlriToken) -> Self {
+        val as usize
+    }
+}
+
+impl From<BasicNlriToken> for u8 {
+    fn from(val: BasicNlriToken) -> Self {
         val as u8
     }
 }
@@ -753,8 +829,12 @@ impl RotoType for RouteWorkshop<FlowSpecNlri<bytes::Bytes>, bytes::Bytes> {
     }
 }
 
-impl From<RouteWorkshop<FlowSpecNlri<bytes::Bytes>, bytes::Bytes>> for TypeValue {
-    fn from(_value: RouteWorkshop<FlowSpecNlri<bytes::Bytes>, bytes::Bytes>) -> Self {
+impl From<RouteWorkshop<FlowSpecNlri<bytes::Bytes>, bytes::Bytes>>
+    for TypeValue
+{
+    fn from(
+        _value: RouteWorkshop<FlowSpecNlri<bytes::Bytes>, bytes::Bytes>,
+    ) -> Self {
         todo!()
     }
 }
