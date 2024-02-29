@@ -3,20 +3,21 @@ use roto::ast::AcceptReject;
 use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self, Filter};
-use roto::types::builtin::basic_route::{BasicRoute, BasicRouteToken, PeerId, PeerRibType, Provenance};
-use roto::types::builtin::{
-    BuiltinTypeValue, NlriStatus, RouteContext,
+use roto::types::builtin::basic_route::{
+    BasicRoute, BasicRouteToken, PeerId, PeerRibType, Provenance,
 };
+use roto::types::builtin::{BuiltinTypeValue, NlriStatus, RouteContext};
 use roto::types::collections::{BytesRecord, Record};
 use roto::types::lazyrecord_types::BgpUpdateMessage;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, FieldIndex, VmResult};
+use routecore::addr::Prefix;
 use routecore::asn::Asn;
 use routecore::bgp::message::nlri::{BasicNlri, Nlri};
-use routecore::bgp::message::SessionConfig;
-use routecore::bgp::types::NextHop;
-use routecore::addr::Prefix;
-use routecore::bgp::workshop::afisafi_nlri::Ipv6UnicastNlri;
+use routecore::bgp::message::update_builder::MpReachNlriBuilder;
+use routecore::bgp::message::{SessionConfig, UpdateMessage};
+use routecore::bgp::types::{AfiSafi, NextHop};
+use routecore::bgp::workshop::afisafi_nlri::{HasBasicNlri, Ipv6UnicastNlri};
 use routecore::bgp::workshop::route::RouteWorkshop;
 
 mod common;
@@ -50,8 +51,11 @@ fn test_data(
         0x00, 0x00, 0x00, 0x00,
     ]);
 
-    let update =
-        BytesRecord::<BgpUpdateMessage>::new(buf.clone(), SessionConfig::modern()).unwrap();
+    let update = BytesRecord::<BgpUpdateMessage>::new(
+        buf.clone(),
+        SessionConfig::modern(),
+    )
+    .unwrap();
 
     let first_prefix: Prefix = update
         .bytes_parser()
@@ -74,7 +78,10 @@ fn test_data(
         timestamp: chrono::Utc::now(),
         router_id: 0,
         connection_id: 0,
-        peer_id: PeerId { addr: peer_ip, asn: Asn::from(65534) },
+        peer_id: PeerId {
+            addr: peer_ip,
+            asn: Asn::from(65534),
+        },
         peer_bgp_id: [0; 4].into(),
         peer_distuingisher: [0; 8],
         peer_rib_type: PeerRibType::OutPost,
@@ -82,20 +89,47 @@ fn test_data(
 
     let nlri: Ipv6UnicastNlri = update
         .bytes_parser()
-        .announcements_vec().unwrap()
-        .first().unwrap().clone().try_into().unwrap();
+        .announcements_vec()
+        .unwrap()
+        .first()
+        .unwrap()
+        .clone()
+        .try_into()
+        .unwrap();
 
-    let context= &RouteContext::new(
+    let context = &RouteContext::new(
         Some(update.clone()),
         NlriStatus::InConvergence,
-        provenance
+        provenance,
     );
 
-    let payload = BasicRoute::new(
-        RouteWorkshop::from_update_pdu(nlri, &update.into_inner())?
-    );
+    let update: UpdateMessage<bytes::Bytes> = update.into_inner();
+    let mut rws = RouteWorkshop::from_update_pdu(nlri, &update)?;
 
-    // let nlri: BasicNlri = payload.nlri();
+    // from_update_pdu does NOT set MP_REACH_NLRI attribute, so we have to set
+    // the NLRI and the NextHop manually.
+
+    // Get the NLRI for this route, we're only looking at the first
+    // announcement, so get that one.
+    let announces = update.announcements_vec().unwrap();
+
+    // Create a MpReachBuilder with the intended NLRI
+    let mp_reach =
+        MpReachNlriBuilder::new_for_nlri(announces.first().unwrap());
+
+    // Store it in the RouteWorkshop
+    rws.set_attr(mp_reach).unwrap();
+
+    // Get the NextHop from this NLRI and store it in the RouteWorkshop
+    rws.set_attr(
+        update
+            .find_next_hop(announces.first().unwrap().afi_safi())
+            .unwrap(),
+    )
+    .unwrap();
+
+    let payload = BasicRoute::new(rws);
+
     trace!("prefix in route {:?}", payload.prefix());
     trace!("peer_ip {:?}", context.provenance().peer_ip());
 
@@ -116,7 +150,6 @@ fn test_data(
         .with_context(context)
         .build()?;
 
-    
     let res = vm.exec(payload, None::<Record>, None, mem).unwrap();
 
     println!("\nRESULT");
@@ -180,7 +213,7 @@ fn test_routes_1() {
         peer_ip,
     ) = test_run.unwrap();
 
-    trace!("OUTPUT RECORD");    
+    trace!("OUTPUT RECORD");
     let output_record = output_stream_queue[0].get_record();
     trace!("{:#?}", output_record);
     assert_eq!(output_stream_queue.len(), 1);
@@ -206,6 +239,7 @@ fn test_routes_2() {
         filter rib-in-pre-filter {
             define {
                 rx route: Route;
+                context ctx: RouteContext;
             }
         
             term always {
@@ -219,7 +253,7 @@ fn test_routes_2() {
                 mqtt.send(
                     Message {
                         prefix: route.prefix,
-                        peer_ip: route.provenance.peer-id.addr
+                        peer_ip: ctx.provenance.peer-id.addr
                     }
                 );
             }
@@ -275,10 +309,11 @@ fn test_routes_3() {
         filter rib-in-pre-filter {
             define {
                 rx route: Route;
+                context ctx: RouteContext;
 
                 msg = Message {
                     prefix: route.prefix,
-                    peer_ip: route.provenance.peer-id.addr
+                    peer_ip: ctx.provenance.peer-id.addr
                 };
             }
         
@@ -344,9 +379,10 @@ fn test_routes_4() {
         filter rib-in-pre-filter {
             define {
                 rx route: Route;
+                context ctx: RouteContext;
 
                 pfx = route.prefix;
-                peer = route.provenance.peer-id.addr;
+                peer = ctx.provenance.peer-id.addr;
             }
         
             term always {
@@ -414,12 +450,13 @@ fn test_routes_5() {
         filter rib-in-pre-filter {
             define {
                 rx route: Route;
+                context ctx: RouteContext;
 
                 msg = Message {
                     text: "Some text",
                     data: {
                         pfx: route.prefix,
-                        peer_ip: route.provenance.peer-id.addr
+                        peer_ip: ctx.provenance.peer-id.addr
                     }
                 };
             }
@@ -493,12 +530,13 @@ fn test_routes_6() {
         filter rib-in-pre-filter {
             define {
                 rx route: Route;
+                context ctx: RouteContext;
 
                 msg = Message {
                     text: "Some text",
                     data: {
                         pfx: route.prefix,
-                        peer_ip: route.provenance.peer-id.addr
+                        peer_ip: ctx.provenance.peer-id.addr
                     }
                 };
             }
@@ -567,22 +605,23 @@ fn test_routes_6() {
     // assert_eq!(route.afi_safi(), AfiSafi::Ipv6Unicast);
 
     let next_hop = route
-        .get_field_by_index(&FieldIndex::from(vec![BasicRouteToken::NextHop.into()]))
+        .get_field_by_index(&FieldIndex::from(vec![
+            1,
+            BasicRouteToken::NextHop.into(),
+        ]))
         .unwrap();
     trace!("next hop in route {:?}", next_hop);
 
     assert_eq!(
         next_hop,
-        TypeValue::Builtin(BuiltinTypeValue::NextHop(
-            NextHop::Ipv6LL(
-                std::net::Ipv6Addr::new(
-                    0xfc00, 0x10, 0x01, 0x10, 0x0, 0x0, 0x0, 0x10
-                ),
-                std::net::Ipv6Addr::new(
-                    0xfe80, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10
-                )
+        TypeValue::Builtin(BuiltinTypeValue::NextHop(NextHop::Ipv6LL(
+            std::net::Ipv6Addr::new(
+                0xfc00, 0x10, 0x01, 0x10, 0x0, 0x0, 0x0, 0x10
+            ),
+            std::net::Ipv6Addr::new(
+                0xfe80, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10
             )
-        ))
+        )))
     );
     trace!("{:#?}", output_stream_queue);
     assert_eq!(accept_reject, AcceptReject::Accept);

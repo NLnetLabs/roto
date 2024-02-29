@@ -34,7 +34,7 @@ fn test_data(
 
     // Create a BGP packet
     let prefix_str = "192.0.2.1";
-    let per_peer_header = mk_per_peer_header(prefix_str, 1);
+    let per_peer_header = mk_per_peer_header(prefix_str, 65535);
     let withdrawals = Prefixes::default();
     let announcements = Announcements::from_str(announce_str).unwrap();
 
@@ -54,7 +54,7 @@ fn test_data(
     };
 
     let nlri = Ipv4UnicastNlri(BasicNlri {
-        prefix: prefix_str.parse().unwrap(),
+        prefix: "192.0.2.0/24".parse().unwrap(),
         path_id: None
     });
 

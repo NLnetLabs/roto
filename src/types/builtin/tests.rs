@@ -146,12 +146,12 @@ mod route {
         assert!(asp.is_some());
         let mut asp = asp.unwrap();
         asp.prepend(Asn::from(211321_u32));
-        let _ = path_attrs.set_attr(asp);
+        path_attrs.set_attr(asp).unwrap();
 
-        let _ = path_attrs.set_attr(Origin(OriginType::Incomplete));
-        let _ = path_attrs.set_attr(LocalPref(100));
+        path_attrs.set_attr(Origin(OriginType::Incomplete)).unwrap();
+        path_attrs.set_attr(LocalPref(100)).unwrap();
         let res: Option<Origin> = path_attrs.get_attr::<Origin>();
-        assert_eq!(res, Some(Origin(OriginType::Igp)));
+        assert_eq!(res, Some(Origin(OriginType::Incomplete)));
 
         let as_path = path_attrs.get_attr::<AsPath>().unwrap();
         println!("change set {:?}", path_attrs);
@@ -159,10 +159,10 @@ mod route {
 
         let mut communities = path_attrs.get_attr::<Vec<routecore::bgp::communities::Community>>().unwrap();
         communities.push(StandardCommunity::from_u32(666).into());
-        communities.push(ExtendedCommunity::from_str("rt: 192.0.2.0:65536").unwrap().into());
-        let _ = path_attrs.set_attr(communities);
+        communities.push(ExtendedCommunity::from_str("rt:65536:123").unwrap().into());
+        path_attrs.set_attr(communities).unwrap();
 
-        let mut std_communities = path_attrs.get_attr::<Vec<Community>>().unwrap();
+        // let mut std_communities = path_attrs.get_attr::<Vec<Community>>().unwrap();
 
         let _ = path_attrs.set_attr(routecore::bgp::types::OriginatorId(Ipv4Addr::from([127,0,0,1])));
         // let mut msg_1 = roto_msgs.remove(1);
@@ -175,15 +175,15 @@ mod route {
 
         println!(
             "ATTR_SET_AS_PATH {:?}",
-            path_attrs.get_attr::<MultiExitDisc>().unwrap()
+            path_attrs.get_attr::<AsPath>().unwrap()
         );
         assert_eq!(
             path_attrs.get_attr::<AsPath>().unwrap().origin().unwrap(),
-            &routecore::bgp::aspath::Hop::from(Asn::from(211321_u32))
+            &routecore::bgp::aspath::Hop::from(Asn::from(200))
         );
         assert_eq!(
-            path_attrs.get_attr::<AsPath>().unwrap().get_hop(1).unwrap(),
-            &routecore::bgp::aspath::Hop::from(Asn::from(200_u32))
+            path_attrs.get_attr::<AsPath>().unwrap().get_hop(0).unwrap(),
+            &routecore::bgp::aspath::Hop::from(Asn::from(211321_u32))
         );
         Ok(())
     }
