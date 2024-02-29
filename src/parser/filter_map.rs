@@ -23,8 +23,8 @@ impl<'source> Parser<'source> {
         };
 
         let ident = self.identifier()?;
-        let for_ident = self.for_statement()?;
-        let with_kv = self.with_statement()?;
+        let for_ident = self.for_clause()?;
+        let with_kv = self.with_clause()?;
         let body = self.filter_map_body()?;
 
         Ok(FilterMap {
@@ -59,8 +59,8 @@ impl<'source> Parser<'source> {
                     // Cannot have multiple define sections
                     return Err(ParseError::Todo(2));
                 }
-                let for_kv = self.for_statement()?;
-                let with_kv = self.with_statement()?;
+                let for_kv = self.for_clause()?;
+                let with_kv = self.with_clause()?;
                 let body = self.define_body()?;
                 define = Some(Define {
                     for_kv,
@@ -72,8 +72,8 @@ impl<'source> Parser<'source> {
                     // Cannot have multiple apply sections
                     return Err(ParseError::Todo(3));
                 }
-                let for_kv = self.for_statement()?;
-                let with_kv = self.with_statement()?;
+                let for_kv = self.for_clause()?;
+                let with_kv = self.with_clause()?;
                 let body = self.apply_body()?;
                 apply = Some(ApplySection {
                     for_kv,
@@ -386,8 +386,8 @@ impl<'source> Parser<'source> {
     fn term(&mut self) -> ParseResult<TermSection> {
         self.accept_required(Token::Term)?;
         let ident = self.identifier()?;
-        let for_kv = self.for_statement()?;
-        let with_kv = self.with_statement()?;
+        let for_kv = self.for_clause()?;
+        let with_kv = self.with_clause()?;
 
         let mut scopes = Vec::new();
         self.accept_required(Token::CurlyLeft)?;
@@ -616,7 +616,7 @@ impl<'source> Parser<'source> {
     pub(super) fn action(&mut self) -> ParseResult<ActionSection> {
         self.accept_required(Token::Action)?;
         let ident = self.identifier()?;
-        let with_kv = self.with_statement()?;
+        let with_kv = self.with_clause()?;
 
         let mut expressions = Vec::new();
         self.accept_required(Token::CurlyLeft)?;
@@ -647,7 +647,7 @@ impl<'source> Parser<'source> {
     /// ```ebnf
     /// For ::= ( 'for' TypeIdentField)?
     /// ```
-    fn for_statement(&mut self) -> ParseResult<Option<TypeIdentField>> {
+    fn for_clause(&mut self) -> ParseResult<Option<TypeIdentField>> {
         if self.accept_optional(Token::For)?.is_some() {
             Ok(Some(self.type_ident_field()?))
         } else {
@@ -660,7 +660,7 @@ impl<'source> Parser<'source> {
     /// ```ebnf
     /// With ::= ( 'with' TypeIdentField (',' TypeIdentField)*)?
     /// ```
-    fn with_statement(&mut self) -> ParseResult<Vec<TypeIdentField>> {
+    fn with_clause(&mut self) -> ParseResult<Vec<TypeIdentField>> {
         let mut key_values = Vec::new();
 
         if self.accept_optional(Token::With)?.is_none() {
