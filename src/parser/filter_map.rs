@@ -22,7 +22,7 @@ impl<'source> Parser<'source> {
     ///
     /// ```ebnf
     /// FilterMap ::= ( 'filter-map' | 'filter' ) Identifier
-    ///               For With FilterMapBody
+    ///               For? With? FilterMapBody
     /// ```
     pub(super) fn filter_map(&mut self) -> ParseResult<FilterMap> {
         let (token, span) = self.next()?;
@@ -39,8 +39,8 @@ impl<'source> Parser<'source> {
         };
 
         let ident = self.identifier()?;
-        let for_ident = self.for_clause()?;
-        let with_kv = self.with_clause()?;
+        let for_ident = self.try_for_clause()?;
+        let with_kv = self.try_with_clause()?;
         let body = self.filter_map_body(span)?;
 
         Ok(FilterMap {
@@ -55,9 +55,9 @@ impl<'source> Parser<'source> {
     /// Parse the body of a filter-map or filter
     ///
     /// ```ebnf
-    /// FilterMapBody ::= '{' Define? FilterMapExpr+ Apply? '}'
-    /// Define        ::= 'define' For With DefineBody
-    /// Apply         ::= 'apply' For With ApplyBody
+    /// FilterMapBody ::= '{' Define FilterMapExpr+ Apply? '}'
+    /// Define        ::= 'define' For? With? DefineBody
+    /// Apply         ::= 'apply' For? With? ApplyBody
     /// ```
     ///
     /// Not shown in the EBNF above, but the location of the define and apply
@@ -80,8 +80,8 @@ impl<'source> Parser<'source> {
                         span,
                     });
                 }
-                let for_kv = self.for_clause()?;
-                let with_kv = self.with_clause()?;
+                let for_kv = self.try_for_clause()?;
+                let with_kv = self.try_with_clause()?;
                 let body = self.define_body()?;
                 define = Some(Define {
                     for_kv,
@@ -98,8 +98,8 @@ impl<'source> Parser<'source> {
                         span,
                     });
                 }
-                let for_kv = self.for_clause()?;
-                let with_kv = self.with_clause()?;
+                let for_kv = self.try_for_clause()?;
+                let with_kv = self.try_with_clause()?;
                 let body = self.apply_body()?;
                 apply = Some(ApplySection {
                     for_kv,
@@ -134,9 +134,9 @@ impl<'source> Parser<'source> {
     /// ```ebnf
     /// DefineBody ::= '{' RxTxType Use? Assignment* '}'
     ///
-    /// RxTxType   ::= ( 'rx_tx' TypeIdentField ';'
-    ///                | 'rx' TypeIdentField ';' 'tx' TypeIdentField ';'
-    ///                | 'rx' TypeIdentField )
+    /// RxTxType   ::= 'rx_tx' TypeIdentField ';'
+    ///              | 'rx' TypeIdentField ';' 'tx' TypeIdentField ';'
+    ///              | 'rx' TypeIdentField ';'
     ///
     /// Use        ::= 'use' Identifier Identifier
     ///
@@ -222,72 +222,41 @@ impl<'source> Parser<'source> {
     /// Parse a scope of the body of apply
     ///
     /// ```ebnf
-    /// ApplyScope ::= 'filter' 'match' ValueExpr
-    ///                'not'? 'matching'
-    ///                Actions ';'
-    ///
-    /// Actions    ::= '{' (ValueExpr ';')* ( AcceptReject ';' )? '}'
+    /// ApplyScope ::= ApplyFilter | ApplyMatch
     /// ```
     fn apply_scope(&mut self) -> ParseResult<ApplyScope> {
-        if self.peek_is(Token::Match) {
-            return self.apply_match();
-        }
-
-        self.take(Token::Filter)?;
-
-        // This is not exactly self.match_operator because match ... with is
-        // not allowed.
-        let operator = if self.next_is(Token::Match) {
-            MatchOperator::Match
-        } else if self.next_is(Token::ExactlyOne) {
-            MatchOperator::ExactlyOne
-        } else if self.next_is(Token::Some) {
-            MatchOperator::Some
-        } else if self.next_is(Token::All) {
-            MatchOperator::All
+        let match_action = if self.peek_is(Token::Match) {
+            MatchActionExpr::PatternMatchAction(self.apply_match()?)
+        } else if self.peek_is(Token::Filter) {
+            MatchActionExpr::FilterMatchAction(self.apply_filter()?)
         } else {
             let (token, span) = self.next()?;
             return Err(ParseError::Expected {
-                expected: "'match', 'exactly-one', 'some' or 'all'".into(),
+                expected: "'match' or 'filter'".to_string(),
                 got: token.to_string(),
                 span,
             });
         };
 
-        let filter_ident = self.value_expr()?;
-        let negate = self.next_is(Token::Not);
-        self.take(Token::Matching)?;
-        self.take(Token::CurlyLeft)?;
-
-        let mut actions = Vec::new();
-        while !self.next_is(Token::CurlyRight) {
-            if let Some(accept_reject) = self.try_accept_reject()? {
-                self.take(Token::CurlyRight)?;
-                actions.push((None, Some(accept_reject)));
-                break;
-            }
-
-            let val = self.value_expr()?;
-            self.take(Token::SemiColon)?;
-            actions.push((Some(val), None));
-        }
-
-        self.take(Token::SemiColon)?;
-
         Ok(ApplyScope {
             scope: None,
-            match_action: MatchActionExpr::FilterMatchAction(
-                FilterMatchActionExpr {
-                    operator,
-                    negate,
-                    actions,
-                    filter_ident,
-                },
-            ),
+            match_action,
         })
     }
 
-    fn apply_match(&mut self) -> ParseResult<ApplyScope> {
+    /// Parse a match block in an apply section
+    ///
+    /// This differs from the other match construct because it can have
+    /// guards and the expressions are only action call expressions.
+    ///
+    /// ```ebnf
+    /// ApplyMatch        ::= MatchOperator '{' ApplyMatchArm* '}'
+    /// ApplyMatchArm     ::= Identifier ( '(' Identifier ')' )? Guard? '->'
+    /// Guard             ::= '|' Identifier '(' (ValueExpr (',' ValueExpr)* ',')? ')'
+    /// ApplyMatchActions ::= ActionCallExpr ','
+    ///                     | '{' (ActionCallExpr ';')* (AcceptReject ';' )? '}' ','?
+    /// ```
+    fn apply_match(&mut self) -> ParseResult<PatternMatchActionExpr> {
         let operator = self.match_operator()?;
         let mut match_arms = Vec::new();
         self.take(Token::CurlyLeft)?;
@@ -340,17 +309,75 @@ impl<'source> Parser<'source> {
                 actions,
             });
         }
-        Ok(ApplyScope {
-            scope: None,
-            match_action: MatchActionExpr::PatternMatchAction(
-                PatternMatchActionExpr {
-                    operator,
-                    match_arms,
-                },
-            ),
+        Ok(PatternMatchActionExpr {
+            operator,
+            match_arms,
         })
     }
 
+    /// Parse a filter block in an apply section
+    ///
+    /// ```ebnf
+    /// ApplyFilter        ::= 'filter' 'match' ValueExpr
+    ///                        'not'? 'matching'
+    ///                        ApplyFilterActions ';'
+    /// ApplyFilterActions ::= '{' (ValueExpr ';')* ( AcceptReject ';' )? '}'
+    /// ```
+    fn apply_filter(&mut self) -> ParseResult<FilterMatchActionExpr> {
+        self.take(Token::Filter)?;
+
+        // This is not exactly self.match_operator because match ... with is
+        // not allowed.
+        let operator = if self.next_is(Token::Match) {
+            MatchOperator::Match
+        } else if self.next_is(Token::ExactlyOne) {
+            MatchOperator::ExactlyOne
+        } else if self.next_is(Token::Some) {
+            MatchOperator::Some
+        } else if self.next_is(Token::All) {
+            MatchOperator::All
+        } else {
+            let (token, span) = self.next()?;
+            return Err(ParseError::Expected {
+                expected: "'match', 'exactly-one', 'some' or 'all'".into(),
+                got: token.to_string(),
+                span,
+            });
+        };
+
+        let filter_ident = self.value_expr()?;
+        let negate = self.next_is(Token::Not);
+        self.take(Token::Matching)?;
+        self.take(Token::CurlyLeft)?;
+
+        let mut actions = Vec::new();
+        while !self.next_is(Token::CurlyRight) {
+            if let Some(accept_reject) = self.try_accept_reject()? {
+                self.take(Token::CurlyRight)?;
+                actions.push((None, Some(accept_reject)));
+                break;
+            }
+
+            let val = self.value_expr()?;
+            self.take(Token::SemiColon)?;
+            actions.push((Some(val), None));
+        }
+
+        self.take(Token::SemiColon)?;
+
+        Ok(FilterMatchActionExpr {
+            operator,
+            negate,
+            actions,
+            filter_ident,
+        })
+    }
+
+    /// Parse an action call expr, resembling a method call
+    ///
+    /// ```ebnf
+    /// ActionCallExpr ::= Identifier '(' (ValueExpr (',' ValueExpr)* ',')? ')'
+    /// ```
     fn action_call_expr(&mut self) -> ParseResult<ActionCallExpr> {
         let action_id = self.identifier()?;
         let args = if self.peek_is(Token::RoundLeft) {
@@ -455,8 +482,8 @@ impl<'source> Parser<'source> {
     fn term(&mut self) -> ParseResult<TermSection> {
         self.take(Token::Term)?;
         let ident = self.identifier()?;
-        let for_kv = self.for_clause()?;
-        let with_kv = self.with_clause()?;
+        let for_kv = self.try_for_clause()?;
+        let with_kv = self.try_with_clause()?;
 
         let mut scopes = Vec::new();
         self.take(Token::CurlyLeft)?;
@@ -706,7 +733,7 @@ impl<'source> Parser<'source> {
     pub(super) fn action(&mut self) -> ParseResult<ActionSection> {
         self.take(Token::Action)?;
         let ident = self.identifier()?;
-        let with_kv = self.with_clause()?;
+        let with_kv = self.try_with_clause()?;
 
         let mut expressions = Vec::new();
         self.take(Token::CurlyLeft)?;
@@ -727,7 +754,7 @@ impl<'source> Parser<'source> {
                     return Err(ParseError::Custom {
                         description: "an action can only be a compute epression or root method call".into(),
                         label: "invalid action".into(),
-                        span: span1.start..span2.end, 
+                        span: span1.start..span2.end,
                     });
                 }
             }
@@ -745,7 +772,7 @@ impl<'source> Parser<'source> {
     /// ```ebnf
     /// For ::= ( 'for' TypeIdentField)?
     /// ```
-    fn for_clause(&mut self) -> ParseResult<Option<TypeIdentField>> {
+    fn try_for_clause(&mut self) -> ParseResult<Option<TypeIdentField>> {
         if self.next_is(Token::For) {
             Ok(Some(self.type_ident_field()?))
         } else {
@@ -758,7 +785,7 @@ impl<'source> Parser<'source> {
     /// ```ebnf
     /// With ::= ( 'with' TypeIdentField (',' TypeIdentField)*)?
     /// ```
-    fn with_clause(&mut self) -> ParseResult<Vec<TypeIdentField>> {
+    fn try_with_clause(&mut self) -> ParseResult<Vec<TypeIdentField>> {
         let mut key_values = Vec::new();
 
         if !self.next_is(Token::With) {
