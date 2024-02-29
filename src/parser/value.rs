@@ -71,7 +71,7 @@ impl<'source> Parser<'source> {
         // If we parsed a prefix, it may be followed by a prefix match
         // If not, it can be an access expression
         if let LiteralExpr::PrefixLiteral(prefix) = &literal {
-            if let Some(ty) = self.prefix_match_type()? {
+            if let Some(ty) = self.try_prefix_match_type()? {
                 return Ok(ValueExpr::PrefixMatchExpr(PrefixMatchExpr {
                     prefix: prefix.clone(),
                     ty,
@@ -94,7 +94,7 @@ impl<'source> Parser<'source> {
     fn access_expr(&mut self) -> ParseResult<Vec<AccessExpr>> {
         let mut access_expr = Vec::new();
 
-        while self.accept_optional(Token::Period)?.is_some() {
+        while self.next_is(Token::Period) {
             let ident = self.identifier()?;
             if self.peek_is(Token::RoundLeft) {
                 let args = self.arg_expr_list()?;
@@ -255,7 +255,7 @@ impl<'source> Parser<'source> {
                 dbg!(parser.peek());
                 let key = parser.identifier()?;
                 dbg!(parser.peek());
-                parser.accept_required(Token::Colon)?;
+                parser.take(Token::Colon)?;
                 dbg!("here?");
                 let value = parser.value_expr()?;
                 Ok((key, value))
@@ -288,18 +288,18 @@ impl<'source> Parser<'source> {
     ///                   | 'upto' PrefixLength
     ///                   | 'netmask' IpAddress
     /// ```
-    fn prefix_match_type(&mut self) -> ParseResult<Option<PrefixMatchType>> {
-        let match_type = if self.accept_optional(Token::Exact)?.is_some() {
+    fn try_prefix_match_type(&mut self) -> ParseResult<Option<PrefixMatchType>> {
+        let match_type = if self.next_is(Token::Exact) {
             PrefixMatchType::Exact
-        } else if self.accept_optional(Token::Longer)?.is_some() {
+        } else if self.next_is(Token::Longer) {
             PrefixMatchType::Longer
-        } else if self.accept_optional(Token::OrLonger)?.is_some() {
+        } else if self.next_is(Token::OrLonger) {
             PrefixMatchType::OrLonger
-        } else if self.accept_optional(Token::PrefixLengthRange)?.is_some() {
+        } else if self.next_is(Token::PrefixLengthRange) {
             PrefixMatchType::PrefixLengthRange(self.prefix_length_range()?)
-        } else if self.accept_optional(Token::UpTo)?.is_some() {
+        } else if self.next_is(Token::UpTo) {
             PrefixMatchType::UpTo(self.prefix_length()?)
-        } else if self.accept_optional(Token::NetMask)?.is_some() {
+        } else if self.next_is(Token::NetMask) {
             PrefixMatchType::NetMask(self.ip_address()?)
         } else {
             return Ok(None);
@@ -315,7 +315,7 @@ impl<'source> Parser<'source> {
     /// ```
     fn prefix_length_range(&mut self) -> ParseResult<PrefixLengthRange> {
         let start = self.prefix_length()?;
-        self.accept_required(Token::Hyphen)?;
+        self.take(Token::Hyphen)?;
         let end = self.prefix_length()?;
         Ok(PrefixLengthRange { start, end })
     }

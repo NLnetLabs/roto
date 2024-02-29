@@ -16,9 +16,9 @@ impl<'source> Parser<'source> {
     ///         RibBody
     /// ```
     pub(super) fn rib(&mut self) -> ParseResult<Rib> {
-        self.accept_required(Token::Rib)?;
+        self.take(Token::Rib)?;
         let ident = self.identifier()?;
-        self.accept_required(Token::Contains)?;
+        self.take(Token::Contains)?;
         let contain_ty = self.type_identifier()?;
         let body = self.rib_body()?;
 
@@ -37,9 +37,9 @@ impl<'source> Parser<'source> {
     ///           RibBody
     /// ```
     pub(super) fn table(&mut self) -> ParseResult<Table> {
-        self.accept_required(Token::Table)?;
+        self.take(Token::Table)?;
         let ident = self.identifier()?;
-        self.accept_required(Token::Contains)?;
+        self.take(Token::Contains)?;
         let contain_ty = self.type_identifier()?;
         let body = self.rib_body()?;
 
@@ -58,9 +58,9 @@ impl<'source> Parser<'source> {
     ///                  RibBody
     /// ```
     pub(super) fn output_stream(&mut self) -> ParseResult<OutputStream> {
-        self.accept_required(Token::OutputStream)?;
+        self.take(Token::OutputStream)?;
         let ident = self.identifier()?;
-        self.accept_required(Token::Contains)?;
+        self.take(Token::Contains)?;
         let contain_ty = self.type_identifier()?;
         let body = self.rib_body()?;
 
@@ -74,7 +74,7 @@ impl<'source> Parser<'source> {
     pub(super) fn record_type_assignment(
         &mut self,
     ) -> ParseResult<RecordTypeAssignment> {
-        self.accept_required(Token::Type)?;
+        self.take(Token::Type)?;
         let ident = self.type_identifier()?;
         let body = self.rib_body()?;
         let record_type = RecordTypeIdentifier {
@@ -111,7 +111,7 @@ impl<'source> Parser<'source> {
     /// ```
     fn rib_field(&mut self) -> ParseResult<RibField> {
         let key = self.identifier()?;
-        self.accept_required(Token::Colon)?;
+        self.take(Token::Colon)?;
 
         let field = if self.peek_is(Token::CurlyLeft) {
             // TODO: This recursion seems to be the right thing to do, maybe
@@ -121,9 +121,9 @@ impl<'source> Parser<'source> {
                 key,
                 RecordTypeIdentifier { key_values },
             )))
-        } else if self.accept_optional(Token::SquareLeft)?.is_some() {
+        } else if self.next_is(Token::SquareLeft) {
             let inner_type = self.type_identifier()?;
-            self.accept_required(Token::SquareRight)?;
+            self.take(Token::SquareRight)?;
             RibField::ListField(Box::new((
                 key,
                 ListTypeIdentifier { inner_type },

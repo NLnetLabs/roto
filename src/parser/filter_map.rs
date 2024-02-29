@@ -51,10 +51,10 @@ impl<'source> Parser<'source> {
         let mut expressions: Vec<FilterMapExpr> = Vec::new();
         let mut apply = None;
 
-        self.accept_required(Token::CurlyLeft)?;
+        self.take(Token::CurlyLeft)?;
 
-        while self.accept_optional(Token::CurlyRight)?.is_none() {
-            if self.accept_optional(Token::Define)?.is_some() {
+        while !self.next_is(Token::CurlyRight) {
+            if self.next_is(Token::Define) {
                 if define.is_some() {
                     // Cannot have multiple define sections
                     return Err(ParseError::Todo(2));
@@ -67,7 +67,7 @@ impl<'source> Parser<'source> {
                     with_kv,
                     body,
                 });
-            } else if self.accept_optional(Token::Apply)?.is_some() {
+            } else if self.next_is(Token::Apply) {
                 if apply.is_some() {
                     // Cannot have multiple apply sections
                     return Err(ParseError::Todo(3));
@@ -106,20 +106,20 @@ impl<'source> Parser<'source> {
     /// Assignment ::= Identifier '=' ValueExpr ';'
     /// ```
     fn define_body(&mut self) -> ParseResult<DefineBody> {
-        self.accept_required(Token::CurlyLeft)?;
+        self.take(Token::CurlyLeft)?;
 
         let rx_tx_type = match self.next()?.0 {
             Token::RxTx => {
                 let field = self.type_ident_field()?;
-                self.accept_required(Token::SemiColon)?;
+                self.take(Token::SemiColon)?;
                 RxTxType::PassThrough(field)
             }
             Token::Rx => {
                 let rx_field = self.type_ident_field()?;
-                self.accept_required(Token::SemiColon)?;
-                if self.accept_optional(Token::Tx)?.is_some() {
+                self.take(Token::SemiColon)?;
+                if self.next_is(Token::Tx) {
                     let tx_field = self.type_ident_field()?;
-                    self.accept_required(Token::SemiColon)?;
+                    self.take(Token::SemiColon)?;
                     RxTxType::Split(rx_field, tx_field)
                 } else {
                     RxTxType::RxOnly(rx_field)
@@ -129,17 +129,17 @@ impl<'source> Parser<'source> {
         };
 
         let mut use_ext_data = Vec::new();
-        while self.accept_optional(Token::Use)?.is_some() {
+        while self.next_is(Token::Use) {
             use_ext_data.push((self.identifier()?, self.identifier()?));
-            self.accept_required(Token::SemiColon)?;
+            self.take(Token::SemiColon)?;
         }
 
         let mut assignments = Vec::new();
-        while self.accept_optional(Token::CurlyRight)?.is_none() {
+        while !self.next_is(Token::CurlyRight) {
             let id = self.identifier()?;
-            self.accept_required(Token::Eq)?;
+            self.take(Token::Eq)?;
             let value = self.value_expr()?;
-            self.accept_required(Token::SemiColon)?;
+            self.take(Token::SemiColon)?;
             assignments.push((id, value));
         }
 
@@ -156,7 +156,7 @@ impl<'source> Parser<'source> {
     /// ApplyBody ::= ApplyScope* (AcceptReject ';')?
     /// ```
     fn apply_body(&mut self) -> ParseResult<ApplyBody> {
-        self.accept_required(Token::CurlyLeft)?;
+        self.take(Token::CurlyLeft)?;
         let mut scopes = Vec::new();
 
         while !(self.peek_is(Token::Return)
@@ -167,8 +167,8 @@ impl<'source> Parser<'source> {
             scopes.push(self.apply_scope()?);
         }
 
-        let accept_reject = self.accept_reject()?;
-        self.accept_required(Token::CurlyRight)?;
+        let accept_reject = self.try_accept_reject()?;
+        self.take(Token::CurlyRight)?;
         Ok(ApplyBody {
             scopes,
             accept_reject,
@@ -189,41 +189,41 @@ impl<'source> Parser<'source> {
             return self.apply_match();
         }
 
-        self.accept_required(Token::Filter)?;
+        self.take(Token::Filter)?;
 
         // This is not exactly self.match_operator because match ... with is
         // not allowed.
-        let operator = if self.accept_optional(Token::Match)?.is_some() {
+        let operator = if self.next_is(Token::Match) {
             MatchOperator::Match
-        } else if self.accept_optional(Token::ExactlyOne)?.is_some() {
+        } else if self.next_is(Token::ExactlyOne) {
             MatchOperator::ExactlyOne
-        } else if self.accept_optional(Token::Some)?.is_some() {
+        } else if self.next_is(Token::Some) {
             MatchOperator::Some
-        } else if self.accept_optional(Token::All)?.is_some() {
+        } else if self.next_is(Token::All) {
             MatchOperator::All
         } else {
             return Err(ParseError::Todo(20));
         };
 
         let filter_ident = self.value_expr()?;
-        let negate = self.accept_optional(Token::Not)?.is_some();
-        self.accept_required(Token::Matching)?;
-        self.accept_required(Token::CurlyLeft)?;
+        let negate = self.next_is(Token::Not);
+        self.take(Token::Matching)?;
+        self.take(Token::CurlyLeft)?;
 
         let mut actions = Vec::new();
-        while self.accept_optional(Token::CurlyRight)?.is_none() {
-            if let Some(accept_reject) = self.accept_reject()? {
-                self.accept_required(Token::CurlyRight)?;
+        while !self.next_is(Token::CurlyRight) {
+            if let Some(accept_reject) = self.try_accept_reject()? {
+                self.take(Token::CurlyRight)?;
                 actions.push((None, Some(accept_reject)));
                 break;
             }
 
             let val = self.value_expr()?;
-            self.accept_required(Token::SemiColon)?;
+            self.take(Token::SemiColon)?;
             actions.push((Some(val), None));
         }
 
-        self.accept_required(Token::SemiColon)?;
+        self.take(Token::SemiColon)?;
 
         Ok(ApplyScope {
             scope: None,
@@ -241,19 +241,19 @@ impl<'source> Parser<'source> {
     fn apply_match(&mut self) -> ParseResult<ApplyScope> {
         let operator = self.match_operator()?;
         let mut match_arms = Vec::new();
-        self.accept_required(Token::CurlyLeft)?;
-        while self.accept_optional(Token::CurlyRight)?.is_none() {
+        self.take(Token::CurlyLeft)?;
+        while !self.next_is(Token::CurlyRight) {
             let variant_id = self.identifier()?;
             let data_field =
-                if self.accept_optional(Token::RoundLeft)?.is_some() {
+                if self.next_is(Token::RoundLeft) {
                     let id = self.identifier()?;
-                    self.accept_required(Token::RoundRight)?;
+                    self.take(Token::RoundRight)?;
                     Some(id)
                 } else {
                     None
                 };
 
-            let guard = if self.accept_optional(Token::Pipe)?.is_some() {
+            let guard = if self.next_is(Token::Pipe) {
                 let term_id = self.identifier()?;
                 let args = if self.peek_is(Token::RoundLeft) {
                     Some(self.arg_expr_list()?)
@@ -265,23 +265,23 @@ impl<'source> Parser<'source> {
                 None
             };
 
-            self.accept_required(Token::Arrow)?;
+            self.take(Token::Arrow)?;
 
             let mut actions = Vec::new();
-            if self.accept_optional(Token::CurlyLeft)?.is_some() {
-                while self.accept_optional(Token::CurlyRight)?.is_none() {
-                    if let Some(ar) = self.accept_reject()? {
-                        self.accept_required(Token::CurlyRight)?;
+            if self.next_is(Token::CurlyLeft) {
+                while !self.next_is(Token::CurlyRight) {
+                    if let Some(ar) = self.try_accept_reject()? {
+                        self.take(Token::CurlyRight)?;
                         actions.push((None, Some(ar)));
                         break;
                     }
                     actions.push((Some(self.action_call_expr()?), None));
-                    self.accept_required(Token::SemiColon)?;
+                    self.take(Token::SemiColon)?;
                 }
-                self.accept_optional(Token::Comma)?;
+                self.next_is(Token::Comma);
             } else {
                 let expr = self.action_call_expr()?;
-                self.accept_required(Token::Comma)?;
+                self.take(Token::Comma)?;
                 actions.push((Some(expr), None));
             }
 
@@ -318,24 +318,24 @@ impl<'source> Parser<'source> {
     /// ```ebnf
     /// AcceptReject ::= ('return'? ( 'accept' | 'reject' ) ';')?
     /// ```
-    fn accept_reject(&mut self) -> ParseResult<Option<AcceptReject>> {
-        if self.accept_optional(Token::Return)?.is_some() {
+    fn try_accept_reject(&mut self) -> ParseResult<Option<AcceptReject>> {
+        if self.next_is(Token::Return) {
             let value = match self.next()?.0 {
                 Token::Accept => AcceptReject::Accept,
                 Token::Reject => AcceptReject::Reject,
                 _ => return Err(ParseError::Todo(10)),
             };
-            self.accept_required(Token::SemiColon)?;
+            self.take(Token::SemiColon)?;
             return Ok(Some(value));
         }
 
-        if self.accept_optional(Token::Accept)?.is_some() {
-            self.accept_required(Token::SemiColon)?;
+        if self.next_is(Token::Accept) {
+            self.take(Token::SemiColon)?;
             return Ok(Some(AcceptReject::Accept));
         }
 
-        if self.accept_optional(Token::Reject)?.is_some() {
-            self.accept_required(Token::SemiColon)?;
+        if self.next_is(Token::Reject) {
+            self.take(Token::SemiColon)?;
             return Ok(Some(AcceptReject::Reject));
         }
 
@@ -353,7 +353,7 @@ impl<'source> Parser<'source> {
             Token::Match => {
                 if matches!(self.peek(), Some(Token::Ident(_))) {
                     let ident = self.identifier()?;
-                    self.accept_required(Token::With)?;
+                    self.take(Token::With)?;
                     MatchOperator::MatchValueWith(ident)
                 } else {
                     MatchOperator::Match
@@ -384,14 +384,14 @@ impl<'source> Parser<'source> {
     }
 
     fn term(&mut self) -> ParseResult<TermSection> {
-        self.accept_required(Token::Term)?;
+        self.take(Token::Term)?;
         let ident = self.identifier()?;
         let for_kv = self.for_clause()?;
         let with_kv = self.with_clause()?;
 
         let mut scopes = Vec::new();
-        self.accept_required(Token::CurlyLeft)?;
-        while self.accept_optional(Token::CurlyRight)?.is_none() {
+        self.take(Token::CurlyLeft)?;
+        while !self.next_is(Token::CurlyRight) {
             scopes.push(self.term_scope()?);
         }
 
@@ -410,8 +410,8 @@ impl<'source> Parser<'source> {
         // the match will contain logical expressions.
         if let MatchOperator::MatchValueWith(_) = operator {
             let mut match_arms = Vec::new();
-            self.accept_required(Token::CurlyLeft)?;
-            while self.accept_optional(Token::CurlyRight)?.is_none() {
+            self.take(Token::CurlyLeft)?;
+            while !self.next_is(Token::CurlyRight) {
                 let (pattern, expr) = self.match_arm()?;
                 match_arms.push((Some(pattern), expr));
             }
@@ -423,11 +423,11 @@ impl<'source> Parser<'source> {
                 match_arms,
             })
         } else {
-            self.accept_required(Token::CurlyLeft)?;
+            self.take(Token::CurlyLeft)?;
             let mut match_arms = Vec::new();
-            while self.accept_optional(Token::CurlyRight)?.is_none() {
+            while !self.next_is(Token::CurlyRight) {
                 match_arms.push((None, vec![self.logical_expr()?]));
-                self.accept_required(Token::SemiColon)?;
+                self.take(Token::SemiColon)?;
             }
             Ok(TermScope {
                 scope: None,
@@ -442,29 +442,28 @@ impl<'source> Parser<'source> {
     ) -> ParseResult<(TermPatternMatchArm, Vec<LogicalExpr>)> {
         let variant_id = self.identifier()?;
 
-        let data_field = self
-            .accept_optional(Token::RoundLeft)?
-            .map(|_| {
-                let field = self.identifier()?;
-                self.accept_required(Token::RoundRight)?;
-                Ok(field)
-            })
-            .transpose()?;
+        let data_field = if self.next_is(Token::RoundLeft) {
+            let field = self.identifier()?;
+            self.take(Token::RoundRight)?;
+            Some(field)
+        } else {
+            None
+        };
 
-        self.accept_required(Token::Arrow)?;
+        self.take(Token::Arrow)?;
 
         let mut expr = Vec::new();
-        if self.accept_optional(Token::CurlyLeft)?.is_some() {
-            while self.accept_optional(Token::CurlyRight)?.is_none() {
+        if self.next_is(Token::CurlyLeft) {
+            while !self.next_is(Token::CurlyRight) {
                 expr.push(self.logical_expr()?);
-                self.accept_required(Token::SemiColon)?;
+                self.take(Token::SemiColon)?;
             }
-            self.accept_optional(Token::Comma)?;
+            self.next_is(Token::Comma);
         } else {
             expr.push(self.logical_expr()?);
             // This comma might need to be optional, but it's probably good
             // practice to require it.
-            self.accept_required(Token::Comma)?;
+            self.take(Token::Comma)?;
         }
 
         Ok((
@@ -485,17 +484,17 @@ impl<'source> Parser<'source> {
     ///               | BooleanExpr
     /// ```
     pub(super) fn logical_expr(&mut self) -> ParseResult<LogicalExpr> {
-        if self.accept_optional(Token::Bang)?.is_some() {
+        if self.next_is(Token::Bang) {
             let expr = self.boolean_expr()?;
             return Ok(LogicalExpr::NotExpr(NotExpr { expr }));
         }
 
         let left = self.boolean_expr()?;
 
-        Ok(if self.accept_optional(Token::PipePipe)?.is_some() {
+        Ok(if self.next_is(Token::PipePipe) {
             let right = self.boolean_expr()?;
             LogicalExpr::OrExpr(OrExpr { left, right })
-        } else if self.accept_optional(Token::AmpAmp)?.is_some() {
+        } else if self.next_is(Token::AmpAmp) {
             let right = self.boolean_expr()?;
             LogicalExpr::AndExpr(AndExpr { left, right })
         } else {
@@ -593,8 +592,8 @@ impl<'source> Parser<'source> {
             Token::AngleRightEq => CompareOp::Ge,
             Token::In => CompareOp::In,
             Token::Not => {
-                self.accept_required(Token::Not)?;
-                self.accept_required(Token::In)?;
+                self.take(Token::Not)?;
+                self.take(Token::In)?;
                 return Ok(Some(CompareOp::NotIn));
             }
             _ => return Ok(None),
@@ -605,24 +604,24 @@ impl<'source> Parser<'source> {
     }
 
     fn grouped_logical_expr(&mut self) -> ParseResult<GroupedLogicalExpr> {
-        self.accept_required(Token::RoundLeft)?;
+        self.take(Token::RoundLeft)?;
         let expr = self.logical_expr()?;
-        self.accept_required(Token::RoundRight)?;
+        self.take(Token::RoundRight)?;
         Ok(GroupedLogicalExpr {
             expr: Box::new(expr),
         })
     }
     
     pub(super) fn action(&mut self) -> ParseResult<ActionSection> {
-        self.accept_required(Token::Action)?;
+        self.take(Token::Action)?;
         let ident = self.identifier()?;
         let with_kv = self.with_clause()?;
 
         let mut expressions = Vec::new();
-        self.accept_required(Token::CurlyLeft)?;
-        while self.accept_optional(Token::CurlyRight)?.is_none() {
+        self.take(Token::CurlyLeft)?;
+        while !self.next_is(Token::CurlyRight) {
             let value_expr = self.value_expr()?;
-            self.accept_required(Token::SemiColon)?;
+            self.take(Token::SemiColon)?;
             match value_expr {
                 ValueExpr::ComputeExpr(x) => expressions.push(x),
                 ValueExpr::RootMethodCallExpr(x) => {
@@ -648,7 +647,7 @@ impl<'source> Parser<'source> {
     /// For ::= ( 'for' TypeIdentField)?
     /// ```
     fn for_clause(&mut self) -> ParseResult<Option<TypeIdentField>> {
-        if self.accept_optional(Token::For)?.is_some() {
+        if self.next_is(Token::For) {
             Ok(Some(self.type_ident_field()?))
         } else {
             Ok(None)
@@ -663,12 +662,12 @@ impl<'source> Parser<'source> {
     fn with_clause(&mut self) -> ParseResult<Vec<TypeIdentField>> {
         let mut key_values = Vec::new();
 
-        if self.accept_optional(Token::With)?.is_none() {
+        if !self.next_is(Token::With) {
             return Ok(key_values);
         }
 
         key_values.push(self.type_ident_field()?);
-        while self.accept_optional(Token::Comma)?.is_some() {
+        while self.next_is(Token::Comma) {
             key_values.push(self.type_ident_field()?);
         }
 
@@ -682,7 +681,7 @@ impl<'source> Parser<'source> {
     /// ```
     fn type_ident_field(&mut self) -> ParseResult<TypeIdentField> {
         let field_name = self.identifier()?;
-        self.accept_required(Token::Colon)?;
+        self.take(Token::Colon)?;
         let ty = self.type_identifier()?;
         Ok(TypeIdentField { field_name, ty })
     }

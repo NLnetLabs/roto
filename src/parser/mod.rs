@@ -86,6 +86,16 @@ impl<'source> Parser<'source> {
         }
     }
 
+    /// Move the lexer forward if the next token matches the given token
+    fn next_is(&mut self, token: Token) -> bool {
+        if self.peek_is(token) {
+            self.next().unwrap();
+            true
+        } else {
+            false
+        }
+    }
+
     /// Peek the next token
     fn peek(&mut self) -> Option<&Token<'source>> {
         match self.lexer.peek() {
@@ -103,18 +113,8 @@ impl<'source> Parser<'source> {
         &token == lexed_token
     }
 
-    /// Check for an optional token
-    fn accept_optional(&mut self, token: Token) -> ParseResult<Option<Span>> {
-        if self.peek_is(token) {
-            // TODO: this should probably be an unwrap?
-            Ok(Some(self.next()?.1))
-        } else {
-            Ok(None)
-        }
-    }
-
     /// Move the lexer forward and assert that it matches the token
-    fn accept_required(&mut self, token: Token) -> ParseResult<()> {
+    fn take(&mut self, token: Token) -> ParseResult<()> {
         let (next, span) = self.next()?;
         if next == token {
             Ok(())
@@ -145,12 +145,12 @@ impl<'source> Parser<'source> {
         sep: Token,
         mut parser: impl FnMut(&mut Self) -> ParseResult<T>,
     ) -> ParseResult<Vec<T>> {
-        self.accept_required(open)?;
+        self.take(open)?;
 
         let mut items = Vec::new();
 
         // If there are no fields, return the empty vec.
-        if self.accept_optional(close.clone())?.is_some() {
+        if self.next_is(close.clone()) {
             return Ok(items);
         }
 
@@ -158,7 +158,7 @@ impl<'source> Parser<'source> {
         items.push(parser(self)?);
 
         // Now each field must be separated by a comma
-        while self.accept_optional(sep.clone())?.is_some() {
+        while self.next_is(sep.clone()) {
             // If we have found the curly right, we have just
             // parsed the trailing comma.
             if self.peek_is(close.clone()) {
@@ -168,7 +168,7 @@ impl<'source> Parser<'source> {
             items.push(parser(self)?);
         }
 
-        self.accept_required(close)?;
+        self.take(close)?;
 
         Ok(items)
     }
