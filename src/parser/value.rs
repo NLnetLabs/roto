@@ -1,3 +1,5 @@
+use std::num::ParseIntError;
+
 use crate::{
     ast::{
         AccessExpr, AccessReceiver, AnonymousRecordValueExpr, ArgExprList,
@@ -155,8 +157,26 @@ impl<'source> Parser<'source> {
     fn ip_address(&mut self) -> ParseResult<IpAddress> {
         let (token, span) = self.next()?;
         Ok(match token {
-            Token::IpV4(s) => IpAddress::Ipv4(Ipv4Addr(s.parse().unwrap())),
-            Token::IpV6(s) => IpAddress::Ipv6(Ipv6Addr(s.parse().unwrap())),
+            Token::IpV4(s) => IpAddress::Ipv4(Ipv4Addr(
+                s.parse::<std::net::Ipv4Addr>().map_err(|e| {
+                    ParseError::InvalidLiteral {
+                        description: "Ipv4 addresss".into(),
+                        token: s.to_string(),
+                        span,
+                        inner_error: e.to_string(),
+                    }
+                })?,
+            )),
+            Token::IpV6(s) => IpAddress::Ipv6(Ipv6Addr(
+                s.parse::<std::net::Ipv6Addr>().map_err(|e| {
+                    ParseError::InvalidLiteral {
+                        description: "Ipv6 addresss".into(),
+                        token: s.to_string(),
+                        span,
+                        inner_error: e.to_string(),
+                    }
+                })?,
+            )),
             _ => {
                 return Err(ParseError::Expected {
                     expected: "an IP address".into(),
@@ -180,13 +200,32 @@ impl<'source> Parser<'source> {
             Token::Integer(s) => LiteralExpr::IntegerLiteral(IntegerLiteral(
                 // This parse fails if the literal is too big,
                 // it should be handled properly
-                s.parse().unwrap(),
+                s.parse::<i64>().map_err(|e| ParseError::InvalidLiteral {
+                    description: "integer".into(),
+                    token: token.to_string(),
+                    span,
+                    inner_error: e.to_string(),
+                })?,
             )),
             Token::Hex(s) => LiteralExpr::HexLiteral(HexLiteral(
-                u64::from_str_radix(&s[2..], 16).unwrap(),
+                u64::from_str_radix(&s[2..], 16).map_err(|e| {
+                    ParseError::InvalidLiteral {
+                        description: "hexadecimal integer".into(),
+                        token: token.to_string(),
+                        span,
+                        inner_error: e.to_string(),
+                    }
+                })?,
             )),
             Token::Asn(s) => LiteralExpr::AsnLiteral(AsnLiteral(
-                s[2..].parse::<u32>().unwrap(),
+                s[2..].parse::<u32>().map_err(|e| {
+                    ParseError::InvalidLiteral {
+                        description: "AS number".into(),
+                        token: token.to_string(),
+                        span,
+                        inner_error: e.to_string(),
+                    }
+                })?,
             )),
             Token::Bool(b) => LiteralExpr::BooleanLiteral(BooleanLiteral(b)),
             Token::Float => {
@@ -199,28 +238,38 @@ impl<'source> Parser<'source> {
 
                 // TODO: Change the AST so that it doesn't contain strings, but
                 // routecore communities.
-                use routecore::bgp::communities::{self, Community};
-                let parts: Vec<_> = s
+                use routecore::bgp::communities::Community;
+
+                let parts = s
                     .split(':')
                     .map(|p| {
                         if let Some(hex) = p.strip_prefix("0x") {
-                            u32::from_str_radix(hex, 16).unwrap().to_string()
+                            Ok(u32::from_str_radix(hex, 16)?.to_string())
                         } else {
-                            p.to_string()
+                            Ok(p.to_string())
                         }
                     })
-                    .collect();
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|e: ParseIntError| {
+                        ParseError::InvalidLiteral {
+                            description: "community".into(),
+                            token: s.to_string(),
+                            span: span.clone(),
+                            inner_error: e.to_string(),
+                        }
+                    })?;
 
                 let transformed = parts.join(":");
 
-                let c: Community = transformed.parse().map_err(
-                    |e: communities::ParseError| ParseError::InvalidLiteral {
-                        description: "community".into(),
-                        token: token.to_string(),
-                        span,
-                        inner_error: e.to_string(),
-                    },
-                )?;
+                let c: Community =
+                    transformed.parse::<Community>().map_err(|e| {
+                        ParseError::InvalidLiteral {
+                            description: "community".into(),
+                            token: token.to_string(),
+                            span,
+                            inner_error: e.to_string(),
+                        }
+                    })?;
                 match c {
                     Community::Standard(x) => {
                         LiteralExpr::StandardCommunityLiteral(
@@ -351,6 +400,14 @@ impl<'source> Parser<'source> {
                 inner_error: String::new(),
             });
         };
-        Ok(PrefixLength(s[1..].parse().unwrap()))
+        let len = s[1..].parse::<u8>().map_err(|e| {
+            ParseError::InvalidLiteral {
+                description: "prefix length".into(),
+                token: token.to_string(),
+                span,
+                inner_error: e.to_string(),
+            }
+        })?;
+        Ok(PrefixLength(len))
     }
 }
