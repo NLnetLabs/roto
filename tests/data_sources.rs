@@ -2,6 +2,7 @@ use log::trace;
 use roto::compiler::Compiler;
 
 use roto::blocks::Scope;
+use roto::types::builtin::{NlriStatus, PeerId, PeerRibType, Provenance, RouteContext};
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::datasources::DataSource;
 use roto::types::typedef::TypeDef;
@@ -112,8 +113,22 @@ fn test_data(
         println!("{}", mb);
     }
 
+    let peer_ip = "192.0.2.11".parse().unwrap();
+    let provenance = Provenance {
+        timestamp: chrono::Utc::now(),
+        router_id: 0,
+        connection_id: 0,
+        peer_id: PeerId { addr: peer_ip, asn: Asn::from(65534) },
+        peer_bgp_id: [0; 4].into(),
+        peer_distuingisher: [0; 8],
+        peer_rib_type: PeerRibType::OutPost,
+    };
+
+    let context = RouteContext::new(None, NlriStatus::InConvergence, provenance);
+
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
+        .with_context(context)
         .with_data_sources(roto_pack.data_sources)
         .with_mir_code(roto_pack.mir)
         .build()?;

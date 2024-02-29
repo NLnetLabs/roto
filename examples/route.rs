@@ -88,7 +88,7 @@ fn test_data(
     let ds_ref = roto_pack.data_sources;
     let args = rotolo.compile_arguments(&name, filter_map_arguments)?;
 
-    let mut vm = vm::VmBuilder::new()
+    let mut vm = vm::VmBuilder::<_,RouteContext,_>::new()
         .with_arguments(args)
         .with_data_sources(ds_ref)
         .with_mir_code(roto_pack.mir)

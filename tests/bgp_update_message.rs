@@ -8,6 +8,7 @@ use roto::types::collections::{BytesRecord, Record};
 use roto::types::lazyrecord_types::BgpUpdateMessage;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
+use routecore::asn::Asn;
 use routecore::bgp::message::SessionConfig;
 
 mod common;

@@ -1,14 +1,27 @@
 use log::trace;
+
 use roto::{
     ast::AcceptReject,
     blocks::Scope::{self, Filter, FilterMap},
     compiler::{CompileError, Compiler},
     types::{
-        builtin::{BuiltinTypeValue, BytesRecord, Provenance}, collections::Record, lazyrecord_types::{BmpMessage, InitiationMessage, LazyRecordTypeDef, RouteMonitoring}, typedef::TypeDef, typevalue::TypeValue
+        builtin::{
+            BuiltinTypeValue, BytesRecord, NlriStatus, PeerId, PeerRibType,
+            Provenance, RouteContext,
+        },
+        collections::Record,
+        lazyrecord_types::{
+            BmpMessage, InitiationMessage, LazyRecordTypeDef, RouteMonitoring,
+        },
+        typedef::TypeDef,
+        typevalue::TypeValue,
     },
     vm::{self, VmResult},
 };
-use routes::bmp::encode::{mk_peer_down_notification_msg, mk_per_peer_header, mk_termination_msg};
+use routecore::asn::Asn;
+use routes::bmp::encode::{
+    mk_peer_down_notification_msg, mk_per_peer_header, mk_termination_msg,
+};
 
 mod common;
 
@@ -47,8 +60,27 @@ fn test_data(
         println!("{}", mb);
     }
 
+    let peer_ip = "192.0.2.0".parse().unwrap();
+
+    let provenance = Provenance {
+        timestamp: chrono::Utc::now(),
+        router_id: 0,
+        connection_id: 0,
+        peer_id: PeerId {
+            addr: peer_ip,
+            asn: Asn::from(65534),
+        },
+        peer_bgp_id: [0; 4].into(),
+        peer_distuingisher: [0; 8],
+        peer_rib_type: PeerRibType::OutPost,
+    };
+
+    let context =
+        RouteContext::new(None, NlriStatus::InConvergence, provenance);
+
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
+        .with_context(context)
         .with_data_sources(ds_ref)
         .with_mir_code(roto_pack.get_mir())
         .build()?;
@@ -114,8 +146,27 @@ fn test_data_2(
         println!("{}", mb);
     }
 
+    let peer_ip = "192.0.2.0".parse().unwrap();
+
+    let provenance = Provenance {
+        timestamp: chrono::Utc::now(),
+        router_id: 0,
+        connection_id: 0,
+        peer_id: PeerId {
+            addr: peer_ip,
+            asn: Asn::from(65534),
+        },
+        peer_bgp_id: [0; 4].into(),
+        peer_distuingisher: [0; 8],
+        peer_rib_type: PeerRibType::OutPost,
+    };
+
+    let context =
+        RouteContext::new(None, NlriStatus::InConvergence, provenance);
+
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
+        .with_context(context)
         .with_data_sources(ds_ref)
         .with_mir_code(roto_pack.get_mir())
         .build()?;
@@ -179,8 +230,27 @@ fn test_data_3(
         println!("{}", mb);
     }
 
+    let peer_ip = "192.0.2.0".parse().unwrap();
+
+    let provenance = Provenance {
+        timestamp: chrono::Utc::now(),
+        router_id: 0,
+        connection_id: 0,
+        peer_id: PeerId {
+            addr: peer_ip,
+            asn: Asn::from(65534),
+        },
+        peer_bgp_id: [0; 4].into(),
+        peer_distuingisher: [0; 8],
+        peer_rib_type: PeerRibType::OutPost,
+    };
+
+    let context =
+        RouteContext::new(None, NlriStatus::InConvergence, provenance);
+
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
+        .with_context(context)
         .with_data_sources(ds_ref)
         .with_mir_code(roto_pack.get_mir())
         .build()?;
@@ -207,58 +277,67 @@ fn test_data_3(
 fn test_data_4(
     name: Scope,
     payload: TypeValue,
-    source_code: &'static str,)  -> Result<VmResult, Box<dyn std::error::Error>> {
-        println!("Evaluate filter-map {}...", name);
+    source_code: &'static str,
+) -> Result<VmResult, Box<dyn std::error::Error>> {
+    println!("Evaluate filter-map {}...", name);
 
-        // Compile the source code in this example
-        let rotolo = Compiler::build(source_code)?;
-        let roto_pack = rotolo.retrieve_pack_as_arcs(&name)?;
-    
-        trace!("Used Arguments");
-        trace!("{:#?}", &roto_pack.get_arguments());
-        trace!("Used Data Sources");
-        trace!("{:#?}", &roto_pack.get_data_sources());
-    
-        let ds_ref = roto_pack.get_data_sources();
-    
-        for mb in roto_pack.get_mir().iter() {
-            println!("{}", mb);
-        }
-    
-        let prov = Provenance {
-            timestamp: chrono::Utc::now(),
-            router_id: 0,
-            connection_id: 0,
-            peer_id: PeerId { addr: "172.0.0.1".parse().unwrap(), asn: Asn::from(65530)},
-            peer_bgp_id: [0,0,0,0].into(),
-            peer_distuingisher: [0; 8],
-            peer_rib_type: PeerRibType::OutPost,
-        };
+    // Compile the source code in this example
+    let rotolo = Compiler::build(source_code)?;
+    let roto_pack = rotolo.retrieve_pack_as_arcs(&name)?;
 
-        let mut vm = vm::VmBuilder::new()
-            // .with_arguments(args)
-            .with_data_sources(ds_ref)
-            .with_context(context)
-            .with_mir_code(roto_pack.get_mir())
-            .build()?;
-    
-        let mem = &mut vm::LinearMemory::uninit();
-        let res = vm
-            .exec(
-                payload,
-                None::<Record>,
-                // Some(filter_map_arguments),
-                None,
-                mem,
-            )
-            .unwrap();
-    
-        trace!("\nRESULT");
-        trace!("action: {}", res.accept_reject);
-        trace!("rx    : {:?}", res.rx);
-        trace!("tx    : {:?}", res.tx);
-    
-        Ok(res)
+    trace!("Used Arguments");
+    trace!("{:#?}", &roto_pack.get_arguments());
+    trace!("Used Data Sources");
+    trace!("{:#?}", &roto_pack.get_data_sources());
+
+    let ds_ref = roto_pack.get_data_sources();
+
+    for mb in roto_pack.get_mir().iter() {
+        println!("{}", mb);
+    }
+
+    let peer_ip = "192.0.2.0".parse().unwrap();
+
+    let provenance = Provenance {
+        timestamp: chrono::Utc::now(),
+        router_id: 0,
+        connection_id: 0,
+        peer_id: PeerId {
+            addr: peer_ip,
+            asn: Asn::from(65534),
+        },
+        peer_bgp_id: [0; 4].into(),
+        peer_distuingisher: [0; 8],
+        peer_rib_type: PeerRibType::OutPost,
+    };
+
+    let context =
+        RouteContext::new(None, NlriStatus::InConvergence, provenance);
+
+    let mut vm = vm::VmBuilder::new()
+        // .with_arguments(args)
+        .with_data_sources(ds_ref)
+        .with_context(context)
+        .with_mir_code(roto_pack.get_mir())
+        .build()?;
+
+    let mem = &mut vm::LinearMemory::uninit();
+    let res = vm
+        .exec(
+            payload,
+            None::<Record>,
+            // Some(filter_map_arguments),
+            None,
+            mem,
+        )
+        .unwrap();
+
+    trace!("\nRESULT");
+    trace!("action: {}", res.accept_reject);
+    trace!("rx    : {:?}", res.rx);
+    trace!("tx    : {:?}", res.tx);
+
+    Ok(res)
 }
 
 fn initiation_payload_example() -> Vec<u8> {
@@ -286,9 +365,7 @@ fn compile_initiation_payload(
 
     // let rm_msg = i_msg.unwrap();
     let payload = TypeValue::Builtin(
-        roto::types::builtin::BuiltinTypeValue::BmpMessage(
-            buf.into(),
-        ),
+        roto::types::builtin::BuiltinTypeValue::BmpMessage(buf.into()),
     );
 
     trace!("Used Arguments");
@@ -302,8 +379,27 @@ fn compile_initiation_payload(
         println!("{}", mb);
     }
 
+    let peer_ip = "192.0.2.0".parse().unwrap();
+
+    let provenance = Provenance {
+        timestamp: chrono::Utc::now(),
+        router_id: 0,
+        connection_id: 0,
+        peer_id: PeerId {
+            addr: peer_ip,
+            asn: Asn::from(65534),
+        },
+        peer_bgp_id: [0; 4].into(),
+        peer_distuingisher: [0; 8],
+        peer_rib_type: PeerRibType::OutPost,
+    };
+
+    let context =
+        RouteContext::new(None, NlriStatus::InConvergence, provenance);
+
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
+        .with_context(context)
         .with_data_sources(ds_ref)
         .with_mir_code(roto_pack.get_mir())
         .build()?;
@@ -973,12 +1069,15 @@ fn bmp_message_9() {
 fn bmp_message_10() {
     common::init();
 
-    let buf = vec![0x03, 0x00, 0x00, 0x00, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x7f, 0x00, 0x00, 0x01, 0x00, 0x00, 0x30, 0x39, 0x01, 0x02, 0x03,
-    0x04, 0x65, 0x7c, 0x49, 0xa7, 0x00, 0x0a, 0x13, 0x82, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x17, 0x02, 
-    0x00, 0x00, 0x00, 0x00];
+    let buf = vec![
+        0x03, 0x00, 0x00, 0x00, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7f, 0x00, 0x00, 0x01, 0x00,
+        0x00, 0x30, 0x39, 0x01, 0x02, 0x03, 0x04, 0x65, 0x7c, 0x49, 0xa7,
+        0x00, 0x0a, 0x13, 0x82, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x17,
+        0x02, 0x00, 0x00, 0x00, 0x00,
+    ];
     let rm_msg = BytesRecord::<BmpMessage>::new(buf.into());
     assert!(rm_msg.is_ok());
     let rm_msg = rm_msg.unwrap();
@@ -1023,7 +1122,6 @@ fn bmp_message_10() {
     assert_eq!(res.accept_reject, AcceptReject::Accept);
     assert_eq!(res.rx, payload);
 }
-
 
 #[test]
 fn initiation_message() {
@@ -1076,7 +1174,9 @@ fn initiation_message() {
 #[test]
 fn peer_down_notification_1() {
     let pph = mk_per_peer_header("192.0.2.10", 65536);
-    let peer_up: BytesRecord<BmpMessage> = BytesRecord::<BmpMessage>::new(mk_peer_down_notification_msg(&pph).0).unwrap();
+    let peer_up: BytesRecord<BmpMessage> =
+        BytesRecord::<BmpMessage>::new(mk_peer_down_notification_msg(&pph).0)
+            .unwrap();
     let payload: TypeValue = TypeValue::Builtin(peer_up.into());
     println!("payload {:?}", payload);
 
@@ -1119,7 +1219,9 @@ fn peer_down_notification_1() {
 #[test]
 fn peer_down_notification_2() {
     let pph = mk_per_peer_header("192.0.2.10", 65536);
-    let peer_up: BytesRecord<BmpMessage> = BytesRecord::<BmpMessage>::new(mk_peer_down_notification_msg(&pph).0).unwrap();
+    let peer_up: BytesRecord<BmpMessage> =
+        BytesRecord::<BmpMessage>::new(mk_peer_down_notification_msg(&pph).0)
+            .unwrap();
     let payload: TypeValue = TypeValue::Builtin(peer_up.into());
     println!("payload {:?}", payload);
 
@@ -1161,12 +1263,18 @@ fn peer_down_notification_2() {
 
 #[test]
 fn termination_message_1() {
-    let peer_up: BytesRecord<BmpMessage> = BytesRecord::<BmpMessage>::new(mk_termination_msg()).unwrap();
+    let peer_up: BytesRecord<BmpMessage> =
+        BytesRecord::<BmpMessage>::new(mk_termination_msg()).unwrap();
     let btv: BuiltinTypeValue = peer_up.into();
     let expected: Result<TypeValue, CompileError> = Err(CompileError::from(
         "Cannot convert raw BMP message into any other type.",
     ));
-    assert_eq!(btv.clone().into_type(&TypeDef::LazyRecord(LazyRecordTypeDef::UpdateMessage)), expected);
+    assert_eq!(
+        btv.clone().into_type(&TypeDef::LazyRecord(
+            LazyRecordTypeDef::UpdateMessage
+        )),
+        expected
+    );
     let payload: TypeValue = TypeValue::Builtin(btv);
     println!("payload {:?}", payload);
 

@@ -85,14 +85,11 @@ fn test_data(
         .announcements_vec().unwrap()
         .first().unwrap().clone().try_into().unwrap();
 
-    let context= Box::new(RouteContext::new(
+    let context= &RouteContext::new(
         Some(update.clone()),
-        // nlri.clone(),
-        // routecore::bgp::types::AfiSafi::Ipv6Unicast,
-        // None,
         NlriStatus::InConvergence,
         provenance
-    ));
+    );
 
     let payload = BasicRoute::new(
         RouteWorkshop::from_update_pdu(nlri, &update.into_inner())?
@@ -119,6 +116,7 @@ fn test_data(
         .with_context(context)
         .build()?;
 
+    
     let res = vm.exec(payload, None::<Record>, None, mem).unwrap();
 
     println!("\nRESULT");
