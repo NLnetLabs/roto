@@ -1201,7 +1201,7 @@ fn compile_filter_map(
     let mut data_sources = vec![];
     for ds in state.used_data_sources {
         let name = &ds.1.name;
-        let resolved_ds = if let Ok(ds) = global_table.get_data_source(&name)
+        let resolved_ds = if let Ok(ds) = global_table.get_data_source(name)
         {
             ds
         } else {
@@ -1215,7 +1215,7 @@ fn compile_filter_map(
         // in the declaration in the source code. he actual source data
         // will only be needed at run-time
         data_sources.push(ExtDataSource::new(
-            &name,
+            name,
             resolved_ds.1,
             resolved_ds.0,
         )?)

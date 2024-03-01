@@ -1645,7 +1645,7 @@ impl<
             .as_ref()
             .iter()
             .find(|ds| ds.token == token)
-            .and_then(|ds| ds.source.load_full().as_ref().map(Arc::clone))
+            .and_then(|ds| ds.source.load_full().clone())
             .ok_or(VmError::DataSourceTokenNotFound(token))
     }
 
@@ -2832,9 +2832,6 @@ pub struct VmResult {
 }
 
 //------------ StreamOutputQueue --------------------------------------------
-
-#[derive(Debug, Copy, Clone)]
-pub struct StreamId(usize);
 
 #[derive(Debug, Clone)]
 pub struct OutputStreamQueue(SmallVec<[OutputStreamMessage; 8]>);

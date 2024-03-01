@@ -26,8 +26,6 @@ use super::symbols;
 use super::types::typedef::TypeDef;
 use super::types::typevalue::TypeValue;
 
-use std::convert::From;
-
 impl<'a> ast::SyntaxTree {
     pub fn eval(
         &'a self,
@@ -2918,14 +2916,10 @@ fn add_match_action(
     }
 }
 
-trait BooleanExpr
-where
-    Self: std::fmt::Debug,
-{
+trait BooleanExpr: std::fmt::Debug {
     fn get_args(&self) -> &[symbols::Symbol];
     fn get_type(&self) -> TypeDef;
     fn get_builtin_type(&self) -> Result<TypeDef, CompileError>;
-    fn get_token(&self) -> Token;
 }
 
 impl BooleanExpr for symbols::Symbol {
@@ -2935,10 +2929,6 @@ impl BooleanExpr for symbols::Symbol {
 
     fn get_type(&self) -> TypeDef {
         self.ty.clone()
-    }
-
-    fn get_token(&self) -> Token {
-        self.token.clone()
     }
 
     fn get_builtin_type(&self) -> Result<TypeDef, CompileError> {
@@ -2980,7 +2970,7 @@ fn is_boolean_function(
 /// A boolean expression only accepts on expression, that should return a
 /// boolean value.
 fn _is_boolean_expression(
-    expr: &impl BooleanExpr,
+    expr: impl BooleanExpr,
 ) -> Result<(), CompileError> {
     if expr.get_type() == TypeDef::Bool {
         return Ok(());

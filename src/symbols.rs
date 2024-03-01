@@ -896,7 +896,7 @@ impl SymbolTable {
         }
         if let Some(tx_type) = self.tx_type.as_ref() {
             if tx_type.name == name {
-                return Some(&tx_type);
+                return Some(tx_type);
             }
         }
         if let Some(symbol) = self.variables.get(name) {
