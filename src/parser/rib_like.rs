@@ -3,13 +3,10 @@
 //! In other words, we parse the constructs that are type declarations.
 //! These constructs are `rib`, `table`, `output-stream` and `type`.
 
-use super::{ParseResult, Parser};
-use crate::{
-    ast::{
-        ListTypeIdentifier, OutputStream, RecordTypeAssignment,
-        RecordTypeIdentifier, Rib, RibBody, RibField, Table, TypeIdentField,
-    },
-    token::Token,
+use super::{token::Token, ParseResult, Parser};
+use crate::ast::{
+    ListTypeIdentifier, OutputStream, RecordTypeAssignment,
+    RecordTypeIdentifier, Rib, RibBody, RibField, Table, TypeIdentField,
 };
 
 /// # Rib-like declarations

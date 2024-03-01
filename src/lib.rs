@@ -5,7 +5,6 @@ pub mod compiler;
 pub mod eval;
 pub mod parser;
 mod symbols;
-pub mod token;
 pub mod traits;
 pub mod types;
 pub mod vm;

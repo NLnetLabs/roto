@@ -12,10 +12,9 @@ use crate::{
         StringLiteral, TypeIdentifier, TypedRecordValueExpr, ValueExpr,
     },
     parser::ParseError,
-    token::Token,
 };
 
-use super::{ParseResult, Parser};
+use super::{token::Token, ParseResult, Parser};
 
 /// # Parsing value expressions
 impl<'source> Parser<'source> {
@@ -401,14 +400,15 @@ impl<'source> Parser<'source> {
                 inner_error: String::new(),
             });
         };
-        let len = s[1..].parse::<u8>().map_err(|e| {
-            ParseError::InvalidLiteral {
-                description: "prefix length".into(),
-                token: token.to_string(),
-                span,
-                inner_error: e.to_string(),
-            }
-        })?;
+        let len =
+            s[1..]
+                .parse::<u8>()
+                .map_err(|e| ParseError::InvalidLiteral {
+                    description: "prefix length".into(),
+                    token: token.to_string(),
+                    span,
+                    inner_error: e.to_string(),
+                })?;
         Ok(PrefixLength(len))
     }
 }

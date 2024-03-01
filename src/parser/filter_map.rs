@@ -1,21 +1,18 @@
 use logos::Span;
 
-use crate::{
-    ast::{
-        AcceptReject, AccessExpr, AccessReceiver, ActionCallExpr,
-        ActionSection, ActionSectionBody, AndExpr, ApplyBody, ApplyScope,
-        ApplySection, BooleanExpr, CompareArg, CompareExpr, CompareOp,
-        ComputeExpr, Define, DefineBody, FilterMap, FilterMapBody,
-        FilterMapExpr, FilterMatchActionExpr, FilterType, GroupedLogicalExpr,
-        ListCompareExpr, LogicalExpr, MatchActionExpr, MatchOperator,
-        NotExpr, OrExpr, PatternMatchActionArm, PatternMatchActionExpr,
-        RxTxType, TermBody, TermCallExpr, TermPatternMatchArm, TermScope,
-        TermSection, TypeIdentField, ValueExpr,
-    },
-    token::Token,
+use crate::ast::{
+    AcceptReject, AccessExpr, AccessReceiver, ActionCallExpr, ActionSection,
+    ActionSectionBody, AndExpr, ApplyBody, ApplyScope, ApplySection,
+    BooleanExpr, CompareArg, CompareExpr, CompareOp, ComputeExpr, Define,
+    DefineBody, FilterMap, FilterMapBody, FilterMapExpr,
+    FilterMatchActionExpr, FilterType, GroupedLogicalExpr, ListCompareExpr,
+    LogicalExpr, MatchActionExpr, MatchOperator, NotExpr, OrExpr,
+    PatternMatchActionArm, PatternMatchActionExpr, RxTxType, TermBody,
+    TermCallExpr, TermPatternMatchArm, TermScope, TermSection,
+    TypeIdentField, ValueExpr,
 };
 
-use super::{ParseError, ParseResult, Parser};
+use super::{token::Token, ParseError, ParseResult, Parser};
 
 /// # Parsing `filter-map` and `filter` sections
 impl<'source> Parser<'source> {

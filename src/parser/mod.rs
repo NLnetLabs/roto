@@ -2,7 +2,7 @@ use crate::ast::{
     Identifier,
     RootExpr, SyntaxTree, TypeIdentifier,
 };
-use crate::token::Token;
+use token::Token;
 use logos::{Lexer, Span, SpannedIter};
 use miette::Diagnostic;
 use std::iter::Peekable;
@@ -10,6 +10,7 @@ use std::iter::Peekable;
 mod filter_map;
 mod rib_like;
 mod value;
+mod token;
 
 #[cfg(test)]
 mod test_expressions;
