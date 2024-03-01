@@ -110,19 +110,17 @@ impl<'source> Parser<'source> {
                 access_expr.push(AccessExpr::MethodComputeExpr(
                     MethodComputeExpr { ident, args },
                 ))
+            } else if let Some(AccessExpr::FieldAccessExpr(
+                FieldAccessExpr { field_names },
+            )) = access_expr.last_mut()
+            {
+                field_names.push(ident);
             } else {
-                if let Some(AccessExpr::FieldAccessExpr(FieldAccessExpr {
-                    field_names,
-                })) = access_expr.last_mut()
-                {
-                    field_names.push(ident);
-                } else {
-                    access_expr.push(AccessExpr::FieldAccessExpr(
-                        FieldAccessExpr {
-                            field_names: vec![ident],
-                        },
-                    ))
-                }
+                access_expr.push(AccessExpr::FieldAccessExpr(
+                    FieldAccessExpr {
+                        field_names: vec![ident],
+                    },
+                ))
             }
         }
 
