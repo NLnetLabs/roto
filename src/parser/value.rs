@@ -17,6 +17,7 @@ use crate::{
 
 use super::{ParseResult, Parser};
 
+/// # Parsing value expressions
 impl<'source> Parser<'source> {
     /// Parse a value expr
     ///

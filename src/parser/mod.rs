@@ -181,7 +181,7 @@ impl<'source> Parser<'source> {
     }
 }
 
-/// # Parsing complex expressions
+/// # Parsing the syntax tree
 impl<'source> Parser<'source> {
     pub fn parse(input: &'source str) -> ParseResult<SyntaxTree> {
         Self::run_parser(Self::tree, input)
@@ -244,6 +244,10 @@ impl<'source> Parser<'source> {
 
 /// # Parsing identifiers
 impl<'source> Parser<'source> {
+    /// Parse an identifier
+    ///
+    /// The `contains` and `type` keywords are treated as identifiers,
+    /// because we already have tests that use these as names for methods.
     fn identifier(&mut self) -> ParseResult<Identifier> {
         let (token, span) = self.next()?;
         match token {
@@ -263,6 +267,9 @@ impl<'source> Parser<'source> {
         }
     }
 
+    /// Parse a type identifier
+    ///
+    /// Currently, this is the same as [`Parser::identifier`].
     fn type_identifier(&mut self) -> ParseResult<TypeIdentifier> {
         let (token, span) = self.next()?;
         match token {

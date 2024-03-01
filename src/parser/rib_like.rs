@@ -1,3 +1,8 @@
+//! Parsing constructs that have a syntax similar to rib declarations
+//!
+//! In other words, we parse the constructs that are type declarations.
+//! These constructs are `rib`, `table`, `output-stream` and `type`.
+
 use super::{ParseResult, Parser};
 use crate::{
     ast::{
@@ -7,8 +12,9 @@ use crate::{
     token::Token,
 };
 
+/// # Rib-like declarations
 impl<'source> Parser<'source> {
-    /// Parse a rib expression
+    /// Parse a rib declaration
     ///
     /// ```ebnf
     /// Rib ::= 'rib' Identifier
@@ -29,7 +35,7 @@ impl<'source> Parser<'source> {
         })
     }
 
-    /// Parse a table expression
+    /// Parse a table declaration
     ///
     /// ```ebnf
     /// Table ::= 'table' Identifier
@@ -50,7 +56,7 @@ impl<'source> Parser<'source> {
         })
     }
 
-    /// Parse an output stream expression
+    /// Parse an output stream declaration
     ///
     /// ```ebnf
     /// OutputStream ::= 'output-stream' Identifier
@@ -71,6 +77,11 @@ impl<'source> Parser<'source> {
         })
     }
 
+    /// Parse a record type declaration
+    ///
+    /// ```ebnf
+    /// Type ::= 'type' TypeIdentifier RibBody
+    /// ```
     pub(super) fn record_type_assignment(
         &mut self,
     ) -> ParseResult<RecordTypeAssignment> {

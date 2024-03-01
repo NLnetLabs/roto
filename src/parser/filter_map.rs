@@ -17,6 +17,7 @@ use crate::{
 
 use super::{ParseError, ParseResult, Parser};
 
+/// # Parsing `filter-map` and `filter` sections
 impl<'source> Parser<'source> {
     /// Parse a filter-map or filter expression
     ///
@@ -459,7 +460,7 @@ impl<'source> Parser<'source> {
         Ok(op)
     }
 
-    /// Parse a filter map expression, which is a term or an action
+    /// Parse a filter map section, which is a term or an action
     ///
     /// ```ebnf
     /// FilterMapExpr ::= Term | Action
@@ -479,6 +480,11 @@ impl<'source> Parser<'source> {
         }
     }
 
+    /// Parse a term section
+    ///
+    /// ```ebnf
+    /// Term ::= Identifier For? With? '{' TermScope '}'
+    /// ```
     fn term(&mut self) -> ParseResult<TermSection> {
         self.take(Token::Term)?;
         let ident = self.identifier()?;
@@ -499,6 +505,12 @@ impl<'source> Parser<'source> {
         })
     }
 
+    /// Parse a term scope
+    ///
+    /// ```ebnf
+    /// TermScope ::= 'match' Identifier 'with' '{' MatchArm '}'
+    ///             | 'match' '{' ( LogicalExpr ';' )* '}'
+    /// ```
     fn term_scope(&mut self) -> ParseResult<TermScope> {
         let operator = self.match_operator()?;
 
@@ -513,7 +525,8 @@ impl<'source> Parser<'source> {
             }
 
             Ok(TermScope {
-                // TODO: remove the scope field (and rename this type probably)
+                // TODO: remove the scope field (and rename this type
+                // probably
                 scope: None,
                 operator,
                 match_arms,
@@ -533,6 +546,13 @@ impl<'source> Parser<'source> {
         }
     }
 
+    /// Parse a match arm
+    ///
+    /// ```ebnf
+    /// MatchArm     ::= Identifier ( '(' Identifier ')' )? '->' MatchArmExpr
+    /// MatchArmExpr ::= LogicalExpr ','
+    ///                | '{' ( LogicalExpr ';' )* '}' ','?
+    /// ```
     pub(super) fn match_arm(
         &mut self,
     ) -> ParseResult<(TermPatternMatchArm, Vec<LogicalExpr>)> {
@@ -692,8 +712,6 @@ impl<'source> Parser<'source> {
     /// ```ebnf
     /// CompareOp ::= '==' | '!=' | '<' | '<=' | '>' | '>=' | 'not'? 'in'
     /// ```
-    ///
-    /// This function returns a span
     fn try_compare_operator(
         &mut self,
     ) -> ParseResult<Option<(CompareOp, Span)>> {
