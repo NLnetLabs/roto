@@ -78,11 +78,7 @@ impl From<RawRouteWithDeltas> for MaterializedRoute {
         let status = raw_route.status_deltas.current();
         let route_id = raw_route.raw_message.message_id;
 
-        let status = if let Ok(status) = status.try_into() {
-            status
-        } else {
-            RouteStatus::Unparsable
-        };
+        let status = status.try_into().unwrap_or(RouteStatus::Unparsable);
 
         if let Ok(route) = raw_route.take_latest_attrs() {
             MaterializedRoute {
@@ -209,43 +205,22 @@ impl RawRouteWithDeltas {
 
     pub fn with_peer_ip(self, peer_ip: IpAddr) -> Self {
         Self {
-            prefix: self.prefix,
-            raw_message: self.raw_message,
-            afi_safi: self.afi_safi,
-            path_id: self.path_id,
             peer_ip: Some(peer_ip),
-            peer_asn: self.peer_asn,
-            router_id: self.router_id,
-            attribute_deltas: self.attribute_deltas,
-            status_deltas: self.status_deltas,
+            ..self
         }
     }
 
     pub fn with_peer_asn(self, peer_asn: routecore::asn::Asn) -> Self {
         Self {
-            prefix: self.prefix,
-            raw_message: self.raw_message,
-            afi_safi: self.afi_safi,
-            path_id: self.path_id,
-            peer_ip: self.peer_ip,
             peer_asn: Some(peer_asn),
-            router_id: self.router_id,
-            attribute_deltas: self.attribute_deltas,
-            status_deltas: self.status_deltas,
+            ..self
         }
     }
 
     pub fn with_router_id(self, router_id: Arc<String>) -> Self {
         Self {
-            prefix: self.prefix,
-            raw_message: self.raw_message,
-            afi_safi: self.afi_safi,
-            path_id: self.path_id,
-            peer_ip: self.peer_ip,
-            peer_asn: self.peer_asn,
             router_id: Some(router_id),
-            attribute_deltas: self.attribute_deltas,
-            status_deltas: self.status_deltas,
+            ..self
         }
     }
 
@@ -453,11 +428,8 @@ impl RawRouteWithDeltas {
         &self,
         field_token: usize,
     ) -> Result<Option<&TypeValue>, VmError> {
-        let current_set = if let Some(atrd) =
-            self.attribute_deltas.get_latest_change_set()
-        {
-            atrd
-        } else {
+        let Some(current_set) = self.attribute_deltas.get_latest_change_set()
+        else {
             return Err(VmError::InvalidRecord);
         };
 
@@ -485,135 +457,36 @@ impl RawRouteWithDeltas {
         &self,
         field_token: usize,
     ) -> Result<TypeValue, VmError> {
-        match field_token.try_into()? {
-            RouteToken::AsPath => self
-                .raw_message
-                .raw_message
-                .0
-                .aspath()
-                .ok()
-                .flatten()
-                .map(|p| p.to_hop_path())
-                .map(TypeValue::from)
-                .ok_or(VmError::InvalidFieldAccess),
-            RouteToken::OriginType => self
-                .raw_message
-                .raw_message
-                .0
-                .origin()
-                .ok()
-                .flatten()
-                .map(TypeValue::from)
-                .ok_or(VmError::InvalidFieldAccess),
-            RouteToken::NextHop => self
-                .raw_message
-                .raw_message
-                .0
-                .find_next_hop(self.afi_safi)
-                .map_err(|_| VmError::InvalidFieldAccess)
-                .map(TypeValue::from),
-            RouteToken::MultiExitDisc => self
-                .raw_message
-                .raw_message
-                .0
-                .multi_exit_disc()
-                .ok()
-                .flatten()
-                .map(TypeValue::from)
-                .ok_or(VmError::InvalidFieldAccess),
-            RouteToken::LocalPref => self
-                .raw_message
-                .raw_message
-                .0
-                .local_pref()
-                .ok()
-                .flatten()
-                .map(TypeValue::from)
-                .ok_or(VmError::InvalidFieldAccess),
-            RouteToken::AtomicAggregate => Some(TypeValue::from(
-                self.raw_message
-                    .raw_message
-                    .0
-                    .is_atomic_aggregate()
-                    .unwrap_or(false),
-            ))
-            .ok_or(VmError::InvalidFieldAccess),
-            RouteToken::Aggregator => self
-                .raw_message
-                .raw_message
-                .0
-                .aggregator()
-                .ok()
-                .flatten()
-                .map(TypeValue::from)
-                .ok_or(VmError::InvalidFieldAccess),
-            RouteToken::Communities => self
-                .raw_message
-                .raw_message
-                .0
-                .all_human_readable_communities()
-                .ok()
-                .flatten()
-                .map(TypeValue::from)
-                .ok_or(VmError::InvalidFieldAccess),
-            RouteToken::Prefix => Ok(self.prefix.into()),
-            RouteToken::Status => Ok(self.status_deltas.current()),
-            RouteToken::PeerIp => self
-                .peer_ip
-                .map(TypeValue::from)
-                .ok_or(VmError::InvalidFieldAccess),
-            RouteToken::PeerAsn => self
-                .peer_asn
-                .map(TypeValue::from)
-                .ok_or(VmError::InvalidFieldAccess),
-            // _ => None,
-            // originator_id: ChangedOption {
-            //     value: None,
-            //     changed: false,
-            // },
-            // cluster_list: ChangedOption {
-            //     value: None,
-            //     changed: false,
-            // },
-            // RouteToken::ExtendedCommunities => self.raw_message.raw_message.ext_communities()
-            //         .map(|c| c.collect::<Vec<ExtendedCommunity>>()).into(),
-            // RouteToken::As4Path => self.raw_message.raw_message.as4path(),
-            // as4_aggregator: ChangedOption {
-            //     value: None,
-            //     changed: false,
-            // },
-            // connector: ChangedOption {
-            //     value: None,
-            //     changed: false,
-            // },
-            // as_path_limit: ChangedOption {
-            //     value: None,
-            //     changed: false,
-            // },
-            // pmsi_tunnel: ChangedOption {
-            //     value: None,
-            //     changed: false,
-            // },
-            // ipv6_extended_communities: ChangedOption {
-            //     value: None,
-            //     changed: false,
-            // },
-            // RouteToken::largeCommunities => self.raw_message.raw_message
-            //         .large_communities()
-            //         .map(|c| c.collect::<Vec<LargeCommunity>>()).into()
-            // bgpsec_as_path: ChangedOption {
-            //     value: None,
-            //     changed: false,
-            // },
-            // attr_set: ChangedOption {
-            //     value: None,
-            //     changed: false,
-            // },
-            // rsrvd_development: ChangedOption {
-            //     value: None,
-            //     changed: false,
-            // },
-        }
+        self.get_field_by_index_internal(field_token.try_into()?)
+            .ok_or(VmError::InvalidFieldAccess)
+    }
+
+    pub fn get_field_by_index_internal(
+        &self,
+        route_token: RouteToken,
+    ) -> Option<TypeValue> {
+        let msg = &self.raw_message.raw_message.0;
+
+        Some(match route_token {
+            RouteToken::AsPath => msg.aspath().ok()??.to_hop_path().into(),
+            RouteToken::OriginType => msg.origin().ok()??.into(),
+            RouteToken::NextHop => {
+                msg.find_next_hop(self.afi_safi).ok()?.into()
+            }
+            RouteToken::MultiExitDisc => msg.multi_exit_disc().ok()??.into(),
+            RouteToken::LocalPref => msg.local_pref().ok()??.into(),
+            RouteToken::AtomicAggregate => {
+                msg.is_atomic_aggregate().unwrap_or(false).into()
+            }
+            RouteToken::Aggregator => msg.aggregator().ok()??.into(),
+            RouteToken::Communities => {
+                msg.all_human_readable_communities().ok()??.into()
+            }
+            RouteToken::Prefix => self.prefix.into(),
+            RouteToken::Status => self.status_deltas.current(),
+            RouteToken::PeerIp => self.peer_ip?.into(),
+            RouteToken::PeerAsn => self.peer_asn?.into(),
+        })
     }
 
     pub fn status(&self) -> RouteStatus {
@@ -1295,8 +1168,7 @@ impl RotoType for RouteStatus {
         _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         Ok(TypeValue::Builtin(BuiltinTypeValue::Bool(
-            method_token
-                == usize::from(*self),
+            method_token == usize::from(*self),
         )))
     }
 
