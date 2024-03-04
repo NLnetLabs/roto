@@ -880,17 +880,15 @@ pub(crate) fn generate_code_for_token_value(
             vec![Command::new(OpCode::PushStack, vec![CommandArg::MemPos(1)])]
         }
         Token::Variable(var_to) => {
-            if let Some(var) = state
-                .used_variables
-                .iter()
-                .find(|(_, var)| { 
-                    var.token.clone().try_into().is_ok_and(|var: usize| var == *var_to) })
-            {
+            if let Some(var) = state.used_variables.iter().find(|(_, var)| {
+                var.token
+                    .clone()
+                    .try_into()
+                    .is_ok_and(|var: usize| var == *var_to)
+            }) {
                 vec![Command::new(
                     OpCode::PushStack,
-                    vec![CommandArg::ConstantIndex(
-                        var.1.value.clone(),
-                    )],
+                    vec![CommandArg::ConstantIndex(var.1.value.clone())],
                 )]
             } else {
                 vec![]
@@ -1304,8 +1302,7 @@ fn compile_apply_section(
                     // handling currently. StackUnPackAsVariant will set
                     // TypeValue::Unknown if this is not the variant we're
                     // looking for at runtime.
-                    if let Token::Variant(variant_index) = variant.token
-                    {
+                    if let Token::Variant(variant_index) = variant.token {
                         // if this is *not* the first variant we first want
                         // to pop the top of the stack, since that will
                         // contain the bool value of the last variant
@@ -1388,8 +1385,7 @@ fn compile_apply_section(
                                     let term = terms
                                         .iter()
                                         .find(|t| {
-                                            t.name
-                                                == action_section.name
+                                            t.name == action_section.name
                                         })
                                         .ok_or_else(|| {
                                             CompileError::Internal(format!(
@@ -1519,9 +1515,10 @@ fn compile_apply_section(
                                 trace!("No action defined. Nothing to do.");
                             }
                             _ => {
-                                return Err(CompileError::Internal(
-                                    format!("No token found for action section: '{}'", action_section.name)
-                                ));
+                                return Err(CompileError::Internal(format!(
+                                    "No token found for action section: '{}'",
+                                    action_section.name
+                                )));
                             }
                         };
 
@@ -1595,11 +1592,11 @@ fn compile_apply_section(
                             .iter()
                             .find(|t| t.name == ma_name)
                             .ok_or_else(|| {
-                                CompileError::Internal(format!(
-                                    "Cannot compile terms: {:?}",
-                                    ma_name
-                                ))
-                            })?;
+                            CompileError::Internal(format!(
+                                "Cannot compile terms: {:?}",
+                                ma_name
+                            ))
+                        })?;
 
                         state.cur_mir_block = MirBlock::new();
                         state = compile_term_section(term, state, &[])?;
@@ -1716,8 +1713,7 @@ fn compile_match_action<'a>(
             _ => {
                 return Err(CompileError::from(format!(
                     "Cannot convert `{}` with type {} into match action type",
-                    action_call.name,
-                    action_call.ty
+                    action_call.name, action_call.ty
                 )));
             }
         };
@@ -1953,9 +1949,7 @@ pub(crate) fn compile_term<'a>(
                 state.cur_mir_block.command_stack.push_back(Command::new(
                     OpCode::Label,
                     vec![CommandArg::Label(
-                        format!("VARIANT_{}", variant.name)
-                            .as_str()
-                            .into(),
+                        format!("VARIANT_{}", variant.name).as_str().into(),
                     )],
                 ));
 
