@@ -90,7 +90,7 @@ pub(crate) fn recurse_compile<'a>(
             // A referenced variable can only have zero or one child. Zero
             // children means that we're going to push all the fields of the
             // variable unto the stack.
-            assert!(symbol.args.iter().count() < 2);
+            assert!(symbol.args.len() < 2);
             if symbol.args.is_empty() {
                 state.extend_commands(var_ref.get_accumulated_commands());
             }
@@ -810,7 +810,7 @@ pub(crate) fn recurse_compile<'a>(
                     trace!("field name {:?}", new_field_name);
                     trace!("current index {:?}", state.cur_record_type);
                     if let Some(local_index) =
-                        rec_type.get_index_for_field_name(&new_field_name)
+                        rec_type.get_index_for_field_name(new_field_name)
                     {
                         trace!("next index {:?}", local_index);
                         if let Some(cur_index) =
@@ -919,7 +919,7 @@ pub(crate) fn recurse_compile<'a>(
                     trace!("field name {:?}", new_field_name);
                     trace!("current index {:?}", state.cur_record_type);
                     if let Some(local_index) =
-                        rec_type.get_index_for_field_name(&new_field_name)
+                        rec_type.get_index_for_field_name(new_field_name)
                     {
                         trace!("next index {:?}", local_index);
                         if let Some(cur_index) =

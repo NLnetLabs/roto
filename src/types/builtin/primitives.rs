@@ -1399,8 +1399,8 @@ typevaluefromimpls!(IpAddr);
 impl From<&'_ ast::IpAddress> for IpAddr {
     fn from(value: &ast::IpAddress) -> Self {
         match value {
-            ast::IpAddress::Ipv4(ast::Ipv4Addr(v4)) => Self::V4(v4.clone()),
-            ast::IpAddress::Ipv6(ast::Ipv6Addr(v6)) => Self::V6(v6.clone()),
+            ast::IpAddress::Ipv4(ast::Ipv4Addr(v4)) => Self::V4(*v4),
+            ast::IpAddress::Ipv6(ast::Ipv6Addr(v6)) => Self::V6(*v6),
         }
     }
 }
