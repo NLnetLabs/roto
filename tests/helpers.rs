@@ -1,5 +1,4 @@
 use log::trace;
-use nom::error::convert_error;
 use roto::{
     blocks::Scope,
     compiler::{CompileError, Compiler},
@@ -26,8 +25,8 @@ impl<'a> TestCompiler<'a> {
         let parse_res = self.compiler.parse_source_code(self.source_code);
 
         trace!("{} {:#?}", self.name, self.compiler.ast);
-        if let Err(e) = parse_res.clone() {
-            trace!("{}", convert_error(self.source_code, e));
+        if let Err(e) = &parse_res {
+            eprintln!("{:?}", e);
         }
 
         match expect_success {

@@ -34,7 +34,6 @@ use std::{
 };
 
 use log::{log_enabled, trace, Level};
-use nom::error::VerboseError;
 
 use crate::{
     ast::{self, AcceptReject, FilterType, ShortString, SyntaxTree},
@@ -45,10 +44,10 @@ use crate::{
         SymbolKind, SymbolTable,
     },
     traits::Token,
-    types::{datasources::DataSource, typevalue::TypeValue},
     types::{
-        datasources::Table,
+        datasources::{DataSource, Table},
         typedef::{RecordTypeDef, TypeDef},
+        typevalue::TypeValue,
     },
     vm::{
         compute_hash, Command, CommandArg, CompiledCollectionField,
@@ -658,8 +657,14 @@ impl<'a> Compiler {
     pub fn parse_source_code(
         &mut self,
         source_code: &'a str,
-    ) -> Result<(), VerboseError<&'a str>> {
-        self.ast = SyntaxTree::parse_str(source_code)?.1;
+    ) -> Result<(), miette::Report> {
+        match SyntaxTree::parse_str(source_code) {
+            Ok(ast) => self.ast = ast,
+            Err(e) => {
+                return Err(miette::Report::new(e)
+                    .with_source_code(source_code.to_string()));
+            }
+        };
 
         Ok(())
     }
@@ -786,7 +791,7 @@ impl<'a> Compiler {
         source_code: &'a str,
     ) -> Result<Rotolo, CompileError> {
         self.parse_source_code(source_code)
-            .map_err(|err| format!("Parse error: {err}"))?;
+            .map_err(|err| format!("{:?}", err))?;
         self.eval_ast()
             .map_err(|err| format!("Eval error: {err}"))?;
         self.inject_compile_time_arguments()
@@ -876,15 +881,14 @@ pub(crate) fn generate_code_for_token_value(
         }
         Token::Variable(var_to) => {
             if let Some(var) = state.used_variables.iter().find(|(_, var)| {
-                var.get_token()
+                var.token
+                    .clone()
                     .try_into()
-                    .is_ok_and(|var: usize| var == var_to)
+                    .is_ok_and(|var: usize| var == *var_to)
             }) {
                 vec![Command::new(
                     OpCode::PushStack,
-                    vec![CommandArg::ConstantIndex(
-                        var.1.value.clone(),
-                    )],
+                    vec![CommandArg::ConstantIndex(var.1.value.clone())],
                 )]
             } else {
                 vec![]
@@ -1298,8 +1302,7 @@ fn compile_apply_section(
                     // handling currently. StackUnPackAsVariant will set
                     // TypeValue::Unknown if this is not the variant we're
                     // looking for at runtime.
-                    if let Token::Variant(variant_index) = variant.token
-                    {
+                    if let Token::Variant(variant_index) = variant.token {
                         // if this is *not* the first variant we first want
                         // to pop the top of the stack, since that will
                         // contain the bool value of the last variant
@@ -1382,8 +1385,7 @@ fn compile_apply_section(
                                     let term = terms
                                         .iter()
                                         .find(|t| {
-                                            t.name
-                                                == action_section.name
+                                            t.name == action_section.name
                                         })
                                         .ok_or_else(|| {
                                             CompileError::Internal(format!(
@@ -1515,7 +1517,7 @@ fn compile_apply_section(
                             _ => {
                                 return Err(CompileError::Internal(format!(
                                     "No token found for action section: '{}'",
-                                    action_section.get_name()
+                                    action_section.name
                                 )));
                             }
                         };
@@ -1590,11 +1592,11 @@ fn compile_apply_section(
                             .iter()
                             .find(|t| t.name == ma_name)
                             .ok_or_else(|| {
-                                CompileError::Internal(format!(
-                                    "Cannot compile terms: {:?}",
-                                    ma_name
-                                ))
-                            })?;
+                            CompileError::Internal(format!(
+                                "Cannot compile terms: {:?}",
+                                ma_name
+                            ))
+                        })?;
 
                         state.cur_mir_block = MirBlock::new();
                         state = compile_term_section(term, state, &[])?;
@@ -1711,8 +1713,7 @@ fn compile_match_action<'a>(
             _ => {
                 return Err(CompileError::from(format!(
                     "Cannot convert `{}` with type {} into match action type",
-                    action_call.name,
-                    action_call.ty
+                    action_call.name, action_call.ty
                 )));
             }
         };
@@ -1948,9 +1949,7 @@ pub(crate) fn compile_term<'a>(
                 state.cur_mir_block.command_stack.push_back(Command::new(
                     OpCode::Label,
                     vec![CommandArg::Label(
-                        format!("VARIANT_{}", variant.name)
-                            .as_str()
-                            .into(),
+                        format!("VARIANT_{}", variant.name).as_str().into(),
                     )],
                 ));
 

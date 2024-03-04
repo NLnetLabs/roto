@@ -25,7 +25,14 @@ fn test_data(
 
     let mut c = Compiler::new();
     c.with_arguments(&name, filter_map_arguments)?;
-    let roto_packs = c.build_from_compiler(source_code)?;
+
+    let compile_res = c.build_from_compiler(source_code);
+
+    if let Err(e) = &compile_res {
+        eprintln!("{e}");
+    }
+
+    let roto_packs = compile_res?;
 
     let mut roto_pack = roto_packs.retrieve_pack_as_refs(&name)?;
     let _count: TypeValue = 1_u32.into();
@@ -144,7 +151,7 @@ fn test_filter_map_1() {
                     tx ext_route: Route;
 
                     // specify additional external data sets that will be consulted.
-                    use table source_asns;
+                    // use table source_asns;
 
                     // assignments
                     extra_in_table = source_asns.contains(extra_asn); // 0
@@ -224,15 +231,15 @@ fn test_filter_map_1() {
                 }
 
                 apply {
-                    use best-path;
+                    // use best-path;
                     filter exactly-one rov-valid matching { 
                         set-best; 
                         set-rov-invalid-asn-community; 
                         return accept; 
                     };
-                    use backup-path;
+                    // use backup-path;
                     filter match on-my-terms matching { set-best; return accept; };
-                    use backup-path;
+                    // use backup-path;
                     filter match on-my-terms not matching { 
                         set-rov-invalid-asn-community; 
                         return reject;

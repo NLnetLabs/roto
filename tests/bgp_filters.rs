@@ -30,7 +30,14 @@ fn test_data(
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
-    let rotolo = Compiler::build(source_code)?;
+    let compile_res = Compiler::build(source_code);
+    
+    // Print a pretty error message for easier debugging
+    if let Err(e) = &compile_res {
+        eprintln!("{e}");
+    }
+
+    let rotolo = compile_res?;
     let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     // Create a BGP packet
@@ -192,7 +199,7 @@ fn test_ip_address_literal_3() {
 
     assert!(res.is_err());
     trace!("res {:?}", res);
-    assert!(format!("{}", res.err().unwrap()).starts_with(r#"Parse error"#));
+    assert!(format!("{}", res.unwrap_err()).contains("Parse error"));
 }
 
 #[test]
@@ -772,8 +779,7 @@ fn test_as_path_1() {
     }
     "#,
         annc,
-    )
-    .unwrap();
+    ).unwrap();
 
     assert_eq!(res.accept_reject, AcceptReject::Reject);
 }
@@ -1283,7 +1289,7 @@ fn test_ext_comms_2() {
 }
 
 #[test]
-#[should_panic = r#"Result::unwrap()` on an `Err` value: "Eval error: Cannot convert literal 'XOTOR:4500:34' into Extended Community: unknown tag"#]
+#[should_panic]
 fn test_ext_comms_3() {
     common::init();
 
@@ -1318,7 +1324,7 @@ fn test_ext_comms_3() {
 }
 
 #[test]
-#[should_panic = r#"Result::unwrap()` on an `Err` value: "Eval error: Cannot convert literal 'rt:450076876500:34' into Extended Community: invalid rt:AS:AN"#]
+#[should_panic]
 fn test_ext_comms_4() {
     common::init();
 

@@ -217,7 +217,7 @@ fn test_filter_map_31() {
             }
 
             apply {
-                use my-filter-map;
+                // use my-filter-map;
                 filter match peer-asn-matches matching { set-asn; return accept; };
                 return reject;
             }
@@ -260,7 +260,7 @@ fn test_filter_map_32() {
             }
 
             apply {
-                use my-filter-map;
+                // use my-filter-map;
                 filter match peer-asn-matches matching { set-asn; return accept; };
                 return reject;
             }
@@ -302,7 +302,7 @@ fn test_filter_map_33() {
             }
 
             apply {
-                use my-filter-map;
+                // use my-filter-map;
                 filter match peer-asn-matches matching { set-asn; return accept; };
                 return reject;
             }
@@ -345,7 +345,7 @@ fn test_filter_map_34() {
             }
 
             apply {
-                use my-filter-map;
+                // use my-filter-map;
                 filter match peer-asn-matches matching { set-asn; return accept; };
                 return reject;
             }

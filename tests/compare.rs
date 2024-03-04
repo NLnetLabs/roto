@@ -86,7 +86,13 @@ fn test_data(
     println!("Evaluate filter-map {}...", name);
 
     let c = Compiler::new();
-    let roto_packs = c.build_from_compiler(source_code)?;
+    let compile_res = c.build_from_compiler(source_code);
+    
+    if let Err(e) = &compile_res {
+        eprintln!("{e}");
+    }
+
+    let roto_packs = compile_res?;
 
     let roto_pack = roto_packs.retrieve_pack_as_refs(&name)?;
     let asn: TypeValue = Asn::from_u32(211321).into();

@@ -24,7 +24,13 @@ fn test_data(
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
-    let rotolo = Compiler::build(source_code)?;
+    let compile_res = Compiler::build(source_code);
+
+    if let Err(e) = &compile_res {
+        eprintln!("{e}")
+    }
+
+    let rotolo = compile_res?;
     let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     let rm_msg = BytesRecord::<RouteMonitoring>::new(buf.clone().into());
@@ -83,7 +89,13 @@ fn test_data_2(
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
-    let rotolo = Compiler::build(source_code)?;
+    let compile_res = Compiler::build(source_code);
+
+    if let Err(e) = &compile_res {
+        eprintln!("{e}")
+    }
+
+    let rotolo = compile_res?;
     let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     let buf = vec![
@@ -150,7 +162,13 @@ fn test_data_3(
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
-    let rotolo = Compiler::build(source_code)?;
+    let compile_res = Compiler::build(source_code);
+
+    if let Err(e) = &compile_res {
+        eprintln!("{e}")
+    }
+
+    let rotolo = compile_res?;
     let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     // BMP PeerDownNotification type 3, containing a BGP NOTIFICATION.
@@ -215,7 +233,13 @@ fn test_data_4(
         println!("Evaluate filter-map {}...", name);
 
         // Compile the source code in this example
-        let rotolo = Compiler::build(source_code)?;
+        let compile_res = Compiler::build(source_code);
+
+        if let Err(e) = &compile_res {
+            eprintln!("{e}")
+        }
+
+        let rotolo = compile_res?;
         let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
     
         trace!("Used Arguments");
@@ -272,7 +296,13 @@ fn compile_initiation_payload(
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
-    let rotolo = Compiler::build(source_code)?;
+    let compile_res = Compiler::build(source_code);
+
+    if let Err(e) = &compile_res {
+        eprintln!("{e}")
+    }
+
+    let rotolo = compile_res?;
     let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     // assert!(i_msg.is_ok());

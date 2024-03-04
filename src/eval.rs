@@ -1114,11 +1114,11 @@ impl ast::ApplyScope {
                     term.name,
                     if fma.negate {
                         symbols::SymbolKind::MatchAction(
-                            MatchActionType::Filter,
+                            MatchActionType::Negate,
                         )
                     } else {
                         symbols::SymbolKind::MatchAction(
-                            MatchActionType::Negate,
+                            MatchActionType::Filter,
                         )
                     },
                     // The AcceptReject value from the Apply section does not end up

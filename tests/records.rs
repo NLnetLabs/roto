@@ -111,8 +111,13 @@ fn test_data(
     trace!("Evaluate filter-map {}...", name);
 
     let c = Compiler::new();
-    let roto_packs = c.build_from_compiler(source_code)?;
+    let compiler_res = c.build_from_compiler(source_code);
 
+    if let Err(e) = &compiler_res {
+        eprintln!("{e}");
+    }
+
+    let roto_packs = compiler_res?;
     let roto_pack = roto_packs.retrieve_pack_as_refs(&name)?;
     let asn: TypeValue = Asn::from_u32(211321).into();
 
@@ -338,7 +343,7 @@ fn test_records_compare_11() {
 fn test_records_compare_12() {
     common::init();
     let src_line = src_code(
-        "D { asn: AS99, i: { f: 86400, g: AS24, h: { l:2, k: 100 } }, d: 400 }",
+        "D { asn: AS99, i: { f: 86400, g: AS24, h: { l: 2, k: 100 } }, d: 400 }",
         "100 in [a.i.h.k,2,3,4,5]; // Peer Down",
         "reject",
     );
