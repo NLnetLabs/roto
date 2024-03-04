@@ -271,17 +271,17 @@ impl<'source> Parser<'source> {
                 match c {
                     Community::Standard(x) => {
                         LiteralExpr::StandardCommunityLiteral(
-                            StandardCommunityLiteral(x.to_string()),
+                            StandardCommunityLiteral(x),
                         )
                     }
                     Community::Extended(x) => {
                         LiteralExpr::ExtendedCommunityLiteral(
-                            ExtendedCommunityLiteral(x.to_string()),
+                            ExtendedCommunityLiteral(x),
                         )
                     }
                     Community::Large(x) => {
                         LiteralExpr::LargeCommunityLiteral(
-                            LargeCommunityLiteral(x.to_string()),
+                            LargeCommunityLiteral(x),
                         )
                     }
                     Community::Ipv6Extended(_) => {
