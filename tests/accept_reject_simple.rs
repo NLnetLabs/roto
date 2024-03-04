@@ -20,7 +20,7 @@ fn test_data(
 
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code)?;
-    let roto_pack = rotolo.retrieve_pack_as_arcs(&name)?;
+    let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     let payload_type =
         TypeDef::new_record_type(vec![("asn", Box::new(TypeDef::Asn))])?;

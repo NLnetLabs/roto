@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::VecDeque,
     fmt::{Display, Formatter},
     sync::Arc,
 };
@@ -24,8 +24,8 @@ use crate::{
     vm::{
         compute_hash, Command, CommandArg, CompiledCollectionField,
         CompiledField, CompiledPrimitiveField, CompiledVariable,
-        ExtDataSource, FilterMapArg, FilterMapArgs, OpCode, StackRefPos,
-        VariablesRefTable, FieldIndex,
+        ExtDataSource, FieldIndex, FilterMapArg, FilterMapArgs, OpCode,
+        StackRefPos, VariablesRefTable,
     },
 };
 
@@ -70,7 +70,6 @@ pub use crate::compiler::error::CompileError;
 /// Rotolo holds all the attributes of the compilation as owned. There are
 /// public methods to retrieve and iter over the packs filled with references
 /// or with arcs.
-
 #[derive(Debug, Clone)]
 pub struct Rotolo {
     packs: Vec<RotoPack>,
@@ -78,124 +77,36 @@ pub struct Rotolo {
 }
 
 impl Rotolo {
-    pub fn inspect_all_arguments(
-        &self,
-    ) -> HashMap<Scope, Vec<(&str, TypeDef)>> {
-        let mut res = HashMap::<Scope, Vec<(&str, TypeDef)>>::new();
-        for rp in self.packs.iter() {
-            res.insert(
-                rp.filter_map_name.clone(),
-                rp.arguments
-                    .iter()
-                    .map(|a| (a.get_name(), a.get_type()))
-                    .collect::<Vec<_>>(),
-            );
-        }
-
-        res
-    }
-
-    pub fn is_success(&self) -> bool {
-        self.mis_compilations.is_empty()
-    }
-
-    pub fn get_mis_compilations(&self) -> &Vec<(Scope, CompileError)> {
+    pub fn get_mis_compilations(&self) -> &[(Scope, CompileError)] {
         &self.mis_compilations
     }
 
-    pub fn take_pack_by_name(
-        &mut self,
-        name: &Scope,
-    ) -> Result<RotoPack, CompileError> {
-        let idx = self.packs.iter().position(|p| p.filter_map_name == *name);
-        if let Some(idx) = idx {
-            let p = self.packs.remove(idx);
-            Ok(p)
+    /// Get the packs from this Rotolo
+    ///
+    /// If any miscompilations occurred, those miscompilations will be
+    /// returned instead.
+    pub fn packs(self) -> Result<Vec<RotoPack>, Vec<(Scope, CompileError)>> {
+        if self.mis_compilations.is_empty() {
+            Ok(self.packs)
         } else {
-            Err(CompileError::from(format!(
-                "Cannot find roto pack with name '{:?}'",
-                name
-            )))
+            Err(self.mis_compilations)
         }
     }
 
-    pub fn packs_to_owned(&mut self) -> Vec<RotoPack> {
-        std::mem::take(&mut self.packs)
-    }
-
-    pub fn clean_packs_to_owned(mut self) -> Vec<RotoPack> {
-        self.packs.retain(|p| {
-            matches!(
-                p.filter_type,
-                FilterType::Filter | FilterType::FilterMap
-            )
-        });
-        self.packs
-    }
-
-    pub fn get_scopes(&self) -> Vec<Scope> {
-        self.iter_as_refs().map(|p| p.0).collect::<Vec<_>>()
-    }
-
     // this iterator is not public because that would leak the (private)
     // RotoPack.
-    fn iter<'a, T: From<&'a RotoPack>>(
-        &'a self,
-    ) -> impl Iterator<Item = (Scope, Result<T, CompileError>)> + 'a {
+    fn iter(
+        &self,
+    ) -> impl Iterator<Item = (&Scope, Result<&RotoPack, &CompileError>)>
+    {
         let mp = self
-            .get_mis_compilations()
+            .mis_compilations
             .iter()
-            .map(|mp| (mp.0.clone(), Err(mp.1.clone())));
+            .map(|(scope, err)| (scope, Err(err)));
         self.packs
             .iter()
-            .map(|p| (p.filter_map_name.clone(), Ok(p.into())))
+            .map(|p| (&p.filter_map_name, Ok(p)))
             .chain(mp)
-    }
-
-    // this iterator is not public because that would leak the (private)
-    // RotoPack.
-    fn iter_clean<'a, T: From<&'a RotoPack>>(
-        &'a self,
-    ) -> impl Iterator<Item = T> + 'a {
-        self.packs
-            .iter()
-            .filter(|p| {
-                matches!(
-                    p.filter_type,
-                    FilterType::Filter | FilterType::FilterMap
-                )
-            })
-            .map(|p| p.into())
-    }
-
-    /// Returns an iterator that goes over all the mis-compilations and packs.
-    /// The items returned from this Iterator are Results over RotoPacks
-    /// filled with `Arc<T>` over all collection-type attributes T inside the
-    /// pack, or, they are a Compile Error, indicating a mis-compilation.
-    pub fn iter_as_arcs(
-        &self,
-    ) -> impl Iterator<Item = (Scope, Result<RotoPackArc, CompileError>)>
-    {
-        self.iter::<RotoPackArc>()
-    }
-
-    /// Returns an iterator that goes over all the mis-compilations and packs.
-    /// The items returned from this Iterator are Results over RotoPacks
-    /// filled with `Arc<T>` over all collection-type attributes T inside the
-    /// pack, or, they are a Compile Error, indicating a mis-compilation.
-    pub fn iter_clean_as_arcs(&self) -> impl Iterator<Item = RotoPackArc> {
-        self.iter_clean::<RotoPackArc>()
-    }
-
-    /// Returns an iterator that goes over all the mis-compilations and packs.
-    /// The items returned from this Iterator are RotoPacks filled with &T
-    /// over all collection-type attributes T inside the pack, or, they are a
-    /// Compile Error, indicating a mis-compilation.
-    pub fn iter_as_refs(
-        &self,
-    ) -> impl Iterator<Item = (Scope, Result<RotoPackRef, CompileError>)>
-    {
-        self.iter::<RotoPackRef>()
     }
 
     // Not public, because it would leak the (private) RotoPack.
@@ -203,27 +114,20 @@ impl Rotolo {
         &'a self,
         name: &'a Scope,
     ) -> Result<T, CompileError> {
-        if !self.mis_compilations.is_empty() {
-            return Err(self.mis_compilations[0].1.clone());
+        match self.iter().find(|p| p.0 == name) {
+            None => Err(CompileError::from(format!(
+                "Can't find filter-map with specified name in this pack: {}",
+                name
+            ))),
+            Some((_, Ok(p))) => Ok(p.into()),
+            Some((_, Err(e))) => {
+                Err(CompileError::from(format!(
+                "The filter-map {} was defined for but contained the following error:\n{}",
+                name,
+                e
+            )))
+        },
         }
-        self.iter::<&RotoPack>()
-            .find(|p| p.0 == *name)
-            .ok_or_else(|| {
-                CompileError::from(format!(
-                    "Can't find filter-map with specified name in this pack: {}",
-                    name
-                ))
-            })
-            .and_then(|p| {
-                if let Ok(p) = p.1 {
-                    Ok(p.into())
-                } else {
-                    Err(p.1.err().unwrap_or(CompileError::from(format!(
-                        "Can't retrieve filter-map name: {} for this roto pack.",
-                        name
-                    ))))
-                }
-            })
     }
 
     /// Retrieves a pack by name, returns a Result over a pack that contains
@@ -233,65 +137,7 @@ impl Rotolo {
         &'a self,
         name: &'a Scope,
     ) -> Result<RotoPackRef, CompileError> {
-        self.retrieve_pack::<RotoPackRef<'a>>(name)
-    }
-
-    /// Retrieves a pack by name, returns a Result over a pack that contains
-    /// `Arc<T>` for every collection-type attribute: T inside the pack. An
-    /// error indicates a mis-compilation for this Filter(Map).
-    pub fn retrieve_pack_as_arcs<'a>(
-        &'a self,
-        name: &'a Scope,
-    ) -> Result<RotoPackArc, CompileError> {
-        self.retrieve_pack::<RotoPackArc<'a>>(name)
-    }
-
-    /// Retrieves the first pack in this rotolo, either a pack that contains
-    /// `&T` for every collection-type attribute: T inside the pack, or an
-    /// error indicating a mis-compilation for this Filter(Map).
-    pub fn retrieve_first_pack_as_arcs(
-        &self,
-    ) -> Result<RotoPackArc, CompileError> {
-        self.iter::<&RotoPack>()
-            .take(1)
-            .next()
-            .ok_or_else(|| {
-                CompileError::from(
-                    "No filter-maps are available in this pack",
-                )
-            })
-            .and_then(|p| {
-                if let Ok(p) = p.1 {
-                    Ok(p.into())
-                } else {
-                    Err(p.1.err().unwrap_or(CompileError::from(
-                        "Can't find filter-map with specified name in this pack"
-                    )))
-                }
-            })
-    }
-
-    pub fn compile_all_arguments(
-        &self,
-        mut args: HashMap<Scope, Vec<(&str, TypeValue)>>,
-    ) -> Result<HashMap<Scope, FilterMapArgs>, CompileError> {
-        let mut res = HashMap::<Scope, FilterMapArgs>::new();
-        for pack in self.packs.iter() {
-            let args = std::mem::take(
-                args.get_mut(&pack.filter_map_name).ok_or_else(|| {
-                    CompileError::Internal(format!(
-                        "Cannot compile arguments: {:?}",
-                        pack.filter_map_name
-                    ))
-                })?,
-            );
-            let cp = pack.arguments.compile_arguments(args);
-            if let Ok(map) = cp {
-                res.insert(pack.filter_map_name.clone(), map);
-            }
-        }
-
-        Ok(res)
+        self.retrieve_pack(name)
     }
 
     pub fn compile_arguments(
@@ -301,12 +147,7 @@ impl Rotolo {
     ) -> Result<FilterMapArgs, CompileError> {
         let pack = self.packs.iter().find(|p| p.filter_map_name == *name);
         if let Some(pack) = pack {
-            let cp = pack.arguments.compile_arguments(args);
-
-            match cp {
-                Ok(map) => Ok(map),
-                Err(err) => Err(err),
-            }
+            pack.arguments.compile_arguments(args)
         } else {
             Err(format!(
                 "Can't find with specified filter-map name: {}",
@@ -320,7 +161,7 @@ impl Rotolo {
 //------------ InternalPack -------------------------------------------------
 
 /// A compiled Filter(Map)
-
+///
 /// RotoPacks are the public representation of the compiled packs, where the
 /// collection-type fields can be `&T`, `Arc<T>`, or really any other
 /// `T: AsRef<[T]>.`.
@@ -434,8 +275,7 @@ impl<
 
 //------------ RotoPack -----------------------------------------------------
 
-// The internal representation of a RotoPack, where all values are owned.
-
+/// The internal representation of a RotoPack, where all values are owned.
 #[derive(Debug, Clone)]
 pub struct RotoPack {
     filter_map_name: Scope,
@@ -1036,12 +876,11 @@ pub(crate) fn generate_code_for_token_value(
             vec![Command::new(OpCode::PushStack, vec![CommandArg::MemPos(2)])]
         }
         Token::Variable(var_to) => {
-            if let Some(var) = state
-                .used_variables
-                .iter()
-                .find(|(_, var)| { 
-                    var.get_token().try_into().is_ok_and(|var: usize| var == var_to) })
-            {
+            if let Some(var) = state.used_variables.iter().find(|(_, var)| {
+                var.get_token()
+                    .try_into()
+                    .is_ok_and(|var: usize| var == var_to)
+            }) {
                 vec![Command::new(
                     OpCode::PushStack,
                     vec![CommandArg::ConstantIndex(
@@ -1170,7 +1009,9 @@ fn compile_filter_map(
     // compile the variables used in the terms
     state = compile_assignments(state)?;
 
-    if state.cur_mem_pos == 0 { state.cur_mem_pos = 2 };
+    if state.cur_mem_pos == 0 {
+        state.cur_mem_pos = 2
+    };
     (mir, state) = compile_apply_section(mir, state)?;
 
     state.cur_mir_block = MirBlock::new();
@@ -1672,9 +1513,10 @@ fn compile_apply_section(
                                 trace!("No action defined. Nothing to do.");
                             }
                             _ => {
-                                return Err(CompileError::Internal(
-                                    format!("No token found for action section: '{}'", action_section.get_name())
-                                ));
+                                return Err(CompileError::Internal(format!(
+                                    "No token found for action section: '{}'",
+                                    action_section.get_name()
+                                )));
                             }
                         };
 
@@ -1812,7 +1654,11 @@ fn compile_apply_section(
                     }
                 }
 
-                state = compile_match_action(match_action.get_match_action(), vec![], state)?;
+                state = compile_match_action(
+                    match_action.get_match_action(),
+                    vec![],
+                    state,
+                )?;
             }
             _ => {
                 return Err(CompileError::new("invalid match action".into()));

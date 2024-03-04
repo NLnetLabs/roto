@@ -34,7 +34,7 @@ fn test_data(
 
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code)?;
-    let roto_pack = rotolo.retrieve_pack_as_arcs(&name)?;
+    let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     let rm_msg = BytesRecord::<RouteMonitoring>::new(buf.clone().into());
     assert!(rm_msg.is_ok());
@@ -112,7 +112,7 @@ fn test_data_2(
 
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code)?;
-    let roto_pack = rotolo.retrieve_pack_as_arcs(&name)?;
+    let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     let buf = vec![
         0x03, 0x00, 0x00, 0x00, 0x67, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -198,7 +198,7 @@ fn test_data_3(
 
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code)?;
-    let roto_pack = rotolo.retrieve_pack_as_arcs(&name)?;
+    let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     // BMP PeerDownNotification type 3, containing a BGP NOTIFICATION.
     let buf = vec![
@@ -281,63 +281,63 @@ fn test_data_4(
 ) -> Result<VmResult, Box<dyn std::error::Error>> {
     println!("Evaluate filter-map {}...", name);
 
-    // Compile the source code in this example
-    let rotolo = Compiler::build(source_code)?;
-    let roto_pack = rotolo.retrieve_pack_as_arcs(&name)?;
+        // Compile the source code in this example
+        let rotolo = Compiler::build(source_code)?;
+        let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
+    
+        trace!("Used Arguments");
+        trace!("{:#?}", &roto_pack.get_arguments());
+        trace!("Used Data Sources");
+        trace!("{:#?}", &roto_pack.get_data_sources());
+    
+        let ds_ref = roto_pack.get_data_sources();
+    
+        for mb in roto_pack.get_mir().iter() {
+            println!("{}", mb);
+        }
+ 
+        let peer_ip = "192.0.2.0".parse().unwrap();
 
-    trace!("Used Arguments");
-    trace!("{:#?}", &roto_pack.get_arguments());
-    trace!("Used Data Sources");
-    trace!("{:#?}", &roto_pack.get_data_sources());
+        let provenance = Provenance {
+            timestamp: chrono::Utc::now(),
+            router_id: 0,
+            connection_id: 0,
+            peer_id: PeerId {
+                addr: peer_ip,
+                asn: Asn::from(65534),
+            },
+            peer_bgp_id: [0; 4].into(),
+            peer_distuingisher: [0; 8],
+            peer_rib_type: PeerRibType::OutPost,
+        };
 
-    let ds_ref = roto_pack.get_data_sources();
+        let context =
+            RouteContext::new(None, NlriStatus::InConvergence, provenance);
 
-    for mb in roto_pack.get_mir().iter() {
-        println!("{}", mb);
-    }
-
-    let peer_ip = "192.0.2.0".parse().unwrap();
-
-    let provenance = Provenance {
-        timestamp: chrono::Utc::now(),
-        router_id: 0,
-        connection_id: 0,
-        peer_id: PeerId {
-            addr: peer_ip,
-            asn: Asn::from(65534),
-        },
-        peer_bgp_id: [0; 4].into(),
-        peer_distuingisher: [0; 8],
-        peer_rib_type: PeerRibType::OutPost,
-    };
-
-    let context =
-        RouteContext::new(None, NlriStatus::InConvergence, provenance);
-
-    let mut vm = vm::VmBuilder::new()
-        // .with_arguments(args)
-        .with_data_sources(ds_ref)
-        .with_context(context)
-        .with_mir_code(roto_pack.get_mir())
-        .build()?;
-
-    let mem = &mut vm::LinearMemory::uninit();
-    let res = vm
-        .exec(
-            payload,
-            None::<Record>,
-            // Some(filter_map_arguments),
-            None,
-            mem,
-        )
-        .unwrap();
-
-    trace!("\nRESULT");
-    trace!("action: {}", res.accept_reject);
-    trace!("rx    : {:?}", res.rx);
-    trace!("tx    : {:?}", res.tx);
-
-    Ok(res)
+        let mut vm = vm::VmBuilder::new()
+            // .with_arguments(args)
+            .with_context(context)
+            .with_data_sources(ds_ref)
+            .with_mir_code(roto_pack.get_mir())
+            .build()?;
+    
+        let mem = &mut vm::LinearMemory::uninit();
+        let res = vm
+            .exec(
+                payload,
+                None::<Record>,
+                // Some(filter_map_arguments),
+                None,
+                mem,
+            )
+            .unwrap();
+    
+        trace!("\nRESULT");
+        trace!("action: {}", res.accept_reject);
+        trace!("rx    : {:?}", res.rx);
+        trace!("tx    : {:?}", res.tx);
+    
+        Ok(res)
 }
 
 fn initiation_payload_example() -> Vec<u8> {
@@ -359,7 +359,7 @@ fn compile_initiation_payload(
 
     // Compile the source code in this example
     let rotolo = Compiler::build(source_code)?;
-    let roto_pack = rotolo.retrieve_pack_as_arcs(&name)?;
+    let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     // assert!(i_msg.is_ok());
 
