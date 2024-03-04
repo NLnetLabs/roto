@@ -1661,6 +1661,10 @@ impl<
         self.stack.borrow_mut().clear();
     }
 
+    pub fn update_context(&mut self, context: C) {
+        self.context = context;
+    } 
+
     fn get_data_source(
         &self,
         token: usize,
