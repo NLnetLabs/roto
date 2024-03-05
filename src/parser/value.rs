@@ -313,11 +313,8 @@ impl<'source> Parser<'source> {
             Token::CurlyRight,
             Token::Comma,
             |parser| {
-                dbg!(parser.peek());
                 let key = parser.identifier()?;
-                dbg!(parser.peek());
                 parser.take(Token::Colon)?;
-                dbg!("here?");
                 let value = parser.value_expr()?;
                 Ok((key, value))
             },
