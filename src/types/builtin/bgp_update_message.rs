@@ -7,7 +7,7 @@ use routecore::
         communities::HumanReadableCommunity,
         message::{update::LocalPref, SessionConfig},
         path_attributes::AggregatorInfo,
-        types::{AfiSafi, MultiExitDisc, NextHop, Origin, OriginType},
+        types::{MultiExitDisc, NextHop, Origin, OriginType},
     };
 
 use crate::{
@@ -89,10 +89,12 @@ impl BytesRecord<BgpUpdateMessage> {
         .map_err(|_| VmError::InvalidPayload)
     }
 
-    pub fn exec_value_method(method_token: usize,
-        args: &[StackValue],
-        res_type: TypeDef,
-        record: &BytesRecord<BgpUpdateMessage>) -> Result<TypeValue, VmError> {
+    pub fn exec_value_method(
+        _method_token: usize,
+        _args: &[StackValue],
+        _res_type: TypeDef,
+        _record: &BytesRecord<BgpUpdateMessage>
+    ) -> Result<TypeValue, VmError> {
             todo!()
     }
 }

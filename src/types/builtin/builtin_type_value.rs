@@ -7,8 +7,7 @@ use std::net::IpAddr;
 
 use routecore::asn::Asn;
 use routecore::bgp::message::nlri::{Nlri, PathId};
-// use routecore::bgp::path_attributes::AtomicAggregate;
-use routecore::bgp::types::{AfiSafi, AtomicAggregate, MultiExitDisc, NextHop, Origin, OriginType};
+use routecore::bgp::types::{AfiSafi, AtomicAggregate, MultiExitDisc, NextHop, Origin};
 use routecore::bgp::path_attributes::AggregatorInfo;
 use routecore::addr::Prefix;
 use routecore::bgp::communities::HumanReadableCommunity as Community;

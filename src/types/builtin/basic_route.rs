@@ -8,14 +8,17 @@ use routecore::bgp::communities::Community;
 use routecore::bgp::communities::HumanReadableCommunity;
 use routecore::bgp::message::nlri::BasicNlri;
 use routecore::bgp::message::nlri::FlowSpecNlri;
+use routecore::bgp::nlri::afisafi::AfiSafiParse;
+use routecore::bgp::nlri::afisafi::Ipv4UnicastNlri;
+use routecore::bgp::nlri::afisafi::IsPrefix;
 use routecore::bgp::path_attributes::BgpIdentifier;
 use routecore::bgp::path_attributes::PaMap;
 use routecore::bgp::path_attributes::PathAttribute;
 use routecore::bgp::types::LocalPref;
 use routecore::bgp::types::MultiExitDisc;
 use routecore::bgp::types::NextHop;
-use routecore::bgp::workshop::afisafi_nlri::AfiSafiNlri;
-use routecore::bgp::workshop::afisafi_nlri::HasBasicNlri;
+use routecore::bgp::nlri::afisafi::AfiSafiNlri;
+use routecore::bgp::nlri::afisafi::Ipv4FlowSpecNlri;
 use routecore::bgp::workshop::route::RouteWorkshop;
 use serde::Deserialize;
 use std::fmt::{Display, Formatter};
@@ -59,16 +62,14 @@ pub struct BasicRoute(
 );
 
 impl BasicRoute {
-    pub fn new<
-        N: AfiSafiNlri<bytes::Bytes, Nlri = BasicNlri> + HasBasicNlri,
-    >(
+    pub fn new<N: AfiSafiNlri + IsPrefix>(
         route: routecore::bgp::workshop::route::RouteWorkshop<
             bytes::Bytes,
             N,
         >,
     ) -> Self {
         BasicRoute(RouteWorkshop::from_pa_map(
-            route.nlri().basic_nlri(),
+            route.nlri().prefix().into(),
             route.attributes().clone(),
         ))
     }
@@ -211,6 +212,12 @@ impl From<RouteWorkshop<bytes::Bytes, BasicNlri>> for TypeValue {
 impl From<BasicRoute> for TypeValue {
     fn from(value: BasicRoute) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::Route(value))
+    }
+}
+
+impl<O: routecore::Octets + Clone + std::fmt::Debug + std::hash::Hash> From<RouteWorkshop<O, Ipv4UnicastNlri>> for TypeValue {
+    fn from(_value: RouteWorkshop<O, Ipv4UnicastNlri>) -> Self {
+        todo!()
     }
 }
 
@@ -781,7 +788,7 @@ impl From<BasicNlriToken> for u8 {
 
 //------------ FlowSpecRoute -------------------------------------------------
 
-impl RotoType for RouteWorkshop<FlowSpecNlri<bytes::Bytes>, bytes::Bytes> {
+impl<O: routecore::Octets + std::fmt::Debug> RotoType for RouteWorkshop<Ipv4FlowSpecNlri<O>, bytes::Bytes> {
     fn get_props_for_method(
         _ty: TypeDef,
         _method_name: &crate::ast::Identifier,
@@ -829,11 +836,11 @@ impl RotoType for RouteWorkshop<FlowSpecNlri<bytes::Bytes>, bytes::Bytes> {
     }
 }
 
-impl From<RouteWorkshop<FlowSpecNlri<bytes::Bytes>, bytes::Bytes>>
+impl<O: routecore::Octets> From<RouteWorkshop<Ipv4FlowSpecNlri<O>, bytes::Bytes>>
     for TypeValue
 {
     fn from(
-        _value: RouteWorkshop<FlowSpecNlri<bytes::Bytes>, bytes::Bytes>,
+        _value: RouteWorkshop<Ipv4FlowSpecNlri<O>, bytes::Bytes>,
     ) -> Self {
         todo!()
     }
@@ -1161,8 +1168,8 @@ impl From<PeerId> for TypeValue {
 
 impl RotoType for PeerId {
     fn get_props_for_method(
-        ty: TypeDef,
-        method_name: &crate::ast::Identifier,
+        _ty: TypeDef,
+        _method_name: &crate::ast::Identifier,
     ) -> Result<MethodProps, CompileError>
     where
         Self: std::marker::Sized,
@@ -1172,7 +1179,7 @@ impl RotoType for PeerId {
 
     fn into_type(
         self,
-        type_value: &TypeDef,
+        _type_value: &TypeDef,
     ) -> Result<TypeValue, CompileError>
     where
         Self: std::marker::Sized,
@@ -1182,26 +1189,26 @@ impl RotoType for PeerId {
 
     fn exec_value_method<'a>(
         &'a self,
-        method_token: usize,
-        args: &'a [StackValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &'a [StackValue],
+        _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
     fn exec_consume_value_method(
         self,
-        method_token: usize,
-        args: Vec<TypeValue>,
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         todo!()
     }
 
     fn exec_type_method(
-        method_token: usize,
-        args: &[StackValue],
-        res_type: TypeDef,
+        _method_token: usize,
+        _args: &[StackValue],
+        _res_type: TypeDef,
     ) -> Result<TypeValue, VmError> {
         todo!()
     }
