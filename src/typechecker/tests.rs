@@ -18,6 +18,15 @@ fn one_record() {
 }
 
 #[test]
+fn declared_multiple_times() {
+    let src = "
+        type Foo { a: u32 }
+        type Foo { a: u32 }
+    ";
+    assert!(typecheck(src).is_err());
+}
+
+#[test]
 fn undeclared_type_in_record() {
     let src = "type Bar { f: Foo }";
     assert!(typecheck(src).is_err());
@@ -97,7 +106,7 @@ fn output_stream_contains_record() {
 #[test]
 fn rib_contains_record() {
     let src = "
-        rib o contains A { b: B }
+        rib r contains A { b: B }
         type B { x: u32 }
     ";
     assert!(typecheck(src).is_ok());
