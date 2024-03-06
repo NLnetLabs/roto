@@ -1,9 +1,11 @@
 //! Type checker for Roto scripts
 
+use crate::ast::{self, TypeIdentField};
+use scope::Scope;
 use std::collections::{hash_map::Entry, HashMap};
 
-use crate::ast::{self, TypeIdentField};
-
+mod filter_map;
+mod scope;
 #[cfg(test)]
 mod tests;
 mod typed;
@@ -16,19 +18,19 @@ const BUILT_IN_TYPES: &'static [(&'static str, Type)] = &[
     ("string", Type::String),
 ];
 
-enum MaybeType {
-    Type(Type),
-    Var(usize),
-}
-
 // This should grow to the already existing TypeDef
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 enum Type {
+    _Var(usize),
     U32,
     U16,
     U8,
     String,
     Bool,
+    Prefix,
+    PrefixLength,
+    AsNumber,
+    IpAddress,
     Table(Box<Type>),
     OutputStream(Box<Type>),
     Rib(Box<Type>),
@@ -43,9 +45,7 @@ struct TypeChecker {
     /// Since type vars are indices, we can get the type easily by indexing.
     /// This map is not retroactively updated; resolving a type might need
     /// multiple hops.
-    _map: Vec<MaybeType>,
-    /// Map from identifier to type
-    variables: HashMap<String, MaybeType>,
+    _type_var_map: Vec<Type>,
     /// Map from type names to types
     types: HashMap<String, Type>,
 }
@@ -56,8 +56,7 @@ impl TypeChecker {
     #[allow(dead_code)]
     fn new() -> Self {
         Self {
-            _map: Vec::new(),
-            variables: HashMap::new(),
+            _type_var_map: Vec::new(),
             types: HashMap::new(),
         }
     }
@@ -80,6 +79,8 @@ impl TypeChecker {
             .map(|(s, t)| (s.to_string(), Some(t.clone())))
             .collect();
 
+        let mut root_scope = Scope::default();
+
         for expr in tree.expressions {
             match expr {
                 // We'll do all filter-maps after all type declarations
@@ -91,10 +92,10 @@ impl TypeChecker {
                 }) => {
                     let ty =
                         create_contains_type(&mut types, contain_ty, body)?;
-                    self.variables.insert(
+                    root_scope.insert_var(
                         ident.ident.to_string(),
-                        MaybeType::Type(Type::Rib(Box::new(ty))),
-                    );
+                        Type::Rib(Box::new(ty)),
+                    )?;
                 }
                 ast::RootExpr::Table(ast::Table {
                     ident,
@@ -103,10 +104,10 @@ impl TypeChecker {
                 }) => {
                     let ty =
                         create_contains_type(&mut types, contain_ty, body)?;
-                    self.variables.insert(
+                    root_scope.insert_var(
                         ident.ident.to_string(),
-                        MaybeType::Type(Type::Table(Box::new(ty))),
-                    );
+                        Type::Table(Box::new(ty)),
+                    )?;
                 }
                 ast::RootExpr::OutputStream(ast::OutputStream {
                     ident,
@@ -115,10 +116,10 @@ impl TypeChecker {
                 }) => {
                     let ty =
                         create_contains_type(&mut types, contain_ty, body)?;
-                    self.variables.insert(
+                    root_scope.insert_var(
                         ident.ident.to_string(),
-                        MaybeType::Type(Type::OutputStream(Box::new(ty))),
-                    );
+                        Type::OutputStream(Box::new(ty)),
+                    )?;
                 }
                 ast::RootExpr::Ty(ast::RecordTypeAssignment {
                     ident,
@@ -129,7 +130,7 @@ impl TypeChecker {
                         evaluate_record_type(
                             &mut types,
                             &record_type.key_values,
-                        ),
+                        )?,
                     );
                     store_type(&mut types, ident.ident.to_string(), ty)?;
                 }
@@ -154,9 +155,33 @@ impl TypeChecker {
 
         self.detect_type_cycles()?;
 
-        Ok(typed::SyntaxTree {
-            filter_maps: Vec::new(),
-        })
+        let filter_maps = filter_maps
+            .into_iter()
+            .map(|f| self.filter_map(&root_scope, *f))
+            .collect::<Result<_, _>>()?;
+
+        Ok(typed::SyntaxTree { filter_maps })
+    }
+
+    /// Check if two types resolve to the same type
+    /// 
+    /// This is a bit awkward at the moment. We might need to find a better
+    /// representation of types that forces every type into a canonical
+    /// representation.
+    fn types_equal<'a>(&'a self, mut a: &'a Type, mut b: &'a Type) -> bool {
+        if a == b {
+            return true;
+        }
+
+        if let Type::Name(name) = a {
+            a = self.types.get(name).unwrap();
+        }
+        
+        if let Type::Name(name) = b {
+            b = self.types.get(name).unwrap();
+        }
+
+        a == b
     }
 
     /// Return an error if there is a cycles in the type declarations
@@ -177,6 +202,7 @@ impl TypeChecker {
     /// To detect cycles, we do a DFS topological sort.
     fn detect_type_cycles(&self) -> TypeResult<()> {
         let mut visited = HashMap::new();
+
         for ident in self.types.keys() {
             self.visit_name(&mut visited, ident)?;
         }
@@ -184,15 +210,21 @@ impl TypeChecker {
         Ok(())
     }
 
-    fn visit_name<'a>(&'a self, visited: &mut HashMap<&'a str, bool>, s: &'a str) -> TypeResult<()> {
+    fn visit_name<'a>(
+        &'a self,
+        visited: &mut HashMap<&'a str, bool>,
+        s: &'a str,
+    ) -> TypeResult<()> {
         match visited.get(s) {
             Some(false) => return Err(format!("cycle detected on {s}!")),
             Some(true) => return Ok(()),
             None => {}
         };
+
         visited.insert(s, false);
         self.visit(visited, &self.types[s])?;
         visited.insert(s, true);
+
         Ok(())
     }
 
@@ -202,7 +234,16 @@ impl TypeChecker {
         ty: &'a Type,
     ) -> TypeResult<()> {
         match ty {
-            Type::U32 | Type::U16 | Type::U8 | Type::String | Type::Bool => {
+            Type::_Var(_)
+            | Type::Prefix
+            | Type::PrefixLength
+            | Type::AsNumber
+            | Type::IpAddress
+            | Type::U32
+            | Type::U16
+            | Type::U8
+            | Type::String
+            | Type::Bool => {
                 // do nothing on primitive types
                 // no need to recurse into them.
                 Ok(())
@@ -216,9 +257,7 @@ impl TypeChecker {
                 }
                 Ok(())
             }
-            Type::Name(ident) => {
-                self.visit_name(visited, &ident)
-            }
+            Type::Name(ident) => self.visit_name(visited, &ident),
         }
     }
 }
@@ -249,7 +288,7 @@ fn create_contains_type(
 ) -> TypeResult<Type> {
     let ty = Type::NamedRecord(
         contain_ty.ident.to_string(),
-        evaluate_record_type(types, &body.key_values),
+        evaluate_record_type(types, &body.key_values)?,
     );
     store_type(types, contain_ty.to_string(), ty.clone())?;
     Ok(ty)
@@ -258,39 +297,45 @@ fn create_contains_type(
 fn evaluate_record_type(
     types: &mut HashMap<String, Option<Type>>,
     fields: &[ast::RibField],
-) -> Vec<(String, Type)> {
-    fields
-        .iter()
-        .map(|field| {
-            let field_ident;
-            let field_type;
-            match field {
-                ast::RibField::PrimitiveField(TypeIdentField {
-                    field_name,
-                    ty,
-                }) => {
-                    field_ident = field_name.ident.to_string();
+) -> TypeResult<Vec<(String, Type)>> {
+    let mut type_fields = Vec::new();
 
-                    // If the type for this is unknown, we insert None,
-                    // which signals that the type is mentioned but not
-                    // yet declared. The declaration will override it
-                    // with Some(...) if we encounter it later.
-                    types.entry(ty.ident.to_string()).or_insert(None);
-                    field_type = Type::Name(ty.ident.to_string());
-                }
-                ast::RibField::RecordField(field) => {
-                    field_ident = field.0.ident.to_string();
-                    field_type = Type::Record(evaluate_record_type(
-                        types,
-                        &field.1.key_values,
-                    ));
-                }
-                ast::RibField::ListField(field) => {
-                    let _field_ident = field.0.ident.to_string();
-                    todo!()
-                }
+    for field in fields {
+        let field_ident;
+        let field_type;
+        match field {
+            ast::RibField::PrimitiveField(TypeIdentField {
+                field_name,
+                ty,
+            }) => {
+                field_ident = field_name.ident.to_string();
+
+                // If the type for this is unknown, we insert None,
+                // which signals that the type is mentioned but not
+                // yet declared. The declaration will override it
+                // with Some(...) if we encounter it later.
+                types.entry(ty.ident.to_string()).or_insert(None);
+                field_type = Type::Name(ty.ident.to_string());
             }
-            (field_ident, field_type)
-        })
-        .collect()
+            ast::RibField::RecordField(field) => {
+                field_ident = field.0.ident.to_string();
+                field_type = Type::Record(evaluate_record_type(
+                    types,
+                    &field.1.key_values,
+                )?);
+            }
+            ast::RibField::ListField(field) => {
+                let _field_ident = field.0.ident.to_string();
+                todo!()
+            }
+        }
+
+        for (existing_ident, _) in &type_fields {
+            if &field_ident == existing_ident {
+                return Err(format!("The field {field_ident} occurs multiple times in a single record"));
+            }
+        }
+        type_fields.push((field_ident, field_type))
+    }
+    Ok(type_fields)
 }
