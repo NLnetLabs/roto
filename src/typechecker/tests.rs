@@ -102,6 +102,17 @@ fn record_cycle() {
 }
 
 #[test]
+fn record_diamond() {
+    let src = "
+        type A { x: B, y: C }
+        type B { x: D }
+        type C { x: D }
+        type D { }
+    ";
+    assert!(typecheck(src).is_ok());
+}
+
+#[test]
 fn table_contains_record() {
     let src = "
         table t contains A { b: B }
