@@ -1,6 +1,6 @@
-use crate::ast::{self, Define, DefineBody};
+use crate::ast::{self, AccessExpr, Define, DefineBody};
 
-use super::{scope::Scope, typed, Type, TypeChecker, TypeResult};
+use super::{scope::Scope, ty::Type, typed, TypeChecker, TypeResult};
 
 impl TypeChecker {
     pub fn filter_map(
@@ -81,14 +81,20 @@ impl TypeChecker {
         Ok(typed::FilterMap {})
     }
 
-    fn expr(&self, scope: &Scope, expr: ast::ValueExpr) -> TypeResult<Type> {
+    fn expr(
+        &mut self,
+        scope: &Scope,
+        expr: ast::ValueExpr,
+    ) -> TypeResult<Type> {
         use ast::ValueExpr::*;
         match expr {
             LiteralAccessExpr(x) => self.literal_access(x),
             PrefixMatchExpr(_) => todo!(),
             ComputeExpr(x) => self.compute_expr(scope, x),
             RootMethodCallExpr(_) => todo!(),
-            AnonymousRecordExpr(_) => todo!(),
+            AnonymousRecordExpr(ast::AnonymousRecordValueExpr {
+                key_values,
+            }) => Ok(Type::Record(self.record_type(scope, key_values)?)),
             TypedRecordExpr(ast::TypedRecordValueExpr {
                 type_id,
                 key_values,
@@ -121,14 +127,16 @@ impl TypeChecker {
                         return Err(format!("Type {record_name} does not have a field {name}."));
                     };
                     let (_, ty) = record_type.remove(idx);
-                    if !self.types_equal(&inferred_type, &ty) {
-                        return Err(format!("Types for field {name} of {record_name} don't match."));
-                    }
+                    self.unify(&inferred_type, &ty)?;
                 }
 
-                let missing: Vec<_> = record_type.into_iter().map(|(s,_)| s).collect();
+                let missing: Vec<_> =
+                    record_type.into_iter().map(|(s, _)| s).collect();
                 if !missing.is_empty() {
-                    return Err(format!("Missing fields on {record_name}: {}", missing.join(", ")))
+                    return Err(format!(
+                        "Missing fields on {record_name}: {}",
+                        missing.join(", ")
+                    ));
                 }
 
                 Ok(Type::Name(record_name.clone()))
@@ -137,22 +145,51 @@ impl TypeChecker {
         }
     }
 
-    fn literal_access(
+    fn access(
         &self,
+        receiver: Type,
+        access: Vec<AccessExpr>,
+    ) -> TypeResult<Type> {
+        let mut last = receiver;
+        for a in access {
+            match a {
+                AccessExpr::MethodComputeExpr(_) => todo!(),
+                AccessExpr::FieldAccessExpr(ast::FieldAccessExpr {
+                    field_names,
+                }) => {
+                    for field in field_names {
+                        if let Type::Record(fields)
+                        | Type::NamedRecord(_, fields) = self.resolve_type(&last)
+                        {
+                            if let Some((_, t)) = fields
+                                .iter()
+                                .find(|(s, _)| s == field.ident.as_str())
+                            {
+                                last = t.clone();
+                                continue;
+                            };
+                        }
+                        return Err(format!("No such field"));
+                    }
+                }
+            }
+        }
+        Ok(last)
+    }
+
+    fn literal_access(
+        &mut self,
         expr: ast::LiteralAccessExpr,
     ) -> TypeResult<Type> {
         let ast::LiteralAccessExpr {
             literal,
             access_expr,
         } = expr;
-        let lit_type = self.literal(literal);
-        if !access_expr.is_empty() {
-            todo!()
-        }
-        lit_type
+        let literal = self.literal(literal)?;
+        self.access(literal, access_expr)
     }
 
-    fn literal(&self, literal: ast::LiteralExpr) -> TypeResult<Type> {
+    fn literal(&mut self, literal: ast::LiteralExpr) -> TypeResult<Type> {
         use ast::LiteralExpr::*;
         Ok(match literal {
             StringLiteral(_) => Type::String,
@@ -163,7 +200,7 @@ impl TypeChecker {
             ExtendedCommunityLiteral(_)
             | StandardCommunityLiteral(_)
             | LargeCommunityLiteral(_) => todo!(),
-            IntegerLiteral(_) | HexLiteral(_) => todo!(),
+            IntegerLiteral(_) | HexLiteral(_) => self.fresh_int(),
             BooleanLiteral(_) => Type::Bool,
         })
     }
@@ -183,14 +220,11 @@ impl TypeChecker {
             }
             ast::AccessReceiver::GlobalScope => todo!(),
         };
-        if !access_expr.is_empty() {
-            todo!()
-        }
-        Ok(receiver_type.clone())
+        self.access(receiver_type.clone(), access_expr)
     }
 
     fn record_type(
-        &self,
+        &mut self,
         scope: &Scope,
         expr: Vec<(ast::Identifier, ast::ValueExpr)>,
     ) -> TypeResult<Vec<(String, Type)>> {

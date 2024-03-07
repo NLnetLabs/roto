@@ -1,0 +1,20 @@
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Type {
+    Var(usize),
+    IntVar(usize),
+    U32,
+    U16,
+    U8,
+    String,
+    Bool,
+    Prefix,
+    PrefixLength,
+    AsNumber,
+    IpAddress,
+    Table(Box<Type>),
+    OutputStream(Box<Type>),
+    Rib(Box<Type>),
+    Record(Vec<(String, Type)>),
+    NamedRecord(String, Vec<(String, Type)>),
+    Name(String),
+}

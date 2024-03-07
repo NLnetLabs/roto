@@ -6,13 +6,13 @@ fn typecheck(s: &str) -> TypeResult<typed::SyntaxTree> {
     let tree = match Parser::parse(s) {
         Ok(ast) => ast,
         Err(e) => {
-            let report = miette::Report::new(e)
-                .with_source_code(s.to_string());
+            let report =
+                miette::Report::new(e).with_source_code(s.to_string());
             println!("{report:?}");
             panic!("Parse error, see above");
         }
     };
-    let res = TypeChecker::new().check(tree);
+    let res = TypeChecker::default().check(tree);
     if let Err(e) = &res {
         eprintln!("{e}");
     }
@@ -91,7 +91,7 @@ fn record_cycle() {
         type D { x: A }
     ";
     assert!(typecheck(src).is_err());
-    
+
     let src = "
         type A { x: B }
         type B { x: C }
@@ -181,7 +181,7 @@ fn using_records() {
         }
     "#;
     typecheck(src).unwrap();
-    
+
     let src = r#"
         type Foo { a: string }
 
@@ -193,7 +193,7 @@ fn using_records() {
         }
     "#;
     assert!(typecheck(src).is_err());
-    
+
     let src = r#"
         type Foo { a: string }
 
@@ -204,5 +204,123 @@ fn using_records() {
             }
         }
     "#;
+    assert!(typecheck(src).is_err());
+}
+
+#[test]
+fn integer_inference() {
+    let src = "
+        type Foo { x: u8 }
+
+        filter-map test {
+            define {
+                rx r: u32;
+                foo = Foo { x: 5 };
+            }
+        }
+    ";
+    typecheck(src).unwrap();
+
+    let src = "
+        type Foo { x: u8 }
+        type Bar { x: u8 }
+
+        filter-map test {
+            define {
+                rx r: u32;
+                a = 5;
+                foo = Foo { x: a };
+            }
+        }
+    ";
+    assert!(typecheck(src).is_ok());
+
+    let src = "
+        type Foo { x: u8 }
+        type Bar { x: u8 }
+
+        filter-map test {
+            define {
+                rx r: u32;
+                a = 5;
+                foo = Foo { x: a };
+                bar = Bar { x: a };
+            }
+        }
+    ";
+    assert!(typecheck(src).is_ok());
+
+    let src = "
+        type Foo { x: u8 }
+        type Bar { x: u32 }
+
+        filter-map test {
+            define {
+                rx r: u32;
+                a = 5;
+                foo = Foo { x: a };
+                bar = Bar { x: a };
+            }
+        }
+    ";
+    assert!(typecheck(src).is_err());
+    
+    let src = "
+        type Foo { x: u8 }
+        type Bar { x: u32 }
+
+        filter-map test {
+            define {
+                rx r: u32;
+                foo = Foo { x: 5 };
+                bar = Bar { x: 5 };
+            }
+        }
+    ";
+    assert!(typecheck(src).is_ok());
+}
+
+#[test]
+fn assign_field_to_other_record() {
+    let src = "
+        type Foo { x: u8 }
+        type Bar { x: u8 }
+
+        filter-map test {
+            define {
+                rx r: u32;
+                foo = Foo { x: 5 };
+                bar = Bar { x: foo.x };
+            }
+        }
+    ";
+    typecheck(src).unwrap();
+
+    let src = "
+        type Foo { x: u8 }
+        type Bar { x: u8 }
+
+        filter-map test {
+            define {
+                rx r: u32;
+                foo = Foo { x: 5 };
+                bar = Bar { x: foo.y };
+            }
+        }
+    ";
+    assert!(typecheck(src).is_err());
+    
+    let src = "
+        type Foo { x: u8 }
+        type Bar { x: u32 }
+
+        filter-map test {
+            define {
+                rx r: u32;
+                foo = Foo { x: 5 };
+                bar = Bar { x: foo.x };
+            }
+        }
+    ";
     assert!(typecheck(src).is_err());
 }

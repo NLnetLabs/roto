@@ -3,11 +3,13 @@
 use crate::ast::{self, TypeIdentField};
 use scope::Scope;
 use std::collections::{hash_map::Entry, HashMap};
+use ty::Type;
 
 mod filter_map;
 mod scope;
 #[cfg(test)]
 mod tests;
+mod ty;
 mod typed;
 
 const BUILT_IN_TYPES: &'static [(&'static str, Type)] = &[
@@ -18,34 +20,17 @@ const BUILT_IN_TYPES: &'static [(&'static str, Type)] = &[
     ("string", Type::String),
 ];
 
-// This should grow to the already existing TypeDef
-#[derive(Clone, PartialEq, Eq)]
-enum Type {
-    _Var(usize),
-    U32,
-    U16,
-    U8,
-    String,
-    Bool,
-    Prefix,
-    PrefixLength,
-    AsNumber,
-    IpAddress,
-    Table(Box<Type>),
-    OutputStream(Box<Type>),
-    Rib(Box<Type>),
-    Record(Vec<(String, Type)>),
-    NamedRecord(String, Vec<(String, Type)>),
-    Name(String),
-}
-
+#[derive(Default)]
 struct TypeChecker {
+    counter: usize,
     /// Map from type var index to a type (or another type var)
     ///
     /// Since type vars are indices, we can get the type easily by indexing.
     /// This map is not retroactively updated; resolving a type might need
     /// multiple hops.
-    _type_var_map: Vec<Type>,
+    type_var_map: HashMap<usize, Type>,
+    /// Map from integer literals to types
+    int_var_map: HashMap<usize, Type>,
     /// Map from type names to types
     types: HashMap<String, Type>,
 }
@@ -53,14 +38,6 @@ struct TypeChecker {
 type TypeResult<T> = Result<T, String>;
 
 impl TypeChecker {
-    #[allow(dead_code)]
-    fn new() -> Self {
-        Self {
-            _type_var_map: Vec::new(),
-            types: HashMap::new(),
-        }
-    }
-
     // This allow just reduces the noise while I'm still writing this code
     #[allow(dead_code)]
     fn check(
@@ -163,25 +140,114 @@ impl TypeChecker {
         Ok(typed::SyntaxTree { filter_maps })
     }
 
-    /// Check if two types resolve to the same type
-    /// 
-    /// This is a bit awkward at the moment. We might need to find a better
-    /// representation of types that forces every type into a canonical
-    /// representation.
-    fn types_equal<'a>(&'a self, mut a: &'a Type, mut b: &'a Type) -> bool {
-        if a == b {
-            return true;
+    fn _fresh_var(&mut self) -> Type {
+        let i = self.counter;
+        self.counter += 1;
+        Type::Var(i)
+    }
+
+    fn fresh_int(&mut self) -> Type {
+        let i = self.counter;
+        self.counter += 1;
+        Type::IntVar(i)
+    }
+
+    fn unify<'a>(&'a mut self, a: &'a Type, b: &'a Type) -> TypeResult<Type> {
+        let a = self.resolve_type(a).clone();
+        let b = self.resolve_type(b).clone();
+
+        Ok(match (a, b) {
+            // We never recurse into NamedRecords, so they are included here.
+            (a, b) if a == b => a.clone(),
+            (
+                Type::IntVar(a),
+                b @ (Type::U8 | Type::U16 | Type::U32 | Type::IntVar(_)),
+            ) => {
+                self.int_var_map.insert(a, b.clone());
+                b.clone()
+            }
+            (
+                a @ (Type::U8 | Type::U16 | Type::U32),
+                Type::IntVar(b)
+            ) => {
+                self.int_var_map.insert(b, a.clone());
+                a.clone()
+            }
+            (Type::Var(a), b) => {
+                // prefer binding from a -> b
+                self.type_var_map.insert(a, b.clone());
+                b.clone()
+            }
+            (a, Type::Var(b)) => {
+                self.type_var_map.insert(b, a.clone());
+                a.clone()
+            }
+            (Type::Table(a), Type::Table(b)) => {
+                Type::Table(Box::new(self.unify(&a, &b)?))
+            }
+            (Type::OutputStream(a), Type::OutputStream(b)) => {
+                Type::OutputStream(Box::new(self.unify(&a, &b)?))
+            }
+            (Type::Rib(a), Type::Rib(b)) => {
+                Type::Rib(Box::new(self.unify(&a, &b)?))
+            }
+            (Type::Record(a_fields), Type::Record(b_fields)) => {
+                if a_fields.len() != b_fields.len() {
+                    return Err(format!(
+                        "cannot unify types {:?} and {:?}",
+                        Type::Record(a_fields),
+                        Type::Record(b_fields),
+                    ));
+                }
+
+                let mut b_fields = b_fields.clone();
+                let mut new_fields = Vec::new();
+                for (name, a_ty) in a_fields {
+                    let Some(idx) =
+                        b_fields.iter().position(|(n, _)| n == &name)
+                    else {
+                        return Err(format!(
+                            "Type {:?} does not have a field {name}.",
+                            Type::Record(b_fields)
+                        ));
+                    };
+                    let (_, b_ty) = b_fields.remove(idx);
+                    new_fields.push((name.clone(), self.unify(&a_ty, &b_ty)?))
+                }
+
+                Type::Record(new_fields)
+            }
+            (a, b) => {
+                return Err(format!("cannot unify types {a:?} and {b:?}"))
+            }
+        })
+    }
+
+    /// Resolve type vars to a type.
+    ///
+    /// This procedure is not recursive.
+    fn resolve_type<'a>(&'a self, mut t: &'a Type) -> &'a Type {
+        while let Type::Var(x) = t {
+            if let Some(new_t) = self.type_var_map.get(x) {
+                t = new_t;
+            } else {
+                return t;
+            }
         }
 
-        if let Type::Name(name) = a {
-            a = self.types.get(name).unwrap();
-        }
-        
-        if let Type::Name(name) = b {
-            b = self.types.get(name).unwrap();
+        while let Type::IntVar(x) = t {
+            if let Some(new_t) = self.int_var_map.get(x) {
+                t = new_t;
+            } else {
+                return t;
+            }
         }
 
-        a == b
+        while let Type::Name(x) = t {
+            t = &self.types[x];
+        }
+
+        t
     }
 
     /// Return an error if there is a cycles in the type declarations
@@ -234,8 +300,11 @@ impl TypeChecker {
         ty: &'a Type,
     ) -> TypeResult<()> {
         match ty {
-            Type::_Var(_)
-            | Type::Prefix
+            Type::Var(_) | Type::IntVar(_) => {
+                Err("there should be no unresolved type variables left"
+                    .into())
+            }
+            Type::Prefix
             | Type::PrefixLength
             | Type::AsNumber
             | Type::IpAddress
