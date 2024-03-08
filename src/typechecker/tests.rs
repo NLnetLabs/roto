@@ -12,7 +12,7 @@ fn typecheck(s: &str) -> TypeResult<typed::SyntaxTree> {
             panic!("Parse error, see above");
         }
     };
-    let res = TypeChecker::default().check(tree);
+    let res = TypeChecker::new().check(tree);
     if let Err(e) = &res {
         eprintln!("{e}");
     }
@@ -21,15 +21,15 @@ fn typecheck(s: &str) -> TypeResult<typed::SyntaxTree> {
 
 #[test]
 fn one_record() {
-    let src = "type Foo { a: u32 }";
+    let src = "type Foo { a: U32 }";
     assert!(typecheck(src).is_ok());
 }
 
 #[test]
 fn declared_multiple_times() {
     let src = "
-        type Foo { a: u32 }
-        type Foo { a: u32 }
+        type Foo { a: U32 }
+        type Foo { a: U32 }
     ";
     assert!(typecheck(src).is_err());
 }
@@ -37,7 +37,7 @@ fn declared_multiple_times() {
 #[test]
 fn double_field() {
     let src = "
-        type Foo { a: u32, a: u8 }
+        type Foo { a: U32, a: U8 }
     ";
     assert!(typecheck(src).is_err());
 }
@@ -51,7 +51,7 @@ fn undeclared_type_in_record() {
 #[test]
 fn nested_record() {
     let src = "
-        type Foo { a: { b: u32, c: u32 } }
+        type Foo { a: { b: U32, c: U32 } }
     ";
     assert!(typecheck(src).is_ok());
 }
@@ -59,14 +59,14 @@ fn nested_record() {
 #[test]
 fn two_records() {
     let src = "
-        type Foo { a: u32 }
+        type Foo { a: U32 }
         type Bar { f: Foo }
     ";
     assert!(typecheck(src).is_ok());
 
     let src = "
         type Bar { f: Foo }
-        type Foo { a: u32 }
+        type Foo { a: U32 }
     ";
     assert!(typecheck(src).is_ok());
 }
@@ -116,7 +116,7 @@ fn record_diamond() {
 fn table_contains_record() {
     let src = "
         table t contains A { b: B }
-        type B { x: u32 }
+        type B { x: U32 }
     ";
     assert!(typecheck(src).is_ok());
 }
@@ -125,7 +125,7 @@ fn table_contains_record() {
 fn output_stream_contains_record() {
     let src = "
         output-stream o contains A { b: B }
-        type B { x: u32 }
+        type B { x: U32 }
     ";
     assert!(typecheck(src).is_ok());
 }
@@ -134,7 +134,7 @@ fn output_stream_contains_record() {
 fn rib_contains_record() {
     let src = "
         rib r contains A { b: B }
-        type B { x: u32 }
+        type B { x: U32 }
     ";
     assert!(typecheck(src).is_ok());
 }
@@ -144,7 +144,7 @@ fn filter_map() {
     let src = r#"
         filter-map blabla {
             define {
-                rx foo: u32;
+                rx foo: U32;
                 a = "hello";
                 b = 0.0.0.0/10;
                 c = 192.168.0.0;
@@ -159,7 +159,7 @@ fn filter_map_double_definition() {
     let src = r#"
         filter-map blabla {
             define {
-                rx foo: u32;
+                rx foo: U32;
                 a = "hello";
                 a = 0.0.0.0/10;
             }
@@ -171,11 +171,11 @@ fn filter_map_double_definition() {
 #[test]
 fn using_records() {
     let src = r#"
-        type Foo { a: string }
+        type Foo { a: String }
 
         filter-map bar {
             define {
-                rx r: u32;
+                rx r: U32;
                 a = Foo { a: "hello" };
             }
         }
@@ -183,11 +183,11 @@ fn using_records() {
     typecheck(src).unwrap();
 
     let src = r#"
-        type Foo { a: string }
+        type Foo { a: String }
 
         filter-map bar {
             define {
-                rx r: u32;
+                rx r: U32;
                 a = Foo { a: 0.0.0.0 };
             }
         }
@@ -199,7 +199,7 @@ fn using_records() {
 
         filter-map bar {
             define {
-                rx r: u32;
+                rx r: U32;
                 a = Foo { };
             }
         }
@@ -210,11 +210,11 @@ fn using_records() {
 #[test]
 fn integer_inference() {
     let src = "
-        type Foo { x: u8 }
+        type Foo { x: U8 }
 
         filter-map test {
             define {
-                rx r: u32;
+                rx r: U32;
                 foo = Foo { x: 5 };
             }
         }
@@ -222,12 +222,12 @@ fn integer_inference() {
     typecheck(src).unwrap();
 
     let src = "
-        type Foo { x: u8 }
-        type Bar { x: u8 }
+        type Foo { x: U8 }
+        type Bar { x: U8 }
 
         filter-map test {
             define {
-                rx r: u32;
+                rx r: U32;
                 a = 5;
                 foo = Foo { x: a };
             }
@@ -236,12 +236,12 @@ fn integer_inference() {
     assert!(typecheck(src).is_ok());
 
     let src = "
-        type Foo { x: u8 }
-        type Bar { x: u8 }
+        type Foo { x: U8 }
+        type Bar { x: U8 }
 
         filter-map test {
             define {
-                rx r: u32;
+                rx r: U32;
                 a = 5;
                 foo = Foo { x: a };
                 bar = Bar { x: a };
@@ -251,12 +251,12 @@ fn integer_inference() {
     assert!(typecheck(src).is_ok());
 
     let src = "
-        type Foo { x: u8 }
-        type Bar { x: u32 }
+        type Foo { x: U8 }
+        type Bar { x: U32 }
 
         filter-map test {
             define {
-                rx r: u32;
+                rx r: U32;
                 a = 5;
                 foo = Foo { x: a };
                 bar = Bar { x: a };
@@ -266,12 +266,12 @@ fn integer_inference() {
     assert!(typecheck(src).is_err());
     
     let src = "
-        type Foo { x: u8 }
-        type Bar { x: u32 }
+        type Foo { x: U8 }
+        type Bar { x: U32 }
 
         filter-map test {
             define {
-                rx r: u32;
+                rx r: U32;
                 foo = Foo { x: 5 };
                 bar = Bar { x: 5 };
             }
@@ -283,12 +283,12 @@ fn integer_inference() {
 #[test]
 fn assign_field_to_other_record() {
     let src = "
-        type Foo { x: u8 }
-        type Bar { x: u8 }
+        type Foo { x: U8 }
+        type Bar { x: U8 }
 
         filter-map test {
             define {
-                rx r: u32;
+                rx r: U32;
                 foo = Foo { x: 5 };
                 bar = Bar { x: foo.x };
             }
@@ -297,12 +297,12 @@ fn assign_field_to_other_record() {
     typecheck(src).unwrap();
 
     let src = "
-        type Foo { x: u8 }
-        type Bar { x: u8 }
+        type Foo { x: U8 }
+        type Bar { x: U8 }
 
         filter-map test {
             define {
-                rx r: u32;
+                rx r: U32;
                 foo = Foo { x: 5 };
                 bar = Bar { x: foo.y };
             }
@@ -311,16 +311,30 @@ fn assign_field_to_other_record() {
     assert!(typecheck(src).is_err());
     
     let src = "
-        type Foo { x: u8 }
-        type Bar { x: u32 }
+        type Foo { x: U8 }
+        type Bar { x: U32 }
 
         filter-map test {
             define {
-                rx r: u32;
+                rx r: U32;
                 foo = Foo { x: 5 };
                 bar = Bar { x: foo.x };
             }
         }
     ";
     assert!(typecheck(src).is_err());
+}
+
+#[test]
+fn prefix_method() {
+    let src = "
+        filter-map test {
+            define {
+                rx r: U32;
+                p = 10.10.10.10/20;
+                add = p.address();
+            }
+        }
+    ";
+    assert!(typecheck(src).is_ok());
 }

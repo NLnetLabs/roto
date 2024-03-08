@@ -1,6 +1,6 @@
 use crate::ast::{self, AccessExpr, Define, DefineBody};
 
-use super::{scope::Scope, ty::Type, typed, TypeChecker, TypeResult};
+use super::{scope::Scope, ty::{Method, Type}, typed, TypeChecker, TypeResult};
 
 impl TypeChecker {
     pub fn filter_map(
@@ -88,7 +88,7 @@ impl TypeChecker {
     ) -> TypeResult<Type> {
         use ast::ValueExpr::*;
         match expr {
-            LiteralAccessExpr(x) => self.literal_access(x),
+            LiteralAccessExpr(x) => self.literal_access(scope, x),
             PrefixMatchExpr(_) => todo!(),
             ComputeExpr(x) => self.compute_expr(scope, x),
             RootMethodCallExpr(_) => todo!(),
@@ -146,14 +146,29 @@ impl TypeChecker {
     }
 
     fn access(
-        &self,
+        &mut self,
+        scope: &Scope,
         receiver: Type,
         access: Vec<AccessExpr>,
     ) -> TypeResult<Type> {
         let mut last = receiver;
         for a in access {
             match a {
-                AccessExpr::MethodComputeExpr(_) => todo!(),
+                AccessExpr::MethodComputeExpr(ast::MethodComputeExpr { ident, args: ast::ArgExprList { args } }) => {
+                    let Some(m) = self.methods.iter().find(|Method { receiver_type, name, .. }| {
+                        receiver_type == &last && ident == name
+                    }) else {
+                        return Err(format!("Method not found"));
+                    };
+                    if args.len() != m.argument_types.len() {
+                        return Err(format!("Number of arguments don't match"));
+                    }
+                    for (arg, ty) in args.iter().zip(m.argument_types) {
+                        let arg_ty = self.expr(scope, arg.clone())?;
+                        self.unify(&arg_ty, ty)?;
+                    }
+                    last = m.return_type.clone();
+                },
                 AccessExpr::FieldAccessExpr(ast::FieldAccessExpr {
                     field_names,
                 }) => {
@@ -179,6 +194,7 @@ impl TypeChecker {
 
     fn literal_access(
         &mut self,
+        scope: &Scope,
         expr: ast::LiteralAccessExpr,
     ) -> TypeResult<Type> {
         let ast::LiteralAccessExpr {
@@ -186,7 +202,7 @@ impl TypeChecker {
             access_expr,
         } = expr;
         let literal = self.literal(literal)?;
-        self.access(literal, access_expr)
+        self.access(scope, literal, access_expr)
     }
 
     fn literal(&mut self, literal: ast::LiteralExpr) -> TypeResult<Type> {
@@ -206,7 +222,7 @@ impl TypeChecker {
     }
 
     fn compute_expr(
-        &self,
+        &mut self,
         scope: &Scope,
         expr: ast::ComputeExpr,
     ) -> TypeResult<Type> {
@@ -220,7 +236,7 @@ impl TypeChecker {
             }
             ast::AccessReceiver::GlobalScope => todo!(),
         };
-        self.access(receiver_type.clone(), access_expr)
+        self.access(scope, receiver_type.clone(), access_expr)
     }
 
     fn record_type(

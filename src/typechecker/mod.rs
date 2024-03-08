@@ -5,6 +5,8 @@ use scope::Scope;
 use std::collections::{hash_map::Entry, HashMap};
 use ty::Type;
 
+use self::ty::Method;
+
 mod filter_map;
 mod scope;
 #[cfg(test)]
@@ -13,14 +15,15 @@ mod ty;
 mod typed;
 
 const BUILT_IN_TYPES: &'static [(&'static str, Type)] = &[
-    ("u32", Type::U32),
-    ("u16", Type::U16),
-    ("u8", Type::U8),
-    ("bool", Type::Bool),
-    ("string", Type::String),
+    ("U32", Type::U32),
+    ("U16", Type::U16),
+    ("U8", Type::U8),
+    ("Bool", Type::Bool),
+    ("String", Type::String),
+    ("Prefix", Type::Prefix),
+    ("IpAddress", Type::IpAddress),
 ];
 
-#[derive(Default)]
 struct TypeChecker {
     counter: usize,
     /// Map from type var index to a type (or another type var)
@@ -33,11 +36,23 @@ struct TypeChecker {
     int_var_map: HashMap<usize, Type>,
     /// Map from type names to types
     types: HashMap<String, Type>,
+    methods: &'static [Method],
 }
 
 type TypeResult<T> = Result<T, String>;
 
 impl TypeChecker {
+    #[allow(dead_code)]
+    pub fn new() -> TypeChecker {
+        Self {
+            counter: 0,
+            type_var_map: HashMap::new(),
+            int_var_map: HashMap::new(),
+            types: HashMap::new(),
+            methods: ty::METHODS,
+        }
+    }
+
     // This allow just reduces the noise while I'm still writing this code
     #[allow(dead_code)]
     fn check(
@@ -166,10 +181,7 @@ impl TypeChecker {
                 self.int_var_map.insert(a, b.clone());
                 b.clone()
             }
-            (
-                a @ (Type::U8 | Type::U16 | Type::U32),
-                Type::IntVar(b)
-            ) => {
+            (a @ (Type::U8 | Type::U16 | Type::U32), Type::IntVar(b)) => {
                 self.int_var_map.insert(b, a.clone());
                 a.clone()
             }
