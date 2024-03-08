@@ -3,6 +3,7 @@ use std::net::IpAddr;
 
 use log::{debug, error, trace};
 use paste::paste;
+use routecore::bgp::nlri::afisafi::Ipv6FlowSpecNlri;
 use serde::Serialize;
 
 use crate::ast::{IpAddressLiteral, PrefixLiteral};
@@ -27,6 +28,7 @@ use super::builtin_type_value::BuiltinTypeValue;
 use routecore::asn::{Asn, LongSegmentError};
 use routecore::bgp::aspath::OwnedHop;
 use routecore::bgp::message::nlri::PathId;
+use routecore::bgp::nlri::afisafi::AfiSafiNlri;
 use routecore::bgp::path_attributes::AggregatorInfo;
 use routecore::bgp::communities::{ExtendedCommunity, HumanReadableCommunity as Community};
 use routecore::addr::Prefix;
@@ -1460,6 +1462,12 @@ impl From<Vec<Nlri>> for TypeValue {
         TypeValue::List(crate::types::collections::List(list))
     }
 }
+
+// impl From<Ipv6FlowSpecNlri<bytes::Bytes>> for TypeValue {
+//     fn from(value: Ipv6FlowSpecNlri<bytes::Bytes>) -> Self {
+//         TypeValue::Builtin(BuiltinTypeValue::Nlri(Nlri::FlowSpec(value.nlri())))
+//     }
+// }
 
 //------------ MatchType ----------------------------------------------------
 

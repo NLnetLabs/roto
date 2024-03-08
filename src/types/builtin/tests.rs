@@ -1,5 +1,7 @@
 #[cfg(test)]
 mod route {
+    use std::fmt::Debug;
+    use std::hash::Hash;
     use std::net::{IpAddr, Ipv4Addr};
 
     use super::super::{IntegerLiteral, PrefixLength, StringLiteral};
@@ -13,20 +15,25 @@ mod route {
     use crate::types::typevalue::TypeValue;
     use crate::{compiler::CompileError, traits::RotoType};
     use log::trace;
-    use routecore::bgp::message::nlri::PathId;
+    use routecore::bgp::message::nlri::{FlowSpecNlri, PathId};
     use routecore::bgp::message::update_builder::MpReachNlriBuilder;
-    use routecore::bgp::nlri::afisafi::{iter_for_afi_safi, AfiSafiNlri, AfiSafiParse, Ipv4MulticastNlri};
+    use routecore::bgp::message::UpdateMessage;
+    use routecore::bgp::nlri::afisafi::Ipv4FlowSpecNlri;
+    use routecore::bgp::nlri::afisafi::Ipv4MulticastAddpathNlri;
     use routecore::bgp::nlri::afisafi::Ipv4RouteTargetNlri;
     use routecore::bgp::nlri::afisafi::Ipv4UnicastAddpathNlri;
+    use routecore::bgp::nlri::afisafi::Ipv6MulticastAddpathNlri;
+    use routecore::bgp::nlri::afisafi::Ipv6MulticastNlri;
     use routecore::bgp::nlri::afisafi::Ipv6UnicastAddpathNlri;
     use routecore::bgp::nlri::afisafi::Ipv6UnicastNlri;
     use routecore::bgp::nlri::afisafi::IsPrefix;
     use routecore::bgp::nlri::afisafi::NlriIter;
+    use routecore::bgp::nlri::afisafi::{
+        iter_for_afi_safi, AfiSafiNlri, AfiSafiParse, Ipv4MulticastNlri,
+        Ipv6FlowSpecNlri,
+    };
     use routecore::bgp::nlri::afisafi::{Addpath, Ipv4UnicastNlri};
     use routecore::bgp::path_attributes::PaMap;
-    use routecore::bgp::nlri::afisafi::Ipv4FlowSpecNlri;
-    use routecore::bgp::nlri::afisafi::Ipv6MulticastAddpathNlri;
-    use routecore::bgp::nlri::afisafi::Ipv6MulticastNlri;
     use routecore::bgp::workshop::route::RouteWorkshop;
     use routecore::bgp::ParseError;
 
@@ -282,156 +289,367 @@ mod route {
                     .ok_or(ParseError::Unsupported)
             })??;
 
-        impl From<Ipv4UnicastAddpathNlri> for TypeValue {
-            fn from(value: Ipv4UnicastAddpathNlri) -> Self {
-                todo!()
-            }
-        }
+        let afi_safi = update.bytes_parser().afi_safis()[1].unwrap();
 
-        impl From<Ipv6UnicastAddpathNlri> for TypeValue {
-            fn from(value: Ipv6UnicastAddpathNlri) -> Self {
-                todo!()
-            }
-        }
+        // impl From<Ipv4UnicastAddpathNlri> for TypeValue {
+        //     fn from(value: Ipv4UnicastAddpathNlri) -> Self {
+        //         todo!()
+        //     }
+        // }
 
-        impl From<Ipv4UnicastNlri> for TypeValue {
-            fn from(value: Ipv4UnicastNlri) -> Self {
-                todo!()
-            }
-        }
+        // impl From<Ipv6UnicastAddpathNlri> for TypeValue {
+        //     fn from(value: Ipv6UnicastAddpathNlri) -> Self {
+        //         todo!()
+        //     }
+        // }
 
-        impl From<Ipv6UnicastNlri> for TypeValue {
-            fn from(value: Ipv6UnicastNlri) -> Self {
-                todo!()
-            }
-        }
+        // impl From<Ipv4UnicastNlri> for TypeValue {
+        //     fn from(value: Ipv4UnicastNlri) -> Self {
+        //         todo!()
+        //     }
+        // }
 
-        impl From<Ipv4RouteTargetNlri<bytes::Bytes>> for TypeValue {
-            fn from(value: Ipv4RouteTargetNlri<bytes::Bytes>) -> Self {
-                todo!()
-            }
-        }
+        // impl From<Ipv6UnicastNlri> for TypeValue {
+        //     fn from(value: Ipv6UnicastNlri) -> Self {
+        //         todo!()
+        //     }
+        // }
 
-        impl<O: routecore::Octets> From<Ipv4FlowSpecNlri<O>> for TypeValue {
-            fn from(value: Ipv4FlowSpecNlri<O>) -> Self {
-                todo!()
-            }
-        }
+        // impl From<Ipv4RouteTargetNlri<bytes::Bytes>> for TypeValue {
+        //     fn from(value: Ipv4RouteTargetNlri<bytes::Bytes>) -> Self {
+        //         todo!()
+        //     }
+        // }
 
-        trait MapType<F, O: routecore::Octets, T> where Self: Sized, T: From<RouteWorkshop<O, F>> + Clone + std::fmt::Debug + std::hash::Hash {
-            // type Output;
+        // trait MapType<F, O: routecore::Octets, T>
+        // where
+        //     Self: Sized,
+        //     T: From<RouteWorkshop<O, F>>
+        //         + Clone
+        //         + std::fmt::Debug
+        //         + std::hash::Hash,
+        // {
+        //     fn fmap(pa_map: &PaMap) -> impl Fn(Self) -> T + '_;
+        // }
 
-            fn fmap(
-                pa_map: &PaMap,
-            ) -> impl Fn(Self) -> T + '_;
-        }
+        // trait MapAddPathType<F, O: routecore::Octets, T>
+        // where
+        //     Self: Sized,
+        //     T: From<RouteWorkshop<O, F>>
+        //         + Clone
+        //         + std::fmt::Debug
+        //         + std::hash::Hash,
+        // {
+        //     fn add_path_fmap(pa_map: &PaMap) -> impl Fn(Self) -> T + '_;
+        // }
 
-        trait MapAddPathType<F, O: routecore::Octets, T> where Self: Sized, T: From<RouteWorkshop<O, F>> + Clone + std::fmt::Debug + std::hash::Hash {
-            // type Output;
-
-            fn add_path_fmap(
-                pa_map: &PaMap,
-            ) -> impl Fn(Self) -> T + '_;
-        }
-
-        // Comes out of the SessionConfig
+        // // Comes out of the SessionConfig
         let add_path_cap = false;
         let pa_map = PaMap::from_update_pdu(update.bytes_parser()).unwrap();
 
         let parser = Parser::from_ref(update.bytes_parser().octets());
 
-        impl<T: AfiSafiNlri + IsPrefix> MapType<BasicNlri, bytes::Bytes, TypeValue> for T {
-            fn fmap<
-                'a,
-            >(
-                pa_map: &'a PaMap,
-            ) -> impl Fn(Self) -> TypeValue + 'a {
-                |n| {
-                    TypeValue::from(RouteWorkshop::<bytes::Bytes, BasicNlri>::from_pa_map(
-                        BasicNlri {
-                            prefix: n.prefix(),
-                            path_id: None,
-                        },
-                        pa_map.clone(),
-                    ))
-                }
-            }
+        // impl<T: AfiSafiNlri + IsPrefix>
+        //     MapType<BasicNlri, bytes::Bytes, TypeValue> for T
+        // {
+        //     fn fmap(pa_map: &PaMap) -> impl Fn(Self) -> TypeValue + '_ {
+        //         |n| {
+        //             TypeValue::from(
+        //                 RouteWorkshop::<bytes::Bytes, BasicNlri>::from_pa_map(
+        //                     BasicNlri {
+        //                         prefix: n.prefix(),
+        //                         path_id: None,
+        //                     },
+        //                     pa_map.clone(),
+        //                 ),
+        //             )
+        //         }
+        //     }
+        // }
+
+        // impl<T: AfiSafiNlri + IsPrefix + Addpath>
+        //     MapAddPathType<BasicNlri, bytes::Bytes, TypeValue> for T
+        // {
+        //     fn add_path_fmap(
+        //         pa_map: &PaMap,
+        //     ) -> impl Fn(Self) -> TypeValue + '_ {
+        //         |n| {
+        //             TypeValue::from(
+        //                 RouteWorkshop::<bytes::Bytes, BasicNlri>::from_pa_map(
+        //                     BasicNlri {
+        //                         prefix: n.prefix(),
+        //                         path_id: Some(PathId::from_u32(
+        //                             n.path_id().0,
+        //                         )),
+        //                     },
+        //                     pa_map.clone(),
+        //                 ),
+        //             )
+        //         }
+        //     }
+        // }
+
+        // fn iter_map(
+        //     afi_safi: AfiSafi,
+        //     add_path_cap: bool,
+        //     parser: Parser<'_, bytes::Bytes>,
+        //     pa_map: PaMap,
+        // ) -> Vec<TypeValue> {
+        //     match afi_safi {
+        //         AfiSafi::Ipv4Unicast => match add_path_cap {
+        //             false => {
+        //                 iter_for_afi_safi::<'_, _, _, Ipv4UnicastNlri>(parser)
+        //                     .map(Ipv4UnicastNlri::fmap(&pa_map))
+        //                     .collect::<Vec<_>>()
+        //             }
+        //             true => {
+        //                 NlriIter::<'_, _, _, Ipv4UnicastAddpathNlri>::new(
+        //                     parser,
+        //                 )
+        //                 .map(Ipv4UnicastAddpathNlri::fmap(&pa_map))
+        //                 .collect::<Vec<_>>()
+        //             }
+        //         },
+        //         AfiSafi::Ipv6Unicast => match add_path_cap {
+        //             false => {
+        //                 NlriIter::<'_, _, _, Ipv6UnicastNlri>::new(parser)
+        //                     .map(Ipv6UnicastNlri::fmap(&pa_map))
+        //                     .collect::<Vec<_>>()
+        //             }
+        //             true => {
+        //                 NlriIter::<'_, _, _, Ipv6UnicastAddpathNlri>::new(
+        //                     parser,
+        //                 )
+        //                 .map(Ipv6UnicastAddpathNlri::add_path_fmap(&pa_map))
+        //                 .collect::<Vec<_>>()
+        //             }
+        //         },
+        //         AfiSafi::Ipv4Multicast => match add_path_cap {
+        //             false => {
+        //                 NlriIter::<'_, _, _, Ipv4MulticastNlri>::new(parser)
+        //                     .map(Ipv4MulticastNlri::fmap(&pa_map))
+        //                     .collect::<Vec<_>>()
+        //             }
+        //             true => {
+        //                 NlriIter::<'_, _, _, Ipv4MulticastAddpathNlri>::new(
+        //                     parser,
+        //                 )
+        //                 .map(Ipv4MulticastAddpathNlri::add_path_fmap(&pa_map))
+        //                 .collect::<Vec<_>>()
+        //             }
+        //         },
+        //         AfiSafi::Ipv6Multicast => match add_path_cap {
+        //             false => {
+        //                 NlriIter::<'_, _, _, Ipv6MulticastNlri>::new(parser)
+        //                     .map(Ipv6MulticastNlri::fmap(&pa_map))
+        //                     .collect::<Vec<_>>()
+        //             }
+        //             true => {
+        //                 NlriIter::<'_, _, _, Ipv6MulticastAddpathNlri>::new(
+        //                     parser,
+        //                 )
+        //                 .map(Ipv6MulticastAddpathNlri::add_path_fmap(&pa_map))
+        //                 .collect::<Vec<_>>()
+        //             }
+        //         },
+        //         AfiSafi::Ipv4MplsUnicast => todo!(),
+        //         AfiSafi::Ipv6MplsUnicast => todo!(),
+        //         AfiSafi::Ipv4MplsVpnUnicast => todo!(),
+        //         AfiSafi::Ipv6MplsVpnUnicast => todo!(),
+        //         AfiSafi::Ipv4RouteTarget => iter_for_afi_safi::<
+        //             '_,
+        //             _,
+        //             _,
+        //             Ipv4RouteTargetNlri<bytes::Bytes>,
+        //         >(parser)
+        //         .map(TypeValue::from)
+        //         .collect::<Vec<_>>(),
+        //         AfiSafi::Ipv4FlowSpec => iter_for_afi_safi::<
+        //             '_,
+        //             _,
+        //             _,
+        //             Ipv4FlowSpecNlri<bytes::Bytes>,
+        //         >(parser)
+        //         .map(|n| {
+        //             TypeValue::from(
+        //                 RouteWorkshop::<bytes::Bytes, _>::from_pa_map(
+        //                     n.nlri(),
+        //                     pa_map.clone(),
+        //                 ),
+        //             )
+        //         })
+        //         .collect::<Vec<_>>(),
+        //         AfiSafi::Ipv6FlowSpec => iter_for_afi_safi::<
+        //             '_,
+        //             _,
+        //             _,
+        //             Ipv6FlowSpecNlri<bytes::Bytes>,
+        //         >(parser)
+        //         .map(|n| {
+        //             TypeValue::from(
+        //                 RouteWorkshop::<bytes::Bytes, _>::from_pa_map(
+        //                     n.nlri(),
+        //                     pa_map.clone(),
+        //                 ),
+        //             )
+        //         })
+        //         .collect::<Vec<_>>(),
+        //         AfiSafi::L2VpnVpls => todo!(),
+        //         AfiSafi::L2VpnEvpn => todo!(),
+        //     }
+        // }
+
+        pub fn explode_into_wrapped_rws<
+            'a,
+            O: routecore::Octets,
+            P: 'a + routecore::Octets<Range<'a> = O>,
+            AF: AfiSafiNlri + AfiSafiParse<'a, O, P, Output = AF>,
+            AFT: Clone + Debug + Hash + From<AF>,
+            T: From<RouteWorkshop<AFT>>,
+        >(
+            parser: Parser<'a, P>,
+            pa_map: &'a PaMap,
+        ) -> Vec<T> {
+            iter_for_afi_safi::<'_, _, _, AF>(parser)
+                .map(|n: AF::Output| {
+                    RouteWorkshop::from_pa_map(AFT::from(n), pa_map.clone())
+                        .into()
+                })
+                .collect::<Vec<_>>()
         }
 
-        impl<T: AfiSafiNlri + IsPrefix + Addpath> MapAddPathType<BasicNlri, bytes::Bytes, TypeValue> for T {
-            fn add_path_fmap(
-                pa_map: &PaMap,
-            ) -> impl Fn(Self) -> TypeValue + '_ {
-                |n| {
-                    TypeValue::from(RouteWorkshop::<bytes::Bytes, BasicNlri>::from_pa_map(
-                        BasicNlri {
-                            prefix: n.prefix(),
-                            path_id: Some(PathId::from_u32(n.path_id().0)),
-                        },
-                        pa_map.clone(),
-                    ))
-                }
-            }
+        fn into_wrapped_rws_iter<
+            'a,
+            O: routecore::Octets + 'a,
+            P: 'a + routecore::Octets<Range<'a> = O>,
+            AF: AfiSafiNlri + AfiSafiParse<'a, O, P, Output = AF> + 'a,
+            AFT: Clone + Debug + Hash + From<AF>,
+            T: From<RouteWorkshop<AFT>>,
+        >(
+            parser: Parser<'a, P>,
+            pa_map: &'a PaMap,
+        ) -> impl Iterator<Item = T> + 'a {
+            iter_for_afi_safi::<'_, _, _, AF>(parser)
+                .map(|n: AF::Output| {
+                    T::from(RouteWorkshop::from_pa_map(AFT::from(n), pa_map.clone()))
+                })
         }
 
-        fn iter_map(afi_safi: AfiSafi, add_path_cap: bool, parser: Parser<'_, bytes::Bytes>, pa_map: PaMap) -> Vec<TypeValue> {
-            match afi_safi {
-                AfiSafi::Ipv4Unicast => match add_path_cap {
-                    false => iter_for_afi_safi::<'_, _, _, Ipv4UnicastNlri>(parser)
-                        .map(Ipv4UnicastNlri::fmap(&pa_map))
-                        .collect::<Vec<_>>(),
-                    true => {
-                        NlriIter::<'_, _, _, Ipv4UnicastAddpathNlri>::new(parser)
-                            .map(Ipv4UnicastAddpathNlri::fmap(&pa_map))
-                            .collect::<Vec<_>>()
-                    }
-                },
-                AfiSafi::Ipv6Unicast => match add_path_cap {
-                    false => NlriIter::<'_, _, _, Ipv6UnicastNlri>::new(parser)
-                        .map(Ipv6UnicastNlri::fmap(&pa_map))
-                        .collect::<Vec<_>>(),
-                    true => {
-                        NlriIter::<'_, _, _, Ipv6UnicastAddpathNlri>::new(parser)
-                            .map(Ipv6UnicastAddpathNlri::add_path_fmap(&pa_map))
-                            .collect::<Vec<_>>()
-                    }
-                },
-                AfiSafi::Ipv4Multicast => match add_path_cap {
-                    false => NlriIter::<'_, _, _, Ipv4MulticastNlri>::new(parser)
-                        .map(Ipv4MulticastNlri::fmap(&pa_map))
-                        .collect::<Vec<_>>(),
-                    true => {
-                        NlriIter::<'_, _, _, Ipv6MulticastAddpathNlri>::new(parser)
-                            .map(Ipv6MulticastAddpathNlri::add_path_fmap(&pa_map))
-                            .collect::<Vec<_>>()
-                    }
-                },
-                AfiSafi::Ipv6Multicast => todo!(),
-                AfiSafi::Ipv4MplsUnicast => todo!(),
-                AfiSafi::Ipv6MplsUnicast => todo!(),
-                AfiSafi::Ipv4MplsVpnUnicast => todo!(),
-                AfiSafi::Ipv6MplsVpnUnicast => todo!(),
-                AfiSafi::Ipv4RouteTarget => {
-                    iter_for_afi_safi::<'_, _, _, Ipv4RouteTargetNlri<bytes::Bytes>>(
-                        parser,
-                    )
-                    .map(TypeValue::from)
-                    .collect::<Vec<_>>()
-                }
-                AfiSafi::Ipv4FlowSpec => {
-                    iter_for_afi_safi::<'_, _, _, Ipv4FlowSpecNlri<bytes::Bytes>>(
-                        parser,
-                    )
-                    .map(TypeValue::from)
-                    .collect::<Vec<_>>()
-                },
-                AfiSafi::Ipv6FlowSpec => todo!(),
-                AfiSafi::L2VpnVpls => todo!(),
-                AfiSafi::L2VpnEvpn => todo!(),
-            }
-        };
+        pub fn explode<
+            'a,
+            O: routecore::Octets + Clone + Debug + Hash + 'a,
+            P: 'a + routecore::Octets<Range<'a> = O>,
+            T: From<RouteWorkshop<BasicNlri>> + 
+                From<RouteWorkshop<routecore::bgp::nlri::flowspec::FlowSpecNlri<O>>>,
+        >(
+            add_path_cap: bool,
+            afi_safis: impl Iterator<Item = AfiSafi>,
+            parser: Parser<'a, P>,
+            pa_map: &'a PaMap,
+        ) -> Vec<T> {
 
-        let my_vec = iter_map(afi_safi, add_path_cap, parser, pa_map);
+            let mut res = vec![];
+            // let mut iter;
+
+            for afi_safi in afi_safis {
+                match (afi_safi, add_path_cap) {
+                    (AfiSafi::Ipv4Unicast, true) => { 
+                        // iter = explode_into_rws::<'_, _, _, Ipv4UnicastNlri, BasicNlri, T>(
+                        //     parser, pa_map
+                        // );
+                        res.extend(
+                            into_wrapped_rws_iter::<'_, _, _, Ipv4UnicastNlri, BasicNlri, T>(
+                                parser, pa_map
+                            ).collect::<Vec<_>>()
+                        );
+                    }
+                    (AfiSafi::Ipv4Unicast, false) => {
+                        res.extend(
+                            explode_into_wrapped_rws::<'_, _, _, Ipv4UnicastAddpathNlri, BasicNlri, T>(parser, pa_map)
+                        );
+                    }
+                    (AfiSafi::Ipv6Unicast, true) => { 
+                        res.extend(
+                            explode_into_wrapped_rws::<'_, _, _, Ipv6UnicastNlri, BasicNlri, T>(parser, pa_map)
+                        );
+                    },
+                    (AfiSafi::Ipv6Unicast, false) => { 
+                        res.extend(
+                            explode_into_wrapped_rws::<'_, _, _, Ipv6UnicastAddpathNlri, BasicNlri, T>(parser, pa_map)
+                        );
+                    },
+                    (AfiSafi::Ipv4Multicast, true) => { 
+                        res.extend(
+                            explode_into_wrapped_rws::<'_, _, _, Ipv4MulticastNlri, BasicNlri, T>(parser, pa_map)
+                        );
+                    },
+                    (AfiSafi::Ipv4Multicast, false) => { 
+                        res.extend(
+                            explode_into_wrapped_rws::<'_, _, _, Ipv4MulticastAddpathNlri, BasicNlri, T>(parser, pa_map)
+                        );
+                    },
+                    (AfiSafi::Ipv6Multicast, true) => { 
+                        res.extend(
+                            explode_into_wrapped_rws::<'_, _, _, Ipv6MulticastNlri, BasicNlri, T>(parser, pa_map)
+                        );
+                    },
+                    (AfiSafi::Ipv6Multicast, false) => { 
+                        res.extend(
+                            explode_into_wrapped_rws::<'_, _, _, Ipv6MulticastAddpathNlri, BasicNlri, T>(parser, pa_map)
+                        );
+                    },
+                    (AfiSafi::Ipv4MplsUnicast, true) => todo!(),
+                    (AfiSafi::Ipv4MplsUnicast, false) => todo!(),
+                    (AfiSafi::Ipv6MplsUnicast, true) => todo!(),
+                    (AfiSafi::Ipv6MplsUnicast, false) => todo!(),
+                    (AfiSafi::Ipv4MplsVpnUnicast, true) => todo!(),
+                    (AfiSafi::Ipv4MplsVpnUnicast, false) => todo!(),
+                    (AfiSafi::Ipv6MplsVpnUnicast, true) => todo!(),
+                    (AfiSafi::Ipv6MplsVpnUnicast, false) => todo!(),
+                    (AfiSafi::Ipv4RouteTarget, true) => todo!(),
+                    (AfiSafi::Ipv4RouteTarget, false) => todo!(),
+                    (AfiSafi::Ipv4FlowSpec, true) => {
+                        res.extend(
+                            explode_into_wrapped_rws::<'_, _, _, routecore::bgp::nlri::afisafi::Ipv4FlowSpecNlri<O>, routecore::bgp::nlri::flowspec::FlowSpecNlri<O>, T>(parser, pa_map)
+                        );
+                    },
+                    (AfiSafi::Ipv4FlowSpec, false) => todo!(),
+                    (AfiSafi::Ipv6FlowSpec, true) => {
+                        res.extend(
+                            explode_into_wrapped_rws::<'_, _, _, routecore::bgp::nlri::afisafi::Ipv6FlowSpecNlri<O>, routecore::bgp::nlri::flowspec::FlowSpecNlri<O>, T>(parser, pa_map)
+                        );
+                    },
+                    (AfiSafi::Ipv6FlowSpec, false) => todo!(),
+                    (AfiSafi::L2VpnVpls, true) => todo!(),
+                    (AfiSafi::L2VpnVpls, false) => todo!(),
+                    (AfiSafi::L2VpnEvpn, true) => todo!(),
+                    (AfiSafi::L2VpnEvpn, false) => todo!(),
+                };
+            }
+            res
+        }
+
+        // let my_vec = iter_map(afi_safi, add_path_cap, parser, pa_map);
+        let afi_safis = update.bytes_parser().afi_safis().into_iter().flatten();
+        let my_vec = explode_into_wrapped_rws::<
+            '_,
+            _,
+            _,
+            Ipv6UnicastNlri,
+            BasicNlri,
+            TypeValue,
+        >(parser, &pa_map);
+
+        let my_vec2 = explode_into_wrapped_rws::<
+            '_,
+            _,
+            _,
+            Ipv4FlowSpecNlri<bytes::Bytes>,
+            routecore::bgp::nlri::flowspec::FlowSpecNlri<bytes::Bytes>,
+            TypeValue,
+        >(parser, &pa_map);
+
+        println!("rws {:?}", my_vec2);
 
         // let iter = match afi_safi {
         //     AfiSafi::Ipv4Unicast => match add_path_cap {
@@ -488,6 +706,10 @@ mod route {
         //     AfiSafi::L2VpnVpls => todo!(),
         //     AfiSafi::L2VpnEvpn => todo!(),
         // };
+
+        let exploded = explode::<_, _, TypeValue>(false, afi_safis, parser, &pa_map);
+
+        println!("exploded view {:?}", exploded);
 
         let prefixes: Vec<routecore::addr::Prefix> = update
             .bytes_parser()

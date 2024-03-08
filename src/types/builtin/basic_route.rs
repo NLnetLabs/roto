@@ -7,7 +7,7 @@ use chrono::Utc;
 use routecore::bgp::communities::Community;
 use routecore::bgp::communities::HumanReadableCommunity;
 use routecore::bgp::message::nlri::BasicNlri;
-use routecore::bgp::message::nlri::FlowSpecNlri;
+use routecore::bgp::nlri::flowspec::FlowSpecNlri;
 use routecore::bgp::nlri::afisafi::AfiSafiParse;
 use routecore::bgp::nlri::afisafi::Ipv4UnicastNlri;
 use routecore::bgp::nlri::afisafi::IsPrefix;
@@ -58,13 +58,12 @@ pub type LogicalTime = u64;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub struct BasicRoute(
-    routecore::bgp::workshop::route::RouteWorkshop<bytes::Bytes, BasicNlri>,
+    routecore::bgp::workshop::route::RouteWorkshop<BasicNlri>,
 );
 
 impl BasicRoute {
     pub fn new<N: AfiSafiNlri + IsPrefix>(
         route: routecore::bgp::workshop::route::RouteWorkshop<
-            bytes::Bytes,
             N,
         >,
     ) -> Self {
@@ -203,8 +202,8 @@ impl BasicRoute {
     }
 }
 
-impl From<RouteWorkshop<bytes::Bytes, BasicNlri>> for TypeValue {
-    fn from(value: RouteWorkshop<bytes::Bytes, BasicNlri>) -> Self {
+impl From<RouteWorkshop<BasicNlri>> for TypeValue {
+    fn from(value: RouteWorkshop<BasicNlri>) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::Route(BasicRoute(value)))
     }
 }
@@ -215,11 +214,11 @@ impl From<BasicRoute> for TypeValue {
     }
 }
 
-impl<O: routecore::Octets + Clone + std::fmt::Debug + std::hash::Hash> From<RouteWorkshop<O, Ipv4UnicastNlri>> for TypeValue {
-    fn from(_value: RouteWorkshop<O, Ipv4UnicastNlri>) -> Self {
-        todo!()
-    }
-}
+// impl<O: routecore::Octets> From<RouteWorkshop<O, Ipv4UnicastNlri>> for TypeValue {
+//     fn from(_value: RouteWorkshop<O, Ipv4UnicastNlri>) -> Self {
+//         todo!()
+//     }
+// }
 
 //------------ MutableBasicRoute ---------------------------------------------
 
@@ -788,7 +787,7 @@ impl From<BasicNlriToken> for u8 {
 
 //------------ FlowSpecRoute -------------------------------------------------
 
-impl<O: routecore::Octets + std::fmt::Debug> RotoType for RouteWorkshop<Ipv4FlowSpecNlri<O>, bytes::Bytes> {
+impl RotoType for RouteWorkshop<FlowSpecNlri<bytes::Bytes>> {
     fn get_props_for_method(
         _ty: TypeDef,
         _method_name: &crate::ast::Identifier,
@@ -836,11 +835,11 @@ impl<O: routecore::Octets + std::fmt::Debug> RotoType for RouteWorkshop<Ipv4Flow
     }
 }
 
-impl<O: routecore::Octets> From<RouteWorkshop<Ipv4FlowSpecNlri<O>, bytes::Bytes>>
+impl From<RouteWorkshop<FlowSpecNlri<bytes::Bytes>>>
     for TypeValue
 {
     fn from(
-        _value: RouteWorkshop<Ipv4FlowSpecNlri<O>, bytes::Bytes>,
+        _value: RouteWorkshop<FlowSpecNlri<bytes::Bytes>>,
     ) -> Self {
         todo!()
     }
