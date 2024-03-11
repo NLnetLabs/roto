@@ -2,6 +2,7 @@ use crate::parser::Parser;
 
 use super::{typed, TypeChecker, TypeResult};
 
+#[track_caller]
 fn typecheck(s: &str) -> TypeResult<typed::SyntaxTree> {
     let tree = match Parser::parse(s) {
         Ok(ast) => ast,
@@ -264,7 +265,7 @@ fn integer_inference() {
         }
     ";
     assert!(typecheck(src).is_err());
-    
+
     let src = "
         type Foo { x: U8 }
         type Bar { x: U32 }
@@ -309,7 +310,7 @@ fn assign_field_to_other_record() {
         }
     ";
     assert!(typecheck(src).is_err());
-    
+
     let src = "
         type Foo { x: U8 }
         type Bar { x: U32 }
@@ -337,4 +338,134 @@ fn prefix_method() {
         }
     ";
     assert!(typecheck(src).is_ok());
+}
+
+#[test]
+fn logical_expr() {
+    let src = "
+        filter-map test {
+            define {
+                rx r: U32;
+                p = 10.10.10.10/10;
+            }
+
+            term foo {
+                match {
+                    (10 == 10) || (10 == 11);
+                }
+            }
+        }
+    ";
+    assert!(typecheck(src).is_ok());
+
+    let src = r#"
+        filter-map test {
+            define {
+                rx r: U32;
+                p = 10.10.10.10/10;
+            }
+
+            term foo {
+                match {
+                    (10 == 10) || ("hello" == 11);
+                }
+            }
+        }
+    "#;
+    assert!(typecheck(src).is_err());
+}
+
+#[test]
+fn send_output_stream() {
+    let src = r#"
+        output-stream stream contains Msg {
+            foo: String
+        }
+
+        filter-map test {
+            define {
+                rx r: U32;
+            }
+
+            action hello {
+                stream.send(Msg {
+                    foo: "hello",
+                });
+            }
+        }
+    "#;
+    typecheck(src).unwrap();
+
+    let src = r#"
+        output-stream stream contains Foo {
+            foo: String
+        }
+
+        type Bar { bar: String }
+
+        filter-map test {
+            define {
+                rx r: U32;
+            }
+
+            action hello {
+                stream.send(Bar {
+                    bar: "hello",
+                });
+            }
+        }
+    "#;
+    assert!(typecheck(src).is_err());
+
+    let src = r#"
+        output-stream foos contains Foo {
+            foo: String
+        }
+
+        output-stream bars contains Bar {
+            bar: String
+        }
+
+        filter-map test {
+            define {
+                rx r: U32;
+            }
+
+            action hello {
+                foos.send(Foo {
+                    foo: "hello",
+                });
+                bars.send(Bar {
+                    bar: "world",
+                });
+            }
+        }
+    "#;
+    typecheck(src).unwrap();
+
+    let src = r#"
+        output-stream foos contains Foo {
+            foo: String
+        }
+
+        output-stream bars contains Bar {
+            bar: String
+        }
+
+        filter-map test {
+            define {
+                rx r: U32;
+            }
+
+            action hello {
+                foos.send(Foo {
+                    foo: "hello",
+                });
+                bars.send(Foo {
+                    foo: "world",
+                });
+            }
+        }
+    "#;
+    assert!(typecheck(src).is_err());
 }

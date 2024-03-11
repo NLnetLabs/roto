@@ -1,6 +1,6 @@
 use crate::ast::{self, AccessExpr, Define, DefineBody};
 
-use super::{scope::Scope, ty::{Method, Type}, typed, TypeChecker, TypeResult};
+use super::{scope::Scope, ty::Type, typed, TypeChecker, TypeResult};
 
 impl TypeChecker {
     pub fn filter_map(
@@ -49,16 +49,24 @@ impl TypeChecker {
                     with_kv: _,
                     body: ast::TermBody { scopes },
                 }) => {
-                    for scope in scopes {
-                        let ast::TermScope {
-                            scope: _,
-                            operator,
-                            match_arms: _,
-                        } = scope;
-
+                    for ast::TermScope {
+                        scope: _,
+                        operator,
+                        match_arms,
+                    } in scopes
+                    {
                         use ast::MatchOperator::*;
                         match operator {
-                            Match => todo!(),
+                            Match => {
+                                for (_, exprs) in match_arms {
+                                    for expr in exprs {
+                                        // We ignore the result because it
+                                        // must be boolean.
+                                        let _ =
+                                            self.logical_expr(&scope, expr)?;
+                                    }
+                                }
+                            }
                             MatchValueWith(_) => todo!(),
                             Some | ExactlyOne | All => todo!(),
                         }
@@ -79,6 +87,75 @@ impl TypeChecker {
         // apply section
 
         Ok(typed::FilterMap {})
+    }
+
+    fn logical_expr(
+        &mut self,
+        scope: &Scope,
+        expr: ast::LogicalExpr,
+    ) -> TypeResult<Type> {
+        match expr {
+            ast::LogicalExpr::OrExpr(ast::OrExpr { left, right })
+            | ast::LogicalExpr::AndExpr(ast::AndExpr { left, right }) => {
+                self.boolean_expr(scope, left)?;
+                self.boolean_expr(scope, right)?;
+                Ok(Type::Bool)
+            }
+            ast::LogicalExpr::NotExpr(ast::NotExpr { expr })
+            | ast::LogicalExpr::BooleanExpr(expr) => {
+                self.boolean_expr(scope, expr)
+            }
+        }
+    }
+
+    fn boolean_expr(
+        &mut self,
+        scope: &Scope,
+        expr: ast::BooleanExpr,
+    ) -> TypeResult<Type> {
+        match expr {
+            ast::BooleanExpr::GroupedLogicalExpr(
+                ast::GroupedLogicalExpr { expr },
+            ) => {
+                self.logical_expr(scope, *expr)?;
+            }
+            ast::BooleanExpr::CompareExpr(expr) => {
+                let ast::CompareExpr { left, right, op: _ } = *expr;
+                let t_left = self.compare_arg(scope, left)?;
+                let t_right = self.compare_arg(scope, right)?;
+                self.unify(&t_left, &t_right)?;
+            }
+            ast::BooleanExpr::ComputeExpr(expr) => {
+                let ty = self.compute_expr(scope, expr)?;
+                self.unify(&Type::Bool, &ty)?;
+            }
+            ast::BooleanExpr::LiteralAccessExpr(expr) => {
+                let ty = self.literal_access(scope, expr)?;
+                self.unify(&Type::Bool, &ty)?;
+            }
+            ast::BooleanExpr::ListCompareExpr(expr) => {
+                let ast::ListCompareExpr { left, op: _, right } = *expr;
+                let t_left = self.expr(scope, left)?;
+                let t_right = self.expr(scope, right)?;
+                self.unify(&Type::List(Box::new(t_left)), &t_right)?;
+            }
+            ast::BooleanExpr::PrefixMatchExpr(_)
+            | ast::BooleanExpr::BooleanLiteral(_) => (),
+        };
+        Ok(Type::Bool)
+    }
+
+    fn compare_arg(
+        &mut self,
+        scope: &Scope,
+        expr: ast::CompareArg,
+    ) -> TypeResult<Type> {
+        match expr {
+            ast::CompareArg::ValueExpr(expr) => self.expr(scope, expr),
+            ast::CompareArg::GroupedLogicalExpr(
+                ast::GroupedLogicalExpr { expr },
+            ) => self.logical_expr(scope, *expr),
+        }
     }
 
     fn expr(
@@ -154,27 +231,47 @@ impl TypeChecker {
         let mut last = receiver;
         for a in access {
             match a {
-                AccessExpr::MethodComputeExpr(ast::MethodComputeExpr { ident, args: ast::ArgExprList { args } }) => {
-                    let Some(m) = self.methods.iter().find(|Method { receiver_type, name, .. }| {
-                        receiver_type == &last && ident == name
-                    }) else {
+                AccessExpr::MethodComputeExpr(ast::MethodComputeExpr {
+                    ident,
+                    args: ast::ArgExprList { args },
+                }) => {
+                    let Some(arrow) =
+                        self.methods.clone().iter().find_map(|m| {
+                            if ident != m.name {
+                                return None;
+                            }
+                            let arrow = self.instantiate_method(m);
+                            if self.subtype_of(&arrow.rec, &last) {
+                                Some(arrow)
+                            } else {
+                                None
+                            }
+                        })
+                    else {
                         return Err(format!("Method not found"));
                     };
-                    if args.len() != m.argument_types.len() {
-                        return Err(format!("Number of arguments don't match"));
+
+                    if args.len() != arrow.args.len() {
+                        return Err(format!(
+                            "Number of arguments don't match"
+                        ));
                     }
-                    for (arg, ty) in args.iter().zip(m.argument_types) {
+
+                    self.unify(&arrow.rec, &last)?;
+
+                    for (arg, ty) in args.iter().zip(&arrow.args) {
                         let arg_ty = self.expr(scope, arg.clone())?;
-                        self.unify(&arg_ty, ty)?;
+                        self.unify(&arg_ty, &ty)?;
                     }
-                    last = m.return_type.clone();
-                },
+                    last = self.resolve_type(&arrow.ret).clone();
+                }
                 AccessExpr::FieldAccessExpr(ast::FieldAccessExpr {
                     field_names,
                 }) => {
                     for field in field_names {
                         if let Type::Record(fields)
-                        | Type::NamedRecord(_, fields) = self.resolve_type(&last)
+                        | Type::NamedRecord(_, fields) =
+                            self.resolve_type(&last)
                         {
                             if let Some((_, t)) = fields
                                 .iter()

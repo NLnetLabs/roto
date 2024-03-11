@@ -5,7 +5,7 @@ use scope::Scope;
 use std::collections::{hash_map::Entry, HashMap};
 use ty::Type;
 
-use self::ty::Method;
+use self::ty::{Arrow, Method};
 
 mod filter_map;
 mod scope;
@@ -36,7 +36,7 @@ struct TypeChecker {
     int_var_map: HashMap<usize, Type>,
     /// Map from type names to types
     types: HashMap<String, Type>,
-    methods: &'static [Method],
+    methods: Vec<Method>,
 }
 
 type TypeResult<T> = Result<T, String>;
@@ -49,7 +49,7 @@ impl TypeChecker {
             type_var_map: HashMap::new(),
             int_var_map: HashMap::new(),
             types: HashMap::new(),
-            methods: ty::METHODS,
+            methods: ty::default_methods(),
         }
     }
 
@@ -155,7 +155,7 @@ impl TypeChecker {
         Ok(typed::SyntaxTree { filter_maps })
     }
 
-    fn _fresh_var(&mut self) -> Type {
+    fn fresh_var(&mut self) -> Type {
         let i = self.counter;
         self.counter += 1;
         Type::Var(i)
@@ -165,6 +165,51 @@ impl TypeChecker {
         let i = self.counter;
         self.counter += 1;
         Type::IntVar(i)
+    }
+
+    fn subtype_of<'a>(&'a mut self, a: &'a Type, b: &'a Type) -> bool {
+        self.subtype_inner(a, b, &mut HashMap::new())
+    }
+
+    fn subtype_inner<'a>(
+        &'a mut self,
+        a: &'a Type,
+        b: &'a Type,
+        subs: &mut HashMap<usize, Type>,
+    ) -> bool {
+        let mut a = self.resolve_type(a).clone();
+        let b = self.resolve_type(b).clone();
+
+        loop {
+            let Type::Var(v) = a else {
+                break;
+            };
+            let Some(t) = subs.get(&v) else {
+                break;
+            };
+            a = t.clone();
+        }
+
+        match (a, b) {
+            (a, b) if a == b => true,
+            (Type::Var(x), t) => {
+                subs.insert(x, t);
+                true
+            }
+            (Type::Table(a), Type::Table(b))
+            | (Type::OutputStream(a), Type::OutputStream(b))
+            | (Type::Rib(a), Type::Rib(b)) => {
+                self.subtype_inner(&a, &b, subs)
+            }
+            (Type::Record(a_fields), Type::Record(b_fields)) => {
+                // TODO: Order maybe shouldn't matter here.
+                a_fields.iter().zip(&b_fields).all(|((x, a), (y, b))| {
+                    x == y && self.subtype_inner(a, b, subs)
+                })
+            }
+            // TODO: Named record and other stuff
+            _ => false,
+        }
     }
 
     fn unify<'a>(&'a mut self, a: &'a Type, b: &'a Type) -> TypeResult<Type> {
@@ -262,6 +307,35 @@ impl TypeChecker {
         t
     }
 
+    // This is probably all quite slow, but we can figure out a more efficient
+    // way later.
+    fn instantiate_method(&mut self, method: &Method) -> Arrow {
+        let Method {
+            receiver_type,
+            name: _,
+            vars,
+            argument_types,
+            return_type,
+        } = method;
+
+        let mut rec = receiver_type.clone();
+        let mut args = argument_types.clone();
+        let mut ret = return_type.clone();
+
+        for method_var in vars {
+            let var = self.fresh_var();
+            let f =
+                |x: &Type| x.substitute(&Type::ExplicitVar(method_var), &var);
+            rec = f(&rec);
+            for a in &mut args {
+                *a = f(a);
+            }
+            ret = f(&ret);
+        }
+
+        Arrow { rec, args, ret }
+    }
+
     /// Return an error if there is a cycles in the type declarations
     ///
     /// The simplest case of a cycle os a recursive type:
@@ -312,7 +386,7 @@ impl TypeChecker {
         ty: &'a Type,
     ) -> TypeResult<()> {
         match ty {
-            Type::Var(_) | Type::IntVar(_) => {
+            Type::Var(_) | Type::IntVar(_) | Type::ExplicitVar(_) => {
                 Err("there should be no unresolved type variables left"
                     .into())
             }
@@ -324,14 +398,16 @@ impl TypeChecker {
             | Type::U16
             | Type::U8
             | Type::String
+            | Type::Unit
             | Type::Bool => {
                 // do nothing on primitive types
                 // no need to recurse into them.
                 Ok(())
             }
-            Type::Table(t) | Type::OutputStream(t) | Type::Rib(t) => {
-                self.visit(visited, t)
-            }
+            Type::Table(t)
+            | Type::OutputStream(t)
+            | Type::Rib(t)
+            | Type::List(t) => self.visit(visited, t),
             Type::NamedRecord(_, fields) | Type::Record(fields) => {
                 for (_, ty) in fields {
                     self.visit(visited, ty)?;
