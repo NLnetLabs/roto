@@ -36,25 +36,19 @@ use std::{
 use log::{log_enabled, trace, Level};
 
 use crate::{
-    ast::{self, AcceptReject, FilterType, ShortString, SyntaxTree},
-    blocks::Scope,
-    compiler::recurse_compile::recurse_compile,
-    symbols::{
+    ast::{self, AcceptReject, FilterType, ShortString, SyntaxTree}, blocks::Scope, compiler::recurse_compile::recurse_compile, symbols::{
         self, DepsGraph, GlobalSymbolTable, MatchActionType, Symbol,
         SymbolKind, SymbolTable,
-    },
-    traits::Token,
-    types::{
+    }, traits::Token, typechecker::{TypeChecker, TypeResult}, types::{
         datasources::{DataSource, Table},
         typedef::{RecordTypeDef, TypeDef},
         typevalue::TypeValue,
-    },
-    vm::{
+    }, vm::{
         compute_hash, Command, CommandArg, CompiledCollectionField,
         CompiledField, CompiledPrimitiveField, CompiledVariable,
         ExtDataSource, FieldIndex, FilterMapArg, FilterMapArgs, OpCode,
         StackRefPos, VariablesRefTable,
-    },
+    }
 };
 
 pub use crate::compiler::error::CompileError;
@@ -669,6 +663,10 @@ impl<'a> Compiler {
         Ok(())
     }
 
+    pub fn typecheck(&mut self) -> TypeResult<()> {
+        TypeChecker::new().check(self.ast.clone())
+    }
+
     pub fn eval_ast(&mut self) -> Result<(), CompileError> {
         self.ast.eval(self.symbols.clone())?;
         Ok(())
@@ -792,6 +790,7 @@ impl<'a> Compiler {
     ) -> Result<Rotolo, CompileError> {
         self.parse_source_code(source_code)
             .map_err(|err| format!("{:?}", err))?;
+        self.typecheck()?;
         self.eval_ast()
             .map_err(|err| format!("Eval error: {err}"))?;
         self.inject_compile_time_arguments()

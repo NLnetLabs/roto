@@ -19,6 +19,9 @@ pub enum Type {
     Rib(Box<Type>),
     Record(Vec<(String, Type)>),
     NamedRecord(String, Vec<(String, Type)>),
+    Enum(String, Vec<(String, Option<Type>)>),
+    Term(Vec<(String, Type)>),
+    Action(Vec<(String, Type)>),
     Name(String),
 }
 
@@ -91,6 +94,29 @@ pub fn default_methods() -> Vec<Method> {
             &["T"],
             &[Type::ExplicitVar("T")],
             Type::Unit,
+        ),
+    ]
+}
+
+pub fn default_types() -> Vec<(&'static str, Type)> {
+    vec![
+        ("U32", Type::U32),
+        ("U16", Type::U16),
+        ("U8", Type::U8),
+        ("Bool", Type::Bool),
+        ("String", Type::String),
+        ("Prefix", Type::Prefix),
+        ("IpAddress", Type::IpAddress),
+        ("Asn", Type::AsNumber),
+        (
+            "MaybeBool",
+            Type::Enum(
+                "MaybeBool".into(),
+                vec![
+                    ("Some".into(), Some(Type::Bool)),
+                    ("None".into(), Some(Type::Bool)),
+                ],
+            ),
         ),
     ]
 }

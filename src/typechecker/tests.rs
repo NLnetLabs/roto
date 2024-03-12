@@ -1,9 +1,9 @@
 use crate::parser::Parser;
 
-use super::{typed, TypeChecker, TypeResult};
+use super::{TypeChecker, TypeResult};
 
 #[track_caller]
-fn typecheck(s: &str) -> TypeResult<typed::SyntaxTree> {
+fn typecheck(s: &str) -> TypeResult<()> {
     let tree = match Parser::parse(s) {
         Ok(ast) => ast,
         Err(e) => {
@@ -464,6 +464,25 @@ fn send_output_stream() {
                 bars.send(Foo {
                     foo: "world",
                 });
+            }
+        }
+    "#;
+    assert!(typecheck(src).is_err());
+}
+
+#[test]
+fn term_overrides_var() {
+    let src = r#"
+        filter-map test {
+            define {
+                rx r: U32;
+                a = true;
+            }
+
+            term a {
+                match {
+                    a;
+                }
             }
         }
     "#;

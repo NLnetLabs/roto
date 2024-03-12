@@ -1,13 +1,13 @@
-use crate::ast::{self, AccessExpr, Define, DefineBody};
+use crate::ast::{self, AccessExpr, Define, DefineBody, TypeIdentField};
 
-use super::{scope::Scope, ty::Type, typed, TypeChecker, TypeResult};
+use super::{scope::Scope, types::Type, TypeChecker, TypeResult};
 
 impl TypeChecker {
     pub fn filter_map(
         &mut self,
         scope: &Scope,
         filter_map: ast::FilterMap,
-    ) -> TypeResult<typed::FilterMap> {
+    ) -> TypeResult<()> {
         let ast::FilterMap {
             ty: _,
             ident: _,
@@ -17,7 +17,7 @@ impl TypeChecker {
                 ast::FilterMapBody {
                     define,
                     expressions,
-                    apply: _,
+                    apply,
                 },
         } = filter_map;
 
@@ -44,11 +44,16 @@ impl TypeChecker {
         for expression in expressions {
             match expression {
                 ast::FilterMapExpr::Term(ast::TermSection {
-                    ident: _,
+                    ident,
                     for_kv: _,
-                    with_kv: _,
+                    with_kv,
                     body: ast::TermBody { scopes },
                 }) => {
+                    let mut inner_scope = scope.wrap();
+
+                    let args =
+                        self.with_clause(&mut inner_scope, &with_kv)?;
+
                     for ast::TermScope {
                         scope: _,
                         operator,
@@ -62,8 +67,10 @@ impl TypeChecker {
                                     for expr in exprs {
                                         // We ignore the result because it
                                         // must be boolean.
-                                        let _ =
-                                            self.logical_expr(&scope, expr)?;
+                                        self.logical_expr(
+                                            &inner_scope,
+                                            expr,
+                                        )?;
                                     }
                                 }
                             }
@@ -71,22 +78,262 @@ impl TypeChecker {
                             Some | ExactlyOne | All => todo!(),
                         }
                     }
+
+                    scope.insert_var(
+                        ident.ident.to_string(),
+                        Type::Term(args),
+                    )?;
                 }
                 ast::FilterMapExpr::Action(ast::ActionSection {
-                    ident: _,
-                    with_kv: _,
+                    ident,
+                    with_kv,
                     body: ast::ActionSectionBody { expressions },
                 }) => {
+                    let mut inner_scope = scope.wrap();
+
+                    let args =
+                        self.with_clause(&mut inner_scope, &with_kv)?;
+
                     for expr in expressions {
-                        let _t = self.compute_expr(&scope, expr)?;
+                        let _t = self.compute_expr(&inner_scope, expr)?;
+                    }
+
+                    scope.insert_var(
+                        ident.ident.to_string(),
+                        Type::Action(args),
+                    )?;
+                }
+            }
+        }
+
+        if let Some(ast::ApplySection {
+            body:
+                ast::ApplyBody {
+                    scopes,
+                    accept_reject: _,
+                },
+            for_kv: _,
+            with_kv: _,
+        }) = apply
+        {
+            for ast::ApplyScope {
+                scope: apply_scope,
+                match_action,
+            } in scopes
+            {
+                assert!(apply_scope.is_none(), "not implemented yet");
+                match match_action {
+                    ast::MatchActionExpr::FilterMatchAction(
+                        ast::FilterMatchActionExpr {
+                            operator: _,
+                            filter_ident,
+                            negate: _,
+                            actions,
+                        },
+                    ) => {
+                        let ty = self.expr(&scope, filter_ident)?;
+                        self.unify(&ty, &Type::Bool)?;
+                        for action in actions {
+                            match action {
+                                (None, None) | (Some(_), Some(_)) => {
+                                    unreachable!()
+                                }
+                                (None, Some(_)) => {
+                                    // do nothing
+                                }
+                                (Some(expr), None) => {
+                                    self.expr(&scope, expr)?;
+                                }
+                            }
+                        }
+                    }
+                    ast::MatchActionExpr::PatternMatchAction(
+                        ast::PatternMatchActionExpr {
+                            operator,
+                            match_arms,
+                        },
+                    ) => {
+                        let ast::MatchOperator::MatchValueWith(x) = operator
+                        else {
+                            unreachable!()
+                        };
+                        let x = scope.get_var(&x.ident.to_string())?;
+                        let Type::Enum(_, variants) =
+                            self.resolve_type(x).clone()
+                        else {
+                            todo!()
+                        };
+
+                        // We'll keep track of used variants to do some basic
+                        // exhaustiveness checking. Only a warning for now.
+                        let arms = &match_arms;
+                        let mut used_variants = Vec::<&str>::new();
+
+                        for ast::PatternMatchActionArm {
+                            variant_id,
+                            data_field,
+                            guard,
+                            actions,
+                        } in arms
+                        {
+                            let variant_id = &variant_id.ident;
+                            let Some(idx) =
+                                variants.iter().position(|(v, _)| {
+                                    v.as_str() == variant_id.as_str()
+                                })
+                            else {
+                                return Err(format!("The variant"));
+                            };
+
+                            if used_variants.contains(&variant_id.as_str()) {
+                                println!("WARNING: variant {variant_id} appears multiple times.");
+                            }
+
+                            let ty = &variants[idx].1;
+
+                            let mut inner_scope = scope.wrap();
+
+                            match (ty, data_field) {
+                                (None, None) => {
+                                    // ok!
+                                }
+                                (Some(t), Some(id)) => {
+                                    inner_scope.insert_var(
+                                        id.ident.to_string(),
+                                        t.clone(),
+                                    )?;
+                                }
+                                (None, Some(_)) => {
+                                    return Err("Got field for variant that doesn't have one".into())
+                                },
+                                (Some(_), None) => {
+                                    return Err("Pattern should have a field".into())
+                                },
+                            }
+
+                            if let Some(guard) = guard {
+                                let ast::TermCallExpr { term_id, args } =
+                                    guard;
+                                let Type::Term(term_params) = scope
+                                    .get_var(&term_id.ident.to_string())?
+                                else {
+                                    return Err("Should be a term".into());
+                                };
+
+                                match args {
+                                    Some(ast::ArgExprList { args }) => {
+                                        if args.len() != term_params.len() {
+                                            return Err(
+                                                "Number of arguments do not match".into(),
+                                            );
+                                        }
+                                        for (arg, (_, param)) in
+                                            args.into_iter().zip(term_params)
+                                        {
+                                            let ty = self
+                                                .expr(&scope, arg.clone())?;
+                                            self.unify(&ty, param)?;
+                                        }
+                                    }
+                                    None => {
+                                        if !term_params.is_empty() {
+                                            return Err("Term takes params but none were given.".into());
+                                        }
+                                    }
+                                }
+                            } else {
+                                // If there is a guard we don't remove the variant
+                                // because it might appear again.
+                                used_variants.push(variant_id.as_str());
+                            }
+
+                            for action in actions {
+                                match action {
+                                    (Some(_), Some(_)) | (None, None) => {
+                                        unreachable!()
+                                    }
+                                    (
+                                        Some(ast::ActionCallExpr {
+                                            action_id,
+                                            args,
+                                        }),
+                                        None,
+                                    ) => {
+                                        let Type::Action(term_params) = scope
+                                            .get_var(
+                                                &action_id.ident.to_string(),
+                                            )?
+                                        else {
+                                            return Err(
+                                                "Should be a action".into()
+                                            );
+                                        };
+
+                                        match args {
+                                            Some(ast::ArgExprList {
+                                                args,
+                                            }) => {
+                                                if args.len()
+                                                    != term_params.len()
+                                                {
+                                                    return Err(
+                                                        "Number of arguments do not match".into(),
+                                                    );
+                                                }
+                                                for (arg, (_, param)) in args
+                                                    .into_iter()
+                                                    .zip(term_params)
+                                                {
+                                                    let ty = self.expr(
+                                                        &scope,
+                                                        arg.clone(),
+                                                    )?;
+                                                    self.unify(&ty, param)?;
+                                                }
+                                            }
+                                            None => {
+                                                if !term_params.is_empty() {
+                                                    return Err("Term takes params but none were given.".into());
+                                                }
+                                            }
+                                        }
+                                    }
+                                    (None, Some(_accept_reject)) => {
+                                        // always ok (for now)
+                                    }
+                                }
+                            }
+                        }
+
+                        for (v, _) in variants {
+                            if !used_variants.contains(&v.as_str()) {
+                                println!("WARNING: Variant {} is not covered in enum.", v.as_str());
+                            }
+                        }
                     }
                 }
             }
         }
 
-        // apply section
+        Ok(())
+    }
 
-        Ok(typed::FilterMap {})
+    fn with_clause(
+        &mut self,
+        scope: &mut Scope,
+        args: &[TypeIdentField],
+    ) -> TypeResult<Vec<(String, Type)>> {
+        args.into_iter()
+            .map(|TypeIdentField { field_name, ty }| {
+                let Some(ty) = self.types.get(&ty.ident.to_string()) else {
+                    return Err("type does not exist".to_string());
+                };
+
+                let field_name = field_name.ident.to_string();
+                scope.insert_var(field_name.clone(), ty.clone())?;
+                Ok((field_name.clone(), ty.clone()))
+            })
+            .collect()
     }
 
     fn logical_expr(

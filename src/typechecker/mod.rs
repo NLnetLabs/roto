@@ -3,28 +3,17 @@
 use crate::ast::{self, TypeIdentField};
 use scope::Scope;
 use std::collections::{hash_map::Entry, HashMap};
-use ty::Type;
+use types::Type;
 
-use self::ty::{Arrow, Method};
+use self::types::{default_types, Arrow, Method};
 
 mod filter_map;
 mod scope;
 #[cfg(test)]
 mod tests;
-mod ty;
-mod typed;
+mod types;
 
-const BUILT_IN_TYPES: &'static [(&'static str, Type)] = &[
-    ("U32", Type::U32),
-    ("U16", Type::U16),
-    ("U8", Type::U8),
-    ("Bool", Type::Bool),
-    ("String", Type::String),
-    ("Prefix", Type::Prefix),
-    ("IpAddress", Type::IpAddress),
-];
-
-struct TypeChecker {
+pub struct TypeChecker {
     counter: usize,
     /// Map from type var index to a type (or another type var)
     ///
@@ -39,26 +28,20 @@ struct TypeChecker {
     methods: Vec<Method>,
 }
 
-type TypeResult<T> = Result<T, String>;
+pub type TypeResult<T> = Result<T, String>;
 
 impl TypeChecker {
-    #[allow(dead_code)]
     pub fn new() -> TypeChecker {
         Self {
             counter: 0,
             type_var_map: HashMap::new(),
             int_var_map: HashMap::new(),
             types: HashMap::new(),
-            methods: ty::default_methods(),
+            methods: types::default_methods(),
         }
     }
 
-    // This allow just reduces the noise while I'm still writing this code
-    #[allow(dead_code)]
-    fn check(
-        &mut self,
-        tree: ast::SyntaxTree,
-    ) -> TypeResult<typed::SyntaxTree> {
+    pub fn check(&mut self, tree: ast::SyntaxTree) -> TypeResult<()> {
         let mut filter_maps = Vec::new();
 
         // This map contains Option<Type>, where None represnts a type that
@@ -66,7 +49,7 @@ impl TypeChecker {
         // declarations, we check whether any nones are left to determine
         // whether any types are unresolved.
         // The builtin types are added right away.
-        let mut types: HashMap<String, Option<Type>> = BUILT_IN_TYPES
+        let mut types: HashMap<String, Option<Type>> = default_types()
             .into_iter()
             .map(|(s, t)| (s.to_string(), Some(t.clone())))
             .collect();
@@ -147,12 +130,12 @@ impl TypeChecker {
 
         self.detect_type_cycles()?;
 
-        let filter_maps = filter_maps
+        filter_maps
             .into_iter()
             .map(|f| self.filter_map(&root_scope, *f))
             .collect::<Result<_, _>>()?;
 
-        Ok(typed::SyntaxTree { filter_maps })
+        Ok(())
     }
 
     fn fresh_var(&mut self) -> Type {
@@ -399,7 +382,9 @@ impl TypeChecker {
             | Type::U8
             | Type::String
             | Type::Unit
-            | Type::Bool => {
+            | Type::Bool
+            | Type::Term(_)
+            | Type::Action(_) => {
                 // do nothing on primitive types
                 // no need to recurse into them.
                 Ok(())
@@ -411,6 +396,14 @@ impl TypeChecker {
             Type::NamedRecord(_, fields) | Type::Record(fields) => {
                 for (_, ty) in fields {
                     self.visit(visited, ty)?;
+                }
+                Ok(())
+            }
+            Type::Enum(_, variants) => {
+                for (_, ty) in variants {
+                    if let Some(ty) = ty {
+                        self.visit(visited, ty)?;
+                    }
                 }
                 Ok(())
             }
@@ -460,6 +453,7 @@ fn evaluate_record_type(
     for field in fields {
         let field_ident;
         let field_type;
+
         match field {
             ast::RibField::PrimitiveField(TypeIdentField {
                 field_name,
@@ -482,8 +476,10 @@ fn evaluate_record_type(
                 )?);
             }
             ast::RibField::ListField(field) => {
-                let _field_ident = field.0.ident.to_string();
-                todo!()
+                field_ident = field.0.ident.to_string();
+                field_type = Type::List(Box::new(Type::Name(
+                    field.1.inner_type.to_string(),
+                )));
             }
         }
 
