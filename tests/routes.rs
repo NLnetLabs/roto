@@ -124,7 +124,7 @@ fn test_routes_1() {
             action send_msg {
                 // An untyped anonymous record
                 mqtt.send(
-                    {
+                    Message {
                         prefix: route.prefix,
                         peer_ip: route.peer_ip
                     }
@@ -333,7 +333,7 @@ fn test_routes_4() {
         
             // A typed named record
             action send_msg {
-                mqtt.send({
+                mqtt.send(Message {
                     prefix: pfx,
                     peer_ip: peer
                 });

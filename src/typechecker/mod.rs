@@ -5,7 +5,7 @@ use scope::Scope;
 use std::collections::{hash_map::Entry, HashMap};
 use types::Type;
 
-use self::types::{default_types, Arrow, Method};
+use self::types::{default_types, Arrow, Method, Primitive};
 
 mod filter_map;
 mod scope;
@@ -26,6 +26,7 @@ pub struct TypeChecker {
     /// Map from type names to types
     types: HashMap<String, Type>,
     methods: Vec<Method>,
+    static_methods: Vec<Method>,
 }
 
 pub type TypeResult<T> = Result<T, String>;
@@ -37,7 +38,8 @@ impl TypeChecker {
             type_var_map: HashMap::new(),
             int_var_map: HashMap::new(),
             types: HashMap::new(),
-            methods: types::default_methods(),
+            methods: types::methods(),
+            static_methods: types::static_methods(),
         }
     }
 
@@ -55,6 +57,10 @@ impl TypeChecker {
             .collect();
 
         let mut root_scope = Scope::default();
+
+        for (v, t) in types::globals() {
+            root_scope.insert_var(v, t)?;
+        }
 
         for expr in tree.expressions {
             match expr {
@@ -130,7 +136,7 @@ impl TypeChecker {
 
         self.detect_type_cycles()?;
 
-        filter_maps
+        let _filter_maps: Vec<_> = filter_maps
             .into_iter()
             .map(|f| self.filter_map(&root_scope, *f))
             .collect::<Result<_, _>>()?;
@@ -181,6 +187,7 @@ impl TypeChecker {
             }
             (Type::Table(a), Type::Table(b))
             | (Type::OutputStream(a), Type::OutputStream(b))
+            | (Type::List(a), Type::List(b))
             | (Type::Rib(a), Type::Rib(b)) => {
                 self.subtype_inner(&a, &b, subs)
             }
@@ -204,12 +211,20 @@ impl TypeChecker {
             (a, b) if a == b => a.clone(),
             (
                 Type::IntVar(a),
-                b @ (Type::U8 | Type::U16 | Type::U32 | Type::IntVar(_)),
+                b @ (Type::Primitive(
+                    Primitive::U8 | Primitive::U16 | Primitive::U32,
+                )
+                | Type::IntVar(_)),
             ) => {
                 self.int_var_map.insert(a, b.clone());
                 b.clone()
             }
-            (a @ (Type::U8 | Type::U16 | Type::U32), Type::IntVar(b)) => {
+            (
+                a @ Type::Primitive(
+                    Primitive::U8 | Primitive::U16 | Primitive::U32,
+                ),
+                Type::IntVar(b),
+            ) => {
                 self.int_var_map.insert(b, a.clone());
                 a.clone()
             }
@@ -230,6 +245,9 @@ impl TypeChecker {
             }
             (Type::Rib(a), Type::Rib(b)) => {
                 Type::Rib(Box::new(self.unify(&a, &b)?))
+            }
+            (Type::List(a), Type::List(b)) => {
+                Type::List(Box::new(self.unify(&a, &b)?))
             }
             (Type::Record(a_fields), Type::Record(b_fields)) => {
                 if a_fields.len() != b_fields.len() {
@@ -373,18 +391,7 @@ impl TypeChecker {
                 Err("there should be no unresolved type variables left"
                     .into())
             }
-            Type::Prefix
-            | Type::PrefixLength
-            | Type::AsNumber
-            | Type::IpAddress
-            | Type::U32
-            | Type::U16
-            | Type::U8
-            | Type::String
-            | Type::Unit
-            | Type::Bool
-            | Type::Term(_)
-            | Type::Action(_) => {
+            Type::Primitive(_) | Type::Term(_) | Type::Action(_) | Type::Filter(_) | Type::FilterMap(_) => {
                 // do nothing on primitive types
                 // no need to recurse into them.
                 Ok(())

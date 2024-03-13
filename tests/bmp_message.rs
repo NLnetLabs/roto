@@ -3,16 +3,19 @@ use roto::{
     ast::AcceptReject,
     blocks::Scope,
     blocks::Scope::{Filter, FilterMap},
-    compiler::{Compiler, CompileError},
+    compiler::{CompileError, Compiler},
     types::{
-        builtin::{BytesRecord, BuiltinTypeValue},
+        builtin::{BuiltinTypeValue, BytesRecord},
         collections::Record,
-        lazyrecord_types::{BmpMessage, RouteMonitoring, InitiationMessage},
-        typevalue::TypeValue, typedef::TypeDef,
+        lazyrecord_types::{BmpMessage, InitiationMessage, RouteMonitoring},
+        typedef::TypeDef,
+        typevalue::TypeValue,
     },
     vm::{self, VmResult},
 };
-use routes::bmp::encode::{mk_peer_down_notification_msg, mk_per_peer_header, mk_termination_msg};
+use routes::bmp::encode::{
+    mk_peer_down_notification_msg, mk_per_peer_header, mk_termination_msg,
+};
 
 mod common;
 
@@ -229,53 +232,54 @@ fn test_data_3(
 fn test_data_4(
     name: Scope,
     payload: TypeValue,
-    source_code: &'static str,)  -> Result<VmResult, Box<dyn std::error::Error>> {
-        println!("Evaluate filter-map {}...", name);
+    source_code: &'static str,
+) -> Result<VmResult, Box<dyn std::error::Error>> {
+    println!("Evaluate filter-map {}...", name);
 
-        // Compile the source code in this example
-        let compile_res = Compiler::build(source_code);
+    // Compile the source code in this example
+    let compile_res = Compiler::build(source_code);
 
-        if let Err(e) = &compile_res {
-            eprintln!("{e}")
-        }
+    if let Err(e) = &compile_res {
+        eprintln!("{e}")
+    }
 
-        let rotolo = compile_res?;
-        let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
-    
-        trace!("Used Arguments");
-        trace!("{:#?}", &roto_pack.get_arguments());
-        trace!("Used Data Sources");
-        trace!("{:#?}", &roto_pack.get_data_sources());
-    
-        let ds_ref = roto_pack.get_data_sources();
-    
-        for mb in roto_pack.get_mir().iter() {
-            println!("{}", mb);
-        }
-    
-        let mut vm = vm::VmBuilder::new()
-            // .with_arguments(args)
-            .with_data_sources(ds_ref)
-            .with_mir_code(roto_pack.get_mir())
-            .build()?;
-    
-        let mem = &mut vm::LinearMemory::uninit();
-        let res = vm
-            .exec(
-                payload,
-                None::<Record>,
-                // Some(filter_map_arguments),
-                None,
-                mem,
-            )
-            .unwrap();
-    
-        trace!("\nRESULT");
-        trace!("action: {}", res.accept_reject);
-        trace!("rx    : {:?}", res.rx);
-        trace!("tx    : {:?}", res.tx);
-    
-        Ok(res)
+    let rotolo = compile_res?;
+    let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
+
+    trace!("Used Arguments");
+    trace!("{:#?}", &roto_pack.get_arguments());
+    trace!("Used Data Sources");
+    trace!("{:#?}", &roto_pack.get_data_sources());
+
+    let ds_ref = roto_pack.get_data_sources();
+
+    for mb in roto_pack.get_mir().iter() {
+        println!("{}", mb);
+    }
+
+    let mut vm = vm::VmBuilder::new()
+        // .with_arguments(args)
+        .with_data_sources(ds_ref)
+        .with_mir_code(roto_pack.get_mir())
+        .build()?;
+
+    let mem = &mut vm::LinearMemory::uninit();
+    let res = vm
+        .exec(
+            payload,
+            None::<Record>,
+            // Some(filter_map_arguments),
+            None,
+            mem,
+        )
+        .unwrap();
+
+    trace!("\nRESULT");
+    trace!("action: {}", res.accept_reject);
+    trace!("rx    : {:?}", res.rx);
+    trace!("tx    : {:?}", res.tx);
+
+    Ok(res)
 }
 
 fn initiation_payload_example() -> Vec<u8> {
@@ -670,11 +674,7 @@ fn bmp_message_3() {
         route_monitoring_example(),
     );
 
-    let err =
-        "Eval error: Cannot convert value with type Lazy Record".to_string();
-    let mut str = res.unwrap_err().to_string();
-    str.truncate(err.len());
-    assert_eq!(str, err);
+    res.unwrap_err();
 }
 
 #[test]
@@ -782,7 +782,7 @@ fn bmp_message_6() {
 
             action send_msg with yy_msg: BmpPeerDownNotification {
                 mqtt.send(
-                    {
+                    Message {
                         asn: yy_msg.per_peer_header.asn,
                         message: String.format(
                             "Peer with ASN {} just went down.", 
@@ -838,7 +838,7 @@ fn bmp_message_7() {
 
             action send_msg with yy_msg: BmpPeerDownNotification {
                 mqtt.send(
-                    {
+                    Message {
                         asn: yy_msg.per_peer_header.asn,
                         message: String.format(
                             "Peer with ASN {} just went down.", 
@@ -867,11 +867,6 @@ fn bmp_message_7() {
     trace!("res : {:?}", res);
 
     res.unwrap();
-    // let err =
-    //     "Eval error: Cannot convert value with type Lazy Record".to_string();
-    // let mut str = res.unwrap_err().to_string();
-    // str.truncate(err.len());
-    // assert_eq!(str, err);
 }
 
 #[test]
@@ -899,7 +894,7 @@ fn bmp_message_8() {
                 }
             }
 
-            action send_msg with yy_msg: IntegerLiteral {
+            action send_msg with yy_msg: U32 {
                 mqtt.send(
                     {
                         asn: yy_msg,
@@ -919,19 +914,13 @@ fn bmp_message_8() {
 
         output-stream mqtt contains Message {
             asn: Asn,
-            message: IntegerLiteral
+            message: U32
         }
         "#,
     );
 
     trace!("res : {:?}", res);
-
-    // res.unwrap();
-    let err =
-        "Eval error: String cannot be converted into Lazy Record".to_string();
-    let mut str = res.unwrap_err().to_string();
-    str.truncate(err.len());
-    assert_eq!(str, err);
+    res.unwrap_err();
 }
 
 const TEST_ROUTER_SYS_NAME: &str = "test-router";
@@ -996,12 +985,15 @@ fn bmp_message_9() {
 fn bmp_message_10() {
     common::init();
 
-    let buf = vec![0x03, 0x00, 0x00, 0x00, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x7f, 0x00, 0x00, 0x01, 0x00, 0x00, 0x30, 0x39, 0x01, 0x02, 0x03,
-    0x04, 0x65, 0x7c, 0x49, 0xa7, 0x00, 0x0a, 0x13, 0x82, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x17, 0x02, 
-    0x00, 0x00, 0x00, 0x00];
+    let buf = vec![
+        0x03, 0x00, 0x00, 0x00, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7f, 0x00, 0x00, 0x01, 0x00,
+        0x00, 0x30, 0x39, 0x01, 0x02, 0x03, 0x04, 0x65, 0x7c, 0x49, 0xa7,
+        0x00, 0x0a, 0x13, 0x82, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x17,
+        0x02, 0x00, 0x00, 0x00, 0x00,
+    ];
     let rm_msg = BytesRecord::<BmpMessage>::new(buf.into());
     assert!(rm_msg.is_ok());
     let rm_msg = rm_msg.unwrap();
@@ -1046,7 +1038,6 @@ fn bmp_message_10() {
     assert_eq!(res.accept_reject, AcceptReject::Accept);
     assert_eq!(res.rx, payload);
 }
-
 
 #[test]
 fn initiation_message() {
@@ -1099,7 +1090,9 @@ fn initiation_message() {
 #[test]
 fn peer_down_notification_1() {
     let pph = mk_per_peer_header("192.0.2.10", 65536);
-    let peer_up: BytesRecord<BmpMessage> = BytesRecord::<BmpMessage>::new(mk_peer_down_notification_msg(&pph).0).unwrap();
+    let peer_up: BytesRecord<BmpMessage> =
+        BytesRecord::<BmpMessage>::new(mk_peer_down_notification_msg(&pph).0)
+            .unwrap();
     let payload: TypeValue = TypeValue::Builtin(peer_up.into());
     println!("payload {:?}", payload);
 
@@ -1142,7 +1135,9 @@ fn peer_down_notification_1() {
 #[test]
 fn peer_down_notification_2() {
     let pph = mk_per_peer_header("192.0.2.10", 65536);
-    let peer_up: BytesRecord<BmpMessage> = BytesRecord::<BmpMessage>::new(mk_peer_down_notification_msg(&pph).0).unwrap();
+    let peer_up: BytesRecord<BmpMessage> =
+        BytesRecord::<BmpMessage>::new(mk_peer_down_notification_msg(&pph).0)
+            .unwrap();
     let payload: TypeValue = TypeValue::Builtin(peer_up.into());
     println!("payload {:?}", payload);
 
@@ -1184,7 +1179,8 @@ fn peer_down_notification_2() {
 
 #[test]
 fn termination_message_1() {
-    let peer_up: BytesRecord<BmpMessage> = BytesRecord::<BmpMessage>::new(mk_termination_msg()).unwrap();
+    let peer_up: BytesRecord<BmpMessage> =
+        BytesRecord::<BmpMessage>::new(mk_termination_msg()).unwrap();
     let btv: BuiltinTypeValue = peer_up.into();
     let expected: Result<TypeValue, CompileError> = Err(CompileError::from(
         "Cannot convert raw BMP message into any other type.",

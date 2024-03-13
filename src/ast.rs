@@ -73,7 +73,7 @@ pub struct RecordTypeAssignment {
     pub record_type: RecordTypeIdentifier,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FilterType {
     FilterMap,
     Filter,

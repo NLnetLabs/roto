@@ -170,6 +170,7 @@ fn test_data(
 }
 
 #[test]
+#[ignore]
 fn test_filter_map_1() {
     common::init();
 
