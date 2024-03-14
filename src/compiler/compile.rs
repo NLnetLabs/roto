@@ -85,12 +85,8 @@ impl Rotolo {
     ///
     /// If any miscompilations occurred, those miscompilations will be
     /// returned instead.
-    pub fn packs(self) -> Result<Vec<RotoPack>, Vec<(Scope, CompileError)>> {
-        if self.mis_compilations.is_empty() {
-            Ok(self.packs)
-        } else {
-            Err(self.mis_compilations)
-        }
+    pub fn packs(self) -> (Vec<RotoPack>, Vec<(Scope, CompileError)>) {
+        (self.packs, self.mis_compilations)
     }
 
     // this iterator is not public because that would leak the (private)

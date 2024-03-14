@@ -54,6 +54,7 @@ impl<'a> TestCompiler<'a> {
         self
     }
 
+    // this is *NOT* dead code, rust-analyzer!
     #[allow(dead_code)]
     pub fn test_compile(
         self,
@@ -62,13 +63,13 @@ impl<'a> TestCompiler<'a> {
         trace!("compile eval {}", self.name);
         let compile_res = self.compiler.compile().unwrap();
 
-        let res = compile_res.packs().map(|_| ());
+        let res = compile_res.packs();
 
         match expect_success {
-            false => assert!(res.is_err()),
-            true => assert!(res.is_ok()),
+            false => assert!(!res.1.is_empty()),
+            true => assert!(!res.0.is_empty() && res.1.is_empty()),
         };
 
-        res
+        Ok(())
     }
 }
