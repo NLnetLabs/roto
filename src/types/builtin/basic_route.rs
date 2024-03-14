@@ -58,7 +58,7 @@ pub type LogicalTime = u64;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub struct BasicRoute(
-    routecore::bgp::workshop::route::RouteWorkshop<BasicNlri>,
+    pub routecore::bgp::workshop::route::RouteWorkshop<BasicNlri>,
 );
 
 impl BasicRoute {
@@ -851,8 +851,11 @@ impl From<RouteWorkshop<FlowSpecNlri<bytes::Bytes>>>
 pub struct Provenance {
     #[serde(skip)]
     pub timestamp: chrono::DateTime<Utc>,
-    pub router_id: u32,     // hash over the string.
-    pub connection_id: u32, // hash over the SourceId of the TCP connection on this Rotonda.
+    // The SocketAddr of the monitored router over BMP, or the SocketAddr of
+    // the BGP peer over BGP.
+    pub connection_id: SocketAddr,
+    // The (IP Address, ASN) of a peer of the monitored router over BMP, or
+    // the (IP Address, ASN) tuple of the connected BGP peer.
     pub peer_id: PeerId,
     pub peer_bgp_id: routecore::bgp::path_attributes::BgpIdentifier,
     pub peer_distuingisher: [u8; 8],
@@ -860,20 +863,20 @@ pub struct Provenance {
 }
 
 impl Provenance {
-    pub fn from_rotonda() -> Self {
-        Self {
-            timestamp: Utc::now(),
-            router_id: 0,
-            connection_id: 0,
-            peer_id: PeerId {
-                addr: "127.0.0.1".parse().unwrap(),
-                asn: 0.into(),
-            },
-            peer_bgp_id: BgpIdentifier::from([0, 0, 0, 0]),
-            peer_distuingisher: [0, 0, 0, 0, 0, 0, 0, 0],
-            peer_rib_type: PeerRibType::Loc,
-        }
-    }
+    // pub fn from_rotonda() -> Self {
+    //     Self {
+    //         timestamp: Utc::now(),
+    //         // router_id: 0,
+    //         connection_id: 0,
+    //         peer_id: PeerId {
+    //             addr: "127.0.0.1".parse().unwrap(),
+    //             asn: 0.into(),
+    //         },
+    //         peer_bgp_id: BgpIdentifier::from([0, 0, 0, 0]),
+    //         peer_distuingisher: [0, 0, 0, 0, 0, 0, 0, 0],
+    //         peer_rib_type: PeerRibType::Loc,
+    //     }
+    // }
 
     pub fn peer_ip(&self) -> std::net::IpAddr {
         self.peer_id.addr
@@ -933,7 +936,7 @@ impl Provenance {
         trace!("get_field_by_index {:?} for Provenance", field_index);
         match field_index.first().map(|i| (*i).try_into()) {
             Some(Ok(ProvenanceToken::Timestamp)) => todo!(),
-            Some(Ok(ProvenanceToken::RouterId)) => Ok(self.router_id.into()),
+            // Some(Ok(ProvenanceToken::RouterId)) => Ok(self.router_id.into()),
             Some(Ok(ProvenanceToken::ConnectionId)) => {
                 Ok(self.connection_id.into())
             }
@@ -965,10 +968,10 @@ impl Display for Provenance {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "timestamp: {}, router_id: {}, connection_id: {}, peer_id: \
+            "timestamp: {}, connection_id: {}, peer_id: \
         {}, peer_bgp_id: {:?}, peer_distuingisher: {:?}, peer_rib_type: {}",
             self.timestamp,
-            self.router_id,
+            // self.router_id,
             self.connection_id,
             self.peer_id,
             self.peer_bgp_id,

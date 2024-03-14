@@ -64,8 +64,7 @@ fn test_data(
 
     let provenance = Provenance {
         timestamp: chrono::Utc::now(),
-        router_id: 0,
-        connection_id: 0,
+        connection_id: "192.0.2.0:178".parse().unwrap(),
         peer_id: PeerId {
             addr: peer_ip,
             asn: Asn::from(65534),
@@ -150,8 +149,7 @@ fn test_data_2(
 
     let provenance = Provenance {
         timestamp: chrono::Utc::now(),
-        router_id: 0,
-        connection_id: 0,
+        connection_id: "192.0.2.10:178".parse().unwrap(),
         peer_id: PeerId {
             addr: peer_ip,
             asn: Asn::from(65534),
@@ -234,8 +232,7 @@ fn test_data_3(
 
     let provenance = Provenance {
         timestamp: chrono::Utc::now(),
-        router_id: 0,
-        connection_id: 0,
+        connection_id: "192.0.2.10:178".parse().unwrap(),
         peer_id: PeerId {
             addr: peer_ip,
             asn: Asn::from(65534),
@@ -300,8 +297,7 @@ fn test_data_4(
 
         let provenance = Provenance {
             timestamp: chrono::Utc::now(),
-            router_id: 0,
-            connection_id: 0,
+            connection_id: "192.0.2.10:178".parse().unwrap(),
             peer_id: PeerId {
                 addr: peer_ip,
                 asn: Asn::from(65534),
@@ -383,8 +379,7 @@ fn compile_initiation_payload(
 
     let provenance = Provenance {
         timestamp: chrono::Utc::now(),
-        router_id: 0,
-        connection_id: 0,
+        connection_id: "192.0.2.10:178".parse().unwrap(),
         peer_id: PeerId {
             addr: peer_ip,
             asn: Asn::from(65534),

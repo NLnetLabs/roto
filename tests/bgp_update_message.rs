@@ -79,8 +79,7 @@ fn test_data(
 
     let prov = Provenance {
         timestamp: chrono::Utc::now(),
-        router_id: 0,
-        connection_id: 0,
+        connection_id: "127.0.0.1:178".parse().unwrap(),
         peer_id: PeerId { addr: "172.0.0.1".parse().unwrap(), asn: Asn::from(65530)},
         peer_bgp_id: [0,0,0,0].into(),
         peer_distuingisher: [0; 8],

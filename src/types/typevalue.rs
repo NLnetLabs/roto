@@ -1435,3 +1435,11 @@ impl From<StatisticsReport> for TypeValue {
         ))
     }
 }
+
+impl From<std::net::SocketAddr> for TypeValue {
+    fn from(value: std::net::SocketAddr) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
+            value.into()
+        ))
+    }
+}
