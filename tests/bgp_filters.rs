@@ -8,11 +8,11 @@ use roto::{
     types::{
         builtin::{
             basic_route::{BasicRoute, PeerId, PeerRibType, Provenance}, NlriStatus, RouteContext,
-        }, collections::{BytesRecord, Record}, lazyrecord_types::BgpUpdateMessage
+        }, collections::{BytesRecord, Record}, lazyrecord_types::BgpUpdateMessage, typevalue::TypeValue
     },
     vm::{self, VmResult},
 };
-use routecore::{asn::Asn, bgp::{message::{nlri::BasicNlri, SessionConfig}, workshop::{afisafi_nlri::Ipv4UnicastNlri, route::RouteWorkshop}}};
+use routecore::{asn::Asn, bgp::{message::{nlri::BasicNlri, SessionConfig}, nlri::afisafi::Ipv4UnicastNlri, path_attributes::PaMap, workshop::route::{explode_for_afi_safis, RouteWorkshop}}, Parser};
 
 use routes::bmp::encode::{
     mk_bgp_update, mk_per_peer_header, Announcements, Prefixes,
@@ -42,21 +42,22 @@ fn test_data(
         mk_bgp_update(&per_peer_header, &withdrawals, &announcements, &[]);
 
     let bgp_msg = BytesRecord::<BgpUpdateMessage>::new(msg_buf.0, SessionConfig::modern())?;
+    let afi_safis = bgp_msg.bytes_parser().afi_safis().into_iter().flatten();
 
     let prov = Provenance {
         timestamp: chrono::Utc::now(),
-        router_id: 0,
-        connection_id: 0,
+        connection_id: "127.0.0.1:8080".parse().unwrap(),
         peer_id: PeerId { addr: "172.0.0.1".parse().unwrap(), asn: Asn::from(65530)},
         peer_bgp_id: [0,0,0,0].into(),
         peer_distuingisher: [0; 8],
         peer_rib_type: PeerRibType::OutPost,
     };
 
-    let nlri = Ipv4UnicastNlri(BasicNlri {
-        prefix: "192.0.2.0/24".parse().unwrap(),
-        path_id: None
-    });
+    let parser = bgp_msg.bytes_parser();
+    let pa_map = PaMap::from_update_pdu(parser).unwrap();
+
+    let parser = Parser::from_ref(parser.octets());
+    let rws = &explode_for_afi_safis::<'_, _, _, TypeValue>(afi_safis, false, parser, &pa_map)[0];
 
     let context = RouteContext::new(
         // routecore::addr::Prefix::from_str("192.0.2.0/24")?,
@@ -68,10 +69,10 @@ fn test_data(
         prov
     );
 
-    let payload = RouteWorkshop::from_update_pdu(
-        nlri,
-        &bgp_msg.into_inner()
-    )?;
+    // let payload = RouteWorkshop::from_update_pdu(
+    //     nlri,
+    //     &bgp_msg.into_inner()
+    // )?;
 
     // Create the VM
     trace!("Used Arguments");
@@ -95,7 +96,8 @@ fn test_data(
     let mem = &mut vm::LinearMemory::uninit();
     let res = vm
         .exec(
-            roto::types::builtin::BasicRoute::new(payload.clone()),
+            // roto::types::builtin::BasicRoute::new(payload.clone()),
+            rws.clone(),
             None::<Record>,
             // Some(filter_map_arguments),
             None,
@@ -108,7 +110,7 @@ fn test_data(
     trace!("rx    : {:?}", res.rx);
     trace!("tx    : {:?}", res.tx);
 
-    Ok((res, BasicRoute::new(payload)))
+    Ok((res, rws.clone().into_route().unwrap()))
 }
 
 //------------ Test: IpAddressLiteral ----------------------------------------

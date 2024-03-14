@@ -16,9 +16,11 @@ use routecore::asn::Asn;
 use routecore::bgp::message::nlri::{BasicNlri, Nlri};
 use routecore::bgp::message::update_builder::MpReachNlriBuilder;
 use routecore::bgp::message::{SessionConfig, UpdateMessage};
+use routecore::bgp::path_attributes::PaMap;
 use routecore::bgp::types::{AfiSafi, NextHop};
 use routecore::bgp::workshop::afisafi_nlri::{HasBasicNlri, Ipv6UnicastNlri};
-use routecore::bgp::workshop::route::RouteWorkshop;
+use routecore::bgp::workshop::route::{explode_for_afi_safis, RouteWorkshop};
+use routecore::Parser;
 
 mod common;
 
@@ -76,8 +78,7 @@ fn test_data(
 
     let provenance = Provenance {
         timestamp: chrono::Utc::now(),
-        router_id: 0,
-        connection_id: 0,
+        connection_id: "fe80::1:178".parse().unwrap(),
         peer_id: PeerId {
             addr: peer_ip,
             asn: Asn::from(65534),
@@ -87,15 +88,15 @@ fn test_data(
         peer_rib_type: PeerRibType::OutPost,
     };
 
-    let nlri: Ipv6UnicastNlri = update
-        .bytes_parser()
-        .announcements_vec()
-        .unwrap()
-        .first()
-        .unwrap()
-        .clone()
-        .try_into()
-        .unwrap();
+    // let nlri: Ipv6UnicastNlri = update
+    //     .bytes_parser()
+    //     .announcements_vec()
+    //     .unwrap()
+    //     .first()
+    //     .unwrap()
+    //     .clone()
+    //     .try_into()
+    //     .unwrap();
 
     let context = &RouteContext::new(
         Some(update.clone()),
@@ -104,7 +105,16 @@ fn test_data(
     );
 
     let update: UpdateMessage<bytes::Bytes> = update.into_inner();
-    let mut rws = RouteWorkshop::from_update_pdu(nlri, &update)?;
+    let parser = Parser::from_ref(update.octets());
+
+    let pa_map = PaMap::from_update_pdu(&update).unwrap();
+
+    let afi_safis = update.afi_safis().into_iter().flatten();
+    trace!("afi safis {:?}", afi_safis);
+    let mut rws = explode_for_afi_safis::<'_, _, _, TypeValue>(afi_safis, false, parser, &pa_map);
+    
+    trace!("rws {:?}", rws);
+    // let mut rws = RouteWorkshop::from_update_pdu(nlri, &update)?;
 
     // from_update_pdu does NOT set MP_REACH_NLRI attribute, so we have to set
     // the NLRI and the NextHop manually.
@@ -117,20 +127,22 @@ fn test_data(
     let mp_reach =
         MpReachNlriBuilder::new_for_nlri(announces.first().unwrap());
 
-    // Store it in the RouteWorkshop
-    rws.set_attr(mp_reach).unwrap();
+    let payload = &mut rws.get_mut(1).unwrap();
 
-    // Get the NextHop from this NLRI and store it in the RouteWorkshop
-    rws.set_attr(
-        update
-            .find_next_hop(announces.first().unwrap().afi_safi())
-            .unwrap(),
-    )
-    .unwrap();
+    if let TypeValue::Builtin(BuiltinTypeValue::Route(BasicRoute(rws))) = payload {
+        // Store it in the RouteWorkshop
+        rws.set_attr(mp_reach).unwrap();
 
-    let payload = BasicRoute::new(rws);
+        // Get the NextHop from this NLRI and store it in the RouteWorkshop
+        rws.set_attr(
+            update
+                .find_next_hop(announces.first().unwrap().afi_safi())
+                .unwrap(),
+        )
+        .unwrap();
+        trace!("prefix in route {:?}", rws.nlri().prefix());
+    }
 
-    trace!("prefix in route {:?}", payload.prefix());
     trace!("peer_ip {:?}", context.provenance().peer_ip());
 
     let mem = &mut vm::LinearMemory::uninit();
@@ -150,7 +162,7 @@ fn test_data(
         .with_context(context)
         .build()?;
 
-    let res = vm.exec(payload, None::<Record>, None, mem).unwrap();
+    let res = vm.exec(payload.clone(), None::<Record>, None, mem).unwrap();
 
     println!("\nRESULT");
     println!("action: {}", res.accept_reject);
