@@ -23,6 +23,8 @@ pub struct TypeChecker {
     type_var_map: HashMap<usize, Type>,
     /// Map from integer literals to types
     int_var_map: HashMap<usize, Type>,
+    /// Map from anonymous records to named records
+    record_var_map: HashMap<usize, Type>,
     /// Map from type names to types
     types: HashMap<String, Type>,
     methods: Vec<Method>,
@@ -37,6 +39,7 @@ impl TypeChecker {
             counter: 0,
             type_var_map: HashMap::new(),
             int_var_map: HashMap::new(),
+            record_var_map: HashMap::new(),
             types: HashMap::new(),
             methods: types::methods(),
             static_methods: types::static_methods(),
@@ -156,6 +159,12 @@ impl TypeChecker {
         Type::IntVar(i)
     }
 
+    fn fresh_record(&mut self) -> usize {
+        let i = self.counter;
+        self.counter += 1;
+        i
+    }
+
     fn subtype_of<'a>(&'a mut self, a: &'a Type, b: &'a Type) -> bool {
         self.subtype_inner(a, b, &mut HashMap::new())
     }
@@ -191,15 +200,43 @@ impl TypeChecker {
             | (Type::Rib(a), Type::Rib(b)) => {
                 self.subtype_inner(&a, &b, subs)
             }
-            (Type::Record(a_fields), Type::Record(b_fields)) => {
-                // TODO: Order maybe shouldn't matter here.
-                a_fields.iter().zip(&b_fields).all(|((x, a), (y, b))| {
-                    x == y && self.subtype_inner(a, b, subs)
-                })
+            (Type::NamedRecord(a_name, _), Type::NamedRecord(b_name, _)) => {
+                a_name == b_name
             }
+            (Type::Record(a_fields), Type::Record(b_fields)) => {
+                self.subtype_fields(a_fields, b_fields, subs)
+            }
+            (
+                Type::RecordVar(_, a_fields),
+                Type::Record(b_fields)
+                | Type::NamedRecord(_, b_fields)
+                | Type::RecordVar(_, b_fields),
+            ) => self.subtype_fields(a_fields, b_fields, subs),
             // TODO: Named record and other stuff
             _ => false,
         }
+    }
+
+    fn subtype_fields(
+        &mut self,
+        a_fields: Vec<(String, Type)>,
+        b_fields: Vec<(String, Type)>,
+        subs: &mut HashMap<usize, Type>,
+    ) -> bool {
+        if a_fields.len() != b_fields.len() {
+            false;
+        }
+
+        for (name, ty_a) in a_fields {
+            let Some((_, ty_b)) = b_fields.iter().find(|(n, _)| n == &name)
+            else {
+                return false;
+            };
+            if !self.subtype_inner(&ty_a, ty_b, subs) {
+                return false;
+            }
+        }
+        return true;
     }
 
     fn unify<'a>(&'a mut self, a: &'a Type, b: &'a Type) -> TypeResult<Type> {
@@ -249,31 +286,24 @@ impl TypeChecker {
             (Type::List(a), Type::List(b)) => {
                 Type::List(Box::new(self.unify(&a, &b)?))
             }
-            (Type::Record(a_fields), Type::Record(b_fields)) => {
-                if a_fields.len() != b_fields.len() {
-                    return Err(format!(
-                        "cannot unify types {:?} and {:?}",
-                        Type::Record(a_fields),
-                        Type::Record(b_fields),
-                    ));
-                }
-
-                let mut b_fields = b_fields.clone();
-                let mut new_fields = Vec::new();
-                for (name, a_ty) in a_fields {
-                    let Some(idx) =
-                        b_fields.iter().position(|(n, _)| n == &name)
-                    else {
-                        return Err(format!(
-                            "Type {:?} does not have a field {name}.",
-                            Type::Record(b_fields)
-                        ));
-                    };
-                    let (_, b_ty) = b_fields.remove(idx);
-                    new_fields.push((name.clone(), self.unify(&a_ty, &b_ty)?))
-                }
-
-                Type::Record(new_fields)
+            (
+                Type::RecordVar(a_var, a_fields),
+                ref b @ (Type::RecordVar(_, ref b_fields)
+                | Type::Record(ref b_fields)
+                | Type::NamedRecord(_, ref b_fields)),
+            ) => {
+                self.unify_fields(a_fields, b_fields.clone())?;
+                self.record_var_map.insert(a_var, b.clone());
+                b.clone()
+            }
+            (
+                ref a @ (Type::Record(ref a_fields)
+                | Type::NamedRecord(_, ref a_fields)),
+                Type::RecordVar(b_var, b_fields),
+            ) => {
+                self.unify_fields(a_fields.clone(), b_fields)?;
+                self.record_var_map.insert(b_var, a.clone());
+                a.clone()
             }
             (a, b) => {
                 return Err(format!("cannot unify types {a:?} and {b:?}"))
@@ -281,31 +311,68 @@ impl TypeChecker {
         })
     }
 
+    fn unify_fields(
+        &mut self,
+        a_fields: Vec<(String, Type)>,
+        b_fields: Vec<(String, Type)>,
+    ) -> TypeResult<Vec<(String, Type)>> {
+        if a_fields.len() != b_fields.len() {
+            return Err(format!(
+                "cannot unify types {:?} and {:?}",
+                Type::Record(a_fields),
+                Type::Record(b_fields),
+            ));
+        }
+
+        let mut b_fields = b_fields.clone();
+        let mut new_fields = Vec::new();
+        for (name, a_ty) in a_fields {
+            let Some(idx) = b_fields.iter().position(|(n, _)| n == &name)
+            else {
+                return Err(format!(
+                    "Type {:?} does not have a field {name}.",
+                    Type::Record(b_fields)
+                ));
+            };
+            let (_, b_ty) = b_fields.remove(idx);
+            new_fields.push((name.clone(), self.unify(&a_ty, &b_ty)?))
+        }
+        Ok(new_fields)
+    }
+
     /// Resolve type vars to a type.
     ///
     /// This procedure is not recursive.
     fn resolve_type<'a>(&'a self, mut t: &'a Type) -> &'a Type {
-        while let Type::Var(x) = t {
-            if let Some(new_t) = self.type_var_map.get(x) {
-                t = new_t;
-            } else {
-                return t;
+        loop {
+            match t {
+                Type::Var(x) => {
+                    if let Some(new_t) = self.type_var_map.get(x) {
+                        t = new_t;
+                    } else {
+                        return t;
+                    }
+                }
+                Type::IntVar(x) => {
+                    if let Some(new_t) = self.int_var_map.get(x) {
+                        t = new_t;
+                    } else {
+                        return t;
+                    }
+                }
+                Type::RecordVar(x, _) => {
+                    if let Some(new_t) = self.record_var_map.get(x) {
+                        t = new_t;
+                    } else {
+                        return t;
+                    }
+                }
+                Type::Name(x) => {
+                    t = &self.types[x];
+                }
+                t => return t,
             }
         }
-
-        while let Type::IntVar(x) = t {
-            if let Some(new_t) = self.int_var_map.get(x) {
-                t = new_t;
-            } else {
-                return t;
-            }
-        }
-
-        while let Type::Name(x) = t {
-            t = &self.types[x];
-        }
-
-        t
     }
 
     // This is probably all quite slow, but we can figure out a more efficient
@@ -387,11 +454,18 @@ impl TypeChecker {
         ty: &'a Type,
     ) -> TypeResult<()> {
         match ty {
-            Type::Var(_) | Type::IntVar(_) | Type::ExplicitVar(_) => {
+            Type::Var(_)
+            | Type::IntVar(_)
+            | Type::ExplicitVar(_)
+            | Type::RecordVar(_, _) => {
                 Err("there should be no unresolved type variables left"
                     .into())
             }
-            Type::Primitive(_) | Type::Term(_) | Type::Action(_) | Type::Filter(_) | Type::FilterMap(_) => {
+            Type::Primitive(_)
+            | Type::Term(_)
+            | Type::Action(_)
+            | Type::Filter(_)
+            | Type::FilterMap(_) => {
                 // do nothing on primitive types
                 // no need to recurse into them.
                 Ok(())

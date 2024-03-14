@@ -488,3 +488,79 @@ fn term_overrides_var() {
     "#;
     assert!(typecheck(src).is_err());
 }
+
+#[test]
+fn record_inference() {
+    let src = "
+        output-stream s contains Msg { a: U32 }
+
+        filter-map foo { 
+            define {
+                rx r: U32;
+                a = { a: 8 };
+            }
+
+            action bla {
+                s.send(a);
+            }
+        }
+    ";
+    typecheck(src).unwrap();
+
+    let src = "
+        output-stream s contains Msg { a: U32 }
+
+        filter-map foo { 
+            define {
+                rx r: U32;
+                a = { b: 8 };
+            }
+
+            action bla {
+                s.send(a);
+            }
+        }
+    ";
+    assert!(typecheck(src).is_err());
+
+    let src = "
+        type A { a: U32 }
+
+        filter-map foo { 
+            define {
+                rx r: U32;
+                a = { a: 8 };
+                b = A { a: 8 };
+            }
+
+            term bla {
+                match {
+                    a == b;
+                }
+            }
+        }
+    ";
+    typecheck(src).unwrap();
+    
+    let src = "
+        type A { a: U32 }
+        type B { a: U32 }
+
+        filter-map foo { 
+            define {
+                rx r: U32;
+                a = { a: 8 };
+                b = A { a: 8 };
+                c = B { a: 8 };
+            }
+
+            term bla {
+                match {
+                    a == b;
+                    a == c;
+                }
+            }
+        }
+    ";
+    assert!(typecheck(src).is_err());
+}

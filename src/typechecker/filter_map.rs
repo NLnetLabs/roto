@@ -541,7 +541,10 @@ impl TypeChecker {
             RootMethodCallExpr(_) => todo!(),
             AnonymousRecordExpr(ast::AnonymousRecordValueExpr {
                 key_values,
-            }) => Ok(Type::Record(self.record_type(scope, key_values)?)),
+            }) => Ok(Type::RecordVar(
+                self.fresh_record(),
+                self.record_type(scope, key_values)?,
+            )),
             TypedRecordExpr(ast::TypedRecordValueExpr {
                 type_id,
                 key_values,
@@ -641,7 +644,8 @@ impl TypeChecker {
                 }) => {
                     for field in field_names {
                         if let Type::Record(fields)
-                        | Type::NamedRecord(_, fields) =
+                        | Type::NamedRecord(_, fields)
+                        | Type::RecordVar(_, fields) =
                             self.resolve_type(&last)
                         {
                             if let Some((_, t)) = fields

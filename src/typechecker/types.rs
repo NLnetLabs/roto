@@ -5,6 +5,7 @@ pub enum Type {
     Var(usize),
     ExplicitVar(&'static str),
     IntVar(usize),
+    RecordVar(usize, Vec<(String, Type)>),
     Primitive(Primitive),
     List(Box<Type>),
     Table(Box<Type>),
@@ -75,6 +76,10 @@ impl Type {
             Type::Table(x) => Type::Table(Box::new(f(x))),
             Type::OutputStream(x) => Type::OutputStream(Box::new(f(x))),
             Type::Rib(x) => Type::Rib(Box::new(f(x))),
+            Type::RecordVar(x, fields) => Type::RecordVar(
+                *x,
+                fields.into_iter().map(|(n, t)| (n.clone(), f(t))).collect(),
+            ),
             Type::Record(fields) => Type::Record(
                 fields.into_iter().map(|(n, t)| (n.clone(), f(t))).collect(),
             ),
