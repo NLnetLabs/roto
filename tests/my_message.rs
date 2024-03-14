@@ -140,7 +140,7 @@ fn test_filter_map_message_1() {
             }
             
             action send-message {
-                mqtt.send(Message { 
+                mqtt.send({ 
                     message: String.format("🤭 I encountered ", my_asn),
                     asn: my_asn
                 });
@@ -249,7 +249,7 @@ fn test_filter_map_message_3() {
             }
             
             action send-message {
-                mqtt.send(Message { 
+                mqtt.send({ 
                     asn: my_asn,
                     message: String.format("🤭 I, the messager, saw {} in a BGP update.", my_asn)
                 });
@@ -357,7 +357,7 @@ fn test_filter_map_message_5() {
             }
             
             action send-message {
-                mqtt.send(Message { 
+                mqtt.send({ 
                     name: "My ASN",
                     topic: "My Asn was Seen!",
                     asn: my_asn,
@@ -417,7 +417,7 @@ fn test_filter_map_message_6() {
             }
             
             action send-message {
-                mqtt.send(Message { 
+                mqtt.send({ 
                     name: "My ASN",
                     topic: "My Asn was Seen!",
                     asn: my_asn,

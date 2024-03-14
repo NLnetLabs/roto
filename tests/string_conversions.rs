@@ -30,7 +30,7 @@ fn src_code(format_line: &str) -> String {
             }}
             
             action send-message {{
-                mqtt.send(Message {{ 
+                mqtt.send({{ 
                     name: "My ASN",
                     topic: "My Asn was Seen!",
                     asn: my_asn,

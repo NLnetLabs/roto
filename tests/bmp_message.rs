@@ -782,7 +782,7 @@ fn bmp_message_6() {
 
             action send_msg with yy_msg: BmpPeerDownNotification {
                 mqtt.send(
-                    Message {
+                    {
                         asn: yy_msg.per_peer_header.asn,
                         message: String.format(
                             "Peer with ASN {} just went down.", 
@@ -838,7 +838,7 @@ fn bmp_message_7() {
 
             action send_msg with yy_msg: BmpPeerDownNotification {
                 mqtt.send(
-                    Message {
+                    {
                         asn: yy_msg.per_peer_header.asn,
                         message: String.format(
                             "Peer with ASN {} just went down.", 

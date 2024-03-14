@@ -209,7 +209,7 @@ fn test_bgp_update_3() {
             }
         
             action send-message {
-                bgp-msg.send(Message2 {
+                bgp-msg.send({
                     name: "local-broker",
                     topic: "testing",
                     bgp_msg: bgp_msg
