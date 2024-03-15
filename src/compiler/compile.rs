@@ -664,7 +664,7 @@ impl<'a> Compiler {
     }
 
     pub fn typecheck(&mut self) -> TypeResult<()> {
-        TypeChecker::new().check(self.ast.clone())
+        TypeChecker::new().check(&self.ast)
     }
 
     pub fn eval_ast(&mut self) -> Result<(), CompileError> {

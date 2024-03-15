@@ -47,7 +47,7 @@ impl TypeChecker {
         }
     }
 
-    pub fn check(&mut self, tree: ast::SyntaxTree) -> TypeResult<()> {
+    pub fn check(&mut self, tree: &ast::SyntaxTree) -> TypeResult<()> {
         let mut filter_maps = Vec::new();
 
         // This map contains Option<Type>, where None represnts a type that
@@ -66,7 +66,7 @@ impl TypeChecker {
             root_scope.insert_var(v, t)?;
         }
 
-        for expr in tree.expressions {
+        for expr in &tree.expressions {
             match expr {
                 // We'll do all filter-maps after all type declarations
                 ast::RootExpr::FilterMap(x) => filter_maps.push(x),
@@ -142,7 +142,7 @@ impl TypeChecker {
 
         let _filter_maps: Vec<_> = filter_maps
             .into_iter()
-            .map(|f| self.filter_map(&root_scope, *f))
+            .map(|f| self.filter_map(&root_scope, f))
             .collect::<Result<_, _>>()?;
 
         Ok(())
@@ -515,8 +515,8 @@ fn store_type(
 
 fn create_contains_type(
     types: &mut HashMap<String, Option<Type>>,
-    contain_ty: ast::TypeIdentifier,
-    body: ast::RibBody,
+    contain_ty: &ast::TypeIdentifier,
+    body: &ast::RibBody,
 ) -> TypeResult<Type> {
     let ty = Type::NamedRecord(
         contain_ty.ident.to_string(),

@@ -6,7 +6,7 @@ impl TypeChecker {
     pub fn filter_map(
         &mut self,
         scope: &Scope,
-        filter_map: ast::FilterMap,
+        filter_map: &ast::FilterMap,
     ) -> TypeResult<Type> {
         let ast::FilterMap {
             ty,
@@ -52,7 +52,7 @@ impl TypeChecker {
     fn define_section(
         &mut self,
         scope: &mut Scope,
-        define: ast::Define,
+        define: &ast::Define,
     ) -> TypeResult<()> {
         let ast::Define {
             for_kv: _,
@@ -115,7 +115,7 @@ impl TypeChecker {
     fn term_section(
         &mut self,
         scope: &Scope,
-        term_section: ast::TermSection,
+        term_section: &ast::TermSection,
     ) -> TypeResult<(String, Type)> {
         let ast::TermSection {
             ident,
@@ -157,10 +157,9 @@ impl TypeChecker {
 
                     // We'll keep track of used variants to do some basic
                     // exhaustiveness checking. Only a warning for now.
-                    let arms = &match_arms;
                     let mut used_variants = Vec::<&str>::new();
 
-                    for (pattern, exprs) in arms {
+                    for (pattern, exprs) in match_arms {
                         let ast::TermPatternMatchArm {
                             variant_id,
                             data_field,
@@ -207,7 +206,7 @@ impl TypeChecker {
                         for expr in exprs {
                             // We ignore the result because it
                             // must be boolean.
-                            self.logical_expr(&inner_scope, expr.clone())?;
+                            self.logical_expr(&inner_scope, expr)?;
                         }
                     }
                 }
@@ -221,7 +220,7 @@ impl TypeChecker {
     fn action_section(
         &mut self,
         scope: &Scope,
-        action_section: ast::ActionSection,
+        action_section: &ast::ActionSection,
     ) -> TypeResult<(String, Type)> {
         let ast::ActionSection {
             ident,
@@ -243,7 +242,7 @@ impl TypeChecker {
     fn apply_section(
         &mut self,
         scope: &Scope,
-        apply_section: ast::ApplySection,
+        apply_section: &ast::ApplySection,
     ) -> TypeResult<()> {
         let ast::ApplySection {
             for_kv: _,
@@ -309,7 +308,6 @@ impl TypeChecker {
 
                     // We'll keep track of used variants to do some basic
                     // exhaustiveness checking. Only a warning for now.
-                    let arms = &match_arms;
                     let mut used_variants = Vec::<&str>::new();
 
                     for ast::PatternMatchActionArm {
@@ -317,7 +315,7 @@ impl TypeChecker {
                         data_field,
                         guard,
                         actions,
-                    } in arms
+                    } in match_arms
                     {
                         let variant_id = &variant_id.ident;
                         let Some(idx) = variants.iter().position(|(v, _)| {
@@ -373,10 +371,8 @@ impl TypeChecker {
                                     for (arg, (_, param)) in
                                         args.into_iter().zip(term_params)
                                     {
-                                        let ty = self.expr(
-                                            &inner_scope,
-                                            arg.clone(),
-                                        )?;
+                                        let ty =
+                                            self.expr(&inner_scope, arg)?;
                                         self.unify(&ty, param)?;
                                     }
                                 }
@@ -428,7 +424,7 @@ impl TypeChecker {
                                             {
                                                 let ty = self.expr(
                                                     &inner_scope,
-                                                    arg.clone(),
+                                                    arg,
                                                 )?;
                                                 self.unify(&ty, param)?;
                                             }

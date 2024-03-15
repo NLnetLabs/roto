@@ -1,12 +1,16 @@
 use crate::ast;
 
-use super::{scope::Scope, types::{Arrow, Method, Primitive, Type}, TypeChecker, TypeResult};
+use super::{
+    scope::Scope,
+    types::{Arrow, Method, Primitive, Type},
+    TypeChecker, TypeResult,
+};
 
 impl TypeChecker {
     pub fn logical_expr(
         &mut self,
         scope: &Scope,
-        expr: ast::LogicalExpr,
+        expr: &ast::LogicalExpr,
     ) -> TypeResult<Type> {
         match expr {
             ast::LogicalExpr::OrExpr(ast::OrExpr { left, right })
@@ -25,18 +29,17 @@ impl TypeChecker {
     fn boolean_expr(
         &mut self,
         scope: &Scope,
-        expr: ast::BooleanExpr,
+        expr: &ast::BooleanExpr,
     ) -> TypeResult<Type> {
         match expr {
             ast::BooleanExpr::GroupedLogicalExpr(
                 ast::GroupedLogicalExpr { expr },
             ) => {
-                self.logical_expr(scope, *expr)?;
+                self.logical_expr(scope, expr)?;
             }
             ast::BooleanExpr::CompareExpr(expr) => {
-                let ast::CompareExpr { left, right, op: _ } = *expr;
-                let t_left = self.compare_arg(scope, left)?;
-                let t_right = self.compare_arg(scope, right)?;
+                let t_left = self.compare_arg(scope, &expr.left)?;
+                let t_right = self.compare_arg(scope, &expr.right)?;
                 self.unify(&t_left, &t_right)?;
             }
             ast::BooleanExpr::ComputeExpr(expr) => {
@@ -48,9 +51,8 @@ impl TypeChecker {
                 self.unify(&Type::Primitive(Primitive::Bool), &ty)?;
             }
             ast::BooleanExpr::ListCompareExpr(expr) => {
-                let ast::ListCompareExpr { left, op: _, right } = *expr;
-                let t_left = self.expr(scope, left)?;
-                let t_right = self.expr(scope, right)?;
+                let t_left = self.expr(scope, &expr.left)?;
+                let t_right = self.expr(scope, &expr.right)?;
                 self.unify(&Type::List(Box::new(t_left)), &t_right)?;
             }
             ast::BooleanExpr::PrefixMatchExpr(_)
@@ -62,20 +64,20 @@ impl TypeChecker {
     fn compare_arg(
         &mut self,
         scope: &Scope,
-        expr: ast::CompareArg,
+        expr: &ast::CompareArg,
     ) -> TypeResult<Type> {
         match expr {
             ast::CompareArg::ValueExpr(expr) => self.expr(scope, expr),
             ast::CompareArg::GroupedLogicalExpr(
                 ast::GroupedLogicalExpr { expr },
-            ) => self.logical_expr(scope, *expr),
+            ) => self.logical_expr(scope, expr),
         }
     }
 
     pub fn expr(
         &mut self,
         scope: &Scope,
-        expr: ast::ValueExpr,
+        expr: &ast::ValueExpr,
     ) -> TypeResult<Type> {
         use ast::ValueExpr::*;
         match expr {
@@ -150,15 +152,17 @@ impl TypeChecker {
         &mut self,
         scope: &Scope,
         receiver: Type,
-        access: Vec<ast::AccessExpr>,
+        access: &[ast::AccessExpr],
     ) -> TypeResult<Type> {
         let mut last = receiver;
         for a in access {
             match a {
-                ast::AccessExpr::MethodComputeExpr(ast::MethodComputeExpr {
-                    ident,
-                    args: ast::ArgExprList { args },
-                }) => {
+                ast::AccessExpr::MethodComputeExpr(
+                    ast::MethodComputeExpr {
+                        ident,
+                        args: ast::ArgExprList { args },
+                    },
+                ) => {
                     let Some(arrow) = self.find_method(
                         self.methods.clone(),
                         &last,
@@ -178,7 +182,7 @@ impl TypeChecker {
                     self.unify(&arrow.rec, &last)?;
 
                     for (arg, ty) in args.iter().zip(&arrow.args) {
-                        let arg_ty = self.expr(scope, arg.clone())?;
+                        let arg_ty = self.expr(scope, arg)?;
                         self.unify(&arg_ty, &ty)?;
                     }
                     last = self.resolve_type(&arrow.ret).clone();
@@ -233,7 +237,7 @@ impl TypeChecker {
     fn literal_access(
         &mut self,
         scope: &Scope,
-        expr: ast::LiteralAccessExpr,
+        expr: &ast::LiteralAccessExpr,
     ) -> TypeResult<Type> {
         let ast::LiteralAccessExpr {
             literal,
@@ -244,7 +248,7 @@ impl TypeChecker {
         self.access(scope, literal, access_expr)
     }
 
-    fn literal(&mut self, literal: ast::LiteralExpr) -> TypeResult<Type> {
+    fn literal(&mut self, literal: &ast::LiteralExpr) -> TypeResult<Type> {
         use ast::LiteralExpr::*;
         Ok(Type::Primitive(match literal {
             StringLiteral(_) => Primitive::String,
@@ -263,7 +267,7 @@ impl TypeChecker {
     pub fn compute_expr(
         &mut self,
         scope: &Scope,
-        expr: ast::ComputeExpr,
+        expr: &ast::ComputeExpr,
     ) -> TypeResult<Type> {
         let ast::ComputeExpr {
             receiver,
@@ -290,7 +294,7 @@ impl TypeChecker {
                     };
                     let receiver_type =
                         self.static_method_call(scope, ty.clone(), m)?;
-                    self.access(scope, receiver_type, access_expr)
+                    self.access(scope, receiver_type, &access_expr)
                 } else {
                     let receiver_type =
                         scope.get_var(&x.ident.to_string())?.clone();
@@ -327,7 +331,7 @@ impl TypeChecker {
         self.unify(&arrow.rec, &ty)?;
 
         for (arg, ty) in args.iter().zip(&arrow.args) {
-            let arg_ty = self.expr(scope, arg.clone())?;
+            let arg_ty = self.expr(scope, arg)?;
             self.unify(&arg_ty, &ty)?;
         }
         Ok(self.resolve_type(&arrow.ret).clone())
@@ -336,7 +340,7 @@ impl TypeChecker {
     fn record_type(
         &mut self,
         scope: &Scope,
-        expr: Vec<(ast::Identifier, ast::ValueExpr)>,
+        expr: &[(ast::Identifier, ast::ValueExpr)],
     ) -> TypeResult<Vec<(String, Type)>> {
         Ok(expr
             .into_iter()

@@ -13,7 +13,7 @@ fn typecheck(s: &str) -> TypeResult<()> {
             panic!("Parse error, see above");
         }
     };
-    let res = TypeChecker::new().check(tree);
+    let res = TypeChecker::new().check(&tree);
     if let Err(e) = &res {
         eprintln!("{e}");
     }
