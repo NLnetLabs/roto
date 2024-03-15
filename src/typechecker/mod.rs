@@ -8,6 +8,7 @@ use types::Type;
 use self::types::{default_types, Arrow, Method, Primitive};
 
 mod filter_map;
+mod expr;
 mod scope;
 #[cfg(test)]
 mod tests;
