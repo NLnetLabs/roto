@@ -1,55 +1,70 @@
 //! Type checker for Roto scripts
+//!
+//! This type checker performs simplified Hindley-Milner type inference.
+//! The simplification is that we only have one situation in which general
+//! type variables are generated: method instantiation. Otherwise, we do
+//! not have to deal with polymorphism at all. However, we might still
+//! extend the type system later to accodomate for that.
+//!
+//! The current implementation is essentially Algorithm W for HM type
+//! inference. For better error message, we should change to Algorithm M,
+//! described in <https://dl.acm.org/doi/pdf/10.1145/291891.291892>. The
+//! advantage of M is that it yields errors earlier in the type inference,
+//! so that errors appear more often where they are caused.
+//!
+//! See also <https://en.wikipedia.org/wiki/Hindley%E2%80%93Milner_type_system>.
 
 use crate::ast::{self, TypeIdentField};
 use scope::Scope;
 use std::collections::{hash_map::Entry, HashMap};
 use types::Type;
 
-use self::types::{default_types, Arrow, Method, Primitive};
+use self::{
+    types::{default_types, Arrow, Method},
+    unionfind::UnionFind,
+};
 
-mod filter_map;
 mod expr;
+mod filter_map;
 mod scope;
 #[cfg(test)]
 mod tests;
-mod types;
+pub mod types;
+mod unionfind;
 
-pub struct TypeChecker {
-    counter: usize,
-    /// Map from type var index to a type (or another type var)
-    ///
-    /// Since type vars are indices, we can get the type easily by indexing.
-    /// This map is not retroactively updated; resolving a type might need
-    /// multiple hops.
-    type_var_map: HashMap<usize, Type>,
-    /// Map from integer literals to types
-    int_var_map: HashMap<usize, Type>,
-    /// Map from anonymous records to named records
-    record_var_map: HashMap<usize, Type>,
+pub struct TypeChecker<'methods> {
+    /// The unionfind structure that maps type variables to types
+    unionfind: UnionFind,
     /// Map from type names to types
     types: HashMap<String, Type>,
-    methods: Vec<Method>,
-    static_methods: Vec<Method>,
+    /// The list of built-in methods.
+    methods: &'methods [Method],
+    /// The list of built-in static methods.
+    static_methods: &'methods [Method],
 }
 
 pub type TypeResult<T> = Result<T, String>;
 
-impl TypeChecker {
-    pub fn new() -> TypeChecker {
-        Self {
-            counter: 0,
-            type_var_map: HashMap::new(),
-            int_var_map: HashMap::new(),
-            record_var_map: HashMap::new(),
-            types: HashMap::new(),
-            methods: types::methods(),
-            static_methods: types::static_methods(),
-        }
-    }
+pub fn typecheck(tree: &ast::SyntaxTree) -> TypeResult<()> {
+    let methods = types::methods();
+    let static_methods = types::static_methods();
 
-    pub fn check(&mut self, tree: &ast::SyntaxTree) -> TypeResult<()> {
-        let mut filter_maps = Vec::new();
+    let mut type_checker = TypeChecker {
+        unionfind: UnionFind::new(),
+        types: HashMap::new(),
+        methods: &methods,
+        static_methods: &static_methods,
+    };
 
+    type_checker.check_syntax_tree(tree)
+}
+
+impl<'methods> TypeChecker<'methods> {
+    /// Perform type checking for a syntax tree
+    pub fn check_syntax_tree(
+        &mut self,
+        tree: &ast::SyntaxTree,
+    ) -> TypeResult<()> {
         // This map contains Option<Type>, where None represnts a type that
         // is referenced, but not (yet) declared. At the end of all the type
         // declarations, we check whether any nones are left to determine
@@ -66,9 +81,12 @@ impl TypeChecker {
             root_scope.insert_var(v, t)?;
         }
 
+        let mut filter_maps = Vec::new();
         for expr in &tree.expressions {
             match expr {
-                // We'll do all filter-maps after all type declarations
+                // We'll do all filter-maps after all type declarations.
+                // This guarantees that all types have been declared once
+                // we get to the filter-maps.
                 ast::RootExpr::FilterMap(x) => filter_maps.push(x),
                 ast::RootExpr::Rib(ast::Rib {
                     ident,
@@ -77,10 +95,7 @@ impl TypeChecker {
                 }) => {
                     let ty =
                         create_contains_type(&mut types, contain_ty, body)?;
-                    root_scope.insert_var(
-                        ident.ident.to_string(),
-                        Type::Rib(Box::new(ty)),
-                    )?;
+                    root_scope.insert_var(ident, Type::Rib(Box::new(ty)))?;
                 }
                 ast::RootExpr::Table(ast::Table {
                     ident,
@@ -89,10 +104,8 @@ impl TypeChecker {
                 }) => {
                     let ty =
                         create_contains_type(&mut types, contain_ty, body)?;
-                    root_scope.insert_var(
-                        ident.ident.to_string(),
-                        Type::Table(Box::new(ty)),
-                    )?;
+                    root_scope
+                        .insert_var(ident, Type::Table(Box::new(ty)))?;
                 }
                 ast::RootExpr::OutputStream(ast::OutputStream {
                     ident,
@@ -102,7 +115,7 @@ impl TypeChecker {
                     let ty =
                         create_contains_type(&mut types, contain_ty, body)?;
                     root_scope.insert_var(
-                        ident.ident.to_string(),
+                        ident,
                         Type::OutputStream(Box::new(ty)),
                     )?;
                 }
@@ -140,44 +153,49 @@ impl TypeChecker {
 
         self.detect_type_cycles()?;
 
-        let _filter_maps: Vec<_> = filter_maps
-            .into_iter()
-            .map(|f| self.filter_map(&root_scope, f))
-            .collect::<Result<_, _>>()?;
+        for f in filter_maps {
+            self.filter_map(&root_scope, f)?;
+        }
 
         Ok(())
     }
 
+    /// Create a fresh variable in the unionfind structure
     fn fresh_var(&mut self) -> Type {
-        let i = self.counter;
-        self.counter += 1;
-        Type::Var(i)
+        self.unionfind.fresh(Type::Var)
     }
 
+    /// Create a fresh integer variable in the unionfind structure
     fn fresh_int(&mut self) -> Type {
-        let i = self.counter;
-        self.counter += 1;
-        Type::IntVar(i)
+        self.unionfind.fresh(Type::IntVar)
     }
 
-    fn fresh_record(&mut self) -> usize {
-        let i = self.counter;
-        self.counter += 1;
-        i
+    /// Create a fresh record variable in the unionfind structure
+    fn fresh_record(&mut self, fields: Vec<(String, Type)>) -> Type {
+        self.unionfind.fresh(move |x| Type::RecordVar(x, fields))
     }
 
-    fn subtype_of<'a>(&'a mut self, a: &'a Type, b: &'a Type) -> bool {
+    fn get_type(&self, type_name: impl AsRef<str>) -> Option<&Type> {
+        self.types.get(&type_name.as_ref().to_string())
+    }
+
+    /// Check whether `a` is a subtype of `b`
+    ///
+    /// Currently, the only possible subtype relation is generated by
+    /// type variables. For example, `[String]` is a subtype of `[T]` if
+    /// `T` is a type variable.
+    fn subtype_of(&mut self, a: &Type, b: &Type) -> bool {
         self.subtype_inner(a, b, &mut HashMap::new())
     }
 
-    fn subtype_inner<'a>(
-        &'a mut self,
-        a: &'a Type,
-        b: &'a Type,
+    fn subtype_inner(
+        &mut self,
+        a: &Type,
+        b: &Type,
         subs: &mut HashMap<usize, Type>,
     ) -> bool {
-        let mut a = self.resolve_type(a).clone();
-        let b = self.resolve_type(b).clone();
+        let mut a = self.resolve_type(a);
+        let b = self.resolve_type(b);
 
         loop {
             let Type::Var(v) = a else {
@@ -205,14 +223,14 @@ impl TypeChecker {
                 a_name == b_name
             }
             (Type::Record(a_fields), Type::Record(b_fields)) => {
-                self.subtype_fields(a_fields, b_fields, subs)
+                self.subtype_fields(&a_fields, &b_fields, subs)
             }
             (
                 Type::RecordVar(_, a_fields),
                 Type::Record(b_fields)
                 | Type::NamedRecord(_, b_fields)
                 | Type::RecordVar(_, b_fields),
-            ) => self.subtype_fields(a_fields, b_fields, subs),
+            ) => self.subtype_fields(&a_fields, &b_fields, subs),
             // TODO: Named record and other stuff
             _ => false,
         }
@@ -220,8 +238,8 @@ impl TypeChecker {
 
     fn subtype_fields(
         &mut self,
-        a_fields: Vec<(String, Type)>,
-        b_fields: Vec<(String, Type)>,
+        a_fields: &[(String, Type)],
+        b_fields: &[(String, Type)],
         subs: &mut HashMap<usize, Type>,
     ) -> bool {
         if a_fields.len() != b_fields.len() {
@@ -229,7 +247,7 @@ impl TypeChecker {
         }
 
         for (name, ty_a) in a_fields {
-            let Some((_, ty_b)) = b_fields.iter().find(|(n, _)| n == &name)
+            let Some((_, ty_b)) = b_fields.iter().find(|(n, _)| n == name)
             else {
                 return false;
             };
@@ -240,70 +258,53 @@ impl TypeChecker {
         return true;
     }
 
-    fn unify<'a>(&'a mut self, a: &'a Type, b: &'a Type) -> TypeResult<Type> {
-        let a = self.resolve_type(a).clone();
-        let b = self.resolve_type(b).clone();
+    fn unify(&mut self, a: &Type, b: &Type) -> TypeResult<Type> {
+        use types::Primitive::*;
+        use Type::*;
+        let a = self.resolve_type(a);
+        let b = self.resolve_type(b);
 
         Ok(match (a, b) {
             // We never recurse into NamedRecords, so they are included here.
-            (a, b) if a == b => a.clone(),
-            (
-                Type::IntVar(a),
-                b @ (Type::Primitive(
-                    Primitive::U8 | Primitive::U16 | Primitive::U32,
-                )
-                | Type::IntVar(_)),
-            ) => {
-                self.int_var_map.insert(a, b.clone());
+            (a, b) if a == b => a,
+            (IntVar(a), b @ (Primitive(U8 | U16 | U32) | IntVar(_))) => {
+                self.unionfind.set(a, b.clone());
                 b.clone()
             }
-            (
-                a @ Type::Primitive(
-                    Primitive::U8 | Primitive::U16 | Primitive::U32,
-                ),
-                Type::IntVar(b),
-            ) => {
-                self.int_var_map.insert(b, a.clone());
+            (a @ Primitive(U8 | U16 | U32), IntVar(b)) => {
+                self.unionfind.set(b, a.clone());
                 a.clone()
             }
-            (Type::Var(a), b) => {
-                // prefer binding from a -> b
-                self.type_var_map.insert(a, b.clone());
+            (Var(a), b) => {
+                self.unionfind.set(a, b.clone());
                 b.clone()
             }
-            (a, Type::Var(b)) => {
-                self.type_var_map.insert(b, a.clone());
+            (a, Var(b)) => {
+                self.unionfind.set(b, a.clone());
                 a.clone()
             }
-            (Type::Table(a), Type::Table(b)) => {
-                Type::Table(Box::new(self.unify(&a, &b)?))
+            (Table(a), Table(b)) => Table(Box::new(self.unify(&a, &b)?)),
+            (OutputStream(a), OutputStream(b)) => {
+                OutputStream(Box::new(self.unify(&a, &b)?))
             }
-            (Type::OutputStream(a), Type::OutputStream(b)) => {
-                Type::OutputStream(Box::new(self.unify(&a, &b)?))
-            }
-            (Type::Rib(a), Type::Rib(b)) => {
-                Type::Rib(Box::new(self.unify(&a, &b)?))
-            }
-            (Type::List(a), Type::List(b)) => {
-                Type::List(Box::new(self.unify(&a, &b)?))
-            }
+            (Rib(a), Rib(b)) => Rib(Box::new(self.unify(&a, &b)?)),
+            (List(a), List(b)) => List(Box::new(self.unify(&a, &b)?)),
             (
-                Type::RecordVar(a_var, a_fields),
-                ref b @ (Type::RecordVar(_, ref b_fields)
-                | Type::Record(ref b_fields)
-                | Type::NamedRecord(_, ref b_fields)),
+                RecordVar(a_var, a_fields),
+                ref b @ (RecordVar(_, ref b_fields)
+                | Record(ref b_fields)
+                | NamedRecord(_, ref b_fields)),
             ) => {
-                self.unify_fields(a_fields, b_fields.clone())?;
-                self.record_var_map.insert(a_var, b.clone());
+                self.unify_fields(&a_fields, b_fields)?;
+                self.unionfind.set(a_var, b.clone());
                 b.clone()
             }
             (
-                ref a @ (Type::Record(ref a_fields)
-                | Type::NamedRecord(_, ref a_fields)),
-                Type::RecordVar(b_var, b_fields),
+                ref a @ (Record(ref a_fields) | NamedRecord(_, ref a_fields)),
+                RecordVar(b_var, b_fields),
             ) => {
-                self.unify_fields(a_fields.clone(), b_fields)?;
-                self.record_var_map.insert(b_var, a.clone());
+                self.unify_fields(a_fields, &b_fields)?;
+                self.unionfind.set(b_var, a.clone());
                 a.clone()
             }
             (a, b) => {
@@ -314,71 +315,58 @@ impl TypeChecker {
 
     fn unify_fields(
         &mut self,
-        a_fields: Vec<(String, Type)>,
-        b_fields: Vec<(String, Type)>,
+        a_fields: &[(String, Type)],
+        b_fields: &[(String, Type)],
     ) -> TypeResult<Vec<(String, Type)>> {
         if a_fields.len() != b_fields.len() {
             return Err(format!(
                 "cannot unify types {:?} and {:?}",
-                Type::Record(a_fields),
-                Type::Record(b_fields),
+                Type::Record(a_fields.to_vec()),
+                Type::Record(b_fields.to_vec()),
             ));
         }
 
-        let mut b_fields = b_fields.clone();
+        let mut b_fields = b_fields.to_vec();
         let mut new_fields = Vec::new();
         for (name, a_ty) in a_fields {
-            let Some(idx) = b_fields.iter().position(|(n, _)| n == &name)
+            let Some(idx) = b_fields.iter().position(|(n, _)| n == name)
             else {
                 return Err(format!(
                     "Type {:?} does not have a field {name}.",
-                    Type::Record(b_fields)
+                    Type::Record(b_fields.to_vec())
                 ));
             };
             let (_, b_ty) = b_fields.remove(idx);
             new_fields.push((name.clone(), self.unify(&a_ty, &b_ty)?))
         }
+
         Ok(new_fields)
     }
 
     /// Resolve type vars to a type.
     ///
-    /// This procedure is not recursive.
-    fn resolve_type<'a>(&'a self, mut t: &'a Type) -> &'a Type {
-        loop {
-            match t {
-                Type::Var(x) => {
-                    if let Some(new_t) = self.type_var_map.get(x) {
-                        t = new_t;
-                    } else {
-                        return t;
-                    }
-                }
-                Type::IntVar(x) => {
-                    if let Some(new_t) = self.int_var_map.get(x) {
-                        t = new_t;
-                    } else {
-                        return t;
-                    }
-                }
-                Type::RecordVar(x, _) => {
-                    if let Some(new_t) = self.record_var_map.get(x) {
-                        t = new_t;
-                    } else {
-                        return t;
-                    }
-                }
-                Type::Name(x) => {
-                    t = &self.types[x];
-                }
-                t => return t,
-            }
+    /// This procedure does not recurse into records and enums
+    fn resolve_type(&mut self, t: &Type) -> Type {
+        let mut t = t.clone();
+
+        if let Type::Var(x) | Type::IntVar(x) | Type::RecordVar(x, _) = t {
+            t = self.unionfind.find(x).clone();
         }
+
+        if let Type::Name(x) = t {
+            t = self.types[&x].clone();
+        }
+
+        t
     }
 
-    // This is probably all quite slow, but we can figure out a more efficient
-    // way later.
+    /// Instantiate all type variables in a method
+    ///
+    /// Instantiation in this context means replacing the explicit type variables with
+    /// fresh variables.
     fn instantiate_method(&mut self, method: &Method) -> Arrow {
+        // This is probably all quite slow, but we can figure out a more
+        // efficient way later.
         let Method {
             receiver_type,
             name: _,
@@ -395,6 +383,7 @@ impl TypeChecker {
             let var = self.fresh_var();
             let f =
                 |x: &Type| x.substitute(&Type::ExplicitVar(method_var), &var);
+
             rec = f(&rec);
             for a in &mut args {
                 *a = f(a);
@@ -420,7 +409,14 @@ impl TypeChecker {
     /// type B { a: A }
     /// ```
     ///
-    /// To detect cycles, we do a DFS topological sort.
+    /// To detect cycles, we do a DFS topological sort. The strange part
+    /// of this  procedure that we only care about named types and their
+    /// relation. So we only record the names of the types that we have
+    /// visited.
+    ///
+    /// This algorithm is the Depth-first search algorithm described at
+    /// <https://en.wikipedia.org/wiki/Topological_sorting>, where `false`
+    /// is a temporary mark and `true` is a permanent mark.
     fn detect_type_cycles(&self) -> TypeResult<()> {
         let mut visited = HashMap::new();
 

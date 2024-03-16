@@ -1,6 +1,6 @@
 use crate::parser::Parser;
 
-use super::{TypeChecker, TypeResult};
+use super::TypeResult;
 
 #[track_caller]
 fn typecheck(s: &str) -> TypeResult<()> {
@@ -13,7 +13,7 @@ fn typecheck(s: &str) -> TypeResult<()> {
             panic!("Parse error, see above");
         }
     };
-    let res = TypeChecker::new().check(&tree);
+    let res = super::typecheck(&tree);
     if let Err(e) = &res {
         eprintln!("{e}");
     }

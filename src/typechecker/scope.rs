@@ -1,4 +1,4 @@
-use std::collections::{hash_map::Entry, HashMap};
+use std::{borrow::Borrow, collections::{hash_map::Entry, HashMap}};
 
 use super::{Type, TypeResult};
 
@@ -22,18 +22,20 @@ impl<'a> Scope<'a> {
         }
     }
 
-    pub fn get_var(&self, k: &String) -> TypeResult<&Type> {
+    pub fn get_var(&self, k: impl AsRef<str>) -> TypeResult<&Type> {
         self.variables
-            .get(k)
-            .ok_or_else(|| format!("The variable {k} is undefined"))
+            .get(k.as_ref())
+            .ok_or_else(|| format!("The variable {} is undefined", k.as_ref()))
             .or_else(|e| self.parent.ok_or(e).and_then(|s| s.get_var(k)))
     }
 
     pub fn insert_var(
         &mut self,
-        v: String,
-        t: Type,
+        v: impl AsRef<str>,
+        t: impl Borrow<Type>,
     ) -> TypeResult<&mut Type> {
+        let v = v.as_ref().to_string();
+        let t = t.borrow().clone();
         match self.variables.entry(v) {
             Entry::Occupied(entry) => Err(format!(
                 "variable {} defined multiple times in the same scope",

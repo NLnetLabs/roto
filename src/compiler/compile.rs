@@ -36,19 +36,26 @@ use std::{
 use log::{log_enabled, trace, Level};
 
 use crate::{
-    ast::{self, AcceptReject, FilterType, ShortString, SyntaxTree}, blocks::Scope, compiler::recurse_compile::recurse_compile, symbols::{
+    ast::{self, AcceptReject, FilterType, ShortString, SyntaxTree},
+    blocks::Scope,
+    compiler::recurse_compile::recurse_compile,
+    symbols::{
         self, DepsGraph, GlobalSymbolTable, MatchActionType, Symbol,
         SymbolKind, SymbolTable,
-    }, traits::Token, typechecker::{TypeChecker, TypeResult}, types::{
+    },
+    traits::Token,
+    typechecker::{typecheck, TypeResult},
+    types::{
         datasources::{DataSource, Table},
         typedef::{RecordTypeDef, TypeDef},
         typevalue::TypeValue,
-    }, vm::{
+    },
+    vm::{
         compute_hash, Command, CommandArg, CompiledCollectionField,
         CompiledField, CompiledPrimitiveField, CompiledVariable,
         ExtDataSource, FieldIndex, FilterMapArg, FilterMapArgs, OpCode,
         StackRefPos, VariablesRefTable,
-    }
+    },
 };
 
 pub use crate::compiler::error::CompileError;
@@ -664,7 +671,7 @@ impl<'a> Compiler {
     }
 
     pub fn typecheck(&mut self) -> TypeResult<()> {
-        TypeChecker::new().check(&self.ast)
+        typecheck(&self.ast)
     }
 
     pub fn eval_ast(&mut self) -> Result<(), CompileError> {
@@ -1045,8 +1052,7 @@ fn compile_filter_map(
     let mut data_sources = vec![];
     for ds in state.used_data_sources {
         let name = &ds.1.name;
-        let resolved_ds = if let Ok(ds) = global_table.get_data_source(name)
-        {
+        let resolved_ds = if let Ok(ds) = global_table.get_data_source(name) {
             ds
         } else {
             return Err(CompileError::from(format!(

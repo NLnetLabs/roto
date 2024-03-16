@@ -1,12 +1,10 @@
 use crate::ast;
 
 use super::{
-    scope::Scope,
-    types::{Arrow, Method, Primitive, Type},
-    TypeChecker, TypeResult,
+    scope::Scope, types::{Arrow, Method, Primitive, Type}, TypeChecker, TypeResult
 };
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub fn logical_expr(
         &mut self,
         scope: &Scope,
@@ -87,10 +85,10 @@ impl TypeChecker {
             RootMethodCallExpr(_) => todo!(),
             AnonymousRecordExpr(ast::AnonymousRecordValueExpr {
                 key_values,
-            }) => Ok(Type::RecordVar(
-                self.fresh_record(),
-                self.record_type(scope, key_values)?,
-            )),
+            }) => {
+                let fields = self.record_type(scope, &key_values)?;
+                Ok(self.fresh_record(fields))
+            }
             TypedRecordExpr(ast::TypedRecordValueExpr {
                 type_id,
                 key_values,
@@ -164,9 +162,9 @@ impl TypeChecker {
                     },
                 ) => {
                     let Some(arrow) = self.find_method(
-                        self.methods.clone(),
+                        self.methods,
                         &last,
-                        &ident.ident.to_string(),
+                        ident.as_ref(),
                     ) else {
                         return Err(format!(
                             "Method '{ident}' not found on {last:?}"
@@ -216,7 +214,7 @@ impl TypeChecker {
 
     fn find_method(
         &mut self,
-        methods: Vec<Method>,
+        methods: &[Method],
         ty: &Type,
         name: &str,
     ) -> Option<Arrow> {
@@ -225,8 +223,7 @@ impl TypeChecker {
                 return None;
             }
             let arrow = self.instantiate_method(m);
-            dbg!(&arrow, ty);
-            if dbg!(self.subtype_of(&arrow.rec, ty)) {
+            if self.subtype_of(&arrow.rec, ty) {
                 Some(arrow)
             } else {
                 None
@@ -277,7 +274,7 @@ impl TypeChecker {
             ast::AccessReceiver::Ident(x) => {
                 // It might be a static method
                 // TODO: This should be cleaned up
-                if let Some(ty) = self.types.get(&x.ident.to_string()) {
+                if let Some(ty) = self.get_type(&x) {
                     let mut access_expr = access_expr.clone();
                     if access_expr.is_empty() {
                         return Err(
@@ -296,8 +293,7 @@ impl TypeChecker {
                         self.static_method_call(scope, ty.clone(), m)?;
                     self.access(scope, receiver_type, &access_expr)
                 } else {
-                    let receiver_type =
-                        scope.get_var(&x.ident.to_string())?.clone();
+                    let receiver_type = scope.get_var(x)?.clone();
                     self.access(scope, receiver_type, access_expr)
                 }
             }
@@ -316,7 +312,7 @@ impl TypeChecker {
             args: ast::ArgExprList { args },
         } = m;
         let Some(arrow) =
-            self.find_method(self.static_methods.clone(), &ty, &ident.ident)
+            self.find_method(self.static_methods, &ty, ident.as_ref())
         else {
             return Err(format!(
                 "No static method '{}' found for '{:?}'",

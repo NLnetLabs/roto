@@ -2,7 +2,7 @@ use crate::ast;
 
 use super::{scope::Scope, types::Type, TypeChecker, TypeResult};
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub fn filter_map(
         &mut self,
         scope: &Scope,
@@ -69,44 +69,36 @@ impl TypeChecker {
 
         match rx_tx_type {
             ast::RxTxType::RxOnly(ast::TypeIdentField { field_name, ty }) => {
-                let Some(ty) = self.types.get(&ty.ident.to_string()) else {
+                let Some(ty) = self.get_type(ty) else {
                     return Err("type for rx is not defined".into());
                 };
-                scope.insert_var(field_name.ident.to_string(), ty.clone())?;
+                scope.insert_var(field_name, ty)?;
             }
             ast::RxTxType::Split(rx, tx) => {
-                let Some(ty) = self.types.get(&rx.ty.ident.to_string())
-                else {
+                let Some(ty) = self.get_type(&rx.ty) else {
                     return Err("type for rx is not defined".into());
                 };
-                scope.insert_var(
-                    rx.field_name.ident.to_string(),
-                    ty.clone(),
-                )?;
+                scope.insert_var(&rx.field_name, ty)?;
 
-                let Some(ty) = self.types.get(&tx.ty.ident.to_string())
-                else {
+                let Some(ty) = self.get_type(&tx.ty) else {
                     return Err("type for tx is not defined".into());
                 };
-                scope.insert_var(
-                    tx.field_name.ident.to_string(),
-                    ty.clone(),
-                )?;
+                scope.insert_var(&tx.field_name, ty)?;
             }
             ast::RxTxType::PassThrough(ast::TypeIdentField {
                 field_name,
                 ty,
             }) => {
-                let Some(ty) = self.types.get(&ty.ident.to_string()) else {
+                let Some(ty) = self.get_type(ty) else {
                     return Err("type for rx_tx is not defined".into());
                 };
-                scope.insert_var(field_name.ident.to_string(), ty.clone())?;
+                scope.insert_var(field_name, ty)?;
             }
         }
 
         for (ident, expr) in assignments {
             let t = self.expr(&scope, expr)?;
-            scope.insert_var(ident.ident.to_string(), t.clone())?;
+            scope.insert_var(ident, t)?;
         }
 
         Ok(())
@@ -148,10 +140,8 @@ impl TypeChecker {
                 ast::MatchOperator::MatchValueWith(ast::Identifier {
                     ident,
                 }) => {
-                    let x = scope.get_var(&ident.to_string())?;
-                    let Type::Enum(_, variants) =
-                        self.resolve_type(x).clone()
-                    else {
+                    let x = scope.get_var(ident)?;
+                    let Type::Enum(_, variants) = self.resolve_type(x) else {
                         return Err(format!("Cannot match on the type '{x:?}', because only matching on enums is supported."));
                     };
 
@@ -166,6 +156,7 @@ impl TypeChecker {
                         } = pattern.as_ref().unwrap();
 
                         let variant_id = &variant_id.ident;
+
                         let Some(idx) = variants.iter().position(|(v, _)| {
                             v.as_str() == variant_id.as_str()
                         }) else {
@@ -187,10 +178,7 @@ impl TypeChecker {
                                 // ok!
                             }
                             (Some(t), Some(id)) => {
-                                inner_scope.insert_var(
-                                    id.ident.to_string(),
-                                    t.clone(),
-                                )?;
+                                inner_scope.insert_var(id, t)?;
                             }
                             (None, Some(_)) => return Err(
                                 "Got field for variant that doesn't have one"
@@ -299,7 +287,7 @@ impl TypeChecker {
                             "The grammar should have forbidden this."
                         )
                     };
-                    let x = scope.get_var(&x.ident.to_string())?;
+                    let x = scope.get_var(x)?;
                     let Type::Enum(_, variants) =
                         self.resolve_type(x).clone()
                     else {
@@ -337,10 +325,7 @@ impl TypeChecker {
                                 // ok!
                             }
                             (Some(t), Some(id)) => {
-                                inner_scope.insert_var(
-                                    id.ident.to_string(),
-                                    t.clone(),
-                                )?;
+                                inner_scope.insert_var(id, t)?;
                             }
                             (None, Some(_)) => return Err(
                                 "Got field for variant that doesn't have one"
@@ -356,7 +341,7 @@ impl TypeChecker {
                         if let Some(guard) = guard {
                             let ast::TermCallExpr { term_id, args } = guard;
                             let Type::Term(term_params) =
-                                scope.get_var(&term_id.ident.to_string())?
+                                scope.get_var(term_id)?
                             else {
                                 return Err("Should be a term".into());
                             };
@@ -400,10 +385,8 @@ impl TypeChecker {
                                     }),
                                     None,
                                 ) => {
-                                    let Type::Action(term_params) = scope
-                                        .get_var(
-                                            &action_id.ident.to_string(),
-                                        )?
+                                    let Type::Action(term_params) =
+                                        scope.get_var(action_id)?
                                     else {
                                         return Err(
                                             "Should be a action".into()
@@ -465,13 +448,12 @@ impl TypeChecker {
     ) -> TypeResult<Vec<(String, Type)>> {
         args.into_iter()
             .map(|ast::TypeIdentField { field_name, ty }| {
-                let Some(ty) = self.types.get(&ty.ident.to_string()) else {
+                let Some(ty) = self.get_type(ty) else {
                     return Err("type does not exist".to_string());
                 };
 
-                let field_name = field_name.ident.to_string();
-                scope.insert_var(field_name.clone(), ty.clone())?;
-                Ok((field_name.clone(), ty.clone()))
+                scope.insert_var(&field_name, ty)?;
+                Ok((field_name.ident.to_string(), ty.clone()))
             })
             .collect()
     }
