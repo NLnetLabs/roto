@@ -4,10 +4,6 @@ use serde::{Serialize, Serializer};
 use smallvec::SmallVec;
 
 use routecore::asn::Asn;
-use routecore::bgp::communities::HumanReadableCommunity as Community;
-use routecore::bgp::communities::{
-    ExtendedCommunity, LargeCommunity, StandardCommunity,
-};
 
 use crate::compiler::error::CompileError;
 use crate::first_into_compile_err;
@@ -533,93 +529,14 @@ impl From<&'_ AsnLiteral> for Asn {
     }
 }
 
-//------------ StandardCommunityLiteral --------------------------------------
+#[derive(Clone, Debug)]
+pub struct StandardCommunityLiteral(pub routecore::bgp::communities::StandardCommunity);
 
 #[derive(Clone, Debug)]
-pub struct StandardCommunityLiteral(pub String);
-
-impl From<&'_ StandardCommunityLiteral> for ShortString {
-    fn from(literal: &StandardCommunityLiteral) -> Self {
-        ShortString::from(literal.0.to_string().as_str())
-    }
-}
-
-impl TryFrom<&'_ StandardCommunityLiteral> for Community {
-    type Error = CompileError;
-
-    // The aforementioned heavy lifting is here.
-    fn try_from(
-        literal: &StandardCommunityLiteral,
-    ) -> Result<Self, Self::Error> {
-        let comm = <StandardCommunity as str::FromStr>::from_str(
-                &literal.0
-            ).map_err(
-                |e| CompileError::from(format!(
-                    "Cannot convert literal '{}' into Extended Community: {e}", literal.0,
-                )))?;
-
-        Ok(comm.into())
-    }
-}
-
-//------------ ExtendedCommunityLiteral --------------------------------------
+pub struct ExtendedCommunityLiteral(pub routecore::bgp::communities::ExtendedCommunity);
 
 #[derive(Clone, Debug)]
-pub struct ExtendedCommunityLiteral(pub String);
-
-impl From<&'_ ExtendedCommunityLiteral> for ShortString {
-    fn from(literal: &ExtendedCommunityLiteral) -> Self {
-        ShortString::from(literal.0.to_string().as_str())
-    }
-}
-
-impl<'a> TryFrom<&'a ExtendedCommunityLiteral> for Community {
-    type Error = CompileError;
-
-    // The aforementioned heavy lifting is here.
-    fn try_from(
-        literal: &ExtendedCommunityLiteral,
-    ) -> Result<Self, Self::Error> {
-        let comm = <ExtendedCommunity as str::FromStr>::from_str(
-                &literal.0
-            ).map_err(
-                |e| CompileError::from(format!(
-                    "Cannot convert literal '{}' into Extended Community: {e}", literal.0,
-                )))?;
-
-        Ok(comm.into())
-    }
-}
-
-//------------ LargeCommunityLiteral -----------------------------------------
-
-#[derive(Clone, Debug)]
-pub struct LargeCommunityLiteral(pub String);
-
-impl From<&'_ LargeCommunityLiteral> for ShortString {
-    fn from(literal: &LargeCommunityLiteral) -> Self {
-        ShortString::from(literal.0.to_string().as_str())
-    }
-}
-
-impl TryFrom<&'_ LargeCommunityLiteral> for Community {
-    type Error = CompileError;
-
-    // The aforementioned heavy lifting is here.
-    fn try_from(
-        literal: &LargeCommunityLiteral,
-    ) -> Result<Self, Self::Error> {
-        let comm = <LargeCommunity as str::FromStr>::from_str(&literal.0)
-            .map_err(|e| {
-                CompileError::from(format!(
-                    "Cannot convert literal '{}' into Large Community: {e}",
-                    literal.0,
-                ))
-            })?;
-
-        Ok(comm.into())
-    }
-}
+pub struct LargeCommunityLiteral(pub routecore::bgp::communities::LargeCommunity);
 
 //------------ FloatLiteral --------------------------------------------------
 

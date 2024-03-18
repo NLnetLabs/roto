@@ -1231,7 +1231,7 @@ impl TryFrom<crate::ast::StandardCommunityLiteral> for TypeValue {
     fn try_from(
         value: crate::ast::StandardCommunityLiteral,
     ) -> Result<Self, Self::Error> {
-        let comm = (&value).try_into()?;
+        let comm = value.0.into();
         Ok(TypeValue::Builtin(BuiltinTypeValue::Community(comm)))
     }
 }
@@ -1242,7 +1242,7 @@ impl TryFrom<crate::ast::ExtendedCommunityLiteral> for TypeValue {
     fn try_from(
         value: crate::ast::ExtendedCommunityLiteral,
     ) -> Result<Self, Self::Error> {
-        let comm = (&value).try_into()?;
+        let comm = value.0.into();
         Ok(TypeValue::Builtin(BuiltinTypeValue::Community(comm)))
     }
 }
@@ -1253,7 +1253,7 @@ impl TryFrom<crate::ast::LargeCommunityLiteral> for TypeValue {
     fn try_from(
         value: crate::ast::LargeCommunityLiteral,
     ) -> Result<Self, Self::Error> {
-        let comm = (&value).try_into()?;
+        let comm = value.0.into();
         Ok(TypeValue::Builtin(BuiltinTypeValue::Community(comm)))
     }
 }

@@ -271,17 +271,17 @@ impl<'source> Parser<'source> {
                 match c {
                     Community::Standard(x) => {
                         LiteralExpr::StandardCommunityLiteral(
-                            StandardCommunityLiteral(x.to_string()),
+                            StandardCommunityLiteral(x),
                         )
                     }
                     Community::Extended(x) => {
                         LiteralExpr::ExtendedCommunityLiteral(
-                            ExtendedCommunityLiteral(x.to_string()),
+                            ExtendedCommunityLiteral(x),
                         )
                     }
                     Community::Large(x) => {
                         LiteralExpr::LargeCommunityLiteral(
-                            LargeCommunityLiteral(x.to_string()),
+                            LargeCommunityLiteral(x),
                         )
                     }
                     Community::Ipv6Extended(_) => {
@@ -313,11 +313,8 @@ impl<'source> Parser<'source> {
             Token::CurlyRight,
             Token::Comma,
             |parser| {
-                dbg!(parser.peek());
                 let key = parser.identifier()?;
-                dbg!(parser.peek());
                 parser.take(Token::Colon)?;
-                dbg!("here?");
                 let value = parser.value_expr()?;
                 Ok((key, value))
             },
