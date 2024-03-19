@@ -63,7 +63,7 @@ pub struct AnonymousRecordValueExpr {
 /// Used in the 'Define' section to create variables to hold a record.
 #[derive(Clone, Debug)]
 pub struct TypedRecordValueExpr {
-    pub type_id: TypeIdentifier,
+    pub type_id: Spanned<TypeIdentifier>,
     pub key_values: Vec<(Spanned<Identifier>, ValueExpr)>,
 }
 

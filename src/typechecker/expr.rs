@@ -1,4 +1,8 @@
-use crate::{ast, parser::span::Spanned, typechecker::TypeError};
+use crate::{
+    ast,
+    parser::span::{Spanned, WithSpan},
+    typechecker::TypeError,
+};
 
 use super::{
     scope::Scope,
@@ -101,18 +105,18 @@ impl TypeChecker<'_> {
                     .get(&type_id.ident.to_string())
                 {
                     Some(Type::NamedRecord(n, t)) => (n.clone(), t.clone()),
-                    Some(_) => {
-                        return Err(TypeError::Simple {
-                            description: format!(
-                            "{type_id} does not refer to a named record type"
+                    Some(_) => return Err(TypeError::Custom {
+                        description: format!(
+                            "Expected a named record type, but found `{}`",
+                            type_id.inner,
                         ),
-                        })
-                    }
+                        label: "not a named record type".into(),
+                        span: type_id.span,
+                    }),
                     None => {
-                        return Err(TypeError::Simple {
-                            description: format!(
-                                "The type {type_id} does not exist"
-                            ),
+                        return Err(TypeError::UndeclaredType {
+                            type_name: type_id.to_string(),
+                            span: type_id.span,
                         })
                     }
                 };
@@ -121,11 +125,14 @@ impl TypeChecker<'_> {
                 let inferred_type = self.record_type(scope, key_values)?;
 
                 for (name, inferred_type) in inferred_type {
-                    let Some(idx) =
-                        record_type.iter().position(|(n, _)| n == &name)
+                    let Some(idx) = record_type
+                        .iter()
+                        .position(|(n, _)| n == &name.inner)
                     else {
-                        return Err(TypeError::Simple {
-                            description: format!("Type {record_name} does not have a field {name}.")
+                        return Err(TypeError::Custom {
+                            description: format!("Record {record_name} does not have a field '{}'.", name.inner),
+                            label: format!("'{record_name}' does not have this field"),
+                            span: name.span
                         });
                     };
                     let (_, ty) = record_type.remove(idx);
@@ -135,11 +142,10 @@ impl TypeChecker<'_> {
                 let missing: Vec<_> =
                     record_type.into_iter().map(|(s, _)| s).collect();
                 if !missing.is_empty() {
-                    return Err(TypeError::Simple {
-                        description: format!(
-                            "Missing fields on {record_name}: {}",
-                            missing.join(", ")
-                        ),
+                    return Err(TypeError::MissingFields {
+                        fields: missing,
+                        type_name: type_id.to_string(),
+                        type_span: type_id.span,
                     });
                 }
 
@@ -254,7 +260,6 @@ impl TypeChecker<'_> {
             literal,
             access_expr,
         } = expr;
-        dbg!();
         let literal = self.literal(literal)?;
         self.access(scope, literal, access_expr)
     }
@@ -356,11 +361,12 @@ impl TypeChecker<'_> {
         &mut self,
         scope: &Scope,
         expr: &[(Spanned<ast::Identifier>, ast::ValueExpr)],
-    ) -> TypeResult<Vec<(String, Type)>> {
+    ) -> TypeResult<Vec<(Spanned<String>, Type)>> {
         Ok(expr
             .into_iter()
             .map(|(k, v)| {
-                self.expr(scope, v).map(|v| (k.ident.to_string(), v))
+                self.expr(scope, v)
+                    .map(|v| (k.ident.to_string().with_span(k.span), v))
             })
             .collect::<Result<_, _>>()?)
     }

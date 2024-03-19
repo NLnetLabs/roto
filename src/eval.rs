@@ -1954,7 +1954,7 @@ impl ast::TypedRecordValueExpr {
             s.push(arg);
         }
 
-        Ok((self.type_id.clone(), s))
+        Ok((self.type_id.inner.clone(), s))
     }
 }
 

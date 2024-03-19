@@ -16,11 +16,11 @@
 
 use crate::{
     ast::{self, TypeIdentField},
-    parser::span::Span,
+    parser::span::{Span, Spanned},
 };
 use miette::Diagnostic;
 use scope::Scope;
-use std::collections::{hash_map::Entry, HashMap};
+use std::{collections::{hash_map::Entry, HashMap}, fmt::Display};
 use types::Type;
 
 use self::{
@@ -49,8 +49,19 @@ pub enum TypeError {
     },
     DuplicateFields {
         field_name: String,
-        #[label(collection, "field {field_name} declared here")]
+        #[label(collection, "field '{field_name}' declared here")]
         fields: Vec<Span>,
+    },
+    UndeclaredType {
+        type_name: String,
+        #[label("not found")]
+        span: Span,
+    },
+    MissingFields {
+        fields: Vec<String>,
+        type_name: String,
+        #[label("missing {}", join_quoted(fields))]
+        type_span: crate::parser::span::Span,
     },
 }
 
@@ -65,10 +76,33 @@ impl std::fmt::Display for TypeError {
                 write!(f, "{description}")
             }
             Self::DuplicateFields { field_name, .. } => {
-                write!(f, "field '{field_name}' appears multiple times in the same record")
+                write!(f, "field `{field_name}` appears multiple times in the same record")
+            }
+            Self::UndeclaredType { type_name, .. } => {
+                write!(f, "cannot find type `{type_name}`")
+            }
+            Self::MissingFields {
+                fields, type_name, ..
+            } => {
+                if fields.len() > 1 {
+                    let fields = join_quoted(fields);
+                    write!(f, "missing fields {fields} in record literal for `{type_name}`")
+                } else {
+                    write!(f, "missing field `{}` in record literal for `{type_name}`", fields[0])
+                }
             }
         }
     }
+}
+
+fn join_quoted<T: Display>(list: impl IntoIterator<Item = T>) -> String {
+    let mut list: Vec<_> =
+        list.into_iter().map(|s| format!("`{s}`")).collect();
+    let last = list.pop().unwrap();
+    if list.is_empty() {
+        return last;
+    }
+    format!("{} and {last}", list.join(", "))
 }
 
 pub struct TypeChecker<'methods> {
@@ -213,7 +247,11 @@ impl<'methods> TypeChecker<'methods> {
     }
 
     /// Create a fresh record variable in the unionfind structure
-    fn fresh_record(&mut self, fields: Vec<(String, Type)>) -> Type {
+    fn fresh_record(&mut self, fields: Vec<(Spanned<String>, Type)>) -> Type {
+        let fields = fields
+            .into_iter()
+            .map(|(s, t)| (s.to_string(), t))
+            .collect();
         self.unionfind.fresh(move |x| Type::RecordVar(x, fields))
     }
 
@@ -638,7 +676,8 @@ fn evaluate_record_type(
                 fields: same_fields,
             });
         }
-        unspanned_type_fields.push((field.0.inner.to_string(), field.1.clone()));
+        unspanned_type_fields
+            .push((field.0.inner.to_string(), field.1.clone()));
     }
 
     Ok(unspanned_type_fields)

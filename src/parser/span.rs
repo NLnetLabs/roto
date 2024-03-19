@@ -9,7 +9,7 @@ pub struct Span {
 }
 
 impl Span {
-    fn merge(self, other: Span) -> Span {
+    fn _merge(self, other: Span) -> Span {
         Span {
             start: self.start.min(other.start),
             end: self.end.max(other.end),

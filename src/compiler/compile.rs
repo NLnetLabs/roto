@@ -44,7 +44,7 @@ use crate::{
         SymbolKind, SymbolTable,
     },
     traits::Token,
-    typechecker::{typecheck, TypeResult},
+    typechecker::typecheck,
     types::{
         datasources::{DataSource, Table},
         typedef::{RecordTypeDef, TypeDef},
@@ -637,7 +637,8 @@ impl<'a> CompilerState<'a> {
 /// separate public methods for each phase, as well as a method that bundles
 /// all phases.
 #[derive(Debug, Default)]
-pub struct Compiler {
+pub struct Compiler<'a> {
+    source: &'a str,
     pub ast: SyntaxTree,
     symbols: GlobalSymbolTable,
     // Compile time arguments
@@ -645,9 +646,10 @@ pub struct Compiler {
     // data_sources: Vec<(&'a str, Arc<DataSource>)>,
 }
 
-impl<'a> Compiler {
+impl<'a> Compiler<'a> {
     pub fn new() -> Self {
         Compiler {
+            source: "",
             ast: SyntaxTree::default(),
             symbols: GlobalSymbolTable::new(),
             arguments: vec![],
@@ -659,6 +661,7 @@ impl<'a> Compiler {
         &mut self,
         source_code: &'a str,
     ) -> Result<(), miette::Report> {
+        self.source = source_code;
         match SyntaxTree::parse_str(source_code) {
             Ok(ast) => self.ast = ast,
             Err(e) => {
@@ -670,8 +673,10 @@ impl<'a> Compiler {
         Ok(())
     }
 
-    pub fn typecheck(&mut self) -> TypeResult<()> {
-        typecheck(&self.ast)
+    pub fn typecheck(&mut self) -> Result<(), miette::Report> {
+        typecheck(&self.ast).map_err(|e| {
+            miette::Report::new(e).with_source_code(self.source.to_string())
+        })
     }
 
     pub fn eval_ast(&mut self) -> Result<(), CompileError> {

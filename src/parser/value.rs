@@ -14,7 +14,7 @@ use crate::{
     parser::ParseError,
 };
 
-use super::{span::Spanned, token::Token, ParseResult, Parser};
+use super::{span::{Spanned, WithSpan}, token::Token, ParseResult, Parser};
 
 /// # Parsing value expressions
 impl<'source> Parser<'source> {
@@ -48,12 +48,12 @@ impl<'source> Parser<'source> {
         }
 
         if let Some(Token::Ident(_)) = self.peek() {
-            let id = self.identifier()?.inner;
+            let id = self.identifier()?;
             if self.peek_is(Token::CurlyLeft) {
-                let Identifier { ident: s } = id;
+                let Identifier { ident: s } = id.inner;
                 return Ok(ValueExpr::TypedRecordExpr(
                     TypedRecordValueExpr {
-                        type_id: TypeIdentifier { ident: s },
+                        type_id: TypeIdentifier { ident: s }.with_span(id.span),
                         key_values: self.record()?,
                     },
                 ));
@@ -62,11 +62,11 @@ impl<'source> Parser<'source> {
             if self.peek_is(Token::RoundLeft) {
                 let args = self.arg_expr_list()?;
                 return Ok(ValueExpr::RootMethodCallExpr(
-                    MethodComputeExpr { ident: id, args },
+                    MethodComputeExpr { ident: id.inner, args },
                 ));
             }
 
-            let receiver = AccessReceiver::Ident(id);
+            let receiver = AccessReceiver::Ident(id.inner);
             let access_expr = self.access_expr()?;
 
             return Ok(ValueExpr::ComputeExpr(ComputeExpr {

@@ -6,7 +6,7 @@ use roto::{
 
 pub struct TestCompiler<'a> {
     name: &'a str,
-    compiler: Compiler,
+    compiler: Compiler<'a>,
     source_code: &'a str,
 }
 
