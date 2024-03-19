@@ -1,7 +1,9 @@
-use crate::ast;
+use crate::{ast, parser::span::Spanned, typechecker::TypeError};
 
 use super::{
-    scope::Scope, types::{Arrow, Method, Primitive, Type}, TypeChecker, TypeResult
+    scope::Scope,
+    types::{Arrow, Method, Primitive, Type},
+    TypeChecker, TypeResult,
 };
 
 impl TypeChecker<'_> {
@@ -100,14 +102,18 @@ impl TypeChecker<'_> {
                 {
                     Some(Type::NamedRecord(n, t)) => (n.clone(), t.clone()),
                     Some(_) => {
-                        return Err(format!(
+                        return Err(TypeError::Simple {
+                            description: format!(
                             "{type_id} does not refer to a named record type"
-                        ))
+                        ),
+                        })
                     }
                     None => {
-                        return Err(format!(
-                            "The type {type_id} does not exist"
-                        ))
+                        return Err(TypeError::Simple {
+                            description: format!(
+                                "The type {type_id} does not exist"
+                            ),
+                        })
                     }
                 };
 
@@ -118,7 +124,9 @@ impl TypeChecker<'_> {
                     let Some(idx) =
                         record_type.iter().position(|(n, _)| n == &name)
                     else {
-                        return Err(format!("Type {record_name} does not have a field {name}."));
+                        return Err(TypeError::Simple {
+                            description: format!("Type {record_name} does not have a field {name}.")
+                        });
                     };
                     let (_, ty) = record_type.remove(idx);
                     self.unify(&inferred_type, &ty)?;
@@ -127,10 +135,12 @@ impl TypeChecker<'_> {
                 let missing: Vec<_> =
                     record_type.into_iter().map(|(s, _)| s).collect();
                 if !missing.is_empty() {
-                    return Err(format!(
-                        "Missing fields on {record_name}: {}",
-                        missing.join(", ")
-                    ));
+                    return Err(TypeError::Simple {
+                        description: format!(
+                            "Missing fields on {record_name}: {}",
+                            missing.join(", ")
+                        ),
+                    });
                 }
 
                 Ok(Type::Name(record_name.clone()))
@@ -161,20 +171,22 @@ impl TypeChecker<'_> {
                         args: ast::ArgExprList { args },
                     },
                 ) => {
-                    let Some(arrow) = self.find_method(
-                        self.methods,
-                        &last,
-                        ident.as_ref(),
-                    ) else {
-                        return Err(format!(
-                            "Method '{ident}' not found on {last:?}"
-                        ));
+                    let Some(arrow) =
+                        self.find_method(self.methods, &last, ident.as_ref())
+                    else {
+                        return Err(TypeError::Simple {
+                            description: format!(
+                                "Method '{ident}' not found on {last:?}"
+                            ),
+                        });
                     };
 
                     if args.len() != arrow.args.len() {
-                        return Err(format!(
-                            "Number of arguments don't match"
-                        ));
+                        return Err(TypeError::Simple {
+                            description: format!(
+                                "Number of arguments don't match"
+                            ),
+                        });
                     }
 
                     self.unify(&arrow.rec, &last)?;
@@ -202,9 +214,11 @@ impl TypeChecker<'_> {
                                 continue;
                             };
                         }
-                        return Err(format!(
-                            "No field '{field}' on {last:?}"
-                        ));
+                        return Err(TypeError::Simple {
+                            description: format!(
+                                "No field '{field}' on {last:?}"
+                            ),
+                        });
                     }
                 }
             }
@@ -277,17 +291,18 @@ impl TypeChecker<'_> {
                 if let Some(ty) = self.get_type(&x) {
                     let mut access_expr = access_expr.clone();
                     if access_expr.is_empty() {
-                        return Err(
-                            "Type should be followed by a method".into()
-                        );
+                        return Err(TypeError::Simple {
+                            description:
+                                "Type should be followed by a method".into(),
+                        });
                     }
                     let ast::AccessExpr::MethodComputeExpr(m) =
                         access_expr.remove(0)
                     else {
-                        return Err(
-                            "First access on a type should be a method call"
+                        return Err(TypeError::Simple {
+                            description: "First access on a type should be a method call"
                                 .into(),
-                        );
+                        });
                     };
                     let receiver_type =
                         self.static_method_call(scope, ty.clone(), m)?;
@@ -314,14 +329,18 @@ impl TypeChecker<'_> {
         let Some(arrow) =
             self.find_method(self.static_methods, &ty, ident.as_ref())
         else {
-            return Err(format!(
-                "No static method '{}' found for '{:?}'",
-                &ident, ty
-            ));
+            return Err(TypeError::Simple {
+                description: format!(
+                    "No static method '{}' found for '{:?}'",
+                    &ident, ty
+                ),
+            });
         };
 
         if args.len() != arrow.args.len() {
-            return Err(format!("Number of arguments don't match"));
+            return Err(TypeError::Simple {
+                description: format!("Number of arguments don't match"),
+            });
         }
 
         self.unify(&arrow.rec, &ty)?;
@@ -336,7 +355,7 @@ impl TypeChecker<'_> {
     fn record_type(
         &mut self,
         scope: &Scope,
-        expr: &[(ast::Identifier, ast::ValueExpr)],
+        expr: &[(Spanned<ast::Identifier>, ast::ValueExpr)],
     ) -> TypeResult<Vec<(String, Type)>> {
         Ok(expr
             .into_iter()

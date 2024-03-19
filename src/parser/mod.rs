@@ -1,16 +1,16 @@
-use crate::ast::{
-    Identifier,
-    RootExpr, SyntaxTree, TypeIdentifier,
-};
-use token::Token;
+use crate::ast::{Identifier, RootExpr, SyntaxTree, TypeIdentifier};
 use logos::{Lexer, Span, SpannedIter};
 use miette::Diagnostic;
 use std::iter::Peekable;
+use token::Token;
+
+use self::span::{Spanned, WithSpan};
 
 mod filter_map;
 mod rib_like;
-mod value;
+pub mod span;
 mod token;
+mod value;
 
 #[cfg(test)]
 mod test_expressions;
@@ -67,10 +67,7 @@ impl std::fmt::Display for ParseError {
             } => {
                 write!(f, "found an invalid {description} literal '{token}': {inner_error}")
             }
-            Self::Custom {
-                description,
-                ..
-            } => {
+            Self::Custom { description, .. } => {
                 write!(f, "{description}")
             }
         }
@@ -249,44 +246,47 @@ impl<'source> Parser<'source> {
     ///
     /// The `contains` and `type` keywords are treated as identifiers,
     /// because we already have tests that use these as names for methods.
-    fn identifier(&mut self) -> ParseResult<Identifier> {
+    fn identifier(&mut self) -> ParseResult<Spanned<Identifier>> {
         let (token, span) = self.next()?;
-        match token {
-            Token::Ident(s) => Ok(Identifier { ident: s.into() }),
+        let ident = match token {
+            Token::Ident(s) => s.as_ref(),
             // 'contains' and `type` is already used as both a keyword and an identifier
-            Token::Contains => Ok(Identifier {
-                ident: "contains".into(),
-            }),
-            Token::Type => Ok(Identifier {
-                ident: "type".into(),
-            }),
-            _ => Err(ParseError::Expected {
-                expected: "an identifier".into(),
-                got: token.to_string(),
-                span,
-            }),
+            Token::Contains => "contains",
+            Token::Type => "type",
+            _ => {
+                return Err(ParseError::Expected {
+                    expected: "an identifier".into(),
+                    got: token.to_string(),
+                    span,
+                })
+            }
+        };
+        Ok(Identifier {
+            ident: ident.into(),
         }
+        .with_span(span))
     }
 
     /// Parse a type identifier
     ///
     /// Currently, this is the same as [`Parser::identifier`].
-    fn type_identifier(&mut self) -> ParseResult<TypeIdentifier> {
+    fn type_identifier(&mut self) -> ParseResult<Spanned<TypeIdentifier>> {
         let (token, span) = self.next()?;
-        match token {
-            Token::Ident(s) => Ok(TypeIdentifier { ident: s.into() }),
+        let ident = match token {
+            Token::Ident(s) => s.as_ref(),
             // 'contains' and `type` already used as both a keyword and an identifier
-            Token::Contains => Ok(TypeIdentifier {
-                ident: "contains".into(),
-            }),
-            Token::Type => Ok(TypeIdentifier {
-                ident: "type".into(),
-            }),
-            _ => Err(ParseError::Expected {
+            Token::Contains => 
+                "contains",
+            Token::Type => "type",
+            _ => return Err(ParseError::Expected {
                 expected: "an identifier".into(),
                 got: token.to_string(),
                 span,
             }),
+        };
+        Ok(TypeIdentifier {
+            ident: ident.into(),
         }
+        .with_span(span))
     }
 }

@@ -172,7 +172,8 @@ impl<'source> Parser<'source> {
 
         let mut use_ext_data = Vec::new();
         while self.next_is(Token::Use) {
-            use_ext_data.push((self.identifier()?, self.identifier()?));
+            use_ext_data
+                .push((self.identifier()?.inner, self.identifier()?.inner));
             self.take(Token::SemiColon)?;
         }
 
@@ -259,9 +260,9 @@ impl<'source> Parser<'source> {
         let mut match_arms = Vec::new();
         self.take(Token::CurlyLeft)?;
         while !self.next_is(Token::CurlyRight) {
-            let variant_id = self.identifier()?;
+            let variant_id = self.identifier()?.inner;
             let data_field = if self.next_is(Token::RoundLeft) {
-                let id = self.identifier()?;
+                let id = self.identifier()?.inner;
                 self.take(Token::RoundRight)?;
                 Some(id)
             } else {
@@ -269,7 +270,7 @@ impl<'source> Parser<'source> {
             };
 
             let guard = if self.next_is(Token::Pipe) {
-                let term_id = self.identifier()?;
+                let term_id = self.identifier()?.inner;
                 let args = if self.peek_is(Token::RoundLeft) {
                     Some(self.arg_expr_list()?)
                 } else {
@@ -377,7 +378,7 @@ impl<'source> Parser<'source> {
     /// ActionCallExpr ::= Identifier '(' (ValueExpr (',' ValueExpr)* ',')? ')'
     /// ```
     fn action_call_expr(&mut self) -> ParseResult<ActionCallExpr> {
-        let action_id = self.identifier()?;
+        let action_id = self.identifier()?.inner;
         let args = if self.peek_is(Token::RoundLeft) {
             Some(self.arg_expr_list()?)
         } else {
@@ -434,7 +435,7 @@ impl<'source> Parser<'source> {
         let op = match token {
             Token::Match => {
                 if matches!(self.peek(), Some(Token::Ident(_))) {
-                    let ident = self.identifier()?;
+                    let ident = self.identifier()?.inner;
                     self.take(Token::With)?;
                     MatchOperator::MatchValueWith(ident)
                 } else {
@@ -484,7 +485,7 @@ impl<'source> Parser<'source> {
     /// ```
     fn term(&mut self) -> ParseResult<TermSection> {
         self.take(Token::Term)?;
-        let ident = self.identifier()?;
+        let ident = self.identifier()?.inner;
         let for_kv = self.try_for_clause()?;
         let with_kv = self.try_with_clause()?;
 
@@ -553,10 +554,10 @@ impl<'source> Parser<'source> {
     pub(super) fn match_arm(
         &mut self,
     ) -> ParseResult<(TermPatternMatchArm, Vec<LogicalExpr>)> {
-        let variant_id = self.identifier()?;
+        let variant_id = self.identifier()?.inner;
 
         let data_field = if self.next_is(Token::RoundLeft) {
-            let field = self.identifier()?;
+            let field = self.identifier()?.inner;
             self.take(Token::RoundRight)?;
             Some(field)
         } else {
@@ -747,7 +748,7 @@ impl<'source> Parser<'source> {
 
     pub(super) fn action(&mut self) -> ParseResult<ActionSection> {
         self.take(Token::Action)?;
-        let ident = self.identifier()?;
+        let ident = self.identifier()?.inner;
         let with_kv = self.try_with_clause()?;
 
         let mut expressions = Vec::new();

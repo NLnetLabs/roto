@@ -1,6 +1,9 @@
-use std::{borrow::Borrow, collections::{hash_map::Entry, HashMap}};
+use std::{
+    borrow::Borrow,
+    collections::{hash_map::Entry, HashMap},
+};
 
-use super::{Type, TypeResult};
+use super::{Type, TypeError, TypeResult};
 
 /// A type checking scope
 #[derive(Default)]
@@ -25,7 +28,12 @@ impl<'a> Scope<'a> {
     pub fn get_var(&self, k: impl AsRef<str>) -> TypeResult<&Type> {
         self.variables
             .get(k.as_ref())
-            .ok_or_else(|| format!("The variable {} is undefined", k.as_ref()))
+            .ok_or_else(|| TypeError::Simple {
+                description: format!(
+                    "The variable {} is undefined",
+                    k.as_ref()
+                ),
+            })
             .or_else(|e| self.parent.ok_or(e).and_then(|s| s.get_var(k)))
     }
 
@@ -37,10 +45,12 @@ impl<'a> Scope<'a> {
         let v = v.as_ref().to_string();
         let t = t.borrow().clone();
         match self.variables.entry(v) {
-            Entry::Occupied(entry) => Err(format!(
-                "variable {} defined multiple times in the same scope",
-                entry.key()
-            )),
+            Entry::Occupied(entry) => Err(TypeError::Simple {
+                description: format!(
+                    "variable {} defined multiple times in the same scope",
+                    entry.key()
+                ),
+            }),
             Entry::Vacant(entry) => Ok(entry.insert(t)),
         }
     }

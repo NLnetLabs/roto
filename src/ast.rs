@@ -7,6 +7,7 @@ use routecore::asn::Asn;
 
 use crate::compiler::error::CompileError;
 use crate::first_into_compile_err;
+use crate::parser::span::Spanned;
 use crate::parser::{ParseError, Parser};
 use crate::types::typevalue::TypeValue;
 
@@ -56,14 +57,14 @@ pub struct ListValueExpr {
 /// actual type can be inferred unambiguously.
 #[derive(Clone, Debug)]
 pub struct AnonymousRecordValueExpr {
-    pub key_values: Vec<(Identifier, ValueExpr)>,
+    pub key_values: Vec<(Spanned<Identifier>, ValueExpr)>,
 }
 
 /// Used in the 'Define' section to create variables to hold a record.
 #[derive(Clone, Debug)]
 pub struct TypedRecordValueExpr {
     pub type_id: TypeIdentifier,
-    pub key_values: Vec<(Identifier, ValueExpr)>,
+    pub key_values: Vec<(Spanned<Identifier>, ValueExpr)>,
 }
 
 /// The value of a typed record
@@ -91,7 +92,7 @@ impl FilterType {
 #[derive(Clone, Debug)]
 pub struct FilterMap {
     pub ty: FilterType,
-    pub ident: Identifier,
+    pub ident: Spanned<Identifier>,
     pub for_ident: Option<TypeIdentField>,
     pub with_kv: Vec<TypeIdentField>,
     pub body: FilterMapBody,
@@ -131,7 +132,7 @@ pub enum RxTxType {
 pub struct DefineBody {
     pub rx_tx_type: RxTxType,
     pub use_ext_data: Vec<(Identifier, Identifier)>,
-    pub assignments: Vec<(Identifier, ValueExpr)>,
+    pub assignments: Vec<(Spanned<Identifier>, ValueExpr)>,
 }
 
 #[derive(Clone, Debug)]
@@ -311,8 +312,8 @@ pub struct RibBody {
 #[derive(Clone, Debug)]
 pub enum RibField {
     PrimitiveField(TypeIdentField),
-    RecordField(Box<(Identifier, RecordTypeIdentifier)>),
-    ListField(Box<(Identifier, ListTypeIdentifier)>),
+    RecordField(Box<(Spanned<Identifier>, RecordTypeIdentifier)>),
+    ListField(Box<(Spanned<Identifier>, ListTypeIdentifier)>),
 }
 
 #[derive(Clone, Debug)]
@@ -419,9 +420,9 @@ impl fmt::Display for TypeIdentifier {
 #[derive(Clone, Debug)]
 pub struct TypeIdentField {
     /// The name of the field.
-    pub field_name: Identifier,
+    pub field_name: Spanned<Identifier>,
     /// The type of the field.
-    pub ty: TypeIdentifier,
+    pub ty: Spanned<TypeIdentifier>,
 }
 
 #[derive(Clone, Debug)]

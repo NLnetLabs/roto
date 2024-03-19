@@ -797,7 +797,7 @@ impl<'a> Compiler {
     ) -> Result<Rotolo, CompileError> {
         self.parse_source_code(source_code)
             .map_err(|err| format!("{:?}", err))?;
-        self.typecheck()?;
+        self.typecheck().map_err(|err| format!("{:?}", err))?;
         self.eval_ast()
             .map_err(|err| format!("Eval error: {err}"))?;
         self.inject_compile_time_arguments()

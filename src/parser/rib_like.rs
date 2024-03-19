@@ -20,9 +20,9 @@ impl<'source> Parser<'source> {
     /// ```
     pub(super) fn rib(&mut self) -> ParseResult<Rib> {
         self.take(Token::Rib)?;
-        let ident = self.identifier()?;
+        let ident = self.identifier()?.inner;
         self.take(Token::Contains)?;
-        let contain_ty = self.type_identifier()?;
+        let contain_ty = self.type_identifier()?.inner;
         let body = self.rib_body()?;
 
         Ok(Rib {
@@ -41,9 +41,9 @@ impl<'source> Parser<'source> {
     /// ```
     pub(super) fn table(&mut self) -> ParseResult<Table> {
         self.take(Token::Table)?;
-        let ident = self.identifier()?;
+        let ident = self.identifier()?.inner;
         self.take(Token::Contains)?;
-        let contain_ty = self.type_identifier()?;
+        let contain_ty = self.type_identifier()?.inner;
         let body = self.rib_body()?;
 
         Ok(Table {
@@ -62,9 +62,9 @@ impl<'source> Parser<'source> {
     /// ```
     pub(super) fn output_stream(&mut self) -> ParseResult<OutputStream> {
         self.take(Token::OutputStream)?;
-        let ident = self.identifier()?;
+        let ident = self.identifier()?.inner;
         self.take(Token::Contains)?;
-        let contain_ty = self.type_identifier()?;
+        let contain_ty = self.type_identifier()?.inner;
         let body = self.rib_body()?;
 
         Ok(OutputStream {
@@ -83,7 +83,7 @@ impl<'source> Parser<'source> {
         &mut self,
     ) -> ParseResult<RecordTypeAssignment> {
         self.take(Token::Type)?;
-        let ident = self.type_identifier()?;
+        let ident = self.type_identifier()?.inner;
         let body = self.rib_body()?;
         let record_type = RecordTypeIdentifier {
             key_values: body.key_values,
@@ -130,7 +130,7 @@ impl<'source> Parser<'source> {
                 RecordTypeIdentifier { key_values },
             )))
         } else if self.next_is(Token::SquareLeft) {
-            let inner_type = self.type_identifier()?;
+            let inner_type = self.type_identifier()?.inner;
             self.take(Token::SquareRight)?;
             RibField::ListField(Box::new((
                 key,

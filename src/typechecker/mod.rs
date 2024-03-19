@@ -14,7 +14,11 @@
 //!
 //! See also <https://en.wikipedia.org/wiki/Hindley%E2%80%93Milner_type_system>.
 
-use crate::ast::{self, TypeIdentField};
+use crate::{
+    ast::{self, TypeIdentField},
+    parser::span::Span,
+};
+use miette::Diagnostic;
 use scope::Scope;
 use std::collections::{hash_map::Entry, HashMap};
 use types::Type;
@@ -32,6 +36,41 @@ mod tests;
 pub mod types;
 mod unionfind;
 
+#[derive(Clone, Debug, Diagnostic)]
+pub enum TypeError {
+    Custom {
+        description: String,
+        label: String,
+        #[label("{label}")]
+        span: Span,
+    },
+    Simple {
+        description: String,
+    },
+    DuplicateFields {
+        field_name: String,
+        #[label(collection, "field {field_name} declared here")]
+        fields: Vec<Span>,
+    },
+}
+
+impl std::error::Error for TypeError {}
+
+impl std::fmt::Display for TypeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Type error: ")?;
+        match self {
+            Self::Custom { description, .. }
+            | Self::Simple { description } => {
+                write!(f, "{description}")
+            }
+            Self::DuplicateFields { field_name, .. } => {
+                write!(f, "field '{field_name}' appears multiple times in the same record")
+            }
+        }
+    }
+}
+
 pub struct TypeChecker<'methods> {
     /// The unionfind structure that maps type variables to types
     unionfind: UnionFind,
@@ -43,7 +82,7 @@ pub struct TypeChecker<'methods> {
     static_methods: &'methods [Method],
 }
 
-pub type TypeResult<T> = Result<T, String>;
+pub type TypeResult<T> = Result<T, TypeError>;
 
 pub fn typecheck(tree: &ast::SyntaxTree) -> TypeResult<()> {
     let methods = types::methods();
@@ -142,16 +181,19 @@ impl<'methods> TypeChecker<'methods> {
             .into_iter()
             .map(|(s, t)| {
                 let Some(t) = t else {
-                    return Err(format!(
-                        "Did not provide declaration for type {s}"
-                    ));
+                    return Err(TypeError::Simple {
+                        description: format!(
+                            "Did not provide declaration for type {s}"
+                        ),
+                    });
                 };
 
                 Ok((s, t))
             })
             .collect::<Result<_, _>>()?;
 
-        self.detect_type_cycles()?;
+        self.detect_type_cycles()
+            .map_err(|description| TypeError::Simple { description })?;
 
         for f in filter_maps {
             self.filter_map(&root_scope, f)?;
@@ -308,7 +350,11 @@ impl<'methods> TypeChecker<'methods> {
                 a.clone()
             }
             (a, b) => {
-                return Err(format!("cannot unify types {a:?} and {b:?}"))
+                return Err(TypeError::Simple {
+                    description: format!(
+                        "cannot unify types {a:?} and {b:?}"
+                    ),
+                });
             }
         })
     }
@@ -319,11 +365,13 @@ impl<'methods> TypeChecker<'methods> {
         b_fields: &[(String, Type)],
     ) -> TypeResult<Vec<(String, Type)>> {
         if a_fields.len() != b_fields.len() {
-            return Err(format!(
-                "cannot unify types {:?} and {:?}",
-                Type::Record(a_fields.to_vec()),
-                Type::Record(b_fields.to_vec()),
-            ));
+            return Err(TypeError::Simple {
+                description: format!(
+                    "cannot unify types {:?} and {:?}",
+                    Type::Record(a_fields.to_vec()),
+                    Type::Record(b_fields.to_vec()),
+                ),
+            });
         }
 
         let mut b_fields = b_fields.to_vec();
@@ -331,10 +379,12 @@ impl<'methods> TypeChecker<'methods> {
         for (name, a_ty) in a_fields {
             let Some(idx) = b_fields.iter().position(|(n, _)| n == name)
             else {
-                return Err(format!(
-                    "Type {:?} does not have a field {name}.",
-                    Type::Record(b_fields.to_vec())
-                ));
+                return Err(TypeError::Simple {
+                    description: format!(
+                        "Type {:?} does not have a field {name}.",
+                        Type::Record(b_fields.to_vec())
+                    ),
+                });
             };
             let (_, b_ty) = b_fields.remove(idx);
             new_fields.push((name.clone(), self.unify(&a_ty, &b_ty)?))
@@ -417,7 +467,7 @@ impl<'methods> TypeChecker<'methods> {
     /// This algorithm is the Depth-first search algorithm described at
     /// <https://en.wikipedia.org/wiki/Topological_sorting>, where `false`
     /// is a temporary mark and `true` is a permanent mark.
-    fn detect_type_cycles(&self) -> TypeResult<()> {
+    fn detect_type_cycles(&self) -> Result<(), String> {
         let mut visited = HashMap::new();
 
         for ident in self.types.keys() {
@@ -431,7 +481,7 @@ impl<'methods> TypeChecker<'methods> {
         &'a self,
         visited: &mut HashMap<&'a str, bool>,
         s: &'a str,
-    ) -> TypeResult<()> {
+    ) -> Result<(), String> {
         match visited.get(s) {
             Some(false) => return Err(format!("cycle detected on {s}!")),
             Some(true) => return Ok(()),
@@ -449,7 +499,7 @@ impl<'methods> TypeChecker<'methods> {
         &'a self,
         visited: &mut HashMap<&'a str, bool>,
         ty: &'a Type,
-    ) -> TypeResult<()> {
+    ) -> Result<(), String> {
         match ty {
             Type::Var(_)
             | Type::IntVar(_)
@@ -498,7 +548,12 @@ fn store_type(
     match types.entry(k) {
         Entry::Occupied(mut entry) => {
             if entry.get().is_some() {
-                return Err(format!("Declared type {} twice", entry.key()));
+                return Err(TypeError::Simple {
+                    description: format!(
+                        "Declared type {} twice",
+                        entry.key()
+                    ),
+                });
             }
             entry.insert(Some(v));
         }
@@ -526,6 +581,7 @@ fn evaluate_record_type(
     types: &mut HashMap<String, Option<Type>>,
     fields: &[ast::RibField],
 ) -> TypeResult<Vec<(String, Type)>> {
+    // We store the spans temporarily to be able to create nice a
     let mut type_fields = Vec::new();
 
     for field in fields {
@@ -537,36 +593,53 @@ fn evaluate_record_type(
                 field_name,
                 ty,
             }) => {
-                field_ident = field_name.ident.to_string();
+                field_ident = field_name;
 
                 // If the type for this is unknown, we insert None,
                 // which signals that the type is mentioned but not
                 // yet declared. The declaration will override it
                 // with Some(...) if we encounter it later.
-                types.entry(ty.ident.to_string()).or_insert(None);
+                types.entry(ty.as_ref().to_string()).or_insert(None);
                 field_type = Type::Name(ty.ident.to_string());
             }
             ast::RibField::RecordField(field) => {
-                field_ident = field.0.ident.to_string();
+                field_ident = &field.0;
                 field_type = Type::Record(evaluate_record_type(
                     types,
                     &field.1.key_values,
                 )?);
             }
             ast::RibField::ListField(field) => {
-                field_ident = field.0.ident.to_string();
+                field_ident = &field.0;
                 field_type = Type::List(Box::new(Type::Name(
                     field.1.inner_type.to_string(),
                 )));
             }
         }
 
-        for (existing_ident, _) in &type_fields {
-            if &field_ident == existing_ident {
-                return Err(format!("The field {field_ident} occurs multiple times in a single record"));
-            }
-        }
         type_fields.push((field_ident, field_type))
     }
-    Ok(type_fields)
+
+    let mut unspanned_type_fields = Vec::new();
+    for field in &type_fields {
+        let same_fields: Vec<_> = type_fields
+            .iter()
+            .filter_map(|(ident, _typ)| {
+                if ident.inner == field.0.inner {
+                    Some(ident.span)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        if same_fields.len() > 1 {
+            return Err(TypeError::DuplicateFields {
+                field_name: field.0.inner.to_string(),
+                fields: same_fields,
+            });
+        }
+        unspanned_type_fields.push((field.0.inner.to_string(), field.1.clone()));
+    }
+
+    Ok(unspanned_type_fields)
 }

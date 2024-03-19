@@ -278,7 +278,7 @@ impl<'a> ast::RibBody {
                 ast::RibField::PrimitiveField(f) => {
                     kvs.push((
                         f.field_name.ident.as_str().into(),
-                        Box::new(f.ty.clone().try_into()?),
+                        Box::new(f.ty.inner.clone().try_into()?),
                     ));
                 }
                 ast::RibField::RecordField(r) => {
@@ -331,7 +331,7 @@ impl<'a> ast::RecordTypeIdentifier {
                 ast::RibField::PrimitiveField(f) => {
                     kvs.push((
                         f.field_name.ident.as_str().into(),
-                        Box::new(f.ty.clone().try_into()?),
+                        Box::new(f.ty.inner.clone().try_into()?),
                     ));
                 }
                 ast::RibField::RecordField(r) => {
@@ -397,7 +397,7 @@ impl ast::FilterMap {
             .into_iter()
             .map(|ty| {
                 declare_argument(
-                    ty.clone().field_name.ident,
+                    ty.clone().field_name.inner.ident,
                     ty,
                     symbols::SymbolKind::Constant,
                     symbols.clone(),
@@ -484,7 +484,7 @@ impl ast::FilterMap {
             .into_iter()
             .map(|ty| {
                 declare_argument(
-                    ty.clone().field_name.ident,
+                    ty.clone().field_name.inner.ident,
                     ty,
                     symbols::SymbolKind::Argument,
                     symbols.clone(),
@@ -558,7 +558,7 @@ impl ast::Define {
             }
             ast::RxTxType::PassThrough(rx_tx_type) => {
                 assert!(check_type_identifier(
-                    rx_tx_type.ty.clone(),
+                    rx_tx_type.ty.inner.clone(),
                     symbols.clone(),
                     &scope
                 )
@@ -566,7 +566,7 @@ impl ast::Define {
             }
             ast::RxTxType::RxOnly(rx_type) => {
                 assert!(check_type_identifier(
-                    rx_type.ty.clone(),
+                    rx_type.ty.inner.clone(),
                     symbols.clone(),
                     &scope
                 )
@@ -630,16 +630,20 @@ impl ast::TermSection {
         let mut argument_type = TypeDef::Unknown;
         // There may be a local scope defined in a `with <ARGUMENT_ID>`
         // in the term header.
-        if let Some(TypeIdentField { field_name, ty }) = self.with_kv.first() {
+        if let Some(TypeIdentField { field_name, ty }) = self.with_kv.first()
+        {
             // Does the supplied type exist in our scope?
-            argument_type =
-                check_type_identifier(ty.clone(), symbols.clone(), &scope)?;
-            trace!("type {}", ty);
+            argument_type = check_type_identifier(
+                ty.inner.clone(),
+                symbols.clone(),
+                &scope,
+            )?;
+            trace!("type {}", ty.inner);
 
             // for now we only accept one `with` argument for a term-
             // section, so the index to the token is always 0.
             local_scope.push(symbols::Symbol::new(
-                field_name.clone().ident,
+                field_name.inner.clone().ident,
                 SymbolKind::Constant,
                 argument_type.clone(),
                 vec![],
@@ -667,10 +671,7 @@ impl ast::TermSection {
                         &local_scope,
                     )?;
                     if expr.ty == TypeDef::Bool
-                        || expr
-                            .ty
-                            .clone()
-                            .test_type_conversion(TypeDef::Bool)
+                        || expr.ty.clone().test_type_conversion(TypeDef::Bool)
                     {
                         expr
                     } else {
@@ -787,9 +788,10 @@ impl ast::TermSection {
                                     &local_scope,
                                 )?;
                                 if expr.ty == TypeDef::Bool
-                                    || expr.ty.clone().test_type_conversion(
-                                        TypeDef::Bool,
-                                    )
+                                    || expr
+                                        .ty
+                                        .clone()
+                                        .test_type_conversion(TypeDef::Bool)
                                 {
                                     logic_args.push(expr);
                                 } else {
@@ -881,13 +883,17 @@ impl ast::ActionSection {
         let mut local_scope: Vec<Symbol> = vec![];
         // There may be a local scope defined in a `with <ARGUMENT_ID>`
         // in the term header.
-        if let Some(TypeIdentField { field_name, ty }) = self.with_kv.first() {
+        if let Some(TypeIdentField { field_name, ty }) = self.with_kv.first()
+        {
             // Does the supplied type exist in our scope?
-            action_section_type =
-                check_type_identifier(ty.clone(), symbols.clone(), &scope)?;
+            action_section_type = check_type_identifier(
+                ty.inner.clone(),
+                symbols.clone(),
+                &scope,
+            )?;
 
             local_scope.push(symbols::Symbol::new(
-                field_name.clone().ident,
+                field_name.inner.clone().ident,
                 SymbolKind::Argument,
                 action_section_type.clone(),
                 vec![],
@@ -909,7 +915,7 @@ impl ast::ActionSection {
             action_exprs.push(symbols::Symbol::new(
                 kv.field_name.ident.clone(),
                 symbols::SymbolKind::Argument,
-                TypeDef::try_from(kv.ty.clone())?,
+                TypeDef::try_from(kv.ty.inner.clone())?,
                 vec![],
                 Token::ActionArgument(action_section_index, i),
             ))
@@ -1431,10 +1437,7 @@ impl ast::ComputeExpr {
             self.get_receiver_ident()?
         };
 
-        trace!(
-            "finished eval compute expression {:?}",
-            ar_symbol.name
-        );
+        trace!("finished eval compute expression {:?}", ar_symbol.name);
         Ok(ar_symbol)
     }
 }
@@ -1562,9 +1565,8 @@ impl ast::AccessReceiver {
             // is it a local-scope-level argument?
             trace!("checking local scope for {}", search_ar.ident);
             trace!("local scope {:#?}", local_scope);
-            if let Some(arg) = local_scope
-                .iter()
-                .find(move |s| s.name == search_ar.ident)
+            if let Some(arg) =
+                local_scope.iter().find(move |s| s.name == search_ar.ident)
             {
                 trace!("local variable {} found", search_ar.ident);
                 return Ok(symbols::Symbol::new(
@@ -1634,9 +1636,7 @@ impl ast::AccessReceiver {
 }
 
 impl ast::LiteralExpr {
-    fn eval(
-        &self
-    ) -> Result<symbols::Symbol, CompileError> {
+    fn eval(&self) -> Result<symbols::Symbol, CompileError> {
         trace!("literal value {:?}", self);
         Ok(symbols::Symbol::new_with_value(
             "lit".into(),
@@ -1653,9 +1653,8 @@ impl ast::LiteralAccessExpr {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: Scope,
-        local_scope: &[Symbol]
+        local_scope: &[Symbol],
     ) -> Result<symbols::Symbol, CompileError> {
-
         let mut ar_symbol = self.literal.eval()?;
         let mut ty = ar_symbol.ty.clone();
 
@@ -1668,7 +1667,7 @@ impl ast::LiteralAccessExpr {
                     trace!("MC symbol (s) {:#?}", s);
                     trace!("method call {:#?} on type {}", method_call, ty);
                     trace!("local scope {:?}", local_scope);
-                    
+
                     let arg_s = method_call.eval(
                         // At this stage we don't know really whether the
                         // method call will be mutating or not, but we're
@@ -1715,7 +1714,9 @@ impl ast::ValueExpr {
         local_scope: &[Symbol],
     ) -> Result<symbols::Symbol, CompileError> {
         match self {
-            ast::ValueExpr::LiteralAccessExpr(lit) => lit.eval(symbols, scope, local_scope),
+            ast::ValueExpr::LiteralAccessExpr(lit) => {
+                lit.eval(symbols, scope, local_scope)
+            }
             // an expression ending in a a method call (e.g. `foo.bar()`).
             // Note that the evaluation of the method call will check for
             // the existence of the method.
@@ -1796,8 +1797,7 @@ impl ast::ValueExpr {
                         return Err(CompileError::from(format!(
                             "The field \
                         name '{}' cannot be found in type '{}'",
-                            field_s.name,
-                            type_id.ident
+                            field_s.name, type_id.ident
                         )));
                     }
                 }
@@ -2098,9 +2098,7 @@ impl ast::BooleanExpr {
                 Ok(symbols::Symbol::new_with_value(
                     "boolean_constant".into(),
                     symbols::SymbolKind::Constant,
-                    TypeValue::Builtin(BuiltinTypeValue::Bool(
-                        bool_lit.0,
-                    )),
+                    TypeValue::Builtin(BuiltinTypeValue::Bool(bool_lit.0)),
                     vec![],
                     Token::Constant(None),
                 ))
@@ -2132,7 +2130,9 @@ impl ast::BooleanExpr {
             // (a method/field access on a literal) may return a boolean.
             ast::BooleanExpr::LiteralAccessExpr(lit_access_expr) => {
                 let s = lit_access_expr.eval(
-                    symbols, scope.clone(), local_scope
+                    symbols,
+                    scope.clone(),
+                    local_scope,
                 )?;
                 Ok(s)
             }
@@ -2390,9 +2390,7 @@ fn check_type_identifier(
 
     // is it in the global table?
     let global_ty = symbols.get(&Scope::Global).and_then(|gt| {
-        gt.get_variable(&ty.ident)
-            .ok()
-            .map(|s| (&s.ty, s.kind))
+        gt.get_variable(&ty.ident).ok().map(|s| (&s.ty, s.kind))
     });
     if let Some(ty) = global_ty {
         if ty.1 == symbols::SymbolKind::AnonymousType
@@ -2408,9 +2406,7 @@ fn check_type_identifier(
             let filter_map_ty = symbols
                 .get(scope)
                 .and_then(|gt| {
-                    gt.get_variable(&ty.ident)
-                        .ok()
-                        .map(|s| (&s.ty, s.kind))
+                    gt.get_variable(&ty.ident).ok().map(|s| (&s.ty, s.kind))
                 })
                 .ok_or(format!(
                     "No type named '{}' found in filter-map '{}'",
@@ -2596,7 +2592,8 @@ fn _declare_variable(
     match &scope {
         Scope::FilterMap(filter_map) | Scope::Filter(filter_map) => {
             // Does the supplied type exist in our scope?
-            let ty = check_type_identifier(type_ident.ty, _symbols, scope)?;
+            let ty =
+                check_type_identifier(type_ident.ty.inner, _symbols, scope)?;
 
             // Apparently, we have a type.  Let's add it to the symbol table.
             let mut _symbols = symbols.borrow_mut();
@@ -2606,7 +2603,7 @@ fn _declare_variable(
             ))?;
 
             filter_map.add_variable(
-                type_ident.field_name.ident,
+                type_ident.field_name.inner.ident,
                 Some(name),
                 kind,
                 ty,
@@ -2617,7 +2614,7 @@ fn _declare_variable(
         Scope::Global => Err(format!(
             "Can't create a variable in the global scope (NEVER). \
                 Variable '{}'",
-            type_ident.field_name
+            type_ident.field_name.inner
         )
         .into()),
     }
@@ -2639,7 +2636,8 @@ fn declare_argument(
     match &scope {
         Scope::FilterMap(filter_map) | Scope::Filter(filter_map) => {
             // Does the supplied type exist in our scope?
-            let ty = check_type_identifier(type_ident.ty, _symbols, scope)?;
+            let ty =
+                check_type_identifier(type_ident.ty.inner, _symbols, scope)?;
 
             // Apparently, we have a type.  Let's add it to the symbol table.
             let mut _symbols = symbols.borrow_mut();
@@ -2649,7 +2647,7 @@ fn declare_argument(
             ))?;
 
             filter_map.add_argument(
-                type_ident.field_name.ident,
+                type_ident.field_name.inner.ident,
                 Some(name),
                 kind,
                 ty,
@@ -2660,7 +2658,7 @@ fn declare_argument(
         Scope::Global => Err(format!(
             "Can't create a variable in the global scope (NEVER). \
                 Variable '{}'",
-            type_ident.field_name
+            type_ident.field_name.inner
         )
         .into()),
     }
@@ -2700,8 +2698,7 @@ fn declare_variable_from_symbol(
                                 .map_err(|e| {
                                     format!(
                                         "{} in type '{}'",
-                                        e,
-                                        arg_symbol.name
+                                        e, arg_symbol.name
                                     )
                                 })?;
                             trace!("fields {:?}", fields);
