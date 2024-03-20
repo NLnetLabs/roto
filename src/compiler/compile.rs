@@ -44,6 +44,7 @@ use crate::{
         SymbolKind, SymbolTable,
     },
     traits::Token,
+    typechecker::{typecheck, TypeResult},
     types::{
         datasources::{DataSource, Table},
         typedef::{RecordTypeDef, TypeDef},
@@ -669,6 +670,10 @@ impl<'a> Compiler {
         Ok(())
     }
 
+    pub fn typecheck(&mut self) -> TypeResult<()> {
+        typecheck(&self.ast)
+    }
+
     pub fn eval_ast(&mut self) -> Result<(), CompileError> {
         self.ast.eval(self.symbols.clone())?;
         Ok(())
@@ -792,6 +797,7 @@ impl<'a> Compiler {
     ) -> Result<Rotolo, CompileError> {
         self.parse_source_code(source_code)
             .map_err(|err| format!("{:?}", err))?;
+        self.typecheck()?;
         self.eval_ast()
             .map_err(|err| format!("Eval error: {err}"))?;
         self.inject_compile_time_arguments()
@@ -1046,8 +1052,7 @@ fn compile_filter_map(
     let mut data_sources = vec![];
     for ds in state.used_data_sources {
         let name = &ds.1.name;
-        let resolved_ds = if let Ok(ds) = global_table.get_data_source(name)
-        {
+        let resolved_ds = if let Ok(ds) = global_table.get_data_source(name) {
             ds
         } else {
             return Err(CompileError::from(format!(

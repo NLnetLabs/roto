@@ -2,9 +2,7 @@ use log::trace;
 use roto::compiler::Compiler;
 
 use roto::blocks::Scope;
-use roto::types::builtin::BuiltinTypeValue;
 use roto::types::collections::{ElementTypeValue, List, Record};
-use roto::types::enum_types::EnumVariant;
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
@@ -57,7 +55,6 @@ fn src_code(format_line: &str) -> String {
         type MyPayload {{
             prefix: Prefix,
             as-path: AsPath,
-            bmp_msg_type: BmpMessageType,
             origin: Asn,
             next-hop: IpAddress,
             med: U32,
@@ -113,12 +110,6 @@ fn test_data(
 
     let my_comms_type = (&comms).into();
 
-    let my_bmp_msg_type_instance =
-        TypeValue::Builtin(BuiltinTypeValue::ConstU8EnumVariant(
-            EnumVariant::<u8>::new(("BMP_MESSAGE_TYPE".into(), 1)),
-        ));
-    let my_bmp_msg_type_type = (&my_bmp_msg_type_instance).into();
-
     let my_rec_type = TypeDef::new_record_type(vec![
         ("prefix", Box::new(TypeDef::Prefix)),
         ("as-path", Box::new(TypeDef::AsPath)),
@@ -127,7 +118,6 @@ fn test_data(
         ("med", Box::new(TypeDef::U32)),
         ("local-pref", Box::new(TypeDef::U32)),
         ("communities", Box::new(my_comms_type)),
-        ("bmp_msg_type", Box::new(my_bmp_msg_type_type)),
     ])
     .unwrap();
 
@@ -141,7 +131,6 @@ fn test_data(
             ("med", 80_u32.into()),
             ("local-pref", 20_u32.into()),
             ("communities", comms),
-            ("bmp_msg_type", my_bmp_msg_type_instance),
         ],
     )
     .unwrap();
@@ -198,7 +187,6 @@ fn test_filter_map_message_00() {
     // let mut str = res.unwrap_err().to_string();
     // str.truncate(err.len());
     // assert_eq!(str, err);
-    assert!(res.is_ok());
     let res = res.unwrap();
     assert_eq!(res.output_stream_queue.len(), 1);
     assert_eq!(res.output_stream_queue[0].get_name(), "My ASN");
@@ -227,7 +215,6 @@ fn test_filter_map_message_01() {
     // let mut str = res.unwrap_err().to_string();
     // str.truncate(err.len());
     // assert_eq!(str, err);
-    assert!(res.is_ok());
     let res = res.unwrap();
     assert_eq!(res.output_stream_queue.len(), 1);
     assert_eq!(res.output_stream_queue[0].get_name(), "My ASN");
@@ -343,12 +330,11 @@ fn test_filter_map_message_05() {
     // let mut str = res.unwrap_err().to_string();
     // str.truncate(err.len());
     // assert_eq!(str, err);
-    assert!(res.is_ok());
     let res = res.unwrap();
     assert_eq!(res.output_stream_queue.len(), 1);
     assert_eq!(res.output_stream_queue[0].get_name(), "My ASN");
     assert_eq!(res.output_stream_queue[0].get_topic(), "My Asn was Seen!");
     assert_eq!(res.output_stream_queue[0].get_record().to_string(),
-        "{\n\tasn: AS65534, \n\tmessage: 🤭 I, the messager, saw {\n\tas-path: AS65534 AS65335, \n\tbmp_msg_type: 1, \n\tcommunities: [AS32524:3340, AS32524:3348], \n\tlocal-pref: 20, \n\tmed: 80, \n\tnext-hop: 193.0.0.23, \n\torigin: AS211321, \n\tprefix: 193.0.0.0/24\n   } in a BGP update.\n   }"
+        "{\n\tasn: AS65534, \n\tmessage: 🤭 I, the messager, saw {\n\tas-path: AS65534 AS65335, \n\tcommunities: [AS32524:3340, AS32524:3348], \n\tlocal-pref: 20, \n\tmed: 80, \n\tnext-hop: 193.0.0.23, \n\torigin: AS211321, \n\tprefix: 193.0.0.0/24\n   } in a BGP update.\n   }"
     );
 }

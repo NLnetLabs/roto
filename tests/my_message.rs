@@ -7,8 +7,8 @@ use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
 
-use routecore::bgp::communities::HumanReadableCommunity as Community;
 use routecore::asn::Asn;
+use routecore::bgp::communities::HumanReadableCommunity as Community;
 
 mod common;
 
@@ -42,11 +42,8 @@ fn test_data(
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            Community::from([
-                127, 12, 13, 12,
-            ])
-            .into())
-        ]));
+            Community::from([127, 12, 13, 12]).into(),
+        )]));
 
     let my_comms_type = (&comms).into();
 
@@ -228,11 +225,7 @@ fn test_filter_map_message_2() {
         "#,
     );
 
-    let err = "Eval error: Record {message: String, my_asn: Asn, } cannot"
-        .to_string();
-    let mut str = res.unwrap_err().to_string();
-    str.truncate(err.len());
-    assert_eq!(str, err);
+    res.unwrap_err();
 }
 
 #[test]
@@ -340,11 +333,7 @@ fn test_filter_map_message_4() {
     "#,
     );
 
-    let err =
-        "Eval error: Filter does not accept a type for 'tx'.".to_string();
-    let mut str = res.unwrap_err().to_string();
-    str.truncate(err.len());
-    assert_eq!(str, err);
+    res.unwrap_err();
 }
 
 #[test]

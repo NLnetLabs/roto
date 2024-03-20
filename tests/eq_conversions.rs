@@ -148,11 +148,7 @@ fn test_eq_conversion_2() {
     let src_line = src_code(r#""b" in a;"#, "reject");
     let test_run = test_data(FilterMap("in-filter-map".into()), &src_line);
 
-    // let err = "Eval error: IntegerLiteral cannot be converted into String".to_string();
-    // let str = test_run.unwrap_err().to_string();
-    // assert_eq!(str, err);
-    let VmResult { accept_reject, .. } = test_run.unwrap();
-    assert_eq!(accept_reject, AcceptReject::Accept);
+    test_run.unwrap_err();
 }
 
 #[test]

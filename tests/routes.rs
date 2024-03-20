@@ -193,7 +193,7 @@ fn test_routes_2() {
             // A typed anonymous record
             action send_msg {
                 mqtt.send(
-                    Message {
+                    {
                         prefix: route.prefix,
                         peer_ip: route.peer_ip
                     }
