@@ -70,7 +70,7 @@ pub struct TypedRecordValueExpr {
 /// The value of a typed record
 #[derive(Clone, Debug)]
 pub struct RecordTypeAssignment {
-    pub ident: TypeIdentifier,
+    pub ident: Spanned<TypeIdentifier>,
     pub record_type: RecordTypeIdentifier,
 }
 
@@ -164,8 +164,8 @@ pub struct TermScope {
 /// optional VariantMatchExpr.
 #[derive(Clone, Debug)]
 pub struct TermPatternMatchArm {
-    pub variant_id: Identifier,
-    pub data_field: Option<Identifier>,
+    pub variant_id: Spanned<Identifier>,
+    pub data_field: Option<Spanned<Identifier>>,
 }
 
 //------------ Action -------------------------------------------------------
@@ -259,7 +259,7 @@ pub struct PatternMatchActionExpr {
 /// treated differently at eval time.
 #[derive(Clone, Debug)]
 pub struct ActionCallExpr {
-    pub action_id: Identifier,
+    pub action_id: Spanned<Identifier>,
     pub args: Option<ArgExprList>,
 }
 
@@ -267,14 +267,14 @@ pub struct ActionCallExpr {
 /// treatment by the evaluator.
 #[derive(Clone, Debug)]
 pub struct TermCallExpr {
-    pub term_id: Identifier,
+    pub term_id: Spanned<Identifier>,
     pub args: Option<ArgExprList>,
 }
 
 #[derive(Clone, Debug)]
 pub struct PatternMatchActionArm {
-    pub variant_id: Identifier,
-    pub data_field: Option<Identifier>,
+    pub variant_id: Spanned<Identifier>,
+    pub data_field: Option<Spanned<Identifier>>,
     pub guard: Option<TermCallExpr>,
     pub actions: Vec<(Option<ActionCallExpr>, Option<AcceptReject>)>,
 }
@@ -300,7 +300,7 @@ pub struct TermMatchExpr {
 #[derive(Clone, Debug)]
 pub struct Rib {
     pub ident: Identifier,
-    pub contain_ty: TypeIdentifier,
+    pub contain_ty: Spanned<TypeIdentifier>,
     pub body: RibBody,
 }
 
@@ -319,14 +319,14 @@ pub enum RibField {
 #[derive(Clone, Debug)]
 pub struct Table {
     pub ident: Identifier,
-    pub contain_ty: TypeIdentifier,
+    pub contain_ty: Spanned<TypeIdentifier>,
     pub body: RibBody,
 }
 
 #[derive(Clone, Debug)]
 pub struct OutputStream {
     pub ident: Identifier,
-    pub contain_ty: TypeIdentifier,
+    pub contain_ty: Spanned<TypeIdentifier>,
     pub body: RibBody,
 }
 
@@ -741,14 +741,14 @@ impl ComputeExpr {
 #[derive(Clone, Debug)]
 pub enum AccessReceiver {
     /// The identifier of the data structure.
-    Ident(Identifier),
+    Ident(Spanned<Identifier>),
     /// or it can only be in the Global Scope (for global methods), it doesn't
     /// have a string as identifier then.
     GlobalScope,
 }
 
 impl AccessReceiver {
-    pub fn get_ident(&self) -> Option<&Identifier> {
+    pub fn get_ident(&self) -> Option<&Spanned<Identifier>> {
         if let Self::Ident(ident) = &self {
             Some(ident)
         } else {
@@ -777,7 +777,7 @@ impl std::fmt::Display for AccessReceiver {
 pub struct FieldAccessExpr {
     // The chain of fields that are being accessed. The last field is the
     // name of the field that is accessed.
-    pub field_names: Vec<Identifier>,
+    pub field_names: Vec<Spanned<Identifier>>,
 }
 
 /// The method that is being called on the data structure (directly or on one
@@ -785,7 +785,7 @@ pub struct FieldAccessExpr {
 #[derive(Clone, Debug)]
 pub struct MethodComputeExpr {
     /// The name of the method.
-    pub ident: Identifier,
+    pub ident: Spanned<Identifier>,
     /// The list with arguments
     pub args: ArgExprList,
 }
@@ -963,7 +963,7 @@ pub enum MatchOperator {
     Match,
     // a `match some_value with` match pattern for enums, the block
     // enumerates the variants
-    MatchValueWith(Identifier),
+    MatchValueWith(Spanned<Identifier>),
     // Query quantifiers, where the following block contains expressions that
     // may yield multiple instances of type values
     Some,
@@ -972,7 +972,7 @@ pub enum MatchOperator {
 }
 
 impl MatchOperator {
-    pub(crate) fn get_ident(&self) -> Result<Identifier, CompileError> {
+    pub(crate) fn get_ident(&self) -> Result<Spanned<Identifier>, CompileError> {
         if let MatchOperator::MatchValueWith(id) = self {
             Ok(id.clone())
         } else {

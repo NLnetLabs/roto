@@ -14,6 +14,7 @@ use routecore::addr::Prefix;
 use routecore::bgp::communities::HumanReadableCommunity as Community;
 
 use crate::compiler::compile::CompileError;
+use crate::parser::span::Spanned;
 use crate::traits::Token;
 use crate::typedefconversion;
 use crate::types::builtin::BgpUpdateMessage;
@@ -338,7 +339,7 @@ impl TypeDef {
     /// corresponding fields, to serve as the token for each field.
     pub(crate) fn has_fields_chain(
         &self,
-        check_fields: &[crate::ast::Identifier],
+        check_fields: &[Spanned<crate::ast::Identifier>],
     ) -> Result<(TypeDef, Token, Option<TypeValue>), CompileError> {
         // Data sources (rib and table) are special cases, because they have
         // their methods on the container (the datasource) and not on the

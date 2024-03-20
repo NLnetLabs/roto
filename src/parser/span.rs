@@ -1,4 +1,4 @@
-use std::ops::{Deref, DerefMut, Range};
+use std::{borrow::Borrow, fmt::Display, ops::{Deref, DerefMut, Range}};
 
 use miette::SourceSpan;
 
@@ -41,6 +41,24 @@ impl From<Range<usize>> for Span {
 impl<T: AsRef<U>, U: ?Sized> AsRef<U> for Spanned<T> {
     fn as_ref(&self) -> &U {
         self.inner.as_ref()
+    }
+}
+
+impl<T: Borrow<str>> Borrow<str> for Spanned<T> {
+    fn borrow(&self) -> &str {
+        self.inner.borrow()
+    }
+}
+
+impl<T: Display> Display for Spanned<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.inner.fmt(f)
+    }
+}
+
+impl<T> From<Spanned<T>> for SourceSpan {
+    fn from(value: Spanned<T>) -> Self {
+        value.span.into()
     }
 }
 

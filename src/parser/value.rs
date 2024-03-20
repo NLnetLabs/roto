@@ -62,11 +62,11 @@ impl<'source> Parser<'source> {
             if self.peek_is(Token::RoundLeft) {
                 let args = self.arg_expr_list()?;
                 return Ok(ValueExpr::RootMethodCallExpr(
-                    MethodComputeExpr { ident: id.inner, args },
+                    MethodComputeExpr { ident: id, args },
                 ));
             }
 
-            let receiver = AccessReceiver::Ident(id.inner);
+            let receiver = AccessReceiver::Ident(id);
             let access_expr = self.access_expr()?;
 
             return Ok(ValueExpr::ComputeExpr(ComputeExpr {
@@ -104,7 +104,7 @@ impl<'source> Parser<'source> {
         let mut access_expr = Vec::new();
 
         while self.next_is(Token::Period) {
-            let ident = self.identifier()?.inner;
+            let ident = self.identifier()?;
             if self.peek_is(Token::RoundLeft) {
                 let args = self.arg_expr_list()?;
                 access_expr.push(AccessExpr::MethodComputeExpr(

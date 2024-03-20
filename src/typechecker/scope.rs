@@ -3,6 +3,8 @@ use std::{
     collections::{hash_map::Entry, HashMap},
 };
 
+use crate::{ast::Identifier, parser::span::Spanned};
+
 use super::{Type, TypeError, TypeResult};
 
 /// A type checking scope
@@ -25,14 +27,16 @@ impl<'a> Scope<'a> {
         }
     }
 
-    pub fn get_var(&self, k: impl AsRef<str>) -> TypeResult<&Type> {
+    pub fn get_var(&self, k: &Spanned<Identifier>) -> TypeResult<&Type> {
         self.variables
             .get(k.as_ref())
-            .ok_or_else(|| TypeError::Simple {
+            .ok_or_else(|| TypeError::Custom {
                 description: format!(
-                    "The variable {} is undefined",
+                    "cannot find variable `{}` in this scope",
                     k.as_ref()
                 ),
+                label: "not found in this scope".into(),
+                span: k.span,
             })
             .or_else(|e| self.parent.ok_or(e).and_then(|s| s.get_var(k)))
     }

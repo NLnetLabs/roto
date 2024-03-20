@@ -10,6 +10,7 @@ use crate::ast::TypeIdentField;
 use crate::blocks::Scope;
 use crate::compiler::compile::CompileError;
 use crate::first_into_compile_err;
+use crate::parser::span::Spanned;
 use crate::symbols::GlobalSymbolTable;
 use crate::symbols::MatchActionType;
 use crate::symbols::Symbol;
@@ -721,7 +722,7 @@ impl ast::TermSection {
 
     fn eval_as_match_expression(
         &self,
-        enum_ident: &ast::Identifier,
+        enum_ident: &Spanned<ast::Identifier>,
         term_section_index: usize,
         symbols: symbols::GlobalSymbolTable,
         scope: Scope,
@@ -762,10 +763,13 @@ impl ast::TermSection {
                         e_num.get_props_for_variant(&variant.variant_id)?;
 
                     let local_scope = vec![symbols::Symbol::new(
-                        variant.data_field.clone().ok_or(CompileError::from(
-                            format!("Variant: '{}' has no data field. This is currently not allowed.", 
-                            variant.variant_id)
-                        ))?.ident,
+                        match &variant.data_field {
+                            Some(x) => x.inner.ident.clone(),
+                            None => return Err(CompileError::from(
+                                format!("Variant: '{}' has no data field. This is currently not allowed.", 
+                                variant.variant_id)
+                            ))
+                        },
                         symbols::SymbolKind::VariableAssignment,
                         variant_type_def.clone(),
                         vec![],
@@ -839,10 +843,13 @@ impl ast::TermSection {
                     )];
 
                     enum_s.add_arg(symbols::Symbol::new(
-                        variant.data_field.clone().ok_or(CompileError::from(
-                            format!("Variant: '{}' has no data field. This is currently not allowed.", 
-                            variant.variant_id)
-                        ))?.ident,
+                        match &variant.data_field {
+                            Some(x) => x.inner.ident.clone(),
+                            None => return Err(CompileError::from(
+                                format!("Variant: '{}' has no data field. This is currently not allowed.", 
+                                variant.variant_id)
+                            ))
+                        },
                         symbols::SymbolKind::EnumVariant,
                         variant_type_def,
                         anon_term,
@@ -1171,10 +1178,13 @@ impl ast::ApplyScope {
                         // create a local scope with the data field variable
                         // for this variant.
                         let local_scope = vec![symbols::Symbol::new(
-                            variant.data_field.clone().ok_or(CompileError::from(
-                                format!("Variant: '{}' has no data field. This is currently not allowed.", 
-                                variant.variant_id)
-                            ))?.ident,
+                            match &variant.data_field {
+                                Some(x) => x.inner.ident.clone(),
+                                None => return Err(CompileError::from(
+                                    format!("Variant: '{}' has no data field. This is currently not allowed.", 
+                                    variant.variant_id)
+                                ))
+                            },
                             symbols::SymbolKind::VariableAssignment,
                             variant_type_def.clone(),
                             vec![],
@@ -1239,7 +1249,7 @@ impl ast::ApplyScope {
                                 // expression (indicating an early return).
                                 (None, Some(accept_reject)) => {
                                     let s = symbols::Symbol::new(
-                                        variant.variant_id.clone().ident,
+                                        variant.variant_id.inner.clone().ident,
                                         symbols::SymbolKind::ActionCall,
                                         TypeDef::AcceptReject(*accept_reject),
                                         vec![],
@@ -1258,10 +1268,13 @@ impl ast::ApplyScope {
                         );
 
                         enum_s.add_arg(symbols::Symbol::new(
-                            variant.data_field.clone().ok_or(CompileError::from(
-                                format!("Variant: '{}' has no data field. This is currently not allowed.", 
-                                variant.variant_id)
-                            ))?.ident,
+                            match &variant.data_field {
+                                Some(x) => x.inner.ident.clone(),
+                                None => return Err(CompileError::from(
+                                    format!("Variant: '{}' has no data field. This is currently not allowed.", 
+                                    variant.variant_id)
+                                ))
+                            },
                             symbols::SymbolKind::EnumVariant,
                             variant_type_def,
                             args_vec,
@@ -1476,7 +1489,7 @@ impl ast::MethodComputeExpr {
 
         if parsed_args.is_empty() && props.arg_types.is_empty() {
             return Ok(symbols::Symbol::new(
-                self.ident.clone().ident,
+                self.ident.ident.clone(),
                 method_kind,
                 props.return_type,
                 vec![],
@@ -1490,7 +1503,7 @@ impl ast::MethodComputeExpr {
             return Err(format!(
                 "Method '{}' on type {:?} expects {} arguments, but {} were \
                 provided.",
-                self.ident,
+                self.ident.inner,
                 method_call_type,
                 props.arg_types.len(),
                 parsed_args.len()
@@ -1519,7 +1532,7 @@ impl ast::MethodComputeExpr {
         trace!("converted args {:?}", args);
 
         Ok(symbols::Symbol::new(
-            self.ident.clone().ident,
+            self.ident.ident.clone(),
             method_kind,
             props.return_type,
             args,
@@ -1548,7 +1561,7 @@ impl ast::AccessReceiver {
         let _symbols = symbols.clone();
         if let Some(search_ar) = self.get_ident() {
             // Is it the name of a builtin type?
-            if let Ok(prim_ty) = TypeDef::try_from(search_ar.clone()) {
+            if let Ok(prim_ty) = TypeDef::try_from(search_ar.inner.clone()) {
                 if prim_ty.is_builtin() {
                     {
                         return Ok(symbols::Symbol::new(
@@ -1725,9 +1738,9 @@ impl ast::ValueExpr {
                 compute_expr.eval(None, symbols, scope, local_scope)
             }
             ast::ValueExpr::RootMethodCallExpr(builtin_call_expr) => {
-                let name: ShortString = builtin_call_expr.ident.clone().ident;
+                let name: ShortString = builtin_call_expr.ident.ident.clone();
                 let prim_ty =
-                    TypeDef::try_from(builtin_call_expr.ident.clone())?;
+                    TypeDef::try_from(builtin_call_expr.ident.clone().inner)?;
 
                 if prim_ty.is_builtin() {
                     builtin_call_expr.eval(
@@ -2456,7 +2469,7 @@ fn check_type_identifier(
 /// present in the symbol, this should only be the case with a Constant,
 /// containing a literal value.
 fn get_props_for_scoped_variable(
-    fields: &[ast::Identifier],
+    fields: &[Spanned<ast::Identifier>],
     symbols: GlobalSymbolTable,
     scope: Scope,
 ) -> Result<(SymbolKind, TypeDef, Token, Option<TypeValue>), CompileError> {
@@ -2511,7 +2524,7 @@ fn get_props_for_scoped_variable(
                                 trace!(
                                 "{} on field '{}' for variable '{}' found in \
                                 filter-map '{}'",
-                                err, fields[1], fields[0].ident, filter_map
+                                err, fields[1].inner, fields[0].ident, filter_map
                             );
                                 err
                             })?;

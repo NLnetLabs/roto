@@ -105,18 +105,18 @@ impl TypeChecker<'_> {
                     .get(&type_id.ident.to_string())
                 {
                     Some(Type::NamedRecord(n, t)) => (n.clone(), t.clone()),
-                    Some(_) => return Err(TypeError::Custom {
-                        description: format!(
-                            "Expected a named record type, but found `{}`",
-                            type_id.inner,
+                    Some(_) => {
+                        return Err(TypeError::Custom {
+                            description: format!(
+                            "Expected a named record type, but found `{type_id}`",
                         ),
-                        label: "not a named record type".into(),
-                        span: type_id.span,
-                    }),
+                            label: "not a named record type".into(),
+                            span: type_id.span,
+                        })
+                    }
                     None => {
                         return Err(TypeError::UndeclaredType {
-                            type_name: type_id.to_string(),
-                            span: type_id.span,
+                            type_name: type_id.clone(),
                         })
                     }
                 };
@@ -130,7 +130,7 @@ impl TypeChecker<'_> {
                         .position(|(n, _)| n == &name.inner)
                     else {
                         return Err(TypeError::Custom {
-                            description: format!("Record {record_name} does not have a field '{}'.", name.inner),
+                            description: format!("Record {record_name} does not have a field '{name}'."),
                             label: format!("'{record_name}' does not have this field"),
                             span: name.span
                         });
@@ -180,18 +180,22 @@ impl TypeChecker<'_> {
                     let Some(arrow) =
                         self.find_method(self.methods, &last, ident.as_ref())
                     else {
-                        return Err(TypeError::Simple {
+                        return Err(TypeError::Custom {
                             description: format!(
-                                "Method '{ident}' not found on {last:?}"
+                                "method `{ident}` not found on `{last}`",
                             ),
+                            label: format!("method not found for `{last}`"),
+                            span: ident.span,
                         });
                     };
 
                     if args.len() != arrow.args.len() {
-                        return Err(TypeError::Simple {
-                            description: format!(
-                                "Number of arguments don't match"
-                            ),
+                        return Err(TypeError::NumberOfArgumentDontMatch {
+                            call_type: "method",
+                            method_name: ident.to_string(),
+                            takes: arrow.args.len(),
+                            given: args.len(),
+                            span: ident.span,
                         });
                     }
 
@@ -220,10 +224,12 @@ impl TypeChecker<'_> {
                                 continue;
                             };
                         }
-                        return Err(TypeError::Simple {
+                        return Err(TypeError::Custom {
                             description: format!(
-                                "No field '{field}' on {last:?}"
+                                "no field `{field}` on type `{last}`",
                             ),
+                            label: "unknown field".into(),
+                            span: field.span,
                         });
                     }
                 }
@@ -296,18 +302,22 @@ impl TypeChecker<'_> {
                 if let Some(ty) = self.get_type(&x) {
                     let mut access_expr = access_expr.clone();
                     if access_expr.is_empty() {
-                        return Err(TypeError::Simple {
+                        return Err(TypeError::Custom {
                             description:
-                                "Type should be followed by a method".into(),
+                                "a type cannot appear on its own and should be followed by a method".into(),
+                            label: "must be followed by a method".into(),
+                            span: x.span,
                         });
                     }
-                    let ast::AccessExpr::MethodComputeExpr(m) =
-                        access_expr.remove(0)
-                    else {
-                        return Err(TypeError::Simple {
-                            description: "First access on a type should be a method call"
-                                .into(),
-                        });
+                    let m = match access_expr.remove(0) {
+                        ast::AccessExpr::MethodComputeExpr(m) => m,
+                        ast::AccessExpr::FieldAccessExpr(f) => {
+                            return Err(TypeError::Custom {
+                                description: format!("`{x}` is a type and does not have any fields"),
+                                label: "no field access possible on a type".into(),
+                                span: f.field_names[0].span,
+                            })
+                        },
                     };
                     let receiver_type =
                         self.static_method_call(scope, ty.clone(), m)?;
@@ -334,17 +344,22 @@ impl TypeChecker<'_> {
         let Some(arrow) =
             self.find_method(self.static_methods, &ty, ident.as_ref())
         else {
-            return Err(TypeError::Simple {
+            return Err(TypeError::Custom {
                 description: format!(
-                    "No static method '{}' found for '{:?}'",
-                    &ident, ty
+                    "no static method `{ident}` found for `{ty}`",
                 ),
+                label: "static method not found for `{ty}`".into(),
+                span: ident.span,
             });
         };
 
         if args.len() != arrow.args.len() {
-            return Err(TypeError::Simple {
-                description: format!("Number of arguments don't match"),
+            return Err(TypeError::NumberOfArgumentDontMatch {
+                call_type: "static method",
+                method_name: ident.to_string(),
+                takes: args.len(),
+                given: arrow.args.len(),
+                span: ident.span,
             });
         }
 

@@ -22,7 +22,7 @@ impl<'source> Parser<'source> {
         self.take(Token::Rib)?;
         let ident = self.identifier()?.inner;
         self.take(Token::Contains)?;
-        let contain_ty = self.type_identifier()?.inner;
+        let contain_ty = self.type_identifier()?;
         let body = self.rib_body()?;
 
         Ok(Rib {
@@ -43,7 +43,7 @@ impl<'source> Parser<'source> {
         self.take(Token::Table)?;
         let ident = self.identifier()?.inner;
         self.take(Token::Contains)?;
-        let contain_ty = self.type_identifier()?.inner;
+        let contain_ty = self.type_identifier()?;
         let body = self.rib_body()?;
 
         Ok(Table {
@@ -64,7 +64,7 @@ impl<'source> Parser<'source> {
         self.take(Token::OutputStream)?;
         let ident = self.identifier()?.inner;
         self.take(Token::Contains)?;
-        let contain_ty = self.type_identifier()?.inner;
+        let contain_ty = self.type_identifier()?;
         let body = self.rib_body()?;
 
         Ok(OutputStream {
@@ -83,7 +83,7 @@ impl<'source> Parser<'source> {
         &mut self,
     ) -> ParseResult<RecordTypeAssignment> {
         self.take(Token::Type)?;
-        let ident = self.type_identifier()?.inner;
+        let ident = self.type_identifier()?;
         let body = self.rib_body()?;
         let record_type = RecordTypeIdentifier {
             key_values: body.key_values,

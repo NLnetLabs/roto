@@ -15,12 +15,15 @@
 //! See also <https://en.wikipedia.org/wiki/Hindley%E2%80%93Milner_type_system>.
 
 use crate::{
-    ast::{self, TypeIdentField},
-    parser::span::{Span, Spanned},
+    ast::{self, Identifier, ShortString, TypeIdentField, TypeIdentifier},
+    parser::span::{Span, Spanned, WithSpan},
 };
 use miette::Diagnostic;
 use scope::Scope;
-use std::{collections::{hash_map::Entry, HashMap}, fmt::Display};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    fmt::Display,
+};
 use types::Type;
 
 use self::{
@@ -49,19 +52,63 @@ pub enum TypeError {
     },
     DuplicateFields {
         field_name: String,
-        #[label(collection, "field '{field_name}' declared here")]
+        #[label(collection, "field `{field_name}` declared here")]
         fields: Vec<Span>,
     },
     UndeclaredType {
-        type_name: String,
         #[label("not found")]
-        span: Span,
+        type_name: Spanned<TypeIdentifier>,
     },
     MissingFields {
         fields: Vec<String>,
         type_name: String,
         #[label("missing {}", join_quoted(fields))]
-        type_span: crate::parser::span::Span,
+        type_span: Span,
+    },
+    DeclaredTwice {
+        type_name: String,
+        #[label("previously declared here")]
+        existing_span: Option<Span>,
+        #[label("declared here")]
+        span: Span,
+    },
+    NumberOfArgumentDontMatch {
+        /// "method" or "term" or "action" etc.
+        call_type: &'static str,
+        method_name: String,
+        takes: usize,
+        given: usize,
+        #[label("takes {takes} arguments but {given} arguments were given")]
+        span: Span,
+    },
+    CanOnlyMatchOnEnum {
+        ty: Type,
+        #[label("cannot match on type `{ty}`")]
+        span: Span,
+    },
+    VariantDoesNotHaveField {
+        variant: Spanned<Identifier>,
+        ty: Type,
+        #[label("unexpected data field")]
+        span: Span,
+    },
+    NeedDataFieldOnPattern {
+        #[label("missing data field")]
+        variant: Spanned<Identifier>,
+        ty: Type,
+    },
+    VariantDoesNotExist {
+        #[label("variant does not exist on `{ty}`")]
+        variant: Spanned<Identifier>,
+        ty: Type,
+    },
+    MismatchedTypes {
+        expected: Type,
+        got: Type,
+        #[label("expected `{expected}`, found `{got}`")]
+        span: Span,
+        #[label("expected because this is `{expected}`")]
+        cause: Option<Span>,
     },
 }
 
@@ -90,6 +137,48 @@ impl std::fmt::Display for TypeError {
                 } else {
                     write!(f, "missing field `{}` in record literal for `{type_name}`", fields[0])
                 }
+            }
+            Self::DeclaredTwice {
+                type_name,
+                existing_span: Some(_),
+                ..
+            } => {
+                write!(f, "type `{type_name}` is declared multiple times")
+            }
+            Self::DeclaredTwice {
+                type_name,
+                existing_span: None,
+                ..
+            } => {
+                write!(f, "type `{type_name}` is a built-in type and cannot be overwritten")
+            }
+            Self::NumberOfArgumentDontMatch {
+                call_type,
+                method_name,
+                takes,
+                given,
+                ..
+            } => {
+                write!(f, "{call_type} `{method_name}` takes {takes} arguments but {given} arguments were given")
+            }
+            Self::CanOnlyMatchOnEnum { ty, .. } => {
+                write!(
+                    f,
+                    "cannot match on the type `{ty}`, \
+                    because only matching on enums is supported."
+                )
+            }
+            Self::VariantDoesNotHaveField { variant, ty, .. } => {
+                write!(f, "pattern has a data field, but the variant `{variant}` of `{ty}` doesn't have one")
+            }
+            Self::NeedDataFieldOnPattern { variant, ty } => {
+                write!(f, "pattern has no data field, but variant `{variant}` of `{ty}` does have a data field")
+            }
+            Self::VariantDoesNotExist { variant, ty } => {
+                write!(f, "the variant `{variant}` does not exist on `{ty}`")
+            }
+            Self::MismatchedTypes { .. } => {
+                write!(f, "mismatched types")
             }
         }
     }
@@ -132,6 +221,15 @@ pub fn typecheck(tree: &ast::SyntaxTree) -> TypeResult<()> {
     type_checker.check_syntax_tree(tree)
 }
 
+enum MaybeDeclared {
+    /// A declared type, where the span of the type declaration is
+    /// available for user-defined types, but not for built-in types.
+    Declared(Type, Option<Span>),
+    /// An (as of yet) undeclared type with the spans of where it is
+    /// referenced.
+    Undeclared(Span),
+}
+
 impl<'methods> TypeChecker<'methods> {
     /// Perform type checking for a syntax tree
     pub fn check_syntax_tree(
@@ -143,9 +241,11 @@ impl<'methods> TypeChecker<'methods> {
         // declarations, we check whether any nones are left to determine
         // whether any types are unresolved.
         // The builtin types are added right away.
-        let mut types: HashMap<String, Option<Type>> = default_types()
+        let mut types: HashMap<String, MaybeDeclared> = default_types()
             .into_iter()
-            .map(|(s, t)| (s.to_string(), Some(t.clone())))
+            .map(|(s, t)| {
+                (s.to_string(), MaybeDeclared::Declared(t.clone(), None))
+            })
             .collect();
 
         let mut root_scope = Scope::default();
@@ -203,7 +303,7 @@ impl<'methods> TypeChecker<'methods> {
                             &record_type.key_values,
                         )?,
                     );
-                    store_type(&mut types, ident.ident.to_string(), ty)?;
+                    store_type(&mut types, ident, ty)?;
                 }
             }
         }
@@ -213,16 +313,16 @@ impl<'methods> TypeChecker<'methods> {
         // type names.
         self.types = types
             .into_iter()
-            .map(|(s, t)| {
-                let Some(t) = t else {
-                    return Err(TypeError::Simple {
-                        description: format!(
-                            "Did not provide declaration for type {s}"
-                        ),
-                    });
-                };
-
-                Ok((s, t))
+            .map(|(s, t)| match t {
+                MaybeDeclared::Declared(t, _) => Ok((s, t)),
+                MaybeDeclared::Undeclared(reference_span) => {
+                    Err(TypeError::UndeclaredType {
+                        type_name: TypeIdentifier {
+                            ident: ShortString::from(&*s),
+                        }
+                        .with_span(reference_span),
+                    })
+                }
             })
             .collect::<Result<_, _>>()?;
 
@@ -338,13 +438,35 @@ impl<'methods> TypeChecker<'methods> {
         return true;
     }
 
-    fn unify(&mut self, a: &Type, b: &Type) -> TypeResult<Type> {
+    fn unify(
+        &mut self,
+        a: &Type,
+        b: &Type,
+        // span: Span,
+        // cause: Option<Span>,
+    ) -> TypeResult<Type> {
+        let a = self.resolve_type(a);
+        let b = self.resolve_type(b);
+
+        if let Some(ty) = self.unify_inner(&a, &b) {
+            Ok(ty)
+        } else {
+            Err(TypeError::MismatchedTypes {
+                expected: a,
+                got: b,
+                span: Span::from(0..1), // TODO: make this logical
+                cause: None,
+            })
+        }
+    }
+
+    fn unify_inner(&mut self, a: &Type, b: &Type) -> Option<Type> {
         use types::Primitive::*;
         use Type::*;
         let a = self.resolve_type(a);
         let b = self.resolve_type(b);
 
-        Ok(match (a, b) {
+        Some(match (a, b) {
             // We never recurse into NamedRecords, so they are included here.
             (a, b) if a == b => a,
             (IntVar(a), b @ (Primitive(U8 | U16 | U32) | IntVar(_))) => {
@@ -363,12 +485,14 @@ impl<'methods> TypeChecker<'methods> {
                 self.unionfind.set(b, a.clone());
                 a.clone()
             }
-            (Table(a), Table(b)) => Table(Box::new(self.unify(&a, &b)?)),
-            (OutputStream(a), OutputStream(b)) => {
-                OutputStream(Box::new(self.unify(&a, &b)?))
+            (Table(a), Table(b)) => {
+                Table(Box::new(self.unify_inner(&a, &b)?))
             }
-            (Rib(a), Rib(b)) => Rib(Box::new(self.unify(&a, &b)?)),
-            (List(a), List(b)) => List(Box::new(self.unify(&a, &b)?)),
+            (OutputStream(a), OutputStream(b)) => {
+                OutputStream(Box::new(self.unify_inner(&a, &b)?))
+            }
+            (Rib(a), Rib(b)) => Rib(Box::new(self.unify_inner(&a, &b)?)),
+            (List(a), List(b)) => List(Box::new(self.unify_inner(&a, &b)?)),
             (
                 RecordVar(a_var, a_fields),
                 ref b @ (RecordVar(_, ref b_fields)
@@ -387,12 +511,8 @@ impl<'methods> TypeChecker<'methods> {
                 self.unionfind.set(b_var, a.clone());
                 a.clone()
             }
-            (a, b) => {
-                return Err(TypeError::Simple {
-                    description: format!(
-                        "cannot unify types {a:?} and {b:?}"
-                    ),
-                });
+            (_a, _b) => {
+                return None;
             }
         })
     }
@@ -401,15 +521,9 @@ impl<'methods> TypeChecker<'methods> {
         &mut self,
         a_fields: &[(String, Type)],
         b_fields: &[(String, Type)],
-    ) -> TypeResult<Vec<(String, Type)>> {
+    ) -> Option<Vec<(String, Type)>> {
         if a_fields.len() != b_fields.len() {
-            return Err(TypeError::Simple {
-                description: format!(
-                    "cannot unify types {:?} and {:?}",
-                    Type::Record(a_fields.to_vec()),
-                    Type::Record(b_fields.to_vec()),
-                ),
-            });
+            return None;
         }
 
         let mut b_fields = b_fields.to_vec();
@@ -417,18 +531,13 @@ impl<'methods> TypeChecker<'methods> {
         for (name, a_ty) in a_fields {
             let Some(idx) = b_fields.iter().position(|(n, _)| n == name)
             else {
-                return Err(TypeError::Simple {
-                    description: format!(
-                        "Type {:?} does not have a field {name}.",
-                        Type::Record(b_fields.to_vec())
-                    ),
-                });
+                return None;
             };
             let (_, b_ty) = b_fields.remove(idx);
-            new_fields.push((name.clone(), self.unify(&a_ty, &b_ty)?))
+            new_fields.push((name.clone(), self.unify_inner(&a_ty, &b_ty)?))
         }
 
-        Ok(new_fields)
+        Some(new_fields)
     }
 
     /// Resolve type vars to a type.
@@ -579,44 +688,45 @@ impl<'methods> TypeChecker<'methods> {
 }
 
 fn store_type(
-    types: &mut HashMap<String, Option<Type>>,
-    k: String,
+    types: &mut HashMap<String, MaybeDeclared>,
+    k: &Spanned<ast::TypeIdentifier>,
     v: Type,
 ) -> TypeResult<()> {
-    match types.entry(k) {
+    let span = k.span;
+    let k = k.inner.to_string();
+    match types.entry(k.clone()) {
         Entry::Occupied(mut entry) => {
-            if entry.get().is_some() {
-                return Err(TypeError::Simple {
-                    description: format!(
-                        "Declared type {} twice",
-                        entry.key()
-                    ),
+            if let MaybeDeclared::Declared(_, existing_span) = entry.get() {
+                return Err(TypeError::DeclaredTwice {
+                    type_name: k,
+                    existing_span: existing_span.clone(),
+                    span,
                 });
             }
-            entry.insert(Some(v));
+            entry.insert(MaybeDeclared::Declared(v, Some(span)));
         }
         Entry::Vacant(entry) => {
-            entry.insert(Some(v));
+            entry.insert(MaybeDeclared::Declared(v, Some(span)));
         }
     };
     Ok(())
 }
 
 fn create_contains_type(
-    types: &mut HashMap<String, Option<Type>>,
-    contain_ty: &ast::TypeIdentifier,
+    types: &mut HashMap<String, MaybeDeclared>,
+    contain_ty: &Spanned<ast::TypeIdentifier>,
     body: &ast::RibBody,
 ) -> TypeResult<Type> {
     let ty = Type::NamedRecord(
         contain_ty.ident.to_string(),
         evaluate_record_type(types, &body.key_values)?,
     );
-    store_type(types, contain_ty.to_string(), ty.clone())?;
+    store_type(types, contain_ty, ty.clone())?;
     Ok(ty)
 }
 
 fn evaluate_record_type(
-    types: &mut HashMap<String, Option<Type>>,
+    types: &mut HashMap<String, MaybeDeclared>,
     fields: &[ast::RibField],
 ) -> TypeResult<Vec<(String, Type)>> {
     // We store the spans temporarily to be able to create nice a
@@ -637,7 +747,9 @@ fn evaluate_record_type(
                 // which signals that the type is mentioned but not
                 // yet declared. The declaration will override it
                 // with Some(...) if we encounter it later.
-                types.entry(ty.as_ref().to_string()).or_insert(None);
+                types
+                    .entry(ty.as_ref().to_string())
+                    .or_insert(MaybeDeclared::Undeclared(field_name.span));
                 field_type = Type::Name(ty.ident.to_string());
             }
             ast::RibField::RecordField(field) => {

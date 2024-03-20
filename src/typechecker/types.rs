@@ -56,6 +56,40 @@ impl Display for Primitive {
     }
 }
 
+impl Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let fmt_args = |args: &[(String, Type)]| {
+            args.iter().map(|(_, t)| t.to_string()).collect::<Vec<_>>().join(", ")
+        };
+        match self {
+            Type::Var(_) => write!(f, "{{unknown}}"),
+            Type::ExplicitVar(s) => write!(f, "{s}"),
+            Type::IntVar(_) => write!(f, "{{integer}}"),
+            Type::RecordVar(_, fields) | Type::Record(fields) => write!(
+                f,
+                "{{ {} }}",
+                fields
+                    .iter()
+                    .map(|(s, t)| { format!("\"{s}\": {t}") })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Type::Primitive(p) => write!(f, "{p}"),
+            Type::List(t) => write!(f, "List<{t}>"),
+            Type::Table(t) => write!(f, "Table<{t}>"),
+            Type::OutputStream(t) => write!(f, "OutputStream<{t}>"),
+            Type::Rib(t) => write!(f, "Rib<{t}>"),
+            Type::NamedRecord(x, _) => write!(f, "{x}"),
+            Type::Enum(x, _) => write!(f, "{x}"),
+            Type::Term(args) => write!(f, "Term({})", fmt_args(args)),
+            Type::Action(args) => write!(f, "Action({})", fmt_args(args)),
+            Type::Filter(args) => write!(f, "Filter({})", fmt_args(args)),
+            Type::FilterMap(args) => write!(f, "Filter({})", fmt_args(args)),
+            Type::Name(x) => write!(f, "{x}"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Arrow {
     pub rec: Type,

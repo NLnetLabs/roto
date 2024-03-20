@@ -260,9 +260,9 @@ impl<'source> Parser<'source> {
         let mut match_arms = Vec::new();
         self.take(Token::CurlyLeft)?;
         while !self.next_is(Token::CurlyRight) {
-            let variant_id = self.identifier()?.inner;
+            let variant_id = self.identifier()?;
             let data_field = if self.next_is(Token::RoundLeft) {
-                let id = self.identifier()?.inner;
+                let id = self.identifier()?;
                 self.take(Token::RoundRight)?;
                 Some(id)
             } else {
@@ -270,7 +270,7 @@ impl<'source> Parser<'source> {
             };
 
             let guard = if self.next_is(Token::Pipe) {
-                let term_id = self.identifier()?.inner;
+                let term_id = self.identifier()?;
                 let args = if self.peek_is(Token::RoundLeft) {
                     Some(self.arg_expr_list()?)
                 } else {
@@ -378,7 +378,7 @@ impl<'source> Parser<'source> {
     /// ActionCallExpr ::= Identifier '(' (ValueExpr (',' ValueExpr)* ',')? ')'
     /// ```
     fn action_call_expr(&mut self) -> ParseResult<ActionCallExpr> {
-        let action_id = self.identifier()?.inner;
+        let action_id = self.identifier()?;
         let args = if self.peek_is(Token::RoundLeft) {
             Some(self.arg_expr_list()?)
         } else {
@@ -435,7 +435,7 @@ impl<'source> Parser<'source> {
         let op = match token {
             Token::Match => {
                 if matches!(self.peek(), Some(Token::Ident(_))) {
-                    let ident = self.identifier()?.inner;
+                    let ident = self.identifier()?;
                     self.take(Token::With)?;
                     MatchOperator::MatchValueWith(ident)
                 } else {
@@ -554,10 +554,10 @@ impl<'source> Parser<'source> {
     pub(super) fn match_arm(
         &mut self,
     ) -> ParseResult<(TermPatternMatchArm, Vec<LogicalExpr>)> {
-        let variant_id = self.identifier()?.inner;
+        let variant_id = self.identifier()?;
 
         let data_field = if self.next_is(Token::RoundLeft) {
-            let field = self.identifier()?.inner;
+            let field = self.identifier()?;
             self.take(Token::RoundRight)?;
             Some(field)
         } else {
