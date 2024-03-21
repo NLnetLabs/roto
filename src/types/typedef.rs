@@ -10,11 +10,11 @@ use routecore::addr::Prefix;
 use routecore::asn::Asn;
 use routecore::bgp::aspath::{HopPath, OwnedHop as Hop};
 use routecore::bgp::communities::HumanReadableCommunity as Community;
-use routecore::bgp::message::nlri::Nlri;
+use routecore::bgp::nlri::afisafi::Nlri;
 use routecore::bgp::path_attributes::AggregatorInfo;
-use routecore::bgp::types::{AtomicAggregate, MultiExitDisc, Origin, OriginType};
+use routecore::bgp::types::{AtomicAggregate, MultiExitDisc, Origin};
 use routecore::bgp::{
-    message::nlri::PathId,
+    types::PathId,
     types::{AfiSafi, LocalPref},
 };
 use serde::Serialize;
@@ -854,7 +854,7 @@ impl TypeDef {
                 TypeValue::Builtin(BuiltinTypeValue::Route(route)) => {
                     for field_index in uniq_field_indexes {
                         if !field_index.is_empty() {
-                            route.hash_field(state, &field_index)?;
+                            route.hash_field(state, field_index)?;
                         } else {
                             route.hash(state);
                         }

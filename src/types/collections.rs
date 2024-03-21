@@ -297,6 +297,7 @@ impl List {
         todo!()
     }
 
+    #[allow(dead_code)]
     fn exec_value_ref_method<'a>(
         &'a self,
         method: usize,

@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 use log::trace;
 use routecore::bgp::communities::{Wellknown, HumanReadableCommunity as Community, StandardCommunity};
-use routecore::bgp::types::{Afi, Safi};
+use routecore::bgp::types::Afi;
 use routecore::bmp::message::MessageType;
 use serde::Serialize;
 
@@ -231,13 +231,13 @@ impl GlobalEnumTypeDef {
                     "UNICAST" => Ok(BuiltinTypeValue::ConstU8EnumVariant(
                         EnumVariant::<u8> {
                             enum_name: self.into(),
-                            value: Safi::Unicast.into(),
+                            value: 1,
                         },
                     )),
                     "MULTICAST" => Ok(BuiltinTypeValue::ConstU8EnumVariant(
                         EnumVariant::<u8> {
                             enum_name: self.into(),
-                            value: Safi::Multicast.into(),
+                            value: 2,
                         },
                     )),
                     _ => Err(AccessReceiverError::Global),

@@ -1,7 +1,5 @@
 #[cfg(test)]
 mod route {
-    use std::fmt::Debug;
-    use std::hash::Hash;
     use std::net::{IpAddr, Ipv4Addr};
 
     use super::super::{IntegerLiteral, PrefixLength, StringLiteral};
@@ -15,27 +13,12 @@ mod route {
     use crate::types::typevalue::TypeValue;
     use crate::{compiler::CompileError, traits::RotoType};
     use log::trace;
-    use routecore::bgp::message::nlri::{FlowSpecNlri, PathId};
-    use routecore::bgp::message::update_builder::MpReachNlriBuilder;
-    use routecore::bgp::message::UpdateMessage;
-    use routecore::bgp::nlri::afisafi::Ipv4FlowSpecNlri;
-    use routecore::bgp::nlri::afisafi::Ipv4MulticastAddpathNlri;
-    use routecore::bgp::nlri::afisafi::Ipv4RouteTargetNlri;
-    use routecore::bgp::nlri::afisafi::Ipv4UnicastAddpathNlri;
-    use routecore::bgp::nlri::afisafi::Ipv6MulticastAddpathNlri;
-    use routecore::bgp::nlri::afisafi::Ipv6MulticastNlri;
-    use routecore::bgp::nlri::afisafi::Ipv6UnicastAddpathNlri;
+    use crate::types::builtin::tests::route::AfiSafiType::Ipv6Unicast;
     use routecore::bgp::nlri::afisafi::Ipv6UnicastNlri;
+    use routecore::bgp::nlri::afisafi::AfiSafiType;
     use routecore::bgp::nlri::afisafi::IsPrefix;
-    use routecore::bgp::nlri::afisafi::NlriIter;
-    use routecore::bgp::nlri::afisafi::{
-        iter_for_afi_safi, AfiSafiNlri, AfiSafiParse, Ipv4MulticastNlri,
-        Ipv6FlowSpecNlri,
-    };
-    use routecore::bgp::nlri::afisafi::{Addpath, Ipv4UnicastNlri};
-    use routecore::bgp::path_attributes::PaMap;
-    use routecore::bgp::workshop::route::{explode_for_afi_safis, into_wrapped_rws_vec, RouteWorkshop};
-    use routecore::bgp::ParseError;
+    use routecore::bgp::nlri::afisafi::Ipv6FlowSpecNlri;
+    use routecore::bgp::workshop::route::{explode_into_wrapped_rws_vec, into_wrapped_rws_vec, BasicNlri, RouteWorkshop};
 
     enum MethodType {
         Value,
@@ -46,20 +29,18 @@ mod route {
     use routecore::asn::{Asn, Asn16};
     use routecore::bgp::aspath::HopPath as AsPath;
     use routecore::bgp::communities::{
-        Community, ExtendedCommunity, HumanReadableCommunity, LargeCommunity,
+        ExtendedCommunity, HumanReadableCommunity, LargeCommunity,
         StandardCommunity, Tag,
     };
     use routecore::bgp::types::{
-        AfiSafi, LocalPref, MultiExitDisc, NextHop, Origin,
+        LocalPref, NextHop, Origin,
     };
     use routecore::bgp::{
-        message::{
-            nlri::{BasicNlri, Nlri},
-            SessionConfig,
-        },
+        nlri::afisafi::Nlri,
+        message::SessionConfig,
         types::OriginType,
     };
-    use routecore::Parser;
+    // use routecore::Parser;
 
     use std::str::FromStr;
 
@@ -108,9 +89,9 @@ mod route {
             .announcements()
             .into_iter()
             .flat_map(|n| {
-                n.filter_map(|p| {
-                    if let Ok(Nlri::Unicast(BasicNlri { prefix, .. })) = p {
-                        Some(prefix)
+                n.filter_map(|nlri| {
+                    if let Ok(Nlri::Ipv6Unicast(nlri)) = nlri {
+                        Some(nlri.prefix())
                     } else {
                         None
                     }
@@ -120,7 +101,7 @@ mod route {
 
         let mut roto_msgs = vec![];
 
-        let provenance = Provenance {
+        let _provenance = Provenance {
             timestamp: chrono::Utc::now(),
             // router_id: 0,
             connection_id: "127.0.0.1:178".parse().unwrap(),
@@ -134,6 +115,7 @@ mod route {
         };
 
         let nlri = BasicNlri {
+            ty: AfiSafiType::Ipv6Unicast,
             prefix: prefixes[0],
             path_id: None,
         };
@@ -144,6 +126,7 @@ mod route {
 
         for prefix in &prefixes[1..] {
             let nlri = BasicNlri {
+                ty: AfiSafiType::Ipv6Unicast,
                 prefix: *prefix,
                 path_id: None,
             };
@@ -173,10 +156,10 @@ mod route {
         // let mut delta = roto_msgs[0].open_new_delta(delta_id)?;
         let mut path_attrs = roto_msgs.remove(0);
         if let std::net::IpAddr::V6(v6) = prefixes[0].addr() {
-            let next_hop =
+            let _next_hop =
                 routecore::bgp::types::NextHop::Unicast(prefixes[0].addr());
-            let _ = path_attrs
-                .set_attr::<routecore::bgp::types::NextHop>(next_hop);
+            // let _ = path_attrs
+            //     .set_attr::<routecore::bgp::types::NextHop>(next_hop);
         }
 
         let asp = path_attrs.get_attr::<AsPath>();
@@ -260,30 +243,34 @@ mod route {
         )
         .unwrap();
 
-        let afi_safi =
-            update.bytes_parser().mp_announcements().map(|a| {
-                a.map(|a| a.afi_safi())
-                    .or_else(|| {
-                        update
-                            .bytes_parser()
-                            .conventional_announcements()
-                            .map(|a| a.afi_safi())
-                            .ok()
-                    })
-                    .ok_or(ParseError::Unsupported)
-            })??;
+        // let afi_safi =
+        //     update.bytes_parser().mp_announcements().map(|a| {
+        //         a.map(|a| a.afi_safi())
+        //             .or_else(|| {
+        //                 update
+        //                     .bytes_parser()
+        //                     .conventional_announcements()
+        //                     .map(|a| a.afi_safi())
+        //                     .ok()
+        //             })
+        //             .ok_or(ParseError::Unsupported)
+        //     })??;
 
-        trace!("afi_safis {:?}", update.bytes_parser().afi_safis());
-        let afi_safi = update.bytes_parser().afi_safis()[1].unwrap();
+        let afi_safis = update.bytes_parser().afi_safis();
+        println!("afi_safis {:?}", afi_safis);
+        
+        // The announcements in MP_REACH
+        let _afi_safi = afi_safis.get(3).unwrap();
 
         // // Comes out of the SessionConfig
-        let add_path_cap = false;
-        let pa_map = PaMap::from_update_pdu(update.bytes_parser()).unwrap();
+        // let pa_map = PaMap::from_update_pdu(update.bytes_parser()).unwrap();
 
-        let parser = Parser::from_ref(update.bytes_parser().octets());
+        // let parser = update.bytes_parser().nlri_parser()?.unwrap();
 
         // let my_vec = iter_map(afi_safi, add_path_cap, parser, pa_map);
         let afi_safis = update.bytes_parser().afi_safis().into_iter().flatten();
+
+        println!("afi_safis {:?}", afi_safis);
         let my_vec = into_wrapped_rws_vec::<
             '_,
             _,
@@ -291,31 +278,38 @@ mod route {
             Ipv6UnicastNlri,
             BasicNlri,
             TypeValue,
-        >(parser, &pa_map);
+        >(update.bytes_parser());
+
+        println!("vec {:?}", my_vec);
+        // let vv = iter_for_afi_safi::<'_, _, _, Ipv6UnicastNlri>(update.bytes_parser());
+        // println!("iter {:?}", vv.collect::<Vec<_>>());
+        println!("mp_announcements {:?}", update.bytes_parser().mp_announcements().unwrap().unwrap().collect::<Vec<_>>());
 
         let my_vec2 = into_wrapped_rws_vec::<
             '_,
             _,
             _,
-            Ipv4FlowSpecNlri<bytes::Bytes>,
+            Ipv6FlowSpecNlri<bytes::Bytes>,
             routecore::bgp::nlri::flowspec::FlowSpecNlri<bytes::Bytes>,
             TypeValue,
-        >(parser, &pa_map);
+        >(update.bytes_parser());
 
         println!("rws {:?}", my_vec2);
 
-        let exploded = explode_for_afi_safis::<_, _, TypeValue>(afi_safis, false, parser, &pa_map);
+        let _exploded = explode_into_wrapped_rws_vec::<_, bytes::Bytes, TypeValue>(afi_safis, false, update.bytes_parser());
 
-        println!("exploded view {:?}", exploded);
+        println!("exploded {:#?}", _exploded);
+
+        // println!("exploded view {:?}", exploded);
 
         let prefixes: Vec<routecore::addr::Prefix> = update
             .bytes_parser()
             .announcements()
             .into_iter()
             .flat_map(|n| {
-                n.filter_map(|p| {
-                    if let Ok(Nlri::Unicast(BasicNlri { prefix, .. })) = p {
-                        Some(prefix)
+                n.filter_map(|nlri| {
+                    if let Ok(Nlri::Ipv6Unicast(nlri)) = nlri {
+                        Some(nlri.prefix())
                     } else {
                         None
                     }
@@ -329,6 +323,7 @@ mod route {
         roto_msgs.push(
             RouteWorkshop::from_update_pdu(
                 BasicNlri {
+                    ty: Ipv6Unicast,
                     prefix: prefixes[0],
                     path_id: None,
                 },
@@ -341,6 +336,7 @@ mod route {
             roto_msgs.push(
                 RouteWorkshop::from_update_pdu(
                     BasicNlri {
+                        ty: Ipv6Unicast,
                         prefix: *prefix,
                         path_id: None,
                     },
@@ -358,16 +354,16 @@ mod route {
         assert_eq!(roto_msgs.len(), 5);
 
         let attr_set = &mut roto_msgs[2];
-        let mp_reach =
-            MpReachNlriBuilder::new_for_nlri(&Nlri::Unicast::<bytes::Bytes>(
-                *attr_set.nlri(),
-            ));
-        attr_set.set_attr(mp_reach).unwrap();
+        // let mp_reach =
+        //     MpReachNlriBuilder::for_nlri(&Ipv6UnicastNlri::<bytes::Bytes>(
+        //         *attr_set.nlri(),
+        //     ));
+        // attr_set.set_attr(mp_reach).unwrap();
 
         println!("change set {:#?}", attr_set);
         if let std::net::IpAddr::V6(v6) = prefixes[2].addr() {
-            let next_hop = NextHop::Unicast(std::net::IpAddr::V6(v6));
-            attr_set.set_attr::<NextHop>(next_hop).unwrap();
+            let _next_hop = NextHop::Unicast(std::net::IpAddr::V6(v6));
+            // attr_set.set_attr::<NextHop>(next_hop).unwrap();
         }
 
         let mut as_path = attr_set.get_attr::<AsPath>().unwrap();
@@ -498,7 +494,7 @@ mod route {
     {
         // The type definition of the from value
 
-        use crate::{types::builtin::BuiltinTypeValue, vm::StackValue};
+        use crate::vm::StackValue;
         let src_ty: TypeDef =
             <BuiltinTypeValue>::from(from_value.clone()).into();
         let m = RT::get_props_for_method(
@@ -584,8 +580,6 @@ mod route {
     where
         BuiltinTypeValue: From<TT>,
     {
-        use log::trace;
-
         let to_ty: TypeDef =
             <BuiltinTypeValue>::from(to_value.clone()).into();
 

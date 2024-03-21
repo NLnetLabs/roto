@@ -2,14 +2,14 @@ use std::net::IpAddr;
 use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
 use log::{debug, trace};
-use primitives::NlriStatus;
+use primitives::{Nlri, NlriStatus};
 
 use routecore::asn::Asn;
 use routecore::bgp::aspath::{HopPath, OwnedHop as Hop};
 use routecore::bgp::communities::HumanReadableCommunity as Community;
-use routecore::bgp::message::nlri::{Nlri, PathId};
+use routecore::bgp::types::PathId;
 use routecore::bgp::types::{
-    AfiSafi, LocalPref, MultiExitDisc, NextHop, Origin, OriginType
+    AfiSafi, LocalPref, MultiExitDisc, NextHop, Origin
 };
 use serde::Serialize;
 

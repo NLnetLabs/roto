@@ -1,7 +1,9 @@
+use std::net::SocketAddrV4;
+
 use roto::compiler::Compiler;
 
 use roto::types::builtin::basic_route::{BasicRoute, PeerId, PeerRibType, Provenance};
-use roto::types::builtin::{NlriStatus, RouteContext};
+use roto::types::builtin::{Nlri, NlriStatus, RouteContext};
 use roto::types::collections::{BytesRecord, Record};
 use roto::types::lazyrecord_types::BgpUpdateMessage;
 use roto::types::typevalue::TypeValue;
@@ -9,10 +11,9 @@ use roto::vm;
 use roto::blocks::Scope::{self, FilterMap};
 use routecore::asn::Asn;
 use routecore::bgp::message::SessionConfig;
-use routecore::bgp::message::nlri::{Nlri, BasicNlri};
 use routecore::addr::Prefix;
-use routecore::bgp::workshop::afisafi_nlri::Ipv4UnicastNlri;
-use routecore::bgp::workshop::route::RouteWorkshop;
+use routecore::bgp::workshop::route::{RouteWorkshop, BasicNlri};
+use routecore::bgp::nlri::afisafi::{Ipv4UnicastNlri, Ipv6UnicastNlri, IsPrefix};
 
 fn test_data(
     name: Scope,
@@ -49,20 +50,20 @@ fn test_data(
         .bytes_parser()
         .announcements()
         .unwrap()
-        .filter_map(|p| if let Ok(Nlri::Unicast(BasicNlri { prefix, .. })) = p { Some(prefix) } else { None })
+        .filter_map(|nlri| if let Ok(Nlri::Ipv6Unicast(nlri)) = nlri { Some(nlri.prefix()) } else { None })
         .collect();
 
     let prov = Provenance {
         timestamp: chrono::Utc::now(),
-        router_id: 0,
-        connection_id: 0,
+        // router_id: 0,
+        connection_id: std::net::SocketAddr::V4(SocketAddrV4::new("172.0.0.1".parse().unwrap(), 179)),
         peer_id: PeerId { addr: "172.0.0.1".parse().unwrap(), asn: Asn::from(65530)},
         peer_bgp_id: [0,0,0,0].into(),
         peer_distuingisher: [0; 8],
         peer_rib_type: PeerRibType::OutPost,
     };
 
-    let nlri = Ipv4UnicastNlri(BasicNlri { prefix: prefixes[0], path_id: None });
+    let nlri = BasicNlri::from(Ipv6UnicastNlri::try_from(prefixes[0])?);
 
     let context = RouteContext::new(
         Some(update.clone()),
@@ -71,7 +72,9 @@ fn test_data(
         prov,
     );
 
-    let payload = BasicRoute::new(RouteWorkshop::from_update_pdu(nlri, &update.into_inner())?);
+    let rws = RouteWorkshop::from_update_pdu(nlri, &update.into_inner())?;
+
+    let payload = BasicRoute(rws);
 
     // Create the VM
     println!("Used Arguments");

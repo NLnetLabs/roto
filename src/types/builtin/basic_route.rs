@@ -6,19 +6,13 @@ use std::net::SocketAddr;
 use chrono::Utc;
 use routecore::bgp::communities::Community;
 use routecore::bgp::communities::HumanReadableCommunity;
-use routecore::bgp::message::nlri::BasicNlri;
 use routecore::bgp::nlri::flowspec::FlowSpecNlri;
-use routecore::bgp::nlri::afisafi::AfiSafiParse;
-use routecore::bgp::nlri::afisafi::Ipv4UnicastNlri;
-use routecore::bgp::nlri::afisafi::IsPrefix;
-use routecore::bgp::path_attributes::BgpIdentifier;
 use routecore::bgp::path_attributes::PaMap;
 use routecore::bgp::path_attributes::PathAttribute;
 use routecore::bgp::types::LocalPref;
 use routecore::bgp::types::MultiExitDisc;
 use routecore::bgp::types::NextHop;
-use routecore::bgp::nlri::afisafi::AfiSafiNlri;
-use routecore::bgp::nlri::afisafi::Ipv4FlowSpecNlri;
+use routecore::bgp::workshop::route::BasicNlri;
 use routecore::bgp::workshop::route::RouteWorkshop;
 use serde::Deserialize;
 use std::fmt::{Display, Formatter};
@@ -48,11 +42,12 @@ use crate::{
 
 use super::super::typevalue::TypeValue;
 use super::BuiltinTypeValue;
+use super::Nlri;
 use super::{super::typedef::TypeDef, BytesRecord, NlriStatus};
 
 use routecore::addr::Prefix;
 use routecore::asn::Asn;
-use routecore::bgp::message::nlri::PathId;
+use routecore::bgp::types::PathId;
 
 pub type LogicalTime = u64;
 
@@ -62,16 +57,6 @@ pub struct BasicRoute(
 );
 
 impl BasicRoute {
-    pub fn new<N: AfiSafiNlri + IsPrefix>(
-        route: routecore::bgp::workshop::route::RouteWorkshop<
-            N,
-        >,
-    ) -> Self {
-        BasicRoute(RouteWorkshop::from_pa_map(
-            route.nlri().prefix().into(),
-            route.attributes().clone(),
-        ))
-    }
 
     pub fn prefix(&self) -> Prefix {
         self.0.nlri().prefix()
@@ -119,7 +104,8 @@ impl BasicRoute {
                 if let Some(index) = index_iter.next() {
                     let attr: Option<TypeValue> = match index {
                         3 => {
-                            self.0.get_attr::<NextHop>().map(TypeValue::from)
+                            todo!()
+                            // self.0.get_attr::<NextHop>().map(TypeValue::from)
                         }
                         8 => self.0.get_attr::<Vec<Community>>().map(|c| {
                             TypeValue::List(List(
@@ -259,8 +245,8 @@ impl From<PathAttribute> for TypeValue {
             }
             PathAttribute::OriginatorId(_) => todo!(),
             PathAttribute::ClusterList(_) => todo!(),
-            PathAttribute::MpReachNlri(_) => todo!(),
-            PathAttribute::MpUnreachNlri(_) => todo!(),
+            // PathAttribute::MpReachNlri(_) => todo!(),
+            // PathAttribute::MpUnreachNlri(_) => todo!(),
             PathAttribute::ExtendedCommunities(comms) => {
                 TypeValue::List(List(comms.fmap(|c| {
                     ElementTypeValue::Primitive(
@@ -839,9 +825,9 @@ impl From<RouteWorkshop<FlowSpecNlri<bytes::Bytes>>>
     for TypeValue
 {
     fn from(
-        _value: RouteWorkshop<FlowSpecNlri<bytes::Bytes>>,
+        value: RouteWorkshop<FlowSpecNlri<bytes::Bytes>>,
     ) -> Self {
-        todo!()
+        TypeValue::Builtin(BuiltinTypeValue::Nlri(Nlri::Ipv4FlowSpec(value.nlri().clone().into())))
     }
 }
 

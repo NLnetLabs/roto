@@ -6,11 +6,12 @@ use std::fmt::Display;
 use std::net::IpAddr;
 
 use routecore::asn::Asn;
-use routecore::bgp::message::nlri::{Nlri, PathId};
+use routecore::bgp::types::PathId;
 use routecore::bgp::types::{AfiSafi, AtomicAggregate, MultiExitDisc, NextHop, Origin};
 use routecore::bgp::path_attributes::AggregatorInfo;
 use routecore::addr::Prefix;
 use routecore::bgp::communities::HumanReadableCommunity as Community;
+use routecore::bgp::nlri::afisafi::Nlri;
 use serde::Serialize;
 
 use crate::compiler::compile::CompileError;
@@ -196,7 +197,7 @@ impl Display for BuiltinTypeValue {
                     write!(f, "{}", v)
                 }
                 BuiltinTypeValue::Community(v) => write!(f, "{}", v),
-                BuiltinTypeValue::Nlri(v) => write!(f, "{}", v),
+                BuiltinTypeValue::Nlri(v) => write!(f, "{:?}", v),
                 BuiltinTypeValue::IpAddr(v) => write!(f, "{}", v),
                 BuiltinTypeValue::Asn(v) => write!(f, "{}", v),
                 BuiltinTypeValue::AsPath(v) => {
@@ -290,7 +291,7 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::Community(v) => {
                     write!(f, "{} (Community)", v)
                 }
-                BuiltinTypeValue::Nlri(v) => { write!(f, "{} (NLRI)", v) }
+                BuiltinTypeValue::Nlri(v) => { write!(f, "{:?} (NLRI)", v) }
                 BuiltinTypeValue::Provenance(v) => { write!(f, "{} (Provenance Record)", v) }
                 BuiltinTypeValue::IpAddr(v) => {
                     write!(f, "{} (IP Address)", v)

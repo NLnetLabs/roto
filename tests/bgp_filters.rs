@@ -12,7 +12,7 @@ use roto::{
     },
     vm::{self, VmResult},
 };
-use routecore::{asn::Asn, bgp::{message::{nlri::BasicNlri, SessionConfig}, nlri::afisafi::Ipv4UnicastNlri, path_attributes::PaMap, workshop::route::{explode_for_afi_safis, RouteWorkshop}}, Parser};
+use routecore::{asn::Asn, bgp::{message::SessionConfig, workshop::route::explode_into_wrapped_rws_vec}};
 
 use routes::bmp::encode::{
     mk_bgp_update, mk_per_peer_header, Announcements, Prefixes,
@@ -54,10 +54,10 @@ fn test_data(
     };
 
     let parser = bgp_msg.bytes_parser();
-    let pa_map = PaMap::from_update_pdu(parser).unwrap();
+    // let pa_map = PaMap::from_update_pdu(parser).unwrap();
 
-    let parser = Parser::from_ref(parser.octets());
-    let rws = &explode_for_afi_safis::<'_, _, _, TypeValue>(afi_safis, false, parser, &pa_map)[0];
+    // let parser = Parser::from_ref(parser.octets());
+    let rws = &explode_into_wrapped_rws_vec::<'_, _, bytes::Bytes, TypeValue>(afi_safis, false, parser).unwrap()[0];
 
     let context = RouteContext::new(
         // routecore::addr::Prefix::from_str("192.0.2.0/24")?,

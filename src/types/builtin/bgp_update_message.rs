@@ -5,8 +5,9 @@ use routecore::
     bgp::{
         aspath::AsPath,
         communities::HumanReadableCommunity,
-        message::{update::LocalPref, SessionConfig},
+        message::SessionConfig,
         path_attributes::AggregatorInfo,
+        types::LocalPref,
         types::{MultiExitDisc, NextHop, Origin, OriginType},
     };
 
@@ -83,7 +84,7 @@ impl BytesRecord<BgpUpdateMessage> {
     ) -> Result<Self, VmError> {
         BgpUpdateMessage::from_octets(
             bytes,
-            session_config,
+            &session_config,
         )
         .map(|msg| msg.into())
         .map_err(|_| VmError::InvalidPayload)

@@ -3,11 +3,9 @@ use std::net::IpAddr;
 
 use log::{debug, error, trace};
 use paste::paste;
-use routecore::bgp::nlri::afisafi::Ipv6FlowSpecNlri;
 use serde::Serialize;
 
 use crate::ast::{IpAddressLiteral, PrefixLiteral};
-// use crate::attr_change_set::{ScalarValue};
 use crate::compiler::compile::CompileError;
 use crate::traits::RotoType;
 use crate::types::collections::ElementTypeValue;
@@ -25,14 +23,12 @@ use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 use super::builtin_type_value::BuiltinTypeValue;
 
-use routecore::asn::{Asn, LongSegmentError};
-use routecore::bgp::aspath::OwnedHop;
-use routecore::bgp::message::nlri::PathId;
-use routecore::bgp::nlri::afisafi::AfiSafiNlri;
+use routecore::asn::Asn;
+use routecore::bgp::types::PathId;
 use routecore::bgp::path_attributes::AggregatorInfo;
-use routecore::bgp::communities::{ExtendedCommunity, HumanReadableCommunity as Community};
+use routecore::bgp::communities::HumanReadableCommunity as Community;
 use routecore::addr::Prefix;
-use routecore::bgp::types::{AfiSafi, AtomicAggregate, LocalPref, MultiExitDisc, NextHop, Origin, OriginType};
+use routecore::bgp::types::{AfiSafi, AtomicAggregate, LocalPref, MultiExitDisc, NextHop, Origin};
 
 //------------ U16 Type -----------------------------------------------------
 
@@ -1307,7 +1303,7 @@ impl From<Vec<Community>> for TypeValue {
 
 //------------ Nlri ----------------------------------------------------------
 
-pub type Nlri = routecore::bgp::message::nlri::Nlri<bytes::Bytes>;
+pub type Nlri = routecore::bgp::nlri::afisafi::Nlri<bytes::Bytes>;
 
 createtoken!(
     Nlri;
@@ -1358,7 +1354,7 @@ impl RotoType for Nlri {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::Nlri(self)))
             }
             TypeDef::StringLiteral => Ok(TypeValue::Builtin(
-                BuiltinTypeValue::StringLiteral(self.into()),
+                BuiltinTypeValue::StringLiteral(format!("{:?}", self).into())
             )),
             _ => Err(format!(
                 "Cannot convert type Nlri to type {:?}",
@@ -1398,7 +1394,7 @@ impl RotoType for Nlri {
                 Ok(TypeValue::Builtin(
                     BuiltinTypeValue::ConstU8EnumVariant(
                         EnumVariant::<u8>::new(
-                            ("SAFI".into(), self.afi_safi().safi().into())
+                            ("SAFI".into(), <(u16, u8)>::from(self.afi_safi()).1)
                         )
                     )
                 ))

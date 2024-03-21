@@ -13,14 +13,11 @@ use roto::types::typevalue::TypeValue;
 use roto::vm::{self, FieldIndex, VmResult};
 use routecore::addr::Prefix;
 use routecore::asn::Asn;
-use routecore::bgp::message::nlri::{BasicNlri, Nlri};
-use routecore::bgp::message::update_builder::MpReachNlriBuilder;
-use routecore::bgp::message::{SessionConfig, UpdateMessage};
-use routecore::bgp::path_attributes::PaMap;
-use routecore::bgp::types::{AfiSafi, NextHop};
-use routecore::bgp::workshop::afisafi_nlri::{HasBasicNlri, Ipv6UnicastNlri};
-use routecore::bgp::workshop::route::{explode_for_afi_safis, RouteWorkshop};
-use routecore::Parser;
+use routecore::bgp::nlri::afisafi::Nlri;
+use routecore::bgp::nlri::afisafi::IsPrefix;
+use routecore::bgp::message::SessionConfig;
+use routecore::bgp::types::NextHop;
+use routecore::bgp::workshop::route::explode_into_wrapped_rws_vec;
 
 mod common;
 
@@ -64,11 +61,11 @@ fn test_data(
         .announcements()
         .into_iter()
         .next()
-        .and_then(|mut p| {
-            if let Some(Ok(Nlri::Unicast(BasicNlri { prefix, .. }))) =
-                p.next()
+        .and_then(|mut nlri| {
+            if let Some(Ok(Nlri::Ipv6Unicast(nlri))) =
+                nlri.next()
             {
-                Some(prefix)
+                Some(nlri.prefix())
             } else {
                 None
             }
@@ -104,14 +101,14 @@ fn test_data(
         provenance,
     );
 
-    let update: UpdateMessage<bytes::Bytes> = update.into_inner();
-    let parser = Parser::from_ref(update.octets());
+    // let update: UpdateMessage<bytes::Bytes> = update.into_inner();
+    // let parser = Parser::from_ref(update.octets());
 
-    let pa_map = PaMap::from_update_pdu(&update).unwrap();
-
-    let afi_safis = update.afi_safis().into_iter().flatten();
+    // let pa_map = PaMap::from_update_pdu(&update).unwrap();
+    let parser = update.bytes_parser();
+    let afi_safis = parser.afi_safis().into_iter().flatten();
     trace!("afi safis {:?}", afi_safis);
-    let mut rws = explode_for_afi_safis::<'_, _, _, TypeValue>(afi_safis, false, parser, &pa_map);
+    let rws = explode_into_wrapped_rws_vec::<'_, _, bytes::Bytes, TypeValue>(afi_safis, false, parser);
     
     trace!("rws {:?}", rws);
     // let mut rws = RouteWorkshop::from_update_pdu(nlri, &update)?;
@@ -121,25 +118,26 @@ fn test_data(
 
     // Get the NLRI for this route, we're only looking at the first
     // announcement, so get that one.
-    let announces = update.announcements_vec().unwrap();
+    // let announces = parser.announcements_vec().unwrap();
 
     // Create a MpReachBuilder with the intended NLRI
-    let mp_reach =
-        MpReachNlriBuilder::new_for_nlri(announces.first().unwrap());
+    // let mp_reach =
+    //     MpReachNlriBuilder::for_nlri(announces.first().unwrap());
+    let rws = &mut rws.unwrap();
 
     let payload = &mut rws.get_mut(1).unwrap();
 
     if let TypeValue::Builtin(BuiltinTypeValue::Route(BasicRoute(rws))) = payload {
         // Store it in the RouteWorkshop
-        rws.set_attr(mp_reach).unwrap();
+        // rws.set_attr(mp_reach).unwrap();
 
         // Get the NextHop from this NLRI and store it in the RouteWorkshop
-        rws.set_attr(
-            update
-                .find_next_hop(announces.first().unwrap().afi_safi())
-                .unwrap(),
-        )
-        .unwrap();
+        // rws.set_attr(
+        //     update
+        //         .find_next_hop(announces.first().unwrap().afi_safi())
+        //         .unwrap(),
+        // )
+        // .unwrap();
         trace!("prefix in route {:?}", rws.nlri().prefix());
     }
 

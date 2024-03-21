@@ -13,7 +13,7 @@ use crate::{
     first_into_vm_err,
     traits::{RotoType, Token},
     types::{
-        builtin::{basic_route::Provenance, BuiltinTypeValue, NlriStatus, RouteContext},
+        builtin::{BuiltinTypeValue, RouteContext},
         collections::{
             BytesRecord, ElementTypeValue, EnumBytesRecord, LazyRecord, List,
             Record,
@@ -30,7 +30,6 @@ use crate::{
 
 use arc_swap::ArcSwapOption;
 use log::{debug, error, log_enabled, trace, Level};
-use routecore::bgp::message::nlri;
 use serde::Serialize;
 use smallvec::SmallVec;
 
