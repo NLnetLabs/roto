@@ -1,5 +1,3 @@
-use logos::Span;
-
 use crate::ast::{
     AcceptReject, AccessExpr, AccessReceiver, ActionCallExpr, ActionSection,
     ActionSectionBody, AndExpr, ApplyBody, ApplyScope, ApplySection,
@@ -12,7 +10,7 @@ use crate::ast::{
     TypeIdentField, ValueExpr,
 };
 
-use super::{token::Token, ParseError, ParseResult, Parser};
+use super::{span::Span, token::Token, ParseError, ParseResult, Parser};
 
 /// # Parsing `filter-map` and `filter` sections
 impl<'source> Parser<'source> {
@@ -687,7 +685,7 @@ impl<'source> Parser<'source> {
                 return Err(ParseError::Custom {
                     description: "not a valid boolean expression".into(),
                     label: "the expression ending here is not a valid boolean expression".into(),
-                    span: span.start-1..span.end-1,
+                    span,
                 });
             }
         })
@@ -728,7 +726,7 @@ impl<'source> Parser<'source> {
             Token::Not => {
                 let span1 = self.take(Token::Not)?;
                 let span2 = self.take(Token::In)?;
-                return Ok(Some((CompareOp::NotIn, span1.start..span2.end)));
+                return Ok(Some((CompareOp::NotIn, span1.merge(span2))));
             }
             _ => return Ok(None),
         };
@@ -770,7 +768,7 @@ impl<'source> Parser<'source> {
                     return Err(ParseError::Custom {
                         description: "an action can only be a compute epression or root method call".into(),
                         label: "invalid action".into(),
-                        span: span1.start..span2.end,
+                        span: span1.merge(span2),
                     });
                 }
             }

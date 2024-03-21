@@ -95,10 +95,13 @@ impl TypeChecker<'_> {
                 let fields = self.record_type(scope, &key_values)?;
                 Ok(self.fresh_record(fields))
             }
-            TypedRecordExpr(ast::TypedRecordValueExpr {
-                type_id,
-                key_values,
-            }) => {
+            TypedRecordExpr(record_expr) => {
+                let record_span = record_expr.span;
+                let ast::TypedRecordValueExpr {
+                    type_id,
+                    key_values,
+                } = &record_expr.inner;
+
                 // We first retrieve the type we expect
                 let (record_name, mut record_type) = match self
                     .types
@@ -122,7 +125,7 @@ impl TypeChecker<'_> {
                 };
 
                 // Infer the type based on the given expression
-                let inferred_type = self.record_type(scope, key_values)?;
+                let inferred_type = self.record_type(scope, &key_values)?;
 
                 for (name, inferred_type) in inferred_type {
                     let Some(idx) = record_type
@@ -130,8 +133,8 @@ impl TypeChecker<'_> {
                         .position(|(n, _)| n == &name.inner)
                     else {
                         return Err(TypeError::Custom {
-                            description: format!("Record {record_name} does not have a field '{name}'."),
-                            label: format!("'{record_name}' does not have this field"),
+                            description: format!("record `{record_name}` does not have a field `{name}`."),
+                            label: format!("`{record_name}` does not have this field"),
                             span: name.span
                         });
                     };
@@ -145,7 +148,7 @@ impl TypeChecker<'_> {
                     return Err(TypeError::MissingFields {
                         fields: missing,
                         type_name: type_id.to_string(),
-                        type_span: type_id.span,
+                        type_span: type_id.span.merge(record_span),
                     });
                 }
 
@@ -153,7 +156,7 @@ impl TypeChecker<'_> {
             }
             ListExpr(ast::ListValueExpr { values }) => {
                 let ret = self.fresh_var();
-                for v in values {
+                for v in values.iter() {
                     let t = self.expr(scope, v)?;
                     self.unify(&ret, &t)?;
                 }

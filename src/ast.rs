@@ -49,7 +49,7 @@ impl RootExpr {
 /// converted to the same type
 #[derive(Clone, Debug)]
 pub struct ListValueExpr {
-    pub values: Vec<ValueExpr>,
+    pub values: Spanned<Vec<ValueExpr>>,
 }
 
 /// The value of a (anonymous) record
@@ -57,14 +57,14 @@ pub struct ListValueExpr {
 /// actual type can be inferred unambiguously.
 #[derive(Clone, Debug)]
 pub struct AnonymousRecordValueExpr {
-    pub key_values: Vec<(Spanned<Identifier>, ValueExpr)>,
+    pub key_values: Spanned<Vec<(Spanned<Identifier>, ValueExpr)>>,
 }
 
 /// Used in the 'Define' section to create variables to hold a record.
 #[derive(Clone, Debug)]
 pub struct TypedRecordValueExpr {
     pub type_id: Spanned<TypeIdentifier>,
-    pub key_values: Vec<(Spanned<Identifier>, ValueExpr)>,
+    pub key_values: Spanned<Vec<(Spanned<Identifier>, ValueExpr)>>,
 }
 
 /// The value of a typed record
@@ -306,7 +306,7 @@ pub struct Rib {
 
 #[derive(Clone, Debug)]
 pub struct RibBody {
-    pub key_values: Vec<RibField>,
+    pub key_values: Spanned<Vec<RibField>>,
 }
 
 #[derive(Clone, Debug)]
@@ -446,7 +446,7 @@ impl From<StringLiteral> for String {
 /// semantically different.
 #[derive(Clone, Debug)]
 pub struct RecordTypeIdentifier {
-    pub key_values: Vec<RibField>,
+    pub key_values: Spanned<Vec<RibField>>,
 }
 
 //============= Literals ====================================================
@@ -655,14 +655,14 @@ pub enum ValueExpr {
     /// an expression of a record that does have a type, e.g. `MyType {
     /// value_1: 100, value_2: "bla" }`, where MyType is a user-defined Record
     /// Type.
-    TypedRecordExpr(TypedRecordValueExpr),
+    TypedRecordExpr(Spanned<TypedRecordValueExpr>),
     /// An expression that yields a list of values, e.g. `[100, 200, 300]`
     ListExpr(ListValueExpr),
 }
 
 #[derive(Clone, Debug)]
 pub struct ArgExprList {
-    pub args: Vec<ValueExpr>,
+    pub args: Spanned<Vec<ValueExpr>>,
 }
 
 impl ArgExprList {

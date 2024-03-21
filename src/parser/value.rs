@@ -14,7 +14,11 @@ use crate::{
     parser::ParseError,
 };
 
-use super::{span::{Spanned, WithSpan}, token::Token, ParseResult, Parser};
+use super::{
+    span::{Spanned, WithSpan},
+    token::Token,
+    ParseResult, Parser,
+};
 
 /// # Parsing value expressions
 impl<'source> Parser<'source> {
@@ -51,11 +55,16 @@ impl<'source> Parser<'source> {
             let id = self.identifier()?;
             if self.peek_is(Token::CurlyLeft) {
                 let Identifier { ident: s } = id.inner;
+                let type_id = TypeIdentifier { ident: s }.with_span(id.span);
+                let key_values = self.record()?;
+                let span = id.span.merge(key_values.span);
+
                 return Ok(ValueExpr::TypedRecordExpr(
                     TypedRecordValueExpr {
-                        type_id: TypeIdentifier { ident: s }.with_span(id.span),
-                        key_values: self.record()?,
-                    },
+                        type_id,
+                        key_values,
+                    }
+                    .with_span(span),
                 ));
             }
 
@@ -307,7 +316,9 @@ impl<'source> Parser<'source> {
     /// Record      ::= '{' (RecordField (',' RecordField)* ','? )? '}'
     /// RecordField ::= Identifier ':' ValueExpr
     /// ```
-    fn record(&mut self) -> ParseResult<Vec<(Spanned<Identifier>, ValueExpr)>> {
+    fn record(
+        &mut self,
+    ) -> ParseResult<Spanned<Vec<(Spanned<Identifier>, ValueExpr)>>> {
         self.separated(
             Token::CurlyLeft,
             Token::CurlyRight,

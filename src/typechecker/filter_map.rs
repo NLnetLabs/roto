@@ -397,10 +397,10 @@ impl TypeChecker<'_> {
                                         });
                                     }
                                     for (arg, (_, param)) in
-                                        args.into_iter().zip(term_params)
+                                        args.iter().zip(term_params)
                                     {
                                         let ty =
-                                            self.expr(&inner_scope, arg)?;
+                                            self.expr(&inner_scope, &arg)?;
                                         self.unify(&ty, param)?;
                                     }
                                 }
@@ -455,13 +455,13 @@ impl TypeChecker<'_> {
                                                     span: action_id.span
                                                 });
                                             }
-                                            for (arg, (_, param)) in args
+                                            for (arg, (_, param)) in args.iter()
                                                 .into_iter()
                                                 .zip(action_params)
                                             {
                                                 let ty = self.expr(
                                                     &inner_scope,
-                                                    arg,
+                                                    &arg,
                                                 )?;
                                                 self.unify(&ty, param)?;
                                             }

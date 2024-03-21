@@ -1,10 +1,10 @@
 use crate::ast::{Identifier, RootExpr, SyntaxTree, TypeIdentifier};
-use logos::{Lexer, Span, SpannedIter};
+use logos::{Lexer, SpannedIter};
 use miette::Diagnostic;
 use std::iter::Peekable;
 use token::Token;
 
-use self::span::{Spanned, WithSpan};
+use self::span::{Span, Spanned, WithSpan};
 
 mod filter_map;
 mod rib_like;
@@ -86,8 +86,10 @@ impl<'source> Parser<'source> {
     fn next(&mut self) -> ParseResult<(Token<'source>, Span)> {
         match self.lexer.next() {
             None => Err(ParseError::EndOfInput),
-            Some((Err(()), span)) => Err(ParseError::InvalidToken(span)),
-            Some((Ok(token), span)) => Ok((token, span)),
+            Some((Err(()), span)) => {
+                Err(ParseError::InvalidToken(span.into()))
+            }
+            Some((Ok(token), span)) => Ok((token, span.into())),
         }
     }
 
@@ -149,14 +151,15 @@ impl<'source> Parser<'source> {
         close: Token,
         sep: Token,
         mut parser: impl FnMut(&mut Self) -> ParseResult<T>,
-    ) -> ParseResult<Vec<T>> {
-        self.take(open)?;
+    ) -> ParseResult<Spanned<Vec<T>>> {
+        let start_span = self.take(open)?;
 
         let mut items = Vec::new();
 
         // If there are no fields, return the empty vec.
-        if self.next_is(close.clone()) {
-            return Ok(items);
+        if self.peek_is(close.clone()) {
+            let end_span = self.take(close)?;
+            return Ok(items.with_span(start_span.merge(end_span)));
         }
 
         // Parse the first field
@@ -173,9 +176,9 @@ impl<'source> Parser<'source> {
             items.push(parser(self)?);
         }
 
-        self.take(close)?;
+        let end_span = self.take(close)?;
 
-        Ok(items)
+        Ok(items.with_span(start_span.merge(end_span)))
     }
 }
 
@@ -275,14 +278,15 @@ impl<'source> Parser<'source> {
         let ident = match token {
             Token::Ident(s) => s.as_ref(),
             // 'contains' and `type` already used as both a keyword and an identifier
-            Token::Contains => 
-                "contains",
+            Token::Contains => "contains",
             Token::Type => "type",
-            _ => return Err(ParseError::Expected {
-                expected: "an identifier".into(),
-                got: token.to_string(),
-                span,
-            }),
+            _ => {
+                return Err(ParseError::Expected {
+                    expected: "an identifier".into(),
+                    got: token.to_string(),
+                    span,
+                })
+            }
         };
         Ok(TypeIdentifier {
             ident: ident.into(),

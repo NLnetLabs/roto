@@ -1849,7 +1849,7 @@ impl ast::ArgExprList {
         local_scope: &[symbols::Symbol],
     ) -> Result<Vec<symbols::Symbol>, CompileError> {
         let mut eval_args = vec![];
-        for arg in &self.args {
+        for arg in self.args.iter() {
             let parsed_arg =
                 arg.eval(symbols.clone(), scope.clone(), local_scope)?;
             eval_args.push(parsed_arg);
@@ -1921,7 +1921,7 @@ impl ast::ListValueExpr {
     ) -> Result<Vec<symbols::Symbol>, CompileError> {
         trace!("anonymous list");
         let mut s: Vec<symbols::Symbol> = vec![];
-        for value in &self.values {
+        for value in self.values.iter() {
             let arg = value.eval(symbols.clone(), scope.clone(), &[])?;
             s.push(arg);
         }
@@ -1939,7 +1939,7 @@ impl ast::AnonymousRecordValueExpr {
     ) -> Result<Vec<symbols::Symbol>, CompileError> {
         trace!("anonymous record");
         let mut s: Vec<symbols::Symbol> = vec![];
-        for (key, value) in &self.key_values {
+        for (key, value) in self.key_values.iter() {
             let mut arg =
                 value.eval(symbols.clone(), scope.clone(), local_scope)?;
             arg.name = key.ident.clone();
@@ -1960,7 +1960,7 @@ impl ast::TypedRecordValueExpr {
     {
         trace!("typed record");
         let mut s: Vec<symbols::Symbol> = vec![];
-        for (key, value) in &self.key_values {
+        for (key, value) in self.key_values.iter() {
             let mut arg =
                 value.eval(symbols.clone(), scope.clone(), local_scope)?;
             arg.name = key.ident.clone();

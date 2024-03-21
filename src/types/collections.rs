@@ -216,7 +216,7 @@ impl TryFrom<ValueExpr> for ElementTypeValue {
                 Ok(ElementTypeValue::Nested(Box::new(rec.try_into()?)))
             }
             ValueExpr::TypedRecordExpr(rec) => {
-                Ok(ElementTypeValue::Nested(Box::new(rec.try_into()?)))
+                Ok(ElementTypeValue::Nested(Box::new(rec.inner.try_into()?)))
             }
             ValueExpr::ListExpr(list) => {
                 Ok(ElementTypeValue::Nested(Box::new(list.try_into()?)))
