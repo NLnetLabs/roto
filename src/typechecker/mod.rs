@@ -19,6 +19,7 @@ use crate::{
     parser::span::{Span, Spanned, WithSpan},
 };
 use miette::Diagnostic;
+use owo_colors::OwoColorize;
 use scope::Scope;
 use std::{
     collections::{hash_map::Entry, HashMap},
@@ -116,26 +117,26 @@ impl std::error::Error for TypeError {}
 
 impl std::fmt::Display for TypeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Type error: ")?;
-        match self {
+        write!(f, "{}", "Type error: ".red().bold())?;
+        let msg = match self {
             Self::Custom { description, .. }
             | Self::Simple { description } => {
-                write!(f, "{description}")
+                format!("{description}")
             }
             Self::DuplicateFields { field_name, .. } => {
-                write!(f, "field `{field_name}` appears multiple times in the same record")
+                format!("field `{field_name}` appears multiple times in the same record")
             }
             Self::UndeclaredType { type_name, .. } => {
-                write!(f, "cannot find type `{type_name}`")
+                format!("cannot find type `{type_name}`")
             }
             Self::MissingFields {
                 fields, type_name, ..
             } => {
                 if fields.len() > 1 {
                     let fields = join_quoted(fields);
-                    write!(f, "missing fields {fields} in record literal for `{type_name}`")
+                    format!("missing fields {fields} in record literal for `{type_name}`")
                 } else {
-                    write!(f, "missing field `{}` in record literal for `{type_name}`", fields[0])
+                    format!("missing field `{}` in record literal for `{type_name}`", fields[0])
                 }
             }
             Self::DeclaredTwice {
@@ -143,14 +144,14 @@ impl std::fmt::Display for TypeError {
                 existing_span: Some(_),
                 ..
             } => {
-                write!(f, "type `{type_name}` is declared multiple times")
+                format!("type `{type_name}` is declared multiple times")
             }
             Self::DeclaredTwice {
                 type_name,
                 existing_span: None,
                 ..
             } => {
-                write!(f, "type `{type_name}` is a built-in type and cannot be overwritten")
+                format!("type `{type_name}` is a built-in type and cannot be overwritten")
             }
             Self::NumberOfArgumentDontMatch {
                 call_type,
@@ -159,28 +160,28 @@ impl std::fmt::Display for TypeError {
                 given,
                 ..
             } => {
-                write!(f, "{call_type} `{method_name}` takes {takes} arguments but {given} arguments were given")
+                format!("{call_type} `{method_name}` takes {takes} arguments but {given} arguments were given")
             }
             Self::CanOnlyMatchOnEnum { ty, .. } => {
-                write!(
-                    f,
+                format!(
                     "cannot match on the type `{ty}`, \
                     because only matching on enums is supported."
                 )
             }
             Self::VariantDoesNotHaveField { variant, ty, .. } => {
-                write!(f, "pattern has a data field, but the variant `{variant}` of `{ty}` doesn't have one")
+                format!("pattern has a data field, but the variant `{variant}` of `{ty}` doesn't have one")
             }
             Self::NeedDataFieldOnPattern { variant, ty } => {
-                write!(f, "pattern has no data field, but variant `{variant}` of `{ty}` does have a data field")
+                format!("pattern has no data field, but variant `{variant}` of `{ty}` does have a data field")
             }
             Self::VariantDoesNotExist { variant, ty } => {
-                write!(f, "the variant `{variant}` does not exist on `{ty}`")
+                format!("the variant `{variant}` does not exist on `{ty}`")
             }
             Self::MismatchedTypes { .. } => {
-                write!(f, "mismatched types")
+                format!("mismatched types")
             }
-        }
+        };
+        write!(f, "{}", msg.red().bold())
     }
 }
 
