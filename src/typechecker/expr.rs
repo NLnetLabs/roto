@@ -243,7 +243,7 @@ impl TypeChecker<'_> {
                         }
                         return Err(error::simple(
                             &format!("no field `{field}` on type `{last}`",),
-                            "unknown field",
+                            &format!("unknown field `{field}`"),
                             field.span,
                         ));
                     }
@@ -318,7 +318,7 @@ impl TypeChecker<'_> {
                     let mut access_expr = access_expr.clone();
                     if access_expr.is_empty() {
                         return Err(error::simple(
-                            "a type cannot appear on its own and should be followed by a method",
+                            "a type cannot appear on its own and must be followed by a method",
                             "must be followed by a method",
                             x.span,
                         ));
@@ -328,7 +328,7 @@ impl TypeChecker<'_> {
                         ast::AccessExpr::FieldAccessExpr(f) => {
                             return Err(error::simple(
                                 &format!("`{x}` is a type and does not have any fields"),
-                                "no field access possible on a type",
+                                "no field access possible on this type",
                                 f.field_names[0].span,
                             ))
                         },
