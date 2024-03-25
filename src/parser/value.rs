@@ -166,30 +166,20 @@ impl<'source> Parser<'source> {
         Ok(match token {
             Token::IpV4(s) => IpAddress::Ipv4(Ipv4Addr(
                 s.parse::<std::net::Ipv4Addr>().map_err(|e| {
-                    ParseError::InvalidLiteral {
-                        description: "Ipv4 addresss".into(),
-                        token: s.to_string(),
-                        span,
-                        inner_error: e.to_string(),
-                    }
+                    ParseError::invalid_literal("Ipv4 addresss", s, e, span)
                 })?,
             )),
             Token::IpV6(s) => IpAddress::Ipv6(Ipv6Addr(
                 s.parse::<std::net::Ipv6Addr>().map_err(|e| {
-                    ParseError::InvalidLiteral {
-                        description: "Ipv6 addresss".into(),
-                        token: s.to_string(),
-                        span,
-                        inner_error: e.to_string(),
-                    }
+                    ParseError::invalid_literal("Ipv6 addresss", s, e, span)
                 })?,
             )),
             _ => {
-                return Err(ParseError::Expected {
-                    expected: "an IP address".into(),
-                    got: token.to_string(),
+                return Err(ParseError::expected(
+                    "an IP address",
+                    token,
                     span,
-                })
+                ))
             }
         })
     }
@@ -207,31 +197,23 @@ impl<'source> Parser<'source> {
             Token::Integer(s) => LiteralExpr::IntegerLiteral(IntegerLiteral(
                 // This parse fails if the literal is too big,
                 // it should be handled properly
-                s.parse::<i64>().map_err(|e| ParseError::InvalidLiteral {
-                    description: "integer".into(),
-                    token: token.to_string(),
-                    span,
-                    inner_error: e.to_string(),
+                s.parse::<i64>().map_err(|e| {
+                    ParseError::invalid_literal("integer", token, e, span)
                 })?,
             )),
             Token::Hex(s) => LiteralExpr::HexLiteral(HexLiteral(
                 u64::from_str_radix(&s[2..], 16).map_err(|e| {
-                    ParseError::InvalidLiteral {
-                        description: "hexadecimal integer".into(),
-                        token: token.to_string(),
+                    ParseError::invalid_literal(
+                        "hexadecimal integer",
+                        token,
+                        e,
                         span,
-                        inner_error: e.to_string(),
-                    }
+                    )
                 })?,
             )),
             Token::Asn(s) => LiteralExpr::AsnLiteral(AsnLiteral(
                 s[2..].parse::<u32>().map_err(|e| {
-                    ParseError::InvalidLiteral {
-                        description: "AS number".into(),
-                        token: token.to_string(),
-                        span,
-                        inner_error: e.to_string(),
-                    }
+                    ParseError::invalid_literal("AS number", token, e, span)
                 })?,
             )),
             Token::Bool(b) => LiteralExpr::BooleanLiteral(BooleanLiteral(b)),
@@ -258,24 +240,24 @@ impl<'source> Parser<'source> {
                     })
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(|e: ParseIntError| {
-                        ParseError::InvalidLiteral {
-                            description: "community".into(),
-                            token: s.to_string(),
-                            span: span.clone(),
-                            inner_error: e.to_string(),
-                        }
+                        ParseError::invalid_literal(
+                            "community",
+                            s,
+                            e,
+                            span.clone(),
+                        )
                     })?;
 
                 let transformed = parts.join(":");
 
                 let c: Community =
                     transformed.parse::<Community>().map_err(|e| {
-                        ParseError::InvalidLiteral {
-                            description: "community".into(),
-                            token: token.to_string(),
+                        ParseError::invalid_literal(
+                            "community",
+                            token,
+                            e,
                             span,
-                            inner_error: e.to_string(),
-                        }
+                        )
                     })?;
                 match c {
                     Community::Standard(x) => {
@@ -300,13 +282,7 @@ impl<'source> Parser<'source> {
                     }
                 }
             }
-            t => {
-                return Err(ParseError::Expected {
-                    expected: "a literal".into(),
-                    got: t.to_string(),
-                    span,
-                })
-            }
+            t => return Err(ParseError::expected("a literal", t, span)),
         })
     }
 
@@ -399,22 +375,16 @@ impl<'source> Parser<'source> {
     fn prefix_length(&mut self) -> ParseResult<PrefixLength> {
         let (token, span) = self.next()?;
         let Token::PrefixLength(s) = token else {
-            return Err(ParseError::InvalidLiteral {
-                description: "prefix length".into(),
-                token: token.to_string(),
+            return Err(ParseError::invalid_literal(
+                "prefix length",
+                token,
+                "",
                 span,
-                inner_error: String::new(),
-            });
+            ));
         };
-        let len =
-            s[1..]
-                .parse::<u8>()
-                .map_err(|e| ParseError::InvalidLiteral {
-                    description: "prefix length".into(),
-                    token: token.to_string(),
-                    span,
-                    inner_error: e.to_string(),
-                })?;
+        let len = s[1..].parse::<u8>().map_err(|e| {
+            ParseError::invalid_literal("prefix length", token, e, span)
+        })?;
         Ok(PrefixLength(len))
     }
 }

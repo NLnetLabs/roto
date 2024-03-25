@@ -1,7 +1,7 @@
 use crate::{
     ast,
     parser::span::{Spanned, WithSpan},
-    typechecker::TypeError,
+    typechecker::error,
 };
 
 use super::{
@@ -109,18 +109,16 @@ impl TypeChecker<'_> {
                 {
                     Some(Type::NamedRecord(n, t)) => (n.clone(), t.clone()),
                     Some(_) => {
-                        return Err(TypeError::Custom {
-                            description: format!(
+                        return Err(error::simple(
+                            &format!(
                             "Expected a named record type, but found `{type_id}`",
                         ),
-                            label: "not a named record type".into(),
-                            span: type_id.span,
-                        })
+                            "not a named record type",
+                            type_id.span,
+                        ))
                     }
                     None => {
-                        return Err(TypeError::UndeclaredType {
-                            type_name: type_id.clone(),
-                        })
+                        return Err(error::undeclared_type(type_id))
                     }
                 };
 
@@ -132,11 +130,11 @@ impl TypeChecker<'_> {
                         .iter()
                         .position(|(n, _)| n == &name.inner)
                     else {
-                        return Err(TypeError::Custom {
-                            description: format!("record `{record_name}` does not have a field `{name}`."),
-                            label: format!("`{record_name}` does not have this field"),
-                            span: name.span
-                        });
+                        return Err(error::simple(
+                            &format!("record `{record_name}` does not have a field `{name}`."),
+                            &format!("`{record_name}` does not have this field"),
+                            name.span
+                        ));
                     };
                     let (_, ty) = record_type.remove(idx);
                     self.unify(&inferred_type, &ty)?;
@@ -145,11 +143,11 @@ impl TypeChecker<'_> {
                 let missing: Vec<_> =
                     record_type.into_iter().map(|(s, _)| s).collect();
                 if !missing.is_empty() {
-                    return Err(TypeError::MissingFields {
-                        fields: missing,
-                        type_name: type_id.to_string(),
-                        type_span: type_id.span.merge(record_span),
-                    });
+                    return Err(error::missing_fields(
+                        &missing,
+                        type_id,
+                        type_id.span.merge(record_span),
+                    ));
                 }
 
                 Ok(Type::Name(record_name.clone()))
@@ -183,23 +181,22 @@ impl TypeChecker<'_> {
                     let Some(arrow) =
                         self.find_method(self.methods, &last, ident.as_ref())
                     else {
-                        return Err(TypeError::Custom {
-                            description: format!(
+                        return Err(error::simple(
+                            &format!(
                                 "method `{ident}` not found on `{last}`",
                             ),
-                            label: format!("method not found for `{last}`"),
-                            span: ident.span,
-                        });
+                            &format!("method not found for `{last}`"),
+                            ident.span,
+                        ));
                     };
 
                     if args.len() != arrow.args.len() {
-                        return Err(TypeError::NumberOfArgumentDontMatch {
-                            call_type: "method",
-                            method_name: ident.to_string(),
-                            takes: arrow.args.len(),
-                            given: args.len(),
-                            span: ident.span,
-                        });
+                        return Err(error::number_of_arguments_dont_match(
+                            "method",
+                            &ident,
+                            arrow.args.len(),
+                            args.len(),
+                        ));
                     }
 
                     self.unify(&arrow.rec, &last)?;
@@ -227,13 +224,11 @@ impl TypeChecker<'_> {
                                 continue;
                             };
                         }
-                        return Err(TypeError::Custom {
-                            description: format!(
-                                "no field `{field}` on type `{last}`",
-                            ),
-                            label: "unknown field".into(),
-                            span: field.span,
-                        });
+                        return Err(error::simple(
+                            &format!("no field `{field}` on type `{last}`",),
+                            "unknown field",
+                            field.span,
+                        ));
                     }
                 }
             }
@@ -305,21 +300,20 @@ impl TypeChecker<'_> {
                 if let Some(ty) = self.get_type(&x) {
                     let mut access_expr = access_expr.clone();
                     if access_expr.is_empty() {
-                        return Err(TypeError::Custom {
-                            description:
-                                "a type cannot appear on its own and should be followed by a method".into(),
-                            label: "must be followed by a method".into(),
-                            span: x.span,
-                        });
+                        return Err(error::simple(
+                            "a type cannot appear on its own and should be followed by a method",
+                            "must be followed by a method",
+                            x.span,
+                        ));
                     }
                     let m = match access_expr.remove(0) {
                         ast::AccessExpr::MethodComputeExpr(m) => m,
                         ast::AccessExpr::FieldAccessExpr(f) => {
-                            return Err(TypeError::Custom {
-                                description: format!("`{x}` is a type and does not have any fields"),
-                                label: "no field access possible on a type".into(),
-                                span: f.field_names[0].span,
-                            })
+                            return Err(error::simple(
+                                &format!("`{x}` is a type and does not have any fields"),
+                                "no field access possible on a type",
+                                f.field_names[0].span,
+                            ))
                         },
                     };
                     let receiver_type =
@@ -347,23 +341,20 @@ impl TypeChecker<'_> {
         let Some(arrow) =
             self.find_method(self.static_methods, &ty, ident.as_ref())
         else {
-            return Err(TypeError::Custom {
-                description: format!(
-                    "no static method `{ident}` found for `{ty}`",
-                ),
-                label: "static method not found for `{ty}`".into(),
-                span: ident.span,
-            });
+            return Err(error::simple(
+                &format!("no static method `{ident}` found for `{ty}`",),
+                &format!("static method not found for `{ty}`"),
+                ident.span,
+            ));
         };
 
         if args.len() != arrow.args.len() {
-            return Err(TypeError::NumberOfArgumentDontMatch {
-                call_type: "static method",
-                method_name: ident.to_string(),
-                takes: args.len(),
-                given: arrow.args.len(),
-                span: ident.span,
-            });
+            return Err(error::number_of_arguments_dont_match(
+                "static method",
+                &ident,
+                arrow.args.len(),
+                args.len(),
+            ));
         }
 
         self.unify(&arrow.rec, &ty)?;

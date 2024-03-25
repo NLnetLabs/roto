@@ -18,20 +18,17 @@ use crate::{
     ast::{self, Identifier, ShortString, TypeIdentField, TypeIdentifier},
     parser::span::{Span, Spanned, WithSpan},
 };
-use miette::Diagnostic;
-use owo_colors::OwoColorize;
 use scope::Scope;
-use std::{
-    collections::{hash_map::Entry, HashMap},
-    fmt::Display,
-};
+use std::collections::{hash_map::Entry, HashMap};
 use types::Type;
 
 use self::{
+    error::TypeError,
     types::{default_types, Arrow, Method},
     unionfind::UnionFind,
 };
 
+pub(crate) mod error;
 mod expr;
 mod filter_map;
 mod scope;
@@ -39,161 +36,6 @@ mod scope;
 mod tests;
 pub mod types;
 mod unionfind;
-
-#[derive(Clone, Debug, Diagnostic)]
-pub enum TypeError {
-    Custom {
-        description: String,
-        label: String,
-        #[label("{label}")]
-        span: Span,
-    },
-    Simple {
-        description: String,
-    },
-    DuplicateFields {
-        field_name: String,
-        #[label(collection, "field `{field_name}` declared here")]
-        fields: Vec<Span>,
-    },
-    UndeclaredType {
-        #[label("not found")]
-        type_name: Spanned<TypeIdentifier>,
-    },
-    MissingFields {
-        fields: Vec<String>,
-        type_name: String,
-        #[label("missing {}", join_quoted(fields))]
-        type_span: Span,
-    },
-    DeclaredTwice {
-        type_name: String,
-        #[label("previously declared here")]
-        existing_span: Option<Span>,
-        #[label("declared here")]
-        span: Span,
-    },
-    NumberOfArgumentDontMatch {
-        /// "method" or "term" or "action" etc.
-        call_type: &'static str,
-        method_name: String,
-        takes: usize,
-        given: usize,
-        #[label("takes {takes} arguments but {given} arguments were given")]
-        span: Span,
-    },
-    CanOnlyMatchOnEnum {
-        ty: Type,
-        #[label("cannot match on type `{ty}`")]
-        span: Span,
-    },
-    VariantDoesNotHaveField {
-        variant: Spanned<Identifier>,
-        ty: Type,
-        #[label("unexpected data field")]
-        span: Span,
-    },
-    NeedDataFieldOnPattern {
-        #[label("missing data field")]
-        variant: Spanned<Identifier>,
-        ty: Type,
-    },
-    VariantDoesNotExist {
-        #[label("variant does not exist on `{ty}`")]
-        variant: Spanned<Identifier>,
-        ty: Type,
-    },
-    MismatchedTypes {
-        expected: Type,
-        got: Type,
-        #[label("expected `{expected}`, found `{got}`")]
-        span: Span,
-        #[label("expected because this is `{expected}`")]
-        cause: Option<Span>,
-    },
-}
-
-impl std::error::Error for TypeError {}
-
-impl std::fmt::Display for TypeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", "Type error: ".red().bold())?;
-        let msg = match self {
-            Self::Custom { description, .. }
-            | Self::Simple { description } => {
-                format!("{description}")
-            }
-            Self::DuplicateFields { field_name, .. } => {
-                format!("field `{field_name}` appears multiple times in the same record")
-            }
-            Self::UndeclaredType { type_name, .. } => {
-                format!("cannot find type `{type_name}`")
-            }
-            Self::MissingFields {
-                fields, type_name, ..
-            } => {
-                if fields.len() > 1 {
-                    let fields = join_quoted(fields);
-                    format!("missing fields {fields} in record literal for `{type_name}`")
-                } else {
-                    format!("missing field `{}` in record literal for `{type_name}`", fields[0])
-                }
-            }
-            Self::DeclaredTwice {
-                type_name,
-                existing_span: Some(_),
-                ..
-            } => {
-                format!("type `{type_name}` is declared multiple times")
-            }
-            Self::DeclaredTwice {
-                type_name,
-                existing_span: None,
-                ..
-            } => {
-                format!("type `{type_name}` is a built-in type and cannot be overwritten")
-            }
-            Self::NumberOfArgumentDontMatch {
-                call_type,
-                method_name,
-                takes,
-                given,
-                ..
-            } => {
-                format!("{call_type} `{method_name}` takes {takes} arguments but {given} arguments were given")
-            }
-            Self::CanOnlyMatchOnEnum { ty, .. } => {
-                format!(
-                    "cannot match on the type `{ty}`, \
-                    because only matching on enums is supported."
-                )
-            }
-            Self::VariantDoesNotHaveField { variant, ty, .. } => {
-                format!("pattern has a data field, but the variant `{variant}` of `{ty}` doesn't have one")
-            }
-            Self::NeedDataFieldOnPattern { variant, ty } => {
-                format!("pattern has no data field, but variant `{variant}` of `{ty}` does have a data field")
-            }
-            Self::VariantDoesNotExist { variant, ty } => {
-                format!("the variant `{variant}` does not exist on `{ty}`")
-            }
-            Self::MismatchedTypes { .. } => {
-                format!("mismatched types")
-            }
-        };
-        write!(f, "{}", msg.red().bold())
-    }
-}
-
-fn join_quoted<T: Display>(list: impl IntoIterator<Item = T>) -> String {
-    let mut list: Vec<_> =
-        list.into_iter().map(|s| format!("`{s}`")).collect();
-    let last = list.pop().unwrap();
-    if list.is_empty() {
-        return last;
-    }
-    format!("{} and {last}", list.join(", "))
-}
 
 pub struct TypeChecker<'methods> {
     /// The unionfind structure that maps type variables to types
@@ -252,7 +94,13 @@ impl<'methods> TypeChecker<'methods> {
         let mut root_scope = Scope::default();
 
         for (v, t) in types::globals() {
-            root_scope.insert_var(v, t)?;
+            root_scope.insert_var(
+                &Identifier {
+                    ident: ShortString::from(&*v),
+                }
+                .with_span(Span::new(0, 0..1)),
+                t,
+            )?;
         }
 
         let mut filter_maps = Vec::new();
@@ -317,18 +165,23 @@ impl<'methods> TypeChecker<'methods> {
             .map(|(s, t)| match t {
                 MaybeDeclared::Declared(t, _) => Ok((s, t)),
                 MaybeDeclared::Undeclared(reference_span) => {
-                    Err(TypeError::UndeclaredType {
-                        type_name: TypeIdentifier {
+                    Err(error::undeclared_type(
+                        &TypeIdentifier {
                             ident: ShortString::from(&*s),
                         }
                         .with_span(reference_span),
-                    })
+                    ))
                 }
             })
             .collect::<Result<_, _>>()?;
 
-        self.detect_type_cycles()
-            .map_err(|description| TypeError::Simple { description })?;
+        self.detect_type_cycles().map_err(|description| {
+            error::simple(
+                &description,
+                "type cycle detected",
+                Span::new(0, 0..1),
+            )
+        })?;
 
         for f in filter_maps {
             self.filter_map(&root_scope, f)?;
@@ -452,12 +305,7 @@ impl<'methods> TypeChecker<'methods> {
         if let Some(ty) = self.unify_inner(&a, &b) {
             Ok(ty)
         } else {
-            Err(TypeError::MismatchedTypes {
-                expected: a,
-                got: b,
-                span: Span::from(0..1), // TODO: make this logical
-                cause: None,
-            })
+            Err(error::mismatched_types(a, b, Span::new(0, 0..1), None))
         }
     }
 
@@ -693,21 +541,21 @@ fn store_type(
     k: &Spanned<ast::TypeIdentifier>,
     v: Type,
 ) -> TypeResult<()> {
-    let span = k.span;
-    let k = k.inner.to_string();
-    match types.entry(k.clone()) {
+    let k_string = k.inner.to_string();
+    match types.entry(k_string) {
         Entry::Occupied(mut entry) => {
             if let MaybeDeclared::Declared(_, existing_span) = entry.get() {
-                return Err(TypeError::DeclaredTwice {
-                    type_name: k,
-                    existing_span: existing_span.clone(),
-                    span,
+                return Err(match existing_span {
+                    Some(existing_span) => {
+                        error::declared_twice(k, *existing_span)
+                    }
+                    None => error::tried_to_overwrite_builtin(k),
                 });
             }
-            entry.insert(MaybeDeclared::Declared(v, Some(span)));
+            entry.insert(MaybeDeclared::Declared(v, Some(k.span)));
         }
         Entry::Vacant(entry) => {
-            entry.insert(MaybeDeclared::Declared(v, Some(span)));
+            entry.insert(MaybeDeclared::Declared(v, Some(k.span)));
         }
     };
     Ok(())
@@ -784,10 +632,10 @@ fn evaluate_record_type(
             })
             .collect();
         if same_fields.len() > 1 {
-            return Err(TypeError::DuplicateFields {
-                field_name: field.0.inner.to_string(),
-                fields: same_fields,
-            });
+            return Err(error::duplicate_fields(
+                field.0.as_ref(),
+                &same_fields,
+            ));
         }
         unspanned_type_fields
             .push((field.0.inner.to_string(), field.1.clone()));

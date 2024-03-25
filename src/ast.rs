@@ -8,22 +8,11 @@ use routecore::asn::Asn;
 use crate::compiler::error::CompileError;
 use crate::first_into_compile_err;
 use crate::parser::span::Spanned;
-use crate::parser::{ParseError, Parser};
 use crate::types::typevalue::TypeValue;
 
 #[derive(Clone, Debug, Default)]
 pub struct SyntaxTree {
     pub expressions: Vec<RootExpr>,
-}
-
-impl SyntaxTree {
-    pub fn parse_str(input: &str) -> Result<Self, ParseError> {
-        let tree = Parser::parse(input)?;
-        if tree.expressions.is_empty() {
-            return Err(ParseError::EmptyInput);
-        }
-        Ok(tree)
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -137,7 +126,7 @@ pub struct DefineBody {
 
 #[derive(Clone, Debug)]
 pub struct TermSection {
-    pub ident: Identifier,
+    pub ident: Spanned<Identifier>,
     pub for_kv: Option<TypeIdentField>,
     pub with_kv: Vec<TypeIdentField>,
     pub body: TermBody,
@@ -175,7 +164,7 @@ pub struct TermPatternMatchArm {
 
 #[derive(Clone, Debug)]
 pub struct ActionSection {
-    pub ident: Identifier,
+    pub ident: Spanned<Identifier>,
     // pub for_kv: Option<TypeIdentField>,
     pub with_kv: Vec<TypeIdentField>,
     pub body: ActionSectionBody,
@@ -299,7 +288,7 @@ pub struct TermMatchExpr {
 
 #[derive(Clone, Debug)]
 pub struct Rib {
-    pub ident: Identifier,
+    pub ident: Spanned<Identifier>,
     pub contain_ty: Spanned<TypeIdentifier>,
     pub body: RibBody,
 }
@@ -318,14 +307,14 @@ pub enum RibField {
 
 #[derive(Clone, Debug)]
 pub struct Table {
-    pub ident: Identifier,
+    pub ident: Spanned<Identifier>,
     pub contain_ty: Spanned<TypeIdentifier>,
     pub body: RibBody,
 }
 
 #[derive(Clone, Debug)]
 pub struct OutputStream {
-    pub ident: Identifier,
+    pub ident: Spanned<Identifier>,
     pub contain_ty: Spanned<TypeIdentifier>,
     pub body: RibBody,
 }
@@ -531,13 +520,19 @@ impl From<&'_ AsnLiteral> for Asn {
 }
 
 #[derive(Clone, Debug)]
-pub struct StandardCommunityLiteral(pub routecore::bgp::communities::StandardCommunity);
+pub struct StandardCommunityLiteral(
+    pub routecore::bgp::communities::StandardCommunity,
+);
 
 #[derive(Clone, Debug)]
-pub struct ExtendedCommunityLiteral(pub routecore::bgp::communities::ExtendedCommunity);
+pub struct ExtendedCommunityLiteral(
+    pub routecore::bgp::communities::ExtendedCommunity,
+);
 
 #[derive(Clone, Debug)]
-pub struct LargeCommunityLiteral(pub routecore::bgp::communities::LargeCommunity);
+pub struct LargeCommunityLiteral(
+    pub routecore::bgp::communities::LargeCommunity,
+);
 
 //------------ FloatLiteral --------------------------------------------------
 
@@ -972,7 +967,9 @@ pub enum MatchOperator {
 }
 
 impl MatchOperator {
-    pub(crate) fn get_ident(&self) -> Result<Spanned<Identifier>, CompileError> {
+    pub(crate) fn get_ident(
+        &self,
+    ) -> Result<Spanned<Identifier>, CompileError> {
         if let MatchOperator::MatchValueWith(id) = self {
             Ok(id.clone())
         } else {

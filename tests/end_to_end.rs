@@ -1,16 +1,16 @@
 use log::trace;
 
 use roto::ast::AcceptReject;
-use roto::compiler::Compiler;
 use roto::blocks::Scope::{self, Filter, FilterMap};
+use roto::pipeline;
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::datasources::{DataSource, Rib};
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
 use rotonda_store::prelude::MergeUpdate;
-use routecore::bgp::communities::HumanReadableCommunity as Community;
 use routecore::asn::Asn;
+use routecore::bgp::communities::HumanReadableCommunity as Community;
 
 mod common;
 
@@ -58,17 +58,9 @@ fn test_data(
 ) -> Result<VmResult, Box<dyn std::error::Error>> {
     trace!("Evaluate filter-map {}...", name);
 
-    let mut c = Compiler::new();
-    c.with_arguments(&name, filter_args)?;
-    let compiler_res = c.build_from_compiler(source_code);
-
-    if let Err(e) = &compiler_res {
-        eprintln!("{e}");
-    }
-
-    let roto_packs = compiler_res?;
-
-    let mut roto_pack = roto_packs.retrieve_pack_as_refs(&name)?;
+    let rotolo =
+        pipeline::run_test(source_code, Some((&name, filter_args)))?;
+    let mut roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
     let _count: TypeValue = 1_u32.into();
     let prefix: TypeValue =
         routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?
@@ -81,9 +73,7 @@ fn test_data(
     trace!("ASN {:?}", asn);
 
     let comms_list = List::new(vec![ElementTypeValue::Primitive(
-        Community::from([
-            127, 12, 13, 12,
-        ]).into(),
+        Community::from([127, 12, 13, 12]).into(),
     )]);
 
     trace!("comms list {}", comms_list);
@@ -101,10 +91,8 @@ fn test_data(
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            Community::from([
-                127, 12, 13, 12,
-            ]).into()),
-        ]));
+            Community::from([127, 12, 13, 12]).into(),
+        )]));
 
     trace!("comms instance {}", comms);
 
@@ -194,10 +182,8 @@ fn test_filter_map_1() {
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            Community::from([
-                127, 12, 13, 12,
-            ]).into()),
-        ]));
+            Community::from([127, 12, 13, 12]).into(),
+        )]));
 
     trace!("comms instance {}", comms);
 

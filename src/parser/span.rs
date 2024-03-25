@@ -1,25 +1,24 @@
-use std::{borrow::Borrow, fmt::Display, ops::{Deref, DerefMut, Range}};
-
-use miette::SourceSpan;
+use std::{
+    borrow::Borrow,
+    fmt::Display,
+    ops::{Deref, DerefMut, Range},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Span {
-    start: usize,
-    end: usize,
+    pub file: usize,
+    pub start: usize,
+    pub end: usize,
 }
 
 impl Span {
-    pub fn merge(self, other: Span) -> Span {
+    pub fn merge(self, other: Self) -> Self {
+        assert_eq!(self.file, other.file);
         Span {
+            file: self.file,
             start: self.start.min(other.start),
             end: self.end.max(other.end),
         }
-    }
-}
-
-impl From<Span> for SourceSpan {
-    fn from(value: Span) -> Self {
-        (value.start..value.end).into()
     }
 }
 
@@ -29,9 +28,10 @@ pub struct Spanned<T> {
     pub span: Span,
 }
 
-impl From<Range<usize>> for Span {
-    fn from(value: Range<usize>) -> Self {
+impl Span {
+    pub fn new(file: usize, value: Range<usize>) -> Self {
         Self {
+            file,
             start: value.start,
             end: value.end,
         }
@@ -56,14 +56,8 @@ impl<T: Display> Display for Spanned<T> {
     }
 }
 
-impl<T> From<Spanned<T>> for SourceSpan {
-    fn from(value: Spanned<T>) -> Self {
-        value.span.into()
-    }
-}
-
 pub trait WithSpan: Sized {
-    fn with_span(self, span: impl Into<Span>) -> Spanned<Self> {
+    fn with_span<'a>(self, span: impl Into<Span>) -> Spanned<Self> {
         Spanned {
             inner: self,
             span: span.into(),

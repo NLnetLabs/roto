@@ -1,10 +1,8 @@
-use roto::compiler::compile::Compiler;
-
 use roto::types::builtin::BuiltinTypeValue;
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
-use roto::vm;
+use roto::{pipeline, vm};
 use roto::blocks::Scope::{self, FilterMap};
 
 use routecore::bgp::communities::HumanReadableCommunity as Community;
@@ -17,7 +15,7 @@ fn test_data(
     println!("Evaluate filter {}...", name);
 
     // Compile the source code in this example
-    let rotolo = Compiler::build(source_code)?;
+    let rotolo = pipeline::run_test(source_code, None)?;
     let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     // Create a payload type and instance to feed into a VM.

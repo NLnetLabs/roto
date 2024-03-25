@@ -1,23 +1,10 @@
-use crate::parser::Parser;
-
-use super::TypeResult;
+use crate::pipeline::{self, RotoReport};
 
 #[track_caller]
-fn typecheck(s: &str) -> TypeResult<()> {
-    let tree = match Parser::parse(s) {
-        Ok(ast) => ast,
-        Err(e) => {
-            let report =
-                miette::Report::new(e).with_source_code(s.to_string());
-            println!("{report:?}");
-            panic!("Parse error, see above");
-        }
-    };
-    let res = super::typecheck(&tree);
-    if let Err(e) = &res {
-        eprintln!("{e}");
-    }
-    res
+fn typecheck(s: &str) -> Result<(), RotoReport> {
+    let files = pipeline::test_file(s);
+    let trees = pipeline::parse(&files)?;
+    pipeline::typecheck(&files, &trees)
 }
 
 #[test]
@@ -541,7 +528,7 @@ fn record_inference() {
         }
     ";
     typecheck(src).unwrap();
-    
+
     let src = "
         type A { a: U32 }
         type B { a: U32 }

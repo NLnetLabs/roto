@@ -10,7 +10,9 @@ use crate::ast::{
     TypeIdentField, ValueExpr,
 };
 
-use super::{span::Span, token::Token, ParseError, ParseResult, Parser};
+use super::{
+    span::Span, token::Token, ParseError, ParseResult, Parser,
+};
 
 /// # Parsing `filter-map` and `filter` sections
 impl<'source> Parser<'source> {
@@ -26,11 +28,11 @@ impl<'source> Parser<'source> {
             Token::FilterMap => FilterType::FilterMap,
             Token::Filter => FilterType::Filter,
             _ => {
-                return Err(ParseError::Expected {
-                    expected: "'filter-map' or 'filter'".into(),
-                    got: token.to_string(),
+                return Err(ParseError::expected(
+                    "'filter-map' or 'filter'",
+                    token,
                     span,
-                })
+                ))
             }
         };
 
@@ -70,11 +72,11 @@ impl<'source> Parser<'source> {
                 let (_, span) = self.next()?;
                 if define.is_some() {
                     // Cannot have multiple define sections
-                    return Err(ParseError::Custom {
-                        description: "a filter or filter-map cannot have multiple define sections".into(),
-                        label: "merge this define section with the previous one".into(),
+                    return Err(ParseError::custom(
+                        "a filter or filter-map cannot have multiple define sections",
+                        "merge this define section with the previous one",
                         span,
-                    });
+                    ));
                 }
                 let for_kv = self.try_for_clause()?;
                 let with_kv = self.try_with_clause()?;
@@ -88,11 +90,11 @@ impl<'source> Parser<'source> {
                 let (_, span) = self.next()?;
                 if apply.is_some() {
                     // Cannot have multiple apply sections
-                    return Err(ParseError::Custom {
-                        description: "a filter or filter-map cannot have multiple apply sections".into(),
-                        label: "merge this apply section with the previous one".into(),
+                    return Err(ParseError::custom(
+                        "a filter or filter-map cannot have multiple apply sections",
+                        "merge this apply section with the previous one",
                         span,
-                    });
+                    ));
                 }
                 let for_kv = self.try_for_clause()?;
                 let with_kv = self.try_with_clause()?;
@@ -108,15 +110,12 @@ impl<'source> Parser<'source> {
         }
 
         let Some(define) = define else {
-            return Err(ParseError::Custom {
-                description: "a filter or filter-map requires at\
-                    least one define section"
-                    .into(),
-                label:
-                    "this filter or filter-map is missing a define section"
-                        .into(),
+            return Err(ParseError::custom(
+                "a filter or filter-map requires at \
+                    least one define section",
+                "this filter or filter-map is missing a define section",
                 span,
-            });
+            ));
         };
         Ok(FilterMapBody {
             define,
@@ -160,11 +159,11 @@ impl<'source> Parser<'source> {
                 }
             }
             _ => {
-                return Err(ParseError::Expected {
-                    expected: "'rx' or 'rx_tx'".into(),
-                    got: token.to_string(),
+                return Err(ParseError::expected(
+                    "`rx` or `rx_tx`",
+                    token,
                     span,
-                })
+                ))
             }
         };
 
@@ -228,11 +227,11 @@ impl<'source> Parser<'source> {
             MatchActionExpr::FilterMatchAction(self.apply_filter()?)
         } else {
             let (token, span) = self.next()?;
-            return Err(ParseError::Expected {
-                expected: "'match' or 'filter'".to_string(),
-                got: token.to_string(),
+            return Err(ParseError::expected(
+                "`match` or `filter`",
+                token,
                 span,
-            });
+            ));
         };
 
         Ok(ApplyScope {
@@ -335,11 +334,11 @@ impl<'source> Parser<'source> {
             MatchOperator::All
         } else {
             let (token, span) = self.next()?;
-            return Err(ParseError::Expected {
-                expected: "'match', 'exactly-one', 'some' or 'all'".into(),
-                got: token.to_string(),
+            return Err(ParseError::expected(
+                "`match`, `exactly-one`, `some` or `all`",
+                token,
                 span,
-            });
+            ));
         };
 
         let filter_ident = self.value_expr()?;
@@ -397,12 +396,11 @@ impl<'source> Parser<'source> {
                 Token::Accept => AcceptReject::Accept,
                 Token::Reject => AcceptReject::Reject,
                 _ => {
-                    return Err(ParseError::Expected {
-                        expected: "'accept' or 'reject' after 'return'"
-                            .into(),
-                        got: token.to_string(),
+                    return Err(ParseError::expected(
+                        "`accept` or `reject` after `return`",
+                        token,
                         span,
-                    })
+                    ))
                 }
             };
             self.take(Token::SemiColon)?;
@@ -444,12 +442,11 @@ impl<'source> Parser<'source> {
             Token::ExactlyOne => MatchOperator::ExactlyOne,
             Token::All => MatchOperator::All,
             _ => {
-                return Err(ParseError::Expected {
-                    expected: "'match', 'exactly-one', 'some' or 'all'"
-                        .into(),
-                    got: token.to_string(),
+                return Err(ParseError::expected(
+                    "`match`, `exactly-one`, `some` or `all`",
+                    token,
                     span,
-                })
+                ))
             }
         };
 
@@ -468,11 +465,7 @@ impl<'source> Parser<'source> {
             Ok(FilterMapExpr::Action(self.action()?))
         } else {
             let (token, span) = self.next()?;
-            Err(ParseError::Expected {
-                expected: "'term' or 'action'".into(),
-                got: token.to_string(),
-                span,
-            })
+            Err(ParseError::expected("`term` or `action`", token, span))
         }
     }
 
@@ -483,7 +476,7 @@ impl<'source> Parser<'source> {
     /// ```
     fn term(&mut self) -> ParseResult<TermSection> {
         self.take(Token::Term)?;
-        let ident = self.identifier()?.inner;
+        let ident = self.identifier()?;
         let for_kv = self.try_for_clause()?;
         let with_kv = self.try_with_clause()?;
 
@@ -637,11 +630,11 @@ impl<'source> Parser<'source> {
                     } else {
                         "in"
                     };
-                    return Err(ParseError::Custom {
-                        description: format!("the {op} operator cannot take a logical expression as an argument"),
-                        label: "this operator only acts on lists".into(),
+                    return Err(ParseError::custom(
+                        format!("the {op} operator cannot take a logical expression as an argument"),
+                        "this operator only acts on lists",
                         span,
-                    });
+                    ));
                 };
                 let right = self.value_expr()?;
                 return Ok(BooleanExpr::ListCompareExpr(Box::new(
@@ -682,11 +675,11 @@ impl<'source> Parser<'source> {
             | ValueExpr::ListExpr(_) => {
                 // TODO: the span information should be better here.
                 let (_token, span) = self.next()?;
-                return Err(ParseError::Custom {
-                    description: "not a valid boolean expression".into(),
-                    label: "the expression ending here is not a valid boolean expression".into(),
+                return Err(ParseError::custom(
+                    "not a valid boolean expression",
+                    "the expression ending here is not a valid boolean expression",
                     span,
-                });
+                ));
             }
         })
     }
@@ -746,7 +739,7 @@ impl<'source> Parser<'source> {
 
     pub(super) fn action(&mut self) -> ParseResult<ActionSection> {
         self.take(Token::Action)?;
-        let ident = self.identifier()?.inner;
+        let ident = self.identifier()?;
         let with_kv = self.try_with_clause()?;
 
         let mut expressions = Vec::new();
@@ -765,11 +758,11 @@ impl<'source> Parser<'source> {
                 _ => {
                     // TODO: span information could be better
                     let (_, span2) = self.next()?;
-                    return Err(ParseError::Custom {
-                        description: "an action can only be a compute epression or root method call".into(),
-                        label: "invalid action".into(),
-                        span: span1.merge(span2),
-                    });
+                    return Err(ParseError::custom(
+                        "an action can only be a compute epression or root method call",
+                        "invalid action",
+                        span1.merge(span2),
+                    ));
                 }
             }
         }

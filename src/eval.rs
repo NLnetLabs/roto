@@ -148,7 +148,7 @@ impl<'a> ast::Rib {
         &'a self,
         symbols: &'_ mut symbols::SymbolTable,
     ) -> Result<(), CompileError> {
-        let child_kvs = self.body.eval(self.ident.clone().ident, symbols)?;
+        let child_kvs = self.body.eval(self.ident.ident.clone(), symbols)?;
 
         // create a new user-defined type for the record type in the RIB
         let rec_type = TypeDef::new_record_type_from_short_string(child_kvs)?;
@@ -184,7 +184,7 @@ impl<'a> ast::Table {
         &'a self,
         symbols: &'_ mut symbols::SymbolTable,
     ) -> Result<(), CompileError> {
-        let child_kvs = self.body.eval(self.ident.clone().ident, symbols)?;
+        let child_kvs = self.body.eval(self.ident.ident.clone(), symbols)?;
 
         // create a new user-defined type for the record type in the table
         let rec_type = TypeDef::new_record_type_from_short_string(child_kvs)?;
@@ -220,7 +220,7 @@ impl<'a> ast::OutputStream {
         &'a self,
         symbols: &'_ mut symbols::SymbolTable,
     ) -> Result<(), CompileError> {
-        let child_kvs = self.body.eval(self.ident.clone().ident, symbols)?;
+        let child_kvs = self.body.eval(self.ident.ident.clone(), symbols)?;
 
         // create a new user-defined type for the record type in the table
         let rec_type = TypeDef::new_record_type_from_short_string(child_kvs)?;

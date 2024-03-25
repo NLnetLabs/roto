@@ -1,12 +1,11 @@
 use log::trace;
-use roto::compiler::Compiler;
 
 use roto::blocks::Scope;
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::datasources::DataSource;
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
-use roto::vm;
+use roto::{pipeline, vm};
 
 use routecore::asn::Asn;
 use routecore::bgp::communities::HumanReadableCommunity as Community;
@@ -23,18 +22,10 @@ fn test_data(
     let filter_map_arguments =
         vec![("extra_asn", TypeValue::from(Asn::from(65534_u32)))];
 
-    let mut c = Compiler::new();
-    c.with_arguments(&name, filter_map_arguments)?;
+    let rotolo =
+        pipeline::run_test(source_code, Some((&name, filter_map_arguments)))?;
 
-    let compile_res = c.build_from_compiler(source_code);
-
-    if let Err(e) = &compile_res {
-        eprintln!("{e}");
-    }
-
-    let roto_packs = compile_res?;
-
-    let mut roto_pack = roto_packs.retrieve_pack_as_refs(&name)?;
+    let mut roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
     let _count: TypeValue = 1_u32.into();
     let prefix: TypeValue =
         routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?

@@ -1,9 +1,7 @@
-use roto::compiler::Compiler;
-
 use roto::types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage, RouteStatus};
 use roto::types::collections::Record;
 use roto::types::typevalue::TypeValue;
-use roto::vm;
+use roto::{pipeline, vm};
 use roto::blocks::Scope::{self, FilterMap};
 use routecore::bgp::message::SessionConfig;
 use routecore::bgp::message::nlri::{Nlri, BasicNlri};
@@ -16,7 +14,7 @@ fn test_data(
     println!("Evaluate module {}...", name);
 
     // Compile the source code in this example
-    let rotolo = Compiler::build(source_code)?;
+    let rotolo = pipeline::run_test(source_code, None)?;
     let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     // BGP UPDATE message containing MP_REACH_NLRI path attribute,

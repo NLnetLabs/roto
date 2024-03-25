@@ -1,14 +1,9 @@
-use std::process::exit;
-
-use roto::compiler::Compiler;
+use roto::pipeline;
 
 fn main() {
-    let source_file = std::env::args_os().nth(1).expect("Expected a file");
-    let source_code = std::fs::read_to_string(source_file).expect("Could not read from file");
-    let result = Compiler::new().build_from_compiler(&source_code);
-    if let Err(err) = result {
-        eprintln!("{err}");
-        exit(1);
+    let result = pipeline::run(std::env::args().skip(1));
+    match result {
+        Ok(_) => eprintln!("Compilation succesful!"),
+        Err(e) => eprintln!("{e}")
     }
-    println!("Compilation succesful!")
 }

@@ -20,7 +20,7 @@ impl<'source> Parser<'source> {
     /// ```
     pub(super) fn rib(&mut self) -> ParseResult<Rib> {
         self.take(Token::Rib)?;
-        let ident = self.identifier()?.inner;
+        let ident = self.identifier()?;
         self.take(Token::Contains)?;
         let contain_ty = self.type_identifier()?;
         let body = self.rib_body()?;
@@ -41,7 +41,7 @@ impl<'source> Parser<'source> {
     /// ```
     pub(super) fn table(&mut self) -> ParseResult<Table> {
         self.take(Token::Table)?;
-        let ident = self.identifier()?.inner;
+        let ident = self.identifier()?;
         self.take(Token::Contains)?;
         let contain_ty = self.type_identifier()?;
         let body = self.rib_body()?;
@@ -62,7 +62,7 @@ impl<'source> Parser<'source> {
     /// ```
     pub(super) fn output_stream(&mut self) -> ParseResult<OutputStream> {
         self.take(Token::OutputStream)?;
-        let ident = self.identifier()?.inner;
+        let ident = self.identifier()?;
         self.take(Token::Contains)?;
         let contain_ty = self.type_identifier()?;
         let body = self.rib_body()?;

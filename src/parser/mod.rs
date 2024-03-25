@@ -1,7 +1,6 @@
 use crate::ast::{Identifier, RootExpr, SyntaxTree, TypeIdentifier};
 use logos::{Lexer, SpannedIter};
-use miette::Diagnostic;
-use std::iter::Peekable;
+use std::{fmt::Display, iter::Peekable};
 use token::Token;
 
 use self::span::{Span, Spanned, WithSpan};
@@ -17,45 +16,108 @@ mod test_expressions;
 #[cfg(test)]
 mod test_sections;
 
-type ParseResult<T> = Result<T, ParseError>;
+type ParseResult<'a, T> = Result<T, ParseError>;
 
-#[derive(Clone, Debug, Diagnostic)]
-pub enum ParseError {
+#[derive(Clone, Debug)]
+pub struct ParseError {
+    pub location: Span,
+    pub kind: ParseErrorKind,
+}
+
+impl ParseError {
+    fn expected(
+        expected: impl Display,
+        got: impl Display,
+        span: Span,
+    ) -> Self {
+        Self {
+            kind: ParseErrorKind::Expected {
+                expected: expected.to_string(),
+                got: got.to_string(),
+            },
+            location: span,
+        }
+    }
+
+    fn invalid_literal(
+        description: impl Display,
+        token: impl Display,
+        inner: impl Display,
+        span: Span,
+    ) -> Self {
+        Self {
+            kind: ParseErrorKind::InvalidLiteral {
+                description: description.to_string(),
+                token: token.to_string(),
+                inner_error: inner.to_string(),
+            },
+            location: span,
+        }
+    }
+
+    fn custom(
+        description: impl Display,
+        label: impl Display,
+        span: Span,
+    ) -> Self {
+        Self {
+            kind: ParseErrorKind::Custom {
+                description: description.to_string(),
+                label: label.to_string(),
+            },
+            location: span,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum ParseErrorKind {
     EmptyInput,
     EndOfInput,
     FailedToParseEntireInput,
-    InvalidToken(#[label("invalid token")] Span),
+    InvalidToken,
     Expected {
         expected: String,
         got: String,
-        #[label("expected {expected}")]
-        span: Span,
     },
     InvalidLiteral {
         description: String,
         token: String,
-        #[label("invalid {description} literal")]
-        span: Span,
         inner_error: String,
     },
     Custom {
         description: String,
         label: String,
-        #[label("{label}")]
-        span: Span,
     },
 }
 
-impl std::fmt::Display for ParseError {
+impl ParseErrorKind {
+    pub fn label(&self) -> String {
+        match self {
+            Self::EmptyInput => "input is empty".into(),
+            Self::EndOfInput => "reached end of input".into(),
+            Self::FailedToParseEntireInput => "parser got stuck here".into(),
+            Self::InvalidToken => "invalid token".into(),
+            Self::Expected { expected, .. } => {
+                format!("expected `{expected}`")
+            }
+            Self::InvalidLiteral { description, .. } => {
+                format!("invalid {description}")
+            }
+            Self::Custom { label, .. } => label.clone(),
+        }
+    }
+}
+
+impl std::fmt::Display for ParseErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Parse error: ")?;
         match self {
             Self::EmptyInput => write!(f, "input was empty"),
             Self::EndOfInput => write!(f, "unexpected end of input"),
             Self::FailedToParseEntireInput => {
                 write!(f, "failed to parse entire input")
             }
-            Self::InvalidToken(_) => write!(f, "invalid token"),
+            Self::InvalidToken => write!(f, "invalid token"),
             Self::Expected { expected, got, .. } => {
                 write!(f, "expected {expected} but got '{got}'")
             }
@@ -74,9 +136,17 @@ impl std::fmt::Display for ParseError {
     }
 }
 
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.kind)
+    }
+}
+
 impl std::error::Error for ParseError {}
 
 pub struct Parser<'source> {
+    file: usize,
+    file_length: usize,
     lexer: Peekable<SpannedIter<'source, Token<'source>>>,
 }
 
@@ -85,11 +155,20 @@ impl<'source> Parser<'source> {
     /// Move the lexer forward and return the token
     fn next(&mut self) -> ParseResult<(Token<'source>, Span)> {
         match self.lexer.next() {
-            None => Err(ParseError::EndOfInput),
-            Some((Err(()), span)) => {
-                Err(ParseError::InvalidToken(span.into()))
+            None => Err(ParseError {
+                kind: ParseErrorKind::EndOfInput,
+                location: Span::new(
+                    self.file,
+                    self.file_length..self.file_length,
+                ),
+            }),
+            Some((Err(()), span)) => Err(ParseError {
+                kind: ParseErrorKind::InvalidToken,
+                location: Span::new(self.file, span),
+            }),
+            Some((Ok(token), span)) => {
+                Ok((token, Span::new(self.file, span)))
             }
-            Some((Ok(token), span)) => Ok((token, span.into())),
         }
     }
 
@@ -126,11 +205,7 @@ impl<'source> Parser<'source> {
         if next == token {
             Ok(span)
         } else {
-            Err(ParseError::Expected {
-                expected: token.to_string(),
-                got: next.to_string(),
-                span,
-            })
+            Err(ParseError::expected(token, next, span))
         }
     }
 
@@ -184,20 +259,29 @@ impl<'source> Parser<'source> {
 
 /// # Parsing the syntax tree
 impl<'source> Parser<'source> {
-    pub fn parse(input: &'source str) -> ParseResult<SyntaxTree> {
-        Self::run_parser(Self::tree, input)
+    pub fn parse(
+        file: usize,
+        input: &'source str,
+    ) -> ParseResult<'source, SyntaxTree> {
+        Self::run_parser(Self::tree, file, input)
     }
 
     fn run_parser<T>(
         mut parser: impl FnMut(&mut Self) -> ParseResult<T>,
+        file: usize,
         input: &'source str,
-    ) -> ParseResult<T> {
+    ) -> ParseResult<'source, T> {
         let mut p = Self {
+            file,
+            file_length: input.len(),
             lexer: Lexer::new(input).spanned().peekable(),
         };
         let out = parser(&mut p)?;
-        if p.lexer.next().is_some() {
-            return Err(ParseError::FailedToParseEntireInput);
+        if let Some((_, s)) = p.lexer.next() {
+            return Err(ParseError {
+                kind: ParseErrorKind::FailedToParseEntireInput,
+                location: Span::new(file, s),
+            });
         }
         Ok(out)
     }
@@ -209,6 +293,13 @@ impl<'source> Parser<'source> {
             expressions.push(self.root()?);
         }
 
+        if expressions.is_empty() {
+            return Err(ParseError {
+                location: Span::new(self.file, 0..0),
+                kind: ParseErrorKind::EmptyInput,
+            });
+        }
+
         Ok(SyntaxTree { expressions })
     }
 
@@ -218,7 +309,14 @@ impl<'source> Parser<'source> {
     /// Root ::= Rib | Table | OutputStream | FilterMap | Type
     /// ```
     fn root(&mut self) -> ParseResult<RootExpr> {
-        let expr = match self.peek().ok_or(ParseError::EndOfInput)? {
+        let end_of_input = ParseError {
+            kind: ParseErrorKind::EndOfInput,
+            location: Span::new(
+                self.file,
+                self.file_length..self.file_length,
+            ),
+        };
+        let expr = match self.peek().ok_or(end_of_input)? {
             Token::Rib => RootExpr::Rib(self.rib()?),
             Token::Table => RootExpr::Table(self.table()?),
             Token::OutputStream => {
@@ -230,13 +328,11 @@ impl<'source> Parser<'source> {
             Token::Type => RootExpr::Ty(self.record_type_assignment()?),
             _ => {
                 let (token, span) = self.next()?;
-                return Err(ParseError::Expected {
-                    expected:
-                        "a rib, table, output-stream, filter or filter-map"
-                            .into(),
-                    got: token.to_string(),
+                return Err(ParseError::expected(
+                    "a rib, table, output-stream, filter or filter-map",
+                    token,
                     span,
-                });
+                ));
             }
         };
         Ok(expr)
@@ -257,11 +353,11 @@ impl<'source> Parser<'source> {
             Token::Contains => "contains",
             Token::Type => "type",
             _ => {
-                return Err(ParseError::Expected {
-                    expected: "an identifier".into(),
-                    got: token.to_string(),
+                return Err(ParseError::expected(
+                    "an identifier",
+                    token,
                     span,
-                })
+                ))
             }
         };
         Ok(Identifier {
@@ -281,11 +377,11 @@ impl<'source> Parser<'source> {
             Token::Contains => "contains",
             Token::Type => "type",
             _ => {
-                return Err(ParseError::Expected {
-                    expected: "an identifier".into(),
-                    got: token.to_string(),
+                return Err(ParseError::expected(
+                    "an identifier",
+                    token,
                     span,
-                })
+                ))
             }
         };
         Ok(TypeIdentifier {

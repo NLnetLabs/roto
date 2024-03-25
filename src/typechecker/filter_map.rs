@@ -1,6 +1,10 @@
-use crate::ast;
+use crate::{
+    ast::{self, Identifier},
+    parser::span::Spanned,
+    typechecker::error,
+};
 
-use super::{scope::Scope, types::Type, TypeChecker, TypeError, TypeResult};
+use super::{scope::Scope, types::Type, TypeChecker, TypeResult};
 
 impl TypeChecker<'_> {
     pub fn filter_map(
@@ -36,7 +40,7 @@ impl TypeChecker<'_> {
                     self.action_section(&scope, action_section)?
                 }
             };
-            scope.insert_var(v, t)?;
+            scope.insert_var(&v, t)?;
         }
 
         if let Some(apply_section) = apply {
@@ -70,24 +74,18 @@ impl TypeChecker<'_> {
         match rx_tx_type {
             ast::RxTxType::RxOnly(ast::TypeIdentField { field_name, ty }) => {
                 let Some(ty) = self.get_type(ty) else {
-                    return Err(TypeError::UndeclaredType {
-                        type_name: ty.clone(),
-                    });
+                    return Err(error::undeclared_type(ty));
                 };
                 scope.insert_var(field_name, ty)?;
             }
             ast::RxTxType::Split(rx, tx) => {
                 let Some(ty) = self.get_type(&rx.ty) else {
-                    return Err(TypeError::UndeclaredType {
-                        type_name: rx.ty.clone(),
-                    });
+                    return Err(error::undeclared_type(&rx.ty));
                 };
                 scope.insert_var(&rx.field_name, ty)?;
 
                 let Some(ty) = self.get_type(&tx.ty) else {
-                    return Err(TypeError::UndeclaredType {
-                        type_name: tx.ty.clone(),
-                    });
+                    return Err(error::undeclared_type(&tx.ty));
                 };
                 scope.insert_var(&tx.field_name, ty)?;
             }
@@ -96,9 +94,7 @@ impl TypeChecker<'_> {
                 ty,
             }) => {
                 let Some(ty) = self.get_type(ty) else {
-                    return Err(TypeError::UndeclaredType {
-                        type_name: ty.clone(),
-                    });
+                    return Err(error::undeclared_type(ty));
                 };
                 scope.insert_var(field_name, ty)?;
             }
@@ -116,7 +112,7 @@ impl TypeChecker<'_> {
         &mut self,
         scope: &Scope,
         term_section: &ast::TermSection,
-    ) -> TypeResult<(String, Type)> {
+    ) -> TypeResult<(Spanned<Identifier>, Type)> {
         let ast::TermSection {
             ident,
             for_kv: _,
@@ -148,10 +144,9 @@ impl TypeChecker<'_> {
                 ast::MatchOperator::MatchValueWith(ident) => {
                     let x = scope.get_var(ident)?;
                     let Type::Enum(_, variants) = self.resolve_type(x) else {
-                        return Err(TypeError::CanOnlyMatchOnEnum {
-                            ty: x.clone(),
-                            span: ident.span,
-                        });
+                        return Err(error::can_only_match_on_enum(
+                            x, ident.span,
+                        ));
                     };
 
                     // We'll keep track of used variants to do some basic
@@ -170,10 +165,9 @@ impl TypeChecker<'_> {
                             .iter()
                             .position(|(v, _)| v.as_str() == variant_str)
                         else {
-                            return Err(TypeError::VariantDoesNotExist {
-                                variant: variant_id.clone(),
-                                ty: x.clone(),
-                            });
+                            return Err(error::variant_does_not_exist(
+                                variant_id, x,
+                            ));
                         };
 
                         if used_variants.contains(&variant_str) {
@@ -195,19 +189,16 @@ impl TypeChecker<'_> {
                             }
                             (None, Some(data_field)) => {
                                 return Err(
-                                    TypeError::VariantDoesNotHaveField {
-                                        variant: variant_id.clone(),
-                                        ty: x.clone(),
-                                        span: data_field.span,
-                                    },
+                                    error::variant_does_not_have_field(
+                                        data_field, x,
+                                    ),
                                 )
                             }
                             (Some(_), None) => {
                                 return Err(
-                                    TypeError::NeedDataFieldOnPattern {
-                                        variant: variant_id.clone(),
-                                        ty: x.clone(),
-                                    },
+                                    error::need_data_field_on_pattern(
+                                        variant_id, x,
+                                    ),
                                 );
                             }
                         }
@@ -223,14 +214,14 @@ impl TypeChecker<'_> {
             }
         }
 
-        Ok((ident.to_string(), Type::Term(args)))
+        Ok((ident.clone(), Type::Term(args)))
     }
 
     fn action_section(
         &mut self,
         scope: &Scope,
         action_section: &ast::ActionSection,
-    ) -> TypeResult<(String, Type)> {
+    ) -> TypeResult<(Spanned<Identifier>, Type)> {
         let ast::ActionSection {
             ident,
             with_kv,
@@ -245,7 +236,7 @@ impl TypeChecker<'_> {
             let _t = self.compute_expr(&inner_scope, expr)?;
         }
 
-        Ok((ident.to_string(), Type::Action(args)))
+        Ok((ident.clone(), Type::Action(args)))
     }
 
     fn apply_section(
@@ -312,10 +303,9 @@ impl TypeChecker<'_> {
                     let Type::Enum(_, variants) =
                         self.resolve_type(x).clone()
                     else {
-                        return Err(TypeError::CanOnlyMatchOnEnum {
-                            ty: x.clone(),
-                            span: ident.span,
-                        });
+                        return Err(error::can_only_match_on_enum(
+                            x, ident.span,
+                        ));
                     };
 
                     // We'll keep track of used variants to do some basic
@@ -334,10 +324,9 @@ impl TypeChecker<'_> {
                             .iter()
                             .position(|(v, _)| v.as_str() == variant_str)
                         else {
-                            return Err(TypeError::VariantDoesNotExist {
-                                variant: variant_id.clone(),
-                                ty: x.clone(),
-                            });
+                            return Err(error::variant_does_not_exist(
+                                variant_id, x,
+                            ));
                         };
 
                         if used_variants.contains(&variant_str) {
@@ -357,19 +346,16 @@ impl TypeChecker<'_> {
                             }
                             (None, Some(data_field)) => {
                                 return Err(
-                                    TypeError::VariantDoesNotHaveField {
-                                        variant: variant_id.clone(),
-                                        ty: x.clone(),
-                                        span: data_field.span,
-                                    },
+                                    error::variant_does_not_have_field(
+                                        data_field, x,
+                                    ),
                                 )
                             }
                             (Some(_), None) => {
                                 return Err(
-                                    TypeError::NeedDataFieldOnPattern {
-                                        variant: variant_id.clone(),
-                                        ty: x.clone(),
-                                    },
+                                    error::need_data_field_on_pattern(
+                                        variant_id, x,
+                                    ),
                                 )
                             }
                         }
@@ -378,23 +364,17 @@ impl TypeChecker<'_> {
                             let ast::TermCallExpr { term_id, args } = guard;
                             let term_params = match scope.get_var(term_id)? {
                                 Type::Term(term_params) => term_params,
-                                ty => return Err(TypeError::Custom {
-                                    description: format!("expected a term but got type `{ty}`"),
-                                    label: format!("has type `{ty}`, but should be a term"),
-                                    span: term_id.span,
-                                }),
+                                ty => return Err(error::simple(
+                                    &format!("expected a term but got type `{ty}`"),
+                                    &format!("has type `{ty}`, but should be a term"),
+                                    term_id.span,
+                                )),
                             };
 
                             match args {
                                 Some(ast::ArgExprList { args }) => {
                                     if args.len() != term_params.len() {
-                                        return Err(TypeError::NumberOfArgumentDontMatch {
-                                            call_type: "term",
-                                            method_name: term_id.to_string(),
-                                            takes: term_params.len(),
-                                            given: args.len(),
-                                            span: term_id.span
-                                        });
+                                        return Err(error::number_of_arguments_dont_match("term", term_id, term_params.len(), args.len()));
                                     }
                                     for (arg, (_, param)) in
                                         args.iter().zip(term_params)
@@ -407,11 +387,11 @@ impl TypeChecker<'_> {
                                 None => {
                                     if !term_params.is_empty() {
                                         let n = term_params.len();
-                                        return Err(TypeError::Custom {
-                                            description: format!("term `{term_id}` takes {n} arguments but none were given."),
-                                            label: format!("takes {n} arguments"),
-                                            span: term_id.span,
-                                        });
+                                        return Err(error::simple(
+                                            &format!("term `{term_id}` takes {n} arguments but none were given."),
+                                            &format!("takes {n} arguments"),
+                                            term_id.span,
+                                        ));
                                     }
                                 }
                             }
@@ -435,11 +415,11 @@ impl TypeChecker<'_> {
                                 ) => {
                                     let action_params = match scope.get_var(action_id)? {
                                         Type::Action(action_params) => action_params,
-                                        ty => return Err(TypeError::Custom {
-                                            description: format!("expected an action but got type `{ty}`"),
-                                            label: format!("has type `{ty}`, but should be an action"),
-                                            span: action_id.span,
-                                        })
+                                        ty => return Err(error::simple(
+                                            &format!("expected an action but got type `{ty}`"),
+                                            &format!("has type `{ty}`, but should be an action"),
+                                            action_id.span,
+                                        ))
                                     };
 
                                     match args {
@@ -447,15 +427,15 @@ impl TypeChecker<'_> {
                                             if args.len()
                                                 != action_params.len()
                                             {
-                                                return Err(TypeError::NumberOfArgumentDontMatch {
-                                                    call_type: "action",
-                                                    method_name: action_id.to_string(),
-                                                    takes: action_params.len(),
-                                                    given: args.len(),
-                                                    span: action_id.span
-                                                });
+                                                return Err(error::number_of_arguments_dont_match(
+                                                    "action",
+                                                    action_id,
+                                                    action_params.len(),
+                                                    args.len())
+                                                );
                                             }
-                                            for (arg, (_, param)) in args.iter()
+                                            for (arg, (_, param)) in args
+                                                .iter()
                                                 .into_iter()
                                                 .zip(action_params)
                                             {
@@ -469,11 +449,11 @@ impl TypeChecker<'_> {
                                         None => {
                                             if !action_params.is_empty() {
                                                 let n = action_params.len();
-                                                return Err(TypeError::Custom {
-                                                    description: format!("action `{action_id}` takes {n} arguments but none were given."),
-                                                    label: format!("takes {n} arguments"),
-                                                    span: action_id.span,
-                                                });
+                                                return Err(error::simple(
+                                                    &format!("action `{action_id}` takes {n} arguments but none were given."),
+                                                    &format!("takes {n} arguments"),
+                                                    action_id.span,
+                                                ));
                                             }
                                         }
                                     }
@@ -508,9 +488,7 @@ impl TypeChecker<'_> {
         args.into_iter()
             .map(|ast::TypeIdentField { field_name, ty }| {
                 let Some(ty) = self.get_type(ty) else {
-                    return Err(TypeError::UndeclaredType {
-                        type_name: ty.clone(),
-                    });
+                    return Err(error::undeclared_type(ty));
                 };
 
                 scope.insert_var(&field_name, ty)?;

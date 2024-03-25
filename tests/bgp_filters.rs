@@ -2,16 +2,12 @@ use std::str::FromStr;
 
 use log::trace;
 use roto::{
-    ast::AcceptReject,
-    blocks::Scope,
-    compiler::Compiler,
-    types::{
+    ast::AcceptReject, blocks::Scope, pipeline, types::{
         builtin::{
             RawRouteWithDeltas, RotondaId, RouteStatus, UpdateMessage,
         },
         collections::Record,
-    },
-    vm::{self, VmResult},
+    }, vm::{self, VmResult}
 };
 use routecore::bgp::message::SessionConfig;
 
@@ -30,14 +26,7 @@ fn test_data(
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
-    let compile_res = Compiler::build(source_code);
-
-    // Print a pretty error message for easier debugging
-    if let Err(e) = &compile_res {
-        eprintln!("{e}");
-    }
-
-    let rotolo = compile_res?;
+    let rotolo = pipeline::run_test(source_code, None)?;
     let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     // Create a BGP packet
