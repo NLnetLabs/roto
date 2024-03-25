@@ -126,7 +126,7 @@ pub fn declared_twice(
         location: new_declaration.span,
         labels: vec![
             Label::error("cannot overwrite type", new_declaration.span),
-            Label::error("previously declared here", old_declaration),
+            Label::info("previously declared here", old_declaration),
         ],
     }
 }
