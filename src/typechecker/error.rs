@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{
     ast::{Identifier, TypeIdentifier},
     parser::span::{Span, Spanned},
@@ -6,9 +8,34 @@ use crate::{
 use super::types::Type;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Level {
+    Error,
+    Info,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Label {
+    pub level: Level,
     pub span: Span,
     pub message: String,
+}
+
+impl Label {
+    fn error(msg: impl Display, span: Span) -> Self {
+        Label {
+            level: Level::Error,
+            span,
+            message: msg.to_string(),
+        }
+    }
+
+    fn info(msg: impl Display, span: Span) -> Self {
+        Label {
+            level: Level::Info,
+            span,
+            message: msg.to_string(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -18,14 +45,11 @@ pub struct TypeError {
     pub labels: Vec<Label>,
 }
 
-pub fn simple(description: &str, label: &str, span: Span) -> TypeError {
+pub fn simple(description: &str, msg: &str, span: Span) -> TypeError {
     TypeError {
         description: description.into(),
         location: span,
-        labels: vec![Label {
-            span,
-            message: label.into(),
-        }],
+        labels: vec![Label::error(msg, span)],
     }
 }
 
@@ -37,9 +61,11 @@ pub fn duplicate_fields(field_name: &str, locations: &[Span]) -> TypeError {
         location: locations[0].clone(),
         labels: locations
             .iter()
-            .map(|&span| Label {
-                span,
-                message: format!("field `{field_name}` declared here"),
+            .map(|&span| {
+                Label::error(
+                    format!("field `{field_name}` declared here"),
+                    span,
+                )
             })
             .collect(),
     }
@@ -49,10 +75,7 @@ pub fn undeclared_type(ty: &Spanned<TypeIdentifier>) -> TypeError {
     TypeError {
         description: format!("cannot find type `{ty}`"),
         location: ty.span,
-        labels: vec![Label {
-            span: ty.span,
-            message: "not found".into(),
-        }],
+        labels: vec![Label::error("not found", ty.span)],
     }
 }
 
@@ -73,10 +96,10 @@ pub fn missing_fields(
     TypeError {
         description,
         location: span,
-        labels: vec![Label {
+        labels: vec![Label::error(
+            format!("missing {}", join_quoted(fields)),
             span,
-            message: format!("missing {}", join_quoted(fields)),
-        }],
+        )],
     }
 }
 
@@ -88,10 +111,7 @@ pub fn tried_to_overwrite_builtin(
             "type `{type_name}` is a built-in type and cannot be overwritten"
         ),
         location: type_name.span,
-        labels: vec![Label {
-            span: type_name.span,
-            message: "declared here".into(),
-        }],
+        labels: vec![Label::error("declared here", type_name.span)],
     }
 }
 
@@ -105,14 +125,8 @@ pub fn declared_twice(
         ),
         location: new_declaration.span,
         labels: vec![
-            Label {
-                span: new_declaration.span,
-                message: "cannot overwrite type".into(),
-            },
-            Label {
-                span: old_declaration,
-                message: "previously declared here".into(),
-            },
+            Label::error("cannot overwrite type", new_declaration.span),
+            Label::error("previously declared here", old_declaration),
         ],
     }
 }
@@ -128,7 +142,10 @@ pub fn number_of_arguments_dont_match(
             "{call_type} `{method_name}` takes {takes} arguments but {given} arguments were given"
         ),
         location: method_name.span,
-        labels: vec![Label { span: method_name.span, message: format!("takes {takes} arguments but {given} arguments were given")}],
+        labels: vec![Label::error(
+            format!("takes {takes} arguments but {given} arguments were given"),
+            method_name.span)
+        ],
     }
 }
 
@@ -139,10 +156,10 @@ pub fn can_only_match_on_enum(ty: &Type, span: Span) -> TypeError {
             because only matching on enums is supported."
         ),
         location: span,
-        labels: vec![Label {
+        labels: vec![Label::error(
+            format!("cannot match on type `{ty}`"),
             span,
-            message: format!("cannot match on type `{ty}`"),
-        }],
+        )],
     }
 }
 
@@ -153,7 +170,7 @@ pub fn variant_does_not_have_field(
     TypeError {
         description: format!("pattern has a data field, but the variant `{variant}` of `{ty}` doesn't have one"),
         location: variant.span,
-        labels: vec![Label { span: variant.span, message: "unexpected data field".into()}],
+        labels: vec![Label::error("unexpected data field", variant.span)],
     }
 }
 
@@ -164,7 +181,7 @@ pub fn need_data_field_on_pattern(
     TypeError {
         description: format!("pattern has no data field, but variant `{variant}` of `{ty}` does have a data field"),
         location: variant.span,
-        labels: vec![Label { span: variant.span, message: format!("missing data field")}],
+        labels: vec![Label::error("missing data field", variant.span)],
     }
 }
 
@@ -177,10 +194,10 @@ pub fn variant_does_not_exist(
             "the variant `{variant}` does not exist on `{ty}`"
         ),
         location: variant.span,
-        labels: vec![Label {
-            span: variant.span,
-            message: format!("variant does not exist on `{ty}`"),
-        }],
+        labels: vec![Label::error(
+            format!("variant does not exist on `{ty}`"),
+            variant.span,
+        )],
     }
 }
 
@@ -190,21 +207,21 @@ pub fn mismatched_types(
     span: Span,
     cause: Option<Span>,
 ) -> TypeError {
-    let mut labels = vec![Label {
+    let mut labels = vec![Label::error(
+        format!("expected `{expected}`, found `{got}`"),
         span,
-        message: format!("expected `{expected}`, found `{got}`"),
-    }];
+    )];
     if let Some(span) = cause {
-        labels.push(Label {
+        labels.push(Label::info(
+            format!("expected because this is `{expected}`"),
             span,
-            message: format!("expected because this is `{expected}`"),
-        });
+        ));
     }
 
     TypeError {
         description: "mismatched types".into(),
         location: span,
-        labels: vec![],
+        labels,
     }
 }
 

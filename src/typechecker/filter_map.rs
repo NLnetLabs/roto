@@ -270,7 +270,7 @@ impl TypeChecker<'_> {
                     },
                 ) => {
                     let ty = self.expr(&scope, filter_ident)?;
-                    self.unify(&ty, &Type::Term(vec![]))?;
+                    self.unify(&ty, &Type::Term(vec![]), filter_ident.span, None)?;
                     for action in actions {
                         match action {
                             (None, None) | (Some(_), Some(_)) => {
@@ -381,7 +381,7 @@ impl TypeChecker<'_> {
                                     {
                                         let ty =
                                             self.expr(&inner_scope, &arg)?;
-                                        self.unify(&ty, param)?;
+                                        self.unify(&ty, param, arg.span, None)?;
                                     }
                                 }
                                 None => {
@@ -443,7 +443,7 @@ impl TypeChecker<'_> {
                                                     &inner_scope,
                                                     &arg,
                                                 )?;
-                                                self.unify(&ty, param)?;
+                                                self.unify(&ty, param, arg.span, None)?;
                                             }
                                         }
                                         None => {

@@ -296,8 +296,8 @@ impl<'methods> TypeChecker<'methods> {
         &mut self,
         a: &Type,
         b: &Type,
-        // span: Span,
-        // cause: Option<Span>,
+        span: Span,
+        cause: Option<Span>,
     ) -> TypeResult<Type> {
         let a = self.resolve_type(a);
         let b = self.resolve_type(b);
@@ -305,7 +305,7 @@ impl<'methods> TypeChecker<'methods> {
         if let Some(ty) = self.unify_inner(&a, &b) {
             Ok(ty)
         } else {
-            Err(error::mismatched_types(a, b, Span::new(0, 0..1), None))
+            Err(error::mismatched_types(a, b, span, cause))
         }
     }
 

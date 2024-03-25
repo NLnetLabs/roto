@@ -38,7 +38,7 @@ impl RootExpr {
 /// converted to the same type
 #[derive(Clone, Debug)]
 pub struct ListValueExpr {
-    pub values: Spanned<Vec<ValueExpr>>,
+    pub values: Spanned<Vec<Spanned<ValueExpr>>>,
 }
 
 /// The value of a (anonymous) record
@@ -46,14 +46,14 @@ pub struct ListValueExpr {
 /// actual type can be inferred unambiguously.
 #[derive(Clone, Debug)]
 pub struct AnonymousRecordValueExpr {
-    pub key_values: Spanned<Vec<(Spanned<Identifier>, ValueExpr)>>,
+    pub key_values: Spanned<Vec<(Spanned<Identifier>, Spanned<ValueExpr>)>>,
 }
 
 /// Used in the 'Define' section to create variables to hold a record.
 #[derive(Clone, Debug)]
 pub struct TypedRecordValueExpr {
     pub type_id: Spanned<TypeIdentifier>,
-    pub key_values: Spanned<Vec<(Spanned<Identifier>, ValueExpr)>>,
+    pub key_values: Spanned<Vec<(Spanned<Identifier>, Spanned<ValueExpr>)>>,
 }
 
 /// The value of a typed record
@@ -121,7 +121,7 @@ pub enum RxTxType {
 pub struct DefineBody {
     pub rx_tx_type: RxTxType,
     pub use_ext_data: Vec<(Identifier, Identifier)>,
-    pub assignments: Vec<(Spanned<Identifier>, ValueExpr)>,
+    pub assignments: Vec<(Spanned<Identifier>, Spanned<ValueExpr>)>,
 }
 
 #[derive(Clone, Debug)]
@@ -172,7 +172,7 @@ pub struct ActionSection {
 
 #[derive(Clone, Debug)]
 pub struct ActionSectionBody {
-    pub expressions: Vec<ComputeExpr>,
+    pub expressions: Vec<Spanned<ComputeExpr>>,
 }
 
 /// An Optional Global Compute Expressions can be either an ordinary Compute
@@ -221,9 +221,9 @@ pub enum MatchActionExpr {
 #[derive(Clone, Debug)]
 pub struct FilterMatchActionExpr {
     pub operator: MatchOperator,
-    pub filter_ident: ValueExpr,
+    pub filter_ident: Spanned<ValueExpr>,
     pub negate: bool,
-    pub actions: Vec<(Option<ValueExpr>, Option<AcceptReject>)>,
+    pub actions: Vec<(Option<Spanned<ValueExpr>>, Option<AcceptReject>)>,
 }
 
 /// A complete pattern match on a variable where every match arm can have
@@ -621,8 +621,8 @@ impl TryFrom<&'_ LiteralExpr> for TypeValue {
 
 #[derive(Clone, Debug)]
 pub struct LiteralAccessExpr {
-    pub literal: LiteralExpr,
-    pub access_expr: Vec<AccessExpr>,
+    pub literal: Spanned<LiteralExpr>,
+    pub access_expr: Vec<Spanned<AccessExpr>>,
 }
 
 /// An expression that ultimately will resolve into a TypeValue, e.g. the
@@ -631,14 +631,14 @@ pub struct LiteralAccessExpr {
 pub enum ValueExpr {
     /// a literal, or a chain of field accesses and/or methods on a literal,
     /// e.g. `10.0.0.0/8.covers(..)`
-    LiteralAccessExpr(LiteralAccessExpr),
+    LiteralAccessExpr(Spanned<LiteralAccessExpr>),
     /// a JunOS style prefix match expression, e.g. `0.0.0.0/0
     /// prefix-length-range /12-/16`
     PrefixMatchExpr(PrefixMatchExpr),
     /// an access receiver (an expression named with a single identifier, e.g.
     /// `my_var`), or a chain of field accesses and/or methods on an access
     /// receiver.
-    ComputeExpr(ComputeExpr),
+    ComputeExpr(Spanned<ComputeExpr>),
     /// an expression of the form `word(argument)`, so nothing in front of
     /// `word`, this would be something like a builtin method call, or an
     /// action or term with an argument.
@@ -657,7 +657,7 @@ pub enum ValueExpr {
 
 #[derive(Clone, Debug)]
 pub struct ArgExprList {
-    pub args: Spanned<Vec<ValueExpr>>,
+    pub args: Spanned<Vec<Spanned<ValueExpr>>>,
 }
 
 impl ArgExprList {
@@ -709,7 +709,7 @@ impl AccessExpr {
 #[derive(Clone, Debug)]
 pub struct ComputeExpr {
     pub receiver: AccessReceiver,
-    pub access_expr: Vec<AccessExpr>,
+    pub access_expr: Vec<Spanned<AccessExpr>>,
 }
 
 impl ComputeExpr {
@@ -862,11 +862,11 @@ pub enum LogicalExpr {
 #[derive(Clone, Debug)]
 pub enum CompareArg {
     /// A "stand-alone" left|right-hand side argument of a comparison
-    ValueExpr(ValueExpr),
+    ValueExpr(Spanned<ValueExpr>),
     /// A nested logical formula, e.g. (A && B) || (C && D) used as a left|
     /// right-hand side argument of a comparison. Note that this can only
     /// have the opposite hand be a boolean expression.
-    GroupedLogicalExpr(GroupedLogicalExpr),
+    GroupedLogicalExpr(Spanned<GroupedLogicalExpr>),
 }
 
 /// A Boolean expression is an expression that *may* evaluate to one of:
@@ -884,19 +884,19 @@ pub enum BooleanExpr {
     /// Function, since it will always return a Boolean value.
     GroupedLogicalExpr(GroupedLogicalExpr),
     /// "true" | "false" literals
-    BooleanLiteral(BooleanLiteral),
+    BooleanLiteral(Spanned<BooleanLiteral>),
     /// A syntactically correct comparison always evaluates to a
     /// Boolean-Valued Function, since it will always return a Boolean value.
     CompareExpr(Box<CompareExpr>),
     /// A ComputeExpression *may* evaluate to a function that returns a boolean
-    ComputeExpr(ComputeExpr),
+    ComputeExpr(Spanned<ComputeExpr>),
     /// Just like a ComputeExpr, a Literal, or a Literal access, e.g.
     /// `10.0.0.0/16.covers()`, may return a boolean
-    LiteralAccessExpr(LiteralAccessExpr),
+    LiteralAccessExpr(Spanned<LiteralAccessExpr>),
     /// Set Compare expression, will *always* result in a boolean-valued
     /// function. Syntactic sugar for a truth-function that performs
     /// fn : a -> {a} ∩ B
-    ListCompareExpr(Box<ListCompareExpr>),
+    ListCompareExpr(Box<Spanned<ListCompareExpr>>),
     /// syntactic sugar for a method on a prefix function that returns a
     /// boolean.
     PrefixMatchExpr(PrefixMatchExpr),
@@ -904,9 +904,9 @@ pub enum BooleanExpr {
 
 #[derive(Clone, Debug)]
 pub struct CompareExpr {
-    pub left: CompareArg,
+    pub left: Spanned<CompareArg>,
     pub op: CompareOp,
-    pub right: CompareArg,
+    pub right: Spanned<CompareArg>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -942,9 +942,9 @@ pub struct NotExpr {
 
 #[derive(Clone, Debug)]
 pub struct ListCompareExpr {
-    pub left: ValueExpr,
+    pub left: Spanned<ValueExpr>,
     pub op: CompareOp,
-    pub right: ValueExpr,
+    pub right: Spanned<ValueExpr>,
 }
 
 #[derive(Clone, Debug)]
@@ -1021,8 +1021,8 @@ pub struct Ipv6Addr(pub std::net::Ipv6Addr);
 
 #[derive(Clone, Debug)]
 pub struct Prefix {
-    pub addr: IpAddress,
-    pub len: PrefixLength,
+    pub addr: Spanned<IpAddress>,
+    pub len: Spanned<PrefixLength>,
 }
 
 #[derive(Clone, Debug)]

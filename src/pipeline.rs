@@ -4,7 +4,7 @@ use crate::{
     compiler::{compile::Rotolo, CompileError, Compiler},
     parser::{ParseError, Parser},
     symbols::GlobalSymbolTable,
-    typechecker::error::TypeError,
+    typechecker::error::{Level, TypeError},
     types::typevalue::TypeValue,
 };
 
@@ -31,7 +31,7 @@ pub struct RotoReport {
 
 impl std::fmt::Display for RotoReport {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use ariadne::{ColorGenerator, Label, Report, ReportKind};
+        use ariadne::{Color, Label, Report, ReportKind};
 
         let mut file_cache = ariadne::sources(
             self.files
@@ -45,14 +45,13 @@ impl std::fmt::Display for RotoReport {
                     write!(f, "could not open `{name}`: {io}")?;
                 }
                 RotoError::Parse(error) => {
-                    let mut colors = ColorGenerator::new();
                     let label_message = error.kind.label();
                     let label = Label::new((
                         self.filename(error.location.file),
                         error.location.start..error.location.end,
                     ))
                     .with_message(label_message)
-                    .with_color(colors.next());
+                    .with_color(Color::Red);
 
                     let file = self.filename(error.location.file);
 
@@ -74,14 +73,16 @@ impl std::fmt::Display for RotoReport {
                     write!(f, "{s}")?;
                 }
                 RotoError::Type(error) => {
-                    let mut colors = ColorGenerator::new();
                     let labels = error.labels.iter().map(|l| {
                         Label::new((
                             self.filename(l.span.file),
                             l.span.start..l.span.end,
                         ))
                         .with_message(&l.message)
-                        .with_color(colors.next())
+                        .with_color(match l.level {
+                            Level::Error => Color::Red,
+                            Level::Info => Color::Blue,
+                        })
                     });
 
                     let file = self.filename(error.location.file);

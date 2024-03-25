@@ -208,7 +208,7 @@ impl TryFrom<ValueExpr> for ElementTypeValue {
     fn try_from(value: ValueExpr) -> Result<Self, Self::Error> {
         match value {
             ValueExpr::LiteralAccessExpr(ref lit) => 
-                Ok(ElementTypeValue::Primitive((&lit.literal).try_into()?)),
+                Ok(ElementTypeValue::Primitive(TypeValue::try_from(&lit.literal.inner)?)),
             ValueExpr::PrefixMatchExpr(_) => todo!(),
             ValueExpr::ComputeExpr(_) => todo!(),
             ValueExpr::RootMethodCallExpr(_) => todo!(),
@@ -577,7 +577,7 @@ impl TryFrom<ListValueExpr> for List {
     fn try_from(value: ListValueExpr) -> Result<Self, Self::Error> {
         let mut lvs = vec![];
         for v in value.values.iter() {
-            match v.clone().try_into() {
+            match v.inner.clone().try_into() {
                 Ok(v) => { lvs.push(v) },
                 Err(e) => { return Err(e); }
             };
@@ -1041,7 +1041,7 @@ impl TryFrom<AnonymousRecordValueExpr> for Record {
 
         let mut kvs: Vec<(ShortString, ElementTypeValue)> = vec![];
         for (s, t) in value.key_values.iter() {
-            match ElementTypeValue::try_from(t.clone()) {
+            match ElementTypeValue::try_from(t.inner.clone()) {
                 Ok(t) => { kvs.push((s.ident.clone(),t)) },
                 Err(e) => { return Err(e); }
             };
@@ -1059,7 +1059,7 @@ impl TryFrom<TypedRecordValueExpr> for Record {
         
         let mut kvs: Vec<(ShortString, ElementTypeValue)> = vec![];
         for (s, t) in value.key_values.iter() {
-            match ElementTypeValue::try_from(t.clone()) {
+            match ElementTypeValue::try_from(t.inner.clone()) {
                 Ok(t) => { kvs.push((s.ident.clone(),t)) },
                 Err(e) => { return Err(e); }
             };

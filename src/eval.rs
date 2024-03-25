@@ -1403,7 +1403,7 @@ impl ast::ComputeExpr {
         };
 
         for a_e in &self.access_expr {
-            match a_e {
+            match &a_e.inner {
                 ast::AccessExpr::MethodComputeExpr(method_call) => {
                     trace!("MC symbol (s) {:#?}", s);
                     // trace!("All Symbols {:#?}", symbols.borrow().get(&scope));
@@ -1675,7 +1675,7 @@ impl ast::LiteralAccessExpr {
         let mut s = &mut ar_symbol;
 
         for a_e in &self.access_expr {
-            match a_e {
+            match &a_e.inner {
                 ast::AccessExpr::MethodComputeExpr(method_call) => {
                     trace!("MC symbol (s) {:#?}", s);
                     trace!("method call {:#?} on type {}", method_call, ty);

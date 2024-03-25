@@ -11,7 +11,9 @@ use crate::ast::{
 };
 
 use super::{
-    span::Span, token::Token, ParseError, ParseResult, Parser,
+    span::{Span, Spanned, WithSpan},
+    token::Token,
+    ParseError, ParseResult, Parser,
 };
 
 /// # Parsing `filter-map` and `filter` sections
@@ -624,7 +626,7 @@ impl<'source> Parser<'source> {
 
         if let Some((op, span)) = self.try_compare_operator()? {
             if op == CompareOp::In || op == CompareOp::NotIn {
-                let CompareArg::ValueExpr(left) = left else {
+                let CompareArg::ValueExpr(left) = left.inner else {
                     let op = if op == CompareOp::NotIn {
                         "not in"
                     } else {
@@ -637,8 +639,9 @@ impl<'source> Parser<'source> {
                     ));
                 };
                 let right = self.value_expr()?;
+                let span = left.span.merge(right.span);
                 return Ok(BooleanExpr::ListCompareExpr(Box::new(
-                    ListCompareExpr { left, op, right },
+                    ListCompareExpr { left, op, right }.with_span(span),
                 )));
             } else {
                 let right = self.logical_or_value_expr()?;
@@ -656,14 +659,14 @@ impl<'source> Parser<'source> {
         //   production rules, so we can return it directly.
         // - A value expr is too general and needs to be asserted to be one
         //   of the allowed constructs.
-        let v = match left {
+        let v = match left.inner {
             CompareArg::GroupedLogicalExpr(l) => {
-                return Ok(BooleanExpr::GroupedLogicalExpr(l))
+                return Ok(BooleanExpr::GroupedLogicalExpr(l.inner))
             }
             CompareArg::ValueExpr(v) => v,
         };
 
-        Ok(match v {
+        Ok(match v.inner {
             ValueExpr::LiteralAccessExpr(x) => {
                 BooleanExpr::LiteralAccessExpr(x)
             }
@@ -684,11 +687,15 @@ impl<'source> Parser<'source> {
         })
     }
 
-    fn logical_or_value_expr(&mut self) -> ParseResult<CompareArg> {
+    fn logical_or_value_expr(&mut self) -> ParseResult<Spanned<CompareArg>> {
         Ok(if self.peek_is(Token::RoundLeft) {
-            CompareArg::GroupedLogicalExpr(self.grouped_logical_expr()?)
+            let expr = self.grouped_logical_expr()?;
+            let span = expr.span;
+            CompareArg::GroupedLogicalExpr(expr).with_span(span)
         } else {
-            CompareArg::ValueExpr(self.value_expr()?)
+            let expr = self.value_expr()?;
+            let span = expr.span;
+            CompareArg::ValueExpr(expr).with_span(span)
         })
     }
 
@@ -728,13 +735,16 @@ impl<'source> Parser<'source> {
         Ok(Some((op, span)))
     }
 
-    fn grouped_logical_expr(&mut self) -> ParseResult<GroupedLogicalExpr> {
-        self.take(Token::RoundLeft)?;
+    fn grouped_logical_expr(
+        &mut self,
+    ) -> ParseResult<Spanned<GroupedLogicalExpr>> {
+        let start = self.take(Token::RoundLeft)?;
         let expr = self.logical_expr()?;
-        self.take(Token::RoundRight)?;
+        let end = self.take(Token::RoundRight)?;
         Ok(GroupedLogicalExpr {
             expr: Box::new(expr),
-        })
+        }
+        .with_span(start.merge(end)))
     }
 
     pub(super) fn action(&mut self) -> ParseResult<ActionSection> {
@@ -747,13 +757,20 @@ impl<'source> Parser<'source> {
         while !self.next_is(Token::CurlyRight) {
             let value_expr = self.value_expr()?;
             let span1 = self.take(Token::SemiColon)?;
-            match value_expr {
+            match value_expr.inner {
                 ValueExpr::ComputeExpr(x) => expressions.push(x),
                 ValueExpr::RootMethodCallExpr(x) => {
-                    expressions.push(ComputeExpr {
-                        receiver: AccessReceiver::GlobalScope,
-                        access_expr: vec![AccessExpr::MethodComputeExpr(x)],
-                    })
+                    let span = x.ident.span.merge(x.args.args.span);
+                    expressions.push(
+                        ComputeExpr {
+                            receiver: AccessReceiver::GlobalScope,
+                            access_expr: vec![AccessExpr::MethodComputeExpr(
+                                x,
+                            )
+                            .with_span(span)],
+                        }
+                        .with_span(span),
+                    )
                 }
                 _ => {
                     // TODO: span information could be better
