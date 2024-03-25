@@ -1,0 +1,11 @@
+filter foo {
+	define {
+		rx msg: BmpMessage;
+	}
+
+	term bar {
+		match msg with {
+			InitiationMessage -> true, // should error here
+		} 
+	}
+}

@@ -1,0 +1,13 @@
+type Foo { a: U32 }
+
+filter foo {
+	define {
+		rx msg: Foo;
+	}
+
+	term bar {
+		match msg with {
+
+		} 
+	}
+}
