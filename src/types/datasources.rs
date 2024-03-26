@@ -239,7 +239,7 @@ impl<M: Meta> RotoRib for Rib<M> {
                 trace!("args {:?}", args);
                 let guard = epoch::pin();
                 let prefix = if let Ok(prefix) =
-                    routecore::addr::Prefix::try_from(first_into_vm_err!(args, InvalidMethodCall)?.as_ref())
+                    inetnum::addr::Prefix::try_from(first_into_vm_err!(args, InvalidMethodCall)?.as_ref())
                 {
                     prefix
                 } else {

@@ -12,7 +12,8 @@ use roto::{
     },
     vm::{self, VmResult},
 };
-use routecore::{asn::Asn, bgp::{message::SessionConfig, workshop::route::explode_into_wrapped_rws_vec}};
+use inetnum::asn::Asn;
+use routecore::bgp::message::SessionConfig;
 
 use routes::bmp::encode::{
     mk_bgp_update, mk_per_peer_header, Announcements, Prefixes,

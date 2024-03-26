@@ -9,11 +9,9 @@ use roto::types::lazyrecord_types::BgpUpdateMessage;
 use roto::types::typevalue::TypeValue;
 use roto::vm;
 use roto::blocks::Scope::{self, FilterMap};
-use routecore::asn::Asn;
+use inetnum::asn::Asn;
 use routecore::bgp::message::SessionConfig;
-use routecore::addr::Prefix;
-use routecore::bgp::workshop::route::{RouteWorkshop, BasicNlri};
-use routecore::bgp::nlri::afisafi::{Ipv4UnicastNlri, Ipv6UnicastNlri, IsPrefix};
+use inetnum::addr::Prefix;
 
 fn test_data(
     name: Scope,

@@ -45,8 +45,8 @@ use super::BuiltinTypeValue;
 use super::Nlri;
 use super::{super::typedef::TypeDef, BytesRecord, NlriStatus};
 
-use routecore::addr::Prefix;
-use routecore::asn::Asn;
+use inetnum::addr::Prefix;
+use inetnum::asn::Asn;
 use routecore::bgp::types::PathId;
 
 pub type LogicalTime = u64;

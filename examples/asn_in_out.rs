@@ -6,7 +6,7 @@ use roto::types::collections::Record;
 use roto::types::typedef::TypeDef;
 use roto::vm;
 
-use routecore::asn::Asn;
+use inetnum::asn::Asn;
 
 fn test_data(
     name: Scope,

@@ -9,7 +9,7 @@ use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
 use rotonda_store::prelude::MergeUpdate;
 
-use routecore::asn::Asn;
+use inetnum::asn::Asn;
 
 mod common;
 

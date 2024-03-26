@@ -10,7 +10,7 @@ use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
 
 use routecore::bgp::communities::HumanReadableCommunity as Community;
-use routecore::asn::Asn;
+use inetnum::asn::Asn;
 
 mod common;
 
@@ -90,7 +90,7 @@ fn test_data(
 
     let _count: TypeValue = 1_u32.into();
     let prefix: TypeValue =
-        routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?
+        inetnum::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?
             .into();
     let next_hop: TypeValue =
         std::net::IpAddr::V4(std::net::Ipv4Addr::new(193, 0, 0, 23)).into();

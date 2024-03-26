@@ -18,7 +18,7 @@ use roto::{
     },
     vm::{self, VmResult},
 };
-use routecore::asn::Asn;
+use inetnum::asn::Asn;
 use routes::bmp::encode::{
     mk_peer_down_notification_msg, mk_per_peer_header, mk_termination_msg,
 };

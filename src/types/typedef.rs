@@ -6,8 +6,8 @@ use std::net::IpAddr;
 // These are all the types the user can create. This enum is used to create
 // `user defined` types.
 use log::{debug, trace};
-use routecore::addr::Prefix;
-use routecore::asn::Asn;
+use inetnum::addr::Prefix;
+use inetnum::asn::Asn;
 use routecore::bgp::aspath::{HopPath, OwnedHop as Hop};
 use routecore::bgp::communities::HumanReadableCommunity as Community;
 use routecore::bgp::nlri::afisafi::Nlri;

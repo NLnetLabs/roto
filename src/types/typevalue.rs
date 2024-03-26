@@ -4,7 +4,7 @@ use std::{cmp::Ordering, fmt::Display, sync::Arc};
 use log::{debug, trace};
 use primitives::{Nlri, NlriStatus};
 
-use routecore::asn::Asn;
+use inetnum::asn::Asn;
 use routecore::bgp::aspath::{HopPath, OwnedHop as Hop};
 use routecore::bgp::communities::HumanReadableCommunity as Community;
 use routecore::bgp::types::PathId;
@@ -409,7 +409,7 @@ impl RotoType for TypeValue {
                 Self::get_props_for_method(*ty, method_name)
             }
             TypeDef::Prefix => {
-                routecore::addr::Prefix::get_props_for_method(ty, method_name)
+                inetnum::addr::Prefix::get_props_for_method(ty, method_name)
             }
             TypeDef::PrefixLength => {
                 PrefixLength::get_props_for_method(ty, method_name)

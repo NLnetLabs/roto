@@ -23,11 +23,11 @@ use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 use super::builtin_type_value::BuiltinTypeValue;
 
-use routecore::asn::Asn;
+use inetnum::asn::Asn;
 use routecore::bgp::types::PathId;
 use routecore::bgp::path_attributes::AggregatorInfo;
 use routecore::bgp::communities::HumanReadableCommunity as Community;
-use routecore::addr::Prefix;
+use inetnum::addr::Prefix;
 use routecore::bgp::types::{AfiSafi, AtomicAggregate, LocalPref, MultiExitDisc, NextHop, Origin};
 
 //------------ U16 Type -----------------------------------------------------
@@ -49,7 +49,7 @@ impl RotoType for u16 {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::U32(self as u32)))
             }
             TypeDef::Asn => Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(
-                routecore::asn::Asn::from(self as u32),
+                inetnum::asn::Asn::from(self as u32),
             ))),
             TypeDef::PrefixLength => match self {
                 0..=128 => Ok(TypeValue::Builtin(
@@ -100,7 +100,7 @@ impl RotoType for u32 {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::U32(self)))
             }
             TypeDef::Asn => Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(
-                routecore::asn::Asn::from(self),
+                inetnum::asn::Asn::from(self),
             ))),
             TypeDef::PrefixLength => match self {
                 0..=128 => Ok(TypeValue::Builtin(
@@ -504,7 +504,7 @@ impl RotoType for IntegerLiteral {
             TypeDef::Asn => match self.0 {
                 0..=4294967295 => {
                     Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(
-                        routecore::asn::Asn::from(self.0 as u32),
+                        inetnum::asn::Asn::from(self.0 as u32),
                     )))
                 }
                 i if i < 0 => Err(CompileError::from(
@@ -820,7 +820,7 @@ createtoken!(Prefix;
     Contains = 7
 );
 
-impl RotoType for routecore::addr::Prefix {
+impl RotoType for inetnum::addr::Prefix {
     fn get_props_for_method(
         _ty: TypeDef,
         method_name: &crate::ast::Identifier,
@@ -973,7 +973,7 @@ impl RotoType for routecore::addr::Prefix {
                             .try_into()
                             .map_err(|_e| VmError::InvalidConversion)?;
                         // let ip = addr;
-                        Ok(routecore::addr::Prefix::new(*addr, len.0)
+                        Ok(inetnum::addr::Prefix::new(*addr, len.0)
                             .map_or_else(
                                 |_| TypeValue::Unknown,
                                 |p| p.into(),
@@ -996,7 +996,7 @@ impl RotoType for routecore::addr::Prefix {
 
 typevaluefromimpls!(Prefix);
 
-impl TryFrom<&'_ PrefixLiteral> for routecore::addr::Prefix {
+impl TryFrom<&'_ PrefixLiteral> for inetnum::addr::Prefix {
     type Error = CompileError;
 
     fn try_from(value: &PrefixLiteral) -> Result<Self, Self::Error> {
@@ -1012,7 +1012,7 @@ impl TryFrom<&'_ PrefixLiteral> for routecore::addr::Prefix {
     }
 }
 
-impl TryFrom<&TypeValue> for routecore::addr::Prefix {
+impl TryFrom<&TypeValue> for inetnum::addr::Prefix {
     type Error = VmError;
 
     fn try_from(value: &TypeValue) -> Result<Self, Self::Error> {
@@ -1609,7 +1609,7 @@ impl TryFrom<&'_ IpAddressLiteral> for IpAddr {
 
 createtoken!(Asn; Set = 0);
 
-impl RotoType for routecore::asn::Asn {
+impl RotoType for inetnum::asn::Asn {
     setmethodonly!(Asn);
 
     fn into_type(

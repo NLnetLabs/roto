@@ -5,11 +5,11 @@
 use std::fmt::Display;
 use std::net::IpAddr;
 
-use routecore::asn::Asn;
+use inetnum::asn::Asn;
 use routecore::bgp::types::PathId;
 use routecore::bgp::types::{AfiSafi, AtomicAggregate, MultiExitDisc, NextHop, Origin};
 use routecore::bgp::path_attributes::AggregatorInfo;
-use routecore::addr::Prefix;
+use inetnum::addr::Prefix;
 use routecore::bgp::communities::HumanReadableCommunity as Community;
 use routecore::bgp::nlri::afisafi::Nlri;
 use serde::Serialize;

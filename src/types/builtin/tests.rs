@@ -25,8 +25,8 @@ mod route {
         Type,
         _Consume,
     }
-    use routecore::addr::Prefix;
-    use routecore::asn::{Asn, Asn16};
+    use inetnum::addr::Prefix;
+    use inetnum::asn::{Asn, Asn16};
     use routecore::bgp::aspath::HopPath as AsPath;
     use routecore::bgp::communities::{
         ExtendedCommunity, HumanReadableCommunity, LargeCommunity,
@@ -84,7 +84,7 @@ mod route {
             )
             .unwrap();
 
-        let prefixes: Vec<routecore::addr::Prefix> = update
+        let prefixes: Vec<inetnum::addr::Prefix> = update
             .bytes_parser()
             .announcements()
             .into_iter()
@@ -302,7 +302,7 @@ mod route {
 
         // println!("exploded view {:?}", exploded);
 
-        let prefixes: Vec<routecore::addr::Prefix> = update
+        let prefixes: Vec<inetnum::addr::Prefix> = update
             .bytes_parser()
             .announcements()
             .into_iter()
@@ -414,7 +414,7 @@ mod route {
         );
         assert_eq!(
             attr_set.get_attr::<AsPath>().unwrap().origin().unwrap(),
-            &routecore::bgp::aspath::Hop::from(routecore::asn::Asn::from(
+            &routecore::bgp::aspath::Hop::from(inetnum::asn::Asn::from(
                 200_u32
             ))
         );

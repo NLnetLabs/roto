@@ -8,7 +8,7 @@ use roto::types::collections::Record;
 use roto::types::typedef::TypeDef;
 use roto::vm::{self, VmResult};
 
-use routecore::asn::Asn;
+use inetnum::asn::Asn;
 
 mod common;
 
