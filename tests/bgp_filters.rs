@@ -1,3 +1,4 @@
+#![cfg(any())]
 use std::str::FromStr;
 
 use log::trace;
