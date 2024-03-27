@@ -7,6 +7,15 @@ use chrono::Utc;
 use routecore::bgp::communities::Community;
 use routecore::bgp::communities::HumanReadableCommunity;
 use routecore::bgp::nlri::afisafi::Ipv4FlowSpecNlri;
+use routecore::bgp::nlri::afisafi::Ipv4UnicastNlri;
+use routecore::bgp::nlri::afisafi::Ipv4UnicastAddpathNlri;
+use routecore::bgp::nlri::afisafi::Ipv6UnicastNlri;
+use routecore::bgp::nlri::afisafi::Ipv6UnicastAddpathNlri;
+use routecore::bgp::nlri::afisafi::Ipv4MulticastNlri;
+use routecore::bgp::nlri::afisafi::Ipv4MulticastAddpathNlri;
+use routecore::bgp::nlri::afisafi::Ipv6MulticastNlri;
+use routecore::bgp::nlri::afisafi::Ipv6MulticastAddpathNlri;
+use routecore::bgp::workshop::route::WorkshopAttribute;
 use crate::types::builtin::FlowSpecNlri::Ipv4FlowSpec;
 use routecore::bgp::nlri::afisafi::IsPrefix;
 use routecore::bgp::path_attributes::PaMap;
@@ -55,29 +64,92 @@ use routecore::bgp::types::PathId;
 pub type LogicalTime = u64;
 
 impl PrefixRoute {
+    pub fn nlri(&self) -> PrefixNlri {
+        match &self.0 {
+            super::PrefixRouteWs::Ipv4Unicast(rws) => PrefixNlri::Ipv4Unicast(*rws.nlri()),
+            super::PrefixRouteWs::Ipv4UnicastAddpath(rws) => PrefixNlri::Ipv4UnicastAddpath(rws.nlri().clone()),
+            super::PrefixRouteWs::Ipv6Unicast(rws) => PrefixNlri::Ipv6Unicast(*rws.nlri()),
+            super::PrefixRouteWs::Ipv6UnicastAddpath(rws) => PrefixNlri::Ipv6UnicastAddpath(rws.nlri().clone()),
+            super::PrefixRouteWs::Ipv4Multicast(rws) => PrefixNlri::Ipv4Multicast(*rws.nlri()),
+            super::PrefixRouteWs::Ipv4MulticastAddpath(rws) => PrefixNlri::Ipv4MulticastAddpath(rws.nlri().clone()),
+            super::PrefixRouteWs::Ipv6Multicast(rws) => PrefixNlri::Ipv6Multicast(*rws.nlri()),
+            super::PrefixRouteWs::Ipv6MulticastAddpath(rws) => PrefixNlri::Ipv6MulticastAddpath(rws.nlri().clone()),
+        }
+    }
+
+    pub fn attributes(&self) -> &PaMap {
+        match &self.0 {
+            super::PrefixRouteWs::Ipv4Unicast(rws) => rws.attributes(),
+            super::PrefixRouteWs::Ipv4UnicastAddpath(rws) => rws.attributes(),
+            super::PrefixRouteWs::Ipv6Unicast(rws) => rws.attributes(),
+            super::PrefixRouteWs::Ipv6UnicastAddpath(rws) => rws.attributes(),
+            super::PrefixRouteWs::Ipv4Multicast(rws) => rws.attributes(),
+            super::PrefixRouteWs::Ipv4MulticastAddpath(rws) => rws.attributes(),
+            super::PrefixRouteWs::Ipv6Multicast(rws) => rws.attributes(),
+            super::PrefixRouteWs::Ipv6MulticastAddpath(rws) => rws.attributes(),
+        }
+    }
+
+    pub fn attributes_mut(&mut self) -> &mut PaMap {
+        match &mut self.0 {
+            super::PrefixRouteWs::Ipv4Unicast(rws) => rws.attributes_mut(),
+            super::PrefixRouteWs::Ipv4UnicastAddpath(rws) => rws.attributes_mut(),
+            super::PrefixRouteWs::Ipv6Unicast(rws) => rws.attributes_mut(),
+            super::PrefixRouteWs::Ipv6UnicastAddpath(rws) => rws.attributes_mut(),
+            super::PrefixRouteWs::Ipv4Multicast(rws) => rws.attributes_mut(),
+            super::PrefixRouteWs::Ipv4MulticastAddpath(rws) => rws.attributes_mut(),
+            super::PrefixRouteWs::Ipv6Multicast(rws) => rws.attributes_mut(),
+            super::PrefixRouteWs::Ipv6MulticastAddpath(rws) => rws.attributes_mut(),
+        }
+    }
+
     pub fn prefix(&self) -> Prefix {
-        match self {
-            PrefixRoute { nlri: PrefixNlri::Ipv4Unicast(nlri), ..} => nlri.prefix(),
-            PrefixRoute { nlri: PrefixNlri::Ipv4UnicastAddpath(nlri), ..} => nlri.prefix(),
-            PrefixRoute { nlri: PrefixNlri::Ipv6Unicast(nlri), ..} => nlri.prefix(),
-            PrefixRoute { nlri: PrefixNlri::Ipv6UnicastAddpath(nlri), ..} => nlri.prefix(),
-            PrefixRoute { nlri: PrefixNlri::Ipv4Multicast(nlri), ..} => nlri.prefix(),
-            PrefixRoute { nlri: PrefixNlri::Ipv4MulticastAddpath(nlri), ..} => nlri.prefix(),
-            PrefixRoute { nlri: PrefixNlri::Ipv6Multicast(nlri), ..} => nlri.prefix(),
-            PrefixRoute { nlri: PrefixNlri::Ipv6MulticastAddpath(nlri), ..} => nlri.prefix(),
+        match &self.0 {
+            super::PrefixRouteWs::Ipv4Unicast(rws) => rws.nlri().prefix(),
+            super::PrefixRouteWs::Ipv4UnicastAddpath(rws) => rws.nlri().prefix(),
+            super::PrefixRouteWs::Ipv6Unicast(rws) => rws.nlri().prefix(),
+            super::PrefixRouteWs::Ipv6UnicastAddpath(rws) => rws.nlri().prefix(),
+            super::PrefixRouteWs::Ipv4Multicast(rws) => rws.nlri().prefix(),
+            super::PrefixRouteWs::Ipv4MulticastAddpath(rws) => rws.nlri().prefix(),
+            super::PrefixRouteWs::Ipv6Multicast(rws) => rws.nlri().prefix(),
+            super::PrefixRouteWs::Ipv6MulticastAddpath(rws) => rws.nlri().prefix(),
         }
     }
 
     pub fn path_id(&self) -> Option<PathId> {
-        match self {
-            PrefixRoute { nlri: PrefixNlri::Ipv4Unicast(nlri), ..} => nlri.path_id(),
-            PrefixRoute { nlri: PrefixNlri::Ipv4UnicastAddpath(nlri), ..} => nlri.path_id(),
-            PrefixRoute { nlri: PrefixNlri::Ipv6Unicast(nlri), ..} => nlri.path_id(),
-            PrefixRoute { nlri: PrefixNlri::Ipv6UnicastAddpath(nlri), ..} => nlri.path_id(),
-            PrefixRoute { nlri: PrefixNlri::Ipv4Multicast(nlri), ..} => nlri.path_id(),
-            PrefixRoute { nlri: PrefixNlri::Ipv4MulticastAddpath(nlri), ..} => nlri.path_id(),
-            PrefixRoute { nlri: PrefixNlri::Ipv6Multicast(nlri), ..} => nlri.path_id(),
-            PrefixRoute { nlri: PrefixNlri::Ipv6MulticastAddpath(nlri), ..} => nlri.path_id(),
+        match &self.0 {
+            super::PrefixRouteWs::Ipv4Unicast(rws) => rws.nlri().path_id(),
+            super::PrefixRouteWs::Ipv4UnicastAddpath(rws) => rws.nlri().path_id(),
+            super::PrefixRouteWs::Ipv6Unicast(rws) => rws.nlri().path_id(),
+            super::PrefixRouteWs::Ipv6UnicastAddpath(rws) => rws.nlri().path_id(),
+            super::PrefixRouteWs::Ipv4Multicast(rws) => rws.nlri().path_id(),
+            super::PrefixRouteWs::Ipv4MulticastAddpath(rws) => rws.nlri().path_id(),
+            super::PrefixRouteWs::Ipv6Multicast(rws) => rws.nlri().path_id(),
+            super::PrefixRouteWs::Ipv6MulticastAddpath(rws) => rws.nlri().path_id(),
+        }
+    }
+
+    pub fn get_attr<A: WorkshopAttribute<Ipv4UnicastNlri>
+         + WorkshopAttribute<Ipv4UnicastAddpathNlri>
+         + WorkshopAttribute<Ipv6UnicastNlri>
+         + WorkshopAttribute<Ipv6UnicastAddpathNlri>
+         + WorkshopAttribute<Ipv4MulticastNlri>
+         + WorkshopAttribute<Ipv4MulticastAddpathNlri>
+         + WorkshopAttribute<Ipv6MulticastNlri>
+         + WorkshopAttribute<Ipv6MulticastAddpathNlri>
+    >(
+        &self,
+    ) -> Option<A> {
+        match &self.0 {
+            super::PrefixRouteWs::Ipv4Unicast(rws) => rws.get_attr::<A>(),
+            super::PrefixRouteWs::Ipv4UnicastAddpath(rws) => rws.get_attr::<A>(),
+            super::PrefixRouteWs::Ipv6Unicast(rws) => rws.get_attr::<A>(),
+            super::PrefixRouteWs::Ipv6UnicastAddpath(rws) => rws.get_attr::<A>(),
+            super::PrefixRouteWs::Ipv4Multicast(rws) => rws.get_attr::<A>(),
+            super::PrefixRouteWs::Ipv4MulticastAddpath(rws) => rws.get_attr::<A>(),
+            super::PrefixRouteWs::Ipv6Multicast(rws) => rws.get_attr::<A>(),
+            super::PrefixRouteWs::Ipv6MulticastAddpath(rws) => rws.get_attr::<A>(),
+            _ => None
         }
     }
 
@@ -86,7 +158,7 @@ impl PrefixRoute {
         field_index: &FieldIndex,
     ) -> Result<TypeValue, VmError> {
         trace!(
-            "get_field_by_index {:?} for BasicRoute {:?}",
+            "get_field_by_index {:?} for PrefixRoute {:?}",
             field_index,
             self
         );
@@ -120,7 +192,7 @@ impl PrefixRoute {
                             todo!()
                             // self.0.get_attr::<NextHop>().map(TypeValue::from)
                         }
-                        8 => self.attributes.get::<Vec<Community>>().map(|c| {
+                        8 => self.get_attr::<Vec<Community>>().map(|c| {
                             TypeValue::List(List(
                                 c.into_iter()
                                     .map(|c| {
@@ -129,10 +201,10 @@ impl PrefixRoute {
                                         )
                                     })
                                     .collect::<Vec<_>>(),
-                            ))
-                        }),
+                                ))
+                            }),
                         _ => self
-                            .attributes
+                            .attributes()
                             .get_by_type_code(index)
                             .map(|pa| TypeValue::from(pa.clone())),
                     };
@@ -175,7 +247,7 @@ impl PrefixRoute {
             Some(1) => {
                 if let Some(index) = index_iter.next() {
                     let attr =
-                        self.attributes.get_mut_by_type_code(index);
+                        self.attributes_mut().get_mut_by_type_code(index);
                     attr.map(|pa| TypeValue::from(pa.clone()))
                         .ok_or(VmError::InvalidPathAttribute)
                 } else {
@@ -193,7 +265,7 @@ impl PrefixRoute {
     ) -> Result<(), VmError> {
         let index = u8::try_from(field_index.first()?)
             .map_err(|_| VmError::InvalidPathAttribute)?;
-        self.attributes.get_by_type_code(index).hash(state);
+        self.attributes().get_by_type_code(index).hash(state);
         Ok(())
     }
 }
@@ -445,7 +517,7 @@ impl std::fmt::Display for PrefixRoute {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "prefix  : {}", self.prefix())?;
         writeln!(f, "path_id : {:?}", self.path_id())?;
-        writeln!(f, "attrs    : {:?}", self.attributes)
+        writeln!(f, "attrs    : {:?}", self.attributes())
     }
 }
 
@@ -980,12 +1052,12 @@ impl From<BasicNlriToken> for u8 {
 //------------ FlowSpecRoute -------------------------------------------------
 
 impl From<RouteWorkshop<Ipv4FlowSpecNlri<bytes::Bytes>>> for TypeValue {
-    fn from(mut value: RouteWorkshop<Ipv4FlowSpecNlri<bytes::Bytes>>) -> Self {
+    fn from(value: RouteWorkshop<Ipv4FlowSpecNlri<bytes::Bytes>>) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::FlowSpecRoute(
             FlowSpecRoute {
-                attributes: std::mem::take(value.attributes_mut()),
-                nlri: Ipv4FlowSpec(value.nlri_owned()),
-            }
+                attributes: value.attributes().clone(),
+                nlri: Ipv4FlowSpec(value.nlri().clone()),
+            },
         ))
     }
 }

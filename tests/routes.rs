@@ -139,7 +139,6 @@ fn test_data(
         //         .unwrap(),
         // )
         // .unwrap();
-        trace!("prefix in route {}", route.nlri.prefix());
     }
 
     trace!("peer_ip {:?}", context.provenance().peer_ip());

@@ -17,11 +17,21 @@ use routecore::{
     },
     Octets,
 };
-use crate::types::builtin::route::NlriType::{Ipv4Unicast, Ipv6Unicast};
 use serde::Serialize;
 
-use crate::types::builtin::BuiltinTypeValue;
 use crate::types::typevalue::TypeValue;
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
+pub enum PrefixRouteWs {
+    Ipv4Unicast(RouteWorkshop<Ipv4UnicastNlri>),
+    Ipv4UnicastAddpath(RouteWorkshop<Ipv4UnicastAddpathNlri>),
+    Ipv6Unicast(RouteWorkshop<Ipv6UnicastNlri>),
+    Ipv6UnicastAddpath(RouteWorkshop<Ipv6UnicastAddpathNlri>),
+    Ipv4Multicast(RouteWorkshop<Ipv4MulticastNlri>),
+    Ipv4MulticastAddpath(RouteWorkshop<Ipv4MulticastAddpathNlri>),
+    Ipv6Multicast(RouteWorkshop<Ipv6MulticastNlri>),
+    Ipv6MulticastAddpath(RouteWorkshop<Ipv6MulticastAddpathNlri>)
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub enum PrefixNlri {
@@ -51,11 +61,7 @@ impl PrefixNlri {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
-pub struct PrefixRoute {
-    pub nlri: PrefixNlri,
-    pub attributes: PaMap,
-    pub next_hop: Option<NextHop>
-}
+pub struct PrefixRoute(pub PrefixRouteWs);
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub enum FlowSpecNlri<O: Octets> {
@@ -70,62 +76,38 @@ pub struct FlowSpecRoute<O: routecore::Octets> {
 }
 
 impl From<RouteWorkshop<Ipv4UnicastNlri>> for PrefixRoute {
-    fn from(mut value: RouteWorkshop<Ipv4UnicastNlri>) -> Self {
-        PrefixRoute {
-            nlri: PrefixNlri::Ipv4Unicast(*value.nlri()),
-            next_hop: *value.nexthop(),
-            attributes: std::mem::take(value.attributes_mut()),
-        }
+    fn from(value: RouteWorkshop<Ipv4UnicastNlri>) -> Self {
+        PrefixRoute(PrefixRouteWs::Ipv4Unicast(value))
     }
 }
 
 impl From<RouteWorkshop<Ipv6UnicastNlri>> for PrefixRoute {
-    fn from(mut value: RouteWorkshop<Ipv6UnicastNlri>) -> Self {
-        PrefixRoute {
-            nlri: PrefixNlri::Ipv6Unicast(*value.nlri()),
-            attributes: std::mem::take(value.attributes_mut()),
-            next_hop: *value.nexthop(),
-        }
+    fn from(value: RouteWorkshop<Ipv6UnicastNlri>) -> Self {
+        PrefixRoute(PrefixRouteWs::Ipv6Unicast(value))
     }
 }
 
 impl From<RouteWorkshop<Ipv4UnicastAddpathNlri>> for PrefixRoute {
-    fn from(mut value: RouteWorkshop<Ipv4UnicastAddpathNlri>) -> Self {
-        PrefixRoute {
-            next_hop: *value.nexthop(),
-            attributes: std::mem::take(value.attributes_mut()),
-            nlri: PrefixNlri::Ipv4UnicastAddpath(value.nlri_owned()),
-        }
+    fn from(value: RouteWorkshop<Ipv4UnicastAddpathNlri>) -> Self {
+        PrefixRoute(PrefixRouteWs::Ipv4UnicastAddpath(value))
     }
 }
 
 impl From<RouteWorkshop<Ipv6UnicastAddpathNlri>> for PrefixRoute {
-    fn from(mut value: RouteWorkshop<Ipv6UnicastAddpathNlri>) -> Self {
-        PrefixRoute {
-            attributes: std::mem::take(value.attributes_mut()),
-            next_hop: *value.nexthop(),
-            nlri: PrefixNlri::Ipv6UnicastAddpath(value.nlri_owned()),
-        }
+    fn from(value: RouteWorkshop<Ipv6UnicastAddpathNlri>) -> Self {
+        PrefixRoute(PrefixRouteWs::Ipv6UnicastAddpath(value))
     }
 }
 
 impl From<RouteWorkshop<Ipv4MulticastAddpathNlri>> for PrefixRoute {
-    fn from(mut value: RouteWorkshop<Ipv4MulticastAddpathNlri>) -> Self {
-        PrefixRoute {
-            next_hop: *value.nexthop(),
-            attributes: std::mem::take(value.attributes_mut()),
-            nlri: PrefixNlri::Ipv4MulticastAddpath(value.nlri_owned()),
-        }
+    fn from(value: RouteWorkshop<Ipv4MulticastAddpathNlri>) -> Self {
+        PrefixRoute(PrefixRouteWs::Ipv4MulticastAddpath(value))
     }
 }
 
 impl From<RouteWorkshop<Ipv6MulticastAddpathNlri>> for PrefixRoute {
-    fn from(mut value: RouteWorkshop<Ipv6MulticastAddpathNlri>) -> Self {
-        PrefixRoute {
-            attributes: std::mem::take(value.attributes_mut()),
-            next_hop: *value.nexthop(),
-            nlri: PrefixNlri::Ipv6MulticastAddpath(value.nlri_owned()),
-        }
+    fn from(value: RouteWorkshop<Ipv6MulticastAddpathNlri>) -> Self {
+        PrefixRoute(PrefixRouteWs::Ipv6MulticastAddpath(value))
     }
 }
 
@@ -321,7 +303,9 @@ pub fn explode_announcements(
     fn pdu_into_rws_typed() {
 
         use crate::types::typevalue::TypeValue;
+        use crate::types::builtin::BuiltinTypeValue;
         use routecore::bgp::message::SessionConfig;
+        use crate::types::builtin::route::NlriType::{Ipv4Unicast, Ipv6Unicast};
 
         // UPDATE with 5 ipv6 nlri + 2 conventional
         let raw = bytes::Bytes::from(vec![
@@ -363,7 +347,7 @@ pub fn explode_announcements(
             println!("{}", rws);
 
             if let TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(route)) = rws {
-                match route.nlri {
+                match route.nlri() {
                     PrefixNlri::Ipv4Unicast(_) => { ipv4_nlri += 1; },
                     PrefixNlri::Ipv4UnicastAddpath(_) => { ipv4_nlri += 1; },
                     PrefixNlri::Ipv6Unicast(_) => { ipv6_nlri += 1; },
