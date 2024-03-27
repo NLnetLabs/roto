@@ -1,7 +1,8 @@
 use inetnum::addr::Prefix;
 use routecore::bgp::nlri::afisafi::IsPrefix;
 use routecore::bgp::nlri::afisafi::NlriType;
-use routecore::bgp::types::NextHop;
+use routecore::bgp::types::PathId;
+use routecore::bgp::nlri::afisafi::AfiSafiType;
 use routecore::{
     bgp::{
         message::UpdateMessage,
@@ -34,28 +35,102 @@ pub enum PrefixRouteWs {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
-pub enum PrefixNlri {
-    Ipv4Unicast(Ipv4UnicastNlri),
-    Ipv4UnicastAddpath(Ipv4UnicastAddpathNlri),
-    Ipv6Unicast(Ipv6UnicastNlri),
-    Ipv6UnicastAddpath(Ipv6UnicastAddpathNlri),
-    Ipv4Multicast(Ipv4MulticastNlri),
-    Ipv4MulticastAddpath(Ipv4MulticastAddpathNlri),
-    Ipv6Multicast(Ipv6MulticastNlri),
-    Ipv6MulticastAddpath(Ipv6MulticastAddpathNlri)
+pub struct PrefixNlri {
+    ty: AfiSafiType,
+    prefix: Prefix,
+    path_id: Option<PathId>
 }
 
 impl PrefixNlri {
     pub fn prefix(&self) -> Prefix {
-        match self {
-            PrefixNlri::Ipv4Unicast(n) => n.prefix(),
-            PrefixNlri::Ipv4UnicastAddpath(n) => n.prefix(),
-            PrefixNlri::Ipv6Unicast(n) => n.prefix(),
-            PrefixNlri::Ipv6UnicastAddpath(n) => n.prefix(),
-            PrefixNlri::Ipv4Multicast(n) => n.prefix(),
-            PrefixNlri::Ipv4MulticastAddpath(n) => n.prefix(),
-            PrefixNlri::Ipv6Multicast(n) => n.prefix(),
-            PrefixNlri::Ipv6MulticastAddpath(n) => n.prefix(),
+        self.prefix
+    }
+
+    pub fn path_id(&self) -> Option<PathId> {
+        self.path_id
+    }
+
+    pub fn get_type(&self) -> AfiSafiType {
+        self.ty
+    }
+}
+
+impl From<Ipv4UnicastNlri> for PrefixNlri {
+    fn from(value: Ipv4UnicastNlri) -> PrefixNlri {
+        PrefixNlri {
+            ty: AfiSafiType::Ipv4Unicast,
+            prefix: value.prefix(),
+            path_id: None
+        }
+    }
+}
+
+impl From<Ipv4UnicastAddpathNlri> for PrefixNlri {
+    fn from(value: Ipv4UnicastAddpathNlri) -> PrefixNlri {
+        PrefixNlri {
+            ty: AfiSafiType::Ipv4Unicast,
+            prefix: value.prefix(),
+            path_id: value.path_id()
+        }
+    }
+}
+
+impl From<Ipv6UnicastNlri> for PrefixNlri {
+    fn from(value: Ipv6UnicastNlri) -> PrefixNlri {
+        PrefixNlri {
+            ty: AfiSafiType::Ipv6Unicast,
+            prefix: value.prefix(),
+            path_id: None
+        }
+    }
+}
+
+impl From<Ipv6UnicastAddpathNlri> for PrefixNlri {
+    fn from(value: Ipv6UnicastAddpathNlri) -> PrefixNlri {
+        PrefixNlri {
+            ty: AfiSafiType::Ipv6Unicast,
+            prefix: value.prefix(),
+            path_id: value.path_id()
+        }
+    }
+}
+
+impl From<Ipv4MulticastNlri> for PrefixNlri {
+    fn from(value: Ipv4MulticastNlri) -> PrefixNlri {
+        PrefixNlri {
+            ty: AfiSafiType::Ipv4Multicast,
+            prefix: value.prefix(),
+            path_id: None
+        }
+    }
+}
+
+impl From<Ipv4MulticastAddpathNlri> for PrefixNlri {
+    fn from(value: Ipv4MulticastAddpathNlri) -> PrefixNlri {
+        PrefixNlri {
+            ty: AfiSafiType::Ipv4Multicast,
+            prefix: value.prefix(),
+            path_id: value.path_id()
+        }
+    }
+}
+
+impl From<Ipv6MulticastNlri> for PrefixNlri {
+    fn from(value: Ipv6MulticastNlri) -> PrefixNlri {
+        PrefixNlri {
+            ty: AfiSafiType::Ipv6Multicast,
+            prefix: value.prefix(),
+            path_id: None
+        }
+    }
+}
+
+impl From<Ipv6MulticastAddpathNlri> for PrefixNlri {
+    fn from(value: Ipv6MulticastAddpathNlri) -> PrefixNlri {
+        PrefixNlri {
+            ty: AfiSafiType::Ipv6Multicast,
+            prefix: value.prefix(),
+            path_id: value.path_id()
         }
     }
 }
@@ -347,15 +422,10 @@ pub fn explode_announcements(
             println!("{}", rws);
 
             if let TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(route)) = rws {
-                match route.nlri() {
-                    PrefixNlri::Ipv4Unicast(_) => { ipv4_nlri += 1; },
-                    PrefixNlri::Ipv4UnicastAddpath(_) => { ipv4_nlri += 1; },
-                    PrefixNlri::Ipv6Unicast(_) => { ipv6_nlri += 1; },
-                    PrefixNlri::Ipv6UnicastAddpath(_) => { ipv6_nlri += 1; },
-                    PrefixNlri::Ipv4Multicast(_) => todo!(),
-                    PrefixNlri::Ipv4MulticastAddpath(_) => todo!(),
-                    PrefixNlri::Ipv6Multicast(_) => todo!(),
-                    PrefixNlri::Ipv6MulticastAddpath(_) => todo!(),
+                match route.nlri().get_type() {
+                    AfiSafiType::Ipv4Unicast => { ipv4_nlri += 1; },
+                    AfiSafiType::Ipv6Unicast => { ipv6_nlri += 1; },
+                    _ => {}
                 }
             }
         }

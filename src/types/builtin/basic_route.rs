@@ -66,14 +66,14 @@ pub type LogicalTime = u64;
 impl PrefixRoute {
     pub fn nlri(&self) -> PrefixNlri {
         match &self.0 {
-            super::PrefixRouteWs::Ipv4Unicast(rws) => PrefixNlri::Ipv4Unicast(*rws.nlri()),
-            super::PrefixRouteWs::Ipv4UnicastAddpath(rws) => PrefixNlri::Ipv4UnicastAddpath(rws.nlri().clone()),
-            super::PrefixRouteWs::Ipv6Unicast(rws) => PrefixNlri::Ipv6Unicast(*rws.nlri()),
-            super::PrefixRouteWs::Ipv6UnicastAddpath(rws) => PrefixNlri::Ipv6UnicastAddpath(rws.nlri().clone()),
-            super::PrefixRouteWs::Ipv4Multicast(rws) => PrefixNlri::Ipv4Multicast(*rws.nlri()),
-            super::PrefixRouteWs::Ipv4MulticastAddpath(rws) => PrefixNlri::Ipv4MulticastAddpath(rws.nlri().clone()),
-            super::PrefixRouteWs::Ipv6Multicast(rws) => PrefixNlri::Ipv6Multicast(*rws.nlri()),
-            super::PrefixRouteWs::Ipv6MulticastAddpath(rws) => PrefixNlri::Ipv6MulticastAddpath(rws.nlri().clone()),
+            super::PrefixRouteWs::Ipv4Unicast(rws) => PrefixNlri::from(*rws.nlri()),
+            super::PrefixRouteWs::Ipv4UnicastAddpath(rws) => PrefixNlri::from(rws.nlri().clone()),
+            super::PrefixRouteWs::Ipv6Unicast(rws) => PrefixNlri::from(*rws.nlri()),
+            super::PrefixRouteWs::Ipv6UnicastAddpath(rws) => PrefixNlri::from(rws.nlri().clone()),
+            super::PrefixRouteWs::Ipv4Multicast(rws) => PrefixNlri::from(*rws.nlri()),
+            super::PrefixRouteWs::Ipv4MulticastAddpath(rws) => PrefixNlri::from(rws.nlri().clone()),
+            super::PrefixRouteWs::Ipv6Multicast(rws) => PrefixNlri::from(*rws.nlri()),
+            super::PrefixRouteWs::Ipv6MulticastAddpath(rws) => PrefixNlri::from(rws.nlri().clone()),
         }
     }
 
