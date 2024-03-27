@@ -7,7 +7,7 @@ mod route {
     use crate::types::builtin::basic_route::{
         PeerId, PeerRibType, Provenance,
     };
-    use crate::types::builtin::{BuiltinTypeValue, BytesRecord};
+    use crate::types::builtin::{explode_announcements, BasicNlri, BuiltinTypeValue, BytesRecord};
     use crate::types::lazyrecord_types::BgpUpdateMessage;
     use crate::types::typedef::TypeDef;
     use crate::types::typevalue::TypeValue;
@@ -18,7 +18,7 @@ mod route {
     use routecore::bgp::nlri::afisafi::AfiSafiType;
     use routecore::bgp::nlri::afisafi::IsPrefix;
     use routecore::bgp::nlri::afisafi::Ipv6FlowSpecNlri;
-    use routecore::bgp::workshop::route::{explode_into_wrapped_rws_vec, into_wrapped_rws_vec, BasicNlri, RouteWorkshop};
+    use routecore::bgp::workshop::route::RouteWorkshop;
 
     enum MethodType {
         Value,
@@ -243,64 +243,19 @@ mod route {
         )
         .unwrap();
 
-        // let afi_safi =
-        //     update.bytes_parser().mp_announcements().map(|a| {
-        //         a.map(|a| a.afi_safi())
-        //             .or_else(|| {
-        //                 update
-        //                     .bytes_parser()
-        //                     .conventional_announcements()
-        //                     .map(|a| a.afi_safi())
-        //                     .ok()
-        //             })
-        //             .ok_or(ParseError::Unsupported)
-        //     })??;
-
         let afi_safis = update.bytes_parser().afi_safis();
-        println!("afi_safis {:?}", afi_safis);
-        
+        // Should contain only IPv6 unicast NLRI in MP_REACH.
+        assert_eq!(afi_safis, (None, None, None, Some(routecore::bgp::nlri::afisafi::NlriType::Ipv6Unicast)));
+
         // The announcements in MP_REACH
-        let _afi_safi = afi_safis.get(3).unwrap();
+        let _afi_safi = afi_safis.3.unwrap();
+        let afi_safis = update.bytes_parser().afi_safis();
+        trace!("afi_safis {:?}", afi_safis);
 
-        // // Comes out of the SessionConfig
-        // let pa_map = PaMap::from_update_pdu(update.bytes_parser()).unwrap();
+        let exploded = explode_announcements::<bytes::Bytes, _, TypeValue>(update.bytes_parser());
 
-        // let parser = update.bytes_parser().nlri_parser()?.unwrap();
-
-        // let my_vec = iter_map(afi_safi, add_path_cap, parser, pa_map);
-        let afi_safis = update.bytes_parser().afi_safis().into_iter().flatten();
-
-        println!("afi_safis {:?}", afi_safis);
-        let my_vec = into_wrapped_rws_vec::<
-            '_,
-            _,
-            _,
-            Ipv6UnicastNlri,
-            BasicNlri,
-            TypeValue,
-        >(update.bytes_parser());
-
-        println!("vec {:?}", my_vec);
-        // let vv = iter_for_afi_safi::<'_, _, _, Ipv6UnicastNlri>(update.bytes_parser());
-        // println!("iter {:?}", vv.collect::<Vec<_>>());
-        println!("mp_announcements {:?}", update.bytes_parser().mp_announcements().unwrap().unwrap().collect::<Vec<_>>());
-
-        let my_vec2 = into_wrapped_rws_vec::<
-            '_,
-            _,
-            _,
-            Ipv6FlowSpecNlri<bytes::Bytes>,
-            routecore::bgp::nlri::flowspec::FlowSpecNlri<bytes::Bytes>,
-            TypeValue,
-        >(update.bytes_parser());
-
-        println!("rws {:?}", my_vec2);
-
-        let _exploded = explode_into_wrapped_rws_vec::<_, bytes::Bytes, TypeValue>(afi_safis, false, update.bytes_parser());
-
-        println!("exploded {:#?}", _exploded);
-
-        // println!("exploded view {:?}", exploded);
+        trace!("exploded {:#?}", exploded);
+        assert_eq!(exploded?.len(), 5);
 
         let prefixes: Vec<inetnum::addr::Prefix> = update
             .bytes_parser()
@@ -354,11 +309,6 @@ mod route {
         assert_eq!(roto_msgs.len(), 5);
 
         let attr_set = &mut roto_msgs[2];
-        // let mp_reach =
-        //     MpReachNlriBuilder::for_nlri(&Ipv6UnicastNlri::<bytes::Bytes>(
-        //         *attr_set.nlri(),
-        //     ));
-        // attr_set.set_attr(mp_reach).unwrap();
 
         println!("change set {:#?}", attr_set);
         if let std::net::IpAddr::V6(v6) = prefixes[2].addr() {

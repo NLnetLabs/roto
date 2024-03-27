@@ -7,7 +7,7 @@ use roto::{
     compiler::Compiler,
     types::{
         builtin::{
-            basic_route::{BasicRoute, PeerId, PeerRibType, Provenance}, NlriStatus, RouteContext,
+            basic_route::{BasicRoute, PeerId, PeerRibType, Provenance}, explode_announcements, NlriStatus, RouteContext
         }, collections::{BytesRecord, Record}, lazyrecord_types::BgpUpdateMessage, typevalue::TypeValue
     },
     vm::{self, VmResult},
@@ -43,7 +43,7 @@ fn test_data(
         mk_bgp_update(&per_peer_header, &withdrawals, &announcements, &[]);
 
     let bgp_msg = BytesRecord::<BgpUpdateMessage>::new(msg_buf.0, SessionConfig::modern())?;
-    let afi_safis = bgp_msg.bytes_parser().afi_safis().into_iter().flatten();
+    // let afi_safis = bgp_msg.bytes_parser().afi_safis().into_iter().flatten();
 
     let prov = Provenance {
         timestamp: chrono::Utc::now(),
@@ -58,7 +58,7 @@ fn test_data(
     // let pa_map = PaMap::from_update_pdu(parser).unwrap();
 
     // let parser = Parser::from_ref(parser.octets());
-    let rws = &explode_into_wrapped_rws_vec::<'_, _, bytes::Bytes, TypeValue>(afi_safis, false, parser).unwrap()[0];
+    let rws = &explode_announcements::<'_, bytes::Bytes, _, TypeValue>(parser).unwrap()[0];
 
     let context = RouteContext::new(
         // routecore::addr::Prefix::from_str("192.0.2.0/24")?,

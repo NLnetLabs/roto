@@ -6,13 +6,14 @@ use std::net::SocketAddr;
 use chrono::Utc;
 use routecore::bgp::communities::Community;
 use routecore::bgp::communities::HumanReadableCommunity;
-use routecore::bgp::nlri::flowspec::FlowSpecNlri;
+use routecore::bgp::nlri::afisafi::Ipv4FlowSpecNlri;
+use routecore::bgp::nlri::afisafi::Ipv6FlowSpecNlri;
+use routecore::bgp::nlri::afisafi::Nlri::{Ipv4FlowSpec, Ipv6FlowSpec};
 use routecore::bgp::path_attributes::PaMap;
 use routecore::bgp::path_attributes::PathAttribute;
 use routecore::bgp::types::LocalPref;
 use routecore::bgp::types::MultiExitDisc;
 use routecore::bgp::types::NextHop;
-use routecore::bgp::workshop::route::BasicNlri;
 use routecore::bgp::workshop::route::RouteWorkshop;
 use serde::Deserialize;
 use std::fmt::{Display, Formatter};
@@ -41,13 +42,14 @@ use crate::{
 };
 
 use super::super::typevalue::TypeValue;
+use super::BasicNlri;
 use super::BuiltinTypeValue;
-use super::Nlri;
 use super::{super::typedef::TypeDef, BytesRecord, NlriStatus};
 
 use inetnum::addr::Prefix;
 use inetnum::asn::Asn;
 use routecore::bgp::types::PathId;
+use routecore::bgp::nlri::afisafi::AfiSafiNlri;
 
 pub type LogicalTime = u64;
 
@@ -59,11 +61,11 @@ pub struct BasicRoute(
 impl BasicRoute {
 
     pub fn prefix(&self) -> Prefix {
-        self.0.nlri().prefix()
+        self.0.nlri().prefix
     }
 
     pub fn path_id(&self) -> Option<PathId> {
-        self.0.nlri().path_id()
+        self.0.nlri().path_id
     }
 
     pub fn get_field_by_index(
@@ -773,7 +775,7 @@ impl From<BasicNlriToken> for u8 {
 
 //------------ FlowSpecRoute -------------------------------------------------
 
-impl RotoType for RouteWorkshop<FlowSpecNlri<bytes::Bytes>> {
+impl RotoType for RouteWorkshop<Ipv4FlowSpecNlri<bytes::Bytes>> {
     fn get_props_for_method(
         _ty: TypeDef,
         _method_name: &crate::ast::Identifier,
@@ -821,13 +823,23 @@ impl RotoType for RouteWorkshop<FlowSpecNlri<bytes::Bytes>> {
     }
 }
 
-impl From<RouteWorkshop<FlowSpecNlri<bytes::Bytes>>>
+impl From<RouteWorkshop<Ipv4FlowSpecNlri<bytes::Bytes>>>
     for TypeValue
 {
     fn from(
-        value: RouteWorkshop<FlowSpecNlri<bytes::Bytes>>,
+        value: RouteWorkshop<Ipv4FlowSpecNlri<bytes::Bytes>>,
     ) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Nlri(Nlri::Ipv4FlowSpec(value.nlri().clone().into())))
+        TypeValue::Builtin(BuiltinTypeValue::Nlri(Ipv4FlowSpec(value.nlri().clone())))
+    }
+}
+
+impl From<RouteWorkshop<Ipv6FlowSpecNlri<bytes::Bytes>>>
+    for TypeValue
+{
+    fn from(
+        value: RouteWorkshop<Ipv6FlowSpecNlri<bytes::Bytes>>,
+    ) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::Nlri(Ipv6FlowSpec(value.nlri().clone())))
     }
 }
 

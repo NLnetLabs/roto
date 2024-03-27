@@ -3,7 +3,7 @@ use std::net::SocketAddrV4;
 use roto::compiler::Compiler;
 
 use roto::types::builtin::basic_route::{BasicRoute, PeerId, PeerRibType, Provenance};
-use roto::types::builtin::{Nlri, NlriStatus, RouteContext};
+use roto::types::builtin::{BasicNlri, Nlri, NlriStatus, RouteContext};
 use roto::types::collections::{BytesRecord, Record};
 use roto::types::lazyrecord_types::BgpUpdateMessage;
 use roto::types::typevalue::TypeValue;
@@ -12,6 +12,9 @@ use roto::blocks::Scope::{self, FilterMap};
 use inetnum::asn::Asn;
 use routecore::bgp::message::SessionConfig;
 use inetnum::addr::Prefix;
+use routecore::bgp::workshop::route::RouteWorkshop;
+use routecore::bgp::nlri::afisafi::Ipv6UnicastNlri;
+use routecore::bgp::nlri::afisafi::IsPrefix;
 
 fn test_data(
     name: Scope,

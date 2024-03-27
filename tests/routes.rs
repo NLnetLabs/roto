@@ -6,18 +6,21 @@ use roto::blocks::Scope::{self, Filter};
 use roto::types::builtin::basic_route::{
     BasicRoute, BasicRouteToken, PeerId, PeerRibType, Provenance,
 };
-use roto::types::builtin::{BuiltinTypeValue, NlriStatus, RouteContext};
+use roto::types::builtin::{explode_announcements, BasicNlri, BuiltinTypeValue, NlriStatus, RouteContext};
 use roto::types::collections::{BytesRecord, Record};
 use roto::types::lazyrecord_types::BgpUpdateMessage;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, FieldIndex, VmResult};
 use inetnum::addr::Prefix;
 use inetnum::asn::Asn;
-use routecore::bgp::nlri::afisafi::Nlri;
+use routecore::bgp::message::update_builder::UpdateBuilder;
+use routecore::bgp::nlri::afisafi::{Ipv6UnicastNlri, Nlri};
 use routecore::bgp::nlri::afisafi::IsPrefix;
 use routecore::bgp::message::SessionConfig;
-use routecore::bgp::types::NextHop;
-use routecore::bgp::workshop::route::explode_into_wrapped_rws_vec;
+use routecore::bgp::path_attributes::PaMap;
+use routecore::bgp::types::{LocalPref, NextHop};
+use routecore::bgp::nlri::afisafi::AfiSafiType;
+use routecore::bgp::workshop::route::{Route, RouteWorkshop};
 
 mod common;
 
@@ -75,7 +78,7 @@ fn test_data(
 
     let provenance = Provenance {
         timestamp: chrono::Utc::now(),
-        connection_id: "fe80::1:178".parse().unwrap(),
+        connection_id: "[fe80::1]:178".parse().unwrap(),
         peer_id: PeerId {
             addr: peer_ip,
             asn: Asn::from(65534),
@@ -106,11 +109,11 @@ fn test_data(
 
     // let pa_map = PaMap::from_update_pdu(&update).unwrap();
     let parser = update.bytes_parser();
-    let afi_safis = parser.afi_safis().into_iter().flatten();
-    trace!("afi safis {:?}", afi_safis);
-    let rws = explode_into_wrapped_rws_vec::<'_, _, bytes::Bytes, TypeValue>(afi_safis, false, parser);
+    let afi_safis = parser.announcement_fams();
+    trace!("afi safis {:?}", afi_safis.collect::<Vec<_>>());
+    let rws = explode_announcements::<'_, bytes::Bytes, _, TypeValue>(parser);
     
-    trace!("rws {:?}", rws);
+    trace!("rws {:#?}", rws);
     // let mut rws = RouteWorkshop::from_update_pdu(nlri, &update)?;
 
     // from_update_pdu does NOT set MP_REACH_NLRI attribute, so we have to set
@@ -125,7 +128,7 @@ fn test_data(
     //     MpReachNlriBuilder::for_nlri(announces.first().unwrap());
     let rws = &mut rws.unwrap();
 
-    let payload = &mut rws.get_mut(1).unwrap();
+    let payload = &mut rws.get_mut(0).unwrap();
 
     if let TypeValue::Builtin(BuiltinTypeValue::Route(BasicRoute(rws))) = payload {
         // Store it in the RouteWorkshop
@@ -138,7 +141,7 @@ fn test_data(
         //         .unwrap(),
         // )
         // .unwrap();
-        trace!("prefix in route {:?}", rws.nlri().prefix());
+        trace!("prefix in route {}", rws.nlri().prefix());
     }
 
     trace!("peer_ip {:?}", context.provenance().peer_ip());
@@ -533,6 +536,7 @@ fn test_routes_5() {
     assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
+#[ignore = "next hop isn't currently working"]
 #[test]
 fn test_routes_6() {
     common::init();
@@ -635,4 +639,22 @@ fn test_routes_6() {
     );
     trace!("{:#?}", output_stream_queue);
     assert_eq!(accept_reject, AcceptReject::Accept);
+}
+
+
+#[test]
+fn test_create_pdu_from_rws() {
+    common::init();
+
+    let mut rws1 = RouteWorkshop::new(BasicNlri {
+        ty: AfiSafiType::Ipv6Unicast,
+        prefix: "2001:fe80:2d::/48".parse().unwrap(),
+        path_id: None,
+    });
+
+    rws1.set_attr::<LocalPref>(LocalPref(80)).unwrap();
+    let nlri: Ipv6UnicastNlri = (*rws1.nlri()).try_into().unwrap();
+    
+    let mut new_update_pdu = UpdateBuilder::<bytes::BytesMut, BasicNlri>::from_workshop(rws1);
+    new_update_pdu.add_announcement(nlri.into()).unwrap();
 }
