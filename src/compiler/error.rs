@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CompileError {
     /// An error that we - the Roto compiler - think is caused by the Roto
     /// end-user, through a Roto script.
@@ -37,17 +37,11 @@ impl From<&str> for CompileError {
 
 impl std::fmt::Display for CompileError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let msg = if let CompileError::User(msg) | CompileError::Internal(msg) = self {
-            msg
-        } else {
-            "None"
-        };
-        let err_type = match self {
-            CompileError::User(_) => "",
-            CompileError::Internal(_) => "[INTERNAL] ",
-            CompileError::Unspecified => "[UNSPECIFIED] ",
-        };
-        write!(f, "{}{}", err_type, msg)
+        match self {
+            CompileError::User(msg) => write!(f, "{msg}"),
+            CompileError::Internal(msg) => write!(f, "[INTERNAL] {msg}"),
+            CompileError::Unspecified => write!(f, "[UNSPECIFIED]"),
+        }
     }
 }
 

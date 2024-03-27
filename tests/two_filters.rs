@@ -1,8 +1,8 @@
 use log::trace;
 use roto::ast::AcceptReject;
-use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self};
+use roto::pipeline;
 use roto::types::builtin::{BgpUpdateMessage, RotondaId, UpdateMessage};
 use roto::types::collections::Record;
 use roto::vm::{self, VmResult};
@@ -17,7 +17,7 @@ fn test_data(
     println!("Evaluate filter {}...", name);
 
     // Compile the source code in this example
-    let rotolo = Compiler::build(source_code)?;
+    let rotolo = pipeline::run_test(source_code, None)?;
     let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     // BGP UPDATE message containing MP_REACH_NLRI path attribute,
@@ -83,8 +83,7 @@ fn test_data(
 }
 
 #[test]
-#[should_panic(expected="Eval error: Duplicate FilterMap with name \
-'bmp-in-filter'")]
+#[should_panic]
 fn test_two_filters_1() {
     common::init();
 

@@ -1,7 +1,15 @@
-use crate::ast;
+use std::ops::Deref;
+
+use crate::{
+    ast,
+    parser::span::{Spanned, WithSpan},
+    typechecker::error,
+};
 
 use super::{
-    scope::Scope, types::{Arrow, Method, Primitive, Type}, TypeChecker, TypeResult
+    scope::Scope,
+    types::{Arrow, Method, Primitive, Type},
+    TypeChecker, TypeResult,
 };
 
 impl TypeChecker<'_> {
@@ -38,20 +46,35 @@ impl TypeChecker<'_> {
             ast::BooleanExpr::CompareExpr(expr) => {
                 let t_left = self.compare_arg(scope, &expr.left)?;
                 let t_right = self.compare_arg(scope, &expr.right)?;
-                self.unify(&t_left, &t_right)?;
+                self.unify(&t_left, &t_right, expr.right.span, Some(expr.left.span))?;
             }
             ast::BooleanExpr::ComputeExpr(expr) => {
                 let ty = self.compute_expr(scope, expr)?;
-                self.unify(&Type::Primitive(Primitive::Bool), &ty)?;
+                self.unify(
+                    &Type::Primitive(Primitive::Bool),
+                    &ty,
+                    expr.span,
+                    None,
+                )?;
             }
             ast::BooleanExpr::LiteralAccessExpr(expr) => {
                 let ty = self.literal_access(scope, expr)?;
-                self.unify(&Type::Primitive(Primitive::Bool), &ty)?;
+                self.unify(
+                    &Type::Primitive(Primitive::Bool),
+                    &ty,
+                    expr.span,
+                    None,
+                )?;
             }
             ast::BooleanExpr::ListCompareExpr(expr) => {
                 let t_left = self.expr(scope, &expr.left)?;
                 let t_right = self.expr(scope, &expr.right)?;
-                self.unify(&Type::List(Box::new(t_left)), &t_right)?;
+                self.unify(
+                    &Type::List(Box::new(t_left)),
+                    &t_right,
+                    expr.right.span,
+                    Some(expr.left.span),
+                )?;
             }
             ast::BooleanExpr::PrefixMatchExpr(_)
             | ast::BooleanExpr::BooleanLiteral(_) => (),
@@ -66,9 +89,9 @@ impl TypeChecker<'_> {
     ) -> TypeResult<Type> {
         match expr {
             ast::CompareArg::ValueExpr(expr) => self.expr(scope, expr),
-            ast::CompareArg::GroupedLogicalExpr(
-                ast::GroupedLogicalExpr { expr },
-            ) => self.logical_expr(scope, expr),
+            ast::CompareArg::GroupedLogicalExpr(expr) => {
+                self.logical_expr(scope, &expr.expr)
+            }
         }
     }
 
@@ -89,10 +112,13 @@ impl TypeChecker<'_> {
                 let fields = self.record_type(scope, &key_values)?;
                 Ok(self.fresh_record(fields))
             }
-            TypedRecordExpr(ast::TypedRecordValueExpr {
-                type_id,
-                key_values,
-            }) => {
+            TypedRecordExpr(record_expr) => {
+                let record_span = record_expr.span;
+                let ast::TypedRecordValueExpr {
+                    type_id,
+                    key_values,
+                } = &record_expr.inner;
+
                 // We first retrieve the type we expect
                 let (record_name, mut record_type) = match self
                     .types
@@ -100,36 +126,44 @@ impl TypeChecker<'_> {
                 {
                     Some(Type::NamedRecord(n, t)) => (n.clone(), t.clone()),
                     Some(_) => {
-                        return Err(format!(
-                            "{type_id} does not refer to a named record type"
+                        return Err(error::simple(
+                            &format!(
+                            "Expected a named record type, but found `{type_id}`",
+                        ),
+                            "not a named record type",
+                            type_id.span,
                         ))
                     }
                     None => {
-                        return Err(format!(
-                            "The type {type_id} does not exist"
-                        ))
+                        return Err(error::undeclared_type(type_id))
                     }
                 };
 
                 // Infer the type based on the given expression
-                let inferred_type = self.record_type(scope, key_values)?;
+                let inferred_type = self.record_type(scope, &key_values)?;
 
                 for (name, inferred_type) in inferred_type {
-                    let Some(idx) =
-                        record_type.iter().position(|(n, _)| n == &name)
+                    let Some(idx) = record_type
+                        .iter()
+                        .position(|(n, _)| n == &name.inner)
                     else {
-                        return Err(format!("Type {record_name} does not have a field {name}."));
+                        return Err(error::simple(
+                            &format!("record `{record_name}` does not have a field `{name}`."),
+                            &format!("`{record_name}` does not have this field"),
+                            name.span
+                        ));
                     };
                     let (_, ty) = record_type.remove(idx);
-                    self.unify(&inferred_type, &ty)?;
+                    self.unify(&inferred_type, &ty, name.span, None)?;
                 }
 
                 let missing: Vec<_> =
                     record_type.into_iter().map(|(s, _)| s).collect();
                 if !missing.is_empty() {
-                    return Err(format!(
-                        "Missing fields on {record_name}: {}",
-                        missing.join(", ")
+                    return Err(error::missing_fields(
+                        &missing,
+                        type_id,
+                        type_id.span.merge(record_span),
                     ));
                 }
 
@@ -137,9 +171,9 @@ impl TypeChecker<'_> {
             }
             ListExpr(ast::ListValueExpr { values }) => {
                 let ret = self.fresh_var();
-                for v in values {
+                for v in values.iter() {
                     let t = self.expr(scope, v)?;
-                    self.unify(&ret, &t)?;
+                    self.unify(&ret, &t, v.span, None)?;
                 }
                 Ok(Type::List(Box::new(self.resolve_type(&ret).clone())))
             }
@@ -150,38 +184,43 @@ impl TypeChecker<'_> {
         &mut self,
         scope: &Scope,
         receiver: Type,
-        access: &[ast::AccessExpr],
+        access: &[impl Deref<Target = ast::AccessExpr>],
     ) -> TypeResult<Type> {
         let mut last = receiver;
         for a in access {
-            match a {
+            match a.deref() {
                 ast::AccessExpr::MethodComputeExpr(
                     ast::MethodComputeExpr {
                         ident,
                         args: ast::ArgExprList { args },
                     },
                 ) => {
-                    let Some(arrow) = self.find_method(
-                        self.methods,
-                        &last,
-                        ident.as_ref(),
-                    ) else {
-                        return Err(format!(
-                            "Method '{ident}' not found on {last:?}"
+                    let Some(arrow) =
+                        self.find_method(self.methods, &last, ident.as_ref())
+                    else {
+                        return Err(error::simple(
+                            &format!(
+                                "method `{ident}` not found on `{last}`",
+                            ),
+                            &format!("method not found for `{last}`"),
+                            ident.span,
                         ));
                     };
 
                     if args.len() != arrow.args.len() {
-                        return Err(format!(
-                            "Number of arguments don't match"
+                        return Err(error::number_of_arguments_dont_match(
+                            "method",
+                            &ident,
+                            arrow.args.len(),
+                            args.len(),
                         ));
                     }
 
-                    self.unify(&arrow.rec, &last)?;
+                    self.unify(&arrow.rec, &last, ident.span, None)?;
 
                     for (arg, ty) in args.iter().zip(&arrow.args) {
                         let arg_ty = self.expr(scope, arg)?;
-                        self.unify(&arg_ty, &ty)?;
+                        self.unify(&arg_ty, &ty, arg.span, None)?;
                     }
                     last = self.resolve_type(&arrow.ret).clone();
                 }
@@ -202,8 +241,10 @@ impl TypeChecker<'_> {
                                 continue;
                             };
                         }
-                        return Err(format!(
-                            "No field '{field}' on {last:?}"
+                        return Err(error::simple(
+                            &format!("no field `{field}` on type `{last}`",),
+                            &format!("unknown field `{field}`"),
+                            field.span,
                         ));
                     }
                 }
@@ -240,7 +281,6 @@ impl TypeChecker<'_> {
             literal,
             access_expr,
         } = expr;
-        dbg!();
         let literal = self.literal(literal)?;
         self.access(scope, literal, access_expr)
     }
@@ -277,17 +317,21 @@ impl TypeChecker<'_> {
                 if let Some(ty) = self.get_type(&x) {
                     let mut access_expr = access_expr.clone();
                     if access_expr.is_empty() {
-                        return Err(
-                            "Type should be followed by a method".into()
-                        );
+                        return Err(error::simple(
+                            "a type cannot appear on its own and must be followed by a method",
+                            "must be followed by a method",
+                            x.span,
+                        ));
                     }
-                    let ast::AccessExpr::MethodComputeExpr(m) =
-                        access_expr.remove(0)
-                    else {
-                        return Err(
-                            "First access on a type should be a method call"
-                                .into(),
-                        );
+                    let m = match access_expr.remove(0).inner {
+                        ast::AccessExpr::MethodComputeExpr(m) => m,
+                        ast::AccessExpr::FieldAccessExpr(f) => {
+                            return Err(error::simple(
+                                &format!("`{x}` is a type and does not have any fields"),
+                                "no field access possible on this type",
+                                f.field_names[0].span,
+                            ))
+                        },
                     };
                     let receiver_type =
                         self.static_method_call(scope, ty.clone(), m)?;
@@ -314,21 +358,27 @@ impl TypeChecker<'_> {
         let Some(arrow) =
             self.find_method(self.static_methods, &ty, ident.as_ref())
         else {
-            return Err(format!(
-                "No static method '{}' found for '{:?}'",
-                &ident, ty
+            return Err(error::simple(
+                &format!("no static method `{ident}` found for `{ty}`",),
+                &format!("static method not found for `{ty}`"),
+                ident.span,
             ));
         };
 
         if args.len() != arrow.args.len() {
-            return Err(format!("Number of arguments don't match"));
+            return Err(error::number_of_arguments_dont_match(
+                "static method",
+                &ident,
+                arrow.args.len(),
+                args.len(),
+            ));
         }
 
-        self.unify(&arrow.rec, &ty)?;
+        self.unify(&arrow.rec, &ty, ident.span, None)?;
 
         for (arg, ty) in args.iter().zip(&arrow.args) {
             let arg_ty = self.expr(scope, arg)?;
-            self.unify(&arg_ty, &ty)?;
+            self.unify(&arg_ty, &ty, arg.span, None)?;
         }
         Ok(self.resolve_type(&arrow.ret).clone())
     }
@@ -336,12 +386,13 @@ impl TypeChecker<'_> {
     fn record_type(
         &mut self,
         scope: &Scope,
-        expr: &[(ast::Identifier, ast::ValueExpr)],
-    ) -> TypeResult<Vec<(String, Type)>> {
+        expr: &[(Spanned<ast::Identifier>, Spanned<ast::ValueExpr>)],
+    ) -> TypeResult<Vec<(Spanned<String>, Type)>> {
         Ok(expr
             .into_iter()
             .map(|(k, v)| {
-                self.expr(scope, v).map(|v| (k.ident.to_string(), v))
+                self.expr(scope, v)
+                    .map(|v| (k.ident.to_string().with_span(k.span), v))
             })
             .collect::<Result<_, _>>()?)
     }

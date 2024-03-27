@@ -14,22 +14,24 @@ use crate::types::enum_types::EnumVariant;
 use crate::types::typedef::MethodProps;
 use crate::vm::{StackValue, VmError};
 use crate::{
-    createtoken, first_into_vm_err, intotype, _intotype, minimalscalartype,
-    noconversioninto, setmethodonly, typevaluefromimpls,
-    wrappedfromimpls, scalartype,
+    _intotype, createtoken, first_into_vm_err, intotype, minimalscalartype,
+    noconversioninto, scalartype, setmethodonly, typevaluefromimpls,
+    wrappedfromimpls,
 };
 
 use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 use super::builtin_type_value::BuiltinTypeValue;
 
+use routecore::addr::Prefix;
 use routecore::asn::{Asn, LongSegmentError};
 use routecore::bgp::aspath::OwnedHop;
-use routecore::bgp::message::nlri::PathId;
-use routecore::bgp::path_attributes::{AtomicAggregate, AggregatorInfo};
 use routecore::bgp::communities::HumanReadableCommunity as Community;
-use routecore::addr::Prefix;
-use routecore::bgp::types::{AfiSafi, LocalPref, NextHop, OriginType, MultiExitDisc};
+use routecore::bgp::message::nlri::PathId;
+use routecore::bgp::path_attributes::{AggregatorInfo, AtomicAggregate};
+use routecore::bgp::types::{
+    AfiSafi, LocalPref, MultiExitDisc, NextHop, OriginType,
+};
 
 //------------ U16 Type -----------------------------------------------------
 
@@ -168,11 +170,9 @@ impl RotoType for u8 {
             TypeDef::U32 => {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::U32(self as u32)))
             }
-            TypeDef::StringLiteral => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
-                    self.into()
-                )))
-            }
+            TypeDef::StringLiteral => Ok(TypeValue::Builtin(
+                BuiltinTypeValue::StringLiteral(self.into()),
+            )),
             TypeDef::PrefixLength => match self {
                 0..=128 => Ok(TypeValue::Builtin(
                     BuiltinTypeValue::PrefixLength(PrefixLength(self)),
@@ -807,7 +807,6 @@ impl From<HexLiteralToken> for usize {
     }
 }
 
-
 // ----------- Prefix type ---------------------------------------------------
 
 createtoken!(Prefix;
@@ -1000,11 +999,9 @@ typevaluefromimpls!(Prefix);
 impl TryFrom<&'_ ast::Prefix> for routecore::addr::Prefix {
     type Error = CompileError;
     fn try_from(value: &ast::Prefix) -> Result<Self, Self::Error> {
-        let ast::Prefix {
-            addr,
-            len: ast::PrefixLength(len),
-        } = value;
-        Prefix::new(addr.into(), *len).map_err(|_| {
+        let ast::Prefix { addr, len } = value;
+        let ast::PrefixLength(len) = len.inner;
+        Prefix::new((&addr.inner).into(), len).map_err(|_| {
             CompileError::from(format!(
                 "Cannot construct prefix from address {addr} and length {len}"
             ))
@@ -1016,17 +1013,13 @@ impl TryFrom<&TypeValue> for routecore::addr::Prefix {
     type Error = VmError;
 
     fn try_from(value: &TypeValue) -> Result<Self, Self::Error> {
-        if let TypeValue::Builtin(BuiltinTypeValue::Prefix(
-            pfx,
-        )) = value
-        {
+        if let TypeValue::Builtin(BuiltinTypeValue::Prefix(pfx)) = value {
             Ok(*pfx)
         } else {
             Err(VmError::InvalidConversion)
         }
     }
 }
-
 
 //------------ PrefixLength type ---------------------------------------------
 
@@ -1083,16 +1076,13 @@ impl TryFrom<&TypeValue> for PrefixLength {
     }
 }
 
-
 //------------ AfiSafi Type --------------------------------------------------
 
 minimalscalartype!(AfiSafi);
 
-
 //------------ PathId Type ---------------------------------------------------
 
 minimalscalartype!(PathId);
-
 
 //------------ Community Type ------------------------------------------------
 
@@ -1272,7 +1262,6 @@ impl From<Vec<Community>> for TypeValue {
     }
 }
 
-
 //------------ MatchType ----------------------------------------------------
 
 #[derive(Debug, Eq, PartialEq)]
@@ -1328,22 +1317,26 @@ impl RotoType for IpAddr {
     ) -> Result<TypeValue, VmError> {
         match method_token.try_into()? {
             IpAddrToken::From => {
-                if let TypeValue::Builtin(BuiltinTypeValue::StringLiteral(str_lit)) =
+                if let TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
+                    str_lit,
+                )) =
                     args.first().ok_or(VmError::InvalidMethodCall)?.as_ref()
                 {
-                   str_lit.clone().into_type(&TypeDef::IpAddr).map_err(|_| VmError::InvalidConversion)
+                    str_lit
+                        .clone()
+                        .into_type(&TypeDef::IpAddr)
+                        .map_err(|_| VmError::InvalidConversion)
                 } else {
                     Err(VmError::InvalidCommandArg)
                 }
-            },
+            }
             IpAddrToken::Matches => {
                 if let TypeValue::Builtin(BuiltinTypeValue::Prefix(pfx)) =
                     args.first().ok_or(VmError::InvalidMethodCall)?.as_ref()
                 {
-                   Ok(TypeValue::Builtin(
-                        BuiltinTypeValue::Bool(pfx.contains(*self))
-                        )
-                    )
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::Bool(
+                        pfx.contains(*self),
+                    )))
                 } else {
                     Err(VmError::InvalidCommandArg)
                 }
@@ -1359,29 +1352,29 @@ impl RotoType for IpAddr {
     ) -> Result<TypeValue, VmError> {
         match method_token.try_into()? {
             IpAddrToken::From if args.len() == 1 => {
-                if let TypeValue::Builtin(BuiltinTypeValue::StringLiteral(str_lit)) =
-                    args.remove(0)
+                if let TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
+                    str_lit,
+                )) = args.remove(0)
                 {
-                   str_lit.into_type(&TypeDef::IpAddr).map_err(|_| VmError::InvalidConversion)
+                    str_lit
+                        .into_type(&TypeDef::IpAddr)
+                        .map_err(|_| VmError::InvalidConversion)
                 } else {
                     Err(VmError::InvalidCommandArg)
                 }
-            },
+            }
             IpAddrToken::Matches => {
                 if let TypeValue::Builtin(BuiltinTypeValue::Prefix(pfx)) =
                     args.first().ok_or(VmError::InvalidMethodCall)?
                 {
-                   Ok(TypeValue::Builtin(
-                        BuiltinTypeValue::Bool(pfx.contains(self))
-                        )
-                    )
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::Bool(
+                        pfx.contains(self),
+                    )))
                 } else {
                     Err(VmError::InvalidCommandArg)
                 }
-            },
-            _ => {
-                Err(VmError::InvalidMethodCall)
             }
+            _ => Err(VmError::InvalidMethodCall),
         }
     }
 
@@ -1449,7 +1442,6 @@ impl RotoType for routecore::asn::Asn {
 }
 
 typevaluefromimpls!(Asn);
-
 
 // ----------- AsPath type --------------------------------------------------
 
@@ -1554,7 +1546,7 @@ impl RotoType for routecore::bgp::aspath::HopPath {
     }
 }
 
-fn try_remove_first<T>(vec: &mut Vec::<T>) -> Result<T, VmError> {
+fn try_remove_first<T>(vec: &mut Vec<T>) -> Result<T, VmError> {
     if vec.is_empty() {
         Ok(vec.swap_remove(0))
     } else {
@@ -1594,7 +1586,7 @@ impl VectorValue for routecore::bgp::aspath::HopPath {
 
     /// Naïve insert that will try to append to the segment that is already in
     /// place at the specified position.
-    /// 
+    ///
     /// Fancier, more conditional ways are available to the roto user, but
     /// those methods are implemented directly on [`builtin::AsPath`].
     fn insert_vec(
@@ -1639,9 +1631,7 @@ impl From<routecore::bgp::aspath::HopPath> for BuiltinTypeValue {
 
 impl From<routecore::bgp::aspath::HopPath> for TypeValue {
     fn from(value: routecore::bgp::aspath::HopPath) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::AsPath(
-            value
-        ))
+        TypeValue::Builtin(BuiltinTypeValue::AsPath(value))
     }
 }
 
@@ -1692,7 +1682,6 @@ impl From<AsPathToken> for usize {
     }
 }
 
-
 //------------ Hop type -----------------------------------------------------
 
 // A read-only type that contains an ASN or a more complex segment of a AS
@@ -1718,7 +1707,8 @@ impl RotoType for Hop {
                 vec![TypeDef::Hop],
             )
             .consume_value()),
-            _ => Err(format!("Unknown method: '{}' for type Hop",
+            _ => Err(format!(
+                "Unknown method: '{}' for type Hop",
                 method_name.ident
             )
             .into()),
@@ -1742,9 +1732,8 @@ impl RotoType for Hop {
     ) -> Result<TypeValue, VmError> {
         match method_token.try_into()? {
             HopToken::Set => {
-                if let Ok(TypeValue::Builtin(BuiltinTypeValue::Hop(
-                    value,
-                ))) = args.remove(0).into_type(&TypeDef::Hop)
+                if let Ok(TypeValue::Builtin(BuiltinTypeValue::Hop(value))) =
+                    args.remove(0).into_type(&TypeDef::Hop)
                 {
                     Ok(TypeValue::Builtin(BuiltinTypeValue::Hop(value)))
                 } else {
@@ -1764,7 +1753,6 @@ impl RotoType for Hop {
 }
 
 typevaluefromimpls!(Hop);
-
 
 //------------ OriginType type ----------------------------------------------
 
@@ -1877,21 +1865,17 @@ impl From<UnknownToken> for usize {
     }
 }
 
-
 //------------ Local Preference type ----------------------------------------
 
 scalartype!(LocalPref; u32; IntegerLiteral = i64);
-
 
 //------------ AtomicAggregate type -----------------------------------------
 
 minimalscalartype!(AtomicAggregate);
 
-
 //------------ Aggregator type -----------------------------------------------
 
 minimalscalartype!(AggregatorInfo);
-
 
 //------------ RouteStatus type ---------------------------------------------
 

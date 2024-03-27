@@ -1,8 +1,8 @@
 use log::trace;
 use roto::ast::AcceptReject;
-use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self, Filter};
+use roto::pipeline;
 use roto::types::builtin::{
     BuiltinTypeValue, RawRouteWithDeltas, RotondaId, RouteStatus, RouteToken,
     UpdateMessage,
@@ -23,10 +23,8 @@ fn test_data(
 ) -> Result<(VmResult, TypeValue, TypeValue), Box<dyn std::error::Error>> {
     trace!("Evaluate filter-map {}...", name);
 
-    let c = Compiler::new();
-    let roto_packs = c.build_from_compiler(source_code)?;
-
-    let roto_pack = roto_packs.retrieve_pack_as_refs(&name)?;
+    let rotolo = pipeline::run_test(source_code, None)?;
+    let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     // BGP UPDATE message containing MP_REACH_NLRI path attribute,
     // comprising 5 IPv6 NLRIs

@@ -1,7 +1,7 @@
 use log::trace;
-use roto::compiler::Compiler;
 
 use roto::blocks::Scope;
+use roto::pipeline;
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
@@ -21,13 +21,9 @@ fn test_data(
     let filter_map_arguments =
         vec![("my_asn", TypeValue::from(Asn::from(65534_u32)))];
 
-    let mut c = Compiler::new();
-    c.with_arguments(&name, filter_map_arguments)?;
-    let roto_packs = c.build_from_compiler(source_code)?;
-
-    println!("miscompilations");
-    println!("{:?}", roto_packs.get_mis_compilations());
-    let roto_pack = roto_packs.retrieve_pack_as_refs(&name)?;
+    let rotolo =
+        pipeline::run_test(source_code, Some((&name, filter_map_arguments)))?;
+    let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     let _count: TypeValue = 1_u32.into();
     let prefix: TypeValue =

@@ -1,4 +1,8 @@
-use crate::ast;
+use crate::{
+    ast::{self, Identifier},
+    parser::span::Spanned,
+    typechecker::error,
+};
 
 use super::{scope::Scope, types::Type, TypeChecker, TypeResult};
 
@@ -36,7 +40,7 @@ impl TypeChecker<'_> {
                     self.action_section(&scope, action_section)?
                 }
             };
-            scope.insert_var(v, t)?;
+            scope.insert_var(&v, t)?;
         }
 
         if let Some(apply_section) = apply {
@@ -70,18 +74,18 @@ impl TypeChecker<'_> {
         match rx_tx_type {
             ast::RxTxType::RxOnly(ast::TypeIdentField { field_name, ty }) => {
                 let Some(ty) = self.get_type(ty) else {
-                    return Err("type for rx is not defined".into());
+                    return Err(error::undeclared_type(ty));
                 };
                 scope.insert_var(field_name, ty)?;
             }
             ast::RxTxType::Split(rx, tx) => {
                 let Some(ty) = self.get_type(&rx.ty) else {
-                    return Err("type for rx is not defined".into());
+                    return Err(error::undeclared_type(&rx.ty));
                 };
                 scope.insert_var(&rx.field_name, ty)?;
 
                 let Some(ty) = self.get_type(&tx.ty) else {
-                    return Err("type for tx is not defined".into());
+                    return Err(error::undeclared_type(&tx.ty));
                 };
                 scope.insert_var(&tx.field_name, ty)?;
             }
@@ -90,7 +94,7 @@ impl TypeChecker<'_> {
                 ty,
             }) => {
                 let Some(ty) = self.get_type(ty) else {
-                    return Err("type for rx_tx is not defined".into());
+                    return Err(error::undeclared_type(ty));
                 };
                 scope.insert_var(field_name, ty)?;
             }
@@ -108,7 +112,7 @@ impl TypeChecker<'_> {
         &mut self,
         scope: &Scope,
         term_section: &ast::TermSection,
-    ) -> TypeResult<(String, Type)> {
+    ) -> TypeResult<(Spanned<Identifier>, Type)> {
         let ast::TermSection {
             ident,
             for_kv: _,
@@ -137,12 +141,12 @@ impl TypeChecker<'_> {
                         }
                     }
                 }
-                ast::MatchOperator::MatchValueWith(ast::Identifier {
-                    ident,
-                }) => {
+                ast::MatchOperator::MatchValueWith(ident) => {
                     let x = scope.get_var(ident)?;
                     let Type::Enum(_, variants) = self.resolve_type(x) else {
-                        return Err(format!("Cannot match on the type '{x:?}', because only matching on enums is supported."));
+                        return Err(error::can_only_match_on_enum(
+                            x, ident.span,
+                        ));
                     };
 
                     // We'll keep track of used variants to do some basic
@@ -155,19 +159,22 @@ impl TypeChecker<'_> {
                             data_field,
                         } = pattern.as_ref().unwrap();
 
-                        let variant_id = &variant_id.ident;
+                        let variant_str = variant_id.ident.as_str();
 
-                        let Some(idx) = variants.iter().position(|(v, _)| {
-                            v.as_str() == variant_id.as_str()
-                        }) else {
-                            return Err(format!("The variant {variant_id} does not exist on {x:?}"));
+                        let Some(idx) = variants
+                            .iter()
+                            .position(|(v, _)| v.as_str() == variant_str)
+                        else {
+                            return Err(error::variant_does_not_exist(
+                                variant_id, x,
+                            ));
                         };
 
-                        if used_variants.contains(&variant_id.as_str()) {
+                        if used_variants.contains(&variant_str) {
                             println!("WARNING: Variant '{variant_id} occurs multiple times");
                         }
 
-                        used_variants.push(variant_id.as_str());
+                        used_variants.push(variant_str);
 
                         let ty = &variants[idx].1;
 
@@ -180,14 +187,19 @@ impl TypeChecker<'_> {
                             (Some(t), Some(id)) => {
                                 inner_scope.insert_var(id, t)?;
                             }
-                            (None, Some(_)) => return Err(
-                                "Got field for variant that doesn't have one"
-                                    .into(),
-                            ),
+                            (None, Some(data_field)) => {
+                                return Err(
+                                    error::variant_does_not_have_field(
+                                        data_field, x,
+                                    ),
+                                )
+                            }
                             (Some(_), None) => {
                                 return Err(
-                                    "Pattern should have a field".into()
-                                )
+                                    error::need_data_field_on_pattern(
+                                        variant_id, x,
+                                    ),
+                                );
                             }
                         }
 
@@ -202,14 +214,14 @@ impl TypeChecker<'_> {
             }
         }
 
-        Ok((ident.to_string(), Type::Term(args)))
+        Ok((ident.clone(), Type::Term(args)))
     }
 
     fn action_section(
         &mut self,
         scope: &Scope,
         action_section: &ast::ActionSection,
-    ) -> TypeResult<(String, Type)> {
+    ) -> TypeResult<(Spanned<Identifier>, Type)> {
         let ast::ActionSection {
             ident,
             with_kv,
@@ -224,7 +236,7 @@ impl TypeChecker<'_> {
             let _t = self.compute_expr(&inner_scope, expr)?;
         }
 
-        Ok((ident.to_string(), Type::Action(args)))
+        Ok((ident.clone(), Type::Action(args)))
     }
 
     fn apply_section(
@@ -258,7 +270,7 @@ impl TypeChecker<'_> {
                     },
                 ) => {
                     let ty = self.expr(&scope, filter_ident)?;
-                    self.unify(&ty, &Type::Term(vec![]))?;
+                    self.unify(&ty, &Type::Term(vec![]), filter_ident.span, None)?;
                     for action in actions {
                         match action {
                             (None, None) | (Some(_), Some(_)) => {
@@ -281,17 +293,19 @@ impl TypeChecker<'_> {
                         match_arms,
                     },
                 ) => {
-                    let ast::MatchOperator::MatchValueWith(x) = operator
+                    let ast::MatchOperator::MatchValueWith(ident) = operator
                     else {
                         unreachable!(
                             "The grammar should have forbidden this."
                         )
                     };
-                    let x = scope.get_var(x)?;
+                    let x = scope.get_var(ident)?;
                     let Type::Enum(_, variants) =
                         self.resolve_type(x).clone()
                     else {
-                        return Err(format!("Cannot match on the type '{x:?}', because only matching on enums is supported."));
+                        return Err(error::can_only_match_on_enum(
+                            x, ident.span,
+                        ));
                     };
 
                     // We'll keep track of used variants to do some basic
@@ -305,14 +319,17 @@ impl TypeChecker<'_> {
                         actions,
                     } in match_arms
                     {
-                        let variant_id = &variant_id.ident;
-                        let Some(idx) = variants.iter().position(|(v, _)| {
-                            v.as_str() == variant_id.as_str()
-                        }) else {
-                            return Err(format!("The variant {variant_id} does not exist on {x:?}"));
+                        let variant_str = variant_id.ident.as_str();
+                        let Some(idx) = variants
+                            .iter()
+                            .position(|(v, _)| v.as_str() == variant_str)
+                        else {
+                            return Err(error::variant_does_not_exist(
+                                variant_id, x,
+                            ));
                         };
 
-                        if used_variants.contains(&variant_id.as_str()) {
+                        if used_variants.contains(&variant_str) {
                             println!("WARNING: variant {variant_id} appears multiple times.");
                         }
 
@@ -327,50 +344,61 @@ impl TypeChecker<'_> {
                             (Some(t), Some(id)) => {
                                 inner_scope.insert_var(id, t)?;
                             }
-                            (None, Some(_)) => return Err(
-                                "Got field for variant that doesn't have one"
-                                    .into(),
-                            ),
+                            (None, Some(data_field)) => {
+                                return Err(
+                                    error::variant_does_not_have_field(
+                                        data_field, x,
+                                    ),
+                                )
+                            }
                             (Some(_), None) => {
                                 return Err(
-                                    "Pattern should have a field".into()
+                                    error::need_data_field_on_pattern(
+                                        variant_id, x,
+                                    ),
                                 )
                             }
                         }
 
                         if let Some(guard) = guard {
                             let ast::TermCallExpr { term_id, args } = guard;
-                            let Type::Term(term_params) =
-                                scope.get_var(term_id)?
-                            else {
-                                return Err("Should be a term".into());
+                            let term_params = match scope.get_var(term_id)? {
+                                Type::Term(term_params) => term_params,
+                                ty => return Err(error::simple(
+                                    &format!("expected a term but got type `{ty}`"),
+                                    &format!("has type `{ty}`, but should be a term"),
+                                    term_id.span,
+                                )),
                             };
 
                             match args {
                                 Some(ast::ArgExprList { args }) => {
                                     if args.len() != term_params.len() {
-                                        return Err(
-                                            "Number of arguments do not match".into(),
-                                        );
+                                        return Err(error::number_of_arguments_dont_match("term", term_id, term_params.len(), args.len()));
                                     }
                                     for (arg, (_, param)) in
-                                        args.into_iter().zip(term_params)
+                                        args.iter().zip(term_params)
                                     {
                                         let ty =
-                                            self.expr(&inner_scope, arg)?;
-                                        self.unify(&ty, param)?;
+                                            self.expr(&inner_scope, &arg)?;
+                                        self.unify(&ty, param, arg.span, None)?;
                                     }
                                 }
                                 None => {
                                     if !term_params.is_empty() {
-                                        return Err("Term takes params but none were given.".into());
+                                        let n = term_params.len();
+                                        return Err(error::simple(
+                                            &format!("term `{term_id}` takes {n} arguments but none were given."),
+                                            &format!("takes {n} arguments"),
+                                            term_id.span,
+                                        ));
                                     }
                                 }
                             }
                         } else {
                             // If there is a guard we don't remove the variant
                             // because it might appear again.
-                            used_variants.push(variant_id.as_str());
+                            used_variants.push(variant_str);
                         }
 
                         for action in actions {
@@ -385,36 +413,47 @@ impl TypeChecker<'_> {
                                     }),
                                     None,
                                 ) => {
-                                    let Type::Action(term_params) =
-                                        scope.get_var(action_id)?
-                                    else {
-                                        return Err(
-                                            "Should be a action".into()
-                                        );
+                                    let action_params = match scope.get_var(action_id)? {
+                                        Type::Action(action_params) => action_params,
+                                        ty => return Err(error::simple(
+                                            &format!("expected an action but got type `{ty}`"),
+                                            &format!("has type `{ty}`, but should be an action"),
+                                            action_id.span,
+                                        ))
                                     };
 
                                     match args {
                                         Some(ast::ArgExprList { args }) => {
-                                            if args.len() != term_params.len()
+                                            if args.len()
+                                                != action_params.len()
                                             {
-                                                return Err(
-                                                    "Number of arguments do not match".into(),
+                                                return Err(error::number_of_arguments_dont_match(
+                                                    "action",
+                                                    action_id,
+                                                    action_params.len(),
+                                                    args.len())
                                                 );
                                             }
                                             for (arg, (_, param)) in args
+                                                .iter()
                                                 .into_iter()
-                                                .zip(term_params)
+                                                .zip(action_params)
                                             {
                                                 let ty = self.expr(
                                                     &inner_scope,
-                                                    arg,
+                                                    &arg,
                                                 )?;
-                                                self.unify(&ty, param)?;
+                                                self.unify(&ty, param, arg.span, None)?;
                                             }
                                         }
                                         None => {
-                                            if !term_params.is_empty() {
-                                                return Err("Term takes params but none were given.".into());
+                                            if !action_params.is_empty() {
+                                                let n = action_params.len();
+                                                return Err(error::simple(
+                                                    &format!("action `{action_id}` takes {n} arguments but none were given."),
+                                                    &format!("takes {n} arguments"),
+                                                    action_id.span,
+                                                ));
                                             }
                                         }
                                     }
@@ -449,7 +488,7 @@ impl TypeChecker<'_> {
         args.into_iter()
             .map(|ast::TypeIdentField { field_name, ty }| {
                 let Some(ty) = self.get_type(ty) else {
-                    return Err("type does not exist".to_string());
+                    return Err(error::undeclared_type(ty));
                 };
 
                 scope.insert_var(&field_name, ty)?;

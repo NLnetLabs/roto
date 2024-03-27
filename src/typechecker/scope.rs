@@ -1,6 +1,11 @@
-use std::{borrow::Borrow, collections::{hash_map::Entry, HashMap}};
+use std::{
+    borrow::Borrow,
+    collections::{hash_map::Entry, HashMap},
+};
 
-use super::{Type, TypeResult};
+use crate::{ast::Identifier, parser::span::Spanned};
+
+use super::{error, Type, TypeResult};
 
 /// A type checking scope
 #[derive(Default)]
@@ -22,24 +27,35 @@ impl<'a> Scope<'a> {
         }
     }
 
-    pub fn get_var(&self, k: impl AsRef<str>) -> TypeResult<&Type> {
+    pub fn get_var(&self, k: &Spanned<Identifier>) -> TypeResult<&Type> {
         self.variables
             .get(k.as_ref())
-            .ok_or_else(|| format!("The variable {} is undefined", k.as_ref()))
+            .ok_or_else(|| error::simple(
+                &format!(
+                    "cannot find variable `{}` in this scope",
+                    k.as_ref()
+                ),
+                "not found in this scope",
+                k.span,
+            ))
             .or_else(|e| self.parent.ok_or(e).and_then(|s| s.get_var(k)))
     }
 
     pub fn insert_var(
         &mut self,
-        v: impl AsRef<str>,
+        v: &Spanned<Identifier>,
         t: impl Borrow<Type>,
     ) -> TypeResult<&mut Type> {
-        let v = v.as_ref().to_string();
         let t = t.borrow().clone();
-        match self.variables.entry(v) {
-            Entry::Occupied(entry) => Err(format!(
-                "variable {} defined multiple times in the same scope",
-                entry.key()
+        let v_string = v.as_ref().to_string();
+        match self.variables.entry(v_string) {
+            Entry::Occupied(entry) => Err(error::simple(
+                &format!(
+                    "variable {} defined multiple times in the same scope",
+                    entry.key()
+                ),
+                "variable already declared",
+                v.span
             )),
             Entry::Vacant(entry) => Ok(entry.insert(t)),
         }

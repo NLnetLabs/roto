@@ -14,16 +14,21 @@
 //!
 //! See also <https://en.wikipedia.org/wiki/Hindley%E2%80%93Milner_type_system>.
 
-use crate::ast::{self, TypeIdentField};
+use crate::{
+    ast::{self, Identifier, ShortString, TypeIdentField, TypeIdentifier},
+    parser::span::{Span, Spanned, WithSpan},
+};
 use scope::Scope;
 use std::collections::{hash_map::Entry, HashMap};
 use types::Type;
 
 use self::{
+    error::TypeError,
     types::{default_types, Arrow, Method},
     unionfind::UnionFind,
 };
 
+pub(crate) mod error;
 mod expr;
 mod filter_map;
 mod scope;
@@ -43,7 +48,7 @@ pub struct TypeChecker<'methods> {
     static_methods: &'methods [Method],
 }
 
-pub type TypeResult<T> = Result<T, String>;
+pub type TypeResult<T> = Result<T, TypeError>;
 
 pub fn typecheck(tree: &ast::SyntaxTree) -> TypeResult<()> {
     let methods = types::methods();
@@ -59,6 +64,15 @@ pub fn typecheck(tree: &ast::SyntaxTree) -> TypeResult<()> {
     type_checker.check_syntax_tree(tree)
 }
 
+enum MaybeDeclared {
+    /// A declared type, where the span of the type declaration is
+    /// available for user-defined types, but not for built-in types.
+    Declared(Type, Option<Span>),
+    /// An (as of yet) undeclared type with the spans of where it is
+    /// referenced.
+    Undeclared(Span),
+}
+
 impl<'methods> TypeChecker<'methods> {
     /// Perform type checking for a syntax tree
     pub fn check_syntax_tree(
@@ -70,15 +84,23 @@ impl<'methods> TypeChecker<'methods> {
         // declarations, we check whether any nones are left to determine
         // whether any types are unresolved.
         // The builtin types are added right away.
-        let mut types: HashMap<String, Option<Type>> = default_types()
+        let mut types: HashMap<String, MaybeDeclared> = default_types()
             .into_iter()
-            .map(|(s, t)| (s.to_string(), Some(t.clone())))
+            .map(|(s, t)| {
+                (s.to_string(), MaybeDeclared::Declared(t.clone(), None))
+            })
             .collect();
 
         let mut root_scope = Scope::default();
 
         for (v, t) in types::globals() {
-            root_scope.insert_var(v, t)?;
+            root_scope.insert_var(
+                &Identifier {
+                    ident: ShortString::from(&*v),
+                }
+                .with_span(Span::new(0, 0..1)),
+                t,
+            )?;
         }
 
         let mut filter_maps = Vec::new();
@@ -130,7 +152,7 @@ impl<'methods> TypeChecker<'methods> {
                             &record_type.key_values,
                         )?,
                     );
-                    store_type(&mut types, ident.ident.to_string(), ty)?;
+                    store_type(&mut types, ident, ty)?;
                 }
             }
         }
@@ -140,18 +162,26 @@ impl<'methods> TypeChecker<'methods> {
         // type names.
         self.types = types
             .into_iter()
-            .map(|(s, t)| {
-                let Some(t) = t else {
-                    return Err(format!(
-                        "Did not provide declaration for type {s}"
-                    ));
-                };
-
-                Ok((s, t))
+            .map(|(s, t)| match t {
+                MaybeDeclared::Declared(t, _) => Ok((s, t)),
+                MaybeDeclared::Undeclared(reference_span) => {
+                    Err(error::undeclared_type(
+                        &TypeIdentifier {
+                            ident: ShortString::from(&*s),
+                        }
+                        .with_span(reference_span),
+                    ))
+                }
             })
             .collect::<Result<_, _>>()?;
 
-        self.detect_type_cycles()?;
+        self.detect_type_cycles().map_err(|description| {
+            error::simple(
+                &description,
+                "type cycle detected",
+                Span::new(0, 0..1),
+            )
+        })?;
 
         for f in filter_maps {
             self.filter_map(&root_scope, f)?;
@@ -171,7 +201,11 @@ impl<'methods> TypeChecker<'methods> {
     }
 
     /// Create a fresh record variable in the unionfind structure
-    fn fresh_record(&mut self, fields: Vec<(String, Type)>) -> Type {
+    fn fresh_record(&mut self, fields: Vec<(Spanned<String>, Type)>) -> Type {
+        let fields = fields
+            .into_iter()
+            .map(|(s, t)| (s.to_string(), t))
+            .collect();
         self.unionfind.fresh(move |x| Type::RecordVar(x, fields))
     }
 
@@ -258,13 +292,30 @@ impl<'methods> TypeChecker<'methods> {
         return true;
     }
 
-    fn unify(&mut self, a: &Type, b: &Type) -> TypeResult<Type> {
+    fn unify(
+        &mut self,
+        a: &Type,
+        b: &Type,
+        span: Span,
+        cause: Option<Span>,
+    ) -> TypeResult<Type> {
+        let a = self.resolve_type(a);
+        let b = self.resolve_type(b);
+
+        if let Some(ty) = self.unify_inner(&a, &b) {
+            Ok(ty)
+        } else {
+            Err(error::mismatched_types(a, b, span, cause))
+        }
+    }
+
+    fn unify_inner(&mut self, a: &Type, b: &Type) -> Option<Type> {
         use types::Primitive::*;
         use Type::*;
         let a = self.resolve_type(a);
         let b = self.resolve_type(b);
 
-        Ok(match (a, b) {
+        Some(match (a, b) {
             // We never recurse into NamedRecords, so they are included here.
             (a, b) if a == b => a,
             (IntVar(a), b @ (Primitive(U8 | U16 | U32) | IntVar(_))) => {
@@ -283,12 +334,14 @@ impl<'methods> TypeChecker<'methods> {
                 self.unionfind.set(b, a.clone());
                 a.clone()
             }
-            (Table(a), Table(b)) => Table(Box::new(self.unify(&a, &b)?)),
-            (OutputStream(a), OutputStream(b)) => {
-                OutputStream(Box::new(self.unify(&a, &b)?))
+            (Table(a), Table(b)) => {
+                Table(Box::new(self.unify_inner(&a, &b)?))
             }
-            (Rib(a), Rib(b)) => Rib(Box::new(self.unify(&a, &b)?)),
-            (List(a), List(b)) => List(Box::new(self.unify(&a, &b)?)),
+            (OutputStream(a), OutputStream(b)) => {
+                OutputStream(Box::new(self.unify_inner(&a, &b)?))
+            }
+            (Rib(a), Rib(b)) => Rib(Box::new(self.unify_inner(&a, &b)?)),
+            (List(a), List(b)) => List(Box::new(self.unify_inner(&a, &b)?)),
             (
                 RecordVar(a_var, a_fields),
                 ref b @ (RecordVar(_, ref b_fields)
@@ -307,8 +360,8 @@ impl<'methods> TypeChecker<'methods> {
                 self.unionfind.set(b_var, a.clone());
                 a.clone()
             }
-            (a, b) => {
-                return Err(format!("cannot unify types {a:?} and {b:?}"))
+            (_a, _b) => {
+                return None;
             }
         })
     }
@@ -317,13 +370,9 @@ impl<'methods> TypeChecker<'methods> {
         &mut self,
         a_fields: &[(String, Type)],
         b_fields: &[(String, Type)],
-    ) -> TypeResult<Vec<(String, Type)>> {
+    ) -> Option<Vec<(String, Type)>> {
         if a_fields.len() != b_fields.len() {
-            return Err(format!(
-                "cannot unify types {:?} and {:?}",
-                Type::Record(a_fields.to_vec()),
-                Type::Record(b_fields.to_vec()),
-            ));
+            return None;
         }
 
         let mut b_fields = b_fields.to_vec();
@@ -331,16 +380,13 @@ impl<'methods> TypeChecker<'methods> {
         for (name, a_ty) in a_fields {
             let Some(idx) = b_fields.iter().position(|(n, _)| n == name)
             else {
-                return Err(format!(
-                    "Type {:?} does not have a field {name}.",
-                    Type::Record(b_fields.to_vec())
-                ));
+                return None;
             };
             let (_, b_ty) = b_fields.remove(idx);
-            new_fields.push((name.clone(), self.unify(&a_ty, &b_ty)?))
+            new_fields.push((name.clone(), self.unify_inner(&a_ty, &b_ty)?))
         }
 
-        Ok(new_fields)
+        Some(new_fields)
     }
 
     /// Resolve type vars to a type.
@@ -417,7 +463,7 @@ impl<'methods> TypeChecker<'methods> {
     /// This algorithm is the Depth-first search algorithm described at
     /// <https://en.wikipedia.org/wiki/Topological_sorting>, where `false`
     /// is a temporary mark and `true` is a permanent mark.
-    fn detect_type_cycles(&self) -> TypeResult<()> {
+    fn detect_type_cycles(&self) -> Result<(), String> {
         let mut visited = HashMap::new();
 
         for ident in self.types.keys() {
@@ -431,7 +477,7 @@ impl<'methods> TypeChecker<'methods> {
         &'a self,
         visited: &mut HashMap<&'a str, bool>,
         s: &'a str,
-    ) -> TypeResult<()> {
+    ) -> Result<(), String> {
         match visited.get(s) {
             Some(false) => return Err(format!("cycle detected on {s}!")),
             Some(true) => return Ok(()),
@@ -449,7 +495,7 @@ impl<'methods> TypeChecker<'methods> {
         &'a self,
         visited: &mut HashMap<&'a str, bool>,
         ty: &'a Type,
-    ) -> TypeResult<()> {
+    ) -> Result<(), String> {
         match ty {
             Type::Var(_)
             | Type::IntVar(_)
@@ -491,41 +537,48 @@ impl<'methods> TypeChecker<'methods> {
 }
 
 fn store_type(
-    types: &mut HashMap<String, Option<Type>>,
-    k: String,
+    types: &mut HashMap<String, MaybeDeclared>,
+    k: &Spanned<ast::TypeIdentifier>,
     v: Type,
 ) -> TypeResult<()> {
-    match types.entry(k) {
+    let k_string = k.inner.to_string();
+    match types.entry(k_string) {
         Entry::Occupied(mut entry) => {
-            if entry.get().is_some() {
-                return Err(format!("Declared type {} twice", entry.key()));
+            if let MaybeDeclared::Declared(_, existing_span) = entry.get() {
+                return Err(match existing_span {
+                    Some(existing_span) => {
+                        error::declared_twice(k, *existing_span)
+                    }
+                    None => error::tried_to_overwrite_builtin(k),
+                });
             }
-            entry.insert(Some(v));
+            entry.insert(MaybeDeclared::Declared(v, Some(k.span)));
         }
         Entry::Vacant(entry) => {
-            entry.insert(Some(v));
+            entry.insert(MaybeDeclared::Declared(v, Some(k.span)));
         }
     };
     Ok(())
 }
 
 fn create_contains_type(
-    types: &mut HashMap<String, Option<Type>>,
-    contain_ty: &ast::TypeIdentifier,
+    types: &mut HashMap<String, MaybeDeclared>,
+    contain_ty: &Spanned<ast::TypeIdentifier>,
     body: &ast::RibBody,
 ) -> TypeResult<Type> {
     let ty = Type::NamedRecord(
         contain_ty.ident.to_string(),
         evaluate_record_type(types, &body.key_values)?,
     );
-    store_type(types, contain_ty.to_string(), ty.clone())?;
+    store_type(types, contain_ty, ty.clone())?;
     Ok(ty)
 }
 
 fn evaluate_record_type(
-    types: &mut HashMap<String, Option<Type>>,
+    types: &mut HashMap<String, MaybeDeclared>,
     fields: &[ast::RibField],
 ) -> TypeResult<Vec<(String, Type)>> {
+    // We store the spans temporarily to be able to create nice a
     let mut type_fields = Vec::new();
 
     for field in fields {
@@ -537,36 +590,56 @@ fn evaluate_record_type(
                 field_name,
                 ty,
             }) => {
-                field_ident = field_name.ident.to_string();
+                field_ident = field_name;
 
                 // If the type for this is unknown, we insert None,
                 // which signals that the type is mentioned but not
                 // yet declared. The declaration will override it
                 // with Some(...) if we encounter it later.
-                types.entry(ty.ident.to_string()).or_insert(None);
+                types
+                    .entry(ty.as_ref().to_string())
+                    .or_insert(MaybeDeclared::Undeclared(field_name.span));
                 field_type = Type::Name(ty.ident.to_string());
             }
             ast::RibField::RecordField(field) => {
-                field_ident = field.0.ident.to_string();
+                field_ident = &field.0;
                 field_type = Type::Record(evaluate_record_type(
                     types,
                     &field.1.key_values,
                 )?);
             }
             ast::RibField::ListField(field) => {
-                field_ident = field.0.ident.to_string();
+                field_ident = &field.0;
                 field_type = Type::List(Box::new(Type::Name(
                     field.1.inner_type.to_string(),
                 )));
             }
         }
 
-        for (existing_ident, _) in &type_fields {
-            if &field_ident == existing_ident {
-                return Err(format!("The field {field_ident} occurs multiple times in a single record"));
-            }
-        }
         type_fields.push((field_ident, field_type))
     }
-    Ok(type_fields)
+
+    let mut unspanned_type_fields = Vec::new();
+    for field in &type_fields {
+        let same_fields: Vec<_> = type_fields
+            .iter()
+            .filter_map(|(ident, _typ)| {
+                if ident.inner == field.0.inner {
+                    Some(ident.span)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        if same_fields.len() > 1 {
+            return Err(error::duplicate_fields(
+                field.0.as_ref(),
+                &same_fields,
+            ));
+        }
+        unspanned_type_fields
+            .push((field.0.inner.to_string(), field.1.clone()));
+    }
+
+    Ok(unspanned_type_fields)
 }

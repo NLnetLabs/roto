@@ -1,0 +1,6 @@
+filter foo {
+	define {
+		rx msg: BmpMessage;
+		a = b;  // error: undefined variable
+	}
+}

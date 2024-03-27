@@ -1,61 +1,123 @@
-use crate::ast::{
-    Identifier,
-    RootExpr, SyntaxTree, TypeIdentifier,
-};
+use crate::ast::{Identifier, RootExpr, SyntaxTree, TypeIdentifier};
+use logos::{Lexer, SpannedIter};
+use std::{fmt::Display, iter::Peekable};
 use token::Token;
-use logos::{Lexer, Span, SpannedIter};
-use miette::Diagnostic;
-use std::iter::Peekable;
+
+use self::span::{Span, Spanned, WithSpan};
 
 mod filter_map;
 mod rib_like;
-mod value;
+pub mod span;
 mod token;
+mod value;
 
 #[cfg(test)]
 mod test_expressions;
 #[cfg(test)]
 mod test_sections;
 
-type ParseResult<T> = Result<T, ParseError>;
+type ParseResult<'a, T> = Result<T, ParseError>;
 
-#[derive(Clone, Debug, Diagnostic)]
-pub enum ParseError {
+#[derive(Clone, Debug)]
+pub struct ParseError {
+    pub location: Span,
+    pub kind: ParseErrorKind,
+}
+
+impl ParseError {
+    fn expected(
+        expected: impl Display,
+        got: impl Display,
+        span: Span,
+    ) -> Self {
+        Self {
+            kind: ParseErrorKind::Expected {
+                expected: expected.to_string(),
+                got: got.to_string(),
+            },
+            location: span,
+        }
+    }
+
+    fn invalid_literal(
+        description: impl Display,
+        token: impl Display,
+        inner: impl Display,
+        span: Span,
+    ) -> Self {
+        Self {
+            kind: ParseErrorKind::InvalidLiteral {
+                description: description.to_string(),
+                token: token.to_string(),
+                inner_error: inner.to_string(),
+            },
+            location: span,
+        }
+    }
+
+    fn custom(
+        description: impl Display,
+        label: impl Display,
+        span: Span,
+    ) -> Self {
+        Self {
+            kind: ParseErrorKind::Custom {
+                description: description.to_string(),
+                label: label.to_string(),
+            },
+            location: span,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum ParseErrorKind {
     EmptyInput,
     EndOfInput,
     FailedToParseEntireInput,
-    InvalidToken(#[label("invalid token")] Span),
+    InvalidToken,
     Expected {
         expected: String,
         got: String,
-        #[label("expected {expected}")]
-        span: Span,
     },
     InvalidLiteral {
         description: String,
         token: String,
-        #[label("invalid {description} literal")]
-        span: Span,
         inner_error: String,
     },
     Custom {
         description: String,
         label: String,
-        #[label("{label}")]
-        span: Span,
     },
 }
 
-impl std::fmt::Display for ParseError {
+impl ParseErrorKind {
+    pub fn label(&self) -> String {
+        match self {
+            Self::EmptyInput => "input is empty".into(),
+            Self::EndOfInput => "reached end of input".into(),
+            Self::FailedToParseEntireInput => "parser got stuck here".into(),
+            Self::InvalidToken => "invalid token".into(),
+            Self::Expected { expected, .. } => {
+                format!("expected `{expected}`")
+            }
+            Self::InvalidLiteral { description, .. } => {
+                format!("invalid {description}")
+            }
+            Self::Custom { label, .. } => label.clone(),
+        }
+    }
+}
+
+impl std::fmt::Display for ParseErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Parse error: ")?;
         match self {
             Self::EmptyInput => write!(f, "input was empty"),
             Self::EndOfInput => write!(f, "unexpected end of input"),
             Self::FailedToParseEntireInput => {
                 write!(f, "failed to parse entire input")
             }
-            Self::InvalidToken(_) => write!(f, "invalid token"),
+            Self::InvalidToken => write!(f, "invalid token"),
             Self::Expected { expected, got, .. } => {
                 write!(f, "expected {expected} but got '{got}'")
             }
@@ -67,19 +129,24 @@ impl std::fmt::Display for ParseError {
             } => {
                 write!(f, "found an invalid {description} literal '{token}': {inner_error}")
             }
-            Self::Custom {
-                description,
-                ..
-            } => {
+            Self::Custom { description, .. } => {
                 write!(f, "{description}")
             }
         }
     }
 }
 
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.kind)
+    }
+}
+
 impl std::error::Error for ParseError {}
 
 pub struct Parser<'source> {
+    file: usize,
+    file_length: usize,
     lexer: Peekable<SpannedIter<'source, Token<'source>>>,
 }
 
@@ -88,9 +155,20 @@ impl<'source> Parser<'source> {
     /// Move the lexer forward and return the token
     fn next(&mut self) -> ParseResult<(Token<'source>, Span)> {
         match self.lexer.next() {
-            None => Err(ParseError::EndOfInput),
-            Some((Err(()), span)) => Err(ParseError::InvalidToken(span)),
-            Some((Ok(token), span)) => Ok((token, span)),
+            None => Err(ParseError {
+                kind: ParseErrorKind::EndOfInput,
+                location: Span::new(
+                    self.file,
+                    self.file_length..self.file_length,
+                ),
+            }),
+            Some((Err(()), span)) => Err(ParseError {
+                kind: ParseErrorKind::InvalidToken,
+                location: Span::new(self.file, span),
+            }),
+            Some((Ok(token), span)) => {
+                Ok((token, Span::new(self.file, span)))
+            }
         }
     }
 
@@ -127,11 +205,7 @@ impl<'source> Parser<'source> {
         if next == token {
             Ok(span)
         } else {
-            Err(ParseError::Expected {
-                expected: token.to_string(),
-                got: next.to_string(),
-                span,
-            })
+            Err(ParseError::expected(token, next, span))
         }
     }
 
@@ -152,14 +226,15 @@ impl<'source> Parser<'source> {
         close: Token,
         sep: Token,
         mut parser: impl FnMut(&mut Self) -> ParseResult<T>,
-    ) -> ParseResult<Vec<T>> {
-        self.take(open)?;
+    ) -> ParseResult<Spanned<Vec<T>>> {
+        let start_span = self.take(open)?;
 
         let mut items = Vec::new();
 
         // If there are no fields, return the empty vec.
-        if self.next_is(close.clone()) {
-            return Ok(items);
+        if self.peek_is(close.clone()) {
+            let end_span = self.take(close)?;
+            return Ok(items.with_span(start_span.merge(end_span)));
         }
 
         // Parse the first field
@@ -176,28 +251,37 @@ impl<'source> Parser<'source> {
             items.push(parser(self)?);
         }
 
-        self.take(close)?;
+        let end_span = self.take(close)?;
 
-        Ok(items)
+        Ok(items.with_span(start_span.merge(end_span)))
     }
 }
 
 /// # Parsing the syntax tree
 impl<'source> Parser<'source> {
-    pub fn parse(input: &'source str) -> ParseResult<SyntaxTree> {
-        Self::run_parser(Self::tree, input)
+    pub fn parse(
+        file: usize,
+        input: &'source str,
+    ) -> ParseResult<'source, SyntaxTree> {
+        Self::run_parser(Self::tree, file, input)
     }
 
     fn run_parser<T>(
         mut parser: impl FnMut(&mut Self) -> ParseResult<T>,
+        file: usize,
         input: &'source str,
-    ) -> ParseResult<T> {
+    ) -> ParseResult<'source, T> {
         let mut p = Self {
+            file,
+            file_length: input.len(),
             lexer: Lexer::new(input).spanned().peekable(),
         };
         let out = parser(&mut p)?;
-        if p.lexer.next().is_some() {
-            return Err(ParseError::FailedToParseEntireInput);
+        if let Some((_, s)) = p.lexer.next() {
+            return Err(ParseError {
+                kind: ParseErrorKind::FailedToParseEntireInput,
+                location: Span::new(file, s),
+            });
         }
         Ok(out)
     }
@@ -209,6 +293,13 @@ impl<'source> Parser<'source> {
             expressions.push(self.root()?);
         }
 
+        if expressions.is_empty() {
+            return Err(ParseError {
+                location: Span::new(self.file, 0..0),
+                kind: ParseErrorKind::EmptyInput,
+            });
+        }
+
         Ok(SyntaxTree { expressions })
     }
 
@@ -218,7 +309,14 @@ impl<'source> Parser<'source> {
     /// Root ::= Rib | Table | OutputStream | FilterMap | Type
     /// ```
     fn root(&mut self) -> ParseResult<RootExpr> {
-        let expr = match self.peek().ok_or(ParseError::EndOfInput)? {
+        let end_of_input = ParseError {
+            kind: ParseErrorKind::EndOfInput,
+            location: Span::new(
+                self.file,
+                self.file_length..self.file_length,
+            ),
+        };
+        let expr = match self.peek().ok_or(end_of_input)? {
             Token::Rib => RootExpr::Rib(self.rib()?),
             Token::Table => RootExpr::Table(self.table()?),
             Token::OutputStream => {
@@ -230,13 +328,11 @@ impl<'source> Parser<'source> {
             Token::Type => RootExpr::Ty(self.record_type_assignment()?),
             _ => {
                 let (token, span) = self.next()?;
-                return Err(ParseError::Expected {
-                    expected:
-                        "a rib, table, output-stream, filter or filter-map"
-                            .into(),
-                    got: token.to_string(),
+                return Err(ParseError::expected(
+                    "a rib, table, output-stream, filter or filter-map",
+                    token,
                     span,
-                });
+                ));
             }
         };
         Ok(expr)
@@ -249,44 +345,48 @@ impl<'source> Parser<'source> {
     ///
     /// The `contains` and `type` keywords are treated as identifiers,
     /// because we already have tests that use these as names for methods.
-    fn identifier(&mut self) -> ParseResult<Identifier> {
+    fn identifier(&mut self) -> ParseResult<Spanned<Identifier>> {
         let (token, span) = self.next()?;
-        match token {
-            Token::Ident(s) => Ok(Identifier { ident: s.into() }),
+        let ident = match token {
+            Token::Ident(s) => s.as_ref(),
             // 'contains' and `type` is already used as both a keyword and an identifier
-            Token::Contains => Ok(Identifier {
-                ident: "contains".into(),
-            }),
-            Token::Type => Ok(Identifier {
-                ident: "type".into(),
-            }),
-            _ => Err(ParseError::Expected {
-                expected: "an identifier".into(),
-                got: token.to_string(),
-                span,
-            }),
+            Token::Contains => "contains",
+            Token::Type => "type",
+            _ => {
+                return Err(ParseError::expected(
+                    "an identifier",
+                    token,
+                    span,
+                ))
+            }
+        };
+        Ok(Identifier {
+            ident: ident.into(),
         }
+        .with_span(span))
     }
 
     /// Parse a type identifier
     ///
     /// Currently, this is the same as [`Parser::identifier`].
-    fn type_identifier(&mut self) -> ParseResult<TypeIdentifier> {
+    fn type_identifier(&mut self) -> ParseResult<Spanned<TypeIdentifier>> {
         let (token, span) = self.next()?;
-        match token {
-            Token::Ident(s) => Ok(TypeIdentifier { ident: s.into() }),
+        let ident = match token {
+            Token::Ident(s) => s.as_ref(),
             // 'contains' and `type` already used as both a keyword and an identifier
-            Token::Contains => Ok(TypeIdentifier {
-                ident: "contains".into(),
-            }),
-            Token::Type => Ok(TypeIdentifier {
-                ident: "type".into(),
-            }),
-            _ => Err(ParseError::Expected {
-                expected: "an identifier".into(),
-                got: token.to_string(),
-                span,
-            }),
+            Token::Contains => "contains",
+            Token::Type => "type",
+            _ => {
+                return Err(ParseError::expected(
+                    "an identifier",
+                    token,
+                    span,
+                ))
+            }
+        };
+        Ok(TypeIdentifier {
+            ident: ident.into(),
         }
+        .with_span(span))
     }
 }

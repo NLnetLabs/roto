@@ -36,7 +36,7 @@ use std::{
 use log::{log_enabled, trace, Level};
 
 use crate::{
-    ast::{self, AcceptReject, FilterType, ShortString, SyntaxTree},
+    ast::{self, AcceptReject, FilterType, ShortString},
     blocks::Scope,
     compiler::recurse_compile::recurse_compile,
     symbols::{
@@ -44,7 +44,6 @@ use crate::{
         SymbolKind, SymbolTable,
     },
     traits::Token,
-    typechecker::{typecheck, TypeResult},
     types::{
         datasources::{DataSource, Table},
         typedef::{RecordTypeDef, TypeDef},
@@ -638,45 +637,19 @@ impl<'a> CompilerState<'a> {
 /// all phases.
 #[derive(Debug, Default)]
 pub struct Compiler {
-    pub ast: SyntaxTree,
     symbols: GlobalSymbolTable,
     // Compile time arguments
     arguments: Vec<(Scope, Vec<(ShortString, TypeValue)>)>,
     // data_sources: Vec<(&'a str, Arc<DataSource>)>,
 }
 
-impl<'a> Compiler {
-    pub fn new() -> Self {
+impl Compiler {
+    pub fn new(symbols: GlobalSymbolTable) -> Self {
         Compiler {
-            ast: SyntaxTree::default(),
-            symbols: GlobalSymbolTable::new(),
-            arguments: vec![],
+            symbols,
+            arguments: Vec::new(),
             // data_sources: vec![],
         }
-    }
-
-    pub fn parse_source_code(
-        &mut self,
-        source_code: &'a str,
-    ) -> Result<(), miette::Report> {
-        match SyntaxTree::parse_str(source_code) {
-            Ok(ast) => self.ast = ast,
-            Err(e) => {
-                return Err(miette::Report::new(e)
-                    .with_source_code(source_code.to_string()));
-            }
-        };
-
-        Ok(())
-    }
-
-    pub fn typecheck(&mut self) -> TypeResult<()> {
-        typecheck(&self.ast)
-    }
-
-    pub fn eval_ast(&mut self) -> Result<(), CompileError> {
-        self.ast.eval(self.symbols.clone())?;
-        Ok(())
     }
 
     pub fn inject_compile_time_arguments(
@@ -778,28 +751,25 @@ impl<'a> Compiler {
         &mut self,
         filter_map_scope: &Scope,
         args: Vec<(&str, TypeValue)>,
-    ) -> Result<(), CompileError> {
+    ) {
         self.arguments.push((
             filter_map_scope.clone(),
             args.into_iter().map(|a| (a.0.into(), a.1)).collect(),
         ));
-
-        Ok(())
     }
 
-    pub fn build(source_code: &'a str) -> Result<Rotolo, CompileError> {
-        Compiler::new().build_from_compiler(source_code)
-    }
-
-    pub fn build_from_compiler(
-        mut self,
-        source_code: &'a str,
+    pub fn build(
+        symbols: GlobalSymbolTable,
+        arguments: Option<(&Scope, Vec<(&str, TypeValue)>)>,
     ) -> Result<Rotolo, CompileError> {
-        self.parse_source_code(source_code)
-            .map_err(|err| format!("{:?}", err))?;
-        self.typecheck()?;
-        self.eval_ast()
-            .map_err(|err| format!("Eval error: {err}"))?;
+        let mut c = Compiler::new(symbols);
+        if let Some(arguments) = arguments {
+            c.with_arguments(arguments.0, arguments.1);
+        }
+        c.build_from_compiler()
+    }
+
+    pub fn build_from_compiler(mut self) -> Result<Rotolo, CompileError> {
         self.inject_compile_time_arguments()
             .map_err(|op| format!("Argument error: {}", op))?;
         self.compile()

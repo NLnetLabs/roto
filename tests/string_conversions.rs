@@ -1,14 +1,14 @@
 use log::trace;
-use roto::compiler::Compiler;
 
 use roto::blocks::Scope;
+use roto::pipeline;
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
 
-use routecore::bgp::communities::HumanReadableCommunity as Community;
 use routecore::asn::Asn;
+use routecore::bgp::communities::HumanReadableCommunity as Community;
 
 mod common;
 
@@ -77,13 +77,9 @@ fn test_data(
     let filter_map_arguments =
         vec![("my_asn", TypeValue::from(Asn::from(65534_u32)))];
 
-    let mut c = Compiler::new();
-    c.with_arguments(&name, filter_map_arguments)?;
-    let roto_packs = c.build_from_compiler(source_code)?;
-
-    println!("miscompilations");
-    println!("{:?}", roto_packs.get_mis_compilations());
-    let roto_pack = roto_packs.retrieve_pack_as_refs(&name)?;
+    let rotolo =
+        pipeline::run_test(source_code, Some((&name, filter_map_arguments)))?;
+    let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     let _count: TypeValue = 1_u32.into();
     let prefix: TypeValue =
@@ -98,15 +94,12 @@ fn test_data(
 
     let comms = TypeValue::List(List::new(vec![
         ElementTypeValue::Primitive(
-            Community::from([
-                127, 12, 13, 12,
-            ]).into()),
-            ElementTypeValue::Primitive(
-                Community::from([
-                    127, 12, 13, 20,
-                ]).into())
-        ])
-    );
+            Community::from([127, 12, 13, 12]).into(),
+        ),
+        ElementTypeValue::Primitive(
+            Community::from([127, 12, 13, 20]).into(),
+        ),
+    ]));
 
     let my_comms_type = (&comms).into();
 

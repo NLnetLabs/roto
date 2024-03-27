@@ -14,7 +14,11 @@ use crate::{
     parser::ParseError,
 };
 
-use super::{token::Token, ParseResult, Parser};
+use super::{
+    span::{Spanned, WithSpan},
+    token::Token,
+    ParseResult, Parser,
+};
 
 /// # Parsing value expressions
 impl<'source> Parser<'source> {
@@ -28,7 +32,7 @@ impl<'source> Parser<'source> {
     ///             | PrefixMatchExpr
     ///             | Literal AccessExpr
     /// ```
-    pub(super) fn value_expr(&mut self) -> ParseResult<ValueExpr> {
+    pub(super) fn value_expr(&mut self) -> ParseResult<Spanned<ValueExpr>> {
         if self.peek_is(Token::SquareLeft) {
             let values = self.separated(
                 Token::SquareLeft,
@@ -36,63 +40,94 @@ impl<'source> Parser<'source> {
                 Token::Comma,
                 Self::value_expr,
             )?;
-            return Ok(ValueExpr::ListExpr(ListValueExpr { values }));
+            let span = values.span;
+            return Ok(
+                ValueExpr::ListExpr(ListValueExpr { values }).with_span(span)
+            );
         }
 
         if self.peek_is(Token::CurlyLeft) {
+            let key_values = self.record()?;
+            let span = key_values.span;
             return Ok(ValueExpr::AnonymousRecordExpr(
-                AnonymousRecordValueExpr {
-                    key_values: self.record()?,
-                },
-            ));
+                AnonymousRecordValueExpr { key_values },
+            )
+            .with_span(span));
         }
 
         if let Some(Token::Ident(_)) = self.peek() {
             let id = self.identifier()?;
             if self.peek_is(Token::CurlyLeft) {
-                let Identifier { ident: s } = id;
+                let Identifier { ident: s } = id.inner;
+                let type_id = TypeIdentifier { ident: s }.with_span(id.span);
+                let key_values = self.record()?;
+                let span = id.span.merge(key_values.span);
+
                 return Ok(ValueExpr::TypedRecordExpr(
                     TypedRecordValueExpr {
-                        type_id: TypeIdentifier { ident: s },
-                        key_values: self.record()?,
-                    },
-                ));
+                        type_id,
+                        key_values,
+                    }
+                    .with_span(span),
+                )
+                .with_span(span));
             }
 
             if self.peek_is(Token::RoundLeft) {
                 let args = self.arg_expr_list()?;
+                let span = id.span.merge(args.args.span);
                 return Ok(ValueExpr::RootMethodCallExpr(
                     MethodComputeExpr { ident: id, args },
-                ));
+                )
+                .with_span(span));
             }
+
+            let mut span = id.span;
 
             let receiver = AccessReceiver::Ident(id);
             let access_expr = self.access_expr()?;
 
-            return Ok(ValueExpr::ComputeExpr(ComputeExpr {
-                receiver,
-                access_expr,
-            }));
+            if let Some(last) = access_expr.last() {
+                span = span.merge(last.span);
+            }
+
+            return Ok(ValueExpr::ComputeExpr(
+                ComputeExpr {
+                    receiver,
+                    access_expr,
+                }
+                .with_span(span),
+            )
+            .with_span(span));
         }
 
         let literal = self.literal()?;
 
         // If we parsed a prefix, it may be followed by a prefix match
         // If not, it can be an access expression
-        if let LiteralExpr::PrefixLiteral(prefix) = &literal {
+        if let LiteralExpr::PrefixLiteral(prefix) = &literal.inner {
             if let Some(ty) = self.try_prefix_match_type()? {
                 return Ok(ValueExpr::PrefixMatchExpr(PrefixMatchExpr {
                     prefix: prefix.clone(),
                     ty,
-                }));
+                })
+                .with_span(literal.span));
             }
         }
 
         let access_expr = self.access_expr()?;
-        Ok(ValueExpr::LiteralAccessExpr(LiteralAccessExpr {
-            literal,
-            access_expr,
-        }))
+        let mut span = literal.span;
+        if let Some(last) = access_expr.last() {
+            span = span.merge(last.span);
+        }
+        Ok(ValueExpr::LiteralAccessExpr(
+            LiteralAccessExpr {
+                literal,
+                access_expr,
+            }
+            .with_span(span),
+        )
+        .with_span(span))
     }
 
     /// Parse an access expresion
@@ -100,27 +135,40 @@ impl<'source> Parser<'source> {
     /// ```ebnf
     /// AccessExpr ::= ( '.' ( MethodCallExpr | FieldAccessExpr ) )*
     /// ```
-    fn access_expr(&mut self) -> ParseResult<Vec<AccessExpr>> {
+    fn access_expr(&mut self) -> ParseResult<Vec<Spanned<AccessExpr>>> {
         let mut access_expr = Vec::new();
 
         while self.next_is(Token::Period) {
             let ident = self.identifier()?;
             if self.peek_is(Token::RoundLeft) {
                 let args = self.arg_expr_list()?;
-                access_expr.push(AccessExpr::MethodComputeExpr(
-                    MethodComputeExpr { ident, args },
-                ))
-            } else if let Some(AccessExpr::FieldAccessExpr(
-                FieldAccessExpr { field_names },
-            )) = access_expr.last_mut()
-            {
-                field_names.push(ident);
+                let span = ident.span.merge(args.args.span);
+                access_expr.push(
+                    AccessExpr::MethodComputeExpr(MethodComputeExpr {
+                        ident,
+                        args,
+                    })
+                    .with_span(span),
+                )
             } else {
-                access_expr.push(AccessExpr::FieldAccessExpr(
-                    FieldAccessExpr {
+                let span = ident.span;
+
+                if let Some(expr) = access_expr.last_mut() {
+                    if let AccessExpr::FieldAccessExpr(field_access) =
+                        &mut expr.inner
+                    {
+                        field_access.field_names.push(ident);
+                        expr.span = expr.span.merge(span);
+                        continue;
+                    }
+                }
+
+                access_expr.push(
+                    AccessExpr::FieldAccessExpr(FieldAccessExpr {
                         field_names: vec![ident],
-                    },
-                ))
+                    })
+                    .with_span(span),
+                )
             }
         }
 
@@ -128,13 +176,15 @@ impl<'source> Parser<'source> {
     }
 
     /// Parse any literal, including prefixes, ip addresses and communities
-    fn literal(&mut self) -> ParseResult<LiteralExpr> {
+    fn literal(&mut self) -> ParseResult<Spanned<LiteralExpr>> {
         // A prefix length, it requires two tokens
         if let Some(Token::PrefixLength(..)) = self.peek() {
-            let PrefixLength(len) = self.prefix_length()?;
+            let prefix_length = self.prefix_length()?;
+            let PrefixLength(len) = prefix_length.inner;
             return Ok(LiteralExpr::PrefixLengthLiteral(
                 PrefixLengthLiteral(len),
-            ));
+            )
+            .with_span(prefix_length.span));
         }
 
         // If we see an IpAddress, we need to check whether it is followed by a
@@ -143,53 +193,47 @@ impl<'source> Parser<'source> {
             let addr = self.ip_address()?;
             if let Some(Token::PrefixLength(..)) = self.peek() {
                 let len = self.prefix_length()?;
-                return Ok(LiteralExpr::PrefixLiteral(Prefix { addr, len }));
+                let span = addr.span.merge(len.span);
+                return Ok(LiteralExpr::PrefixLiteral(Prefix { addr, len })
+                    .with_span(span));
             } else {
-                return Ok(LiteralExpr::IpAddressLiteral(addr));
+                return Ok(LiteralExpr::IpAddressLiteral(addr.inner)
+                    .with_span(addr.span));
             }
         }
 
         self.simple_literal()
     }
 
-    fn ip_address(&mut self) -> ParseResult<IpAddress> {
+    fn ip_address(&mut self) -> ParseResult<Spanned<IpAddress>> {
         let (token, span) = self.next()?;
-        Ok(match token {
+        let addr = match token {
             Token::IpV4(s) => IpAddress::Ipv4(Ipv4Addr(
                 s.parse::<std::net::Ipv4Addr>().map_err(|e| {
-                    ParseError::InvalidLiteral {
-                        description: "Ipv4 addresss".into(),
-                        token: s.to_string(),
-                        span,
-                        inner_error: e.to_string(),
-                    }
+                    ParseError::invalid_literal("Ipv4 addresss", s, e, span)
                 })?,
             )),
             Token::IpV6(s) => IpAddress::Ipv6(Ipv6Addr(
                 s.parse::<std::net::Ipv6Addr>().map_err(|e| {
-                    ParseError::InvalidLiteral {
-                        description: "Ipv6 addresss".into(),
-                        token: s.to_string(),
-                        span,
-                        inner_error: e.to_string(),
-                    }
+                    ParseError::invalid_literal("Ipv6 addresss", s, e, span)
                 })?,
             )),
             _ => {
-                return Err(ParseError::Expected {
-                    expected: "an IP address".into(),
-                    got: token.to_string(),
+                return Err(ParseError::expected(
+                    "an IP address",
+                    token,
                     span,
-                })
+                ))
             }
-        })
+        };
+        Ok(addr.with_span(span))
     }
 
     /// Parse literals that need no complex parsing, just one token
-    fn simple_literal(&mut self) -> ParseResult<LiteralExpr> {
+    fn simple_literal(&mut self) -> ParseResult<Spanned<LiteralExpr>> {
         // TODO: Make proper errors using the spans
         let (token, span) = self.next()?;
-        Ok(match token {
+        let literal = match token {
             Token::String(s) => {
                 // Trim the quotes from the string literal
                 let trimmed = &s[1..s.len() - 1];
@@ -198,31 +242,23 @@ impl<'source> Parser<'source> {
             Token::Integer(s) => LiteralExpr::IntegerLiteral(IntegerLiteral(
                 // This parse fails if the literal is too big,
                 // it should be handled properly
-                s.parse::<i64>().map_err(|e| ParseError::InvalidLiteral {
-                    description: "integer".into(),
-                    token: token.to_string(),
-                    span,
-                    inner_error: e.to_string(),
+                s.parse::<i64>().map_err(|e| {
+                    ParseError::invalid_literal("integer", token, e, span)
                 })?,
             )),
             Token::Hex(s) => LiteralExpr::HexLiteral(HexLiteral(
                 u64::from_str_radix(&s[2..], 16).map_err(|e| {
-                    ParseError::InvalidLiteral {
-                        description: "hexadecimal integer".into(),
-                        token: token.to_string(),
+                    ParseError::invalid_literal(
+                        "hexadecimal integer",
+                        token,
+                        e,
                         span,
-                        inner_error: e.to_string(),
-                    }
+                    )
                 })?,
             )),
             Token::Asn(s) => LiteralExpr::AsnLiteral(AsnLiteral(
                 s[2..].parse::<u32>().map_err(|e| {
-                    ParseError::InvalidLiteral {
-                        description: "AS number".into(),
-                        token: token.to_string(),
-                        span,
-                        inner_error: e.to_string(),
-                    }
+                    ParseError::invalid_literal("AS number", token, e, span)
                 })?,
             )),
             Token::Bool(b) => LiteralExpr::BooleanLiteral(BooleanLiteral(b)),
@@ -249,24 +285,24 @@ impl<'source> Parser<'source> {
                     })
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(|e: ParseIntError| {
-                        ParseError::InvalidLiteral {
-                            description: "community".into(),
-                            token: s.to_string(),
-                            span: span.clone(),
-                            inner_error: e.to_string(),
-                        }
+                        ParseError::invalid_literal(
+                            "community",
+                            s,
+                            e,
+                            span.clone(),
+                        )
                     })?;
 
                 let transformed = parts.join(":");
 
                 let c: Community =
                     transformed.parse::<Community>().map_err(|e| {
-                        ParseError::InvalidLiteral {
-                            description: "community".into(),
-                            token: token.to_string(),
+                        ParseError::invalid_literal(
+                            "community",
+                            token,
+                            e,
                             span,
-                            inner_error: e.to_string(),
-                        }
+                        )
                     })?;
                 match c {
                     Community::Standard(x) => {
@@ -291,14 +327,9 @@ impl<'source> Parser<'source> {
                     }
                 }
             }
-            t => {
-                return Err(ParseError::Expected {
-                    expected: "a literal".into(),
-                    got: t.to_string(),
-                    span,
-                })
-            }
-        })
+            t => return Err(ParseError::expected("a literal", t, span)),
+        };
+        Ok(literal.with_span(span))
     }
 
     /// Parse an (anonymous) record
@@ -307,7 +338,10 @@ impl<'source> Parser<'source> {
     /// Record      ::= '{' (RecordField (',' RecordField)* ','? )? '}'
     /// RecordField ::= Identifier ':' ValueExpr
     /// ```
-    fn record(&mut self) -> ParseResult<Vec<(Identifier, ValueExpr)>> {
+    fn record(
+        &mut self,
+    ) -> ParseResult<Spanned<Vec<(Spanned<Identifier>, Spanned<ValueExpr>)>>>
+    {
         self.separated(
             Token::CurlyLeft,
             Token::CurlyRight,
@@ -356,11 +390,13 @@ impl<'source> Parser<'source> {
         } else if self.next_is(Token::OrLonger) {
             PrefixMatchType::OrLonger
         } else if self.next_is(Token::PrefixLengthRange) {
-            PrefixMatchType::PrefixLengthRange(self.prefix_length_range()?)
+            PrefixMatchType::PrefixLengthRange(
+                self.prefix_length_range()?.inner,
+            )
         } else if self.next_is(Token::UpTo) {
-            PrefixMatchType::UpTo(self.prefix_length()?)
+            PrefixMatchType::UpTo(self.prefix_length()?.inner)
         } else if self.next_is(Token::NetMask) {
-            PrefixMatchType::NetMask(self.ip_address()?)
+            PrefixMatchType::NetMask(self.ip_address()?.inner)
         } else {
             return Ok(None);
         };
@@ -373,11 +409,18 @@ impl<'source> Parser<'source> {
     /// ```ebnf
     /// PrefixLengthRange ::= PrefixLength '-' PrefixLength
     /// ```
-    fn prefix_length_range(&mut self) -> ParseResult<PrefixLengthRange> {
+    fn prefix_length_range(
+        &mut self,
+    ) -> ParseResult<Spanned<PrefixLengthRange>> {
         let start = self.prefix_length()?;
         self.take(Token::Hyphen)?;
         let end = self.prefix_length()?;
-        Ok(PrefixLengthRange { start, end })
+        let span = start.span.merge(end.span);
+        Ok(PrefixLengthRange {
+            start: start.inner,
+            end: end.inner,
+        }
+        .with_span(span))
     }
 
     /// Parse a prefix length
@@ -385,25 +428,19 @@ impl<'source> Parser<'source> {
     /// ```ebnf
     /// PrefixLength ::= '/' Integer
     /// ```
-    fn prefix_length(&mut self) -> ParseResult<PrefixLength> {
+    fn prefix_length(&mut self) -> ParseResult<Spanned<PrefixLength>> {
         let (token, span) = self.next()?;
         let Token::PrefixLength(s) = token else {
-            return Err(ParseError::InvalidLiteral {
-                description: "prefix length".into(),
-                token: token.to_string(),
+            return Err(ParseError::invalid_literal(
+                "prefix length",
+                token,
+                "",
                 span,
-                inner_error: String::new(),
-            });
+            ));
         };
-        let len =
-            s[1..]
-                .parse::<u8>()
-                .map_err(|e| ParseError::InvalidLiteral {
-                    description: "prefix length".into(),
-                    token: token.to_string(),
-                    span,
-                    inner_error: e.to_string(),
-                })?;
-        Ok(PrefixLength(len))
+        let len = s[1..].parse::<u8>().map_err(|e| {
+            ParseError::invalid_literal("prefix length", token, e, span)
+        })?;
+        Ok(PrefixLength(len).with_span(span))
     }
 }

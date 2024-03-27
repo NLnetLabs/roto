@@ -1,9 +1,9 @@
 use log::trace;
 use roto::{
     ast::AcceptReject,
-    blocks::Scope,
-    blocks::Scope::{Filter, FilterMap},
-    compiler::{CompileError, Compiler},
+    blocks::Scope::{self, Filter, FilterMap},
+    compiler::CompileError,
+    pipeline,
     types::{
         builtin::{BuiltinTypeValue, BytesRecord},
         collections::Record,
@@ -27,13 +27,7 @@ fn test_data(
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
-    let compile_res = Compiler::build(source_code);
-
-    if let Err(e) = &compile_res {
-        eprintln!("{e}")
-    }
-
-    let rotolo = compile_res?;
+    let rotolo = pipeline::run_test(source_code, None)?;
     let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     let rm_msg = BytesRecord::<RouteMonitoring>::new(buf.clone().into());
@@ -92,13 +86,7 @@ fn test_data_2(
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
-    let compile_res = Compiler::build(source_code);
-
-    if let Err(e) = &compile_res {
-        eprintln!("{e}")
-    }
-
-    let rotolo = compile_res?;
+    let rotolo = pipeline::run_test(source_code, None)?;
     let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     let buf = vec![
@@ -165,13 +153,7 @@ fn test_data_3(
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
-    let compile_res = Compiler::build(source_code);
-
-    if let Err(e) = &compile_res {
-        eprintln!("{e}")
-    }
-
-    let rotolo = compile_res?;
+    let rotolo = pipeline::run_test(source_code, None)?;
     let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     // BMP PeerDownNotification type 3, containing a BGP NOTIFICATION.
@@ -237,13 +219,7 @@ fn test_data_4(
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
-    let compile_res = Compiler::build(source_code);
-
-    if let Err(e) = &compile_res {
-        eprintln!("{e}")
-    }
-
-    let rotolo = compile_res?;
+    let rotolo = pipeline::run_test(source_code, None)?;
     let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     trace!("Used Arguments");
@@ -300,13 +276,7 @@ fn compile_initiation_payload(
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
-    let compile_res = Compiler::build(source_code);
-
-    if let Err(e) = &compile_res {
-        eprintln!("{e}")
-    }
-
-    let rotolo = compile_res?;
+    let rotolo = pipeline::run_test(source_code, None)?;
     let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     // assert!(i_msg.is_ok());

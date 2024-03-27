@@ -1,7 +1,7 @@
 use roto::ast::AcceptReject;
-use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self, FilterMap};
+use roto::pipeline;
 use roto::types::collections::Record;
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
@@ -85,16 +85,8 @@ fn test_data(
 ) -> Result<VmResult, Box<dyn std::error::Error>> {
     println!("Evaluate filter-map {}...", name);
 
-    let c = Compiler::new();
-    let compile_res = c.build_from_compiler(source_code);
-    
-    if let Err(e) = &compile_res {
-        eprintln!("{e}");
-    }
-
-    let roto_packs = compile_res?;
-
-    let roto_pack = roto_packs.retrieve_pack_as_refs(&name)?;
+    let rotolo = pipeline::run_test(source_code, None)?;
+    let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
     let asn: TypeValue = Asn::from_u32(211321).into();
 
     println!("ASN {:?}", asn);

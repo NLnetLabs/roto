@@ -130,7 +130,7 @@ impl<'source> Parser<'source> {
                 RecordTypeIdentifier { key_values },
             )))
         } else if self.next_is(Token::SquareLeft) {
-            let inner_type = self.type_identifier()?;
+            let inner_type = self.type_identifier()?.inner;
             self.take(Token::SquareRight)?;
             RibField::ListField(Box::new((
                 key,

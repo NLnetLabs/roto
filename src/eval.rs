@@ -10,6 +10,7 @@ use crate::ast::TypeIdentField;
 use crate::blocks::Scope;
 use crate::compiler::compile::CompileError;
 use crate::first_into_compile_err;
+use crate::parser::span::Spanned;
 use crate::symbols::GlobalSymbolTable;
 use crate::symbols::MatchActionType;
 use crate::symbols::Symbol;
@@ -147,7 +148,7 @@ impl<'a> ast::Rib {
         &'a self,
         symbols: &'_ mut symbols::SymbolTable,
     ) -> Result<(), CompileError> {
-        let child_kvs = self.body.eval(self.ident.clone().ident, symbols)?;
+        let child_kvs = self.body.eval(self.ident.ident.clone(), symbols)?;
 
         // create a new user-defined type for the record type in the RIB
         let rec_type = TypeDef::new_record_type_from_short_string(child_kvs)?;
@@ -183,7 +184,7 @@ impl<'a> ast::Table {
         &'a self,
         symbols: &'_ mut symbols::SymbolTable,
     ) -> Result<(), CompileError> {
-        let child_kvs = self.body.eval(self.ident.clone().ident, symbols)?;
+        let child_kvs = self.body.eval(self.ident.ident.clone(), symbols)?;
 
         // create a new user-defined type for the record type in the table
         let rec_type = TypeDef::new_record_type_from_short_string(child_kvs)?;
@@ -219,7 +220,7 @@ impl<'a> ast::OutputStream {
         &'a self,
         symbols: &'_ mut symbols::SymbolTable,
     ) -> Result<(), CompileError> {
-        let child_kvs = self.body.eval(self.ident.clone().ident, symbols)?;
+        let child_kvs = self.body.eval(self.ident.ident.clone(), symbols)?;
 
         // create a new user-defined type for the record type in the table
         let rec_type = TypeDef::new_record_type_from_short_string(child_kvs)?;
@@ -278,7 +279,7 @@ impl<'a> ast::RibBody {
                 ast::RibField::PrimitiveField(f) => {
                     kvs.push((
                         f.field_name.ident.as_str().into(),
-                        Box::new(f.ty.clone().try_into()?),
+                        Box::new(f.ty.inner.clone().try_into()?),
                     ));
                 }
                 ast::RibField::RecordField(r) => {
@@ -331,7 +332,7 @@ impl<'a> ast::RecordTypeIdentifier {
                 ast::RibField::PrimitiveField(f) => {
                     kvs.push((
                         f.field_name.ident.as_str().into(),
-                        Box::new(f.ty.clone().try_into()?),
+                        Box::new(f.ty.inner.clone().try_into()?),
                     ));
                 }
                 ast::RibField::RecordField(r) => {
@@ -397,7 +398,7 @@ impl ast::FilterMap {
             .into_iter()
             .map(|ty| {
                 declare_argument(
-                    ty.clone().field_name.ident,
+                    ty.clone().field_name.inner.ident,
                     ty,
                     symbols::SymbolKind::Constant,
                     symbols.clone(),
@@ -484,7 +485,7 @@ impl ast::FilterMap {
             .into_iter()
             .map(|ty| {
                 declare_argument(
-                    ty.clone().field_name.ident,
+                    ty.clone().field_name.inner.ident,
                     ty,
                     symbols::SymbolKind::Argument,
                     symbols.clone(),
@@ -558,7 +559,7 @@ impl ast::Define {
             }
             ast::RxTxType::PassThrough(rx_tx_type) => {
                 assert!(check_type_identifier(
-                    rx_tx_type.ty.clone(),
+                    rx_tx_type.ty.inner.clone(),
                     symbols.clone(),
                     &scope
                 )
@@ -566,7 +567,7 @@ impl ast::Define {
             }
             ast::RxTxType::RxOnly(rx_type) => {
                 assert!(check_type_identifier(
-                    rx_type.ty.clone(),
+                    rx_type.ty.inner.clone(),
                     symbols.clone(),
                     &scope
                 )
@@ -630,16 +631,20 @@ impl ast::TermSection {
         let mut argument_type = TypeDef::Unknown;
         // There may be a local scope defined in a `with <ARGUMENT_ID>`
         // in the term header.
-        if let Some(TypeIdentField { field_name, ty }) = self.with_kv.first() {
+        if let Some(TypeIdentField { field_name, ty }) = self.with_kv.first()
+        {
             // Does the supplied type exist in our scope?
-            argument_type =
-                check_type_identifier(ty.clone(), symbols.clone(), &scope)?;
-            trace!("type {}", ty);
+            argument_type = check_type_identifier(
+                ty.inner.clone(),
+                symbols.clone(),
+                &scope,
+            )?;
+            trace!("type {}", ty.inner);
 
             // for now we only accept one `with` argument for a term-
             // section, so the index to the token is always 0.
             local_scope.push(symbols::Symbol::new(
-                field_name.clone().ident,
+                field_name.inner.clone().ident,
                 SymbolKind::Constant,
                 argument_type.clone(),
                 vec![],
@@ -667,10 +672,7 @@ impl ast::TermSection {
                         &local_scope,
                     )?;
                     if expr.ty == TypeDef::Bool
-                        || expr
-                            .ty
-                            .clone()
-                            .test_type_conversion(TypeDef::Bool)
+                        || expr.ty.clone().test_type_conversion(TypeDef::Bool)
                     {
                         expr
                     } else {
@@ -720,7 +722,7 @@ impl ast::TermSection {
 
     fn eval_as_match_expression(
         &self,
-        enum_ident: &ast::Identifier,
+        enum_ident: &Spanned<ast::Identifier>,
         term_section_index: usize,
         symbols: symbols::GlobalSymbolTable,
         scope: Scope,
@@ -761,10 +763,13 @@ impl ast::TermSection {
                         e_num.get_props_for_variant(&variant.variant_id)?;
 
                     let local_scope = vec![symbols::Symbol::new(
-                        variant.data_field.clone().ok_or(CompileError::from(
-                            format!("Variant: '{}' has no data field. This is currently not allowed.", 
-                            variant.variant_id)
-                        ))?.ident,
+                        match &variant.data_field {
+                            Some(x) => x.inner.ident.clone(),
+                            None => return Err(CompileError::from(
+                                format!("Variant: '{}' has no data field. This is currently not allowed.", 
+                                variant.variant_id)
+                            ))
+                        },
                         symbols::SymbolKind::VariableAssignment,
                         variant_type_def.clone(),
                         vec![],
@@ -787,9 +792,10 @@ impl ast::TermSection {
                                     &local_scope,
                                 )?;
                                 if expr.ty == TypeDef::Bool
-                                    || expr.ty.clone().test_type_conversion(
-                                        TypeDef::Bool,
-                                    )
+                                    || expr
+                                        .ty
+                                        .clone()
+                                        .test_type_conversion(TypeDef::Bool)
                                 {
                                     logic_args.push(expr);
                                 } else {
@@ -837,10 +843,13 @@ impl ast::TermSection {
                     )];
 
                     enum_s.add_arg(symbols::Symbol::new(
-                        variant.data_field.clone().ok_or(CompileError::from(
-                            format!("Variant: '{}' has no data field. This is currently not allowed.", 
-                            variant.variant_id)
-                        ))?.ident,
+                        match &variant.data_field {
+                            Some(x) => x.inner.ident.clone(),
+                            None => return Err(CompileError::from(
+                                format!("Variant: '{}' has no data field. This is currently not allowed.", 
+                                variant.variant_id)
+                            ))
+                        },
                         symbols::SymbolKind::EnumVariant,
                         variant_type_def,
                         anon_term,
@@ -881,13 +890,17 @@ impl ast::ActionSection {
         let mut local_scope: Vec<Symbol> = vec![];
         // There may be a local scope defined in a `with <ARGUMENT_ID>`
         // in the term header.
-        if let Some(TypeIdentField { field_name, ty }) = self.with_kv.first() {
+        if let Some(TypeIdentField { field_name, ty }) = self.with_kv.first()
+        {
             // Does the supplied type exist in our scope?
-            action_section_type =
-                check_type_identifier(ty.clone(), symbols.clone(), &scope)?;
+            action_section_type = check_type_identifier(
+                ty.inner.clone(),
+                symbols.clone(),
+                &scope,
+            )?;
 
             local_scope.push(symbols::Symbol::new(
-                field_name.clone().ident,
+                field_name.inner.clone().ident,
                 SymbolKind::Argument,
                 action_section_type.clone(),
                 vec![],
@@ -909,7 +922,7 @@ impl ast::ActionSection {
             action_exprs.push(symbols::Symbol::new(
                 kv.field_name.ident.clone(),
                 symbols::SymbolKind::Argument,
-                TypeDef::try_from(kv.ty.clone())?,
+                TypeDef::try_from(kv.ty.inner.clone())?,
                 vec![],
                 Token::ActionArgument(action_section_index, i),
             ))
@@ -1165,10 +1178,13 @@ impl ast::ApplyScope {
                         // create a local scope with the data field variable
                         // for this variant.
                         let local_scope = vec![symbols::Symbol::new(
-                            variant.data_field.clone().ok_or(CompileError::from(
-                                format!("Variant: '{}' has no data field. This is currently not allowed.", 
-                                variant.variant_id)
-                            ))?.ident,
+                            match &variant.data_field {
+                                Some(x) => x.inner.ident.clone(),
+                                None => return Err(CompileError::from(
+                                    format!("Variant: '{}' has no data field. This is currently not allowed.", 
+                                    variant.variant_id)
+                                ))
+                            },
                             symbols::SymbolKind::VariableAssignment,
                             variant_type_def.clone(),
                             vec![],
@@ -1233,7 +1249,7 @@ impl ast::ApplyScope {
                                 // expression (indicating an early return).
                                 (None, Some(accept_reject)) => {
                                     let s = symbols::Symbol::new(
-                                        variant.variant_id.clone().ident,
+                                        variant.variant_id.inner.clone().ident,
                                         symbols::SymbolKind::ActionCall,
                                         TypeDef::AcceptReject(*accept_reject),
                                         vec![],
@@ -1252,10 +1268,13 @@ impl ast::ApplyScope {
                         );
 
                         enum_s.add_arg(symbols::Symbol::new(
-                            variant.data_field.clone().ok_or(CompileError::from(
-                                format!("Variant: '{}' has no data field. This is currently not allowed.", 
-                                variant.variant_id)
-                            ))?.ident,
+                            match &variant.data_field {
+                                Some(x) => x.inner.ident.clone(),
+                                None => return Err(CompileError::from(
+                                    format!("Variant: '{}' has no data field. This is currently not allowed.", 
+                                    variant.variant_id)
+                                ))
+                            },
                             symbols::SymbolKind::EnumVariant,
                             variant_type_def,
                             args_vec,
@@ -1384,7 +1403,7 @@ impl ast::ComputeExpr {
         };
 
         for a_e in &self.access_expr {
-            match a_e {
+            match &a_e.inner {
                 ast::AccessExpr::MethodComputeExpr(method_call) => {
                     trace!("MC symbol (s) {:#?}", s);
                     // trace!("All Symbols {:#?}", symbols.borrow().get(&scope));
@@ -1431,10 +1450,7 @@ impl ast::ComputeExpr {
             self.get_receiver_ident()?
         };
 
-        trace!(
-            "finished eval compute expression {:?}",
-            ar_symbol.name
-        );
+        trace!("finished eval compute expression {:?}", ar_symbol.name);
         Ok(ar_symbol)
     }
 }
@@ -1473,7 +1489,7 @@ impl ast::MethodComputeExpr {
 
         if parsed_args.is_empty() && props.arg_types.is_empty() {
             return Ok(symbols::Symbol::new(
-                self.ident.clone().ident,
+                self.ident.ident.clone(),
                 method_kind,
                 props.return_type,
                 vec![],
@@ -1487,7 +1503,7 @@ impl ast::MethodComputeExpr {
             return Err(format!(
                 "Method '{}' on type {:?} expects {} arguments, but {} were \
                 provided.",
-                self.ident,
+                self.ident.inner,
                 method_call_type,
                 props.arg_types.len(),
                 parsed_args.len()
@@ -1516,7 +1532,7 @@ impl ast::MethodComputeExpr {
         trace!("converted args {:?}", args);
 
         Ok(symbols::Symbol::new(
-            self.ident.clone().ident,
+            self.ident.ident.clone(),
             method_kind,
             props.return_type,
             args,
@@ -1545,7 +1561,7 @@ impl ast::AccessReceiver {
         let _symbols = symbols.clone();
         if let Some(search_ar) = self.get_ident() {
             // Is it the name of a builtin type?
-            if let Ok(prim_ty) = TypeDef::try_from(search_ar.clone()) {
+            if let Ok(prim_ty) = TypeDef::try_from(search_ar.inner.clone()) {
                 if prim_ty.is_builtin() {
                     {
                         return Ok(symbols::Symbol::new(
@@ -1562,9 +1578,8 @@ impl ast::AccessReceiver {
             // is it a local-scope-level argument?
             trace!("checking local scope for {}", search_ar.ident);
             trace!("local scope {:#?}", local_scope);
-            if let Some(arg) = local_scope
-                .iter()
-                .find(move |s| s.name == search_ar.ident)
+            if let Some(arg) =
+                local_scope.iter().find(move |s| s.name == search_ar.ident)
             {
                 trace!("local variable {} found", search_ar.ident);
                 return Ok(symbols::Symbol::new(
@@ -1634,9 +1649,7 @@ impl ast::AccessReceiver {
 }
 
 impl ast::LiteralExpr {
-    fn eval(
-        &self
-    ) -> Result<symbols::Symbol, CompileError> {
+    fn eval(&self) -> Result<symbols::Symbol, CompileError> {
         trace!("literal value {:?}", self);
         Ok(symbols::Symbol::new_with_value(
             "lit".into(),
@@ -1653,9 +1666,8 @@ impl ast::LiteralAccessExpr {
         &self,
         symbols: symbols::GlobalSymbolTable,
         scope: Scope,
-        local_scope: &[Symbol]
+        local_scope: &[Symbol],
     ) -> Result<symbols::Symbol, CompileError> {
-
         let mut ar_symbol = self.literal.eval()?;
         let mut ty = ar_symbol.ty.clone();
 
@@ -1663,12 +1675,12 @@ impl ast::LiteralAccessExpr {
         let mut s = &mut ar_symbol;
 
         for a_e in &self.access_expr {
-            match a_e {
+            match &a_e.inner {
                 ast::AccessExpr::MethodComputeExpr(method_call) => {
                     trace!("MC symbol (s) {:#?}", s);
                     trace!("method call {:#?} on type {}", method_call, ty);
                     trace!("local scope {:?}", local_scope);
-                    
+
                     let arg_s = method_call.eval(
                         // At this stage we don't know really whether the
                         // method call will be mutating or not, but we're
@@ -1715,7 +1727,9 @@ impl ast::ValueExpr {
         local_scope: &[Symbol],
     ) -> Result<symbols::Symbol, CompileError> {
         match self {
-            ast::ValueExpr::LiteralAccessExpr(lit) => lit.eval(symbols, scope, local_scope),
+            ast::ValueExpr::LiteralAccessExpr(lit) => {
+                lit.eval(symbols, scope, local_scope)
+            }
             // an expression ending in a a method call (e.g. `foo.bar()`).
             // Note that the evaluation of the method call will check for
             // the existence of the method.
@@ -1724,9 +1738,9 @@ impl ast::ValueExpr {
                 compute_expr.eval(None, symbols, scope, local_scope)
             }
             ast::ValueExpr::RootMethodCallExpr(builtin_call_expr) => {
-                let name: ShortString = builtin_call_expr.ident.clone().ident;
+                let name: ShortString = builtin_call_expr.ident.ident.clone();
                 let prim_ty =
-                    TypeDef::try_from(builtin_call_expr.ident.clone())?;
+                    TypeDef::try_from(builtin_call_expr.ident.clone().inner)?;
 
                 if prim_ty.is_builtin() {
                     builtin_call_expr.eval(
@@ -1796,8 +1810,7 @@ impl ast::ValueExpr {
                         return Err(CompileError::from(format!(
                             "The field \
                         name '{}' cannot be found in type '{}'",
-                            field_s.name,
-                            type_id.ident
+                            field_s.name, type_id.ident
                         )));
                     }
                 }
@@ -1836,7 +1849,7 @@ impl ast::ArgExprList {
         local_scope: &[symbols::Symbol],
     ) -> Result<Vec<symbols::Symbol>, CompileError> {
         let mut eval_args = vec![];
-        for arg in &self.args {
+        for arg in self.args.iter() {
             let parsed_arg =
                 arg.eval(symbols.clone(), scope.clone(), local_scope)?;
             eval_args.push(parsed_arg);
@@ -1908,7 +1921,7 @@ impl ast::ListValueExpr {
     ) -> Result<Vec<symbols::Symbol>, CompileError> {
         trace!("anonymous list");
         let mut s: Vec<symbols::Symbol> = vec![];
-        for value in &self.values {
+        for value in self.values.iter() {
             let arg = value.eval(symbols.clone(), scope.clone(), &[])?;
             s.push(arg);
         }
@@ -1926,7 +1939,7 @@ impl ast::AnonymousRecordValueExpr {
     ) -> Result<Vec<symbols::Symbol>, CompileError> {
         trace!("anonymous record");
         let mut s: Vec<symbols::Symbol> = vec![];
-        for (key, value) in &self.key_values {
+        for (key, value) in self.key_values.iter() {
             let mut arg =
                 value.eval(symbols.clone(), scope.clone(), local_scope)?;
             arg.name = key.ident.clone();
@@ -1947,14 +1960,14 @@ impl ast::TypedRecordValueExpr {
     {
         trace!("typed record");
         let mut s: Vec<symbols::Symbol> = vec![];
-        for (key, value) in &self.key_values {
+        for (key, value) in self.key_values.iter() {
             let mut arg =
                 value.eval(symbols.clone(), scope.clone(), local_scope)?;
             arg.name = key.ident.clone();
             s.push(arg);
         }
 
-        Ok((self.type_id.clone(), s))
+        Ok((self.type_id.inner.clone(), s))
     }
 }
 
@@ -2098,9 +2111,7 @@ impl ast::BooleanExpr {
                 Ok(symbols::Symbol::new_with_value(
                     "boolean_constant".into(),
                     symbols::SymbolKind::Constant,
-                    TypeValue::Builtin(BuiltinTypeValue::Bool(
-                        bool_lit.0,
-                    )),
+                    TypeValue::Builtin(BuiltinTypeValue::Bool(bool_lit.0)),
                     vec![],
                     Token::Constant(None),
                 ))
@@ -2132,7 +2143,9 @@ impl ast::BooleanExpr {
             // (a method/field access on a literal) may return a boolean.
             ast::BooleanExpr::LiteralAccessExpr(lit_access_expr) => {
                 let s = lit_access_expr.eval(
-                    symbols, scope.clone(), local_scope
+                    symbols,
+                    scope.clone(),
+                    local_scope,
                 )?;
                 Ok(s)
             }
@@ -2390,9 +2403,7 @@ fn check_type_identifier(
 
     // is it in the global table?
     let global_ty = symbols.get(&Scope::Global).and_then(|gt| {
-        gt.get_variable(&ty.ident)
-            .ok()
-            .map(|s| (&s.ty, s.kind))
+        gt.get_variable(&ty.ident).ok().map(|s| (&s.ty, s.kind))
     });
     if let Some(ty) = global_ty {
         if ty.1 == symbols::SymbolKind::AnonymousType
@@ -2408,9 +2419,7 @@ fn check_type_identifier(
             let filter_map_ty = symbols
                 .get(scope)
                 .and_then(|gt| {
-                    gt.get_variable(&ty.ident)
-                        .ok()
-                        .map(|s| (&s.ty, s.kind))
+                    gt.get_variable(&ty.ident).ok().map(|s| (&s.ty, s.kind))
                 })
                 .ok_or(format!(
                     "No type named '{}' found in filter-map '{}'",
@@ -2460,7 +2469,7 @@ fn check_type_identifier(
 /// present in the symbol, this should only be the case with a Constant,
 /// containing a literal value.
 fn get_props_for_scoped_variable(
-    fields: &[ast::Identifier],
+    fields: &[Spanned<ast::Identifier>],
     symbols: GlobalSymbolTable,
     scope: Scope,
 ) -> Result<(SymbolKind, TypeDef, Token, Option<TypeValue>), CompileError> {
@@ -2515,7 +2524,7 @@ fn get_props_for_scoped_variable(
                                 trace!(
                                 "{} on field '{}' for variable '{}' found in \
                                 filter-map '{}'",
-                                err, fields[1], fields[0].ident, filter_map
+                                err, fields[1].inner, fields[0].ident, filter_map
                             );
                                 err
                             })?;
@@ -2596,7 +2605,8 @@ fn _declare_variable(
     match &scope {
         Scope::FilterMap(filter_map) | Scope::Filter(filter_map) => {
             // Does the supplied type exist in our scope?
-            let ty = check_type_identifier(type_ident.ty, _symbols, scope)?;
+            let ty =
+                check_type_identifier(type_ident.ty.inner, _symbols, scope)?;
 
             // Apparently, we have a type.  Let's add it to the symbol table.
             let mut _symbols = symbols.borrow_mut();
@@ -2606,7 +2616,7 @@ fn _declare_variable(
             ))?;
 
             filter_map.add_variable(
-                type_ident.field_name.ident,
+                type_ident.field_name.inner.ident,
                 Some(name),
                 kind,
                 ty,
@@ -2617,7 +2627,7 @@ fn _declare_variable(
         Scope::Global => Err(format!(
             "Can't create a variable in the global scope (NEVER). \
                 Variable '{}'",
-            type_ident.field_name
+            type_ident.field_name.inner
         )
         .into()),
     }
@@ -2639,7 +2649,8 @@ fn declare_argument(
     match &scope {
         Scope::FilterMap(filter_map) | Scope::Filter(filter_map) => {
             // Does the supplied type exist in our scope?
-            let ty = check_type_identifier(type_ident.ty, _symbols, scope)?;
+            let ty =
+                check_type_identifier(type_ident.ty.inner, _symbols, scope)?;
 
             // Apparently, we have a type.  Let's add it to the symbol table.
             let mut _symbols = symbols.borrow_mut();
@@ -2649,7 +2660,7 @@ fn declare_argument(
             ))?;
 
             filter_map.add_argument(
-                type_ident.field_name.ident,
+                type_ident.field_name.inner.ident,
                 Some(name),
                 kind,
                 ty,
@@ -2660,7 +2671,7 @@ fn declare_argument(
         Scope::Global => Err(format!(
             "Can't create a variable in the global scope (NEVER). \
                 Variable '{}'",
-            type_ident.field_name
+            type_ident.field_name.inner
         )
         .into()),
     }
@@ -2700,8 +2711,7 @@ fn declare_variable_from_symbol(
                                 .map_err(|e| {
                                     format!(
                                         "{} in type '{}'",
-                                        e,
-                                        arg_symbol.name
+                                        e, arg_symbol.name
                                     )
                                 })?;
                             trace!("fields {:?}", fields);
