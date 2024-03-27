@@ -5,8 +5,8 @@
 
 use super::{token::Token, ParseResult, Parser};
 use crate::ast::{
-    ListTypeIdentifier, OutputStream, RecordTypeAssignment,
-    RecordTypeIdentifier, Rib, RibBody, RibField, Table, TypeIdentField,
+    Identifier, OutputStream, RecordType, RecordTypeDeclaration, Rib,
+    RibBody, RibFieldType, Table,
 };
 
 /// # Rib-like declarations
@@ -22,7 +22,7 @@ impl<'source> Parser<'source> {
         self.take(Token::Rib)?;
         let ident = self.identifier()?;
         self.take(Token::Contains)?;
-        let contain_ty = self.type_identifier()?;
+        let contain_ty = self.identifier()?;
         let body = self.rib_body()?;
 
         Ok(Rib {
@@ -43,7 +43,7 @@ impl<'source> Parser<'source> {
         self.take(Token::Table)?;
         let ident = self.identifier()?;
         self.take(Token::Contains)?;
-        let contain_ty = self.type_identifier()?;
+        let contain_ty = self.identifier()?;
         let body = self.rib_body()?;
 
         Ok(Table {
@@ -64,7 +64,7 @@ impl<'source> Parser<'source> {
         self.take(Token::OutputStream)?;
         let ident = self.identifier()?;
         self.take(Token::Contains)?;
-        let contain_ty = self.type_identifier()?;
+        let contain_ty = self.identifier()?;
         let body = self.rib_body()?;
 
         Ok(OutputStream {
@@ -81,15 +81,15 @@ impl<'source> Parser<'source> {
     /// ```
     pub(super) fn record_type_assignment(
         &mut self,
-    ) -> ParseResult<RecordTypeAssignment> {
+    ) -> ParseResult<RecordTypeDeclaration> {
         self.take(Token::Type)?;
-        let ident = self.type_identifier()?;
+        let ident = self.identifier()?;
         let body = self.rib_body()?;
-        let record_type = RecordTypeIdentifier {
+        let record_type = RecordType {
             key_values: body.key_values,
         };
 
-        Ok(RecordTypeAssignment { ident, record_type })
+        Ok(RecordTypeDeclaration { ident, record_type })
     }
 
     /// Parse a rib body
@@ -117,32 +117,27 @@ impl<'source> Parser<'source> {
     /// RibField ::= Identifier ':'
     ///              (RibBody | '[' TypeIdentifier ']' | TypeIdentifier)
     /// ```
-    fn rib_field(&mut self) -> ParseResult<RibField> {
+    fn rib_field(&mut self) -> ParseResult<(Identifier, RibFieldType)> {
         let key = self.identifier()?;
         self.take(Token::Colon)?;
 
-        let field = if self.peek_is(Token::CurlyLeft) {
+        let field_type = self.rib_field_type()?;
+
+        Ok((key.inner, field_type))
+    }
+
+    fn rib_field_type(&mut self) -> ParseResult<RibFieldType> {
+        Ok(if self.peek_is(Token::CurlyLeft) {
             // TODO: This recursion seems to be the right thing to do, maybe
             // the syntax tree should reflect that.
             let RibBody { key_values } = self.rib_body()?;
-            RibField::RecordField(Box::new((
-                key,
-                RecordTypeIdentifier { key_values },
-            )))
+            RibFieldType::Record(RecordType { key_values })
         } else if self.next_is(Token::SquareLeft) {
-            let inner_type = self.type_identifier()?.inner;
+            let inner_type = self.rib_field_type()?;
             self.take(Token::SquareRight)?;
-            RibField::ListField(Box::new((
-                key,
-                ListTypeIdentifier { inner_type },
-            )))
+            RibFieldType::List(Box::new(inner_type))
         } else {
-            RibField::PrimitiveField(TypeIdentField {
-                field_name: key,
-                ty: self.type_identifier()?,
-            })
-        };
-
-        Ok(field)
+            RibFieldType::Identifier(self.identifier()?.inner)
+        })
     }
 }

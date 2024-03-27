@@ -109,8 +109,8 @@ impl<'methods> TypeChecker<'methods> {
                 // We'll do all filter-maps after all type declarations.
                 // This guarantees that all types have been declared once
                 // we get to the filter-maps.
-                ast::RootExpr::FilterMap(x) => filter_maps.push(x),
-                ast::RootExpr::Rib(ast::Rib {
+                ast::Declaration::FilterMap(x) => filter_maps.push(x),
+                ast::Declaration::Rib(ast::Rib {
                     ident,
                     contain_ty,
                     body,
@@ -119,7 +119,7 @@ impl<'methods> TypeChecker<'methods> {
                         create_contains_type(&mut types, contain_ty, body)?;
                     root_scope.insert_var(ident, Type::Rib(Box::new(ty)))?;
                 }
-                ast::RootExpr::Table(ast::Table {
+                ast::Declaration::Table(ast::Table {
                     ident,
                     contain_ty,
                     body,
@@ -129,7 +129,7 @@ impl<'methods> TypeChecker<'methods> {
                     root_scope
                         .insert_var(ident, Type::Table(Box::new(ty)))?;
                 }
-                ast::RootExpr::OutputStream(ast::OutputStream {
+                ast::Declaration::OutputStream(ast::OutputStream {
                     ident,
                     contain_ty,
                     body,
@@ -141,7 +141,7 @@ impl<'methods> TypeChecker<'methods> {
                         Type::OutputStream(Box::new(ty)),
                     )?;
                 }
-                ast::RootExpr::Ty(ast::RecordTypeAssignment {
+                ast::Declaration::Record(ast::RecordType {
                     ident,
                     record_type,
                 }) => {

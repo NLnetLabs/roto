@@ -37,7 +37,7 @@ impl<'a> ast::SyntaxTree {
         let (filter_maps, global): (Vec<_>, Vec<_>) = self
             .expressions
             .iter()
-            .partition(|e| matches!(e, ast::RootExpr::FilterMap(_)));
+            .partition(|e| matches!(e, ast::Declaration::FilterMap(_)));
 
         let mut acc = vec![];
         for filter_map in &filter_maps {
@@ -82,12 +82,12 @@ impl<'a> ast::SyntaxTree {
 
         for expr in &global {
             match expr {
-                ast::RootExpr::Rib(rib) => rib.eval(global_symbols)?,
-                ast::RootExpr::Table(table) => table.eval(global_symbols)?,
-                ast::RootExpr::OutputStream(stream) => {
+                ast::Declaration::Rib(rib) => rib.eval(global_symbols)?,
+                ast::Declaration::Table(table) => table.eval(global_symbols)?,
+                ast::Declaration::OutputStream(stream) => {
                     stream.eval(global_symbols)?
                 }
-                ast::RootExpr::Ty(rt_assign) => {
+                ast::Declaration::Record(rt_assign) => {
                     rt_assign.eval(global_symbols)?
                 }
                 _ => {}
@@ -126,14 +126,14 @@ impl<'a> ast::SyntaxTree {
         // Now, evaluate all the define sections in modules, so that filter_maps
         // can use each other's types and variables.
         for filter_map in &filter_maps {
-            if let ast::RootExpr::FilterMap(m) = filter_map {
+            if let ast::Declaration::FilterMap(m) = filter_map {
                 m.eval_define_header(symbols.clone())?;
             }
         }
 
         // Finally, evaluate all the filter_maps themselves.
         for filter_map in &filter_maps {
-            if let ast::RootExpr::FilterMap(m) = filter_map {
+            if let ast::Declaration::FilterMap(m) = filter_map {
                 m.eval(symbols.clone())?;
             }
         }
@@ -251,7 +251,7 @@ impl<'a> ast::OutputStream {
     }
 }
 
-impl<'a> ast::RecordTypeAssignment {
+impl<'a> ast::RecordType {
     fn eval(
         &'a self,
         symbols: &'_ mut symbols::SymbolTable,
@@ -386,7 +386,7 @@ impl ast::FilterMap {
         &self,
         symbols: symbols::GlobalSymbolTable,
     ) -> Result<(), CompileError> {
-        let filter_map_scope = match &self.ty {
+        let filter_map_scope = match &self.filter_type {
             FilterType::FilterMap => {
                 Scope::FilterMap(self.ident.ident.clone())
             }
@@ -410,7 +410,7 @@ impl ast::FilterMap {
         // first, parse the define section, so that other sections in this
         // filter_map can use the defined variables.
         self.body.define.eval(
-            self.ty,
+            self.filter_type,
             symbols.clone(),
             filter_map_scope.clone(),
         )?;
@@ -474,7 +474,7 @@ impl ast::FilterMap {
         // The `with` clause of the `define` section acts as an extra
         // argument to the whole filter_map, that can be used as a extra
         // read-only payload.
-        let scope = match self.ty {
+        let scope = match self.filter_type {
             FilterType::FilterMap => {
                 Scope::FilterMap(self.ident.ident.clone())
             }
@@ -873,7 +873,7 @@ impl ast::TermSection {
 
 // =========== ActionSection ================================================
 
-impl ast::ActionSection {
+impl ast::ActionDeclaration {
     fn eval(
         &self,
         action_section_index: usize,

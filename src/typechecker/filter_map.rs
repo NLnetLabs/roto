@@ -13,7 +13,7 @@ impl TypeChecker<'_> {
         filter_map: &ast::FilterMap,
     ) -> TypeResult<Type> {
         let ast::FilterMap {
-            ty,
+            filter_type: ty,
             ident: _,
             for_ident: _,
             with_kv,
@@ -220,9 +220,9 @@ impl TypeChecker<'_> {
     fn action_section(
         &mut self,
         scope: &Scope,
-        action_section: &ast::ActionSection,
+        action_section: &ast::ActionDeclaration,
     ) -> TypeResult<(Spanned<Identifier>, Type)> {
-        let ast::ActionSection {
+        let ast::ActionDeclaration {
             ident,
             with_kv,
             body: ast::ActionSectionBody { expressions },

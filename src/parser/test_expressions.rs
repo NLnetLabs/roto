@@ -5,7 +5,7 @@ use crate::parser::Parser;
 #[test]
 fn test_logical_expr_1() {
     let r = Parser::run_parser(
-        Parser::logical_expr,
+        Parser::expr,
         0,
         "( blaffer.waf().contains(my_set) ) || ( blaffer.blaf() < bop() )",
     );
@@ -14,87 +14,80 @@ fn test_logical_expr_1() {
 
 #[test]
 fn test_logical_expr_2() {
-    let r = Parser::run_parser(
-        Parser::logical_expr,
+    Parser::run_parser(
+        Parser::expr,
         0,
         r#"(0.0.0.0/0 prefix-length-range /12-/16)"#,
-    );
-    assert!(r.is_ok());
+    )
+    .unwrap();
 }
 
 #[test]
 fn test_logical_expr_3() {
-    let r = Parser::run_parser(
-        Parser::logical_expr,
+    Parser::run_parser(
+        Parser::expr,
         0,
         r#"blaffer.blaf.contains(something,"somewhat") > blaf()"#,
-    );
-    assert!(r.is_ok());
+    )
+    .unwrap();
 }
 
 #[test]
 fn test_logical_expr_4() {
-    let r = Parser::run_parser(
-        Parser::logical_expr,
+    Parser::run_parser(
+        Parser::expr,
         0,
         r#"( my_set.contains(bla.bla()) ) || ( my_other_set.contains(bla.bla()) )"#,
-    );
-    assert!(r.is_ok());
+    ).unwrap();
 }
 
 #[test]
 fn test_logical_expr_5() {
-    let r = Parser::run_parser(
-        Parser::logical_expr,
+    Parser::run_parser(
+        Parser::expr,
         0,
         "(found_prefix.prefix.exists() && found_prefix.prefix.exists()) || route_in_table"
-    );
-    assert!(r.is_ok());
+    ).unwrap();
 }
 
 //------------ Compute Expressions parsing ----------------------------------
 
 #[test]
 fn test_compute_expr_1() {
-    let cm = Parser::run_parser(
-        Parser::value_expr,
+    Parser::run_parser(
+        Parser::expr,
         0,
         r#"source_asns.contains("asn", route.as_path.origin)"#,
-    );
-    assert!(cm.is_ok());
+    )
+    .unwrap();
 }
 
 #[test]
 fn test_compute_expr_2() {
-    let r =
-        Parser::run_parser(Parser::value_expr, 0, "a.b.c.d(x,y,z).e.f(o.p()).g");
-    assert!(r.is_ok());
+    Parser::run_parser(Parser::expr, 0, "a.b.c.d(x,y,z).e.f(o.p()).g")
+        .unwrap();
 }
 
 #[test]
 fn test_compute_expr_3() {
-    let r = Parser::run_parser(Parser::value_expr, 0, "send-to(a, b)");
-    assert!(r.is_ok());
+    Parser::run_parser(Parser::expr, 0, "send-to(a, b)").unwrap();
 }
 
 #[test]
 fn test_compute_expr_4() {
-    let r = Parser::run_parser(Parser::value_expr, 0, "global_record.field");
-    assert!(r.is_ok());
+    Parser::run_parser(Parser::expr, 0, "global_record.field").unwrap();
 }
 
 #[test]
 fn test_compute_expr_5() {
-    let r = Parser::run_parser(Parser::value_expr, 0, "pph_asn.asn.set(AS200)");
-    assert!(r.is_ok());
+    Parser::run_parser(Parser::expr, 0, "pph_asn.asn.set(AS200)").unwrap();
 }
 
 //------------ Other Expressions --------------------------------------------
 
 #[test]
 fn test_value_expr() {
-    let mm = Parser::run_parser(Parser::value_expr, 0, r###"globlaf(bla)"###);
-    assert!(mm.is_ok());
+    Parser::run_parser(Parser::expr, 0, r###"globlaf(bla)"###).unwrap();
 }
 
 //------------ Prefix Match Expressions -------------------------------------
@@ -105,21 +98,35 @@ fn test_value_expr() {
 
 #[test]
 fn test_prefix_expr_1() {
-    let s = Parser::run_parser(Parser::value_expr, 0, r###"129.23.0.0/16 upto /18"###);
-    assert!(s.is_ok());
+    Parser::run_parser(Parser::expr, 0, r###"129.23.0.0/16 upto /18"###)
+        .unwrap();
 }
 
 #[test]
 fn test_prefix_expr_2() {
-    let s = Parser::run_parser(Parser::value_expr, 0, r###"2001::1/48 orlonger"###);
-    assert!(s.is_ok());
+    Parser::run_parser(Parser::expr, 0, r###"2001::1/48 orlonger"###)
+        .unwrap();
 }
 
 #[test]
 fn test_prefix_expr_3() {
-    let s = Parser::run_parser(Parser::value_expr,
+    Parser::run_parser(
+        Parser::expr,
         0,
         r###"0.0.0.0/0 prefix-length-range /24-/32"###,
-    );
-    assert!(s.is_ok());
+    )
+    .unwrap();
+}
+
+#[test]
+fn test_match() {
+    Parser::run_parser(
+        Parser::expr,
+        0,
+        "match x {
+            A(x) -> b(),
+            C(y) -> d(),
+        }",
+    )
+    .unwrap();
 }

@@ -1,11 +1,7 @@
 use crate::{
     ast::SyntaxTree,
-    blocks::Scope,
-    compiler::{compile::Rotolo, CompileError, Compiler},
     parser::{ParseError, Parser},
-    symbols::GlobalSymbolTable,
-    typechecker::error::{Level, TypeError},
-    types::typevalue::TypeValue,
+    // typechecker::error::{Level, TypeError},
 };
 
 #[derive(Clone, Debug)]
@@ -18,9 +14,7 @@ pub struct SourceFile {
 enum RotoError {
     Read(String, std::io::Error),
     Parse(ParseError),
-    Type(TypeError),
-    Evaluate(CompileError),
-    Compile(CompileError),
+    // Type(TypeError),
 }
 
 #[derive(Debug)]
@@ -72,44 +66,38 @@ impl std::fmt::Display for RotoReport {
                     let s = String::from_utf8_lossy(&v);
                     write!(f, "{s}")?;
                 }
-                RotoError::Type(error) => {
-                    let labels = error.labels.iter().map(|l| {
-                        Label::new((
-                            self.filename(l.span.file),
-                            l.span.start..l.span.end,
-                        ))
-                        .with_message(&l.message)
-                        .with_color(match l.level {
-                            Level::Error => Color::Red,
-                            Level::Info => Color::Blue,
-                        })
-                    });
+                // RotoError::Type(error) => {
+                //     let labels = error.labels.iter().map(|l| {
+                //         Label::new((
+                //             self.filename(l.span.file),
+                //             l.span.start..l.span.end,
+                //         ))
+                //         .with_message(&l.message)
+                //         .with_color(match l.level {
+                //             Level::Error => Color::Red,
+                //             Level::Info => Color::Blue,
+                //         })
+                //     });
 
-                    let file = self.filename(error.location.file);
+                //     let file = self.filename(error.location.file);
 
-                    let report = Report::build(
-                        ReportKind::Error,
-                        file,
-                        error.location.start,
-                    )
-                    .with_message(format!(
-                        "Type error: {}",
-                        &error.description
-                    ))
-                    .with_labels(labels)
-                    .finish();
+                //     let report = Report::build(
+                //         ReportKind::Error,
+                //         file,
+                //         error.location.start,
+                //     )
+                //     .with_message(format!(
+                //         "Type error: {}",
+                //         &error.description
+                //     ))
+                //     .with_labels(labels)
+                //     .finish();
 
-                    let mut v = Vec::new();
-                    report.write(&mut file_cache, &mut v).unwrap();
-                    let s = String::from_utf8_lossy(&v);
-                    write!(f, "{s}")?;
-                }
-                RotoError::Evaluate(e) => {
-                    write!(f, "{e}")?;
-                }
-                RotoError::Compile(e) => {
-                    write!(f, "{e}")?;
-                }
+                //     let mut v = Vec::new();
+                //     report.write(&mut file_cache, &mut v).unwrap();
+                //     let s = String::from_utf8_lossy(&v);
+                //     write!(f, "{s}")?;
+                // }
             }
         }
 
@@ -127,12 +115,11 @@ impl std::error::Error for RotoReport {}
 
 pub fn run<'a>(
     files: impl IntoIterator<Item = String>,
-) -> Result<Vec<Rotolo>, RotoReport> {
+) -> Result<(), RotoReport> {
     let files = read_files(files)?;
     let trees = parse(&files)?;
-    typecheck(&files, &trees)?;
-    let symbols = evaluate(&files, &trees)?;
-    compile(&files, &symbols, None)
+    // typecheck(&files, &trees)?;
+    Ok(())
 }
 
 pub fn test_file(source: &str) -> Vec<SourceFile> {
@@ -142,16 +129,16 @@ pub fn test_file(source: &str) -> Vec<SourceFile> {
     }]
 }
 
-pub fn run_test(
-    source: &str,
-    arguments: Option<(&Scope, Vec<(&str, TypeValue)>)>,
-) -> Result<Rotolo, RotoReport> {
-    let files = test_file(source);
-    let trees = parse(&files)?;
-    typecheck(&files, &trees)?;
-    let symbols = evaluate(&files, &trees)?;
-    Ok(compile(&files, &symbols, arguments)?.remove(0))
-}
+// pub fn run_test(
+//     source: &str,
+//     arguments: Option<(&Scope, Vec<(&str, TypeValue)>)>,
+// ) -> Result<Rotolo, RotoReport> {
+//     let files = test_file(source);
+//     let trees = parse(&files)?;
+//     typecheck(&files, &trees)?;
+//     let symbols = evaluate(&files, &trees)?;
+//     Ok(compile(&files, &symbols, arguments)?.remove(0))
+// }
 
 fn read_files<'a>(
     files: impl IntoIterator<Item = String>,
@@ -209,89 +196,28 @@ pub fn parse(files: &[SourceFile]) -> Result<Vec<SyntaxTree>, RotoReport> {
     }
 }
 
-pub fn typecheck(
-    files: &[SourceFile],
-    trees: &[SyntaxTree],
-) -> Result<(), RotoReport> {
-    let results: Vec<_> = trees
-        .into_iter()
-        .map(|f| crate::typechecker::typecheck(&f))
-        .collect();
+// pub fn typecheck(
+//     files: &[SourceFile],
+//     trees: &[SyntaxTree],
+// ) -> Result<(), RotoReport> {
+//     let results: Vec<_> = trees
+//         .into_iter()
+//         .map(|f| crate::typechecker::typecheck(&f))
+//         .collect();
 
-    let mut errors = Vec::new();
-    for result in results {
-        if let Err(err) = result {
-            errors.push(RotoError::Type(err));
-        }
-    }
+//     let mut errors = Vec::new();
+//     for result in results {
+//         if let Err(err) = result {
+//             errors.push(RotoError::Type(err));
+//         }
+//     }
 
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        Err(RotoReport {
-            files: files.to_vec(),
-            errors,
-        })
-    }
-}
-
-pub fn evaluate(
-    files: &[SourceFile],
-    trees: &[SyntaxTree],
-) -> Result<Vec<GlobalSymbolTable>, RotoReport> {
-    let results: Vec<_> = trees
-        .into_iter()
-        .map(|t| {
-            let symbols = GlobalSymbolTable::new();
-            t.eval(symbols.clone())?;
-            Ok(symbols)
-        })
-        .collect();
-
-    let mut symbol_tables = Vec::new();
-    let mut errors = Vec::new();
-    for result in results {
-        match result {
-            Ok(s) => symbol_tables.push(s),
-            Err(e) => errors.push(RotoError::Evaluate(e)),
-        }
-    }
-
-    if errors.is_empty() {
-        Ok(symbol_tables)
-    } else {
-        Err(RotoReport {
-            files: files.to_vec(),
-            errors,
-        })
-    }
-}
-
-pub fn compile(
-    files: &[SourceFile],
-    symbol_tables: &[GlobalSymbolTable],
-    arguments: Option<(&Scope, Vec<(&str, TypeValue)>)>,
-) -> Result<Vec<Rotolo>, RotoReport> {
-    let results: Vec<_> = symbol_tables
-        .into_iter()
-        .map(|t| Compiler::build(t.clone(), arguments.clone()))
-        .collect();
-
-    let mut rotolos = Vec::new();
-    let mut errors = Vec::new();
-    for result in results {
-        match result {
-            Ok(r) => rotolos.push(r),
-            Err(e) => errors.push(RotoError::Compile(e)),
-        }
-    }
-
-    if errors.is_empty() {
-        Ok(rotolos)
-    } else {
-        Err(RotoReport {
-            files: files.to_vec(),
-            errors,
-        })
-    }
-}
+//     if errors.is_empty() {
+//         Ok(())
+//     } else {
+//         Err(RotoReport {
+//             files: files.to_vec(),
+//             errors,
+//         })
+//     }
+// }

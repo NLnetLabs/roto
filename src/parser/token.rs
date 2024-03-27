@@ -65,8 +65,6 @@ pub enum Token<'s> {
     Accept,
     #[token("action")]
     Action,
-    #[token("all")]
-    All,
     #[token("apply")]
     Apply,
     #[token("contains")]
@@ -75,14 +73,10 @@ pub enum Token<'s> {
     Define,
     #[token("exact")]
     Exact,
-    #[token("exactly-one")]
-    ExactlyOne,
     #[token("filter-map")]
     FilterMap,
     #[token("filter")]
     Filter,
-    #[token("for")]
-    For,
     #[token("import")]
     Import,
     #[token("in")]
@@ -113,8 +107,6 @@ pub enum Token<'s> {
     Rib,
     #[token("rx")]
     Rx,
-    #[token("rx_tx")]
-    RxTx,
     #[token("some")]
     Some,
     #[token("table")]
@@ -198,15 +190,12 @@ impl<'source> Display for Token<'source> {
             Token::AngleRight => ">",
             Token::Accept => "accept",
             Token::Action => "action",
-            Token::All => "all",
             Token::Apply => "apply",
             Token::Contains => "contains",
             Token::Define => "define",
             Token::Exact => "exact",
-            Token::ExactlyOne => "exactly-one",
             Token::FilterMap => "filter-map",
             Token::Filter => "filter",
-            Token::For => "for",
             Token::Import => "import",
             Token::In => "in",
             Token::Longer => "longer",
@@ -222,7 +211,6 @@ impl<'source> Display for Token<'source> {
             Token::Return => "return",
             Token::Rib => "rib",
             Token::Rx => "rx",
-            Token::RxTx => "rx_tx",
             Token::Some => "some",
             Token::Table => "table",
             Token::Term => "term",

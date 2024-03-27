@@ -1,4 +1,4 @@
-use crate::ast::{Identifier, RootExpr, SyntaxTree, TypeIdentifier};
+use crate::ast::{Declaration, Identifier, SyntaxTree};
 use logos::{Lexer, SpannedIter};
 use std::{fmt::Display, iter::Peekable};
 use token::Token;
@@ -308,7 +308,7 @@ impl<'source> Parser<'source> {
     /// ```ebnf
     /// Root ::= Rib | Table | OutputStream | FilterMap | Type
     /// ```
-    fn root(&mut self) -> ParseResult<RootExpr> {
+    fn root(&mut self) -> ParseResult<Declaration> {
         let end_of_input = ParseError {
             kind: ParseErrorKind::EndOfInput,
             location: Span::new(
@@ -317,15 +317,17 @@ impl<'source> Parser<'source> {
             ),
         };
         let expr = match self.peek().ok_or(end_of_input)? {
-            Token::Rib => RootExpr::Rib(self.rib()?),
-            Token::Table => RootExpr::Table(self.table()?),
+            Token::Rib => Declaration::Rib(self.rib()?),
+            Token::Table => Declaration::Table(self.table()?),
             Token::OutputStream => {
-                RootExpr::OutputStream(self.output_stream()?)
+                Declaration::OutputStream(self.output_stream()?)
             }
             Token::FilterMap | Token::Filter => {
-                RootExpr::FilterMap(Box::new(self.filter_map()?))
+                Declaration::FilterMap(Box::new(self.filter_map()?))
             }
-            Token::Type => RootExpr::Ty(self.record_type_assignment()?),
+            Token::Type => {
+                Declaration::Record(self.record_type_assignment()?)
+            }
             _ => {
                 let (token, span) = self.next()?;
                 return Err(ParseError::expected(
@@ -360,33 +362,6 @@ impl<'source> Parser<'source> {
                 ))
             }
         };
-        Ok(Identifier {
-            ident: ident.into(),
-        }
-        .with_span(span))
-    }
-
-    /// Parse a type identifier
-    ///
-    /// Currently, this is the same as [`Parser::identifier`].
-    fn type_identifier(&mut self) -> ParseResult<Spanned<TypeIdentifier>> {
-        let (token, span) = self.next()?;
-        let ident = match token {
-            Token::Ident(s) => s.as_ref(),
-            // 'contains' and `type` already used as both a keyword and an identifier
-            Token::Contains => "contains",
-            Token::Type => "type",
-            _ => {
-                return Err(ParseError::expected(
-                    "an identifier",
-                    token,
-                    span,
-                ))
-            }
-        };
-        Ok(TypeIdentifier {
-            ident: ident.into(),
-        }
-        .with_span(span))
+        Ok(Identifier(ident.into()).with_span(span))
     }
 }
