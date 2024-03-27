@@ -27,7 +27,7 @@ use super::super::typevalue::TypeValue;
 
 use super::basic_route::{PeerId, PeerRibType, Provenance};
 use super::{
-    BasicRoute, HexLiteral, IntegerLiteral, NlriStatus, PrefixLength, RouteContext, StringLiteral
+    FlowSpecRoute, HexLiteral, IntegerLiteral, NlriStatus, PrefixLength, PrefixRoute, RouteContext, StringLiteral
 };
 
 #[derive(Debug, Eq, Clone, Hash, PartialEq, Serialize)]
@@ -58,10 +58,11 @@ pub enum BuiltinTypeValue {
     AsPath(routecore::bgp::aspath::HopPath),        // vector
     Hop(routecore::bgp::aspath::OwnedHop), // read-only scalar
     Origin(Origin),           // scalar
-    Route(BasicRoute),
+    PrefixRoute(PrefixRoute),
+    FlowSpecRoute(FlowSpecRoute<bytes::Bytes>),
     RouteContext(RouteContext),
     PeerId(PeerId),                    // scalar
-    PeerRibType(PeerRibType),          // scalar
+    PeerRibType(PeerRibType), // scalar
     // A read-only enum variant for capturing constants
     ConstU8EnumVariant(EnumVariant<u8>),
     ConstU16EnumVariant(EnumVariant<u16>),
@@ -102,7 +103,8 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::AsPath(v) => v.into_type(ty),
             BuiltinTypeValue::Hop(h) => h.into_type(ty),
             BuiltinTypeValue::Origin(v) => v.into_type(ty),
-            BuiltinTypeValue::Route(r) => r.into_type(ty),
+            BuiltinTypeValue::PrefixRoute(r) => r.into_type(ty),
+            BuiltinTypeValue::FlowSpecRoute(r) => r.into_type(ty),
             BuiltinTypeValue::RouteContext(c) => c.into_type(ty),
             BuiltinTypeValue::PeerId(r) => r.into_type(ty),
             BuiltinTypeValue::PeerRibType(p) => p.into_type(ty),
@@ -209,7 +211,8 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::Origin(v) => {
                     write!(f, "{:?}", v)
                 }
-                BuiltinTypeValue::Route(r) => write!(f, "{:?}", r),
+                BuiltinTypeValue::PrefixRoute(r) => write!(f, "{:?}", r),
+                BuiltinTypeValue::FlowSpecRoute(r) => write!(f, "{:?}", r),
                 BuiltinTypeValue::RouteContext(c) => write!(f, "{:?}", c),
                 BuiltinTypeValue::BgpUpdateMessage(raw) => {
                     write!(f, "{:X?}", *raw)
@@ -306,7 +309,8 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::Origin(v) => {
                     write!(f, "{:?} (Origin Type)", v)
                 }
-                BuiltinTypeValue::Route(r) => write!(f, "{:?} (Route)", r),
+                BuiltinTypeValue::PrefixRoute(r) => write!(f, "{:?} (Prefix Route)", r),
+                BuiltinTypeValue::FlowSpecRoute(r) => write!(f, "{:?} (FlowSpec Route)", r),
                 BuiltinTypeValue::RouteContext(c) => write!(f, "{:?} (Context)", c),
                 BuiltinTypeValue::BgpUpdateMessage(raw) => {
                     write!(f, "{:X?} (RawBgpMessage)", *raw)

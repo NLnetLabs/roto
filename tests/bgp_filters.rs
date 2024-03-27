@@ -7,8 +7,8 @@ use roto::{
     compiler::Compiler,
     types::{
         builtin::{
-            basic_route::{BasicRoute, PeerId, PeerRibType, Provenance}, explode_announcements, NlriStatus, RouteContext
-        }, collections::{BytesRecord, Record}, lazyrecord_types::BgpUpdateMessage, typevalue::TypeValue
+            basic_route::{PeerId, PeerRibType, Provenance}, explode_announcements, NlriStatus, PrefixRoute, RouteContext
+        }, collections::{BytesRecord, Record}, lazyrecord_types::BgpUpdateMessage,
     },
     vm::{self, VmResult},
 };
@@ -25,7 +25,7 @@ fn test_data(
     name: Scope,
     source_code: &str,
     announce_str: &str,
-) -> Result<(VmResult, BasicRoute), Box<dyn std::error::Error>> {
+) -> Result<(VmResult, PrefixRoute), Box<dyn std::error::Error>> {
     common::init();
     println!("Evaluate filter-map {}...", name);
 
@@ -58,7 +58,7 @@ fn test_data(
     // let pa_map = PaMap::from_update_pdu(parser).unwrap();
 
     // let parser = Parser::from_ref(parser.octets());
-    let rws = &explode_announcements::<'_, bytes::Bytes, _, TypeValue>(parser).unwrap()[0];
+    let rws = &explode_announcements(parser).unwrap()[0];
 
     let context = RouteContext::new(
         // routecore::addr::Prefix::from_str("192.0.2.0/24")?,
@@ -111,7 +111,7 @@ fn test_data(
     trace!("rx    : {:?}", res.rx);
     trace!("tx    : {:?}", res.tx);
 
-    Ok((res, rws.clone().into_route().unwrap()))
+    Ok((res, rws.clone().into_prefix_route().unwrap()))
 }
 
 //------------ Test: IpAddressLiteral ----------------------------------------

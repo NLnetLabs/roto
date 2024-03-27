@@ -318,7 +318,7 @@ impl LinearMemory {
                         trace!("found context for index {:?}", field_index);
                         Ok(context.get_field_by_index(field_index).unwrap_or(TypeValue::Unknown))
                     }
-                    Some(TypeValue::Builtin(BuiltinTypeValue::Route(
+                    Some(TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(
                         mut route,
                     ))) => {
                         trace!("found route");
@@ -409,7 +409,7 @@ impl LinearMemory {
                             _ => Err(VmError::InvalidFieldAccess),
                         }
                     }
-                    Some(TypeValue::Builtin(BuiltinTypeValue::Route(
+                    Some(TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(
                         route,
                     ))) => {
                         // let bgp_msg = self.get_mem_pos(3);

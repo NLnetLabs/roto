@@ -7,17 +7,14 @@ mod route {
     use crate::types::builtin::basic_route::{
         PeerId, PeerRibType, Provenance,
     };
-    use crate::types::builtin::{explode_announcements, BasicNlri, BuiltinTypeValue, BytesRecord};
+    use crate::types::builtin::{explode_announcements, BuiltinTypeValue, BytesRecord};
     use crate::types::lazyrecord_types::BgpUpdateMessage;
     use crate::types::typedef::TypeDef;
     use crate::types::typevalue::TypeValue;
     use crate::{compiler::CompileError, traits::RotoType};
     use log::trace;
-    use crate::types::builtin::tests::route::AfiSafiType::Ipv6Unicast;
     use routecore::bgp::nlri::afisafi::Ipv6UnicastNlri;
-    use routecore::bgp::nlri::afisafi::AfiSafiType;
     use routecore::bgp::nlri::afisafi::IsPrefix;
-    use routecore::bgp::nlri::afisafi::Ipv6FlowSpecNlri;
     use routecore::bgp::workshop::route::RouteWorkshop;
 
     enum MethodType {
@@ -114,22 +111,14 @@ mod route {
             peer_rib_type: PeerRibType::OutPost,
         };
 
-        let nlri = BasicNlri {
-            ty: AfiSafiType::Ipv6Unicast,
-            prefix: prefixes[0],
-            path_id: None,
-        };
+        let nlri = Ipv6UnicastNlri::try_from(prefixes[0]).unwrap();
         let bgp_msg = update.into_inner();
 
         roto_msgs
             .push(RouteWorkshop::from_update_pdu(nlri, &bgp_msg).unwrap());
 
         for prefix in &prefixes[1..] {
-            let nlri = BasicNlri {
-                ty: AfiSafiType::Ipv6Unicast,
-                prefix: *prefix,
-                path_id: None,
-            };
+            let nlri = Ipv6UnicastNlri::try_from(*prefix).unwrap();
 
             roto_msgs.push(
                 RouteWorkshop::from_update_pdu(
@@ -251,8 +240,7 @@ mod route {
         let _afi_safi = afi_safis.3.unwrap();
         let afi_safis = update.bytes_parser().afi_safis();
         trace!("afi_safis {:?}", afi_safis);
-
-        let exploded = explode_announcements::<bytes::Bytes, _, TypeValue>(update.bytes_parser());
+        let exploded = explode_announcements(update.bytes_parser());
 
         trace!("exploded {:#?}", exploded);
         assert_eq!(exploded?.len(), 5);
@@ -277,11 +265,7 @@ mod route {
 
         roto_msgs.push(
             RouteWorkshop::from_update_pdu(
-                BasicNlri {
-                    ty: Ipv6Unicast,
-                    prefix: prefixes[0],
-                    path_id: None,
-                },
+                Ipv6UnicastNlri::try_from(prefixes[0]).unwrap(),
                 &bgp_msg,
             )
             .unwrap(),
@@ -290,11 +274,7 @@ mod route {
         for prefix in &prefixes[1..] {
             roto_msgs.push(
                 RouteWorkshop::from_update_pdu(
-                    BasicNlri {
-                        ty: Ipv6Unicast,
-                        prefix: *prefix,
-                        path_id: None,
-                    },
+                    Ipv6UnicastNlri::try_from(*prefix).unwrap(),
                     &bgp_msg,
                 )
                 .unwrap(),

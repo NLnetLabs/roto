@@ -2,8 +2,8 @@ use std::net::SocketAddrV4;
 
 use roto::compiler::Compiler;
 
-use roto::types::builtin::basic_route::{BasicRoute, PeerId, PeerRibType, Provenance};
-use roto::types::builtin::{BasicNlri, Nlri, NlriStatus, RouteContext};
+use roto::types::builtin::basic_route::{PeerId, PeerRibType, Provenance};
+use roto::types::builtin::{Nlri, NlriStatus, PrefixRoute, RouteContext};
 use roto::types::collections::{BytesRecord, Record};
 use roto::types::lazyrecord_types::BgpUpdateMessage;
 use roto::types::typevalue::TypeValue;
@@ -64,7 +64,7 @@ fn test_data(
         peer_rib_type: PeerRibType::OutPost,
     };
 
-    let nlri = BasicNlri::from(Ipv6UnicastNlri::try_from(prefixes[0])?);
+    let nlri = Ipv6UnicastNlri::try_from(prefixes[0]).unwrap();
 
     let context = RouteContext::new(
         Some(update.clone()),
@@ -75,7 +75,7 @@ fn test_data(
 
     let rws = RouteWorkshop::from_update_pdu(nlri, &update.into_inner())?;
 
-    let payload = BasicRoute(rws);
+    let payload = PrefixRoute::from(rws);
 
     // Create the VM
     println!("Used Arguments");

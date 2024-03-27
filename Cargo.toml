@@ -23,7 +23,8 @@ smallvec        = { version = "1.11", features = [ "const_generics", "serde" ] }
 serde           = { version = "1.0", features = [ "derive", "rc" ] }
 inetnum         = { version = "0.1.0", features = ["arbitrary", "serde"] }
 rotonda-store   = { git = "https://github.com/nlnetlabs/rotonda-store", branch = "main" }
-routecore       = { git = "https://github.com/nlnetlabs/routecore", rev = "ca54e23", features = ["bgp", "bmp", "serde"]}
+# routecore       = { git = "https://github.com/nlnetlabs/routecore", rev = "a6b0399b", features = ["bgp", "bmp", "serde"]}
+routecore       = { path = "../../routecore-pab", features = ["bgp", "bmp", "serde"] }
 
 [dev-dependencies]
 env_logger  = "0.10"

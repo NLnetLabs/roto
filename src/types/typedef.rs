@@ -30,10 +30,10 @@ use crate::{
 };
 
 use super::builtin::basic_route::{
-    BasicRoute, PeerId, PeerRibType, Provenance,
+    PeerId, PeerRibType, Provenance,
 };
 use super::builtin::{
-    HexLiteral, IntegerLiteral, NlriStatus, PrefixLength, RouteContext, StringLiteral, Unknown
+    FlowSpecRoute, HexLiteral, IntegerLiteral, NlriStatus, PrefixLength, PrefixRoute, RouteContext, StringLiteral, Unknown
 };
 use super::collections::{LazyElementTypeValue, Record};
 use super::datasources::{RibType, Table};
@@ -194,7 +194,8 @@ pub enum TypeDef {
     PathId,
     IpAddr,
     Asn,
-    Route, // BGP Update path attributes
+    PrefixRoute,
+    FlowSpecRoute,
     RouteContext,
     AsPath,
     Hop,
@@ -283,7 +284,8 @@ impl TypeDef {
         ConstEnumVariant(StringLiteral,U32,Community;);
         // no conversions, no data field
         // SOURCE TYPE
-        Route,
+        PrefixRoute,
+        FlowSpecRoute,
         RouteContext,
         // BgpUpdateMessage,
         Unknown;
@@ -349,7 +351,7 @@ impl TypeDef {
             TypeDef::Record(rec_type) => rec_type.recursive_len(),
             TypeDef::LazyRecord(l_rec) => l_rec.get_field_num(),
             TypeDef::List(list) => list.get_field_num(),
-            TypeDef::Route => BasicRoute::get_field_num(),
+            TypeDef::PrefixRoute => PrefixRoute::get_field_num(),
             TypeDef::OutputStream(rec) => rec.get_field_num(),
             _ => 1,
         }
@@ -416,9 +418,9 @@ impl TypeDef {
                 // fields access (it is backed by the raw bytes of the
                 // update message), but we want to create the illusion
                 // that it does have them.
-                (TypeDef::Route, _) => {
+                (TypeDef::PrefixRoute, _) => {
                     trace!("Route w/ field '{}'", field);
-                    let this_token = BasicRoute::get_props_for_field(field)?;
+                    let this_token = PrefixRoute::get_props_for_field(field)?;
 
                     // Add the token to the FieldAccess vec.
                     result_type = if let Token::FieldAccess(to_f) =
@@ -730,8 +732,11 @@ impl TypeDef {
             TypeDef::Origin => {
                 Origin::get_props_for_method(self.clone(), method_name)
             }
-            TypeDef::Route => {
-                BasicRoute::get_props_for_method(self.clone(), method_name)
+            TypeDef::PrefixRoute => {
+                PrefixRoute::get_props_for_method(self.clone(), method_name)
+            }
+            TypeDef::FlowSpecRoute => {
+                FlowSpecRoute::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::RouteContext => {
                 RouteContext::get_props_for_method(self.clone(), method_name)
@@ -822,8 +827,8 @@ impl TypeDef {
             TypeDef::IpAddr => {
                 IpAddr::exec_type_method(method_token, args, return_type)
             }
-            TypeDef::Route => {
-                BasicRoute::exec_type_method(method_token, args, return_type)
+            TypeDef::PrefixRoute => {
+                PrefixRoute::exec_type_method(method_token, args, return_type)
             }
             TypeDef::Rib(_rib) => {
                 RibType::exec_type_method(method_token, args, return_type)
@@ -851,7 +856,7 @@ impl TypeDef {
                         rec.get_field_by_index(field_index).hash(state);
                     }
                 }
-                TypeValue::Builtin(BuiltinTypeValue::Route(route)) => {
+                TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(route)) => {
                     for field_index in uniq_field_indexes {
                         if !field_index.is_empty() {
                             route.hash_field(state, field_index)?;
@@ -931,8 +936,9 @@ impl std::fmt::Display for TypeDef {
             TypeDef::U16 => write!(f, "U16"),
             TypeDef::Asn => write!(f, "Asn"),
             TypeDef::IpAddr => write!(f, "IpAddress"),
-            TypeDef::Route => write!(f, "Route"),
-            TypeDef::RouteContext => write!(f, "RouteContext"),
+            TypeDef::PrefixRoute => write!(f, "Prefix Route"),
+            TypeDef::FlowSpecRoute => write!(f, "FlowSpec Route"),
+            TypeDef::RouteContext => write!(f, "Route Context"),
             TypeDef::LazyRecord(lazy_type_def) => {
                 write!(f, "Lazy Record {}", lazy_type_def.type_def())
             }
@@ -1176,7 +1182,7 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             "AsPath" => Ok(TypeDef::AsPath),
             "Hop" => Ok(TypeDef::Hop),
             "Origin" => Ok(TypeDef::Origin),
-            "Route" => Ok(TypeDef::Route),
+            "Route" => Ok(TypeDef::PrefixRoute),
             "RouteContext" => Ok(TypeDef::RouteContext),
             "Provenance" => Ok(TypeDef::Provenance),
             "Nlri" => Ok(TypeDef::Nlri),
@@ -1247,7 +1253,8 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
             "AsPath" => Ok(TypeDef::AsPath),
             "Hop" => Ok(TypeDef::Hop),
             "Origin" => Ok(TypeDef::Origin),
-            "Route" => Ok(TypeDef::Route),
+            "PrefixRoute" => Ok(TypeDef::PrefixRoute),
+            "FlowSpecRoute" => Ok(TypeDef::FlowSpecRoute),
             "RouteContext" => Ok(TypeDef::RouteContext),
             "Provenance" => Ok(TypeDef::Provenance),
             "PeerId" => Ok(TypeDef::PeerId),
@@ -1313,7 +1320,8 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::AsPath(_) => TypeDef::AsPath,
             BuiltinTypeValue::Community(_) => TypeDef::Community,
             BuiltinTypeValue::Nlri(_) => TypeDef::Nlri,
-            BuiltinTypeValue::Route(_) => TypeDef::Route,
+            BuiltinTypeValue::PrefixRoute(_) => TypeDef::PrefixRoute,
+            BuiltinTypeValue::FlowSpecRoute(_) => TypeDef::FlowSpecRoute,
             BuiltinTypeValue::RouteContext(_) => TypeDef::RouteContext,
             BuiltinTypeValue::Provenance(_) => TypeDef::Provenance,
             BuiltinTypeValue::PeerId(_) => TypeDef::PeerId,
@@ -1382,7 +1390,8 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::Community(_) => TypeDef::Community,
             BuiltinTypeValue::Nlri(_) => TypeDef::Nlri,
             BuiltinTypeValue::Origin(_) => TypeDef::Origin,
-            BuiltinTypeValue::Route(_) => TypeDef::Route,
+            BuiltinTypeValue::PrefixRoute(_) => TypeDef::PrefixRoute,
+            BuiltinTypeValue::FlowSpecRoute(_) => TypeDef::FlowSpecRoute,
             BuiltinTypeValue::RouteContext(_) => TypeDef::RouteContext,
             BuiltinTypeValue::Provenance(_) => TypeDef::Provenance,
             BuiltinTypeValue::PeerId(_) => TypeDef::PeerId,

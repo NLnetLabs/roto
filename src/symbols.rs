@@ -60,7 +60,8 @@ impl Symbol {
                 | TypeDef::Table(_)
                 | TypeDef::List(_)
                 | TypeDef::Record(_)
-                | TypeDef::Route
+                | TypeDef::PrefixRoute
+                | TypeDef::FlowSpecRoute
                 | TypeDef::Unknown
         ) {
             Ok(self.ty.clone())

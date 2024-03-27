@@ -2,7 +2,7 @@ use log::trace;
 use serde::Serialize;
 
 use super::{
-    builtin::{basic_route::BasicRoute, BuiltinTypeValue},
+    builtin::{BuiltinTypeValue, PrefixRoute},
     collections::RecordType,
     typedef::{MethodProps, RecordTypeDef, TypeDef},
     typevalue::TypeValue,
@@ -58,7 +58,7 @@ pub enum LazyRecordTypeDef {
     RouteMirroring,
     TerminationMessage,
     UpdateMessage,
-    BasicRoute,
+    PrefixRoute,
 }
 
 impl LazyRecordTypeDef {
@@ -84,7 +84,7 @@ impl LazyRecordTypeDef {
             LazyRecordTypeDef::UpdateMessage => {
                 BytesRecord::<BgpUpdateMessage>::type_def()
             }
-            LazyRecordTypeDef::BasicRoute => BasicRoute::type_def(),
+            LazyRecordTypeDef::PrefixRoute => PrefixRoute::type_def(),
         }
     }
 
@@ -110,7 +110,7 @@ impl LazyRecordTypeDef {
             LazyRecordTypeDef::UpdateMessage => {
                 BgpUpdateMessage::get_field_num()
             }
-            LazyRecordTypeDef::BasicRoute => BasicRoute::get_field_num(),
+            LazyRecordTypeDef::PrefixRoute => PrefixRoute::get_field_num(),
         }
     }
 
@@ -149,8 +149,8 @@ impl LazyRecordTypeDef {
                     method_name,
                 )
             }
-            LazyRecordTypeDef::BasicRoute => {
-                BasicRoute::get_props_for_method(ty, method_name)
+            LazyRecordTypeDef::PrefixRoute => {
+                PrefixRoute::get_props_for_method(ty, method_name)
             }
         }
     }
@@ -193,9 +193,9 @@ impl LazyRecordTypeDef {
                 trace!("LRT BgpUpdateMessage w/ field '{}'", field);
                 BytesRecord::<BgpUpdateMessage>::get_props_for_field(field)
             }
-            LazyRecordTypeDef::BasicRoute => {
+            LazyRecordTypeDef::PrefixRoute => {
                 trace!("LRT Basic Route w/ field '{}'", field);
-                BasicRoute::get_props_for_field(field)
+                PrefixRoute::get_props_for_field(field)
             }
         }
     }
@@ -246,7 +246,7 @@ impl std::fmt::Display for LazyRecordTypeDef {
                 write!(f, "TerminationMessage")
             }
             LazyRecordTypeDef::UpdateMessage => write!(f, "BgpUpdateMessage"),
-            LazyRecordTypeDef::BasicRoute => write!(f, "BasicRoute"),
+            LazyRecordTypeDef::PrefixRoute => write!(f, "BasicRoute"),
         }
     }
 }
@@ -262,7 +262,7 @@ impl From<LazyRecordTypeDef> for usize {
             LazyRecordTypeDef::TerminationMessage => 5,
             LazyRecordTypeDef::RouteMirroring => 6,
             LazyRecordTypeDef::UpdateMessage => 7,
-            LazyRecordTypeDef::BasicRoute => 8,
+            LazyRecordTypeDef::PrefixRoute => 8,
         }
     }
 }
@@ -278,7 +278,7 @@ impl From<usize> for LazyRecordTypeDef {
             5 => LazyRecordTypeDef::TerminationMessage,
             6 => LazyRecordTypeDef::RouteMonitoring,
             7 => LazyRecordTypeDef::UpdateMessage,
-            8 => LazyRecordTypeDef::BasicRoute,
+            8 => LazyRecordTypeDef::PrefixRoute,
             _ => unimplemented!(),
         }
     }

@@ -7,10 +7,16 @@ use primitives::{Nlri, NlriStatus};
 use inetnum::asn::Asn;
 use routecore::bgp::aspath::{HopPath, OwnedHop as Hop};
 use routecore::bgp::communities::HumanReadableCommunity as Community;
+use routecore::bgp::nlri::afisafi::{
+    Ipv4MulticastAddpathNlri, Ipv4MulticastNlri, Ipv4UnicastAddpathNlri, 
+    Ipv4UnicastNlri, Ipv6FlowSpecNlri, Ipv6MulticastAddpathNlri, 
+    Ipv6MulticastNlri, Ipv6UnicastAddpathNlri, Ipv6UnicastNlri
+};
 use routecore::bgp::types::PathId;
 use routecore::bgp::types::{
-    AfiSafi, LocalPref, MultiExitDisc, NextHop, Origin
+    AfiSafi as AfiSafiType, LocalPref, MultiExitDisc, NextHop, Origin
 };
+use routecore::bgp::workshop::route::RouteWorkshop;
 use serde::Serialize;
 
 //============ TypeValue ====================================================
@@ -26,7 +32,8 @@ use crate::{
 };
 
 use super::builtin::basic_route::{PeerId, PeerRibType, Provenance};
-use super::builtin::{BasicRoute, RouteContext};
+use super::builtin::{FlowSpecNlri, FlowSpecRoute, PrefixNlri, 
+    PrefixRoute, RouteContext};
 use super::lazyrecord_types::BgpUpdateMessage;
 use super::{
     builtin::{
@@ -291,8 +298,16 @@ impl TypeValue {
         }
     }
 
-    pub fn into_route(self) -> Result<BasicRoute, Self> {
-        if let TypeValue::Builtin(BuiltinTypeValue::Route(route)) = self {
+    pub fn into_prefix_route(self) -> Result<PrefixRoute, Self> {
+        if let TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(route)) = self {
+            Ok(route)
+        } else {
+            Err(self)
+        }
+    }
+
+    pub fn into_flowspec_route(self) -> Result<FlowSpecRoute<bytes::Bytes>, Self> {
+        if let TypeValue::Builtin(BuiltinTypeValue::FlowSpecRoute(route)) = self {
             Ok(route)
         } else {
             Err(self)
@@ -415,7 +430,7 @@ impl RotoType for TypeValue {
                 PrefixLength::get_props_for_method(ty, method_name)
             }
             TypeDef::AfiSafi => {
-                AfiSafi::get_props_for_method(ty, method_name)
+                AfiSafiType::get_props_for_method(ty, method_name)
             }
             TypeDef::PathId => PathId::get_props_for_method(ty, method_name),
             TypeDef::Record(_) => {
@@ -424,8 +439,11 @@ impl RotoType for TypeValue {
             TypeDef::Rib(ty) => {
                 Self::get_props_for_method(*ty.0, method_name)
             }
-            TypeDef::Route => {
-                BasicRoute::get_props_for_method(ty, method_name)
+            TypeDef::PrefixRoute => {
+                PrefixRoute::get_props_for_method(ty, method_name)
+            }
+            TypeDef::FlowSpecRoute => {
+                FlowSpecRoute::get_props_for_method(ty, method_name)
             }
             TypeDef::RouteContext => {
                 RouteContext::get_props_for_method(ty, method_name)
@@ -492,7 +510,8 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::PrefixLength(v) => v.into_type(ty),
                 BuiltinTypeValue::AfiSafi(v) => v.into_type(ty),
                 BuiltinTypeValue::PathId(v) => v.into_type(ty),
-                BuiltinTypeValue::Route(v) => v.into_type(ty),
+                BuiltinTypeValue::PrefixRoute(v) => v.into_type(ty),
+                BuiltinTypeValue::FlowSpecRoute(v) => v.into_type(ty),
                 BuiltinTypeValue::RouteContext(c) => c.into_type(ty),
                 BuiltinTypeValue::Provenance(v) => v.into_type(ty),
                 BuiltinTypeValue::NlriStatus(v) => v.into_type(ty),
@@ -722,7 +741,10 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::PrefixLength(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::Route(v) => {
+                BuiltinTypeValue::PrefixRoute(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::FlowSpecRoute(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::RouteContext(c) => {
@@ -867,7 +889,10 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::PrefixLength(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::Route(v) => {
+                BuiltinTypeValue::PrefixRoute(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::FlowSpecRoute(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::RouteContext(c) => {
@@ -1171,8 +1196,8 @@ impl PartialOrd for TypeValue {
                 None
             }
             (
-                TypeValue::Builtin(BuiltinTypeValue::Route(_)),
-                TypeValue::Builtin(BuiltinTypeValue::Route(_)),
+                TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(_)),
+                TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(_)),
             ) => {
                 debug!("Routes have no ordering.");
                 None
@@ -1441,5 +1466,94 @@ impl From<std::net::SocketAddr> for TypeValue {
         TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
             value.into()
         ))
+    }
+}
+
+impl From<RouteWorkshop<Ipv4UnicastNlri>> for TypeValue {
+    fn from(value: RouteWorkshop<Ipv4UnicastNlri>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(PrefixRoute {
+            nlri: PrefixNlri::Ipv4Unicast(*value.nlri()),
+            attributes: value.attributes().clone(),
+            next_hop: *value.nexthop(),
+        }))
+    }
+}
+
+impl From<RouteWorkshop<Ipv4UnicastAddpathNlri>> for TypeValue {
+    fn from(value: RouteWorkshop<Ipv4UnicastAddpathNlri>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(PrefixRoute {
+            nlri: PrefixNlri::Ipv4UnicastAddpath(value.nlri().clone()),
+            attributes: value.attributes().clone(),
+            next_hop: *value.nexthop(),
+        }))
+    }
+}
+
+impl From<RouteWorkshop<Ipv6UnicastNlri>> for TypeValue {
+    fn from(value: RouteWorkshop<Ipv6UnicastNlri>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(PrefixRoute {
+            nlri: PrefixNlri::Ipv6Unicast(*value.nlri()),
+            attributes: value.attributes().clone(),
+            next_hop: *value.nexthop(),
+        }))
+    }
+}
+
+impl From<RouteWorkshop<Ipv6UnicastAddpathNlri>> for TypeValue {
+    fn from(value: RouteWorkshop<Ipv6UnicastAddpathNlri>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(PrefixRoute {
+            nlri: PrefixNlri::Ipv6UnicastAddpath(value.nlri().clone()),
+            attributes: value.attributes().clone(),
+            next_hop: *value.nexthop(),
+        }))
+    }
+}
+
+impl From<RouteWorkshop<Ipv4MulticastNlri>> for TypeValue {
+    fn from(value: RouteWorkshop<Ipv4MulticastNlri>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(PrefixRoute {
+            nlri: PrefixNlri::Ipv4Multicast(*value.nlri()),
+            attributes: value.attributes().clone(),
+            next_hop: *value.nexthop(),
+        }))
+    }
+}
+
+impl From<RouteWorkshop<Ipv4MulticastAddpathNlri>> for TypeValue {
+    fn from(value: RouteWorkshop<Ipv4MulticastAddpathNlri>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(PrefixRoute {
+            nlri: PrefixNlri::Ipv4MulticastAddpath(value.nlri().clone()),
+            attributes: value.attributes().clone(),
+            next_hop: *value.nexthop(),
+        }))
+    }
+}
+
+impl From<RouteWorkshop<Ipv6MulticastNlri>> for TypeValue {
+    fn from(value: RouteWorkshop<Ipv6MulticastNlri>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(PrefixRoute {
+            nlri: PrefixNlri::Ipv6Multicast(*value.nlri()),
+            attributes: value.attributes().clone(),
+            next_hop: *value.nexthop(),
+        }))
+    }
+}
+
+impl From<RouteWorkshop<Ipv6MulticastAddpathNlri>> for TypeValue {
+    fn from(value: RouteWorkshop<Ipv6MulticastAddpathNlri>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(PrefixRoute {
+            nlri: PrefixNlri::Ipv6MulticastAddpath(value.nlri().clone()),
+            attributes: value.attributes().clone(),
+            next_hop: *value.nexthop(),
+        }))
+    }
+}
+
+impl From<RouteWorkshop<Ipv6FlowSpecNlri<bytes::Bytes>>> for TypeValue {
+    fn from(value: RouteWorkshop<Ipv6FlowSpecNlri<bytes::Bytes>>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::FlowSpecRoute(FlowSpecRoute {
+            nlri: FlowSpecNlri::Ipv6FlowSpec(value.nlri().clone()),
+            attributes: value.attributes().clone(),
+        }))
     }
 }

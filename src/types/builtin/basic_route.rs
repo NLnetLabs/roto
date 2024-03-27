@@ -7,8 +7,8 @@ use chrono::Utc;
 use routecore::bgp::communities::Community;
 use routecore::bgp::communities::HumanReadableCommunity;
 use routecore::bgp::nlri::afisafi::Ipv4FlowSpecNlri;
-use routecore::bgp::nlri::afisafi::Ipv6FlowSpecNlri;
-use routecore::bgp::nlri::afisafi::Nlri::{Ipv4FlowSpec, Ipv6FlowSpec};
+use crate::types::builtin::FlowSpecNlri::Ipv4FlowSpec;
+use routecore::bgp::nlri::afisafi::IsPrefix;
 use routecore::bgp::path_attributes::PaMap;
 use routecore::bgp::path_attributes::PathAttribute;
 use routecore::bgp::types::LocalPref;
@@ -42,30 +42,43 @@ use crate::{
 };
 
 use super::super::typevalue::TypeValue;
-use super::BasicNlri;
 use super::BuiltinTypeValue;
+use super::FlowSpecRoute;
+use super::PrefixNlri;
+use super::PrefixRoute;
 use super::{super::typedef::TypeDef, BytesRecord, NlriStatus};
 
 use inetnum::addr::Prefix;
 use inetnum::asn::Asn;
 use routecore::bgp::types::PathId;
-use routecore::bgp::nlri::afisafi::AfiSafiNlri;
 
 pub type LogicalTime = u64;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
-pub struct BasicRoute(
-    pub routecore::bgp::workshop::route::RouteWorkshop<BasicNlri>,
-);
-
-impl BasicRoute {
-
+impl PrefixRoute {
     pub fn prefix(&self) -> Prefix {
-        self.0.nlri().prefix
+        match self {
+            PrefixRoute { nlri: PrefixNlri::Ipv4Unicast(nlri), ..} => nlri.prefix(),
+            PrefixRoute { nlri: PrefixNlri::Ipv4UnicastAddpath(nlri), ..} => nlri.prefix(),
+            PrefixRoute { nlri: PrefixNlri::Ipv6Unicast(nlri), ..} => nlri.prefix(),
+            PrefixRoute { nlri: PrefixNlri::Ipv6UnicastAddpath(nlri), ..} => nlri.prefix(),
+            PrefixRoute { nlri: PrefixNlri::Ipv4Multicast(nlri), ..} => nlri.prefix(),
+            PrefixRoute { nlri: PrefixNlri::Ipv4MulticastAddpath(nlri), ..} => nlri.prefix(),
+            PrefixRoute { nlri: PrefixNlri::Ipv6Multicast(nlri), ..} => nlri.prefix(),
+            PrefixRoute { nlri: PrefixNlri::Ipv6MulticastAddpath(nlri), ..} => nlri.prefix(),
+        }
     }
 
     pub fn path_id(&self) -> Option<PathId> {
-        self.0.nlri().path_id
+        match self {
+            PrefixRoute { nlri: PrefixNlri::Ipv4Unicast(nlri), ..} => nlri.path_id(),
+            PrefixRoute { nlri: PrefixNlri::Ipv4UnicastAddpath(nlri), ..} => nlri.path_id(),
+            PrefixRoute { nlri: PrefixNlri::Ipv6Unicast(nlri), ..} => nlri.path_id(),
+            PrefixRoute { nlri: PrefixNlri::Ipv6UnicastAddpath(nlri), ..} => nlri.path_id(),
+            PrefixRoute { nlri: PrefixNlri::Ipv4Multicast(nlri), ..} => nlri.path_id(),
+            PrefixRoute { nlri: PrefixNlri::Ipv4MulticastAddpath(nlri), ..} => nlri.path_id(),
+            PrefixRoute { nlri: PrefixNlri::Ipv6Multicast(nlri), ..} => nlri.path_id(),
+            PrefixRoute { nlri: PrefixNlri::Ipv6MulticastAddpath(nlri), ..} => nlri.path_id(),
+        }
     }
 
     pub fn get_field_by_index(
@@ -83,11 +96,9 @@ impl BasicRoute {
         match index {
             // The NLRI
             Some(0) => match index_iter.next() {
-                Some(0) => Ok(TypeValue::from(self.0.nlri().prefix)),
+                Some(0) => Ok(TypeValue::from(self.prefix())),
                 Some(1) => self
-                    .0
-                    .nlri()
-                    .path_id
+                    .path_id()
                     .map(TypeValue::from)
                     .ok_or_else(|| VmError::InvalidPathAttribute),
                 _ => Err(VmError::InvalidPathAttribute),
@@ -109,7 +120,7 @@ impl BasicRoute {
                             todo!()
                             // self.0.get_attr::<NextHop>().map(TypeValue::from)
                         }
-                        8 => self.0.get_attr::<Vec<Community>>().map(|c| {
+                        8 => self.attributes.get::<Vec<Community>>().map(|c| {
                             TypeValue::List(List(
                                 c.into_iter()
                                     .map(|c| {
@@ -121,8 +132,7 @@ impl BasicRoute {
                             ))
                         }),
                         _ => self
-                            .0
-                            .attributes()
+                            .attributes
                             .get_by_type_code(index)
                             .map(|pa| TypeValue::from(pa.clone())),
                     };
@@ -152,13 +162,11 @@ impl BasicRoute {
             Some(0) => match index_iter.next() {
                 Some(0) => {
                     trace!("index {:?}", index);
-                    trace!("PREFIX! {:?}", self.0.nlri().prefix);
-                    Ok(TypeValue::from(self.0.nlri().prefix))
+                    trace!("PREFIX! {:?}", self.prefix());
+                    Ok(TypeValue::from(self.prefix()))
                 }
                 Some(1) => self
-                    .0
-                    .nlri()
-                    .path_id
+                    .path_id()
                     .map(TypeValue::from)
                     .ok_or_else(|| VmError::InvalidPathAttribute),
                 _ => Err(VmError::InvalidPathAttribute),
@@ -167,7 +175,7 @@ impl BasicRoute {
             Some(1) => {
                 if let Some(index) = index_iter.next() {
                     let attr =
-                        self.0.attributes_mut().get_mut_by_type_code(index);
+                        self.attributes.get_mut_by_type_code(index);
                     attr.map(|pa| TypeValue::from(pa.clone()))
                         .ok_or(VmError::InvalidPathAttribute)
                 } else {
@@ -185,28 +193,22 @@ impl BasicRoute {
     ) -> Result<(), VmError> {
         let index = u8::try_from(field_index.first()?)
             .map_err(|_| VmError::InvalidPathAttribute)?;
-        self.0.attributes().get_by_type_code(index).hash(state);
+        self.attributes.get_by_type_code(index).hash(state);
         Ok(())
     }
 }
 
-impl From<RouteWorkshop<BasicNlri>> for TypeValue {
-    fn from(value: RouteWorkshop<BasicNlri>) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Route(BasicRoute(value)))
+impl From<PrefixRoute> for TypeValue {
+    fn from(value: PrefixRoute) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(value))
     }
 }
 
-impl From<BasicRoute> for TypeValue {
-    fn from(value: BasicRoute) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Route(value))
+impl From<FlowSpecRoute<bytes::Bytes>> for TypeValue {
+    fn from(value: FlowSpecRoute<bytes::Bytes>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::FlowSpecRoute(value))
     }
 }
-
-// impl<O: routecore::Octets> From<RouteWorkshop<O, Ipv4UnicastNlri>> for TypeValue {
-//     fn from(_value: RouteWorkshop<O, Ipv4UnicastNlri>) -> Self {
-//         todo!()
-//     }
-// }
 
 //------------ MutableBasicRoute ---------------------------------------------
 
@@ -439,15 +441,15 @@ impl AsRef<RouteContext> for RouteContext {
     }
 }
 
-impl std::fmt::Display for BasicRoute {
+impl std::fmt::Display for PrefixRoute {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "prefix  : {}", self.prefix())?;
         writeln!(f, "path_id : {:?}", self.path_id())?;
-        writeln!(f, "attrs    : {:?}", self.0.attributes())
+        writeln!(f, "attrs    : {:?}", self.attributes)
     }
 }
 
-impl BasicRoute {
+impl PrefixRoute {
     pub(crate) fn get_field_num() -> usize {
         todo!()
     }
@@ -532,7 +534,7 @@ impl BasicRoute {
     }
 }
 
-impl RotoType for BasicRoute {
+impl RotoType for PrefixRoute {
     fn get_props_for_method(
         _ty: TypeDef,
         method_name: &crate::ast::Identifier,
@@ -604,8 +606,8 @@ impl RotoType for BasicRoute {
         type_def: &TypeDef,
     ) -> Result<TypeValue, CompileError> {
         match type_def {
-            TypeDef::Route => {
-                Ok(TypeValue::Builtin(BuiltinTypeValue::Route(self)))
+            TypeDef::PrefixRoute => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(self)))
             }
             _ => Err(format!(
                 "Cannot convert type Route to type {:?}",
@@ -646,6 +648,208 @@ impl RotoType for BasicRoute {
         self
     }
 }
+
+
+//-----------------------
+
+impl FlowSpecRoute<bytes::Bytes> {
+    pub(crate) fn get_field_num() -> usize {
+        todo!()
+    }
+    pub(crate) fn type_def() -> RecordTypeDef {
+        todo!()
+    }
+
+    pub(crate) fn get_props_for_field(
+        field_name: &ast::Identifier,
+    ) -> Result<(TypeDef, traits::Token), CompileError>
+    where
+        Self: std::marker::Sized,
+    {
+        match field_name.ident.as_str() {
+            "path-id" => Ok((
+                TypeDef::PathId,
+                Token::FieldAccess(vec![0, BasicNlriToken::PathId.into()]),
+            )),
+            // The Path Attributes. They follow the IANA BGP Attributes type
+            // codes.
+            "as-path" => Ok((
+                TypeDef::AsPath,
+                Token::FieldAccess(vec![1, BasicRouteToken::AsPath.into()]),
+            )),
+            "origin" => Ok((
+                TypeDef::Origin,
+                Token::FieldAccess(vec![
+                    1,
+                    BasicRouteToken::OriginType.into(),
+                ]),
+            )),
+            "next-hop" => Ok((
+                TypeDef::NextHop,
+                Token::FieldAccess(vec![1, BasicRouteToken::NextHop.into()]),
+            )),
+            "multi-exit-disc" => Ok((
+                TypeDef::MultiExitDisc,
+                Token::FieldAccess(vec![
+                    1,
+                    BasicRouteToken::MultiExitDisc.into(),
+                ]),
+            )),
+            "local-pref" => Ok((
+                TypeDef::LocalPref,
+                Token::FieldAccess(vec![
+                    1,
+                    BasicRouteToken::LocalPref.into(),
+                ]),
+            )),
+            "atomic-aggregate" => Ok((
+                TypeDef::Bool,
+                Token::FieldAccess(vec![
+                    1,
+                    BasicRouteToken::AtomicAggregate.into(),
+                ]),
+            )),
+            "aggregator" => Ok((
+                TypeDef::AggregatorInfo,
+                Token::FieldAccess(vec![
+                    1,
+                    BasicRouteToken::Aggregator.into(),
+                ]),
+            )),
+            "communities" => Ok((
+                TypeDef::List(Box::new(TypeDef::Community)),
+                Token::FieldAccess(vec![
+                    1,
+                    BasicRouteToken::Communities.into(),
+                ]),
+            )),
+            _ => Err(format!(
+                "Unknown method '{}' for type Route",
+                field_name.ident
+            )
+            .into()),
+        }
+    }
+}
+
+impl RotoType for FlowSpecRoute<bytes::Bytes> {
+    fn get_props_for_method(
+        _ty: TypeDef,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, CompileError>
+    where
+        Self: std::marker::Sized,
+    {
+        match method_name.ident.as_str() {
+            "path-id" => Ok(MethodProps::new(
+                TypeDef::PathId,
+                BasicNlriToken::PathId.into(),
+                vec![],
+            )),
+            "as-path" => Ok(MethodProps::new(
+                TypeDef::AsPath,
+                BasicRouteToken::AsPath.into(),
+                vec![],
+            )),
+            "origin" => Ok(MethodProps::new(
+                TypeDef::Origin,
+                BasicRouteToken::OriginType.into(),
+                vec![],
+            )),
+            "next-hop" => Ok(MethodProps::new(
+                TypeDef::NextHop,
+                BasicRouteToken::NextHop.into(),
+                vec![],
+            )),
+            "multi-exit-disc" => Ok(MethodProps::new(
+                TypeDef::MultiExitDisc,
+                BasicRouteToken::MultiExitDisc.into(),
+                vec![],
+            )),
+            "local-pref" => Ok(MethodProps::new(
+                TypeDef::LocalPref,
+                BasicRouteToken::LocalPref.into(),
+                vec![],
+            )),
+            "atomic-aggregate" => Ok(MethodProps::new(
+                TypeDef::Bool,
+                BasicRouteToken::AtomicAggregate.into(),
+                vec![],
+            )),
+            "aggregator" => Ok(MethodProps::new(
+                TypeDef::AggregatorInfo,
+                BasicRouteToken::Aggregator.into(),
+                vec![],
+            )),
+            "communities" => Ok(MethodProps::new(
+                TypeDef::List(Box::new(TypeDef::Community)),
+                BasicRouteToken::Communities.into(),
+                vec![],
+            )),
+            _ => Err(format!(
+                "Unknown method '{}' for type Route",
+                method_name.ident
+            )
+            .into()),
+        }
+    }
+
+    fn into_type(
+        self,
+        type_def: &TypeDef,
+    ) -> Result<TypeValue, CompileError> {
+        match type_def {
+            TypeDef::FlowSpecRoute => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::FlowSpecRoute(self)))
+            }
+            _ => Err(format!(
+                "Cannot convert type Route to type {:?}",
+                type_def
+            )
+            .into()),
+        }
+    }
+
+    fn exec_value_method<'a>(
+        &'a self,
+        _method: usize,
+
+        _args: &'a [StackValue],
+        _res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        Err(VmError::InvalidMethodCall)
+    }
+
+    fn exec_consume_value_method(
+        self,
+        _method_token: usize,
+        _args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        Err(VmError::InvalidMethodCall)
+    }
+
+    fn exec_type_method<'a>(
+        _method_token: usize,
+        _args: &[StackValue],
+        _res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        Err(VmError::InvalidMethodCall)
+    }
+
+    fn take_value(self) -> Self {
+        self
+    }
+}
+
+
+
+
+
+
+
+//----------------------
+
 
 #[derive(Copy, Clone, Debug, Deserialize, PartialEq, Eq)]
 pub enum BasicNlriToken {
@@ -775,6 +979,17 @@ impl From<BasicNlriToken> for u8 {
 
 //------------ FlowSpecRoute -------------------------------------------------
 
+impl From<RouteWorkshop<Ipv4FlowSpecNlri<bytes::Bytes>>> for TypeValue {
+    fn from(mut value: RouteWorkshop<Ipv4FlowSpecNlri<bytes::Bytes>>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::FlowSpecRoute(
+            FlowSpecRoute {
+                attributes: std::mem::take(value.attributes_mut()),
+                nlri: Ipv4FlowSpec(value.nlri_owned()),
+            }
+        ))
+    }
+}
+
 impl RotoType for RouteWorkshop<Ipv4FlowSpecNlri<bytes::Bytes>> {
     fn get_props_for_method(
         _ty: TypeDef,
@@ -823,25 +1038,25 @@ impl RotoType for RouteWorkshop<Ipv4FlowSpecNlri<bytes::Bytes>> {
     }
 }
 
-impl From<RouteWorkshop<Ipv4FlowSpecNlri<bytes::Bytes>>>
-    for TypeValue
-{
-    fn from(
-        value: RouteWorkshop<Ipv4FlowSpecNlri<bytes::Bytes>>,
-    ) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Nlri(Ipv4FlowSpec(value.nlri().clone())))
-    }
-}
+// impl From<RouteWorkshop<Ipv4FlowSpecNlri<bytes::Bytes>>>
+//     for TypeValue
+// {
+//     fn from(
+//         value: RouteWorkshop<Ipv4FlowSpecNlri<bytes::Bytes>>,
+//     ) -> Self {
+//         TypeValue::Builtin(BuiltinTypeValue::Nlri(Ipv4FlowSpec(value.nlri().clone())))
+//     }
+// }
 
-impl From<RouteWorkshop<Ipv6FlowSpecNlri<bytes::Bytes>>>
-    for TypeValue
-{
-    fn from(
-        value: RouteWorkshop<Ipv6FlowSpecNlri<bytes::Bytes>>,
-    ) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::Nlri(Ipv6FlowSpec(value.nlri().clone())))
-    }
-}
+// impl From<RouteWorkshop<Ipv6FlowSpecNlri<bytes::Bytes>>>
+//     for TypeValue
+// {
+//     fn from(
+//         value: RouteWorkshop<Ipv6FlowSpecNlri<bytes::Bytes>>,
+//     ) -> Self {
+//         TypeValue::Builtin(BuiltinTypeValue::Nlri(Ipv6FlowSpec(value.nlri().clone())))
+//     }
+// }
 
 //------------ Provenance ----------------------------------------------------
 
