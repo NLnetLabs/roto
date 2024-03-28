@@ -1,0 +1,9 @@
+filter foo {
+    define {
+        rx msg: U32;
+    }
+
+    apply {
+        true && false || true && false;
+    }
+}
