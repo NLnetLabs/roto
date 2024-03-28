@@ -6,6 +6,7 @@ use std::net::SocketAddr;
 use chrono::Utc;
 use routecore::bgp::communities::Community;
 use routecore::bgp::communities::HumanReadableCommunity;
+use routecore::bgp::message::update_builder::ComposeError;
 use routecore::bgp::nlri::afisafi::Ipv4FlowSpecNlri;
 use routecore::bgp::nlri::afisafi::Ipv4UnicastNlri;
 use routecore::bgp::nlri::afisafi::Ipv4UnicastAddpathNlri;
@@ -150,6 +151,31 @@ impl PrefixRoute {
             super::PrefixRouteWs::Ipv6Multicast(rws) => rws.get_attr::<A>(),
             super::PrefixRouteWs::Ipv6MulticastAddpath(rws) => rws.get_attr::<A>(),
             _ => None
+        }
+    }
+
+    pub fn set_attr<A: WorkshopAttribute<Ipv4UnicastNlri>
+         + WorkshopAttribute<Ipv4UnicastAddpathNlri>
+         + WorkshopAttribute<Ipv6UnicastNlri>
+         + WorkshopAttribute<Ipv6UnicastAddpathNlri>
+         + WorkshopAttribute<Ipv4MulticastNlri>
+         + WorkshopAttribute<Ipv4MulticastAddpathNlri>
+         + WorkshopAttribute<Ipv6MulticastNlri>
+         + WorkshopAttribute<Ipv6MulticastAddpathNlri>
+    >(
+        &mut self,
+        value: A
+    ) -> Result<(), ComposeError> {
+        match &mut self.0 {
+            super::PrefixRouteWs::Ipv4Unicast(rws) => rws.set_attr::<A>(value),
+            super::PrefixRouteWs::Ipv4UnicastAddpath(rws) => rws.set_attr::<A>(value),
+            super::PrefixRouteWs::Ipv6Unicast(rws) => rws.set_attr::<A>(value),
+            super::PrefixRouteWs::Ipv6UnicastAddpath(rws) => rws.set_attr::<A>(value),
+            super::PrefixRouteWs::Ipv4Multicast(rws) => rws.set_attr::<A>(value),
+            super::PrefixRouteWs::Ipv4MulticastAddpath(rws) => rws.set_attr::<A>(value),
+            super::PrefixRouteWs::Ipv6Multicast(rws) => rws.set_attr::<A>(value),
+            super::PrefixRouteWs::Ipv6MulticastAddpath(rws) => rws.set_attr::<A>(value),
+            _ => Err(ComposeError::InvalidAttribute)
         }
     }
 
