@@ -1,0 +1,13 @@
+filter foo {
+	define {
+		rx msg: BmpMessage;
+		a = true;
+		b = 4;
+	}
+
+	term foo {
+		match {
+			a == b;
+		}
+	}	
+}

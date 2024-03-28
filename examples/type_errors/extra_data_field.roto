@@ -1,0 +1,11 @@
+filter foo {
+	define {
+		rx msg: RouteStatus;
+	}
+
+	term bar {
+		match msg with {
+			Stale(x) -> true, // should error here
+		} 
+	}
+}

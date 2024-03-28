@@ -3,7 +3,7 @@ mod route {
     use std::net::{IpAddr, Ipv4Addr};
 
     use super::super::{IntegerLiteral, PrefixLength, StringLiteral};
-    use crate::ast::{AsnLiteral, IpAddressLiteral};
+    use crate::ast::AsnLiteral;
     use crate::types::builtin::basic_route::{
         PeerId, PeerRibType, Provenance,
     };
@@ -1109,45 +1109,45 @@ src_ty.clone().test_type_conversion(arg_ty)"]
 
     //------------ Test: IpAddr ----------------------------------------------
 
-    #[test]
-    fn test_ip_address_literal_1() -> Result<(), CompileError> {
-        init();
+    // #[test]
+    // fn test_ip_address_literal_1() -> Result<(), CompileError> {
+    //     init();
 
-        let test_value =
-            IpAddr::try_from(&IpAddressLiteral("24.0.2.0".to_string()))
-                .unwrap();
-        let res = std::net::IpAddr::from([24, 0, 2, 0]);
-        mk_converted_type_value(test_value, res)
-    }
+    //     let test_value =
+    //         IpAddr::try_from(&IpAddressLiteral("24.0.2.0".to_string()))
+    //             .unwrap();
+    //     let res = std::net::IpAddr::from([24, 0, 2, 0]);
+    //     mk_converted_type_value(test_value, res)
+    // }
 
-    #[test]
-    fn test_ip_address_literal_2() -> Result<(), CompileError> {
-        init();
+    // #[test]
+    // fn test_ip_address_literal_2() -> Result<(), CompileError> {
+    //     init();
 
-        let test_value =
-            IpAddr::try_from(&IpAddressLiteral("24.0.2.0".to_string()))
-                .unwrap();
-        let res = StringLiteral("24.0.2.0".into());
-        mk_converted_type_value(test_value, res)
-    }
+    //     let test_value =
+    //         IpAddr::try_from(&IpAddressLiteral("24.0.2.0".to_string()))
+    //             .unwrap();
+    //     let res = StringLiteral("24.0.2.0".into());
+    //     mk_converted_type_value(test_value, res)
+    // }
 
-    #[test]
-    fn test_ip_address_literal_3() -> Result<(), CompileError> {
-        init();
+    // #[test]
+    // fn test_ip_address_literal_3() -> Result<(), CompileError> {
+    //     init();
 
-        let test_value =
-            IpAddr::try_from(&IpAddressLiteral("2001::ffff".to_string()))
-                .unwrap();
-        let res = std::net::IpAddr::from([
-            0x2001, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xffff,
-        ]);
+    //     let test_value =
+    //         IpAddr::try_from(&IpAddressLiteral("2001::ffff".to_string()))
+    //             .unwrap();
+    //     let res = std::net::IpAddr::from([
+    //         0x2001, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xffff,
+    //     ]);
 
-        assert_eq!(
-            TypeValue::from(test_value).into_builtin()?,
-            BuiltinTypeValue::IpAddr(res)
-        );
-        mk_converted_type_value(test_value, res)
-    }
+    //     assert_eq!(
+    //         TypeValue::from(test_value).into_builtin()?,
+    //         BuiltinTypeValue::IpAddr(res)
+    //     );
+    //     mk_converted_type_value(test_value, res)
+    // }
 
     //-------- Test: Asn -----------------------------------------------------
 

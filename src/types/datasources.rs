@@ -47,9 +47,9 @@ impl DataSource {
         }
     }
 
-    // methods on a data source can indicate whether they are returning a
-    // value created by the method or a reference to a value in the data
-    // source itself, through the TableMethodValue enum.
+    /// Methods on a data source can indicate whether they are returning a
+    /// value created by the method or a reference to a value in the data
+    /// source itself, through the [`DataSourceMethodValue`] enum.
     pub(crate) fn exec_method(
         &self,
         method_token: usize,
@@ -115,8 +115,8 @@ use super::{
     typevalue::TypeValue,
 };
 
-// This data-structure only exists to populate the static methods for the type
-// `Rib`, e.g. the methods `Rib::method_name()` and their properties.
+/// This data-structure only exists to populate the static methods for the type
+/// `Rib`, e.g. the methods `Rib::method_name()` and their properties.
 #[derive(Debug)]
 pub struct RibType {
     pub(crate) ty: TypeDef,
@@ -188,13 +188,13 @@ impl From<RibToken> for usize {
     }
 }
 
-// Wrapper around a prefix store so that it can be used by Roto as an
-// external source of data. See [DataSource] for further details of
-// how it gets shared.
+/// Wrapper around a prefix store so that it can be used by Roto as an
+/// external source of data. See [`DataSource`] for further details of
+/// how it gets shared.
 pub struct Rib<M: Meta> {
-    // The definition of the Roto type as exposed to Roto scripts.
-    // Doesn't necessarily have to be the Meta-data type that is stored in
-    // the prefix store.
+    /// The definition of the Roto type as exposed to Roto scripts.
+    /// Doesn't necessarily have to be the Meta-data type that is stored in
+    /// the prefix store.
     pub name: ShortString,
     pub ty: TypeDef,
     pub store: rotonda_store::MultiThreadedStore<M>,

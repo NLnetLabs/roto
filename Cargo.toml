@@ -17,6 +17,7 @@ log = "0.4"
 arc-swap        = "^1.6"
 bytes           = { version = "1.5", features = [ "serde" ] }
 chrono             = "0.4"
+logos           = "0.14.0"
 nom             = "7.1"
 paste           = "1.0.14"
 smallvec        = { version = "1.11", features = [ "const_generics", "serde" ] }
@@ -25,7 +26,9 @@ inetnum         = { version = "0.1.0", features = ["arbitrary", "serde"] }
 rotonda-store   = { git = "https://github.com/nlnetlabs/rotonda-store", branch = "main" }
 routecore       = { git = "https://github.com/nlnetlabs/routecore", rev = "920fd", features = ["bgp", "bmp", "serde"]}
 # routecore       = { path = "../../routecore-pab", features = ["bgp", "bmp", "serde"] }
+clap            = { version = "4.4.6", features = ["derive"] }
+ariadne         = "0.4.0"
 
 [dev-dependencies]
 env_logger  = "0.10"
-routes      = { version = "0.1.0" }
+routes      = { git = "https://github.com/nlnetlabs/routes", branch = "main" }

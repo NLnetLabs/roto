@@ -1,9 +1,9 @@
 use log::trace;
 use roto::ast::AcceptReject;
-use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self, FilterMap};
 use roto::types::builtin::{NlriStatus, PeerId, PeerRibType, Provenance, RouteContext};
+use roto::pipeline;
 use roto::types::collections::Record;
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
@@ -91,10 +91,8 @@ fn test_data(
 ) -> Result<VmResult, Box<dyn std::error::Error>> {
     trace!("Evaluate filter-map {}...", name);
 
-    let c = Compiler::new();
-    let roto_packs = c.build_from_compiler(source_code)?;
-
-    let roto_pack = roto_packs.retrieve_pack_as_refs(&name)?;
+    let rotolo = pipeline::run_test(source_code, None)?;
+    let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
     let asn: TypeValue = Asn::from_u32(211321).into();
 
     println!("ASN {:?}", asn);
@@ -201,8 +199,7 @@ fn test_list_compare_5() {
         src_code(r#""stringetje" in [2,3,4,5,1]; // Peer Down"#, "reject");
     let test_run = test_data(FilterMap("in-filter-map".into()), &src_line);
 
-    let VmResult { accept_reject, .. } = test_run.unwrap();
-    assert_eq!(accept_reject, AcceptReject::Accept);
+    test_run.unwrap_err();
 }
 
 #[test]

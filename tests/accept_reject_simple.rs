@@ -1,9 +1,9 @@
 use log::{info, trace};
 use roto::ast::AcceptReject;
-use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self, FilterMap};
 use roto::types::builtin::{NlriStatus, PeerId, PeerRibType, Provenance, RouteContext};
+use roto::pipeline;
 use roto::types::collections::Record;
 use roto::types::typedef::TypeDef;
 use roto::vm::{self, VmResult};
@@ -19,7 +19,7 @@ fn test_data(
     info!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
-    let rotolo = Compiler::build(source_code)?;
+    let rotolo = pipeline::run_test(source_code, None)?;
     let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     let payload_type =
@@ -118,7 +118,10 @@ fn test_filter_map_10() {
     );
     let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
 
-    assert!(test_run.is_ok());
+    if let Err(e) = &test_run {
+        println!("{}", e);
+        assert!(false);
+    }
 
     let VmResult { accept_reject, .. } = test_run.unwrap();
     assert_eq!(accept_reject, AcceptReject::Accept);
@@ -180,8 +183,6 @@ fn test_filter_map_21() {
         "reject",
     );
     let test_run = test_data(FilterMap("my-filter-map".into()), src_line);
-
-    assert!(test_run.is_ok());
 
     let VmResult { accept_reject, .. } = test_run.unwrap();
     assert_eq!(accept_reject, AcceptReject::Reject);

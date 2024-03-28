@@ -1,3 +1,32 @@
+//! # The Compiler (Filter creation time)
+//!
+//! Our starting point here is the Global Symbol Table that falls out of the
+//! evaluation of the AST.
+//!
+//! First, the `arguments` map is left alone, all of the values for the
+//! arguments supplied by the caller at filter runtime. All the entries in the
+//! `variables` map could now be compiled to their tokenized values. But, that
+//! may be too much, since a user can declare variables that are never used
+//! anywhere. Therefore we start from the other side, and go over the terms
+//! first and then tokenize all the arguments encountered there. That way we
+//! can signal to the user which variables are actually not used.
+//!
+//! # The Virtual Machine (Filter RunTime)
+//!
+//! The virtual machine starts at each run of a filter and will be called with
+//! the input payload and the with arguments from the `define` section of the
+//! filter-filter-map.
+//!
+//! Our starting point here is the Global Symbol Table that falls out of the
+//! evaluation of the AST.
+//!
+//! First, the `arguments` map is left alone, all of its values should be
+//! supplied by the caller. All the entries in the `variables` map could now
+//! be interpreted to their final values. But that could be too much work,
+//! since users may specify any number of variables that are not actually used
+//! in the filter run-time. If we start from interpreting the terms then we'll
+//! bump only into the variables that are actually used.
+
 use std::{
     collections::VecDeque,
     fmt::{Display, Formatter},
@@ -5,10 +34,9 @@ use std::{
 };
 
 use log::{log_enabled, trace, Level};
-use nom::error::VerboseError;
 
 use crate::{
-    ast::{self, AcceptReject, FilterType, ShortString, SyntaxTree},
+    ast::{self, AcceptReject, FilterType, ShortString},
     blocks::Scope,
     compiler::recurse_compile::recurse_compile,
     symbols::{
@@ -16,10 +44,10 @@ use crate::{
         SymbolKind, SymbolTable,
     },
     traits::Token,
-    types::{datasources::DataSource, typevalue::TypeValue},
     types::{
-        datasources::Table,
+        datasources::{DataSource, Table},
         typedef::{RecordTypeDef, TypeDef},
+        typevalue::TypeValue,
     },
     vm::{
         compute_hash, Command, CommandArg, CompiledCollectionField,
@@ -30,33 +58,6 @@ use crate::{
 };
 
 pub use crate::compiler::error::CompileError;
-
-//============ The Compiler (Filter creation time) ==========================
-
-// Our starting point here is the Global Symbol Table that falls out of the
-// evaluation of the AST.
-// First, the `arguments` map is left alone, all of the values for the
-// arguments supplied by the caller at filter runtime. All the entries in the
-// `variables` map could now be compiled to their tokenized values. But, that
-// may be too much, since a user can declare variables that are never used
-// anywhere. Therefore we start from the other side, and go over the terms
-// first and then tokenize all the arguments encountered there. That way we
-// can signal to the user which variables are actually not used.
-
-//============ The Virtual Machine (Filter RunTime) =========================
-
-// The virtual machine starts at each run of a filter and will be called with
-// the input payload and the with arguments from the `define` section of the
-// filter-filter-map.
-
-// Our starting point here is the Global Symbol Table that falls out of the
-// evaluation of the AST.
-// First, the `arguments` map are left alone, all of their values should be
-// supplied by the caller. All the entries in the `variables` map could now
-// be interpreted to their final values. But that could be too much work,
-// since users may specify any number of variables that are not actually used
-// in the filter run-time. If we start from interpreting the terms then we'll
-// bump only into the variables that are actually used.
 
 //========================== Compiler ========================================
 
@@ -454,50 +455,50 @@ pub(crate) type Action<'a> = &'a Symbol;
 #[derive(Debug)]
 pub(crate) struct CompilerState<'a> {
     cur_filter_map: &'a SymbolTable,
-    // the vec of symbols that hold all the variables that were referenced in
-    // the actions -> terms -> define chain in the source code, i.e. only
-    // actions that reference terms that reference variables that we're
-    // defined in the `Define` section are stored here (as symbols). These
-    // variables are guaranteed to be necessary, no matter how the code
-    // branches. The compiler will unconditionally compile these symbols and
-    // store them at the start of the MIR code.
+    /// the vec of symbols that hold all the variables that were referenced in
+    /// the actions -> terms -> define chain in the source code, i.e. only
+    /// actions that reference terms that reference variables that we're
+    /// defined in the `Define` section are stored here (as symbols). These
+    /// variables are guaranteed to be necessary, no matter how the code
+    /// branches. The compiler will unconditionally compile these symbols and
+    /// store them at the start of the MIR code.
     used_variables: Variables<'a>,
-    // map of variable tokens -> memory positions to use when reading a
-    // variable, filled by the compiler when compiling the `used_variables`.
+    /// map of variable tokens -> memory positions to use when reading a
+    /// variable, filled by the compiler when compiling the `used_variables`.
     pub(crate) variable_ref_table: VariablesRefTable,
     used_data_sources: DataSources<'a>,
-    // The cache of all arguments, global or local with their associated
-    // symbol and code block to generate the retrieval of its value. Note
-    // that this cache cannot be used to figure out if a argument is defined
-    // in a particular scope. For the latter purpose the local_scope vec that
-    // is passed around from eval to nested eval method is used. When the
-    // compiler kicks in, this should already been all solved by the
-    // evaluator. Having said that each argument for each scope has a unique
-    // index, the first element in the tuples it stores is a
-    // Token::ActionArgument or Token::TermArgument. That token has *two*
-    // usize in it, one that corresponds to the ACtionSection or TermSection
-    // it was defined in (it is the value of the token of the section, which
-    // is an index from the enumeration of sections in the source code). The
-    // second usize is the index of the `with` argument of the enumeration of
-    // all the `with` arguments in that section. Currently only one is
-    // allowed, btw.
+    /// The cache of all arguments, global or local with their associated
+    /// symbol and code block to generate the retrieval of its value. Note
+    /// that this cache cannot be used to figure out if a argument is defined
+    /// in a particular scope. For the latter purpose the local_scope vec that
+    /// is passed around from eval to nested eval method is used. When the
+    /// compiler kicks in, this should already been all solved by the
+    /// evaluator. Having said that each argument for each scope has a unique
+    /// index, the first element in the tuples it stores is a
+    /// Token::ActionArgument or Token::TermArgument. That token has *two*
+    /// usize in it, one that corresponds to the ACtionSection or TermSection
+    /// it was defined in (it is the value of the token of the section, which
+    /// is an index from the enumeration of sections in the source code). The
+    /// second usize is the index of the `with` argument of the enumeration of
+    /// all the `with` arguments in that section. Currently only one is
+    /// allowed, btw.
     pub(crate) used_arguments: Arguments<'a>,
     pub(crate) cur_mir_block: MirBlock,
-    // This holds the flattened stack-friendly data-structure for a variable,
-    // up until the current field index, if the variable is a scalar, then the
-    // field index is an empty (small)vec.
+    /// This holds the flattened stack-friendly data-structure for a variable,
+    /// up until the current field index, if the variable is a scalar, then the
+    /// field index is an empty (small)vec.
     pub(crate) cur_partial_variable: Option<CompiledVariable>,
-    // This keeps track of the depth in the original record, while compiling
-    // recursively.
+    /// This keeps track of the depth in the original record, while compiling
+    /// recursively.
     pub(crate) cur_record_depth: usize,
-    // This keeps track of the current field we are recursively compiling,
+    /// This keeps track of the current field we are recursively compiling,
     pub(crate) cur_record_field_index: FieldIndex,
-    // The name of the Record we are currently (recursively) compiling.
+    /// The name of the Record we are currently (recursively) compiling.
     pub(crate) cur_record_field_name: Option<ShortString>,
-    // The type of the Record we are currently (recursively) compiling.
+    /// The type of the Record we are currently (recursively) compiling.
     pub(crate) cur_record_type: Option<RecordTypeDef>,
-    // the memory position that is currently empty and available to be
-    // written to.
+    /// the memory position that is currently empty and available to be
+    /// written to.
     pub(crate) cur_mem_pos: u32,
     var_read_only: bool,
     compiled_terms: TermSections<'a>,
@@ -632,35 +633,19 @@ impl<'a> CompilerState<'a> {
 /// all phases.
 #[derive(Debug, Default)]
 pub struct Compiler {
-    pub ast: SyntaxTree,
     symbols: GlobalSymbolTable,
     // Compile time arguments
     arguments: Vec<(Scope, Vec<(ShortString, TypeValue)>)>,
     // data_sources: Vec<(&'a str, Arc<DataSource>)>,
 }
 
-impl<'a> Compiler {
-    pub fn new() -> Self {
+impl Compiler {
+    pub fn new(symbols: GlobalSymbolTable) -> Self {
         Compiler {
-            ast: SyntaxTree::default(),
-            symbols: GlobalSymbolTable::new(),
-            arguments: vec![],
+            symbols,
+            arguments: Vec::new(),
             // data_sources: vec![],
         }
-    }
-
-    pub fn parse_source_code(
-        &mut self,
-        source_code: &'a str,
-    ) -> Result<(), VerboseError<&'a str>> {
-        self.ast = SyntaxTree::parse_str(source_code)?.1;
-
-        Ok(())
-    }
-
-    pub fn eval_ast(&mut self) -> Result<(), CompileError> {
-        self.ast.eval(self.symbols.clone())?;
-        Ok(())
     }
 
     pub fn inject_compile_time_arguments(
@@ -686,15 +671,15 @@ impl<'a> Compiler {
                         )
                     ))?;
 
-                if _arg.get_type() == arg.1 {
-                    _arg.set_value(arg.1.clone());
+                if _arg.ty == arg.1 {
+                    _arg.value = arg.1.clone();
                 } else {
                     return Err(
                         CompileError::from(
                             format!(
                                 "Argument '{}' has the wrong type, expected '{}', got '{}'",
                                 arg.0,
-                                _arg.get_type(),
+                                _arg.ty,
                                 TypeDef::from(&arg.1),
                             )
                         )
@@ -762,27 +747,25 @@ impl<'a> Compiler {
         &mut self,
         filter_map_scope: &Scope,
         args: Vec<(&str, TypeValue)>,
-    ) -> Result<(), CompileError> {
+    ) {
         self.arguments.push((
             filter_map_scope.clone(),
             args.into_iter().map(|a| (a.0.into(), a.1)).collect(),
         ));
-
-        Ok(())
     }
 
-    pub fn build(source_code: &'a str) -> Result<Rotolo, CompileError> {
-        Compiler::new().build_from_compiler(source_code)
-    }
-
-    pub fn build_from_compiler(
-        mut self,
-        source_code: &'a str,
+    pub fn build(
+        symbols: GlobalSymbolTable,
+        arguments: Option<(&Scope, Vec<(&str, TypeValue)>)>,
     ) -> Result<Rotolo, CompileError> {
-        self.parse_source_code(source_code)
-            .map_err(|err| format!("Parse error: {err}"))?;
-        self.eval_ast()
-            .map_err(|err| format!("Eval error: {err}"))?;
+        let mut c = Compiler::new(symbols);
+        if let Some(arguments) = arguments {
+            c.with_arguments(arguments.0, arguments.1);
+        }
+        c.build_from_compiler()
+    }
+
+    pub fn build_from_compiler(mut self) -> Result<Rotolo, CompileError> {
         self.inject_compile_time_arguments()
             .map_err(|op| format!("Argument error: {}", op))?;
         self.compile()
@@ -859,7 +842,7 @@ impl Clone for MirBlock {
 // stack.
 pub(crate) fn generate_code_for_token_value(
     state: &CompilerState,
-    token: Token,
+    token: &Token,
 ) -> Vec<Command> {
     match token {
         Token::RxType(_) => {
@@ -873,15 +856,14 @@ pub(crate) fn generate_code_for_token_value(
         }
         Token::Variable(var_to) => {
             if let Some(var) = state.used_variables.iter().find(|(_, var)| {
-                var.get_token()
+                var.token
+                    .clone()
                     .try_into()
-                    .is_ok_and(|var: usize| var == var_to)
+                    .is_ok_and(|var: usize| var == *var_to)
             }) {
                 vec![Command::new(
                     OpCode::PushStack,
-                    vec![CommandArg::ConstantIndex(
-                        var.1.get_value().clone(),
-                    )],
+                    vec![CommandArg::ConstantIndex(var.1.value.clone())],
                 )]
             } else {
                 vec![]
@@ -891,7 +873,7 @@ pub(crate) fn generate_code_for_token_value(
         Token::Variant(_) => todo!(),
         Token::Argument(_) => {
             if let Some((_, _, code_block)) =
-                state.used_arguments.iter().find(|(to, _, _)| to == &token)
+                state.used_arguments.iter().find(|(to, _, _)| to == token)
             {
                 code_block.clone()
             } else {
@@ -900,7 +882,7 @@ pub(crate) fn generate_code_for_token_value(
         }
         Token::ActionArgument(_, _) => {
             if let Some((_, _, code_block)) =
-                state.used_arguments.iter().find(|(to, _, _)| to == &token)
+                state.used_arguments.iter().find(|(to, _, _)| to == token)
             {
                 code_block.clone()
             } else {
@@ -909,7 +891,7 @@ pub(crate) fn generate_code_for_token_value(
         }
         Token::TermArgument(_, _) => {
             if let Some((_, _, code_block)) =
-                state.used_arguments.iter().find(|(to, _, _)| to == &token)
+                state.used_arguments.iter().find(|(to, _, _)| to == token)
             {
                 code_block.clone()
             } else {
@@ -959,7 +941,7 @@ fn compile_filter_map(
         used_data_sources,
         used_arguments: used_arguments
             .into_iter()
-            .map(|(_n, s)| (s.get_token(), s, vec![]))
+            .map(|(_n, s)| (s.token.clone(), s, vec![]))
             .collect::<Vec<_>>(),
         compiled_terms: TermSections::new(),
         compiled_action_sections: ActionSections::new(),
@@ -983,16 +965,16 @@ fn compile_filter_map(
         state
             .used_arguments
             .iter()
-            .for_each(|s| trace!("{:?}: {:?}", s.1.get_token(), s.0));
+            .for_each(|s| trace!("{:?}: {:?}", s.1.token, s.0));
 
         trace!("___used vars");
         state.used_variables.iter().for_each(|s| {
-            trace!("{:?} {:?}", s.1.get_token(), s.0);
+            trace!("{:?} {:?}", s.1.token, s.0);
         });
 
         trace!("___used data_sources");
         state.used_data_sources.iter().for_each(|t| {
-            trace!("{:?} {:?}", t.1.get_token(), t.0);
+            trace!("{:?} {:?}", t.1.token, t.0);
         });
 
         trace!("___rx tx types");
@@ -1025,9 +1007,9 @@ fn compile_filter_map(
         .iter_mut()
         .map(|a| {
             FilterMapArg::new(
-                &a.1.get_name(),
-                a.1.get_token(),
-                a.1.get_type(),
+                &a.1.name,
+                a.1.token.clone(),
+                a.1.ty.clone(),
                 TypeValue::UnInit,
             )
         })
@@ -1038,9 +1020,8 @@ fn compile_filter_map(
     // table does not have (the right) type defs for data sources.
     let mut data_sources = vec![];
     for ds in state.used_data_sources {
-        let name = ds.1.get_name();
-        let resolved_ds = if let Ok(ds) = global_table.get_data_source(&name)
-        {
+        let name = &ds.1.name;
+        let resolved_ds = if let Ok(ds) = global_table.get_data_source(name) {
             ds
         } else {
             return Err(CompileError::from(format!(
@@ -1053,7 +1034,7 @@ fn compile_filter_map(
         // in the declaration in the source code. he actual source data
         // will only be needed at run-time
         data_sources.push(ExtDataSource::new(
-            &name,
+            name,
             resolved_ds.1,
             resolved_ds.0,
         )?)
@@ -1070,12 +1051,12 @@ fn compile_filter_map(
     ))
 }
 
-// Compiles the variable assignments, creates a MirBlock that retrieves and/or
-// computes the value of the variable and stores it in the
-// `variables_ref_table` map. Note that in cases where the variables
-// assignments points to a field access, the access receiver of the assignment
-// is stored together with the field_index on the access receiver that points
-// to the actual variable assignment.
+/// Compiles the variable assignments, creates a MirBlock that retrieves and/or
+/// computes the value of the variable and stores it in the
+/// `variables_ref_table` map. Note that in cases where the variables
+/// assignments points to a field access, the access receiver of the assignment
+/// is stored together with the field_index on the access receiver that points
+/// to the actual variable assignment.
 fn compile_assignments(
     mut state: CompilerState<'_>,
 ) -> Result<CompilerState<'_>, CompileError> {
@@ -1101,18 +1082,18 @@ fn compile_assignments(
             state.cur_mem_pos
         );
 
-        let s = _filter_map.get_variable_by_token(&var.1.get_token())?;
+        let s = _filter_map.get_variable_by_token(&var.1.token)?;
 
-        for arg in s.get_args() {
+        for arg in &s.args {
             trace!(
                 "arg {:?} {:?} {:?} {:?}",
-                arg.get_name(),
-                arg.get_token(),
-                arg.get_type(),
-                arg.get_kind()
+                arg.name,
+                arg.token,
+                arg.ty,
+                arg.kind
             );
 
-            match arg.get_type() {
+            match &arg.ty {
                 TypeDef::Record(_rec_type) => {
                     trace!("RECORD TYPE");
                     trace!("{:#?}", arg);
@@ -1120,22 +1101,22 @@ fn compile_assignments(
                     state.init_current_record_tracker_with_collection();
 
                     state.cur_record_type =
-                        if let TypeDef::Record(rec_type) = arg.get_type() {
-                            Some(rec_type)
+                        if let TypeDef::Record(rec_type) = &arg.ty {
+                            Some(rec_type.clone())
                         } else {
                             None
                         };
 
                     state = recurse_compile(arg, state, None, false)?;
 
-                    trace!("inserting {:#?}", var.1.get_token());
+                    trace!("inserting {:#?}", var.1.token);
                     state.variable_ref_table.insert(
-                        var.1.get_token(),
+                        var.1.token.clone(),
                         state.cur_partial_variable.clone().ok_or_else(
                             || {
                                 CompileError::Internal(format!(
                                     "Cannot compile variable: {:?}",
-                                    var.1.get_name()
+                                    var.1.name
                                 ))
                             },
                         )?,
@@ -1149,14 +1130,14 @@ fn compile_assignments(
 
                     state = recurse_compile(arg, state, None, false)?;
 
-                    trace!("inserting {:#?}", var.1.get_token());
+                    trace!("inserting {:#?}", var.1.token);
                     state.variable_ref_table.insert(
-                        var.1.get_token(),
+                        var.1.token.clone(),
                         state.cur_partial_variable.clone().ok_or_else(
                             || {
                                 CompileError::Internal(format!(
                                     "Cannot compile list: {:?}",
-                                    var.1.get_name()
+                                    var.1.name
                                 ))
                             },
                         )?,
@@ -1174,14 +1155,14 @@ fn compile_assignments(
                         state.cur_partial_variable
                     );
                     state.variable_ref_table.set_primitive(
-                        var.1.get_token().try_into()?,
+                        var.1.token.clone().try_into()?,
                         state
                             .cur_partial_variable
                             .clone()
                             .ok_or_else(|| {
                                 CompileError::Internal(format!(
                                     "Cannot compile record: {:?}",
-                                    var.1.get_name()
+                                    var.1.name
                                 ))
                             })?
                             .get_accumulated_commands(),
@@ -1250,7 +1231,7 @@ fn compile_apply_section(
                 // section
                 let enum_instance_code_block = generate_code_for_token_value(
                     &state,
-                    match_action.get_token(),
+                    &match_action.get_token(),
                 );
 
                 state.cur_mem_pos += 1;
@@ -1272,19 +1253,19 @@ fn compile_apply_section(
                 for variant in match_action.get_args() {
                     trace!(
                         "compiling variant {} for enum {}...",
-                        variant.get_name(),
+                        variant.name,
                         match_action.get_name()
                     );
                     // The variant here is a symbol that must be of kind
                     // EnumVariant, must have a Token::Variant as its token.
                     assert_eq!(
-                        variant.get_kind(),
+                        variant.kind,
                         symbols::SymbolKind::EnumVariant
                     );
                     state.push_command(
                         OpCode::Label,
                         vec![CommandArg::Label(
-                            format!("VARIANT {}", variant.get_name())
+                            format!("VARIANT {}", variant.name)
                                 .as_str()
                                 .into(),
                         )],
@@ -1294,8 +1275,7 @@ fn compile_apply_section(
                     // handling currently. StackUnPackAsVariant will set
                     // TypeValue::Unknown if this is not the variant we're
                     // looking for at runtime.
-                    if let Token::Variant(variant_index) = variant.get_token()
-                    {
+                    if let Token::Variant(variant_index) = variant.token {
                         // if this is *not* the first variant we first want
                         // to pop the top of the stack, since that will
                         // contain the bool value of the last variant
@@ -1318,7 +1298,7 @@ fn compile_apply_section(
                     } else {
                         return Err(CompileError::from(format!(
                             "Expected an Enum Variant, but got a {:?}",
-                            variant.get_token()
+                            variant.token
                         )));
                     }
 
@@ -1326,18 +1306,18 @@ fn compile_apply_section(
                     // ActionCall and, all have tokens
                     // Token::ActionSection or Token::NoAction.
 
-                    for action_section in variant.get_args() {
+                    for action_section in &variant.args {
                         // Check if the user defined a guard for this variant
 
                         // GUARD START ---------------------------------------
 
-                        if action_section.get_kind() == SymbolKind::TermCall {
+                        if action_section.kind == SymbolKind::TermCall {
                             trace!("found guard");
                             // See if it was already compiled earlier on.
                             let term_name = state
                                 .compiled_terms
                                 .iter()
-                                .find(|t| t.0 == action_section.get_name());
+                                .find(|t| t.0 == action_section.name);
 
                             match term_name {
                                 // yes, it was, create a reference to the
@@ -1355,7 +1335,7 @@ fn compile_apply_section(
                                                     vec![CommandArg::Label(
                                                         format!(
                                         "COPY TERM SECTION RESULT {}",
-                                        action_section.get_name().clone()
+                                        action_section.name.clone()
                                     )
                                                         .as_str()
                                                         .into(),
@@ -1378,8 +1358,7 @@ fn compile_apply_section(
                                     let term = terms
                                         .iter()
                                         .find(|t| {
-                                            t.get_name()
-                                                == action_section.get_name()
+                                            t.name == action_section.name
                                         })
                                         .ok_or_else(|| {
                                             CompileError::Internal(format!(
@@ -1405,7 +1384,7 @@ fn compile_apply_section(
                                     // to this term can directly use the result instead of doing the whole
                                     // computation again.
                                     state.compiled_terms.push((
-                                        action_section.get_name().clone(),
+                                        action_section.name.clone(),
                                         state.cur_mem_pos.into(),
                                     ));
                                 }
@@ -1419,25 +1398,25 @@ fn compile_apply_section(
                         trace!("ACTION SECTION {:#?}", action_section);
 
                         assert!(
-                            action_section.get_type()
+                            action_section.ty
                                 == TypeDef::AcceptReject(
                                     AcceptReject::Accept
                                 )
-                                || action_section.get_type()
+                                || action_section.ty
                                     == TypeDef::AcceptReject(
                                         AcceptReject::Reject
                                     )
-                                || action_section.get_type()
+                                || action_section.ty
                                     == TypeDef::AcceptReject(
                                         AcceptReject::NoReturn
                                     )
                         );
                         assert_eq!(
-                            action_section.get_kind(),
+                            action_section.kind,
                             symbols::SymbolKind::ActionCall
                         );
 
-                        match action_section.get_token() {
+                        match action_section.token {
                             Token::ActionSection(as_id) => {
                                 let as_name = state
                                     .compiled_action_sections
@@ -1477,7 +1456,7 @@ fn compile_apply_section(
                                         let a_s = action_sections
                                             .iter()
                                             .find(|t| {
-                                                t.get_token()
+                                                t.token
                                                     == Token::ActionSection(
                                                         as_id
                                                     )
@@ -1511,19 +1490,19 @@ fn compile_apply_section(
                             _ => {
                                 return Err(CompileError::Internal(format!(
                                     "No token found for action section: '{}'",
-                                    action_section.get_name()
+                                    action_section.name
                                 )));
                             }
                         };
 
                         let accept_reject = if let TypeDef::AcceptReject(
                             accept_reject,
-                        ) = action_section.get_type()
+                        ) = action_section.ty
                         {
                             accept_reject
                         } else {
                             return Err(CompileError::Internal(
-                                format!("No Accept or Reject found in action section: '{}'", action_section.get_name())
+                                format!("No Accept or Reject found in action section: '{}'", action_section.name)
                             ));
                         };
 
@@ -1584,13 +1563,13 @@ fn compile_apply_section(
                         let terms = _filter_map.get_terms();
                         let term = terms
                             .iter()
-                            .find(|t| t.get_name() == ma_name)
+                            .find(|t| t.name == ma_name)
                             .ok_or_else(|| {
-                                CompileError::Internal(format!(
-                                    "Cannot compile terms: {:?}",
-                                    ma_name
-                                ))
-                            })?;
+                            CompileError::Internal(format!(
+                                "Cannot compile terms: {:?}",
+                                ma_name
+                            ))
+                        })?;
 
                         state.cur_mir_block = MirBlock::new();
                         state = compile_term_section(term, state, &[])?;
@@ -1693,11 +1672,11 @@ fn compile_match_action<'a>(
     mut state: CompilerState<'a>,
 ) -> Result<CompilerState<'a>, CompileError> {
     // collect all actions referenced in this match_action and compile them.
-    for action_call in match_action.get_args() {
+    for action_call in &match_action.args {
         let filter_map = state.cur_filter_map;
-        let action_name = action_call.get_name();
+        let action_name = &action_call.name;
 
-        let accept_reject = match action_call.get_type() {
+        let accept_reject = match action_call.ty {
             // A FilterMatchAction should only appear here with a
             // AcceptReject value as its type
             TypeDef::AcceptReject(accept_reject) => accept_reject,
@@ -1707,8 +1686,7 @@ fn compile_match_action<'a>(
             _ => {
                 return Err(CompileError::from(format!(
                     "Cannot convert `{}` with type {} into match action type",
-                    action_call.get_name(),
-                    action_call.get_type()
+                    action_call.name, action_call.ty
                 )));
             }
         };
@@ -1716,7 +1694,7 @@ fn compile_match_action<'a>(
         if let Some(action) = filter_map
             .get_action_sections()
             .iter()
-            .find(|t| t.get_name() == action_name)
+            .find(|t| t.name == action_name)
         {
             state = compile_action_section(
                 action,
@@ -1747,9 +1725,9 @@ fn compile_action_section<'a>(
     state.var_read_only = true;
 
     // Set a Label so that each term block is identifiable for humans.
-    trace!("compiling ACTION SECTION {}...", action_section.get_name());
+    trace!("compiling ACTION SECTION {}...", action_section.name);
 
-    for action in action_section.get_args() {
+    for action in &action_section.args {
         state = compile_action(action, argument_code_block, state)?;
     }
 
@@ -1763,7 +1741,7 @@ fn compile_action<'a>(
     argument_code_block: &[Command],
     mut state: CompilerState<'a>,
 ) -> Result<CompilerState<'a>, CompileError> {
-    match action.get_kind() {
+    match action.kind {
         // A symbol with an RxType token, should be an access receiver.
         SymbolKind::AccessReceiver => {
             trace!("compiling ACTION {:#?}", action);
@@ -1775,7 +1753,7 @@ fn compile_action<'a>(
         // here.
         SymbolKind::Argument => {
             state.used_arguments.push((
-                action.get_token(),
+                action.token.clone(),
                 action,
                 argument_code_block.to_vec(),
             ));
@@ -1784,7 +1762,7 @@ fn compile_action<'a>(
             trace!("Faulty ACTION {:#?}", action);
             return Err(CompileError::new(format!(
                 "Invalid action {}",
-                action.get_name()
+                action.name
             )));
         }
     }
@@ -1804,13 +1782,13 @@ fn compile_term_section<'a>(
     state.var_read_only = true;
 
     // Set a Label so that each term block is identifiable for humans.
-    trace!("TERM SECTION {}", term_section.get_name());
+    trace!("TERM SECTION {}", term_section.name);
 
     // Push the code block that retrieves the argument for this section to
     // the cache.
-    if let Some(s) = term_section.get_args().first() {
+    if let Some(s) = term_section.args.first() {
         state.used_arguments.push((
-            s.get_token(),
+            s.token.clone(),
             s,
             argument_code_block.to_vec(),
         ));
@@ -1819,13 +1797,13 @@ fn compile_term_section<'a>(
     state.push_command(
         OpCode::Label,
         vec![CommandArg::Label(
-            format!("TERM SECTION {}", term_section.get_name())
+            format!("TERM SECTION {}", term_section.name)
                 .as_str()
                 .into(),
         )],
     );
 
-    let terms = term_section.get_args();
+    let terms = &term_section.args;
     let mut terms = terms.iter().peekable();
 
     while let Some(arg) = &mut terms.next() {
@@ -1852,7 +1830,7 @@ pub(crate) fn compile_term<'a>(
 ) -> Result<CompilerState<'a>, CompileError> {
     let saved_mem_pos = state.cur_mem_pos;
 
-    match term.get_kind() {
+    match term.kind {
         SymbolKind::CompareExpr(op) => {
             let args = term.get_args_checked(2)?;
             state = recurse_compile(&args[0], state, None, false)?;
@@ -1922,41 +1900,39 @@ pub(crate) fn compile_term<'a>(
         SymbolKind::GlobalEnum => {
             trace!(
                 "ENUM TERM EXPRESSION {} {:?}",
-                term.get_name(),
+                term.name,
                 term.get_kind_type_and_token()
             );
 
-            let variants = term.get_args();
+            let variants = &term.args;
             state.cur_mem_pos += 1;
             let orig_mem_pos = state.cur_mem_pos;
 
             state.cur_mir_block.command_stack.push_back(Command::new(
                 OpCode::Label,
                 vec![CommandArg::Label(
-                    format!("ENUM {}", term.get_name()).as_str().into(),
+                    format!("ENUM {}", term.name).as_str().into(),
                 )],
             ));
 
-            trace!("enum token {:?}", term.get_token());
+            trace!("enum token {:?}", term.token);
 
             let mut variants = variants.iter().peekable();
             while let Some(variant) = &mut variants.next() {
                 state.cur_mir_block.command_stack.push_back(Command::new(
                     OpCode::Label,
                     vec![CommandArg::Label(
-                        format!("VARIANT_{}", variant.get_name())
-                            .as_str()
-                            .into(),
+                        format!("VARIANT_{}", variant.name).as_str().into(),
                     )],
                 ));
 
                 // push the enum instance to the stack.
                 state.cur_mir_block.extend(generate_code_for_token_value(
                     &state,
-                    term.get_token(),
+                    &term.token,
                 ));
 
-                if let Token::Variant(variant_index) = variant.get_token() {
+                if let Token::Variant(variant_index) = variant.token {
                     state.cur_mir_block.command_stack.push_back(
                         Command::new(
                             OpCode::StackIsVariant,
@@ -2000,7 +1976,7 @@ pub(crate) fn compile_term<'a>(
         _ => {
             trace!(
                 "RESIDUAL TERM EXPRESSION {} {:?}",
-                term.get_name(),
+                term.name,
                 term.get_kind_type_and_token()
             );
             state = recurse_compile(term, state, None, false)?;

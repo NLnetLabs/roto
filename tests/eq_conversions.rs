@@ -1,7 +1,7 @@
 use roto::ast::AcceptReject;
-use roto::compiler::Compiler;
 use roto::blocks::Scope::{self, FilterMap};
 use roto::types::builtin::{NlriStatus, PeerId, PeerRibType, Provenance, RouteContext};
+use roto::pipeline;
 use roto::types::collections::Record;
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
@@ -87,10 +87,8 @@ fn test_data(
 ) -> Result<VmResult, Box<dyn std::error::Error>> {
     println!("Evaluate filter-map {}...", name);
 
-    let c = Compiler::new();
-    let roto_packs = c.build_from_compiler(source_code)?;
-
-    let roto_pack = roto_packs.retrieve_pack_as_refs(&name)?;
+    let rotolo = pipeline::run_test(source_code, None)?;
+    let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
     let asn: TypeValue = Asn::from_u32(211321).into();
 
     println!("ASN {:?}", asn);
@@ -163,11 +161,7 @@ fn test_eq_conversion_2() {
     let src_line = src_code(r#""b" in a;"#, "reject");
     let test_run = test_data(FilterMap("in-filter-map".into()), &src_line);
 
-    // let err = "Eval error: IntegerLiteral cannot be converted into String".to_string();
-    // let str = test_run.unwrap_err().to_string();
-    // assert_eq!(str, err);
-    let VmResult { accept_reject, .. } = test_run.unwrap();
-    assert_eq!(accept_reject, AcceptReject::Accept);
+    test_run.unwrap_err();
 }
 
 #[test]

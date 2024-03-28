@@ -5,6 +5,7 @@ mod global_methods;
 pub(crate) mod primitives;
 pub mod basic_route;
 pub mod route;
+
 mod tests;
 
 pub use bmp_message::*;

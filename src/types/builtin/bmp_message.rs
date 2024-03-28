@@ -98,10 +98,10 @@ impl EnumBytesRecord for BytesRecord<BmpMessage> {
         self.bytes_parser().common_header().msg_type().into()
     }
 
-    // Returns the TypeValue for a variant and field_index on this
-    // bytes_record. Returns a TypeValue::Unknown if the requested
-    // variant does not match the bytes record. Returns an error if
-    // no field_index was specified.
+    /// Returns the [`TypeValue`] for a variant and field_index on this
+    /// `bytes_record`. Returns a [`TypeValue::Unknown`] if the requested
+    /// variant does not match the bytes record. Returns an error if
+    /// no field_index was specified.
     fn get_field_index_for_variant(
         &self,
         variant_token: LazyRecordTypeDef,
@@ -249,7 +249,7 @@ impl From<MessageType> for LazyRecordTypeDef {
 
 //------------ BmpRouteMonitoringMessage -------------------------------------
 
-// THe fields of a bytes_record_impl should be STRICTLY alphabetically ordered
+// The fields of a bytes_record_impl should be STRICTLY alphabetically ordered
 // by the the name of the key and numbered in that order.
 
 bytes_record_impl!(
@@ -311,7 +311,7 @@ impl BytesRecord<RouteMonitoring> {
 
 //------------ PeerUpNotification -------------------------------------------
 
-// THe fields of a bytes_record_impl should be STRICTLY alphabetically
+// The fields of a bytes_record_impl should be STRICTLY alphabetically
 // ordered by the the name of the key and numbered in that order.
 
 bytes_record_impl!(

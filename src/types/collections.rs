@@ -1,3 +1,39 @@
+//! Roughly the collection types fall into two categories: Materialized
+//! collections and their element types, and lazy evaluated collection types
+//! and their element types.
+//!
+//! The materialized collection types are Record and List. The element type for
+//! both is called ElementTypeValue. The latter has the ability to store nested
+//! TypeValues, so the roto user can create/modify things like Lists of lists,
+//! or Record with List-typed fields. The collection types themselves are
+//! straight-forward vectors of ElementTypeValues (with a ShortString added for
+//! the Record type). The List type is ordered (order of insert), the Record
+//! type MUST be ordered alphabetically by key. The Roto user should not have
+//! to worry about this, though.
+//!
+//! The lazy types are BytesRecord and LazyRecord. BytesRecord is the type that
+//! wraps the more complex routecore types, mainly the different BMP message
+//! types. They are a wrapper around this message. A LazyRecord is a special
+//! type that provides the translation between the method calls on a routecore
+//! type and the corresponding fields that are offered to the roto user. So,
+//! from the perspective of the roto user a LazyRecord is just a regular
+//! Record, with (field_name, value) pairs. The LazyRecord type instances
+//! *cannot* be stored in a TypeValue enum, they are strictly to be used as
+//! intermediary types inside a Rotonda instance. If they need to be stored
+//! (e.g. in a RIB), they need to be materialized first. Materializing them
+//! only makes sense when the Roto user has modified them, otherwise it's
+//! advisable to store the related BytesRecord, which *do* have
+//! BuiltinTypeValue variants to store them in, e.g. BuiltinTypeValue::
+//! BmpMessage. Each BytesRecord type has a variant in the `LazyRecordTypeDef`
+//! enum, so this acts as a registry for them (see LazyRecord_types).
+//!
+//! There's also an `EnumBytesRecord` trait that should be implemented for
+//! BytesRecord types that contain an enum, e.g. `BytesRecord<BmpMessage>`. This
+//! allows the roto user to create a match pattern on them.
+//!
+//! Note that the roto user should not be have to worry about or ever be
+//! confronted with the lazy evaluated types.
+
 use log::{trace, error, debug};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Serializer};
@@ -17,50 +53,11 @@ use super::lazyrecord_types::LazyRecordTypeDef;
 use super::typedef::{LazyNamedTypeDef, MethodProps, TypeDef};
 use super::typevalue::TypeValue;
 
-//============ Collections ==================================================
-
-// Roughly the collection types fall into two categories: Materialized
-// collections and their element types, and lazy evaluated collection types
-// and their element types.
-
-// The materialized collection types are Record and List. The element type for
-// both is called ElementTypeValue. The latter has the ability to store nested
-// TypeValues, so the roto user can create/modify things like Lists of lists,
-// or Record with List-typed fields. The collection types themselves are
-// straight-forward vectors of ElementTypeValues (with a ShortString added for
-// the Record type). The List type is ordered (order of insert), the Record
-// type MUST be ordered alphabetically by key. The Roto user should not have
-// to worry about this, though.
-
-// The lazy types are BytesRecord and LazyRecord. BytesRecord is the type that
-// wraps the more complex routecore types, mainly the different BMP message
-// types. They are a wrapper around this message. A LazyRecord is a special
-// type that provides the translation between the method calls on a routecore
-// type and the corresponding fields that are offered to the roto user. So,
-// from the perspective of the roto user a LazyRecord is just a regular
-// Record, with (field_name, value) pairs. The LazyRecord type instances
-// *cannot* be stored in a TypeValue enum, they are strictly to be used as
-// intermediary types inside a Rotonda instance. If they need to be stored
-// (e.g. in a RIB), they need to be materialized first. Materializing them
-// only makes sense when the Roto user has modified them, otherwise it's
-// advisable to store the related BytesRecord, which *do* have
-// BuiltinTypeValue variants to store them in, e.g. BuiltinTypeValue::
-// BmpMessage. Each BytesRecord type has a variant in the `LazyRecordTypeDef`
-// enum, so this acts as a registry for them (see LazyRecord_types).
-
-// There's also an `EnumBytesRecord` trait that should be implemented for
-// BytesRecord types that contain an enum, e.g. BytesRecord<BmpMessage>. This
-// allows the roto user to create a match pattern on them.
-
-// Note that the roto user should not be have to worry about or ever be
-// confronted with the lazy evaluated types.
-
 //------------ ElementType --------------------------------------------------
 
-// This enum is used to differentiate between recursive collections and
-// simple collections (that only contain primitive types). The latter do not
-// need to be boxed, while the former do.
-
+/// This enum is used to differentiate between recursive collections and
+/// simple collections (that only contain primitive types). The latter do not
+/// need to be boxed, while the former do.
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize)]
 #[serde(untagged)]
 pub enum ElementTypeValue {
@@ -201,17 +198,17 @@ impl Default for ElementTypeValue {
     }
 }
 
-// Conversion for Records. Records hold `ElementTypeValue`s, the literals
-// provided by the user in a a Roto script need to be converted. This returns
-// a Result because the conversion may fail in the eval() phase, where we have
-// syntactically correct structures, but they overflow or have unknown values.
+/// Conversion for Records. Records hold `ElementTypeValue`s, the literals
+/// provided by the user in a a Roto script need to be converted. This returns
+/// a Result because the conversion may fail in the eval() phase, where we have
+/// syntactically correct structures, but they overflow or have unknown values.
 impl TryFrom<ValueExpr> for ElementTypeValue {
     type Error = CompileError;
 
     fn try_from(value: ValueExpr) -> Result<Self, Self::Error> {
         match value {
             ValueExpr::LiteralAccessExpr(ref lit) => 
-                Ok(ElementTypeValue::Primitive((&lit.literal).try_into()?)),
+                Ok(ElementTypeValue::Primitive(TypeValue::try_from(&lit.literal.inner)?)),
             ValueExpr::PrefixMatchExpr(_) => todo!(),
             ValueExpr::ComputeExpr(_) => todo!(),
             ValueExpr::RootMethodCallExpr(_) => todo!(),
@@ -219,7 +216,7 @@ impl TryFrom<ValueExpr> for ElementTypeValue {
                 Ok(ElementTypeValue::Nested(Box::new(rec.try_into()?)))
             }
             ValueExpr::TypedRecordExpr(rec) => {
-                Ok(ElementTypeValue::Nested(Box::new(rec.try_into()?)))
+                Ok(ElementTypeValue::Nested(Box::new(rec.inner.try_into()?)))
             }
             ValueExpr::ListExpr(list) => {
                 Ok(ElementTypeValue::Nested(Box::new(list.try_into()?)))
@@ -237,9 +234,9 @@ impl std::fmt::Display for ElementTypeValue {
     }
 }
 
-// These conversions are used when creating OutputStreamMessages as a poor
-// men's serializer (for `name` and `topic` fields). Probably want to make
-// a more structural solution.
+/// These conversions are used when creating `OutputStreamMessages` as a poor
+/// men's serializer (for `name` and `topic` fields). Probably want to make
+/// a more structural solution.
 impl From<&ElementTypeValue> for String {
     fn from(value: &ElementTypeValue) -> String {
         match value {
@@ -264,9 +261,8 @@ impl From<&ElementTypeValue> for ShortString {
 
 //------------ List type ----------------------------------------------------
 
-// A recursive, materialized list that can contain any TypeValue variant,
-// including Records and Lists.
-
+/// A recursive, materialized list that can contain any [`TypeValue`] variant,
+/// including Records and Lists.
 #[derive(Debug, Eq, Clone, Hash, PartialEq, Serialize)]
 pub struct List(pub(crate) Vec<ElementTypeValue>);
 
@@ -355,10 +351,10 @@ impl List {
         elm
     }
 
-    // Get the owned value of a field on a List, indicated by the first index
-    // in the field index, and then descent into that field, based on the
-    // following indexes in the field_index. Returns None if the field index
-    // is empty.
+    /// Get the owned value of a field on a List, indicated by the first index
+    /// in the field index, and then descent into that field, based on the
+    /// following indexes in the field_index. Returns `None` if the field index
+    /// is empty.
     pub fn get_field_by_index_owned(
         &mut self,
         field_index: FieldIndex,
@@ -640,7 +636,7 @@ impl TryFrom<ListValueExpr> for List {
     fn try_from(value: ListValueExpr) -> Result<Self, Self::Error> {
         let mut lvs = vec![];
         for v in value.values.iter() {
-            match v.clone().try_into() {
+            match v.inner.clone().try_into() {
                 Ok(v) => { lvs.push(v) },
                 Err(e) => { return Err(e); }
             };
@@ -711,9 +707,8 @@ impl From<ListToken> for usize {
 
 //---------------- Record type ----------------------------------------------
 
-// A recursive, materialized Record type that can contain any TypeValue
-// variant, including Lists and Records.
-
+/// A recursive, materialized Record type that can contain any [`TypeValue`]
+/// variant, including Lists and Records.
 #[derive(Debug, PartialEq, Eq, Default, Clone, Hash)]
 pub struct Record(Vec<(ShortString, ElementTypeValue)>);
 
@@ -725,14 +720,14 @@ impl<'a> Record {
         Self(elems)
     }
 
-    // Sorted inserts on record creation time are essential for the PartialEq
-    // impl (equivalence testing) of a Record TypeDef. The TypeDefs of two
-    // Records are compared field-by-field in a simple zipped loop. Therefore
-    // all the fields need to be sorted in the same way (aligned), otherwise
-    // they'll be unequal, even if all the values are the same. This method
-    // assumes the TypeValues are ordered, and DOES NOT CHECK THE SORTING, but
-    // it does check whether the TypeValue of the record-to-be-created matches
-    // its type definition.
+    /// Sorted inserts on record creation time are essential for the `PartialEq`
+    /// impl (equivalence testing) of a Record TypeDef. The TypeDefs of two
+    /// Records are compared field-by-field in a simple zipped loop. Therefore
+    /// all the fields need to be sorted in the same way (aligned), otherwise
+    /// they'll be unequal, even if all the values are the same. This method
+    /// assumes the TypeValues are ordered, and DOES NOT CHECK THE SORTING, but
+    /// it does check whether the TypeValue of the record-to-be-created matches
+    /// its type definition.
     pub fn create_instance_with_ordered_fields(
         ty: &TypeDef,
         kvs: Vec<(&str, TypeValue)>,
@@ -828,13 +823,13 @@ impl<'a> Record {
         Ok(kvs)
     }
 
-    // This function requires quite the trust from our VM and the user, it
-    // takes a Vec of TypeValues under the assumption that they are exactly
-    // ordered the way the resulting Record is, so that the caller can omit
-    // the field NAMES, only supplying the values. If you have the field
-    // names available you should probably use the
-    // `create_instance_with_ordered_fields` method, which does check whether
-    // field names and type match.
+    /// This function requires quite the trust from our VM and the user, it
+    /// takes a Vec of TypeValues under the assumption that they are exactly
+    /// ordered the way the resulting Record is, so that the caller can omit
+    /// the field NAMES, only supplying the values. If you have the field
+    /// names available you should probably use the
+    /// `create_instance_with_ordered_fields` method, which does check whether
+    /// field names and type match.
     pub fn create_instance_from_ordered_fields(
         ty: &TypeDef,
         mut values: Vec<TypeValue>,
@@ -902,10 +897,10 @@ impl<'a> Record {
             .map(|i| self.0.remove(i).1)
     }
 
-    // Get a reference to a field on a List, indicated by the first index in
-    // the field index, and then descent into that field, based on the
-    // following indexes in the field_index. Returns None if the field index
-    // is empty.
+    /// Get a reference to a field on a List, indicated by the first index in
+    /// the field index, and then descent into that field, based on the
+    /// following indexes in the field_index. Returns None if the field index
+    /// is empty.
     pub fn get_field_by_index(
         &'a self,
         field_index: &FieldIndex,
@@ -922,10 +917,10 @@ impl<'a> Record {
         elm
     }
 
-    // Get a reference to a field on a List, indicated by the first index in
-    // the field index, and then descent into that field, based on the
-    // following indexes in the field_index. Returns None if the field index
-    // is empty.
+    /// Get a reference to a field on a List, indicated by the first index in
+    /// the field index, and then descent into that field, based on the
+    /// following indexes in the field_index. Returns None if the field index
+    /// is empty.
     pub fn get_field_by_index_owned(
         &mut self,
         field_index: &FieldIndex,
@@ -1097,8 +1092,8 @@ impl Serialize for Record {
     }
 }
 
-// Value Expressions that contain a Record parsed as a pair of
-// (field_name, value) pairs. This turns it into an actual Record.
+/// Value Expressions that contain a Record parsed as a pair of
+/// `(field_name, value)` pairs. This turns it into an actual Record.
 impl TryFrom<AnonymousRecordValueExpr> for Record {
     type Error = CompileError;
 
@@ -1107,7 +1102,7 @@ impl TryFrom<AnonymousRecordValueExpr> for Record {
 
         let mut kvs: Vec<(ShortString, ElementTypeValue)> = vec![];
         for (s, t) in value.key_values.iter() {
-            match ElementTypeValue::try_from(t.clone()) {
+            match ElementTypeValue::try_from(t.inner.clone()) {
                 Ok(t) => { kvs.push((s.ident.clone(),t)) },
                 Err(e) => { return Err(e); }
             };
@@ -1125,7 +1120,7 @@ impl TryFrom<TypedRecordValueExpr> for Record {
         
         let mut kvs: Vec<(ShortString, ElementTypeValue)> = vec![];
         for (s, t) in value.key_values.iter() {
-            match ElementTypeValue::try_from(t.clone()) {
+            match ElementTypeValue::try_from(t.inner.clone()) {
                 Ok(t) => { kvs.push((s.ident.clone(),t)) },
                 Err(e) => { return Err(e); }
             };
@@ -1184,28 +1179,29 @@ impl From<RecordToken> for usize {
 
 //------------ EnumBytesRecord trait ----------------------------------------
 
-// This trait is used for BytesRecord types that are enums themselves,
-// currently that is only the BytesRecord<BmpMessage> type. This allows the
-// roto user to create match patterns for these BytesRecord instances.
-
-// Unlike a normal record, a bytes record need to have its recursive field
-// resolved in one go, there can be no intermediary methods that return a
-// (sub)-field value and then other methods can take that as argument for the
-// next recursion IN THE VM, because that would mean having to clone the
-// (sub-)field and probably the whole bytes message. This would defy the
-// point of lazy evaluation. Therefore this method takes the bytes record AND
-// the complete field index vec to go to do all the recursion in this method.
-// The data-fields of the variants in this enum are handled as closely as
-// possible to actual lazy fields. Note that we're still copying bytes out
-// into the actual variant. TODO.
-
+/// This trait is used for BytesRecord types that are enums themselves,
+/// currently that is only the `BytesRecord<BmpMessage>` type. This allows the
+/// roto user to create match patterns for these BytesRecord instances.
+///
+/// Unlike a normal record, a bytes record need to have its recursive field
+/// resolved in one go, there can be no intermediary methods that return a
+/// (sub)-field value and then other methods can take that as argument for the
+/// next recursion IN THE VM, because that would mean having to clone the
+/// (sub-)field and probably the whole bytes message. This would defy the
+/// point of lazy evaluation. Therefore this method takes the bytes record AND
+/// the complete field index vec to go to do all the recursion in this method.
+/// The data-fields of the variants in this enum are handled as closely as
+/// possible to actual lazy fields. Note that we're still copying bytes out
+/// into the actual variant. TODO.
 pub trait EnumBytesRecord {
     fn get_variant(&self) -> LazyRecordTypeDef;
 
-    // Returns the TypeValue for a variant and field_index on this
-    // bytes_record. Returns a TypeValue::Unknown if the requested
-    // variant does not match the bytes record. Returns an error if
-    // no field_index was specified.
+    /// Returns the [`TypeValue`] for a variant and `field_index`` on this
+    /// `bytes_record`.
+    ///
+    /// Returns a [`TypeValue::Unknown`] if the requested
+    /// variant does not match the bytes record. Returns an error if
+    /// no field_index was specified.
     fn get_field_index_for_variant(
         &self,
         variant_token: LazyRecordTypeDef,
@@ -1226,10 +1222,9 @@ pub trait RecordType: AsRef<[u8]> {
 
 //------------ BytesRecord type ---------------------------------------------
 
-// A wrapper around routecore types, used to store into a TypeValue. The
-// actual mapping between routecore methods and Roto record field names and
-// values does not happen here, but in the LazyRecord type.
-
+/// A wrapper around routecore types, used to store into a [`TypeValue`]. The
+/// actual mapping between routecore methods and Roto record field names and
+/// values does not happen here, but in the [`LazyRecord`]` type.
 #[derive(Debug, Serialize, Clone)]
 pub struct BytesRecord<T: RecordType>(T);
 
@@ -1283,11 +1278,10 @@ impl<T: RecordType> From<T> for BytesRecord<T> {
 
 //------------- LazyElementTypeValue type -----------------------------------
 
-// The containing element of a LazyRecord, besides being able to store
-// recursive and simple collections (like its counterpart the materialized
-// LazyElementTypeValue), it can also host unevaluated expressions (as
-// closures) of field values, to be called by the VM at runtime.
-
+/// The containing element of a [`LazyRecord`], besides being able to store
+/// recursive and simple collections (like its counterpart the materialized
+/// LazyElementTypeValue), it can also host unevaluated expressions (as
+/// closures) of field values, to be called by the VM at runtime.
 #[allow(clippy::type_complexity)]
 pub enum LazyElementTypeValue<'a, T: RecordType> {
     LazyRecord(LazyRecord<'a, T>),
@@ -1412,15 +1406,14 @@ impl<'a, T: RecordType + std::fmt::Debug> LazyElementTypeValue<'a, T> {
 
 //------------ LazyRecord type ----------------------------------------------
 
-// The LazyRecord type is the mapping between the routecore parser methods
-// and the roto record (field_name, value) pairs that we communicate to a
-// roto user. It does contains neither the parser, nor the original bytes of
-// the message, instead each method of LazyRecord requires the caller (the
-// roto VM) to pass in a reference to the BytesRecord. A value whether lazily
-// evaluated or not, can be modified by the caller. The result of the
-// modification should be materialized into a (regular) roto record though,
-// the LazyRecord itself cannot be stored into a TypeValue variant.
-
+/// The [`LazyRecord`] type is the mapping between the routecore parser methods
+/// and the roto record `(field_name, value)` pairs that we communicate to a
+/// roto user. It contains neither the parser, nor the original bytes of
+/// the message, instead each method of [`LazyRecord`] requires the caller (the
+/// roto VM) to pass in a reference to the [`BytesRecord`]. A value whether lazily
+/// evaluated or not, can be modified by the caller. The result of the
+/// modification should be materialized into a (regular) roto record though,
+/// the [`LazyRecord`] itself cannot be stored into a [`TypeValue`] variant.
 #[derive(Debug)]
 pub struct LazyRecord<'a, T: RecordType> {
     value: LazyNamedTypeDef<'a, T>,

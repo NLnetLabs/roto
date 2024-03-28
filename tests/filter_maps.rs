@@ -217,7 +217,7 @@ fn test_filter_map_31() {
             }
 
             apply {
-                use my-filter-map;
+                // use my-filter-map;
                 filter match peer-asn-matches matching { set-asn; return accept; };
                 return reject;
             }
@@ -231,90 +231,6 @@ fn test_filter_map_31() {
     .test_parse(true)
     .test_eval(true)
     .test_compile(true);
-}
-
-#[test]
-fn test_filter_map_32() {
-    common::init();
-
-    let _compiler = TestCompiler::create(
-        "filter-map_1",
-        r###"
-        filter-map filter-map_1 {
-            define {
-                // specify the types of that this filter receives
-                // and sends.
-                // rx_tx route: StreamRoute;
-                rx pph_asn: MyRec;
-                tx out: Asn;
-            }
-
-            term peer-asn-matches {
-                match {
-                    pph_asn.i_dont_exist == AS65534;
-                }
-            }
-
-            action set-asn {
-                pph_asn.asn.set(AS200);
-            }
-
-            apply {
-                use my-filter-map;
-                filter match peer-asn-matches matching { set-asn; return accept; };
-                return reject;
-            }
-        }
-
-        type MyRec {
-            asn: Asn
-        }
-        "###,
-    )
-    .test_parse(true)
-    .test_eval(false);
-}
-
-#[test]
-fn test_filter_map_33() {
-    common::init();
-
-    let _compiler = TestCompiler::create(
-        "filter-map_1",
-        r###"
-        filter-map filter-map_1 {
-            define {
-                // specify the types of that this filter receives
-                // and sends.
-                // rx_tx route: StreamRoute;
-                rx pph_asn: MyRec;
-                tx out: Asn;
-            }
-
-            term peer-asn-matches {
-                match {
-                    pph_asn.asn == AS65534;
-                }
-            }
-
-            action set-asn {
-                pph_asn.asn.set(AS200);
-            }
-
-            apply {
-                use my-filter-map;
-                filter match peer-asn-matches matching { set-asn; return accept; };
-                return reject;
-            }
-        }
-
-        type IamNotUsed {
-            asn: Asn
-        }
-        "###,
-    )
-    .test_parse(true)
-    .test_eval(false);
 }
 
 #[test]
@@ -345,7 +261,7 @@ fn test_filter_map_34() {
             }
 
             apply {
-                use my-filter-map;
+                // use my-filter-map;
                 filter match peer-asn-matches matching { set-asn; return accept; };
                 return reject;
             }

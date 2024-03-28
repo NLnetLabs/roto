@@ -1,8 +1,8 @@
 use log::trace;
 use roto::ast::AcceptReject;
-use roto::compiler::Compiler;
 
 use roto::blocks::Scope::{self, FilterMap};
+use roto::pipeline;
 use roto::types::builtin::{NlriStatus, PeerId, PeerRibType, Provenance, RouteContext};
 use roto::types::collections::{BytesRecord, Record};
 use roto::types::lazyrecord_types::BgpUpdateMessage;
@@ -20,7 +20,7 @@ fn test_data(
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
-    let rotolo = Compiler::build(source_code)?;
+    let rotolo = pipeline::run_test(source_code, None)?;
     let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     // BGP UPDATE message containing MP_REACH_NLRI path attribute,

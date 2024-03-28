@@ -20,6 +20,7 @@ use routecore::bgp::{
 use serde::Serialize;
 
 use crate::compiler::compile::CompileError;
+use crate::parser::span::Spanned;
 use crate::traits::Token;
 use crate::typedefconversion;
 use crate::types::collections::ElementTypeValue;
@@ -44,18 +45,18 @@ use super::{
     builtin::BuiltinTypeValue, collections::List, typevalue::TypeValue,
 };
 
-// the type definition of the type that's stored in the RIB and the
-// vec of field_indexes that are used in the hash to calculate
-// uniqueness for an entry.
+/// the type definition of the type that's stored in the RIB and the
+/// vec of field_indexes that are used in the hash to calculate
+/// uniqueness for an entry.
 pub type RibTypeDef = (Box<TypeDef>, Option<Vec<FieldIndex>>);
 pub type NamedTypeDef = (ShortString, Box<TypeDef>);
 pub type LazyNamedTypeDef<'a, T> =
     Vec<(ShortString, LazyElementTypeValue<'a, T>)>;
 
-// This struct mainly serves the purpose of making sure that all inner
-// Vec<NamedTypeDef> are being sorted at creation time, so that they
-// are comparable (for equivalence) at all times without the need to
-// ever sort them again.
+/// This struct mainly serves the purpose of making sure that all inner
+/// `Vec<NamedTypeDef>` are being sorted at creation time, so that they
+/// are comparable (for equivalence) at all times without the need to
+/// ever sort them again.
 #[derive(Clone, Debug, Eq, Default, Ord, PartialOrd, Serialize)]
 pub struct RecordTypeDef(Vec<NamedTypeDef>);
 
@@ -73,7 +74,7 @@ impl RecordTypeDef {
         self.0.len()
     }
 
-    // returns the number of all fields in the flattened record type.
+    /// returns the number of all fields in the flattened record type.
     pub(crate) fn recursive_len(&self) -> usize {
         let mut len = self.0.len();
         for field in self.0.iter() {
@@ -97,10 +98,10 @@ impl RecordTypeDef {
     }
 }
 
-// Equivalence of two RecordTypeDefs is defined as the two vectors being
-// completely the same, or the field names being the same. The types
-// of the fields are being left out of the equivalence comparison
-// here! That is the responsibility of the evaluator.
+/// Equivalence of two RecordTypeDefs is defined as the two vectors being
+/// completely the same, or the field names being the same. The types
+/// of the fields are being left out of the equivalence comparison
+/// here! That is the responsibility of the evaluator.
 impl PartialEq for RecordTypeDef {
     fn eq(&self, other: &Self) -> bool {
         if self.0 == other.0 {
@@ -343,9 +344,9 @@ impl TypeDef {
         Ok(TypeDef::Record(type_ident_pairs.into()))
     }
 
-    // compute the number of fields in this typedef, mostly relevant for
-    // records to figure how many values should be popped from the stack for
-    // method calls.
+    /// Compute the number of fields in this typedef, mostly relevant for
+    /// records to figure how many values should be popped from the stack for
+    /// method calls.
     pub fn get_field_num(&self) -> usize {
         match self {
             TypeDef::Record(rec_type) => rec_type.recursive_len(),
@@ -357,12 +358,12 @@ impl TypeDef {
         }
     }
 
-    // this function checks that the `fields` vec describes the fields
-    // present in self. If so it returns the positions in the vec of the
-    // corresponding fields, to serve as the token for each field.
+    /// This function checks that the `fields` vec describes the fields
+    /// present in `self`. If so it returns the positions in the vec of the
+    /// corresponding fields, to serve as the token for each field.
     pub(crate) fn has_fields_chain(
         &self,
-        check_fields: &[crate::ast::Identifier],
+        check_fields: &[Spanned<crate::ast::Identifier>],
     ) -> Result<(TypeDef, Token, Option<TypeValue>), CompileError> {
         // Data sources (rib and table) are special cases, because they have
         // their methods on the container (the datasource) and not on the
@@ -606,9 +607,9 @@ impl TypeDef {
         Ok((result_type.0, result_type.1, existing_tv))
     }
 
-    // This does a strict check to see if all the names of the fields and
-    // their types match up. It does not take into account possible type
-    // conversions on fields.
+    /// This does a strict check to see if all the names of the fields and
+    /// their types match up. It does not take into account possible type
+    /// conversions on fields.
     pub(crate) fn _check_record_fields(
         &self,
         fields: &[(ShortString, &TypeValue)],
@@ -840,10 +841,10 @@ impl TypeDef {
         }
     }
 
-    // Calculates the hash over the fields that are referenced in the unique
-    // field indexes vec that lives on the Rib typedef.
-    // If there's no field indexes vec then simply calculate the hash over
-    // the (whole) TypeValue that was passed in.
+    /// Calculates the hash over the fields that are referenced in the unique
+    /// field indexes vec that lives on the `Rib` typedef.
+    /// If there's no field indexes vec then simply calculate the hash over
+    /// the (whole) [`TypeValue`] that was passed in.
     pub fn hash_key_values<'a, H: Hasher>(
         &'a self,
         state: &'a mut H,

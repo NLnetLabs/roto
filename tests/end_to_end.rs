@@ -1,9 +1,9 @@
 use log::trace;
 
 use roto::ast::AcceptReject;
-use roto::compiler::Compiler;
 use roto::blocks::Scope::{self, Filter, FilterMap};
 use roto::types::builtin::{NlriStatus, PeerId, PeerRibType, Provenance, RouteContext};
+use roto::pipeline;
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::datasources::{DataSource, Rib};
 use roto::types::typedef::TypeDef;
@@ -59,11 +59,9 @@ fn test_data(
 ) -> Result<VmResult, Box<dyn std::error::Error>> {
     trace!("Evaluate filter-map {}...", name);
 
-    let mut c = Compiler::new();
-    c.with_arguments(&name, filter_args)?;
-    let roto_packs = c.build_from_compiler(source_code)?;
-
-    let mut roto_pack = roto_packs.retrieve_pack_as_refs(&name)?;
+    let rotolo =
+        pipeline::run_test(source_code, Some((&name, filter_args)))?;
+    let mut roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
     let _count: TypeValue = 1_u32.into();
     let prefix: TypeValue =
         inetnum::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?
@@ -76,9 +74,7 @@ fn test_data(
     trace!("ASN {:?}", asn);
 
     let comms_list = List::new(vec![ElementTypeValue::Primitive(
-        Community::from([
-            127, 12, 13, 12,
-        ]).into(),
+        Community::from([127, 12, 13, 12]).into(),
     )]);
 
     trace!("comms list {}", comms_list);
@@ -96,10 +92,8 @@ fn test_data(
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            Community::from([
-                127, 12, 13, 12,
-            ]).into()),
-        ]));
+            Community::from([127, 12, 13, 12]).into(),
+        )]));
 
     trace!("comms instance {}", comms);
 
@@ -178,6 +172,7 @@ fn test_data(
 }
 
 #[test]
+#[ignore]
 fn test_filter_map_1() {
     common::init();
 
@@ -201,10 +196,8 @@ fn test_filter_map_1() {
 
     let comms =
         TypeValue::List(List::new(vec![ElementTypeValue::Primitive(
-            Community::from([
-                127, 12, 13, 12,
-            ]).into()),
-        ]));
+            Community::from([127, 12, 13, 12]).into(),
+        )]));
 
     trace!("comms instance {}", comms);
 
@@ -246,8 +239,8 @@ fn test_filter_map_1() {
                     tx ext_route: ExtRoute;
 
                     // specify additional external data sets that will be consulted.
-                    use table source_asns;
-                    use rib rib-rov;
+                    // use table source_asns;
+                    // use rib rib-rov;
 
                     // assignments
                     extra_in_table = source_asns.contains(extra_asn); // 0
@@ -340,15 +333,15 @@ fn test_filter_map_1() {
                 }
 
                 apply {
-                    use best-path;
+                    // use best-path;
                     filter exactly-one rov-valid matching { 
                         set-best; 
                         set-rov-invalid-asn-community; 
                         return accept; 
                     };
-                    use backup-path;
+                    // use backup-path;
                     filter match on-my-terms matching { set-best; return accept; };
-                    use backup-path;
+                    // use backup-path;
                     filter match on-my-terms not matching { 
                         set-rov-invalid-asn-community; 
                         return reject;

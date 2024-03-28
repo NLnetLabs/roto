@@ -822,10 +822,9 @@ impl Display for LinearMemory {
 
 //------------ Command Arguments Stack --------------------------------------
 
-// A stack especially for the arguments to a Command. The Vec that forms the
-// stack is immutable, so that the VM doesn't need to clone the MIR code for
-// each run. A counter keeps track of the current position in the stack.
-
+/// A stack especially for the arguments to a Command. The Vec that forms the
+/// stack is immutable, so that the VM doesn't need to clone the MIR code for
+/// each run. A counter keeps track of the current position in the stack.
 #[derive(Debug)]
 pub(crate) struct CommandArgsStack<'a> {
     args: &'a mut VecDeque<CommandArg>,
@@ -843,15 +842,17 @@ impl<'a> CommandArgsStack<'a> {
         self.args.front()
     }
 
-    // Remove and return the first item, decrement the counter This returns
-    // None if the stack has under flowed.
+    /// Remove and return the first item, decrement the counter
+    ///
+    /// This returns `None` if the stack has under flowed.
     fn pop_front(&mut self) -> Option<CommandArg> {
         self.args_counter.checked_sub(1)?;
         self.args.pop_front()
     }
 
-    // Return the last item and decrement the counter. This returns None if
-    // the stack has under flowed.
+    /// Return the last item and decrement the counter.
+    ///
+    /// This returns `None` if the stack has under flowed.
     fn pop(&mut self) -> Result<&'_ CommandArg, VmError> {
         self.args_counter = self
             .args_counter
@@ -866,7 +867,7 @@ impl<'a> CommandArgsStack<'a> {
         self.args.is_empty()
     }
 
-    // Interpret the last stack entry as a constant value.
+    /// Interpret the last stack entry as a constant value.
     pub(crate) fn take_arg_as_constant(
         &mut self,
     ) -> Result<TypeValue, VmError> {
@@ -880,8 +881,8 @@ impl<'a> CommandArgsStack<'a> {
         }
     }
 
-    // Pop ALL arguments and return the top two. Returns None if the stack
-    // underflows, or if one of the arguments does not exist.
+    /// Pop ALL arguments and return the top two. Returns None if the stack
+    /// underflows, or if one of the arguments does not exist.
     pub(crate) fn pop_2(
         mut self,
     ) -> Result<(&'a CommandArg, &'a CommandArg), VmError> {
@@ -903,8 +904,9 @@ impl<'a> CommandArgsStack<'a> {
         Err(VmError::StackUnderflow)
     }
 
-    // Pop ALL arguments and return the top three arguments, Returns None if
-    // the stack underflows, or if one of the arguments does not exist.
+    /// Pop ALL arguments and return the top three arguments.
+    ///
+    /// Returns None if the stack underflows, or if one of the arguments does not exist.
     pub(crate) fn pop_3(
         mut self,
     ) -> Result<(&'a CommandArg, &'a CommandArg, &'a CommandArg), VmError>
@@ -955,10 +957,9 @@ impl<'a> From<&'a mut VecDeque<CommandArg>> for CommandArgsStack<'a> {
 
 //------------ Argument -----------------------------------------------------
 
-// These are the filter-map-level arguments, they can be compiled in when
-// passed in before compiling (`with_arguments()`), or they can be provided
-// at run-time.
-
+/// These are the filter-map-level arguments, they can be compiled in when
+/// passed in before compiling (`with_arguments()`), or they can be provided
+/// at run-time.
 #[derive(Debug, Clone)]
 pub struct FilterMapArg {
     pub(crate) name: ShortString,
@@ -1181,9 +1182,11 @@ impl std::hash::Hash for FilterMapArgs {
     }
 }
 
-// Computes the has over the mir code and the data sources, that is stored in
-// the built VM. This hash serves the purpose to figure out if a new (mir
-// code,data sources) tuple actually contains meaningful changes.
+/// Computes the has over the mir code and the data sources, that is stored in
+/// the built VM.
+///
+/// This hash serves the purpose to figure out if a new (mir
+/// code,data sources) tuple actually contains meaningful changes.
 pub fn compute_hash(
     mir_code: &[MirBlock],
     data_sources: &[ExtDataSource],
@@ -1196,31 +1199,31 @@ pub fn compute_hash(
 
 //------------ CompiledPrimitiveField ----------------------------------------
 
-// Variable Assignments can be of any these types:
-// 1. literal primitive values: a = “AA”;
-// 2. literal compound values: a = [1,2,3]; a = Msg { prefix: fe80::/24,
-//    peer_ip: fe80::1, comment: “bla” };
-// 3. primitive aliasing a = route.prefix;
-// 4. compound aliasing a = Msg { prefix: route.prefix, peer_ip:
-//    route.peer_ip, comment: “bla”  };
-
-// In the first case we're creating a new value, that we'll have to store in a
-// memory position and create a single entry in the VariablesRefTable. In the
-// second case we can do the same thing, since a memory position can hold a
-// complete literal record, provided all of its fields are literal values (so
-// no computation needed at run time). The third case only needs a single
-// entry in the VariablesRefTable, pointing to a pre-filled memory position.
-// The last case is the hardest, we need to be able to store a series of
-// references to memory positions that can addressed from a single entry in
-// the VariablesRefTable.
-
-// In short:
-// 1. single mem_pos_set + entry in var_ref_table
-// 2. single mem_pos_set + entry in var_ref_table
-// 3. entry in var_ref_table
-// 4. mem_pos_sets + entry in var_ref_table
-
-// This the table that maps the user-defined variables from the 'define'
+/// Variable Assignments can be of any these types:
+/// 1. literal primitive values: `a = “AA”;`
+/// 2. literal compound values:
+///    `a = [1,2,3]; a = Msg { prefix: fe80::/24, peer_ip: fe80::1, comment: “bla” };`
+/// 3. primitive aliasing: `a = route.prefix;`
+/// 4. compound aliasing: `a = Msg { prefix: route.prefix, peer_ip:
+///    route.peer_ip, comment: “bla”  };`
+///
+/// In the first case we're creating a new value, that we'll have to store in a
+/// memory position and create a single entry in the `VariablesRefTable`. In the
+/// second case we can do the same thing, since a memory position can hold a
+/// complete literal record, provided all of its fields are literal values (so
+/// no computation needed at run time). The third case only needs a single
+/// entry in the `VariablesRefTable`, pointing to a pre-filled memory position.
+/// The last case is the hardest, we need to be able to store a series of
+/// references to memory positions that can addressed from a single entry in
+/// the `VariablesRefTable`.
+///
+/// In short:
+/// 1. `single mem_pos_set + entry` in `var_ref_table`
+/// 2. `single mem_pos_set + entry` in `var_ref_table`
+/// 3. `entry` in `var_ref_table`
+/// 4. `mem_pos_sets + entry` in `var_ref_table`
+///
+// This the table that maps the user-defined variables from the `define`
 // section to memory positions in the VM.
 #[derive(Debug, Clone)]
 pub(crate) struct CompiledPrimitiveField {
@@ -1285,10 +1288,10 @@ impl CompiledField {
 
 //------------ CompiledVariable ----------------------------------------------
 
-// This is the data-structure that stores snippets of compiled code (sequences
-// of VM commands) that compute a variable, in a flat, stack-friendly way. For
-// scalar values the length of the of the Vec<CompiledField> will be one, for
-// records it will correspond to the number of fields in that record.
+/// This is the data-structure that stores snippets of compiled code (sequences
+/// of VM commands) that compute a variable, in a flat, stack-friendly way. For
+/// scalar values the length of the of the `Vec<CompiledField>` will be one, for
+/// records it will correspond to the number of fields in that record.
 #[derive(Debug, Clone)]
 pub(crate) struct CompiledVariable(Vec<CompiledField>);
 
@@ -1509,8 +1512,8 @@ impl<
         Ok(unwind_stack)
     }
 
-    // Take a number of elements on the stack and flush the rest, so we'll end
-    // up with an empty stack.
+    /// Take a number of elements on the stack and flush the rest, so we'll end
+    /// up with an empty stack.
     fn _take_resolved_and_flush(
         &'a self,
         elem_num: u32, // number of elements to take
@@ -1558,8 +1561,8 @@ impl<
         Ok(take_vec)
     }
 
-    // Take a number of elements on the stack, leaving the rest of the stack
-    // in place.
+    /// Take a number of elements on the stack, leaving the rest of the stack
+    /// in place.
     fn _take_resolved(
         &'a self,
         elem_num: u32, // number of elements to take
@@ -1615,8 +1618,8 @@ impl<
         Ok(take_vec)
     }
 
-    // Take a number of elements on the stack, leaving the rest of the stack
-    // in place.
+    /// Take a number of elements on the stack, leaving the rest of the stack
+    /// in place.
     fn _take_resolved_as_owned(
         &'a self,
         elem_num: u32, // number of elements to take
@@ -1672,7 +1675,7 @@ impl<
             .as_ref()
             .iter()
             .find(|ds| ds.token == token)
-            .and_then(|ds| ds.source.load_full().as_ref().map(Arc::clone))
+            .and_then(|ds| ds.source.load_full().clone())
             .ok_or(VmError::DataSourceTokenNotFound(token))
     }
 
@@ -1680,14 +1683,18 @@ impl<
         self.hash_id
     }
 
-    // re-populate the VM with different intermediate code and different data
-    // sources. Note that the MIR and the data sources MUST come from the same
-    // RotoPack. If they are not, then the VM will crash or return arbitrary
-    // results, a.k.a. Undefined Behaviour! THIS IS NOT CHECKED BY THIS
-    // METHOD, ITS ON THE CONSUMER OF THIS METHOD TO GUARANTEE THIS.
-
-    // Returns a bool that indicates whether the MIR and the data sources
-    // where actually replaced.
+    /// Re-populate the VM with different intermediate code and different data
+    /// sources.
+    ///
+    /// Note that the MIR and the data sources MUST come from the same
+    /// [`RotoPack`]. If they are not, then the VM will crash or return arbitrary
+    /// results, a.k.a. Undefined Behaviour! THIS IS NOT CHECKED BY THIS
+    /// METHOD, ITS ON THE CONSUMER OF THIS METHOD TO GUARANTEE THIS.
+    ///
+    /// Returns a bool that indicates whether the MIR and the data sources
+    /// where actually replaced.
+    ///
+    /// [`RotoPack`]: crate::compiler::RotoPack
     pub fn replace_mir_code_and_data_sources(
         &'a mut self,
         mir_code: MB,
@@ -2879,9 +2886,6 @@ pub struct VmResult {
 
 //------------ StreamOutputQueue --------------------------------------------
 
-#[derive(Debug, Copy, Clone)]
-pub struct StreamId(usize);
-
 #[derive(Debug, Clone)]
 pub struct OutputStreamQueue(SmallVec<[OutputStreamMessage; 8]>);
 
@@ -3146,53 +3150,53 @@ impl Display for Command {
 
 #[derive(Debug, Hash, Clone)]
 pub enum CommandArg {
-    // Constant index
+    /// Constant index
     ConstantIndex(TypeValue),
-    // TypeValue constant
+    /// TypeValue constant
     ConstantValue(TypeValue),
-    // Variable with token value
+    /// Variable with token value
     Variable(usize),
-    // extra runtime argument for filter_map & term
+    /// extra runtime argument for filter_map & term
     Argument(usize),
-    // a list that needs to be stored at a memory position
+    /// a list that needs to be stored at a memory position
     List(List),
-    // a record that needs to be stored at a mem position
+    /// a record that needs to be stored at a mem position
     Record(Record),
-    // the placeholder for the value of the rx type at runtime
+    /// the placeholder for the value of the rx type at runtime
     RxValue,
-    // the placeholder for the value of the tx type at runtime
+    /// the placeholder for the value of the tx type at runtime
     TxValue,
-    // method token value
+    /// method token value
     Method(usize),
-    // data source: table token value
+    /// data source: table token value
     DataSourceTable(usize),
-    // data source: rib token value
+    /// data source: rib token value
     DataSourceRib(usize),
-    // output stream value
+    /// output stream value
     OutputStream(usize),
-    // field access token value
+    /// field access token value
     FieldAccess(usize),
-    // field index token value (for LazyRecord)
+    /// field index token value (for LazyRecord)
     FieldIndex(FieldIndex),
-    // builtin method token value
+    /// builtin method token value
     BuiltinMethod(usize),
-    // memory position
+    /// memory position
     MemPos(u32),
-    // type definition
+    /// type definition
     Type(TypeDef),
-    // argument types (for method calls)
+    /// argument types (for method calls)
     Arguments(Vec<TypeDef>),
-    // boolean value (used in cmp opcode)
+    /// boolean value (used in cmp opcode)
     Boolean(bool),
-    // term token value
+    /// term token value
     Term(usize),
-    // compare operation
+    /// compare operation
     CompareOp(ast::CompareOp),
-    // a label with its name (to jump to)
+    /// a label with its name (to jump to)
     Label(ShortString),
-    // argument tell what should happen after
+    /// argument tell what should happen after
     AcceptReject(AcceptReject),
-    // the index of a variant of an enum
+    /// the index of a variant of an enum
     Variant(usize),
 }
 
@@ -3298,45 +3302,45 @@ pub enum OpCode {
     ExecuteDataStoreMethod,
     ExecuteValueMethod,
     ExecuteConsumeValueMethod,
-    // Pop a value from the stack and if it's a LazyRecord or a LazyField on a
-    // LazyRecord.
+    /// Pop a value from the stack and if it's a LazyRecord or a LazyField on a
+    /// LazyRecord.
     LoadLazyFieldValue,
     PopStack,
     PushStack,
     ClearStack,
-    // Assumes the top of the stack is a Vec of type values, and modifies the
-    // value on the top of the stack to the element that is indexed by the
-    // first argument is receives. It will recurse into that element if their
-    // is a next argument, and repeats that until the arguments are exhausted.
+    /// Assumes the top of the stack is a Vec of type values, and modifies the
+    /// value on the top of the stack to the element that is indexed by the
+    /// first argument is receives. It will recurse into that element if their
+    /// is a next argument, and repeats that until the arguments are exhausted.
     StackOffset,
-    // Inspects the top of the stack to see if its value corresponds to the
-    // variant of an enum, passed in as a Variant Token in the arguments of
-    // the command. Pushes the result (the boolean) onto the stack. Does not
-    // pop the enum instance of the stack.
+    /// Inspects the top of the stack to see if its value corresponds to the
+    /// variant of an enum, passed in as a Variant Token in the arguments of
+    /// the command. Pushes the result (the boolean) onto the stack. Does not
+    /// pop the enum instance of the stack.
     StackIsVariant,
     MemPosSet,
-    // Push a user-defined argument to the stack.
+    /// Push a user-defined argument to the stack.
     PushArgToStack,
-    // Conditionally skip to the end ot the MIR block.
+    /// Conditionally skip to the end ot the MIR block.
     SkipToEOB,
-    // Skip to the end of the MIR block if the top of the stack holds a
-    // reference to a boolean value true
+    /// Skip to the end of the MIR block if the top of the stack holds a
+    /// reference to a boolean value true
     CondFalseSkipToEOB,
-    // Skip to the end of the MIR block if the top of the stack holds a
-    // reference to a boolean value false.
+    /// Skip to the end of the MIR block if the top of the stack holds a
+    /// reference to a boolean value false.
     CondTrueSkipToEOB,
-    // Skip to the next label in a MIR block if the top of the stack holds a
-    // reference to a TypeValue::Boolean that is false.
+    /// Skip to the next label in a MIR block if the top of the stack holds a
+    /// reference to a TypeValue::Boolean that is false.
     CondFalseSkipToLabel,
-    // Skip to the next label in a MIR block if the top of the stack holds a
-    // reference to a TypeValue::Unknown. Used to match expression variants.
+    /// Skip to the next label in a MIR block if the top of the stack holds a
+    /// reference to a TypeValue::Unknown. Used to match expression variants.
     CondUnknownSkipToLabel,
-    // Debug Label for terms
+    /// Debug Label for terms
     Label,
     SetRxField,
     SetTxField,
-    // The output stream stack holds indexes to memory positions that contain
-    // messages to be send out.
+    /// The output stream stack holds indexes to memory positions that contain
+    /// messages to be send out.
     PushOutputStreamQueue,
     Exit(AcceptReject),
 }

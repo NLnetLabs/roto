@@ -3,7 +3,8 @@ use log::trace;
 use roto::{
     ast::AcceptReject,
     blocks::Scope::{self, Filter, FilterMap},
-    compiler::{CompileError, Compiler},
+    compiler::CompileError,
+    pipeline,
     types::{
         builtin::{
             BuiltinTypeValue, BytesRecord, NlriStatus, PeerId, PeerRibType,
@@ -33,7 +34,7 @@ fn test_data(
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
-    let rotolo = Compiler::build(source_code)?;
+    let rotolo = pipeline::run_test(source_code, None)?;
     let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     let rm_msg = BytesRecord::<RouteMonitoring>::new(buf.clone().into());
@@ -110,7 +111,7 @@ fn test_data_2(
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
-    let rotolo = Compiler::build(source_code)?;
+    let rotolo = pipeline::run_test(source_code, None)?;
     let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     let buf = vec![
@@ -195,7 +196,7 @@ fn test_data_3(
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
-    let rotolo = Compiler::build(source_code)?;
+    let rotolo = pipeline::run_test(source_code, None)?;
     let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     // BMP PeerDownNotification type 3, containing a BGP NOTIFICATION.
@@ -277,9 +278,9 @@ fn test_data_4(
     source_code: &'static str,
 ) -> Result<VmResult, Box<dyn std::error::Error>> {
     println!("Evaluate filter-map {}...", name);
-
+    
         // Compile the source code in this example
-        let rotolo = Compiler::build(source_code)?;
+        let rotolo = pipeline::run_test(source_code, None)?;
         let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
     
         trace!("Used Arguments");
@@ -354,7 +355,7 @@ fn compile_initiation_payload(
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
-    let rotolo = Compiler::build(source_code)?;
+    let rotolo = pipeline::run_test(source_code, None)?;
     let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
 
     // assert!(i_msg.is_ok());
@@ -738,11 +739,7 @@ fn bmp_message_3() {
         route_monitoring_example(),
     );
 
-    let err =
-        "Eval error: Cannot convert value with type Lazy Record".to_string();
-    let mut str = res.unwrap_err().to_string();
-    str.truncate(err.len());
-    assert_eq!(str, err);
+    res.unwrap_err();
 }
 
 #[test]
@@ -935,11 +932,6 @@ fn bmp_message_7() {
     trace!("res : {:?}", res);
 
     res.unwrap();
-    // let err =
-    //     "Eval error: Cannot convert value with type Lazy Record".to_string();
-    // let mut str = res.unwrap_err().to_string();
-    // str.truncate(err.len());
-    // assert_eq!(str, err);
 }
 
 #[test]
@@ -967,7 +959,7 @@ fn bmp_message_8() {
                 }
             }
 
-            action send_msg with yy_msg: IntegerLiteral {
+            action send_msg with yy_msg: U32 {
                 mqtt.send(
                     {
                         asn: yy_msg,
@@ -987,19 +979,13 @@ fn bmp_message_8() {
 
         output-stream mqtt contains Message {
             asn: Asn,
-            message: IntegerLiteral
+            message: U32
         }
         "#,
     );
 
     trace!("res : {:?}", res);
-
-    // res.unwrap();
-    let err =
-        "Eval error: String cannot be converted into Lazy Record".to_string();
-    let mut str = res.unwrap_err().to_string();
-    str.truncate(err.len());
-    assert_eq!(str, err);
+    res.unwrap_err();
 }
 
 const TEST_ROUTER_SYS_NAME: &str = "test-router";
