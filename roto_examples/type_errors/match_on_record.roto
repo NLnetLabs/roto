@@ -1,13 +1,15 @@
 type Foo { a: U32 }
 
-filter foo {
+filter foo() {
 	define {
 		rx msg: Foo;
 	}
 
-	term bar {
-		match msg with {
+	term bar() {
+		match msg {
 
 		} 
 	}
+
+	apply { accept }
 }

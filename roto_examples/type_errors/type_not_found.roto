@@ -1,5 +1,7 @@
-filter foo {
+filter foo() {
 	define {
 		rx msg: FOO;
 	}
+
+	apply { accept }
 }

@@ -1,13 +1,13 @@
-filter foo {
+filter foo() {
 	define {
 		rx msg: BmpMessage;
 		a = true;
 		b = 4;
 	}
 
-	term foo {
-		match {
-			a == b;
-		}
-	}	
+	term foo() {
+		a == b
+	}
+	
+	apply { accept }
 }

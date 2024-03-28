@@ -1,11 +1,13 @@
-filter foo {
+filter foo() {
 	define {
 		rx msg: RouteStatus;
 	}
 
-	term bar {
-		match msg with {
+	term bar() {
+		match msg {
 			Stale(x) -> true, // should error here
 		} 
 	}
+
+	apply { accept }
 }

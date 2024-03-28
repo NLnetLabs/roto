@@ -1,11 +1,13 @@
-filter foo {
+filter foo() {
 	define {
 		rx msg: BmpMessage;
 	}
 
-	term bar {
-		match msg with {
+	term bar() {
+		match msg {
 			InitiationMessage -> true, // should error here
 		} 
 	}
+
+	apply { accept }
 }
