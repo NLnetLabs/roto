@@ -3,12 +3,16 @@ use std::str::FromStr;
 
 use log::trace;
 use roto::{
-    ast::AcceptReject, blocks::Scope, pipeline, types::{
+    ast::AcceptReject,
+    blocks::Scope,
+    pipeline,
+    types::{
         builtin::{
             RawRouteWithDeltas, RotondaId, RouteStatus, UpdateMessage,
         },
         collections::Record,
-    }, vm::{self, VmResult}
+    },
+    vm::{self, VmResult},
 };
 use routecore::bgp::message::SessionConfig;
 

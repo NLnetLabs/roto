@@ -11,10 +11,10 @@ use roto::types::builtin::{
 use roto::types::collections::Record;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
+use routecore::addr::Prefix;
 use routecore::bgp::message::nlri::{BasicNlri, Nlri};
 use routecore::bgp::message::SessionConfig;
 use routecore::bgp::types::{AfiSafi, NextHop};
-use routecore::addr::Prefix;
 
 mod common;
 
@@ -548,16 +548,14 @@ fn test_routes_6() {
 
     assert_eq!(
         next_hop,
-        TypeValue::Builtin(BuiltinTypeValue::NextHop(
-            NextHop::Ipv6LL(
-                std::net::Ipv6Addr::new(
-                    0xfc00, 0x10, 0x01, 0x10, 0x0, 0x0, 0x0, 0x10
-                ),
-                std::net::Ipv6Addr::new(
-                    0xfe80, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10
-                )
+        TypeValue::Builtin(BuiltinTypeValue::NextHop(NextHop::Ipv6LL(
+            std::net::Ipv6Addr::new(
+                0xfc00, 0x10, 0x01, 0x10, 0x0, 0x0, 0x0, 0x10
+            ),
+            std::net::Ipv6Addr::new(
+                0xfe80, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10
             )
-        ))
+        )))
     );
     trace!("{:#?}", output_stream_queue);
     assert_eq!(accept_reject, AcceptReject::Accept);

@@ -1,7 +1,6 @@
 use crate::ast::{
-    ActionDeclaration, Define, DefineBody, FilterMap,
-    FilterMapBody, FilterMapExpr, FilterType, Identifier, RxTxType,
-    TermDeclaration,
+    ActionDeclaration, Define, DefineBody, FilterMap, FilterMapBody,
+    FilterMapExpr, FilterType, Identifier, RxTxType, TermDeclaration,
 };
 
 use super::{

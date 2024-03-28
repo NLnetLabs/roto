@@ -242,9 +242,7 @@ fn test_bgp_update_3() {
     assert_eq!(
         res.rx,
         TypeValue::Builtin(
-            roto::types::builtin::BuiltinTypeValue::BgpUpdateMessage(
-                payload,
-            ),
+            roto::types::builtin::BuiltinTypeValue::BgpUpdateMessage(payload,),
         )
     );
 }

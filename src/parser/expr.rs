@@ -2,8 +2,8 @@ use std::num::ParseIntError;
 
 use crate::{
     ast::{
-        BinOp, Block, Expr, Identifier, IpAddress, Literal, Match, MatchArm,
-        Prefix, PrefixLengthRange, PrefixMatchExpr, PrefixMatchType,
+        BinOp, Block, Expr, IpAddress, Literal, Match, MatchArm, Prefix,
+        PrefixLengthRange, PrefixMatchExpr, PrefixMatchType, Record,
     },
     parser::ParseError,
 };
@@ -240,7 +240,7 @@ impl<'source> Parser<'source> {
         if self.peek_is(Token::CurlyLeft) {
             let key_values = self.record()?;
             let span = key_values.span;
-            return Ok(Expr::Record(key_values.inner).with_span(span));
+            return Ok(Expr::Record(key_values).with_span(span));
         }
 
         if self.peek_is(Token::Return) {
@@ -490,12 +490,7 @@ impl<'source> Parser<'source> {
                     })
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(|e: ParseIntError| {
-                        ParseError::invalid_literal(
-                            "community",
-                            s,
-                            e,
-                            span.clone(),
-                        )
+                        ParseError::invalid_literal("community", s, e, span)
                     })?;
 
                 let transformed = parts.join(":");
@@ -531,10 +526,8 @@ impl<'source> Parser<'source> {
     /// Record      ::= '{' (RecordField (',' RecordField)* ','? )? '}'
     /// RecordField ::= Identifier ':' ValueExpr
     /// ```
-    fn record(
-        &mut self,
-    ) -> ParseResult<Spanned<Vec<(Spanned<Identifier>, Spanned<Expr>)>>> {
-        self.separated(
+    fn record(&mut self) -> ParseResult<Spanned<Record>> {
+        let fields = self.separated(
             Token::CurlyLeft,
             Token::CurlyRight,
             Token::Comma,
@@ -544,7 +537,13 @@ impl<'source> Parser<'source> {
                 let value = parser.expr()?;
                 Ok((key, value))
             },
-        )
+        )?;
+
+        let span = fields.span;
+        Ok(Record {
+            fields: fields.inner,
+        }
+        .with_span(span))
     }
 
     /// Parse a list of arguments to a method

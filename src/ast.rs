@@ -94,23 +94,32 @@ pub enum Expr {
     /// prefix-length-range /12-/16`
     PrefixMatch(PrefixMatchExpr),
     FunctionCall(Spanned<Identifier>, Spanned<Vec<Spanned<Expr>>>),
-    MethodCall(Box<Spanned<Expr>>, Spanned<Identifier>, Spanned<Vec<Spanned<Expr>>>),
+    MethodCall(
+        Box<Spanned<Expr>>,
+        Spanned<Identifier>,
+        Spanned<Vec<Spanned<Expr>>>,
+    ),
     Access(Box<Spanned<Expr>>, Spanned<Identifier>),
     Var(Spanned<Identifier>),
     /// a record that doesn't have a type mentioned in the assignment of it,
     /// e.g `{ value_1: 100, value_2: "bla" }`. This can also be a sub-record
     /// of a record that does have an explicit type.
-    Record(Vec<(Spanned<Identifier>, Spanned<Expr>)>),
+    Record(Spanned<Record>),
     /// an expression of a record that does have a type, e.g. `MyType {
     /// value_1: 100, value_2: "bla" }`, where MyType is a user-defined Record
     /// Type.
-    TypedRecord(Spanned<Identifier>, Spanned<Vec<(Spanned<Identifier>, Spanned<Expr>)>>),
+    TypedRecord(Spanned<Identifier>, Spanned<Record>),
     /// An expression that yields a list of values, e.g. `[100, 200, 300]`
     List(Vec<Spanned<Expr>>),
     Not(Box<Spanned<Expr>>),
     BinOp(Box<Spanned<Expr>>, BinOp, Box<Spanned<Expr>>),
     Return(Box<Spanned<Expr>>),
     IfElse(Box<Spanned<Expr>>, Spanned<Block>, Option<Spanned<Block>>),
+}
+
+#[derive(Clone, Debug)]
+pub struct Record {
+    pub fields: Vec<(Spanned<Identifier>, Spanned<Expr>)>,
 }
 
 #[derive(Clone, Debug)]

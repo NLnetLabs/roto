@@ -54,10 +54,7 @@ impl std::fmt::Display for RotoReport {
                         file,
                         error.location.start,
                     )
-                    .with_message(format!(
-                        "Parse error: {}",
-                        error.to_string()
-                    ))
+                    .with_message(format!("Parse error: {}", error))
                     .with_label(label)
                     .finish();
 
@@ -65,39 +62,38 @@ impl std::fmt::Display for RotoReport {
                     report.write(&mut file_cache, &mut v).unwrap();
                     let s = String::from_utf8_lossy(&v);
                     write!(f, "{s}")?;
-                }
-                // RotoError::Type(error) => {
-                //     let labels = error.labels.iter().map(|l| {
-                //         Label::new((
-                //             self.filename(l.span.file),
-                //             l.span.start..l.span.end,
-                //         ))
-                //         .with_message(&l.message)
-                //         .with_color(match l.level {
-                //             Level::Error => Color::Red,
-                //             Level::Info => Color::Blue,
-                //         })
-                //     });
+                } // RotoError::Type(error) => {
+                  //     let labels = error.labels.iter().map(|l| {
+                  //         Label::new((
+                  //             self.filename(l.span.file),
+                  //             l.span.start..l.span.end,
+                  //         ))
+                  //         .with_message(&l.message)
+                  //         .with_color(match l.level {
+                  //             Level::Error => Color::Red,
+                  //             Level::Info => Color::Blue,
+                  //         })
+                  //     });
 
-                //     let file = self.filename(error.location.file);
+                  //     let file = self.filename(error.location.file);
 
-                //     let report = Report::build(
-                //         ReportKind::Error,
-                //         file,
-                //         error.location.start,
-                //     )
-                //     .with_message(format!(
-                //         "Type error: {}",
-                //         &error.description
-                //     ))
-                //     .with_labels(labels)
-                //     .finish();
+                  //     let report = Report::build(
+                  //         ReportKind::Error,
+                  //         file,
+                  //         error.location.start,
+                  //     )
+                  //     .with_message(format!(
+                  //         "Type error: {}",
+                  //         &error.description
+                  //     ))
+                  //     .with_labels(labels)
+                  //     .finish();
 
-                //     let mut v = Vec::new();
-                //     report.write(&mut file_cache, &mut v).unwrap();
-                //     let s = String::from_utf8_lossy(&v);
-                //     write!(f, "{s}")?;
-                // }
+                  //     let mut v = Vec::new();
+                  //     report.write(&mut file_cache, &mut v).unwrap();
+                  //     let s = String::from_utf8_lossy(&v);
+                  //     write!(f, "{s}")?;
+                  // }
             }
         }
 
@@ -113,11 +109,11 @@ impl RotoReport {
 
 impl std::error::Error for RotoReport {}
 
-pub fn run<'a>(
+pub fn run(
     files: impl IntoIterator<Item = String>,
 ) -> Result<(), RotoReport> {
     let files = read_files(files)?;
-    let trees = parse(&files)?;
+    let _trees = parse(&files)?;
     // typecheck(&files, &trees)?;
     Ok(())
 }
@@ -140,7 +136,7 @@ pub fn test_file(source: &str) -> Vec<SourceFile> {
 //     Ok(compile(&files, &symbols, arguments)?.remove(0))
 // }
 
-fn read_files<'a>(
+fn read_files(
     files: impl IntoIterator<Item = String>,
 ) -> Result<Vec<SourceFile>, RotoReport> {
     let results: Vec<_> = files
@@ -172,7 +168,7 @@ fn read_files<'a>(
 
 pub fn parse(files: &[SourceFile]) -> Result<Vec<SyntaxTree>, RotoReport> {
     let results: Vec<_> = files
-        .into_iter()
+        .iter()
         .enumerate()
         .map(|(i, f)| Parser::parse(i, &f.contents))
         .collect();

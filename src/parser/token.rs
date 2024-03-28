@@ -139,7 +139,7 @@ pub enum Token<'s> {
     // Integers can contain underscores, but cannot start with them.
     #[regex(r"[0-9][0-9_]*")]
     Integer(&'s str),
-    
+
     #[regex(r"0x[0-9A-Fa-f]+")]
     Hex(&'s str),
     #[regex(r"AS[0-9]+")]
