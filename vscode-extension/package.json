@@ -1,0 +1,25 @@
+{
+  "name": "roto",
+  "displayName": "roto",
+  "description": "",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.87.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [{
+      "id": "roto",
+      "aliases": ["Roto", "roto"],
+      "extensions": [".roto"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "roto",
+      "scopeName": "source.roto",
+      "path": "./syntaxes/roto.tmLanguage.json"
+    }]
+  }
+}
