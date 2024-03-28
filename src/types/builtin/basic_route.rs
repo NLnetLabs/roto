@@ -67,40 +67,14 @@ pub type LogicalTime = u64;
 impl PrefixRoute {
     pub fn nlri(&self) -> PrefixNlri {
         match &self.0 {
-            super::PrefixRouteWs::Ipv4Unicast(rws) => PrefixNlri::from(*rws.nlri()),
-            super::PrefixRouteWs::Ipv4UnicastAddpath(rws) => PrefixNlri::from(rws.nlri().clone()),
-            super::PrefixRouteWs::Ipv6Unicast(rws) => PrefixNlri::from(*rws.nlri()),
-            super::PrefixRouteWs::Ipv6UnicastAddpath(rws) => PrefixNlri::from(rws.nlri().clone()),
-            super::PrefixRouteWs::Ipv4Multicast(rws) => PrefixNlri::from(*rws.nlri()),
-            super::PrefixRouteWs::Ipv4MulticastAddpath(rws) => PrefixNlri::from(rws.nlri().clone()),
-            super::PrefixRouteWs::Ipv6Multicast(rws) => PrefixNlri::from(*rws.nlri()),
-            super::PrefixRouteWs::Ipv6MulticastAddpath(rws) => PrefixNlri::from(rws.nlri().clone()),
-        }
-    }
-
-    pub fn attributes(&self) -> &PaMap {
-        match &self.0 {
-            super::PrefixRouteWs::Ipv4Unicast(rws) => rws.attributes(),
-            super::PrefixRouteWs::Ipv4UnicastAddpath(rws) => rws.attributes(),
-            super::PrefixRouteWs::Ipv6Unicast(rws) => rws.attributes(),
-            super::PrefixRouteWs::Ipv6UnicastAddpath(rws) => rws.attributes(),
-            super::PrefixRouteWs::Ipv4Multicast(rws) => rws.attributes(),
-            super::PrefixRouteWs::Ipv4MulticastAddpath(rws) => rws.attributes(),
-            super::PrefixRouteWs::Ipv6Multicast(rws) => rws.attributes(),
-            super::PrefixRouteWs::Ipv6MulticastAddpath(rws) => rws.attributes(),
-        }
-    }
-
-    pub fn attributes_mut(&mut self) -> &mut PaMap {
-        match &mut self.0 {
-            super::PrefixRouteWs::Ipv4Unicast(rws) => rws.attributes_mut(),
-            super::PrefixRouteWs::Ipv4UnicastAddpath(rws) => rws.attributes_mut(),
-            super::PrefixRouteWs::Ipv6Unicast(rws) => rws.attributes_mut(),
-            super::PrefixRouteWs::Ipv6UnicastAddpath(rws) => rws.attributes_mut(),
-            super::PrefixRouteWs::Ipv4Multicast(rws) => rws.attributes_mut(),
-            super::PrefixRouteWs::Ipv4MulticastAddpath(rws) => rws.attributes_mut(),
-            super::PrefixRouteWs::Ipv6Multicast(rws) => rws.attributes_mut(),
-            super::PrefixRouteWs::Ipv6MulticastAddpath(rws) => rws.attributes_mut(),
+            super::PrefixRouteWs::Ipv4Unicast(rws) => PrefixNlri::from(rws.nlri()),
+            super::PrefixRouteWs::Ipv4UnicastAddpath(rws) => PrefixNlri::from(rws.nlri()),
+            super::PrefixRouteWs::Ipv6Unicast(rws) => PrefixNlri::from(rws.nlri()),
+            super::PrefixRouteWs::Ipv6UnicastAddpath(rws) => PrefixNlri::from(rws.nlri()),
+            super::PrefixRouteWs::Ipv4Multicast(rws) => PrefixNlri::from(rws.nlri()),
+            super::PrefixRouteWs::Ipv4MulticastAddpath(rws) => PrefixNlri::from(rws.nlri()),
+            super::PrefixRouteWs::Ipv6Multicast(rws) => PrefixNlri::from(rws.nlri()),
+            super::PrefixRouteWs::Ipv6MulticastAddpath(rws) => PrefixNlri::from(rws.nlri()),
         }
     }
 
@@ -127,6 +101,58 @@ impl PrefixRoute {
             super::PrefixRouteWs::Ipv4MulticastAddpath(rws) => rws.nlri().path_id(),
             super::PrefixRouteWs::Ipv6Multicast(rws) => rws.nlri().path_id(),
             super::PrefixRouteWs::Ipv6MulticastAddpath(rws) => rws.nlri().path_id(),
+        }
+    }
+
+    pub fn next_hop(&self) -> Option<NextHop> {
+        match &self.0 {
+            super::PrefixRouteWs::Ipv4Unicast(rws) => *rws.nexthop(),
+            super::PrefixRouteWs::Ipv4UnicastAddpath(rws) => *rws.nexthop(),
+            super::PrefixRouteWs::Ipv6Unicast(rws) => *rws.nexthop(),
+            super::PrefixRouteWs::Ipv6UnicastAddpath(rws) => *rws.nexthop(),
+            super::PrefixRouteWs::Ipv4Multicast(rws) => *rws.nexthop(),
+            super::PrefixRouteWs::Ipv4MulticastAddpath(rws) => *rws.nexthop(),
+            super::PrefixRouteWs::Ipv6Multicast(rws) => *rws.nexthop(),
+            super::PrefixRouteWs::Ipv6MulticastAddpath(rws) => *rws.nexthop(),
+        }
+    }
+
+    pub fn set_next_hop(&mut self, value: NextHop) -> Option<NextHop> {
+        match &mut self.0 {
+            super::PrefixRouteWs::Ipv4Unicast(rws) => rws.set_nexthop(value),
+            super::PrefixRouteWs::Ipv4UnicastAddpath(rws) => rws.set_nexthop(value),
+            super::PrefixRouteWs::Ipv6Unicast(rws) => rws.set_nexthop(value),
+            super::PrefixRouteWs::Ipv6UnicastAddpath(rws) => rws.set_nexthop(value),
+            super::PrefixRouteWs::Ipv4Multicast(rws) => rws.set_nexthop(value),
+            super::PrefixRouteWs::Ipv4MulticastAddpath(rws) => rws.set_nexthop(value),
+            super::PrefixRouteWs::Ipv6Multicast(rws) => rws.set_nexthop(value),
+            super::PrefixRouteWs::Ipv6MulticastAddpath(rws) => rws.set_nexthop(value),
+        }
+    }
+
+    pub fn attributes(&self) -> &PaMap {
+        match &self.0 {
+            super::PrefixRouteWs::Ipv4Unicast(rws) => rws.attributes(),
+            super::PrefixRouteWs::Ipv4UnicastAddpath(rws) => rws.attributes(),
+            super::PrefixRouteWs::Ipv6Unicast(rws) => rws.attributes(),
+            super::PrefixRouteWs::Ipv6UnicastAddpath(rws) => rws.attributes(),
+            super::PrefixRouteWs::Ipv4Multicast(rws) => rws.attributes(),
+            super::PrefixRouteWs::Ipv4MulticastAddpath(rws) => rws.attributes(),
+            super::PrefixRouteWs::Ipv6Multicast(rws) => rws.attributes(),
+            super::PrefixRouteWs::Ipv6MulticastAddpath(rws) => rws.attributes(),
+        }
+    }
+
+    pub fn attributes_mut(&mut self) -> &mut PaMap {
+        match &mut self.0 {
+            super::PrefixRouteWs::Ipv4Unicast(rws) => rws.attributes_mut(),
+            super::PrefixRouteWs::Ipv4UnicastAddpath(rws) => rws.attributes_mut(),
+            super::PrefixRouteWs::Ipv6Unicast(rws) => rws.attributes_mut(),
+            super::PrefixRouteWs::Ipv6UnicastAddpath(rws) => rws.attributes_mut(),
+            super::PrefixRouteWs::Ipv4Multicast(rws) => rws.attributes_mut(),
+            super::PrefixRouteWs::Ipv4MulticastAddpath(rws) => rws.attributes_mut(),
+            super::PrefixRouteWs::Ipv6Multicast(rws) => rws.attributes_mut(),
+            super::PrefixRouteWs::Ipv6MulticastAddpath(rws) => rws.attributes_mut(),
         }
     }
 
@@ -215,8 +241,7 @@ impl PrefixRoute {
                 if let Some(index) = index_iter.next() {
                     let attr: Option<TypeValue> = match index {
                         3 => {
-                            todo!()
-                            // self.0.get_attr::<NextHop>().map(TypeValue::from)
+                            self.next_hop().map(TypeValue::from)
                         }
                         8 => self.get_attr::<Vec<Community>>().map(|c| {
                             TypeValue::List(List(

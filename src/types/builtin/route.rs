@@ -55,8 +55,8 @@ impl PrefixNlri {
     }
 }
 
-impl From<Ipv4UnicastNlri> for PrefixNlri {
-    fn from(value: Ipv4UnicastNlri) -> PrefixNlri {
+impl From<&Ipv4UnicastNlri> for PrefixNlri {
+    fn from(value: &Ipv4UnicastNlri) -> PrefixNlri {
         PrefixNlri {
             ty: AfiSafiType::Ipv4Unicast,
             prefix: value.prefix(),
@@ -65,8 +65,8 @@ impl From<Ipv4UnicastNlri> for PrefixNlri {
     }
 }
 
-impl From<Ipv4UnicastAddpathNlri> for PrefixNlri {
-    fn from(value: Ipv4UnicastAddpathNlri) -> PrefixNlri {
+impl From<&Ipv4UnicastAddpathNlri> for PrefixNlri {
+    fn from(value: &Ipv4UnicastAddpathNlri) -> PrefixNlri {
         PrefixNlri {
             ty: AfiSafiType::Ipv4Unicast,
             prefix: value.prefix(),
@@ -75,8 +75,8 @@ impl From<Ipv4UnicastAddpathNlri> for PrefixNlri {
     }
 }
 
-impl From<Ipv6UnicastNlri> for PrefixNlri {
-    fn from(value: Ipv6UnicastNlri) -> PrefixNlri {
+impl From<&Ipv6UnicastNlri> for PrefixNlri {
+    fn from(value: &Ipv6UnicastNlri) -> PrefixNlri {
         PrefixNlri {
             ty: AfiSafiType::Ipv6Unicast,
             prefix: value.prefix(),
@@ -85,8 +85,8 @@ impl From<Ipv6UnicastNlri> for PrefixNlri {
     }
 }
 
-impl From<Ipv6UnicastAddpathNlri> for PrefixNlri {
-    fn from(value: Ipv6UnicastAddpathNlri) -> PrefixNlri {
+impl From<&Ipv6UnicastAddpathNlri> for PrefixNlri {
+    fn from(value: &Ipv6UnicastAddpathNlri) -> PrefixNlri {
         PrefixNlri {
             ty: AfiSafiType::Ipv6Unicast,
             prefix: value.prefix(),
@@ -95,8 +95,8 @@ impl From<Ipv6UnicastAddpathNlri> for PrefixNlri {
     }
 }
 
-impl From<Ipv4MulticastNlri> for PrefixNlri {
-    fn from(value: Ipv4MulticastNlri) -> PrefixNlri {
+impl From<&Ipv4MulticastNlri> for PrefixNlri {
+    fn from(value: &Ipv4MulticastNlri) -> PrefixNlri {
         PrefixNlri {
             ty: AfiSafiType::Ipv4Multicast,
             prefix: value.prefix(),
@@ -105,8 +105,8 @@ impl From<Ipv4MulticastNlri> for PrefixNlri {
     }
 }
 
-impl From<Ipv4MulticastAddpathNlri> for PrefixNlri {
-    fn from(value: Ipv4MulticastAddpathNlri) -> PrefixNlri {
+impl From<&Ipv4MulticastAddpathNlri> for PrefixNlri {
+    fn from(value: &Ipv4MulticastAddpathNlri) -> PrefixNlri {
         PrefixNlri {
             ty: AfiSafiType::Ipv4Multicast,
             prefix: value.prefix(),
@@ -115,8 +115,8 @@ impl From<Ipv4MulticastAddpathNlri> for PrefixNlri {
     }
 }
 
-impl From<Ipv6MulticastNlri> for PrefixNlri {
-    fn from(value: Ipv6MulticastNlri) -> PrefixNlri {
+impl From<&Ipv6MulticastNlri> for PrefixNlri {
+    fn from(value: &Ipv6MulticastNlri) -> PrefixNlri {
         PrefixNlri {
             ty: AfiSafiType::Ipv6Multicast,
             prefix: value.prefix(),
@@ -125,8 +125,8 @@ impl From<Ipv6MulticastNlri> for PrefixNlri {
     }
 }
 
-impl From<Ipv6MulticastAddpathNlri> for PrefixNlri {
-    fn from(value: Ipv6MulticastAddpathNlri) -> PrefixNlri {
+impl From<&Ipv6MulticastAddpathNlri> for PrefixNlri {
+    fn from(value: &Ipv6MulticastAddpathNlri) -> PrefixNlri {
         PrefixNlri {
             ty: AfiSafiType::Ipv6Multicast,
             prefix: value.prefix(),
