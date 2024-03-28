@@ -14,6 +14,14 @@ use super::{
     ParseResult, Parser,
 };
 
+/// Contextual restrictions on the expression parsing
+///
+/// This is used to resolve ambiguities in the grammar.
+#[derive(Clone, Copy)]
+struct Restrictions {
+    forbid_records: bool,
+}
+
 /// # Parsing value expressions
 impl<'source> Parser<'source> {
     pub fn block(&mut self) -> ParseResult<Block> {
@@ -29,16 +37,31 @@ impl<'source> Parser<'source> {
     }
 
     pub fn expr(&mut self) -> ParseResult<Spanned<Expr>> {
-        self.logical_expr()
+        self.expr_inner(Restrictions {
+            forbid_records: false,
+        })
     }
 
-    fn logical_expr(&mut self) -> ParseResult<Spanned<Expr>> {
-        let expr = self.comparison()?;
+    fn expr_no_records(&mut self) -> ParseResult<Spanned<Expr>> {
+        self.expr_inner(Restrictions {
+            forbid_records: true,
+        })
+    }
+
+    fn expr_inner(&mut self, r: Restrictions) -> ParseResult<Spanned<Expr>> {
+        self.logical_expr(r)
+    }
+
+    fn logical_expr(
+        &mut self,
+        r: Restrictions,
+    ) -> ParseResult<Spanned<Expr>> {
+        let expr = self.comparison(r)?;
 
         if self.peek_is(Token::AmpAmp) {
             let mut exprs = vec![expr];
             while self.next_is(Token::AmpAmp) {
-                exprs.push(self.comparison()?);
+                exprs.push(self.comparison(r)?);
             }
             Ok(exprs
                 .into_iter()
@@ -52,7 +75,7 @@ impl<'source> Parser<'source> {
         } else if self.peek_is(Token::PipePipe) {
             let mut exprs = vec![expr];
             while self.next_is(Token::PipePipe) {
-                exprs.push(self.comparison()?);
+                exprs.push(self.comparison(r)?);
             }
             Ok(exprs
                 .into_iter()
@@ -68,11 +91,11 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn comparison(&mut self) -> ParseResult<Spanned<Expr>> {
-        let expr = self.access()?;
+    fn comparison(&mut self, r: Restrictions) -> ParseResult<Spanned<Expr>> {
+        let expr = self.access(r)?;
 
         if let Some(op) = self.try_compare_operator()? {
-            let right = self.access()?;
+            let right = self.access(r)?;
             let span = expr.span.merge(right.span);
             Ok(Expr::BinOp(Box::new(expr), op.inner, Box::new(right))
                 .with_span(span))
@@ -117,8 +140,8 @@ impl<'source> Parser<'source> {
         Ok(Some(op.with_span(span)))
     }
 
-    fn access(&mut self) -> ParseResult<Spanned<Expr>> {
-        let mut expr = self.atom()?;
+    fn access(&mut self, r: Restrictions) -> ParseResult<Spanned<Expr>> {
+        let mut expr = self.atom(r)?;
 
         while self.next_is(Token::Period) {
             let ident = self.identifier()?;
@@ -136,7 +159,7 @@ impl<'source> Parser<'source> {
         Ok(expr)
     }
 
-    fn atom(&mut self) -> ParseResult<Spanned<Expr>> {
+    fn atom(&mut self, r: Restrictions) -> ParseResult<Spanned<Expr>> {
         if self.peek_is(Token::RoundLeft) {
             self.take(Token::RoundLeft)?;
             let expr = self.expr()?;
@@ -162,59 +185,12 @@ impl<'source> Parser<'source> {
         }
 
         if self.peek_is(Token::Match) {
-            let start = self.take(Token::Match)?;
-            let expr = self.expr()?;
-
-            let mut arms = Vec::new();
-            self.take(Token::CurlyLeft)?;
-            while !self.peek_is(Token::CurlyRight) {
-                let variant_id = self.identifier()?;
-
-                let data_field = if self.peek_is(Token::RoundLeft) {
-                    self.take(Token::RoundLeft)?;
-                    let ident = self.identifier()?;
-                    self.take(Token::RoundRight)?;
-                    Some(ident)
-                } else {
-                    None
-                };
-
-                let guard = if self.next_is(Token::Pipe) {
-                    Some(self.expr()?)
-                } else {
-                    None
-                };
-
-                self.take(Token::Arrow)?;
-
-                let body = if self.peek_is(Token::CurlyLeft) {
-                    let exprs = self.block()?;
-                    self.next_is(Token::Comma);
-                    exprs
-                } else {
-                    let expr = self.expr()?;
-                    self.take(Token::Comma)?;
-                    Block { exprs: vec![expr] }
-                };
-
-                arms.push(MatchArm {
-                    variant_id,
-                    data_field,
-                    guard,
-                    body,
-                })
-            }
-
-            let end = self.take(Token::CurlyRight)?;
-            let span = start.merge(end);
-            return Ok(
-                Expr::Match(Box::new(Match { expr, arms })).with_span(span)
-            );
+            return self.match_expr();
         }
 
         if let Some(Token::Ident(_)) = self.peek() {
             let ident = self.identifier()?;
-            if self.peek_is(Token::CurlyLeft) {
+            if !r.forbid_records && self.peek_is(Token::CurlyLeft) {
                 let key_values = self.record()?;
                 let span = ident.span.merge(key_values.span);
                 return Ok(
@@ -246,6 +222,55 @@ impl<'source> Parser<'source> {
 
         let span = literal.span;
         Ok(Expr::Literal(literal).with_span(span))
+    }
+
+    fn match_expr(&mut self) -> ParseResult<Spanned<Expr>> {
+        let start = self.take(Token::Match)?;
+        let expr = self.expr_no_records()?;
+
+        let mut arms = Vec::new();
+        self.take(Token::CurlyLeft)?;
+        while !self.peek_is(Token::CurlyRight) {
+            let variant_id = self.identifier()?;
+
+            let data_field = if self.peek_is(Token::RoundLeft) {
+                self.take(Token::RoundLeft)?;
+                let ident = self.identifier()?;
+                self.take(Token::RoundRight)?;
+                Some(ident)
+            } else {
+                None
+            };
+
+            let guard = if self.next_is(Token::Pipe) {
+                Some(self.expr()?)
+            } else {
+                None
+            };
+
+            self.take(Token::Arrow)?;
+
+            let body = if self.peek_is(Token::CurlyLeft) {
+                let exprs = self.block()?;
+                self.next_is(Token::Comma);
+                exprs
+            } else {
+                let expr = self.expr()?;
+                self.take(Token::Comma)?;
+                Block { exprs: vec![expr] }
+            };
+
+            arms.push(MatchArm {
+                variant_id,
+                data_field,
+                guard,
+                body,
+            })
+        }
+
+        let end = self.take(Token::CurlyRight)?;
+        let span = start.merge(end);
+        Ok(Expr::Match(Box::new(Match { expr, arms })).with_span(span))
     }
 
     /// Parse any literal, including prefixes, ip addresses and communities

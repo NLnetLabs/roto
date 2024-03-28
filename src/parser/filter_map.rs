@@ -1,5 +1,5 @@
 use crate::ast::{
-    ActionDeclaration, Block, Define, DefineBody, FilterMap,
+    ActionDeclaration, Define, DefineBody, FilterMap,
     FilterMapBody, FilterMapExpr, FilterType, Identifier, RxTxType,
     TermDeclaration,
 };
