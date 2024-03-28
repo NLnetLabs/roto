@@ -71,6 +71,8 @@ pub enum Token<'s> {
     Contains,
     #[token("define")]
     Define,
+    #[token("else")]
+    Else,
     #[token("exact")]
     Exact,
     #[token("filter-map")]
@@ -79,6 +81,8 @@ pub enum Token<'s> {
     Filter,
     #[token("import")]
     Import,
+    #[token("if")]
+    If,
     #[token("in")]
     In,
     #[token("longer")]
@@ -193,10 +197,12 @@ impl<'source> Display for Token<'source> {
             Token::Apply => "apply",
             Token::Contains => "contains",
             Token::Define => "define",
+            Token::Else => "else",
             Token::Exact => "exact",
             Token::FilterMap => "filter-map",
             Token::Filter => "filter",
             Token::Import => "import",
+            Token::If => "if",
             Token::In => "in",
             Token::Longer => "longer",
             Token::Match => "match",

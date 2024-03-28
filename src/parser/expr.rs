@@ -24,16 +24,59 @@ struct Restrictions {
 
 /// # Parsing value expressions
 impl<'source> Parser<'source> {
-    pub fn block(&mut self) -> ParseResult<Block> {
-        self.take(Token::CurlyLeft)?;
+    pub fn block(&mut self) -> ParseResult<Spanned<Block>> {
+        let start = self.take(Token::CurlyLeft)?;
 
         let mut exprs = Vec::new();
-        while !self.next_is(Token::CurlyRight) {
-            exprs.push(self.expr()?);
-            self.take(Token::SemiColon)?;
-        }
 
-        Ok(Block { exprs })
+        loop {
+            if self.peek_is(Token::CurlyRight) {
+                let end = self.take(Token::CurlyRight)?;
+                return Ok(
+                    Block { exprs, last: None }.with_span(start.merge(end))
+                );
+            }
+
+            // Edge case: if and match don't have to end in a semicolon
+            // but if they appear at the end, they are the last
+            // expression. This is what Rust does too and while it looks
+            // hacky, it works really well in practice.
+            if self.peek_is(Token::If) {
+                let expr = self.if_else()?;
+                if self.peek_is(Token::CurlyRight) {
+                    let end = self.take(Token::CurlyRight)?;
+                    return Ok(Block {
+                        exprs,
+                        last: Some(Box::new(expr)),
+                    }
+                    .with_span(start.merge(end)));
+                }
+                exprs.push(expr);
+            } else if self.peek_is(Token::Match) {
+                let expr = self.match_expr()?;
+                if self.peek_is(Token::CurlyRight) {
+                    let end = self.take(Token::CurlyRight)?;
+                    return Ok(Block {
+                        exprs,
+                        last: Some(Box::new(expr)),
+                    }
+                    .with_span(start.merge(end)));
+                }
+                exprs.push(expr);
+            } else {
+                let expr = self.expr()?;
+                if self.next_is(Token::SemiColon) {
+                    exprs.push(expr);
+                } else {
+                    let end = self.take(Token::CurlyRight)?;
+                    return Ok(Block {
+                        exprs,
+                        last: Some(Box::new(expr)),
+                    }
+                    .with_span(start.merge(end)));
+                }
+            };
+        }
     }
 
     pub fn expr(&mut self) -> ParseResult<Spanned<Expr>> {
@@ -200,6 +243,17 @@ impl<'source> Parser<'source> {
             return Ok(Expr::Record(key_values.inner).with_span(span));
         }
 
+        if self.peek_is(Token::Return) {
+            let start = self.take(Token::Return)?;
+            let expr = self.expr_inner(r)?;
+            let span = start.merge(expr.span);
+            return Ok(Expr::Return(Box::new(expr)).with_span(span));
+        }
+
+        if self.peek_is(Token::If) {
+            return self.if_else();
+        }
+
         if self.peek_is(Token::Match) {
             return self.match_expr();
         }
@@ -240,6 +294,35 @@ impl<'source> Parser<'source> {
         Ok(Expr::Literal(literal).with_span(span))
     }
 
+    fn if_else(&mut self) -> ParseResult<Spanned<Expr>> {
+        let start = self.take(Token::If)?;
+        let cond = self.expr_no_records()?;
+        let then_block = self.block()?;
+
+        if self.next_is(Token::Else) {
+            let else_block = if self.peek_is(Token::If) {
+                let expr = self.if_else()?;
+                let span = expr.span;
+                Block {
+                    exprs: Vec::new(),
+                    last: Some(Box::new(expr)),
+                }
+                .with_span(span)
+            } else {
+                self.block()?
+            };
+            let span = start.merge(else_block.span);
+            Ok(Expr::IfElse(Box::new(cond), then_block, Some(else_block))
+                .with_span(span))
+        } else {
+            let span = start.merge(then_block.span);
+            Ok(
+                Expr::IfElse(Box::new(cond), then_block, None)
+                    .with_span(span),
+            )
+        }
+    }
+
     fn match_expr(&mut self) -> ParseResult<Spanned<Expr>> {
         let start = self.take(Token::Match)?;
         let expr = self.expr_no_records()?;
@@ -272,8 +355,13 @@ impl<'source> Parser<'source> {
                 exprs
             } else {
                 let expr = self.expr()?;
+                let span = expr.span;
                 self.take(Token::Comma)?;
-                Block { exprs: vec![expr] }
+                Block {
+                    exprs: Vec::new(),
+                    last: Some(Box::new(expr)),
+                }
+                .with_span(span)
             };
 
             arms.push(MatchArm {

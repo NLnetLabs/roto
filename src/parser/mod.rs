@@ -9,7 +9,7 @@ mod filter_map;
 mod rib_like;
 pub mod span;
 mod token;
-mod value;
+mod expr;
 
 #[cfg(test)]
 mod test_expressions;

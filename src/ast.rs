@@ -39,7 +39,7 @@ pub struct FilterMap {
 pub struct FilterMapBody {
     pub define: Define,
     pub expressions: Vec<FilterMapExpr>,
-    pub apply: Block,
+    pub apply: Spanned<Block>,
 }
 
 /// These are the sections that can appear multiple times in a Filter(Map)
@@ -75,12 +75,13 @@ pub struct DefineBody {
 pub struct TermDeclaration {
     pub ident: Spanned<Identifier>,
     pub with_kv: Vec<(Spanned<Identifier>, Spanned<Identifier>)>,
-    pub body: Block,
+    pub body: Spanned<Block>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Block {
     pub exprs: Vec<Spanned<Expr>>,
+    pub last: Option<Box<Spanned<Expr>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -108,6 +109,8 @@ pub enum Expr {
     List(Vec<Spanned<Expr>>),
     Not(Box<Spanned<Expr>>),
     BinOp(Box<Spanned<Expr>>, BinOp, Box<Spanned<Expr>>),
+    Return(Box<Spanned<Expr>>),
+    IfElse(Box<Spanned<Expr>>, Spanned<Block>, Option<Spanned<Block>>),
 }
 
 #[derive(Clone, Debug)]
@@ -121,19 +124,14 @@ pub struct MatchArm {
     pub variant_id: Spanned<Identifier>,
     pub data_field: Option<Spanned<Identifier>>,
     pub guard: Option<Spanned<Expr>>,
-    pub body: Block,
+    pub body: Spanned<Block>,
 }
 
 #[derive(Clone, Debug)]
 pub struct ActionDeclaration {
     pub ident: Spanned<Identifier>,
     pub with_kv: Vec<(Spanned<Identifier>, Spanned<Identifier>)>,
-    pub body: Block,
-}
-
-#[derive(Clone, Debug)]
-pub struct PatternMatchActionArm {
-    
+    pub body: Spanned<Block>,
 }
 
 #[derive(Clone, Debug)]

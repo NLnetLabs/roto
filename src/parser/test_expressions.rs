@@ -1,7 +1,5 @@
 use crate::parser::Parser;
 
-//------------ Logical Expressions parsing ----------------------------------
-
 #[test]
 fn test_logical_expr_1() {
     let r = Parser::run_parser(
@@ -160,4 +158,24 @@ fn test_or_or_or() {
 #[test]
 fn test_and_or_and() {
     Parser::run_parser(Parser::expr, 0, "a && b || c && d").unwrap_err();
+}
+
+#[test]
+fn test_if() {
+    Parser::run_parser(Parser::expr, 0, "if true { 0 }").unwrap();
+}
+
+#[test]
+fn test_if_else() {
+    Parser::run_parser(Parser::expr, 0, "if true { 0 } else { 1 }").unwrap();
+}
+
+#[test]
+fn test_if_else_if_else() {
+    Parser::run_parser(
+        Parser::expr,
+        0,
+        "if true { 0 } else if false { 1 } else { 2 }",
+    )
+    .unwrap();
 }
