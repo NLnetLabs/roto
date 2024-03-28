@@ -101,8 +101,15 @@ impl TypeChecker<'_> {
             }
         }
 
+        if let Some(ast::TypeIdentField { field_name, ty }) = route_context {
+            let Some(ty) = self.get_type(ty) else {
+                return Err(error::undeclared_type(ty));
+            };
+            scope.insert_var(field_name, ty)?;
+        }
+
         for (ident, expr) in assignments {
-            let t = self.expr(&scope, expr)?;
+            let t = self.expr(scope, expr)?;
             scope.insert_var(ident, t)?;
         }
 

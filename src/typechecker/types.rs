@@ -1,5 +1,7 @@
 use std::fmt::{Debug, Display};
 
+use crate::types::lazyrecord_types::BgpUpdateMessage;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
     Var(usize),
@@ -41,6 +43,9 @@ pub enum Primitive {
     LocalPref,
     AtomicAggregate,
     Aggregator,
+    Nlri,
+    RouteStatus,
+    BgpUpdateMessage
 }
 
 impl Into<Type> for Primitive {
@@ -205,6 +210,13 @@ pub fn methods() -> Vec<Method> {
             Bool,
         ),
         Method::new(
+            List(Box::new(ExplicitVar("T"))),
+            "first",
+            &["T"],
+            &[] as &[Type],
+            ExplicitVar("T")
+        ),
+        Method::new(
             Table(Box::new(ExplicitVar("T"))),
             "contains",
             &["T"],
@@ -217,6 +229,8 @@ pub fn methods() -> Vec<Method> {
         Method::new(Prefix, "is_covered_by", &[], &[Prefix], Bool),
         Method::new(AsPath, "len", &[], &[] as &[Type], U32),
         Method::new(AsPath, "origin", &[], &[] as &[Type], AsNumber),
+        Method::new(Nlri, "afi", &[], &[] as &[Type], Type::Name("Afi".into())),
+        Method::new(Nlri, "safi", &[], &[] as &[Type], Type::Name("Safi".into())),
     ]
 }
 
@@ -256,6 +270,9 @@ pub fn default_types() -> Vec<(&'static str, Type)> {
         ("Aggregator", Aggregator),
         ("Community", Community),
         ("Unit", Unit),
+        ("Nlri", Nlri),
+        ("RouteStatus", RouteStatus),
+        ("BgpUpdateMessage", BgpUpdateMessage),
     ];
 
     let mut types = Vec::new();
@@ -284,6 +301,39 @@ pub fn default_types() -> Vec<(&'static str, Type)> {
                 ("asn", "Asn"),
                 ("address", "IpAddress"),
             ],
+        ),
+        Enum(
+            "PeerRibType",
+            vec![
+                ("InPre", None),
+                ("InPost", None),
+                ("Loc", None),
+                ("OutPre", None),
+                ("OutPost", None)
+            ]
+        ),
+        Record(
+            "PeerId",
+            vec![("addr", "IpAddress"), ("asn", "Asn")]
+        ),
+        Record(
+            "Provenance",
+            vec![
+                ("timestamp", "U32"),
+                ("connection_id", "U32"),
+                ("peer-id", "PeerId"),
+                ("peer-bgp-id", "U32"),
+                ("peer-distuingisher", "U32"),
+                ("peer-rib-type", "PeerRibType"),
+            ]
+        ),
+        Record(
+            "RouteContext",
+            vec![
+                ("bgp-msg", "BgpUpdateMessage"),
+                ("provenance", "Provenance"),
+                ("nlri-status", "RouteStatus")
+            ]
         ),
         Enum(
             "RouteStatus",
@@ -356,10 +406,23 @@ pub fn default_types() -> Vec<(&'static str, Type)> {
             ],
         ),
         Enum("Safi", vec![("Unicast", None), ("Multicast", None)]),
-        Record("Nlris", vec![("afi", "Afi"), ("safi", "Safi")]),
+        Record("Nlri", vec![("afi", "Afi"), ("safi", "Safi")]),
         Record(
             "BgpUpdateMessage",
-            vec![("nlris", "Nlris"), ("afi", "Afi"), ("safi", "Safi")],
+            vec![
+                ("announcements", "[Nlri]"),
+                ("as-path", "AsPath"),
+                ("origin-type", "OriginType"),
+                ("next-hop", "NextHop"),
+                ("multi-exit-disc", "MultiExitDisc"),
+                ("local-pref", "LocalPref"),
+                ("atomic-aggregate", "AtomicAggregate"),
+                ("aggregator", "Aggregator"),
+                ("communities", "[Community]"),
+                ("status", "RouteStatus"),
+                ("peer_ip", "IpAddress"),
+                ("peer_asn", "Asn"),
+            ]
         ),
     ];
 
@@ -394,7 +457,7 @@ pub fn default_types() -> Vec<(&'static str, Type)> {
                         (field_name.to_string(), ty)
                     })
                     .collect();
-                types.push((n.into(), Type::NamedRecord(n.into(), fields)))
+                types.push((n, Type::NamedRecord(n.into(), fields)))
             }
             Enum(n, variants) => {
                 let variants = variants
@@ -411,7 +474,7 @@ pub fn default_types() -> Vec<(&'static str, Type)> {
                         (variant_name.to_string(), v)
                     })
                     .collect();
-                types.push((n.into(), Type::Enum(n.into(), variants)))
+                types.push((n, Type::Enum(n.into(), variants)))
             }
         }
     }
