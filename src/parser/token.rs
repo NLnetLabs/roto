@@ -127,8 +127,6 @@ pub enum Token<'s> {
     UpTo,
     #[token("use")]
     Use,
-    #[token("with")]
-    With,
 
     // === Literals ===
     // String literal with escape sequences would look like this:
@@ -225,7 +223,6 @@ impl<'source> Display for Token<'source> {
             Token::Type => "type",
             Token::UpTo => "up-to",
             Token::Use => "use",
-            Token::With => "with",
             Token::String(s) => s,
             Token::Integer(s) => s,
             Token::Hex(s) => s,

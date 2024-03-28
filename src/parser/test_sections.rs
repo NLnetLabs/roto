@@ -8,7 +8,7 @@ fn test_logical_expr_1() {
         Parser::action,
         0,
         r###"
-        action my-action {
+        action my-action() {
             send-to(a,b);
         }"###,
     );
@@ -21,7 +21,7 @@ fn test_logical_expr_2() {
         Parser::action,
         0,
         r###"
-        action my-action {
+        action my-action() {
             send_to(a,b);
             pph_asn.asn.set(AS200);
         }

@@ -31,7 +31,7 @@ pub enum FilterType {
 pub struct FilterMap {
     pub filter_type: FilterType,
     pub ident: Spanned<Identifier>,
-    pub with_kv: Vec<(Spanned<Identifier>, Spanned<Identifier>)>,
+    pub params: Spanned<Vec<(Spanned<Identifier>, Spanned<Identifier>)>>,
     pub body: FilterMapBody,
 }
 
@@ -49,10 +49,8 @@ pub enum FilterMapExpr {
     Action(ActionDeclaration),
 }
 
-//------------ Define -------------------------------------------------------
 #[derive(Clone, Debug)]
 pub struct Define {
-    pub with_kv: Vec<(Spanned<Identifier>, Spanned<Identifier>)>,
     pub body: DefineBody,
 }
 
@@ -74,7 +72,7 @@ pub struct DefineBody {
 #[derive(Clone, Debug)]
 pub struct TermDeclaration {
     pub ident: Spanned<Identifier>,
-    pub with_kv: Vec<(Spanned<Identifier>, Spanned<Identifier>)>,
+    pub params: Spanned<Vec<(Spanned<Identifier>, Spanned<Identifier>)>>,
     pub body: Spanned<Block>,
 }
 
@@ -139,7 +137,7 @@ pub struct MatchArm {
 #[derive(Clone, Debug)]
 pub struct ActionDeclaration {
     pub ident: Spanned<Identifier>,
-    pub with_kv: Vec<(Spanned<Identifier>, Spanned<Identifier>)>,
+    pub params: Spanned<Vec<(Spanned<Identifier>, Spanned<Identifier>)>>,
     pub body: Spanned<Block>,
 }
 

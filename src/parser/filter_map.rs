@@ -19,7 +19,7 @@ impl<'source> Parser<'source> {
     /// ```
     pub(super) fn filter_map(&mut self) -> ParseResult<FilterMap> {
         let (token, span) = self.next()?;
-        let ty = match token {
+        let filter_type = match token {
             Token::FilterMap => FilterType::FilterMap,
             Token::Filter => FilterType::Filter,
             _ => {
@@ -32,13 +32,13 @@ impl<'source> Parser<'source> {
         };
 
         let ident = self.identifier()?;
-        let with_kv = self.try_with_clause()?;
+        let params = self.params()?;
         let body = self.filter_map_body(span)?;
 
         Ok(FilterMap {
-            filter_type: ty,
+            filter_type,
             ident,
-            with_kv,
+            params,
             body,
         })
     }
@@ -71,9 +71,8 @@ impl<'source> Parser<'source> {
                         span,
                     ));
                 }
-                let with_kv = self.try_with_clause()?;
                 let body = self.define_body()?;
-                define = Some(Define { with_kv, body });
+                define = Some(Define { body });
             } else if self.peek_is(Token::Apply) {
                 let (_, span) = self.next()?;
                 if apply.is_some() {
@@ -202,12 +201,12 @@ impl<'source> Parser<'source> {
     fn term(&mut self) -> ParseResult<TermDeclaration> {
         self.take(Token::Term)?;
         let ident = self.identifier()?;
-        let with_kv = self.try_with_clause()?;
+        let params = self.params()?;
         let body = self.block()?;
 
         Ok(TermDeclaration {
             ident,
-            with_kv,
+            params,
             body,
         })
     }
@@ -215,12 +214,12 @@ impl<'source> Parser<'source> {
     pub(super) fn action(&mut self) -> ParseResult<ActionDeclaration> {
         self.take(Token::Action)?;
         let ident = self.identifier()?;
-        let with_kv = self.try_with_clause()?;
+        let params = self.params()?;
         let body = self.block()?;
 
         Ok(ActionDeclaration {
             ident,
-            with_kv,
+            params,
             body,
         })
     }
@@ -230,21 +229,16 @@ impl<'source> Parser<'source> {
     /// ```ebnf
     /// With ::= ( 'with' TypeIdentField (',' TypeIdentField)*)?
     /// ```
-    fn try_with_clause(
+    fn params(
         &mut self,
-    ) -> ParseResult<Vec<(Spanned<Identifier>, Spanned<Identifier>)>> {
-        let mut key_values = Vec::new();
-
-        if !self.next_is(Token::With) {
-            return Ok(key_values);
-        }
-
-        key_values.push(self.type_ident_field()?);
-        while self.next_is(Token::Comma) {
-            key_values.push(self.type_ident_field()?);
-        }
-
-        Ok(key_values)
+    ) -> ParseResult<Spanned<Vec<(Spanned<Identifier>, Spanned<Identifier>)>>>
+    {
+        self.separated(
+            Token::RoundLeft,
+            Token::RoundRight,
+            Token::Comma,
+            Self::type_ident_field,
+        )
     }
 
     /// Parse an identifier and a type identifier separated by a colon
