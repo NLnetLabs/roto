@@ -210,16 +210,10 @@ pub struct RecordType {
     pub key_values: Spanned<Vec<(Identifier, RibFieldType)>>,
 }
 
-/// Every filter needs to return either a 'accept' or 'reject' statement.
-/// failing to set it properly ends in the whole thing being cancelled.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum AcceptReject {
-    Accept,
-    Reject,
-}
-
 #[derive(Clone, Debug)]
 pub enum Literal {
+    Accept,
+    Reject,
     String(String),
     Prefix(Prefix),
     PrefixLength(u8),

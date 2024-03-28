@@ -130,3 +130,34 @@ fn test_match() {
     )
     .unwrap();
 }
+
+#[test]
+fn test_match_block() {
+    Parser::run_parser(
+        Parser::expr,
+        0,
+        "match x {
+            A(x) -> {
+                a == b;
+                a && b;
+            }
+            C(y) -> d(),
+        }",
+    )
+    .unwrap();
+}
+
+#[test]
+fn test_and_and_and() {
+    Parser::run_parser(Parser::expr, 0, "a && b && c && d").unwrap();
+}
+
+#[test]
+fn test_or_or_or() {
+    Parser::run_parser(Parser::expr, 0, "a || b || c || d").unwrap();
+}
+
+#[test]
+fn test_and_or_and() {
+    Parser::run_parser(Parser::expr, 0, "a && b || c && d").unwrap_err();
+}

@@ -63,6 +63,14 @@ impl<'source> Parser<'source> {
             while self.next_is(Token::AmpAmp) {
                 exprs.push(self.comparison(r)?);
             }
+            if self.peek_is(Token::PipePipe) {
+                let pipe = self.take(Token::PipePipe)?;
+                return Err(ParseError::custom(
+                    "`||` cannot be chained with `&&`",
+                    "cannot be chained with `&&`",
+                    pipe,
+                ));
+            }
             Ok(exprs
                 .into_iter()
                 .rev()
@@ -76,6 +84,14 @@ impl<'source> Parser<'source> {
             let mut exprs = vec![expr];
             while self.next_is(Token::PipePipe) {
                 exprs.push(self.comparison(r)?);
+            }
+            if self.peek_is(Token::AmpAmp) {
+                let amp = self.take(Token::AmpAmp)?;
+                return Err(ParseError::custom(
+                    "`&&` cannot be chained with `||`",
+                    "cannot be chained with `||`",
+                    amp,
+                ));
             }
             Ok(exprs
                 .into_iter()
@@ -333,6 +349,8 @@ impl<'source> Parser<'source> {
         // TODO: Make proper errors using the spans
         let (token, span) = self.next()?;
         let literal = match token {
+            Token::Accept => Literal::Accept,
+            Token::Reject => Literal::Reject,
             Token::String(s) => {
                 // Trim the quotes from the string literal
                 let trimmed = &s[1..s.len() - 1];
