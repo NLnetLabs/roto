@@ -126,19 +126,6 @@ fn test_data(
 
     let payload = &mut rws.get_mut(0).unwrap();
 
-    if let TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(route)) = payload {
-        // Store it in the RouteWorkshop
-        // rws.set_attr(mp_reach).unwrap();
-
-        // Get the NextHop from this NLRI and store it in the RouteWorkshop
-        // rws.set_attr(
-        //     update
-        //         .find_next_hop(announces.first().unwrap().afi_safi())
-        //         .unwrap(),
-        // )
-        // .unwrap();
-    }
-
     trace!("peer_ip {:?}", context.provenance().peer_ip());
 
     let mem = &mut vm::LinearMemory::uninit();

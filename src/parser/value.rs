@@ -289,7 +289,7 @@ impl<'source> Parser<'source> {
                             "community",
                             s,
                             e,
-                            span.clone(),
+                            span,
                         )
                     })?;
 
@@ -338,6 +338,7 @@ impl<'source> Parser<'source> {
     /// Record      ::= '{' (RecordField (',' RecordField)* ','? )? '}'
     /// RecordField ::= Identifier ':' ValueExpr
     /// ```
+    #[allow(clippy::type_complexity)]
     fn record(
         &mut self,
     ) -> ParseResult<Spanned<Vec<(Spanned<Identifier>, Spanned<ValueExpr>)>>>

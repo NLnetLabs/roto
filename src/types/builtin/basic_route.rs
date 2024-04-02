@@ -176,7 +176,6 @@ impl PrefixRoute {
             super::PrefixRouteWs::Ipv4MulticastAddpath(rws) => rws.get_attr::<A>(),
             super::PrefixRouteWs::Ipv6Multicast(rws) => rws.get_attr::<A>(),
             super::PrefixRouteWs::Ipv6MulticastAddpath(rws) => rws.get_attr::<A>(),
-            _ => None
         }
     }
 
@@ -201,7 +200,6 @@ impl PrefixRoute {
             super::PrefixRouteWs::Ipv4MulticastAddpath(rws) => rws.set_attr::<A>(value),
             super::PrefixRouteWs::Ipv6Multicast(rws) => rws.set_attr::<A>(value),
             super::PrefixRouteWs::Ipv6MulticastAddpath(rws) => rws.set_attr::<A>(value),
-            _ => Err(ComposeError::InvalidAttribute)
         }
     }
 
@@ -775,6 +773,7 @@ impl RotoType for PrefixRoute {
 
 //-----------------------
 
+#[allow(dead_code)]
 impl FlowSpecRoute<bytes::Bytes> {
     pub(crate) fn get_field_num() -> usize {
         todo!()

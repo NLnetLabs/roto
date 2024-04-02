@@ -58,7 +58,7 @@ pub fn duplicate_fields(field_name: &str, locations: &[Span]) -> TypeError {
         description: format!(
             "field `{field_name}` appears multiple times in the same record"
         ),
-        location: locations[0].clone(),
+        location: locations[0],
         labels: locations
             .iter()
             .map(|&span| {

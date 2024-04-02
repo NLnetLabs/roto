@@ -277,7 +277,7 @@ impl<'methods> TypeChecker<'methods> {
         subs: &mut HashMap<usize, Type>,
     ) -> bool {
         if a_fields.len() != b_fields.len() {
-            false;
+            return false
         }
 
         for (name, ty_a) in a_fields {
@@ -285,11 +285,11 @@ impl<'methods> TypeChecker<'methods> {
             else {
                 return false;
             };
-            if !self.subtype_inner(&ty_a, ty_b, subs) {
+            if !self.subtype_inner(ty_a, ty_b, subs) {
                 return false;
             }
         }
-        return true;
+        true
     }
 
     fn unify(
@@ -378,12 +378,9 @@ impl<'methods> TypeChecker<'methods> {
         let mut b_fields = b_fields.to_vec();
         let mut new_fields = Vec::new();
         for (name, a_ty) in a_fields {
-            let Some(idx) = b_fields.iter().position(|(n, _)| n == name)
-            else {
-                return None;
-            };
+            let idx = b_fields.iter().position(|(n, _)| n == name)?;
             let (_, b_ty) = b_fields.remove(idx);
-            new_fields.push((name.clone(), self.unify_inner(&a_ty, &b_ty)?))
+            new_fields.push((name.clone(), self.unify_inner(a_ty, &b_ty)?))
         }
 
         Some(new_fields)
@@ -531,7 +528,7 @@ impl<'methods> TypeChecker<'methods> {
                 }
                 Ok(())
             }
-            Type::Name(ident) => self.visit_name(visited, &ident),
+            Type::Name(ident) => self.visit_name(visited, ident),
         }
     }
 }

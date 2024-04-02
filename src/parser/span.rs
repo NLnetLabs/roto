@@ -57,7 +57,7 @@ impl<T: Display> Display for Spanned<T> {
 }
 
 pub trait WithSpan: Sized {
-    fn with_span<'a>(self, span: impl Into<Span>) -> Spanned<Self> {
+    fn with_span(self, span: impl Into<Span>) -> Spanned<Self> {
         Spanned {
             inner: self,
             span: span.into(),

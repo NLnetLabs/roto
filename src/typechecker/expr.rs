@@ -109,7 +109,7 @@ impl TypeChecker<'_> {
             AnonymousRecordExpr(ast::AnonymousRecordValueExpr {
                 key_values,
             }) => {
-                let fields = self.record_type(scope, &key_values)?;
+                let fields = self.record_type(scope, key_values)?;
                 Ok(self.fresh_record(fields))
             }
             TypedRecordExpr(record_expr) => {
@@ -140,7 +140,7 @@ impl TypeChecker<'_> {
                 };
 
                 // Infer the type based on the given expression
-                let inferred_type = self.record_type(scope, &key_values)?;
+                let inferred_type = self.record_type(scope, key_values)?;
 
                 for (name, inferred_type) in inferred_type {
                     let Some(idx) = record_type
@@ -210,7 +210,7 @@ impl TypeChecker<'_> {
                     if args.len() != arrow.args.len() {
                         return Err(error::number_of_arguments_dont_match(
                             "method",
-                            &ident,
+                            ident,
                             arrow.args.len(),
                             args.len(),
                         ));
@@ -220,7 +220,7 @@ impl TypeChecker<'_> {
 
                     for (arg, ty) in args.iter().zip(&arrow.args) {
                         let arg_ty = self.expr(scope, arg)?;
-                        self.unify(&arg_ty, &ty, arg.span, None)?;
+                        self.unify(&arg_ty, ty, arg.span, None)?;
                     }
                     last = self.resolve_type(&arrow.ret).clone();
                 }
@@ -314,7 +314,7 @@ impl TypeChecker<'_> {
             ast::AccessReceiver::Ident(x) => {
                 // It might be a static method
                 // TODO: This should be cleaned up
-                if let Some(ty) = self.get_type(&x) {
+                if let Some(ty) = self.get_type(x) {
                     let mut access_expr = access_expr.clone();
                     if access_expr.is_empty() {
                         return Err(error::simple(
@@ -378,7 +378,7 @@ impl TypeChecker<'_> {
 
         for (arg, ty) in args.iter().zip(&arrow.args) {
             let arg_ty = self.expr(scope, arg)?;
-            self.unify(&arg_ty, &ty, arg.span, None)?;
+            self.unify(&arg_ty, ty, arg.span, None)?;
         }
         Ok(self.resolve_type(&arrow.ret).clone())
     }
@@ -388,12 +388,12 @@ impl TypeChecker<'_> {
         scope: &Scope,
         expr: &[(Spanned<ast::Identifier>, Spanned<ast::ValueExpr>)],
     ) -> TypeResult<Vec<(Spanned<String>, Type)>> {
-        Ok(expr
-            .into_iter()
+        expr
+            .iter()
             .map(|(k, v)| {
                 self.expr(scope, v)
                     .map(|v| (k.ident.to_string().with_span(k.span), v))
             })
-            .collect::<Result<_, _>>()?)
+            .collect::<Result<_, _>>()
     }
 }

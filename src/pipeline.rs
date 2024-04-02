@@ -62,7 +62,7 @@ impl std::fmt::Display for RotoReport {
                     )
                     .with_message(format!(
                         "Parse error: {}",
-                        error.to_string()
+                        error
                     ))
                     .with_label(label)
                     .finish();
@@ -125,7 +125,7 @@ impl RotoReport {
 
 impl std::error::Error for RotoReport {}
 
-pub fn run<'a>(
+pub fn run(
     files: impl IntoIterator<Item = String>,
 ) -> Result<Vec<Rotolo>, RotoReport> {
     let files = read_files(files)?;
@@ -153,7 +153,7 @@ pub fn run_test(
     Ok(compile(&files, &symbols, arguments)?.remove(0))
 }
 
-fn read_files<'a>(
+fn read_files(
     files: impl IntoIterator<Item = String>,
 ) -> Result<Vec<SourceFile>, RotoReport> {
     let results: Vec<_> = files
@@ -185,7 +185,7 @@ fn read_files<'a>(
 
 pub fn parse(files: &[SourceFile]) -> Result<Vec<SyntaxTree>, RotoReport> {
     let results: Vec<_> = files
-        .into_iter()
+        .iter()
         .enumerate()
         .map(|(i, f)| Parser::parse(i, &f.contents))
         .collect();
@@ -214,8 +214,8 @@ pub fn typecheck(
     trees: &[SyntaxTree],
 ) -> Result<(), RotoReport> {
     let results: Vec<_> = trees
-        .into_iter()
-        .map(|f| crate::typechecker::typecheck(&f))
+        .iter()
+        .map(crate::typechecker::typecheck)
         .collect();
 
     let mut errors = Vec::new();
@@ -240,7 +240,7 @@ pub fn evaluate(
     trees: &[SyntaxTree],
 ) -> Result<Vec<GlobalSymbolTable>, RotoReport> {
     let results: Vec<_> = trees
-        .into_iter()
+        .iter()
         .map(|t| {
             let symbols = GlobalSymbolTable::new();
             t.eval(symbols.clone())?;
@@ -273,7 +273,7 @@ pub fn compile(
     arguments: Option<(&Scope, Vec<(&str, TypeValue)>)>,
 ) -> Result<Vec<Rotolo>, RotoReport> {
     let results: Vec<_> = symbol_tables
-        .into_iter()
+        .iter()
         .map(|t| Compiler::build(t.clone(), arguments.clone()))
         .collect();
 

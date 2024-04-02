@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod route {
-    use std::net::{IpAddr, Ipv4Addr};
+    use std::net::Ipv4Addr;
 
     use super::super::{IntegerLiteral, PrefixLength, StringLiteral};
     use crate::ast::AsnLiteral;
@@ -144,7 +144,7 @@ mod route {
 
         // let mut delta = roto_msgs[0].open_new_delta(delta_id)?;
         let mut path_attrs = roto_msgs.remove(0);
-        if let std::net::IpAddr::V6(v6) = prefixes[0].addr() {
+        if let std::net::IpAddr::V6(_v6) = prefixes[0].addr() {
             let _next_hop =
                 routecore::bgp::types::NextHop::Unicast(prefixes[0].addr());
             // let _ = path_attrs
@@ -207,7 +207,7 @@ mod route {
     }
 
     #[test]
-    fn create_layered_update_msg<'a>() -> Result<(), VmError> {
+    fn create_layered_update_msg() -> Result<(), VmError> {
         // BGP UPDATE message containing MP_REACH_NLRI path attribute,
         // comprising 5 IPv6 NLRIs
         let buf = bytes::Bytes::from(vec![

@@ -120,7 +120,7 @@ fn test_filter_map_10() {
 
     if let Err(e) = &test_run {
         println!("{}", e);
-        assert!(false);
+        unreachable!();
     }
 
     let VmResult { accept_reject, .. } = test_run.unwrap();

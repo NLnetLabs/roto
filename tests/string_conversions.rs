@@ -2,7 +2,7 @@ use log::trace;
 
 use roto::blocks::Scope;
 use roto::pipeline;
-use roto::types::builtin::{BuiltinTypeValue, NlriStatus, PeerId, PeerRibType, Provenance, RouteContext};
+use roto::types::builtin::{NlriStatus, PeerId, PeerRibType, Provenance, RouteContext};
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
