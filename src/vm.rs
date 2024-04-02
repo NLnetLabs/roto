@@ -527,6 +527,13 @@ impl LinearMemory {
 
                         Ok(StackValue::Owned(v.try_into()?))
                     }
+                    Some(TypeValue::Builtin(
+                        BuiltinTypeValue::RouteContext(ctx))) => {
+                            trace!("get route_context get_value_owned_for_field {:?}", ctx);
+                            let v = ctx.get_field_by_index(&field_index)?;
+
+                            Ok(StackValue::Owned(v))
+                    }
                     Some(tv) => match tv {
                         // Do not own AsPath and Communities, cloning is
                         // expensive!
