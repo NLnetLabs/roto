@@ -410,7 +410,6 @@ pub fn default_types() -> Vec<(&'static str, Type)> {
         Record(
             "BgpUpdateMessage",
             vec![
-                ("announcements", "[Nlri]"),
                 ("as-path", "AsPath"),
                 ("origin-type", "OriginType"),
                 ("next-hop", "NextHop"),

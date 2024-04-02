@@ -80,7 +80,7 @@ fn test_data(
     let prov = Provenance {
         timestamp: chrono::Utc::now(),
         connection_id: "127.0.0.1:178".parse().unwrap(),
-        peer_id: PeerId { addr: "172.0.0.1".parse().unwrap(), asn: Asn::from(65530)},
+        peer_id: PeerId { addr: "127.0.0.1".parse().unwrap(), asn: Asn::from(65530)},
         peer_bgp_id: [0,0,0,0].into(),
         peer_distuingisher: [0; 8],
         peer_rib_type: PeerRibType::OutPost,
@@ -124,6 +124,7 @@ fn test_bgp_update_1() {
         filter-map filter-unicast-v4-v6-only {
             define {
                 rx_tx bgp_msg: BgpUpdateMessage;
+                context ctx: RouteContext;
                 // IPV4 = 100;
             }
         
@@ -145,22 +146,7 @@ fn test_bgp_update_1() {
 
             term afi-safi-unicast {
                 match {
-                    // bgp_msg.nlris.afi in [AFI_IPV4, AFI_IPV6];
-                    // bgp_msg.nlris.afi in [Ipv4, Ipv6];
-                    // bgp_msg.nlris.afi in [AFI.Ipv4, AFI.Ipv6];
-                    
-                    //
-                    //bgp_msg.announcements.first().afi() in [AFI.IPV4, IPV6];
-                    //
-                    
-                    // bgp_msg.nlris.afi in [afi.IPV4, afi.IPV6];
-                    // bgp_msg.announcements.first().afi == IPV4 | IPV6;
-                    
-                    //
-                    bgp_msg.announcements.first().safi() == UNICAST;
-                    //
-                    
-                    // IPV4 == 150;
+                    ctx.provenance.peer-id.asn != AS64900;
                 }
             }
         
@@ -188,12 +174,12 @@ fn test_bgp_update_2() {
         filter-map filter-unicast-v4-v6-only {
             define {
                 rx_tx bgp_msg: BgpUpdateMessage;
+                context ctx: RouteContext;
             }
 
             term afi-safi-unicast {
                 match {
-                    bgp_msg.announcements.first().afi() in [IPV6, IPV4];
-                    bgp_msg.announcements.first().safi() == UNICAST;
+                    ctx.provenance.peer-id.asn == AS65530;
                 }
             }
         
@@ -220,11 +206,12 @@ fn test_bgp_update_3() {
         filter-map bgp-update-filter-map-3 {
             define {
                 rx_tx bgp_msg: BgpUpdateMessage;
+                context ctx: RouteContext;
             }
         
             term afi-safi-unicast {
                 match {
-                    bgp_msg.announcements.first().afi() != IPV4;
+                    ctx.provenance.peer-id.asn != AS64900;
                 }
             }
         

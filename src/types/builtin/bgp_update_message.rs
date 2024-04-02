@@ -52,29 +52,28 @@ bytes_record_impl!(
     BgpUpdateMessage, // The variant of TypeValue
     #[type_def(
         field(
-            "aggregator_type"; 0,
+            "aggregator-type"; 0,
             AggregatorInfo,
             aggregator
         ),
-        list_field("announcements"; 1, Nlri, Vec<Nlri>, announcements_vec),
         field(
-            "as_path"; 2,
+            "as-path"; 1,
             AsPath,
             aspath
         ),
         field(
-            "as4_path"; 3,
+            "as4-path"; 2,
             AsPath,
             as4path
         ),
-        field("atomic_aggregate"; 4, AtomicAggregate, is_atomic_aggregate),
-        list_field("communities"; 5, Community, Vec<Community>, all_human_readable_communities),
-        field("local_pref"; 6, LocalPref, local_pref),
-        field("multi_exit_discriminator"; 7, MultiExitDisc, multi_exit_disc),
-        method_field("next_hop"; 8, NextHop, find_next_hop(self.afi_safi)),
-        field("origin"; 9, Origin, origin),
+        field("atomic-aggregate"; 3, AtomicAggregate, is_atomic_aggregate),
+        list_field("communities"; 4, Community, Vec<Community>, all_human_readable_communities),
+        field("local-pref"; 5, LocalPref, local_pref),
+        field("multi-exit-discriminator"; 6, MultiExitDisc, multi_exit_disc),
+        method_field("next-hop"; 7, NextHop, find_next_hop(self.afi_safi)),
+        field("origin"; 8, Origin, origin),
     )],
-    10
+    9
 );
 
 impl BytesRecord<BgpUpdateMessage> {
