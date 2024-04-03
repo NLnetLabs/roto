@@ -186,138 +186,67 @@ impl From<RouteWorkshop<Ipv6MulticastAddpathNlri>> for PrefixRoute {
     }
 }
 
+macro_rules! announcements_into_typevalues {
+    ( $nlri_type:ty, $update: ident, $res: ident ) => {
+        let iter = if let Some(iter) = $update
+            .typed_announcements::<_, $nlri_type>()? {
+                iter
+            } else {
+                return Err(ParseError::ShortInput)
+            };
+
+        $res.extend(
+            iter.filter_map(|a| {
+                if let Ok(a) = a {
+                    RouteWorkshop::from_update_pdu(
+                        a, 
+                        $update
+                    ).ok().map(|a| a.into())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>(),
+        );
+    };
+}
+
+/// Create a `Vec<TypeValue::Route<RouteWorkshop<_>>` from a PDU that
+/// represents a BGP [`routecore::UpdateMessage`], with one or more
+/// announcements in it.
 pub fn explode_announcements(
     update: &UpdateMessage<bytes::Bytes>,
 ) -> Result<Vec<TypeValue>, ParseError> {
-    let pa_map = PaMap::from_update_pdu(update).unwrap();
+    // Read all the types of NLRI in MP_REACH and/or conventional NLRI.
     let announce_afi_safis = update.announcement_fams();
+
     let mut res = vec![];
 
     for afi_safi in announce_afi_safis {
         match afi_safi {
             NlriType::Ipv4Unicast => {
-                let iter = update
-                    .typed_announcements::<_, Ipv4UnicastNlri>()
-                    .unwrap()
-                    .unwrap();
-
-                res.extend(
-                    iter.map(|a| {
-                        TypeValue::from(
-                            RouteWorkshop::from_pa_map(
-                                a.unwrap(),
-                                pa_map.clone(),
-                            )
-                        )
-                    })
-                    .collect::<Vec<_>>(),
-                );
+                announcements_into_typevalues!(Ipv4UnicastNlri, update, res);
             }
             NlriType::Ipv4UnicastAddpath => {
-                let iter = update
-                    .typed_announcements::<_, Ipv4UnicastAddpathNlri>()
-                    .unwrap()
-                    .unwrap();
-
-                res.extend(
-                    iter.map(|a| {
-                        RouteWorkshop::from_pa_map(
-                            a.unwrap(),
-                            pa_map.clone(),
-                        ).into()
-                    })
-                    .collect::<Vec<_>>(),
-                );
+                announcements_into_typevalues!(Ipv4UnicastAddpathNlri, update, res);
             }
             NlriType::Ipv6Unicast => {
-                let iter = update
-                    .typed_announcements::<_, Ipv6UnicastNlri>()
-                    .unwrap()
-                    .unwrap();
-                res.extend(
-                    iter.map(|a| {
-                        RouteWorkshop::from_pa_map(
-                            a.unwrap(),
-                            pa_map.clone(),
-                        ).into()
-                    })
-                    .collect::<Vec<_>>(),
-                );
+                announcements_into_typevalues!(Ipv6UnicastNlri, update, res);
             }
             NlriType::Ipv6UnicastAddpath => {
-                let iter = update
-                    .typed_announcements::<_, Ipv6UnicastAddpathNlri>()
-                    .unwrap()
-                    .unwrap();
-                res.extend(
-                    iter.map(|a| {
-                        RouteWorkshop::from_pa_map(
-                            a.unwrap(),
-                            pa_map.clone(),
-                        ).into()
-                    })
-                    .collect::<Vec<_>>(),
-                );
+                announcements_into_typevalues!(Ipv6UnicastAddpathNlri, update, res);
             }
             NlriType::Ipv4Multicast => {
-                let iter = update
-                    .typed_announcements::<_, Ipv4MulticastNlri>()
-                    .unwrap()
-                    .unwrap();
-                res.extend(
-                    iter.map(|a| {
-                        RouteWorkshop::from_pa_map(
-                            a.unwrap(),
-                            pa_map.clone(),
-                        ).into()
-                    })
-                    .collect::<Vec<_>>(),
-                );
+                announcements_into_typevalues!(Ipv4MulticastNlri, update, res);
             }
             NlriType::Ipv4MulticastAddpath => {
-                let iter = update
-                    .typed_announcements::<_, Ipv4MulticastAddpathNlri>()
-                    .unwrap()
-                    .unwrap();
-                res.extend(
-                    iter.map(|a| {
-                        RouteWorkshop::from_pa_map(
-                            a.unwrap(),
-                            pa_map.clone(),
-                        ).into()
-                    })
-                    .collect::<Vec<_>>(),
-                );
+                announcements_into_typevalues!(Ipv4MulticastAddpathNlri, update, res);
             }
             NlriType::Ipv6Multicast => {
-                let iter = update
-                    .typed_announcements::<_, Ipv6MulticastNlri>()
-                    .unwrap()
-                    .unwrap();
-                res.extend(
-                    iter.map(|a| {
-                        RouteWorkshop::from_pa_map(
-                            a.unwrap(),
-                            pa_map.clone(),
-                        ).into()
-                    })
-                    .collect::<Vec<_>>(),
-                );
+                announcements_into_typevalues!(Ipv6MulticastNlri, update, res);
             }
             NlriType::Ipv6MulticastAddpath => {
-                let iter = update
-                    .typed_announcements::<_, Ipv6MulticastAddpathNlri>()
-                    .unwrap()
-                    .unwrap();
-                res.extend(
-                    iter.map(|a| {
-                        RouteWorkshop::from_pa_map(
-                            a.unwrap(),
-                            pa_map.clone(),
-                        ).into()
-                    })
-                    .collect::<Vec<_>>(),
-                );
+                announcements_into_typevalues!(Ipv6MulticastAddpathNlri, update, res);
             }
             NlriType::Ipv4MplsUnicast => todo!(),
             NlriType::Ipv4MplsUnicastAddpath => todo!(),
@@ -330,37 +259,11 @@ pub fn explode_announcements(
             NlriType::Ipv4RouteTarget => todo!(),
             NlriType::Ipv4RouteTargetAddpath => todo!(),
             NlriType::Ipv4FlowSpec => {
-                let iter = update
-                    .typed_announcements::<_, Ipv4FlowSpecNlri<bytes::Bytes>>()
-                    .unwrap()
-                    .unwrap();
-                res.extend(
-                    iter.map(|a| {
-                        TypeValue::Builtin(super::BuiltinTypeValue::FlowSpecRoute(
-                            FlowSpecRoute {
-                                nlri: FlowSpecNlri::Ipv4FlowSpec(a.unwrap()),
-                                attributes: pa_map.clone()
-                            }
-                        ))
-                    })
-                    .collect::<Vec<_>>(),
-                );
+                announcements_into_typevalues!(Ipv4FlowSpecNlri<bytes::Bytes>, update, res);
             }
             NlriType::Ipv4FlowSpecAddpath => todo!(),
             NlriType::Ipv6FlowSpec => {
-                let iter = update
-                    .typed_announcements::<_, Ipv6FlowSpecNlri<bytes::Bytes>>()
-                    .unwrap()
-                    .unwrap();
-                res.extend(
-                    iter.map(|a| {
-                        RouteWorkshop::from_pa_map(
-                            a.unwrap(),
-                            pa_map.clone(),
-                        ).into()
-                    })
-                    .collect::<Vec<_>>(),
-                );
+                announcements_into_typevalues!(Ipv6FlowSpecNlri<bytes::Bytes>, update, res);
             }
             NlriType::Ipv6FlowSpecAddpath => todo!(),
             NlriType::L2VpnVpls => todo!(),
@@ -386,9 +289,9 @@ pub fn explode_announcements(
         let raw = bytes::Bytes::from(vec![
             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-            //0x00, 0x88,
-            0x00, 0x88 + 6,
-            0x02, 0x00, 0x00, 0x00, 0x71, 0x80,
+            0x00, 0x95,
+            0x02, 0x00, 0x00, 0x00, 0x78,
+            0x80,
             0x0e, 0x5a, 0x00, 0x02, 0x01, 0x20, 0xfc, 0x00,
             0x00, 0x10, 0x00, 0x01, 0x00, 0x10, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0xfe, 0x80,
@@ -402,10 +305,11 @@ pub fn explode_announcements(
             0xff, 0x00, 0x02, 0x40, 0x20, 0x01, 0x0d, 0xb8,
             0xff, 0xff, 0x00, 0x03, 0x40, 0x01, 0x01, 0x00,
             0x40, 0x02, 0x06, 0x02, 0x01, 0x00, 0x00, 0x00,
-            0xc8, 0x80, 0x04, 0x04, 0x00, 0x00, 0x00, 0x00,
+            0xc8,
+            0x40, 0x03, 0x04, 0x01, 0x02, 0x03, 0x04, // NEXT_HOP
+            0x80, 0x04, 0x04, 0x00, 0x00, 0x00, 0x00,
             16, 1, 2,
             16, 10, 20
-
         ]);
         let pdu = UpdateMessage::from_octets(raw, &SessionConfig::modern())
             .unwrap();

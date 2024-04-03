@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use log::trace;
 use roto::ast::AcceptReject;
 
@@ -518,7 +520,6 @@ fn test_routes_5() {
     assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
-#[ignore = "next hop isn't currently working"]
 #[test]
 fn test_routes_6() {
     common::init();
@@ -628,9 +629,9 @@ fn test_routes_6() {
 fn test_create_pdu_from_rws() {
     common::init();
 
-    let mut rws1 = RouteWorkshop::new(Ipv6UnicastNlri(
-        "2001:fe80:2d::/48".parse().unwrap()
-    ));
+    let mut rws1 = RouteWorkshop::new(Ipv6UnicastNlri::from_str(
+        "2001:fe80:2d::/48"
+    ).unwrap());
 
     rws1.set_attr::<LocalPref>(LocalPref(80)).unwrap();
     let nlri: Ipv6UnicastNlri = *rws1.nlri();
