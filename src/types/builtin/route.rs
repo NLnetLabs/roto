@@ -212,8 +212,9 @@ macro_rules! announcements_into_typevalues {
 }
 
 /// Create a `Vec<TypeValue::Route<RouteWorkshop<_>>` from a PDU that
-/// represents a BGP [`routecore::UpdateMessage`], with one or more
-/// announcements in it.
+/// represents a BGP [`routecore::UpdateMessage`]. The returned Vec will
+/// contain one TypeValue-wrapped RWS for every announcement in the PDU, no
+/// matter what the type of the `NLRI` of the announcement is.
 pub fn explode_announcements(
     update: &UpdateMessage<bytes::Bytes>,
 ) -> Result<Vec<TypeValue>, ParseError> {
