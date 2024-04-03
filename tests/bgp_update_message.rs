@@ -3,10 +3,12 @@ use roto::ast::AcceptReject;
 
 use roto::blocks::Scope::{self, FilterMap};
 use roto::pipeline;
-use roto::types::builtin::{BgpUpdateMessage, RotondaId, UpdateMessage};
-use roto::types::collections::Record;
+use roto::types::builtin::{NlriStatus, PeerId, PeerRibType, Provenance, RouteContext};
+use roto::types::collections::{BytesRecord, Record};
+use roto::types::lazyrecord_types::BgpUpdateMessage;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
+use inetnum::asn::Asn;
 use routecore::bgp::message::SessionConfig;
 
 mod common;
@@ -14,7 +16,7 @@ mod common;
 fn test_data(
     name: Scope,
     source_code: &str,
-) -> Result<(VmResult, BgpUpdateMessage), Box<dyn std::error::Error>> {
+) -> Result<(VmResult, BytesRecord<BgpUpdateMessage>), Box<dyn std::error::Error>> {
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
@@ -43,17 +45,15 @@ fn test_data(
     //     UpdateMessage::new(buf.clone(), SessionConfig::modern());
     // let prefixes: Vec<Prefix> =
     //         update.0.nlris().iter().filter_map(|n| n.prefix().map(|p| p.into())).collect();
-    let msg_id = (RotondaId(0), 0);
+    // let msg_id = (RotondaId(0), 0);
 
     // let payload: RawRouteWithDeltas = RawRouteWithDeltas::new_with_message(
     //     msg_id,
     //     prefixes[0],
     //     update,
     // );
-    let payload = BgpUpdateMessage::new(
-        msg_id,
-        UpdateMessage::new(buf, SessionConfig::modern()).unwrap(),
-    );
+    let payload = 
+        BytesRecord::<BgpUpdateMessage>::new(buf, SessionConfig::modern()).unwrap();
 
     // let payload2 = TypeValue::Builtin(
     //     roto::types::builtin::BuiltinTypeValue::BgpUpdateMessage(
@@ -77,16 +77,28 @@ fn test_data(
         println!("{}", mb);
     }
 
+    let prov = Provenance {
+        timestamp: chrono::Utc::now(),
+        connection_id: "127.0.0.1:178".parse().unwrap(),
+        peer_id: PeerId { addr: "127.0.0.1".parse().unwrap(), asn: Asn::from(65530)},
+        peer_bgp_id: [0,0,0,0].into(),
+        peer_distuingisher: [0; 8],
+        peer_rib_type: PeerRibType::OutPost,
+    };
+
+    let context = &RouteContext::new(None, NlriStatus::Empty, prov);
+
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
         .with_data_sources(ds_ref)
+        .with_context(context)
         .with_mir_code(roto_pack.get_mir())
         .build()?;
 
     let mem = &mut vm::LinearMemory::uninit();
     let res = vm
         .exec(
-            payload.clone(),
+            TypeValue::from(payload.clone()),
             None::<Record>,
             // Some(filter_map_arguments),
             None,
@@ -112,6 +124,7 @@ fn test_bgp_update_1() {
         filter-map filter-unicast-v4-v6-only {
             define {
                 rx_tx bgp_msg: BgpUpdateMessage;
+                context ctx: RouteContext;
                 // IPV4 = 100;
             }
         
@@ -133,14 +146,7 @@ fn test_bgp_update_1() {
 
             term afi-safi-unicast {
                 match {
-                    // bgp_msg.nlris.afi in [AFI_IPV4, AFI_IPV6];
-                    // bgp_msg.nlris.afi in [Ipv4, Ipv6];
-                    // bgp_msg.nlris.afi in [AFI.Ipv4, AFI.Ipv6];
-                    bgp_msg.nlris.afi in [IPV4, IPV6];
-                    // bgp_msg.nlris.afi in [afi.IPV4, afi.IPV6];
-                    // bgp_msg.nlris.afi == IPV4 | IPV6;
-                    bgp_msg.nlris.safi == UNICAST;
-                    // IPV4 == 150;
+                    ctx.provenance.peer-id.asn != AS64900;
                 }
             }
         
@@ -168,12 +174,12 @@ fn test_bgp_update_2() {
         filter-map filter-unicast-v4-v6-only {
             define {
                 rx_tx bgp_msg: BgpUpdateMessage;
+                context ctx: RouteContext;
             }
 
             term afi-safi-unicast {
                 match {
-                    bgp_msg.nlris.afi in [IPV6, IPV4];
-                    bgp_msg.nlris.safi == UNICAST;
+                    ctx.provenance.peer-id.asn == AS65530;
                 }
             }
         
@@ -200,11 +206,12 @@ fn test_bgp_update_3() {
         filter-map bgp-update-filter-map-3 {
             define {
                 rx_tx bgp_msg: BgpUpdateMessage;
+                context ctx: RouteContext;
             }
         
             term afi-safi-unicast {
                 match {
-                    bgp_msg.nlris.afi != IPV4;
+                    ctx.provenance.peer-id.asn != AS64900;
                 }
             }
         

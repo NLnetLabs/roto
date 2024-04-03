@@ -35,6 +35,8 @@ pub enum Token {
     RxType(TypeDef),
     /// There can only ever be one TxType too
     TxType,
+    // There can only ever be one RouteContext type too
+    RouteContext(TypeDef),
     /// External Data Sources
     Table(usize),
     Rib(usize),

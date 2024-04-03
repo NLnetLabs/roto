@@ -533,6 +533,16 @@ impl ast::Define {
             }
         };
 
+        if let Some(ctx) = &self.body.route_context {
+            declare_argument(
+                ctx.field_name.ident.clone(),
+                ctx.clone(),
+                SymbolKind::RouteContextType,
+                symbols.clone(),
+                &scope
+            )?;
+        }
+
         declare_argument(
             rx_type.field_name.ident.clone(),
             rx_type.clone(),

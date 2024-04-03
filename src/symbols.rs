@@ -58,7 +58,8 @@ impl Symbol {
                 | TypeDef::Table(_)
                 | TypeDef::List(_)
                 | TypeDef::Record(_)
-                | TypeDef::Route
+                | TypeDef::PrefixRoute
+                | TypeDef::FlowSpecRoute
                 | TypeDef::Unknown
         ) {
             Ok(self.ty.clone())
@@ -408,6 +409,7 @@ pub enum SymbolKind {
     // that are filled by the filter will have a (non-default) value.
     SplitRxType, // type of the incoming payload
     SplitTxType, // type of the outgoing payload
+    RouteContextType, // type of the RouteContext value.
 
     // data sources access receivers
     Rib,
@@ -791,6 +793,7 @@ impl SymbolTable {
             SymbolKind::SplitRxType => Token::RxType(ty.clone()),
             SymbolKind::SplitTxType => Token::TxType,
             SymbolKind::PassThroughRxTxType => Token::RxType(ty.clone()),
+            SymbolKind::RouteContextType => Token::RouteContext(ty.clone()),
             _ => Token::Argument(token_int),
         };
 

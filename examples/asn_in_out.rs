@@ -1,9 +1,10 @@
 use roto::blocks::Scope::{self, FilterMap};
+use roto::types::builtin::RouteContext;
 use roto::types::collections::Record;
 use roto::types::typedef::TypeDef;
 use roto::{pipeline, vm};
 
-use routecore::asn::Asn;
+use inetnum::asn::Asn;
 
 fn test_data(
     name: Scope,
@@ -46,8 +47,8 @@ fn test_data(
 
     let ds_ref = roto_pack.get_data_sources();
     // let args = rotolo.compile_arguments(name, filter_map_arguments)?;
-
-    let mut vm = vm::VmBuilder::new()
+    
+    let mut vm = vm::VmBuilder::<_,RouteContext,_>::new()
         // .with_arguments(args)
         .with_data_sources(ds_ref)
         .with_mir_code(roto_pack.get_mir())

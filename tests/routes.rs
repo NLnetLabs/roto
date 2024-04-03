@@ -1,19 +1,26 @@
+use std::str::FromStr;
+
 use log::trace;
 use roto::ast::AcceptReject;
 
 use roto::blocks::Scope::{self, Filter};
 use roto::pipeline;
-use roto::types::builtin::{
-    BuiltinTypeValue, RawRouteWithDeltas, RotondaId, RouteStatus, RouteToken,
-    UpdateMessage,
+use roto::types::builtin::basic_route::{
+    BasicRouteToken, PeerId, PeerRibType, Provenance,
 };
-use roto::types::collections::Record;
+use roto::types::builtin::{explode_announcements, BuiltinTypeValue, NlriStatus, RouteContext};
+use roto::types::collections::{BytesRecord, Record};
+use roto::types::lazyrecord_types::BgpUpdateMessage;
 use roto::types::typevalue::TypeValue;
-use roto::vm::{self, VmResult};
-use routecore::bgp::message::nlri::{BasicNlri, Nlri};
+use roto::vm::{self, FieldIndex, VmResult};
+use inetnum::addr::Prefix;
+use inetnum::asn::Asn;
+use routecore::bgp::message::update_builder::UpdateBuilder;
+use routecore::bgp::nlri::afisafi::{Ipv6UnicastNlri, Nlri};
+use routecore::bgp::nlri::afisafi::IsPrefix;
 use routecore::bgp::message::SessionConfig;
-use routecore::bgp::types::{AfiSafi, NextHop};
-use routecore::addr::Prefix;
+use routecore::bgp::types::{LocalPref, NextHop};
+use routecore::bgp::workshop::route::RouteWorkshop;
 
 mod common;
 
@@ -44,20 +51,22 @@ fn test_data(
         0x00, 0x00, 0x00, 0x00,
     ]);
 
-    let msg_id = (RotondaId(0), 0);
-    let update: UpdateMessage =
-        UpdateMessage::new(buf.clone(), SessionConfig::modern()).unwrap();
+    let update = BytesRecord::<BgpUpdateMessage>::new(
+        buf.clone(),
+        SessionConfig::modern(),
+    )
+    .unwrap();
 
     let first_prefix: Prefix = update
-        .0
+        .bytes_parser()
         .announcements()
         .into_iter()
         .next()
-        .and_then(|mut p| {
-            if let Some(Ok(Nlri::Unicast(BasicNlri { prefix, .. }))) =
-                p.next()
+        .and_then(|mut nlri| {
+            if let Some(Ok(Nlri::Ipv6Unicast(nlri))) =
+                nlri.next()
             {
-                Some(prefix)
+                Some(nlri.prefix())
             } else {
                 None
             }
@@ -65,18 +74,61 @@ fn test_data(
         .unwrap();
     let peer_ip = "fe80::1".parse().unwrap();
 
-    let payload: RawRouteWithDeltas = RawRouteWithDeltas::new_with_message(
-        msg_id,
-        first_prefix,
-        update,
-        routecore::bgp::types::AfiSafi::Ipv6Unicast,
-        None,
-        RouteStatus::InConvergence,
-    )?
-    .with_peer_ip(peer_ip);
+    let provenance = Provenance {
+        timestamp: chrono::Utc::now(),
+        connection_id: "[fe80::1]:178".parse().unwrap(),
+        peer_id: PeerId {
+            addr: peer_ip,
+            asn: Asn::from(65534),
+        },
+        peer_bgp_id: [0; 4].into(),
+        peer_distuingisher: [0; 8],
+        peer_rib_type: PeerRibType::OutPost,
+    };
 
-    trace!("prefix in route {:?}", payload.prefix);
-    trace!("peer_ip {:?}", payload.peer_ip());
+    // let nlri: Ipv6UnicastNlri = update
+    //     .bytes_parser()
+    //     .announcements_vec()
+    //     .unwrap()
+    //     .first()
+    //     .unwrap()
+    //     .clone()
+    //     .try_into()
+    //     .unwrap();
+
+    let context = &RouteContext::new(
+        Some(update.clone()),
+        NlriStatus::InConvergence,
+        provenance,
+    );
+
+    // let update: UpdateMessage<bytes::Bytes> = update.into_inner();
+    // let parser = Parser::from_ref(update.octets());
+
+    // let pa_map = PaMap::from_update_pdu(&update).unwrap();
+    let parser = update.bytes_parser();
+    let afi_safis = parser.announcement_fams();
+    trace!("afi safis {:?}", afi_safis.collect::<Vec<_>>());
+    let rws = explode_announcements(parser);
+    
+    trace!("rws {:#?}", rws);
+    // let mut rws = RouteWorkshop::from_update_pdu(nlri, &update)?;
+
+    // from_update_pdu does NOT set MP_REACH_NLRI attribute, so we have to set
+    // the NLRI and the NextHop manually.
+
+    // Get the NLRI for this route, we're only looking at the first
+    // announcement, so get that one.
+    // let announces = parser.announcements_vec().unwrap();
+
+    // Create a MpReachBuilder with the intended NLRI
+    // let mp_reach =
+    //     MpReachNlriBuilder::for_nlri(announces.first().unwrap());
+    let rws = &mut rws.unwrap();
+
+    let payload = &mut rws.get_mut(0).unwrap();
+
+    trace!("peer_ip {:?}", context.provenance().peer_ip());
 
     let mem = &mut vm::LinearMemory::uninit();
 
@@ -92,9 +144,10 @@ fn test_data(
     let mut vm = vm::VmBuilder::new()
         .with_data_sources(roto_pack.data_sources)
         .with_mir_code(roto_pack.mir)
+        .with_context(context)
         .build()?;
 
-    let res = vm.exec(payload, None::<Record>, None, mem).unwrap();
+    let res = vm.exec(payload.clone(), None::<Record>, None, mem).unwrap();
 
     println!("\nRESULT");
     println!("action: {}", res.accept_reject);
@@ -111,6 +164,7 @@ fn test_routes_1() {
         filter rib-in-pre-filter {
             define {
                 rx route: Route;
+                context ctx: RouteContext;
             }
         
             term always {
@@ -124,7 +178,7 @@ fn test_routes_1() {
                 mqtt.send(
                     {
                         prefix: route.prefix,
-                        peer_ip: route.peer_ip
+                        peer_ip: ctx.provenance.peer-id.addr
                     }
                 );
             }
@@ -155,6 +209,8 @@ fn test_routes_1() {
         prefix,
         peer_ip,
     ) = test_run.unwrap();
+
+    trace!("OUTPUT RECORD");
     let output_record = output_stream_queue[0].get_record();
     trace!("{:#?}", output_record);
     assert_eq!(output_stream_queue.len(), 1);
@@ -180,6 +236,7 @@ fn test_routes_2() {
         filter rib-in-pre-filter {
             define {
                 rx route: Route;
+                context ctx: RouteContext;
             }
         
             term always {
@@ -193,7 +250,7 @@ fn test_routes_2() {
                 mqtt.send(
                     {
                         prefix: route.prefix,
-                        peer_ip: route.peer_ip
+                        peer_ip: ctx.provenance.peer-id.addr
                     }
                 );
             }
@@ -249,10 +306,11 @@ fn test_routes_3() {
         filter rib-in-pre-filter {
             define {
                 rx route: Route;
+                context ctx: RouteContext;
 
                 msg = Message {
                     prefix: route.prefix,
-                    peer_ip: route.peer_ip
+                    peer_ip: ctx.provenance.peer-id.addr
                 };
             }
         
@@ -318,9 +376,10 @@ fn test_routes_4() {
         filter rib-in-pre-filter {
             define {
                 rx route: Route;
+                context ctx: RouteContext;
 
                 pfx = route.prefix;
-                peer = route.peer_ip;
+                peer = ctx.provenance.peer-id.addr;
             }
         
             term always {
@@ -388,12 +447,13 @@ fn test_routes_5() {
         filter rib-in-pre-filter {
             define {
                 rx route: Route;
+                context ctx: RouteContext;
 
                 msg = Message {
                     text: "Some text",
                     data: {
                         pfx: route.prefix,
-                        peer_ip: route.peer_ip
+                        peer_ip: ctx.provenance.peer-id.addr
                     }
                 };
             }
@@ -467,12 +527,13 @@ fn test_routes_6() {
         filter rib-in-pre-filter {
             define {
                 rx route: Route;
+                context ctx: RouteContext;
 
                 msg = Message {
                     text: "Some text",
                     data: {
                         pfx: route.prefix,
-                        peer_ip: route.peer_ip
+                        peer_ip: ctx.provenance.peer-id.addr
                     }
                 };
             }
@@ -537,27 +598,44 @@ fn test_routes_6() {
         &peer_ip
     );
 
-    let route = rx.clone().into_route().unwrap();
-    assert_eq!(route.afi_safi, AfiSafi::Ipv6Unicast);
+    let route = rx.clone().into_prefix_route().unwrap();
+    // assert_eq!(route.afi_safi(), AfiSafi::Ipv6Unicast);
 
     let next_hop = route
-        .get_field_by_index(RouteToken::NextHop.into())
+        .get_field_by_index(&FieldIndex::from(vec![
+            1,
+            BasicRouteToken::NextHop.into(),
+        ]))
         .unwrap();
     trace!("next hop in route {:?}", next_hop);
 
     assert_eq!(
         next_hop,
-        TypeValue::Builtin(BuiltinTypeValue::NextHop(
-            NextHop::Ipv6LL(
-                std::net::Ipv6Addr::new(
-                    0xfc00, 0x10, 0x01, 0x10, 0x0, 0x0, 0x0, 0x10
-                ),
-                std::net::Ipv6Addr::new(
-                    0xfe80, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10
-                )
+        TypeValue::Builtin(BuiltinTypeValue::NextHop(NextHop::Ipv6LL(
+            std::net::Ipv6Addr::new(
+                0xfc00, 0x10, 0x01, 0x10, 0x0, 0x0, 0x0, 0x10
+            ),
+            std::net::Ipv6Addr::new(
+                0xfe80, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x10
             )
-        ))
+        )))
     );
     trace!("{:#?}", output_stream_queue);
     assert_eq!(accept_reject, AcceptReject::Accept);
+}
+
+
+#[test]
+fn test_create_pdu_from_rws() {
+    common::init();
+
+    let mut rws1 = RouteWorkshop::new(Ipv6UnicastNlri::from_str(
+        "2001:fe80:2d::/48"
+    ).unwrap());
+
+    rws1.set_attr::<LocalPref>(LocalPref(80)).unwrap();
+    let nlri: Ipv6UnicastNlri = *rws1.nlri();
+    
+    let mut new_update_pdu = UpdateBuilder::<bytes::BytesMut, Ipv6UnicastNlri>::from_workshop(rws1);
+    new_update_pdu.add_announcement(nlri).unwrap();
 }

@@ -348,7 +348,7 @@ impl<'source> Parser<'source> {
     fn identifier(&mut self) -> ParseResult<Spanned<Identifier>> {
         let (token, span) = self.next()?;
         let ident = match token {
-            Token::Ident(s) => s.as_ref(),
+            Token::Ident(s) => s,
             // 'contains' and `type` is already used as both a keyword and an identifier
             Token::Contains => "contains",
             Token::Type => "type",
@@ -372,7 +372,7 @@ impl<'source> Parser<'source> {
     fn type_identifier(&mut self) -> ParseResult<Spanned<TypeIdentifier>> {
         let (token, span) = self.next()?;
         let ident = match token {
-            Token::Ident(s) => s.as_ref(),
+            Token::Ident(s) => s,
             // 'contains' and `type` already used as both a keyword and an identifier
             Token::Contains => "contains",
             Token::Type => "type",

@@ -47,6 +47,7 @@ impl<'a> TestCompiler<'a> {
         self
     }
 
+    // this is *NOT* dead code, rust-analyzer!
     #[allow(dead_code)]
     pub fn test_compile(
         self,

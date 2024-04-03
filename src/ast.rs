@@ -3,7 +3,7 @@ use std::{borrow, cmp, fmt, hash, ops, str};
 use serde::{Serialize, Serializer};
 use smallvec::SmallVec;
 
-use routecore::asn::Asn;
+use inetnum::asn::Asn;
 
 use crate::compiler::error::CompileError;
 use crate::first_into_compile_err;
@@ -120,6 +120,7 @@ pub enum RxTxType {
 #[derive(Clone, Debug)]
 pub struct DefineBody {
     pub rx_tx_type: RxTxType,
+    pub route_context: Option<TypeIdentField>,
     pub use_ext_data: Vec<(Identifier, Identifier)>,
     pub assignments: Vec<(Spanned<Identifier>, Spanned<ValueExpr>)>,
 }
@@ -1085,11 +1086,6 @@ impl borrow::Borrow<str> for ShortString {
     }
 }
 
-impl borrow::Borrow<[u8]> for ShortString {
-    fn borrow(&self) -> &[u8] {
-        self.as_bytes()
-    }
-}
 
 impl<T: AsRef<str>> PartialEq<T> for ShortString {
     fn eq(&self, other: &T) -> bool {

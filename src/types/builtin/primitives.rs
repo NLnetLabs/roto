@@ -6,32 +6,30 @@ use paste::paste;
 use serde::Serialize;
 
 use crate::ast;
-use crate::attr_change_set::{ScalarValue, VectorValue};
+// use crate::ast::{IpAddressLiteral, PrefixLiteral};
 use crate::compiler::compile::CompileError;
 use crate::traits::RotoType;
 use crate::types::collections::ElementTypeValue;
 use crate::types::enum_types::EnumVariant;
 use crate::types::typedef::MethodProps;
-use crate::vm::{StackValue, VmError};
+use crate::vm::{FieldIndex, StackValue, VmError};
 use crate::{
-    _intotype, createtoken, first_into_vm_err, intotype, minimalscalartype,
-    noconversioninto, scalartype, setmethodonly, typevaluefromimpls,
-    wrappedfromimpls,
+    createtoken, first_into_vm_err, intotype, _intotype, minimalscalartype,
+    noconversioninto, setmethodonly, typevaluefromimpls,
+    wrappedfromimpls, scalartype,
 };
+use crate::types::typedef::TypeDef::ConstEnumVariant;
 
 use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 use super::builtin_type_value::BuiltinTypeValue;
 
-use routecore::addr::Prefix;
-use routecore::asn::{Asn, LongSegmentError};
-use routecore::bgp::aspath::OwnedHop;
+use inetnum::asn::Asn;
+use inetnum::addr::Prefix;
+use routecore::bgp::types::PathId;
+use routecore::bgp::path_attributes::AggregatorInfo;
 use routecore::bgp::communities::HumanReadableCommunity as Community;
-use routecore::bgp::message::nlri::PathId;
-use routecore::bgp::path_attributes::{AggregatorInfo, AtomicAggregate};
-use routecore::bgp::types::{
-    AfiSafi, LocalPref, MultiExitDisc, NextHop, OriginType,
-};
+use routecore::bgp::types::{AfiSafi, AtomicAggregate, LocalPref, MultiExitDisc, NextHop, Origin};
 
 //------------ U16 Type -----------------------------------------------------
 
@@ -52,7 +50,7 @@ impl RotoType for u16 {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::U32(self as u32)))
             }
             TypeDef::Asn => Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(
-                routecore::asn::Asn::from(self as u32),
+                inetnum::asn::Asn::from(self as u32),
             ))),
             TypeDef::PrefixLength => match self {
                 0..=128 => Ok(TypeValue::Builtin(
@@ -103,7 +101,7 @@ impl RotoType for u32 {
                 Ok(TypeValue::Builtin(BuiltinTypeValue::U32(self)))
             }
             TypeDef::Asn => Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(
-                routecore::asn::Asn::from(self),
+                inetnum::asn::Asn::from(self),
             ))),
             TypeDef::PrefixLength => match self {
                 0..=128 => Ok(TypeValue::Builtin(
@@ -413,7 +411,7 @@ pub enum StringLiteralToken {
     Set = 2,
 }
 
-impl ScalarValue for StringLiteral {}
+// impl ScalarValue for StringLiteral {}
 
 impl TryFrom<usize> for StringLiteralToken {
     type Error = VmError;
@@ -505,7 +503,7 @@ impl RotoType for IntegerLiteral {
             TypeDef::Asn => match self.0 {
                 0..=4294967295 => {
                     Ok(TypeValue::Builtin(BuiltinTypeValue::Asn(
-                        routecore::asn::Asn::from(self.0 as u32),
+                        inetnum::asn::Asn::from(self.0 as u32),
                     )))
                 }
                 i if i < 0 => Err(CompileError::from(
@@ -820,7 +818,7 @@ createtoken!(Prefix;
     Contains = 7
 );
 
-impl RotoType for routecore::addr::Prefix {
+impl RotoType for inetnum::addr::Prefix {
     fn get_props_for_method(
         _ty: TypeDef,
         method_name: &crate::ast::Identifier,
@@ -973,7 +971,7 @@ impl RotoType for routecore::addr::Prefix {
                             .try_into()
                             .map_err(|_e| VmError::InvalidConversion)?;
                         // let ip = addr;
-                        Ok(routecore::addr::Prefix::new(*addr, len.0)
+                        Ok(inetnum::addr::Prefix::new(*addr, len.0)
                             .map_or_else(
                                 |_| TypeValue::Unknown,
                                 |p| p.into(),
@@ -996,7 +994,7 @@ impl RotoType for routecore::addr::Prefix {
 
 typevaluefromimpls!(Prefix);
 
-impl TryFrom<&'_ ast::Prefix> for routecore::addr::Prefix {
+impl TryFrom<&'_ ast::Prefix> for inetnum::addr::Prefix {
     type Error = CompileError;
     fn try_from(value: &ast::Prefix) -> Result<Self, Self::Error> {
         let ast::Prefix { addr, len } = value;
@@ -1009,7 +1007,7 @@ impl TryFrom<&'_ ast::Prefix> for routecore::addr::Prefix {
     }
 }
 
-impl TryFrom<&TypeValue> for routecore::addr::Prefix {
+impl TryFrom<&TypeValue> for inetnum::addr::Prefix {
     type Error = VmError;
 
     fn try_from(value: &TypeValue) -> Result<Self, Self::Error> {
@@ -1238,7 +1236,7 @@ impl RotoType for Community {
     }
 }
 
-impl ScalarValue for Community {}
+// impl ScalarValue for Community {}
 
 impl From<Community> for TypeValue {
     fn from(val: Community) -> Self {
@@ -1261,6 +1259,171 @@ impl From<Vec<Community>> for TypeValue {
         TypeValue::List(crate::types::collections::List(list))
     }
 }
+
+
+//------------ Nlri ----------------------------------------------------------
+
+pub type Nlri = routecore::bgp::nlri::afisafi::Nlri<bytes::Bytes>;
+
+createtoken!(
+    Nlri;
+    Set = 0
+    Afi = 1
+    Safi = 2
+);
+
+impl RotoType for Nlri {
+
+    fn get_props_for_method(
+        _ty: TypeDef,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, CompileError>
+    where
+        Self: std::marker::Sized,
+    {
+        match method_name.ident.as_str() {
+            "set" => Ok(MethodProps::new(
+                TypeDef::Nlri,
+                NlriToken::Set.into(),
+                vec![TypeDef::Nlri],
+            )),
+            "afi" => Ok(MethodProps::new(
+                ConstEnumVariant("AFI".into()),
+                NlriToken::Afi.into(),
+                vec![]
+            )),
+            "safi" => Ok(MethodProps::new(
+                ConstEnumVariant("SAFI".into()),
+                NlriToken::Safi.into(),
+                vec![]
+            )),
+            _ => Err(format!(
+                "Unknown method: '{}' for type Nlri",
+                method_name.ident
+            )
+            .into()),
+        }
+    }
+
+    fn into_type(
+        self,
+        type_def: &TypeDef,
+    ) -> Result<TypeValue, CompileError> {
+        match type_def {
+            TypeDef::Nlri => {
+                Ok(TypeValue::Builtin(BuiltinTypeValue::Nlri(self)))
+            }
+            TypeDef::StringLiteral => Ok(TypeValue::Builtin(
+                BuiltinTypeValue::StringLiteral(format!("{:?}", self).into())
+            )),
+            _ => Err(format!(
+                "Cannot convert type Nlri to type {:?}",
+                type_def
+            )
+            .into()),
+        }
+    }
+
+    fn exec_value_method(
+        &self,
+        method_token: usize,
+
+        args: &[StackValue],
+        _res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        match method_token.try_into()? {
+            NlriToken::Set => {
+                if let TypeValue::Builtin(BuiltinTypeValue::Nlri(nlri)) =
+                    args.first().ok_or(VmError::InvalidMethodCall)?.as_ref()
+                {
+                    Ok(TypeValue::from(nlri.clone()))
+                } else {
+                    Err(VmError::InvalidMethodCall)
+                }
+            }
+            NlriToken::Afi => {
+                Ok(TypeValue::Builtin(
+                    BuiltinTypeValue::ConstU16EnumVariant(
+                        EnumVariant::<u16>::new(
+                            ("AFI".into(), self.afi_safi().afi().into())
+                        )
+                    )
+                ))
+            }
+            NlriToken::Safi => {
+                Ok(TypeValue::Builtin(
+                    BuiltinTypeValue::ConstU8EnumVariant(
+                        EnumVariant::<u8>::new(
+                            ("SAFI".into(), <(u16, u8)>::from(self.afi_safi()).1)
+                        )
+                    )
+                ))
+            }
+        }
+    }
+
+    fn exec_consume_value_method(
+        self,
+        method_token: usize,
+        mut args: Vec<TypeValue>,
+        _res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        match method_token.try_into()? {
+            NlriToken::Set => {
+                if let Ok(TypeValue::Builtin(BuiltinTypeValue::Nlri(
+                    comm_lit,
+                ))) = args.remove(0).into_type(&TypeDef::Nlri)
+                {
+                    Ok(TypeValue::Builtin(BuiltinTypeValue::Nlri(
+                        comm_lit,
+                    )))
+                } else {
+                    Err(VmError::InvalidValueType)
+                }
+            },
+            NlriToken::Afi => Err(VmError::InvalidMethodCall),
+            NlriToken::Safi => Err(VmError::InvalidMethodCall)
+        }
+    }
+
+    fn exec_type_method<'a>(
+        _method_token: usize,
+        _args: &[StackValue],
+        _res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        todo!()
+    }
+}
+
+// impl ScalarValue for Nlri {}
+
+impl From<Nlri> for TypeValue {
+    fn from(val: Nlri) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::Nlri(val))
+    }
+}
+
+impl From<Nlri> for BuiltinTypeValue {
+    fn from(value: Nlri) -> Self {
+        BuiltinTypeValue::Nlri(value)
+    }
+}
+
+impl From<Vec<Nlri>> for TypeValue {
+    fn from(value: Vec<Nlri>) -> Self {
+        let list: Vec<ElementTypeValue> = value
+            .iter()
+            .map(|c| ElementTypeValue::Primitive(TypeValue::from(c.clone())))
+            .collect::<Vec<_>>();
+        TypeValue::List(crate::types::collections::List(list))
+    }
+}
+
+// impl From<Ipv6FlowSpecNlri<bytes::Bytes>> for TypeValue {
+//     fn from(value: Ipv6FlowSpecNlri<bytes::Bytes>) -> Self {
+//         TypeValue::Builtin(BuiltinTypeValue::Nlri(Nlri::FlowSpec(value.nlri())))
+//     }
+// }
 
 //------------ MatchType ----------------------------------------------------
 
@@ -1402,7 +1565,7 @@ impl From<&'_ ast::IpAddress> for IpAddr {
 
 createtoken!(Asn; Set = 0);
 
-impl RotoType for routecore::asn::Asn {
+impl RotoType for inetnum::asn::Asn {
     setmethodonly!(Asn);
 
     fn into_type(
@@ -1554,74 +1717,74 @@ fn try_remove_first<T>(vec: &mut Vec<T>) -> Result<T, VmError> {
     }
 }
 
-impl VectorValue for routecore::bgp::aspath::HopPath {
-    type ReadItem = routecore::bgp::aspath::OwnedHop;
-    type WriteItem = routecore::asn::Asn;
+// impl VectorValue for routecore::bgp::aspath::HopPath {
+//     type ReadItem = routecore::bgp::aspath::OwnedHop;
+//     type WriteItem = inetnum::asn::Asn;
 
-    fn prepend_vec(
-        &mut self,
-        vector: Vec<Self::WriteItem>,
-    ) -> Result<(), LongSegmentError> {
-        let mut as_path = vector
-            .iter()
-            .map(|a| routecore::bgp::aspath::OwnedHop::Asn(*a))
-            .collect::<Vec<_>>();
-        as_path.extend_from_slice(std::mem::take(self).iter().as_slice());
+//     fn prepend_vec(
+//         &mut self,
+//         vector: Vec<Self::WriteItem>,
+//     ) -> Result<(), LongSegmentError> {
+//         let mut as_path = vector
+//             .iter()
+//             .map(|a| routecore::bgp::aspath::OwnedHop::Asn(*a))
+//             .collect::<Vec<_>>();
+//         as_path.extend_from_slice(std::mem::take(self).iter().as_slice());
 
-        std::mem::swap(self, &mut as_path.into());
+//         std::mem::swap(self, &mut as_path.into());
 
-        Ok(())
-    }
+//         Ok(())
+//     }
 
-    fn append_vec(
-        &mut self,
-        vector: Vec<Self::WriteItem>,
-    ) -> Result<(), LongSegmentError> {
-        for asn in vector {
-            self.append(OwnedHop::Asn(asn));
-        }
+//     fn append_vec(
+//         &mut self,
+//         vector: Vec<Self::WriteItem>,
+//     ) -> Result<(), LongSegmentError> {
+//         for asn in vector {
+//             self.append(OwnedHop::Asn(asn));
+//         }
 
-        Ok(())
-    }
+//         Ok(())
+//     }
 
-    /// Naïve insert that will try to append to the segment that is already in
-    /// place at the specified position.
-    ///
-    /// Fancier, more conditional ways are available to the roto user, but
-    /// those methods are implemented directly on [`builtin::AsPath`].
-    fn insert_vec(
-        &mut self,
-        pos: u8,
-        vector: Vec<Self::WriteItem>,
-    ) -> Result<(), LongSegmentError> {
-        let mut as_path = std::mem::take(self);
-        let mut left_path = as_path[..pos as usize].to_vec();
-        left_path.extend_from_slice(
-            vector
-                .into_iter()
-                .map(|a| a.into())
-                .collect::<Vec<_>>()
-                .as_slice(),
-        );
-        left_path.extend_from_slice(&self[pos as usize..]);
+//     /// Naïve insert that will try to append to the segment that is already in
+//     /// place at the specified position.
+//     ///
+//     /// Fancier, more conditional ways are available to the roto user, but
+//     /// those methods are implemented directly on [`builtin::AsPath`].
+//     fn insert_vec(
+//         &mut self,
+//         pos: u8,
+//         vector: Vec<Self::WriteItem>,
+//     ) -> Result<(), LongSegmentError> {
+//         let mut as_path = std::mem::take(self);
+//         let mut left_path = as_path[..pos as usize].to_vec();
+//         left_path.extend_from_slice(
+//             vector
+//                 .into_iter()
+//                 .map(|a| a.into())
+//                 .collect::<Vec<_>>()
+//                 .as_slice(),
+//         );
+//         left_path.extend_from_slice(&self[pos as usize..]);
 
-        std::mem::swap(self, &mut as_path);
+//         std::mem::swap(self, &mut as_path);
 
-        Ok(())
-    }
+//         Ok(())
+//     }
 
-    fn vec_len(&self) -> Option<usize> {
-        Some(self.hop_count())
-    }
+//     fn vec_len(&self) -> Option<usize> {
+//         Some(self.hop_count())
+//     }
 
-    fn vec_is_empty(&self) -> bool {
-        self.hop_count() == 0
-    }
+//     fn vec_is_empty(&self) -> bool {
+//         self.hop_count() == 0
+//     }
 
-    fn into_vec(self) -> Vec<Self::ReadItem> {
-        self.into_iter().collect::<Vec<_>>()
-    }
-}
+//     fn into_vec(self) -> Vec<Self::ReadItem> {
+//         self.into_iter().collect::<Vec<_>>()
+//     }
+// }
 
 impl From<routecore::bgp::aspath::HopPath> for BuiltinTypeValue {
     fn from(value: routecore::bgp::aspath::HopPath) -> Self {
@@ -1756,7 +1919,7 @@ typevaluefromimpls!(Hop);
 
 //------------ OriginType type ----------------------------------------------
 
-minimalscalartype!(OriginType);
+minimalscalartype!(Origin);
 
 //------------ NextHop type -------------------------------------------------
 
@@ -1877,6 +2040,7 @@ minimalscalartype!(AtomicAggregate);
 
 minimalscalartype!(AggregatorInfo);
 
+
 //------------ RouteStatus type ---------------------------------------------
 
 // Status is piece of metadata that writes some (hopefully) relevant state of
@@ -1896,54 +2060,77 @@ minimalscalartype!(AggregatorInfo);
     PartialOrd,
     Serialize,
 )]
-pub enum RouteStatus {
+pub enum NlriStatus {
     // Between start and EOR on a BGP peer-session
-    InConvergence,
+    InConvergence = 0,
     // After EOR for a BGP peer-session, either `Graceful Restart` or EOR
-    UpToDate,
+    UpToDate = 1,
     // After hold-timer expiry
-    Stale,
+    Stale = 2,
     // After the request for a Route Refresh to a peer and the reception of a
     // new route
-    StartOfRouteRefresh,
+    StartOfRouteRefresh = 3,
     // After the reception of a withdrawal
-    Withdrawn,
+    Withdrawn = 4,
     // A routecore::bgp::ParseError happened on a part of the PDU!
-    Unparsable,
+    Unparsable = 5,
     // Status not relevant, e.g. a RIB that holds archived routes.
     #[default]
     Empty,
 }
 
-impl std::fmt::Display for RouteStatus {
+impl NlriStatus {
+    pub fn get_field_by_index(&self, field_index: &[usize]) -> Result<TypeValue, VmError> {
+        let tv: NlriStatus = FieldIndex::from(field_index).first()?.try_into()?;
+        Ok(tv.into())
+    }
+}
+
+impl std::fmt::Display for NlriStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RouteStatus::InConvergence => write!(f, "in convergence"),
-            RouteStatus::UpToDate => write!(f, "up to date"),
-            RouteStatus::Stale => write!(f, "stale"),
-            RouteStatus::StartOfRouteRefresh => {
+            NlriStatus::InConvergence => write!(f, "in convergence"),
+            NlriStatus::UpToDate => write!(f, "up to date"),
+            NlriStatus::Stale => write!(f, "stale"),
+            NlriStatus::StartOfRouteRefresh => {
                 write!(f, "start of route refresh")
             }
-            RouteStatus::Withdrawn => write!(f, "withdrawn"),
-            RouteStatus::Unparsable => write!(f, "UNPARSABLE"),
-            RouteStatus::Empty => write!(f, "empty"),
+            NlriStatus::Withdrawn => write!(f, "withdrawn"),
+            NlriStatus::Unparsable => write!(f, "UNPARSABLE"),
+            NlriStatus::Empty => write!(f, "empty"),
         }
     }
 }
 
-typevaluefromimpls!(RouteStatus);
+typevaluefromimpls!(NlriStatus);
 
-impl TryFrom<TypeValue> for RouteStatus {
+impl TryFrom<TypeValue> for NlriStatus {
     type Error = VmError;
 
     fn try_from(value: TypeValue) -> Result<Self, VmError> {
-        if let TypeValue::Builtin(BuiltinTypeValue::RouteStatus(value)) =
+        if let TypeValue::Builtin(BuiltinTypeValue::NlriStatus(value)) =
             value
         {
             Ok(value)
         } else {
             debug!("invalid something");
             Err(VmError::InvalidMethodCall)
+        }
+    }
+}
+
+impl TryFrom<usize> for NlriStatus {
+    type Error = VmError;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(NlriStatus::InConvergence),
+            1 => Ok(NlriStatus::UpToDate),
+            2 => Ok(NlriStatus::UpToDate),
+            3 => Ok(NlriStatus::StartOfRouteRefresh),
+            4 => Ok(NlriStatus::Withdrawn),
+            5 => Ok(NlriStatus::Unparsable),
+            _ => Err(VmError::InvalidContext)
         }
     }
 }

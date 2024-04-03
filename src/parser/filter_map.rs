@@ -169,6 +169,14 @@ impl<'source> Parser<'source> {
             }
         };
 
+        let route_context = if self.next_is(Token::Context) {
+            let context_field = self.type_ident_field()?;
+            self.take(Token::SemiColon)?;
+            Some(context_field)
+        } else {
+            None
+        };
+
         let mut use_ext_data = Vec::new();
         while self.next_is(Token::Use) {
             use_ext_data
@@ -187,6 +195,7 @@ impl<'source> Parser<'source> {
 
         Ok(DefineBody {
             rx_tx_type,
+            route_context,
             use_ext_data,
             assignments,
         })

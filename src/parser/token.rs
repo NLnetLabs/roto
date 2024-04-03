@@ -115,6 +115,8 @@ pub enum Token<'s> {
     Rx,
     #[token("rx_tx")]
     RxTx,
+    #[token("context")]
+    Context,
     #[token("some")]
     Some,
     #[token("table")]
@@ -223,6 +225,7 @@ impl<'source> Display for Token<'source> {
             Token::Rib => "rib",
             Token::Rx => "rx",
             Token::RxTx => "rx_tx",
+            Token::Context => "context",
             Token::Some => "some",
             Token::Table => "table",
             Token::Term => "term",

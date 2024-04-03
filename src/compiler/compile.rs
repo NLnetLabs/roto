@@ -86,12 +86,8 @@ impl Rotolo {
     ///
     /// If any miscompilations occurred, those miscompilations will be
     /// returned instead.
-    pub fn packs(self) -> Result<Vec<RotoPack>, Vec<(Scope, CompileError)>> {
-        if self.mis_compilations.is_empty() {
-            Ok(self.packs)
-        } else {
-            Err(self.mis_compilations)
-        }
+    pub fn packs(self) -> (Vec<RotoPack>, Vec<(Scope, CompileError)>) {
+        (self.packs, self.mis_compilations)
     }
 
     // this iterator is not public because that would leak the (private)
@@ -855,6 +851,9 @@ pub(crate) fn generate_code_for_token_value(
         Token::TxType => {
             vec![Command::new(OpCode::PushStack, vec![CommandArg::MemPos(1)])]
         }
+        Token::RouteContext(_) => {
+            vec![Command::new(OpCode::PushStack, vec![CommandArg::MemPos(2)])]
+        }
         Token::Variable(var_to) => {
             if let Some(var) = state.used_variables.iter().find(|(_, var)| {
                 var.token
@@ -1073,14 +1072,13 @@ fn compile_assignments(
         // `compile_expr` may increase state.mem_pos to temporarily store
         // argument variables. If we already have variables set here, then we
         // can just increase it, but if there are none, we're going to skip
-        // over 0 and 1, since they should host the RxType and TxType
-        // respectively.
-        state.cur_mem_pos =
-            u32::max(2, 1 + state.used_variables.len() as u32);
+        // over 0, 1, 2, and 3 since they should host the RxType, TxType, the
+        // BgpUpdateMessage and the Provenance object respectively.
+        state.cur_mem_pos = u32::max(4, 1 + state.used_variables.len() as u32);
         trace!(
             "VAR {:?} MEM POS {} TEMP POS START {}",
             var.0,
-            var_mem_pos + 2,
+            var_mem_pos + 4,
             state.cur_mem_pos
         );
 

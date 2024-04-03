@@ -4,7 +4,7 @@ use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
 
 use routecore::bgp::communities::HumanReadableCommunity as Community;
-use routecore::asn::Asn;
+use inetnum::asn::Asn;
 
 fn main() {
     // let count = RotoType::create_primitive_var(
@@ -17,7 +17,7 @@ fn main() {
         TypeValue::from(1_u32);
 
     let count2 = TypeValue::from(
-        routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)
+        inetnum::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)
             .unwrap(),
     );
 
@@ -27,7 +27,7 @@ fn main() {
 
     let as_path = TypeValue::from(
         BuiltinTypeValue::AsPath(
-            vec![routecore::asn::Asn::from_u32(1)].into()
+            vec![inetnum::asn::Asn::from_u32(1)].into()
         )
     );
 

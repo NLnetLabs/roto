@@ -27,7 +27,7 @@ impl TypeChecker<'_> {
 
         let mut scope = scope.wrap();
 
-        let args = self.with_clause(&mut scope, &with_kv)?;
+        let args = self.with_clause(&mut scope, with_kv)?;
 
         self.define_section(&mut scope, define)?;
 
@@ -64,12 +64,13 @@ impl TypeChecker<'_> {
             body:
                 ast::DefineBody {
                     rx_tx_type,
+                    route_context,
                     use_ext_data: _,
                     assignments,
                 },
         } = define;
 
-        self.with_clause(scope, &with_kv)?;
+        self.with_clause(scope, with_kv)?;
 
         match rx_tx_type {
             ast::RxTxType::RxOnly(ast::TypeIdentField { field_name, ty }) => {
@@ -100,8 +101,15 @@ impl TypeChecker<'_> {
             }
         }
 
+        if let Some(ast::TypeIdentField { field_name, ty }) = route_context {
+            let Some(ty) = self.get_type(ty) else {
+                return Err(error::undeclared_type(ty));
+            };
+            scope.insert_var(field_name, ty)?;
+        }
+
         for (ident, expr) in assignments {
-            let t = self.expr(&scope, expr)?;
+            let t = self.expr(scope, expr)?;
             scope.insert_var(ident, t)?;
         }
 
@@ -122,7 +130,7 @@ impl TypeChecker<'_> {
 
         let mut scope = scope.wrap();
 
-        let args = self.with_clause(&mut scope, &with_kv)?;
+        let args = self.with_clause(&mut scope, with_kv)?;
 
         for ast::TermScope {
             scope: _,
@@ -230,7 +238,7 @@ impl TypeChecker<'_> {
 
         let mut inner_scope = scope.wrap();
 
-        let args = self.with_clause(&mut inner_scope, &with_kv)?;
+        let args = self.with_clause(&mut inner_scope, with_kv)?;
 
         for expr in expressions {
             let _t = self.compute_expr(&inner_scope, expr)?;
@@ -269,7 +277,7 @@ impl TypeChecker<'_> {
                         actions,
                     },
                 ) => {
-                    let ty = self.expr(&scope, filter_ident)?;
+                    let ty = self.expr(scope, filter_ident)?;
                     self.unify(&ty, &Type::Term(vec![]), filter_ident.span, None)?;
                     for action in actions {
                         match action {
@@ -282,7 +290,7 @@ impl TypeChecker<'_> {
                                 // do nothing
                             }
                             (Some(expr), None) => {
-                                self.expr(&scope, expr)?;
+                                self.expr(scope, expr)?;
                             }
                         }
                     }
@@ -380,7 +388,7 @@ impl TypeChecker<'_> {
                                         args.iter().zip(term_params)
                                     {
                                         let ty =
-                                            self.expr(&inner_scope, &arg)?;
+                                            self.expr(&inner_scope, arg)?;
                                         self.unify(&ty, param, arg.span, None)?;
                                     }
                                 }
@@ -436,12 +444,11 @@ impl TypeChecker<'_> {
                                             }
                                             for (arg, (_, param)) in args
                                                 .iter()
-                                                .into_iter()
                                                 .zip(action_params)
                                             {
                                                 let ty = self.expr(
                                                     &inner_scope,
-                                                    &arg,
+                                                    arg,
                                                 )?;
                                                 self.unify(&ty, param, arg.span, None)?;
                                             }
@@ -485,13 +492,13 @@ impl TypeChecker<'_> {
         scope: &mut Scope,
         args: &[ast::TypeIdentField],
     ) -> TypeResult<Vec<(String, Type)>> {
-        args.into_iter()
+        args.iter()
             .map(|ast::TypeIdentField { field_name, ty }| {
                 let Some(ty) = self.get_type(ty) else {
                     return Err(error::undeclared_type(ty));
                 };
 
-                scope.insert_var(&field_name, ty)?;
+                scope.insert_var(field_name, ty)?;
                 Ok((field_name.ident.to_string(), ty.clone()))
             })
             .collect()

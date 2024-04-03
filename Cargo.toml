@@ -15,14 +15,16 @@ license = "BSD-3-Clause"
 log = "0.4"
 
 arc-swap        = "^1.6"
-bytes           = { version = "1", features = [ "serde" ] }
+bytes           = { version = "1.5", features = [ "serde" ] }
+chrono             = "0.4"
 logos           = "0.14.0"
 nom             = "7.1"
 paste           = "1.0.14"
 smallvec        = { version = "1.11", features = [ "const_generics", "serde" ] }
 serde           = { version = "1.0", features = [ "derive", "rc" ] }
-routecore       = { version = "0.4.0", features = ["bgp", "bmp", "serde"] }
-rotonda-store   = { version = "0.3.0" }
+inetnum         = { version = "0.1.0", features = ["arbitrary", "serde"] }
+rotonda-store   = { git = "https://github.com/nlnetlabs/rotonda-store", branch = "main" }
+routecore       = { git = "https://github.com/nlnetlabs/routecore", branch = "absorb-fsm", features = ["bgp", "bmp", "serde"] }
 clap            = { version = "4.4.6", features = ["derive"] }
 ariadne         = "0.4.0"
 

@@ -1,11 +1,18 @@
-use roto::types::builtin::{RawRouteWithDeltas, RotondaId, UpdateMessage, RouteStatus};
-use roto::types::collections::Record;
+use std::net::SocketAddrV4;
+
+use roto::types::builtin::basic_route::{PeerId, PeerRibType, Provenance};
+use roto::types::builtin::{Nlri, NlriStatus, PrefixRoute, RouteContext};
+use roto::types::collections::{BytesRecord, Record};
+use roto::types::lazyrecord_types::BgpUpdateMessage;
 use roto::types::typevalue::TypeValue;
 use roto::{pipeline, vm};
 use roto::blocks::Scope::{self, FilterMap};
+use inetnum::asn::Asn;
 use routecore::bgp::message::SessionConfig;
-use routecore::bgp::message::nlri::{Nlri, BasicNlri};
-use routecore::addr::Prefix;
+use inetnum::addr::Prefix;
+use routecore::bgp::workshop::route::RouteWorkshop;
+use routecore::bgp::nlri::afisafi::Ipv6UnicastNlri;
+use routecore::bgp::nlri::afisafi::IsPrefix;
 
 fn test_data(
     name: Scope,
@@ -35,25 +42,38 @@ fn test_data(
         0x00, 0x00, 0x00, 0x00,
     ]);
 
-    let update: UpdateMessage =
-        UpdateMessage::new(buf, SessionConfig::modern()).unwrap();
+    let update =
+        BytesRecord::<BgpUpdateMessage>::new(buf, SessionConfig::modern()).unwrap();
 
     let prefixes: Vec<Prefix> = update
-        .0
+        .bytes_parser()
         .announcements()
         .unwrap()
-        .filter_map(|p| if let Ok(Nlri::Unicast(BasicNlri { prefix, .. })) = p { Some(prefix) } else { None })
+        .filter_map(|nlri| if let Ok(Nlri::Ipv6Unicast(nlri)) = nlri { Some(nlri.prefix()) } else { None })
         .collect();
-    let msg_id = (RotondaId(0), 0);
 
-    let payload: RawRouteWithDeltas = RawRouteWithDeltas::new_with_message(
-        msg_id,
-        prefixes[0],
-        update,
-        routecore::bgp::types::AfiSafi::Ipv6Unicast,
-        None,
-        RouteStatus::InConvergence,
-    )?;
+    let prov = Provenance {
+        timestamp: chrono::Utc::now(),
+        // router_id: 0,
+        connection_id: std::net::SocketAddr::V4(SocketAddrV4::new("172.0.0.1".parse().unwrap(), 179)),
+        peer_id: PeerId { addr: "172.0.0.1".parse().unwrap(), asn: Asn::from(65530)},
+        peer_bgp_id: [0,0,0,0].into(),
+        peer_distuingisher: [0; 8],
+        peer_rib_type: PeerRibType::OutPost,
+    };
+
+    let nlri = Ipv6UnicastNlri::try_from(prefixes[0]).unwrap();
+
+    let context = RouteContext::new(
+        Some(update.clone()),
+        // nlri.clone(),
+        NlriStatus::InConvergence,
+        prov,
+    );
+
+    let rws = RouteWorkshop::from_update_pdu(nlri, &update.into_inner())?;
+
+    let payload = PrefixRoute::from(rws);
 
     // Create the VM
     println!("Used Arguments");
@@ -70,10 +90,11 @@ fn test_data(
     let ds_ref = roto_pack.data_sources;
     let args = rotolo.compile_arguments(&name, filter_map_arguments)?;
 
-    let mut vm = vm::VmBuilder::new()
+    let mut vm = vm::VmBuilder::<_,RouteContext,_>::new()
         .with_arguments(args)
         .with_data_sources(ds_ref)
         .with_mir_code(roto_pack.mir)
+        .with_context(context)
         .build()?;
 
     let mem = &mut vm::LinearMemory::uninit();

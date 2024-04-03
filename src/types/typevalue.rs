@@ -1,15 +1,24 @@
 use std::net::IpAddr;
 use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
-use log::debug;
-use primitives::RouteStatus;
+use log::{debug, trace};
+use primitives::{Nlri, NlriStatus};
 
-use routecore::asn::Asn;
+use inetnum::asn::Asn;
 use routecore::bgp::aspath::{HopPath, OwnedHop as Hop};
-use routecore::bgp::message::nlri::PathId;
-use routecore::bgp::types::{AfiSafi, NextHop, LocalPref, OriginType, MultiExitDisc};
 use routecore::bgp::communities::HumanReadableCommunity as Community;
+use routecore::bgp::nlri::afisafi::{
+    Ipv4MulticastAddpathNlri, Ipv4MulticastNlri, Ipv4UnicastAddpathNlri, 
+    Ipv4UnicastNlri, Ipv6FlowSpecNlri, Ipv6MulticastAddpathNlri, 
+    Ipv6MulticastNlri, Ipv6UnicastAddpathNlri, Ipv6UnicastNlri
+};
+use routecore::bgp::types::PathId;
+use routecore::bgp::types::{
+    AfiSafi as AfiSafiType, LocalPref, MultiExitDisc, NextHop, Origin
+};
+use routecore::bgp::workshop::route::RouteWorkshop;
 use serde::Serialize;
+
 
 //============ TypeValue ====================================================
 use crate::{
@@ -17,17 +26,19 @@ use crate::{
         AnonymousRecordValueExpr, ListValueExpr, ShortString,
         TypedRecordValueExpr,
     },
-    attr_change_set::ScalarValue,
+    // attr_change_set::ScalarValue,
     compiler::compile::CompileError,
     traits::{RotoType, Token},
     vm::{FieldIndex, StackValue, VmError},
 };
 
+use super::builtin::basic_route::{PeerId, PeerRibType, Provenance};
+use super::builtin::{FlowSpecNlri, FlowSpecRoute, PrefixRoute, PrefixRouteWs, RouteContext};
+use super::lazyrecord_types::BgpUpdateMessage;
 use super::{
     builtin::{
-        primitives, BgpUpdateMessage, BuiltinTypeValue,
-        HexLiteral, IntegerLiteral, PrefixLength,
-        RawRouteWithDeltas, StringLiteral,
+        primitives, BuiltinTypeValue, HexLiteral, IntegerLiteral,
+        PrefixLength, StringLiteral,
     },
     collections::{
         BytesRecord, ElementTypeValue, EnumBytesRecord, LazyRecord, List,
@@ -101,8 +112,7 @@ impl TypeValue {
     }
 
     pub fn is_false(&self) -> Result<bool, VmError> {
-        if let TypeValue::Builtin(BuiltinTypeValue::Bool(bool_val)) = self
-        {
+        if let TypeValue::Builtin(BuiltinTypeValue::Bool(bool_val)) = self {
             Ok(!bool_val)
         } else {
             Err(VmError::InvalidValueType)
@@ -137,6 +147,7 @@ impl TypeValue {
         &self,
         index: FieldIndex,
     ) -> Result<&ElementTypeValue, CompileError> {
+        trace!("get_field_by_index for TypeValue {:?}", self);
         match self {
             TypeValue::Record(r) => {
                 let field = r.get_field_by_index(&index);
@@ -212,33 +223,50 @@ impl TypeValue {
     }
 
     pub fn is_bytes_record(&self) -> bool {
-        matches!(self, TypeValue::Builtin(BuiltinTypeValue::BmpMessage(_))
-        | TypeValue::Builtin(
-            BuiltinTypeValue::BmpRouteMonitoringMessage(_),
+        matches!(
+            self,
+            TypeValue::Builtin(BuiltinTypeValue::BmpMessage(_))
+                | TypeValue::Builtin(
+                    BuiltinTypeValue::BmpRouteMonitoringMessage(_),
+                )
+                | TypeValue::Builtin(
+                    BuiltinTypeValue::BmpPeerDownNotification(_),
+                )
+                | TypeValue::Builtin(
+                    BuiltinTypeValue::BmpPeerUpNotification(_,)
+                )
+                | TypeValue::Builtin(BuiltinTypeValue::BmpInitiationMessage(
+                    _
+                ))
+                | TypeValue::Builtin(BuiltinTypeValue::BmpStatisticsReport(
+                    _
+                ))
+                | TypeValue::Builtin(
+                    BuiltinTypeValue::BmpTerminationMessage(_,)
+                )
         )
-        | TypeValue::Builtin(
-            BuiltinTypeValue::BmpPeerDownNotification(_),
-        )
-        | TypeValue::Builtin(BuiltinTypeValue::BmpPeerUpNotification(
-            _,
-        ))
-        | TypeValue::Builtin(BuiltinTypeValue::BmpInitiationMessage(_))
-        | TypeValue::Builtin(BuiltinTypeValue::BmpStatisticsReport(_))
-        | TypeValue::Builtin(BuiltinTypeValue::BmpTerminationMessage(
-            _,
-        )))
     }
 
-    pub fn into_route_monitoring_bytes_record(self) -> Option<BytesRecord<RouteMonitoring>> {
-        if let TypeValue::Builtin(BuiltinTypeValue::BmpRouteMonitoringMessage(bytes_rec)) = self {
+    pub fn into_route_monitoring_bytes_record(
+        self,
+    ) -> Option<BytesRecord<RouteMonitoring>> {
+        if let TypeValue::Builtin(
+            BuiltinTypeValue::BmpRouteMonitoringMessage(bytes_rec),
+        ) = self
+        {
             Some(bytes_rec)
         } else {
             None
         }
     }
 
-    pub fn into_initiation_message_bytes_record(self) -> Option<BytesRecord<InitiationMessage>> {
-        if let TypeValue::Builtin(BuiltinTypeValue::BmpInitiationMessage(bytes_rec)) = self {
+    pub fn into_initiation_message_bytes_record(
+        self,
+    ) -> Option<BytesRecord<InitiationMessage>> {
+        if let TypeValue::Builtin(BuiltinTypeValue::BmpInitiationMessage(
+            bytes_rec,
+        )) = self
+        {
             Some(bytes_rec)
         } else {
             None
@@ -247,18 +275,38 @@ impl TypeValue {
 
     pub fn into_bytes(self) -> Option<bytes::Bytes> {
         match self {
-            TypeValue::Builtin(BuiltinTypeValue::BmpInitiationMessage(bytes_rec)) => Some(bytes::Bytes::copy_from_slice(bytes_rec.as_ref())),
-            TypeValue::Builtin(BuiltinTypeValue::BmpRouteMonitoringMessage(bytes_rec)) => Some(bytes::Bytes::copy_from_slice(bytes_rec.as_ref())),
-            TypeValue::Builtin(BuiltinTypeValue::BmpPeerDownNotification(bytes_rec)) => Some(bytes::Bytes::copy_from_slice(bytes_rec.as_ref())),
-            TypeValue::Builtin(BuiltinTypeValue::BmpPeerUpNotification(bytes_rec)) => Some(bytes::Bytes::copy_from_slice(bytes_rec.as_ref())),
-            TypeValue::Builtin(BuiltinTypeValue::BmpStatisticsReport(bytes_rec)) => Some(bytes::Bytes::copy_from_slice(bytes_rec.as_ref())),
-            TypeValue::Builtin(BuiltinTypeValue::BmpTerminationMessage(bytes_rec)) => Some(bytes::Bytes::copy_from_slice(bytes_rec.as_ref())),
-            _ => None
+            TypeValue::Builtin(BuiltinTypeValue::BmpInitiationMessage(
+                bytes_rec,
+            )) => Some(bytes::Bytes::copy_from_slice(bytes_rec.as_ref())),
+            TypeValue::Builtin(
+                BuiltinTypeValue::BmpRouteMonitoringMessage(bytes_rec),
+            ) => Some(bytes::Bytes::copy_from_slice(bytes_rec.as_ref())),
+            TypeValue::Builtin(
+                BuiltinTypeValue::BmpPeerDownNotification(bytes_rec),
+            ) => Some(bytes::Bytes::copy_from_slice(bytes_rec.as_ref())),
+            TypeValue::Builtin(BuiltinTypeValue::BmpPeerUpNotification(
+                bytes_rec,
+            )) => Some(bytes::Bytes::copy_from_slice(bytes_rec.as_ref())),
+            TypeValue::Builtin(BuiltinTypeValue::BmpStatisticsReport(
+                bytes_rec,
+            )) => Some(bytes::Bytes::copy_from_slice(bytes_rec.as_ref())),
+            TypeValue::Builtin(BuiltinTypeValue::BmpTerminationMessage(
+                bytes_rec,
+            )) => Some(bytes::Bytes::copy_from_slice(bytes_rec.as_ref())),
+            _ => None,
         }
     }
 
-    pub fn into_route(self) -> Result<RawRouteWithDeltas, Self> {
-        if let TypeValue::Builtin(BuiltinTypeValue::Route(route)) = self {
+    pub fn into_prefix_route(self) -> Result<PrefixRoute, Self> {
+        if let TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(route)) = self {
+            Ok(route)
+        } else {
+            Err(self)
+        }
+    }
+
+    pub fn into_flowspec_route(self) -> Result<FlowSpecRoute<bytes::Bytes>, Self> {
+        if let TypeValue::Builtin(BuiltinTypeValue::FlowSpecRoute(route)) = self {
             Ok(route)
         } else {
             Err(self)
@@ -289,16 +337,19 @@ impl TypeValue {
 }
 
 pub enum BytesRecordType {
-    InitiationMessage(routecore::bmp::message::InitiationMessage<bytes::Bytes>)
+    InitiationMessage(
+        routecore::bmp::message::InitiationMessage<bytes::Bytes>,
+    ),
 }
 
 pub fn into_inner<T: RecordType>(tv: TypeValue) -> Option<BytesRecordType> {
     match tv {
-        TypeValue::Builtin(BuiltinTypeValue::BmpInitiationMessage(msg)) => Some(BytesRecordType::InitiationMessage(msg.0)),
-        _ => None
+        TypeValue::Builtin(BuiltinTypeValue::BmpInitiationMessage(msg)) => {
+            Some(BytesRecordType::InitiationMessage(msg.into_inner()))
+        }
+        _ => None,
     }
 }
-
 
 impl RotoType for TypeValue {
     fn get_props_for_method(
@@ -326,18 +377,17 @@ impl RotoType for TypeValue {
                 get_props_for_method()"
                     .to_string(),
             )),
-            TypeDef::BgpUpdateMessage => {
-                BgpUpdateMessage::get_props_for_method(ty, method_name)
-            }
+            // TypeDef::BgpUpdateMessage => {
+            //     BytesRecord::<BgpUpdateMessage>::get_props_for_method(ty, method_name)
+            // }
             TypeDef::LazyRecord(ref bytes_parser) => {
                 bytes_parser.get_props_for_method(ty.clone(), method_name)
             }
-            TypeDef::Bool => {
-                bool::get_props_for_method(ty, method_name)
-            }
+            TypeDef::Bool => bool::get_props_for_method(ty, method_name),
             TypeDef::Community => {
                 Community::get_props_for_method(ty, method_name)
             }
+            TypeDef::Nlri => Nlri::get_props_for_method(ty, method_name),
             TypeDef::ConstEnumVariant(_) => Err(CompileError::new(
                 "Unsupported TypeDef::ConstEnumVariant in TypeValue::\
                 get_props_for_method()"
@@ -355,9 +405,7 @@ impl RotoType for TypeValue {
             TypeDef::IntegerLiteral => {
                 IntegerLiteral::get_props_for_method(ty, method_name)
             }
-            TypeDef::IpAddr => {
-                IpAddr::get_props_for_method(ty, method_name)
-            }
+            TypeDef::IpAddr => IpAddr::get_props_for_method(ty, method_name),
             TypeDef::List(ty) => Self::get_props_for_method(*ty, method_name),
             TypeDef::LocalPref => {
                 LocalPref::get_props_for_method(ty, method_name)
@@ -368,33 +416,46 @@ impl RotoType for TypeValue {
             TypeDef::NextHop => {
                 NextHop::get_props_for_method(ty, method_name)
             }
-            TypeDef::OriginType => {
-                OriginType::get_props_for_method(ty, method_name)
+            TypeDef::Origin => {
+                Origin::get_props_for_method(ty, method_name)
             }
             TypeDef::OutputStream(ty) => {
                 Self::get_props_for_method(*ty, method_name)
             }
-            TypeDef::Prefix => routecore::addr::Prefix::get_props_for_method(ty, method_name),
+            TypeDef::Prefix => {
+                inetnum::addr::Prefix::get_props_for_method(ty, method_name)
+            }
             TypeDef::PrefixLength => {
                 PrefixLength::get_props_for_method(ty, method_name)
             }
             TypeDef::AfiSafi => {
-                AfiSafi::get_props_for_method(ty, method_name)
+                AfiSafiType::get_props_for_method(ty, method_name)
             }
-            TypeDef::PathId => {
-                PathId::get_props_for_method(ty, method_name)
-            }
+            TypeDef::PathId => PathId::get_props_for_method(ty, method_name),
             TypeDef::Record(_) => {
                 Record::get_props_for_method(ty, method_name)
             }
             TypeDef::Rib(ty) => {
                 Self::get_props_for_method(*ty.0, method_name)
             }
-            TypeDef::Route => {
-                RawRouteWithDeltas::get_props_for_method(ty, method_name)
+            TypeDef::PrefixRoute => {
+                PrefixRoute::get_props_for_method(ty, method_name)
             }
-            TypeDef::RouteStatus => {
-                RouteStatus::get_props_for_method(ty, method_name)
+            TypeDef::FlowSpecRoute => {
+                FlowSpecRoute::get_props_for_method(ty, method_name)
+            }
+            TypeDef::RouteContext => {
+                RouteContext::get_props_for_method(ty, method_name)
+            }
+            TypeDef::Provenance => {
+                Provenance::get_props_for_method(ty, method_name)
+            }
+            TypeDef::PeerId => PeerId::get_props_for_method(ty, method_name),
+            TypeDef::PeerRibType => {
+                PeerRibType::get_props_for_method(ty, method_name)
+            }
+            TypeDef::NlriStatus => {
+                NlriStatus::get_props_for_method(ty, method_name)
             }
             TypeDef::StringLiteral => {
                 StringLiteral::get_props_for_method(ty, method_name)
@@ -432,6 +493,7 @@ impl RotoType for TypeValue {
                 }
                 BuiltinTypeValue::Bool(v) => v.into_type(ty),
                 BuiltinTypeValue::Community(v) => v.into_type(ty),
+                BuiltinTypeValue::Nlri(v) => v.into_type(ty),
                 BuiltinTypeValue::ConstU16EnumVariant(v) => v.into_type(ty),
                 BuiltinTypeValue::ConstU32EnumVariant(v) => v.into_type(ty),
                 BuiltinTypeValue::ConstU8EnumVariant(v) => v.into_type(ty),
@@ -442,17 +504,22 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::LocalPref(v) => v.into_type(ty),
                 BuiltinTypeValue::MultiExitDisc(v) => v.into_type(ty),
                 BuiltinTypeValue::NextHop(v) => v.into_type(ty),
-                BuiltinTypeValue::OriginType(v) => v.into_type(ty),
+                BuiltinTypeValue::Origin(v) => v.into_type(ty),
                 BuiltinTypeValue::Prefix(v) => v.into_type(ty),
                 BuiltinTypeValue::PrefixLength(v) => v.into_type(ty),
                 BuiltinTypeValue::AfiSafi(v) => v.into_type(ty),
                 BuiltinTypeValue::PathId(v) => v.into_type(ty),
-                BuiltinTypeValue::Route(v) => v.into_type(ty),
-                BuiltinTypeValue::RouteStatus(v) => v.into_type(ty),
+                BuiltinTypeValue::PrefixRoute(v) => v.into_type(ty),
+                BuiltinTypeValue::FlowSpecRoute(v) => v.into_type(ty),
+                BuiltinTypeValue::RouteContext(c) => c.into_type(ty),
+                BuiltinTypeValue::Provenance(v) => v.into_type(ty),
+                BuiltinTypeValue::NlriStatus(v) => v.into_type(ty),
                 BuiltinTypeValue::StringLiteral(v) => v.into_type(ty),
                 BuiltinTypeValue::U32(v) => v.into_type(ty),
                 BuiltinTypeValue::U16(v) => v.into_type(ty),
                 BuiltinTypeValue::U8(v) => v.into_type(ty),
+                BuiltinTypeValue::PeerId(v) => v.into_type(ty),
+                BuiltinTypeValue::PeerRibType(v) => v.into_type(ty),
                 BuiltinTypeValue::BmpMessage(_v) => Err(CompileError::new(
                     "Unsupported TypeValue::BmpMessage in TypeValue::\
                     into_type()"
@@ -542,8 +609,13 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::AtomicAggregate(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::BgpUpdateMessage(v) => {
-                    v.exec_value_method(method_token, args, res_type)
+                BuiltinTypeValue::BgpUpdateMessage(bytes_rec) => {
+                    BytesRecord::<BgpUpdateMessage>::exec_value_method(
+                        method_token,
+                        args,
+                        res_type,
+                        bytes_rec,
+                    )
                 }
                 BuiltinTypeValue::BmpMessage(_bytes_rec) => {
                     Err(VmError::InvalidValueType)
@@ -556,7 +628,7 @@ impl RotoType for TypeValue {
                         method_token,
                         args,
                         res_type,
-                        bytes_rec.0.as_ref(),
+                        bytes_rec.as_ref(),
                     )
                 }
                 BuiltinTypeValue::BmpPeerUpNotification(bytes_rec) => {
@@ -567,7 +639,7 @@ impl RotoType for TypeValue {
                         method_token,
                         args,
                         res_type,
-                        bytes_rec.0.as_ref(),
+                        bytes_rec.as_ref(),
                     )
                 }
                 BuiltinTypeValue::BmpPeerDownNotification(bytes_rec) => {
@@ -578,7 +650,7 @@ impl RotoType for TypeValue {
                         method_token,
                         args,
                         res_type,
-                        bytes_rec.0.as_ref(),
+                        bytes_rec.as_ref(),
                     )
                 }
                 BuiltinTypeValue::BmpInitiationMessage(bytes_rec) => {
@@ -589,7 +661,7 @@ impl RotoType for TypeValue {
                         method_token,
                         args,
                         res_type,
-                        bytes_rec.0.as_ref(),
+                        bytes_rec.as_ref(),
                     )
                 }
                 BuiltinTypeValue::BmpTerminationMessage(bytes_rec) => {
@@ -600,7 +672,7 @@ impl RotoType for TypeValue {
                         method_token,
                         args,
                         res_type,
-                        bytes_rec.0.as_ref(),
+                        bytes_rec.as_ref(),
                     )
                 }
                 BuiltinTypeValue::BmpStatisticsReport(bytes_rec) => {
@@ -611,13 +683,16 @@ impl RotoType for TypeValue {
                         method_token,
                         args,
                         res_type,
-                        bytes_rec.0.as_ref(),
+                        bytes_rec.as_ref(),
                     )
                 }
                 BuiltinTypeValue::Bool(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::Community(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::Nlri(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::ConstU16EnumVariant(v) => {
@@ -650,7 +725,7 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::NextHop(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::OriginType(v) => {
+                BuiltinTypeValue::Origin(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::Prefix(v) => {
@@ -665,10 +740,19 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::PrefixLength(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::Route(v) => {
+                BuiltinTypeValue::PrefixRoute(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::RouteStatus(v) => {
+                BuiltinTypeValue::FlowSpecRoute(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::RouteContext(c) => {
+                    c.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::Provenance(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::NlriStatus(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::StringLiteral(v) => {
@@ -681,6 +765,12 @@ impl RotoType for TypeValue {
                     v.exec_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::U8(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::PeerId(v) => {
+                    v.exec_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::PeerRibType(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
             },
@@ -750,6 +840,9 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::Community(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
+                BuiltinTypeValue::Nlri(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
                 BuiltinTypeValue::ConstU16EnumVariant(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
@@ -780,7 +873,7 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::NextHop(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::OriginType(v) => {
+                BuiltinTypeValue::Origin(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::Prefix(v) => {
@@ -795,10 +888,19 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::PrefixLength(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::Route(v) => {
+                BuiltinTypeValue::PrefixRoute(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::RouteStatus(v) => {
+                BuiltinTypeValue::FlowSpecRoute(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::RouteContext(c) => {
+                    c.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::Provenance(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::NlriStatus(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::StringLiteral(v) => {
@@ -811,6 +913,12 @@ impl RotoType for TypeValue {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
                 BuiltinTypeValue::U8(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::PeerId(v) => {
+                    v.exec_consume_value_method(method_token, args, res_type)
+                }
+                BuiltinTypeValue::PeerRibType(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
             },
@@ -1087,15 +1195,15 @@ impl PartialOrd for TypeValue {
                 None
             }
             (
-                TypeValue::Builtin(BuiltinTypeValue::Route(_)),
-                TypeValue::Builtin(BuiltinTypeValue::Route(_)),
+                TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(_)),
+                TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(_)),
             ) => {
                 debug!("Routes have no ordering.");
                 None
             }
             (
-                TypeValue::Builtin(BuiltinTypeValue::RouteStatus(_)),
-                TypeValue::Builtin(BuiltinTypeValue::RouteStatus(_)),
+                TypeValue::Builtin(BuiltinTypeValue::NlriStatus(_)),
+                TypeValue::Builtin(BuiltinTypeValue::NlriStatus(_)),
             ) => {
                 debug!("Route statuses have no ordering.");
                 None
@@ -1133,12 +1241,11 @@ impl<'a> TryFrom<StackValue<'a>> for bool {
 
     fn try_from(t: StackValue) -> Result<Self, Self::Error> {
         match t {
-            StackValue::Ref(TypeValue::Builtin(
-                BuiltinTypeValue::Bool(ref b),
-            )) => Ok(*b),
+            StackValue::Ref(TypeValue::Builtin(BuiltinTypeValue::Bool(
+                ref b,
+            ))) => Ok(*b),
             StackValue::Arc(bv) => {
-                if let TypeValue::Builtin(BuiltinTypeValue::Bool(ref b)) =
-                    *bv
+                if let TypeValue::Builtin(BuiltinTypeValue::Bool(ref b)) = *bv
                 {
                     Ok(*b)
                 } else {
@@ -1173,7 +1280,7 @@ impl From<&'_ str> for TypeValue {
     }
 }
 
-impl ScalarValue for TypeValue {}
+// impl ScalarValue for TypeValue {}
 
 // Type conversions for Records
 
@@ -1298,36 +1405,145 @@ impl TryFrom<TypedRecordValueExpr> for TypeValue {
 
 impl From<RouteMonitoring> for TypeValue {
     fn from(value: RouteMonitoring) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::BmpRouteMonitoringMessage(BytesRecord(value)))
+        TypeValue::Builtin(BuiltinTypeValue::BmpRouteMonitoringMessage(
+            value.into(),
+        ))
     }
 }
 
 impl From<InitiationMessage> for TypeValue {
     fn from(value: InitiationMessage) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::BmpInitiationMessage(BytesRecord(value)))
+        TypeValue::Builtin(BuiltinTypeValue::BmpInitiationMessage(
+            value.into(),
+        ))
     }
 }
 
 impl From<TerminationMessage> for TypeValue {
     fn from(value: TerminationMessage) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::BmpTerminationMessage(BytesRecord(value)))
+        TypeValue::Builtin(BuiltinTypeValue::BmpTerminationMessage(
+            value.into(),
+        ))
     }
 }
 
 impl From<PeerUpNotification> for TypeValue {
     fn from(value: PeerUpNotification) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::BmpPeerUpNotification(BytesRecord(value)))
+        TypeValue::Builtin(BuiltinTypeValue::BmpPeerUpNotification(
+            value.into(),
+        ))
     }
 }
 
 impl From<PeerDownNotification> for TypeValue {
     fn from(value: PeerDownNotification) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::BmpPeerDownNotification(BytesRecord(value)))
+        TypeValue::Builtin(BuiltinTypeValue::BmpPeerDownNotification(
+            value.into(),
+        ))
     }
 }
 
 impl From<StatisticsReport> for TypeValue {
     fn from(value: StatisticsReport) -> Self {
-        TypeValue::Builtin(BuiltinTypeValue::BmpStatisticsReport(BytesRecord(value)))
+        TypeValue::Builtin(BuiltinTypeValue::BmpStatisticsReport(
+            value.into(),
+        ))
+    }
+}
+
+impl From<std::net::SocketAddr> for TypeValue {
+    fn from(value: std::net::SocketAddr) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::StringLiteral(
+            value.into()
+        ))
+    }
+}
+
+impl From<RouteWorkshop<Ipv4UnicastNlri>> for TypeValue {
+    fn from(value: RouteWorkshop<Ipv4UnicastNlri>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(PrefixRoute(
+            PrefixRouteWs::Ipv4Unicast(
+                value
+            )
+        )))
+    }
+}
+
+impl From<RouteWorkshop<Ipv4UnicastAddpathNlri>> for TypeValue {
+    fn from(value: RouteWorkshop<Ipv4UnicastAddpathNlri>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(PrefixRoute(
+            PrefixRouteWs::Ipv4UnicastAddpath(
+                value
+            )
+        )))
+    }
+}
+
+impl From<RouteWorkshop<Ipv6UnicastNlri>> for TypeValue {
+    fn from(value: RouteWorkshop<Ipv6UnicastNlri>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(PrefixRoute(
+            PrefixRouteWs::Ipv6Unicast(
+                value
+            )
+        )))
+    }
+}
+
+impl From<RouteWorkshop<Ipv6UnicastAddpathNlri>> for TypeValue {
+    fn from(value: RouteWorkshop<Ipv6UnicastAddpathNlri>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(PrefixRoute(
+            PrefixRouteWs::Ipv6UnicastAddpath(
+                value
+            )
+        )))
+    }
+}
+
+impl From<RouteWorkshop<Ipv4MulticastNlri>> for TypeValue {
+    fn from(value: RouteWorkshop<Ipv4MulticastNlri>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(PrefixRoute(
+            PrefixRouteWs::Ipv4Multicast(
+                value
+            )
+        )))
+    }
+}
+
+impl From<RouteWorkshop<Ipv4MulticastAddpathNlri>> for TypeValue {
+    fn from(value: RouteWorkshop<Ipv4MulticastAddpathNlri>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(PrefixRoute(
+            PrefixRouteWs::Ipv4MulticastAddpath(
+                value
+            )
+        )))
+    }
+}
+
+impl From<RouteWorkshop<Ipv6MulticastNlri>> for TypeValue {
+    fn from(value: RouteWorkshop<Ipv6MulticastNlri>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(PrefixRoute(
+            PrefixRouteWs::Ipv6Multicast(
+                value
+            )
+        )))
+    }
+}
+
+impl From<RouteWorkshop<Ipv6MulticastAddpathNlri>> for TypeValue {
+    fn from(value: RouteWorkshop<Ipv6MulticastAddpathNlri>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::PrefixRoute(PrefixRoute(
+            PrefixRouteWs::Ipv6MulticastAddpath(
+                value
+            )
+        )))
+    }
+}
+
+impl From<RouteWorkshop<Ipv6FlowSpecNlri<bytes::Bytes>>> for TypeValue {
+    fn from(value: RouteWorkshop<Ipv6FlowSpecNlri<bytes::Bytes>>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::FlowSpecRoute(FlowSpecRoute {
+            nlri: FlowSpecNlri::Ipv6FlowSpec(value.nlri().clone()),
+            attributes: value.attributes().clone(),
+        }))
     }
 }

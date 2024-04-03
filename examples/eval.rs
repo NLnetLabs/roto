@@ -1,4 +1,4 @@
-use roto::types::builtin::BuiltinTypeValue;
+use roto::types::builtin::{BuiltinTypeValue, RouteContext};
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
@@ -6,7 +6,7 @@ use roto::{pipeline, vm};
 use roto::blocks::Scope::{self, FilterMap};
 
 use routecore::bgp::communities::HumanReadableCommunity as Community;
-use routecore::asn::Asn;
+use inetnum::asn::Asn;
 
 fn test_data(
     name: Scope,
@@ -21,7 +21,7 @@ fn test_data(
     // Create a payload type and instance to feed into a VM.
     let _count: TypeValue = 1_u32.into();
     let prefix: TypeValue =
-        routecore::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?
+        inetnum::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?
             .into();
     let next_hop: TypeValue =
         std::net::IpAddr::V4(std::net::Ipv4Addr::new(193, 0, 0, 23)).into();
@@ -94,7 +94,7 @@ fn test_data(
     let ds_ref = roto_pack.data_sources;
     let args = rotolo.compile_arguments(&name, filter_map_arguments)?;
 
-    let mut vm = vm::VmBuilder::new()
+    let mut vm = vm::VmBuilder::<_,RouteContext,_>::new()
         .with_arguments(args)
         .with_data_sources(ds_ref)
         .with_mir_code(roto_pack.mir)

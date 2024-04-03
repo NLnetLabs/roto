@@ -322,7 +322,7 @@ macro_rules! typevaluefromimpls {
             }
         }
 
-        impl ScalarValue for $type_def {}
+        // impl ScalarValue for $type_def {}
     }
 }
 
@@ -455,7 +455,7 @@ macro_rules! lazyrecord {
 macro_rules! lazyfield {
     (
         $field_name: literal,
-        $ty: ident,
+        $ty: ty,
         $raw_ty: path,
         $base_call: ident
         $( .$method_call: ident )*
@@ -464,14 +464,14 @@ macro_rules! lazyfield {
         lazyelmtypevalue!(
             raw_bytes;
             $raw_ty;
-            TypeValue::Builtin(
-                BuiltinTypeValue::from(
+            // TypeValue::Builtin(
+                TypeValue::from(
                     // $ty::new(
                         raw_bytes
                             .bytes_parser()
                             .$base_call()$(.$method_call())*
                     // )
-                )
+                // )
             ).try_into().unwrap_or(
                 ElementTypeValue::Primitive(TypeValue::Unknown)
             )
@@ -485,6 +485,60 @@ macro_rules! lazyfield {
         //     ).into()
         //      })
         // )
+    )}
+}
+
+#[macro_export]
+macro_rules! lazy_list_field {
+    (
+        $field_name: literal,
+        $ty: ty,
+        $raw_ty: path,
+        $base_call: ident
+        $( .$method_call: ident )*
+    ) => {(
+        ShortString::from($field_name),
+        lazyelmtypevalue!(
+            raw_bytes;
+            $raw_ty;
+            ElementTypeValue::Primitive(
+                TypeValue::List(
+                List::from(
+                    // Vec<ElementTypeValue> here.
+                    (    raw_bytes
+                            .bytes_parser()
+                            .$base_call()$(.$method_call())*    
+                    )
+                )
+            )
+        ))
+    )}
+}
+
+#[macro_export]
+macro_rules! lazymethodfield {
+    (
+        $field_name: literal,
+        $ty: ty,
+        $raw_ty: path,
+        $base_call: expr
+        // $( .$method_call: ident )*
+    ) => {(
+        ShortString::from($field_name),
+        lazyelmtypevalue!(
+            raw_bytes;
+            $raw_ty;
+            TypeValue::Builtin(
+                BuiltinTypeValue::from(    
+                    raw_bytes
+                        .bytes_parser()
+                        .expr
+                        // .$base_call()$(.$method_call())*
+                )
+            ).try_into().unwrap_or(
+                ElementTypeValue::Primitive(TypeValue::Unknown)
+            )
+        )
     )}
 }
 
@@ -614,11 +668,28 @@ macro_rules! bytes_record_impl {
                 )
             )?
             $(
+                list_field(
+                    $list_field_name: literal; $list_field_variant_identifier: literal,
+                    $list_field_ty: ident,
+                    $list_field_vec_ty: ty,
+                    $list_field_base_call: ident
+                    $( .$list_field_method_call: ident )*
+                )
+            )?
+            $(
                 field(
                     $next_field_name: literal; $next_field_variant_identifier: literal,
                     $next_field_ty: ident,
                     $next_field_base_call: ident
                     $( .$next_field_method_call: ident )*
+                )
+            )?
+            $(
+                method_field(
+                    $m_field_name: literal; $m_field_variant_identifier: literal,
+                    $m_field_ty: ident,
+                    $m_field_base_call: expr
+                    // $( .$next_field_method_call: ident )*
                 )
             )?
             $(
@@ -649,7 +720,7 @@ macro_rules! bytes_record_impl {
                 $field_num
             }
             fn into_typevalue(self) -> TypeValue {
-                TypeValue::Builtin(BuiltinTypeValue::$builtin_type_variant(BytesRecord(self)))
+                TypeValue::Builtin(BuiltinTypeValue::$builtin_type_variant(self.into()))
             }
             fn get_name() -> & 'static str {
                 stringify!($bytes_record_type)
@@ -692,6 +763,14 @@ macro_rules! bytes_record_impl {
                                     $next_field_ty,
                                     $bytes_record_type,
                                     $next_field_base_call$(.$next_field_method_call)*
+                                ),
+                            )?
+                            $(
+                                lazy_list_field!(
+                                    $list_field_name,
+                                    $list_field_ty,
+                                    $bytes_record_type,
+                                    $list_field_base_call$(.$list_field_method_call)*
                                 ),
                             )?
                             $( 
@@ -823,6 +902,14 @@ macro_rules! bytes_record_impl {
                             )),
                         )?
                         $(
+                            $list_field_name => Ok((
+                                TypeDef::List(Box::new(TypeDef::$list_field_ty)),
+                                Token::FieldAccess(vec![
+                                    $list_field_variant_identifier
+                                ])
+                            )),
+                        )?
+                        $(
                             $next_enum_field_name => Ok((
                                 TypeDef::ConstEnumVariant($next_enum_name.into()),
                                 Token::FieldAccess(vec![
@@ -833,12 +920,14 @@ macro_rules! bytes_record_impl {
                     )+
                     _ => {
                         trace!(
-                            "Unknown field '{}' for type BmpMessage",
-                            field_name.ident
+                            "Unknown field '{}' for type {}",
+                            field_name.ident,
+                            stringify!($builtin_type_variant)
                         );
                         Err(format!(
-                            "Unknown field '{}' for type BmpMessage",
-                            field_name.ident
+                            "Unknown field '{}' for type {}",
+                            field_name.ident,
+                            stringify!($builtin_type_variant)
                         )
                         .into())
                     }

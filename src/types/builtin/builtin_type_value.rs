@@ -5,13 +5,13 @@
 use std::fmt::Display;
 use std::net::IpAddr;
 
-use routecore::asn::Asn;
-use routecore::bgp::message::nlri::PathId;
-use routecore::bgp::path_attributes::AtomicAggregate;
-use routecore::bgp::types::{AfiSafi, NextHop, OriginType, MultiExitDisc};
+use inetnum::asn::Asn;
+use routecore::bgp::types::PathId;
+use routecore::bgp::types::{AfiSafi, AtomicAggregate, MultiExitDisc, NextHop, Origin};
 use routecore::bgp::path_attributes::AggregatorInfo;
-use routecore::addr::Prefix;
+use inetnum::addr::Prefix;
 use routecore::bgp::communities::HumanReadableCommunity as Community;
+use routecore::bgp::nlri::afisafi::Nlri;
 use serde::Serialize;
 
 use crate::compiler::compile::CompileError;
@@ -19,18 +19,15 @@ use crate::traits::RotoType;
 use crate::types::collections::BytesRecord;
 use crate::types::enum_types::EnumVariant;
 use crate::types::lazyrecord_types::{
-    BmpMessage, InitiationMessage, PeerDownNotification, PeerUpNotification,
-    RouteMonitoring, StatisticsReport, TerminationMessage,
+    BgpUpdateMessage, BmpMessage, InitiationMessage, PeerDownNotification, PeerUpNotification, RouteMonitoring, StatisticsReport, TerminationMessage
 };
 
 use super::super::typedef::TypeDef;
 use super::super::typevalue::TypeValue;
 
+use super::basic_route::{PeerId, PeerRibType, Provenance};
 use super::{
-    BgpUpdateMessage,
-    HexLiteral, IntegerLiteral,
-    PrefixLength,
-    RawRouteWithDeltas, RouteStatus, StringLiteral,
+    FlowSpecRoute, HexLiteral, IntegerLiteral, NlriStatus, PrefixLength, PrefixRoute, RouteContext, StringLiteral
 };
 
 #[derive(Debug, Eq, Clone, Hash, PartialEq, Serialize)]
@@ -53,20 +50,26 @@ pub enum BuiltinTypeValue {
     AggregatorInfo(AggregatorInfo),           // scalar
     NextHop(NextHop),                 // scalar
     MultiExitDisc(MultiExitDisc),     // scalar
-    RouteStatus(RouteStatus),         // scalar
+    NlriStatus(NlriStatus),         // scalar
     Community(Community),             // scalar
+    Nlri(Nlri<bytes::Bytes>),                       // scalar
+    Provenance(Provenance),           // scalar
     Asn(Asn),                         // scalar
     AsPath(routecore::bgp::aspath::HopPath),        // vector
     Hop(routecore::bgp::aspath::OwnedHop), // read-only scalar
-    OriginType(OriginType),           // scalar
-    Route(RawRouteWithDeltas),        // vector
+    Origin(Origin),           // scalar
+    PrefixRoute(PrefixRoute),
+    FlowSpecRoute(FlowSpecRoute<bytes::Bytes>),
+    RouteContext(RouteContext),
+    PeerId(PeerId),                    // scalar
+    PeerRibType(PeerRibType), // scalar
     // A read-only enum variant for capturing constants
     ConstU8EnumVariant(EnumVariant<u8>),
     ConstU16EnumVariant(EnumVariant<u16>),
     ConstU32EnumVariant(EnumVariant<u32>),
     // Used for filtering on the properties of the whole message,
     // not taking into account any individual prefixes.
-    BgpUpdateMessage(BgpUpdateMessage), // scalar
+    BgpUpdateMessage(BytesRecord<BgpUpdateMessage>),
     BmpMessage(BytesRecord<BmpMessage>),
     BmpRouteMonitoringMessage(BytesRecord<RouteMonitoring>),
     BmpPeerUpNotification(BytesRecord<PeerUpNotification>),
@@ -95,11 +98,17 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::PathId(v) => v.into_type(ty),
             BuiltinTypeValue::PrefixLength(v) => v.into_type(ty),
             BuiltinTypeValue::Community(v) => v.into_type(ty),
+            BuiltinTypeValue::Nlri(v) => v.into_type(ty),
             BuiltinTypeValue::IpAddr(v) => v.into_type(ty),
             BuiltinTypeValue::AsPath(v) => v.into_type(ty),
             BuiltinTypeValue::Hop(h) => h.into_type(ty),
-            BuiltinTypeValue::OriginType(v) => v.into_type(ty),
-            BuiltinTypeValue::Route(r) => r.into_type(ty),
+            BuiltinTypeValue::Origin(v) => v.into_type(ty),
+            BuiltinTypeValue::PrefixRoute(r) => r.into_type(ty),
+            BuiltinTypeValue::FlowSpecRoute(r) => r.into_type(ty),
+            BuiltinTypeValue::RouteContext(c) => c.into_type(ty),
+            BuiltinTypeValue::PeerId(r) => r.into_type(ty),
+            BuiltinTypeValue::PeerRibType(p) => p.into_type(ty),
+            BuiltinTypeValue::Provenance(p) => p.into_type(ty),
             BuiltinTypeValue::BgpUpdateMessage(_raw) => Err(CompileError::from(
                 "Cannot convert raw BGP message into any other type.",
             )),
@@ -124,7 +133,7 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::BmpStatisticsReport(_raw) => Err(CompileError::from(
                 "Cannot convert raw BMP Statistics Report into any other type.",
             )),
-            BuiltinTypeValue::RouteStatus(v) => v.into_type(ty),
+            BuiltinTypeValue::NlriStatus(v) => v.into_type(ty),
             BuiltinTypeValue::Bool(v) => v.into_type(ty),
             BuiltinTypeValue::HexLiteral(v) => v.into_type(ty),
             BuiltinTypeValue::Asn(v) => v.into_type(ty),
@@ -190,6 +199,7 @@ impl Display for BuiltinTypeValue {
                     write!(f, "{}", v)
                 }
                 BuiltinTypeValue::Community(v) => write!(f, "{}", v),
+                BuiltinTypeValue::Nlri(v) => write!(f, "{:?}", v),
                 BuiltinTypeValue::IpAddr(v) => write!(f, "{}", v),
                 BuiltinTypeValue::Asn(v) => write!(f, "{}", v),
                 BuiltinTypeValue::AsPath(v) => {
@@ -198,10 +208,12 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::Hop(h) => {
                     write!(f, "{}", h)
                 }
-                BuiltinTypeValue::OriginType(v) => {
-                    write!(f, "{}", v)
+                BuiltinTypeValue::Origin(v) => {
+                    write!(f, "{:?}", v)
                 }
-                BuiltinTypeValue::Route(r) => write!(f, "{}", r),
+                BuiltinTypeValue::PrefixRoute(r) => write!(f, "{:?}", r),
+                BuiltinTypeValue::FlowSpecRoute(r) => write!(f, "{:?}", r),
+                BuiltinTypeValue::RouteContext(c) => write!(f, "{:?}", c),
                 BuiltinTypeValue::BgpUpdateMessage(raw) => {
                     write!(f, "{:X?}", *raw)
                 }
@@ -226,7 +238,10 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::BmpStatisticsReport(raw) => {
                     write!(f, "{:X?}", *raw)
                 }
-                BuiltinTypeValue::RouteStatus(v) => {
+                BuiltinTypeValue::NlriStatus(v) => {
+                    write!(f, "{}", v)
+                }
+                BuiltinTypeValue::Provenance(v) => {
                     write!(f, "{}", v)
                 }
                 BuiltinTypeValue::Bool(v) => write!(f, "{}", v),
@@ -246,6 +261,8 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::MultiExitDisc(v) => {
                     write!(f, "{}", v)
                 }
+                BuiltinTypeValue::PeerId(p) => write!(f, "{}", p),
+                BuiltinTypeValue::PeerRibType(v) => write!(f, "{}", v)
             }
         } else {
             // This is the pretty printer: "{:#?}"
@@ -277,6 +294,8 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::Community(v) => {
                     write!(f, "{} (Community)", v)
                 }
+                BuiltinTypeValue::Nlri(v) => { write!(f, "{:?} (NLRI)", v) }
+                BuiltinTypeValue::Provenance(v) => { write!(f, "{} (Provenance Record)", v) }
                 BuiltinTypeValue::IpAddr(v) => {
                     write!(f, "{} (IP Address)", v)
                 }
@@ -287,10 +306,12 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::Hop(h) => {
                     write!(f, "{} (Hop)", h)
                 }
-                BuiltinTypeValue::OriginType(v) => {
-                    write!(f, "{} (Origin Type)", v)
+                BuiltinTypeValue::Origin(v) => {
+                    write!(f, "{:?} (Origin Type)", v)
                 }
-                BuiltinTypeValue::Route(r) => write!(f, "{} (Route)", r),
+                BuiltinTypeValue::PrefixRoute(r) => write!(f, "{:?} (Prefix Route)", r),
+                BuiltinTypeValue::FlowSpecRoute(r) => write!(f, "{:?} (FlowSpec Route)", r),
+                BuiltinTypeValue::RouteContext(c) => write!(f, "{:?} (Context)", c),
                 BuiltinTypeValue::BgpUpdateMessage(raw) => {
                     write!(f, "{:X?} (RawBgpMessage)", *raw)
                 }
@@ -315,7 +336,7 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::BmpStatisticsReport(raw) => {
                     write!(f, "{:X?} (BmpStatisticsReport)", *raw)
                 }
-                BuiltinTypeValue::RouteStatus(v) => {
+                BuiltinTypeValue::NlriStatus(v) => {
                     write!(f, "{} (Route Status)", v)
                 }
                 BuiltinTypeValue::Bool(v) => write!(f, "{} (Boolean)", v),
@@ -335,6 +356,8 @@ impl Display for BuiltinTypeValue {
                 BuiltinTypeValue::MultiExitDisc(v) => {
                     write!(f, "{} (Multi Exit Discriminator)", v)
                 }
+                BuiltinTypeValue::PeerId(v) => write!(f,"{} (Peer ID)", v),
+                BuiltinTypeValue::PeerRibType(v) => write!(f, "{} (Peer Rib Type)", v),
             }
         }
     }
