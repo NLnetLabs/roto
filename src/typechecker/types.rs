@@ -36,6 +36,7 @@ pub enum Primitive {
     AsPath,
     Community,
     OriginType,
+    Verdict,
     NextHop,
     MultiExitDisc,
     LocalPref,
@@ -59,7 +60,10 @@ impl Display for Primitive {
 impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let fmt_args = |args: &[(String, Type)]| {
-            args.iter().map(|(_, t)| t.to_string()).collect::<Vec<_>>().join(", ")
+            args.iter()
+                .map(|(_, t)| t.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
         };
         match self {
             Type::Var(_) => write!(f, "{{unknown}}"),

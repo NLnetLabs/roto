@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::{
-    ast::{Identifier, TypeIdentifier},
+    ast::Identifier,
     parser::span::{Span, Spanned},
 };
 
@@ -45,9 +45,13 @@ pub struct TypeError {
     pub labels: Vec<Label>,
 }
 
-pub fn simple(description: &str, msg: &str, span: Span) -> TypeError {
+pub fn simple(
+    description: impl Display,
+    msg: impl Display,
+    span: Span,
+) -> TypeError {
     TypeError {
-        description: description.into(),
+        description: description.to_string(),
         location: span,
         labels: vec![Label::error(msg, span)],
     }
@@ -71,7 +75,7 @@ pub fn duplicate_fields(field_name: &str, locations: &[Span]) -> TypeError {
     }
 }
 
-pub fn undeclared_type(ty: &Spanned<TypeIdentifier>) -> TypeError {
+pub fn undeclared_type(ty: &Spanned<Identifier>) -> TypeError {
     TypeError {
         description: format!("cannot find type `{ty}`"),
         location: ty.span,
@@ -81,7 +85,7 @@ pub fn undeclared_type(ty: &Spanned<TypeIdentifier>) -> TypeError {
 
 pub fn missing_fields(
     fields: &[String],
-    type_name: &Spanned<TypeIdentifier>,
+    type_name: &Spanned<Identifier>,
     span: Span,
 ) -> TypeError {
     let description = if fields.len() > 1 {
@@ -104,7 +108,7 @@ pub fn missing_fields(
 }
 
 pub fn tried_to_overwrite_builtin(
-    type_name: &Spanned<TypeIdentifier>,
+    type_name: &Spanned<Identifier>,
 ) -> TypeError {
     TypeError {
         description: format!(
@@ -116,7 +120,7 @@ pub fn tried_to_overwrite_builtin(
 }
 
 pub fn declared_twice(
-    new_declaration: &Spanned<TypeIdentifier>,
+    new_declaration: &Spanned<Identifier>,
     old_declaration: Span,
 ) -> TypeError {
     TypeError {
@@ -222,6 +226,31 @@ pub fn mismatched_types(
         description: "mismatched types".into(),
         location: span,
         labels,
+    }
+}
+
+pub fn nonexhaustive_match(
+    span: Span,
+    missing_variants: &[impl Display],
+) -> TypeError {
+    TypeError {
+        description: format!(
+            "match expression is not exhaustive, missing variants {}",
+            join_quoted(missing_variants)
+        ),
+        location: span,
+        labels: vec![Label::error(
+            format!("missing variants {}", join_quoted(missing_variants)),
+            span,
+        )],
+    }
+}
+
+pub fn expected_list(span: Span, ty: &Type) -> TypeError {
+    TypeError {
+        description: format!("expected a list but got `{ty}`"),
+        location: span,
+        labels: vec![Label::error("not a list", span)],
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::{
     ast::SyntaxTree,
     parser::{ParseError, Parser},
-    // typechecker::error::{Level, TypeError},
+    typechecker::error::{Level, TypeError},
 };
 
 #[derive(Clone, Debug)]
@@ -14,7 +14,7 @@ pub struct SourceFile {
 enum RotoError {
     Read(String, std::io::Error),
     Parse(ParseError),
-    // Type(TypeError),
+    Type(TypeError),
 }
 
 #[derive(Debug)]
@@ -62,38 +62,39 @@ impl std::fmt::Display for RotoReport {
                     report.write(&mut file_cache, &mut v).unwrap();
                     let s = String::from_utf8_lossy(&v);
                     write!(f, "{s}")?;
-                } // RotoError::Type(error) => {
-                  //     let labels = error.labels.iter().map(|l| {
-                  //         Label::new((
-                  //             self.filename(l.span.file),
-                  //             l.span.start..l.span.end,
-                  //         ))
-                  //         .with_message(&l.message)
-                  //         .with_color(match l.level {
-                  //             Level::Error => Color::Red,
-                  //             Level::Info => Color::Blue,
-                  //         })
-                  //     });
+                }
+                RotoError::Type(error) => {
+                    let labels = error.labels.iter().map(|l| {
+                        Label::new((
+                            self.filename(l.span.file),
+                            l.span.start..l.span.end,
+                        ))
+                        .with_message(&l.message)
+                        .with_color(match l.level {
+                            Level::Error => Color::Red,
+                            Level::Info => Color::Blue,
+                        })
+                    });
 
-                  //     let file = self.filename(error.location.file);
+                    let file = self.filename(error.location.file);
 
-                  //     let report = Report::build(
-                  //         ReportKind::Error,
-                  //         file,
-                  //         error.location.start,
-                  //     )
-                  //     .with_message(format!(
-                  //         "Type error: {}",
-                  //         &error.description
-                  //     ))
-                  //     .with_labels(labels)
-                  //     .finish();
+                    let report = Report::build(
+                        ReportKind::Error,
+                        file,
+                        error.location.start,
+                    )
+                    .with_message(format!(
+                        "Type error: {}",
+                        &error.description
+                    ))
+                    .with_labels(labels)
+                    .finish();
 
-                  //     let mut v = Vec::new();
-                  //     report.write(&mut file_cache, &mut v).unwrap();
-                  //     let s = String::from_utf8_lossy(&v);
-                  //     write!(f, "{s}")?;
-                  // }
+                    let mut v = Vec::new();
+                    report.write(&mut file_cache, &mut v).unwrap();
+                    let s = String::from_utf8_lossy(&v);
+                    write!(f, "{s}")?;
+                }
             }
         }
 
@@ -192,28 +193,28 @@ pub fn parse(files: &[SourceFile]) -> Result<Vec<SyntaxTree>, RotoReport> {
     }
 }
 
-// pub fn typecheck(
-//     files: &[SourceFile],
-//     trees: &[SyntaxTree],
-// ) -> Result<(), RotoReport> {
-//     let results: Vec<_> = trees
-//         .into_iter()
-//         .map(|f| crate::typechecker::typecheck(&f))
-//         .collect();
+pub fn typecheck(
+    files: &[SourceFile],
+    trees: &[SyntaxTree],
+) -> Result<(), RotoReport> {
+    let results: Vec<_> = trees
+        .into_iter()
+        .map(|f| crate::typechecker::typecheck(&f))
+        .collect();
 
-//     let mut errors = Vec::new();
-//     for result in results {
-//         if let Err(err) = result {
-//             errors.push(RotoError::Type(err));
-//         }
-//     }
+    let mut errors = Vec::new();
+    for result in results {
+        if let Err(err) = result {
+            errors.push(RotoError::Type(err));
+        }
+    }
 
-//     if errors.is_empty() {
-//         Ok(())
-//     } else {
-//         Err(RotoReport {
-//             files: files.to_vec(),
-//             errors,
-//         })
-//     }
-// }
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(RotoReport {
+            files: files.to_vec(),
+            errors,
+        })
+    }
+}

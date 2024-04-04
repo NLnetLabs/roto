@@ -87,7 +87,7 @@ pub enum Expr {
     /// a literal, or a chain of field accesses and/or methods on a literal,
     /// e.g. `10.0.0.0/8.covers(..)`
     Literal(Spanned<Literal>),
-    Match(Box<Match>),
+    Match(Box<Spanned<Match>>),
     /// a JunOS style prefix match expression, e.g. `0.0.0.0/0
     /// prefix-length-range /12-/16`
     PrefixMatch(PrefixMatchExpr),
@@ -150,14 +150,14 @@ pub struct Rib {
 
 #[derive(Clone, Debug)]
 pub struct RibBody {
-    pub key_values: Spanned<Vec<(Identifier, RibFieldType)>>,
+    pub key_values: Spanned<Vec<(Spanned<Identifier>, RibFieldType)>>,
 }
 
 #[derive(Clone, Debug)]
 pub enum RibFieldType {
-    Identifier(Identifier),
-    Record(RecordType),
-    List(Box<RibFieldType>),
+    Identifier(Spanned<Identifier>),
+    Record(Spanned<RecordType>),
+    List(Spanned<Box<RibFieldType>>),
 }
 
 #[derive(Clone, Debug)]
@@ -212,7 +212,7 @@ impl std::fmt::Display for Identifier {
 /// semantically different.
 #[derive(Clone, Debug)]
 pub struct RecordType {
-    pub key_values: Spanned<Vec<(Identifier, RibFieldType)>>,
+    pub key_values: Spanned<Vec<(Spanned<Identifier>, RibFieldType)>>,
 }
 
 #[derive(Clone, Debug)]

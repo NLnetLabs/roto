@@ -3,7 +3,11 @@
 //! In other words, we parse the constructs that are type declarations.
 //! These constructs are `rib`, `table`, `output-stream` and `type`.
 
-use super::{token::Token, ParseResult, Parser};
+use super::{
+    span::{Spanned, WithSpan},
+    token::Token,
+    ParseResult, Parser,
+};
 use crate::ast::{
     Identifier, OutputStream, RecordType, RecordTypeDeclaration, Rib,
     RibBody, RibFieldType, Table,
@@ -117,13 +121,15 @@ impl<'source> Parser<'source> {
     /// RibField ::= Identifier ':'
     ///              (RibBody | '[' TypeIdentifier ']' | TypeIdentifier)
     /// ```
-    fn rib_field(&mut self) -> ParseResult<(Identifier, RibFieldType)> {
+    fn rib_field(
+        &mut self,
+    ) -> ParseResult<(Spanned<Identifier>, RibFieldType)> {
         let key = self.identifier()?;
         self.take(Token::Colon)?;
 
         let field_type = self.rib_field_type()?;
 
-        Ok((key.inner, field_type))
+        Ok((key, field_type))
     }
 
     fn rib_field_type(&mut self) -> ParseResult<RibFieldType> {
@@ -131,13 +137,16 @@ impl<'source> Parser<'source> {
             // TODO: This recursion seems to be the right thing to do, maybe
             // the syntax tree should reflect that.
             let RibBody { key_values } = self.rib_body()?;
-            RibFieldType::Record(RecordType { key_values })
-        } else if self.next_is(Token::SquareLeft) {
+            let span = key_values.span;
+            RibFieldType::Record(RecordType { key_values }.with_span(span))
+        } else if self.peek_is(Token::SquareLeft) {
+            let start = self.take(Token::SquareLeft)?;
             let inner_type = self.rib_field_type()?;
-            self.take(Token::SquareRight)?;
-            RibFieldType::List(Box::new(inner_type))
+            let end = self.take(Token::SquareRight)?;
+            let span = start.merge(end);
+            RibFieldType::List(Box::new(inner_type).with_span(span))
         } else {
-            RibFieldType::Identifier(self.identifier()?.inner)
+            RibFieldType::Identifier(self.identifier()?)
         })
     }
 }

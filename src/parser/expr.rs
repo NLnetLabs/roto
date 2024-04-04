@@ -374,7 +374,8 @@ impl<'source> Parser<'source> {
 
         let end = self.take(Token::CurlyRight)?;
         let span = start.merge(end);
-        Ok(Expr::Match(Box::new(Match { expr, arms })).with_span(span))
+        Ok(Expr::Match(Box::new(Match { expr, arms }.with_span(span)))
+            .with_span(span))
     }
 
     /// Parse any literal, including prefixes, ip addresses and communities

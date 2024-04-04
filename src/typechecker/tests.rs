@@ -4,7 +4,12 @@ use crate::pipeline::{self, RotoReport};
 fn typecheck(s: &str) -> Result<(), RotoReport> {
     let files = pipeline::test_file(s);
     let trees = pipeline::parse(&files)?;
-    pipeline::typecheck(&files, &trees)
+    if let Err(e) = pipeline::typecheck(&files, &trees) {
+        println!("{e}");
+        Err(e)
+    } else {
+        Ok(())
+    }
 }
 
 #[test]
@@ -130,13 +135,15 @@ fn rib_contains_record() {
 #[test]
 fn filter_map() {
     let src = r#"
-        filter-map blabla {
+        filter-map blabla() {
             define {
                 rx foo: U32;
                 a = "hello";
                 b = 0.0.0.0/10;
                 c = 192.168.0.0;
             }
+
+            apply { accept }
         }
     "#;
     assert!(typecheck(src).is_ok());
@@ -145,12 +152,14 @@ fn filter_map() {
 #[test]
 fn filter_map_double_definition() {
     let src = r#"
-        filter-map blabla {
+        filter-map blabla() {
             define {
                 rx foo: U32;
                 a = "hello";
                 a = 0.0.0.0/10;
             }
+
+            apply { accept }
         }
     "#;
     assert!(typecheck(src).is_err());
@@ -161,11 +170,13 @@ fn using_records() {
     let src = r#"
         type Foo { a: String }
 
-        filter-map bar {
+        filter-map bar() {
             define {
                 rx r: U32;
                 a = Foo { a: "hello" };
             }
+
+            apply { accept }
         }
     "#;
     typecheck(src).unwrap();
@@ -173,11 +184,13 @@ fn using_records() {
     let src = r#"
         type Foo { a: String }
 
-        filter-map bar {
+        filter-map bar() {
             define {
                 rx r: U32;
                 a = Foo { a: 0.0.0.0 };
             }
+
+            apply { accept }
         }
     "#;
     assert!(typecheck(src).is_err());
@@ -190,6 +203,8 @@ fn using_records() {
                 rx r: U32;
                 a = Foo { };
             }
+
+            apply { accept }
         }
     "#;
     assert!(typecheck(src).is_err());
@@ -200,11 +215,13 @@ fn integer_inference() {
     let src = "
         type Foo { x: U8 }
 
-        filter-map test {
+        filter-map test() {
             define {
                 rx r: U32;
                 foo = Foo { x: 5 };
             }
+
+            apply { accept }
         }
     ";
     typecheck(src).unwrap();
@@ -213,12 +230,14 @@ fn integer_inference() {
         type Foo { x: U8 }
         type Bar { x: U8 }
 
-        filter-map test {
+        filter-map test() {
             define {
                 rx r: U32;
                 a = 5;
                 foo = Foo { x: a };
             }
+
+            apply { accept }
         }
     ";
     assert!(typecheck(src).is_ok());
@@ -227,13 +246,15 @@ fn integer_inference() {
         type Foo { x: U8 }
         type Bar { x: U8 }
 
-        filter-map test {
+        filter-map test() {
             define {
                 rx r: U32;
                 a = 5;
                 foo = Foo { x: a };
                 bar = Bar { x: a };
             }
+
+            apply { accept }
         }
     ";
     assert!(typecheck(src).is_ok());
@@ -242,13 +263,15 @@ fn integer_inference() {
         type Foo { x: U8 }
         type Bar { x: U32 }
 
-        filter-map test {
+        filter-map test() {
             define {
                 rx r: U32;
                 a = 5;
                 foo = Foo { x: a };
                 bar = Bar { x: a };
             }
+
+            apply { accept }
         }
     ";
     assert!(typecheck(src).is_err());
@@ -257,12 +280,14 @@ fn integer_inference() {
         type Foo { x: U8 }
         type Bar { x: U32 }
 
-        filter-map test {
+        filter-map test() {
             define {
                 rx r: U32;
                 foo = Foo { x: 5 };
                 bar = Bar { x: 5 };
             }
+
+            apply { accept }
         }
     ";
     assert!(typecheck(src).is_ok());
@@ -274,12 +299,14 @@ fn assign_field_to_other_record() {
         type Foo { x: U8 }
         type Bar { x: U8 }
 
-        filter-map test {
+        filter-map test() {
             define {
                 rx r: U32;
                 foo = Foo { x: 5 };
                 bar = Bar { x: foo.x };
             }
+
+            apply { accept }
         }
     ";
     typecheck(src).unwrap();
@@ -288,12 +315,14 @@ fn assign_field_to_other_record() {
         type Foo { x: U8 }
         type Bar { x: U8 }
 
-        filter-map test {
+        filter-map test() {
             define {
                 rx r: U32;
                 foo = Foo { x: 5 };
                 bar = Bar { x: foo.y };
             }
+
+            apply { accept }
         }
     ";
     assert!(typecheck(src).is_err());
@@ -302,12 +331,14 @@ fn assign_field_to_other_record() {
         type Foo { x: U8 }
         type Bar { x: U32 }
 
-        filter-map test {
+        filter-map test() {
             define {
                 rx r: U32;
                 foo = Foo { x: 5 };
                 bar = Bar { x: foo.x };
             }
+
+            apply { accept }
         }
     ";
     assert!(typecheck(src).is_err());
@@ -316,12 +347,14 @@ fn assign_field_to_other_record() {
 #[test]
 fn prefix_method() {
     let src = "
-        filter-map test {
+        filter-map test() {
             define {
                 rx r: U32;
                 p = 10.10.10.10/20;
                 add = p.address();
             }
+
+            apply { accept }
         }
     ";
     assert!(typecheck(src).is_ok());
@@ -330,36 +363,36 @@ fn prefix_method() {
 #[test]
 fn logical_expr() {
     let src = "
-        filter-map test {
+        filter-map test() {
             define {
                 rx r: U32;
                 p = 10.10.10.10/10;
             }
 
-            term foo {
-                match {
-                    (10 == 10) || (10 == 11);
-                }
+            term foo() {
+                (10 == 10) || (10 == 11)
             }
+
+            apply { accept }
         }
     ";
-    assert!(typecheck(src).is_ok());
+    typecheck(src).unwrap();
 
     let src = r#"
-        filter-map test {
+        filter-map test() {
             define {
                 rx r: U32;
                 p = 10.10.10.10/10;
             }
 
-            term foo {
-                match {
-                    (10 == 10) || ("hello" == 11);
-                }
+            term foo() {
+                (10 == 10) || ("hello" == 11)
             }
+
+            apply { accept }
         }
     "#;
-    assert!(typecheck(src).is_err());
+    typecheck(src).unwrap_err();
 }
 
 #[test]
@@ -369,16 +402,18 @@ fn send_output_stream() {
             foo: String
         }
 
-        filter-map test {
+        filter-map test() {
             define {
                 rx r: U32;
             }
 
-            action hello {
+            action hello() {
                 stream.send(Msg {
                     foo: "hello",
                 });
             }
+
+            apply { accept }
         }
     "#;
     typecheck(src).unwrap();
@@ -390,16 +425,18 @@ fn send_output_stream() {
 
         type Bar { bar: String }
 
-        filter-map test {
+        filter-map test() {
             define {
                 rx r: U32;
             }
 
-            action hello {
+            action hello() {
                 stream.send(Bar {
                     bar: "hello",
                 });
             }
+
+            apply { accept }
         }
     "#;
     assert!(typecheck(src).is_err());
@@ -413,12 +450,12 @@ fn send_output_stream() {
             bar: String
         }
 
-        filter-map test {
+        filter-map test() {
             define {
                 rx r: U32;
             }
 
-            action hello {
+            action hello() {
                 foos.send(Foo {
                     foo: "hello",
                 });
@@ -426,6 +463,8 @@ fn send_output_stream() {
                     bar: "world",
                 });
             }
+
+            apply { accept }
         }
     "#;
     typecheck(src).unwrap();
@@ -439,12 +478,12 @@ fn send_output_stream() {
             bar: String
         }
 
-        filter-map test {
+        filter-map test() {
             define {
                 rx r: U32;
             }
 
-            action hello {
+            action hello() {
                 foos.send(Foo {
                     foo: "hello",
                 });
@@ -452,6 +491,8 @@ fn send_output_stream() {
                     foo: "world",
                 });
             }
+
+            apply { accept }
         }
     "#;
     assert!(typecheck(src).is_err());
@@ -460,17 +501,17 @@ fn send_output_stream() {
 #[test]
 fn term_overrides_var() {
     let src = r#"
-        filter-map test {
+        filter-map test() {
             define {
                 rx r: U32;
                 a = true;
             }
 
-            term a {
-                match {
-                    a;
-                }
+            term a() {
+                a
             }
+
+            apply { accept }
         }
     "#;
     assert!(typecheck(src).is_err());
@@ -481,15 +522,17 @@ fn record_inference() {
     let src = "
         output-stream s contains Msg { a: U32 }
 
-        filter-map foo { 
+        filter-map foo() { 
             define {
                 rx r: U32;
                 a = { a: 8 };
             }
 
-            action bla {
+            action bla() {
                 s.send(a);
             }
+
+            apply { accept }
         }
     ";
     typecheck(src).unwrap();
@@ -497,15 +540,17 @@ fn record_inference() {
     let src = "
         output-stream s contains Msg { a: U32 }
 
-        filter-map foo { 
+        filter-map foo() { 
             define {
                 rx r: U32;
                 a = { b: 8 };
             }
 
-            action bla {
+            action bla() {
                 s.send(a);
             }
+
+            apply { accept }
         }
     ";
     assert!(typecheck(src).is_err());
@@ -513,18 +558,18 @@ fn record_inference() {
     let src = "
         type A { a: U32 }
 
-        filter-map foo { 
+        filter-map foo() { 
             define {
                 rx r: U32;
                 a = { a: 8 };
                 b = A { a: 8 };
             }
 
-            term bla {
-                match {
-                    a == b;
-                }
+            term bla() {
+                a == b
             }
+
+            apply { accept }
         }
     ";
     typecheck(src).unwrap();
@@ -533,7 +578,7 @@ fn record_inference() {
         type A { a: U32 }
         type B { a: U32 }
 
-        filter-map foo { 
+        filter-map foo() { 
             define {
                 rx r: U32;
                 a = { a: 8 };
@@ -541,12 +586,11 @@ fn record_inference() {
                 c = B { a: 8 };
             }
 
-            term bla {
-                match {
-                    a == b;
-                    a == c;
-                }
+            term bla() {
+                a == b && a == c
             }
+
+            apply { accept }
         }
     ";
     assert!(typecheck(src).is_err());

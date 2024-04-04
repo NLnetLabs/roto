@@ -15,7 +15,7 @@
 //! See also <https://en.wikipedia.org/wiki/Hindley%E2%80%93Milner_type_system>.
 
 use crate::{
-    ast::{self, Identifier, ShortString, TypeIdentField, TypeIdentifier},
+    ast::{self, Identifier},
     parser::span::{Span, Spanned, WithSpan},
 };
 use scope::Scope;
@@ -95,10 +95,7 @@ impl<'methods> TypeChecker<'methods> {
 
         for (v, t) in types::globals() {
             root_scope.insert_var(
-                &Identifier {
-                    ident: ShortString::from(&*v),
-                }
-                .with_span(Span::new(0, 0..1)),
+                &Identifier(v.into()).with_span(Span::new(0, 0..1)),
                 t,
             )?;
         }
@@ -141,12 +138,12 @@ impl<'methods> TypeChecker<'methods> {
                         Type::OutputStream(Box::new(ty)),
                     )?;
                 }
-                ast::Declaration::Record(ast::RecordType {
+                ast::Declaration::Record(ast::RecordTypeDeclaration {
                     ident,
                     record_type,
                 }) => {
                     let ty = Type::NamedRecord(
-                        ident.ident.to_string(),
+                        ident.0.clone(),
                         evaluate_record_type(
                             &mut types,
                             &record_type.key_values,
@@ -166,10 +163,7 @@ impl<'methods> TypeChecker<'methods> {
                 MaybeDeclared::Declared(t, _) => Ok((s, t)),
                 MaybeDeclared::Undeclared(reference_span) => {
                     Err(error::undeclared_type(
-                        &TypeIdentifier {
-                            ident: ShortString::from(&*s),
-                        }
-                        .with_span(reference_span),
+                        &Identifier(s.into()).with_span(reference_span),
                     ))
                 }
             })
@@ -538,7 +532,7 @@ impl<'methods> TypeChecker<'methods> {
 
 fn store_type(
     types: &mut HashMap<String, MaybeDeclared>,
-    k: &Spanned<ast::TypeIdentifier>,
+    k: &Spanned<ast::Identifier>,
     v: Type,
 ) -> TypeResult<()> {
     let k_string = k.inner.to_string();
@@ -563,11 +557,11 @@ fn store_type(
 
 fn create_contains_type(
     types: &mut HashMap<String, MaybeDeclared>,
-    contain_ty: &Spanned<ast::TypeIdentifier>,
+    contain_ty: &Spanned<ast::Identifier>,
     body: &ast::RibBody,
 ) -> TypeResult<Type> {
     let ty = Type::NamedRecord(
-        contain_ty.ident.to_string(),
+        contain_ty.0.to_string(),
         evaluate_record_type(types, &body.key_values)?,
     );
     store_type(types, contain_ty, ty.clone())?;
@@ -576,47 +570,14 @@ fn create_contains_type(
 
 fn evaluate_record_type(
     types: &mut HashMap<String, MaybeDeclared>,
-    fields: &[ast::RibField],
+    fields: &[(Spanned<Identifier>, ast::RibFieldType)],
 ) -> TypeResult<Vec<(String, Type)>> {
     // We store the spans temporarily to be able to create nice a
     let mut type_fields = Vec::new();
 
-    for field in fields {
-        let field_ident;
-        let field_type;
-
-        match field {
-            ast::RibField::PrimitiveField(TypeIdentField {
-                field_name,
-                ty,
-            }) => {
-                field_ident = field_name;
-
-                // If the type for this is unknown, we insert None,
-                // which signals that the type is mentioned but not
-                // yet declared. The declaration will override it
-                // with Some(...) if we encounter it later.
-                types
-                    .entry(ty.as_ref().to_string())
-                    .or_insert(MaybeDeclared::Undeclared(field_name.span));
-                field_type = Type::Name(ty.ident.to_string());
-            }
-            ast::RibField::RecordField(field) => {
-                field_ident = &field.0;
-                field_type = Type::Record(evaluate_record_type(
-                    types,
-                    &field.1.key_values,
-                )?);
-            }
-            ast::RibField::ListField(field) => {
-                field_ident = &field.0;
-                field_type = Type::List(Box::new(Type::Name(
-                    field.1.inner_type.to_string(),
-                )));
-            }
-        }
-
-        type_fields.push((field_ident, field_type))
+    for (ident, ty) in fields {
+        let field_type = evaluate_field_type(types, ty)?;
+        type_fields.push((ident, field_type))
     }
 
     let mut unspanned_type_fields = Vec::new();
@@ -642,4 +603,29 @@ fn evaluate_record_type(
     }
 
     Ok(unspanned_type_fields)
+}
+
+fn evaluate_field_type(
+    types: &mut HashMap<String, MaybeDeclared>,
+    ty: &ast::RibFieldType,
+) -> TypeResult<Type> {
+    Ok(match ty {
+        ast::RibFieldType::Identifier(ty) => {
+            // If the type for this is unknown, we insert None,
+            // which signals that the type is mentioned but not
+            // yet declared. The declaration will override it
+            // with Some(...) if we encounter it later.
+            types
+                .entry(ty.as_ref().to_string())
+                .or_insert(MaybeDeclared::Undeclared(ty.span));
+            Type::Name(ty.0.clone())
+        }
+        ast::RibFieldType::Record(fields) => {
+            Type::Record(evaluate_record_type(types, &fields.key_values)?)
+        }
+        ast::RibFieldType::List(inner) => {
+            let inner = evaluate_field_type(types, &*inner.inner)?;
+            Type::List(Box::new(inner))
+        }
+    })
 }
