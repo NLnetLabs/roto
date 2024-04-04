@@ -1,6 +1,8 @@
+use std::collections::HashSet;
+
 use crate::{
     ast::{self, Identifier},
-    parser::span::{Spanned, WithSpan},
+    parser::span::{Span, Spanned},
     typechecker::error,
 };
 
@@ -10,33 +12,65 @@ use super::{
     TypeChecker, TypeResult,
 };
 
+#[derive(Clone)]
+pub struct Context {
+    pub expected_type: Type,
+    pub function_return_type: Option<Type>,
+}
+
 impl TypeChecker<'_> {
     pub fn block(
         &mut self,
         scope: &Scope,
+        ctx: &Context,
         block: &ast::Block,
-    ) -> TypeResult<Type> {
+    ) -> TypeResult<bool> {
+        let mut diverged = false;
+
         for expr in &block.exprs {
-            self.expr(scope, expr)?;
+            if diverged {
+                return Err(error::unreachable_expression(expr));
+            }
+            let ctx = Context {
+                expected_type: Type::Primitive(Primitive::Unit),
+                ..ctx.clone()
+            };
+
+            diverged |= self.expr(scope, &ctx, expr)?;
         }
-        if let Some(expr) = &block.last {
-            self.expr(scope, expr)
-        } else {
-            Ok(Type::Primitive(Primitive::Unit))
+
+        // TODO: check return type
+        let Some(expr) = &block.last else {
+            return Ok(diverged);
+        };
+
+        if diverged {
+            return Err(error::unreachable_expression(expr));
         }
+        diverged |= self.expr(scope, ctx, expr)?;
+        Ok(diverged)
     }
 
     pub fn expr(
         &mut self,
         scope: &Scope,
+        ctx: &Context,
         expr: &Spanned<ast::Expr>,
-    ) -> TypeResult<Type> {
+    ) -> TypeResult<bool> {
         use ast::Expr::*;
         let span = expr.span;
         match &expr.inner {
-            Literal(l) => Ok(self.literal(l)),
-            Match(m) => self.match_expr(scope, m),
-            PrefixMatch(_) => Ok(Type::Primitive(Primitive::Bool)),
+            Literal(l) => self.literal(ctx, l),
+            Match(m) => self.match_expr(scope, ctx, m),
+            PrefixMatch(_) => {
+                self.unify(
+                    &Type::Primitive(Primitive::Bool),
+                    &ctx.expected_type,
+                    span,
+                    None,
+                )?;
+                Ok(false)
+            }
             FunctionCall(name, args) => {
                 let t = scope.get_var(name)?;
                 let t = self.resolve_type(t);
@@ -53,23 +87,35 @@ impl TypeChecker<'_> {
                     }
                 };
 
-                let params: Vec<_> = params.into_iter().map(|(_, t)| t).collect();
-                self.check_arguments(scope, call_type, name, &params, args)?;
+                let params: Vec<_> =
+                    params.into_iter().map(|(_, t)| t).collect();
+                let diverges = self.check_arguments(
+                    scope, ctx, call_type, name, &params, args,
+                )?;
 
-                Ok(ret)
+                self.unify(&ctx.expected_type, &ret, span, None)?;
+                Ok(diverges)
             }
             MethodCall(receiver, name, args) => {
                 if let ast::Expr::Var(x) = &receiver.inner {
                     if let Some(ty) = self.get_type(x) {
                         let ty = ty.clone();
                         return self
-                            .static_method_call(scope, &ty, name, args);
+                            .static_method_call(scope, ctx, &ty, name, args);
                     }
                 }
-                self.method_call(scope, receiver, name, args)
+                self.method_call(scope, ctx, receiver, name, args)
             }
             Access(e, x) => {
-                let t = self.expr(scope, e)?;
+                let t = self.fresh_var();
+                let diverges = self.expr(
+                    scope,
+                    &Context {
+                        expected_type: t.clone(),
+                        ..ctx.clone()
+                    },
+                    e,
+                )?;
                 let t = self.resolve_type(&t);
                 if let Type::Record(fields)
                 | Type::NamedRecord(_, fields)
@@ -78,7 +124,8 @@ impl TypeChecker<'_> {
                     if let Some((_, t)) =
                         fields.iter().find(|(s, _)| s == x.0.as_str())
                     {
-                        return Ok(t.clone());
+                        self.unify(&ctx.expected_type, t, x.span, None)?;
+                        return Ok(diverges);
                     };
                 }
                 return Err(error::simple(
@@ -87,134 +134,187 @@ impl TypeChecker<'_> {
                     x.span,
                 ));
             }
-            Var(x) => scope.get_var(x).map(Clone::clone),
-            Record(fields) => {
-                let fields = self.record_type(scope, &fields)?;
-                Ok(self.fresh_record(fields))
+            Var(x) => {
+                let t = scope.get_var(x)?;
+                self.unify(&ctx.expected_type, &t, x.span, None)?;
+                Ok(false)
             }
-            TypedRecord(name, fields) => {
+            Record(record) => {
+                let field_types: Vec<_> = record
+                    .fields
+                    .iter()
+                    .map(|(s, _)| (s, self.fresh_var()))
+                    .collect();
+                let rec = self.fresh_record(field_types.clone());
+                self.unify(&ctx.expected_type, &rec, span, None)?;
+
+                self.record_fields(scope, ctx, field_types, record, span)
+            }
+            TypedRecord(name, record) => {
                 // We first retrieve the type we expect
-                let (record_name, mut record_type) = match self
-                    .types
-                    .get(&name.0.to_string())
-                {
-                    Some(Type::NamedRecord(n, t)) => (n.clone(), t.clone()),
-                    Some(_) => {
-                        return Err(error::simple(
-                            &format!(
-                            "Expected a named record type, but found `{name}`",
-                        ),
-                            "not a named record type",
-                            name.span,
-                        ))
-                    }
-                    None => {
-                        return Err(error::undeclared_type(name))
-                    }
+                let Some(ty) = self.types.get(&name.0.to_string()) else {
+                    return Err(error::undeclared_type(name));
+                };
+                let ty = ty.clone();
+                self.unify(&ctx.expected_type, &ty, span, None)?;
+
+                // This check is redundant, but might give better error messages.
+                let Type::NamedRecord(record_name, record_fields) = ty else {
+                    return Err(error::simple(
+                        format!("Expected a named record type, but found `{name}`"),
+                        "not a named record type",
+                        name.span,
+                    ));
                 };
 
+                let diverges = self.record_fields(
+                    scope,
+                    ctx,
+                    record_fields.clone(),
+                    record,
+                    span,
+                )?;
+
                 // Infer the type based on the given expression
-                let inferred_type = self.record_type(scope, &fields)?;
+                let field_types: Vec<_> = record
+                    .fields
+                    .iter()
+                    .map(|(s, _)| (s, self.fresh_var()))
+                    .collect();
+                let rec = self.fresh_record(field_types.clone());
+                self.unify(&ctx.expected_type, &rec, span, None)?;
 
-                for (name, inferred_type) in inferred_type {
-                    let Some(idx) = record_type
-                        .iter()
-                        .position(|(n, _)| n == &name.inner)
-                    else {
-                        return Err(error::simple(
-                            &format!("record `{record_name}` does not have a field `{name}`."),
-                            &format!("`{record_name}` does not have this field"),
-                            name.span
-                        ));
-                    };
-                    let (_, ty) = record_type.remove(idx);
-                    self.unify(&inferred_type, &ty, name.span, None)?;
-                }
-
-                let missing: Vec<_> =
-                    record_type.into_iter().map(|(s, _)| s).collect();
-                if !missing.is_empty() {
-                    return Err(error::missing_fields(&missing, name, span));
-                }
-
-                Ok(Type::Name(record_name.clone()))
+                Ok(diverges)
             }
             List(es) => {
                 let var = self.fresh_var();
+                let ty = Type::List(Box::new(var.clone()));
+                self.unify(&ctx.expected_type, &ty, span, None)?;
+
+                let mut diverges = false;
+                let ctx = Context {
+                    expected_type: var,
+                    ..ctx.clone()
+                };
+
                 for e in es {
-                    let t = self.expr(scope, e)?;
-                    self.unify(&var, &t, span, None)?;
+                    diverges |= self.expr(scope, &ctx, e)?;
                 }
-                Ok(self.resolve_type(&var))
+
+                Ok(diverges)
             }
             Not(e) => {
-                let t = self.expr(scope, e)?;
                 self.unify(
+                    &ctx.expected_type,
                     &Type::Primitive(Primitive::Bool),
-                    &t,
                     span,
                     None,
                 )?;
-                Ok(Type::Primitive(Primitive::Bool))
+                self.expr(
+                    scope,
+                    &Context {
+                        expected_type: Type::Primitive(Primitive::Bool),
+                        ..ctx.clone()
+                    },
+                    e,
+                )
             }
-            BinOp(left, op, right) => self.binop(scope, op, left, right),
+            BinOp(left, op, right) => self.binop(scope, ctx, op, left, right),
             Return(_) => todo!(),
             IfElse(c, t, e) => {
-                let c_ty = self.expr(scope, c)?;
-                self.unify(
-                    &Type::Primitive(Primitive::Bool),
-                    &c_ty,
-                    span,
-                    None,
+                self.expr(
+                    scope,
+                    &Context {
+                        expected_type: Type::Primitive(Primitive::Bool),
+                        ..ctx.clone()
+                    },
+                    c,
                 )?;
 
                 if let Some(e) = e {
                     let var = self.fresh_var();
+                    let ctx = Context {
+                        expected_type: var,
+                        ..ctx.clone()
+                    };
 
-                    let t_ty = self.block(scope, t)?;
-                    self.unify(&var, &t_ty, span, None)?;
-
-                    let e_ty = self.block(scope, e)?;
-                    self.unify(&var, &e_ty, span, None)
+                    let mut diverges = false;
+                    diverges |= self.block(scope, &ctx, t)?;
+                    diverges |= self.block(scope, &ctx, e)?;
+                    Ok(diverges)
                 } else {
-                    let t_ty = self.block(scope, t)?;
                     self.unify(
+                        &ctx.expected_type,
                         &Type::Primitive(Primitive::Unit),
-                        &t_ty,
                         span,
                         None,
                     )?;
-                    Ok(Type::Primitive(Primitive::Unit))
+
+                    // An if without else does not always diverge, because
+                    // the condition could be false
+                    let _ = self.block(
+                        scope,
+                        &Context {
+                            expected_type: Type::Primitive(Primitive::Unit),
+                            ..ctx.clone()
+                        },
+                        t,
+                    );
+                    Ok(false)
                 }
             }
         }
     }
 
-    fn literal(&mut self, lit: &ast::Literal) -> Type {
+    fn literal(
+        &mut self,
+        ctx: &Context,
+        lit: &Spanned<ast::Literal>,
+    ) -> TypeResult<bool> {
         use ast::Literal::*;
-        Type::Primitive(match lit {
-            Accept | Reject => Primitive::Verdict,
-            String(_) => Primitive::String,
-            Prefix(_) => Primitive::Prefix,
-            PrefixLength(_) => Primitive::PrefixLength,
-            Asn(_) => Primitive::AsNumber,
-            IpAddress(_) => Primitive::IpAddress,
+        let span = lit.span;
+
+        let t = match lit.inner {
+            Accept | Reject => Type::Primitive(Primitive::Verdict),
+            String(_) => Type::Primitive(Primitive::String),
+            Prefix(_) => Type::Primitive(Primitive::Prefix),
+            PrefixLength(_) => Type::Primitive(Primitive::PrefixLength),
+            Asn(_) => Type::Primitive(Primitive::AsNumber),
+            IpAddress(_) => Type::Primitive(Primitive::IpAddress),
             ExtendedCommunity(_) | StandardCommunity(_)
-            | LargeCommunity(_) => Primitive::Community,
-            Bool(_) => Primitive::Bool,
-            Integer(_) => return self.fresh_int(),
-        })
+            | LargeCommunity(_) => Type::Primitive(Primitive::Community),
+            Bool(_) => Type::Primitive(Primitive::Bool),
+            Integer(_) => self.fresh_int(),
+        };
+
+        self.unify(&ctx.expected_type, &t, span, None)?;
+        Ok(false)
     }
 
     fn match_expr(
         &mut self,
         scope: &Scope,
+        ctx: &Context,
         mat: &Spanned<ast::Match>,
-    ) -> TypeResult<Type> {
+    ) -> TypeResult<bool> {
         let span = mat.span;
         let ast::Match { expr, arms } = &mat.inner;
-        let t_expr = self.expr(scope, expr)?;
-        let t_expr = self.resolve_type(&t_expr);
+
+        let diverges;
+
+        let t_expr = {
+            let examinee_type = self.fresh_var();
+            let ctx = Context {
+                expected_type: examinee_type.clone(),
+                ..ctx.clone()
+            };
+            diverges = self.expr(scope, &ctx, expr)?;
+            self.resolve_type(&examinee_type)
+        };
+
+        if diverges {
+            todo!("make a pretty error")
+        }
 
         let Type::Enum(_, variants) = &t_expr else {
             return Err(error::can_only_match_on_enum(&t_expr, expr.span));
@@ -224,7 +324,8 @@ impl TypeChecker<'_> {
         // exhaustiveness checking.
         let mut used_variants = Vec::<&str>::new();
 
-        let t_return = self.fresh_var();
+        // Match diverges if all its branches diverge
+        let mut arms_diverge = true;
 
         for ast::MatchArm {
             variant_id,
@@ -268,22 +369,19 @@ impl TypeChecker<'_> {
             }
 
             if let Some(guard) = guard {
-                let t_guard = self.expr(&arm_scope, guard)?;
-                self.unify(
-                    &Type::Primitive(Primitive::Bool),
-                    &t_guard,
-                    guard.span,
-                    None,
-                )?;
+                let ctx = Context {
+                    expected_type: Type::Primitive(Primitive::Bool),
+                    ..ctx.clone()
+                };
+                let _ = self.expr(&arm_scope, &ctx, guard)?;
             } else if !variant_already_used {
-                // If there is a guard we don't mark the variant as used, because the guard
-                // could evaluate to false and hence the variant _should_ actually be used
-                // again.
+                // If there is a guard we don't mark the variant as used,
+                // because the guard could evaluate to false and hence the
+                // variant _should_ actually be used again.
                 used_variants.push(variant_str);
             }
 
-            let t_body = self.block(&arm_scope, body)?;
-            self.unify(&t_return, &t_body, body.span, None)?;
+            arms_diverge &= self.block(&arm_scope, ctx, body)?;
         }
 
         if used_variants.len() < variants.len() {
@@ -297,50 +395,82 @@ impl TypeChecker<'_> {
             return Err(error::nonexhaustive_match(span, &missing_variants));
         }
 
-        Ok(self.resolve_type(&t_return))
+        Ok(arms_diverge)
     }
 
     fn binop(
         &mut self,
         scope: &Scope,
+        ctx: &Context,
         op: &ast::BinOp,
         left: &Spanned<ast::Expr>,
         right: &Spanned<ast::Expr>,
-    ) -> TypeResult<Type> {
+    ) -> TypeResult<bool> {
         use ast::BinOp::*;
 
-        let t_left = self.expr(scope, left)?;
-        let t_right = self.expr(scope, right)?;
+        self.unify(
+            &Type::Primitive(Primitive::Bool),
+            &ctx.expected_type,
+            left.span.merge(right.span),
+            None,
+        )?;
 
         match op {
             And | Or => {
-                self.unify(
-                    &Type::Primitive(Primitive::Bool),
-                    &t_left,
-                    left.span,
-                    None,
-                )?;
-
-                self.unify(
-                    &Type::Primitive(Primitive::Bool),
-                    &t_right,
-                    right.span,
-                    None,
-                )?;
-
-                Ok(Type::Primitive(Primitive::Bool))
-            }
-            Eq | Ne | Lt | Le | Gt | Ge => {
-                self.unify(&t_left, &t_right, right.span, Some(left.span))?;
-                Ok(Type::Primitive(Primitive::Bool))
-            }
-            In | NotIn => {
-                let Type::List(t_right) = &t_right else {
-                    return Err(error::expected_list(right.span, &t_right));
+                let ctx = Context {
+                    expected_type: Type::Primitive(Primitive::Bool),
+                    ..ctx.clone()
                 };
 
-                self.unify(&t_left, &t_right, left.span, None)?;
-                Ok(Type::Primitive(Primitive::Bool))
+                let mut diverges = false;
+                diverges |= self.expr(scope, &ctx, left)?;
+                diverges |= self.expr(scope, &ctx, right)?;
+                Ok(diverges)
+            }
+            Lt | Le | Gt | Ge => {
+                let ctx = Context {
+                    expected_type: self.fresh_int(),
+                    ..ctx.clone()
+                };
+
+                let mut diverges = false;
+                diverges |= self.expr(scope, &ctx, left)?;
+                diverges |= self.expr(scope, &ctx, right)?;
+                Ok(diverges)
+            }
+            Eq | Ne => {
+                let ctx = Context {
+                    expected_type: self.fresh_var(),
+                    ..ctx.clone()
+                };
+
+                let mut diverges = false;
+                diverges |= self.expr(scope, &ctx, left)?;
+                diverges |= self.expr(scope, &ctx, right)?;
+                Ok(diverges)
+            }
+            In | NotIn => {
+                let ty = self.fresh_var();
+
+                let mut diverges = false;
+                diverges |= self.expr(
+                    scope,
+                    &Context {
+                        expected_type: ty.clone(),
+                        ..ctx.clone()
+                    },
+                    left,
+                )?;
+                diverges |= self.expr(
+                    scope,
+                    &Context {
+                        expected_type: Type::List(Box::new(ty.clone())),
+                        ..ctx.clone()
+                    },
+                    left,
+                )?;
+
+                Ok(diverges)
             }
         }
     }
@@ -348,11 +478,21 @@ impl TypeChecker<'_> {
     fn method_call(
         &mut self,
         scope: &Scope,
+        ctx: &Context,
         receiver: &Spanned<ast::Expr>,
         name: &Spanned<Identifier>,
         args: &[Spanned<ast::Expr>],
-    ) -> TypeResult<Type> {
-        let t = self.expr(scope, receiver)?;
+    ) -> TypeResult<bool> {
+        let t = self.fresh_var();
+        let mut diverges = self.expr(
+            scope,
+            &Context {
+                expected_type: t.clone(),
+                ..ctx.clone()
+            },
+            receiver,
+        )?;
+
         let Some(arrow) = self.find_method(self.methods, &t, name.as_ref())
         else {
             return Err(error::simple(
@@ -364,18 +504,26 @@ impl TypeChecker<'_> {
 
         self.unify(&arrow.rec, &t, name.span, None)?;
 
-        self.check_arguments(scope, "method", name, &arrow.args, args)?;
+        diverges |= self.check_arguments(
+            scope,
+            ctx,
+            "method",
+            name,
+            &arrow.args,
+            args,
+        )?;
 
-        Ok(self.resolve_type(&arrow.ret).clone())
+        Ok(diverges)
     }
 
     fn static_method_call(
         &mut self,
         scope: &Scope,
+        ctx: &Context,
         ty: &Type,
         name: &Spanned<Identifier>,
         args: &[Spanned<ast::Expr>],
-    ) -> TypeResult<Type> {
+    ) -> TypeResult<bool> {
         let Some(arrow) =
             self.find_method(self.static_methods, ty, name.as_ref())
         else {
@@ -386,25 +534,29 @@ impl TypeChecker<'_> {
             ));
         };
 
-        self.check_arguments(
+        self.unify(&ctx.expected_type, &arrow.ret, name.span, None)?;
+
+        let diverges = self.check_arguments(
             scope,
+            ctx,
             "static method",
             name,
             &arrow.args,
             args,
         )?;
 
-        Ok(self.resolve_type(&arrow.ret).clone())
+        Ok(diverges)
     }
 
     fn check_arguments(
         &mut self,
         scope: &Scope,
+        ctx: &Context,
         call_type: &str,
         name: &Spanned<Identifier>,
         params: &[Type],
         args: &[Spanned<ast::Expr>],
-    ) -> TypeResult<()> {
+    ) -> TypeResult<bool> {
         if args.len() != params.len() {
             return Err(error::number_of_arguments_dont_match(
                 call_type,
@@ -414,12 +566,19 @@ impl TypeChecker<'_> {
             ));
         }
 
+        let mut diverges = false;
         for (arg, ty) in args.iter().zip(params) {
-            let arg_ty = self.expr(scope, arg)?;
-            self.unify(&arg_ty, &ty, arg.span, None)?;
+            diverges |= self.expr(
+                scope,
+                &Context {
+                    expected_type: ty.clone(),
+                    ..ctx.clone()
+                },
+                arg,
+            )?;
         }
 
-        Ok(())
+        Ok(diverges)
     }
 
     fn find_method(
@@ -441,18 +600,51 @@ impl TypeChecker<'_> {
         })
     }
 
-    fn record_type(
+    fn record_fields(
         &mut self,
         scope: &Scope,
-        expr: &ast::Record,
-    ) -> TypeResult<Vec<(Spanned<String>, Type)>> {
-        Ok(expr
-            .fields
-            .iter()
-            .map(|(k, v)| {
-                self.expr(scope, v)
-                    .map(|v| (k.0.to_string().with_span(k.span), v))
-            })
-            .collect::<Result<_, _>>()?)
+        ctx: &Context,
+        field_types: Vec<(impl AsRef<str>, Type)>,
+        record: &ast::Record,
+        span: Span,
+    ) -> TypeResult<bool> {
+        let mut used_fields = HashSet::<&str>::new();
+        let mut missing_fields: HashSet<_> = field_types.iter().map(|x| x.0.as_ref()).collect();
+        let mut invalid_fields = Vec::new();
+        let mut duplicate_fields = Vec::new();
+        
+        for (ident, _) in &record.fields {
+            if used_fields.contains(ident.as_ref()) {
+                duplicate_fields.push(ident);
+            } else if missing_fields.contains(ident.as_ref()) {
+                missing_fields.remove(ident.as_ref());
+                used_fields.insert(ident.as_ref());
+            } else {
+                invalid_fields.push(ident);
+            }
+        }
+
+        if !invalid_fields.is_empty() || !duplicate_fields.is_empty() || !missing_fields.is_empty() {
+            return Err(error::field_mismatch(span, invalid_fields, duplicate_fields, missing_fields));
+        }
+
+        let mut diverges = false;
+        for (ident, expr) in &record.fields {
+            let expected_type = field_types
+                .iter()
+                .find_map(|(s, t)| (s.as_ref() == ident.0).then_some(t))
+                .unwrap()
+                .clone();
+
+            diverges |= self.expr(
+                scope,
+                &Context {
+                    expected_type,
+                    ..ctx.clone()
+                },
+                expr,
+            )?;
+        }
+        Ok(diverges)
     }
 }

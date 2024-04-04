@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::{
-    ast::Identifier,
+    ast::{Expr, Identifier},
     parser::span::{Span, Spanned},
 };
 
@@ -83,27 +83,37 @@ pub fn undeclared_type(ty: &Spanned<Identifier>) -> TypeError {
     }
 }
 
-pub fn missing_fields(
-    fields: &[String],
-    type_name: &Spanned<Identifier>,
+pub fn field_mismatch<'a>(
     span: Span,
+    invalid: impl IntoIterator<Item = &'a Spanned<Identifier>>,
+    duplicate: impl IntoIterator<Item = &'a Spanned<Identifier>>,
+    missing: impl IntoIterator<Item = impl Display>,
 ) -> TypeError {
-    let description = if fields.len() > 1 {
-        let fields = join_quoted(fields);
-        format!("missing fields {fields} in record literal for `{type_name}`")
+    let missing: Vec<_> = missing.into_iter().collect();
+
+    let description = if missing.len() > 1 {
+        let fields = join_quoted(missing);
+        format!("field mismatch: missing fields {fields} in record literal")
+    } else if let &[ref m] = &missing[..] {
+        format!("field: mismatch: missing field `{}` in record literal", m)
     } else {
-        format!(
-            "missing field `{}` in record literal for `{type_name}`",
-            fields[0]
-        )
+        "field mismatch".into()
     };
+
+    let mut labels = vec![Label::error(&description, span)];
+
+    for field in invalid {
+        labels.push(Label::info("invalid field", field.span));
+    }
+
+    for field in duplicate {
+        labels.push(Label::info("duplicate field", field.span));
+    }
+
     TypeError {
         description,
         location: span,
-        labels: vec![Label::error(
-            format!("missing {}", join_quoted(fields)),
-            span,
-        )],
+        labels,
     }
 }
 
@@ -246,11 +256,11 @@ pub fn nonexhaustive_match(
     }
 }
 
-pub fn expected_list(span: Span, ty: &Type) -> TypeError {
+pub fn unreachable_expression(expr: &Spanned<Expr>) -> TypeError {
     TypeError {
-        description: format!("expected a list but got `{ty}`"),
-        location: span,
-        labels: vec![Label::error("not a list", span)],
+        description: "expression is unreachable".into(),
+        location: expr.span,
+        labels: vec![Label::error("unreachable", expr.span)],
     }
 }
 

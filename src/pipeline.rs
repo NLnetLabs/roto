@@ -114,8 +114,8 @@ pub fn run(
     files: impl IntoIterator<Item = String>,
 ) -> Result<(), RotoReport> {
     let files = read_files(files)?;
-    let _trees = parse(&files)?;
-    // typecheck(&files, &trees)?;
+    let trees = parse(&files)?;
+    typecheck(&files, &trees)?;
     Ok(())
 }
 

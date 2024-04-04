@@ -195,7 +195,7 @@ impl<'methods> TypeChecker<'methods> {
     }
 
     /// Create a fresh record variable in the unionfind structure
-    fn fresh_record(&mut self, fields: Vec<(Spanned<String>, Type)>) -> Type {
+    fn fresh_record(&mut self, fields: Vec<(&Spanned<Identifier>, Type)>) -> Type {
         let fields = fields
             .into_iter()
             .map(|(s, t)| (s.to_string(), t))

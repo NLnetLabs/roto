@@ -5,6 +5,9 @@ filter foo() {
 		rx msg: U32;
 		a = Foo { 
 			a: 8,
+			d: 9,
+			a: 10,
+			blabla: 11,
 		}; // should error here
 	}
 

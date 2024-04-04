@@ -4,7 +4,12 @@ use crate::{
     typechecker::error,
 };
 
-use super::{scope::Scope, types::Type, TypeChecker, TypeResult};
+use super::{
+    expr::Context,
+    scope::Scope,
+    types::{Primitive, Type},
+    TypeChecker, TypeResult,
+};
 
 impl TypeChecker<'_> {
     pub fn filter_map(
@@ -42,7 +47,12 @@ impl TypeChecker<'_> {
             scope.insert_var(&v, t)?;
         }
 
-        self.block(&scope, apply)?;
+        let ctx = Context {
+            expected_type: Type::Primitive(Primitive::Verdict),
+            function_return_type: Some(Type::Primitive(Primitive::Verdict)),
+        };
+
+        self.block(&scope, &ctx, apply)?;
 
         Ok(match ty {
             ast::FilterType::FilterMap => Type::FilterMap(args),
@@ -84,8 +94,19 @@ impl TypeChecker<'_> {
         }
 
         for (ident, expr) in assignments {
-            let t = self.expr(&scope, expr)?;
-            scope.insert_var(ident, t)?;
+            let var = self.fresh_var();
+            let ctx = Context {
+                expected_type: var.clone(),
+                function_return_type: None,
+            };
+            let diverges = self.expr(&scope, &ctx, expr)?;
+            if diverges {
+                unreachable!(
+                    "Something has gone wrong in the type checker. \
+                    Divergence should have prohibited elsewhere."
+                );
+            }
+            scope.insert_var(ident, self.resolve_type(&var))?;
         }
 
         Ok(())
@@ -106,7 +127,12 @@ impl TypeChecker<'_> {
 
         let args = self.params(&mut scope, &params)?;
 
-        self.block(&scope, body)?;
+        let ctx = Context {
+            expected_type: Type::Primitive(Primitive::Bool),
+            function_return_type: Some(Type::Primitive(Primitive::Bool)),
+        };
+
+        self.block(&scope, &ctx, body)?;
 
         Ok((ident.clone(), Type::Term(args)))
     }
@@ -125,7 +151,13 @@ impl TypeChecker<'_> {
         let mut scope = scope.wrap();
 
         let args = self.params(&mut scope, &params)?;
-        self.block(&scope, body)?;
+
+        let ctx = Context {
+            expected_type: Type::Primitive(Primitive::Unit),
+            function_return_type: Some(Type::Primitive(Primitive::Unit)),
+        };
+
+        self.block(&scope, &ctx, body)?;
 
         Ok((ident.clone(), Type::Action(args)))
     }
