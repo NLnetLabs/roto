@@ -6,6 +6,7 @@ pub enum Type {
     ExplicitVar(&'static str),
     IntVar(usize),
     RecordVar(usize, Vec<(String, Type)>),
+    Never,
     Primitive(Primitive),
     List(Box<Type>),
     Table(Box<Type>),
@@ -78,6 +79,7 @@ impl Display for Type {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
+            Type::Never => write!(f, "!"),
             Type::Primitive(p) => write!(f, "{p}"),
             Type::List(t) => write!(f, "List<{t}>"),
             Type::Table(t) => write!(f, "Table<{t}>"),

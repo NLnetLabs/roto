@@ -1,0 +1,9 @@
+filter foo() {
+    define {
+        rx msg: U32;
+    }
+
+    apply {
+        if 2 == 4 { reject }
+    }
+}

@@ -1,0 +1,12 @@
+filter foo() {
+    define {
+        rx msg: U32;
+    }
+
+    term bar() {
+        return true;
+        return false;
+    }
+
+    apply { accept }
+}

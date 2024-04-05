@@ -32,7 +32,7 @@ impl TypeChecker<'_> {
         &mut self,
         scope: &Scope,
         ctx: &Context,
-        block: &ast::Block,
+        block: &Spanned<ast::Block>,
     ) -> TypeResult<bool> {
         let mut diverged = false;
 
@@ -45,8 +45,15 @@ impl TypeChecker<'_> {
             diverged |= self.expr(scope, &ctx, expr)?;
         }
 
-        // TODO: check return type
         let Some(expr) = &block.last else {
+            if !diverged {
+                self.unify(
+                    &ctx.expected_type,
+                    &Type::Primitive(Primitive::Unit),
+                    block.span,
+                    None,
+                )?;
+            }
             return Ok(diverged);
         };
 
@@ -66,6 +73,23 @@ impl TypeChecker<'_> {
         use ast::Expr::*;
         let span = expr.span;
         match &expr.inner {
+            Accept | Reject => {
+                let Some(ret) = &ctx.function_return_type else {
+                    let s = if let Accept = expr.inner {
+                        "accept"
+                    } else {
+                        "reject"
+                    };
+                    return Err(error::cannot_diverge_here(s, expr));
+                };
+                self.unify(
+                    &ret,
+                    &Type::Primitive(Primitive::Verdict),
+                    span,
+                    None,
+                )?;
+                Ok(true)
+            }
             Literal(l) => self.literal(ctx, l),
             Match(m) => self.match_expr(scope, ctx, m),
             PrefixMatch(_) => {
@@ -213,7 +237,14 @@ impl TypeChecker<'_> {
                 )
             }
             BinOp(left, op, right) => self.binop(scope, ctx, op, left, right),
-            Return(_) => todo!(),
+            Return(e) => {
+                let Some(ret) = &ctx.function_return_type else {
+                    return Err(error::cannot_diverge_here("return", expr));
+                };
+                self.unify(&ctx.expected_type, &Type::Never, span, None)?;
+                self.expr(scope, &ctx.with_type(ret), e)?;
+                Ok(true)
+            }
             IfElse(c, t, e) => {
                 self.expr(
                     scope,
@@ -259,7 +290,6 @@ impl TypeChecker<'_> {
         let span = lit.span;
 
         let t = match lit.inner {
-            Accept | Reject => Type::Primitive(Primitive::Verdict),
             String(_) => Type::Primitive(Primitive::String),
             Prefix(_) => Type::Primitive(Primitive::Prefix),
             PrefixLength(_) => Type::Primitive(Primitive::PrefixLength),

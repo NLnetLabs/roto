@@ -264,6 +264,17 @@ pub fn unreachable_expression(expr: &Spanned<Expr>) -> TypeError {
     }
 }
 
+pub fn cannot_diverge_here(
+    divergence_type: &str,
+    expr: &Spanned<Expr>,
+) -> TypeError {
+    TypeError {
+        description: format!("cannot `{divergence_type}` here"),
+        location: expr.span,
+        labels: vec![Label::error("not allowed", expr.span)],
+    }
+}
+
 fn join_quoted<T: std::fmt::Display>(
     list: impl IntoIterator<Item = T>,
 ) -> String {

@@ -243,6 +243,16 @@ impl<'source> Parser<'source> {
             return Ok(Expr::Record(key_values).with_span(span));
         }
 
+        if self.peek_is(Token::Accept) {
+            let span = self.take(Token::Accept)?;
+            return Ok(Expr::Accept.with_span(span));
+        }
+
+        if self.peek_is(Token::Reject) {
+            let span = self.take(Token::Reject)?;
+            return Ok(Expr::Reject.with_span(span));
+        }
+
         if self.peek_is(Token::Return) {
             let start = self.take(Token::Return)?;
             let expr = self.expr_inner(r)?;
@@ -438,8 +448,6 @@ impl<'source> Parser<'source> {
         // TODO: Make proper errors using the spans
         let (token, span) = self.next()?;
         let literal = match token {
-            Token::Accept => Literal::Accept,
-            Token::Reject => Literal::Reject,
             Token::String(s) => {
                 // Trim the quotes from the string literal
                 let trimmed = &s[1..s.len() - 1];

@@ -312,6 +312,7 @@ impl<'methods> TypeChecker<'methods> {
         Some(match (a, b) {
             // We never recurse into NamedRecords, so they are included here.
             (a, b) if a == b => a,
+            (Never, x) | (x, Never) => x,
             (IntVar(a), b @ (Primitive(U8 | U16 | U32) | IntVar(_))) => {
                 self.unionfind.set(a, b.clone());
                 b.clone()
@@ -497,6 +498,9 @@ impl<'methods> TypeChecker<'methods> {
             | Type::RecordVar(_, _) => {
                 Err("there should be no unresolved type variables left"
                     .into())
+            }
+            Type::Never => {
+                Err("never should not appear in a type declaration".into())
             }
             Type::Primitive(_)
             | Type::Term(_)

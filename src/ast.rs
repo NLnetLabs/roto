@@ -84,6 +84,8 @@ pub struct Block {
 
 #[derive(Clone, Debug)]
 pub enum Expr {
+    Accept,
+    Reject,
     /// a literal, or a chain of field accesses and/or methods on a literal,
     /// e.g. `10.0.0.0/8.covers(..)`
     Literal(Spanned<Literal>),
@@ -217,8 +219,6 @@ pub struct RecordType {
 
 #[derive(Clone, Debug)]
 pub enum Literal {
-    Accept,
-    Reject,
     String(String),
     Prefix(Prefix),
     PrefixLength(u8),

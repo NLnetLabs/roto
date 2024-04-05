@@ -595,3 +595,76 @@ fn record_inference() {
     ";
     assert!(typecheck(src).is_err());
 }
+
+#[test]
+fn return_keyword() {
+    let src = "
+        filter-map foo() { 
+            define {
+                rx r: U32;
+            }
+
+            term foo() {
+                return true
+            }
+
+            apply { accept }
+        }
+    ";
+    typecheck(src).unwrap();
+
+    let src = "
+        filter-map foo() { 
+            define {
+                rx r: U32;
+            }
+
+            term foo() {
+                return 2
+            }
+
+            apply { accept }
+        }
+    ";
+    typecheck(src).unwrap_err();
+}
+
+#[test]
+fn unit_block() {
+    let src = "
+        filter-map foo() { 
+            define {
+                rx r: U32;
+            }
+
+            // workaround for not having a ()
+            action unit() {}
+
+            term foo() {
+                unit();
+            }
+
+            apply { accept }
+        }
+    ";
+    typecheck(src).unwrap_err();
+}
+
+#[test]
+fn unreachable_expression() {
+    let src = "
+        filter-map foo() { 
+            define {
+                rx r: U32;
+            }
+
+            term foo() {
+                return true;
+                return false;
+            }
+
+            apply { accept }
+        }
+    ";
+    typecheck(src).unwrap_err();
+}
