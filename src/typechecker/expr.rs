@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{borrow::Borrow, collections::HashSet};
 
 use crate::{
     ast::{self, Identifier},
@@ -18,6 +18,15 @@ pub struct Context {
     pub function_return_type: Option<Type>,
 }
 
+impl Context {
+    fn with_type(&self, t: impl Borrow<Type>) -> Self {
+        Context {
+            expected_type: t.borrow().clone(),
+            ..self.clone()
+        }
+    }
+}
+
 impl TypeChecker<'_> {
     pub fn block(
         &mut self,
@@ -31,11 +40,8 @@ impl TypeChecker<'_> {
             if diverged {
                 return Err(error::unreachable_expression(expr));
             }
-            let ctx = Context {
-                expected_type: Type::Primitive(Primitive::Unit),
-                ..ctx.clone()
-            };
 
+            let ctx = ctx.with_type(Type::Primitive(Primitive::Unit));
             diverged |= self.expr(scope, &ctx, expr)?;
         }
 
@@ -108,15 +114,9 @@ impl TypeChecker<'_> {
             }
             Access(e, x) => {
                 let t = self.fresh_var();
-                let diverges = self.expr(
-                    scope,
-                    &Context {
-                        expected_type: t.clone(),
-                        ..ctx.clone()
-                    },
-                    e,
-                )?;
+                let diverges = self.expr(scope, &ctx.with_type(&t), e)?;
                 let t = self.resolve_type(&t);
+
                 if let Type::Record(fields)
                 | Type::NamedRecord(_, fields)
                 | Type::RecordVar(_, fields) = &t
@@ -158,8 +158,7 @@ impl TypeChecker<'_> {
                 let ty = ty.clone();
                 self.unify(&ctx.expected_type, &ty, span, None)?;
 
-                // This check is redundant, but might give better error messages.
-                let Type::NamedRecord(record_name, record_fields) = ty else {
+                let Type::NamedRecord(_, record_fields) = ty else {
                     return Err(error::simple(
                         format!("Expected a named record type, but found `{name}`"),
                         "not a named record type",
@@ -192,10 +191,7 @@ impl TypeChecker<'_> {
                 self.unify(&ctx.expected_type, &ty, span, None)?;
 
                 let mut diverges = false;
-                let ctx = Context {
-                    expected_type: var,
-                    ..ctx.clone()
-                };
+                let ctx = ctx.with_type(var);
 
                 for e in es {
                     diverges |= self.expr(scope, &ctx, e)?;
@@ -212,10 +208,7 @@ impl TypeChecker<'_> {
                 )?;
                 self.expr(
                     scope,
-                    &Context {
-                        expected_type: Type::Primitive(Primitive::Bool),
-                        ..ctx.clone()
-                    },
+                    &ctx.with_type(Type::Primitive(Primitive::Bool)),
                     e,
                 )
             }
@@ -224,19 +217,13 @@ impl TypeChecker<'_> {
             IfElse(c, t, e) => {
                 self.expr(
                     scope,
-                    &Context {
-                        expected_type: Type::Primitive(Primitive::Bool),
-                        ..ctx.clone()
-                    },
+                    &ctx.with_type(Type::Primitive(Primitive::Bool)),
                     c,
                 )?;
 
                 if let Some(e) = e {
                     let var = self.fresh_var();
-                    let ctx = Context {
-                        expected_type: var,
-                        ..ctx.clone()
-                    };
+                    let ctx = ctx.with_type(var);
 
                     let mut diverges = false;
                     diverges |= self.block(scope, &ctx, t)?;
@@ -254,10 +241,7 @@ impl TypeChecker<'_> {
                     // the condition could be false
                     let _ = self.block(
                         scope,
-                        &Context {
-                            expected_type: Type::Primitive(Primitive::Unit),
-                            ..ctx.clone()
-                        },
+                        &ctx.with_type(Type::Primitive(Primitive::Unit)),
                         t,
                     );
                     Ok(false)
@@ -304,10 +288,7 @@ impl TypeChecker<'_> {
 
         let t_expr = {
             let examinee_type = self.fresh_var();
-            let ctx = Context {
-                expected_type: examinee_type.clone(),
-                ..ctx.clone()
-            };
+            let ctx = ctx.with_type(&examinee_type);
             diverges = self.expr(scope, &ctx, expr)?;
             self.resolve_type(&examinee_type)
         };
@@ -369,10 +350,7 @@ impl TypeChecker<'_> {
             }
 
             if let Some(guard) = guard {
-                let ctx = Context {
-                    expected_type: Type::Primitive(Primitive::Bool),
-                    ..ctx.clone()
-                };
+                let ctx = ctx.with_type(Type::Primitive(Primitive::Bool));
                 let _ = self.expr(&arm_scope, &ctx, guard)?;
             } else if !variant_already_used {
                 // If there is a guard we don't mark the variant as used,
@@ -417,10 +395,7 @@ impl TypeChecker<'_> {
 
         match op {
             And | Or => {
-                let ctx = Context {
-                    expected_type: Type::Primitive(Primitive::Bool),
-                    ..ctx.clone()
-                };
+                let ctx = ctx.with_type(Type::Primitive(Primitive::Bool));
 
                 let mut diverges = false;
                 diverges |= self.expr(scope, &ctx, left)?;
@@ -428,10 +403,7 @@ impl TypeChecker<'_> {
                 Ok(diverges)
             }
             Lt | Le | Gt | Ge => {
-                let ctx = Context {
-                    expected_type: self.fresh_int(),
-                    ..ctx.clone()
-                };
+                let ctx = ctx.with_type(self.fresh_int());
 
                 let mut diverges = false;
                 diverges |= self.expr(scope, &ctx, left)?;
@@ -439,10 +411,7 @@ impl TypeChecker<'_> {
                 Ok(diverges)
             }
             Eq | Ne => {
-                let ctx = Context {
-                    expected_type: self.fresh_var(),
-                    ..ctx.clone()
-                };
+                let ctx = ctx.with_type(self.fresh_var());
 
                 let mut diverges = false;
                 diverges |= self.expr(scope, &ctx, left)?;
@@ -453,21 +422,11 @@ impl TypeChecker<'_> {
                 let ty = self.fresh_var();
 
                 let mut diverges = false;
+                diverges |= self.expr(scope, &ctx.with_type(&ty), left)?;
                 diverges |= self.expr(
                     scope,
-                    &Context {
-                        expected_type: ty.clone(),
-                        ..ctx.clone()
-                    },
-                    left,
-                )?;
-                diverges |= self.expr(
-                    scope,
-                    &Context {
-                        expected_type: Type::List(Box::new(ty.clone())),
-                        ..ctx.clone()
-                    },
-                    left,
+                    &ctx.with_type(Type::List(Box::new(ty))),
+                    right,
                 )?;
 
                 Ok(diverges)
@@ -484,14 +443,7 @@ impl TypeChecker<'_> {
         args: &[Spanned<ast::Expr>],
     ) -> TypeResult<bool> {
         let t = self.fresh_var();
-        let mut diverges = self.expr(
-            scope,
-            &Context {
-                expected_type: t.clone(),
-                ..ctx.clone()
-            },
-            receiver,
-        )?;
+        let mut diverges = self.expr(scope, &ctx.with_type(&t), receiver)?;
 
         let Some(arrow) = self.find_method(self.methods, &t, name.as_ref())
         else {
@@ -568,14 +520,7 @@ impl TypeChecker<'_> {
 
         let mut diverges = false;
         for (arg, ty) in args.iter().zip(params) {
-            diverges |= self.expr(
-                scope,
-                &Context {
-                    expected_type: ty.clone(),
-                    ..ctx.clone()
-                },
-                arg,
-            )?;
+            diverges |= self.expr(scope, &ctx.with_type(ty), arg)?;
         }
 
         Ok(diverges)
@@ -609,10 +554,11 @@ impl TypeChecker<'_> {
         span: Span,
     ) -> TypeResult<bool> {
         let mut used_fields = HashSet::<&str>::new();
-        let mut missing_fields: HashSet<_> = field_types.iter().map(|x| x.0.as_ref()).collect();
+        let mut missing_fields: HashSet<_> =
+            field_types.iter().map(|x| x.0.as_ref()).collect();
         let mut invalid_fields = Vec::new();
         let mut duplicate_fields = Vec::new();
-        
+
         for (ident, _) in &record.fields {
             if used_fields.contains(ident.as_ref()) {
                 duplicate_fields.push(ident);
@@ -624,8 +570,16 @@ impl TypeChecker<'_> {
             }
         }
 
-        if !invalid_fields.is_empty() || !duplicate_fields.is_empty() || !missing_fields.is_empty() {
-            return Err(error::field_mismatch(span, invalid_fields, duplicate_fields, missing_fields));
+        if !invalid_fields.is_empty()
+            || !duplicate_fields.is_empty()
+            || !missing_fields.is_empty()
+        {
+            return Err(error::field_mismatch(
+                span,
+                invalid_fields,
+                duplicate_fields,
+                missing_fields,
+            ));
         }
 
         let mut diverges = false;
@@ -636,14 +590,8 @@ impl TypeChecker<'_> {
                 .unwrap()
                 .clone();
 
-            diverges |= self.expr(
-                scope,
-                &Context {
-                    expected_type,
-                    ..ctx.clone()
-                },
-                expr,
-            )?;
+            diverges |=
+                self.expr(scope, &ctx.with_type(expected_type), expr)?;
         }
         Ok(diverges)
     }
