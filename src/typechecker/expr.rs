@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, collections::HashSet};
+use std::{borrow::Borrow, collections::HashSet, process::id};
 
 use crate::{
     ast::{self, Identifier},
@@ -71,7 +71,11 @@ impl TypeChecker<'_> {
         expr: &Meta<ast::Expr>,
     ) -> TypeResult<bool> {
         use ast::Expr::*;
-        let span = expr.id;
+        let id = expr.id;
+        
+        // Store the type for use in the lowering step
+        self.expr_types.insert(id, ctx.expected_type.clone());
+
         match &expr.node {
             Accept | Reject => {
                 let Some(ret) = &ctx.function_return_type else {
@@ -85,7 +89,7 @@ impl TypeChecker<'_> {
                 self.unify(
                     &ret,
                     &Type::Primitive(Primitive::Verdict),
-                    span,
+                    id,
                     None,
                 )?;
                 Ok(true)
@@ -96,7 +100,7 @@ impl TypeChecker<'_> {
                 self.unify(
                     &Type::Primitive(Primitive::Bool),
                     &ctx.expected_type,
-                    span,
+                    id,
                     None,
                 )?;
                 Ok(false)
@@ -123,7 +127,7 @@ impl TypeChecker<'_> {
                     scope, ctx, call_type, name, &params, args,
                 )?;
 
-                self.unify(&ctx.expected_type, &ret, span, None)?;
+                self.unify(&ctx.expected_type, &ret, id, None)?;
                 Ok(diverges)
             }
             MethodCall(receiver, name, args) => {
@@ -170,9 +174,9 @@ impl TypeChecker<'_> {
                     .map(|(s, _)| (s, self.fresh_var()))
                     .collect();
                 let rec = self.fresh_record(field_types.clone());
-                self.unify(&ctx.expected_type, &rec, span, None)?;
+                self.unify(&ctx.expected_type, &rec, id, None)?;
 
-                self.record_fields(scope, ctx, field_types, record, span)
+                self.record_fields(scope, ctx, field_types, record, id)
             }
             TypedRecord(name, record) => {
                 // We first retrieve the type we expect
@@ -180,7 +184,7 @@ impl TypeChecker<'_> {
                     return Err(error::undeclared_type(name));
                 };
                 let ty = ty.clone();
-                self.unify(&ctx.expected_type, &ty, span, None)?;
+                self.unify(&ctx.expected_type, &ty, id, None)?;
 
                 let Type::NamedRecord(_, record_fields) = ty else {
                     return Err(error::simple(
@@ -195,7 +199,7 @@ impl TypeChecker<'_> {
                     ctx,
                     record_fields.clone(),
                     record,
-                    span,
+                    id,
                 )?;
 
                 // Infer the type based on the given expression
@@ -205,14 +209,14 @@ impl TypeChecker<'_> {
                     .map(|(s, _)| (s, self.fresh_var()))
                     .collect();
                 let rec = self.fresh_record(field_types.clone());
-                self.unify(&ctx.expected_type, &rec, span, None)?;
+                self.unify(&ctx.expected_type, &rec, id, None)?;
 
                 Ok(diverges)
             }
             List(es) => {
                 let var = self.fresh_var();
                 let ty = Type::List(Box::new(var.clone()));
-                self.unify(&ctx.expected_type, &ty, span, None)?;
+                self.unify(&ctx.expected_type, &ty, id, None)?;
 
                 let mut diverges = false;
                 let ctx = ctx.with_type(var);
@@ -227,7 +231,7 @@ impl TypeChecker<'_> {
                 self.unify(
                     &ctx.expected_type,
                     &Type::Primitive(Primitive::Bool),
-                    span,
+                    id,
                     None,
                 )?;
                 self.expr(
@@ -236,12 +240,12 @@ impl TypeChecker<'_> {
                     e,
                 )
             }
-            BinOp(left, op, right) => self.binop(scope, ctx, op, span, left, right),
+            BinOp(left, op, right) => self.binop(scope, ctx, op, id, left, right),
             Return(e) => {
                 let Some(ret) = &ctx.function_return_type else {
                     return Err(error::cannot_diverge_here("return", expr));
                 };
-                self.unify(&ctx.expected_type, &Type::Never, span, None)?;
+                self.unify(&ctx.expected_type, &Type::Never, id, None)?;
                 self.expr(scope, &ctx.with_type(ret), e)?;
                 Ok(true)
             }
@@ -264,7 +268,7 @@ impl TypeChecker<'_> {
                     self.unify(
                         &ctx.expected_type,
                         &Type::Primitive(Primitive::Unit),
-                        span,
+                        id,
                         None,
                     )?;
 

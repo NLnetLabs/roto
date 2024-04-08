@@ -245,6 +245,23 @@ pub enum BinOp {
     NotIn,
 }
 
+impl std::fmt::Display for BinOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            Self::And => "&&",
+            Self::Or => "||",
+            Self::Eq => "==",
+            Self::Ne => "!=",
+            Self::Lt => "<=",
+            Self::Le => "<",
+            Self::Gt => ">=",
+            Self::Ge => "<",
+            Self::In => "in",
+            Self::NotIn => "not in",
+        })
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum PrefixMatchType {
     Exact,

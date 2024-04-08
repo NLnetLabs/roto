@@ -5,6 +5,7 @@ pub(crate) mod ast;
 // pub mod eval;
 pub(crate) mod typechecker;
 pub(crate) mod parser;
+pub(crate) mod lower;
 // mod symbols;
 // pub mod traits;
 // pub mod types;

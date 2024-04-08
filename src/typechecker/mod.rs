@@ -46,6 +46,10 @@ pub struct TypeChecker<'methods> {
     methods: &'methods [Method],
     /// The list of built-in static methods.
     static_methods: &'methods [Method],
+    /// The types we inferred for each Expr
+    /// 
+    /// This might not be fully resolved yet.
+    expr_types: HashMap<MetaId, Type>,
 }
 
 pub type TypeResult<T> = Result<T, TypeError>;
@@ -59,6 +63,7 @@ pub fn typecheck(tree: &ast::SyntaxTree) -> TypeResult<()> {
         types: HashMap::new(),
         methods: &methods,
         static_methods: &static_methods,
+        expr_types: HashMap::new(),
     };
 
     type_checker.check_syntax_tree(tree)

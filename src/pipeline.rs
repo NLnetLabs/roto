@@ -1,10 +1,8 @@
 use crate::{
-    ast::SyntaxTree,
-    parser::{
+    ast::SyntaxTree, lower, parser::{
         meta::{Span, Spans},
         ParseError, Parser,
-    },
-    typechecker::error::{Level, TypeError},
+    }, typechecker::error::{Level, TypeError}
 };
 
 #[derive(Clone, Debug)]
@@ -121,6 +119,7 @@ pub fn run(
     let files = read_files(files)?;
     let (trees, spans) = parse(&files)?;
     typecheck(&files, &trees, spans)?;
+    println!("{}", lower::lower(&trees[0]));
     Ok(())
 }
 
