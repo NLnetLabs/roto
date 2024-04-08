@@ -216,21 +216,6 @@ macro_rules! announcements_into_typevalues {
     };
 }
 
-// pub fn withdrawals(
-//     update: &routecore::bgp::message::UpdateMessage<bytes::Bytes>,
-// ) -> Result<impl Iterator<Item = TypeValue> + '_, ParseError> {
-//     match update.withdrawals() {
-//         Ok(announces) => Ok(announces.filter_map(|a| {
-//             if let Ok(a) = a {
-//                 Some(a.into())
-//             } else {
-//                 None
-//             }
-//         })),
-//         Err(e) => Err(e)
-//     }
-// }
-
 /// Create a `Vec<TypeValue::Route<RouteWorkshop<_>>` from a PDU that
 /// represents a BGP [`routecore::UpdateMessage`]. The returned Vec will
 /// contain one TypeValue-wrapped RWS for every announcement in the PDU, no
