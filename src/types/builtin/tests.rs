@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod route {
+    use std::collections::BTreeSet;
     use std::net::Ipv4Addr;
 
     use super::super::{IntegerLiteral, PrefixLength, StringLiteral};
@@ -7,7 +8,7 @@ mod route {
     use crate::types::builtin::basic_route::{
         PeerId, PeerRibType, Provenance,
     };
-    use crate::types::builtin::{explode_announcements, BuiltinTypeValue, BytesRecord};
+    use crate::types::builtin::{explode_announcements, BuiltinTypeValue, BytesRecord, Nlri};
     use crate::types::lazyrecord_types::BgpUpdateMessage;
     use crate::types::typedef::TypeDef;
     use crate::types::typevalue::TypeValue;
@@ -33,7 +34,6 @@ mod route {
         LocalPref, NextHop, Origin,
     };
     use routecore::bgp::{
-        nlri::afisafi::Nlri,
         message::SessionConfig,
         types::OriginType,
     };
@@ -239,8 +239,12 @@ mod route {
         // The announcements in MP_REACH
         let _afi_safi = afi_safis.3.unwrap();
         let afi_safis = update.bytes_parser().afi_safis();
+
+        #[allow(clippy::mutable_key_type)]
+        let mut nlri_set = BTreeSet::<Nlri>::new();
+        
         trace!("afi_safis {:?}", afi_safis);
-        let exploded = explode_announcements(update.bytes_parser());
+        let exploded = explode_announcements(update.bytes_parser(), &mut nlri_set);
 
         trace!("exploded {:#?}", exploded);
         assert_eq!(exploded?.len(), 5);

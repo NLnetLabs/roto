@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::str::FromStr;
 
 use log::trace;
@@ -109,7 +110,11 @@ fn test_data(
     let parser = update.bytes_parser();
     let afi_safis = parser.announcement_fams();
     trace!("afi safis {:?}", afi_safis.collect::<Vec<_>>());
-    let rws = explode_announcements(parser);
+
+    #[allow(clippy::mutable_key_type)]
+    let mut nlri_set = BTreeSet::new();
+    
+    let rws = explode_announcements(parser, &mut nlri_set);
     
     trace!("rws {:#?}", rws);
     // let mut rws = RouteWorkshop::from_update_pdu(nlri, &update)?;

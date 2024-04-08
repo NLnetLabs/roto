@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{collections::BTreeSet, str::FromStr};
 
 use log::trace;
 use roto::{
@@ -54,7 +54,10 @@ fn test_data(
     // let pa_map = PaMap::from_update_pdu(parser).unwrap();
 
     // let parser = Parser::from_ref(parser.octets());
-    let rws = &explode_announcements(parser).unwrap()[0];
+    #[allow(clippy::mutable_key_type)]
+    let mut nlri_set = BTreeSet::new();
+    
+    let rws = &explode_announcements(parser, &mut nlri_set).unwrap()[0];
 
     let context = RouteContext::new(
         // routecore::addr::Prefix::from_str("192.0.2.0/24")?,
