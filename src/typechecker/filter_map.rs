@@ -1,6 +1,6 @@
 use crate::{
     ast::{self, Identifier},
-    parser::span::Spanned,
+    parser::meta::Meta,
     typechecker::error,
 };
 
@@ -116,7 +116,7 @@ impl TypeChecker<'_> {
         &mut self,
         scope: &Scope,
         term_section: &ast::TermDeclaration,
-    ) -> TypeResult<(Spanned<Identifier>, Type)> {
+    ) -> TypeResult<(Meta<Identifier>, Type)> {
         let ast::TermDeclaration {
             ident,
             params,
@@ -141,7 +141,7 @@ impl TypeChecker<'_> {
         &mut self,
         scope: &Scope,
         action_section: &ast::ActionDeclaration,
-    ) -> TypeResult<(Spanned<Identifier>, Type)> {
+    ) -> TypeResult<(Meta<Identifier>, Type)> {
         let ast::ActionDeclaration {
             ident,
             params,
@@ -165,7 +165,7 @@ impl TypeChecker<'_> {
     fn params(
         &mut self,
         scope: &mut Scope,
-        args: &[(Spanned<Identifier>, Spanned<Identifier>)],
+        args: &[(Meta<Identifier>, Meta<Identifier>)],
     ) -> TypeResult<Vec<(String, Type)>> {
         args.into_iter()
             .map(|(field_name, ty)| {

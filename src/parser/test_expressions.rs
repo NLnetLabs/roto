@@ -1,91 +1,84 @@
-use crate::parser::Parser;
+use crate::{ast::Expr, parser::Parser};
+
+use super::{
+    meta::{Meta, Spans},
+    ParseResult,
+};
+
+fn parse_expr(s: &str) -> ParseResult<Meta<Expr>> {
+    let mut spans = Spans::new();
+    Parser::run_parser(Parser::expr, 0, &mut spans, s)
+}
 
 #[test]
 fn test_logical_expr_1() {
-    let r = Parser::run_parser(
-        Parser::expr,
-        0,
-        "( blaffer.waf().contains(my_set) ) || ( blaffer.blaf() < bop() )",
-    );
-    assert!(r.is_ok());
+    let s =
+        "( blaffer.waf().contains(my_set) ) || ( blaffer.blaf() < bop() )";
+    parse_expr(s).unwrap();
 }
 
 #[test]
 fn test_logical_expr_2() {
-    Parser::run_parser(
-        Parser::expr,
-        0,
-        r#"(0.0.0.0/0 prefix-length-range /12-/16)"#,
-    )
-    .unwrap();
+    let s = r#"(0.0.0.0/0 prefix-length-range /12-/16)"#;
+    parse_expr(s).unwrap();
 }
 
 #[test]
 fn test_logical_expr_3() {
-    Parser::run_parser(
-        Parser::expr,
-        0,
-        r#"blaffer.blaf.contains(something,"somewhat") > blaf()"#,
-    )
-    .unwrap();
+    let s = r#"blaffer.blaf.contains(something,"somewhat") > blaf()"#;
+    parse_expr(s).unwrap();
 }
 
 #[test]
 fn test_logical_expr_4() {
-    Parser::run_parser(
-        Parser::expr,
-        0,
-        r#"( my_set.contains(bla.bla()) ) || ( my_other_set.contains(bla.bla()) )"#,
-    ).unwrap();
+    let s = r#"( my_set.contains(bla.bla()) ) || ( my_other_set.contains(bla.bla()) )"#;
+    parse_expr(s).unwrap();
 }
 
 #[test]
 fn test_logical_expr_5() {
-    Parser::run_parser(
-        Parser::expr,
-        0,
-        "(found_prefix.prefix.exists() && found_prefix.prefix.exists()) || route_in_table"
-    ).unwrap();
+    let s ="(found_prefix.prefix.exists() && found_prefix.prefix.exists()) || route_in_table";
+    parse_expr(s).unwrap();
 }
 
 //------------ Compute Expressions parsing ----------------------------------
 
 #[test]
 fn test_compute_expr_1() {
-    Parser::run_parser(
-        Parser::expr,
-        0,
-        r#"source_asns.contains("asn", route.as_path.origin)"#,
-    )
-    .unwrap();
+    let s = r#"source_asns.contains("asn", route.as_path.origin)"#;
+    parse_expr(s).unwrap();
 }
 
 #[test]
 fn test_compute_expr_2() {
-    Parser::run_parser(Parser::expr, 0, "a.b.c.d(x,y,z).e.f(o.p()).g")
-        .unwrap();
+    let s = "a.b.c.d(x,y,z).e.f(o.p()).g";
+    parse_expr(s).unwrap();
 }
 
 #[test]
 fn test_compute_expr_3() {
-    Parser::run_parser(Parser::expr, 0, "send-to(a, b)").unwrap();
+    let s = "send-to(a, b)";
+    parse_expr(s).unwrap();
 }
 
 #[test]
 fn test_compute_expr_4() {
-    Parser::run_parser(Parser::expr, 0, "global_record.field").unwrap();
+    let s = "global_record.field";
+    parse_expr(s).unwrap();
 }
 
 #[test]
 fn test_compute_expr_5() {
-    Parser::run_parser(Parser::expr, 0, "pph_asn.asn.set(AS200)").unwrap();
+    let s = "pph_asn.asn.set(AS200)";
+    parse_expr(s).unwrap();
 }
 
 //------------ Other Expressions --------------------------------------------
 
 #[test]
 fn test_value_expr() {
-    Parser::run_parser(Parser::expr, 0, r###"globlaf(bla)"###).unwrap();
+    let s = "globlaf(bla)";
+    parse_expr(s).unwrap();
 }
 
 //------------ Prefix Match Expressions -------------------------------------
@@ -96,86 +89,79 @@ fn test_value_expr() {
 
 #[test]
 fn test_prefix_expr_1() {
-    Parser::run_parser(Parser::expr, 0, r###"129.23.0.0/16 upto /18"###)
-        .unwrap();
+    let s = "129.23.0.0/16 upto /18";
+    parse_expr(s).unwrap();
 }
 
 #[test]
 fn test_prefix_expr_2() {
-    Parser::run_parser(Parser::expr, 0, r###"2001::1/48 orlonger"###)
-        .unwrap();
+    let s = r"2001::1/48 orlonger";
+    parse_expr(s).unwrap();
 }
 
 #[test]
 fn test_prefix_expr_3() {
-    Parser::run_parser(
-        Parser::expr,
-        0,
-        r###"0.0.0.0/0 prefix-length-range /24-/32"###,
-    )
-    .unwrap();
+    let s = r"0.0.0.0/0 prefix-length-range /24-/32";
+    parse_expr(s).unwrap();
 }
 
 #[test]
 fn test_match() {
-    Parser::run_parser(
-        Parser::expr,
-        0,
-        "match x {
+    let s = "
+        match x {
             A(x) -> b(),
             C(y) -> d(),
-        }",
-    )
-    .unwrap();
+        }
+    ";
+    parse_expr(s).unwrap();
 }
 
 #[test]
 fn test_match_block() {
-    Parser::run_parser(
-        Parser::expr,
-        0,
-        "match x {
+    let s= "
+        match x {
             A(x) -> {
                 a == b;
                 a && b;
             }
             C(y) -> d(),
-        }",
-    )
-    .unwrap();
+        }
+    ";
+    parse_expr(s).unwrap();
 }
 
 #[test]
 fn test_and_and_and() {
-    Parser::run_parser(Parser::expr, 0, "a && b && c && d").unwrap();
+    let s = "a && b && c && d";
+    parse_expr(s).unwrap();
 }
 
 #[test]
 fn test_or_or_or() {
-    Parser::run_parser(Parser::expr, 0, "a || b || c || d").unwrap();
+    let s = "a || b || c || d";
+    parse_expr(s).unwrap();
 }
 
 #[test]
 fn test_and_or_and() {
-    Parser::run_parser(Parser::expr, 0, "a && b || c && d").unwrap_err();
+    let s = "a && b || c && d";
+    parse_expr(s).unwrap_err();
 }
 
 #[test]
 fn test_if() {
-    Parser::run_parser(Parser::expr, 0, "if true { 0 }").unwrap();
+    let s = "if true { 0 }";
+    parse_expr(s).unwrap();
 }
 
 #[test]
 fn test_if_else() {
-    Parser::run_parser(Parser::expr, 0, "if true { 0 } else { 1 }").unwrap();
+    let s = "if true { 0 } else { 1 }";
+    parse_expr(s).unwrap();
 }
 
 #[test]
 fn test_if_else_if_else() {
-    Parser::run_parser(
-        Parser::expr,
-        0,
-        "if true { 0 } else if false { 1 } else { 2 }",
-    )
-    .unwrap();
+    let s = "if true { 0 } else if false { 1 } else { 2 }";
+    parse_expr(s).unwrap();
 }

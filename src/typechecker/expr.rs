@@ -2,7 +2,7 @@ use std::{borrow::Borrow, collections::HashSet};
 
 use crate::{
     ast::{self, Identifier},
-    parser::span::{Span, Spanned},
+    parser::meta::{MetaId, Meta},
     typechecker::error,
 };
 
@@ -32,7 +32,7 @@ impl TypeChecker<'_> {
         &mut self,
         scope: &Scope,
         ctx: &Context,
-        block: &Spanned<ast::Block>,
+        block: &Meta<ast::Block>,
     ) -> TypeResult<bool> {
         let mut diverged = false;
 
@@ -50,7 +50,7 @@ impl TypeChecker<'_> {
                 self.unify(
                     &ctx.expected_type,
                     &Type::Primitive(Primitive::Unit),
-                    block.span,
+                    block.id,
                     None,
                 )?;
             }
@@ -68,14 +68,14 @@ impl TypeChecker<'_> {
         &mut self,
         scope: &Scope,
         ctx: &Context,
-        expr: &Spanned<ast::Expr>,
+        expr: &Meta<ast::Expr>,
     ) -> TypeResult<bool> {
         use ast::Expr::*;
-        let span = expr.span;
-        match &expr.inner {
+        let span = expr.id;
+        match &expr.node {
             Accept | Reject => {
                 let Some(ret) = &ctx.function_return_type else {
-                    let s = if let Accept = expr.inner {
+                    let s = if let Accept = expr.node {
                         "accept"
                     } else {
                         "reject"
@@ -112,7 +112,7 @@ impl TypeChecker<'_> {
                         return Err(error::simple(
                             format!("the variable `{name}` is not callable, but has type `{t}`"),
                             "not a term or an action",
-                            name.span,
+                            name.id,
                         ))
                     }
                 };
@@ -127,7 +127,7 @@ impl TypeChecker<'_> {
                 Ok(diverges)
             }
             MethodCall(receiver, name, args) => {
-                if let ast::Expr::Var(x) = &receiver.inner {
+                if let ast::Expr::Var(x) = &receiver.node {
                     if let Some(ty) = self.get_type(x) {
                         let ty = ty.clone();
                         return self
@@ -148,19 +148,19 @@ impl TypeChecker<'_> {
                     if let Some((_, t)) =
                         fields.iter().find(|(s, _)| s == x.0.as_str())
                     {
-                        self.unify(&ctx.expected_type, t, x.span, None)?;
+                        self.unify(&ctx.expected_type, t, x.id, None)?;
                         return Ok(diverges);
                     };
                 }
                 return Err(error::simple(
                     format!("no field `{x}` on type `{t}`",),
                     format!("unknown field `{x}`"),
-                    x.span,
+                    x.id,
                 ));
             }
             Var(x) => {
                 let t = scope.get_var(x)?;
-                self.unify(&ctx.expected_type, &t, x.span, None)?;
+                self.unify(&ctx.expected_type, &t, x.id, None)?;
                 Ok(false)
             }
             Record(record) => {
@@ -186,7 +186,7 @@ impl TypeChecker<'_> {
                     return Err(error::simple(
                         format!("Expected a named record type, but found `{name}`"),
                         "not a named record type",
-                        name.span,
+                        name.id,
                     ));
                 };
 
@@ -236,7 +236,7 @@ impl TypeChecker<'_> {
                     e,
                 )
             }
-            BinOp(left, op, right) => self.binop(scope, ctx, op, left, right),
+            BinOp(left, op, right) => self.binop(scope, ctx, op, span, left, right),
             Return(e) => {
                 let Some(ret) = &ctx.function_return_type else {
                     return Err(error::cannot_diverge_here("return", expr));
@@ -284,12 +284,12 @@ impl TypeChecker<'_> {
     fn literal(
         &mut self,
         ctx: &Context,
-        lit: &Spanned<ast::Literal>,
+        lit: &Meta<ast::Literal>,
     ) -> TypeResult<bool> {
         use ast::Literal::*;
-        let span = lit.span;
+        let span = lit.id;
 
-        let t = match lit.inner {
+        let t = match lit.node {
             String(_) => Type::Primitive(Primitive::String),
             Prefix(_) => Type::Primitive(Primitive::Prefix),
             PrefixLength(_) => Type::Primitive(Primitive::PrefixLength),
@@ -309,10 +309,10 @@ impl TypeChecker<'_> {
         &mut self,
         scope: &Scope,
         ctx: &Context,
-        mat: &Spanned<ast::Match>,
+        mat: &Meta<ast::Match>,
     ) -> TypeResult<bool> {
-        let span = mat.span;
-        let ast::Match { expr, arms } = &mat.inner;
+        let span = mat.id;
+        let ast::Match { expr, arms } = &mat.node;
 
         let diverges;
 
@@ -328,7 +328,7 @@ impl TypeChecker<'_> {
         }
 
         let Type::Enum(_, variants) = &t_expr else {
-            return Err(error::can_only_match_on_enum(&t_expr, expr.span));
+            return Err(error::can_only_match_on_enum(&t_expr, expr.id));
         };
 
         // We'll keep track of used variants to do some basic
@@ -411,15 +411,16 @@ impl TypeChecker<'_> {
         scope: &Scope,
         ctx: &Context,
         op: &ast::BinOp,
-        left: &Spanned<ast::Expr>,
-        right: &Spanned<ast::Expr>,
+        span: MetaId,
+        left: &Meta<ast::Expr>,
+        right: &Meta<ast::Expr>,
     ) -> TypeResult<bool> {
         use ast::BinOp::*;
 
         self.unify(
             &Type::Primitive(Primitive::Bool),
             &ctx.expected_type,
-            left.span.merge(right.span),
+            span,
             None,
         )?;
 
@@ -468,9 +469,9 @@ impl TypeChecker<'_> {
         &mut self,
         scope: &Scope,
         ctx: &Context,
-        receiver: &Spanned<ast::Expr>,
-        name: &Spanned<Identifier>,
-        args: &[Spanned<ast::Expr>],
+        receiver: &Meta<ast::Expr>,
+        name: &Meta<Identifier>,
+        args: &[Meta<ast::Expr>],
     ) -> TypeResult<bool> {
         let t = self.fresh_var();
         let mut diverges = self.expr(scope, &ctx.with_type(&t), receiver)?;
@@ -480,11 +481,11 @@ impl TypeChecker<'_> {
             return Err(error::simple(
                 format!("method `{name}` not found on `{t}`",),
                 format!("method not found for `{t}`"),
-                name.span,
+                name.id,
             ));
         };
 
-        self.unify(&arrow.rec, &t, name.span, None)?;
+        self.unify(&arrow.rec, &t, name.id, None)?;
 
         diverges |= self.check_arguments(
             scope,
@@ -503,8 +504,8 @@ impl TypeChecker<'_> {
         scope: &Scope,
         ctx: &Context,
         ty: &Type,
-        name: &Spanned<Identifier>,
-        args: &[Spanned<ast::Expr>],
+        name: &Meta<Identifier>,
+        args: &[Meta<ast::Expr>],
     ) -> TypeResult<bool> {
         let Some(arrow) =
             self.find_method(self.static_methods, ty, name.as_ref())
@@ -512,11 +513,11 @@ impl TypeChecker<'_> {
             return Err(error::simple(
                 format!("static method `{name}` not found on `{ty}`",),
                 format!("static method not found on `{ty}`"),
-                name.span,
+                name.id,
             ));
         };
 
-        self.unify(&ctx.expected_type, &arrow.ret, name.span, None)?;
+        self.unify(&ctx.expected_type, &arrow.ret, name.id, None)?;
 
         let diverges = self.check_arguments(
             scope,
@@ -535,9 +536,9 @@ impl TypeChecker<'_> {
         scope: &Scope,
         ctx: &Context,
         call_type: &str,
-        name: &Spanned<Identifier>,
+        name: &Meta<Identifier>,
         params: &[Type],
-        args: &[Spanned<ast::Expr>],
+        args: &[Meta<ast::Expr>],
     ) -> TypeResult<bool> {
         if args.len() != params.len() {
             return Err(error::number_of_arguments_dont_match(
@@ -581,7 +582,7 @@ impl TypeChecker<'_> {
         ctx: &Context,
         field_types: Vec<(impl AsRef<str>, Type)>,
         record: &ast::Record,
-        span: Span,
+        span: MetaId,
     ) -> TypeResult<bool> {
         let mut used_fields = HashSet::<&str>::new();
         let mut missing_fields: HashSet<_> =

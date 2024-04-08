@@ -1,6 +1,9 @@
 use crate::{
     ast::SyntaxTree,
-    parser::{ParseError, Parser},
+    parser::{
+        meta::{Span, Spans},
+        ParseError, Parser,
+    },
     typechecker::error::{Level, TypeError},
 };
 
@@ -21,6 +24,7 @@ enum RotoError {
 pub struct RotoReport {
     files: Vec<SourceFile>,
     errors: Vec<RotoError>,
+    spans: Spans,
 }
 
 impl std::fmt::Display for RotoReport {
@@ -41,13 +45,13 @@ impl std::fmt::Display for RotoReport {
                 RotoError::Parse(error) => {
                     let label_message = error.kind.label();
                     let label = Label::new((
-                        self.filename(error.location.file),
+                        self.filename(error.location),
                         error.location.start..error.location.end,
                     ))
                     .with_message(label_message)
                     .with_color(Color::Red);
 
-                    let file = self.filename(error.location.file);
+                    let file = self.filename(error.location);
 
                     let report = Report::build(
                         ReportKind::Error,
@@ -65,9 +69,10 @@ impl std::fmt::Display for RotoReport {
                 }
                 RotoError::Type(error) => {
                     let labels = error.labels.iter().map(|l| {
+                        let s = self.spans.get(l.id);
                         Label::new((
-                            self.filename(l.span.file),
-                            l.span.start..l.span.end,
+                            self.filename(s),
+                            s.start..s.end,
                         ))
                         .with_message(&l.message)
                         .with_color(match l.level {
@@ -76,12 +81,12 @@ impl std::fmt::Display for RotoReport {
                         })
                     });
 
-                    let file = self.filename(error.location.file);
+                    let file = self.filename(self.spans.get(error.location));
 
                     let report = Report::build(
                         ReportKind::Error,
                         file,
-                        error.location.start,
+                        self.spans.get(error.location).start,
                     )
                     .with_message(format!(
                         "Type error: {}",
@@ -103,8 +108,8 @@ impl std::fmt::Display for RotoReport {
 }
 
 impl RotoReport {
-    fn filename(&self, i: usize) -> String {
-        self.files[i].name.clone()
+    fn filename(&self, s: Span) -> String {
+        self.files[s.file].name.clone()
     }
 }
 
@@ -114,8 +119,8 @@ pub fn run(
     files: impl IntoIterator<Item = String>,
 ) -> Result<(), RotoReport> {
     let files = read_files(files)?;
-    let trees = parse(&files)?;
-    typecheck(&files, &trees)?;
+    let (trees, spans) = parse(&files)?;
+    typecheck(&files, &trees, spans)?;
     Ok(())
 }
 
@@ -163,15 +168,23 @@ fn read_files(
     if errors.is_empty() {
         Ok(files)
     } else {
-        Err(RotoReport { files, errors })
+        Err(RotoReport {
+            files,
+            errors,
+            spans: Spans::new(),
+        })
     }
 }
 
-pub fn parse(files: &[SourceFile]) -> Result<Vec<SyntaxTree>, RotoReport> {
+pub fn parse(
+    files: &[SourceFile],
+) -> Result<(Vec<SyntaxTree>, Spans), RotoReport> {
+    let mut spans = Spans::new();
+
     let results: Vec<_> = files
         .iter()
         .enumerate()
-        .map(|(i, f)| Parser::parse(i, &f.contents))
+        .map(|(i, f)| Parser::parse(i, &mut spans, &f.contents))
         .collect();
 
     let mut trees = Vec::new();
@@ -184,11 +197,12 @@ pub fn parse(files: &[SourceFile]) -> Result<Vec<SyntaxTree>, RotoReport> {
     }
 
     if errors.is_empty() {
-        Ok(trees)
+        Ok((trees, spans))
     } else {
         Err(RotoReport {
             files: files.to_vec(),
             errors,
+            spans,
         })
     }
 }
@@ -196,6 +210,7 @@ pub fn parse(files: &[SourceFile]) -> Result<Vec<SyntaxTree>, RotoReport> {
 pub fn typecheck(
     files: &[SourceFile],
     trees: &[SyntaxTree],
+    spans: Spans,
 ) -> Result<(), RotoReport> {
     let results: Vec<_> = trees
         .into_iter()
@@ -215,6 +230,7 @@ pub fn typecheck(
         Err(RotoReport {
             files: files.to_vec(),
             errors,
+            spans,
         })
     }
 }

@@ -4,13 +4,13 @@ use crate::ast::{
 };
 
 use super::{
-    span::{Span, Spanned},
+    meta::{Meta, Span},
     token::Token,
     ParseError, ParseResult, Parser,
 };
 
 /// # Parsing `filter-map` and `filter` sections
-impl<'source> Parser<'source> {
+impl<'source> Parser<'source, '_> {
     /// Parse a filter-map or filter expression
     ///
     /// ```ebnf
@@ -158,7 +158,7 @@ impl<'source> Parser<'source> {
         let mut use_ext_data = Vec::new();
         while self.next_is(Token::Use) {
             use_ext_data
-                .push((self.identifier()?.inner, self.identifier()?.inner));
+                .push((self.identifier()?.node, self.identifier()?.node));
             self.take(Token::SemiColon)?;
         }
 
@@ -231,7 +231,7 @@ impl<'source> Parser<'source> {
     /// ```
     fn params(
         &mut self,
-    ) -> ParseResult<Spanned<Vec<(Spanned<Identifier>, Spanned<Identifier>)>>>
+    ) -> ParseResult<Meta<Vec<(Meta<Identifier>, Meta<Identifier>)>>>
     {
         self.separated(
             Token::RoundLeft,
@@ -248,7 +248,7 @@ impl<'source> Parser<'source> {
     /// ```
     fn type_ident_field(
         &mut self,
-    ) -> ParseResult<(Spanned<Identifier>, Spanned<Identifier>)> {
+    ) -> ParseResult<(Meta<Identifier>, Meta<Identifier>)> {
         let field_name = self.identifier()?;
         self.take(Token::Colon)?;
         let ty = self.identifier()?;

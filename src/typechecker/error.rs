@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::{
     ast::{Expr, Identifier},
-    parser::span::{Span, Spanned},
+    parser::meta::{Meta, MetaId},
 };
 
 use super::types::Type;
@@ -13,42 +13,42 @@ pub enum Level {
     Info,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Label {
     pub level: Level,
-    pub span: Span,
+    pub id: MetaId,
     pub message: String,
 }
 
 impl Label {
-    fn error(msg: impl Display, span: Span) -> Self {
+    fn error(msg: impl Display, id: MetaId) -> Self {
         Label {
             level: Level::Error,
-            span,
+            id,
             message: msg.to_string(),
         }
     }
 
-    fn info(msg: impl Display, span: Span) -> Self {
+    fn info(msg: impl Display, id: MetaId) -> Self {
         Label {
             level: Level::Info,
-            span,
+            id,
             message: msg.to_string(),
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct TypeError {
     pub description: String,
-    pub location: Span,
+    pub location: MetaId,
     pub labels: Vec<Label>,
 }
 
 pub fn simple(
     description: impl Display,
     msg: impl Display,
-    span: Span,
+    span: MetaId,
 ) -> TypeError {
     TypeError {
         description: description.to_string(),
@@ -57,7 +57,7 @@ pub fn simple(
     }
 }
 
-pub fn duplicate_fields(field_name: &str, locations: &[Span]) -> TypeError {
+pub fn duplicate_fields(field_name: &str, locations: &[MetaId]) -> TypeError {
     TypeError {
         description: format!(
             "field `{field_name}` appears multiple times in the same record"
@@ -75,18 +75,18 @@ pub fn duplicate_fields(field_name: &str, locations: &[Span]) -> TypeError {
     }
 }
 
-pub fn undeclared_type(ty: &Spanned<Identifier>) -> TypeError {
+pub fn undeclared_type(ty: &Meta<Identifier>) -> TypeError {
     TypeError {
         description: format!("cannot find type `{ty}`"),
-        location: ty.span,
-        labels: vec![Label::error("not found", ty.span)],
+        location: ty.id,
+        labels: vec![Label::error("not found", ty.id)],
     }
 }
 
 pub fn field_mismatch<'a>(
-    span: Span,
-    invalid: impl IntoIterator<Item = &'a Spanned<Identifier>>,
-    duplicate: impl IntoIterator<Item = &'a Spanned<Identifier>>,
+    span: MetaId,
+    invalid: impl IntoIterator<Item = &'a Meta<Identifier>>,
+    duplicate: impl IntoIterator<Item = &'a Meta<Identifier>>,
     missing: impl IntoIterator<Item = impl Display>,
 ) -> TypeError {
     let missing: Vec<_> = missing.into_iter().collect();
@@ -103,11 +103,11 @@ pub fn field_mismatch<'a>(
     let mut labels = vec![Label::error(&description, span)];
 
     for field in invalid {
-        labels.push(Label::info("invalid field", field.span));
+        labels.push(Label::info("invalid field", field.id));
     }
 
     for field in duplicate {
-        labels.push(Label::info("duplicate field", field.span));
+        labels.push(Label::info("duplicate field", field.id));
     }
 
     TypeError {
@@ -117,29 +117,27 @@ pub fn field_mismatch<'a>(
     }
 }
 
-pub fn tried_to_overwrite_builtin(
-    type_name: &Spanned<Identifier>,
-) -> TypeError {
+pub fn tried_to_overwrite_builtin(type_name: &Meta<Identifier>) -> TypeError {
     TypeError {
         description: format!(
             "type `{type_name}` is a built-in type and cannot be overwritten"
         ),
-        location: type_name.span,
-        labels: vec![Label::error("declared here", type_name.span)],
+        location: type_name.id,
+        labels: vec![Label::error("declared here", type_name.id)],
     }
 }
 
 pub fn declared_twice(
-    new_declaration: &Spanned<Identifier>,
-    old_declaration: Span,
+    new_declaration: &Meta<Identifier>,
+    old_declaration: MetaId,
 ) -> TypeError {
     TypeError {
         description: format!(
             "type `{new_declaration}` is declared multiple times"
         ),
-        location: new_declaration.span,
+        location: new_declaration.id,
         labels: vec![
-            Label::error("cannot overwrite type", new_declaration.span),
+            Label::error("cannot overwrite type", new_declaration.id),
             Label::info("previously declared here", old_declaration),
         ],
     }
@@ -147,7 +145,7 @@ pub fn declared_twice(
 
 pub fn number_of_arguments_dont_match(
     call_type: &str,
-    method_name: &Spanned<Identifier>,
+    method_name: &Meta<Identifier>,
     takes: usize,
     given: usize,
 ) -> TypeError {
@@ -155,15 +153,15 @@ pub fn number_of_arguments_dont_match(
         description: format!(
             "{call_type} `{method_name}` takes {takes} arguments but {given} arguments were given"
         ),
-        location: method_name.span,
+        location: method_name.id,
         labels: vec![Label::error(
             format!("takes {takes} arguments but {given} arguments were given"),
-            method_name.span)
+            method_name.id)
         ],
     }
 }
 
-pub fn can_only_match_on_enum(ty: &Type, span: Span) -> TypeError {
+pub fn can_only_match_on_enum(ty: &Type, span: MetaId) -> TypeError {
     TypeError {
         description: format!(
             "cannot match on the type `{ty}`, \
@@ -178,39 +176,39 @@ pub fn can_only_match_on_enum(ty: &Type, span: Span) -> TypeError {
 }
 
 pub fn variant_does_not_have_field(
-    variant: &Spanned<Identifier>,
+    variant: &Meta<Identifier>,
     ty: &Type,
 ) -> TypeError {
     TypeError {
         description: format!("pattern has a data field, but the variant `{variant}` of `{ty}` doesn't have one"),
-        location: variant.span,
-        labels: vec![Label::error("unexpected data field", variant.span)],
+        location: variant.id,
+        labels: vec![Label::error("unexpected data field", variant.id)],
     }
 }
 
 pub fn need_data_field_on_pattern(
-    variant: &Spanned<Identifier>,
+    variant: &Meta<Identifier>,
     ty: &Type,
 ) -> TypeError {
     TypeError {
         description: format!("pattern has no data field, but variant `{variant}` of `{ty}` does have a data field"),
-        location: variant.span,
-        labels: vec![Label::error("missing data field", variant.span)],
+        location: variant.id,
+        labels: vec![Label::error("missing data field", variant.id)],
     }
 }
 
 pub fn variant_does_not_exist(
-    variant: &Spanned<Identifier>,
+    variant: &Meta<Identifier>,
     ty: &Type,
 ) -> TypeError {
     TypeError {
         description: format!(
             "the variant `{variant}` does not exist on `{ty}`"
         ),
-        location: variant.span,
+        location: variant.id,
         labels: vec![Label::error(
             format!("variant does not exist on `{ty}`"),
-            variant.span,
+            variant.id,
         )],
     }
 }
@@ -218,8 +216,8 @@ pub fn variant_does_not_exist(
 pub fn mismatched_types(
     expected: Type,
     got: Type,
-    span: Span,
-    cause: Option<Span>,
+    span: MetaId,
+    cause: Option<MetaId>,
 ) -> TypeError {
     let mut labels = vec![Label::error(
         format!("expected `{expected}`, found `{got}`"),
@@ -240,7 +238,7 @@ pub fn mismatched_types(
 }
 
 pub fn nonexhaustive_match(
-    span: Span,
+    span: MetaId,
     missing_variants: &[impl Display],
 ) -> TypeError {
     TypeError {
@@ -256,22 +254,22 @@ pub fn nonexhaustive_match(
     }
 }
 
-pub fn unreachable_expression(expr: &Spanned<Expr>) -> TypeError {
+pub fn unreachable_expression(expr: &Meta<Expr>) -> TypeError {
     TypeError {
         description: "expression is unreachable".into(),
-        location: expr.span,
-        labels: vec![Label::error("unreachable", expr.span)],
+        location: expr.id,
+        labels: vec![Label::error("unreachable", expr.id)],
     }
 }
 
 pub fn cannot_diverge_here(
     divergence_type: &str,
-    expr: &Spanned<Expr>,
+    expr: &Meta<Expr>,
 ) -> TypeError {
     TypeError {
         description: format!("cannot `{divergence_type}` here"),
-        location: expr.span,
-        labels: vec![Label::error("not allowed", expr.span)],
+        location: expr.id,
+        labels: vec![Label::error("not allowed", expr.id)],
     }
 }
 

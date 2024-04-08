@@ -3,18 +3,14 @@
 //! In other words, we parse the constructs that are type declarations.
 //! These constructs are `rib`, `table`, `output-stream` and `type`.
 
-use super::{
-    span::{Spanned, WithSpan},
-    token::Token,
-    ParseResult, Parser,
-};
+use super::{meta::Meta, token::Token, ParseResult, Parser};
 use crate::ast::{
     Identifier, OutputStream, RecordType, RecordTypeDeclaration, Rib,
     RibBody, RibFieldType, Table,
 };
 
 /// # Rib-like declarations
-impl<'source> Parser<'source> {
+impl<'source> Parser<'source, '_> {
     /// Parse a rib declaration
     ///
     /// ```ebnf
@@ -121,9 +117,7 @@ impl<'source> Parser<'source> {
     /// RibField ::= Identifier ':'
     ///              (RibBody | '[' TypeIdentifier ']' | TypeIdentifier)
     /// ```
-    fn rib_field(
-        &mut self,
-    ) -> ParseResult<(Spanned<Identifier>, RibFieldType)> {
+    fn rib_field(&mut self) -> ParseResult<(Meta<Identifier>, RibFieldType)> {
         let key = self.identifier()?;
         self.take(Token::Colon)?;
 
@@ -137,14 +131,16 @@ impl<'source> Parser<'source> {
             // TODO: This recursion seems to be the right thing to do, maybe
             // the syntax tree should reflect that.
             let RibBody { key_values } = self.rib_body()?;
-            let span = key_values.span;
-            RibFieldType::Record(RecordType { key_values }.with_span(span))
+            let span = self.get_span(&key_values);
+            RibFieldType::Record(
+                self.add_span(span, RecordType { key_values }),
+            )
         } else if self.peek_is(Token::SquareLeft) {
             let start = self.take(Token::SquareLeft)?;
             let inner_type = self.rib_field_type()?;
             let end = self.take(Token::SquareRight)?;
             let span = start.merge(end);
-            RibFieldType::List(Box::new(inner_type).with_span(span))
+            RibFieldType::List(self.add_span(span, Box::new(inner_type)))
         } else {
             RibFieldType::Identifier(self.identifier()?)
         })

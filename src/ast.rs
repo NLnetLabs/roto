@@ -1,4 +1,4 @@
-use crate::parser::span::Spanned;
+use crate::parser::meta::Meta;
 
 #[derive(Clone, Debug)]
 pub struct SyntaxTree {
@@ -17,7 +17,7 @@ pub enum Declaration {
 /// The value of a typed record
 #[derive(Clone, Debug)]
 pub struct RecordTypeDeclaration {
-    pub ident: Spanned<Identifier>,
+    pub ident: Meta<Identifier>,
     pub record_type: RecordType,
 }
 
@@ -30,8 +30,8 @@ pub enum FilterType {
 #[derive(Clone, Debug)]
 pub struct FilterMap {
     pub filter_type: FilterType,
-    pub ident: Spanned<Identifier>,
-    pub params: Spanned<Vec<(Spanned<Identifier>, Spanned<Identifier>)>>,
+    pub ident: Meta<Identifier>,
+    pub params: Meta<Vec<(Meta<Identifier>, Meta<Identifier>)>>,
     pub body: FilterMapBody,
 }
 
@@ -39,7 +39,7 @@ pub struct FilterMap {
 pub struct FilterMapBody {
     pub define: Define,
     pub expressions: Vec<FilterMapExpr>,
-    pub apply: Spanned<Block>,
+    pub apply: Meta<Block>,
 }
 
 /// These are the sections that can appear multiple times in a Filter(Map)
@@ -56,30 +56,30 @@ pub struct Define {
 
 #[derive(Clone, Debug)]
 pub enum RxTxType {
-    RxOnly(Spanned<Identifier>, Spanned<Identifier>),
+    RxOnly(Meta<Identifier>, Meta<Identifier>),
     Split {
-        rx: (Spanned<Identifier>, Spanned<Identifier>),
-        tx: (Spanned<Identifier>, Spanned<Identifier>),
+        rx: (Meta<Identifier>, Meta<Identifier>),
+        tx: (Meta<Identifier>, Meta<Identifier>),
     },
 }
 
 #[derive(Clone, Debug)]
 pub struct DefineBody {
     pub rx_tx_type: RxTxType,
-    pub assignments: Vec<(Spanned<Identifier>, Spanned<Expr>)>,
+    pub assignments: Vec<(Meta<Identifier>, Meta<Expr>)>,
 }
 
 #[derive(Clone, Debug)]
 pub struct TermDeclaration {
-    pub ident: Spanned<Identifier>,
-    pub params: Spanned<Vec<(Spanned<Identifier>, Spanned<Identifier>)>>,
-    pub body: Spanned<Block>,
+    pub ident: Meta<Identifier>,
+    pub params: Meta<Vec<(Meta<Identifier>, Meta<Identifier>)>>,
+    pub body: Meta<Block>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Block {
-    pub exprs: Vec<Spanned<Expr>>,
-    pub last: Option<Box<Spanned<Expr>>>,
+    pub exprs: Vec<Meta<Expr>>,
+    pub last: Option<Box<Meta<Expr>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -88,91 +88,91 @@ pub enum Expr {
     Reject,
     /// a literal, or a chain of field accesses and/or methods on a literal,
     /// e.g. `10.0.0.0/8.covers(..)`
-    Literal(Spanned<Literal>),
-    Match(Box<Spanned<Match>>),
+    Literal(Meta<Literal>),
+    Match(Box<Meta<Match>>),
     /// a JunOS style prefix match expression, e.g. `0.0.0.0/0
     /// prefix-length-range /12-/16`
     PrefixMatch(PrefixMatchExpr),
-    FunctionCall(Spanned<Identifier>, Spanned<Vec<Spanned<Expr>>>),
+    FunctionCall(Meta<Identifier>, Meta<Vec<Meta<Expr>>>),
     MethodCall(
-        Box<Spanned<Expr>>,
-        Spanned<Identifier>,
-        Spanned<Vec<Spanned<Expr>>>,
+        Box<Meta<Expr>>,
+        Meta<Identifier>,
+        Meta<Vec<Meta<Expr>>>,
     ),
-    Access(Box<Spanned<Expr>>, Spanned<Identifier>),
-    Var(Spanned<Identifier>),
+    Access(Box<Meta<Expr>>, Meta<Identifier>),
+    Var(Meta<Identifier>),
     /// a record that doesn't have a type mentioned in the assignment of it,
     /// e.g `{ value_1: 100, value_2: "bla" }`. This can also be a sub-record
     /// of a record that does have an explicit type.
-    Record(Spanned<Record>),
+    Record(Meta<Record>),
     /// an expression of a record that does have a type, e.g. `MyType {
     /// value_1: 100, value_2: "bla" }`, where MyType is a user-defined Record
     /// Type.
-    TypedRecord(Spanned<Identifier>, Spanned<Record>),
+    TypedRecord(Meta<Identifier>, Meta<Record>),
     /// An expression that yields a list of values, e.g. `[100, 200, 300]`
-    List(Vec<Spanned<Expr>>),
-    Not(Box<Spanned<Expr>>),
-    BinOp(Box<Spanned<Expr>>, BinOp, Box<Spanned<Expr>>),
-    Return(Box<Spanned<Expr>>),
-    IfElse(Box<Spanned<Expr>>, Spanned<Block>, Option<Spanned<Block>>),
+    List(Vec<Meta<Expr>>),
+    Not(Box<Meta<Expr>>),
+    BinOp(Box<Meta<Expr>>, BinOp, Box<Meta<Expr>>),
+    Return(Box<Meta<Expr>>),
+    IfElse(Box<Meta<Expr>>, Meta<Block>, Option<Meta<Block>>),
 }
 
 #[derive(Clone, Debug)]
 pub struct Record {
-    pub fields: Vec<(Spanned<Identifier>, Spanned<Expr>)>,
+    pub fields: Vec<(Meta<Identifier>, Meta<Expr>)>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Match {
-    pub expr: Spanned<Expr>,
+    pub expr: Meta<Expr>,
     pub arms: Vec<MatchArm>,
 }
 
 #[derive(Clone, Debug)]
 pub struct MatchArm {
-    pub variant_id: Spanned<Identifier>,
-    pub data_field: Option<Spanned<Identifier>>,
-    pub guard: Option<Spanned<Expr>>,
-    pub body: Spanned<Block>,
+    pub variant_id: Meta<Identifier>,
+    pub data_field: Option<Meta<Identifier>>,
+    pub guard: Option<Meta<Expr>>,
+    pub body: Meta<Block>,
 }
 
 #[derive(Clone, Debug)]
 pub struct ActionDeclaration {
-    pub ident: Spanned<Identifier>,
-    pub params: Spanned<Vec<(Spanned<Identifier>, Spanned<Identifier>)>>,
-    pub body: Spanned<Block>,
+    pub ident: Meta<Identifier>,
+    pub params: Meta<Vec<(Meta<Identifier>, Meta<Identifier>)>>,
+    pub body: Meta<Block>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Rib {
-    pub ident: Spanned<Identifier>,
-    pub contain_ty: Spanned<Identifier>,
+    pub ident: Meta<Identifier>,
+    pub contain_ty: Meta<Identifier>,
     pub body: RibBody,
 }
 
 #[derive(Clone, Debug)]
 pub struct RibBody {
-    pub key_values: Spanned<Vec<(Spanned<Identifier>, RibFieldType)>>,
+    pub key_values: Meta<Vec<(Meta<Identifier>, RibFieldType)>>,
 }
 
 #[derive(Clone, Debug)]
 pub enum RibFieldType {
-    Identifier(Spanned<Identifier>),
-    Record(Spanned<RecordType>),
-    List(Spanned<Box<RibFieldType>>),
+    Identifier(Meta<Identifier>),
+    Record(Meta<RecordType>),
+    List(Meta<Box<RibFieldType>>),
 }
 
 #[derive(Clone, Debug)]
 pub struct Table {
-    pub ident: Spanned<Identifier>,
-    pub contain_ty: Spanned<Identifier>,
+    pub ident: Meta<Identifier>,
+    pub contain_ty: Meta<Identifier>,
     pub body: RibBody,
 }
 
 #[derive(Clone, Debug)]
 pub struct OutputStream {
-    pub ident: Spanned<Identifier>,
-    pub contain_ty: Spanned<Identifier>,
+    pub ident: Meta<Identifier>,
+    pub contain_ty: Meta<Identifier>,
     pub body: RibBody,
 }
 
@@ -214,7 +214,7 @@ impl std::fmt::Display for Identifier {
 /// semantically different.
 #[derive(Clone, Debug)]
 pub struct RecordType {
-    pub key_values: Spanned<Vec<(Spanned<Identifier>, RibFieldType)>>,
+    pub key_values: Meta<Vec<(Meta<Identifier>, RibFieldType)>>,
 }
 
 #[derive(Clone, Debug)]
@@ -270,8 +270,8 @@ pub enum IpAddress {
 
 #[derive(Clone, Debug)]
 pub struct Prefix {
-    pub addr: Spanned<IpAddress>,
-    pub len: Spanned<u8>,
+    pub addr: Meta<IpAddress>,
+    pub len: Meta<u8>,
 }
 
 #[derive(Clone, Debug)]

@@ -3,7 +3,7 @@ use std::{
     collections::{hash_map::Entry, HashMap},
 };
 
-use crate::{ast::Identifier, parser::span::Spanned};
+use crate::{ast::Identifier, parser::meta::Meta};
 
 use super::{error, Type, TypeResult};
 
@@ -27,7 +27,7 @@ impl<'a> Scope<'a> {
         }
     }
 
-    pub fn get_var(&self, k: &Spanned<Identifier>) -> TypeResult<&Type> {
+    pub fn get_var(&self, k: &Meta<Identifier>) -> TypeResult<&Type> {
         self.variables
             .get(k.as_ref())
             .ok_or_else(|| error::simple(
@@ -36,14 +36,14 @@ impl<'a> Scope<'a> {
                     k.as_ref()
                 ),
                 "not found in this scope",
-                k.span,
+                k.id,
             ))
             .or_else(|e| self.parent.ok_or(e).and_then(|s| s.get_var(k)))
     }
 
     pub fn insert_var(
         &mut self,
-        v: &Spanned<Identifier>,
+        v: &Meta<Identifier>,
         t: impl Borrow<Type>,
     ) -> TypeResult<&mut Type> {
         let t = t.borrow().clone();
@@ -55,7 +55,7 @@ impl<'a> Scope<'a> {
                     entry.key()
                 ),
                 "variable already declared",
-                v.span
+                v.id
             )),
             Entry::Vacant(entry) => Ok(entry.insert(t)),
         }

@@ -8,11 +8,7 @@ use crate::{
     parser::ParseError,
 };
 
-use super::{
-    span::{Spanned, WithSpan},
-    token::Token,
-    ParseResult, Parser,
-};
+use super::{meta::Meta, token::Token, ParseResult, Parser};
 
 /// Contextual restrictions on the expression parsing
 ///
@@ -23,8 +19,8 @@ struct Restrictions {
 }
 
 /// # Parsing value expressions
-impl<'source> Parser<'source> {
-    pub fn block(&mut self) -> ParseResult<Spanned<Block>> {
+impl<'source> Parser<'source, '_> {
+    pub fn block(&mut self) -> ParseResult<Meta<Block>> {
         let start = self.take(Token::CurlyLeft)?;
 
         let mut exprs = Vec::new();
@@ -32,9 +28,10 @@ impl<'source> Parser<'source> {
         loop {
             if self.peek_is(Token::CurlyRight) {
                 let end = self.take(Token::CurlyRight)?;
-                return Ok(
-                    Block { exprs, last: None }.with_span(start.merge(end))
-                );
+                return Ok(self.spans.add(
+                    start.merge(end),
+                    Block { exprs, last: None },
+                ));
             }
 
             // Edge case: if and match don't have to end in a semicolon
@@ -45,22 +42,28 @@ impl<'source> Parser<'source> {
                 let expr = self.if_else()?;
                 if self.peek_is(Token::CurlyRight) {
                     let end = self.take(Token::CurlyRight)?;
-                    return Ok(Block {
-                        exprs,
-                        last: Some(Box::new(expr)),
-                    }
-                    .with_span(start.merge(end)));
+                    let span = start.merge(end);
+                    return Ok(self.spans.add(
+                        span,
+                        Block {
+                            exprs,
+                            last: Some(Box::new(expr)),
+                        },
+                    ));
                 }
                 exprs.push(expr);
             } else if self.peek_is(Token::Match) {
                 let expr = self.match_expr()?;
                 if self.peek_is(Token::CurlyRight) {
                     let end = self.take(Token::CurlyRight)?;
-                    return Ok(Block {
-                        exprs,
-                        last: Some(Box::new(expr)),
-                    }
-                    .with_span(start.merge(end)));
+                    let span = start.merge(end);
+                    return Ok(self.spans.add(
+                        span,
+                        Block {
+                            exprs,
+                            last: Some(Box::new(expr)),
+                        },
+                    ));
                 }
                 exprs.push(expr);
             } else {
@@ -69,36 +72,36 @@ impl<'source> Parser<'source> {
                     exprs.push(expr);
                 } else {
                     let end = self.take(Token::CurlyRight)?;
-                    return Ok(Block {
-                        exprs,
-                        last: Some(Box::new(expr)),
-                    }
-                    .with_span(start.merge(end)));
+                    let span = start.merge(end);
+                    return Ok(self.spans.add(
+                        span,
+                        Block {
+                            exprs,
+                            last: Some(Box::new(expr)),
+                        },
+                    ));
                 }
             };
         }
     }
 
-    pub fn expr(&mut self) -> ParseResult<Spanned<Expr>> {
+    pub fn expr(&mut self) -> ParseResult<Meta<Expr>> {
         self.expr_inner(Restrictions {
             forbid_records: false,
         })
     }
 
-    fn expr_no_records(&mut self) -> ParseResult<Spanned<Expr>> {
+    fn expr_no_records(&mut self) -> ParseResult<Meta<Expr>> {
         self.expr_inner(Restrictions {
             forbid_records: true,
         })
     }
 
-    fn expr_inner(&mut self, r: Restrictions) -> ParseResult<Spanned<Expr>> {
+    fn expr_inner(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
         self.logical_expr(r)
     }
 
-    fn logical_expr(
-        &mut self,
-        r: Restrictions,
-    ) -> ParseResult<Spanned<Expr>> {
+    fn logical_expr(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
         let expr = self.comparison(r)?;
 
         if self.peek_is(Token::AmpAmp) {
@@ -118,9 +121,11 @@ impl<'source> Parser<'source> {
                 .into_iter()
                 .rev()
                 .reduce(|acc, e| {
-                    let span = e.span.merge(acc.span);
-                    Expr::BinOp(Box::new(e), BinOp::And, Box::new(acc))
-                        .with_span(span)
+                    let s = self.spans.merge(&e, &acc);
+                    self.spans.add(
+                        s,
+                        Expr::BinOp(Box::new(e), BinOp::And, Box::new(acc)),
+                    )
                 })
                 .unwrap())
         } else if self.peek_is(Token::PipePipe) {
@@ -140,9 +145,11 @@ impl<'source> Parser<'source> {
                 .into_iter()
                 .rev()
                 .reduce(|acc, e| {
-                    let span = e.span.merge(acc.span);
-                    Expr::BinOp(Box::new(e), BinOp::Or, Box::new(acc))
-                        .with_span(span)
+                    let span = self.spans.merge(&e, &acc);
+                    self.spans.add(
+                        span,
+                        Expr::BinOp(Box::new(e), BinOp::Or, Box::new(acc)),
+                    )
                 })
                 .unwrap())
         } else {
@@ -150,14 +157,16 @@ impl<'source> Parser<'source> {
         }
     }
 
-    fn comparison(&mut self, r: Restrictions) -> ParseResult<Spanned<Expr>> {
+    fn comparison(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
         let expr = self.access(r)?;
 
         if let Some(op) = self.try_compare_operator()? {
             let right = self.access(r)?;
-            let span = expr.span.merge(right.span);
-            Ok(Expr::BinOp(Box::new(expr), op.inner, Box::new(right))
-                .with_span(span))
+            let span = self.merge_spans(&expr, &right);
+            Ok(self.spans.add(
+                span,
+                Expr::BinOp(Box::new(expr), op.node, Box::new(right)),
+            ))
         } else {
             Ok(expr)
         }
@@ -172,9 +181,7 @@ impl<'source> Parser<'source> {
     /// ```ebnf
     /// CompareOp ::= '==' | '!=' | '<' | '<=' | '>' | '>=' | 'not'? 'in'
     /// ```
-    fn try_compare_operator(
-        &mut self,
-    ) -> ParseResult<Option<Spanned<BinOp>>> {
+    fn try_compare_operator(&mut self) -> ParseResult<Option<Meta<BinOp>>> {
         let Some(tok) = self.peek() else {
             return Ok(None);
         };
@@ -190,35 +197,40 @@ impl<'source> Parser<'source> {
             Token::Not => {
                 let span1 = self.take(Token::Not)?;
                 let span2 = self.take(Token::In)?;
-                return Ok(Some(BinOp::NotIn.with_span(span1.merge(span2))));
+                let span = span1.merge(span2);
+                let x = self.spans.add(span, BinOp::NotIn);
+                return Ok(Some(x));
             }
             _ => return Ok(None),
         };
 
         let (_, span) = self.next()?;
-        Ok(Some(op.with_span(span)))
+        Ok(Some(self.spans.add(span, op)))
     }
 
-    fn access(&mut self, r: Restrictions) -> ParseResult<Spanned<Expr>> {
+    fn access(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
         let mut expr = self.atom(r)?;
 
         while self.next_is(Token::Period) {
             let ident = self.identifier()?;
             if self.peek_is(Token::RoundLeft) {
                 let args = self.args()?;
-                let span = expr.span.merge(args.span);
-                expr = Expr::MethodCall(Box::new(expr), ident, args)
-                    .with_span(span);
+                let span = self.merge_spans(&expr, &args);
+                expr = self.spans.add(
+                    span,
+                    Expr::MethodCall(Box::new(expr), ident, args),
+                );
             } else {
-                let span = expr.span.merge(ident.span);
-                expr = Expr::Access(Box::new(expr), ident).with_span(span);
+                let span = self.merge_spans(&expr, &ident);
+                expr =
+                    self.spans.add(span, Expr::Access(Box::new(expr), ident));
             }
         }
 
         Ok(expr)
     }
 
-    fn atom(&mut self, r: Restrictions) -> ParseResult<Spanned<Expr>> {
+    fn atom(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
         if self.peek_is(Token::RoundLeft) {
             self.take(Token::RoundLeft)?;
             let expr = self.expr()?;
@@ -233,31 +245,33 @@ impl<'source> Parser<'source> {
                 Token::Comma,
                 Self::expr,
             )?;
-            let span = values.span;
-            return Ok(Expr::List(values.inner).with_span(span));
+            return Ok(Meta {
+                id: values.id,
+                node: Expr::List(values.node),
+            });
         }
 
         if self.peek_is(Token::CurlyLeft) {
             let key_values = self.record()?;
-            let span = key_values.span;
-            return Ok(Expr::Record(key_values).with_span(span));
+            let span = self.spans.get(&key_values);
+            return Ok(self.spans.add(span, Expr::Record(key_values)));
         }
 
         if self.peek_is(Token::Accept) {
             let span = self.take(Token::Accept)?;
-            return Ok(Expr::Accept.with_span(span));
+            return Ok(self.spans.add(span, Expr::Accept));
         }
 
         if self.peek_is(Token::Reject) {
             let span = self.take(Token::Reject)?;
-            return Ok(Expr::Reject.with_span(span));
+            return Ok(self.spans.add(span, Expr::Reject));
         }
 
         if self.peek_is(Token::Return) {
             let start = self.take(Token::Return)?;
             let expr = self.expr_inner(r)?;
-            let span = start.merge(expr.span);
-            return Ok(Expr::Return(Box::new(expr)).with_span(span));
+            let span = start.merge(self.spans.get(&expr));
+            return Ok(self.spans.add(span, Expr::Return(Box::new(expr))));
         }
 
         if self.peek_is(Token::If) {
@@ -272,39 +286,47 @@ impl<'source> Parser<'source> {
             let ident = self.identifier()?;
             if !r.forbid_records && self.peek_is(Token::CurlyLeft) {
                 let key_values = self.record()?;
-                let span = ident.span.merge(key_values.span);
+                let span = self.merge_spans(&ident, &key_values);
                 return Ok(
-                    Expr::TypedRecord(ident, key_values).with_span(span)
+                    self.spans.add(span, Expr::TypedRecord(ident, key_values))
                 );
             }
             if self.peek_is(Token::RoundLeft) {
                 let args = self.args()?;
-                let span = ident.span.merge(args.span);
-                return Ok(Expr::FunctionCall(ident, args).with_span(span));
+                let span = self.merge_spans(&ident, &args);
+                return Ok(
+                    self.spans.add(span, Expr::FunctionCall(ident, args))
+                );
             }
-            let span = ident.span;
-            return Ok(Expr::Var(ident).with_span(span));
+            return Ok(Meta {
+                id: ident.id,
+                node: Expr::Var(ident),
+            });
         }
 
         let literal = self.literal()?;
 
         // If we parsed a prefix, it may be followed by a prefix match
         // If not, it can be an access expression
-        if let Literal::Prefix(prefix) = &literal.inner {
+        if let Literal::Prefix(prefix) = &literal.node {
             if let Some(ty) = self.try_prefix_match_type()? {
-                return Ok(Expr::PrefixMatch(PrefixMatchExpr {
-                    prefix: prefix.clone(),
-                    ty,
-                })
-                .with_span(literal.span));
+                return Ok(Meta {
+                    id: literal.id,
+                    node: Expr::PrefixMatch(PrefixMatchExpr {
+                        prefix: prefix.clone(),
+                        ty,
+                    }),
+                });
             }
         }
 
-        let span = literal.span;
-        Ok(Expr::Literal(literal).with_span(span))
+        Ok(Meta {
+            id: literal.id,
+            node: Expr::Literal(literal),
+        })
     }
 
-    fn if_else(&mut self) -> ParseResult<Spanned<Expr>> {
+    fn if_else(&mut self) -> ParseResult<Meta<Expr>> {
         let start = self.take(Token::If)?;
         let cond = self.expr_no_records()?;
         let then_block = self.block()?;
@@ -312,28 +334,31 @@ impl<'source> Parser<'source> {
         if self.next_is(Token::Else) {
             let else_block = if self.peek_is(Token::If) {
                 let expr = self.if_else()?;
-                let span = expr.span;
-                Block {
-                    exprs: Vec::new(),
-                    last: Some(Box::new(expr)),
+                Meta {
+                    id: expr.id,
+                    node: Block {
+                        exprs: Vec::new(),
+                        last: Some(Box::new(expr)),
+                    },
                 }
-                .with_span(span)
             } else {
                 self.block()?
             };
-            let span = start.merge(else_block.span);
-            Ok(Expr::IfElse(Box::new(cond), then_block, Some(else_block))
-                .with_span(span))
+            let span = start.merge(self.spans.get(&else_block));
+            Ok(self.spans.add(
+                span,
+                Expr::IfElse(Box::new(cond), then_block, Some(else_block)),
+            ))
         } else {
-            let span = start.merge(then_block.span);
-            Ok(
-                Expr::IfElse(Box::new(cond), then_block, None)
-                    .with_span(span),
-            )
+            let span = start.merge(self.spans.get(&then_block));
+            Ok(self.spans.add(
+                span,
+                Expr::IfElse(Box::new(cond), then_block, None),
+            ))
         }
     }
 
-    fn match_expr(&mut self) -> ParseResult<Spanned<Expr>> {
+    fn match_expr(&mut self) -> ParseResult<Meta<Expr>> {
         let start = self.take(Token::Match)?;
         let expr = self.expr_no_records()?;
 
@@ -365,13 +390,14 @@ impl<'source> Parser<'source> {
                 exprs
             } else {
                 let expr = self.expr()?;
-                let span = expr.span;
                 self.take(Token::Comma)?;
-                Block {
-                    exprs: Vec::new(),
-                    last: Some(Box::new(expr)),
+                Meta {
+                    id: expr.id,
+                    node: Block {
+                        exprs: Vec::new(),
+                        last: Some(Box::new(expr)),
+                    },
                 }
-                .with_span(span)
             };
 
             arms.push(MatchArm {
@@ -384,19 +410,23 @@ impl<'source> Parser<'source> {
 
         let end = self.take(Token::CurlyRight)?;
         let span = start.merge(end);
-        Ok(Expr::Match(Box::new(Match { expr, arms }.with_span(span)))
-            .with_span(span))
+        let match_expr = self.spans.add(span, Match { expr, arms });
+        Ok(self.spans.add(
+            span,
+            Expr::Match(Box::new(match_expr)),
+        ))
     }
 
     /// Parse any literal, including prefixes, ip addresses and communities
-    fn literal(&mut self) -> ParseResult<Spanned<Literal>> {
+    fn literal(&mut self) -> ParseResult<Meta<Literal>> {
         // A prefix length, it requires two tokens
         if let Some(Token::PrefixLength(..)) = self.peek() {
             let prefix_length = self.prefix_length()?;
-            let len = prefix_length.inner;
-            return Ok(
-                Literal::PrefixLength(len).with_span(prefix_length.span)
-            );
+            let len = prefix_length.node;
+            return Ok(Meta {
+                id: prefix_length.id,
+                node: Literal::PrefixLength(len),
+            });
         }
 
         // If we see an IpAddress, we need to check whether it is followed by a
@@ -405,21 +435,21 @@ impl<'source> Parser<'source> {
             let addr = self.ip_address()?;
             if let Some(Token::PrefixLength(..)) = self.peek() {
                 let len = self.prefix_length()?;
-                let span = addr.span.merge(len.span);
-                return Ok(
-                    Literal::Prefix(Prefix { addr, len }).with_span(span)
-                );
+                let span = self.merge_spans(&addr, &len);
+                return Ok(self
+                    .spans.add(span, Literal::Prefix(Prefix { addr, len })));
             } else {
-                return Ok(
-                    Literal::IpAddress(addr.inner).with_span(addr.span)
-                );
+                return Ok(Meta {
+                    id: addr.id,
+                    node: Literal::IpAddress(addr.node),
+                });
             }
         }
 
         self.simple_literal()
     }
 
-    fn ip_address(&mut self) -> ParseResult<Spanned<IpAddress>> {
+    fn ip_address(&mut self) -> ParseResult<Meta<IpAddress>> {
         let (token, span) = self.next()?;
         let addr = match token {
             Token::IpV4(s) => IpAddress::Ipv4(
@@ -440,11 +470,11 @@ impl<'source> Parser<'source> {
                 ))
             }
         };
-        Ok(addr.with_span(span))
+        Ok(self.spans.add(span, addr))
     }
 
     /// Parse literals that need no complex parsing, just one token
-    fn simple_literal(&mut self) -> ParseResult<Spanned<Literal>> {
+    fn simple_literal(&mut self) -> ParseResult<Meta<Literal>> {
         // TODO: Make proper errors using the spans
         let (token, span) = self.next()?;
         let literal = match token {
@@ -526,7 +556,7 @@ impl<'source> Parser<'source> {
             }
             t => return Err(ParseError::expected("a literal", t, span)),
         };
-        Ok(literal.with_span(span))
+        Ok(self.spans.add(span, literal))
     }
 
     /// Parse an (anonymous) record
@@ -535,7 +565,7 @@ impl<'source> Parser<'source> {
     /// Record      ::= '{' (RecordField (',' RecordField)* ','? )? '}'
     /// RecordField ::= Identifier ':' ValueExpr
     /// ```
-    fn record(&mut self) -> ParseResult<Spanned<Record>> {
+    fn record(&mut self) -> ParseResult<Meta<Record>> {
         let fields = self.separated(
             Token::CurlyLeft,
             Token::CurlyRight,
@@ -548,11 +578,12 @@ impl<'source> Parser<'source> {
             },
         )?;
 
-        let span = fields.span;
-        Ok(Record {
-            fields: fields.inner,
-        }
-        .with_span(span))
+        Ok(Meta {
+            id: fields.id,
+            node: Record {
+                fields: fields.node,
+            },
+        })
     }
 
     /// Parse a list of arguments to a method
@@ -560,9 +591,7 @@ impl<'source> Parser<'source> {
     /// ```ebnf
     /// ArgExprList ::= '(' ( ValueExpr (',' ValueExpr)* ','? )? ')'
     /// ```
-    pub(super) fn args(
-        &mut self,
-    ) -> ParseResult<Spanned<Vec<Spanned<Expr>>>> {
+    pub(super) fn args(&mut self) -> ParseResult<Meta<Vec<Meta<Expr>>>> {
         let args = self.separated(
             Token::RoundLeft,
             Token::RoundRight,
@@ -593,12 +622,12 @@ impl<'source> Parser<'source> {
             PrefixMatchType::OrLonger
         } else if self.next_is(Token::PrefixLengthRange) {
             PrefixMatchType::PrefixLengthRange(
-                self.prefix_length_range()?.inner,
+                self.prefix_length_range()?.node,
             )
         } else if self.next_is(Token::UpTo) {
-            PrefixMatchType::UpTo(self.prefix_length()?.inner)
+            PrefixMatchType::UpTo(self.prefix_length()?.node)
         } else if self.next_is(Token::NetMask) {
-            PrefixMatchType::NetMask(self.ip_address()?.inner)
+            PrefixMatchType::NetMask(self.ip_address()?.node)
         } else {
             return Ok(None);
         };
@@ -613,16 +642,18 @@ impl<'source> Parser<'source> {
     /// ```
     fn prefix_length_range(
         &mut self,
-    ) -> ParseResult<Spanned<PrefixLengthRange>> {
+    ) -> ParseResult<Meta<PrefixLengthRange>> {
         let start = self.prefix_length()?;
         self.take(Token::Hyphen)?;
         let end = self.prefix_length()?;
-        let span = start.span.merge(end.span);
-        Ok(PrefixLengthRange {
-            start: start.inner,
-            end: end.inner,
-        }
-        .with_span(span))
+        let span = self.merge_spans(&start, &end);
+        Ok(self.spans.add(
+            span,
+            PrefixLengthRange {
+                start: start.node,
+                end: end.node,
+            },
+        ))
     }
 
     /// Parse a prefix length
@@ -630,7 +661,7 @@ impl<'source> Parser<'source> {
     /// ```ebnf
     /// PrefixLength ::= '/' Integer
     /// ```
-    fn prefix_length(&mut self) -> ParseResult<Spanned<u8>> {
+    fn prefix_length(&mut self) -> ParseResult<Meta<u8>> {
         let (token, span) = self.next()?;
         let Token::PrefixLength(s) = token else {
             return Err(ParseError::invalid_literal(
@@ -643,6 +674,6 @@ impl<'source> Parser<'source> {
         let len = s[1..].parse::<u8>().map_err(|e| {
             ParseError::invalid_literal("prefix length", token, e, span)
         })?;
-        Ok(len.with_span(span))
+        Ok(self.spans.add(span, len))
     }
 }

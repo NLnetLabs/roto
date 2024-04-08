@@ -3,8 +3,11 @@ use crate::pipeline::{self, RotoReport};
 #[track_caller]
 fn typecheck(s: &str) -> Result<(), RotoReport> {
     let files = pipeline::test_file(s);
-    let trees = pipeline::parse(&files)?;
-    if let Err(e) = pipeline::typecheck(&files, &trees) {
+
+    // Unwrap on parse because a parse error in this file is never correct.
+    // We only want to test for type errors.
+    let (trees, spans) = pipeline::parse(&files).unwrap();
+    if let Err(e) = pipeline::typecheck(&files, &trees, spans) {
         println!("{e}");
         Err(e)
     } else {
@@ -198,7 +201,7 @@ fn using_records() {
     let src = r#"
         type Foo { a: string }
 
-        filter-map bar {
+        filter-map bar() {
             define {
                 rx r: U32;
                 a = Foo { };

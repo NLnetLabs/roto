@@ -6,17 +6,17 @@
 //! not have to deal with polymorphism at all. However, we might still
 //! extend the type system later to accodomate for that.
 //!
-//! The current implementation is essentially Algorithm W for HM type
-//! inference. For better error message, we should change to Algorithm M,
-//! described in <https://dl.acm.org/doi/pdf/10.1145/291891.291892>. The
-//! advantage of M is that it yields errors earlier in the type inference,
-//! so that errors appear more often where they are caused.
+//! The current implementation is based on Algorithm M, described in
+//! <https://dl.acm.org/doi/pdf/10.1145/291891.291892>. The advantage of
+//! Algorithm M over the classic Algorithm W is that it yields errors
+//! earlier in the type inference, so that errors appear more often where
+//! they are caused.
 //!
 //! See also <https://en.wikipedia.org/wiki/Hindley%E2%80%93Milner_type_system>.
 
 use crate::{
     ast::{self, Identifier},
-    parser::span::{Span, Spanned, WithSpan},
+    parser::meta::{Meta, MetaId},
 };
 use scope::Scope;
 use std::collections::{hash_map::Entry, HashMap};
@@ -67,10 +67,10 @@ pub fn typecheck(tree: &ast::SyntaxTree) -> TypeResult<()> {
 enum MaybeDeclared {
     /// A declared type, where the span of the type declaration is
     /// available for user-defined types, but not for built-in types.
-    Declared(Type, Option<Span>),
+    Declared(Type, Option<MetaId>),
     /// An (as of yet) undeclared type with the spans of where it is
     /// referenced.
-    Undeclared(Span),
+    Undeclared(MetaId),
 }
 
 impl<'methods> TypeChecker<'methods> {
@@ -95,7 +95,10 @@ impl<'methods> TypeChecker<'methods> {
 
         for (v, t) in types::globals() {
             root_scope.insert_var(
-                &Identifier(v.into()).with_span(Span::new(0, 0..1)),
+                &Meta {
+                    id: MetaId(0),
+                    node: Identifier(v.into()),
+                },
                 t,
             )?;
         }
@@ -162,9 +165,10 @@ impl<'methods> TypeChecker<'methods> {
             .map(|(s, t)| match t {
                 MaybeDeclared::Declared(t, _) => Ok((s, t)),
                 MaybeDeclared::Undeclared(reference_span) => {
-                    Err(error::undeclared_type(
-                        &Identifier(s.into()).with_span(reference_span),
-                    ))
+                    Err(error::undeclared_type(&Meta {
+                        id: reference_span,
+                        node: Identifier(s.into()),
+                    }))
                 }
             })
             .collect::<Result<_, _>>()?;
@@ -173,7 +177,7 @@ impl<'methods> TypeChecker<'methods> {
             error::simple(
                 &description,
                 "type cycle detected",
-                Span::new(0, 0..1),
+                MetaId(0), // TODO: make a more useful error here with the recursive chain
             )
         })?;
 
@@ -195,7 +199,10 @@ impl<'methods> TypeChecker<'methods> {
     }
 
     /// Create a fresh record variable in the unionfind structure
-    fn fresh_record(&mut self, fields: Vec<(&Spanned<Identifier>, Type)>) -> Type {
+    fn fresh_record(
+        &mut self,
+        fields: Vec<(&Meta<Identifier>, Type)>,
+    ) -> Type {
         let fields = fields
             .into_iter()
             .map(|(s, t)| (s.to_string(), t))
@@ -290,8 +297,8 @@ impl<'methods> TypeChecker<'methods> {
         &mut self,
         a: &Type,
         b: &Type,
-        span: Span,
-        cause: Option<Span>,
+        span: MetaId,
+        cause: Option<MetaId>,
     ) -> TypeResult<Type> {
         let a = self.resolve_type(a);
         let b = self.resolve_type(b);
@@ -536,10 +543,10 @@ impl<'methods> TypeChecker<'methods> {
 
 fn store_type(
     types: &mut HashMap<String, MaybeDeclared>,
-    k: &Spanned<ast::Identifier>,
+    k: &Meta<ast::Identifier>,
     v: Type,
 ) -> TypeResult<()> {
-    let k_string = k.inner.to_string();
+    let k_string = k.node.to_string();
     match types.entry(k_string) {
         Entry::Occupied(mut entry) => {
             if let MaybeDeclared::Declared(_, existing_span) = entry.get() {
@@ -550,10 +557,10 @@ fn store_type(
                     None => error::tried_to_overwrite_builtin(k),
                 });
             }
-            entry.insert(MaybeDeclared::Declared(v, Some(k.span)));
+            entry.insert(MaybeDeclared::Declared(v, Some(k.id)));
         }
         Entry::Vacant(entry) => {
-            entry.insert(MaybeDeclared::Declared(v, Some(k.span)));
+            entry.insert(MaybeDeclared::Declared(v, Some(k.id)));
         }
     };
     Ok(())
@@ -561,7 +568,7 @@ fn store_type(
 
 fn create_contains_type(
     types: &mut HashMap<String, MaybeDeclared>,
-    contain_ty: &Spanned<ast::Identifier>,
+    contain_ty: &Meta<ast::Identifier>,
     body: &ast::RibBody,
 ) -> TypeResult<Type> {
     let ty = Type::NamedRecord(
@@ -574,7 +581,7 @@ fn create_contains_type(
 
 fn evaluate_record_type(
     types: &mut HashMap<String, MaybeDeclared>,
-    fields: &[(Spanned<Identifier>, ast::RibFieldType)],
+    fields: &[(Meta<Identifier>, ast::RibFieldType)],
 ) -> TypeResult<Vec<(String, Type)>> {
     // We store the spans temporarily to be able to create nice a
     let mut type_fields = Vec::new();
@@ -589,8 +596,8 @@ fn evaluate_record_type(
         let same_fields: Vec<_> = type_fields
             .iter()
             .filter_map(|(ident, _typ)| {
-                if ident.inner == field.0.inner {
-                    Some(ident.span)
+                if ident.node == field.0.node {
+                    Some(ident.id)
                 } else {
                     None
                 }
@@ -603,7 +610,7 @@ fn evaluate_record_type(
             ));
         }
         unspanned_type_fields
-            .push((field.0.inner.to_string(), field.1.clone()));
+            .push((field.0.node.to_string(), field.1.clone()));
     }
 
     Ok(unspanned_type_fields)
@@ -621,14 +628,14 @@ fn evaluate_field_type(
             // with Some(...) if we encounter it later.
             types
                 .entry(ty.as_ref().to_string())
-                .or_insert(MaybeDeclared::Undeclared(ty.span));
+                .or_insert(MaybeDeclared::Undeclared(ty.id));
             Type::Name(ty.0.clone())
         }
         ast::RibFieldType::Record(fields) => {
             Type::Record(evaluate_record_type(types, &fields.key_values)?)
         }
         ast::RibFieldType::List(inner) => {
-            let inner = evaluate_field_type(types, &*inner.inner)?;
+            let inner = evaluate_field_type(types, &*inner.node)?;
             Type::List(Box::new(inner))
         }
     })

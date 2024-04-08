@@ -1,31 +1,29 @@
-use crate::parser::Parser;
+use crate::{ast::ActionDeclaration, parser::Parser};
 
-//------------ Logical Expressions parsing ----------------------------------
+use super::{meta::Spans, ParseResult};
+
+fn parse_action(s: &str) -> ParseResult<ActionDeclaration> {
+    let mut spans = Spans::new();
+    Parser::run_parser(Parser::action, 0, &mut spans, s)
+}
 
 #[test]
 fn test_logical_expr_1() {
-    let r = Parser::run_parser(
-        Parser::action,
-        0,
-        r###"
+    let s = "
         action my-action() {
             send-to(a,b);
-        }"###,
-    );
-    assert!(r.is_ok());
+        }
+    ";
+    parse_action(s).unwrap();
 }
 
 #[test]
 fn test_logical_expr_2() {
-    let r = Parser::run_parser(
-        Parser::action,
-        0,
-        r###"
+    let s = "
         action my-action() {
             send_to(a,b);
             pph_asn.asn.set(AS200);
         }
-        "###,
-    );
-    assert!(r.is_ok());
+    ";
+    parse_action(s).unwrap();
 }
