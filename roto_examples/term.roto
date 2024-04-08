@@ -4,7 +4,7 @@ filter-map foo() {
     }
 
     term bar() {
-        true && (true && false)
+        true && (true && 1 < 2)
     }
 
     apply { accept }

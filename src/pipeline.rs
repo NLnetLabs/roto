@@ -1,8 +1,10 @@
+use std::collections::HashMap;
+
 use crate::{
     ast::SyntaxTree, lower, parser::{
-        meta::{Span, Spans},
+        meta::{MetaId, Span, Spans},
         ParseError, Parser,
-    }, typechecker::error::{Level, TypeError}
+    }, typechecker::{error::{Level, TypeError}, types::Type}
 };
 
 #[derive(Clone, Debug)]
@@ -118,8 +120,8 @@ pub fn run(
 ) -> Result<(), RotoReport> {
     let files = read_files(files)?;
     let (trees, spans) = parse(&files)?;
-    typecheck(&files, &trees, spans)?;
-    println!("{}", lower::lower(&trees[0]));
+    let expr_types = typecheck(&files, &trees, spans)?;
+    println!("{}", lower::lower(&trees[0], expr_types[0].clone()));
     Ok(())
 }
 
@@ -210,21 +212,23 @@ pub fn typecheck(
     files: &[SourceFile],
     trees: &[SyntaxTree],
     spans: Spans,
-) -> Result<(), RotoReport> {
+) -> Result<Vec<HashMap<MetaId, Type>>, RotoReport> {
     let results: Vec<_> = trees
         .into_iter()
         .map(|f| crate::typechecker::typecheck(&f))
         .collect();
 
+    let mut maps = Vec::new();
     let mut errors = Vec::new();
     for result in results {
-        if let Err(err) = result {
-            errors.push(RotoError::Type(err));
+        match result {
+            Ok(map) => maps.push(map),
+            Err(err) => errors.push(RotoError::Type(err)),
         }
     }
 
     if errors.is_empty() {
-        Ok(())
+        Ok(maps)
     } else {
         Err(RotoReport {
             files: files.to_vec(),

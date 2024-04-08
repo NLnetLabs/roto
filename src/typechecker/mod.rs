@@ -47,14 +47,16 @@ pub struct TypeChecker<'methods> {
     /// The list of built-in static methods.
     static_methods: &'methods [Method],
     /// The types we inferred for each Expr
-    /// 
+    ///
     /// This might not be fully resolved yet.
     expr_types: HashMap<MetaId, Type>,
 }
 
 pub type TypeResult<T> = Result<T, TypeError>;
 
-pub fn typecheck(tree: &ast::SyntaxTree) -> TypeResult<()> {
+pub fn typecheck(
+    tree: &ast::SyntaxTree,
+) -> TypeResult<HashMap<MetaId, Type>> {
     let methods = types::methods();
     let static_methods = types::static_methods();
 
@@ -66,7 +68,17 @@ pub fn typecheck(tree: &ast::SyntaxTree) -> TypeResult<()> {
         expr_types: HashMap::new(),
     };
 
-    type_checker.check_syntax_tree(tree)
+    type_checker.check_syntax_tree(tree)?;
+
+    // Make sure that all types referenced later are resolved.
+    let expr_types = type_checker
+        .expr_types
+        .clone()
+        .iter()
+        .map(|(k, v)| (k.clone(), type_checker.resolve_type(v)))
+        .collect();
+
+    Ok(expr_types)
 }
 
 enum MaybeDeclared {

@@ -6,11 +6,11 @@
 //! Let's start simple:
 //!  - Memory is linear and contains `Value` (though we might want to be more general about the layout)
 
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
 use crate::{
     ast::{self, BinOp, Identifier, Literal},
-    parser::meta::Meta,
+    parser::meta::{Meta, MetaId}, typechecker::types::{Primitive, Type},
 };
 
 #[derive(Clone, Copy)]
@@ -201,6 +201,7 @@ where
 struct Lowerer {
     tmp_idx: usize,
     blocks: Vec<Block<Var, SafeValue>>,
+    expr_types: HashMap<MetaId, Type>,
 }
 
 #[derive(Clone)]
@@ -210,9 +211,10 @@ struct Ctx {
     block_idx: usize,
 }
 
-pub fn lower(tree: &ast::SyntaxTree) -> Program<Var, SafeValue> {
+pub fn lower(tree: &ast::SyntaxTree, expr_types: HashMap<MetaId, Type>) -> Program<Var, SafeValue> {
     let lowerer = Lowerer {
         tmp_idx: 0,
+        expr_types,
         blocks: Vec::new(),
     };
 
@@ -420,8 +422,14 @@ impl Lowerer {
             Literal::StandardCommunity(_) => todo!(),
             Literal::LargeCommunity(_) => todo!(),
             Literal::Integer(x) => {
-                // let ty = self.expr_types.get(lit.id);
-                todo!()
+                let ty = &self.expr_types[&lit.id];
+                match ty {
+                    Type::Primitive(Primitive::U8) => SafeValue::U8(*x as u8),
+                    Type::Primitive(Primitive::U16) => SafeValue::U16(*x as u16),
+                    Type::Primitive(Primitive::U32) => SafeValue::U32(*x as u32),
+                    Type::IntVar(_) => SafeValue::U32(*x as u32),
+                    _ => unreachable!("should be a type error: {ty}")
+                }.into()
             },
             Literal::Bool(x) => SafeValue::Bool(*x).into(),
         }
