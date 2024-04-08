@@ -135,6 +135,16 @@ pub fn run<'a>(
     compile(&files, &symbols, None)
 }
 
+pub fn run_string<'a>(
+    script: String,
+) -> Result<Vec<Rotolo>, RotoReport> {
+    let files = vec![SourceFile { name: "script".into(), contents: script }];
+    let trees = parse(&files)?;
+    typecheck(&files, &trees)?;
+    let symbols = evaluate(&files, &trees)?;
+    compile(&files, &symbols, None)
+}
+
 pub fn test_file(source: &str) -> Vec<SourceFile> {
     vec![SourceFile {
         name: "test".into(),
