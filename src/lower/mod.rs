@@ -5,6 +5,8 @@
 //!
 //! Let's start simple:
 //!  - Memory is linear and contains `Value` (though we might want to be more general about the layout)
+//!  - Operands to instructions are places (variables) or values.
+//!  - Branching and jumping is done via basic blocks.
 
 use std::{collections::HashMap, fmt::Display};
 
@@ -125,9 +127,13 @@ enum Instruction<P, V> {
         to: P,
         val: Operand<P, V>,
     },
-    // LogicalOr(Operand<P, V>, Operand<P, V>),
+    /// Return from the current "function" (filter-map, term or action)
     Return,
+
+    /// Exit the program entirely
     Exit,
+
+    /// Perform a binary operation and store the result in `to`
     BinOp {
         to: P,
         op: BinOp,
