@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use log::info;
+
 use crate::{
     ast::SyntaxTree,
     lower::{self, eval, ir::SafeValue},
@@ -120,14 +122,15 @@ impl std::error::Error for RotoReport {}
 
 pub fn run(
     files: impl IntoIterator<Item = String>,
+    rx: SafeValue,
 ) -> Result<SafeValue, RotoReport> {
     let files = read_files(files)?;
     let (trees, spans) = parse(&files)?;
     let (expr_types, fully_qualified_names) =
         typecheck(&files, &trees, spans)?;
     let ir = lower::lower(&trees[0], expr_types[0].clone(), fully_qualified_names[0].clone());
-    eprintln!("{ir}");
-    let res = eval::eval(&ir, "main");
+    info!("{ir}");
+    let res = eval::eval(&ir, "main", rx);
     Ok(res)
 }
 

@@ -2,11 +2,18 @@ use std::collections::HashMap;
 
 use log::trace;
 
-use crate::{ast::BinOp, lower::ir::{Instruction, Value}};
+use crate::{
+    ast::BinOp,
+    lower::ir::{Instruction, Value},
+};
 
 use super::ir::{Operand, Program, SafeValue, Var};
 
-pub fn eval(p: &Program<Var, SafeValue>, filter_map: &str) -> SafeValue {
+pub fn eval(
+    p: &Program<Var, SafeValue>,
+    filter_map: &str,
+    rx: SafeValue,
+) -> SafeValue {
     let mut block_map = HashMap::new();
 
     for (i, block) in p.blocks.iter().enumerate() {
@@ -15,6 +22,14 @@ pub fn eval(p: &Program<Var, SafeValue>, filter_map: &str) -> SafeValue {
 
     // This is our working memory for the interpreter
     let mut mem = HashMap::new();
+
+    // Insert the rx value
+    mem.insert(
+        Var {
+            var: format!("{filter_map}-rx"),
+        },
+        rx,
+    );
 
     let mut current_block = filter_map;
     'outer: loop {
@@ -79,7 +94,7 @@ pub fn eval(p: &Program<Var, SafeValue>, filter_map: &str) -> SafeValue {
                         BinOp::NotIn => todo!(),
                     };
                     mem.insert(to.clone(), SafeValue::Bool(res));
-                },
+                }
             }
         }
 

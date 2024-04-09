@@ -135,6 +135,20 @@ impl Lowerer {
 
         self.new_block(&ident);
 
+        match &define.body.rx_tx_type {
+            ast::RxTxType::RxOnly(x, _) => {
+                let var = self.fully_qualified_names[&x.id].clone();
+                self.add(Instruction::Assign {
+                    to: Var { var },
+                    val: Var {
+                        var: format!("{ident}-rx"),
+                    }
+                    .into(),
+                })
+            }
+            ast::RxTxType::Split { .. } => todo!(),
+        }
+
         for (ident, expr) in &define.body.assignments {
             let val = self.expr(&ctx, expr);
             let name = self.fully_qualified_names[&ident.id].clone();
@@ -226,7 +240,7 @@ impl Lowerer {
             ast::Expr::Var(x) => {
                 let var = self.fully_qualified_names[&x.id].clone();
                 Var { var }.into()
-            },
+            }
             ast::Expr::Record(_) => todo!(),
             ast::Expr::TypedRecord(_, _) => todo!(),
             ast::Expr::List(_) => todo!(),

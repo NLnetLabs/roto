@@ -1,0 +1,13 @@
+filter-map main() {
+    define {
+        rx x: U32;
+    }
+
+    apply {
+        if x == 4 {
+            accept
+        } else {
+            reject
+        }
+    }
+}
