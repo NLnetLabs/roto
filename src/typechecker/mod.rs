@@ -301,7 +301,7 @@ impl<'methods> TypeChecker<'methods> {
         subs: &mut HashMap<usize, Type>,
     ) -> bool {
         if a_fields.len() != b_fields.len() {
-            false;
+            return false;
         }
 
         for (name, ty_a) in a_fields {
