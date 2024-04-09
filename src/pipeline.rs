@@ -3,8 +3,11 @@ use std::collections::HashMap;
 use log::info;
 
 use crate::{
-    ast::SyntaxTree,
-    lower::{self, eval, ir::SafeValue},
+    ast,
+    lower::{
+        self, eval,
+        ir::{self, SafeValue},
+    },
     parser::{
         meta::{MetaId, Span, Spans},
         ParseError, Parser,
@@ -33,6 +36,31 @@ pub struct RotoReport {
     files: Vec<SourceFile>,
     errors: Vec<RotoError>,
     spans: Spans,
+}
+
+/// Compiler Stages
+
+pub struct LoadedFiles {
+    files: Vec<SourceFile>,
+}
+
+pub struct Parsed {
+    files: Vec<SourceFile>,
+    trees: Vec<ast::SyntaxTree>,
+    spans: Spans,
+}
+
+pub struct TypeChecked {
+    trees: Vec<ast::SyntaxTree>,
+    expr_types: Vec<HashMap<MetaId, Type>>,
+    fully_qualified_names: Vec<HashMap<MetaId, String>>,
+}
+pub struct Lowered {
+    ir: ir::Program<ir::Var, SafeValue>,
+}
+
+pub struct Evaluated {
+    value: SafeValue,
 }
 
 impl std::fmt::Display for RotoReport {
@@ -123,38 +151,24 @@ impl std::error::Error for RotoReport {}
 pub fn run(
     files: impl IntoIterator<Item = String>,
     rx: SafeValue,
-) -> Result<SafeValue, RotoReport> {
-    let files = read_files(files)?;
-    let (trees, spans) = parse(&files)?;
-    let (expr_types, fully_qualified_names) =
-        typecheck(&files, &trees, spans)?;
-    let ir = lower::lower(&trees[0], expr_types[0].clone(), fully_qualified_names[0].clone());
-    info!("Generated code:\n{ir}");
-    let res = eval::eval(&ir, "main", rx);
-    Ok(res)
+) -> Result<Evaluated, RotoReport> {
+    let lowered = read_files(files)?.parse()?.typecheck()?.lower();
+    info!("Generated code:\n{}", lowered.ir);
+    Ok(lowered.eval(rx))
 }
 
-pub fn test_file(source: &str) -> Vec<SourceFile> {
-    vec![SourceFile {
-        name: "test".into(),
-        contents: source.into(),
-    }]
+pub fn test_file(source: &str) -> LoadedFiles {
+    LoadedFiles {
+        files: vec![SourceFile {
+            name: "test".into(),
+            contents: source.into(),
+        }],
+    }
 }
-
-// pub fn run_test(
-//     source: &str,
-//     arguments: Option<(&Scope, Vec<(&str, TypeValue)>)>,
-// ) -> Result<Rotolo, RotoReport> {
-//     let files = test_file(source);
-//     let trees = parse(&files)?;
-//     typecheck(&files, &trees)?;
-//     let symbols = evaluate(&files, &trees)?;
-//     Ok(compile(&files, &symbols, arguments)?.remove(0))
-// }
 
 fn read_files(
     files: impl IntoIterator<Item = String>,
-) -> Result<Vec<SourceFile>, RotoReport> {
+) -> Result<LoadedFiles, RotoReport> {
     let results: Vec<_> = files
         .into_iter()
         .map(|f| (f.to_string(), std::fs::read_to_string(f)))
@@ -176,7 +190,7 @@ fn read_files(
     }
 
     if errors.is_empty() {
-        Ok(files)
+        Ok(LoadedFiles { files })
     } else {
         Err(RotoReport {
             files,
@@ -186,70 +200,110 @@ fn read_files(
     }
 }
 
-pub fn parse(
-    files: &[SourceFile],
-) -> Result<(Vec<SyntaxTree>, Spans), RotoReport> {
-    let mut spans = Spans::default();
+impl LoadedFiles {
+    pub fn parse(self) -> Result<Parsed, RotoReport> {
+        let mut spans = Spans::default();
 
-    let results: Vec<_> = files
-        .iter()
-        .enumerate()
-        .map(|(i, f)| Parser::parse(i, &mut spans, &f.contents))
-        .collect();
+        let results: Vec<_> = self
+            .files
+            .iter()
+            .enumerate()
+            .map(|(i, f)| Parser::parse(i, &mut spans, &f.contents))
+            .collect();
 
-    let mut trees = Vec::new();
-    let mut errors = Vec::new();
-    for result in results {
-        match result {
-            Ok(tree) => trees.push(tree),
-            Err(err) => errors.push(RotoError::Parse(err)),
-        };
-    }
+        let mut trees = Vec::new();
+        let mut errors = Vec::new();
+        for result in results {
+            match result {
+                Ok(tree) => trees.push(tree),
+                Err(err) => errors.push(RotoError::Parse(err)),
+            };
+        }
 
-    if errors.is_empty() {
-        Ok((trees, spans))
-    } else {
-        Err(RotoReport {
-            files: files.to_vec(),
-            errors,
-            spans,
-        })
+        if errors.is_empty() {
+            Ok(Parsed {
+                trees,
+                spans,
+                files: self.files,
+            })
+        } else {
+            Err(RotoReport {
+                files: self.files.to_vec(),
+                errors,
+                spans,
+            })
+        }
     }
 }
 
-pub fn typecheck(
-    files: &[SourceFile],
-    trees: &[SyntaxTree],
-    spans: Spans,
-) -> Result<
-    (Vec<HashMap<MetaId, Type>>, Vec<HashMap<MetaId, String>>),
-    RotoReport,
-> {
-    let results: Vec<_> = trees
-        .iter()
-        .map(|f| crate::typechecker::typecheck(f))
-        .collect();
+impl Parsed {
+    pub fn typecheck(self) -> Result<TypeChecked, RotoReport> {
+        let Parsed {
+            files,
+            trees,
+            spans,
+        } = self;
 
-    let mut type_maps = Vec::new();
-    let mut name_maps = Vec::new();
-    let mut errors = Vec::new();
-    for result in results {
-        match result {
-            Ok((type_map, name_map)) => {
-                type_maps.push(type_map);
-                name_maps.push(name_map);
+        let results: Vec<_> = trees
+            .iter()
+            .map(|f| crate::typechecker::typecheck(f))
+            .collect();
+
+        let mut expr_types = Vec::new();
+        let mut fully_qualified_types = Vec::new();
+        let mut errors = Vec::new();
+        for result in results {
+            match result {
+                Ok((type_map, name_map)) => {
+                    expr_types.push(type_map);
+                    fully_qualified_types.push(name_map);
+                }
+                Err(err) => errors.push(RotoError::Type(err)),
             }
-            Err(err) => errors.push(RotoError::Type(err)),
+        }
+
+        if errors.is_empty() {
+            Ok(TypeChecked {
+                trees,
+                expr_types,
+                fully_qualified_names: fully_qualified_types,
+            })
+        } else {
+            Err(RotoReport {
+                files: files.to_vec(),
+                errors,
+                spans,
+            })
         }
     }
+}
 
-    if errors.is_empty() {
-        Ok((type_maps, name_maps))
-    } else {
-        Err(RotoReport {
-            files: files.to_vec(),
-            errors,
-            spans,
-        })
+impl TypeChecked {
+    pub fn lower(self) -> Lowered {
+        let TypeChecked {
+            trees,
+            expr_types,
+            fully_qualified_names,
+        } = self;
+        let ir = lower::lower(
+            &trees[0],
+            expr_types[0].clone(),
+            fully_qualified_names[0].clone(),
+        );
+        Lowered { ir }
+    }
+}
+
+impl Lowered {
+    pub fn eval(self, rx: SafeValue) -> Evaluated {
+        Evaluated {
+            value: eval::eval(&self.ir, "main", rx),
+        }
+    }
+}
+
+impl Evaluated {
+    pub fn to_value(self) -> SafeValue {
+        self.value
     }
 }
