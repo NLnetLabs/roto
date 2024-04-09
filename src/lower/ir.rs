@@ -34,7 +34,15 @@ impl Value for SafeValue {
     as_type!(as_bool, bool, Bool);
     as_type!(as_u8, u8, U8);
     as_type!(as_u16, u16, U16);
-    as_type!(as_u32, u32, U32);
+    
+    fn as_u32(&self) -> u32 {
+        match self {
+            SafeValue::U8(x) => *x as u32,
+            SafeValue::U16(x) => *x as u32,
+            SafeValue::U32(x) => *x as u32,
+            _ => panic!("Invalid value!"),
+        }
+    }
 }
 
 impl<P> From<SafeValue> for Operand<P, SafeValue> {
