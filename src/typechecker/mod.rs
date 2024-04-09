@@ -78,7 +78,7 @@ pub fn typecheck(
         .expr_types
         .clone()
         .iter()
-        .map(|(k, v)| (k.clone(), type_checker.resolve_type(v)))
+        .map(|(k, v)| (*k, type_checker.resolve_type(v)))
         .collect();
 
     Ok((expr_types, type_checker.fully_qualified_names))
@@ -117,7 +117,7 @@ impl<'methods> TypeChecker<'methods> {
             root_scope.insert_var(
                 &Meta {
                     id: MetaId(0),
-                    node: Identifier(v.into()),
+                    node: Identifier(v),
                 },
                 t,
             )?;
@@ -187,7 +187,7 @@ impl<'methods> TypeChecker<'methods> {
                 MaybeDeclared::Undeclared(reference_span) => {
                     Err(error::undeclared_type(&Meta {
                         id: reference_span,
-                        node: Identifier(s.into()),
+                        node: Identifier(s),
                     }))
                 }
             })
@@ -195,7 +195,7 @@ impl<'methods> TypeChecker<'methods> {
 
         self.detect_type_cycles().map_err(|description| {
             error::simple(
-                &description,
+                description,
                 "type cycle detected",
                 MetaId(0), // TODO: make a more useful error here with the recursive chain
             )
@@ -309,11 +309,11 @@ impl<'methods> TypeChecker<'methods> {
             else {
                 return false;
             };
-            if !self.subtype_inner(&ty_a, ty_b, subs) {
+            if !self.subtype_inner(ty_a, ty_b, subs) {
                 return false;
             }
         }
-        return true;
+        true
     }
 
     fn insert_var<'a>(&mut self, scope: &'a mut Scope, k: &Meta<Identifier>, t: impl Borrow<Type>)-> TypeResult<&'a mut Type> {
@@ -415,12 +415,9 @@ impl<'methods> TypeChecker<'methods> {
         let mut b_fields = b_fields.to_vec();
         let mut new_fields = Vec::new();
         for (name, a_ty) in a_fields {
-            let Some(idx) = b_fields.iter().position(|(n, _)| n == name)
-            else {
-                return None;
-            };
+            let idx = b_fields.iter().position(|(n, _)| n == name)?;
             let (_, b_ty) = b_fields.remove(idx);
-            new_fields.push((name.clone(), self.unify_inner(&a_ty, &b_ty)?))
+            new_fields.push((name.clone(), self.unify_inner(a_ty, &b_ty)?))
         }
 
         Some(new_fields)
@@ -571,7 +568,7 @@ impl<'methods> TypeChecker<'methods> {
                 }
                 Ok(())
             }
-            Type::Name(ident) => self.visit_name(visited, &ident),
+            Type::Name(ident) => self.visit_name(visited, ident),
         }
     }
 }
@@ -670,7 +667,7 @@ fn evaluate_field_type(
             Type::Record(evaluate_record_type(types, &fields.key_values)?)
         }
         ast::RibFieldType::List(inner) => {
-            let inner = evaluate_field_type(types, &*inner.node)?;
+            let inner = evaluate_field_type(types, &inner.node)?;
             Type::List(Box::new(inner))
         }
     })

@@ -3,7 +3,7 @@ use std::fmt::Display;
 use crate::ast::BinOp;
 
 pub trait Value {
-    fn as_unit(&self) -> () {}
+    fn as_unit(&self) {}
     fn as_bool(&self) -> bool;
     fn as_u8(&self) -> u8;
     fn as_u16(&self) -> u16;

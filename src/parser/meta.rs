@@ -4,14 +4,10 @@ use std::{
     ops::{Deref, DerefMut, Range},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Spans(Vec<Span>);
 
 impl Spans {
-    pub fn new() -> Spans {
-        Self(Vec::new())
-    }
-
     pub fn add<T>(&mut self, span: Span, x: T) -> Meta<T> {
         let id = MetaId(self.0.len());
         self.0.push(span);

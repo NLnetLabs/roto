@@ -62,7 +62,7 @@ pub fn duplicate_fields(field_name: &str, locations: &[MetaId]) -> TypeError {
         description: format!(
             "field `{field_name}` appears multiple times in the same record"
         ),
-        location: locations[0].clone(),
+        location: locations[0],
         labels: locations
             .iter()
             .map(|&span| {
@@ -94,7 +94,7 @@ pub fn field_mismatch<'a>(
     let description = if missing.len() > 1 {
         let fields = join_quoted(missing);
         format!("field mismatch: missing fields {fields} in record literal")
-    } else if let &[ref m] = &missing[..] {
+    } else if let [m] = &missing[..] {
         format!("field: mismatch: missing field `{}` in record literal", m)
     } else {
         "field mismatch".into()

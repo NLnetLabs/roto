@@ -34,7 +34,7 @@ impl<'a> Scope<'a> {
         self.variables
             .get(k.as_ref())
             .ok_or_else(|| error::simple(
-                &format!(
+                format!(
                     "cannot find variable `{}` in this scope",
                     k.as_ref()
                 ),
@@ -56,7 +56,7 @@ impl<'a> Scope<'a> {
         let v_string = v.as_ref().to_string();
         match self.variables.entry(v_string) {
             Entry::Occupied(entry) => Err(error::simple(
-                &format!(
+                format!(
                     "variable {} defined multiple times in the same scope",
                     entry.key()
                 ),

@@ -68,7 +68,7 @@ pub fn eval(
                 }
                 Instruction::Assign { to, val } => {
                     let val = eval_operand(&mem, val);
-                    mem.insert(to.clone(), val.clone());
+                    mem.insert(to.clone(), *val);
                 }
                 // TODO: This is obviously not correct
                 Instruction::Return => break 'outer,

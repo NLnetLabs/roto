@@ -30,7 +30,7 @@ impl TypeChecker<'_> {
         } = filter_map;
         let mut scope = scope.wrap(&ident.0);
 
-        let args = self.params(&mut scope, &params)?;
+        let args = self.params(&mut scope, params)?;
 
         self.define_section(&mut scope, define)?;
 
@@ -98,7 +98,7 @@ impl TypeChecker<'_> {
                 expected_type: var.clone(),
                 function_return_type: None,
             };
-            let diverges = self.expr(&scope, &ctx, expr)?;
+            let diverges = self.expr(scope, &ctx, expr)?;
             if diverges {
                 unreachable!(
                     "Something has gone wrong in the type checker. \
@@ -129,7 +129,7 @@ impl TypeChecker<'_> {
 
         let mut scope = scope.wrap(&ident.0);
 
-        let args = self.params(&mut scope, &params)?;
+        let args = self.params(&mut scope, params)?;
 
         let ctx = Context {
             expected_type: Type::Primitive(Primitive::Bool),
@@ -154,7 +154,7 @@ impl TypeChecker<'_> {
 
         let mut scope = scope.wrap(&ident.0);
 
-        let args = self.params(&mut scope, &params)?;
+        let args = self.params(&mut scope, params)?;
 
         let ctx = Context {
             expected_type: Type::Primitive(Primitive::Unit),
@@ -171,14 +171,14 @@ impl TypeChecker<'_> {
         scope: &mut Scope,
         args: &[(Meta<Identifier>, Meta<Identifier>)],
     ) -> TypeResult<Vec<(String, Type)>> {
-        args.into_iter()
+        args.iter()
             .map(|(field_name, ty)| {
                 let Some(ty) = self.get_type(ty) else {
                     return Err(error::undeclared_type(ty));
                 };
 
                 let ty = ty.clone();
-                self.insert_var(scope, &field_name, &ty)?;
+                self.insert_var(scope, field_name, &ty)?;
                 Ok((field_name.0.to_string(), ty))
             })
             .collect()

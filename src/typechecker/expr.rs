@@ -87,7 +87,7 @@ impl TypeChecker<'_> {
                     return Err(error::cannot_diverge_here(s, expr));
                 };
                 self.unify(
-                    &ret,
+                    ret,
                     &Type::Primitive(Primitive::Verdict),
                     id,
                     None,
@@ -156,15 +156,15 @@ impl TypeChecker<'_> {
                         return Ok(diverges);
                     };
                 }
-                return Err(error::simple(
+                Err(error::simple(
                     format!("no field `{x}` on type `{t}`",),
                     format!("unknown field `{x}`"),
                     x.id,
-                ));
+                ))
             }
             Var(x) => {
                 let t = self.get_var(scope, x)?;
-                self.unify(&ctx.expected_type, &t, x.id, None)?;
+                self.unify(&ctx.expected_type, t, x.id, None)?;
                 Ok(false)
             }
             Record(record) => {
@@ -549,7 +549,7 @@ impl TypeChecker<'_> {
         if args.len() != params.len() {
             return Err(error::number_of_arguments_dont_match(
                 call_type,
-                &name,
+                name,
                 params.len(),
                 args.len(),
             ));

@@ -181,7 +181,7 @@ fn read_files(
         Err(RotoReport {
             files,
             errors,
-            spans: Spans::new(),
+            spans: Spans::default(),
         })
     }
 }
@@ -189,7 +189,7 @@ fn read_files(
 pub fn parse(
     files: &[SourceFile],
 ) -> Result<(Vec<SyntaxTree>, Spans), RotoReport> {
-    let mut spans = Spans::new();
+    let mut spans = Spans::default();
 
     let results: Vec<_> = files
         .iter()
@@ -226,8 +226,8 @@ pub fn typecheck(
     RotoReport,
 > {
     let results: Vec<_> = trees
-        .into_iter()
-        .map(|f| crate::typechecker::typecheck(&f))
+        .iter()
+        .map(|f| crate::typechecker::typecheck(f))
         .collect();
 
     let mut type_maps = Vec::new();

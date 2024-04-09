@@ -203,16 +203,14 @@ impl Lowerer {
     ) -> Option<Operand<Var, SafeValue>> {
         // Result is ignored
         for expr in &block.exprs {
-            self.expr(ctx, &expr);
+            self.expr(ctx, expr);
         }
 
-        let last = if let Some(last) = &block.last {
-            Some(self.expr(ctx, &last))
+        if let Some(last) = &block.last {
+            Some(self.expr(ctx, last))
         } else {
             None
-        };
-
-        last
+        }
     }
 
     fn expr(
@@ -274,11 +272,7 @@ impl Lowerer {
                 let lbl_then = self.new_unique_block_name("if-then");
                 let lbl_else = self.new_unique_block_name("if-else");
 
-                let branches = if if_false.is_some() {
-                    vec![(1, lbl_then.clone())]
-                } else {
-                    vec![(1, lbl_then.clone())]
-                };
+                let branches = vec![(1, lbl_then.clone())];
 
                 self.add(Instruction::Switch {
                     examinee: place,

@@ -45,9 +45,9 @@ pub enum Primitive {
     Aggregator,
 }
 
-impl Into<Type> for Primitive {
-    fn into(self) -> Type {
-        Type::Primitive(self)
+impl From<Primitive> for Type {
+    fn from(value: Primitive) -> Self {
+        Type::Primitive(value)
     }
 }
 
@@ -118,14 +118,14 @@ impl Type {
             Type::Rib(x) => Type::Rib(Box::new(f(x))),
             Type::RecordVar(x, fields) => Type::RecordVar(
                 *x,
-                fields.into_iter().map(|(n, t)| (n.clone(), f(t))).collect(),
+                fields.iter().map(|(n, t)| (n.clone(), f(t))).collect(),
             ),
             Type::Record(fields) => Type::Record(
-                fields.into_iter().map(|(n, t)| (n.clone(), f(t))).collect(),
+                fields.iter().map(|(n, t)| (n.clone(), f(t))).collect(),
             ),
             Type::NamedRecord(n, fields) => Type::NamedRecord(
                 n.clone(),
-                fields.into_iter().map(|(n, t)| (n.clone(), f(t))).collect(),
+                fields.iter().map(|(n, t)| (n.clone(), f(t))).collect(),
             ),
             other => other.clone(),
         }
@@ -377,8 +377,8 @@ pub fn default_types() -> Vec<(&'static str, Type)> {
                     .map(|(field_name, field_type)| {
                         // Little hack to get list types for now, until that is in the
                         // actual syntax and we can use a real type parser here.
-                        let is_list = field_type.starts_with("[")
-                            && field_type.ends_with("]");
+                        let is_list = field_type.starts_with('[')
+                            && field_type.ends_with(']');
 
                         let s = if is_list {
                             &field_type[1..(field_type.len() - 1)]
@@ -400,7 +400,7 @@ pub fn default_types() -> Vec<(&'static str, Type)> {
                         (field_name.to_string(), ty)
                     })
                     .collect();
-                types.push((n.into(), Type::NamedRecord(n.into(), fields)))
+                types.push((n, Type::NamedRecord(n.into(), fields)))
             }
             Enum(n, variants) => {
                 let variants = variants
@@ -417,7 +417,7 @@ pub fn default_types() -> Vec<(&'static str, Type)> {
                         (variant_name.to_string(), v)
                     })
                     .collect();
-                types.push((n.into(), Type::Enum(n.into(), variants)))
+                types.push((n, Type::Enum(n.into(), variants)))
             }
         }
     }
