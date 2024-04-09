@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    ast::SyntaxTree, lower, parser::{
+    ast::SyntaxTree, lower::{self, eval, ir::SafeValue}, parser::{
         meta::{MetaId, Span, Spans},
         ParseError, Parser,
     }, typechecker::{error::{Level, TypeError}, types::Type}
@@ -117,12 +117,14 @@ impl std::error::Error for RotoReport {}
 
 pub fn run(
     files: impl IntoIterator<Item = String>,
-) -> Result<(), RotoReport> {
+) -> Result<SafeValue, RotoReport> {
     let files = read_files(files)?;
     let (trees, spans) = parse(&files)?;
     let expr_types = typecheck(&files, &trees, spans)?;
-    println!("{}", lower::lower(&trees[0], expr_types[0].clone()));
-    Ok(())
+    let ir = lower::lower(&trees[0], expr_types[0].clone());
+    eprintln!("{ir}");
+    let res = eval::eval(&ir, "main");
+    Ok(res)
 }
 
 pub fn test_file(source: &str) -> Vec<SourceFile> {

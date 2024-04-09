@@ -8,230 +8,75 @@
 //!  - Operands to instructions are places (variables) or values.
 //!  - Branching and jumping is done via basic blocks.
 
-use std::{collections::HashMap, fmt::Display};
+pub mod eval;
+pub mod ir;
+
+use ir::{Block, Instruction, Operand, Program, SafeValue, Var};
+use std::collections::HashMap;
 
 use crate::{
-    ast::{self, BinOp, Identifier, Literal},
-    parser::meta::{Meta, MetaId}, typechecker::types::{Primitive, Type},
+    ast::{self, Identifier, Literal},
+    parser::meta::{Meta, MetaId},
+    typechecker::types::{Primitive, Type},
 };
-
-#[derive(Clone, Copy)]
-struct Ref(usize);
-
-trait Value {
-    fn as_unit(&self) -> () {}
-    fn as_bool(&self) -> bool;
-    fn as_u8(&self) -> u8;
-    fn as_u16(&self) -> u16;
-    fn as_u32(&self) -> u32;
-    fn as_ref(&self) -> Ref;
-}
-
-pub enum SafeValue {
-    Unit,
-    Bool(bool),
-    U8(u8),
-    U16(u16),
-    U32(u32),
-    Ref(Ref),
-}
-
-macro_rules! as_type {
-    ($method:ident, $t:ident, $variant:ident) => {
-        fn $method(&self) -> $t {
-            let Self::$variant(x) = self else {
-                panic!("Invalid value!");
-            };
-            *x
-        }
-    };
-}
-
-impl Value for SafeValue {
-    as_type!(as_bool, bool, Bool);
-    as_type!(as_u8, u8, U8);
-    as_type!(as_u16, u16, U16);
-    as_type!(as_u32, u32, U32);
-    as_type!(as_ref, Ref, Ref);
-}
-
-impl<P> From<SafeValue> for Operand<P, SafeValue> {
-    fn from(value: SafeValue) -> Self {
-        Operand::Value(value)
-    }
-}
-
-impl Display for SafeValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SafeValue::Unit => write!(f, "Unit"),
-            SafeValue::Bool(x) => write!(f, "Bool({x})"),
-            SafeValue::U8(x) => write!(f, "U8({x})"),
-            SafeValue::U16(x) => write!(f, "U16({x})"),
-            SafeValue::U32(x) => write!(f, "U32({x})"),
-            SafeValue::Ref(_) => todo!(),
-        }
-    }
-}
-
-/// Humand readable place
-#[derive(Clone)]
-pub struct Var {
-    var: String,
-    offset: usize,
-}
-
-impl<V> From<Var> for Operand<Var, V> {
-    fn from(value: Var) -> Self {
-        Operand::Place(value)
-    }
-}
-
-impl Display for Var {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.offset == 0 {
-            write!(f, "{}", self.var)
-        } else {
-            write!(f, "{} + {}", self.var, self.offset)
-        }
-    }
-}
-
-struct BlockId(usize);
-
-enum Operand<P, V> {
-    Place(P),
-    Value(V),
-}
-
-impl<P, V> Display for Operand<P, V>
-where
-    P: Display,
-    V: Display,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Operand::Place(x) => write!(f, "{x}"),
-            Operand::Value(x) => write!(f, "{x}"),
-        }
-    }
-}
-
-enum Instruction<P, V> {
-    // Jump(BlockId),
-    // JumpTrue {
-    //     condition: Operand<P, V>,
-    //     block: BlockId,
-    // },
-    Assign {
-        to: P,
-        val: Operand<P, V>,
-    },
-    /// Return from the current "function" (filter-map, term or action)
-    Return,
-
-    /// Exit the program entirely
-    Exit,
-
-    /// Perform a binary operation and store the result in `to`
-    BinOp {
-        to: P,
-        op: BinOp,
-        left: Operand<P, V>,
-        right: Operand<P, V>,
-    },
-}
-
-impl<P, V> Display for Instruction<P, V>
-where
-    P: Display,
-    Operand<P, V>: Display,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Instruction::Assign { to, val } => write!(f, "{to} = {val}"),
-            Instruction::Exit => write!(f, "exit"),
-            Instruction::Return => write!(f, "return"),
-            Instruction::BinOp { to, op, left, right } => {
-                write!(f, "{to} = {left} {op} {right}")
-            }
-        }
-    }
-}
-
-pub struct Program<P, V> {
-    blocks: Vec<Block<P, V>>,
-}
-
-impl<P, V> Display for Program<P, V>
-where
-    Block<P, V>: Display,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut blocks = self.blocks.iter();
-
-        let Some(b) = blocks.next() else {
-            write!(f, "<empty program>")?;
-            return Ok(());
-        };
-
-        write!(f, "{b}")?;
-
-        for b in blocks {
-            writeln!(f)?;
-            write!(f, "{b}")?;
-        }
-
-        Ok(())
-    }
-}
-
-struct Block<P, V> {
-    label: String,
-    instructions: Vec<Instruction<P, V>>,
-}
-
-impl<P, V> Display for Block<P, V>
-where
-    Instruction<P, V>: Display,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, ".{}", self.label)?;
-        for i in &self.instructions {
-            writeln!(f, "  {i}")?
-        }
-        Ok(())
-    }
-}
 
 struct Lowerer {
     tmp_idx: usize,
     blocks: Vec<Block<Var, SafeValue>>,
     expr_types: HashMap<MetaId, Type>,
+    block_names: HashMap<String, usize>,
 }
 
 #[derive(Clone)]
 struct Ctx {
     return_var: Var,
     var_prefix: String,
-    block_idx: usize,
 }
 
-pub fn lower(tree: &ast::SyntaxTree, expr_types: HashMap<MetaId, Type>) -> Program<Var, SafeValue> {
+pub fn lower(
+    tree: &ast::SyntaxTree,
+    expr_types: HashMap<MetaId, Type>,
+) -> Program<Var, SafeValue> {
     let lowerer = Lowerer {
         tmp_idx: 0,
         expr_types,
         blocks: Vec::new(),
+        block_names: HashMap::new(),
     };
 
     lowerer.tree(tree)
 }
 
 impl Lowerer {
+    fn new_unique_block_name(&mut self, s: &str) -> String {
+        let v = self.block_names.entry(s.to_string()).or_default();
+        let name = if *v == 0 {
+            s.to_string()
+        } else {
+            format!("{s}.{v}")
+        };
+        *v += 1;
+        name
+    }
+
+    fn new_block(&mut self, s: &str) {
+        self.blocks.push(Block {
+            label: s.into(),
+            instructions: Vec::new(),
+        })
+    }
+
+    fn add(&mut self, instruction: Instruction<Var, SafeValue>) {
+        self.blocks
+            .last_mut()
+            .unwrap()
+            .instructions
+            .push(instruction);
+    }
+
     fn new_tmp(&mut self) -> Var {
         let var = Var {
             var: format!("$tmp-{}", self.tmp_idx),
-            offset: 0,
         };
         self.tmp_idx += 1;
         var
@@ -257,18 +102,16 @@ impl Lowerer {
     fn filter_map(&mut self, fm: &ast::FilterMap) {
         let ast::FilterMap { ident, body, .. } = fm;
         let ast::FilterMapBody {
-            define,
+            define: _,
             expressions,
             apply,
         } = body;
 
         let return_var = Var {
             var: format!("{}-return", ident.0),
-            offset: 0,
         };
         let ctx = Ctx {
             return_var: return_var.clone(),
-            block_idx: 0,
             var_prefix: ident.0.clone(),
         };
 
@@ -278,108 +121,90 @@ impl Lowerer {
                     ident,
                     params,
                     body,
-                }) => self.function(ctx.clone(), &ident.0, params, body),
+                }) => self.function(&ctx, &ident.0, params, body),
                 ast::FilterMapExpr::Action(ast::ActionDeclaration {
                     ident,
                     params,
                     body,
-                }) => self.function(ctx.clone(), &ident.0, params, body),
+                }) => self.function(&ctx, &ident.0, params, body),
             }
         }
 
-        let (mut instructions, last) = self.block(ctx, apply);
+        self.new_block(&ident.0);
+
+        let last = self.block(&ctx, apply);
 
         if let Some(last) = last {
-            instructions.push(Instruction::Assign {
+            self.add(Instruction::Assign {
                 to: return_var,
                 val: last,
             });
         }
-        instructions.push(Instruction::Exit);
-
-        self.blocks.push(Block {
-            label: ident.0.clone(),
-            instructions,
-        });
+        self.add(Instruction::Exit);
     }
 
     fn function(
         &mut self,
-        ctx: Ctx,
+        ctx: &Ctx,
         ident: &str,
         _params: &Meta<Vec<(Meta<Identifier>, Meta<Identifier>)>>,
         body: &ast::Block,
     ) {
         let return_var = Var {
             var: format!("{}-return", ident),
-            offset: 0,
         };
         let ctx = Ctx {
             return_var: return_var.clone(),
-            block_idx: 0,
             var_prefix: format!("{}::{}", ctx.var_prefix, ident),
         };
 
-        let (mut instructions, last) = self.block(ctx, body);
+        self.new_block(ident);
+
+        let last = self.block(&ctx, body);
 
         if let Some(last) = last {
-            instructions.push(Instruction::Assign {
+            self.add(Instruction::Assign {
                 to: return_var,
                 val: last,
             });
         }
-        instructions.push(Instruction::Return);
-
-        self.blocks.push(Block {
-            label: ident.into(),
-            instructions,
-        });
+        self.add(Instruction::Return);
     }
 
     fn block(
         &mut self,
-        ctx: Ctx,
+        ctx: &Ctx,
         block: &ast::Block,
-    ) -> (
-        Vec<Instruction<Var, SafeValue>>,
-        Option<Operand<Var, SafeValue>>,
-    ) {
-        let mut instructions = Vec::new();
-
+    ) -> Option<Operand<Var, SafeValue>> {
         // Result is ignored
         for expr in &block.exprs {
-            self.expr(ctx.clone(), &mut instructions, &expr);
+            self.expr(ctx, &expr);
         }
 
         let last = if let Some(last) = &block.last {
-            Some(self.expr(ctx, &mut instructions, &last))
+            Some(self.expr(ctx, &last))
         } else {
             None
         };
 
-        (instructions, last)
+        last
     }
 
     fn expr(
         &mut self,
-        ctx: Ctx,
-        instructions: &mut Vec<Instruction<Var, SafeValue>>,
+        ctx: &Ctx,
         expr: &Meta<ast::Expr>,
     ) -> Operand<Var, SafeValue> {
         match &expr.node {
-            ast::Expr::Accept => self.return_with(
-                ctx,
-                instructions,
-                SafeValue::Bool(true).into(),
-            ),
-            ast::Expr::Reject => self.return_with(
-                ctx,
-                instructions,
-                SafeValue::Bool(false).into(),
-            ),
+            ast::Expr::Accept => {
+                self.return_with(ctx, SafeValue::Bool(true).into())
+            }
+            ast::Expr::Reject => {
+                self.return_with(ctx, SafeValue::Bool(false).into())
+            }
             ast::Expr::Return(e) => {
-                let val = self.expr(ctx.clone(), instructions, e);
-                self.return_with(ctx, instructions, val)
+                let val = self.expr(ctx, e);
+                self.return_with(ctx, val)
             }
             ast::Expr::Literal(l) => self.literal(l),
             ast::Expr::Match(_) => todo!(),
@@ -392,20 +217,20 @@ impl Lowerer {
             ast::Expr::TypedRecord(_, _) => todo!(),
             ast::Expr::List(_) => todo!(),
             ast::Expr::Not(e) => {
-                let val = self.expr(ctx.clone(), instructions, e);
+                let val = self.expr(ctx, e);
                 let place = self.new_tmp();
-                instructions.push(Instruction::Assign {
+                self.add(Instruction::Assign {
                     to: place.clone(),
                     val,
                 });
                 place.into()
             }
             ast::Expr::BinOp(left, op, right) => {
-                let left = self.expr(ctx.clone(), instructions, left);
-                let right = self.expr(ctx.clone(), instructions, right);
+                let left = self.expr(ctx, left);
+                let right = self.expr(ctx, right);
 
                 let place = self.new_tmp();
-                instructions.push(Instruction::BinOp {
+                self.add(Instruction::BinOp {
                     to: place.clone(),
                     op: op.clone(),
                     left,
@@ -413,7 +238,54 @@ impl Lowerer {
                 });
                 place.into()
             }
-            ast::Expr::IfElse(_, _, _) => todo!(),
+            ast::Expr::IfElse(condition, if_true, if_false) => {
+                let place = self.expr(ctx, condition);
+                let res = self.new_tmp();
+
+                let lbl_cont = self.new_unique_block_name("if-continue");
+                let lbl_then = self.new_unique_block_name("if-then");
+                let lbl_else = self.new_unique_block_name("if-else");
+
+                let branches = if if_false.is_some() {
+                    vec![(1, lbl_then.clone())]
+                } else {
+                    vec![(1, lbl_then.clone())]
+                };
+
+                self.add(Instruction::Switch {
+                    examinee: place,
+                    branches,
+                    default: if if_false.is_some() {
+                        lbl_else.clone()
+                    } else {
+                        lbl_cont.clone()
+                    },
+                });
+
+                self.new_block(&lbl_then);
+                if let Some(op) = self.block(ctx, if_true) {
+                    self.add(Instruction::Assign {
+                        to: res.clone(),
+                        val: op,
+                    });
+                }
+                self.add(Instruction::Jump(lbl_cont.clone()));
+
+                if let Some(if_false) = if_false {
+                    self.new_block(&lbl_else);
+                    if let Some(op) = self.block(ctx, if_false) {
+                        self.add(Instruction::Assign {
+                            to: res.clone(),
+                            val: op,
+                        });
+                    }
+                    self.add(Instruction::Jump(lbl_cont.clone()));
+                }
+
+                self.new_block(&lbl_cont);
+
+                res.into()
+            }
         }
     }
 
@@ -431,27 +303,31 @@ impl Lowerer {
                 let ty = &self.expr_types[&lit.id];
                 match ty {
                     Type::Primitive(Primitive::U8) => SafeValue::U8(*x as u8),
-                    Type::Primitive(Primitive::U16) => SafeValue::U16(*x as u16),
-                    Type::Primitive(Primitive::U32) => SafeValue::U32(*x as u32),
+                    Type::Primitive(Primitive::U16) => {
+                        SafeValue::U16(*x as u16)
+                    }
+                    Type::Primitive(Primitive::U32) => {
+                        SafeValue::U32(*x as u32)
+                    }
                     Type::IntVar(_) => SafeValue::U32(*x as u32),
-                    _ => unreachable!("should be a type error: {ty}")
-                }.into()
-            },
+                    _ => unreachable!("should be a type error: {ty}"),
+                }
+                .into()
+            }
             Literal::Bool(x) => SafeValue::Bool(*x).into(),
         }
     }
 
     fn return_with(
-        &self,
-        ctx: Ctx,
-        instructions: &mut Vec<Instruction<Var, SafeValue>>,
+        &mut self,
+        ctx: &Ctx,
         val: Operand<Var, SafeValue>,
     ) -> Operand<Var, SafeValue> {
-        instructions.push(Instruction::Assign {
-            to: ctx.return_var,
+        self.add(Instruction::Assign {
+            to: ctx.return_var.clone(),
             val,
         });
-        instructions.push(Instruction::Return);
+        self.add(Instruction::Return);
         SafeValue::Unit.into()
     }
 }

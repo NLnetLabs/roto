@@ -1,8 +1,8 @@
-use std::{borrow::Borrow, collections::HashSet, process::id};
+use std::{borrow::Borrow, collections::HashSet};
 
 use crate::{
     ast::{self, Identifier},
-    parser::meta::{MetaId, Meta},
+    parser::meta::{Meta, MetaId},
     typechecker::error,
 };
 
@@ -72,7 +72,7 @@ impl TypeChecker<'_> {
     ) -> TypeResult<bool> {
         use ast::Expr::*;
         let id = expr.id;
-        
+
         // Store the type for use in the lowering step
         self.expr_types.insert(id, ctx.expected_type.clone());
 
@@ -240,7 +240,9 @@ impl TypeChecker<'_> {
                     e,
                 )
             }
-            BinOp(left, op, right) => self.binop(scope, ctx, op, id, left, right),
+            BinOp(left, op, right) => {
+                self.binop(scope, ctx, op, id, left, right)
+            }
             Return(e) => {
                 let Some(ret) = &ctx.function_return_type else {
                     return Err(error::cannot_diverge_here("return", expr));
