@@ -19,7 +19,7 @@ use crate::{
     parser::meta::{Meta, MetaId},
 };
 use scope::Scope;
-use std::collections::{hash_map::Entry, HashMap};
+use std::{borrow::Borrow, collections::{hash_map::Entry, HashMap}};
 use types::Type;
 
 use self::{
@@ -50,13 +50,15 @@ pub struct TypeChecker<'methods> {
     ///
     /// This might not be fully resolved yet.
     expr_types: HashMap<MetaId, Type>,
+    /// The fully qualified (and hence unique) name for each identifier.
+    fully_qualified_names: HashMap<MetaId, String>
 }
 
 pub type TypeResult<T> = Result<T, TypeError>;
 
 pub fn typecheck(
     tree: &ast::SyntaxTree,
-) -> TypeResult<HashMap<MetaId, Type>> {
+) -> TypeResult<(HashMap<MetaId, Type>, HashMap<MetaId, String>)> {
     let methods = types::methods();
     let static_methods = types::static_methods();
 
@@ -66,6 +68,7 @@ pub fn typecheck(
         methods: &methods,
         static_methods: &static_methods,
         expr_types: HashMap::new(),
+        fully_qualified_names: HashMap::new(),
     };
 
     type_checker.check_syntax_tree(tree)?;
@@ -78,7 +81,7 @@ pub fn typecheck(
         .map(|(k, v)| (k.clone(), type_checker.resolve_type(v)))
         .collect();
 
-    Ok(expr_types)
+    Ok((expr_types, type_checker.fully_qualified_names))
 }
 
 enum MaybeDeclared {
@@ -199,7 +202,10 @@ impl<'methods> TypeChecker<'methods> {
         })?;
 
         for f in filter_maps {
-            self.filter_map(&root_scope, f)?;
+            let ty = self.fresh_var();
+            self.insert_var(&mut root_scope, &f.ident, ty.clone())?;
+            let ty2 = self.filter_map(&root_scope, f)?;
+            self.unify(&ty, &ty2, f.ident.id, None)?;
         }
 
         Ok(())
@@ -308,6 +314,18 @@ impl<'methods> TypeChecker<'methods> {
             }
         }
         return true;
+    }
+
+    fn insert_var<'a>(&mut self, scope: &'a mut Scope, k: &Meta<Identifier>, t: impl Borrow<Type>)-> TypeResult<&'a mut Type> {
+        let (name, t) = scope.insert_var(k, t)?;
+        self.fully_qualified_names.insert(k.id, name);
+        Ok(t)
+    }
+
+    fn get_var<'a>(&mut self, scope: &'a Scope, k: &Meta<Identifier>) -> TypeResult<&'a Type> {
+        let (name, t) = scope.get_var(k)?;
+        self.fully_qualified_names.insert(k.id, name);
+        Ok(t)
     }
 
     fn unify(

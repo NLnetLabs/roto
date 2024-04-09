@@ -1,4 +1,4 @@
-filter-map foo() {
+filter-map main() {
     define {
         rx msg: U32;
     }

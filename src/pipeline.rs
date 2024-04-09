@@ -1,10 +1,16 @@
 use std::collections::HashMap;
 
 use crate::{
-    ast::SyntaxTree, lower::{self, eval, ir::SafeValue}, parser::{
+    ast::SyntaxTree,
+    lower::{self, eval, ir::SafeValue},
+    parser::{
         meta::{MetaId, Span, Spans},
         ParseError, Parser,
-    }, typechecker::{error::{Level, TypeError}, types::Type}
+    },
+    typechecker::{
+        error::{Level, TypeError},
+        types::Type,
+    },
 };
 
 #[derive(Clone, Debug)]
@@ -70,15 +76,12 @@ impl std::fmt::Display for RotoReport {
                 RotoError::Type(error) => {
                     let labels = error.labels.iter().map(|l| {
                         let s = self.spans.get(l.id);
-                        Label::new((
-                            self.filename(s),
-                            s.start..s.end,
-                        ))
-                        .with_message(&l.message)
-                        .with_color(match l.level {
-                            Level::Error => Color::Red,
-                            Level::Info => Color::Blue,
-                        })
+                        Label::new((self.filename(s), s.start..s.end))
+                            .with_message(&l.message)
+                            .with_color(match l.level {
+                                Level::Error => Color::Red,
+                                Level::Info => Color::Blue,
+                            })
                     });
 
                     let file = self.filename(self.spans.get(error.location));
@@ -120,8 +123,9 @@ pub fn run(
 ) -> Result<SafeValue, RotoReport> {
     let files = read_files(files)?;
     let (trees, spans) = parse(&files)?;
-    let expr_types = typecheck(&files, &trees, spans)?;
-    let ir = lower::lower(&trees[0], expr_types[0].clone());
+    let (expr_types, fully_qualified_names) =
+        typecheck(&files, &trees, spans)?;
+    let ir = lower::lower(&trees[0], expr_types[0].clone(), fully_qualified_names[0].clone());
     eprintln!("{ir}");
     let res = eval::eval(&ir, "main");
     Ok(res)
@@ -214,23 +218,30 @@ pub fn typecheck(
     files: &[SourceFile],
     trees: &[SyntaxTree],
     spans: Spans,
-) -> Result<Vec<HashMap<MetaId, Type>>, RotoReport> {
+) -> Result<
+    (Vec<HashMap<MetaId, Type>>, Vec<HashMap<MetaId, String>>),
+    RotoReport,
+> {
     let results: Vec<_> = trees
         .into_iter()
         .map(|f| crate::typechecker::typecheck(&f))
         .collect();
 
-    let mut maps = Vec::new();
+    let mut type_maps = Vec::new();
+    let mut name_maps = Vec::new();
     let mut errors = Vec::new();
     for result in results {
         match result {
-            Ok(map) => maps.push(map),
+            Ok((type_map, name_map)) => {
+                type_maps.push(type_map);
+                name_maps.push(name_map);
+            }
             Err(err) => errors.push(RotoError::Type(err)),
         }
     }
 
     if errors.is_empty() {
-        Ok(maps)
+        Ok((type_maps, name_maps))
     } else {
         Err(RotoReport {
             files: files.to_vec(),

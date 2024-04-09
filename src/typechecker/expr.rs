@@ -106,7 +106,7 @@ impl TypeChecker<'_> {
                 Ok(false)
             }
             FunctionCall(name, args) => {
-                let t = scope.get_var(name)?;
+                let t = self.get_var(scope, name)?;
                 let t = self.resolve_type(t);
 
                 let (call_type, params, ret) = match t {
@@ -163,7 +163,7 @@ impl TypeChecker<'_> {
                 ));
             }
             Var(x) => {
-                let t = scope.get_var(x)?;
+                let t = self.get_var(scope, x)?;
                 self.unify(&ctx.expected_type, &t, x.id, None)?;
                 Ok(false)
             }
@@ -366,12 +366,12 @@ impl TypeChecker<'_> {
             }
 
             let ty = &variants[idx].1;
-            let mut arm_scope = scope.wrap();
+            let mut arm_scope = scope.wrap(&format!("$arm_{idx}"));
 
             match (ty, data_field) {
                 (None, None) => {} // ok!
                 (Some(t), Some(id)) => {
-                    arm_scope.insert_var(id, t)?;
+                    self.insert_var(&mut arm_scope, id, t)?;
                 }
                 (None, Some(data_field)) => {
                     return Err(error::variant_does_not_have_field(

@@ -24,22 +24,24 @@ struct Lowerer {
     tmp_idx: usize,
     blocks: Vec<Block<Var, SafeValue>>,
     expr_types: HashMap<MetaId, Type>,
+    fully_qualified_names: HashMap<MetaId, String>,
     block_names: HashMap<String, usize>,
 }
 
 #[derive(Clone)]
 struct Ctx {
     return_var: Var,
-    var_prefix: String,
 }
 
 pub fn lower(
     tree: &ast::SyntaxTree,
     expr_types: HashMap<MetaId, Type>,
+    fully_qualified_names: HashMap<MetaId, String>,
 ) -> Program<Var, SafeValue> {
     let lowerer = Lowerer {
         tmp_idx: 0,
         expr_types,
+        fully_qualified_names,
         blocks: Vec::new(),
         block_names: HashMap::new(),
     };
@@ -102,17 +104,18 @@ impl Lowerer {
     fn filter_map(&mut self, fm: &ast::FilterMap) {
         let ast::FilterMap { ident, body, .. } = fm;
         let ast::FilterMapBody {
-            define: _,
+            define,
             expressions,
             apply,
         } = body;
 
+        let ident = self.fully_qualified_names[&ident.id].clone();
+
         let return_var = Var {
-            var: format!("{}-return", ident.0),
+            var: format!("{}-return", ident),
         };
         let ctx = Ctx {
             return_var: return_var.clone(),
-            var_prefix: ident.0.clone(),
         };
 
         for decl in expressions {
@@ -121,16 +124,25 @@ impl Lowerer {
                     ident,
                     params,
                     body,
-                }) => self.function(&ctx, &ident.0, params, body),
+                }) => self.function(ident, params, body),
                 ast::FilterMapExpr::Action(ast::ActionDeclaration {
                     ident,
                     params,
                     body,
-                }) => self.function(&ctx, &ident.0, params, body),
+                }) => self.function(ident, params, body),
             }
         }
 
-        self.new_block(&ident.0);
+        self.new_block(&ident);
+
+        for (ident, expr) in &define.body.assignments {
+            let val = self.expr(&ctx, expr);
+            let name = self.fully_qualified_names[&ident.id].clone();
+            self.add(Instruction::Assign {
+                to: Var { var: name },
+                val,
+            })
+        }
 
         let last = self.block(&ctx, apply);
 
@@ -145,20 +157,19 @@ impl Lowerer {
 
     fn function(
         &mut self,
-        ctx: &Ctx,
-        ident: &str,
+        ident: &Meta<Identifier>,
         _params: &Meta<Vec<(Meta<Identifier>, Meta<Identifier>)>>,
         body: &ast::Block,
     ) {
+        let ident = self.fully_qualified_names[&ident.id].clone();
         let return_var = Var {
             var: format!("{}-return", ident),
         };
         let ctx = Ctx {
             return_var: return_var.clone(),
-            var_prefix: format!("{}::{}", ctx.var_prefix, ident),
         };
 
-        self.new_block(ident);
+        self.new_block(&ident);
 
         let last = self.block(&ctx, body);
 
@@ -212,7 +223,10 @@ impl Lowerer {
             ast::Expr::FunctionCall(_, _) => todo!(),
             ast::Expr::MethodCall(_, _, _) => todo!(),
             ast::Expr::Access(_, _) => todo!(),
-            ast::Expr::Var(_) => todo!(),
+            ast::Expr::Var(x) => {
+                let var = self.fully_qualified_names[&x.id].clone();
+                Var { var }.into()
+            },
             ast::Expr::Record(_) => todo!(),
             ast::Expr::TypedRecord(_, _) => todo!(),
             ast::Expr::List(_) => todo!(),

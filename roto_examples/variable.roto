@@ -1,0 +1,14 @@
+filter-map main() {
+    define {
+        rx msg: U32;
+        a = 5;
+    }
+
+    apply {
+        if a == 5 {
+            accept
+        } else {
+            reject
+        }
+    }
+}

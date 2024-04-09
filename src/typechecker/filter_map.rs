@@ -19,7 +19,7 @@ impl TypeChecker<'_> {
     ) -> TypeResult<Type> {
         let ast::FilterMap {
             filter_type: ty,
-            ident: _,
+            ident,
             params,
             body:
                 ast::FilterMapBody {
@@ -28,8 +28,7 @@ impl TypeChecker<'_> {
                     apply,
                 },
         } = filter_map;
-
-        let mut scope = scope.wrap();
+        let mut scope = scope.wrap(&ident.0);
 
         let args = self.params(&mut scope, &params)?;
 
@@ -44,7 +43,7 @@ impl TypeChecker<'_> {
                     self.action(&scope, action_section)?
                 }
             };
-            scope.insert_var(&v, t)?;
+            self.insert_var(&mut scope, &v, t)?;
         }
 
         let ctx = Context {
@@ -78,18 +77,18 @@ impl TypeChecker<'_> {
                 let Some(ty) = self.get_type(ty) else {
                     return Err(error::undeclared_type(ty));
                 };
-                scope.insert_var(field_name, ty)?;
+                self.insert_var(scope, field_name, ty.clone())?;
             }
             ast::RxTxType::Split { rx, tx } => {
                 let Some(ty) = self.get_type(&rx.1) else {
                     return Err(error::undeclared_type(&rx.1));
                 };
-                scope.insert_var(&rx.0, ty)?;
+                self.insert_var(scope, &rx.0, ty.clone())?;
 
                 let Some(ty) = self.get_type(&tx.1) else {
                     return Err(error::undeclared_type(&tx.1));
                 };
-                scope.insert_var(&tx.0, ty)?;
+                self.insert_var(scope, &tx.0, ty.clone())?;
             }
         }
 
@@ -106,7 +105,12 @@ impl TypeChecker<'_> {
                     Divergence should have prohibited elsewhere."
                 );
             }
-            scope.insert_var(ident, self.resolve_type(&var))?;
+            let ty = self.resolve_type(&var);
+            self.insert_var(scope, ident, ty)?;
+
+            // We want the fully qualified name to be stored, so we do a lookup
+            // This won't fail because we just addded it.
+            self.get_var(scope, ident).unwrap();
         }
 
         Ok(())
@@ -123,7 +127,7 @@ impl TypeChecker<'_> {
             body,
         } = term_section;
 
-        let mut scope = scope.wrap();
+        let mut scope = scope.wrap(&ident.0);
 
         let args = self.params(&mut scope, &params)?;
 
@@ -148,7 +152,7 @@ impl TypeChecker<'_> {
             body,
         } = action_section;
 
-        let mut scope = scope.wrap();
+        let mut scope = scope.wrap(&ident.0);
 
         let args = self.params(&mut scope, &params)?;
 
@@ -173,8 +177,9 @@ impl TypeChecker<'_> {
                     return Err(error::undeclared_type(ty));
                 };
 
-                scope.insert_var(&field_name, ty)?;
-                Ok((field_name.0.to_string(), ty.clone()))
+                let ty = ty.clone();
+                self.insert_var(scope, &field_name, &ty)?;
+                Ok((field_name.0.to_string(), ty))
             })
             .collect()
     }
