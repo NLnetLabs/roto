@@ -129,7 +129,7 @@ pub fn run(
     let (expr_types, fully_qualified_names) =
         typecheck(&files, &trees, spans)?;
     let ir = lower::lower(&trees[0], expr_types[0].clone(), fully_qualified_names[0].clone());
-    info!("{ir}");
+    info!("Generated code:\n{ir}");
     let res = eval::eval(&ir, "main", rx);
     Ok(res)
 }

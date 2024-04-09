@@ -69,11 +69,18 @@ impl Lowerer {
     }
 
     fn add(&mut self, instruction: Instruction<Var, SafeValue>) {
-        self.blocks
+        let instructions = &mut self.blocks
             .last_mut()
             .unwrap()
-            .instructions
-            .push(instruction);
+            .instructions;
+        
+        // If the last instruction is a return or an exit, we know that
+        // the instruction we push will never be executed, so we just
+        // omit it. This should be done by an optimizer as well but this
+        // makes our initial generated code just a bit nicer.
+        if !matches!(instructions.last(), Some(Instruction::Return | Instruction::Exit)) {
+            instructions.push(instruction);
+        }
     }
 
     fn new_tmp(&mut self) -> Var {
