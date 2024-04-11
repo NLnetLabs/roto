@@ -52,6 +52,9 @@ impl<'source> Parser<'source, '_> {
                     ));
                 }
                 exprs.push(expr);
+                
+                // Semicolon is allowed but not mandatory after if
+                self.next_is(Token::SemiColon);
             } else if self.peek_is(Token::Match) {
                 let expr = self.match_expr()?;
                 if self.peek_is(Token::CurlyRight) {
@@ -66,6 +69,9 @@ impl<'source> Parser<'source, '_> {
                     ));
                 }
                 exprs.push(expr);
+
+                // Semicolon is allowed but not mandatory after match
+                self.next_is(Token::SemiColon);
             } else {
                 let expr = self.expr()?;
                 if self.next_is(Token::SemiColon) {

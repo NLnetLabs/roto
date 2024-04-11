@@ -8,7 +8,7 @@ fn parse_action(s: &str) -> ParseResult<ActionDeclaration> {
 }
 
 #[test]
-fn test_logical_expr_1() {
+fn action_section_1() {
     let s = "
         action my-action() {
             send-to(a,b);
@@ -18,10 +18,32 @@ fn test_logical_expr_1() {
 }
 
 #[test]
-fn test_logical_expr_2() {
+fn action_section_2() {
     let s = "
         action my-action() {
             send_to(a,b);
+            pph_asn.asn.set(AS200);
+        }
+    ";
+    parse_action(s).unwrap();
+}
+
+#[test]
+fn block_with_if() {
+    let s = "
+        action my-action() {
+            if true { send_to(a,b); }
+            pph_asn.asn.set(AS200);
+        }
+    ";
+    parse_action(s).unwrap();
+}
+
+#[test]
+fn block_with_if_with_semicolon() {
+    let s = "
+        action my-action() {
+            if true { send_to(a,b); };
             pph_asn.asn.set(AS200);
         }
     ";
