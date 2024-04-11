@@ -74,7 +74,7 @@ impl TypeChecker<'_> {
         let id = expr.id;
 
         // Store the type for use in the lowering step
-        self.expr_types.insert(id, ctx.expected_type.clone());
+        self.type_info.expr_types.insert(id, ctx.expected_type.clone());
 
         match &expr.node {
             Accept | Reject => {
@@ -180,7 +180,7 @@ impl TypeChecker<'_> {
             }
             TypedRecord(name, record) => {
                 // We first retrieve the type we expect
-                let Some(ty) = self.types.get(&name.0.to_string()) else {
+                let Some(ty) = self.type_info.types.get(&name.0.to_string()) else {
                     return Err(error::undeclared_type(name));
                 };
                 let ty = ty.clone();

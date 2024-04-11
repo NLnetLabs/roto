@@ -10,7 +10,7 @@ pub trait Value {
     fn as_u32(&self) -> u32;
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SafeValue {
     Unit,
     Bool(bool),
@@ -34,7 +34,7 @@ impl Value for SafeValue {
     as_type!(as_bool, bool, Bool);
     as_type!(as_u8, u8, U8);
     as_type!(as_u16, u16, U16);
-    
+
     fn as_u32(&self) -> u32 {
         match self {
             SafeValue::U8(x) => *x as u32,
@@ -110,6 +110,11 @@ pub enum Instruction<P, V> {
         to: P,
         val: Operand<P, V>,
     },
+    /// Call a function.
+    ///
+    /// Takes a block to jump to. Differs from just because it will store
+    /// the current location to return to.
+    Call(String),
     /// Return from the current "function" (filter-map, term or action)
     Return,
 
@@ -134,6 +139,7 @@ where
         match self {
             Self::Assign { to, val } => write!(f, "{to} = {val}"),
             Self::Exit => write!(f, "exit"),
+            Self::Call(name) => write!(f, "call {name}"),
             Self::Return => write!(f, "return"),
             Self::BinOp {
                 to,

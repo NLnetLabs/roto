@@ -138,7 +138,9 @@ impl TypeChecker<'_> {
 
         self.block(&scope, &ctx, body)?;
 
-        Ok((ident.clone(), Type::Term(args)))
+        let ty = Type::Term(args);
+        self.type_info.expr_types.insert(ident.id, ty.clone());
+        Ok((ident.clone(), ty))
     }
 
     fn action(

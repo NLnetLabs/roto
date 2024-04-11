@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use log::info;
 
 use crate::{
@@ -9,12 +7,12 @@ use crate::{
         ir::{self, SafeValue},
     },
     parser::{
-        meta::{MetaId, Span, Spans},
+        meta::{Span, Spans},
         ParseError, Parser,
     },
     typechecker::{
         error::{Level, TypeError},
-        types::Type,
+        TypeInfo,
     },
 };
 
@@ -52,15 +50,10 @@ pub struct Parsed {
 
 pub struct TypeChecked {
     trees: Vec<ast::SyntaxTree>,
-    expr_types: Vec<HashMap<MetaId, Type>>,
-    fully_qualified_names: Vec<HashMap<MetaId, String>>,
+    type_infos: Vec<TypeInfo>,
 }
 pub struct Lowered {
     ir: ir::Program<ir::Var, SafeValue>,
-}
-
-pub struct Evaluated {
-    value: SafeValue,
 }
 
 impl std::fmt::Display for RotoReport {
@@ -151,7 +144,7 @@ impl std::error::Error for RotoReport {}
 pub fn run(
     files: impl IntoIterator<Item = String>,
     rx: SafeValue,
-) -> Result<Evaluated, RotoReport> {
+) -> Result<SafeValue, RotoReport> {
     let lowered = read_files(files)?.parse()?.typecheck()?.lower();
     info!("Generated code:\n{}", lowered.ir);
     Ok(lowered.eval(rx))
@@ -249,25 +242,19 @@ impl Parsed {
             .map(|f| crate::typechecker::typecheck(f))
             .collect();
 
-        let mut expr_types = Vec::new();
-        let mut fully_qualified_types = Vec::new();
+        let mut type_infos = Vec::new();
         let mut errors = Vec::new();
         for result in results {
             match result {
-                Ok((type_map, name_map)) => {
-                    expr_types.push(type_map);
-                    fully_qualified_types.push(name_map);
+                Ok(type_info) => {
+                    type_infos.push(type_info);
                 }
                 Err(err) => errors.push(RotoError::Type(err)),
             }
         }
 
         if errors.is_empty() {
-            Ok(TypeChecked {
-                trees,
-                expr_types,
-                fully_qualified_names: fully_qualified_types,
-            })
+            Ok(TypeChecked { trees, type_infos })
         } else {
             Err(RotoReport {
                 files: files.to_vec(),
@@ -280,30 +267,14 @@ impl Parsed {
 
 impl TypeChecked {
     pub fn lower(self) -> Lowered {
-        let TypeChecked {
-            trees,
-            expr_types,
-            fully_qualified_names,
-        } = self;
-        let ir = lower::lower(
-            &trees[0],
-            expr_types[0].clone(),
-            fully_qualified_names[0].clone(),
-        );
+        let TypeChecked { trees, type_infos } = self;
+        let ir = lower::lower(&trees[0], type_infos[0].clone());
         Lowered { ir }
     }
 }
 
 impl Lowered {
-    pub fn eval(self, rx: SafeValue) -> Evaluated {
-        Evaluated {
-            value: eval::eval(&self.ir, "main", rx),
-        }
-    }
-}
-
-impl Evaluated {
-    pub fn to_value(self) -> SafeValue {
-        self.value
+    pub fn eval(&self, rx: SafeValue) -> SafeValue {
+        eval::eval(&self.ir, "main", rx)
     }
 }

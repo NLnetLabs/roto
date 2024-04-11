@@ -19,7 +19,10 @@ use crate::{
     parser::meta::{Meta, MetaId},
 };
 use scope::Scope;
-use std::{borrow::Borrow, collections::{hash_map::Entry, HashMap}};
+use std::{
+    borrow::Borrow,
+    collections::{hash_map::Entry, HashMap},
+};
 use types::Type;
 
 use self::{
@@ -37,51 +40,95 @@ mod tests;
 pub mod types;
 mod unionfind;
 
-pub struct TypeChecker<'methods> {
+/// The output of the type checker that is used for lowering
+#[derive(Clone, Default)]
+pub struct TypeInfo {
     /// The unionfind structure that maps type variables to types
     unionfind: UnionFind,
     /// Map from type names to types
     types: HashMap<String, Type>,
-    /// The list of built-in methods.
-    methods: &'methods [Method],
-    /// The list of built-in static methods.
-    static_methods: &'methods [Method],
     /// The types we inferred for each Expr
     ///
     /// This might not be fully resolved yet.
     expr_types: HashMap<MetaId, Type>,
     /// The fully qualified (and hence unique) name for each identifier.
-    fully_qualified_names: HashMap<MetaId, String>
+    fully_qualified_names: HashMap<MetaId, String>,
+}
+
+impl TypeInfo {
+    pub fn full_name(&self, x: impl Into<MetaId>) -> String {
+        self.fully_qualified_names[&x.into()].clone()
+    }
+
+    pub fn type_of(&mut self, x: impl Into<MetaId>) -> Type {
+        let ty = self.expr_types[&x.into()].clone();
+        self.resolve(&ty)
+    }
+
+    pub fn resolve(&mut self, t: &Type) -> Type {
+        let mut t = t.clone();
+
+        if let Type::Var(x) | Type::IntVar(x) | Type::RecordVar(x, _) = t {
+            t = self.unionfind.find(x).clone();
+        }
+
+        if let Type::Name(x) = t {
+            t = self.types[&x].clone();
+        }
+
+        t
+    }
+
+    pub fn size_of(&mut self, t: &Type) -> u32 {
+        let t = self.resolve(t);
+        match t {
+            // Never is zero-sized
+            Type::Never => 0,
+            // Int variables are inferred to u32
+            Type::IntVar(_) => 4,
+            // Records have the size of their fields
+            Type::Record(fields)
+            | Type::NamedRecord(_, fields)
+            | Type::RecordVar(_, fields) => {
+                fields.iter().map(|t| self.size_of(&t.1)).sum()
+            }
+            Type::Primitive(p) => p.size(),
+            // A list is a pointer
+            Type::List(_) => 4,
+            // Tables, stream and ribs are 8-bit id's
+            Type::Table(_) => 1,
+            Type::OutputStream(_) => 1,
+            Type::Rib(_) => 1,
+            _ => 0,
+        }
+    }
+
+}
+
+pub struct TypeChecker<'methods> {
+    /// The list of built-in methods.
+    methods: &'methods [Method],
+    /// The list of built-in static methods.
+    static_methods: &'methods [Method],
+    type_info: TypeInfo,
 }
 
 pub type TypeResult<T> = Result<T, TypeError>;
 
-pub fn typecheck(
-    tree: &ast::SyntaxTree,
-) -> TypeResult<(HashMap<MetaId, Type>, HashMap<MetaId, String>)> {
+pub fn typecheck(tree: &ast::SyntaxTree) -> TypeResult<TypeInfo> {
     let methods = types::methods();
     let static_methods = types::static_methods();
 
     let mut type_checker = TypeChecker {
-        unionfind: UnionFind::new(),
-        types: HashMap::new(),
         methods: &methods,
         static_methods: &static_methods,
-        expr_types: HashMap::new(),
-        fully_qualified_names: HashMap::new(),
+        type_info: TypeInfo::default(),
     };
 
     type_checker.check_syntax_tree(tree)?;
 
-    // Make sure that all types referenced later are resolved.
-    let expr_types = type_checker
-        .expr_types
-        .clone()
-        .iter()
-        .map(|(k, v)| (*k, type_checker.resolve_type(v)))
-        .collect();
-
-    Ok((expr_types, type_checker.fully_qualified_names))
+    // Compute the sizes of all types in the syntax tree
+    Ok(type_checker.type_info)
 }
 
 enum MaybeDeclared {
@@ -99,7 +146,7 @@ impl<'methods> TypeChecker<'methods> {
         &mut self,
         tree: &ast::SyntaxTree,
     ) -> TypeResult<()> {
-        // This map contains Option<Type>, where None represnts a type that
+        // This map contains MaybeDeclared, where Undeclared represents a type that
         // is referenced, but not (yet) declared. At the end of all the type
         // declarations, we check whether any nones are left to determine
         // whether any types are unresolved.
@@ -180,7 +227,7 @@ impl<'methods> TypeChecker<'methods> {
         // Check for any undeclared types in the type declarations
         // self.types will then only contain data types with valid
         // type names.
-        self.types = types
+        self.type_info.types = types
             .into_iter()
             .map(|(s, t)| match t {
                 MaybeDeclared::Declared(t, _) => Ok((s, t)),
@@ -213,12 +260,12 @@ impl<'methods> TypeChecker<'methods> {
 
     /// Create a fresh variable in the unionfind structure
     fn fresh_var(&mut self) -> Type {
-        self.unionfind.fresh(Type::Var)
+        self.type_info.unionfind.fresh(Type::Var)
     }
 
     /// Create a fresh integer variable in the unionfind structure
     fn fresh_int(&mut self) -> Type {
-        self.unionfind.fresh(Type::IntVar)
+        self.type_info.unionfind.fresh(Type::IntVar)
     }
 
     /// Create a fresh record variable in the unionfind structure
@@ -230,11 +277,13 @@ impl<'methods> TypeChecker<'methods> {
             .into_iter()
             .map(|(s, t)| (s.to_string(), t))
             .collect();
-        self.unionfind.fresh(move |x| Type::RecordVar(x, fields))
+        self.type_info
+            .unionfind
+            .fresh(move |x| Type::RecordVar(x, fields))
     }
 
     fn get_type(&self, type_name: impl AsRef<str>) -> Option<&Type> {
-        self.types.get(&type_name.as_ref().to_string())
+        self.type_info.types.get(&type_name.as_ref().to_string())
     }
 
     /// Check whether `a` is a subtype of `b`
@@ -316,15 +365,25 @@ impl<'methods> TypeChecker<'methods> {
         true
     }
 
-    fn insert_var<'a>(&mut self, scope: &'a mut Scope, k: &Meta<Identifier>, t: impl Borrow<Type>)-> TypeResult<&'a mut Type> {
+    fn insert_var<'a>(
+        &mut self,
+        scope: &'a mut Scope,
+        k: &Meta<Identifier>,
+        t: impl Borrow<Type>,
+    ) -> TypeResult<&'a mut Type> {
         let (name, t) = scope.insert_var(k, t)?;
-        self.fully_qualified_names.insert(k.id, name);
+        self.type_info.fully_qualified_names.insert(k.id, name);
         Ok(t)
     }
 
-    fn get_var<'a>(&mut self, scope: &'a Scope, k: &Meta<Identifier>) -> TypeResult<&'a Type> {
+    fn get_var<'a>(
+        &mut self,
+        scope: &'a Scope,
+        k: &Meta<Identifier>,
+    ) -> TypeResult<&'a Type> {
         let (name, t) = scope.get_var(k)?;
-        self.fully_qualified_names.insert(k.id, name);
+        self.type_info.fully_qualified_names.insert(k.id, name);
+        self.type_info.expr_types.insert(k.id, t.clone());
         Ok(t)
     }
 
@@ -356,19 +415,19 @@ impl<'methods> TypeChecker<'methods> {
             (a, b) if a == b => a,
             (Never, x) | (x, Never) => x,
             (IntVar(a), b @ (Primitive(U8 | U16 | U32) | IntVar(_))) => {
-                self.unionfind.set(a, b.clone());
+                self.type_info.unionfind.set(a, b.clone());
                 b.clone()
             }
             (a @ Primitive(U8 | U16 | U32), IntVar(b)) => {
-                self.unionfind.set(b, a.clone());
+                self.type_info.unionfind.set(b, a.clone());
                 a.clone()
             }
             (Var(a), b) => {
-                self.unionfind.set(a, b.clone());
+                self.type_info.unionfind.set(a, b.clone());
                 b.clone()
             }
             (a, Var(b)) => {
-                self.unionfind.set(b, a.clone());
+                self.type_info.unionfind.set(b, a.clone());
                 a.clone()
             }
             (Table(a), Table(b)) => {
@@ -386,7 +445,7 @@ impl<'methods> TypeChecker<'methods> {
                 | NamedRecord(_, ref b_fields)),
             ) => {
                 self.unify_fields(&a_fields, b_fields)?;
-                self.unionfind.set(a_var, b.clone());
+                self.type_info.unionfind.set(a_var, b.clone());
                 b.clone()
             }
             (
@@ -394,7 +453,7 @@ impl<'methods> TypeChecker<'methods> {
                 RecordVar(b_var, b_fields),
             ) => {
                 self.unify_fields(a_fields, &b_fields)?;
-                self.unionfind.set(b_var, a.clone());
+                self.type_info.unionfind.set(b_var, a.clone());
                 a.clone()
             }
             (_a, _b) => {
@@ -430,11 +489,11 @@ impl<'methods> TypeChecker<'methods> {
         let mut t = t.clone();
 
         if let Type::Var(x) | Type::IntVar(x) | Type::RecordVar(x, _) = t {
-            t = self.unionfind.find(x).clone();
+            t = self.type_info.unionfind.find(x).clone();
         }
 
         if let Type::Name(x) = t {
-            t = self.types[&x].clone();
+            t = self.type_info.types[&x].clone();
         }
 
         t
@@ -500,7 +559,7 @@ impl<'methods> TypeChecker<'methods> {
     fn detect_type_cycles(&self) -> Result<(), String> {
         let mut visited = HashMap::new();
 
-        for ident in self.types.keys() {
+        for ident in self.type_info.types.keys() {
             self.visit_name(&mut visited, ident)?;
         }
 
@@ -519,7 +578,7 @@ impl<'methods> TypeChecker<'methods> {
         };
 
         visited.insert(s, false);
-        self.visit(visited, &self.types[s])?;
+        self.visit(visited, &self.type_info.types[s])?;
         visited.insert(s, true);
 
         Ok(())

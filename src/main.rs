@@ -24,7 +24,7 @@ fn main() {
     };
     let result = pipeline::run(settings.files, rx);
     match result {
-        Ok(r) => println!("{}", r.to_value()),
+        Ok(r) => println!("{r}"),
         Err(e) => eprintln!("{e}"),
     }
 }

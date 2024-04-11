@@ -1,7 +1,0 @@
-filter-map foo() {
-    define {
-        rx msg: U32;
-    }
-
-    apply { reject }
-}

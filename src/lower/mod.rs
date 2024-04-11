@@ -11,20 +11,25 @@
 pub mod eval;
 pub mod ir;
 
+#[cfg(test)]
+mod test_eval;
+
 use ir::{Block, Instruction, Operand, Program, SafeValue, Var};
 use std::collections::HashMap;
 
 use crate::{
     ast::{self, Identifier, Literal},
-    parser::meta::{Meta, MetaId},
-    typechecker::types::{Primitive, Type},
+    parser::meta::Meta,
+    typechecker::{
+        types::{Primitive, Type},
+        TypeInfo,
+    },
 };
 
 struct Lowerer {
     tmp_idx: usize,
     blocks: Vec<Block<Var, SafeValue>>,
-    expr_types: HashMap<MetaId, Type>,
-    fully_qualified_names: HashMap<MetaId, String>,
+    type_info: TypeInfo,
     block_names: HashMap<String, usize>,
 }
 
@@ -35,13 +40,11 @@ struct Ctx {
 
 pub fn lower(
     tree: &ast::SyntaxTree,
-    expr_types: HashMap<MetaId, Type>,
-    fully_qualified_names: HashMap<MetaId, String>,
+    type_info: TypeInfo,
 ) -> Program<Var, SafeValue> {
     let lowerer = Lowerer {
         tmp_idx: 0,
-        expr_types,
-        fully_qualified_names,
+        type_info,
         blocks: Vec::new(),
         block_names: HashMap::new(),
     };
@@ -69,16 +72,16 @@ impl Lowerer {
     }
 
     fn add(&mut self, instruction: Instruction<Var, SafeValue>) {
-        let instructions = &mut self.blocks
-            .last_mut()
-            .unwrap()
-            .instructions;
-        
+        let instructions = &mut self.blocks.last_mut().unwrap().instructions;
+
         // If the last instruction is a return or an exit, we know that
         // the instruction we push will never be executed, so we just
         // omit it. This should be done by an optimizer as well but this
         // makes our initial generated code just a bit nicer.
-        if !matches!(instructions.last(), Some(Instruction::Return | Instruction::Exit)) {
+        if !matches!(
+            instructions.last(),
+            Some(Instruction::Return | Instruction::Exit)
+        ) {
             instructions.push(instruction);
         }
     }
@@ -116,7 +119,7 @@ impl Lowerer {
             apply,
         } = body;
 
-        let ident = self.fully_qualified_names[&ident.id].clone();
+        let ident = self.type_info.full_name(ident);
 
         let return_var = Var {
             var: format!("{}-return", ident),
@@ -144,7 +147,7 @@ impl Lowerer {
 
         match &define.body.rx_tx_type {
             ast::RxTxType::RxOnly(x, _) => {
-                let var = self.fully_qualified_names[&x.id].clone();
+                let var = self.type_info.full_name(x);
                 self.add(Instruction::Assign {
                     to: Var { var },
                     val: Var {
@@ -158,7 +161,7 @@ impl Lowerer {
 
         for (ident, expr) in &define.body.assignments {
             let val = self.expr(&ctx, expr);
-            let name = self.fully_qualified_names[&ident.id].clone();
+            let name = self.type_info.full_name(ident);
             self.add(Instruction::Assign {
                 to: Var { var: name },
                 val,
@@ -176,13 +179,23 @@ impl Lowerer {
         self.add(Instruction::Exit);
     }
 
+    /// Lower a function
+    ///
+    /// We compile functions differently than turing complete languages,
+    /// because we don't have a full stack. Instead, the arguments just
+    /// have fixed locations. The interpreter does have to keep track
+    /// where the function is called and hence where it has to return to
+    ///
+    /// Ultimately, it should be possible to inline all functions, so
+    /// that we don't even need a return instruction. However, this could
+    /// also be done by an optimizing step.
     fn function(
         &mut self,
         ident: &Meta<Identifier>,
         _params: &Meta<Vec<(Meta<Identifier>, Meta<Identifier>)>>,
         body: &ast::Block,
     ) {
-        let ident = self.fully_qualified_names[&ident.id].clone();
+        let ident = self.type_info.full_name(ident);
         let return_var = Var {
             var: format!("{}-return", ident),
         };
@@ -239,11 +252,39 @@ impl Lowerer {
             ast::Expr::Literal(l) => self.literal(l),
             ast::Expr::Match(_) => todo!(),
             ast::Expr::PrefixMatch(_) => todo!(),
-            ast::Expr::FunctionCall(_, _) => todo!(),
+            ast::Expr::FunctionCall(ident, args) => {
+                let ty = self.type_info.type_of(ident);
+                let ident = self.type_info.full_name(ident);
+
+                let (Type::Term(params) | Type::Action(params)) = ty else {
+                    panic!("This shouldn't have passed typechecking");
+                };
+
+                for (arg, (name, _)) in args.iter().zip(params) {
+                    let val = self.expr(ctx, arg);
+                    self.add(Instruction::Assign {
+                        to: Var {
+                            var: format!("{ident}::{name}"),
+                        },
+                        val,
+                    });
+                }
+
+                self.add(Instruction::Call(ident.clone()));
+                let to = self.new_tmp();
+                self.add(Instruction::Assign {
+                    to: to.clone(),
+                    val: Var {
+                        var: format!("{ident}-return"),
+                    }
+                    .into(),
+                });
+                to.into()
+            }
             ast::Expr::MethodCall(_, _, _) => todo!(),
             ast::Expr::Access(_, _) => todo!(),
             ast::Expr::Var(x) => {
-                let var = self.fully_qualified_names[&x.id].clone();
+                let var = self.type_info.full_name(x);
                 Var { var }.into()
             }
             ast::Expr::Record(_) => todo!(),
@@ -329,7 +370,7 @@ impl Lowerer {
             Literal::StandardCommunity(_) => todo!(),
             Literal::LargeCommunity(_) => todo!(),
             Literal::Integer(x) => {
-                let ty = &self.expr_types[&lit.id];
+                let ty = self.type_info.type_of(lit);
                 match ty {
                     Type::Primitive(Primitive::U8) => SafeValue::U8(*x as u8),
                     Type::Primitive(Primitive::U16) => {

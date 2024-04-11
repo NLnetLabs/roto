@@ -31,15 +31,20 @@ pub fn eval(
         rx,
     );
 
+    let mut stack = Vec::new();
     let mut current_block = filter_map;
+    let mut start_instruction = 0;
+
     'outer: loop {
         trace!("Jump: '{current_block}'");
         let idx = block_map[current_block];
-        for instruction in &p.blocks[idx].instructions {
+        for (i, instruction) in p.blocks[idx].instructions[start_instruction..].iter().enumerate()
+        {
             trace!("Inst: {instruction}");
             match instruction {
                 Instruction::Jump(b) => {
                     current_block = b;
+                    start_instruction = 0;
                     continue 'outer;
                 }
                 Instruction::Switch {
@@ -59,19 +64,35 @@ pub fn eval(
                     for (i, branch) in branches {
                         if *i == x {
                             current_block = branch;
+                            start_instruction = 0;
                             continue 'outer;
                         }
                     }
 
                     current_block = default;
+                    start_instruction = 0;
                     continue 'outer;
                 }
                 Instruction::Assign { to, val } => {
                     let val = eval_operand(&mem, val);
                     mem.insert(to.clone(), *val);
                 }
+                Instruction::Call(b) => {
+                    stack.push((current_block, i + start_instruction));
+                    current_block = b;
+                    start_instruction = 0;
+                    continue 'outer;
+                }
                 // TODO: This is obviously not correct
-                Instruction::Return => break 'outer,
+                Instruction::Return => {
+                    if let Some((b, i)) = stack.pop() {
+                        current_block = b;
+                        start_instruction = i + 1;
+                        continue 'outer;
+                    } else {
+                        break 'outer;
+                    }
+                }
                 Instruction::Exit => break 'outer,
                 Instruction::BinOp {
                     to,

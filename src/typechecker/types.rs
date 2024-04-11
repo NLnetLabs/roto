@@ -132,6 +132,34 @@ impl Type {
     }
 }
 
+impl Primitive {
+    /// Size of the type in bytes
+    pub fn size(&self) -> u32 {
+        match self {
+            Primitive::U32 => 4,
+            Primitive::U16 => 2,
+            Primitive::U8 => 1,
+            Primitive::Unit => 0,
+            Primitive::String => 4,
+            Primitive::Bool => 1,
+            Primitive::Verdict => 1,
+            Primitive::Prefix => todo!(),
+            Primitive::PrefixLength => todo!(),
+            Primitive::AsNumber => todo!(),
+            Primitive::IpAddress => todo!(),
+            Primitive::AsPath => todo!(),
+            Primitive::Community => todo!(),
+            Primitive::OriginType => todo!(),
+            Primitive::NextHop => todo!(),
+            Primitive::MultiExitDisc => todo!(),
+            Primitive::LocalPref => todo!(),
+            Primitive::AtomicAggregate => todo!(),
+            Primitive::Aggregator => todo!(),
+        }
+    }
+
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Method {
     pub receiver_type: Type,
