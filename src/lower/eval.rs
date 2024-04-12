@@ -48,13 +48,13 @@ pub fn eval(
     let mut stack = Vec::new();
     let mut program_counter = block_map[filter_map];
 
-    'outer: loop {
+    loop {
         let instruction = &instructions[program_counter];
         trace!("Inst: {instruction}");
         match instruction {
             Instruction::Jump(b) => {
                 program_counter = block_map[b];
-                continue 'outer;
+                continue;
             }
             Instruction::Switch {
                 examinee,
@@ -70,15 +70,12 @@ pub fn eval(
                     SafeValue::Unit | SafeValue::Record(_) => panic!(),
                 };
 
-                for (i, branch) in branches {
-                    if *i == x {
-                        program_counter = block_map[branch];
-                        continue 'outer;
-                    }
-                }
-
-                program_counter = block_map[default];
-                continue 'outer;
+                let label = branches
+                    .iter()
+                    .find_map(|(i, branch)| (*i == x).then_some(branch))
+                    .unwrap_or(default);
+                program_counter = block_map[label];
+                continue;
             }
             Instruction::Assign { to, val } => {
                 let val = eval_operand(&mem, val);
@@ -99,14 +96,18 @@ pub fn eval(
                     );
                 }
                 program_counter = block_map[b];
-                continue 'outer;
+                continue;
             }
             Instruction::Return(ret) => {
                 let val = eval_operand(&mem, ret);
-                if let Some(StackFrame { return_address, return_place }) = stack.pop() {
+                if let Some(StackFrame {
+                    return_address,
+                    return_place,
+                }) = stack.pop()
+                {
                     mem.insert(return_place, val.clone());
                     program_counter = return_address + 1;
-                    continue 'outer;
+                    continue;
                 } else {
                     return val.clone();
                 }
