@@ -152,7 +152,6 @@ fn calling_term() {
     );
 
     for x in 0..30 {
-        dbg!(x);
         assert_eq!(p(SafeValue::U32(x)), SafeValue::Bool(10 < x && x < 20));
     }
 }

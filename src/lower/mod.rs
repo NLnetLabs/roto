@@ -1,12 +1,6 @@
-//! So, we want to lower that AST into simple expressions and stuff.
+//! Compiler stage to transform the AST into HIR
 //!
-//! This means: basic blocks and simple instructions. It also means that we
-//! have to think about the values that we are using. And places.
-//!
-//! Let's start simple:
-//!  - Memory is linear and contains `Value` (though we might want to be more general about the layout)
-//!  - Operands to instructions are places (variables) or values.
-//!  - Branching and jumping is done via basic blocks.
+//! For more information on the HIR, see [ir].
 
 pub mod eval;
 pub mod ir;
@@ -33,11 +27,6 @@ struct Lowerer {
     block_names: HashMap<String, usize>,
 }
 
-#[derive(Clone)]
-struct Ctx {
-    return_var: Var,
-}
-
 pub fn lower(
     tree: &ast::SyntaxTree,
     type_info: TypeInfo,
@@ -53,6 +42,10 @@ pub fn lower(
 }
 
 impl Lowerer {
+    /// Create a block with a unique name starting with a given prefix
+    ///
+    /// For example, the prefix `if-then` will give `if-then` for the first
+    /// occurrence, `if-then.1` for the second, `if-then.2` for the third, etc.
     fn new_unique_block_name(&mut self, s: &str) -> String {
         let v = self.block_names.entry(s.to_string()).or_default();
         let name = if *v == 0 {
@@ -64,6 +57,7 @@ impl Lowerer {
         name
     }
 
+    /// Add a new block to blocks in the program.
     fn new_block(&mut self, s: &str) {
         self.blocks.push(Block {
             label: s.into(),
@@ -71,6 +65,7 @@ impl Lowerer {
         })
     }
 
+    /// Add an instruction to the last block
     fn add(&mut self, instruction: Instruction<Var, SafeValue>) {
         let instructions = &mut self.blocks.last_mut().unwrap().instructions;
 
@@ -80,12 +75,13 @@ impl Lowerer {
         // makes our initial generated code just a bit nicer.
         if !matches!(
             instructions.last(),
-            Some(Instruction::Return | Instruction::Exit)
+            Some(Instruction::Return(_))
         ) {
             instructions.push(instruction);
         }
     }
 
+    /// Create a new unique temporary variable
     fn new_tmp(&mut self) -> Var {
         let var = Var {
             var: format!("$tmp-{}", self.tmp_idx),
@@ -94,6 +90,7 @@ impl Lowerer {
         var
     }
 
+    /// Lower a syntax tree
     fn tree(mut self, tree: &ast::SyntaxTree) -> Program<Var, SafeValue> {
         let ast::SyntaxTree { expressions } = tree;
 
@@ -111,6 +108,7 @@ impl Lowerer {
         }
     }
 
+    /// Lower a filter-map
     fn filter_map(&mut self, fm: &ast::FilterMap) {
         let ast::FilterMap { ident, body, .. } = fm;
         let ast::FilterMapBody {
@@ -120,13 +118,6 @@ impl Lowerer {
         } = body;
 
         let ident = self.type_info.full_name(ident);
-
-        let return_var = Var {
-            var: format!("{}-return", ident),
-        };
-        let ctx = Ctx {
-            return_var: return_var.clone(),
-        };
 
         for decl in expressions {
             match decl {
@@ -160,7 +151,7 @@ impl Lowerer {
         }
 
         for (ident, expr) in &define.body.assignments {
-            let val = self.expr(&ctx, expr);
+            let val = self.expr(expr);
             let name = self.type_info.full_name(ident);
             self.add(Instruction::Assign {
                 to: Var { var: name },
@@ -168,15 +159,9 @@ impl Lowerer {
             })
         }
 
-        let last = self.block(&ctx, apply);
+        let last = self.block(apply);
 
-        if let Some(last) = last {
-            self.add(Instruction::Assign {
-                to: return_var,
-                val: last,
-            });
-        }
-        self.add(Instruction::Exit);
+        self.add(Instruction::Return(last.unwrap_or(SafeValue::Unit.into())));
     }
 
     /// Lower a function
@@ -196,58 +181,59 @@ impl Lowerer {
         body: &ast::Block,
     ) {
         let ident = self.type_info.full_name(ident);
-        let return_var = Var {
-            var: format!("{}-return", ident),
-        };
-        let ctx = Ctx {
-            return_var: return_var.clone(),
-        };
-
         self.new_block(&ident);
 
-        let last = self.block(&ctx, body);
+        let last = self.block(body);
 
-        if let Some(last) = last {
-            self.add(Instruction::Assign {
-                to: return_var,
-                val: last,
-            });
-        }
-        self.add(Instruction::Return);
+        self.add(Instruction::Return(last.unwrap_or(SafeValue::Unit.into())))
     }
 
+    /// Lower a block
+    ///
+    /// Returns either the value of the expression or the place where the
+    /// value can be retrieved.
     fn block(
         &mut self,
-        ctx: &Ctx,
         block: &ast::Block,
     ) -> Option<Operand<Var, SafeValue>> {
         // Result is ignored
         for expr in &block.exprs {
-            self.expr(ctx, expr);
+            self.expr(expr);
         }
 
         if let Some(last) = &block.last {
-            Some(self.expr(ctx, last))
+            Some(self.expr(last))
         } else {
             None
         }
     }
 
-    fn expr(
-        &mut self,
-        ctx: &Ctx,
-        expr: &Meta<ast::Expr>,
-    ) -> Operand<Var, SafeValue> {
+    /// Lower an expression
+    ///
+    /// Returns either the value of the expression or the place where the
+    /// value can be retrieved. The nested expressions will be lowered
+    /// recursively.
+    fn expr(&mut self, expr: &Meta<ast::Expr>) -> Operand<Var, SafeValue> {
         match &expr.node {
             ast::Expr::Accept => {
-                self.return_with(ctx, SafeValue::Bool(true).into())
+                let this = &mut *self;
+                let val = SafeValue::Bool(true).into();
+                this.add(Instruction::Return(val));
+                SafeValue::Unit.into()
             }
             ast::Expr::Reject => {
-                self.return_with(ctx, SafeValue::Bool(false).into())
+                let this = &mut *self;
+                let val = SafeValue::Bool(false).into();
+                this.add(Instruction::Return(val));
+                SafeValue::Unit.into()
             }
             ast::Expr::Return(e) => {
-                let val = self.expr(ctx, e);
-                self.return_with(ctx, val)
+                let val = self.expr(e);
+                {
+                    let this = &mut *self;
+                    this.add(Instruction::Return(val));
+                    SafeValue::Unit.into()
+                }
             }
             ast::Expr::Literal(l) => self.literal(l),
             ast::Expr::Match(_) => todo!(),
@@ -260,25 +246,14 @@ impl Lowerer {
                     panic!("This shouldn't have passed typechecking");
                 };
 
-                for (arg, (name, _)) in args.iter().zip(params) {
-                    let val = self.expr(ctx, arg);
-                    self.add(Instruction::Assign {
-                        to: Var {
-                            var: format!("{ident}::{name}"),
-                        },
-                        val,
-                    });
-                }
+                let args = params
+                    .iter()
+                    .zip(&args.node)
+                    .map(|(p, a)| ((&p.0).into(), self.expr(&a)))
+                    .collect();
 
-                self.add(Instruction::Call(ident.clone()));
                 let to = self.new_tmp();
-                self.add(Instruction::Assign {
-                    to: to.clone(),
-                    val: Var {
-                        var: format!("{ident}-return"),
-                    }
-                    .into(),
-                });
+                self.add(Instruction::Call(to.clone(), ident.clone(), args));
                 to.into()
             }
             ast::Expr::MethodCall(_, _, _) => todo!(),
@@ -291,7 +266,7 @@ impl Lowerer {
             ast::Expr::TypedRecord(_, _) => todo!(),
             ast::Expr::List(_) => todo!(),
             ast::Expr::Not(e) => {
-                let val = self.expr(ctx, e);
+                let val = self.expr(e);
                 let place = self.new_tmp();
                 self.add(Instruction::Assign {
                     to: place.clone(),
@@ -300,8 +275,8 @@ impl Lowerer {
                 place.into()
             }
             ast::Expr::BinOp(left, op, right) => {
-                let left = self.expr(ctx, left);
-                let right = self.expr(ctx, right);
+                let left = self.expr(left);
+                let right = self.expr(right);
 
                 let place = self.new_tmp();
                 self.add(Instruction::BinOp {
@@ -313,7 +288,7 @@ impl Lowerer {
                 place.into()
             }
             ast::Expr::IfElse(condition, if_true, if_false) => {
-                let place = self.expr(ctx, condition);
+                let place = self.expr(condition);
                 let res = self.new_tmp();
 
                 let lbl_cont = self.new_unique_block_name("if-continue");
@@ -333,7 +308,7 @@ impl Lowerer {
                 });
 
                 self.new_block(&lbl_then);
-                if let Some(op) = self.block(ctx, if_true) {
+                if let Some(op) = self.block(if_true) {
                     self.add(Instruction::Assign {
                         to: res.clone(),
                         val: op,
@@ -343,7 +318,7 @@ impl Lowerer {
 
                 if let Some(if_false) = if_false {
                     self.new_block(&lbl_else);
-                    if let Some(op) = self.block(ctx, if_false) {
+                    if let Some(op) = self.block(if_false) {
                         self.add(Instruction::Assign {
                             to: res.clone(),
                             val: op,
@@ -359,6 +334,7 @@ impl Lowerer {
         }
     }
 
+    /// Lower a literal
     fn literal(&mut self, lit: &Meta<Literal>) -> Operand<Var, SafeValue> {
         match &lit.node {
             Literal::String(_) => todo!(),
@@ -386,18 +362,5 @@ impl Lowerer {
             }
             Literal::Bool(x) => SafeValue::Bool(*x).into(),
         }
-    }
-
-    fn return_with(
-        &mut self,
-        ctx: &Ctx,
-        val: Operand<Var, SafeValue>,
-    ) -> Operand<Var, SafeValue> {
-        self.add(Instruction::Assign {
-            to: ctx.return_var.clone(),
-            val,
-        });
-        self.add(Instruction::Return);
-        SafeValue::Unit.into()
     }
 }

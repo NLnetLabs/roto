@@ -269,6 +269,7 @@ impl TypeChecked {
     pub fn lower(self) -> Lowered {
         let TypeChecked { trees, type_infos } = self;
         let ir = lower::lower(&trees[0], type_infos[0].clone());
+        info!("{ir}");
         Lowered { ir }
     }
 }

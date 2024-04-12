@@ -1,4 +1,30 @@
-use std::fmt::Display;
+//! High-level intermediate representation (HIR)
+//!
+//! The high-level intermediate IR is the first IR after type checking.
+//! Its purpose is to be simple yet human-readable. Evaluating it does not
+//! need to be particularly fast yet, but the evaluation is safe in the
+//! sense that it in the case anything unexpected happens (e.g the wrong
+//! type being given) it will panic instead of performing undefined
+//! behaviour. By evaluating the HIR, we can run tests to test this
+//! compilation step.
+//!
+//! The HIR has the following characteristics:
+//!
+//!  - Human-readable names for all variables and fields.
+//!  - The names of all variables are global.
+//!  - Blocks are also identified by readable labels.
+//!  - Values are a tagged enum and types are checked at runtime.
+//!  - Records and lists are heap allocated, hence the size of values does
+//!    need to be known to construct the HIR.
+//!  - Expressions are simple (as opposed to complex).
+//!  - Control flow is represented with basic blocks.
+//!
+//! The instructions in the HIR are inspired by the instructions defined by
+//! [cranelift].
+//!
+//! [cranelift]: https://docs.rs/cranelift-frontend/latest/cranelift_frontend/
+
+use std::{fmt::Display, rc::Rc};
 
 use crate::ast::BinOp;
 
@@ -10,13 +36,14 @@ pub trait Value {
     fn as_u32(&self) -> u32;
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SafeValue {
     Unit,
     Bool(bool),
     U8(u8),
     U16(u16),
     U32(u32),
+    Record(Rc<Vec<(String, SafeValue)>>),
 }
 
 macro_rules! as_type {
@@ -59,12 +86,21 @@ impl Display for SafeValue {
             SafeValue::U8(x) => write!(f, "U8({x})"),
             SafeValue::U16(x) => write!(f, "U16({x})"),
             SafeValue::U32(x) => write!(f, "U32({x})"),
+            SafeValue::Record(fields) => write!(
+                f,
+                "{{{}}}",
+                fields
+                    .iter()
+                    .map(|(f, v)| format!("{f}: {v}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
         }
     }
 }
 
 /// Humand readable place
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Var {
     pub var: String,
 }
@@ -81,6 +117,7 @@ impl Display for Var {
     }
 }
 
+#[derive(Clone, Debug)]
 pub enum Operand<P, V> {
     Place(P),
     Value(V),
@@ -99,27 +136,26 @@ where
     }
 }
 
+#[derive(Clone)]
 pub enum Instruction<P, V> {
+    /// Jump to a block
     Jump(String),
+
+    /// Switch on the integer value of the `examinee`
     Switch {
         examinee: Operand<P, V>,
         branches: Vec<(usize, String)>,
         default: String,
     },
-    Assign {
-        to: P,
-        val: Operand<P, V>,
-    },
-    /// Call a function.
-    ///
-    /// Takes a block to jump to. Differs from just because it will store
-    /// the current location to return to.
-    Call(String),
-    /// Return from the current "function" (filter-map, term or action)
-    Return,
 
-    /// Exit the program entirely
-    Exit,
+    /// Assign the value `val` to `P`.
+    Assign { to: P, val: Operand<P, V> },
+
+    /// Call a function.
+    Call(P, String, Vec<(String, Operand<P, V>)>),
+
+    /// Return from the current "function" (filter-map, term or action)
+    Return(Operand<P, V>),
 
     /// Perform a binary operation and store the result in `to`
     BinOp {
@@ -128,6 +164,9 @@ pub enum Instruction<P, V> {
         left: Operand<P, V>,
         right: Operand<P, V>,
     },
+
+    /// Access a record field
+    Access { to: P, record: P, field: String },
 }
 
 impl<P, V> Display for Instruction<P, V>
@@ -138,9 +177,15 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Assign { to, val } => write!(f, "{to} = {val}"),
-            Self::Exit => write!(f, "exit"),
-            Self::Call(name) => write!(f, "call {name}"),
-            Self::Return => write!(f, "return"),
+            Self::Call(to, name, args) => write!(
+                f,
+                "{to} = {name}({})",
+                args.iter()
+                    .map(|a| format!("{} = {}", a.0, a.1))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Self::Return(val) => write!(f, "return {val}"),
             Self::BinOp {
                 to,
                 op,
@@ -166,6 +211,9 @@ where
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
+            }
+            Self::Access { to, record, field } => {
+                write!(f, "{to} = {record}.{field}")
             }
         }
     }
