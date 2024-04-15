@@ -237,7 +237,74 @@ impl Lowerer {
                 }
             }
             ast::Expr::Literal(l) => self.literal(l),
-            ast::Expr::Match(_) => todo!(),
+            ast::Expr::Match(m) => {
+                let ast::Match { expr, arms } = &m.node;
+
+                let ty = self.type_info.type_of(expr);
+                let Type::Enum(_, variants) = ty else {
+                    panic!()
+                };
+
+                let branches: Vec<_> = arms
+                    .iter()
+                    .map(|a| {
+                        let discriminant = variants
+                            .iter()
+                            .position(|(s, _)| s == &a.variant_id.0)
+                            .unwrap();
+
+                        let label = self.new_unique_block_name(&format!(
+                            "match::${}",
+                            a.variant_id
+                        ));
+
+                        (discriminant, label)
+                    })
+                    .collect();
+
+                let cont = self.new_unique_block_name("match::$continue");
+
+                let op = self.expr(expr);
+                self.add(Instruction::Switch {
+                    examinee: op.clone(),
+                    branches: branches.clone(),
+                    default: cont.clone(),
+                });
+
+                let out = self.new_tmp();
+
+                for (
+                    ast::MatchArm {
+                        variant_id: _,
+                        data_field,
+                        guard: _,
+                        body,
+                    },
+                    (_, lbl),
+                ) in arms.iter().zip(&branches)
+                {
+                    self.new_block(&lbl);
+                    if let Some(var) = data_field {
+                        let var = self.type_info.full_name(var);
+                        self.add(Instruction::AccessEnum {
+                            to: Var { var },
+                            from: op.clone(),
+                        })
+                    }
+
+                    let op = self.block(&body);
+                    if let Some(op) = op {
+                        self.add(Instruction::Assign {
+                            to: out.clone(),
+                            val: op,
+                        });
+                    }
+                    self.add(Instruction::Jump(cont.clone()));
+                }
+
+                self.new_block(&cont);
+                out.into()
+            }
             ast::Expr::PrefixMatch(_) => todo!(),
             ast::Expr::FunctionCall(ident, args) => {
                 let ty = self.type_info.type_of(ident);
@@ -389,11 +456,12 @@ impl Lowerer {
                         });
                     }
                     self.add(Instruction::Jump(lbl_cont.clone()));
+                    self.new_block(&lbl_cont);
+                    res.into()
+                } else {
+                    self.new_block(&lbl_cont);
+                    SafeValue::Unit.into()
                 }
-
-                self.new_block(&lbl_cont);
-
-                res.into()
             }
         }
     }

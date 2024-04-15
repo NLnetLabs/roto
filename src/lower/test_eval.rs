@@ -280,3 +280,59 @@ fn bmp_message() {
         SafeValue::Bool(false)
     );
 }
+
+#[test]
+fn bmp_message_2() {
+    let p = compile(
+        "
+        filter-map main() { 
+            define {
+                rx x: BmpMessage;
+            }
+
+            apply {
+                match x {
+                    PeerUpNotification(x) -> {
+                        if x.local_port == 80 {
+                            accept
+                        }
+                    },
+                    InitiationMessage(x) -> {},
+                    RouteMonitoring(x) -> {},
+                    PeerDownNotification(x) -> {},
+                    StatisticsReport(x) -> {},
+                    TerminationMessage(x) -> {},
+                }
+                reject
+            }
+        }
+    ",
+    );
+
+    assert_eq!(
+        p(SafeValue::Enum(
+            2,
+            Box::new(SafeValue::Record(vec![(
+                "local_port".into(),
+                SafeValue::U16(80)
+            )]))
+        )),
+        SafeValue::Bool(true)
+    );
+    
+    assert_eq!(
+        p(SafeValue::Enum(
+            2,
+            Box::new(SafeValue::Record(vec![(
+                "local_port".into(),
+                SafeValue::U16(10)
+            )]))
+        )),
+        SafeValue::Bool(false)
+    );
+
+    assert_eq!(
+        p(SafeValue::Enum(1, Box::new(SafeValue::Record(Vec::new())))),
+        SafeValue::Bool(false)
+    );
+}
