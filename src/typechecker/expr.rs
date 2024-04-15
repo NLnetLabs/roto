@@ -74,7 +74,9 @@ impl TypeChecker<'_> {
         let id = expr.id;
 
         // Store the type for use in the lowering step
-        self.type_info.expr_types.insert(id, ctx.expected_type.clone());
+        self.type_info
+            .expr_types
+            .insert(id, ctx.expected_type.clone());
 
         match &expr.node {
             Accept | Reject => {
@@ -131,6 +133,33 @@ impl TypeChecker<'_> {
                 Ok(diverges)
             }
             MethodCall(receiver, name, args) => {
+                // This could be an enum variant constructor, so we check that too
+                if let Some((type_name, _, data)) =
+                    self.find_enum_variant(ctx, id, receiver, name)?
+                {
+                    let Some(data) = data else {
+                        return Err(error::simple(
+                            format!("variant {name} of {type_name} does not have data"),
+                            "does not have data",
+                            name.id,
+                        ));
+                    };
+
+                    let [arg] = &args.node[..] else {
+                        return Err(error::simple(
+                            format!("enum constructor must have exactly 1 argument"),
+                            "must have exactly 1 argument",
+                            args.id,
+                        ));
+                    };
+
+                    let ctx = &Context {
+                        expected_type: data.clone(),
+                        ..ctx.clone()
+                    };
+                    return self.expr(scope, ctx, arg);
+                }
+
                 if let ast::Expr::Var(x) = &receiver.node {
                     if let Some(ty) = self.get_type(x) {
                         let ty = ty.clone();
@@ -141,6 +170,21 @@ impl TypeChecker<'_> {
                 self.method_call(scope, ctx, receiver, name, args)
             }
             Access(e, x) => {
+                // This could be an enum variant constructor, so we check that too
+                if let Some((name, _, data)) =
+                    self.find_enum_variant(ctx, id, e, x)?
+                {
+                    if data.is_some() {
+                        return Err(error::simple(
+                            format!("variant {x} of {name} requires data"),
+                            "requires data",
+                            x.id,
+                        ));
+                    }
+
+                    return Ok(false);
+                }
+
                 let t = self.fresh_var();
                 let diverges = self.expr(scope, &ctx.with_type(&t), e)?;
                 let t = self.resolve_type(&t);
@@ -156,6 +200,7 @@ impl TypeChecker<'_> {
                         return Ok(diverges);
                     };
                 }
+
                 Err(error::simple(
                     format!("no field `{x}` on type `{t}`",),
                     format!("unknown field `{x}`"),
@@ -180,7 +225,8 @@ impl TypeChecker<'_> {
             }
             TypedRecord(name, record) => {
                 // We first retrieve the type we expect
-                let Some(ty) = self.type_info.types.get(&name.0.to_string()) else {
+                let Some(ty) = self.type_info.types.get(&name.0.to_string())
+                else {
                     return Err(error::undeclared_type(name));
                 };
                 let ty = ty.clone();
@@ -285,6 +331,45 @@ impl TypeChecker<'_> {
                 }
             }
         }
+    }
+
+    fn find_enum_variant(
+        &mut self,
+        ctx: &Context,
+        id: MetaId,
+        e: &Meta<ast::Expr>,
+        x: &Meta<Identifier>,
+    ) -> TypeResult<Option<(String, String, Option<Type>)>> {
+        let ast::Expr::Var(ident) = &e.node else {
+            return Ok(None);
+        };
+
+        let Some(t) = self.get_type(ident) else {
+            return Ok(None);
+        };
+
+        let t = t.clone();
+
+        let Type::Enum(name, variants) = &t else {
+            return Ok(None);
+        };
+
+        let Some((variant, data)) =
+            variants.iter().find(|(v, _)| v == &x.node.0)
+        else {
+            return Err(error::simple(
+                format!("no variant {x} on enum {name}"),
+                format!("variant not found"),
+                x.id,
+            ));
+        };
+
+        self.unify(&ctx.expected_type, &t, x.id, None)?;
+        self.type_info
+            .enum_variant_constructors
+            .insert(id, t.clone());
+
+        Ok(Some((name.clone(), variant.clone(), data.clone())))
     }
 
     fn literal(

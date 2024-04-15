@@ -670,3 +670,66 @@ fn unreachable_expression() {
     ";
     typecheck(src).unwrap_err();
 }
+
+#[test]
+fn enum_values() {
+    let src = "
+        filter-map main() { 
+            define {
+                rx r: U32;
+                x = Afi.IpV4;
+            }
+
+            apply {
+                if x == Afi.IpV4 {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
+    typecheck(src).unwrap();
+}
+
+#[test]
+fn bmp_message() {
+    let src = "
+        filter-map main() { 
+            define {
+                rx x: BmpMessage;
+                a = BmpMessage.InitiationMessage(BmpInitiationMessage {});
+            }
+
+            apply {
+                if x == a {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
+    typecheck(src).unwrap();
+}
+
+#[test]
+#[ignore = "not yet implemented"]
+fn enum_match() {
+    let src = "
+        filter-map foo() { 
+            define {
+                rx r: U32;
+                x = Afi.IpV4;
+            }
+
+            apply {
+                match x {
+                    IpV4 -> accept,
+                    IpV6 -> reject,
+                }
+            }
+        }
+    ";
+    typecheck(src).unwrap();
+}

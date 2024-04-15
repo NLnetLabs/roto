@@ -1,5 +1,5 @@
 use clap::Parser;
-use roto::{lower::ir::SafeValue, pipeline};
+use roto::{lower::value::SafeValue, pipeline};
 
 #[derive(Parser)]
 struct Cli {

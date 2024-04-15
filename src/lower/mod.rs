@@ -4,11 +4,12 @@
 
 pub mod eval;
 pub mod ir;
+pub mod value;
 
 #[cfg(test)]
 mod test_eval;
 
-use ir::{Block, Instruction, Operand, Program, SafeValue, Var};
+use ir::{Block, Instruction, Operand, Program, Var};
 use std::collections::HashMap;
 
 use crate::{
@@ -19,6 +20,8 @@ use crate::{
         TypeInfo,
     },
 };
+
+use self::value::SafeValue;
 
 struct Lowerer {
     tmp_idx: usize,
@@ -73,10 +76,7 @@ impl Lowerer {
         // the instruction we push will never be executed, so we just
         // omit it. This should be done by an optimizer as well but this
         // makes our initial generated code just a bit nicer.
-        if !matches!(
-            instructions.last(),
-            Some(Instruction::Return(_))
-        ) {
+        if !matches!(instructions.last(), Some(Instruction::Return(_))) {
             instructions.push(instruction);
         }
     }
@@ -214,6 +214,7 @@ impl Lowerer {
     /// value can be retrieved. The nested expressions will be lowered
     /// recursively.
     fn expr(&mut self, expr: &Meta<ast::Expr>) -> Operand<Var, SafeValue> {
+        let id = expr.id;
         match &expr.node {
             ast::Expr::Accept => {
                 let this = &mut *self;
@@ -256,14 +257,77 @@ impl Lowerer {
                 self.add(Instruction::Call(to.clone(), ident.clone(), args));
                 to.into()
             }
-            ast::Expr::MethodCall(_, _, _) => todo!(),
-            ast::Expr::Access(_, _) => todo!(),
+            ast::Expr::MethodCall(_, m, args) => {
+                let args: Vec<_> =
+                    args.iter().map(|a| self.expr(&a)).collect();
+
+                if let Some(t) = self.type_info.enum_variant_constructor(id) {
+                    let [arg] = &args[..] else {
+                        panic!("Should have been caught in typechecking");
+                    };
+                    let Type::Enum(_, fields) = t else {
+                        panic!("Should have been caught in typechecking");
+                    };
+                    for (i, (f, _)) in fields.iter().enumerate() {
+                        if m.node == f {
+                            let to = self.new_tmp();
+                            self.add(Instruction::CreateEnum {
+                                to: to.clone(),
+                                variant: i as u32,
+                                data: arg.clone(),
+                            });
+                            return to.into();
+                        }
+                    }
+                    panic!("Should have been caught in typechecking")
+                }
+                todo!()
+            }
+            ast::Expr::Access(e, field) => {
+                if let Some(t) = self.type_info.enum_variant_constructor(id) {
+                    let Type::Enum(_, fields) = t else {
+                        panic!("Should have been caught in typechecking");
+                    };
+                    for (i, (f, _)) in fields.iter().enumerate() {
+                        if field.node == f {
+                            let to = self.new_tmp();
+                            self.add(Instruction::CreateEnum {
+                                to: to.clone(),
+                                variant: i as u32,
+                                data: SafeValue::Unit.into(),
+                            });
+                            return to.into();
+                        }
+                    }
+                    panic!("Should have been caught in typechecking")
+                } else {
+                    let val = self.expr(e);
+                    let to = self.new_tmp();
+                    self.add(Instruction::AccessRecord {
+                        to: to.clone(),
+                        record: val,
+                        field: field.0.to_string(),
+                    });
+                    to.into()
+                }
+            }
             ast::Expr::Var(x) => {
                 let var = self.type_info.full_name(x);
                 Var { var }.into()
             }
-            ast::Expr::Record(_) => todo!(),
-            ast::Expr::TypedRecord(_, _) => todo!(),
+            ast::Expr::TypedRecord(_, record) | ast::Expr::Record(record) => {
+                let fields = record
+                    .fields
+                    .iter()
+                    .map(|(s, expr)| ((&s.0).into(), self.expr(expr)))
+                    .collect();
+                let to = self.new_tmp();
+                self.add(Instruction::CreateRecord {
+                    to: to.clone(),
+                    fields,
+                });
+                to.into()
+            }
             ast::Expr::List(_) => todo!(),
             ast::Expr::Not(e) => {
                 let val = self.expr(e);

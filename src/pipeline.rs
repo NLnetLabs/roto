@@ -4,7 +4,7 @@ use crate::{
     ast,
     lower::{
         self, eval,
-        ir::{self, SafeValue},
+        ir, value::SafeValue,
     },
     parser::{
         meta::{Span, Spans},

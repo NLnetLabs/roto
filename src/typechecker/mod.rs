@@ -53,6 +53,9 @@ pub struct TypeInfo {
     expr_types: HashMap<MetaId, Type>,
     /// The fully qualified (and hence unique) name for each identifier.
     fully_qualified_names: HashMap<MetaId, String>,
+    /// The ids of all the `Expr::Access` nodes that should be interpreted
+    /// as enum variant constructors.
+    enum_variant_constructors: HashMap<MetaId, Type>,
 }
 
 impl TypeInfo {
@@ -63,6 +66,10 @@ impl TypeInfo {
     pub fn type_of(&mut self, x: impl Into<MetaId>) -> Type {
         let ty = self.expr_types[&x.into()].clone();
         self.resolve(&ty)
+    }
+
+    pub fn enum_variant_constructor(&self, x: impl Into<MetaId>) -> Option<&Type> {
+        self.enum_variant_constructors.get(&x.into())
     }
 
     pub fn resolve(&mut self, t: &Type) -> Type {

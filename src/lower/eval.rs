@@ -4,10 +4,10 @@ use log::trace;
 
 use crate::{
     ast::BinOp,
-    lower::ir::{Instruction, Value},
+    lower::{ir::Instruction, value::Value},
 };
 
-use super::ir::{Operand, Program, SafeValue, Var};
+use super::{ir::{Operand, Program, Var}, value::SafeValue};
 
 struct StackFrame {
     return_address: usize,
@@ -62,13 +62,7 @@ pub fn eval(
                 default,
             } => {
                 let val = eval_operand(&mem, examinee);
-                let x = match val {
-                    SafeValue::Bool(b) => *b as usize,
-                    SafeValue::U8(x) => *x as usize,
-                    SafeValue::U16(x) => *x as usize,
-                    SafeValue::U32(x) => *x as usize,
-                    SafeValue::Unit | SafeValue::Record(_) => panic!(),
-                };
+                let x = val.switch_on() as usize;
 
                 let label = branches
                     .iter()
@@ -134,14 +128,32 @@ pub fn eval(
                 };
                 mem.insert(to.clone(), SafeValue::Bool(res));
             }
-            Instruction::Access { to, record, field } => {
-                let record = &mem[record];
+            Instruction::AccessRecord { to, record, field } => {
+                let record = eval_operand(&mem, record);
                 let SafeValue::Record(record) = record else {
                     panic!("Should have been caught in typechecking")
                 };
                 let (_, val) =
                     record.iter().find(|(s, _)| s == field).unwrap();
                 mem.insert(to.clone(), val.clone());
+            }
+            Instruction::CreateRecord { to, fields } => {
+                let fields = fields
+                    .iter()
+                    .map(|(s, op)| (s.into(), eval_operand(&mem, op).clone()))
+                    .collect();
+                mem.insert(to.clone(), SafeValue::Record(fields));
+            }
+            Instruction::CreateEnum { to, variant, data } => {
+                let val = eval_operand(&mem, data);
+                mem.insert(to.clone(), SafeValue::Enum(*variant, Box::new(val.clone())));
+            }
+            Instruction::AccessEnum { to, from } => {
+                let val = eval_operand(&mem, from);
+                let SafeValue::Enum(_, data) = val else {
+                    panic!("Should have been caught in typechecking")
+                };
+                mem.insert(to.clone(), data.as_ref().clone());
             }
         }
 
@@ -154,7 +166,7 @@ fn eval_operand<'a>(
     op: &'a Operand<Var, SafeValue>,
 ) -> &'a SafeValue {
     match op {
-        Operand::Place(p) => &mem[dbg!(p)],
+        Operand::Place(p) => &mem[p],
         Operand::Value(v) => v,
     }
 }

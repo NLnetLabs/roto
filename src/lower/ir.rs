@@ -24,82 +24,11 @@
 //!
 //! [cranelift]: https://docs.rs/cranelift-frontend/latest/cranelift_frontend/
 
-use std::{fmt::Display, rc::Rc};
+use std::fmt::Display;
 
 use crate::ast::BinOp;
 
-pub trait Value {
-    fn as_unit(&self) {}
-    fn as_bool(&self) -> bool;
-    fn as_u8(&self) -> u8;
-    fn as_u16(&self) -> u16;
-    fn as_u32(&self) -> u32;
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum SafeValue {
-    Unit,
-    Bool(bool),
-    U8(u8),
-    U16(u16),
-    U32(u32),
-    Record(Rc<Vec<(String, SafeValue)>>),
-}
-
-macro_rules! as_type {
-    ($method:ident, $t:ident, $variant:ident) => {
-        fn $method(&self) -> $t {
-            let Self::$variant(x) = self else {
-                panic!("Invalid value!");
-            };
-            *x
-        }
-    };
-}
-
-impl Value for SafeValue {
-    as_type!(as_bool, bool, Bool);
-    as_type!(as_u8, u8, U8);
-    as_type!(as_u16, u16, U16);
-
-    fn as_u32(&self) -> u32 {
-        match self {
-            SafeValue::U8(x) => *x as u32,
-            SafeValue::U16(x) => *x as u32,
-            SafeValue::U32(x) => *x as u32,
-            _ => panic!("Invalid value!"),
-        }
-    }
-}
-
-impl<P> From<SafeValue> for Operand<P, SafeValue> {
-    fn from(value: SafeValue) -> Self {
-        Operand::Value(value)
-    }
-}
-
-impl Display for SafeValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SafeValue::Unit => write!(f, "Unit"),
-            SafeValue::Bool(x) => write!(f, "Bool({x})"),
-            SafeValue::U8(x) => write!(f, "U8({x})"),
-            SafeValue::U16(x) => write!(f, "U16({x})"),
-            SafeValue::U32(x) => write!(f, "U32({x})"),
-            SafeValue::Record(fields) => write!(
-                f,
-                "{{{}}}",
-                fields
-                    .iter()
-                    .map(|(f, v)| format!("{f}: {v}"))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-        }
-    }
-}
-
-/// Humand readable place
+/// Human-readable place
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Var {
     pub var: String,
@@ -166,7 +95,26 @@ pub enum Instruction<P, V> {
     },
 
     /// Access a record field
-    Access { to: P, record: P, field: String },
+    AccessRecord { to: P, record: Operand<P, V>, field: String },
+
+    /// Create record
+    CreateRecord {
+        to: P,
+        fields: Vec<(String, Operand<P, V>)>,
+    },
+
+    /// Create enum variant
+    CreateEnum {
+        to: P,
+        variant: u32,
+        data: Operand<P, V>,
+    },
+
+    /// Get enum data
+    AccessEnum {
+        to: P,
+        from: Operand<P, V>,
+    },
 }
 
 impl<P, V> Display for Instruction<P, V>
@@ -212,8 +160,25 @@ where
                         .join(", ")
                 )
             }
-            Self::Access { to, record, field } => {
+            Self::AccessRecord { to, record, field } => {
                 write!(f, "{to} = {record}.{field}")
+            }
+            Self::CreateRecord { to, fields } => {
+                write!(
+                    f,
+                    "{to} = {{ {} }}",
+                    fields
+                        .iter()
+                        .map(|(i, v)| format!("{i}: {v}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            Self::CreateEnum { to, variant, data } => {
+                write!(f, "{to} = Enum({variant}, {data})")
+            }
+            Self::AccessEnum { to, from } => {
+                write!(f, "{to} = get data of {from}")
             }
         }
     }
