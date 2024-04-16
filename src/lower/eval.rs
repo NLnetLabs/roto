@@ -166,7 +166,7 @@ fn eval_operand<'a>(
     op: &'a Operand<Var, SafeValue>,
 ) -> &'a SafeValue {
     match op {
-        Operand::Place(p) => &mem[dbg!(p)],
+        Operand::Place(p) => &mem[p],
         Operand::Value(v) => v,
     }
 }

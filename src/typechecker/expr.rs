@@ -429,6 +429,9 @@ impl TypeChecker<'_> {
         // Match diverges if all its branches diverge
         let mut arms_diverge = true;
 
+        // Whether there is a default arm present (with '_')
+        let mut default_arm = false;
+
         for ast::MatchArm {
             variant_id,
             data_field,
@@ -437,6 +440,31 @@ impl TypeChecker<'_> {
         } in arms
         {
             let variant_str = variant_id.0.as_str();
+            
+            // Anything after default is unreachable
+            if default_arm {
+                todo!("error")
+            }
+
+            if variant_str == "_" {
+                if data_field.is_some() {
+                    todo!("error")
+                }
+
+                // If we allow guards, then control flow in match becomes much
+                // harder because of the order of the discriminants then matters.
+                // Essentially for every variant we match on _after_ a default with
+                // guard, we have to insert the same guard check at this location.
+                if let Some(_guard) = guard {
+                    todo!()
+                }
+
+                default_arm = true;
+                let arm_scope = scope.wrap(&format!("$arm_default"));
+                arms_diverge &= self.block(&arm_scope, ctx, body)?;
+                continue;
+            }
+
             let Some(idx) =
                 variants.iter().position(|(v, _)| v.as_str() == variant_str)
             else {
@@ -483,7 +511,7 @@ impl TypeChecker<'_> {
             arms_diverge &= self.block(&arm_scope, ctx, body)?;
         }
 
-        if used_variants.len() < variants.len() {
+        if !default_arm && used_variants.len() < variants.len() {
             let mut missing_variants = Vec::new();
             for v in variants {
                 let v = v.0.as_str();

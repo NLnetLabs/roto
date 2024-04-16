@@ -733,3 +733,29 @@ fn enum_match() {
     ";
     typecheck(src).unwrap();
 }
+
+#[test]
+fn bmp_message_4() {
+    let src = "
+        filter-map main() { 
+            define {
+                rx x: BmpMessage;
+            }
+
+            apply {
+                match x {
+                    PeerUpNotification(x) | x.local_port == 80 -> accept,
+                    PeerUpNotification(x) | x.local_port == 12 -> accept,
+                    PeerUpNotification(x) -> {
+                        if x.local_port == 70 {
+                            accept
+                        }
+                    }
+                    _ -> {},
+                }
+                reject
+            }
+        }
+    ";
+    typecheck(src).unwrap();
+}
