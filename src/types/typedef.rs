@@ -61,7 +61,7 @@ pub type LazyNamedTypeDef<'a, T> =
 pub struct RecordTypeDef(Vec<NamedTypeDef>);
 
 impl RecordTypeDef {
-    pub(crate) fn new(mut named_type_vec: Vec<NamedTypeDef>) -> Self {
+    pub fn new(mut named_type_vec: Vec<NamedTypeDef>) -> Self {
         named_type_vec.sort();
         Self(named_type_vec)
     }

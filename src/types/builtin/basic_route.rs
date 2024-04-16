@@ -1,6 +1,7 @@
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::net::IpAddr;
+use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 
 use chrono::Utc;
@@ -430,6 +431,10 @@ impl RouteContext {
 
     pub fn nlri_status(&self) -> NlriStatus {
         self.nlri_status
+    }
+
+    pub fn update_nlri_status(&mut self, status: NlriStatus) {
+        self.nlri_status = status;
     }
 
     pub fn get_attrs_builder(&self) -> Result<PaMap, VmError> {
@@ -1213,8 +1218,23 @@ impl Provenance {
     //     }
     // }
 
+    pub fn mock() -> Self {
+        Self {
+            timestamp: Utc::now(),
+            connection_id: SocketAddr::V4(std::net::SocketAddrV4::new(Ipv4Addr::from(0), 0)),
+            peer_id: PeerId { addr: "127.0.0.1".parse().unwrap(), asn: 0.into() },
+            peer_bgp_id: routecore::bgp::path_attributes::BgpIdentifier::from([0, 0, 0, 0]),
+            peer_distuingisher: [0, 0, 0, 0, 0, 0, 0, 0],
+            peer_rib_type: PeerRibType::Loc
+        }
+    }
+
     pub fn peer_ip(&self) -> std::net::IpAddr {
         self.peer_id.addr
+    }
+
+    pub fn peer_asn(&self) -> Asn {
+        self.peer_id.asn
     }
 
     pub(crate) fn get_props_for_field(

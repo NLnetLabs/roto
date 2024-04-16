@@ -29,6 +29,12 @@ pub struct RotoReport {
     errors: Vec<RotoError>,
 }
 
+impl RotoReport {
+    pub fn errors(&self) -> &[RotoError] {
+        &self.errors
+    }
+}
+
 impl std::fmt::Display for RotoReport {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use ariadne::{Color, Label, Report, ReportKind};
