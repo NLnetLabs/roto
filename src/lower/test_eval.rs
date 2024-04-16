@@ -464,3 +464,81 @@ fn bmp_message_4() {
         SafeValue::Bool(false)
     );
 }
+
+
+#[test]
+fn bmp_message_5() {
+    let p = compile(
+        "
+        filter-map main() { 
+            define {
+                rx x: BmpMessage;
+            }
+
+            apply {
+                match x {
+                    PeerUpNotification(x) | x.local_port == 80 -> accept,
+                    _ | true -> reject, // everything below is useless!
+                    PeerUpNotification(x) | x.local_port == 12 -> accept,
+                    PeerUpNotification(x) -> {
+                        if x.local_port == 70 {
+                            accept
+                        }
+                    }
+                    _ -> {}
+                }
+                reject
+            }
+        }
+    ",
+    );
+
+    assert_eq!(
+        p(SafeValue::Enum(
+            2,
+            Box::new(SafeValue::Record(vec![(
+                "local_port".into(),
+                SafeValue::U16(80)
+            )]))
+        )),
+        SafeValue::Bool(true)
+    );
+    
+    assert_eq!(
+        p(SafeValue::Enum(
+            2,
+            Box::new(SafeValue::Record(vec![(
+                "local_port".into(),
+                SafeValue::U16(12)
+            )]))
+        )),
+        SafeValue::Bool(false)
+    );
+    
+    assert_eq!(
+        p(SafeValue::Enum(
+            2,
+            Box::new(SafeValue::Record(vec![(
+                "local_port".into(),
+                SafeValue::U16(70)
+            )]))
+        )),
+        SafeValue::Bool(false)
+    );
+    
+    assert_eq!(
+        p(SafeValue::Enum(
+            2,
+            Box::new(SafeValue::Record(vec![(
+                "local_port".into(),
+                SafeValue::U16(10)
+            )]))
+        )),
+        SafeValue::Bool(false)
+    );
+
+    assert_eq!(
+        p(SafeValue::Enum(1, Box::new(SafeValue::Record(Vec::new())))),
+        SafeValue::Bool(false)
+    );
+}

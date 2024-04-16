@@ -451,16 +451,14 @@ impl TypeChecker<'_> {
                     todo!("error")
                 }
 
-                // If we allow guards, then control flow in match becomes much
-                // harder because of the order of the discriminants then matters.
-                // Essentially for every variant we match on _after_ a default with
-                // guard, we have to insert the same guard check at this location.
-                if let Some(_guard) = guard {
-                    todo!()
+                let arm_scope = scope.wrap(&format!("$arm_default"));
+                if let Some(guard) = guard {
+                    let ctx = ctx.with_type(Type::Primitive(Primitive::Bool));
+                    let _ = self.expr(&arm_scope, &ctx, guard)?;
+                } else {
+                    default_arm = true;
                 }
 
-                default_arm = true;
-                let arm_scope = scope.wrap(&format!("$arm_default"));
                 arms_diverge &= self.block(&arm_scope, ctx, body)?;
                 continue;
             }

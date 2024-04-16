@@ -714,7 +714,6 @@ fn bmp_message() {
 }
 
 #[test]
-#[ignore = "not yet implemented"]
 fn enum_match() {
     let src = "
         filter-map foo() { 
@@ -726,7 +725,8 @@ fn enum_match() {
             apply {
                 match x {
                     IpV4 -> accept,
-                    IpV6 -> reject,
+                    IpV6 -> accept,
+                    _ -> reject,
                 }
             }
         }
