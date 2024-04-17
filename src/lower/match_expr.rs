@@ -13,12 +13,101 @@ use super::{
 };
 
 impl Lowerer {
+    /// Lower a match expression
+    /// 
+    /// Lowering a match expression is quite tricky. Here's how we do it at
+    /// the moment. Take this match expression:
+    /// 
+    /// ```roto
+    /// match x {
+    ///     A(y) -> {}
+    ///     B -> {}
+    /// }
+    /// ```
+    /// 
+    /// The easiest thing to do is to treat it as one big if-else chain
+    /// where we check whether each variant matches, but that is not
+    /// particularly efficient. Instead, we should switch directly on the
+    /// discriminant.
+    /// 
+    /// First we evaluate `x` and then we go to a `switch` instruction,
+    /// which has a label for each pattern. Simple enough. However, there
+    /// are 2 things that make it more complicated: default patterns and
+    /// guards.
+    /// 
+    /// A guard requires us to do checks after switching on the
+    /// discriminant. This expression for example:
+    /// 
+    /// ```roto
+    /// match x {
+    ///     A(y) | y == 1 -> b1,
+    ///     A(y) | y == 2 -> b2,
+    ///     B -> b3,
+    ///     A(y) -> b4,
+    /// }
+    /// ``` 
+    /// 
+    /// Can be compiled like this expression:
+    /// 
+    /// ```roto
+    /// match x {
+    ///     A(y) -> {
+    ///         if y == 1 {
+    ///             b1
+    ///         } else if y == 2 {
+    ///             b2
+    ///         } else {
+    ///             b4
+    ///         }
+    ///     }
+    ///     B -> b3,
+    /// }
+    /// ```
+    /// 
+    /// That means that we have to collect all the branches for variant `A`,
+    /// to lower them together.
+    /// 
+    /// Default patterns have to be added to each discriminant too. Here's
+    /// a particularly interesting case:
+    /// 
+    /// ```roto
+    /// match x {
+    ///     A(y) | c1 -> b1,
+    ///     _ | c2 -> b2,
+    ///     B | c3 -> b3,
+    ///     _ -> b4,
+    /// }
+    /// ```
+    /// 
+    /// This should be compiled equivalently to:
+    /// 
+    /// ```roto
+    /// match x {
+    ///     A(y) -> {
+    ///         if c1 { b1 }
+    ///         else if c2 { b2 }
+    ///         else { b4 }
+    ///     }
+    ///     B -> {
+    ///         if c2 { b2 }
+    ///         else if c3 { b3 }
+    ///         else { b4 }
+    ///     }
+    /// }
+    /// ```
+    /// 
+    /// Note how the default patterns are added to the if-else chains for
+    /// all possible discriminants.
+    /// 
+    /// We do this by checking which variants occur in patterns and then
+    /// making those chains for all branches that match that discriminant or
+    /// are `_`.
     pub fn match_expr(&mut self, m: &Meta<Match>) -> Operand<Var, SafeValue> {
         let ast::Match { expr, arms } = &m.node;
 
         let ty = self.type_info.type_of(expr);
         let Type::Enum(_, variants) = ty else {
-            panic!()
+            panic!("Should have been caught in typechecking")
         };
 
         let lbl_prefix = self.new_unique_block_name("$match");
@@ -57,8 +146,8 @@ impl Lowerer {
 
         let switch_branches = all_discriminants.iter().cloned().collect();
 
-        // We need to know for the switch whether there are any default branches.
-        // So start with this check
+        // We need to know for the switch whether there are any default
+        // branches. So start with this check
         let default_branches: Vec<_> =
             branches.iter().filter(|(d, _, _)| d.is_none()).collect();
 
@@ -74,6 +163,8 @@ impl Lowerer {
         });
 
         for (discriminant, lbl) in all_discriminants {
+            // Each discriminant gets the branches for itself and `_`.
+            // See doc comment on this function for more information.
             let branches: Vec<_> = branches
                 .iter()
                 .filter(|(d, _, _)| *d == Some(discriminant) || d.is_none())
@@ -85,6 +176,8 @@ impl Lowerer {
             self.match_case(op, &lbl_prefix, default_lbl, &default_branches);
         }
 
+        // Here we finally create all the blocks for the expression of each
+        // arm.
         let out = self.new_tmp();
         for (_, arm, arm_index) in branches {
             self.new_block(&format!("{lbl_prefix}_arm_{arm_index}"));
