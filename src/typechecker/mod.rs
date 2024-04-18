@@ -15,8 +15,7 @@
 //! See also <https://en.wikipedia.org/wiki/Hindley%E2%80%93Milner_type_system>.
 
 use crate::{
-    ast::{self, Identifier},
-    parser::meta::{Meta, MetaId},
+    ast::{self, Identifier}, lower::wrap::WrappedFunction, parser::meta::{Meta, MetaId}
 };
 use scope::Scope;
 use std::{
@@ -56,6 +55,8 @@ pub struct TypeInfo {
     /// The ids of all the `Expr::Access` nodes that should be interpreted
     /// as enum variant constructors.
     enum_variant_constructors: HashMap<MetaId, Type>,
+    /// Builtin methods
+    methods: HashMap<MetaId, WrappedFunction>,
 }
 
 impl TypeInfo {
@@ -68,7 +69,14 @@ impl TypeInfo {
         self.resolve(&ty)
     }
 
-    pub fn enum_variant_constructor(&self, x: impl Into<MetaId>) -> Option<&Type> {
+    pub fn method(&mut self, x: impl Into<MetaId>) -> Option<&WrappedFunction> {
+        self.methods.get(&x.into())
+    }
+
+    pub fn enum_variant_constructor(
+        &self,
+        x: impl Into<MetaId>,
+    ) -> Option<&Type> {
         self.enum_variant_constructors.get(&x.into())
     }
 
@@ -109,7 +117,6 @@ impl TypeInfo {
             _ => 0,
         }
     }
-
 }
 
 pub struct TypeChecker<'methods> {
@@ -519,6 +526,7 @@ impl<'methods> TypeChecker<'methods> {
             vars,
             argument_types,
             return_type,
+            function,
         } = method;
 
         let mut rec = receiver_type.clone();
@@ -537,7 +545,12 @@ impl<'methods> TypeChecker<'methods> {
             ret = f(&ret);
         }
 
-        Arrow { rec, args, ret }
+        Arrow {
+            rec,
+            args,
+            ret,
+            function: function.clone(),
+        }
     }
 
     /// Return an error if there is a cycles in the type declarations

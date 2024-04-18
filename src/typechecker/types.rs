@@ -1,4 +1,8 @@
-use std::fmt::{Debug, Display};
+use crate::{lower::wrap::WrappedFunction, wrap};
+use std::{
+    fmt::{Debug, Display},
+    net::IpAddr,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
@@ -101,6 +105,7 @@ pub struct Arrow {
     pub rec: Type,
     pub args: Vec<Type>,
     pub ret: Type,
+    pub function: Option<WrappedFunction>,
 }
 
 impl Type {
@@ -157,7 +162,6 @@ impl Primitive {
             Primitive::Aggregator => todo!(),
         }
     }
-
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -167,9 +171,39 @@ pub struct Method {
     pub vars: Vec<&'static str>,
     pub argument_types: Vec<Type>,
     pub return_type: Type,
+    pub function: Option<WrappedFunction>,
 }
 
 impl Method {
+    fn builtin<'a, T, F>(
+        receiver_type: impl Into<Type>,
+        name: &'static str,
+        vars: &[&'static str],
+        argument_types: &'a [T],
+        return_type: impl Into<Type>,
+        function: F,
+    ) -> Self
+    where
+        T: Into<Type> + Clone + 'a,
+        F: Into<WrappedFunction>,
+    {
+        let function: WrappedFunction = function.into();
+        assert_eq!(function.params, argument_types.len() + 1);
+
+        Self {
+            receiver_type: receiver_type.into(),
+            name,
+            vars: vars.to_vec(),
+            argument_types: argument_types
+                .iter()
+                .cloned()
+                .map(Into::into)
+                .collect(),
+            return_type: return_type.into(),
+            function: Some(function),
+        }
+    }
+
     fn new<'a, T>(
         receiver_type: impl Into<Type>,
         name: &'static str,
@@ -190,6 +224,7 @@ impl Method {
                 .map(Into::into)
                 .collect(),
             return_type: return_type.into(),
+            function: None,
         }
     }
 }
@@ -209,14 +244,41 @@ pub fn globals() -> Vec<(String, Type)> {
     .collect()
 }
 
+fn prefix_addr(x: routecore::addr::Prefix) -> IpAddr {
+    x.addr()
+}
+
+fn prefix_len(x: routecore::addr::Prefix) -> u8 {
+    x.len()
+}
+
+fn as_path_origin(x: &routecore::bgp::aspath::AsPath<Vec<u8>>) -> u32 {
+    // Good evidence for adding better error handling to roto...
+    x.origin().unwrap().try_into_asn().unwrap().into_u32()
+}
+
 pub fn methods() -> Vec<Method> {
     use self::Primitive::*;
     use Type::*;
 
     vec![
-        Method::new(Prefix, "address", &[], &[] as &[Type], IpAddress),
+        Method::builtin(
+            Prefix,
+            "address",
+            &[],
+            &[] as &[Type],
+            IpAddress,
+            wrap!(prefix_addr(p)),
+        ),
         Method::new(Prefix, "exists", &[], &[] as &[Type], Bool),
-        Method::new(Prefix, "len", &[], &[] as &[Type], PrefixLength),
+        Method::builtin(
+            Prefix,
+            "len",
+            &[],
+            &[] as &[Type],
+            PrefixLength,
+            wrap!(prefix_len(p)),
+        ),
         Method::new(
             OutputStream(Box::new(ExplicitVar("T"))),
             "send",
@@ -250,7 +312,14 @@ pub fn methods() -> Vec<Method> {
         Method::new(Prefix, "covers", &[], &[Prefix], Bool),
         Method::new(Prefix, "is_covered_by", &[], &[Prefix], Bool),
         Method::new(AsPath, "len", &[], &[] as &[Type], U32),
-        Method::new(AsPath, "origin", &[], &[] as &[Type], AsNumber),
+        Method::builtin(
+            AsPath,
+            "origin",
+            &[],
+            &[] as &[Type],
+            AsNumber,
+            wrap!(as_path_origin(p)),
+        ),
     ]
 }
 

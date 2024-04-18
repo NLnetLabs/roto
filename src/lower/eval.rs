@@ -7,7 +7,10 @@ use crate::{
     lower::{ir::Instruction, value::Value},
 };
 
-use super::{ir::{Operand, Program, Var}, value::SafeValue};
+use super::{
+    ir::{Operand, Program, Var},
+    value::SafeValue,
+};
 
 struct StackFrame {
     return_address: usize,
@@ -92,6 +95,14 @@ pub fn eval(
                 program_counter = block_map[b];
                 continue;
             }
+            Instruction::CallExternal(to, func, args) => {
+                let args: Vec<_> = args
+                    .iter()
+                    .map(|a| eval_operand(&mem, a).clone())
+                    .collect();
+                let val = func.call(args);
+                mem.insert(to.clone(), val);
+            }
             Instruction::Return(ret) => {
                 let val = eval_operand(&mem, ret);
                 if let Some(StackFrame {
@@ -146,7 +157,10 @@ pub fn eval(
             }
             Instruction::CreateEnum { to, variant, data } => {
                 let val = eval_operand(&mem, data);
-                mem.insert(to.clone(), SafeValue::Enum(*variant, Box::new(val.clone())));
+                mem.insert(
+                    to.clone(),
+                    SafeValue::Enum(*variant, Box::new(val.clone())),
+                );
             }
             Instruction::AccessEnum { to, from } => {
                 let val = eval_operand(&mem, from);

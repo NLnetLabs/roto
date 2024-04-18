@@ -28,6 +28,8 @@ use std::fmt::Display;
 
 use crate::ast::BinOp;
 
+use super::wrap::WrappedFunction;
+
 /// Human-readable place
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Var {
@@ -83,6 +85,9 @@ pub enum Instruction<P, V> {
     /// Call a function.
     Call(P, String, Vec<(String, Operand<P, V>)>),
 
+    /// Call an external function (i.e. a Rust function)
+    CallExternal(P, WrappedFunction, Vec<Operand<P, V>>),
+
     /// Return from the current "function" (filter-map, term or action)
     Return(Operand<P, V>),
 
@@ -95,7 +100,11 @@ pub enum Instruction<P, V> {
     },
 
     /// Access a record field
-    AccessRecord { to: P, record: Operand<P, V>, field: String },
+    AccessRecord {
+        to: P,
+        record: Operand<P, V>,
+        field: String,
+    },
 
     /// Create record
     CreateRecord {
@@ -111,10 +120,7 @@ pub enum Instruction<P, V> {
     },
 
     /// Get enum data
-    AccessEnum {
-        to: P,
-        from: Operand<P, V>,
-    },
+    AccessEnum { to: P, from: Operand<P, V> },
 }
 
 impl<P, V> Display for Instruction<P, V>
@@ -130,6 +136,15 @@ where
                 "{to} = {name}({})",
                 args.iter()
                     .map(|a| format!("{} = {}", a.0, a.1))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Self::CallExternal(to, func, args) => write!(
+                f,
+                "{to} = <rust function {:?}>({})",
+                func.pointer,
+                args.iter()
+                    .map(|a| a.to_string())
                     .collect::<Vec<_>>()
                     .join(", ")
             ),

@@ -6,12 +6,13 @@ pub mod eval;
 pub mod ir;
 mod match_expr;
 pub mod value;
+pub mod wrap;
 
 #[cfg(test)]
 mod test_eval;
 
 use ir::{Block, Instruction, Operand, Program, Var};
-use std::collections::HashMap;
+use std::{collections::HashMap, net::IpAddr};
 
 use crate::{
     ast::{self, Identifier, Literal},
@@ -22,7 +23,7 @@ use crate::{
     },
 };
 
-use self::value::SafeValue;
+use self::value::{BuiltIn, SafeValue};
 
 struct Lowerer {
     tmp_idx: usize,
@@ -258,11 +259,12 @@ impl Lowerer {
                 self.add(Instruction::Call(to.clone(), ident.clone(), args));
                 to.into()
             }
-            ast::Expr::MethodCall(_, m, args) => {
-                let args: Vec<_> =
-                    args.iter().map(|a| self.expr(&a)).collect();
-
+            ast::Expr::MethodCall(receiver, m, args) => {
                 if let Some(t) = self.type_info.enum_variant_constructor(id) {
+                    let t = t.clone();
+                    let args: Vec<_> =
+                        args.iter().map(|a| self.expr(&a)).collect();
+
                     let [arg] = &args[..] else {
                         panic!("Should have been caught in typechecking");
                     };
@@ -282,7 +284,24 @@ impl Lowerer {
                     }
                     panic!("Should have been caught in typechecking")
                 }
-                todo!()
+
+                // It's not a constructor, so it's a method call!
+                if let Some(f) = self.type_info.method(id) {
+                    let f = f.clone();
+                    let receiver = self.expr(&receiver);
+                    let mut all_args = vec![receiver];
+                    all_args.extend(args.iter().map(|a| self.expr(&a)));
+
+                    let to = self.new_tmp();
+                    self.add(Instruction::CallExternal(
+                        to.clone(),
+                        f,
+                        all_args,
+                    ));
+                    return to.into();
+                }
+
+                todo!("method was declared but missing definition")
             }
             ast::Expr::Access(e, field) => {
                 if let Some(t) = self.type_info.enum_variant_constructor(id) {
@@ -404,10 +423,25 @@ impl Lowerer {
     fn literal(&mut self, lit: &Meta<Literal>) -> Operand<Var, SafeValue> {
         match &lit.node {
             Literal::String(_) => todo!(),
-            Literal::Prefix(_) => todo!(),
-            Literal::PrefixLength(_) => todo!(),
-            Literal::Asn(_) => todo!(),
-            Literal::IpAddress(_) => todo!(),
+            Literal::Prefix(ast::Prefix { addr, len }) => {
+                let addr = match addr.node {
+                    ast::IpAddress::Ipv4(x) => IpAddr::V4(x),
+                    ast::IpAddress::Ipv6(x) => IpAddr::V6(x),
+                };
+                SafeValue::BuiltIn(value::BuiltIn::Prefix(
+                    routecore::addr::Prefix::new(addr, len.node).unwrap(),
+                ))
+                .into()
+            }
+            Literal::PrefixLength(n) => SafeValue::U8(*n).into(),
+            Literal::Asn(n) => SafeValue::U32(*n).into(),
+            Literal::IpAddress(addr) => {
+                SafeValue::BuiltIn(BuiltIn::IpAddress(match addr {
+                    ast::IpAddress::Ipv4(x) => IpAddr::V4(*x),
+                    ast::IpAddress::Ipv6(x) => IpAddr::V6(*x),
+                }))
+                .into()
+            }
             Literal::ExtendedCommunity(_) => todo!(),
             Literal::StandardCommunity(_) => todo!(),
             Literal::LargeCommunity(_) => todo!(),

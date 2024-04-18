@@ -167,7 +167,7 @@ impl TypeChecker<'_> {
                             .static_method_call(scope, ctx, &ty, name, args);
                     }
                 }
-                self.method_call(scope, ctx, receiver, name, args)
+                self.method_call(id, scope, ctx, receiver, name, args)
             }
             Access(e, x) => {
                 // This could be an enum variant constructor, so we check that too
@@ -584,6 +584,7 @@ impl TypeChecker<'_> {
 
     fn method_call(
         &mut self,
+        meta_id: MetaId,
         scope: &Scope,
         ctx: &Context,
         receiver: &Meta<ast::Expr>,
@@ -612,6 +613,10 @@ impl TypeChecker<'_> {
             &arrow.args,
             args,
         )?;
+
+        if let Some(f) = arrow.function {
+            self.type_info.methods.insert(meta_id, f);
+        }
 
         Ok(diverges)
     }
