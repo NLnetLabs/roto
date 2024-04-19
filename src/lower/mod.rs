@@ -1,6 +1,6 @@
 //! Compiler stage to transform the AST into HIR
 //!
-//! For more information on the HIR, see [ir].
+//! For more information on the HIR, see the [ir] module.
 
 pub mod eval;
 pub mod ir;
@@ -62,7 +62,7 @@ impl Lowerer {
         name
     }
 
-    /// Add a new block to blocks in the program.
+    /// Add a new block to the blocks in the program.
     fn new_block(&mut self, s: &str) {
         self.blocks.push(Block {
             label: s.into(),

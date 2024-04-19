@@ -10,6 +10,12 @@ pub trait Value: Eq {
     fn switch_on(&self) -> u32;
 }
 
+/// A Roto value with type information at runtime
+/// 
+/// The purpose of [`SafeValue`] is to provide a safe way to test our
+/// generated code. It is the value that is generally used by the HIR.
+/// For this value, we prefer ease of use over performance, therefore,
+/// the ubiquitous [`Vec`]s and [`Box`]es in this type are not a problem. 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SafeValue {
     Unit,
@@ -22,6 +28,10 @@ pub enum SafeValue {
     BuiltIn(BuiltIn),
 }
 
+/// An external built-in value for Roto
+/// 
+/// External built-ins are not primitives in Roto, but "live" in Rust and
+/// Roto scripts can manipulate them by calling external functions.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BuiltIn {
     IpAddress(std::net::IpAddr),

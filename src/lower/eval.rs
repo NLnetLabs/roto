@@ -1,3 +1,5 @@
+//! Evaluate HIR programs
+
 use std::collections::HashMap;
 
 use log::trace;
@@ -180,7 +182,9 @@ fn eval_operand<'a>(
     op: &'a Operand<Var, SafeValue>,
 ) -> &'a SafeValue {
     match op {
-        Operand::Place(p) => &mem[p],
+        Operand::Place(p) => &mem
+            .get(p)
+            .expect(&format!("No value was found for place {p}")),
         Operand::Value(v) => v,
     }
 }
