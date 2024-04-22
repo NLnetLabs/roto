@@ -11,7 +11,7 @@ use super::{
     TypeChecker, TypeResult,
 };
 
-impl TypeChecker<'_> {
+impl TypeChecker<'_, '_> {
     pub fn filter_map(
         &mut self,
         scope: &Scope,

@@ -4,7 +4,7 @@
 //! The simplification is that we only have one situation in which general
 //! type variables are generated: method instantiation. Otherwise, we do
 //! not have to deal with polymorphism at all. However, we might still
-//! extend the type system later to accodomate for that.
+//! extend the type system later to accommodate for that.
 //!
 //! The current implementation is based on Algorithm M, described in
 //! <https://dl.acm.org/doi/pdf/10.1145/291891.291892>. The advantage of
@@ -15,7 +15,9 @@
 //! See also <https://en.wikipedia.org/wiki/Hindley%E2%80%93Milner_type_system>.
 
 use crate::{
-    ast::{self, Identifier}, lower::wrap::WrappedFunction, parser::meta::{Meta, MetaId}
+    ast::{self, Identifier},
+    parser::meta::{Meta, MetaId},
+    runtime::{wrap::WrappedFunction, Runtime},
 };
 use scope::Scope;
 use std::{
@@ -69,7 +71,10 @@ impl TypeInfo {
         self.resolve(&ty)
     }
 
-    pub fn method(&mut self, x: impl Into<MetaId>) -> Option<&WrappedFunction> {
+    pub fn method(
+        &mut self,
+        x: impl Into<MetaId>,
+    ) -> Option<&WrappedFunction> {
         self.methods.get(&x.into())
     }
 
@@ -119,7 +124,8 @@ impl TypeInfo {
     }
 }
 
-pub struct TypeChecker<'methods> {
+pub struct TypeChecker<'r, 'methods> {
+    runtime: &'r Runtime,
     /// The list of built-in methods.
     methods: &'methods [Method],
     /// The list of built-in static methods.
@@ -129,12 +135,13 @@ pub struct TypeChecker<'methods> {
 
 pub type TypeResult<T> = Result<T, TypeError>;
 
-pub fn typecheck(tree: &ast::SyntaxTree) -> TypeResult<TypeInfo> {
-    let methods = types::methods();
+pub fn typecheck(runtime: &Runtime, tree: &ast::SyntaxTree) -> TypeResult<TypeInfo> {
+    let methods = types::methods(runtime);
     let static_methods = types::static_methods();
 
     let mut type_checker = TypeChecker {
         methods: &methods,
+        runtime,
         static_methods: &static_methods,
         type_info: TypeInfo::default(),
     };
@@ -154,7 +161,7 @@ enum MaybeDeclared {
     Undeclared(MetaId),
 }
 
-impl<'methods> TypeChecker<'methods> {
+impl<'r, 'methods> TypeChecker<'r, 'methods> {
     /// Perform type checking for a syntax tree
     pub fn check_syntax_tree(
         &mut self,
@@ -165,7 +172,7 @@ impl<'methods> TypeChecker<'methods> {
         // declarations, we check whether any nones are left to determine
         // whether any types are unresolved.
         // The builtin types are added right away.
-        let mut types: HashMap<String, MaybeDeclared> = default_types()
+        let mut types: HashMap<String, MaybeDeclared> = default_types(self.runtime)
             .into_iter()
             .map(|(s, t)| {
                 (s.to_string(), MaybeDeclared::Declared(t.clone(), None))
@@ -621,6 +628,7 @@ impl<'methods> TypeChecker<'methods> {
                 Err("never should not appear in a type declaration".into())
             }
             Type::Primitive(_)
+            | Type::BuiltIn(_, _)
             | Type::Term(_)
             | Type::Action(_)
             | Type::Filter(_)

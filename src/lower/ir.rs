@@ -28,7 +28,7 @@ use std::fmt::Display;
 
 use crate::ast::BinOp;
 
-use super::wrap::WrappedFunction;
+use crate::runtime::wrap::WrappedFunction;
 
 /// Human-readable place
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

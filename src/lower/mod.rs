@@ -6,7 +6,6 @@ pub mod eval;
 pub mod ir;
 mod match_expr;
 pub mod value;
-pub mod wrap;
 
 #[cfg(test)]
 mod test_eval;
@@ -17,15 +16,17 @@ use std::{collections::HashMap, net::IpAddr};
 use crate::{
     ast::{self, Identifier, Literal},
     parser::meta::Meta,
+    runtime::Runtime,
     typechecker::{
         types::{Primitive, Type},
         TypeInfo,
     },
 };
 
-use self::value::{BuiltIn, SafeValue};
+use self::value::SafeValue;
 
-struct Lowerer {
+struct Lowerer<'r> {
+    runtime: &'r Runtime,
     tmp_idx: usize,
     blocks: Vec<Block<Var, SafeValue>>,
     type_info: TypeInfo,
@@ -33,10 +34,12 @@ struct Lowerer {
 }
 
 pub fn lower(
+    runtime: &Runtime,
     tree: &ast::SyntaxTree,
     type_info: TypeInfo,
 ) -> Program<Var, SafeValue> {
     let lowerer = Lowerer {
+        runtime,
         tmp_idx: 0,
         type_info,
         blocks: Vec::new(),
@@ -46,7 +49,7 @@ pub fn lower(
     lowerer.tree(tree)
 }
 
-impl Lowerer {
+impl Lowerer<'_> {
     /// Create a block with a unique name starting with a given prefix
     ///
     /// For example, the prefix `if-then` will give `if-then` for the first
@@ -359,16 +362,31 @@ impl Lowerer {
                 place.into()
             }
             ast::Expr::BinOp(left, op, right) => {
+                let ty = self.type_info.type_of(left.id);
                 let left = self.expr(left);
                 let right = self.expr(right);
 
                 let place = self.new_tmp();
-                self.add(Instruction::BinOp {
-                    to: place.clone(),
-                    op: op.clone(),
-                    left,
-                    right,
-                });
+                match (op, ty) {
+                    (ast::BinOp::Eq, Type::BuiltIn(_, i)) => {
+                        let eq =
+                            self.runtime.get_type(i).eq.as_ref().unwrap();
+                        self.add(Instruction::CallExternal(
+                            place.clone(),
+                            eq.clone(),
+                            vec![left, right],
+                        ))
+                    }
+                    (_, _) => {
+                        self.add(Instruction::BinOp {
+                            to: place.clone(),
+                            op: op.clone(),
+                            left,
+                            right,
+                        });
+                    }
+                }
+
                 place.into()
             }
             ast::Expr::IfElse(condition, if_true, if_false) => {
@@ -428,7 +446,7 @@ impl Lowerer {
                     ast::IpAddress::Ipv4(x) => IpAddr::V4(x),
                     ast::IpAddress::Ipv6(x) => IpAddr::V6(x),
                 };
-                SafeValue::BuiltIn(value::BuiltIn::Prefix(
+                SafeValue::from_any(Box::new(
                     routecore::addr::Prefix::new(addr, len.node).unwrap(),
                 ))
                 .into()
@@ -436,7 +454,7 @@ impl Lowerer {
             Literal::PrefixLength(n) => SafeValue::U8(*n).into(),
             Literal::Asn(n) => SafeValue::U32(*n).into(),
             Literal::IpAddress(addr) => {
-                SafeValue::BuiltIn(BuiltIn::IpAddress(match addr {
+                SafeValue::from_any(Box::new(match addr {
                     ast::IpAddress::Ipv4(x) => IpAddr::V4(*x),
                     ast::IpAddress::Ipv6(x) => IpAddr::V6(*x),
                 }))

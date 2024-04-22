@@ -248,16 +248,10 @@ fn enum_values() {
     );
 
     // IpV4 -> accepted
-    assert_eq!(
-        p(SafeValue::Enum(0, Box::new(SafeValue::Unit))),
-        true
-    );
+    assert_eq!(p(SafeValue::Enum(0, Box::new(SafeValue::Unit))), true);
 
     // IpV6 -> rejected
-    assert_eq!(
-        p(SafeValue::Enum(1, Box::new(SafeValue::Unit))),
-        false
-    );
+    assert_eq!(p(SafeValue::Enum(1, Box::new(SafeValue::Unit))), false);
 }
 
 #[test]
@@ -572,12 +566,16 @@ fn prefix_addr() {
     );
 
     assert_eq!(
-        p(Prefix::from_str("0.0.0.0/8").unwrap().into()),
+        p(SafeValue::from_any(Box::new(
+            Prefix::from_str("0.0.0.0/8").unwrap()
+        ))),
         true
     );
 
     assert_eq!(
-        p(Prefix::from_str("127.0.0.0/8").unwrap().into()),
+        p(SafeValue::from_any(Box::new(
+            Prefix::from_str("127.0.0.0/8").unwrap()
+        ))),
         false
     );
 }

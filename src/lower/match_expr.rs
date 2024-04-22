@@ -12,7 +12,7 @@ use super::{
     Lowerer,
 };
 
-impl Lowerer {
+impl Lowerer<'_> {
     /// Lower a match expression
     /// 
     /// Lowering a match expression is quite tricky. Here's how we do it at

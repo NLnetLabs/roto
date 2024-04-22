@@ -27,7 +27,7 @@ impl Context {
     }
 }
 
-impl TypeChecker<'_> {
+impl TypeChecker<'_, '_> {
     pub fn block(
         &mut self,
         scope: &Scope,
@@ -382,12 +382,12 @@ impl TypeChecker<'_> {
 
         let t = match lit.node {
             String(_) => Type::Primitive(Primitive::String),
-            Prefix(_) => Type::Primitive(Primitive::Prefix),
-            PrefixLength(_) => Type::Primitive(Primitive::PrefixLength),
-            Asn(_) => Type::Primitive(Primitive::AsNumber),
-            IpAddress(_) => Type::Primitive(Primitive::IpAddress),
+            Prefix(_) => Type::Name("Prefix".into()),
+            PrefixLength(_) => Type::Primitive(Primitive::U8),
+            Asn(_) => Type::Primitive(Primitive::U32),
+            IpAddress(_) => Type::Name("IpAddress".into()),
             ExtendedCommunity(_) | StandardCommunity(_)
-            | LargeCommunity(_) => Type::Primitive(Primitive::Community),
+            | LargeCommunity(_) => Type::Name("Community".into()),
             Bool(_) => Type::Primitive(Primitive::Bool),
             Integer(_) => self.fresh_int(),
         };
@@ -440,7 +440,7 @@ impl TypeChecker<'_> {
         } in arms
         {
             let variant_str = variant_id.0.as_str();
-            
+
             // Anything after default is unreachable
             if default_arm {
                 todo!("error")
@@ -564,6 +564,30 @@ impl TypeChecker<'_> {
                 let mut diverges = false;
                 diverges |= self.expr(scope, &ctx, left)?;
                 diverges |= self.expr(scope, &ctx, right)?;
+
+                let ty = self.resolve_type(&ctx.expected_type);
+                match ty {
+                    Type::IntVar(_)
+                    | Type::Never
+                    | Type::Primitive(_)
+                    | Type::Enum(_, _)
+                    | Type::Record(..)
+                    | Type::RecordVar(..)
+                    | Type::NamedRecord(..) => (),
+                    Type::BuiltIn(_, i)
+                        if self.runtime.get_type(i).eq.is_some() =>
+                    {
+                        ()
+                    }
+                    _ => {
+                        return Err(error::simple(
+                            "type cannot be compared",
+                            "cannot be compared",
+                            span,
+                        ))
+                    }
+                }
+
                 Ok(diverges)
             }
             In | NotIn => {

@@ -1,21 +1,18 @@
+//! Compiler pipeline that executes multiple compiler stages in sequence
+
 use log::info;
 
 use crate::{
-    ast,
-    lower::{
-        self, eval,
-        ir, value::SafeValue,
-    },
-    parser::{
+    ast, lower::{self, eval, ir, value::SafeValue}, parser::{
         meta::{Span, Spans},
         ParseError, Parser,
-    },
-    typechecker::{
+    }, runtime::Runtime, typechecker::{
         error::{Level, TypeError},
         TypeInfo,
-    },
+    }
 };
 
+/// A filename with its contents
 #[derive(Clone, Debug)]
 pub struct SourceFile {
     name: String,
@@ -29,6 +26,9 @@ enum RotoError {
     Type(TypeError),
 }
 
+/// An error report containing a set of Roto errors
+/// 
+/// The errors can be printed with the regular [`std::fmt::Display`].
 #[derive(Debug)]
 pub struct RotoReport {
     files: Vec<SourceFile>,
@@ -36,22 +36,26 @@ pub struct RotoReport {
     spans: Spans,
 }
 
-/// Compiler Stages
-
+/// Compiler stage: Files loaded and ready to be parsed
 pub struct LoadedFiles {
     files: Vec<SourceFile>,
 }
 
+/// Compiler stage: Files loaded and parsed
 pub struct Parsed {
     files: Vec<SourceFile>,
     trees: Vec<ast::SyntaxTree>,
     spans: Spans,
 }
 
+/// Compiler stage: loaded, parsed and type checked
 pub struct TypeChecked {
+    runtime: Runtime,
     trees: Vec<ast::SyntaxTree>,
     type_infos: Vec<TypeInfo>,
 }
+
+/// Compiler stage: HIR
 pub struct Lowered {
     ir: ir::Program<ir::Var, SafeValue>,
 }
@@ -141,6 +145,7 @@ impl RotoReport {
 
 impl std::error::Error for RotoReport {}
 
+/// Compile and run a Roto script from a file
 pub fn run(
     files: impl IntoIterator<Item = String>,
     rx: SafeValue,
@@ -150,6 +155,7 @@ pub fn run(
     Ok(lowered.eval(rx))
 }
 
+/// Create a test file to compile and run
 pub fn test_file(source: &str) -> LoadedFiles {
     LoadedFiles {
         files: vec![SourceFile {
@@ -237,9 +243,11 @@ impl Parsed {
             spans,
         } = self;
 
+        let runtime = Runtime::default();
+
         let results: Vec<_> = trees
             .iter()
-            .map(|f| crate::typechecker::typecheck(f))
+            .map(|f| crate::typechecker::typecheck(&runtime, f))
             .collect();
 
         let mut type_infos = Vec::new();
@@ -254,7 +262,7 @@ impl Parsed {
         }
 
         if errors.is_empty() {
-            Ok(TypeChecked { trees, type_infos })
+            Ok(TypeChecked { runtime, trees, type_infos })
         } else {
             Err(RotoReport {
                 files: files.to_vec(),
@@ -267,8 +275,8 @@ impl Parsed {
 
 impl TypeChecked {
     pub fn lower(self) -> Lowered {
-        let TypeChecked { trees, type_infos } = self;
-        let ir = lower::lower(&trees[0], type_infos[0].clone());
+        let TypeChecked { runtime, trees, type_infos } = self;
+        let ir = lower::lower(&runtime, &trees[0], type_infos[0].clone());
         info!("{ir}");
         Lowered { ir }
     }

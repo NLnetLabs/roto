@@ -1,7 +1,7 @@
-use crate::{lower::wrap::WrappedFunction, wrap};
+use crate::runtime::{wrap::WrappedFunction, Runtime};
 use std::{
+    any::TypeId,
     fmt::{Debug, Display},
-    net::IpAddr,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -12,6 +12,7 @@ pub enum Type {
     RecordVar(usize, Vec<(String, Type)>),
     Never,
     Primitive(Primitive),
+    BuiltIn(&'static str, TypeId),
     List(Box<Type>),
     Table(Box<Type>),
     OutputStream(Box<Type>),
@@ -34,19 +35,7 @@ pub enum Primitive {
     Unit,
     String,
     Bool,
-    Prefix,
-    PrefixLength,
-    AsNumber,
-    IpAddress,
-    AsPath,
-    Community,
-    OriginType,
     Verdict,
-    NextHop,
-    MultiExitDisc,
-    LocalPref,
-    AtomicAggregate,
-    Aggregator,
 }
 
 impl From<Primitive> for Type {
@@ -85,6 +74,7 @@ impl Display for Type {
             ),
             Type::Never => write!(f, "!"),
             Type::Primitive(p) => write!(f, "{p}"),
+            Type::BuiltIn(name, _) => write!(f, "{name}"),
             Type::List(t) => write!(f, "List<{t}>"),
             Type::Table(t) => write!(f, "Table<{t}>"),
             Type::OutputStream(t) => write!(f, "OutputStream<{t}>"),
@@ -141,25 +131,13 @@ impl Primitive {
     /// Size of the type in bytes
     pub fn size(&self) -> u32 {
         match self {
+            Primitive::Verdict => 1,
             Primitive::U32 => 4,
             Primitive::U16 => 2,
             Primitive::U8 => 1,
             Primitive::Unit => 0,
             Primitive::String => 4,
             Primitive::Bool => 1,
-            Primitive::Verdict => 1,
-            Primitive::Prefix => todo!(),
-            Primitive::PrefixLength => todo!(),
-            Primitive::AsNumber => todo!(),
-            Primitive::IpAddress => todo!(),
-            Primitive::AsPath => todo!(),
-            Primitive::Community => todo!(),
-            Primitive::OriginType => todo!(),
-            Primitive::NextHop => todo!(),
-            Primitive::MultiExitDisc => todo!(),
-            Primitive::LocalPref => todo!(),
-            Primitive::AtomicAggregate => todo!(),
-            Primitive::Aggregator => todo!(),
         }
     }
 }
@@ -175,35 +153,6 @@ pub struct Method {
 }
 
 impl Method {
-    fn builtin<'a, T, F>(
-        receiver_type: impl Into<Type>,
-        name: &'static str,
-        vars: &[&'static str],
-        argument_types: &'a [T],
-        return_type: impl Into<Type>,
-        function: F,
-    ) -> Self
-    where
-        T: Into<Type> + Clone + 'a,
-        F: Into<WrappedFunction>,
-    {
-        let function: WrappedFunction = function.into();
-        assert_eq!(function.params, argument_types.len() + 1);
-
-        Self {
-            receiver_type: receiver_type.into(),
-            name,
-            vars: vars.to_vec(),
-            argument_types: argument_types
-                .iter()
-                .cloned()
-                .map(Into::into)
-                .collect(),
-            return_type: return_type.into(),
-            function: Some(function),
-        }
-    }
-
     fn new<'a, T>(
         receiver_type: impl Into<Type>,
         name: &'static str,
@@ -231,7 +180,7 @@ impl Method {
 
 pub fn globals() -> Vec<(String, Type)> {
     [
-        ("BLACKHOLE", Type::Primitive(Primitive::Community)),
+        ("BLACKHOLE", Type::Name("Community".into())),
         ("UNICAST", Type::Name("Safi".into())),
         ("MULTICAST", Type::Name("Safi".into())),
         ("IPV4", Type::Name("Afi".into())),
@@ -244,41 +193,27 @@ pub fn globals() -> Vec<(String, Type)> {
     .collect()
 }
 
-fn prefix_addr(x: routecore::addr::Prefix) -> IpAddr {
-    x.addr()
-}
-
-fn prefix_len(x: routecore::addr::Prefix) -> u8 {
-    x.len()
-}
-
-fn as_path_origin(x: &routecore::bgp::aspath::AsPath<Vec<u8>>) -> u32 {
-    // Good evidence for adding better error handling to roto...
-    x.origin().unwrap().try_into_asn().unwrap().into_u32()
-}
-
-pub fn methods() -> Vec<Method> {
+pub fn methods(rt: &Runtime) -> Vec<Method> {
     use self::Primitive::*;
     use Type::*;
 
-    vec![
-        Method::builtin(
-            Prefix,
-            "address",
-            &[],
-            &[] as &[Type],
-            IpAddress,
-            wrap!(prefix_addr(p)),
-        ),
-        Method::new(Prefix, "exists", &[], &[] as &[Type], Bool),
-        Method::builtin(
-            Prefix,
-            "len",
-            &[],
-            &[] as &[Type],
-            PrefixLength,
-            wrap!(prefix_len(p)),
-        ),
+    // All the method defined by the runtime are valid
+    let mut m = Vec::new();
+    for ty in &rt.types {
+        for method in &ty.methods {
+            m.push(Method {
+                receiver_type: Type::Name(ty.name.into()),
+                name: method.name.into(),
+                vars: Vec::new(),
+                argument_types: method.parameter_types.to_vec(),
+                return_type: method.return_type.clone(),
+                function: Some(method.wrapped.clone()),
+            })
+        }
+    }
+
+    // TODO: These should be valid but are not defined yet
+    let other = vec![
         Method::new(
             OutputStream(Box::new(ExplicitVar("T"))),
             "send",
@@ -307,27 +242,26 @@ pub fn methods() -> Vec<Method> {
             &[ExplicitVar("T")],
             Bool,
         ),
-        Method::new(AsPath, "contains", &[], &[AsNumber], Bool),
-        Method::new(Prefix, "contains", &[], &[IpAddress], Bool),
-        Method::new(Prefix, "covers", &[], &[Prefix], Bool),
-        Method::new(Prefix, "is_covered_by", &[], &[Prefix], Bool),
-        Method::new(AsPath, "len", &[], &[] as &[Type], U32),
-        Method::builtin(
-            AsPath,
-            "origin",
-            &[],
-            &[] as &[Type],
-            AsNumber,
-            wrap!(as_path_origin(p)),
-        ),
-    ]
+    ];
+
+    m.extend(other);
+    m
 }
 
 pub fn static_methods() -> Vec<Method> {
     use self::Primitive::*;
 
     vec![
-        Method::new(Prefix, "from", &[], &[IpAddress, PrefixLength], Prefix),
+        Method::new(
+            Type::Name("Prefix".into()),
+            "from",
+            &[],
+            &[
+                Type::Name("IpAddress".into()),
+                Type::Primitive(Primitive::U8),
+            ],
+            Type::Name("Prefix".into()),
+        ),
         Method::new(
             String,
             "format",
@@ -338,7 +272,7 @@ pub fn static_methods() -> Vec<Method> {
     ]
 }
 
-pub fn default_types() -> Vec<(&'static str, Type)> {
+pub fn default_types(runtime: &Runtime) -> Vec<(&'static str, Type)> {
     use Primitive::*;
 
     let primitives = vec![
@@ -347,17 +281,6 @@ pub fn default_types() -> Vec<(&'static str, Type)> {
         ("U8", U8),
         ("Bool", Bool),
         ("String", String),
-        ("Prefix", Prefix),
-        ("IpAddress", IpAddress),
-        ("Asn", AsNumber),
-        ("AsPath", AsPath),
-        ("OriginType", OriginType),
-        ("NextHop", NextHop),
-        ("MultiExitDisc", MultiExitDisc),
-        ("LocalPref", LocalPref),
-        ("AtomicAggregate", AtomicAggregate),
-        ("Aggregator", Aggregator),
-        ("Community", Community),
         ("Unit", Unit),
     ];
 
@@ -365,6 +288,10 @@ pub fn default_types() -> Vec<(&'static str, Type)> {
 
     for (n, p) in primitives {
         types.push((n, Type::Primitive(p)))
+    }
+
+    for ty in &runtime.types {
+        types.push((ty.name, Type::BuiltIn(ty.name, ty.type_id)))
     }
 
     enum RecordOrEnum {
@@ -384,7 +311,7 @@ pub fn default_types() -> Vec<(&'static str, Type)> {
                 ("is_post_policy", "Bool"),
                 ("is_pre_policy", "Bool"),
                 ("peer_type", "U8"),
-                ("asn", "Asn"),
+                ("asn", "U32"),
                 ("address", "IpAddress"),
             ],
         ),
@@ -414,7 +341,7 @@ pub fn default_types() -> Vec<(&'static str, Type)> {
                 ("communities", "[Community]"),
                 ("status", "RouteStatus"),
                 ("peer_ip", "IpAddress"),
-                ("peer_asn", "Asn"),
+                ("peer_asn", "U32"),
             ],
         ),
         Record("BmpInitiationMessage", vec![]),
