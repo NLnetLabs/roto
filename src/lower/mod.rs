@@ -255,7 +255,7 @@ impl Lowerer<'_> {
                 let args = params
                     .iter()
                     .zip(&args.node)
-                    .map(|(p, a)| ((&p.0).into(), self.expr(&a)))
+                    .map(|(p, a)| ((&p.0).into(), self.expr(a)))
                     .collect();
 
                 let to = self.new_tmp();
@@ -266,7 +266,7 @@ impl Lowerer<'_> {
                 if let Some(t) = self.type_info.enum_variant_constructor(id) {
                     let t = t.clone();
                     let args: Vec<_> =
-                        args.iter().map(|a| self.expr(&a)).collect();
+                        args.iter().map(|a| self.expr(a)).collect();
 
                     let [arg] = &args[..] else {
                         panic!("Should have been caught in typechecking");
@@ -291,9 +291,9 @@ impl Lowerer<'_> {
                 // It's not a constructor, so it's a method call!
                 if let Some(f) = self.type_info.method(id) {
                     let f = f.clone();
-                    let receiver = self.expr(&receiver);
+                    let receiver = self.expr(receiver);
                     let mut all_args = vec![receiver];
-                    all_args.extend(args.iter().map(|a| self.expr(&a)));
+                    all_args.extend(args.iter().map(|a| self.expr(a)));
 
                     let to = self.new_tmp();
                     self.add(Instruction::CallExternal(

@@ -182,9 +182,9 @@ fn eval_operand<'a>(
     op: &'a Operand<Var, SafeValue>,
 ) -> &'a SafeValue {
     match op {
-        Operand::Place(p) => &mem
+        Operand::Place(p) => mem
             .get(p)
-            .expect(&format!("No value was found for place {p}")),
+            .unwrap_or_else(|| panic!("No value was found for place {p}")),
         Operand::Value(v) => v,
     }
 }

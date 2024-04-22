@@ -147,7 +147,7 @@ impl TypeChecker<'_, '_> {
 
                     let [arg] = &args.node[..] else {
                         return Err(error::simple(
-                            format!("enum constructor must have exactly 1 argument"),
+                            "enum constructor must have exactly 1 argument",
                             "must have exactly 1 argument",
                             args.id,
                         ));
@@ -359,7 +359,7 @@ impl TypeChecker<'_, '_> {
         else {
             return Err(error::simple(
                 format!("no variant {x} on enum {name}"),
-                format!("variant not found"),
+                "variant not found",
                 x.id,
             ));
         };
@@ -451,7 +451,7 @@ impl TypeChecker<'_, '_> {
                     todo!("error")
                 }
 
-                let arm_scope = scope.wrap(&format!("$arm_default"));
+                let arm_scope = scope.wrap("$arm_default");
                 if let Some(guard) = guard {
                     let ctx = ctx.with_type(Type::Primitive(Primitive::Bool));
                     let _ = self.expr(&arm_scope, &ctx, guard)?;
@@ -576,9 +576,7 @@ impl TypeChecker<'_, '_> {
                     | Type::NamedRecord(..) => (),
                     Type::BuiltIn(_, i)
                         if self.runtime.get_type(i).eq.is_some() =>
-                    {
-                        ()
-                    }
+                    {}
                     _ => {
                         return Err(error::simple(
                             "type cannot be compared",

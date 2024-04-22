@@ -97,7 +97,7 @@ impl Value for SafeValue {
         match self {
             SafeValue::U8(x) => *x as u32,
             SafeValue::U16(x) => *x as u32,
-            SafeValue::U32(x) => *x as u32,
+            SafeValue::U32(x) => *x,
             _ => panic!("Invalid value!"),
         }
     }

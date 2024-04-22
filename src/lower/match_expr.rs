@@ -216,7 +216,7 @@ impl Lowerer<'_> {
             }
 
             if let Some(guard) = &arm.guard {
-                let op = self.expr(&guard);
+                let op = self.expr(guard);
                 self.add(Instruction::Switch {
                     examinee: op,
                     branches: vec![(

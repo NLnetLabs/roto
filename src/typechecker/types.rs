@@ -203,7 +203,7 @@ pub fn methods(rt: &Runtime) -> Vec<Method> {
         for method in &ty.methods {
             m.push(Method {
                 receiver_type: Type::Name(ty.name.into()),
-                name: method.name.into(),
+                name: method.name,
                 vars: Vec::new(),
                 argument_types: method.parameter_types.to_vec(),
                 return_type: method.return_type.clone(),
