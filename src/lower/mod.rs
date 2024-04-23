@@ -221,25 +221,20 @@ impl Lowerer<'_> {
     fn expr(&mut self, expr: &Meta<ast::Expr>) -> Operand<Var, SafeValue> {
         let id = expr.id;
         match &expr.node {
-            ast::Expr::Accept => {
-                let this = &mut *self;
-                let val = SafeValue::Bool(true).into();
-                this.add(Instruction::Return(val));
-                SafeValue::Unit.into()
-            }
-            ast::Expr::Reject => {
-                let this = &mut *self;
-                let val = SafeValue::Bool(false).into();
-                this.add(Instruction::Return(val));
-                SafeValue::Unit.into()
-            }
-            ast::Expr::Return(e) => {
-                let val = self.expr(e);
-                {
-                    let this = &mut *self;
-                    this.add(Instruction::Return(val));
+            ast::Expr::Return(kind, e) => {
+                let op = if let Some(e) = e {
+                    self.expr(e)
+                } else {
                     SafeValue::Unit.into()
-                }
+                };
+
+                self.add(match kind {
+                    ast::ReturnKind::Return => Instruction::Return(op),
+                    ast::ReturnKind::Accept => Instruction::Exit(true, op),
+                    ast::ReturnKind::Reject => Instruction::Exit(false, op),
+                });
+
+                SafeValue::Unit.into()
             }
             ast::Expr::Literal(l) => self.literal(l),
             ast::Expr::Match(m) => self.match_expr(m),

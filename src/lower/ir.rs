@@ -91,6 +91,9 @@ pub enum Instruction<P, V> {
     /// Return from the current "function" (filter-map, term or action)
     Return(Operand<P, V>),
 
+    /// Exit the filter-map with an accept or reject
+    Exit(bool, Operand<P, V>),
+
     /// Perform a binary operation and store the result in `to`
     BinOp {
         to: P,
@@ -149,6 +152,14 @@ where
                     .join(", ")
             ),
             Self::Return(val) => write!(f, "return {val}"),
+            Self::Exit(b, val) => {
+                let s = if *b {
+                    "accept"
+                } else {
+                    "reject"
+                };
+                write!(f, "{s} {val}")
+            }
             Self::BinOp {
                 to,
                 op,

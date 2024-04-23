@@ -25,9 +25,16 @@ pub enum SafeValue {
     U8(u8),
     U16(u16),
     U32(u32),
+    Verdict(Box<Verdict>),
     Record(Vec<(String, SafeValue)>),
     Enum(u32, Box<SafeValue>),
     Runtime(Rc<dyn Any>),
+}
+
+#[derive(Clone, Debug)]
+pub enum Verdict {
+    Accept(SafeValue),
+    Reject(SafeValue),
 }
 
 impl PartialEq for SafeValue {
@@ -60,6 +67,7 @@ impl SafeValue {
             SafeValue::U32(x) => x,
             SafeValue::Record(_) => todo!(),
             SafeValue::Enum(_, _) => todo!(),
+            SafeValue::Verdict(_) => todo!(),
             SafeValue::Runtime(x) => {
                 let y = x.as_ref();
                 dbg!(std::any::type_name_of_val(y));
@@ -143,7 +151,24 @@ impl Display for SafeValue {
             SafeValue::Enum(variant, v) => {
                 write!(f, "Enum({variant}, {v})")
             }
-            _ => todo!(),
+            SafeValue::Verdict(v) => {
+                match v.as_ref() {
+                    Verdict::Accept(x) => write!(f, "Accept({x})"),
+                    Verdict::Reject(x) => write!(f, "Reject({x})"),
+                }
+            }
+            _ => todo!("{:?}", self),
+        }
+    }
+}
+
+impl TryFrom<SafeValue> for () {
+    type Error = ();
+
+    fn try_from(value: SafeValue) -> Result<Self, Self::Error> {
+        match value {
+            SafeValue::Unit => Ok(()),
+            _ => Err(()),
         }
     }
 }
@@ -171,6 +196,24 @@ impl TryFrom<SafeValue> for bool {
     fn try_from(value: SafeValue) -> Result<Self, Self::Error> {
         match value {
             SafeValue::Bool(x) => Ok(x),
+            _ => Err(()),
+        }
+    }
+}
+
+impl<'a, T, E> TryFrom<SafeValue> for Result<T, E>
+where
+    T: TryFrom<SafeValue, Error = ()>,
+    E: TryFrom<SafeValue, Error = ()>,
+{
+    type Error = ();
+
+    fn try_from(value: SafeValue) -> Result<Self, Self::Error> {
+        match value {
+            SafeValue::Verdict(v) => Ok(match v.as_ref() {
+                Verdict::Accept(x) => Ok(x.clone().try_into()?),
+                Verdict::Reject(x) => Err(x.clone().try_into()?),
+            }),
             _ => Err(()),
         }
     }

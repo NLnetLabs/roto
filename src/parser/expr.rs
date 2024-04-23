@@ -4,6 +4,7 @@ use crate::{
     ast::{
         BinOp, Block, Expr, IpAddress, Literal, Match, MatchArm, Prefix,
         PrefixLengthRange, PrefixMatchExpr, PrefixMatchType, Record,
+        ReturnKind,
     },
     parser::ParseError,
 };
@@ -28,10 +29,9 @@ impl<'source> Parser<'source, '_> {
         loop {
             if self.peek_is(Token::CurlyRight) {
                 let end = self.take(Token::CurlyRight)?;
-                return Ok(self.spans.add(
-                    start.merge(end),
-                    Block { exprs, last: None },
-                ));
+                return Ok(self
+                    .spans
+                    .add(start.merge(end), Block { exprs, last: None }));
             }
 
             // Edge case: if and match don't have to end in a semicolon
@@ -52,7 +52,7 @@ impl<'source> Parser<'source, '_> {
                     ));
                 }
                 exprs.push(expr);
-                
+
                 // Semicolon is allowed but not mandatory after if
                 self.next_is(Token::SemiColon);
             } else if self.peek_is(Token::Match) {
@@ -222,10 +222,9 @@ impl<'source> Parser<'source, '_> {
             if self.peek_is(Token::RoundLeft) {
                 let args = self.args()?;
                 let span = self.merge_spans(&expr, &args);
-                expr = self.spans.add(
-                    span,
-                    Expr::MethodCall(Box::new(expr), ident, args),
-                );
+                expr = self
+                    .spans
+                    .add(span, Expr::MethodCall(Box::new(expr), ident, args));
             } else {
                 let span = self.merge_spans(&expr, &ident);
                 expr =
@@ -263,21 +262,28 @@ impl<'source> Parser<'source, '_> {
             return Ok(self.spans.add(span, Expr::Record(key_values)));
         }
 
-        if self.peek_is(Token::Accept) {
-            let span = self.take(Token::Accept)?;
-            return Ok(self.spans.add(span, Expr::Accept));
-        }
+        if let Some(Token::Accept | Token::Reject | Token::Return) =
+            self.peek()
+        {
+            let (t, mut span) = self.next()?;
 
-        if self.peek_is(Token::Reject) {
-            let span = self.take(Token::Reject)?;
-            return Ok(self.spans.add(span, Expr::Reject));
-        }
+            let kind = match t {
+                Token::Accept => ReturnKind::Accept,
+                Token::Reject => ReturnKind::Reject,
+                Token::Return => ReturnKind::Return,
+                _ => unreachable!(),
+            };
 
-        if self.peek_is(Token::Return) {
-            let start = self.take(Token::Return)?;
-            let expr = self.expr_inner(r)?;
-            let span = start.merge(self.spans.get(&expr));
-            return Ok(self.spans.add(span, Expr::Return(Box::new(expr))));
+            let val = match self.peek() {
+                Some(tok) if Self::can_start_expression(tok) => {
+                    let expr = self.expr()?;
+                    span = span.merge(self.spans.get(expr.id));
+                    Some(Box::new(expr))
+                }
+                _ => None,
+            };
+
+            return Ok(self.spans.add(span, Expr::Return(kind, val)));
         }
 
         if self.peek_is(Token::If) {
@@ -293,16 +299,16 @@ impl<'source> Parser<'source, '_> {
             if !r.forbid_records && self.peek_is(Token::CurlyLeft) {
                 let key_values = self.record()?;
                 let span = self.merge_spans(&ident, &key_values);
-                return Ok(
-                    self.spans.add(span, Expr::TypedRecord(ident, key_values))
-                );
+                return Ok(self
+                    .spans
+                    .add(span, Expr::TypedRecord(ident, key_values)));
             }
             if self.peek_is(Token::RoundLeft) {
                 let args = self.args()?;
                 let span = self.merge_spans(&ident, &args);
-                return Ok(
-                    self.spans.add(span, Expr::FunctionCall(ident, args))
-                );
+                return Ok(self
+                    .spans
+                    .add(span, Expr::FunctionCall(ident, args)));
             }
             return Ok(Meta {
                 id: ident.id,
@@ -332,6 +338,20 @@ impl<'source> Parser<'source, '_> {
         })
     }
 
+    fn can_start_expression(tok: &Token) -> bool {
+        match tok {
+            Token::RoundLeft
+            | Token::CurlyLeft
+            | Token::SquareLeft
+            | Token::Ident(..)
+            | Token::Bang
+            | Token::Bool(_)
+            | Token::Integer(_)
+            | Token::Hyphen => true,
+            _ => false,
+        }
+    }
+
     fn if_else(&mut self) -> ParseResult<Meta<Expr>> {
         let start = self.take(Token::If)?;
         let cond = self.expr_no_records()?;
@@ -357,10 +377,9 @@ impl<'source> Parser<'source, '_> {
             ))
         } else {
             let span = start.merge(self.spans.get(&then_block));
-            Ok(self.spans.add(
-                span,
-                Expr::IfElse(Box::new(cond), then_block, None),
-            ))
+            Ok(self
+                .spans
+                .add(span, Expr::IfElse(Box::new(cond), then_block, None)))
         }
     }
 
@@ -417,10 +436,7 @@ impl<'source> Parser<'source, '_> {
         let end = self.take(Token::CurlyRight)?;
         let span = start.merge(end);
         let match_expr = self.spans.add(span, Match { expr, arms });
-        Ok(self.spans.add(
-            span,
-            Expr::Match(Box::new(match_expr)),
-        ))
+        Ok(self.spans.add(span, Expr::Match(Box::new(match_expr))))
     }
 
     /// Parse any literal, including prefixes, ip addresses and communities
@@ -443,7 +459,8 @@ impl<'source> Parser<'source, '_> {
                 let len = self.prefix_length()?;
                 let span = self.merge_spans(&addr, &len);
                 return Ok(self
-                    .spans.add(span, Literal::Prefix(Prefix { addr, len })));
+                    .spans
+                    .add(span, Literal::Prefix(Prefix { addr, len })));
             } else {
                 return Ok(Meta {
                     id: addr.id,

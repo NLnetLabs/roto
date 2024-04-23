@@ -5,8 +5,8 @@ filter-map main() {
     }
 
     apply {
-        if a == 5 {
-            accept
+        if a == msg {
+            accept msg
         } else {
             reject
         }

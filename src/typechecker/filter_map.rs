@@ -18,7 +18,7 @@ impl TypeChecker<'_, '_> {
         filter_map: &ast::FilterMap,
     ) -> TypeResult<Type> {
         let ast::FilterMap {
-            filter_type: ty,
+            filter_type,
             ident,
             params,
             body:
@@ -46,14 +46,18 @@ impl TypeChecker<'_, '_> {
             self.insert_var(&mut scope, &v, t)?;
         }
 
+        let a = self.fresh_var();
+        let r = self.fresh_var();
+        let ty = Type::Verdict(Box::new(a), Box::new(r));
+
         let ctx = Context {
-            expected_type: Type::Primitive(Primitive::Verdict),
-            function_return_type: Some(Type::Primitive(Primitive::Verdict)),
+            expected_type: ty.clone(),
+            function_return_type: Some(ty.clone()),
         };
 
         self.block(&scope, &ctx, apply)?;
 
-        Ok(match ty {
+        Ok(match filter_type {
             ast::FilterType::FilterMap => Type::FilterMap(args),
             ast::FilterType::Filter => Type::Filter(args),
         })

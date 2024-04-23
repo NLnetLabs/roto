@@ -32,7 +32,7 @@ where
 
 #[test]
 fn accept() {
-    let p = compile::<u32, bool>(
+    let p = compile::<u32, Result<(), ()>>(
         "
         filter-map main() {
             define {
@@ -43,12 +43,12 @@ fn accept() {
         }
     ",
     );
-    assert_eq!(p(0), true);
+    assert_eq!(p(0), Ok(()));
 }
 
 #[test]
 fn reject() {
-    let p = compile::<u32, bool>(
+    let p = compile::<u32, Result<(), ()>>(
         "
         filter-map main() {
             define {
@@ -59,12 +59,12 @@ fn reject() {
         }
     ",
     );
-    assert_eq!(p(0), false);
+    assert_eq!(p(0), Err(()));
 }
 
 #[test]
 fn if_else() {
-    let p = compile::<u32, bool>(
+    let p = compile::<u32, Result<(), ()>>(
         "
         filter-map main() {
             define {
@@ -81,12 +81,12 @@ fn if_else() {
         }      
     ",
     );
-    assert_eq!(p(0), true);
+    assert_eq!(p(0), Ok(()));
 }
 
 #[test]
 fn react_to_rx() {
-    let p = compile::<u32, bool>(
+    let p = compile::<u32, Result<(), ()>>(
         "
         filter-map main() {
             define {
@@ -103,17 +103,17 @@ fn react_to_rx() {
         }
     ",
     );
-    assert_eq!(p(0), true);
-    assert_eq!(p(1), true);
-    assert_eq!(p(2), true);
-    assert_eq!(p(3), true);
-    assert_eq!(p(4), true);
-    assert_eq!(p(5), false);
+    assert_eq!(p(0), Ok(()));
+    assert_eq!(p(1), Ok(()));
+    assert_eq!(p(2), Ok(()));
+    assert_eq!(p(3), Ok(()));
+    assert_eq!(p(4), Ok(()));
+    assert_eq!(p(5), Err(()));
 }
 
 #[test]
 fn variable() {
-    let p = compile::<u32, bool>(
+    let p = compile::<u32, Result<(), ()>>(
         "
     filter-map main() {
         define {
@@ -131,12 +131,12 @@ fn variable() {
     }
     ",
     );
-    assert_eq!(p(0), true);
+    assert_eq!(p(0), Ok(()));
 }
 
 #[test]
 fn calling_term() {
-    let p = compile::<u32, bool>(
+    let p = compile::<u32, Result<(), ()>>(
         "
         filter-map main() {
             define {
@@ -162,13 +162,13 @@ fn calling_term() {
     );
 
     for x in 0..30 {
-        assert_eq!(p(x), 10 < x && x < 20);
+        assert_eq!(p(x), if 10 < x && x < 20 { Ok(()) } else { Err(()) });
     }
 }
 
 #[test]
 fn anonymous_record() {
-    let p = compile::<u32, bool>(
+    let p = compile::<u32, Result<(), ()>>(
         "
         filter-map main() {
             define {
@@ -189,13 +189,13 @@ fn anonymous_record() {
     );
 
     for x in 0..30 {
-        assert_eq!(p(x), 10 < x && x < 20);
+        assert_eq!(p(x), if 10 < x && x < 20 { Ok(()) } else { Err(()) });
     }
 }
 
 #[test]
 fn typed_record() {
-    let p = compile::<u32, bool>(
+    let p = compile::<u32, Result<(), ()>>(
         "
         type Range {
             low: U32,
@@ -223,13 +223,13 @@ fn typed_record() {
     );
 
     for x in 0..1 {
-        assert_eq!(p(x), 10 < x && x < 20);
+        assert_eq!(p(x), if 10 < x && x < 20 { Ok(()) } else { Err(()) });
     }
 }
 
 #[test]
 fn enum_values() {
-    let p = compile::<SafeValue, bool>(
+    let p = compile::<SafeValue, Result<(), ()>>(
         "
         filter-map main() { 
             define {
@@ -248,15 +248,15 @@ fn enum_values() {
     );
 
     // IpV4 -> accepted
-    assert_eq!(p(SafeValue::Enum(0, Box::new(SafeValue::Unit))), true);
+    assert_eq!(p(SafeValue::Enum(0, Box::new(SafeValue::Unit))), Ok(()));
 
     // IpV6 -> rejected
-    assert_eq!(p(SafeValue::Enum(1, Box::new(SafeValue::Unit))), false);
+    assert_eq!(p(SafeValue::Enum(1, Box::new(SafeValue::Unit))), Err(()));
 }
 
 #[test]
 fn bmp_message() {
-    let p = compile::<SafeValue, bool>(
+    let p = compile::<SafeValue, Result<(), ()>>(
         "
         filter-map main() {
             define {
@@ -276,18 +276,18 @@ fn bmp_message() {
     );
     assert_eq!(
         p(SafeValue::Enum(0, Box::new(SafeValue::Record(Vec::new())))),
-        true
+        Ok(())
     );
 
     assert_eq!(
         p(SafeValue::Enum(1, Box::new(SafeValue::Record(Vec::new())))),
-        false
+        Err(())
     );
 }
 
 #[test]
 fn bmp_message_2() {
-    let p = compile::<SafeValue, bool>(
+    let p = compile::<SafeValue, Result<(), ()>>(
         "
         filter-map main() { 
             define {
@@ -321,7 +321,7 @@ fn bmp_message_2() {
                 SafeValue::U16(80)
             )]))
         )),
-        true
+        Ok(())
     );
 
     assert_eq!(
@@ -332,18 +332,18 @@ fn bmp_message_2() {
                 SafeValue::U16(10)
             )]))
         )),
-        false
+        Err(())
     );
 
     assert_eq!(
         p(SafeValue::Enum(1, Box::new(SafeValue::Record(Vec::new())))),
-        false
+        Err(())
     );
 }
 
 #[test]
 fn bmp_message_3() {
-    let p = compile::<SafeValue, bool>(
+    let p = compile::<SafeValue, Result<(), ()>>(
         "
         filter-map main() { 
             define {
@@ -373,7 +373,7 @@ fn bmp_message_3() {
                 SafeValue::U16(80)
             )]))
         )),
-        true
+        Ok(())
     );
 
     assert_eq!(
@@ -384,18 +384,18 @@ fn bmp_message_3() {
                 SafeValue::U16(10)
             )]))
         )),
-        false
+        Err(())
     );
 
     assert_eq!(
         p(SafeValue::Enum(1, Box::new(SafeValue::Record(Vec::new())))),
-        false
+        Err(())
     );
 }
 
 #[test]
 fn bmp_message_4() {
-    let p = compile::<SafeValue, bool>(
+    let p = compile::<SafeValue, Result<(), ()>>(
         "
         filter-map main() { 
             define {
@@ -427,7 +427,7 @@ fn bmp_message_4() {
                 SafeValue::U16(80)
             )]))
         )),
-        true
+        Ok(())
     );
 
     assert_eq!(
@@ -438,7 +438,7 @@ fn bmp_message_4() {
                 SafeValue::U16(12)
             )]))
         )),
-        true
+        Ok(())
     );
 
     assert_eq!(
@@ -449,7 +449,7 @@ fn bmp_message_4() {
                 SafeValue::U16(70)
             )]))
         )),
-        true
+        Ok(())
     );
 
     assert_eq!(
@@ -460,18 +460,18 @@ fn bmp_message_4() {
                 SafeValue::U16(10)
             )]))
         )),
-        false
+        Err(())
     );
 
     assert_eq!(
         p(SafeValue::Enum(1, Box::new(SafeValue::Record(Vec::new())))),
-        false
+        Err(())
     );
 }
 
 #[test]
 fn bmp_message_5() {
-    let p = compile::<SafeValue, bool>(
+    let p = compile::<SafeValue, Result<(), ()>>(
         "
         filter-map main() { 
             define {
@@ -504,7 +504,7 @@ fn bmp_message_5() {
                 SafeValue::U16(80)
             )]))
         )),
-        true
+        Ok(())
     );
 
     assert_eq!(
@@ -515,7 +515,7 @@ fn bmp_message_5() {
                 SafeValue::U16(12)
             )]))
         )),
-        false
+        Err(())
     );
 
     assert_eq!(
@@ -526,7 +526,7 @@ fn bmp_message_5() {
                 SafeValue::U16(70)
             )]))
         )),
-        false
+        Err(())
     );
 
     assert_eq!(
@@ -537,18 +537,18 @@ fn bmp_message_5() {
                 SafeValue::U16(10)
             )]))
         )),
-        false
+        Err(())
     );
 
     assert_eq!(
         p(SafeValue::Enum(1, Box::new(SafeValue::Record(Vec::new())))),
-        false
+        Err(())
     );
 }
 
 #[test]
 fn prefix_addr() {
-    let p = compile::<SafeValue, bool>(
+    let p = compile::<SafeValue, Result<(), ()>>(
         "
         filter-map main() { 
             define {
@@ -569,13 +569,13 @@ fn prefix_addr() {
         p(SafeValue::from_any(Box::new(
             Prefix::from_str("0.0.0.0/8").unwrap()
         ))),
-        true
+        Ok(())
     );
 
     assert_eq!(
         p(SafeValue::from_any(Box::new(
             Prefix::from_str("127.0.0.0/8").unwrap()
         ))),
-        false
+        Err(())
     );
 }

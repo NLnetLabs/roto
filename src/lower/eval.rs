@@ -6,7 +6,7 @@ use log::trace;
 
 use crate::{
     ast::BinOp,
-    lower::{ir::Instruction, value::Value},
+    lower::{ir::Instruction, value::{Value, Verdict}},
 };
 
 use super::{
@@ -118,6 +118,15 @@ pub fn eval(
                 } else {
                     return val.clone();
                 }
+            }
+            Instruction::Exit(b, ret) => {
+                let val = eval_operand(&mem, ret);
+                let verdict = if *b {
+                    Verdict::Accept(val.clone())
+                } else {
+                    Verdict::Reject(val.clone())
+                };
+                return SafeValue::Verdict(Box::new(verdict));
             }
             Instruction::BinOp {
                 to,

@@ -3,13 +3,17 @@
 use log::info;
 
 use crate::{
-    ast, lower::{self, eval, ir, value::SafeValue}, parser::{
+    ast,
+    lower::{self, eval, ir, value::SafeValue},
+    parser::{
         meta::{Span, Spans},
         ParseError, Parser,
-    }, runtime::Runtime, typechecker::{
+    },
+    runtime::Runtime,
+    typechecker::{
         error::{Level, TypeError},
         TypeInfo,
-    }
+    },
 };
 
 /// A filename with its contents
@@ -27,7 +31,7 @@ enum RotoError {
 }
 
 /// An error report containing a set of Roto errors
-/// 
+///
 /// The errors can be printed with the regular [`std::fmt::Display`].
 #[derive(Debug)]
 pub struct RotoReport {
@@ -262,7 +266,11 @@ impl Parsed {
         }
 
         if errors.is_empty() {
-            Ok(TypeChecked { runtime, trees, type_infos })
+            Ok(TypeChecked {
+                runtime,
+                trees,
+                type_infos,
+            })
         } else {
             Err(RotoReport {
                 files: files.to_vec(),
@@ -275,7 +283,11 @@ impl Parsed {
 
 impl TypeChecked {
     pub fn lower(self) -> Lowered {
-        let TypeChecked { runtime, trees, type_infos } = self;
+        let TypeChecked {
+            runtime,
+            trees,
+            type_infos,
+        } = self;
         let ir = lower::lower(&runtime, &trees[0], type_infos[0].clone());
         info!("{ir}");
         Lowered { ir }

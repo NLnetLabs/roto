@@ -79,21 +79,44 @@ impl TypeChecker<'_, '_> {
             .insert(id, ctx.expected_type.clone());
 
         match &expr.node {
-            Accept | Reject => {
+            Return(kind, e) => {
                 let Some(ret) = &ctx.function_return_type else {
-                    let s = if let Accept = expr.node {
-                        "accept"
-                    } else {
-                        "reject"
-                    };
-                    return Err(error::cannot_diverge_here(s, expr));
+                    return Err(error::cannot_diverge_here(kind.str(), expr));
                 };
-                self.unify(
-                    ret,
-                    &Type::Primitive(Primitive::Verdict),
-                    id,
-                    None,
-                )?;
+
+                self.unify(&ctx.expected_type, &Type::Never, id, None)?;
+
+                let expected_type = match kind {
+                    ast::ReturnKind::Return => ret.clone(),
+                    ast::ReturnKind::Accept => {
+                        let a_ty = self.fresh_var();
+                        let b_ty = self.fresh_var();
+                        let ty =
+                            Type::Verdict(Box::new(a_ty.clone()), Box::new(b_ty));
+                        self.unify(ret, &ty, id, None)?;
+                        a_ty
+                    }
+                    ast::ReturnKind::Reject => {
+                        let a_ty = self.fresh_var();
+                        let r_ty = self.fresh_var();
+                        let ty =
+                            Type::Verdict(Box::new(a_ty), Box::new(r_ty.clone()));
+                        self.unify(ret, &ty, id, None)?;
+                        r_ty
+                    }
+                };
+
+                if let Some(e) = e {
+                    self.expr(scope, &ctx.with_type(expected_type), e)?;
+                } else {
+                    self.unify(
+                        &expected_type,
+                        &Type::Primitive(Primitive::Unit),
+                        id,
+                        None,
+                    )?;
+                }
+
                 Ok(true)
             }
             Literal(l) => self.literal(ctx, l),
@@ -288,14 +311,6 @@ impl TypeChecker<'_, '_> {
             }
             BinOp(left, op, right) => {
                 self.binop(scope, ctx, op, id, left, right)
-            }
-            Return(e) => {
-                let Some(ret) = &ctx.function_return_type else {
-                    return Err(error::cannot_diverge_here("return", expr));
-                };
-                self.unify(&ctx.expected_type, &Type::Never, id, None)?;
-                self.expr(scope, &ctx.with_type(ret), e)?;
-                Ok(true)
             }
             IfElse(c, t, e) => {
                 self.expr(
@@ -575,8 +590,7 @@ impl TypeChecker<'_, '_> {
                     | Type::RecordVar(..)
                     | Type::NamedRecord(..) => (),
                     Type::BuiltIn(_, i)
-                        if self.runtime.get_type(i).eq.is_some() =>
-                    {}
+                        if self.runtime.get_type(i).eq.is_some() => {}
                     _ => {
                         return Err(error::simple(
                             "type cannot be compared",

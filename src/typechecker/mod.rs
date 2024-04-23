@@ -135,7 +135,10 @@ pub struct TypeChecker<'r, 'methods> {
 
 pub type TypeResult<T> = Result<T, TypeError>;
 
-pub fn typecheck(runtime: &Runtime, tree: &ast::SyntaxTree) -> TypeResult<TypeInfo> {
+pub fn typecheck(
+    runtime: &Runtime,
+    tree: &ast::SyntaxTree,
+) -> TypeResult<TypeInfo> {
     let methods = types::methods(runtime);
     let static_methods = types::static_methods();
 
@@ -172,12 +175,13 @@ impl<'r, 'methods> TypeChecker<'r, 'methods> {
         // declarations, we check whether any nones are left to determine
         // whether any types are unresolved.
         // The builtin types are added right away.
-        let mut types: HashMap<String, MaybeDeclared> = default_types(self.runtime)
-            .into_iter()
-            .map(|(s, t)| {
-                (s.to_string(), MaybeDeclared::Declared(t.clone(), None))
-            })
-            .collect();
+        let mut types: HashMap<String, MaybeDeclared> =
+            default_types(self.runtime)
+                .into_iter()
+                .map(|(s, t)| {
+                    (s.to_string(), MaybeDeclared::Declared(t.clone(), None))
+                })
+                .collect();
 
         let mut root_scope = Scope::default();
 
@@ -459,6 +463,10 @@ impl<'r, 'methods> TypeChecker<'r, 'methods> {
             }
             (Rib(a), Rib(b)) => Rib(Box::new(self.unify_inner(&a, &b)?)),
             (List(a), List(b)) => List(Box::new(self.unify_inner(&a, &b)?)),
+            (Verdict(a1, r1), Verdict(a2, r2)) => Verdict(
+                Box::new(self.unify_inner(&a1, &a2)?),
+                Box::new(self.unify_inner(&r1, &r2)?),
+            ),
             (
                 RecordVar(a_var, a_fields),
                 ref b @ (RecordVar(_, ref b_fields)
@@ -641,6 +649,10 @@ impl<'r, 'methods> TypeChecker<'r, 'methods> {
             | Type::OutputStream(t)
             | Type::Rib(t)
             | Type::List(t) => self.visit(visited, t),
+            Type::Verdict(t1, t2) => {
+                self.visit(visited, t1)?;
+                self.visit(visited, t2)
+            }
             Type::NamedRecord(_, fields) | Type::Record(fields) => {
                 for (_, ty) in fields {
                     self.visit(visited, ty)?;

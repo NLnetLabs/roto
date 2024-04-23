@@ -13,6 +13,7 @@ pub enum Type {
     Never,
     Primitive(Primitive),
     BuiltIn(&'static str, TypeId),
+    Verdict(Box<Type>, Box<Type>),
     List(Box<Type>),
     Table(Box<Type>),
     OutputStream(Box<Type>),
@@ -35,7 +36,6 @@ pub enum Primitive {
     Unit,
     String,
     Bool,
-    Verdict,
 }
 
 impl From<Primitive> for Type {
@@ -72,6 +72,9 @@ impl Display for Type {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
+            Type::Verdict(a, r) => {
+                write!(f, "Verdict<{a}, {r}>")
+            }
             Type::Never => write!(f, "!"),
             Type::Primitive(p) => write!(f, "{p}"),
             Type::BuiltIn(name, _) => write!(f, "{name}"),
@@ -111,6 +114,9 @@ impl Type {
             Type::Table(x) => Type::Table(Box::new(f(x))),
             Type::OutputStream(x) => Type::OutputStream(Box::new(f(x))),
             Type::Rib(x) => Type::Rib(Box::new(f(x))),
+            Type::Verdict(a, r) => {
+                Type::Verdict(Box::new(f(a)), Box::new(f(r)))
+            }
             Type::RecordVar(x, fields) => Type::RecordVar(
                 *x,
                 fields.iter().map(|(n, t)| (n.clone(), f(t))).collect(),
@@ -131,7 +137,6 @@ impl Primitive {
     /// Size of the type in bytes
     pub fn size(&self) -> u32 {
         match self {
-            Primitive::Verdict => 1,
             Primitive::U32 => 4,
             Primitive::U16 => 2,
             Primitive::U8 => 1,

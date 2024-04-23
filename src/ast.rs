@@ -84,8 +84,7 @@ pub struct Block {
 
 #[derive(Clone, Debug)]
 pub enum Expr {
-    Accept,
-    Reject,
+    Return(ReturnKind, Option<Box<Meta<Expr>>>),
     /// a literal, or a chain of field accesses and/or methods on a literal,
     /// e.g. `10.0.0.0/8.covers(..)`
     Literal(Meta<Literal>),
@@ -113,9 +112,26 @@ pub enum Expr {
     List(Vec<Meta<Expr>>),
     Not(Box<Meta<Expr>>),
     BinOp(Box<Meta<Expr>>, BinOp, Box<Meta<Expr>>),
-    Return(Box<Meta<Expr>>),
     IfElse(Box<Meta<Expr>>, Meta<Block>, Option<Meta<Block>>),
 }
+
+#[derive(Clone, Debug)]
+pub enum ReturnKind {
+    Return,
+    Accept,
+    Reject,
+}
+
+impl ReturnKind {
+    pub fn str(&self) -> &'static str {
+        match self {
+            ReturnKind::Return => "return",
+            ReturnKind::Accept => "accept",
+            ReturnKind::Reject => "reject",
+        }
+    }
+}
+
 
 #[derive(Clone, Debug)]
 pub struct Record {
