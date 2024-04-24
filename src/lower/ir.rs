@@ -210,11 +210,11 @@ where
     }
 }
 
-pub struct Program<P, V> {
+pub struct Function<P, V> {
     pub blocks: Vec<Block<P, V>>,
 }
 
-impl<P, V> Display for Program<P, V>
+impl<P, V> Display for Function<P, V>
 where
     Block<P, V>: Display,
 {

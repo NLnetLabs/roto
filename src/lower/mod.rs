@@ -10,7 +10,7 @@ pub mod value;
 #[cfg(test)]
 mod test_eval;
 
-use ir::{Block, Instruction, Operand, Program, Var};
+use ir::{Block, Function, Instruction, Operand, Var};
 use std::{collections::HashMap, net::IpAddr};
 
 use crate::{
@@ -26,30 +26,37 @@ use crate::{
 use self::value::SafeValue;
 
 struct Lowerer<'r> {
+    function_name: &'r str,
     runtime: &'r Runtime,
     tmp_idx: usize,
     blocks: Vec<Block<Var, SafeValue>>,
-    type_info: TypeInfo,
+    type_info: &'r mut TypeInfo,
     block_names: HashMap<String, usize>,
 }
 
 pub fn lower(
     runtime: &Runtime,
     tree: &ast::SyntaxTree,
-    type_info: TypeInfo,
-) -> Program<Var, SafeValue> {
-    let lowerer = Lowerer {
-        runtime,
-        tmp_idx: 0,
-        type_info,
-        blocks: Vec::new(),
-        block_names: HashMap::new(),
-    };
-
-    lowerer.tree(tree)
+    type_info: &mut TypeInfo,
+) -> Vec<Function<Var, SafeValue>> {
+    Lowerer::tree(runtime, type_info, tree)
 }
 
-impl Lowerer<'_> {
+impl<'r> Lowerer<'r> {
+    fn new(
+        runtime: &'r Runtime,
+        type_info: &'r mut TypeInfo,
+        function_name: &'r str,
+    ) -> Self {
+        Self {
+            runtime,
+            tmp_idx: 0,
+            type_info,
+            function_name,
+            blocks: Vec::new(),
+            block_names: HashMap::new(),
+        }
+    }
     /// Create a block with a unique name starting with a given prefix
     ///
     /// For example, the prefix `if-then` will give `if-then` for the first
@@ -59,7 +66,7 @@ impl Lowerer<'_> {
         let name = if *v == 0 {
             s.to_string()
         } else {
-            format!("{s}.{v}")
+            format!("{}::{s}.{v}", self.function_name)
         };
         *v += 1;
         name
@@ -89,37 +96,55 @@ impl Lowerer<'_> {
     /// Create a new unique temporary variable
     fn new_tmp(&mut self) -> Var {
         let var = Var {
-            var: format!("$tmp-{}", self.tmp_idx),
+            var: format!("{}::$tmp-{}", self.function_name, self.tmp_idx),
         };
         self.tmp_idx += 1;
         var
     }
 
     /// Lower a syntax tree
-    fn tree(mut self, tree: &ast::SyntaxTree) -> Program<Var, SafeValue> {
+    fn tree(
+        runtime: &Runtime,
+        type_info: &mut TypeInfo,
+        tree: &ast::SyntaxTree,
+    ) -> Vec<Function<Var, SafeValue>> {
         let ast::SyntaxTree { expressions } = tree;
+
+        let mut functions = Vec::new();
 
         for expr in expressions {
             match expr {
                 ast::Declaration::FilterMap(x) => {
-                    self.filter_map(x);
+                    functions.push(
+                        Lowerer::new(runtime, type_info, x.ident.as_ref())
+                            .filter_map(x),
+                    );
                 }
-                ast::Declaration::Term(ast::TermDeclaration { ident, params, body }) 
-                | ast::Declaration::Action(ast::ActionDeclaration { ident, params, body })=> {
-                    self.function(ident, params, body)
+                ast::Declaration::Term(ast::TermDeclaration {
+                    ident,
+                    params,
+                    body,
+                })
+                | ast::Declaration::Action(ast::ActionDeclaration {
+                    ident,
+                    params,
+                    body,
+                }) => {
+                    functions.push(
+                        Lowerer::new(runtime, type_info, ident.as_ref())
+                            .function(ident, params, body),
+                    );
                 }
                 // Ignore the rest
                 _ => {}
             }
         }
 
-        Program {
-            blocks: self.blocks,
-        }
+        functions
     }
 
     /// Lower a filter-map
-    fn filter_map(&mut self, fm: &ast::FilterMap) {
+    fn filter_map(mut self, fm: &ast::FilterMap) -> Function<Var, SafeValue> {
         let ast::FilterMap {
             ident,
             body,
@@ -155,6 +180,10 @@ impl Lowerer<'_> {
         let last = self.block(apply);
 
         self.add(Instruction::Return(last.unwrap_or(SafeValue::Unit.into())));
+
+        Function {
+            blocks: self.blocks,
+        }
     }
 
     /// Lower a function
@@ -168,17 +197,21 @@ impl Lowerer<'_> {
     /// that we don't even need a return instruction. However, this could
     /// also be done by an optimizing step.
     fn function(
-        &mut self,
+        mut self,
         ident: &Meta<Identifier>,
         _params: &Meta<ast::Params>,
         body: &ast::Block,
-    ) {
+    ) -> Function<Var, SafeValue> {
         let ident = self.type_info.full_name(ident);
         self.new_block(&ident);
 
         let last = self.block(body);
 
-        self.add(Instruction::Return(last.unwrap_or(SafeValue::Unit.into())))
+        self.add(Instruction::Return(last.unwrap_or(SafeValue::Unit.into())));
+
+        Function {
+            blocks: self.blocks,
+        }
     }
 
     /// Lower a block

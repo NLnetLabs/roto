@@ -10,7 +10,7 @@ use crate::{
 };
 
 use super::{
-    ir::{Operand, Program, Var},
+    ir::{Operand, Function, Var},
     value::SafeValue,
 };
 
@@ -25,7 +25,7 @@ struct StackFrame {
 /// fairly slow. This is because all variables at this point are identified
 /// by strings and therefore stored as a hashmap.
 pub fn eval(
-    p: &Program<Var, SafeValue>,
+    p: &[Function<Var, SafeValue>],
     filter_map: &str,
     rx: SafeValue,
 ) -> SafeValue {
@@ -34,7 +34,7 @@ pub fn eval(
     let mut block_map = HashMap::new();
     let mut instructions = Vec::new();
 
-    for block in &p.blocks {
+    for block in p.iter().flat_map(|f| &f.blocks) {
         block_map.insert(block.label.clone(), instructions.len());
         instructions.extend(block.instructions.clone());
     }

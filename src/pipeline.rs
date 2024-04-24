@@ -1,7 +1,5 @@
 //! Compiler pipeline that executes multiple compiler stages in sequence
 
-use log::info;
-
 use crate::{
     ast,
     lower::{self, eval, ir, value::SafeValue},
@@ -61,7 +59,7 @@ pub struct TypeChecked {
 
 /// Compiler stage: HIR
 pub struct Lowered {
-    ir: ir::Program<ir::Var, SafeValue>,
+    ir: Vec<ir::Function<ir::Var, SafeValue>>,
 }
 
 impl std::fmt::Display for RotoReport {
@@ -155,7 +153,6 @@ pub fn run(
     rx: SafeValue,
 ) -> Result<SafeValue, RotoReport> {
     let lowered = read_files(files)?.parse()?.typecheck()?.lower();
-    info!("Generated code:\n{}", lowered.ir);
     Ok(lowered.eval(rx))
 }
 
@@ -286,10 +283,9 @@ impl TypeChecked {
         let TypeChecked {
             runtime,
             trees,
-            type_infos,
+            mut type_infos,
         } = self;
-        let ir = lower::lower(&runtime, &trees[0], type_infos[0].clone());
-        info!("{ir}");
+        let ir = lower::lower(&runtime, &trees[0], &mut type_infos[0]);
         Lowered { ir }
     }
 }
