@@ -157,7 +157,7 @@ impl Display for SafeValue {
                     Verdict::Reject(x) => write!(f, "Reject({x})"),
                 }
             }
-            _ => todo!("{:?}", self),
+            SafeValue::Runtime(..) => write!(f, "Runtime(..)"),
         }
     }
 }
@@ -201,7 +201,7 @@ impl TryFrom<SafeValue> for bool {
     }
 }
 
-impl<'a, T, E> TryFrom<SafeValue> for Result<T, E>
+impl<T, E> TryFrom<SafeValue> for Result<T, E>
 where
     T: TryFrom<SafeValue, Error = ()>,
     E: TryFrom<SafeValue, Error = ()>,

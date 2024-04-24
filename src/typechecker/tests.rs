@@ -2,11 +2,19 @@ use crate::pipeline::{self, RotoReport};
 
 #[track_caller]
 fn typecheck(s: &str) -> Result<(), RotoReport> {
-    let res = pipeline::test_file(s).parse().unwrap().typecheck();
+    let res = pipeline::test_file(s).parse();
+
+    let res = match res {
+        Ok(res) => res,
+        Err(err) => {
+            println!("{err}");
+            panic!("Parse Error");
+        }
+    };
 
     // Unwrap on parse because a parse error in this file is never correct.
     // We only want to test for type errors.
-    if let Err(e) = res {
+    if let Err(e) = res.typecheck() {
         println!("{e}");
         Err(e)
     } else {
@@ -137,9 +145,8 @@ fn rib_contains_record() {
 #[test]
 fn filter_map() {
     let src = r#"
-        filter-map blabla() {
+        filter-map blabla(foo: U32) {
             define {
-                rx foo: U32;
                 a = "hello";
                 b = 0.0.0.0/10;
                 c = 192.168.0.0;
@@ -154,9 +161,8 @@ fn filter_map() {
 #[test]
 fn filter_map_double_definition() {
     let src = r#"
-        filter-map blabla() {
+        filter-map blabla(foo: U32) {
             define {
-                rx foo: U32;
                 a = "hello";
                 a = 0.0.0.0/10;
             }
@@ -172,9 +178,8 @@ fn using_records() {
     let src = r#"
         type Foo { a: String }
 
-        filter-map bar() {
+        filter-map bar(r: U32) {
             define {
-                rx r: U32;
                 a = Foo { a: "hello" };
             }
 
@@ -186,9 +191,8 @@ fn using_records() {
     let src = r#"
         type Foo { a: String }
 
-        filter-map bar() {
+        filter-map bar(r: U32) {
             define {
-                rx r: U32;
                 a = Foo { a: 0.0.0.0 };
             }
 
@@ -200,9 +204,8 @@ fn using_records() {
     let src = r#"
         type Foo { a: string }
 
-        filter-map bar() {
+        filter-map bar(r: U32) {
             define {
-                rx r: U32;
                 a = Foo { };
             }
 
@@ -217,9 +220,8 @@ fn integer_inference() {
     let src = "
         type Foo { x: U8 }
 
-        filter-map test() {
+        filter-map test(r: U32) {
             define {
-                rx r: U32;
                 foo = Foo { x: 5 };
             }
 
@@ -232,9 +234,8 @@ fn integer_inference() {
         type Foo { x: U8 }
         type Bar { x: U8 }
 
-        filter-map test() {
+        filter-map test(r: U32) {
             define {
-                rx r: U32;
                 a = 5;
                 foo = Foo { x: a };
             }
@@ -248,9 +249,8 @@ fn integer_inference() {
         type Foo { x: U8 }
         type Bar { x: U8 }
 
-        filter-map test() {
+        filter-map test(r: U32) {
             define {
-                rx r: U32;
                 a = 5;
                 foo = Foo { x: a };
                 bar = Bar { x: a };
@@ -265,9 +265,8 @@ fn integer_inference() {
         type Foo { x: U8 }
         type Bar { x: U32 }
 
-        filter-map test() {
+        filter-map test(r: U32) {
             define {
-                rx r: U32;
                 a = 5;
                 foo = Foo { x: a };
                 bar = Bar { x: a };
@@ -282,9 +281,8 @@ fn integer_inference() {
         type Foo { x: U8 }
         type Bar { x: U32 }
 
-        filter-map test() {
+        filter-map test(r: U32) {
             define {
-                rx r: U32;
                 foo = Foo { x: 5 };
                 bar = Bar { x: 5 };
             }
@@ -301,9 +299,8 @@ fn assign_field_to_other_record() {
         type Foo { x: U8 }
         type Bar { x: U8 }
 
-        filter-map test() {
+        filter-map test(r: U32) {
             define {
-                rx r: U32;
                 foo = Foo { x: 5 };
                 bar = Bar { x: foo.x };
             }
@@ -317,9 +314,8 @@ fn assign_field_to_other_record() {
         type Foo { x: U8 }
         type Bar { x: U8 }
 
-        filter-map test() {
+        filter-map test(r: U32) {
             define {
-                rx r: U32;
                 foo = Foo { x: 5 };
                 bar = Bar { x: foo.y };
             }
@@ -333,9 +329,8 @@ fn assign_field_to_other_record() {
         type Foo { x: U8 }
         type Bar { x: U32 }
 
-        filter-map test() {
+        filter-map test(r: U32) {
             define {
-                rx r: U32;
                 foo = Foo { x: 5 };
                 bar = Bar { x: foo.x };
             }
@@ -349,9 +344,8 @@ fn assign_field_to_other_record() {
 #[test]
 fn prefix_method() {
     let src = "
-        filter-map test() {
+        filter-map test(r: U32) {
             define {
-                rx r: U32;
                 p = 10.10.10.10/20;
                 add = p.address();
             }
@@ -365,9 +359,8 @@ fn prefix_method() {
 #[test]
 fn logical_expr() {
     let src = "
-        filter-map test() {
+        filter-map test(r: U32) {
             define {
-                rx r: U32;
                 p = 10.10.10.10/10;
             }
 
@@ -381,9 +374,8 @@ fn logical_expr() {
     typecheck(src).unwrap();
 
     let src = r#"
-        filter-map test() {
+        filter-map test(r: U32) {
             define {
-                rx r: U32;
                 p = 10.10.10.10/10;
             }
 
@@ -404,11 +396,7 @@ fn send_output_stream() {
             foo: String
         }
 
-        filter-map test() {
-            define {
-                rx r: U32;
-            }
-
+        filter-map test(r: U32) {
             action hello() {
                 stream.send(Msg {
                     foo: "hello",
@@ -427,11 +415,7 @@ fn send_output_stream() {
 
         type Bar { bar: String }
 
-        filter-map test() {
-            define {
-                rx r: U32;
-            }
-
+        filter-map test(r: U32) {
             action hello() {
                 stream.send(Bar {
                     bar: "hello",
@@ -452,11 +436,7 @@ fn send_output_stream() {
             bar: String
         }
 
-        filter-map test() {
-            define {
-                rx r: U32;
-            }
-
+        filter-map test(r: U32) {
             action hello() {
                 foos.send(Foo {
                     foo: "hello",
@@ -480,11 +460,7 @@ fn send_output_stream() {
             bar: String
         }
 
-        filter-map test() {
-            define {
-                rx r: U32;
-            }
-
+        filter-map test(r: U32) {
             action hello() {
                 foos.send(Foo {
                     foo: "hello",
@@ -503,9 +479,8 @@ fn send_output_stream() {
 #[test]
 fn term_overrides_var() {
     let src = r#"
-        filter-map test() {
+        filter-map test(r: U32) {
             define {
-                rx r: U32;
                 a = true;
             }
 
@@ -524,9 +499,8 @@ fn record_inference() {
     let src = "
         output-stream s contains Msg { a: U32 }
 
-        filter-map foo() { 
+        filter-map foo(r: U32) { 
             define {
-                rx r: U32;
                 a = { a: 8 };
             }
 
@@ -542,9 +516,8 @@ fn record_inference() {
     let src = "
         output-stream s contains Msg { a: U32 }
 
-        filter-map foo() { 
+        filter-map foo(r: U32) { 
             define {
-                rx r: U32;
                 a = { b: 8 };
             }
 
@@ -560,9 +533,8 @@ fn record_inference() {
     let src = "
         type A { a: U32 }
 
-        filter-map foo() { 
+        filter-map foo(r: U32) { 
             define {
-                rx r: U32;
                 a = { a: 8 };
                 b = A { a: 8 };
             }
@@ -580,9 +552,8 @@ fn record_inference() {
         type A { a: U32 }
         type B { a: U32 }
 
-        filter-map foo() { 
+        filter-map foo(r: U32) { 
             define {
-                rx r: U32;
                 a = { a: 8 };
                 b = A { a: 8 };
                 c = B { a: 8 };
@@ -601,11 +572,7 @@ fn record_inference() {
 #[test]
 fn return_keyword() {
     let src = "
-        filter-map foo() { 
-            define {
-                rx r: U32;
-            }
-
+        filter-map foo(r: U32) { 
             term foo() {
                 return true
             }
@@ -616,11 +583,7 @@ fn return_keyword() {
     typecheck(src).unwrap();
 
     let src = "
-        filter-map foo() { 
-            define {
-                rx r: U32;
-            }
-
+        filter-map foo(r: U32) { 
             term foo() {
                 return 2
             }
@@ -634,11 +597,7 @@ fn return_keyword() {
 #[test]
 fn unit_block() {
     let src = "
-        filter-map foo() { 
-            define {
-                rx r: U32;
-            }
-
+        filter-map foo(r: U32) { 
             // workaround for not having a ()
             action unit() {}
 
@@ -655,11 +614,7 @@ fn unit_block() {
 #[test]
 fn unreachable_expression() {
     let src = "
-        filter-map foo() { 
-            define {
-                rx r: U32;
-            }
-
+        filter-map foo(r: U32) { 
             term foo() {
                 return true;
                 return false;
@@ -674,9 +629,8 @@ fn unreachable_expression() {
 #[test]
 fn enum_values() {
     let src = "
-        filter-map main() { 
+        filter-map main(r: U32) { 
             define {
-                rx r: U32;
                 x = Afi.IpV4;
             }
 
@@ -695,9 +649,8 @@ fn enum_values() {
 #[test]
 fn bmp_message() {
     let src = "
-        filter-map main() { 
+        filter-map main(x: BmpMessage) { 
             define {
-                rx x: BmpMessage;
                 a = BmpMessage.InitiationMessage(BmpInitiationMessage {});
             }
 
@@ -716,9 +669,8 @@ fn bmp_message() {
 #[test]
 fn enum_match() {
     let src = "
-        filter-map foo() { 
+        filter-map foo(r: U32) { 
             define {
-                rx r: U32;
                 x = Afi.IpV4;
             }
 
@@ -737,11 +689,7 @@ fn enum_match() {
 #[test]
 fn bmp_message_4() {
     let src = "
-        filter-map main() { 
-            define {
-                rx x: BmpMessage;
-            }
-
+        filter-map main(x: BmpMessage) { 
             apply {
                 match x {
                     PeerUpNotification(x) | x.local_port == 80 -> accept,

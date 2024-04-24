@@ -339,17 +339,17 @@ impl<'source> Parser<'source, '_> {
     }
 
     fn can_start_expression(tok: &Token) -> bool {
-        match tok {
+        matches!(
+            tok,
             Token::RoundLeft
-            | Token::CurlyLeft
-            | Token::SquareLeft
-            | Token::Ident(..)
-            | Token::Bang
-            | Token::Bool(_)
-            | Token::Integer(_)
-            | Token::Hyphen => true,
-            _ => false,
-        }
+                | Token::CurlyLeft
+                | Token::SquareLeft
+                | Token::Ident(..)
+                | Token::Bang
+                | Token::Bool(_)
+                | Token::Integer(_)
+                | Token::Hyphen
+        )
     }
 
     fn if_else(&mut self) -> ParseResult<Meta<Expr>> {

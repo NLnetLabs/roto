@@ -1,6 +1,5 @@
 use crate::ast::{
-    ActionDeclaration, Define, DefineBody, FilterMap, FilterMapBody,
-    FilterMapExpr, FilterType, Identifier, RxTxType, TermDeclaration,
+    ActionDeclaration, Expr, FilterMap, FilterMapBody, FilterMapExpr, FilterType, Identifier, TermDeclaration
 };
 
 use super::{
@@ -71,8 +70,7 @@ impl<'source> Parser<'source, '_> {
                         span,
                     ));
                 }
-                let body = self.define_body()?;
-                define = Some(Define { body });
+                define = Some(self.define_body()?);
             } else if self.peek_is(Token::Apply) {
                 let (_, span) = self.next()?;
                 if apply.is_some() {
@@ -89,14 +87,7 @@ impl<'source> Parser<'source, '_> {
             }
         }
 
-        let Some(define) = define else {
-            return Err(ParseError::custom(
-                "a filter or filter-map requires at \
-                    least one define section",
-                "this filter or filter-map is missing a define section",
-                span,
-            ));
-        };
+        let define = define.unwrap_or_default();
 
         let Some(apply) = apply else {
             return Err(ParseError::custom(
@@ -117,43 +108,12 @@ impl<'source> Parser<'source, '_> {
     /// Parse the body of a define section
     ///
     /// ```ebnf
-    /// DefineBody ::= '{' RxTxType Use? Assignment* '}'
-    ///
-    /// RxTxType   ::= 'rx_tx' TypeIdentField ';'
-    ///              | 'rx' TypeIdentField ';' 'tx' TypeIdentField ';'
-    ///              | 'rx' TypeIdentField ';'
-    ///
-    /// Use        ::= 'use' Identifier Identifier
+    /// DefineBody ::= '{' Assignment* '}'
     ///
     /// Assignment ::= Identifier '=' ValueExpr ';'
     /// ```
-    fn define_body(&mut self) -> ParseResult<DefineBody> {
+    fn define_body(&mut self) -> ParseResult<Vec<(Meta<Identifier>, Meta<Expr>)>> {
         self.take(Token::CurlyLeft)?;
-
-        let (token, span) = self.next()?;
-        let rx_tx_type = match token {
-            Token::Rx => {
-                let rx_field = self.type_ident_field()?;
-                self.take(Token::SemiColon)?;
-                if self.next_is(Token::Tx) {
-                    let tx_field = self.type_ident_field()?;
-                    self.take(Token::SemiColon)?;
-                    RxTxType::Split {
-                        rx: rx_field,
-                        tx: tx_field,
-                    }
-                } else {
-                    RxTxType::RxOnly(rx_field.0, rx_field.1)
-                }
-            }
-            _ => {
-                return Err(ParseError::expected(
-                    "`rx` or `rx_tx`",
-                    token,
-                    span,
-                ))
-            }
-        };
 
         let mut use_ext_data = Vec::new();
         while self.next_is(Token::Use) {
@@ -171,10 +131,7 @@ impl<'source> Parser<'source, '_> {
             assignments.push((id, value));
         }
 
-        Ok(DefineBody {
-            rx_tx_type,
-            assignments,
-        })
+        Ok(assignments)
     }
 
     /// Parse a filter map section, which is a term or an action
@@ -231,8 +188,7 @@ impl<'source> Parser<'source, '_> {
     /// ```
     fn params(
         &mut self,
-    ) -> ParseResult<Meta<Vec<(Meta<Identifier>, Meta<Identifier>)>>>
-    {
+    ) -> ParseResult<Meta<Vec<(Meta<Identifier>, Meta<Identifier>)>>> {
         self.separated(
             Token::RoundLeft,
             Token::RoundRight,

@@ -109,16 +109,12 @@ pub enum Token<'s> {
     Return,
     #[token("rib")]
     Rib,
-    #[token("rx")]
-    Rx,
     #[token("some")]
     Some,
     #[token("table")]
     Table,
     #[token("term")]
     Term,
-    #[token("tx")]
-    Tx,
     #[token("through")]
     Through,
     #[token("type")]
@@ -214,11 +210,9 @@ impl<'source> Display for Token<'source> {
             Token::Reject => "reject",
             Token::Return => "return",
             Token::Rib => "rib",
-            Token::Rx => "rx",
             Token::Some => "some",
             Token::Table => "table",
             Token::Term => "term",
-            Token::Tx => "tx",
             Token::Through => "through",
             Token::Type => "type",
             Token::UpTo => "up-to",

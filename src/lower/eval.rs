@@ -45,7 +45,7 @@ pub fn eval(
     // Insert the rx value
     mem.insert(
         Var {
-            var: format!("{filter_map}-rx"),
+            var: "$arg_0".into(),
         },
         rx,
     );

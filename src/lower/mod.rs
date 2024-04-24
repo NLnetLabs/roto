@@ -100,11 +100,8 @@ impl Lowerer<'_> {
         let ast::SyntaxTree { expressions } = tree;
 
         for expr in expressions {
-            match expr {
-                ast::Declaration::FilterMap(fm) => {
-                    self.filter_map(fm);
-                }
-                _ => {} // ignore declarations
+            if let ast::Declaration::FilterMap(fm) = expr {
+                self.filter_map(fm);
             }
         }
 
@@ -115,7 +112,12 @@ impl Lowerer<'_> {
 
     /// Lower a filter-map
     fn filter_map(&mut self, fm: &ast::FilterMap) {
-        let ast::FilterMap { ident, body, .. } = fm;
+        let ast::FilterMap {
+            ident,
+            body,
+            params,
+            ..
+        } = fm;
         let ast::FilterMapBody {
             define,
             expressions,
@@ -141,21 +143,18 @@ impl Lowerer<'_> {
 
         self.new_block(&ident);
 
-        match &define.body.rx_tx_type {
-            ast::RxTxType::RxOnly(x, _) => {
-                let var = self.type_info.full_name(x);
-                self.add(Instruction::Assign {
-                    to: Var { var },
-                    val: Var {
-                        var: format!("{ident}-rx"),
-                    }
-                    .into(),
-                })
-            }
-            ast::RxTxType::Split { .. } => todo!(),
+        for (i, (p, _)) in params.iter().enumerate() {
+            let p = self.type_info.full_name(p);
+            self.add(Instruction::Assign {
+                to: Var { var: p.clone() },
+                val: Var {
+                    var: format!("$arg_{i}"),
+                }
+                .into(),
+            })
         }
 
-        for (ident, expr) in &define.body.assignments {
+        for (ident, expr) in define {
             let val = self.expr(expr);
             let name = self.type_info.full_name(ident);
             self.add(Instruction::Assign {
@@ -206,11 +205,7 @@ impl Lowerer<'_> {
             self.expr(expr);
         }
 
-        if let Some(last) = &block.last {
-            Some(self.expr(last))
-        } else {
-            None
-        }
+        block.last.as_ref().map(|last| self.expr(last))
     }
 
     /// Lower an expression

@@ -37,7 +37,7 @@ pub struct FilterMap {
 
 #[derive(Clone, Debug)]
 pub struct FilterMapBody {
-    pub define: Define,
+    pub define: Vec<(Meta<Identifier>, Meta<Expr>)>,
     pub expressions: Vec<FilterMapExpr>,
     pub apply: Meta<Block>,
 }
@@ -47,26 +47,6 @@ pub struct FilterMapBody {
 pub enum FilterMapExpr {
     Term(TermDeclaration),
     Action(ActionDeclaration),
-}
-
-#[derive(Clone, Debug)]
-pub struct Define {
-    pub body: DefineBody,
-}
-
-#[derive(Clone, Debug)]
-pub enum RxTxType {
-    RxOnly(Meta<Identifier>, Meta<Identifier>),
-    Split {
-        rx: (Meta<Identifier>, Meta<Identifier>),
-        tx: (Meta<Identifier>, Meta<Identifier>),
-    },
-}
-
-#[derive(Clone, Debug)]
-pub struct DefineBody {
-    pub rx_tx_type: RxTxType,
-    pub assignments: Vec<(Meta<Identifier>, Meta<Expr>)>,
 }
 
 #[derive(Clone, Debug)]

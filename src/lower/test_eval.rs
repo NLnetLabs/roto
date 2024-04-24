@@ -34,11 +34,7 @@ where
 fn accept() {
     let p = compile::<u32, Result<(), ()>>(
         "
-        filter-map main() {
-            define {
-                rx msg: U32;
-            }
-
+        filter-map main(msg: U32) {
             apply { accept }
         }
     ",
@@ -50,11 +46,7 @@ fn accept() {
 fn reject() {
     let p = compile::<u32, Result<(), ()>>(
         "
-        filter-map main() {
-            define {
-                rx msg: U32;
-            }
-
+        filter-map main(msg: U32) {
             apply { reject }
         }
     ",
@@ -66,11 +58,7 @@ fn reject() {
 fn if_else() {
     let p = compile::<u32, Result<(), ()>>(
         "
-        filter-map main() {
-            define {
-                rx msg: U32;
-            }
-        
+        filter-map main(msg: U32) {
             apply { 
                 if true && true {
                     accept
@@ -88,11 +76,7 @@ fn if_else() {
 fn react_to_rx() {
     let p = compile::<u32, Result<(), ()>>(
         "
-        filter-map main() {
-            define {
-                rx x: U32;
-            }
-        
+        filter-map main(x: U32) {
             apply {
                 if x <= 4 {
                     accept
@@ -115,9 +99,8 @@ fn react_to_rx() {
 fn variable() {
     let p = compile::<u32, Result<(), ()>>(
         "
-    filter-map main() {
+    filter-map main(msg: U32) {
         define {
-            rx msg: U32;
             a = 5;
         }
     
@@ -138,9 +121,8 @@ fn variable() {
 fn calling_term() {
     let p = compile::<u32, Result<(), ()>>(
         "
-        filter-map main() {
+        filter-map main(msg: U32) {
             define {
-                rx msg: U32;
                 c = 10;
                 d = 20;
             }
@@ -170,9 +152,8 @@ fn calling_term() {
 fn anonymous_record() {
     let p = compile::<u32, Result<(), ()>>(
         "
-        filter-map main() {
+        filter-map main(msg: U32) {
             define {
-                rx msg: U32;
                 a = { low: 10, high: 20 };
             }
 
@@ -202,9 +183,8 @@ fn typed_record() {
             high: U32,
         }
 
-        filter-map main() {
+        filter-map main(msg: U32) {
             define {
-                rx msg: U32;
                 a = Range { low: 10, high: 20 };
                 b = Range { low: a.low, high: a.high };
                 c = b;
@@ -231,11 +211,7 @@ fn typed_record() {
 fn enum_values() {
     let p = compile::<SafeValue, Result<(), ()>>(
         "
-        filter-map main() { 
-            define {
-                rx x: Afi;
-            }
-
+        filter-map main(x: Afi) { 
             apply {
                 if x == Afi.IpV4 {
                     accept
@@ -258,9 +234,8 @@ fn enum_values() {
 fn bmp_message() {
     let p = compile::<SafeValue, Result<(), ()>>(
         "
-        filter-map main() {
+        filter-map main(x: BmpMessage) {
             define {
-                rx x: BmpMessage;
                 a = BmpMessage.InitiationMessage(BmpInitiationMessage {});
             }
 
@@ -289,11 +264,7 @@ fn bmp_message() {
 fn bmp_message_2() {
     let p = compile::<SafeValue, Result<(), ()>>(
         "
-        filter-map main() { 
-            define {
-                rx x: BmpMessage;
-            }
-
+        filter-map main(x: BmpMessage) { 
             apply {
                 match x {
                     PeerUpNotification(x) -> {
@@ -345,11 +316,7 @@ fn bmp_message_2() {
 fn bmp_message_3() {
     let p = compile::<SafeValue, Result<(), ()>>(
         "
-        filter-map main() { 
-            define {
-                rx x: BmpMessage;
-            }
-
+        filter-map main(x: BmpMessage) { 
             apply {
                 match x {
                     PeerUpNotification(x) -> {
@@ -397,11 +364,7 @@ fn bmp_message_3() {
 fn bmp_message_4() {
     let p = compile::<SafeValue, Result<(), ()>>(
         "
-        filter-map main() { 
-            define {
-                rx x: BmpMessage;
-            }
-
+        filter-map main(x: BmpMessage) { 
             apply {
                 match x {
                     PeerUpNotification(x) | x.local_port == 80 -> accept,
@@ -473,11 +436,7 @@ fn bmp_message_4() {
 fn bmp_message_5() {
     let p = compile::<SafeValue, Result<(), ()>>(
         "
-        filter-map main() { 
-            define {
-                rx x: BmpMessage;
-            }
-
+        filter-map main(x: BmpMessage) { 
             apply {
                 match x {
                     PeerUpNotification(x) | x.local_port == 80 -> accept,
@@ -550,11 +509,7 @@ fn bmp_message_5() {
 fn prefix_addr() {
     let p = compile::<SafeValue, Result<(), ()>>(
         "
-        filter-map main() { 
-            define {
-                rx x: Prefix;
-            }
-
+        filter-map main(x: Prefix) { 
             apply {
                 if x.address() == 0.0.0.0 {
                     accept

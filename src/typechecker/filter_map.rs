@@ -66,37 +66,9 @@ impl TypeChecker<'_, '_> {
     fn define_section(
         &mut self,
         scope: &mut Scope,
-        define: &ast::Define,
+        define: &[(Meta<Identifier>, Meta<ast::Expr>)],
     ) -> TypeResult<()> {
-        let ast::Define {
-            body:
-                ast::DefineBody {
-                    rx_tx_type,
-                    assignments,
-                },
-        } = define;
-
-        match rx_tx_type {
-            ast::RxTxType::RxOnly(field_name, ty) => {
-                let Some(ty) = self.get_type(ty) else {
-                    return Err(error::undeclared_type(ty));
-                };
-                self.insert_var(scope, field_name, ty.clone())?;
-            }
-            ast::RxTxType::Split { rx, tx } => {
-                let Some(ty) = self.get_type(&rx.1) else {
-                    return Err(error::undeclared_type(&rx.1));
-                };
-                self.insert_var(scope, &rx.0, ty.clone())?;
-
-                let Some(ty) = self.get_type(&tx.1) else {
-                    return Err(error::undeclared_type(&tx.1));
-                };
-                self.insert_var(scope, &tx.0, ty.clone())?;
-            }
-        }
-
-        for (ident, expr) in assignments {
+        for (ident, expr) in define {
             let var = self.fresh_var();
             let ctx = Context {
                 expected_type: var.clone(),
