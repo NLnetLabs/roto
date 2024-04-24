@@ -12,7 +12,12 @@ pub enum Declaration {
     Table(Table),
     OutputStream(OutputStream),
     Record(RecordTypeDeclaration),
+    Term(TermDeclaration),
+    Action(ActionDeclaration),
 }
+
+#[derive(Clone, Debug)]
+pub struct Params(pub Vec<(Meta<Identifier>, Meta<Identifier>)>);
 
 /// The value of a typed record
 #[derive(Clone, Debug)]
@@ -31,28 +36,20 @@ pub enum FilterType {
 pub struct FilterMap {
     pub filter_type: FilterType,
     pub ident: Meta<Identifier>,
-    pub params: Meta<Vec<(Meta<Identifier>, Meta<Identifier>)>>,
+    pub params: Meta<Params>,
     pub body: FilterMapBody,
 }
 
 #[derive(Clone, Debug)]
 pub struct FilterMapBody {
     pub define: Vec<(Meta<Identifier>, Meta<Expr>)>,
-    pub expressions: Vec<FilterMapExpr>,
     pub apply: Meta<Block>,
-}
-
-/// These are the sections that can appear multiple times in a Filter(Map)
-#[derive(Clone, Debug)]
-pub enum FilterMapExpr {
-    Term(TermDeclaration),
-    Action(ActionDeclaration),
 }
 
 #[derive(Clone, Debug)]
 pub struct TermDeclaration {
     pub ident: Meta<Identifier>,
-    pub params: Meta<Vec<(Meta<Identifier>, Meta<Identifier>)>>,
+    pub params: Meta<Params>,
     pub body: Meta<Block>,
 }
 
@@ -135,7 +132,7 @@ pub struct MatchArm {
 #[derive(Clone, Debug)]
 pub struct ActionDeclaration {
     pub ident: Meta<Identifier>,
-    pub params: Meta<Vec<(Meta<Identifier>, Meta<Identifier>)>>,
+    pub params: Meta<Params>,
     pub body: Meta<Block>,
 }
 

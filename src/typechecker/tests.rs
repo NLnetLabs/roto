@@ -359,14 +359,15 @@ fn prefix_method() {
 #[test]
 fn logical_expr() {
     let src = "
+        term foo() {
+            (10 == 10) || (10 == 11)
+        }
+
         filter-map test(r: U32) {
             define {
                 p = 10.10.10.10/10;
             }
 
-            term foo() {
-                (10 == 10) || (10 == 11)
-            }
 
             apply { accept }
         }
@@ -374,13 +375,13 @@ fn logical_expr() {
     typecheck(src).unwrap();
 
     let src = r#"
+        term foo() {
+            (10 == 10) || ("hello" == 11)
+        }
+
         filter-map test(r: U32) {
             define {
                 p = 10.10.10.10/10;
-            }
-
-            term foo() {
-                (10 == 10) || ("hello" == 11)
             }
 
             apply { accept }
@@ -396,13 +397,13 @@ fn send_output_stream() {
             foo: String
         }
 
+        action hello() {
+            stream.send(Msg {
+                foo: "hello",
+            });
+        }
+        
         filter-map test(r: U32) {
-            action hello() {
-                stream.send(Msg {
-                    foo: "hello",
-                });
-            }
-
             apply { accept }
         }
     "#;
@@ -415,13 +416,13 @@ fn send_output_stream() {
 
         type Bar { bar: String }
 
-        filter-map test(r: U32) {
-            action hello() {
-                stream.send(Bar {
-                    bar: "hello",
-                });
-            }
+        action hello() {
+            stream.send(Bar {
+                bar: "hello",
+            });
+        }
 
+        filter-map test(r: U32) {
             apply { accept }
         }
     "#;
@@ -435,17 +436,17 @@ fn send_output_stream() {
         output-stream bars contains Bar {
             bar: String
         }
+        
+        action hello() {
+            foos.send(Foo {
+                foo: "hello",
+            });
+            bars.send(Bar {
+                bar: "world",
+            });
+        }
 
         filter-map test(r: U32) {
-            action hello() {
-                foos.send(Foo {
-                    foo: "hello",
-                });
-                bars.send(Bar {
-                    bar: "world",
-                });
-            }
-
             apply { accept }
         }
     "#;
@@ -460,34 +461,16 @@ fn send_output_stream() {
             bar: String
         }
 
-        filter-map test(r: U32) {
-            action hello() {
-                foos.send(Foo {
-                    foo: "hello",
-                });
-                bars.send(Foo {
-                    foo: "world",
-                });
-            }
-
-            apply { accept }
+        action hello() {
+            foos.send(Foo {
+                foo: "hello",
+            });
+            bars.send(Foo {
+                foo: "world",
+            });
         }
-    "#;
-    assert!(typecheck(src).is_err());
-}
-
-#[test]
-fn term_overrides_var() {
-    let src = r#"
+        
         filter-map test(r: U32) {
-            define {
-                a = true;
-            }
-
-            term a() {
-                a
-            }
-
             apply { accept }
         }
     "#;
@@ -498,34 +481,40 @@ fn term_overrides_var() {
 fn record_inference() {
     let src = "
         output-stream s contains Msg { a: U32 }
-
+        
+        action bar(a: Msg) {
+            s.send(a);
+        }
+        
         filter-map foo(r: U32) { 
             define {
                 a = { a: 8 };
             }
 
-            action bla() {
-                s.send(a);
+            apply {
+                bar(a);
+                accept
             }
-
-            apply { accept }
         }
     ";
     typecheck(src).unwrap();
 
     let src = "
         output-stream s contains Msg { a: U32 }
+        
+        action bar(a: Msg) {
+            s.send(a);
+        }
 
         filter-map foo(r: U32) { 
             define {
                 a = { b: 8 };
             }
 
-            action bla() {
-                s.send(a);
+            apply {
+                bar(a);
+                accept
             }
-
-            apply { accept }
         }
     ";
     assert!(typecheck(src).is_err());
@@ -533,17 +522,22 @@ fn record_inference() {
     let src = "
         type A { a: U32 }
 
+        term bla(a: A, b: A) {
+            a == b
+        }
+        
         filter-map foo(r: U32) { 
             define {
                 a = { a: 8 };
                 b = A { a: 8 };
             }
 
-            term bla() {
-                a == b
+            apply { 
+                if bla(a, b) {
+                    accept
+                }
+                reject
             }
-
-            apply { accept }
         }
     ";
     typecheck(src).unwrap();
@@ -552,15 +546,15 @@ fn record_inference() {
         type A { a: U32 }
         type B { a: U32 }
 
+        term bla() {
+            a == b && a == c
+        }
+
         filter-map foo(r: U32) { 
             define {
                 a = { a: 8 };
                 b = A { a: 8 };
                 c = B { a: 8 };
-            }
-
-            term bla() {
-                a == b && a == c
             }
 
             apply { accept }
@@ -572,22 +566,22 @@ fn record_inference() {
 #[test]
 fn return_keyword() {
     let src = "
+        term bar() {
+            return true
+        }
+        
         filter-map foo(r: U32) { 
-            term foo() {
-                return true
-            }
-
             apply { accept }
         }
     ";
     typecheck(src).unwrap();
 
     let src = "
+        term bar() {
+            return 2
+        }
+        
         filter-map foo(r: U32) { 
-            term foo() {
-                return 2
-            }
-
             apply { accept }
         }
     ";
@@ -597,14 +591,14 @@ fn return_keyword() {
 #[test]
 fn unit_block() {
     let src = "
+        // workaround for not having a ()
+        action unit() {}
+
+        term bar() {
+            unit();
+        }
+
         filter-map foo(r: U32) { 
-            // workaround for not having a ()
-            action unit() {}
-
-            term foo() {
-                unit();
-            }
-
             apply { accept }
         }
     ";
@@ -614,12 +608,12 @@ fn unit_block() {
 #[test]
 fn unreachable_expression() {
     let src = "
-        filter-map foo(r: U32) { 
-            term foo() {
-                return true;
-                return false;
-            }
+        term bar() {
+            return true;
+            return false;
+        }
 
+        filter-map foo(r: U32) { 
             apply { accept }
         }
     ";

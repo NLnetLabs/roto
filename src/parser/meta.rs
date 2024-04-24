@@ -58,7 +58,7 @@ impl Span {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct MetaId(pub usize);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Meta<T> {
     pub node: T,
     pub id: MetaId,

@@ -1,9 +1,7 @@
-use crate::ast::{
-    ActionDeclaration, Expr, FilterMap, FilterMapBody, FilterMapExpr, FilterType, Identifier, TermDeclaration
-};
+use crate::ast::{Expr, FilterMap, FilterMapBody, FilterType, Identifier, Params};
 
 use super::{
-    meta::{Meta, Span},
+    meta::Meta,
     token::Token,
     ParseError, ParseResult, Parser,
 };
@@ -32,7 +30,7 @@ impl<'source> Parser<'source, '_> {
 
         let ident = self.identifier()?;
         let params = self.params()?;
-        let body = self.filter_map_body(span)?;
+        let body = self.filter_map_body()?;
 
         Ok(FilterMap {
             filter_type,
@@ -52,57 +50,20 @@ impl<'source> Parser<'source, '_> {
     ///
     /// Not shown in the EBNF above, but the location of the define and apply
     /// sections doesn't matter, but they can both only appear once.
-    fn filter_map_body(&mut self, span: Span) -> ParseResult<FilterMapBody> {
-        let mut define = None;
-        let mut expressions: Vec<FilterMapExpr> = Vec::new();
-        let mut apply = None;
-
+    fn filter_map_body(&mut self) -> ParseResult<FilterMapBody> {
         self.take(Token::CurlyLeft)?;
 
-        while !self.next_is(Token::CurlyRight) {
-            if self.peek_is(Token::Define) {
-                let (_, span) = self.next()?;
-                if define.is_some() {
-                    // Cannot have multiple define sections
-                    return Err(ParseError::custom(
-                        "a filter or filter-map cannot have multiple define sections",
-                        "merge this define section with the previous one",
-                        span,
-                    ));
-                }
-                define = Some(self.define_body()?);
-            } else if self.peek_is(Token::Apply) {
-                let (_, span) = self.next()?;
-                if apply.is_some() {
-                    // Cannot have multiple apply sections
-                    return Err(ParseError::custom(
-                        "a filter or filter-map cannot have multiple apply sections",
-                        "merge this apply section with the previous one",
-                        span,
-                    ));
-                }
-                apply = Some(self.block()?);
-            } else {
-                expressions.push(self.filter_map_expr()?);
-            }
-        }
-
-        let define = define.unwrap_or_default();
-
-        let Some(apply) = apply else {
-            return Err(ParseError::custom(
-                "a filter or filter-map requires at \
-                    least one apply section",
-                "this filter or filter-map is missing an apply section",
-                span,
-            ));
+        let define = if self.next_is(Token::Define) {
+            self.define_body()?
+        } else {
+            Vec::new()
         };
 
-        Ok(FilterMapBody {
-            define,
-            expressions,
-            apply,
-        })
+        self.take(Token::Apply)?;
+        let apply = self.block()?;
+        self.take(Token::CurlyRight)?;
+
+        Ok(FilterMapBody { define, apply })
     }
 
     /// Parse the body of a define section
@@ -112,7 +73,9 @@ impl<'source> Parser<'source, '_> {
     ///
     /// Assignment ::= Identifier '=' ValueExpr ';'
     /// ```
-    fn define_body(&mut self) -> ParseResult<Vec<(Meta<Identifier>, Meta<Expr>)>> {
+    fn define_body(
+        &mut self,
+    ) -> ParseResult<Vec<(Meta<Identifier>, Meta<Expr>)>> {
         self.take(Token::CurlyLeft)?;
 
         let mut use_ext_data = Vec::new();
@@ -134,67 +97,22 @@ impl<'source> Parser<'source, '_> {
         Ok(assignments)
     }
 
-    /// Parse a filter map section, which is a term or an action
-    ///
-    /// ```ebnf
-    /// FilterMapExpr ::= Term | Action
-    /// ```
-    fn filter_map_expr(&mut self) -> ParseResult<FilterMapExpr> {
-        if self.peek_is(Token::Term) {
-            Ok(FilterMapExpr::Term(self.term()?))
-        } else if self.peek_is(Token::Action) {
-            Ok(FilterMapExpr::Action(self.action()?))
-        } else {
-            let (token, span) = self.next()?;
-            Err(ParseError::expected("`term` or `action`", token, span))
-        }
-    }
-
-    /// Parse a term section
-    ///
-    /// ```ebnf
-    /// Term ::= Identifier For? With? '{' TermScope '}'
-    /// ```
-    fn term(&mut self) -> ParseResult<TermDeclaration> {
-        self.take(Token::Term)?;
-        let ident = self.identifier()?;
-        let params = self.params()?;
-        let body = self.block()?;
-
-        Ok(TermDeclaration {
-            ident,
-            params,
-            body,
-        })
-    }
-
-    pub(super) fn action(&mut self) -> ParseResult<ActionDeclaration> {
-        self.take(Token::Action)?;
-        let ident = self.identifier()?;
-        let params = self.params()?;
-        let body = self.block()?;
-
-        Ok(ActionDeclaration {
-            ident,
-            params,
-            body,
-        })
-    }
-
     /// Parse an optional with clause for filter-map, define and apply
     ///
     /// ```ebnf
     /// With ::= ( 'with' TypeIdentField (',' TypeIdentField)*)?
     /// ```
-    fn params(
+    pub fn params(
         &mut self,
-    ) -> ParseResult<Meta<Vec<(Meta<Identifier>, Meta<Identifier>)>>> {
-        self.separated(
+    ) -> ParseResult<Meta<Params>> {
+        let m = self.separated(
             Token::RoundLeft,
             Token::RoundRight,
             Token::Comma,
             Self::type_ident_field,
-        )
+        )?;
+        let id = m.id;
+        Ok(Meta { id, node: Params(m.node) })
     }
 
     /// Parse an identifier and a type identifier separated by a colon

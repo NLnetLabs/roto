@@ -121,20 +121,15 @@ fn variable() {
 fn calling_term() {
     let p = compile::<u32, Result<(), ()>>(
         "
-        filter-map main(msg: U32) {
-            define {
-                c = 10;
-                d = 20;
-            }
-        
-            term smaller_than(a: U32, b: U32) {
-                a < b
-            }
-        
-            term small(x: U32) {
-                smaller_than(c, x) && smaller_than(x, d)
-            }
-        
+        term smaller_than(a: U32, b: U32) {
+            a < b
+        }
+    
+        term small(x: U32) {
+            smaller_than(10, x) && smaller_than(x, 20)
+        }
+
+        filter-map main(msg: U32) {        
             apply {
                 if small(msg) { accept }
                 reject
@@ -152,17 +147,18 @@ fn calling_term() {
 fn anonymous_record() {
     let p = compile::<u32, Result<(), ()>>(
         "
+        term in_range(x: U32, low: U32, high: U32) {
+            low < x && x < high
+        }
+
         filter-map main(msg: U32) {
             define {
                 a = { low: 10, high: 20 };
             }
 
-            term in_range(x: U32) {
-                a.low < x && x < a.high
-            }
 
             apply {
-                if in_range(msg) { accept }
+                if in_range(msg, a.low, a.high) { accept }
                 reject
             }
         }
@@ -183,6 +179,10 @@ fn typed_record() {
             high: U32,
         }
 
+        term in_range(x: U32, c: Range) {
+            c.low < x && x < c.high
+        }
+
         filter-map main(msg: U32) {
             define {
                 a = Range { low: 10, high: 20 };
@@ -190,12 +190,9 @@ fn typed_record() {
                 c = b;
             }
             
-            term in_range(x: U32) {
-                c.low < x && x < c.high
-            }
             
             apply {
-                if in_range(msg) { accept }
+                if in_range(msg, c) { accept }
                 reject
             }
         }

@@ -1,10 +1,10 @@
-use crate::{ast::ActionDeclaration, parser::Parser};
+use crate::{ast::Declaration, parser::Parser};
 
 use super::{meta::Spans, ParseResult};
 
-fn parse_action(s: &str) -> ParseResult<ActionDeclaration> {
+fn parse_action(s: &str) -> ParseResult<Declaration> {
     let mut spans = Spans::default();
-    Parser::run_parser(Parser::action, 0, &mut spans, s)
+    Parser::run_parser(Parser::root, 0, &mut spans, s)
 }
 
 #[test]

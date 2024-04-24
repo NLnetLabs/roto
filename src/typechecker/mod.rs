@@ -195,13 +195,12 @@ impl<'r, 'methods> TypeChecker<'r, 'methods> {
             )?;
         }
 
-        let mut filter_maps = Vec::new();
+        // We go over the expressions three times:
+        //  1. Collect all type definitions
+        //  2. Collect all function definitions
+        //  3. Type check all function bodies
         for expr in &tree.expressions {
             match expr {
-                // We'll do all filter-maps after all type declarations.
-                // This guarantees that all types have been declared once
-                // we get to the filter-maps.
-                ast::Declaration::FilterMap(x) => filter_maps.push(x),
                 ast::Declaration::Rib(ast::Rib {
                     ident,
                     contain_ty,
@@ -246,6 +245,7 @@ impl<'r, 'methods> TypeChecker<'r, 'methods> {
                     );
                     store_type(&mut types, ident, ty)?;
                 }
+                _ => {}
             }
         }
 
@@ -273,11 +273,43 @@ impl<'r, 'methods> TypeChecker<'r, 'methods> {
             )
         })?;
 
-        for f in filter_maps {
-            let ty = self.fresh_var();
-            self.insert_var(&mut root_scope, &f.ident, ty.clone())?;
-            let ty2 = self.filter_map(&root_scope, f)?;
-            self.unify(&ty, &ty2, f.ident.id, None)?;
+        // Filter-maps are pretty generic: they do not have a fixed
+        // output type at the moment. It's a mess. So we don't declare
+        // them, which means that they cannot be called by anything else,
+        // which honestly makes sense.
+        for expr in &tree.expressions {
+            match expr {
+                ast::Declaration::Term(x) => {
+                    let ty = self.term_type(x)?;
+                    self.insert_var(&mut root_scope, &x.ident, &ty)?;
+                    self.type_info.expr_types.insert(x.ident.id, ty.clone());
+                }
+                ast::Declaration::Action(x) => {
+                    let ty = self.action_type(x)?;
+                    self.insert_var(&mut root_scope, &x.ident, &ty)?;
+                    self.type_info.expr_types.insert(x.ident.id, ty.clone());
+                    self.type_info.full_name(&x.ident);
+                }
+                _ => {}
+            }
+        }
+
+        for expr in &tree.expressions {
+            match expr {
+                ast::Declaration::FilterMap(f) => {
+                    let ty = self.fresh_var();
+                    self.insert_var(&mut root_scope, &f.ident, ty.clone())?;
+                    let ty2 = self.filter_map(&root_scope, f)?;
+                    self.unify(&ty, &ty2, f.ident.id, None)?;
+                }
+                ast::Declaration::Term(x) => {
+                    self.term(&root_scope, x)?;
+                },
+                ast::Declaration::Action(x) => {
+                    self.action(&root_scope, x)?;
+                },
+                _ => {}
+            }
         }
 
         Ok(())

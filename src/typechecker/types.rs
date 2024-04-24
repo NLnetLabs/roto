@@ -1,4 +1,4 @@
-use crate::runtime::{wrap::WrappedFunction, Runtime};
+use crate::{ast::Identifier, parser::meta::Meta, runtime::{wrap::WrappedFunction, Runtime}};
 use std::{
     any::TypeId,
     fmt::{Debug, Display},
@@ -21,10 +21,10 @@ pub enum Type {
     Record(Vec<(String, Type)>),
     NamedRecord(String, Vec<(String, Type)>),
     Enum(String, Vec<(String, Option<Type>)>),
-    Term(Vec<(String, Type)>),
-    Action(Vec<(String, Type)>),
-    Filter(Vec<(String, Type)>),
-    FilterMap(Vec<(String, Type)>),
+    Term(Vec<(Meta<Identifier>, Type)>),
+    Action(Vec<(Meta<Identifier>, Type)>),
+    Filter(Vec<(Meta<Identifier>, Type)>),
+    FilterMap(Vec<(Meta<Identifier>, Type)>),
     Name(String),
 }
 
@@ -53,7 +53,7 @@ impl Display for Primitive {
 
 impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let fmt_args = |args: &[(String, Type)]| {
+        let fmt_args = |args: &[(_, Type)]| {
             args.iter()
                 .map(|(_, t)| t.to_string())
                 .collect::<Vec<_>>()

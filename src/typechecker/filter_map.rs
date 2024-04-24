@@ -21,30 +21,16 @@ impl TypeChecker<'_, '_> {
             filter_type,
             ident,
             params,
-            body:
-                ast::FilterMapBody {
-                    define,
-                    expressions,
-                    apply,
-                },
+            body: ast::FilterMapBody { define, apply },
         } = filter_map;
         let mut scope = scope.wrap(&ident.0);
 
-        let args = self.params(&mut scope, params)?;
+        let params = self.params(params)?;
+        for (v, t) in &params {
+            self.insert_var(&mut scope, v, t)?;
+        }
 
         self.define_section(&mut scope, define)?;
-
-        for expression in expressions {
-            let (v, t) = match expression {
-                ast::FilterMapExpr::Term(term_section) => {
-                    self.term(&scope, term_section)?
-                }
-                ast::FilterMapExpr::Action(action_section) => {
-                    self.action(&scope, action_section)?
-                }
-            };
-            self.insert_var(&mut scope, &v, t)?;
-        }
 
         let a = self.fresh_var();
         let r = self.fresh_var();
@@ -58,8 +44,8 @@ impl TypeChecker<'_, '_> {
         self.block(&scope, &ctx, apply)?;
 
         Ok(match filter_type {
-            ast::FilterType::FilterMap => Type::FilterMap(args),
-            ast::FilterType::Filter => Type::Filter(args),
+            ast::FilterType::FilterMap => Type::FilterMap(params),
+            ast::FilterType::Filter => Type::Filter(params),
         })
     }
 
@@ -85,18 +71,18 @@ impl TypeChecker<'_, '_> {
             self.insert_var(scope, ident, ty)?;
 
             // We want the fully qualified name to be stored, so we do a lookup
-            // This won't fail because we just addded it.
+            // This won't fail because we just added it.
             self.get_var(scope, ident).unwrap();
         }
 
         Ok(())
     }
 
-    fn term(
+    pub fn term(
         &mut self,
         scope: &Scope,
         term_section: &ast::TermDeclaration,
-    ) -> TypeResult<(Meta<Identifier>, Type)> {
+    ) -> TypeResult<()> {
         let ast::TermDeclaration {
             ident,
             params,
@@ -105,7 +91,10 @@ impl TypeChecker<'_, '_> {
 
         let mut scope = scope.wrap(&ident.0);
 
-        let args = self.params(&mut scope, params)?;
+        let params = self.params(params)?;
+        for (v, t) in &params {
+            self.insert_var(&mut scope, v, t)?;
+        }
 
         let ctx = Context {
             expected_type: Type::Primitive(Primitive::Bool),
@@ -113,17 +102,21 @@ impl TypeChecker<'_, '_> {
         };
 
         self.block(&scope, &ctx, body)?;
-
-        let ty = Type::Term(args);
-        self.type_info.expr_types.insert(ident.id, ty.clone());
-        Ok((ident.clone(), ty))
+        Ok(())
     }
 
-    fn action(
+    pub fn term_type(
+        &mut self,
+        dec: &ast::TermDeclaration,
+    ) -> TypeResult<Type> {
+        Ok(Type::Term(self.params(&dec.params)?))
+    }
+
+    pub fn action(
         &mut self,
         scope: &Scope,
         action_section: &ast::ActionDeclaration,
-    ) -> TypeResult<(Meta<Identifier>, Type)> {
+    ) -> TypeResult<()> {
         let ast::ActionDeclaration {
             ident,
             params,
@@ -132,7 +125,11 @@ impl TypeChecker<'_, '_> {
 
         let mut scope = scope.wrap(&ident.0);
 
-        let args = self.params(&mut scope, params)?;
+        // Insert params into the scope
+        let params = self.params(params)?;
+        for (v, t) in &params {
+            self.insert_var(&mut scope, v, t)?;
+        }
 
         let ctx = Context {
             expected_type: Type::Primitive(Primitive::Unit),
@@ -141,23 +138,29 @@ impl TypeChecker<'_, '_> {
 
         self.block(&scope, &ctx, body)?;
 
-        Ok((ident.clone(), Type::Action(args)))
+        Ok(())
+    }
+
+    pub fn action_type(
+        &mut self,
+        dec: &ast::ActionDeclaration,
+    ) -> TypeResult<Type> {
+        Ok(Type::Action(self.params(&dec.params)?))
     }
 
     fn params(
         &mut self,
-        scope: &mut Scope,
-        args: &[(Meta<Identifier>, Meta<Identifier>)],
-    ) -> TypeResult<Vec<(String, Type)>> {
-        args.iter()
+        args: &ast::Params,
+    ) -> TypeResult<Vec<(Meta<Identifier>, Type)>> {
+        args.0
+            .iter()
             .map(|(field_name, ty)| {
                 let Some(ty) = self.get_type(ty) else {
                     return Err(error::undeclared_type(ty));
                 };
 
                 let ty = ty.clone();
-                self.insert_var(scope, field_name, &ty)?;
-                Ok((field_name.0.to_string(), ty))
+                Ok((field_name.clone(), ty))
             })
             .collect()
     }

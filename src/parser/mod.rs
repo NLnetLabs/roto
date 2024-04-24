@@ -1,4 +1,4 @@
-use crate::ast::{Declaration, Identifier, SyntaxTree};
+use crate::ast::{ActionDeclaration, Declaration, Identifier, SyntaxTree, TermDeclaration};
 use logos::{Lexer, SpannedIter};
 use std::{fmt::Display, iter::Peekable};
 use token::Token;
@@ -333,16 +333,53 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             Token::Type => {
                 Declaration::Record(self.record_type_assignment()?)
             }
+            Token::Action => {
+                Declaration::Action(self.action()?)
+            }
+            Token::Term => {
+                Declaration::Term(self.term()?)
+            }
             _ => {
                 let (token, span) = self.next()?;
                 return Err(ParseError::expected(
-                    "a rib, table, output-stream, filter or filter-map",
+                    "a term, action, rib, table, output-stream, filter or filter-map",
                     token,
                     span,
                 ));
             }
         };
         Ok(expr)
+    }
+
+    /// Parse a term section
+    ///
+    /// ```ebnf
+    /// Term ::= Identifier For? With? '{' TermScope '}'
+    /// ```
+    fn term(&mut self) -> ParseResult<TermDeclaration> {
+        self.take(Token::Term)?;
+        let ident = self.identifier()?;
+        let params = self.params()?;
+        let body = self.block()?;
+
+        Ok(TermDeclaration {
+            ident,
+            params,
+            body,
+        })
+    }
+
+    pub(super) fn action(&mut self) -> ParseResult<ActionDeclaration> {
+        self.take(Token::Action)?;
+        let ident = self.identifier()?;
+        let params = self.params()?;
+        let body = self.block()?;
+
+        Ok(ActionDeclaration {
+            ident,
+            params,
+            body,
+        })
     }
 }
 

@@ -100,8 +100,16 @@ impl Lowerer<'_> {
         let ast::SyntaxTree { expressions } = tree;
 
         for expr in expressions {
-            if let ast::Declaration::FilterMap(fm) = expr {
-                self.filter_map(fm);
+            match expr {
+                ast::Declaration::FilterMap(x) => {
+                    self.filter_map(x);
+                }
+                ast::Declaration::Term(ast::TermDeclaration { ident, params, body }) 
+                | ast::Declaration::Action(ast::ActionDeclaration { ident, params, body })=> {
+                    self.function(ident, params, body)
+                }
+                // Ignore the rest
+                _ => {}
             }
         }
 
@@ -118,32 +126,13 @@ impl Lowerer<'_> {
             params,
             ..
         } = fm;
-        let ast::FilterMapBody {
-            define,
-            expressions,
-            apply,
-        } = body;
+        let ast::FilterMapBody { define, apply } = body;
 
         let ident = self.type_info.full_name(ident);
 
-        for decl in expressions {
-            match decl {
-                ast::FilterMapExpr::Term(ast::TermDeclaration {
-                    ident,
-                    params,
-                    body,
-                }) => self.function(ident, params, body),
-                ast::FilterMapExpr::Action(ast::ActionDeclaration {
-                    ident,
-                    params,
-                    body,
-                }) => self.function(ident, params, body),
-            }
-        }
-
         self.new_block(&ident);
 
-        for (i, (p, _)) in params.iter().enumerate() {
+        for (i, (p, _)) in params.0.iter().enumerate() {
             let p = self.type_info.full_name(p);
             self.add(Instruction::Assign {
                 to: Var { var: p.clone() },
@@ -181,7 +170,7 @@ impl Lowerer<'_> {
     fn function(
         &mut self,
         ident: &Meta<Identifier>,
-        _params: &Meta<Vec<(Meta<Identifier>, Meta<Identifier>)>>,
+        _params: &Meta<ast::Params>,
         body: &ast::Block,
     ) {
         let ident = self.type_info.full_name(ident);
@@ -245,7 +234,7 @@ impl Lowerer<'_> {
                 let args = params
                     .iter()
                     .zip(&args.node)
-                    .map(|(p, a)| ((&p.0).into(), self.expr(a)))
+                    .map(|(p, a)| (p.0.to_string(), self.expr(a)))
                     .collect();
 
                 let to = self.new_tmp();

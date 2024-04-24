@@ -2,6 +2,8 @@ use std::{fmt::Debug, rc::Rc};
 
 use crate::lower::value::SafeValue;
 
+type SafeFn = Rc<dyn for<'f> Fn(&'f [SafeValue]) -> SafeValue>;
+
 /// A function that can be referenced by Roto scripts
 ///
 /// This is usually constructed by the [`wrap`](crate::wrap) macro. A
@@ -15,7 +17,7 @@ use crate::lower::value::SafeValue;
 pub struct WrappedFunction {
     pub pointer: *const u8,
     pub params: usize,
-    pub safe: Rc<dyn for<'f> Fn(&'f [SafeValue]) -> SafeValue>,
+    pub safe: SafeFn,
 }
 
 impl WrappedFunction {
