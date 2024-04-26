@@ -1,5 +1,5 @@
 use clap::Parser;
-use roto::{lower::value::SafeValue, pipeline};
+use roto::SafeValue;
 
 #[derive(Parser)]
 struct Cli {
@@ -22,7 +22,7 @@ fn main() {
         Some(x) => SafeValue::U32(x.parse().unwrap()),
         _ => SafeValue::Unit,
     };
-    let result = pipeline::run(settings.files, rx);
+    let result = roto::run(settings.files, rx);
     match result {
         Ok(r) => println!("{r}"),
         Err(e) => eprintln!("{e}"),

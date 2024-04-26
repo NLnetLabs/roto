@@ -1,10 +1,12 @@
 pub(crate) mod ast;
-pub mod runtime;
+
 pub(crate) mod typechecker;
 pub(crate) mod parser;
-pub mod lower;
-// mod symbols;
-// pub mod traits;
-// pub mod types;
-// pub mod vm;
-pub mod pipeline;
+pub(crate) mod lower;
+
+pub(crate) mod runtime;
+pub(crate) mod pipeline;
+
+pub use runtime::{Runtime, RuntimeMethod, RuntimeType};
+pub use lower::value::SafeValue;
+pub use pipeline::*;

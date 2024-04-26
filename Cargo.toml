@@ -15,13 +15,8 @@ license = "BSD-3-Clause"
 log = "0.4"
 env_logger  = "0.10"
 
-arc-swap        = "^1.6"
 bytes           = { version = "1", features = [ "serde" ] }
 logos           = "0.14.0"
-nom             = "7.1"
-paste           = "1.0.14"
-smallvec        = { version = "1.11", features = [ "const_generics", "serde" ] }
-serde           = { version = "1.0", features = [ "derive", "rc" ] }
 routecore       = { version = "0.4.0", features = ["bgp", "bmp", "serde"] }
 rotonda-store   = { version = "0.3.0" }
 clap            = { version = "4.4.6", features = ["derive"] }
