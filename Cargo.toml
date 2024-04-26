@@ -12,15 +12,13 @@ categories = ["network-programming"]
 license = "BSD-3-Clause"
 
 [dependencies]
+ariadne = "0.4.0"
+clap = { version = "4.4.6", features = ["derive"] }
+env_logger = "0.10"
 log = "0.4"
-env_logger  = "0.10"
-
-bytes           = { version = "1", features = [ "serde" ] }
-logos           = "0.14.0"
-routecore       = { version = "0.4.0", features = ["bgp", "bmp", "serde"] }
-rotonda-store   = { version = "0.3.0" }
-clap            = { version = "4.4.6", features = ["derive"] }
-ariadne         = "0.4.0"
+logos = "0.14.0"
+routecore = { version = "0.4.0", features = ["bgp", "bmp"] }
 
 [dev-dependencies]
-routes      = { git = "https://github.com/nlnetlabs/routes", branch = "main" }
+bytes = "1"
+rotonda-store = "0.3.0"
