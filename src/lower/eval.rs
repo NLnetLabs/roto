@@ -25,7 +25,7 @@ struct StackFrame {
 /// fairly slow. This is because all variables at this point are identified
 /// by strings and therefore stored as a hashmap.
 pub fn eval(
-    p: &[Function<Var, SafeValue>],
+    p: &[Function],
     filter_map: &str,
     rx: SafeValue,
 ) -> SafeValue {
@@ -188,7 +188,7 @@ pub fn eval(
 
 fn eval_operand<'a>(
     mem: &'a HashMap<Var, SafeValue>,
-    op: &'a Operand<Var, SafeValue>,
+    op: &'a Operand,
 ) -> &'a SafeValue {
     match op {
         Operand::Place(p) => mem

@@ -29,7 +29,7 @@ struct Lowerer<'r> {
     function_name: &'r str,
     runtime: &'r Runtime,
     tmp_idx: usize,
-    blocks: Vec<Block<Var, SafeValue>>,
+    blocks: Vec<Block>,
     type_info: &'r mut TypeInfo,
     block_names: HashMap<String, usize>,
 }
@@ -38,7 +38,7 @@ pub fn lower(
     runtime: &Runtime,
     tree: &ast::SyntaxTree,
     type_info: &mut TypeInfo,
-) -> Vec<Function<Var, SafeValue>> {
+) -> Vec<Function> {
     Lowerer::tree(runtime, type_info, tree)
 }
 
@@ -81,7 +81,7 @@ impl<'r> Lowerer<'r> {
     }
 
     /// Add an instruction to the last block
-    fn add(&mut self, instruction: Instruction<Var, SafeValue>) {
+    fn add(&mut self, instruction: Instruction) {
         let instructions = &mut self.blocks.last_mut().unwrap().instructions;
 
         // If the last instruction is a return or an exit, we know that
@@ -107,7 +107,7 @@ impl<'r> Lowerer<'r> {
         runtime: &Runtime,
         type_info: &mut TypeInfo,
         tree: &ast::SyntaxTree,
-    ) -> Vec<Function<Var, SafeValue>> {
+    ) -> Vec<Function> {
         let ast::SyntaxTree { expressions } = tree;
 
         let mut functions = Vec::new();
@@ -159,7 +159,7 @@ impl<'r> Lowerer<'r> {
     }
 
     /// Lower a filter-map
-    fn filter_map(mut self, fm: &ast::FilterMap) -> Function<Var, SafeValue> {
+    fn filter_map(mut self, fm: &ast::FilterMap) -> Function {
         let ast::FilterMap {
             ident,
             body,
@@ -227,7 +227,7 @@ impl<'r> Lowerer<'r> {
         params: &Meta<ast::Params>,
         return_type: Type,
         body: &ast::Block,
-    ) -> Function<Var, SafeValue> {
+    ) -> Function {
         let ident = self.type_info.full_name(ident);
         self.new_block(&ident);
 
@@ -256,7 +256,7 @@ impl<'r> Lowerer<'r> {
     fn block(
         &mut self,
         block: &ast::Block,
-    ) -> Option<Operand<Var, SafeValue>> {
+    ) -> Option<Operand> {
         // Result is ignored
         for expr in &block.exprs {
             self.expr(expr);
@@ -270,7 +270,7 @@ impl<'r> Lowerer<'r> {
     /// Returns either the value of the expression or the place where the
     /// value can be retrieved. The nested expressions will be lowered
     /// recursively.
-    fn expr(&mut self, expr: &Meta<ast::Expr>) -> Operand<Var, SafeValue> {
+    fn expr(&mut self, expr: &Meta<ast::Expr>) -> Operand {
         let id = expr.id;
         match &expr.node {
             ast::Expr::Return(kind, e) => {
@@ -485,7 +485,7 @@ impl<'r> Lowerer<'r> {
     }
 
     /// Lower a literal
-    fn literal(&mut self, lit: &Meta<Literal>) -> Operand<Var, SafeValue> {
+    fn literal(&mut self, lit: &Meta<Literal>) -> Operand {
         match &lit.node {
             Literal::String(_) => todo!(),
             Literal::Prefix(ast::Prefix { addr, len }) => {

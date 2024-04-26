@@ -31,13 +31,15 @@ use crate::ast::BinOp;
 use crate::runtime::wrap::WrappedFunction;
 use crate::typechecker::types::Type;
 
+use super::value::SafeValue;
+
 /// Human-readable place
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Var {
     pub var: String,
 }
 
-impl<V> From<Var> for Operand<Var, V> {
+impl From<Var> for Operand {
     fn from(value: Var) -> Self {
         Operand::Place(value)
     }
@@ -50,16 +52,12 @@ impl Display for Var {
 }
 
 #[derive(Clone, Debug)]
-pub enum Operand<P, V> {
-    Place(P),
-    Value(V),
+pub enum Operand {
+    Place(Var),
+    Value(SafeValue),
 }
 
-impl<P, V> Display for Operand<P, V>
-where
-    P: Display,
-    V: Display,
-{
+impl Display for Operand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Operand::Place(x) => write!(f, "{x}"),
@@ -69,69 +67,65 @@ where
 }
 
 #[derive(Clone)]
-pub enum Instruction<P, V> {
+pub enum Instruction {
     /// Jump to a block
     Jump(String),
 
     /// Switch on the integer value of the `examinee`
     Switch {
-        examinee: Operand<P, V>,
+        examinee: Operand,
         branches: Vec<(usize, String)>,
         default: String,
     },
 
-    /// Assign the value `val` to `P`.
-    Assign { to: P, val: Operand<P, V> },
+    /// Assign the value `val` to `to`.
+    Assign { to: Var, val: Operand },
 
     /// Call a function.
-    Call(P, String, Vec<(String, Operand<P, V>)>),
+    Call(Var, String, Vec<(String, Operand)>),
 
     /// Call an external function (i.e. a Rust function)
-    CallExternal(P, WrappedFunction, Vec<Operand<P, V>>),
+    CallExternal(Var, WrappedFunction, Vec<Operand>),
 
     /// Return from the current "function" (filter-map, term or action)
-    Return(Operand<P, V>),
+    Return(Operand),
 
     /// Exit the filter-map with an accept or reject
-    Exit(bool, Operand<P, V>),
+    Exit(bool, Operand),
 
     /// Perform a binary operation and store the result in `to`
     BinOp {
-        to: P,
+        to: Var,
         op: BinOp,
-        left: Operand<P, V>,
-        right: Operand<P, V>,
+        left: Operand,
+        right: Operand,
     },
 
     /// Access a record field
     AccessRecord {
-        to: P,
-        record: Operand<P, V>,
+        to: Var,
+        record: Operand,
         field: String,
     },
 
     /// Create record
     CreateRecord {
-        to: P,
-        fields: Vec<(String, Operand<P, V>)>,
+        to: Var,
+        fields: Vec<(String, Operand)>,
     },
 
     /// Create enum variant
     CreateEnum {
-        to: P,
+        to: Var,
         variant: u32,
-        data: Operand<P, V>,
+        data: Operand,
     },
 
     /// Get enum data
-    AccessEnum { to: P, from: Operand<P, V> },
+    AccessEnum { to: Var, from: Operand },
 }
 
-impl<P, V> Display for Instruction<P, V>
-where
-    P: Display,
-    Operand<P, V>: Display,
-{
+impl Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Assign { to, val } => write!(f, "{to} = {val}"),
@@ -154,11 +148,7 @@ where
             ),
             Self::Return(val) => write!(f, "return {val}"),
             Self::Exit(b, val) => {
-                let s = if *b {
-                    "accept"
-                } else {
-                    "reject"
-                };
+                let s = if *b { "accept" } else { "reject" };
                 write!(f, "{s} {val}")
             }
             Self::BinOp {
@@ -211,17 +201,14 @@ where
     }
 }
 
-pub struct Function<P, V> {
+pub struct Function {
     pub name: String,
     pub parameter_types: Vec<Type>,
     pub return_type: Type,
-    pub blocks: Vec<Block<P, V>>,
+    pub blocks: Vec<Block>,
 }
 
-impl<P, V> Display for Function<P, V>
-where
-    Block<P, V>: Display,
-{
+impl Display for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut blocks = self.blocks.iter();
 
@@ -241,15 +228,12 @@ where
     }
 }
 
-pub struct Block<P, V> {
+pub struct Block {
     pub label: String,
-    pub instructions: Vec<Instruction<P, V>>,
+    pub instructions: Vec<Instruction>,
 }
 
-impl<P, V> Display for Block<P, V>
-where
-    Instruction<P, V>: Display,
-{
+impl Display for Block {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, ".{}", self.label)?;
         for i in &self.instructions {

@@ -8,36 +8,35 @@ use crate::{
 
 use super::{
     ir::{Instruction, Operand, Var},
-    value::SafeValue,
     Lowerer,
 };
 
 impl Lowerer<'_> {
     /// Lower a match expression
-    /// 
+    ///
     /// Lowering a match expression is quite tricky. Here's how we do it at
     /// the moment. Take this match expression:
-    /// 
+    ///
     /// ```roto
     /// match x {
     ///     A(y) -> {}
     ///     B -> {}
     /// }
     /// ```
-    /// 
+    ///
     /// The easiest thing to do is to treat it as one big if-else chain
     /// where we check whether each variant matches, but that is not
     /// particularly efficient. Instead, we should switch directly on the
     /// discriminant.
-    /// 
+    ///
     /// First we evaluate `x` and then we go to a `switch` instruction,
     /// which has a label for each pattern. Simple enough. However, there
     /// are 2 things that make it more complicated: default patterns and
     /// guards.
-    /// 
+    ///
     /// A guard requires us to do checks after switching on the
     /// discriminant. This expression for example:
-    /// 
+    ///
     /// ```roto
     /// match x {
     ///     A(y) | y == 1 -> b1,
@@ -45,10 +44,10 @@ impl Lowerer<'_> {
     ///     B -> b3,
     ///     A(y) -> b4,
     /// }
-    /// ``` 
-    /// 
+    /// ```
+    ///
     /// Can be compiled like this expression:
-    /// 
+    ///
     /// ```roto
     /// match x {
     ///     A(y) -> {
@@ -63,13 +62,13 @@ impl Lowerer<'_> {
     ///     B -> b3,
     /// }
     /// ```
-    /// 
+    ///
     /// That means that we have to collect all the branches for variant `A`,
     /// to lower them together.
-    /// 
+    ///
     /// Default patterns have to be added to each discriminant too. Here's
     /// a particularly interesting case:
-    /// 
+    ///
     /// ```roto
     /// match x {
     ///     A(y) | c1 -> b1,
@@ -78,9 +77,9 @@ impl Lowerer<'_> {
     ///     _ -> b4,
     /// }
     /// ```
-    /// 
+    ///
     /// This should be compiled equivalently to:
-    /// 
+    ///
     /// ```roto
     /// match x {
     ///     A(y) -> {
@@ -95,14 +94,14 @@ impl Lowerer<'_> {
     ///     }
     /// }
     /// ```
-    /// 
+    ///
     /// Note how the default patterns are added to the if-else chains for
     /// all possible discriminants.
-    /// 
+    ///
     /// We do this by checking which variants occur in patterns and then
     /// making those chains for all branches that match that discriminant or
     /// are `_`.
-    pub fn match_expr(&mut self, m: &Meta<Match>) -> Operand<Var, SafeValue> {
+    pub fn match_expr(&mut self, m: &Meta<Match>) -> Operand {
         let ast::Match { expr, arms } = &m.node;
 
         let ty = self.type_info.type_of(expr);
@@ -197,7 +196,7 @@ impl Lowerer<'_> {
 
     fn match_case(
         &mut self,
-        examinee: Operand<Var, SafeValue>,
+        examinee: Operand,
         lbl_prefix: &str,
         lbl: String,
         branches: &[&(Option<usize>, &ast::MatchArm, usize)],

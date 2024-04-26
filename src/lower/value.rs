@@ -125,7 +125,7 @@ impl Value for SafeValue {
     }
 }
 
-impl<P> From<SafeValue> for Operand<P, SafeValue> {
+impl From<SafeValue> for Operand {
     fn from(value: SafeValue) -> Self {
         Operand::Value(value)
     }

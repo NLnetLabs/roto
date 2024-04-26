@@ -59,7 +59,7 @@ pub struct TypeChecked {
 
 /// Compiler stage: HIR
 pub struct Lowered {
-    ir: Vec<ir::Function<ir::Var, SafeValue>>,
+    ir: Vec<ir::Function>,
 }
 
 impl std::fmt::Display for RotoReport {
