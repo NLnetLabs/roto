@@ -61,6 +61,11 @@ impl TypeChecker<'_, '_> {
             return Err(error::unreachable_expression(expr));
         }
         diverged |= self.expr(scope, ctx, expr)?;
+
+        // Store the same type info on the block as on the expression
+        let ty = &self.type_info.expr_types[&expr.id];
+        self.type_info.expr_types.insert(block.id, ty.clone());
+
         Ok(diverged)
     }
 
@@ -91,16 +96,20 @@ impl TypeChecker<'_, '_> {
                     ast::ReturnKind::Accept => {
                         let a_ty = self.fresh_var();
                         let b_ty = self.fresh_var();
-                        let ty =
-                            Type::Verdict(Box::new(a_ty.clone()), Box::new(b_ty));
+                        let ty = Type::Verdict(
+                            Box::new(a_ty.clone()),
+                            Box::new(b_ty),
+                        );
                         self.unify(ret, &ty, id, None)?;
                         a_ty
                     }
                     ast::ReturnKind::Reject => {
                         let a_ty = self.fresh_var();
                         let r_ty = self.fresh_var();
-                        let ty =
-                            Type::Verdict(Box::new(a_ty), Box::new(r_ty.clone()));
+                        let ty = Type::Verdict(
+                            Box::new(a_ty),
+                            Box::new(r_ty.clone()),
+                        );
                         self.unify(ret, &ty, id, None)?;
                         r_ty
                     }

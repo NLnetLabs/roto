@@ -65,7 +65,7 @@ impl TypeInfo {
     pub fn full_name(&self, x: impl Into<MetaId>) -> String {
         self.fully_qualified_names[&x.into()].clone()
     }
-
+    
     pub fn type_of(&mut self, x: impl Into<MetaId>) -> Type {
         let ty = self.expr_types[&x.into()].clone();
         self.resolve(&ty)
@@ -430,6 +430,7 @@ impl<'r, 'methods> TypeChecker<'r, 'methods> {
     ) -> TypeResult<&'a mut Type> {
         let (name, t) = scope.insert_var(k, t)?;
         self.type_info.fully_qualified_names.insert(k.id, name);
+        self.type_info.expr_types.insert(k.id, t.clone());
         Ok(t)
     }
 

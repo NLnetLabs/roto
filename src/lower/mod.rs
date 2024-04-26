@@ -124,15 +124,30 @@ impl<'r> Lowerer<'r> {
                     ident,
                     params,
                     body,
-                })
-                | ast::Declaration::Action(ast::ActionDeclaration {
+                }) => {
+                    functions.push(
+                        Lowerer::new(runtime, type_info, ident.as_ref())
+                            .function(
+                                ident,
+                                params,
+                                Type::Primitive(Primitive::Bool),
+                                body,
+                            ),
+                    );
+                }
+                ast::Declaration::Action(ast::ActionDeclaration {
                     ident,
                     params,
                     body,
                 }) => {
                     functions.push(
                         Lowerer::new(runtime, type_info, ident.as_ref())
-                            .function(ident, params, body),
+                            .function(
+                                ident,
+                                params,
+                                Type::Primitive(Primitive::Unit),
+                                body,
+                            ),
                     );
                 }
                 // Ignore the rest
@@ -168,6 +183,12 @@ impl<'r> Lowerer<'r> {
             })
         }
 
+        let parameter_types = params
+            .0
+            .iter()
+            .map(|(x, _)| self.type_info.type_of(x))
+            .collect();
+
         for (ident, expr) in define {
             let val = self.expr(expr);
             let name = self.type_info.full_name(ident);
@@ -177,11 +198,15 @@ impl<'r> Lowerer<'r> {
             })
         }
 
+        let return_type = self.type_info.type_of(apply);
         let last = self.block(apply);
 
         self.add(Instruction::Return(last.unwrap_or(SafeValue::Unit.into())));
 
         Function {
+            name: ident,
+            parameter_types,
+            return_type,
             blocks: self.blocks,
         }
     }
@@ -199,17 +224,27 @@ impl<'r> Lowerer<'r> {
     fn function(
         mut self,
         ident: &Meta<Identifier>,
-        _params: &Meta<ast::Params>,
+        params: &Meta<ast::Params>,
+        return_type: Type,
         body: &ast::Block,
     ) -> Function<Var, SafeValue> {
         let ident = self.type_info.full_name(ident);
         self.new_block(&ident);
+
+        let parameter_types = params
+            .0
+            .iter()
+            .map(|(x, _)| self.type_info.type_of(x)) // this panics, alright, where do I get this then
+            .collect();
 
         let last = self.block(body);
 
         self.add(Instruction::Return(last.unwrap_or(SafeValue::Unit.into())));
 
         Function {
+            name: ident,
+            parameter_types,
+            return_type,
             blocks: self.blocks,
         }
     }

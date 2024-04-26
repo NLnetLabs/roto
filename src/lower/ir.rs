@@ -29,6 +29,7 @@ use std::fmt::Display;
 use crate::ast::BinOp;
 
 use crate::runtime::wrap::WrappedFunction;
+use crate::typechecker::types::Type;
 
 /// Human-readable place
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -211,6 +212,9 @@ where
 }
 
 pub struct Function<P, V> {
+    pub name: String,
+    pub parameter_types: Vec<Type>,
+    pub return_type: Type,
     pub blocks: Vec<Block<P, V>>,
 }
 
@@ -222,7 +226,7 @@ where
         let mut blocks = self.blocks.iter();
 
         let Some(b) = blocks.next() else {
-            write!(f, "<empty program>")?;
+            write!(f, "<empty function>")?;
             return Ok(());
         };
 
