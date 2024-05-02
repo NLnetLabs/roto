@@ -66,7 +66,7 @@ impl Display for Operand {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Instruction {
     /// Jump to a block
     Jump(String),
@@ -79,10 +79,10 @@ pub enum Instruction {
     },
 
     /// Assign the value `val` to `to`.
-    Assign { to: Var, val: Operand },
+    Assign { to: Var, val: Operand, ty: Type },
 
     /// Call a function.
-    Call(Var, String, Vec<(String, Operand)>),
+    Call(Var, Type, String, Vec<(String, Operand)>),
 
     /// Call an external function (i.e. a Rust function)
     CallExternal(Var, WrappedFunction, Vec<Operand>),
@@ -128,10 +128,10 @@ pub enum Instruction {
 impl Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Assign { to, val } => write!(f, "{to} = {val}"),
-            Self::Call(to, name, args) => write!(
+            Self::Assign { to, val, ty } => write!(f, "{to}: {ty} = {val}"),
+            Self::Call(to, ty, name, args) => write!(
                 f,
-                "{to} = {name}({})",
+                "{to}: {ty} = {name}({})",
                 args.iter()
                     .map(|a| format!("{} = {}", a.0, a.1))
                     .collect::<Vec<_>>()
@@ -203,9 +203,10 @@ impl Display for Instruction {
 
 pub struct Function {
     pub name: String,
-    pub parameter_types: Vec<Type>,
+    pub parameters: Vec<(String, Type)>,
     pub return_type: Type,
     pub blocks: Vec<Block>,
+    pub public: bool,
 }
 
 impl Display for Function {

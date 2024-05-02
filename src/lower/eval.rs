@@ -6,11 +6,14 @@ use log::trace;
 
 use crate::{
     ast::BinOp,
-    lower::{ir::Instruction, value::{Value, Verdict}},
+    lower::{
+        ir::Instruction,
+        value::{Value, Verdict},
+    },
 };
 
 use super::{
-    ir::{Operand, Function, Var},
+    ir::{Function, Operand, Var},
     value::SafeValue,
 };
 
@@ -27,8 +30,14 @@ struct StackFrame {
 pub fn eval(
     p: &[Function],
     filter_map: &str,
-    rx: SafeValue,
+    rx: Vec<SafeValue>,
 ) -> SafeValue {
+    let f = p
+        .iter()
+        .find(|f| f.name == "main")
+        .expect("Need a main function!");
+    let parameters = f.parameters.clone();
+
     // Make the program easier to work with by collecting all instructions
     // and constructing a map from labels to indices.
     let mut block_map = HashMap::new();
@@ -43,12 +52,10 @@ pub fn eval(
     let mut mem = HashMap::new();
 
     // Insert the rx value
-    mem.insert(
-        Var {
-            var: "$arg_0".into(),
-        },
-        rx,
-    );
+    assert_eq!(parameters.len(), rx.len());
+    for ((x, _), v) in parameters.iter().zip(rx) {
+        mem.insert(Var { var: x.into() }, v);
+    }
 
     let mut stack = Vec::new();
     let mut program_counter = block_map[filter_map];
@@ -76,11 +83,11 @@ pub fn eval(
                 program_counter = block_map[label];
                 continue;
             }
-            Instruction::Assign { to, val } => {
+            Instruction::Assign { to, val, .. } => {
                 let val = eval_operand(&mem, val);
                 mem.insert(to.clone(), val.clone());
             }
-            Instruction::Call(to, b, args) => {
+            Instruction::Call(to, _, b, args) => {
                 stack.push(StackFrame {
                     return_address: program_counter,
                     return_place: to.clone(),

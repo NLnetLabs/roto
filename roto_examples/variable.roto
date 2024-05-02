@@ -1,12 +1,11 @@
-filter-map main() {
+filter-map main(x: U32) {
     define {
-        rx msg: U32;
         a = 5;
     }
 
     apply {
-        if a == msg {
-            accept msg
+        if a == x {
+            accept
         } else {
             reject
         }

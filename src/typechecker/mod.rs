@@ -59,6 +59,7 @@ pub struct TypeInfo {
     enum_variant_constructors: HashMap<MetaId, Type>,
     /// Builtin methods
     methods: HashMap<MetaId, WrappedFunction>,
+    diverges: HashMap<MetaId, bool>,
 }
 
 impl TypeInfo {
@@ -69,6 +70,10 @@ impl TypeInfo {
     pub fn type_of(&mut self, x: impl Into<MetaId>) -> Type {
         let ty = self.expr_types[&x.into()].clone();
         self.resolve(&ty)
+    }
+
+    pub fn diverges(&mut self, x: impl Into<MetaId>) -> bool {
+        self.diverges[&x.into()]
     }
 
     pub fn method(

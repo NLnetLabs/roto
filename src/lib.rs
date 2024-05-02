@@ -3,6 +3,7 @@ pub(crate) mod ast;
 pub(crate) mod typechecker;
 pub(crate) mod parser;
 pub(crate) mod lower;
+pub(crate) mod codegen;
 
 pub(crate) mod runtime;
 pub(crate) mod pipeline;

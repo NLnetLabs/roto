@@ -88,7 +88,10 @@ impl<'r> Lowerer<'r> {
         // the instruction we push will never be executed, so we just
         // omit it. This should be done by an optimizer as well but this
         // makes our initial generated code just a bit nicer.
-        if !matches!(instructions.last(), Some(Instruction::Return(_))) {
+        if !matches!(
+            instructions.last(),
+            Some(Instruction::Return(_) | Instruction::Exit(..))
+        ) {
             instructions.push(instruction);
         }
     }
@@ -172,29 +175,22 @@ impl<'r> Lowerer<'r> {
 
         self.new_block(&ident);
 
-        for (i, (p, _)) in params.0.iter().enumerate() {
-            let p = self.type_info.full_name(p);
-            self.add(Instruction::Assign {
-                to: Var { var: p.clone() },
-                val: Var {
-                    var: format!("$arg_{i}"),
-                }
-                .into(),
-            })
-        }
-
-        let parameter_types = params
+        let parameters = params
             .0
             .iter()
-            .map(|(x, _)| self.type_info.type_of(x))
+            .map(|(x, _)| {
+                (self.type_info.full_name(x), self.type_info.type_of(x))
+            })
             .collect();
 
         for (ident, expr) in define {
             let val = self.expr(expr);
             let name = self.type_info.full_name(ident);
+            let ty = self.type_info.type_of(ident);
             self.add(Instruction::Assign {
                 to: Var { var: name },
                 val,
+                ty,
             })
         }
 
@@ -205,9 +201,10 @@ impl<'r> Lowerer<'r> {
 
         Function {
             name: ident,
-            parameter_types,
+            parameters,
             return_type,
             blocks: self.blocks,
+            public: true,
         }
     }
 
@@ -231,10 +228,12 @@ impl<'r> Lowerer<'r> {
         let ident = self.type_info.full_name(ident);
         self.new_block(&ident);
 
-        let parameter_types = params
+        let parameters = params
             .0
             .iter()
-            .map(|(x, _)| self.type_info.type_of(x)) // this panics, alright, where do I get this then
+            .map(|(x, _)| {
+                (self.type_info.full_name(x), self.type_info.type_of(x))
+            })
             .collect();
 
         let last = self.block(body);
@@ -243,9 +242,10 @@ impl<'r> Lowerer<'r> {
 
         Function {
             name: ident,
-            parameter_types,
+            parameters,
             return_type,
             blocks: self.blocks,
+            public: false,
         }
     }
 
@@ -253,10 +253,7 @@ impl<'r> Lowerer<'r> {
     ///
     /// Returns either the value of the expression or the place where the
     /// value can be retrieved.
-    fn block(
-        &mut self,
-        block: &ast::Block,
-    ) -> Option<Operand> {
+    fn block(&mut self, block: &ast::Block) -> Option<Operand> {
         // Result is ignored
         for expr in &block.exprs {
             self.expr(expr);
@@ -306,7 +303,13 @@ impl<'r> Lowerer<'r> {
                     .collect();
 
                 let to = self.new_tmp();
-                self.add(Instruction::Call(to.clone(), ident.clone(), args));
+                let ty = self.type_info.type_of(id);
+                self.add(Instruction::Call(
+                    to.clone(),
+                    ty,
+                    ident.clone(),
+                    args,
+                ));
                 to.into()
             }
             ast::Expr::MethodCall(receiver, m, args) => {
@@ -400,11 +403,13 @@ impl<'r> Lowerer<'r> {
             }
             ast::Expr::List(_) => todo!(),
             ast::Expr::Not(e) => {
+                let ty = self.type_info.type_of(e.id);
                 let val = self.expr(e);
                 let place = self.new_tmp();
                 self.add(Instruction::Assign {
                     to: place.clone(),
                     val,
+                    ty,
                 });
                 place.into()
             }
@@ -440,6 +445,8 @@ impl<'r> Lowerer<'r> {
                 let place = self.expr(condition);
                 let res = self.new_tmp();
 
+                let diverges = self.type_info.diverges(id);
+
                 let lbl_cont = self.new_unique_block_name("if-continue");
                 let lbl_then = self.new_unique_block_name("if-then");
                 let lbl_else = self.new_unique_block_name("if-else");
@@ -458,26 +465,37 @@ impl<'r> Lowerer<'r> {
 
                 self.new_block(&lbl_then);
                 if let Some(op) = self.block(if_true) {
+                    let ty = self.type_info.type_of(if_true);
                     self.add(Instruction::Assign {
                         to: res.clone(),
                         val: op,
+                        ty,
                     });
                 }
-                self.add(Instruction::Jump(lbl_cont.clone()));
+
+                if !diverges {
+                    self.add(Instruction::Jump(lbl_cont.clone()));
+                }
 
                 if let Some(if_false) = if_false {
                     self.new_block(&lbl_else);
                     if let Some(op) = self.block(if_false) {
+                        let ty = self.type_info.type_of(if_false);
                         self.add(Instruction::Assign {
                             to: res.clone(),
                             val: op,
+                            ty,
                         });
                     }
-                    self.add(Instruction::Jump(lbl_cont.clone()));
-                    self.new_block(&lbl_cont);
+                    if !diverges {
+                        self.add(Instruction::Jump(lbl_cont.clone()));
+                        self.new_block(&lbl_cont);
+                    }
                     res.into()
                 } else {
-                    self.new_block(&lbl_cont);
+                    if !diverges {
+                        self.new_block(&lbl_cont);
+                    }
                     SafeValue::Unit.into()
                 }
             }

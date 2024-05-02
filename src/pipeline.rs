@@ -2,6 +2,7 @@
 
 use crate::{
     ast,
+    codegen::{self, Module},
     lower::{self, eval, ir, value::SafeValue},
     parser::{
         meta::{Span, Spans},
@@ -59,7 +60,14 @@ pub struct TypeChecked {
 
 /// Compiler stage: HIR
 pub struct Lowered {
-    ir: Vec<ir::Function>,
+    runtime: Runtime,
+    type_info: TypeInfo,
+    pub ir: Vec<ir::Function>,
+}
+
+pub struct Compiled {
+    pub runtime: Runtime,
+    pub module: Module,
 }
 
 impl std::fmt::Display for RotoReport {
@@ -153,7 +161,14 @@ pub fn run(
     rx: SafeValue,
 ) -> Result<SafeValue, RotoReport> {
     let lowered = read_files(files)?.parse()?.typecheck()?.lower();
-    Ok(lowered.eval(rx))
+    for f in &lowered.ir {
+        println!("{}", f);
+    }
+
+    let res = lowered.eval(rx);
+    lowered.codegen();
+
+    Ok(res)
 }
 
 /// Create a test file to compile and run
@@ -286,12 +301,24 @@ impl TypeChecked {
             mut type_infos,
         } = self;
         let ir = lower::lower(&runtime, &trees[0], &mut type_infos[0]);
-        Lowered { ir }
+        Lowered {
+            ir,
+            runtime,
+            type_info: type_infos.remove(0),
+        }
     }
 }
 
 impl Lowered {
     pub fn eval(&self, rx: SafeValue) -> SafeValue {
-        eval::eval(&self.ir, "main", rx)
+        eval::eval(&self.ir, "main", vec![rx])
+    }
+
+    pub fn codegen(mut self) -> Compiled {
+        let module = codegen::codegen(&self.ir, &mut self.type_info, &self.runtime);
+        Compiled {
+            runtime: self.runtime,
+            module,
+        }
     }
 }

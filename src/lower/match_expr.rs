@@ -180,11 +180,13 @@ impl Lowerer<'_> {
         let out = self.new_tmp();
         for (_, arm, arm_index) in branches {
             self.new_block(&format!("{lbl_prefix}_arm_{arm_index}"));
+            let ty = self.type_info.type_of(&arm.body);
             let val = self.block(&arm.body);
             if let Some(val) = val {
                 self.add(Instruction::Assign {
                     to: out.clone(),
                     val,
+                    ty,
                 });
             }
             self.add(Instruction::Jump(continue_lbl.clone()));

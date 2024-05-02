@@ -54,6 +54,10 @@ impl TypeChecker<'_, '_> {
                     None,
                 )?;
             }
+            self.type_info
+                .expr_types
+                .insert(block.id, Type::Primitive(Primitive::Unit));
+            self.type_info.diverges.insert(block.id, diverged);
             return Ok(diverged);
         };
 
@@ -65,6 +69,7 @@ impl TypeChecker<'_, '_> {
         // Store the same type info on the block as on the expression
         let ty = &self.type_info.expr_types[&expr.id];
         self.type_info.expr_types.insert(block.id, ty.clone());
+        self.type_info.diverges.insert(block.id, diverged);
 
         Ok(diverged)
     }
@@ -335,6 +340,10 @@ impl TypeChecker<'_, '_> {
                     let mut diverges = false;
                     diverges |= self.block(scope, &ctx, t)?;
                     diverges |= self.block(scope, &ctx, e)?;
+
+                    // Record divergence so that we can omit the
+                    // block after the if-else while lowering
+                    self.type_info.diverges.insert(id, diverges);
                     Ok(diverges)
                 } else {
                     self.unify(
@@ -351,6 +360,7 @@ impl TypeChecker<'_, '_> {
                         &ctx.with_type(Type::Primitive(Primitive::Unit)),
                         t,
                     );
+                    self.type_info.diverges.insert(id, false);
                     Ok(false)
                 }
             }
