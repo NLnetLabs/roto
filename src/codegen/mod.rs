@@ -267,8 +267,8 @@ impl ModuleBuilder<'_> {
                         self.compile_operand(variable_map, builder, val);
                     builder.def_var(var, val)
                 }
-                ir::Instruction::Call(to, ty, name, args) => {
-                    let (func_id, _) = self.functions[name];
+                ir::Instruction::Call { to, ty, func, args } => {
+                    let (func_id, _) = self.functions[func];
                     let func_ref = self
                         .inner
                         .declare_func_in_func(func_id, builder.func);
@@ -290,7 +290,7 @@ impl ModuleBuilder<'_> {
                         });
                     builder.def_var(var, builder.inst_results(inst)[0]);
                 }
-                ir::Instruction::CallExternal(_, _, _) => todo!(),
+                ir::Instruction::CallExternal { .. } => todo!(),
                 ir::Instruction::Return(v) => {
                     let val = self.compile_operand(variable_map, builder, v);
                     builder.ins().return_(&[val]);

@@ -82,10 +82,20 @@ pub enum Instruction {
     Assign { to: Var, val: Operand, ty: Type },
 
     /// Call a function.
-    Call(Var, Type, String, Vec<(String, Operand)>),
+    Call {
+        to: Var,
+        ty: Type,
+        func: String,
+        args: Vec<(String, Operand)>,
+    },
 
     /// Call an external function (i.e. a Rust function)
-    CallExternal(Var, WrappedFunction, Vec<Operand>),
+    CallExternal {
+        to: Var,
+        ty: Type,
+        func: WrappedFunction,
+        args: Vec<Operand>,
+    },
 
     /// Return from the current "function" (filter-map, term or action)
     Return(Operand),
@@ -129,17 +139,17 @@ impl Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Assign { to, val, ty } => write!(f, "{to}: {ty} = {val}"),
-            Self::Call(to, ty, name, args) => write!(
+            Self::Call { to, ty, func, args } => write!(
                 f,
-                "{to}: {ty} = {name}({})",
+                "{to}: {ty} = {func}({})",
                 args.iter()
                     .map(|a| format!("{} = {}", a.0, a.1))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            Self::CallExternal(to, func, args) => write!(
+            Self::CallExternal { to, ty, func, args } => write!(
                 f,
-                "{to} = <rust function {:?}>({})",
+                "{to}: {ty} = <rust function {:?}>({})",
                 func.pointer,
                 args.iter()
                     .map(|a| a.to_string())

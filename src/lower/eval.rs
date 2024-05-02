@@ -87,7 +87,12 @@ pub fn eval(
                 let val = eval_operand(&mem, val);
                 mem.insert(to.clone(), val.clone());
             }
-            Instruction::Call(to, _, b, args) => {
+            Instruction::Call {
+                to,
+                ty: _,
+                func,
+                args,
+            } => {
                 stack.push(StackFrame {
                     return_address: program_counter,
                     return_place: to.clone(),
@@ -96,15 +101,20 @@ pub fn eval(
                     let val = eval_operand(&mem, arg);
                     mem.insert(
                         Var {
-                            var: format!("{b}::{name}"),
+                            var: format!("{func}::{name}"),
                         },
                         val.clone(),
                     );
                 }
-                program_counter = block_map[b];
+                program_counter = block_map[func];
                 continue;
             }
-            Instruction::CallExternal(to, func, args) => {
+            Instruction::CallExternal {
+                to,
+                ty: _,
+                func,
+                args,
+            } => {
                 let args: Vec<_> = args
                     .iter()
                     .map(|a| eval_operand(&mem, a).clone())

@@ -304,12 +304,12 @@ impl<'r> Lowerer<'r> {
 
                 let to = self.new_tmp();
                 let ty = self.type_info.type_of(id);
-                self.add(Instruction::Call(
-                    to.clone(),
+                self.add(Instruction::Call {
+                    to: to.clone(),
                     ty,
-                    ident.clone(),
+                    func: ident.clone(),
                     args,
-                ));
+                });
                 to.into()
             }
             ast::Expr::MethodCall(receiver, m, args) => {
@@ -341,16 +341,18 @@ impl<'r> Lowerer<'r> {
                 // It's not a constructor, so it's a method call!
                 if let Some(f) = self.type_info.method(id) {
                     let f = f.clone();
+                    let ty = self.type_info.type_of(id);
                     let receiver = self.expr(receiver);
                     let mut all_args = vec![receiver];
                     all_args.extend(args.iter().map(|a| self.expr(a)));
 
                     let to = self.new_tmp();
-                    self.add(Instruction::CallExternal(
-                        to.clone(),
-                        f,
-                        all_args,
-                    ));
+                    self.add(Instruction::CallExternal {
+                        to: to.clone(),
+                        ty,
+                        func: f,
+                        args: all_args,
+                    });
                     return to.into();
                 }
 
@@ -423,11 +425,12 @@ impl<'r> Lowerer<'r> {
                     (ast::BinOp::Eq, Type::BuiltIn(_, i)) => {
                         let eq =
                             self.runtime.get_type(i).eq.as_ref().unwrap();
-                        self.add(Instruction::CallExternal(
-                            place.clone(),
-                            eq.clone(),
-                            vec![left, right],
-                        ))
+                        self.add(Instruction::CallExternal {
+                            to: place.clone(),
+                            ty: Type::Primitive(Primitive::Bool),
+                            func: eq.clone(),
+                            args: vec![left, right],
+                        })
                     }
                     (_, _) => {
                         self.add(Instruction::BinOp {
