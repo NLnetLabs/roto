@@ -70,11 +70,7 @@ pub enum Expr {
     /// prefix-length-range /12-/16`
     PrefixMatch(PrefixMatchExpr),
     FunctionCall(Meta<Identifier>, Meta<Vec<Meta<Expr>>>),
-    MethodCall(
-        Box<Meta<Expr>>,
-        Meta<Identifier>,
-        Meta<Vec<Meta<Expr>>>,
-    ),
+    MethodCall(Box<Meta<Expr>>, Meta<Identifier>, Meta<Vec<Meta<Expr>>>),
     Access(Box<Meta<Expr>>, Meta<Identifier>),
     Var(Meta<Identifier>),
     /// a record that doesn't have a type mentioned in the assignment of it,
@@ -108,7 +104,6 @@ impl ReturnKind {
         }
     }
 }
-
 
 #[derive(Clone, Debug)]
 pub struct Record {
@@ -240,18 +235,22 @@ pub enum BinOp {
 
 impl std::fmt::Display for BinOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            Self::And => "&&",
-            Self::Or => "||",
-            Self::Eq => "==",
-            Self::Ne => "!=",
-            Self::Lt => "<=",
-            Self::Le => "<",
-            Self::Gt => ">=",
-            Self::Ge => "<",
-            Self::In => "in",
-            Self::NotIn => "not in",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::And => "&&",
+                Self::Or => "||",
+                Self::Eq => "==",
+                Self::Ne => "!=",
+                Self::Lt => "<=",
+                Self::Le => "<",
+                Self::Gt => ">=",
+                Self::Ge => "<",
+                Self::In => "in",
+                Self::NotIn => "not in",
+            }
+        )
     }
 }
 

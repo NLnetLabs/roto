@@ -18,7 +18,11 @@ impl Spans {
         self.0[x.into().0]
     }
 
-    pub fn merge(&mut self, x: impl Into<MetaId>, y: impl Into<MetaId>) -> Span {
+    pub fn merge(
+        &mut self,
+        x: impl Into<MetaId>,
+        y: impl Into<MetaId>,
+    ) -> Span {
         self.get(x).merge(self.get(y))
     }
 }

@@ -315,7 +315,8 @@ impl Lowered {
     }
 
     pub fn codegen(mut self) -> Compiled {
-        let module = codegen::codegen(&self.ir, &mut self.type_info, &self.runtime);
+        let module =
+            codegen::codegen(&self.ir, &mut self.type_info, &self.runtime);
         Compiled {
             runtime: self.runtime,
             module,

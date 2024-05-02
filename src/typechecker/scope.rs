@@ -30,20 +30,23 @@ impl<'a> Scope<'a> {
         }
     }
 
-    pub fn get_var(&self, k: &Meta<Identifier>) -> TypeResult<(String, &Type)> {
+    pub fn get_var(
+        &self,
+        k: &Meta<Identifier>,
+    ) -> TypeResult<(String, &Type)> {
         self.variables
             .get(k.as_ref())
-            .ok_or_else(|| error::simple(
-                format!(
-                    "cannot find variable `{}` in this scope",
-                    k.as_ref()
-                ),
-                "not found in this scope",
-                k.id,
-            ))
-            .map(|t| {
-                (format!("{}{k}", self.prefix), t)
+            .ok_or_else(|| {
+                error::simple(
+                    format!(
+                        "cannot find variable `{}` in this scope",
+                        k.as_ref()
+                    ),
+                    "not found in this scope",
+                    k.id,
+                )
             })
+            .map(|t| (format!("{}{k}", self.prefix), t))
             .or_else(|e| self.parent.ok_or(e).and_then(|s| s.get_var(k)))
     }
 
@@ -61,9 +64,11 @@ impl<'a> Scope<'a> {
                     entry.key()
                 ),
                 "variable already declared",
-                v.id
+                v.id,
             )),
-            Entry::Vacant(entry) => Ok((format!("{}{v}", self.prefix), entry.insert(t))),
+            Entry::Vacant(entry) => {
+                Ok((format!("{}{v}", self.prefix), entry.insert(t)))
+            }
         }
     }
 }

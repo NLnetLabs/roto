@@ -151,12 +151,10 @@ impl Display for SafeValue {
             SafeValue::Enum(variant, v) => {
                 write!(f, "Enum({variant}, {v})")
             }
-            SafeValue::Verdict(v) => {
-                match v.as_ref() {
-                    Verdict::Accept(x) => write!(f, "Accept({x})"),
-                    Verdict::Reject(x) => write!(f, "Reject({x})"),
-                }
-            }
+            SafeValue::Verdict(v) => match v.as_ref() {
+                Verdict::Accept(x) => write!(f, "Accept({x})"),
+                Verdict::Reject(x) => write!(f, "Reject({x})"),
+            },
             SafeValue::Runtime(..) => write!(f, "Runtime(..)"),
         }
     }

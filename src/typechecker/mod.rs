@@ -66,7 +66,7 @@ impl TypeInfo {
     pub fn full_name(&self, x: impl Into<MetaId>) -> String {
         self.fully_qualified_names[&x.into()].clone()
     }
-    
+
     pub fn type_of(&mut self, x: impl Into<MetaId>) -> Type {
         let ty = self.expr_types[&x.into()].clone();
         self.resolve(&ty)
@@ -309,10 +309,10 @@ impl<'r, 'methods> TypeChecker<'r, 'methods> {
                 }
                 ast::Declaration::Term(x) => {
                     self.term(&root_scope, x)?;
-                },
+                }
                 ast::Declaration::Action(x) => {
                     self.action(&root_scope, x)?;
-                },
+                }
                 _ => {}
             }
         }

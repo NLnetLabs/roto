@@ -1,13 +1,10 @@
 use crate::pipeline::*;
 
 fn compile(p: &'static str) -> Compiled {
-    let res = test_file(p)
-        .parse()
-        .and_then(|x| x.typecheck())
-        .map(|x| {
-            let x = x.lower();
-            x.codegen()
-        });
+    let res = test_file(p).parse().and_then(|x| x.typecheck()).map(|x| {
+        let x = x.lower();
+        x.codegen()
+    });
 
     match res {
         Ok(x) => x,

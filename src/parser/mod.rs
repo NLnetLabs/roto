@@ -1,4 +1,6 @@
-use crate::ast::{ActionDeclaration, Declaration, Identifier, SyntaxTree, TermDeclaration};
+use crate::ast::{
+    ActionDeclaration, Declaration, Identifier, SyntaxTree, TermDeclaration,
+};
 use logos::{Lexer, SpannedIter};
 use std::{fmt::Display, iter::Peekable};
 use token::Token;
@@ -333,12 +335,8 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             Token::Type => {
                 Declaration::Record(self.record_type_assignment()?)
             }
-            Token::Action => {
-                Declaration::Action(self.action()?)
-            }
-            Token::Term => {
-                Declaration::Term(self.term()?)
-            }
+            Token::Action => Declaration::Action(self.action()?),
+            Token::Term => Declaration::Term(self.term()?),
             _ => {
                 let (token, span) = self.next()?;
                 return Err(ParseError::expected(

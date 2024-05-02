@@ -1,4 +1,8 @@
-use crate::{ast::Identifier, parser::meta::Meta, runtime::{wrap::WrappedFunction, Runtime}};
+use crate::{
+    ast::Identifier,
+    parser::meta::Meta,
+    runtime::{wrap::WrappedFunction, Runtime},
+};
 use std::{
     any::TypeId,
     fmt::{Debug, Display},

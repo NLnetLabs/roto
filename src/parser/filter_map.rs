@@ -1,10 +1,8 @@
-use crate::ast::{Expr, FilterMap, FilterMapBody, FilterType, Identifier, Params};
-
-use super::{
-    meta::Meta,
-    token::Token,
-    ParseError, ParseResult, Parser,
+use crate::ast::{
+    Expr, FilterMap, FilterMapBody, FilterType, Identifier, Params,
 };
+
+use super::{meta::Meta, token::Token, ParseError, ParseResult, Parser};
 
 /// # Parsing `filter-map` and `filter` sections
 impl<'source> Parser<'source, '_> {
@@ -102,9 +100,7 @@ impl<'source> Parser<'source, '_> {
     /// ```ebnf
     /// With ::= ( 'with' TypeIdentField (',' TypeIdentField)*)?
     /// ```
-    pub fn params(
-        &mut self,
-    ) -> ParseResult<Meta<Params>> {
+    pub fn params(&mut self) -> ParseResult<Meta<Params>> {
         let m = self.separated(
             Token::RoundLeft,
             Token::RoundRight,
@@ -112,7 +108,10 @@ impl<'source> Parser<'source, '_> {
             Self::type_ident_field,
         )?;
         let id = m.id;
-        Ok(Meta { id, node: Params(m.node) })
+        Ok(Meta {
+            id,
+            node: Params(m.node),
+        })
     }
 
     /// Parse an identifier and a type identifier separated by a colon

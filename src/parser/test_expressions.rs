@@ -118,7 +118,7 @@ fn test_match() {
 
 #[test]
 fn test_match_block() {
-    let s= "
+    let s = "
         match x {
             A(x) -> {
                 a == b;
