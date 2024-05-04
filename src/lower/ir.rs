@@ -25,9 +25,6 @@
 //! [cranelift]: https://docs.rs/cranelift-frontend/latest/cranelift_frontend/
 
 use std::fmt::Display;
-
-use crate::ast::BinOp;
-
 use crate::runtime::wrap::WrappedFunction;
 use crate::typechecker::types::Type;
 
@@ -104,9 +101,34 @@ pub enum Instruction {
     Exit(bool, Operand),
 
     /// Perform a binary operation and store the result in `to`
-    BinOp {
+    Cmp {
         to: Var,
-        op: BinOp,
+        cmp: IntCmp,
+        left: Operand,
+        right: Operand,
+    },
+
+    /// More of a placeholder instruction until we got proper equality on
+    /// more complicated types.
+    Eq {
+        to: Var,
+        left: Operand,
+        right: Operand,
+    },
+
+    Not {
+        to: Var,
+        val: Operand,
+    },
+
+    And {
+        to: Var,
+        left: Operand,
+        right: Operand,
+    },
+
+    Or {
+        to: Var,
         left: Operand,
         right: Operand,
     },
@@ -116,12 +138,14 @@ pub enum Instruction {
         to: Var,
         record: Operand,
         field: String,
+        record_ty: Type,
     },
 
     /// Create record
     CreateRecord {
         to: Var,
         fields: Vec<(String, Operand)>,
+        ty: Type,
     },
 
     /// Create enum variant
@@ -133,6 +157,38 @@ pub enum Instruction {
 
     /// Get enum data
     AccessEnum { to: Var, from: Operand },
+}
+
+#[derive(Clone, Debug)]
+pub enum IntCmp {
+    Eq,
+    Ne,
+    ULt,
+    ULe,
+    UGt,
+    UGe,
+    SLt,
+    SLe,
+    SGt,
+    SGe,
+}
+
+impl Display for IntCmp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            IntCmp::Eq => "eq",
+            IntCmp::Ne => "ne",
+            IntCmp::ULt => "ult",
+            IntCmp::ULe => "ule",
+            IntCmp::UGt => "ugt",
+            IntCmp::UGe => "uge",
+            IntCmp::SLt => "slt",
+            IntCmp::SLe => "sle",
+            IntCmp::SGt => "sgt",
+            IntCmp::SGe => "sge",
+        };
+        write!(f, "{s}")
+    }
 }
 
 impl Display for Instruction {
@@ -161,13 +217,40 @@ impl Display for Instruction {
                 let s = if *b { "accept" } else { "reject" };
                 write!(f, "{s} {val}")
             }
-            Self::BinOp {
+            Self::Cmp {
                 to,
-                op,
+                cmp,
                 left,
                 right,
             } => {
-                write!(f, "{to} = {left} {op} {right}")
+                write!(f, "{to} = {cmp}({left}, {right})")
+            }
+            Self::Eq {
+                to,
+                left,
+                right,
+            } => {
+                write!(f, "{to} = {left} == {right}")
+            }
+            Self::Not {
+                to,
+                val,
+            } => {
+                write!(f, "{to} = not({val})")
+            }
+            Self::And {
+                to,
+                left,
+                right,
+            } => {
+                write!(f, "{to} = {left} & {right}")
+            }
+            Self::Or {
+                to,
+                left,
+                right,
+            } => {
+                write!(f, "{to} = {left} | {right}")
             }
             Self::Jump(to) => {
                 write!(f, "jump {to}")
@@ -187,13 +270,17 @@ impl Display for Instruction {
                         .join(", ")
                 )
             }
-            Self::AccessRecord { to, record, field } => {
+            Self::AccessRecord { to, record, field, .. } => {
                 write!(f, "{to} = {record}.{field}")
             }
-            Self::CreateRecord { to, fields } => {
+            Self::CreateRecord { to, fields, ty } => {
+                let name = match ty {
+                    Type::NamedRecord(name, _) => name,
+                    _ => "",
+                };
                 write!(
                     f,
-                    "{to} = {{ {} }}",
+                    "{to} = {name} {{ {} }}",
                     fields
                         .iter()
                         .map(|(i, v)| format!("{i}: {v}"))

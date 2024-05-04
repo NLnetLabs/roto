@@ -76,6 +76,22 @@ impl TypeInfo {
         self.diverges[&x.into()]
     }
 
+    pub fn offset_of(&mut self, record: &Type, field: &str, pointer_bytes: u32) -> (Type, u32) {
+        let record = self.resolve(record);
+        let (Type::Record(fields) | Type::RecordVar(_, fields) | Type::NamedRecord(_, fields)) = record else {
+            panic!()
+        };
+
+        let mut offset = 0;
+        for f in fields {
+            if f.0 == field {
+                return (f.1, offset);
+            }
+            offset += self.size_of(&f.1, pointer_bytes);
+        }
+        panic!("Field not found")
+    }
+
     pub fn method(
         &mut self,
         x: impl Into<MetaId>,
@@ -104,7 +120,7 @@ impl TypeInfo {
         t
     }
 
-    pub fn size_of(&mut self, t: &Type) -> u32 {
+    pub fn size_of(&mut self, t: &Type, pointer_bytes: u32) -> u32 {
         let t = self.resolve(t);
         match t {
             // Never is zero-sized
@@ -114,13 +130,12 @@ impl TypeInfo {
             // Records have the size of their fields
             Type::Record(fields)
             | Type::NamedRecord(_, fields)
-            | Type::RecordVar(_, fields) => {
-                fields.iter().map(|t| self.size_of(&t.1)).sum()
-            }
+            | Type::RecordVar(_, fields) => pointer_bytes,
             Type::Primitive(p) => p.size(),
             // A list is a pointer
-            Type::List(_) => 4,
+            Type::List(_) => pointer_bytes,
             // Tables, stream and ribs are 8-bit id's
+            // TODO: maybe they should be pointers?
             Type::Table(_) => 1,
             Type::OutputStream(_) => 1,
             Type::Rib(_) => 1,
@@ -477,11 +492,14 @@ impl<'r, 'methods> TypeChecker<'r, 'methods> {
             // We never recurse into NamedRecords, so they are included here.
             (a, b) if a == b => a,
             (Never, x) | (x, Never) => x,
-            (IntVar(a), b @ (Primitive(U8 | U16 | U32) | IntVar(_))) => {
+            (
+                IntVar(a),
+                b @ (Primitive(U8 | U16 | U32 | I8 | I16 | I32) | IntVar(_)),
+            ) => {
                 self.type_info.unionfind.set(a, b.clone());
                 b.clone()
             }
-            (a @ Primitive(U8 | U16 | U32), IntVar(b)) => {
+            (a @ Primitive(U8 | U16 | U32 | I8 | I16 | I32), IntVar(b)) => {
                 self.type_info.unionfind.set(b, a.clone());
                 a.clone()
             }

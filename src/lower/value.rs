@@ -9,6 +9,7 @@ pub trait Value: Eq {
     fn as_unit(&self) {}
     fn as_bool(&self) -> bool;
     fn as_u32(&self) -> u32;
+    fn as_i32(&self) -> i32;
     fn switch_on(&self) -> u32;
 }
 
@@ -25,6 +26,9 @@ pub enum SafeValue {
     U8(u8),
     U16(u16),
     U32(u32),
+    I8(i8),
+    I16(i16),
+    I32(i32),
     Verdict(Box<Verdict>),
     Record(Vec<(String, SafeValue)>),
     Enum(u32, Box<SafeValue>),
@@ -65,6 +69,9 @@ impl SafeValue {
             SafeValue::U8(x) => x,
             SafeValue::U16(x) => x,
             SafeValue::U32(x) => x,
+            SafeValue::I8(x) => x,
+            SafeValue::I16(x) => x,
+            SafeValue::I32(x) => x,
             SafeValue::Record(_) => todo!(),
             SafeValue::Enum(_, _) => todo!(),
             SafeValue::Verdict(_) => todo!(),
@@ -87,6 +94,12 @@ impl SafeValue {
             SafeValue::U16(*x)
         } else if let Some(x) = any.downcast_ref() {
             SafeValue::U32(*x)
+        } else if let Some(x) = any.downcast_ref() {
+            SafeValue::I8(*x)
+        } else if let Some(x) = any.downcast_ref() {
+            SafeValue::I16(*x)
+        } else if let Some(x) = any.downcast_ref() {
+            SafeValue::I32(*x)
         } else {
             SafeValue::Runtime(Rc::from(any))
         }
@@ -106,6 +119,15 @@ impl Value for SafeValue {
             SafeValue::U8(x) => *x as u32,
             SafeValue::U16(x) => *x as u32,
             SafeValue::U32(x) => *x,
+            _ => panic!("Invalid value!"),
+        }
+    }
+    
+    fn as_i32(&self) -> i32 {
+        match self {
+            SafeValue::I8(x) => *x as i32,
+            SafeValue::I16(x) => *x as i32,
+            SafeValue::I32(x) => *x,
             _ => panic!("Invalid value!"),
         }
     }
@@ -139,6 +161,9 @@ impl Display for SafeValue {
             SafeValue::U8(x) => write!(f, "U8({x})"),
             SafeValue::U16(x) => write!(f, "U16({x})"),
             SafeValue::U32(x) => write!(f, "U32({x})"),
+            SafeValue::I8(x) => write!(f, "I8({x})"),
+            SafeValue::I16(x) => write!(f, "I16({x})"),
+            SafeValue::I32(x) => write!(f, "I32({x})"),
             SafeValue::Record(fields) => write!(
                 f,
                 "{{{}}}",

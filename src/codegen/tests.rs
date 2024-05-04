@@ -140,3 +140,123 @@ fn equal_to_10_with_two_terms() {
     assert_eq!(f.call((15,)), 0);
     assert_eq!(f.call((20,)), 1);
 }
+
+#[test]
+fn negation() {
+    let s = "
+        filter-map main(x: I32) {
+            apply {
+                if not (x == 10) {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        } 
+    ";
+
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(i32,), i8>("main")
+        .expect("No function found (or mismatched types)");
+
+    for x in 0..20 {
+        assert_eq!(f.call((x,)), (x != 10) as i8, "{x}");
+    }
+}
+
+#[test]
+fn a_bunch_of_comparisons() {
+    let s = "
+        filter-map main(x: I32) {
+            apply {
+                if (
+                    (x > 10 && x < 20)
+                    || (x >= 30 && x <= 40)
+                    || x == 55
+                ){
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
+
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(i32,), i8>("main")
+        .expect("No function found (or mismatched types)");
+
+    for x in 0..100 {
+        #[allow(clippy::manual_range_contains)]
+        let expected = (x > 10 && x < 20) || (x >= 30 && x <= 40) || x == 55;
+        assert_eq!(f.call((x,)), expected as i8);
+    }
+}
+
+#[test]
+fn record() {
+    let s = "
+        type Foo { a: I32, b: I32 }
+
+        filter-map main(x: I32) {
+            define {
+                foo = Foo { a: x, b: 20 };
+            }
+            apply {
+                if foo.a == foo.b {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
+
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(i32,), i8>("main")
+        .expect("No function found (or mismatched types)");
+
+    for x in 0..100 {
+        let expected = x == 20;
+        assert_eq!(f.call((x,)), expected as i8);
+    }
+}
+
+#[test]
+fn record_with_fields_flipped() {
+    let s = "
+        type Foo { a: I32, b: I32 }
+
+        filter-map main(x: I32) {
+            define {
+                // These are flipped, to ensure that the order in which
+                // the fields are given doesn't matter:
+                foo = Foo { b: 20, a: x };
+            }
+            apply {
+                if foo.a == foo.b {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
+
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(i32,), i8>("main")
+        .expect("No function found (or mismatched types)");
+
+    for x in 0..100 {
+        let expected = x == 20;
+        assert_eq!(f.call((x,)), expected as i8);
+    }
+}

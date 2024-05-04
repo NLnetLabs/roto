@@ -4,12 +4,9 @@ use std::collections::HashMap;
 
 use log::trace;
 
-use crate::{
-    ast::BinOp,
-    lower::{
-        ir::Instruction,
-        value::{Value, Verdict},
-    },
+use crate::lower::{
+    ir::{Instruction, IntCmp},
+    value::{Value, Verdict},
 };
 
 use super::{
@@ -145,29 +142,50 @@ pub fn eval(
                 };
                 return SafeValue::Verdict(Box::new(verdict));
             }
-            Instruction::BinOp {
+            Instruction::Cmp {
                 to,
-                op,
+                cmp,
                 left,
                 right,
             } => {
                 let left = eval_operand(&mem, left);
                 let right = eval_operand(&mem, right);
-                let res = match op {
-                    BinOp::And => left.as_bool() && right.as_bool(),
-                    BinOp::Or => left.as_bool() || right.as_bool(),
-                    BinOp::Eq => left == right,
-                    BinOp::Ne => left != right,
-                    BinOp::Lt => left.as_u32() < right.as_u32(),
-                    BinOp::Le => left.as_u32() <= right.as_u32(),
-                    BinOp::Gt => left.as_u32() > right.as_u32(),
-                    BinOp::Ge => left.as_u32() >= right.as_u32(),
-                    BinOp::In => todo!(),
-                    BinOp::NotIn => todo!(),
+                let res = match cmp {
+                    IntCmp::Eq => left == right,
+                    IntCmp::Ne => left != right,
+                    IntCmp::ULt => left.as_u32() < right.as_u32(),
+                    IntCmp::ULe => left.as_u32() <= right.as_u32(),
+                    IntCmp::UGt => left.as_u32() > right.as_u32(),
+                    IntCmp::UGe => left.as_u32() >= right.as_u32(),
+                    IntCmp::SLt => left.as_i32() < right.as_i32(),
+                    IntCmp::SLe => left.as_i32() <= right.as_i32(),
+                    IntCmp::SGt => left.as_i32() > right.as_i32(),
+                    IntCmp::SGe => left.as_i32() >= right.as_i32(),
                 };
                 mem.insert(to.clone(), SafeValue::Bool(res));
             }
-            Instruction::AccessRecord { to, record, field } => {
+            Instruction::Eq { to, left, right } => {
+                let left = eval_operand(&mem, left);
+                let right = eval_operand(&mem, right);
+                mem.insert(to.clone(), SafeValue::Bool(left.eq(right)));
+            }
+            Instruction::Not { to, val } => {
+                let val = eval_operand(&mem, val).as_bool();
+                mem.insert(to.clone(), SafeValue::Bool(val));
+            }
+            Instruction::And { to, left, right } => {
+                let left = eval_operand(&mem, left).as_bool();
+                let right = eval_operand(&mem, right).as_bool();
+                mem.insert(to.clone(), SafeValue::Bool(left && right));
+            }
+            Instruction::Or { to, left, right } => {
+                let left = eval_operand(&mem, left).as_bool();
+                let right = eval_operand(&mem, right).as_bool();
+                mem.insert(to.clone(), SafeValue::Bool(left || right));
+            }
+            Instruction::AccessRecord {
+                to, record, field, ..
+            } => {
                 let record = eval_operand(&mem, record);
                 let SafeValue::Record(record) = record else {
                     panic!("Should have been caught in typechecking")
@@ -176,7 +194,7 @@ pub fn eval(
                     record.iter().find(|(s, _)| s == field).unwrap();
                 mem.insert(to.clone(), val.clone());
             }
-            Instruction::CreateRecord { to, fields } => {
+            Instruction::CreateRecord { to, fields, .. } => {
                 let fields = fields
                     .iter()
                     .map(|(s, op)| (s.into(), eval_operand(&mem, op).clone()))

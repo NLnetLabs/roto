@@ -165,3 +165,15 @@ fn test_if_else_if_else() {
     let s = "if true { 0 } else if false { 1 } else { 2 }";
     parse_expr(s).unwrap();
 }
+
+#[test]
+fn test_not_true() {
+    let s = "not true";
+    parse_expr(s).unwrap();
+}
+
+#[test]
+fn test_not_true_is_true() {
+    let s = "not true == true";
+    parse_expr(s).unwrap();
+}

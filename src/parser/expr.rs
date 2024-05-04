@@ -108,12 +108,12 @@ impl<'source> Parser<'source, '_> {
     }
 
     fn logical_expr(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
-        let expr = self.comparison(r)?;
+        let expr = self.negation(r)?;
 
         if self.peek_is(Token::AmpAmp) {
             let mut exprs = vec![expr];
             while self.next_is(Token::AmpAmp) {
-                exprs.push(self.comparison(r)?);
+                exprs.push(self.negation(r)?);
             }
             if self.peek_is(Token::PipePipe) {
                 let pipe = self.take(Token::PipePipe)?;
@@ -137,7 +137,7 @@ impl<'source> Parser<'source, '_> {
         } else if self.peek_is(Token::PipePipe) {
             let mut exprs = vec![expr];
             while self.next_is(Token::PipePipe) {
-                exprs.push(self.comparison(r)?);
+                exprs.push(self.negation(r)?);
             }
             if self.peek_is(Token::AmpAmp) {
                 let amp = self.take(Token::AmpAmp)?;
@@ -160,6 +160,17 @@ impl<'source> Parser<'source, '_> {
                 .unwrap())
         } else {
             Ok(expr)
+        }
+    }
+
+    fn negation(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
+        if self.peek_is(Token::Not) {
+            let span = self.take(Token::Not)?;
+            let expr = self.negation(r)?;
+            let span = span.merge(self.get_span(&expr));
+            Ok(self.spans.add(span, Expr::Not(Box::new(expr))))
+        } else {
+            self.comparison(r)
         }
     }
 

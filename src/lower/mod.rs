@@ -376,12 +376,14 @@ impl<'r> Lowerer<'r> {
                     }
                     panic!("Should have been caught in typechecking")
                 } else {
+                    let record_ty = self.type_info.type_of(&**e);
                     let val = self.expr(e);
                     let to = self.new_tmp();
                     self.add(Instruction::AccessRecord {
                         to: to.clone(),
                         record: val,
                         field: field.0.to_string(),
+                        record_ty,
                     });
                     to.into()
                 }
@@ -397,21 +399,21 @@ impl<'r> Lowerer<'r> {
                     .map(|(s, expr)| ((&s.0).into(), self.expr(expr)))
                     .collect();
                 let to = self.new_tmp();
+                let ty = self.type_info.type_of(id);
                 self.add(Instruction::CreateRecord {
                     to: to.clone(),
                     fields,
+                    ty,
                 });
                 to.into()
             }
             ast::Expr::List(_) => todo!(),
             ast::Expr::Not(e) => {
-                let ty = self.type_info.type_of(e.id);
                 let val = self.expr(e);
                 let place = self.new_tmp();
-                self.add(Instruction::Assign {
+                self.add(Instruction::Not {
                     to: place.clone(),
                     val,
-                    ty,
                 });
                 place.into()
             }
@@ -421,8 +423,8 @@ impl<'r> Lowerer<'r> {
                 let right = self.expr(right);
 
                 let place = self.new_tmp();
-                match (op, ty) {
-                    (ast::BinOp::Eq, Type::BuiltIn(_, i)) => {
+                match (op, binop_to_cmp(op, &ty), ty) {
+                    (ast::BinOp::Eq, _, Type::BuiltIn(_, i)) => {
                         let eq =
                             self.runtime.get_type(i).eq.as_ref().unwrap();
                         self.add(Instruction::CallExternal {
@@ -432,14 +434,30 @@ impl<'r> Lowerer<'r> {
                             args: vec![left, right],
                         })
                     }
-                    (_, _) => {
-                        self.add(Instruction::BinOp {
+                    (_, Some(cmp), _) => {
+                        self.add(Instruction::Cmp {
                             to: place.clone(),
-                            op: op.clone(),
+                            cmp,
                             left,
                             right,
                         });
                     }
+                    (ast::BinOp::And, _, _) => self.add(Instruction::And {
+                        to: place.clone(),
+                        left,
+                        right,
+                    }),
+                    (ast::BinOp::Or, _, _) => self.add(Instruction::Or {
+                        to: place.clone(),
+                        left,
+                        right,
+                    }),
+                    (ast::BinOp::Eq, _, _) => self.add(Instruction::Eq {
+                        to: place.clone(),
+                        left,
+                        right,
+                    }),
+                    _ => todo!(),
                 }
 
                 place.into()
@@ -541,7 +559,14 @@ impl<'r> Lowerer<'r> {
                     Type::Primitive(Primitive::U32) => {
                         SafeValue::U32(*x as u32)
                     }
-                    Type::IntVar(_) => SafeValue::U32(*x as u32),
+                    Type::Primitive(Primitive::I8) => SafeValue::I8(*x as i8),
+                    Type::Primitive(Primitive::I16) => {
+                        SafeValue::I16(*x as i16)
+                    }
+                    Type::Primitive(Primitive::I32) => {
+                        SafeValue::I32(*x as i32)
+                    }
+                    Type::IntVar(_) => SafeValue::I32(*x as i32),
                     _ => unreachable!("should be a type error: {ty}"),
                 }
                 .into()
@@ -549,4 +574,34 @@ impl<'r> Lowerer<'r> {
             Literal::Bool(x) => SafeValue::Bool(*x).into(),
         }
     }
+}
+
+fn binop_to_cmp(op: &ast::BinOp, ty: &Type) -> Option<ir::IntCmp> {
+    let signed = match ty {
+        Type::Primitive(p) => match p {
+            Primitive::U32
+            | Primitive::U16
+            | Primitive::U8
+            | Primitive::Bool => false,
+            Primitive::I32 | Primitive::I16 | Primitive::I8 => true,
+            Primitive::Unit => return None,
+            Primitive::String => return None,
+        },
+        Type::IntVar(_) => true,
+        _ => return None,
+    };
+
+    Some(match op {
+        ast::BinOp::Eq => ir::IntCmp::Eq,
+        ast::BinOp::Ne => ir::IntCmp::Ne,
+        ast::BinOp::Lt if signed => ir::IntCmp::SLt,
+        ast::BinOp::Le if signed => ir::IntCmp::SLe,
+        ast::BinOp::Gt if signed => ir::IntCmp::SGt,
+        ast::BinOp::Ge if signed => ir::IntCmp::SGe,
+        ast::BinOp::Lt => ir::IntCmp::ULt,
+        ast::BinOp::Le => ir::IntCmp::ULe,
+        ast::BinOp::Gt => ir::IntCmp::UGt,
+        ast::BinOp::Ge => ir::IntCmp::UGe,
+        _ => return None,
+    })
 }

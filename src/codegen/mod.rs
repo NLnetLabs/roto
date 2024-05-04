@@ -21,12 +21,15 @@ use cranelift::{
     },
     frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable},
 };
-use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::{
+    ir::{MemFlags, StackSlotData, StackSlotKind},
+    isa::TargetIsa,
+};
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{FuncId, Linkage, Module as _};
 
 use crate::{
-    lower::ir::{self, Operand},
+    lower::ir::{self, IntCmp, Operand},
     typechecker::{
         types::{Primitive, Type as RotoType},
         TypeInfo,
@@ -299,36 +302,141 @@ impl ModuleBuilder<'_> {
                     let val = builder.ins().iconst(I8, *v as i64);
                     builder.ins().return_(&[val]);
                 }
-                ir::Instruction::BinOp {
+                ir::Instruction::Cmp {
                     to,
-                    op,
+                    cmp,
                     left,
                     right,
                 } => {
                     let l = self.compile_operand(variable_map, builder, left);
                     let r =
                         self.compile_operand(variable_map, builder, right);
+                    let len = variable_map.len();
+                    let var =
+                        *variable_map.entry(&to.var).or_insert_with(|| {
+                            let var = Variable::new(len);
+                            builder.declare_var(var, I8);
+                            var
+                        });
+                    let val = compile_binop(builder, l, r, cmp);
+                    builder.def_var(var, val);
+                }
+                ir::Instruction::Not { to, val } => {
+                    let val = self.compile_operand(variable_map, builder, val);
+                    let len = variable_map.len();
+                    let var =
+                        *variable_map.entry(&to.var).or_insert_with(|| {
+                            let var = Variable::new(len);
+                            builder.declare_var(var, I8);
+                            var
+                        });
+                    let val = builder.ins().icmp_imm(IntCC::Equal, val, 0);
+                    builder.def_var(var, val);
+                }
+                ir::Instruction::And { to, left, right } => {
+                    let l = self.compile_operand(variable_map, builder, left);
+                    let r =
+                        self.compile_operand(variable_map, builder, right);
+                    let len = variable_map.len();
+                    let var =
+                        *variable_map.entry(&to.var).or_insert_with(|| {
+                            let var = Variable::new(len);
+                            builder.declare_var(var, I8);
+                            var
+                        });
+                    let val = builder.ins().band(l, r);
+                    builder.def_var(var, val);
+                }
+                ir::Instruction::Or { to, left, right } => {
+                    let l = self.compile_operand(variable_map, builder, left);
+                    let r =
+                        self.compile_operand(variable_map, builder, right);
+                    let len = variable_map.len();
+                    let var =
+                        *variable_map.entry(&to.var).or_insert_with(|| {
+                            let var = Variable::new(len);
+                            builder.declare_var(var, I8);
+                            var
+                        });
+                    let val = builder.ins().bor(l, r);
+                    builder.def_var(var, val);
+                }
+                ir::Instruction::Eq { .. } => todo!(),
+                ir::Instruction::AccessRecord {
+                    to,
+                    record,
+                    field,
+                    record_ty,
+                } => {
+                    let pointer_bytes = self.isa.pointer_bytes() as u32;
 
-                    match op {
-                        crate::ast::BinOp::Eq => {
-                            let len = variable_map.len();
-                            let var = *variable_map
-                                .entry(&to.var)
-                                .or_insert_with(|| {
-                                    let var = Variable::new(len);
-                                    builder.declare_var(var, I8);
-                                    var
-                                });
-                            let val = builder.ins().icmp(IntCC::Equal, l, r);
-                            builder.def_var(var, val);
-                        }
-                        _ => todo!(),
+                    let (ty, offset) = self.type_info.offset_of(
+                        record_ty,
+                        field,
+                        pointer_bytes,
+                    );
+
+                    let len = variable_map.len();
+                    let var =
+                        *variable_map.entry(&to.var).or_insert_with(|| {
+                            let var = Variable::new(len);
+                            builder
+                                .declare_var(var, self.cranelift_type(&ty));
+                            var
+                        });
+
+                    let record =
+                        self.compile_operand(variable_map, builder, record);
+
+                    let val = builder.ins().load(
+                        self.cranelift_type(&ty),
+                        MemFlags::new(),
+                        record,
+                        offset as i32,
+                    );
+
+                    builder.def_var(var, val);
+                }
+                ir::Instruction::CreateRecord { to, fields, ty } => {
+                    let pointer_bytes = self.isa.pointer_bytes() as u32;
+                    let pointer_ty = self.isa.pointer_type();
+                    let size = self.type_info.size_of(ty, pointer_bytes);
+                    let slot_data =
+                        StackSlotData::new(StackSlotKind::ExplicitSlot, size);
+                    let slot = builder.create_sized_stack_slot(slot_data);
+                    let p = builder.ins().stack_addr(pointer_ty, slot, 0);
+
+                    for (field_name, field_operand) in fields {
+                        let (_, offset) = self.type_info.offset_of(
+                            ty,
+                            field_name,
+                            pointer_bytes,
+                        );
+
+                        let op = self.compile_operand(
+                            variable_map,
+                            builder,
+                            field_operand,
+                        );
+
+                        builder.ins().store(
+                            MemFlags::new(),
+                            op,
+                            p,
+                            offset as i32,
+                        );
                     }
+
+                    let len = variable_map.len();
+                    let var =
+                        *variable_map.entry(&to.var).or_insert_with(|| {
+                            let var = Variable::new(len);
+                            builder.declare_var(var, pointer_ty);
+                            var
+                        });
+
+                    builder.def_var(var, p);
                 }
-                ir::Instruction::AccessRecord { .. } => {
-                    todo!()
-                }
-                ir::Instruction::CreateRecord { .. } => todo!(),
                 ir::Instruction::CreateEnum { .. } => todo!(),
                 ir::Instruction::AccessEnum { .. } => todo!(),
             }
@@ -357,6 +465,9 @@ impl ModuleBuilder<'_> {
                 SafeValue::U8(x) => builder.ins().iconst(I8, *x as i64),
                 SafeValue::U16(x) => builder.ins().iconst(I16, *x as i64),
                 SafeValue::U32(x) => builder.ins().iconst(I32, *x as i64),
+                SafeValue::I8(x) => builder.ins().iconst(I8, *x as i64),
+                SafeValue::I16(x) => builder.ins().iconst(I16, *x as i64),
+                SafeValue::I32(x) => builder.ins().iconst(I32, *x as i64),
                 SafeValue::Verdict(_) => todo!(),
                 SafeValue::Record(_) => todo!(),
                 SafeValue::Enum(_, _) => todo!(),
@@ -380,6 +491,9 @@ impl ModuleBuilder<'_> {
                 Primitive::U32 => I32,
                 Primitive::U16 => I16,
                 Primitive::U8 => I8,
+                Primitive::I32 => I32,
+                Primitive::I16 => I16,
+                Primitive::I8 => I8,
                 Primitive::Bool => I8,
                 // todo!(): this is temporary: units need to be 0-sized and
                 // compiled away
@@ -399,7 +513,7 @@ impl ModuleBuilder<'_> {
             RotoType::OutputStream(_) => todo!(),
             RotoType::Rib(_) => todo!(),
             RotoType::Record(_) => todo!(),
-            RotoType::NamedRecord(_, _) => todo!(),
+            RotoType::NamedRecord(_, _) => self.isa.pointer_type(),
             RotoType::Enum(_, _) => todo!(),
             RotoType::Term(_) => todo!(),
             RotoType::Action(_) => todo!(),
@@ -430,6 +544,27 @@ impl Module {
             _ty: PhantomData,
         })
     }
+}
+
+fn compile_binop(
+    builder: &mut FunctionBuilder,
+    left_val: Value,
+    right_val: Value,
+    op: &IntCmp,
+) -> Value {
+    let cc = match op {
+        IntCmp::Eq => IntCC::Equal,
+        IntCmp::Ne => IntCC::NotEqual,
+        IntCmp::ULt => IntCC::UnsignedLessThan,
+        IntCmp::ULe => IntCC::UnsignedLessThanOrEqual,
+        IntCmp::UGt => IntCC::UnsignedGreaterThan,
+        IntCmp::UGe => IntCC::UnsignedGreaterThanOrEqual,
+        IntCmp::SLt => IntCC::SignedLessThan,
+        IntCmp::SLe => IntCC::SignedLessThanOrEqual,
+        IntCmp::SGt => IntCC::SignedGreaterThan,
+        IntCmp::SGe => IntCC::SignedGreaterThanOrEqual,
+    };
+    builder.ins().icmp(cc, left_val, right_val)
 }
 
 trait IsRotoType {
