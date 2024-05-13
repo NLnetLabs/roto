@@ -76,9 +76,17 @@ impl TypeInfo {
         self.diverges[&x.into()]
     }
 
-    pub fn offset_of(&mut self, record: &Type, field: &str, pointer_bytes: u32) -> (Type, u32) {
+    pub fn offset_of(
+        &mut self,
+        record: &Type,
+        field: &str,
+        pointer_bytes: u32,
+    ) -> (Type, u32) {
         let record = self.resolve(record);
-        let (Type::Record(fields) | Type::RecordVar(_, fields) | Type::NamedRecord(_, fields)) = record else {
+        let (Type::Record(fields)
+        | Type::RecordVar(_, fields)
+        | Type::NamedRecord(_, fields)) = record
+        else {
             panic!()
         };
 
@@ -130,15 +138,15 @@ impl TypeInfo {
             // Records have the size of their fields
             Type::Record(fields)
             | Type::NamedRecord(_, fields)
-            | Type::RecordVar(_, fields) => pointer_bytes,
+            | Type::RecordVar(_, fields) => fields
+                .iter()
+                .map(|(_, t)| self.size_of(t, pointer_bytes))
+                .sum(),
             Type::Primitive(p) => p.size(),
-            // A list is a pointer
-            Type::List(_) => pointer_bytes,
-            // Tables, stream and ribs are 8-bit id's
-            // TODO: maybe they should be pointers?
-            Type::Table(_) => 1,
-            Type::OutputStream(_) => 1,
-            Type::Rib(_) => 1,
+            Type::List(_)
+            | Type::Table(_) => pointer_bytes,
+            | Type::OutputStream(_) => pointer_bytes,
+            | Type::Rib(_) => pointer_bytes,
             _ => 0,
         }
     }

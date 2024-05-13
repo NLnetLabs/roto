@@ -24,6 +24,7 @@ use cranelift::{
 use cranelift_codegen::{
     ir::{MemFlags, StackSlotData, StackSlotKind},
     isa::TargetIsa,
+    trace,
 };
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{FuncId, Linkage, Module as _};
@@ -206,12 +207,10 @@ impl ModuleBuilder<'_> {
 
         builder.finalize();
 
-        dbg!(&ctx.func);
-
         self.inner.define_function(func_id, &mut ctx).unwrap();
 
         let capstone = self.isa.to_capstone().unwrap();
-        eprintln!(
+        trace!(
             "{}",
             ctx.compiled_code()
                 .unwrap()
@@ -322,7 +321,8 @@ impl ModuleBuilder<'_> {
                     builder.def_var(var, val);
                 }
                 ir::Instruction::Not { to, val } => {
-                    let val = self.compile_operand(variable_map, builder, val);
+                    let val =
+                        self.compile_operand(variable_map, builder, val);
                     let len = variable_map.len();
                     let var =
                         *variable_map.entry(&to.var).or_insert_with(|| {
@@ -388,12 +388,19 @@ impl ModuleBuilder<'_> {
                     let record =
                         self.compile_operand(variable_map, builder, record);
 
-                    let val = builder.ins().load(
-                        self.cranelift_type(&ty),
-                        MemFlags::new(),
-                        record,
-                        offset as i32,
-                    );
+                    let val = if let RotoType::Record(..)
+                    | RotoType::NamedRecord(..)
+                    | RotoType::RecordVar(..) = ty
+                    {
+                        builder.ins().iadd_imm(record, offset as i64)
+                    } else {
+                        builder.ins().load(
+                            self.cranelift_type(&ty),
+                            MemFlags::new(),
+                            record,
+                            offset as i32,
+                        )
+                    };
 
                     builder.def_var(var, val);
                 }
@@ -404,10 +411,9 @@ impl ModuleBuilder<'_> {
                     let slot_data =
                         StackSlotData::new(StackSlotKind::ExplicitSlot, size);
                     let slot = builder.create_sized_stack_slot(slot_data);
-                    let p = builder.ins().stack_addr(pointer_ty, slot, 0);
 
                     for (field_name, field_operand) in fields {
-                        let (_, offset) = self.type_info.offset_of(
+                        let (ty, offset) = self.type_info.offset_of(
                             ty,
                             field_name,
                             pointer_bytes,
@@ -419,12 +425,36 @@ impl ModuleBuilder<'_> {
                             field_operand,
                         );
 
-                        builder.ins().store(
-                            MemFlags::new(),
-                            op,
-                            p,
-                            offset as i32,
-                        );
+                        if let RotoType::Record(..)
+                        | RotoType::NamedRecord(..)
+                        | RotoType::RecordVar(..) = ty
+                        {
+                            let size =
+                                self.type_info.size_of(&ty, pointer_bytes);
+
+                            let dest = builder.ins().stack_addr(
+                                pointer_ty,
+                                slot,
+                                offset as i32,
+                            );
+
+                            builder.emit_small_memory_copy(
+                                self.isa.frontend_config(),
+                                dest,
+                                op,
+                                size as u64,
+                                0,
+                                0,
+                                true,
+                                MemFlags::new(),
+                            )
+                        } else {
+                            builder.ins().stack_store(
+                                op,
+                                slot,
+                                offset as i32,
+                            );
+                        }
                     }
 
                     let len = variable_map.len();
@@ -435,6 +465,7 @@ impl ModuleBuilder<'_> {
                             var
                         });
 
+                    let p = builder.ins().stack_addr(pointer_ty, slot, 0);
                     builder.def_var(var, p);
                 }
                 ir::Instruction::CreateEnum { .. } => todo!(),
