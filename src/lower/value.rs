@@ -6,7 +6,6 @@ use std::rc::Rc;
 use super::ir::Operand;
 
 pub trait Value: Eq {
-    fn as_unit(&self) {}
     fn as_bool(&self) -> bool;
     fn as_u32(&self) -> u32;
     fn as_i32(&self) -> i32;

@@ -49,13 +49,13 @@ pub struct Module {
     inner: JITModule,
 }
 
-struct TypedFunc<P, R> {
+pub struct TypedFunc<P, R> {
     func: *const u8,
     _ty: PhantomData<(P, R)>,
 }
 
 impl<P: RotoParams, R: IsRotoType> TypedFunc<P, R> {
-    fn call(&self, params: P) -> R {
+    pub fn call(&self, params: P) -> R {
         unsafe { P::invoke::<R>(self.func, params) }
     }
 }
@@ -396,7 +396,7 @@ impl ModuleBuilder<'_> {
                     } else {
                         builder.ins().load(
                             self.cranelift_type(&ty),
-                            MemFlags::new(),
+                            MemFlags::new().with_aligned(),
                             record,
                             offset as i32,
                         )
@@ -446,7 +446,7 @@ impl ModuleBuilder<'_> {
                                 0,
                                 0,
                                 true,
-                                MemFlags::new(),
+                                MemFlags::new().with_aligned(),
                             )
                         } else {
                             builder.ins().stack_store(
@@ -556,7 +556,7 @@ impl ModuleBuilder<'_> {
 }
 
 impl Module {
-    fn get_function<P: RotoParams, R: IsRotoType>(
+    pub fn get_function<P: RotoParams, R: IsRotoType>(
         &self,
         name: &str,
     ) -> Option<TypedFunc<P, R>> {
@@ -598,7 +598,7 @@ fn compile_binop(
     builder.ins().icmp(cc, left_val, right_val)
 }
 
-trait IsRotoType {
+pub trait IsRotoType {
     fn check(ty: Type) -> bool {
         ty == I8
     }
@@ -640,7 +640,7 @@ impl IsRotoType for u32 {
     }
 }
 
-trait RotoParams {
+pub trait RotoParams {
     fn check(ty: &[Type]) -> bool {
         ty.is_empty()
     }

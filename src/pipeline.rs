@@ -165,9 +165,19 @@ pub fn run(
         println!("{}", f);
     }
 
-    let res = lowered.eval(rx);
-    lowered.codegen();
+    let res = lowered.eval(rx.clone());
+    let compiled = lowered.codegen();
 
+    let res2 = match &rx {
+        SafeValue::U32(x) => {
+            let main =
+                compiled.module.get_function::<(u32,), u32>("main").unwrap();
+            SafeValue::from(main.call((*x,)))
+        }
+        _ => panic!("Not the right type"),
+    };
+
+    assert_eq!(res, res2);
     Ok(res)
 }
 

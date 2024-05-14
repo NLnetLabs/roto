@@ -261,7 +261,6 @@ pub enum PrefixMatchType {
     OrLonger,
     PrefixLengthRange(PrefixLengthRange),
     UpTo(u8),
-    Through(u8),
     NetMask(IpAddress),
 }
 
