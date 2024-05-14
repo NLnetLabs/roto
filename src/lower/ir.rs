@@ -24,9 +24,9 @@
 //!
 //! [cranelift]: https://docs.rs/cranelift-frontend/latest/cranelift_frontend/
 
-use std::fmt::Display;
 use crate::runtime::wrap::WrappedFunction;
 use crate::typechecker::types::Type;
+use std::fmt::Display;
 
 use super::value::SafeValue;
 
@@ -76,7 +76,11 @@ pub enum Instruction {
     },
 
     /// Assign the value `val` to `to`.
-    Assign { to: Var, val: Operand, ty: Type },
+    Assign {
+        to: Var,
+        val: Operand,
+        ty: Type,
+    },
 
     /// Call a function.
     Call {
@@ -156,7 +160,10 @@ pub enum Instruction {
     },
 
     /// Get enum data
-    AccessEnum { to: Var, from: Operand },
+    AccessEnum {
+        to: Var,
+        from: Operand,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -225,31 +232,16 @@ impl Display for Instruction {
             } => {
                 write!(f, "{to} = {cmp}({left}, {right})")
             }
-            Self::Eq {
-                to,
-                left,
-                right,
-            } => {
+            Self::Eq { to, left, right } => {
                 write!(f, "{to} = {left} == {right}")
             }
-            Self::Not {
-                to,
-                val,
-            } => {
+            Self::Not { to, val } => {
                 write!(f, "{to} = not({val})")
             }
-            Self::And {
-                to,
-                left,
-                right,
-            } => {
+            Self::And { to, left, right } => {
                 write!(f, "{to} = {left} & {right}")
             }
-            Self::Or {
-                to,
-                left,
-                right,
-            } => {
+            Self::Or { to, left, right } => {
                 write!(f, "{to} = {left} | {right}")
             }
             Self::Jump(to) => {
@@ -270,7 +262,9 @@ impl Display for Instruction {
                         .join(", ")
                 )
             }
-            Self::AccessRecord { to, record, field, .. } => {
+            Self::AccessRecord {
+                to, record, field, ..
+            } => {
                 write!(f, "{to} = {record}.{field}")
             }
             Self::CreateRecord { to, fields, ty } => {

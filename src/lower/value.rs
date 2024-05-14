@@ -121,7 +121,7 @@ impl Value for SafeValue {
             _ => panic!("Invalid value!"),
         }
     }
-    
+
     fn as_i32(&self) -> i32 {
         match self {
             SafeValue::I8(x) => *x as i32,
