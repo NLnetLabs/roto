@@ -293,3 +293,35 @@ fn nested_record() {
         assert_eq!(f.call((x,)), expected as i8);
     }
 }
+
+#[test]
+fn misaligned_fields() {
+    // A record where the second field should be aligned
+    let s = "
+        type Foo { a: I16, b: I32 }
+
+        filter-map main(x: I32) {
+            define {
+                foo = Foo { a: 10, b: x };
+            }
+            apply {
+                if foo.b == 20 {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
+
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(i32,), i8>("main")
+        .expect("No function found (or mismatched types)");
+
+    for x in 0..100 {
+        let expected = x == 20;
+        assert_eq!(f.call((x,)), expected as i8);
+    }
+}
