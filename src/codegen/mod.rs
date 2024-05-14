@@ -1,13 +1,5 @@
 //! Machine code generation via cranelift
 
-// Time to write some hints for myself for next week.
-// 1. Translate basic functions with u32
-// 2. Figure out translating Rust types to Roto types
-// 3. Type check to a specific Rust function signature? Should be automatic
-//    ideally, where we can give it `fn(u32) -> u32` and it will know what
-//    types to expect on the Roto side.
-// 4. Figure out sizes and more complicated instructions
-
 use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
 use cranelift::{
