@@ -260,3 +260,36 @@ fn record_with_fields_flipped() {
         assert_eq!(f.call((x,)), expected as i8);
     }
 }
+
+#[test]
+fn nested_record() {
+    let s = "
+        type Foo { x: Bar, y: Bar }
+        type Bar { a: I32, b: I32 }
+
+        filter-map main(x: I32) {
+            define {
+                bar = Bar { a: 20, b: x };
+                foo = Foo { x: bar, y: bar };
+            }
+            apply {
+                if foo.x.a == foo.y.b {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
+
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(i32,), i8>("main")
+        .expect("No function found (or mismatched types)");
+
+    for x in 0..100 {
+        let expected = x == 20;
+        assert_eq!(f.call((x,)), expected as i8);
+    }
+}
