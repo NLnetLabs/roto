@@ -87,17 +87,47 @@ impl TypeInfo {
         | Type::RecordVar(_, fields)
         | Type::NamedRecord(_, fields)) = record
         else {
-            panic!()
+            panic!("Can't get offsets in a type that's not a record")
         };
 
         let mut offset = 0;
-        for f in fields {
-            if f.0 == field {
-                return (f.1, offset);
+        for (name, ty) in fields {
+            // Here, we align the offset to the natural alignment of each
+            // type.
+            offset += self.padding_of(&ty, offset, pointer_bytes);
+            if name == field {
+                return (ty, offset);
             }
-            offset += self.size_of(&f.1, pointer_bytes);
+            offset += self.size_of(&ty, pointer_bytes);
         }
         panic!("Field not found")
+    }
+
+    pub fn padding_of(
+        &mut self,
+        ty: &Type,
+        offset: u32,
+        pointer_bytes: u32,
+    ) -> u32 {
+        let alignment = self.alignment_of(ty, pointer_bytes);
+        if offset & alignment > 0 {
+            alignment - (offset % alignment)
+        } else {
+            0
+        }
+    }
+
+    pub fn alignment_of(&mut self, ty: &Type, pointer_bytes: u32) -> u32 {
+        match self.resolve(ty) {
+            Type::RecordVar(_, fields)
+            | Type::Record(fields)
+            | Type::NamedRecord(_, fields) => fields
+                .iter()
+                .map(|f| self.alignment_of(&f.1, pointer_bytes))
+                .max()
+                .unwrap_or(1),
+            ty => self.size_of(&ty, pointer_bytes),
+        }
     }
 
     pub fn method(
@@ -138,14 +168,18 @@ impl TypeInfo {
             // Records have the size of their fields
             Type::Record(fields)
             | Type::NamedRecord(_, fields)
-            | Type::RecordVar(_, fields) => fields
-                .iter()
-                .map(|(_, t)| self.size_of(t, pointer_bytes))
-                .sum(),
+            | Type::RecordVar(_, fields) => {
+                let mut size = 0;
+                for (_, ty) in &fields {
+                    size += self.size_of(ty, pointer_bytes)
+                        + self.padding_of(ty, size, pointer_bytes);
+                }
+                size
+            }
             Type::Primitive(p) => p.size(),
             Type::List(_)
-            | Type::Table(_) => pointer_bytes,
-            | Type::OutputStream(_) => pointer_bytes,
+            | Type::Table(_)
+            | Type::OutputStream(_)
             | Type::Rib(_) => pointer_bytes,
             _ => 0,
         }
