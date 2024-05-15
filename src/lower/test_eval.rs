@@ -221,10 +221,16 @@ fn enum_values() {
     );
 
     // IpV4 -> accepted
-    assert_eq!(p(SafeValue::Enum(0, Box::new(SafeValue::Unit))), Ok(()));
+    assert_eq!(p(
+        SafeValue::Enum(0, None)),
+        Ok(())
+    );
 
     // IpV6 -> rejected
-    assert_eq!(p(SafeValue::Enum(1, Box::new(SafeValue::Unit))), Err(()));
+    assert_eq!(p(
+        SafeValue::Enum(1, None)),
+        Err(())
+    );
 }
 
 #[test]
@@ -247,12 +253,18 @@ fn bmp_message() {
     ",
     );
     assert_eq!(
-        p(SafeValue::Enum(0, Box::new(SafeValue::Record(Vec::new())))),
+        p(SafeValue::Enum(
+            0,
+            Some(Box::new(SafeValue::Record(Vec::new())))
+        )),
         Ok(())
     );
 
     assert_eq!(
-        p(SafeValue::Enum(1, Box::new(SafeValue::Record(Vec::new())))),
+        p(SafeValue::Enum(
+            1,
+            Some(Box::new(SafeValue::Record(Vec::new())))
+        )),
         Err(())
     );
 }
@@ -284,10 +296,10 @@ fn bmp_message_2() {
     assert_eq!(
         p(SafeValue::Enum(
             2,
-            Box::new(SafeValue::Record(vec![(
+            Some(Box::new(SafeValue::Record(vec![(
                 "local_port".into(),
                 SafeValue::U16(80)
-            )]))
+            )])))
         )),
         Ok(())
     );
@@ -295,16 +307,19 @@ fn bmp_message_2() {
     assert_eq!(
         p(SafeValue::Enum(
             2,
-            Box::new(SafeValue::Record(vec![(
+            Some(Box::new(SafeValue::Record(vec![(
                 "local_port".into(),
                 SafeValue::U16(10)
-            )]))
+            )])))
         )),
         Err(())
     );
 
     assert_eq!(
-        p(SafeValue::Enum(1, Box::new(SafeValue::Record(Vec::new())))),
+        p(SafeValue::Enum(
+            1,
+            Some(Box::new(SafeValue::Record(Vec::new())))
+        )),
         Err(())
     );
 }
@@ -332,10 +347,10 @@ fn bmp_message_3() {
     assert_eq!(
         p(SafeValue::Enum(
             2,
-            Box::new(SafeValue::Record(vec![(
+            Some(Box::new(SafeValue::Record(vec![(
                 "local_port".into(),
                 SafeValue::U16(80)
-            )]))
+            )])))
         )),
         Ok(())
     );
@@ -343,16 +358,19 @@ fn bmp_message_3() {
     assert_eq!(
         p(SafeValue::Enum(
             2,
-            Box::new(SafeValue::Record(vec![(
+            Some(Box::new(SafeValue::Record(vec![(
                 "local_port".into(),
                 SafeValue::U16(10)
-            )]))
+            )])))
         )),
         Err(())
     );
 
     assert_eq!(
-        p(SafeValue::Enum(1, Box::new(SafeValue::Record(Vec::new())))),
+        p(SafeValue::Enum(
+            1,
+            Some(Box::new(SafeValue::Record(Vec::new())))
+        )),
         Err(())
     );
 }
@@ -382,10 +400,10 @@ fn bmp_message_4() {
     assert_eq!(
         p(SafeValue::Enum(
             2,
-            Box::new(SafeValue::Record(vec![(
+            Some(Box::new(SafeValue::Record(vec![(
                 "local_port".into(),
                 SafeValue::U16(80)
-            )]))
+            )])))
         )),
         Ok(())
     );
@@ -393,10 +411,10 @@ fn bmp_message_4() {
     assert_eq!(
         p(SafeValue::Enum(
             2,
-            Box::new(SafeValue::Record(vec![(
+            Some(Box::new(SafeValue::Record(vec![(
                 "local_port".into(),
                 SafeValue::U16(12)
-            )]))
+            )])))
         )),
         Ok(())
     );
@@ -404,10 +422,10 @@ fn bmp_message_4() {
     assert_eq!(
         p(SafeValue::Enum(
             2,
-            Box::new(SafeValue::Record(vec![(
+            Some(Box::new(SafeValue::Record(vec![(
                 "local_port".into(),
                 SafeValue::U16(70)
-            )]))
+            )])))
         )),
         Ok(())
     );
@@ -415,16 +433,19 @@ fn bmp_message_4() {
     assert_eq!(
         p(SafeValue::Enum(
             2,
-            Box::new(SafeValue::Record(vec![(
+            Some(Box::new(SafeValue::Record(vec![(
                 "local_port".into(),
                 SafeValue::U16(10)
-            )]))
+            )])))
         )),
         Err(())
     );
 
     assert_eq!(
-        p(SafeValue::Enum(1, Box::new(SafeValue::Record(Vec::new())))),
+        p(SafeValue::Enum(
+            1,
+            Some(Box::new(SafeValue::Record(Vec::new())))
+        )),
         Err(())
     );
 }
@@ -455,10 +476,10 @@ fn bmp_message_5() {
     assert_eq!(
         p(SafeValue::Enum(
             2,
-            Box::new(SafeValue::Record(vec![(
+            Some(Box::new(SafeValue::Record(vec![(
                 "local_port".into(),
                 SafeValue::U16(80)
-            )]))
+            )])))
         )),
         Ok(())
     );
@@ -466,10 +487,10 @@ fn bmp_message_5() {
     assert_eq!(
         p(SafeValue::Enum(
             2,
-            Box::new(SafeValue::Record(vec![(
+            Some(Box::new(SafeValue::Record(vec![(
                 "local_port".into(),
                 SafeValue::U16(12)
-            )]))
+            )])))
         )),
         Err(())
     );
@@ -477,10 +498,10 @@ fn bmp_message_5() {
     assert_eq!(
         p(SafeValue::Enum(
             2,
-            Box::new(SafeValue::Record(vec![(
+            Some(Box::new(SafeValue::Record(vec![(
                 "local_port".into(),
                 SafeValue::U16(70)
-            )]))
+            )])))
         )),
         Err(())
     );
@@ -488,16 +509,19 @@ fn bmp_message_5() {
     assert_eq!(
         p(SafeValue::Enum(
             2,
-            Box::new(SafeValue::Record(vec![(
+            Some(Box::new(SafeValue::Record(vec![(
                 "local_port".into(),
                 SafeValue::U16(10)
-            )]))
+            )])))
         )),
         Err(())
     );
 
     assert_eq!(
-        p(SafeValue::Enum(1, Box::new(SafeValue::Record(Vec::new())))),
+        p(SafeValue::Enum(
+            1,
+            Some(Box::new(SafeValue::Record(Vec::new())))
+        )),
         Err(())
     );
 }

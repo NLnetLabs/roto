@@ -1,6 +1,8 @@
 use crate::pipeline::*;
 
 fn compile(p: &'static str) -> Compiled {
+    let _ = env_logger::try_init();
+
     let res = test_file(p).parse().and_then(|x| x.typecheck()).map(|x| {
         let x = x.lower();
         x.codegen()
@@ -324,4 +326,98 @@ fn misaligned_fields() {
         let expected = x == 20;
         assert_eq!(f.call((x,)), expected as i8);
     }
+}
+
+#[test]
+fn enum_match() {
+    let s = "
+        filter-map main(r: Bool) { 
+            define {
+                x = if r {
+                    Afi.IpV4
+                } else {
+                    Afi.IpV6
+                };
+            }
+
+            apply {
+                match x {
+                    IpV4 -> accept,
+                    _ -> reject,
+                }
+            }
+        }
+    ";
+
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(i8,), i8>("main")
+        .expect("No function found (or mismatched types)");
+
+    assert_eq!(f.call((true as i8,)), true as i8);
+    assert_eq!(f.call((false as i8,)), false as i8);
+}
+
+#[test]
+fn bmp_message() {
+    let s = "
+    filter-map main(a: I32) {
+        define {
+            header = {
+                is_ipv6: true,
+                is_ipv4: true,
+                is_legacy_format: false,
+                is_post_policy: false,
+                is_pre_policy: false,
+                peer_type: 0,
+                asn: 0,
+                address: 1.1.1.1,  
+            };
+            bmp = if a == 1 {
+                BmpMessage.PeerUpNotification({
+                    local_port: 80,
+                    local_address: 1.1.1.1,
+                    remote_port: 80,
+                    per_peer_header: header,
+                })
+            } else if a == 2 {
+                BmpMessage.PeerUpNotification({
+                    local_port: 10,
+                    local_address: 1.1.1.1,
+                    remote_port: 80,
+                    per_peer_header: header,
+                })
+            } else {
+                BmpMessage.InitiationMessage({})
+            };
+        }
+        
+        apply {
+            match bmp {
+                PeerUpNotification(x) -> {
+                    if x.local_port == 80 {
+                        accept
+                    }
+                },
+                InitiationMessage(x) -> {},
+                RouteMonitoring(x) -> {},
+                PeerDownNotification(x) -> {},
+                StatisticsReport(x) -> {},
+                TerminationMessage(x) -> {},
+            }
+            reject
+        }
+    }
+    ";
+
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(i32,), i8>("main")
+        .expect("No function found (or mismatched types)");
+
+    assert_eq!(f.call((1,)), true as i8);
+    assert_eq!(f.call((2,)), false as i8);
+    assert_eq!(f.call((3,)), false as i8);
 }

@@ -30,7 +30,7 @@ pub enum SafeValue {
     I32(i32),
     Verdict(Box<Verdict>),
     Record(Vec<(String, SafeValue)>),
-    Enum(u32, Box<SafeValue>),
+    Enum(u8, Option<Box<SafeValue>>),
     Runtime(Rc<dyn Any>),
 }
 
@@ -137,8 +137,7 @@ impl Value for SafeValue {
             SafeValue::U8(x) => *x as u32,
             SafeValue::U16(x) => *x as u32,
             SafeValue::U32(x) => *x,
-            SafeValue::Enum(x, _) => *x,
-            SafeValue::Unit | SafeValue::Record(_) => {
+            SafeValue::Enum(..) | SafeValue::Unit | SafeValue::Record(_) => {
                 panic!("Can't switch on this value")
             }
             _ => todo!(),
@@ -172,8 +171,11 @@ impl Display for SafeValue {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            SafeValue::Enum(variant, v) => {
+            SafeValue::Enum(variant, Some(v)) => {
                 write!(f, "Enum({variant}, {v})")
+            }
+            SafeValue::Enum(variant, None) => {
+                write!(f, "Enum({variant})")
             }
             SafeValue::Verdict(v) => match v.as_ref() {
                 Verdict::Accept(x) => write!(f, "Accept({x})"),

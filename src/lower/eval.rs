@@ -201,19 +201,28 @@ pub fn eval(
                     .collect();
                 mem.insert(to.clone(), SafeValue::Record(fields));
             }
-            Instruction::CreateEnum { to, variant, data } => {
-                let val = eval_operand(&mem, data);
+            Instruction::CreateEnum {
+                to, variant, data, ..
+            } => {
+                let val = data.as_ref().map(|d| Box::new(eval_operand(&mem, d).clone()));
                 mem.insert(
                     to.clone(),
-                    SafeValue::Enum(*variant, Box::new(val.clone())),
+                    SafeValue::Enum(*variant, val),
                 );
             }
-            Instruction::AccessEnum { to, from } => {
+            Instruction::AccessEnum { to, from, .. } => {
                 let val = eval_operand(&mem, from);
-                let SafeValue::Enum(_, data) = val else {
+                let SafeValue::Enum(_, Some(data)) = val else {
                     panic!("Should have been caught in typechecking")
                 };
                 mem.insert(to.clone(), data.as_ref().clone());
+            }
+            Instruction::EnumDiscriminant { to, from } => {
+                let val = eval_operand(&mem, from);
+                let SafeValue::Enum(discriminant, _) = val else {
+                    panic!("Should have been caught in typechecking")
+                };
+                mem.insert(to.clone(), SafeValue::from(*discriminant));
             }
         }
 

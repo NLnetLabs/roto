@@ -373,7 +373,7 @@ pub fn default_types(runtime: &Runtime) -> Vec<(&'static str, Type)> {
                 ("local_address", "IpAddress"),
                 ("local_port", "U16"),
                 ("remote_port", "U16"),
-                ("session_config", "Unit"),
+                // ("session_config", "TODO"),
                 ("per_peer_header", "Header"),
             ],
         ),

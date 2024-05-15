@@ -313,15 +313,15 @@ impl<'r> Lowerer<'r> {
                 to.into()
             }
             ast::Expr::MethodCall(receiver, m, args) => {
-                if let Some(t) = self.type_info.enum_variant_constructor(id) {
-                    let t = t.clone();
+                if let Some(ty) = self.type_info.enum_variant_constructor(id) {
+                    let ty = ty.clone();
                     let args: Vec<_> =
                         args.iter().map(|a| self.expr(a)).collect();
 
                     let [arg] = &args[..] else {
                         panic!("Should have been caught in typechecking");
                     };
-                    let Type::Enum(_, fields) = t else {
+                    let Type::Enum(_, fields) = ty.clone() else {
                         panic!("Should have been caught in typechecking");
                     };
                     for (i, (f, _)) in fields.iter().enumerate() {
@@ -329,8 +329,9 @@ impl<'r> Lowerer<'r> {
                             let to = self.new_tmp();
                             self.add(Instruction::CreateEnum {
                                 to: to.clone(),
-                                variant: i as u32,
-                                data: arg.clone(),
+                                variant: i as u8,
+                                data: Some(arg.clone()),
+                                ty,
                             });
                             return to.into();
                         }
@@ -359,8 +360,9 @@ impl<'r> Lowerer<'r> {
                 todo!("method was declared but missing definition")
             }
             ast::Expr::Access(e, field) => {
-                if let Some(t) = self.type_info.enum_variant_constructor(id) {
-                    let Type::Enum(_, fields) = t else {
+                if let Some(ty) = self.type_info.enum_variant_constructor(id) {
+                    let ty = ty.clone();
+                    let Type::Enum(_, fields) = ty.clone() else {
                         panic!("Should have been caught in typechecking");
                     };
                     for (i, (f, _)) in fields.iter().enumerate() {
@@ -368,8 +370,9 @@ impl<'r> Lowerer<'r> {
                             let to = self.new_tmp();
                             self.add(Instruction::CreateEnum {
                                 to: to.clone(),
-                                variant: i as u32,
-                                data: SafeValue::Unit.into(),
+                                variant: i as u8,
+                                data: None,
+                                ty,
                             });
                             return to.into();
                         }

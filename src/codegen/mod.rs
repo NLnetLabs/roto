@@ -1,6 +1,6 @@
 //! Machine code generation via cranelift
 
-use std::{collections::HashMap, marker::PhantomData, sync::Arc};
+use std::{collections::HashMap, marker::PhantomData, rc::Rc, sync::Arc};
 
 use cranelift::{
     codegen::{
@@ -101,6 +101,7 @@ pub fn codegen(
     let mut builder_context = FunctionBuilderContext::new();
     for func in ir {
         module.define_function(func, &mut builder_context);
+        trace!("{}", func);
     }
 
     module.finalize()
@@ -250,11 +251,18 @@ impl ModuleBuilder<'_> {
                     switch.emit(builder, val, *otherwise);
                 }
                 ir::Instruction::Assign { to, val, ty } => {
+                    let pointer_bytes = self.isa.pointer_bytes();
+                    if self.type_info.size_of(ty, pointer_bytes as u32) == 0 {
+                        continue;
+                    }
                     let len = variable_map.len();
                     let var =
                         *variable_map.entry(&to.var).or_insert_with(|| {
                             let var = Variable::new(len);
-                            builder.declare_var(var, self.cranelift_type(ty));
+                            builder.declare_var(
+                                var,
+                                self.cranelift_type(ty),
+                            );
                             var
                         });
                     let val =
@@ -419,7 +427,8 @@ impl ModuleBuilder<'_> {
 
                         if let RotoType::Record(..)
                         | RotoType::NamedRecord(..)
-                        | RotoType::RecordVar(..) = ty
+                        | RotoType::RecordVar(..)
+                        | RotoType::Enum(..) = ty
                         {
                             let size =
                                 self.type_info.size_of(&ty, pointer_bytes);
@@ -460,8 +469,137 @@ impl ModuleBuilder<'_> {
                     let p = builder.ins().stack_addr(pointer_ty, slot, 0);
                     builder.def_var(var, p);
                 }
-                ir::Instruction::CreateEnum { .. } => todo!(),
-                ir::Instruction::AccessEnum { .. } => todo!(),
+                ir::Instruction::CreateEnum {
+                    to,
+                    variant,
+                    data,
+                    ty,
+                } => {
+                    let pointer_bytes = self.isa.pointer_bytes() as u32;
+                    let pointer_ty = self.isa.pointer_type();
+                    let size = self.type_info.size_of(ty, pointer_bytes);
+                    let slot_data =
+                        StackSlotData::new(StackSlotKind::ExplicitSlot, size);
+                    let slot = builder.create_sized_stack_slot(slot_data);
+
+                    let variant_val =
+                        builder.ins().iconst(I8, *variant as i64);
+                    builder.ins().stack_store(variant_val, slot, 0);
+
+                    let RotoType::Enum(_, variants) = ty else {
+                        panic!()
+                    };
+
+                    if let Some(data) = data {
+                        let field_ty =
+                            &variants[*variant as usize].1.as_ref().unwrap();
+                        let offset = 1 + self.type_info.padding_of(
+                            field_ty,
+                            1,
+                            pointer_bytes,
+                        );
+
+                        let op =
+                            self.compile_operand(variable_map, builder, data);
+
+                        if let RotoType::Record(..)
+                        | RotoType::NamedRecord(..)
+                        | RotoType::RecordVar(..)
+                        | RotoType::Enum(..) = ty
+                        {
+                            let size =
+                                self.type_info.size_of(ty, pointer_bytes);
+
+                            let dest = builder.ins().stack_addr(
+                                pointer_ty,
+                                slot,
+                                offset as i32,
+                            );
+
+                            builder.emit_small_memory_copy(
+                                self.isa.frontend_config(),
+                                dest,
+                                op,
+                                size as u64,
+                                0,
+                                0,
+                                true,
+                                MemFlags::new().with_aligned(),
+                            )
+                        } else {
+                            builder.ins().stack_store(
+                                op,
+                                slot,
+                                offset as i32,
+                            );
+                        }
+                    }
+
+                    let len = variable_map.len();
+                    let var =
+                        *variable_map.entry(&to.var).or_insert_with(|| {
+                            let var = Variable::new(len);
+                            builder.declare_var(var, pointer_ty);
+                            var
+                        });
+
+                    let p = builder.ins().stack_addr(pointer_ty, slot, 0);
+                    builder.def_var(var, p);
+                }
+                ir::Instruction::EnumDiscriminant { to, from } => {
+                    let p = self.compile_operand(variable_map, builder, from);
+                    let p = builder.ins().load(
+                        I8,
+                        MemFlags::new().with_aligned(),
+                        p,
+                        0,
+                    );
+                    let len = variable_map.len();
+                    let var =
+                        *variable_map.entry(&to.var).or_insert_with(|| {
+                            let var = Variable::new(len);
+                            builder.declare_var(var, I8);
+                            var
+                        });
+                    builder.def_var(var, p);
+                }
+                ir::Instruction::AccessEnum { to, from, field_ty } => {
+                    let len = variable_map.len();
+                    let var =
+                        *variable_map.entry(&to.var).or_insert_with(|| {
+                            let var = Variable::new(len);
+                            builder.declare_var(
+                                var,
+                                self.cranelift_type(field_ty),
+                            );
+                            var
+                        });
+
+                    let enum_val =
+                        self.compile_operand(variable_map, builder, from);
+
+                    let pointer_bytes = self.isa.pointer_bytes();
+                    let offset = 1 + self.type_info.padding_of(
+                        field_ty,
+                        1,
+                        pointer_bytes as u32,
+                    );
+                    let val = match field_ty {
+                        RotoType::Record(..)
+                        | RotoType::NamedRecord(..)
+                        | RotoType::RecordVar(..) => {
+                            builder.ins().iadd_imm(enum_val, offset as i64)
+                        }
+                        _ => builder.ins().load(
+                            self.cranelift_type(field_ty),
+                            MemFlags::new().with_aligned(),
+                            enum_val,
+                            offset as i32,
+                        ),
+                    };
+
+                    builder.def_var(var, val);
+                }
             }
         }
     }
@@ -494,7 +632,10 @@ impl ModuleBuilder<'_> {
                 SafeValue::Verdict(_) => todo!(),
                 SafeValue::Record(_) => todo!(),
                 SafeValue::Enum(_, _) => todo!(),
-                SafeValue::Runtime(_) => todo!(),
+                SafeValue::Runtime(x) => builder.ins().iconst(
+                    self.isa.pointer_type(),
+                    Rc::as_ptr(x) as *const () as i64,
+                ),
             },
         }
     }
@@ -537,7 +678,7 @@ impl ModuleBuilder<'_> {
             RotoType::Rib(_) => todo!(),
             RotoType::Record(_) => todo!(),
             RotoType::NamedRecord(_, _) => self.isa.pointer_type(),
-            RotoType::Enum(_, _) => todo!(),
+            RotoType::Enum(_, _) => self.isa.pointer_type(),
             RotoType::Term(_) => todo!(),
             RotoType::Action(_) => todo!(),
             RotoType::Filter(_) => todo!(),

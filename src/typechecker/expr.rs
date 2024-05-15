@@ -334,12 +334,9 @@ impl TypeChecker<'_, '_> {
                 )?;
 
                 if let Some(e) = e {
-                    let var = self.fresh_var();
-                    let ctx = ctx.with_type(var);
-
                     let mut diverges = false;
-                    diverges |= self.block(scope, &ctx, t)?;
-                    diverges |= self.block(scope, &ctx, e)?;
+                    diverges |= self.block(scope, ctx, t)?;
+                    diverges |= self.block(scope, ctx, e)?;
 
                     // Record divergence so that we can omit the
                     // block after the if-else while lowering

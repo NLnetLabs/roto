@@ -176,11 +176,24 @@ impl TypeInfo {
                 }
                 size
             }
+            Type::Enum(_, fields) => {
+                fields
+                    .iter()
+                    .flat_map(|f| &f.1)
+                    .map(|ty| {
+                        self.size_of(ty, pointer_bytes)
+                            + self.padding_of(ty, 1, pointer_bytes)
+                    })
+                    .max()
+                    .unwrap_or(0)
+                    + 1 // add the discriminant
+            }
             Type::Primitive(p) => p.size(),
             Type::List(_)
             | Type::Table(_)
             | Type::OutputStream(_)
-            | Type::Rib(_) => pointer_bytes,
+            | Type::Rib(_)
+            | Type::BuiltIn(..) => pointer_bytes,
             _ => 0,
         }
     }

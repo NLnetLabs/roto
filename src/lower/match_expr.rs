@@ -105,7 +105,7 @@ impl Lowerer<'_> {
         let ast::Match { expr, arms } = &m.node;
 
         let ty = self.type_info.type_of(expr);
-        let Type::Enum(_, variants) = ty else {
+        let Type::Enum(_, variants) = &ty else {
             panic!("Should have been caught in typechecking")
         };
 
@@ -151,8 +151,13 @@ impl Lowerer<'_> {
             branches.iter().filter(|(d, _, _)| d.is_none()).collect();
 
         let op = self.expr(expr);
+        let discriminant = self.new_tmp();
+        self.add(Instruction::EnumDiscriminant {
+            to: discriminant.clone(),
+            from: op.clone(),
+        });
         self.add(Instruction::Switch {
-            examinee: op.clone(),
+            examinee: discriminant.into(),
             branches: switch_branches,
             default: if default_branches.is_empty() {
                 continue_lbl.clone()
@@ -209,10 +214,12 @@ impl Lowerer<'_> {
             self.new_block(&format!("{lbl}_guard_{i}"));
 
             if let Some(var) = &arm.data_field {
+                let ty = self.type_info.type_of(var);
                 let var = self.type_info.full_name(var);
                 self.add(Instruction::AccessEnum {
                     to: Var { var },
                     from: examinee.clone(),
+                    field_ty: ty,
                 })
             }
 

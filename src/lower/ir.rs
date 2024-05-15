@@ -155,12 +155,20 @@ pub enum Instruction {
     /// Create enum variant
     CreateEnum {
         to: Var,
-        variant: u32,
-        data: Operand,
+        variant: u8,
+        data: Option<Operand>,
+        ty: Type,
     },
 
     /// Get enum data
     AccessEnum {
+        to: Var,
+        from: Operand,
+        field_ty: Type,
+    },
+
+    /// Get enum discriminant
+    EnumDiscriminant {
         to: Var,
         from: Operand,
     },
@@ -282,11 +290,27 @@ impl Display for Instruction {
                         .join(", ")
                 )
             }
-            Self::CreateEnum { to, variant, data } => {
-                write!(f, "{to} = Enum({variant}, {data})")
+            Self::CreateEnum {
+                to,
+                variant,
+                data: Some(data),
+                ty,
+            } => {
+                write!(f, "{to} = {ty}::{variant}({data})")
             }
-            Self::AccessEnum { to, from } => {
+            Self::CreateEnum {
+                to,
+                variant,
+                data: None,
+                ty,
+            } => {
+                write!(f, "{to} = {ty}::{variant}")
+            }
+            Self::AccessEnum { to, from, .. } => {
                 write!(f, "{to} = get data of {from}")
+            }
+            Self::EnumDiscriminant { to, from } => {
+                write!(f, "{to} = get discriminant of {from}")
             }
         }
     }
