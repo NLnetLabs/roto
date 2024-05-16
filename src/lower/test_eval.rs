@@ -221,16 +221,10 @@ fn enum_values() {
     );
 
     // IpV4 -> accepted
-    assert_eq!(p(
-        SafeValue::Enum(0, None)),
-        Ok(())
-    );
+    assert_eq!(p(SafeValue::Enum(0, None)), Ok(()));
 
     // IpV6 -> rejected
-    assert_eq!(p(
-        SafeValue::Enum(1, None)),
-        Err(())
-    );
+    assert_eq!(p(SafeValue::Enum(1, None)), Err(()));
 }
 
 #[test]

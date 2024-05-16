@@ -313,7 +313,8 @@ impl<'r> Lowerer<'r> {
                 to.into()
             }
             ast::Expr::MethodCall(receiver, m, args) => {
-                if let Some(ty) = self.type_info.enum_variant_constructor(id) {
+                if let Some(ty) = self.type_info.enum_variant_constructor(id)
+                {
                     let ty = ty.clone();
                     let args: Vec<_> =
                         args.iter().map(|a| self.expr(a)).collect();
@@ -360,7 +361,8 @@ impl<'r> Lowerer<'r> {
                 todo!("method was declared but missing definition")
             }
             ast::Expr::Access(e, field) => {
-                if let Some(ty) = self.type_info.enum_variant_constructor(id) {
+                if let Some(ty) = self.type_info.enum_variant_constructor(id)
+                {
                     let ty = ty.clone();
                     let Type::Enum(_, fields) = ty.clone() else {
                         panic!("Should have been caught in typechecking");

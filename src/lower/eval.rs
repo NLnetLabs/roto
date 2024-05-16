@@ -204,11 +204,10 @@ pub fn eval(
             Instruction::CreateEnum {
                 to, variant, data, ..
             } => {
-                let val = data.as_ref().map(|d| Box::new(eval_operand(&mem, d).clone()));
-                mem.insert(
-                    to.clone(),
-                    SafeValue::Enum(*variant, val),
-                );
+                let val = data
+                    .as_ref()
+                    .map(|d| Box::new(eval_operand(&mem, d).clone()));
+                mem.insert(to.clone(), SafeValue::Enum(*variant, val));
             }
             Instruction::AccessEnum { to, from, .. } => {
                 let val = eval_operand(&mem, from);
