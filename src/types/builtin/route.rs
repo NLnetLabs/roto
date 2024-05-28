@@ -142,6 +142,22 @@ impl From<&Ipv6MulticastAddpathNlri> for PrefixNlri {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub struct PrefixRoute(pub PrefixRouteWs);
 
+impl PrefixRouteWs {
+
+    pub fn no_attributes(&self) -> bool {
+        match self {
+            PrefixRouteWs::Ipv4Unicast(rws) => rws.attributes().is_empty(),
+            PrefixRouteWs::Ipv4UnicastAddpath(rws) => rws.attributes().is_empty(),
+            PrefixRouteWs::Ipv6Unicast(rws) => rws.attributes().is_empty(),
+            PrefixRouteWs::Ipv6UnicastAddpath(rws) => rws.attributes().is_empty(),
+            PrefixRouteWs::Ipv4Multicast(rws) => rws.attributes().is_empty(),
+            PrefixRouteWs::Ipv4MulticastAddpath(rws) => rws.attributes().is_empty(),
+            PrefixRouteWs::Ipv6Multicast(rws) => rws.attributes().is_empty(),
+            PrefixRouteWs::Ipv6MulticastAddpath(rws) => rws.attributes().is_empty(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub enum FlowSpecNlri<O: Octets> {
     Ipv4FlowSpec(Ipv4FlowSpecNlri<O>),

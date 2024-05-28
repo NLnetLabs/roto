@@ -9,6 +9,7 @@ use routecore::bgp::communities::Community;
 use routecore::bgp::communities::HumanReadableCommunity;
 use routecore::bgp::message::update_builder::ComposeError;
 use routecore::bgp::nlri::afisafi::Ipv4FlowSpecNlri;
+use routecore::bgp::nlri::afisafi::Ipv6FlowSpecNlri;
 use routecore::bgp::nlri::afisafi::Ipv4UnicastNlri;
 use routecore::bgp::nlri::afisafi::Ipv4UnicastAddpathNlri;
 use routecore::bgp::nlri::afisafi::Ipv6UnicastNlri;
@@ -18,7 +19,7 @@ use routecore::bgp::nlri::afisafi::Ipv4MulticastAddpathNlri;
 use routecore::bgp::nlri::afisafi::Ipv6MulticastNlri;
 use routecore::bgp::nlri::afisafi::Ipv6MulticastAddpathNlri;
 use routecore::bgp::workshop::route::WorkshopAttribute;
-use crate::types::builtin::FlowSpecNlri::Ipv4FlowSpec;
+use crate::types::builtin::FlowSpecNlri::{Ipv4FlowSpec, Ipv6FlowSpec};
 use routecore::bgp::nlri::afisafi::IsPrefix;
 use routecore::bgp::path_attributes::PaMap;
 use routecore::bgp::path_attributes::PathAttribute;
@@ -404,8 +405,10 @@ impl From<PathAttribute> for TypeValue {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub struct RouteContext {
     pub(crate) bgp_msg: Option<BytesRecord<BgpUpdateMessage>>,
-    pub(crate) provenance: Provenance,
     pub(crate) nlri_status: NlriStatus,
+    pub(crate) provenance: Provenance,
+    // reprocessing: bool // true if this RouteContext is attached to values
+    // facilitating a query (and thus the bgp_msg itself likely is  None).
 }
 
 impl RouteContext {
@@ -420,13 +423,23 @@ impl RouteContext {
             provenance,
         }
     }
+    pub fn for_reprocessing(
+        nlri_status: NlriStatus,
+        provenance: Provenance,
+    ) -> Self {
+        Self {
+            bgp_msg: None,
+            nlri_status,
+            provenance,
+        }
+    }
 
     pub fn message(&self) -> &Option<BytesRecord<BgpUpdateMessage>> {
         &self.bgp_msg
     }
 
-    pub fn provenance(&self) -> &Provenance {
-        &self.provenance
+    pub fn provenance(&self) -> Provenance {
+        self.provenance
     }
 
     pub fn nlri_status(&self) -> NlriStatus {
@@ -1184,58 +1197,193 @@ impl RotoType for RouteWorkshop<Ipv4FlowSpecNlri<bytes::Bytes>> {
 //         TypeValue::Builtin(BuiltinTypeValue::Nlri(Ipv6FlowSpec(value.nlri().clone())))
 //     }
 // }
+impl From<RouteWorkshop<Ipv6FlowSpecNlri<bytes::Bytes>>> for TypeValue {
+    fn from(value: RouteWorkshop<Ipv6FlowSpecNlri<bytes::Bytes>>) -> Self {
+        TypeValue::Builtin(BuiltinTypeValue::FlowSpecRoute(
+            FlowSpecRoute {
+                attributes: value.attributes().clone(),
+                nlri: Ipv6FlowSpec(value.nlri().clone()),
+            },
+        ))
+    }
+}
+
+impl RotoType for RouteWorkshop<Ipv6FlowSpecNlri<bytes::Bytes>> {
+    fn get_props_for_method(
+        ty: TypeDef,
+        method_name: &crate::ast::Identifier,
+    ) -> Result<MethodProps, CompileError>
+    where
+        Self: std::marker::Sized {
+        todo!()
+    }
+
+    fn into_type(
+        self,
+        type_value: &TypeDef,
+    ) -> Result<TypeValue, CompileError>
+    where
+        Self: std::marker::Sized {
+        todo!()
+    }
+
+    fn exec_value_method<'a>(
+        &'a self,
+        method_token: usize,
+        args: &'a [StackValue],
+        res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        todo!()
+    }
+
+    fn exec_consume_value_method(
+        self,
+        method_token: usize,
+        args: Vec<TypeValue>,
+        res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        todo!()
+    }
+
+    fn exec_type_method(
+        method_token: usize,
+        args: &[StackValue],
+        res_type: TypeDef,
+    ) -> Result<TypeValue, VmError> {
+        todo!()
+    }
+}
 
 //------------ Provenance ----------------------------------------------------
 
+/// A sized struct containing session/state information for BMP and/or BGP.
+///
+/// The Provenance struct holds information that pertains to the session. This
+/// information comes from configuration, or is exchanged in the first
+/// stage of a session prior to the actual routing information is exchanged.
+/// Typically, the information in Provenance is not available in the
+/// individual routing information messages (e.g. BGP UPDATE PDUs), but is
+/// useful or necessary to process such messages.
+///
+/// For BGP, this means information from the BGP OPEN message.
+/// For BMP, that is information from the PerPeerHeader: as we currently split
+/// up the encapsulated BGP UPDATE message per NLRI into N `PrefixRoutes`
+/// typevalues, we lose the PerPeerHeader after the filter in the connector
+/// Unit.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub struct Provenance {
     #[serde(skip)]
     pub timestamp: chrono::DateTime<Utc>,
-    // The SocketAddr of the monitored router over BMP, or the SocketAddr of
-    // the BGP peer over BGP.
-    pub connection_id: SocketAddr,
-    // The (IP Address, ASN) of a peer of the monitored router over BMP, or
-    // the (IP Address, ASN) tuple of the connected BGP peer.
-    pub peer_id: PeerId,
-    pub peer_bgp_id: routecore::bgp::path_attributes::BgpIdentifier,
-    pub peer_distuingisher: [u8; 8],
+
+
+    /// The unique ID for the session.
+    ///
+    /// For the first 'control' messages in a BGP/BMP session, this ingress_id
+    /// might be a general ID registered by the connector, not a session
+    /// specific ID.
+    pub ingress_id: u32, // rotonda::ingress::IngressId
+                         
+    /// The remote address of the BGP session.
+    ///
+    /// If this is not yet available (e.g. for the first messages of a BMP
+    /// session), this holds the remote IP of the BMP session itself, i.e. the
+    /// monitored router.
+    pub peer_ip: IpAddr,
+
+    /// The remote ASN of the BGP session.
+    ///
+    /// If this is not yet available (e.g. for the first messages of a BMP
+    /// session), this holds ASN(0).
+    pub peer_asn: Asn,
+
+    /// The remote ip address for the TCP connection.
+    ///
+    /// For BGP, the connection_ip and peer_ip are the same.
+    /// For BMP, the connection_ip holds the IP address of the monitored
+    /// router.
+    pub connection_ip: IpAddr,
+
+    // pub peer_bgp_id: routecore::bgp::path_attributes::BgpIdentifier,
+
+    /// The BMP PeerType (1 byte) and PeerDistuingisher (8 bytes).
+    ///
+    /// These are stored together as the combination of the two is used to
+    /// disambiguate peers in certain scenarios.
+    /// PeerType can be 0, 1 or 2, and only for 1 or 2 the RouteDistinguisher
+    /// is set. So for the majority, the value of peer_distuingisher will be a
+    /// 0 for PeerType == Global Instance Peer, followed by 8 more zeroes.
+    pub peer_distuingisher: [u8; 9],
+
     pub peer_rib_type: PeerRibType,
 }
 
 impl Provenance {
-    // pub fn from_rotonda() -> Self {
-    //     Self {
-    //         timestamp: Utc::now(),
-    //         // router_id: 0,
-    //         connection_id: 0,
-    //         peer_id: PeerId {
-    //             addr: "127.0.0.1".parse().unwrap(),
-    //             asn: 0.into(),
-    //         },
-    //         peer_bgp_id: BgpIdentifier::from([0, 0, 0, 0]),
-    //         peer_distuingisher: [0, 0, 0, 0, 0, 0, 0, 0],
-    //         peer_rib_type: PeerRibType::Loc,
-    //     }
-    // }
 
-    pub fn mock() -> Self {
+    pub fn for_bgp(
+        ingress_id: u32,
+        peer_ip: IpAddr,
+        peer_asn: Asn,
+    ) -> Self {
+        Self::new(
+            ingress_id,
+            peer_ip,
+            peer_asn,
+            peer_ip, // connection ==~ peer_ip
+            [0u8; 9],
+            PeerRibType::OutPost,
+        )
+    }
+
+    pub fn for_bmp(
+        ingress_id: u32,
+        peer_ip: IpAddr,
+        peer_asn: Asn,
+        connection_ip: IpAddr,
+        peer_distuingisher: [u8; 9],
+        peer_rib_type: PeerRibType,
+    ) -> Self {
+        Self::new(
+            ingress_id,
+            peer_ip,
+            peer_asn,
+            connection_ip,
+            peer_distuingisher,
+            peer_rib_type,
+        )
+    }
+
+    pub fn new(
+        ingress_id: u32,
+        peer_ip: IpAddr,
+        peer_asn: Asn,
+        connection_ip: IpAddr,
+        peer_distuingisher: [u8; 9],
+        peer_rib_type: PeerRibType,
+    ) -> Self {
         Self {
             timestamp: Utc::now(),
-            connection_id: SocketAddr::V4(std::net::SocketAddrV4::new(Ipv4Addr::from(0), 0)),
-            peer_id: PeerId { addr: "127.0.0.1".parse().unwrap(), asn: 0.into() },
-            peer_bgp_id: routecore::bgp::path_attributes::BgpIdentifier::from([0, 0, 0, 0]),
-            peer_distuingisher: [0, 0, 0, 0, 0, 0, 0, 0],
-            peer_rib_type: PeerRibType::Loc
+            ingress_id,
+            peer_ip,
+            peer_asn,
+            connection_ip,
+            peer_distuingisher,
+            peer_rib_type,
         }
     }
 
-    pub fn peer_ip(&self) -> std::net::IpAddr {
-        self.peer_id.addr
+
+
+    pub fn mock() -> Self {
+        todo!()
     }
 
-    pub fn peer_asn(&self) -> Asn {
-        self.peer_id.asn
-    }
+    //pub fn peer_ip(&self) -> std::net::IpAddr {
+    //    self.peer_id.addr
+    //}
+
+    //pub fn peer_asn(&self) -> Asn {
+    //    self.peer_id.asn
+    //}
 
     pub(crate) fn get_props_for_field(
         field_name: &ast::Identifier,
@@ -1289,11 +1437,13 @@ impl Provenance {
         field_index: &[usize],
     ) -> Result<TypeValue, VmError> {
         trace!("get_field_by_index {:?} for Provenance", field_index);
+        todo!()
+            /*
         match field_index.first().map(|i| (*i).try_into()) {
             Some(Ok(ProvenanceToken::Timestamp)) => todo!(),
             // Some(Ok(ProvenanceToken::RouterId)) => Ok(self.router_id.into()),
             Some(Ok(ProvenanceToken::ConnectionId)) => {
-                Ok(self.connection_id.into())
+                todo!() //Ok(self.connection_id.into())
             }
             Some(Ok(ProvenanceToken::PeerId)) => {
                 match field_index.len() {
@@ -1316,11 +1466,14 @@ impl Provenance {
             }
             _ => Err(VmError::InvalidFieldAccess),
         }
+            */
     }
 }
 
 impl Display for Provenance {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        todo!()
+            /*
         write!(
             f,
             "timestamp: {}, connection_id: {}, peer_id: \
@@ -1333,6 +1486,7 @@ impl Display for Provenance {
             self.peer_distuingisher,
             self.peer_rib_type
         )
+            */
     }
 }
 

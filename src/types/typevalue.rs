@@ -1539,6 +1539,7 @@ impl From<RouteWorkshop<Ipv6MulticastAddpathNlri>> for TypeValue {
     }
 }
 
+/*
 impl From<RouteWorkshop<Ipv6FlowSpecNlri<bytes::Bytes>>> for TypeValue {
     fn from(value: RouteWorkshop<Ipv6FlowSpecNlri<bytes::Bytes>>) -> Self {
         TypeValue::Builtin(BuiltinTypeValue::FlowSpecRoute(FlowSpecRoute {
@@ -1547,3 +1548,4 @@ impl From<RouteWorkshop<Ipv6FlowSpecNlri<bytes::Bytes>>> for TypeValue {
         }))
     }
 }
+*/
