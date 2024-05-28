@@ -15,7 +15,7 @@ use routecore::bgp::path_attributes::AggregatorInfo;
 use routecore::bgp::types::{AtomicAggregate, MultiExitDisc, Origin};
 use routecore::bgp::{
     types::PathId,
-    types::{AfiSafi, LocalPref},
+    types::{AfiSafiType, LocalPref},
 };
 use serde::Serialize;
 
@@ -191,7 +191,7 @@ pub enum TypeDef {
     Bool,
     Prefix,
     PrefixLength, // A u8 prefixes by a /
-    AfiSafi,
+    AfiSafiType,
     PathId,
     IpAddr,
     Asn,
@@ -261,7 +261,7 @@ impl TypeDef {
         HexLiteral(StringLiteral,U8,U32,Community;),
         PrefixLength(StringLiteral,IntegerLiteral,U8,U32;),
         Provenance(StringLiteral;),
-        AfiSafi(StringLiteral;),
+        AfiSafiType(StringLiteral;),
         PeerId(StringLiteral;),
         PeerRibType(StringLiteral;),
         PathId(StringLiteral,IntegerLiteral,U32;),
@@ -706,8 +706,8 @@ impl TypeDef {
             TypeDef::PrefixLength => {
                 PrefixLength::get_props_for_method(self.clone(), method_name)
             }
-            TypeDef::AfiSafi => {
-                AfiSafi::get_props_for_method(self.clone(), method_name)
+            TypeDef::AfiSafiType => {
+                AfiSafiType::get_props_for_method(self.clone(), method_name)
             }
             TypeDef::PathId => {
                 PathId::get_props_for_method(self.clone(), method_name)
@@ -931,7 +931,7 @@ impl std::fmt::Display for TypeDef {
             TypeDef::AsPath => write!(f, "AsPath"),
             TypeDef::Hop => write!(f, "Hop"),
             TypeDef::Prefix => write!(f, "Prefix"),
-            TypeDef::AfiSafi => write!(f, "AFI SAFI"),
+            TypeDef::AfiSafiType => write!(f, "AFI SAFI"),
             TypeDef::PathId => write!(f, "Path ID"),
             TypeDef::U32 => write!(f, "U32"),
             TypeDef::U16 => write!(f, "U16"),
@@ -1169,7 +1169,7 @@ impl TryFrom<crate::ast::TypeIdentifier> for TypeDef {
             "HexLiteral" => Ok(TypeDef::HexLiteral),
             "IpAddress" => Ok(TypeDef::IpAddr),
             "Prefix" => Ok(TypeDef::Prefix),
-            "AfiSafi" => Ok(TypeDef::AfiSafi),
+            "AfiSafiType" => Ok(TypeDef::AfiSafiType),
             "PathId" => Ok(TypeDef::PathId),
             "PrefixLength" => Ok(TypeDef::PrefixLength),
             "LocalPref" => Ok(TypeDef::LocalPref),
@@ -1239,7 +1239,7 @@ impl TryFrom<crate::ast::Identifier> for TypeDef {
             "HexLiteral" => Ok(TypeDef::HexLiteral),
             "IpAddress" => Ok(TypeDef::IpAddr),
             "Prefix" => Ok(TypeDef::Prefix),
-            "AfiSafi" => Ok(TypeDef::AfiSafi),
+            "AfiSafiType" => Ok(TypeDef::AfiSafiType),
             "PathId" => Ok(TypeDef::PathId),
             "PrefixLength" => Ok(TypeDef::PrefixLength),
             "LocalPref" => Ok(TypeDef::LocalPref),
@@ -1311,7 +1311,7 @@ impl From<&BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::StringLiteral(_) => TypeDef::StringLiteral,
             BuiltinTypeValue::Bool(_) => TypeDef::Bool,
             BuiltinTypeValue::Prefix(_) => TypeDef::Prefix,
-            BuiltinTypeValue::AfiSafi(_) => TypeDef::AfiSafi,
+            BuiltinTypeValue::AfiSafiType(_) => TypeDef::AfiSafiType,
             BuiltinTypeValue::PathId(_) => TypeDef::PathId,
             BuiltinTypeValue::PrefixLength(_) => TypeDef::PrefixLength,
             BuiltinTypeValue::IpAddr(_) => TypeDef::IpAddr,
@@ -1381,7 +1381,7 @@ impl From<BuiltinTypeValue> for TypeDef {
             BuiltinTypeValue::StringLiteral(_) => TypeDef::StringLiteral,
             BuiltinTypeValue::Bool(_) => TypeDef::Bool,
             BuiltinTypeValue::Prefix(_) => TypeDef::Prefix,
-            BuiltinTypeValue::AfiSafi(_) => TypeDef::AfiSafi,
+            BuiltinTypeValue::AfiSafiType(_) => TypeDef::AfiSafiType,
             BuiltinTypeValue::PathId(_) => TypeDef::PathId,
             BuiltinTypeValue::PrefixLength(_) => TypeDef::PrefixLength,
             BuiltinTypeValue::IpAddr(_) => TypeDef::IpAddr,
