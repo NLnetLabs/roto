@@ -14,7 +14,7 @@ use routecore::bgp::nlri::afisafi::{
 };
 use routecore::bgp::types::PathId;
 use routecore::bgp::types::{
-    AfiSafi as AfiSafiType, LocalPref, MultiExitDisc, NextHop, Origin
+    LocalPref, MultiExitDisc, NextHop, Origin
 };
 use routecore::bgp::workshop::route::RouteWorkshop;
 use serde::Serialize;
@@ -428,9 +428,9 @@ impl RotoType for TypeValue {
             TypeDef::PrefixLength => {
                 PrefixLength::get_props_for_method(ty, method_name)
             }
-            TypeDef::AfiSafi => {
-                AfiSafiType::get_props_for_method(ty, method_name)
-            }
+            // TypeDef::AfiSafi => {
+            //     AfiSafiType::get_props_for_method(ty, method_name)
+            // }
             TypeDef::PathId => PathId::get_props_for_method(ty, method_name),
             TypeDef::Record(_) => {
                 Record::get_props_for_method(ty, method_name)
@@ -507,7 +507,7 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::Origin(v) => v.into_type(ty),
                 BuiltinTypeValue::Prefix(v) => v.into_type(ty),
                 BuiltinTypeValue::PrefixLength(v) => v.into_type(ty),
-                BuiltinTypeValue::AfiSafi(v) => v.into_type(ty),
+                // BuiltinTypeValue::AfiSafi(v) => v.into_type(ty),
                 BuiltinTypeValue::PathId(v) => v.into_type(ty),
                 BuiltinTypeValue::PrefixRoute(v) => v.into_type(ty),
                 BuiltinTypeValue::FlowSpecRoute(v) => v.into_type(ty),
@@ -731,9 +731,9 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::Prefix(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::AfiSafi(v) => {
-                    v.exec_value_method(method_token, args, res_type)
-                }
+                // BuiltinTypeValue::AfiSafi(v) => {
+                //     v.exec_value_method(method_token, args, res_type)
+                // }
                 BuiltinTypeValue::PathId(v) => {
                     v.exec_value_method(method_token, args, res_type)
                 }
@@ -879,9 +879,9 @@ impl RotoType for TypeValue {
                 BuiltinTypeValue::Prefix(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
-                BuiltinTypeValue::AfiSafi(v) => {
-                    v.exec_consume_value_method(method_token, args, res_type)
-                }
+                // BuiltinTypeValue::AfiSafi(v) => {
+                //     v.exec_consume_value_method(method_token, args, res_type)
+                // }
                 BuiltinTypeValue::PathId(v) => {
                     v.exec_consume_value_method(method_token, args, res_type)
                 }
