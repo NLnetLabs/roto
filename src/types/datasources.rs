@@ -253,9 +253,10 @@ impl<M: Meta> RotoRib for Rib<M> {
                         &prefix,
                         &MatchOptions {
                             match_type: MatchType::LongestMatch,
-                            include_all_records: false,
+                            include_withdrawn: false,
                             include_less_specifics: false,
                             include_more_specifics: false,
+                            mui: None
                         },
                         &guard,
                     )
