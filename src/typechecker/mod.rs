@@ -210,7 +210,7 @@ impl<'methods> TypeChecker<'methods> {
     }
 
     fn get_type(&self, type_name: impl AsRef<str>) -> Option<&Type> {
-        self.types.get(&type_name.as_ref().to_string())
+        self.types.get(type_name.as_ref())
     }
 
     /// Check whether `a` is a subtype of `b`

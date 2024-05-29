@@ -2938,6 +2938,7 @@ fn add_match_action(
 
 trait BooleanExpr: std::fmt::Debug {
     fn get_args(&self) -> &[symbols::Symbol];
+    #[allow(dead_code)]
     fn get_type(&self) -> TypeDef;
     fn get_builtin_type(&self) -> Result<TypeDef, CompileError>;
 }

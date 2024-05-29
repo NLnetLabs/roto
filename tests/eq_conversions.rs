@@ -13,8 +13,8 @@ use inetnum::asn::Asn;
 
 mod common;
 
-#[derive(Debug, Clone)]
-struct RibValue(Vec<TypeValue>);
+// #[derive(Debug, Clone)]
+// struct RibValue(Vec<TypeValue>);
 
 // impl MergeUpdate for RibValue {
 //     type UserDataIn = ();
@@ -43,11 +43,11 @@ struct RibValue(Vec<TypeValue>);
 //     }
 // }
 
-impl std::fmt::Display for RibValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
-}
+// impl std::fmt::Display for RibValue {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{:?}", self.0)
+//     }
+// }
 
 fn src_code(code_line: &str, end_accept_reject: &str) -> String {
     let pre = format!(
