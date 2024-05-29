@@ -29,7 +29,7 @@ use inetnum::addr::Prefix;
 use routecore::bgp::types::PathId;
 use routecore::bgp::path_attributes::AggregatorInfo;
 use routecore::bgp::communities::HumanReadableCommunity as Community;
-use routecore::bgp::types::{AfiSafi, AtomicAggregate, LocalPref, MultiExitDisc, NextHop, Origin};
+use routecore::bgp::types::{AfiSafiType, AtomicAggregate, LocalPref, MultiExitDisc, NextHop, Origin};
 
 //------------ U16 Type -----------------------------------------------------
 
@@ -1076,7 +1076,7 @@ impl TryFrom<&TypeValue> for PrefixLength {
 
 //------------ AfiSafi Type --------------------------------------------------
 
-minimalscalartype!(AfiSafi);
+minimalscalartype!(AfiSafiType);
 
 //------------ PathId Type ---------------------------------------------------
 

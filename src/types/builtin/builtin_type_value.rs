@@ -7,7 +7,7 @@ use std::net::IpAddr;
 
 use inetnum::asn::Asn;
 use routecore::bgp::types::PathId;
-use routecore::bgp::types::{AfiSafi, AtomicAggregate, MultiExitDisc, NextHop, Origin};
+use routecore::bgp::types::{AfiSafiType, AtomicAggregate, MultiExitDisc, NextHop, Origin};
 use routecore::bgp::path_attributes::AggregatorInfo;
 use inetnum::addr::Prefix;
 use routecore::bgp::communities::HumanReadableCommunity as Community;
@@ -42,7 +42,7 @@ pub enum BuiltinTypeValue {
     HexLiteral(HexLiteral),           // scalar
     IpAddr(IpAddr),                   // scalar
     Prefix(Prefix),                   // scalar
-    AfiSafi(AfiSafi),                 // scalar
+    AfiSafiType(AfiSafiType),                 // scalar
     PathId(PathId),                   // scalar
     PrefixLength(PrefixLength),       // scalar
     LocalPref(routecore::bgp::types::LocalPref),    // scalar
@@ -94,7 +94,7 @@ impl BuiltinTypeValue {
             BuiltinTypeValue::IntegerLiteral(v) => v.into_type(ty),
             BuiltinTypeValue::StringLiteral(v) => v.into_type(ty),
             BuiltinTypeValue::Prefix(v) => v.into_type(ty),
-            BuiltinTypeValue::AfiSafi(v) => v.into_type(ty),
+            BuiltinTypeValue::AfiSafiType(v) => v.into_type(ty),
             BuiltinTypeValue::PathId(v) => v.into_type(ty),
             BuiltinTypeValue::PrefixLength(v) => v.into_type(ty),
             BuiltinTypeValue::Community(v) => v.into_type(ty),
@@ -194,7 +194,7 @@ impl Display for BuiltinTypeValue {
                 }
                 BuiltinTypeValue::Prefix(v) => write!(f, "{}", v),
                 BuiltinTypeValue::PathId(v) => write!(f, "{}", v),
-                BuiltinTypeValue::AfiSafi(v) => write!(f, "{}", v),
+                BuiltinTypeValue::AfiSafiType(v) => write!(f, "{}", v),
                 BuiltinTypeValue::PrefixLength(v) => {
                     write!(f, "{}", v)
                 }
@@ -286,7 +286,7 @@ impl Display for BuiltinTypeValue {
                     write!(f, "{} (Const U32 Enum Variant)", v.value)
                 }
                 BuiltinTypeValue::Prefix(v) => write!(f, "{} (Prefix)", v),
-                BuiltinTypeValue::AfiSafi(v) => write!(f, "{} (AFI SAFI)", v),
+                BuiltinTypeValue::AfiSafiType(v) => write!(f, "{} (AFI SAFI)", v),
                 BuiltinTypeValue::PathId(v) => write!(f, "{} (Path ID)", v),
                 BuiltinTypeValue::PrefixLength(v) => {
                     write!(f, "{} (Prefix Length)", v)
