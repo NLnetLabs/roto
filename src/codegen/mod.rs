@@ -2,28 +2,6 @@
 
 use std::{collections::HashMap, marker::PhantomData, rc::Rc, sync::Arc};
 
-use cranelift::{
-    codegen::{
-        entity::EntityRef,
-        ir::{
-            condcodes::IntCC, types::*, AbiParam, Block, InstBuilder,
-            Signature, Value,
-        },
-        settings::{self, Configurable as _},
-    },
-    frontend::{
-        FuncInstBuilder, FunctionBuilder, FunctionBuilderContext, Switch,
-        Variable,
-    },
-};
-use cranelift_codegen::{
-    ir::{MemFlags, StackSlot, StackSlotData, StackSlotKind},
-    isa::TargetIsa,
-    trace,
-};
-use cranelift_jit::{JITBuilder, JITModule};
-use cranelift_module::{FuncId, Linkage, Module as _};
-
 use crate::{
     lower::ir::{self, IntCmp, Operand},
     typechecker::{
@@ -32,6 +10,25 @@ use crate::{
     },
     Runtime, SafeValue,
 };
+use cranelift::{
+    codegen::{
+        entity::EntityRef,
+        ir::{
+            condcodes::IntCC, types::*, AbiParam, Block, InstBuilder,
+            MemFlags, Signature, StackSlot, StackSlotData, StackSlotKind,
+            Value,
+        },
+        isa::TargetIsa,
+        settings::{self, Configurable as _},
+    },
+    frontend::{
+        FuncInstBuilder, FunctionBuilder, FunctionBuilderContext, Switch,
+        Variable,
+    },
+};
+use cranelift_jit::{JITBuilder, JITModule};
+use cranelift_module::{FuncId, Linkage, Module as _};
+use log::info;
 
 #[cfg(test)]
 mod tests;
@@ -99,9 +96,6 @@ pub fn codegen(
 
     let jit = JITModule::new(builder);
 
-    // Our functions might call each other, so we declare them before we
-    // define them. This is also when we start building the function
-    // hashmap.
     let mut module = ModuleBuilder {
         functions: HashMap::new(),
         inner: jit,
@@ -110,6 +104,9 @@ pub fn codegen(
         variable_map: HashMap::new(),
     };
 
+    // Our functions might call each other, so we declare them before we
+    // define them. This is also when we start building the function
+    // hashmap.
     for func in ir {
         module.declare_function(func);
     }
@@ -117,14 +114,14 @@ pub fn codegen(
     let mut builder_context = FunctionBuilderContext::new();
     for func in ir {
         module.define_function(func, &mut builder_context);
-        trace!("{}", func);
+        info!("\n{}", func);
     }
 
     module.finalize()
 }
 
 impl<'a> ModuleBuilder<'_, 'a> {
-    // Declare a function and its signature (without the body)
+    /// Declare a function and its signature (without the body)
     fn declare_function(&mut self, func: &ir::Function) {
         let ir::Function {
             name,
@@ -195,8 +192,8 @@ impl<'a> ModuleBuilder<'_, 'a> {
         self.inner.define_function(func_id, &mut ctx).unwrap();
 
         let capstone = self.isa.to_capstone().unwrap();
-        trace!(
-            "{}",
+        info!(
+            "\n{}",
             ctx.compiled_code()
                 .unwrap()
                 .disassemble(None, &capstone)
@@ -213,6 +210,7 @@ impl<'a> ModuleBuilder<'_, 'a> {
         }
     }
 
+    /// Get the corresponding Cranelift type for a Roto type
     fn cranelift_type(&mut self, ty: &RotoType) -> Type {
         let ty = self.type_info.resolve(ty);
         match ty {
@@ -229,22 +227,21 @@ impl<'a> ModuleBuilder<'_, 'a> {
                 Primitive::Unit => I8,
                 Primitive::String => todo!(),
             },
+            RotoType::IntVar(_) => I32,
             // TODO: The associated data needs to be fixed of course
             RotoType::Verdict(_, _) => I8,
+            RotoType::Record(_)
+            | RotoType::RecordVar(_, _)
+            | RotoType::NamedRecord(_, _)
+            | RotoType::Enum(_, _) => self.isa.pointer_type(),
             RotoType::Var(_) => todo!(),
             RotoType::ExplicitVar(_) => todo!(),
-            RotoType::IntVar(_) => todo!(),
-            RotoType::RecordVar(_, _) => todo!(),
             RotoType::Never => todo!(),
             RotoType::BuiltIn(_, _) => todo!(),
             RotoType::List(_) => todo!(),
             RotoType::Table(_) => todo!(),
             RotoType::OutputStream(_) => todo!(),
             RotoType::Rib(_) => todo!(),
-            RotoType::Record(_) => todo!(),
-            RotoType::NamedRecord(_, _) | RotoType::Enum(_, _) => {
-                self.isa.pointer_type()
-            }
             RotoType::Term(_) => todo!(),
             RotoType::Action(_) => todo!(),
             RotoType::Filter(_) => todo!(),
@@ -282,6 +279,7 @@ impl<'r, 'a, 'c> FuncGen<'r, 'a, 'c> {
         }
     }
 
+    /// Translate an IR block to a Cranelift block
     fn block(&mut self, block: &'a ir::Block) {
         let b = self.get_block(&block.label);
         self.builder.switch_to_block(b);
@@ -347,6 +345,8 @@ impl<'r, 'a, 'c> FuncGen<'r, 'a, 'c> {
                 self.ins().return_(&[val]);
             }
             ir::Instruction::Exit(v, _) => {
+                // For now, exit is the same as return, because we can't
+                // exit without a value
                 let val = self.ins().iconst(I8, *v as i64);
                 self.ins().return_(&[val]);
             }
@@ -409,6 +409,9 @@ impl<'r, 'a, 'c> FuncGen<'r, 'a, 'c> {
 
                 let pointer_ty = self.module.isa.pointer_type();
                 let var = self.variable(&to.var, pointer_ty);
+
+                // Records are represented by the address to their stack
+                // slot. Hence, that's what we put in the variable.
                 let p = self.ins().stack_addr(pointer_ty, slot, 0);
                 self.def(var, p);
             }
@@ -440,10 +443,15 @@ impl<'r, 'a, 'c> FuncGen<'r, 'a, 'c> {
 
                 let pointer_ty = self.module.isa.pointer_type();
                 let var = self.variable(&to.var, pointer_ty);
+
+                // Enums are represented by the address to their stack
+                // slot. Hence, that's what we put in the variable.
                 let p = self.ins().stack_addr(pointer_ty, slot, 0);
                 self.def(var, p);
             }
             ir::Instruction::EnumDiscriminant { to, from } => {
+                // The discriminant is the first byte of the enum, so offset
+                // 0 and of type I8.
                 let p = self.operand(from);
                 let p = self.ins().load(I8, MEMFLAGS, p, 0);
                 let var = self.variable(&to.var, I8);
@@ -451,6 +459,9 @@ impl<'r, 'a, 'c> FuncGen<'r, 'a, 'c> {
             }
             ir::Instruction::AccessEnum { to, from, field_ty } => {
                 let enum_val = self.operand(from);
+
+                // The offset of the field is (at least) 1 because of the
+                // discriminant.
                 let offset = 1 + self.padding_of(field_ty, 1);
                 let val = self.read_field(enum_val, field_ty, offset as i32);
 
@@ -461,6 +472,7 @@ impl<'r, 'a, 'c> FuncGen<'r, 'a, 'c> {
         }
     }
 
+    /// Get the block for the given label or create it if it doesn't exist
     fn get_block(&mut self, label: &'a str) -> Block {
         *self
             .block_map
@@ -468,6 +480,7 @@ impl<'r, 'a, 'c> FuncGen<'r, 'a, 'c> {
             .or_insert_with(|| self.builder.create_block())
     }
 
+    /// Write to a field of a compound data type
     fn write_field(
         &mut self,
         slot: StackSlot,
@@ -477,11 +490,7 @@ impl<'r, 'a, 'c> FuncGen<'r, 'a, 'c> {
     ) {
         let op = self.operand(op);
 
-        if let RotoType::Record(..)
-        | RotoType::NamedRecord(..)
-        | RotoType::RecordVar(..)
-        | RotoType::Enum(..) = ty
-        {
+        if is_reference_type(ty) {
             let pointer_ty = self.module.isa.pointer_type();
             let size = self.size_of(ty);
 
@@ -502,17 +511,14 @@ impl<'r, 'a, 'c> FuncGen<'r, 'a, 'c> {
         }
     }
 
+    /// Read a field of a compound data type
     fn read_field(
         &mut self,
         addr: Value,
         ty: &RotoType,
         offset: i32,
     ) -> Value {
-        if let RotoType::Record(..)
-        | RotoType::NamedRecord(..)
-        | RotoType::RecordVar(..)
-        | RotoType::Enum(..) = ty
-        {
+        if is_reference_type(ty) {
             self.ins().iadd_imm(addr, offset as i64)
         } else {
             let ty = self.module.cranelift_type(ty);
@@ -520,10 +526,12 @@ impl<'r, 'a, 'c> FuncGen<'r, 'a, 'c> {
         }
     }
 
+    /// Return the [`FuncInstBuilder`] for the function builder
     fn ins<'short>(&'short mut self) -> FuncInstBuilder<'short, 'c> {
         self.builder.ins()
     }
 
+    /// Define a variable with a value
     fn def(&mut self, var: Variable, val: Value) {
         self.builder.def_var(var, val);
     }
@@ -604,15 +612,15 @@ impl<'r, 'a, 'c> FuncGen<'r, 'a, 'c> {
 }
 
 impl Module {
-    pub fn get_function<P: RotoParams, R: IsRotoType>(
+    pub fn get_function<Params: RotoParams, Return: IsRotoType>(
         &self,
         name: &str,
-    ) -> Option<TypedFunc<P, R>> {
+    ) -> Option<TypedFunc<Params, Return>> {
         let (id, sig) = self.functions.get(name)?;
-        let correct_params = P::check(
+        let correct_params = Params::check(
             &sig.params.iter().map(|p| p.value_type).collect::<Vec<_>>(),
         );
-        let correct_return = R::check(sig.returns[0].value_type);
+        let correct_return = Return::check(sig.returns[0].value_type);
         if !correct_params || !correct_return {
             return None;
         }
@@ -623,6 +631,17 @@ impl Module {
             _ty: PhantomData,
         })
     }
+}
+
+/// Record and enums are passed by reference
+fn is_reference_type(t: &RotoType) -> bool {
+    matches!(
+        t,
+        RotoType::Record(..)
+            | RotoType::RecordVar(..)
+            | RotoType::NamedRecord(..)
+            | RotoType::Enum(..)
+    )
 }
 
 pub trait IsRotoType {

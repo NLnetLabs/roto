@@ -421,3 +421,34 @@ fn bmp_message() {
     assert_eq!(f.call((2,)), false as i8);
     assert_eq!(f.call((3,)), false as i8);
 }
+
+#[test]
+fn can_we_misalign_stack_slots() {
+    let s = "
+    type Foo { x: I8 }
+    type Bar { x: I32, y: I16 }
+
+    filter-map main() {
+        define {
+            foo = Foo { x: 1 };
+            bar = Bar { x: 2, y: 3 };
+        }
+        
+        apply {
+            if foo.x == 1 && bar.x == 2 && bar.y == 3 {
+                accept
+            } else {
+                reject
+            }
+        }
+    }
+    ";
+
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(), i8>("main")
+        .expect("No function found (or mismatched types)");
+
+    assert_eq!(f.call(()), true as i8);
+}

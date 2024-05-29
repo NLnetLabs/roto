@@ -27,3 +27,9 @@ routecore = { version = "0.4.0", features = ["bgp", "bmp"] }
 [dev-dependencies]
 bytes = "1"
 rotonda-store = "0.3.0"
+
+[profile.profiling]
+inherits = "release"
+lto = true
+strip = "none"
+debug = "full"
