@@ -135,7 +135,7 @@ pub fn run(
     compile(&files, &symbols, None)
 }
 
-pub fn run_string<'a>(
+pub fn run_string(
     script: String,
 ) -> Result<Vec<Rotolo>, RotoReport> {
     let files = vec![SourceFile { name: "script".into(), contents: script }];

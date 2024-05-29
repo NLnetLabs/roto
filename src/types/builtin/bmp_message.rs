@@ -370,9 +370,9 @@ bytes_record_impl!(
         record_field(
             "session_config"; 13,
             field(
-                "has_four_octet_asn"; 14,
+                "four_octet_enabled"; 14,
                 Bool,
-                session_config.has_four_octet_asn
+                session_config.four_octet_enabled
             ),
         ),
     )],

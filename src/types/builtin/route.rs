@@ -18,7 +18,7 @@ use routecore::{
         workshop::route::RouteWorkshop,
         ParseError,
     },
-    Octets,
+    // Octets,
 };
 use serde::Serialize;
 
@@ -143,13 +143,13 @@ impl From<&Ipv6MulticastAddpathNlri> for PrefixNlri {
 pub struct PrefixRoute(pub PrefixRouteWs);
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
-pub enum FlowSpecNlri<O: Octets> {
+pub enum FlowSpecNlri<O: AsRef<[u8]>> {
     Ipv4FlowSpec(Ipv4FlowSpecNlri<O>),
     Ipv6FlowSpec(Ipv6FlowSpecNlri<O>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
-pub struct FlowSpecRoute<O: routecore::Octets> {
+pub struct FlowSpecRoute<O: AsRef<[u8]>> {
     pub(crate) nlri: FlowSpecNlri<O>,
     pub(crate) attributes: PaMap,
 }

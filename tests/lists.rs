@@ -9,47 +9,47 @@ use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
 
-use rotonda_store::prelude::MergeUpdate;
+// use rotonda_store::prelude::MergeUpdate;
 
 use inetnum::asn::Asn;
 
 mod common;
 
-#[derive(Debug, Clone)]
-struct RibValue(Vec<TypeValue>);
+// #[derive(Debug, Clone)]
+// struct RibValue(Vec<TypeValue>);
 
-impl MergeUpdate for RibValue {
-    type UserDataIn = ();
-    type UserDataOut = ();
+// impl MergeUpdate for RibValue {
+//     type UserDataIn = ();
+//     type UserDataOut = ();
 
-    fn merge_update(
-        &mut self,
-        update_record: RibValue,
-        _: Option<&Self::UserDataIn>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        self.0 = update_record.0;
-        Ok(())
-    }
+//     fn merge_update(
+//         &mut self,
+//         update_record: RibValue,
+//         _: Option<&Self::UserDataIn>,
+//     ) -> Result<(), Box<dyn std::error::Error>> {
+//         self.0 = update_record.0;
+//         Ok(())
+//     }
 
-    fn clone_merge_update(
-        &self,
-        update_meta: &Self,
-        _: Option<&Self::UserDataIn>,
-    ) -> Result<(Self, Self::UserDataOut), Box<dyn std::error::Error>>
-    where
-        Self: std::marker::Sized,
-    {
-        let mut new_meta = update_meta.0.clone();
-        new_meta.push(self.0[0].clone());
-        Ok((RibValue(new_meta), ()))
-    }
-}
+//     fn clone_merge_update(
+//         &self,
+//         update_meta: &Self,
+//         _: Option<&Self::UserDataIn>,
+//     ) -> Result<(Self, Self::UserDataOut), Box<dyn std::error::Error>>
+//     where
+//         Self: std::marker::Sized,
+//     {
+//         let mut new_meta = update_meta.0.clone();
+//         new_meta.push(self.0[0].clone());
+//         Ok((RibValue(new_meta), ()))
+//     }
+// }
 
-impl std::fmt::Display for RibValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
-}
+// impl std::fmt::Display for RibValue {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{:?}", self.0)
+//     }
+// }
 
 fn src_code(code_line: &str, end_accept_reject: &str) -> String {
     let pre = format!(
