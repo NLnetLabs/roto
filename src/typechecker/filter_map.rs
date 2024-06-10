@@ -5,10 +5,7 @@ use crate::{
 };
 
 use super::{
-    expr::Context,
-    scope::Scope,
-    types::{Primitive, Type},
-    TypeChecker, TypeResult,
+    expr::Context, scope::Scope, types::{Primitive, Type}, TypeChecker, TypeResult,
 };
 
 impl TypeChecker<'_, '_> {
@@ -78,16 +75,17 @@ impl TypeChecker<'_, '_> {
         Ok(())
     }
 
-    pub fn term(
+    pub fn function(
         &mut self,
         scope: &Scope,
-        term_section: &ast::TermDeclaration,
+        function: &ast::FunctionDeclaration,
     ) -> TypeResult<()> {
-        let ast::TermDeclaration {
+        let ast::FunctionDeclaration {
             ident,
             params,
             body,
-        } = term_section;
+            ret,
+        } = function;
 
         let mut scope = scope.wrap(&ident.0);
 
@@ -96,56 +94,37 @@ impl TypeChecker<'_, '_> {
             self.insert_var(&mut scope, v, t)?;
         }
 
+        let ret = if let Some(ret) = ret {
+            let Some(ty) = self.get_type(ret) else {
+                return Err(error::undeclared_type(ret));
+            };
+            ty.clone()
+        } else {
+            Type::Primitive(Primitive::Unit)
+        };
+
         let ctx = Context {
-            expected_type: Type::Primitive(Primitive::Bool),
-            function_return_type: Some(Type::Primitive(Primitive::Bool)),
+            expected_type: ret.clone(),
+            function_return_type: Some(ret),
         };
 
         self.block(&scope, &ctx, body)?;
         Ok(())
     }
 
-    pub fn term_type(
+    pub fn function_type(
         &mut self,
-        dec: &ast::TermDeclaration,
+        dec: &ast::FunctionDeclaration,
     ) -> TypeResult<Type> {
-        Ok(Type::Term(self.params(&dec.params)?))
-    }
-
-    pub fn action(
-        &mut self,
-        scope: &Scope,
-        action_section: &ast::ActionDeclaration,
-    ) -> TypeResult<()> {
-        let ast::ActionDeclaration {
-            ident,
-            params,
-            body,
-        } = action_section;
-
-        let mut scope = scope.wrap(&ident.0);
-
-        // Insert params into the scope
-        let params = self.params(params)?;
-        for (v, t) in &params {
-            self.insert_var(&mut scope, v, t)?;
-        }
-
-        let ctx = Context {
-            expected_type: Type::Primitive(Primitive::Unit),
-            function_return_type: Some(Type::Primitive(Primitive::Unit)),
+        let ret = if let Some(ret) = &dec.ret {
+            let Some(ty) = self.get_type(ret) else {
+                return Err(error::undeclared_type(ret));
+            };
+            ty.clone()
+        } else {
+            Type::Primitive(Primitive::Unit)
         };
-
-        self.block(&scope, &ctx, body)?;
-
-        Ok(())
-    }
-
-    pub fn action_type(
-        &mut self,
-        dec: &ast::ActionDeclaration,
-    ) -> TypeResult<Type> {
-        Ok(Type::Action(self.params(&dec.params)?))
+        Ok(Type::Function(self.params(&dec.params)?, Box::new(ret)))
     }
 
     fn params(

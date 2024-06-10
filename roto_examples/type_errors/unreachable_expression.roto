@@ -3,7 +3,7 @@ filter foo() {
         rx msg: U32;
     }
 
-    term bar() {
+    function bar() -> Bool {
         return true;
         return false;
     }

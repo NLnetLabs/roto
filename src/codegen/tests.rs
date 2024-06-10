@@ -1,5 +1,6 @@
 use crate::pipeline::*;
 
+#[track_caller]
 fn compile(p: &'static str) -> Compiled {
     let _ = env_logger::try_init();
 
@@ -80,9 +81,9 @@ fn equal_to_10() {
 }
 
 #[test]
-fn equal_to_10_with_term() {
+fn equal_to_10_with_function() {
     let s = "
-        term is_10(x: U32) {
+        function is_10(x: U32) -> Bool {
             x == 10
         }
         
@@ -108,13 +109,13 @@ fn equal_to_10_with_term() {
 }
 
 #[test]
-fn equal_to_10_with_two_terms() {
+fn equal_to_10_with_two_functions() {
     let s = "
-        term equals(x: U32, y: U32) {
+        function equals(x: U32, y: U32) -> Bool {
             x == y
         }
 
-        term is_10(x: U32) {
+        function is_10(x: U32) -> Bool {
             equals(x, 10)
         }
 

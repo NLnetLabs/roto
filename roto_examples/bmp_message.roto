@@ -1,0 +1,47 @@
+filter-map main(a: I32) {
+    define {
+        header = {
+            is_ipv6: true,
+            is_ipv4: true,
+            is_legacy_format: false,
+            is_post_policy: false,
+            is_pre_policy: false,
+            peer_type: 0,
+            asn: 0,
+            address: 1.1.1.1,  
+        };
+        bmp = if a == 1 {
+            BmpMessage.PeerUpNotification({
+                local_port: 80,
+                local_address: 1.1.1.1,
+                remote_port: 80,
+                per_peer_header: header,
+            })
+        } else if a == 2 {
+            BmpMessage.PeerUpNotification({
+                local_port: 10,
+                local_address: 1.1.1.1,
+                remote_port: 80,
+                per_peer_header: header,
+            })
+        } else {
+            BmpMessage.InitiationMessage({})
+        };
+    }
+    
+    apply {
+        match bmp {
+            PeerUpNotification(x) -> {
+                if x.local_port == 80 {
+                    accept
+                }
+            },
+            InitiationMessage(x) -> {},
+            RouteMonitoring(x) -> {},
+            PeerDownNotification(x) -> {},
+            StatisticsReport(x) -> {},
+            TerminationMessage(x) -> {},
+        }
+        reject
+    }
+}

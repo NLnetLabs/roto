@@ -12,8 +12,7 @@ pub enum Declaration {
     Table(Table),
     OutputStream(OutputStream),
     Record(RecordTypeDeclaration),
-    Term(TermDeclaration),
-    Action(ActionDeclaration),
+    Function(FunctionDeclaration),
 }
 
 #[derive(Clone, Debug)]
@@ -47,9 +46,10 @@ pub struct FilterMapBody {
 }
 
 #[derive(Clone, Debug)]
-pub struct TermDeclaration {
+pub struct FunctionDeclaration {
     pub ident: Meta<Identifier>,
     pub params: Meta<Params>,
+    pub ret: Option<Meta<Identifier>>,
     pub body: Meta<Block>,
 }
 
@@ -121,13 +121,6 @@ pub struct MatchArm {
     pub variant_id: Meta<Identifier>,
     pub data_field: Option<Meta<Identifier>>,
     pub guard: Option<Meta<Expr>>,
-    pub body: Meta<Block>,
-}
-
-#[derive(Clone, Debug)]
-pub struct ActionDeclaration {
-    pub ident: Meta<Identifier>,
-    pub params: Meta<Params>,
     pub body: Meta<Block>,
 }
 

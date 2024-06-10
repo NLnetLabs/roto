@@ -148,22 +148,18 @@ impl TypeChecker<'_, '_> {
                 let t = self.get_var(scope, name)?;
                 let t = self.resolve_type(t);
 
-                let (call_type, params, ret) = match t {
-                    Type::Term(params) => ("term", params, Type::Primitive(Primitive::Bool)),
-                    Type::Action(params) => ("action", params, Type::Primitive(Primitive::Unit)),
-                    t => {
-                        return Err(error::simple(
-                            format!("the variable `{name}` is not callable, but has type `{t}`"),
-                            "not a term or an action",
-                            name.id,
-                        ))
-                    }
+                let Type::Function(params, ret) = t else {
+                    return Err(error::simple(
+                        format!("the variable `{name}` is not callable, but has type `{t}`"),
+                        "not a function",
+                        name.id,
+                    ));
                 };
 
                 let params: Vec<_> =
                     params.into_iter().map(|(_, t)| t).collect();
                 let diverges = self.check_arguments(
-                    scope, ctx, call_type, name, &params, args,
+                    scope, ctx, "function", name, &params, args,
                 )?;
 
                 self.unify(&ctx.expected_type, &ret, id, None)?;

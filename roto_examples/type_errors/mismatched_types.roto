@@ -1,3 +1,7 @@
+function foo(a: U32, b: U32) -> Bool {
+	a == b
+}
+
 filter foo() {
 	define {
 		rx msg: BmpMessage;
@@ -5,9 +9,6 @@ filter foo() {
 		b = 4;
 	}
 
-	term foo() {
-		a == b
-	}
 	
 	apply { accept }
 }

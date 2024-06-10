@@ -25,8 +25,7 @@ pub enum Type {
     Record(Vec<(String, Type)>),
     NamedRecord(String, Vec<(String, Type)>),
     Enum(String, Vec<(String, Option<Type>)>),
-    Term(Vec<(Meta<Identifier>, Type)>),
-    Action(Vec<(Meta<Identifier>, Type)>),
+    Function(Vec<(Meta<Identifier>, Type)>, Box<Type>),
     Filter(Vec<(Meta<Identifier>, Type)>),
     FilterMap(Vec<(Meta<Identifier>, Type)>),
     Name(String),
@@ -91,10 +90,11 @@ impl Display for Type {
             Type::Rib(t) => write!(f, "Rib<{t}>"),
             Type::NamedRecord(x, _) => write!(f, "{x}"),
             Type::Enum(x, _) => write!(f, "{x}"),
-            Type::Term(args) => write!(f, "Term({})", fmt_args(args)),
-            Type::Action(args) => write!(f, "Action({})", fmt_args(args)),
-            Type::Filter(args) => write!(f, "Filter({})", fmt_args(args)),
-            Type::FilterMap(args) => write!(f, "Filter({})", fmt_args(args)),
+            Type::Function(args, ret) => {
+                write!(f, "function({}) -> {}", fmt_args(args), ret)
+            }
+            Type::Filter(args) => write!(f, "filter({})", fmt_args(args)),
+            Type::FilterMap(args) => write!(f, "filter-map({})", fmt_args(args)),
             Type::Name(x) => write!(f, "{x}"),
         }
     }

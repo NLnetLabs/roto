@@ -359,7 +359,7 @@ fn prefix_method() {
 #[test]
 fn logical_expr() {
     let src = "
-        term foo() {
+        function foo() -> Bool {
             (10 == 10) || (10 == 11)
         }
 
@@ -375,7 +375,7 @@ fn logical_expr() {
     typecheck(src).unwrap();
 
     let src = r#"
-        term foo() {
+        function foo() -> Bool {
             (10 == 10) || ("hello" == 11)
         }
 
@@ -397,7 +397,7 @@ fn send_output_stream() {
             foo: String
         }
 
-        action hello() {
+        function hello() {
             stream.send(Msg {
                 foo: "hello",
             });
@@ -416,7 +416,7 @@ fn send_output_stream() {
 
         type Bar { bar: String }
 
-        action hello() {
+        function hello() {
             stream.send(Bar {
                 bar: "hello",
             });
@@ -437,7 +437,7 @@ fn send_output_stream() {
             bar: String
         }
         
-        action hello() {
+        function hello() {
             foos.send(Foo {
                 foo: "hello",
             });
@@ -461,7 +461,7 @@ fn send_output_stream() {
             bar: String
         }
 
-        action hello() {
+        function hello() {
             foos.send(Foo {
                 foo: "hello",
             });
@@ -482,7 +482,7 @@ fn record_inference() {
     let src = "
         output-stream s contains Msg { a: U32 }
         
-        action bar(a: Msg) {
+        function bar(a: Msg) {
             s.send(a);
         }
         
@@ -502,7 +502,7 @@ fn record_inference() {
     let src = "
         output-stream s contains Msg { a: U32 }
         
-        action bar(a: Msg) {
+        function bar(a: Msg) {
             s.send(a);
         }
 
@@ -522,7 +522,7 @@ fn record_inference() {
     let src = "
         type A { a: U32 }
 
-        term bla(a: A, b: A) {
+        function bla(a: A, b: A) -> Bool {
             a == b
         }
         
@@ -546,7 +546,7 @@ fn record_inference() {
         type A { a: U32 }
         type B { a: U32 }
 
-        term bla() {
+        function bla() -> Bool {
             a == b && a == c
         }
 
@@ -566,7 +566,7 @@ fn record_inference() {
 #[test]
 fn return_keyword() {
     let src = "
-        term bar() {
+        function bar() -> Bool {
             return true
         }
         
@@ -577,7 +577,7 @@ fn return_keyword() {
     typecheck(src).unwrap();
 
     let src = "
-        term bar() {
+        function bar() -> Bool {
             return 2
         }
         
@@ -592,9 +592,9 @@ fn return_keyword() {
 fn unit_block() {
     let src = "
         // workaround for not having a ()
-        action unit() {}
+        function unit() {}
 
-        term bar() {
+        function bar() -> Bool {
             unit();
         }
 
@@ -608,7 +608,7 @@ fn unit_block() {
 #[test]
 fn unreachable_expression() {
     let src = "
-        term bar() {
+        function bar() -> Bool {
             return true;
             return false;
         }

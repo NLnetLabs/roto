@@ -353,19 +353,10 @@ impl<'r, 'methods> TypeChecker<'r, 'methods> {
         // them, which means that they cannot be called by anything else,
         // which honestly makes sense.
         for expr in &tree.expressions {
-            match expr {
-                ast::Declaration::Term(x) => {
-                    let ty = self.term_type(x)?;
-                    self.insert_var(&mut root_scope, &x.ident, &ty)?;
-                    self.type_info.expr_types.insert(x.ident.id, ty.clone());
-                }
-                ast::Declaration::Action(x) => {
-                    let ty = self.action_type(x)?;
-                    self.insert_var(&mut root_scope, &x.ident, &ty)?;
-                    self.type_info.expr_types.insert(x.ident.id, ty.clone());
-                    self.type_info.full_name(&x.ident);
-                }
-                _ => {}
+            if let ast::Declaration::Function(x) = expr {
+                let ty = self.function_type(x)?;
+                self.insert_var(&mut root_scope, &x.ident, &ty)?;
+                self.type_info.expr_types.insert(x.ident.id, ty.clone());
             }
         }
 
@@ -377,11 +368,8 @@ impl<'r, 'methods> TypeChecker<'r, 'methods> {
                     let ty2 = self.filter_map(&root_scope, f)?;
                     self.unify(&ty, &ty2, f.ident.id, None)?;
                 }
-                ast::Declaration::Term(x) => {
-                    self.term(&root_scope, x)?;
-                }
-                ast::Declaration::Action(x) => {
-                    self.action(&root_scope, x)?;
+                ast::Declaration::Function(x) => {
+                    self.function(&root_scope, x)?;
                 }
                 _ => {}
             }
@@ -748,8 +736,7 @@ impl<'r, 'methods> TypeChecker<'r, 'methods> {
             }
             Type::Primitive(_)
             | Type::BuiltIn(_, _)
-            | Type::Term(_)
-            | Type::Action(_)
+            | Type::Function(_, _)
             | Type::Filter(_)
             | Type::FilterMap(_) => {
                 // do nothing on primitive types

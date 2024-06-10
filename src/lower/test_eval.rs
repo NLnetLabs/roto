@@ -7,6 +7,7 @@ use crate::pipeline;
 
 use super::value::SafeValue;
 
+#[track_caller]
 fn compile<T: Into<SafeValue>, U: TryFrom<SafeValue>>(
     s: &str,
 ) -> impl Fn(T) -> U
@@ -118,14 +119,14 @@ fn variable() {
 }
 
 #[test]
-fn calling_term() {
+fn calling_function() {
     let p = compile::<u32, Result<(), ()>>(
         "
-        term smaller_than(a: U32, b: U32) {
+        function smaller_than(a: U32, b: U32) -> Bool {
             a < b
         }
     
-        term small(x: U32) {
+        function small(x: U32) -> Bool {
             smaller_than(10, x) && smaller_than(x, 20)
         }
 
@@ -147,7 +148,7 @@ fn calling_term() {
 fn anonymous_record() {
     let p = compile::<u32, Result<(), ()>>(
         "
-        term in_range(x: U32, low: U32, high: U32) {
+        function in_range(x: U32, low: U32, high: U32) -> Bool {
             low < x && x < high
         }
 
@@ -179,7 +180,7 @@ fn typed_record() {
             high: U32,
         }
 
-        term in_range(x: U32, c: Range) {
+        function in_range(x: U32, c: Range) -> Bool {
             c.low < x && x < c.high
         }
 

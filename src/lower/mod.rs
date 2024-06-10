@@ -123,34 +123,15 @@ impl<'r> Lowerer<'r> {
                             .filter_map(x),
                     );
                 }
-                ast::Declaration::Term(ast::TermDeclaration {
+                ast::Declaration::Function(ast::FunctionDeclaration {
                     ident,
                     params,
                     body,
+                    ret,
                 }) => {
                     functions.push(
                         Lowerer::new(runtime, type_info, ident.as_ref())
-                            .function(
-                                ident,
-                                params,
-                                Type::Primitive(Primitive::Bool),
-                                body,
-                            ),
-                    );
-                }
-                ast::Declaration::Action(ast::ActionDeclaration {
-                    ident,
-                    params,
-                    body,
-                }) => {
-                    functions.push(
-                        Lowerer::new(runtime, type_info, ident.as_ref())
-                            .function(
-                                ident,
-                                params,
-                                Type::Primitive(Primitive::Unit),
-                                body,
-                            ),
+                            .function(ident, params, ret, body),
                     );
                 }
                 // Ignore the rest
@@ -222,7 +203,7 @@ impl<'r> Lowerer<'r> {
         mut self,
         ident: &Meta<Identifier>,
         params: &Meta<ast::Params>,
-        return_type: Type,
+        return_type: &Option<Meta<Identifier>>,
         body: &ast::Block,
     ) -> Function {
         let ident = self.type_info.full_name(ident);
@@ -235,6 +216,11 @@ impl<'r> Lowerer<'r> {
                 (self.type_info.full_name(x), self.type_info.type_of(x))
             })
             .collect();
+
+        let return_type = match return_type {
+            Some(ret) => self.type_info.resolve(&Type::Name(ret.to_string())),
+            None => Type::Primitive(Primitive::Unit),
+        };
 
         let last = self.block(body);
 
@@ -292,7 +278,7 @@ impl<'r> Lowerer<'r> {
                 let ty = self.type_info.type_of(ident);
                 let ident = self.type_info.full_name(ident);
 
-                let (Type::Term(params) | Type::Action(params)) = ty else {
+                let Type::Function(params, _) = ty else {
                     panic!("This shouldn't have passed typechecking");
                 };
 

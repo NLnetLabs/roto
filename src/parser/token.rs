@@ -63,8 +63,6 @@ pub enum Token<'s> {
     // === Keywords ===
     #[token("accept")]
     Accept,
-    #[token("action")]
-    Action,
     #[token("apply")]
     Apply,
     #[token("contains")]
@@ -79,6 +77,8 @@ pub enum Token<'s> {
     FilterMap,
     #[token("filter")]
     Filter,
+    #[token("function")]
+    Function,
     #[token("import")]
     Import,
     #[token("if")]
@@ -113,8 +113,6 @@ pub enum Token<'s> {
     Some,
     #[token("table")]
     Table,
-    #[token("term")]
-    Term,
     #[token("through")]
     Through,
     #[token("type")]
@@ -187,7 +185,6 @@ impl<'source> Display for Token<'source> {
             Token::AngleLeft => "<",
             Token::AngleRight => ">",
             Token::Accept => "accept",
-            Token::Action => "action",
             Token::Apply => "apply",
             Token::Contains => "contains",
             Token::Define => "define",
@@ -195,6 +192,7 @@ impl<'source> Display for Token<'source> {
             Token::Exact => "exact",
             Token::FilterMap => "filter-map",
             Token::Filter => "filter",
+            Token::Function => "function",
             Token::Import => "import",
             Token::If => "if",
             Token::In => "in",
@@ -212,7 +210,6 @@ impl<'source> Display for Token<'source> {
             Token::Rib => "rib",
             Token::Some => "some",
             Token::Table => "table",
-            Token::Term => "term",
             Token::Through => "through",
             Token::Type => "type",
             Token::UpTo => "up-to",

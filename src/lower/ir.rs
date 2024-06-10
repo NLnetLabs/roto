@@ -98,7 +98,7 @@ pub enum Instruction {
         args: Vec<Operand>,
     },
 
-    /// Return from the current "function" (filter-map, term or action)
+    /// Return from the current function (or filter-map)
     Return(Operand),
 
     /// Exit the filter-map with an accept or reject

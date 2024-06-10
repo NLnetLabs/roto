@@ -1,6 +1,4 @@
-use crate::ast::{
-    ActionDeclaration, Declaration, Identifier, SyntaxTree, TermDeclaration,
-};
+use crate::ast::{Declaration, FunctionDeclaration, Identifier, SyntaxTree};
 use logos::{Lexer, SpannedIter};
 use std::{fmt::Display, iter::Peekable};
 use token::Token;
@@ -335,12 +333,11 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             Token::Type => {
                 Declaration::Record(self.record_type_assignment()?)
             }
-            Token::Action => Declaration::Action(self.action()?),
-            Token::Term => Declaration::Term(self.term()?),
+            Token::Function => Declaration::Function(self.function()?),
             _ => {
                 let (token, span) = self.next()?;
                 return Err(ParseError::expected(
-                    "a term, action, rib, table, output-stream, filter or filter-map",
+                    "a function, rib, table, output-stream, filter or filter-map",
                     token,
                     span,
                 ));
@@ -352,31 +349,25 @@ impl<'source, 'spans> Parser<'source, 'spans> {
     /// Parse a term section
     ///
     /// ```ebnf
-    /// Term ::= Identifier For? With? '{' TermScope '}'
+    /// Function ::= 'function' Identifier '{' Body '}'
     /// ```
-    fn term(&mut self) -> ParseResult<TermDeclaration> {
-        self.take(Token::Term)?;
+    fn function(&mut self) -> ParseResult<FunctionDeclaration> {
+        self.take(Token::Function)?;
         let ident = self.identifier()?;
         let params = self.params()?;
+        
+        let ret = if self.next_is(Token::Arrow) {
+            Some(self.identifier()?)
+        } else {
+            None
+        };
         let body = self.block()?;
 
-        Ok(TermDeclaration {
+        Ok(FunctionDeclaration {
             ident,
             params,
             body,
-        })
-    }
-
-    pub(super) fn action(&mut self) -> ParseResult<ActionDeclaration> {
-        self.take(Token::Action)?;
-        let ident = self.identifier()?;
-        let params = self.params()?;
-        let body = self.block()?;
-
-        Ok(ActionDeclaration {
-            ident,
-            params,
-            body,
+            ret,
         })
     }
 }

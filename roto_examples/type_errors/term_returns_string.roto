@@ -1,10 +1,10 @@
+function bar() -> Bool {
+    return "hello"
+}
+
 filter foo() {
     define {
         rx msg: U32;
-    }
-
-    term bar() {
-        return "hello"
     }
 
     apply { accept }
