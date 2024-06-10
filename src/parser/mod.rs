@@ -355,7 +355,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         self.take(Token::Function)?;
         let ident = self.identifier()?;
         let params = self.params()?;
-        
+
         let ret = if self.next_is(Token::Arrow) {
             Some(self.identifier()?)
         } else {

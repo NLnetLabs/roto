@@ -94,7 +94,9 @@ impl Display for Type {
                 write!(f, "function({}) -> {}", fmt_args(args), ret)
             }
             Type::Filter(args) => write!(f, "filter({})", fmt_args(args)),
-            Type::FilterMap(args) => write!(f, "filter-map({})", fmt_args(args)),
+            Type::FilterMap(args) => {
+                write!(f, "filter-map({})", fmt_args(args))
+            }
             Type::Name(x) => write!(f, "{x}"),
         }
     }

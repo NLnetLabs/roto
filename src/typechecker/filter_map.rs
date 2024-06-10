@@ -5,7 +5,10 @@ use crate::{
 };
 
 use super::{
-    expr::Context, scope::Scope, types::{Primitive, Type}, TypeChecker, TypeResult,
+    expr::Context,
+    scope::Scope,
+    types::{Primitive, Type},
+    TypeChecker, TypeResult,
 };
 
 impl TypeChecker<'_, '_> {
