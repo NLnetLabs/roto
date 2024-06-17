@@ -453,3 +453,37 @@ fn can_we_misalign_stack_slots() {
 
     assert_eq!(f.call(()), true as i8);
 }
+
+#[test]
+fn returning_a_record() {
+    let s = "
+        type Foo { x: I32, y: I32, z: I32 }
+
+        function make_foo(x: I32) -> Foo {
+            Foo { x: x, y: 1, z: 2 }
+        }
+
+        filter-map main(rx: I32) {
+            define {
+                x = make_foo(rx);
+                y = make_foo(1);
+            }
+            apply {
+                if rx == x.x {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
+
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(i32,), i8>("main")
+        .expect("No function found (or mismatched types)");
+
+    assert_eq!(f.call((5,)), true as i8);
+    assert_eq!(f.call((4,)), true as i8);
+}

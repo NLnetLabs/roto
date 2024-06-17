@@ -1,22 +1,198 @@
 //! Evaluate HIR programs
+//!
+//! This is mostly used for testing purposes, since this evaluation is
+//! fairly slow. This is because all variables at this point are identified
+//! by strings and therefore stored as a hashmap.
 
-use std::collections::HashMap;
-
-use log::trace;
-
+use super::ir::{Function, Operand, Var};
 use crate::lower::{
     ir::{Instruction, IntCmp},
-    value::{Value, Verdict},
+    value::IrValue,
 };
+use log::trace;
+use std::collections::HashMap;
 
-use super::{
-    ir::{Function, Operand, Var},
-    value::SafeValue,
-};
+/// Memory for the IR evaluation
+///
+/// This matches the
+///
+/// The IR evaluation is meant to be close to the native execution, but with
+/// additional safety guarantees, not just to check programs, but mostly to
+/// check correctness of the compiler. To achieve this, we store more
+/// metadata for each allocation.
+///
+/// A pointer consists of:
+///
+///  - a stack frame index,
+///  - a stack frame id,
+///  - an allocation index, and
+///  - an offset
+///
+/// When we read or write from a pointer, we do the following steps:
+///
+///  1. Get the stack frame at the given index.
+///  2. Check whether the id matches.
+///  3. Read the allocation at the allocation index.
+///  4. Check that the access is in bounds (i.e. `offset + size < len`).
+///  5. Check that the access is aligned (i.e. `offset % size == 0`)
+///
+/// This guarantees most of the properties that we would like to check:
+///
+///  - No use after free.
+///  - No unaligned accesses.
+///  - No out of bounds accesses.
+///
+/// Of course these are only checked at runtime, not statically enforced.
+/// But it provides a good mechanism for testing the compiler.
+#[derive(Debug)]
+pub struct Memory {
+    id_counter: usize,
+    stack: Vec<StackFrame>,
+    pointers: Vec<Pointer>,
+}
 
+#[derive(Clone, Debug)]
+pub struct Pointer {
+    stack_index: usize,
+    stack_id: usize,
+    allocation_index: usize,
+    allocation_offset: usize,
+}
+
+#[derive(Debug)]
 struct StackFrame {
+    id: usize,
     return_address: usize,
-    return_place: Var,
+    return_place: Option<Var>,
+    allocations: Vec<Allocation>,
+}
+
+#[derive(Debug)]
+struct Allocation {
+    inner: Vec<u8>,
+}
+
+impl Pointer {
+    fn offset_by(&self, offset: usize) -> Self {
+        Self {
+            allocation_offset: self.allocation_offset + offset,
+            ..self.clone()
+        }
+    }
+}
+
+impl Default for Memory {
+    fn default() -> Self {
+        Self {
+            id_counter: 1,
+            pointers: Vec::new(),
+            stack: vec![StackFrame {
+                id: 0,
+                return_address: 0,
+                return_place: None,
+                allocations: Vec::new(),
+            }],
+        }
+    }
+}
+
+impl Memory {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn copy(&mut self, to: usize, from: usize, size: usize) {
+        let data: Vec<_> = self.read(from, size).into();
+        self.write(to, &data);
+    }
+
+    pub fn write(&mut self, p: usize, val: &[u8]) {
+        let p = &self.pointers[p];
+        let frame = &mut self.stack[p.stack_index];
+        assert_eq!(frame.id, p.stack_id);
+        frame.write(p, val)
+    }
+
+    pub fn read(&self, p: usize, size: usize) -> &[u8] {
+        let p = &self.pointers[p];
+        let frame = &self.stack[p.stack_index];
+        assert_eq!(frame.id, p.stack_id);
+        frame.read(p, size)
+    }
+
+    fn push_frame(
+        &mut self,
+        return_address: usize,
+        return_place: Option<Var>,
+    ) {
+        let id = self.id_counter;
+        self.id_counter += 1;
+        self.stack.push(StackFrame {
+            id,
+            return_address,
+            return_place,
+            allocations: Vec::new(),
+        });
+    }
+
+    fn pop_frame(&mut self) -> Option<StackFrame> {
+        // Keep the root, because it's values provided by the runtime
+        if self.stack.len() == 1 {
+            return None;
+        }
+        self.stack.pop()
+    }
+
+    fn offset_by(&mut self, p: usize, offset: usize) -> usize {
+        let p = &self.pointers[p];
+        self.pointers.push(p.offset_by(offset));
+        self.pointers.len() - 1
+    }
+
+    pub fn allocate(&mut self, bytes: usize) -> usize {
+        let stack_index = self.stack.len() - 1;
+        let frame = &mut self.stack[stack_index];
+        let stack_id = frame.id;
+        let allocation_index = frame.allocations.len();
+        frame.allocations.push(Allocation {
+            inner: vec![0; bytes],
+        });
+        self.pointers.push(Pointer {
+            stack_index,
+            stack_id,
+            allocation_index,
+            allocation_offset: 0,
+        });
+        self.pointers.len() - 1
+    }
+}
+
+impl StackFrame {
+    fn write(&mut self, p: &Pointer, val: &[u8]) {
+        let alloc = &mut self.allocations[p.allocation_index];
+        alloc.write(p.allocation_offset, val);
+    }
+
+    fn read(&self, p: &Pointer, size: usize) -> &[u8] {
+        let alloc = &self.allocations[p.allocation_index];
+        alloc.read(p.allocation_offset, size)
+    }
+}
+
+impl Allocation {
+    fn write(&mut self, offset: usize, val: &[u8]) {
+        assert!(offset + val.len() <= self.inner.len(), "memory access out of bounds");
+        assert!(offset % val.len() == 0, "memory access is unaligned");
+
+        self.inner[offset..offset + val.len()].copy_from_slice(val);
+    }
+
+    fn read(&self, offset: usize, size: usize) -> &[u8] {
+        assert!(offset + size <= self.inner.len(), "memory access out of bounds");
+        assert!(offset % size == 0, "memory access is unaligned");
+
+        &self.inner[offset..offset + size]
+    }
 }
 
 /// Evaluate HIR
@@ -27,12 +203,15 @@ struct StackFrame {
 pub fn eval(
     p: &[Function],
     filter_map: &str,
-    rx: Vec<SafeValue>,
-) -> SafeValue {
+    mem: &mut Memory,
+    rx: Vec<IrValue>,
+) -> Option<IrValue> {
     let f = p
         .iter()
         .find(|f| f.name == "main")
         .expect("Need a main function!");
+
+    eprintln!("{}", &f);
     let parameters = f.parameters.clone();
 
     // Make the program easier to work with by collecting all instructions
@@ -46,15 +225,14 @@ pub fn eval(
     }
 
     // This is our working memory for the interpreter
-    let mut mem = HashMap::new();
+    let mut vars = HashMap::<Var, IrValue>::new();
 
     // Insert the rx value
     assert_eq!(parameters.len(), rx.len());
     for ((x, _), v) in parameters.iter().zip(rx) {
-        mem.insert(Var { var: x.into() }, v);
+        vars.insert(Var { var: x.into() }, v);
     }
 
-    let mut stack = Vec::new();
     let mut program_counter = block_map[filter_map];
 
     loop {
@@ -70,7 +248,7 @@ pub fn eval(
                 branches,
                 default,
             } => {
-                let val = eval_operand(&mem, examinee);
+                let val = eval_operand(&vars, examinee);
                 let x = val.switch_on() as usize;
 
                 let label = branches
@@ -81,8 +259,8 @@ pub fn eval(
                 continue;
             }
             Instruction::Assign { to, val, .. } => {
-                let val = eval_operand(&mem, val);
-                mem.insert(to.clone(), val.clone());
+                let val = eval_operand(&vars, val);
+                vars.insert(to.clone(), val.clone());
             }
             Instruction::Call {
                 to,
@@ -90,13 +268,10 @@ pub fn eval(
                 func,
                 args,
             } => {
-                stack.push(StackFrame {
-                    return_address: program_counter,
-                    return_place: to.clone(),
-                });
+                mem.push_frame(program_counter, to.clone());
                 for (name, arg) in args {
-                    let val = eval_operand(&mem, arg);
-                    mem.insert(
+                    let val = eval_operand(&vars, arg);
+                    vars.insert(
                         Var {
                             var: format!("{func}::{name}"),
                         },
@@ -114,33 +289,29 @@ pub fn eval(
             } => {
                 let args: Vec<_> = args
                     .iter()
-                    .map(|a| eval_operand(&mem, a).clone())
+                    .map(|a| eval_operand(&vars, a).clone())
                     .collect();
                 let val = func.call(args);
-                mem.insert(to.clone(), val);
+                vars.insert(to.clone(), val);
             }
             Instruction::Return(ret) => {
-                let val = eval_operand(&mem, ret);
+                let val =
+                    ret.as_ref().map(|r| eval_operand(&vars, r).clone());
                 if let Some(StackFrame {
+                    id: _,
+                    allocations: _,
                     return_address,
                     return_place,
-                }) = stack.pop()
+                }) = mem.pop_frame()
                 {
-                    mem.insert(return_place, val.clone());
+                    if let Some(val) = val {
+                        vars.insert(return_place.unwrap(), val.clone());
+                    }
                     program_counter = return_address + 1;
                     continue;
                 } else {
-                    return val.clone();
+                    return val;
                 }
-            }
-            Instruction::Exit(b, ret) => {
-                let val = eval_operand(&mem, ret);
-                let verdict = if *b {
-                    Verdict::Accept(val.clone())
-                } else {
-                    Verdict::Reject(val.clone())
-                };
-                return SafeValue::Verdict(Box::new(verdict));
             }
             Instruction::Cmp {
                 to,
@@ -148,8 +319,8 @@ pub fn eval(
                 left,
                 right,
             } => {
-                let left = eval_operand(&mem, left);
-                let right = eval_operand(&mem, right);
+                let left = eval_operand(&vars, left);
+                let right = eval_operand(&vars, right);
                 let res = match cmp {
                     IntCmp::Eq => left == right,
                     IntCmp::Ne => left != right,
@@ -162,66 +333,65 @@ pub fn eval(
                     IntCmp::SGt => left.as_i32() > right.as_i32(),
                     IntCmp::SGe => left.as_i32() >= right.as_i32(),
                 };
-                mem.insert(to.clone(), SafeValue::Bool(res));
+                vars.insert(to.clone(), IrValue::Bool(res));
             }
             Instruction::Eq { to, left, right } => {
-                let left = eval_operand(&mem, left);
-                let right = eval_operand(&mem, right);
-                mem.insert(to.clone(), SafeValue::Bool(left.eq(right)));
+                let left = eval_operand(&vars, left);
+                let right = eval_operand(&vars, right);
+                vars.insert(to.clone(), IrValue::Bool(left.eq(right)));
             }
             Instruction::Not { to, val } => {
-                let val = eval_operand(&mem, val).as_bool();
-                mem.insert(to.clone(), SafeValue::Bool(val));
+                let val = eval_operand(&vars, val).as_bool();
+                vars.insert(to.clone(), IrValue::Bool(val));
             }
             Instruction::And { to, left, right } => {
-                let left = eval_operand(&mem, left).as_bool();
-                let right = eval_operand(&mem, right).as_bool();
-                mem.insert(to.clone(), SafeValue::Bool(left && right));
+                let left = eval_operand(&vars, left).as_bool();
+                let right = eval_operand(&vars, right).as_bool();
+                vars.insert(to.clone(), IrValue::Bool(left && right));
             }
             Instruction::Or { to, left, right } => {
-                let left = eval_operand(&mem, left).as_bool();
-                let right = eval_operand(&mem, right).as_bool();
-                mem.insert(to.clone(), SafeValue::Bool(left || right));
+                let left = eval_operand(&vars, left).as_bool();
+                let right = eval_operand(&vars, right).as_bool();
+                vars.insert(to.clone(), IrValue::Bool(left || right));
             }
-            Instruction::AccessRecord {
-                to, record, field, ..
-            } => {
-                let record = eval_operand(&mem, record);
-                let SafeValue::Record(record) = record else {
-                    panic!("Should have been caught in typechecking")
+            Instruction::Offset { to, from, offset } => {
+                let &IrValue::Pointer(from) = eval_operand(&vars, from)
+                else {
+                    panic!()
                 };
-                let (_, val) =
-                    record.iter().find(|(s, _)| s == field).unwrap();
-                mem.insert(to.clone(), val.clone());
+                let new = mem.offset_by(from, *offset as usize);
+                vars.insert(to.clone(), IrValue::Pointer(new));
             }
-            Instruction::CreateRecord { to, fields, .. } => {
-                let fields = fields
-                    .iter()
-                    .map(|(s, op)| (s.into(), eval_operand(&mem, op).clone()))
-                    .collect();
-                mem.insert(to.clone(), SafeValue::Record(fields));
+            Instruction::Alloc { to, size } => {
+                let pointer = mem.allocate(*size as usize);
+                vars.insert(to.clone(), IrValue::Pointer(pointer));
             }
-            Instruction::CreateEnum {
-                to, variant, data, ..
-            } => {
-                let val = data
-                    .as_ref()
-                    .map(|d| Box::new(eval_operand(&mem, d).clone()));
-                mem.insert(to.clone(), SafeValue::Enum(*variant, val));
-            }
-            Instruction::AccessEnum { to, from, .. } => {
-                let val = eval_operand(&mem, from);
-                let SafeValue::Enum(_, Some(data)) = val else {
-                    panic!("Should have been caught in typechecking")
+            Instruction::Write { to, val } => {
+                let &IrValue::Pointer(to) = eval_operand(&vars, to) else {
+                    panic!()
                 };
-                mem.insert(to.clone(), data.as_ref().clone());
+                let val = eval_operand(&vars, val);
+                mem.write(to, &val.as_vec())
             }
-            Instruction::EnumDiscriminant { to, from } => {
-                let val = eval_operand(&mem, from);
-                let SafeValue::Enum(discriminant, _) = val else {
-                    panic!("Should have been caught in typechecking")
+            Instruction::Read { to, from, ty } => {
+                let &IrValue::Pointer(from) = eval_operand(&vars, from)
+                else {
+                    panic!()
                 };
-                mem.insert(to.clone(), SafeValue::from(*discriminant));
+                let size = ty.bytes();
+                let res = mem.read(from, size);
+                let val = IrValue::from_slice(ty, res);
+                vars.insert(to.clone(), val);
+            }
+            Instruction::Copy { to, from, size } => {
+                let &IrValue::Pointer(to) = eval_operand(&vars, to) else {
+                    panic!()
+                };
+                let &IrValue::Pointer(from) = eval_operand(&vars, from)
+                else {
+                    panic!()
+                };
+                mem.copy(to, from, *size as usize);
             }
         }
 
@@ -230,13 +400,16 @@ pub fn eval(
 }
 
 fn eval_operand<'a>(
-    mem: &'a HashMap<Var, SafeValue>,
+    mem: &'a HashMap<Var, IrValue>,
     op: &'a Operand,
-) -> &'a SafeValue {
+) -> &'a IrValue {
     match op {
-        Operand::Place(p) => mem
-            .get(p)
-            .unwrap_or_else(|| panic!("No value was found for place {p}")),
+        Operand::Place(p) => {
+            let Some(v) = mem.get(p) else {
+                panic!("No value was found for place {p}")
+            };
+            v
+        }
         Operand::Value(v) => v,
     }
 }

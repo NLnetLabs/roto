@@ -60,6 +60,9 @@ pub struct TypeInfo {
     /// Builtin methods
     methods: HashMap<MetaId, WrappedFunction>,
     diverges: HashMap<MetaId, bool>,
+    /// Type for return/accept/reject that it constructs and returns.
+    return_types: HashMap<MetaId, Type>,
+    pointer_bytes: u32,
 }
 
 impl TypeInfo {
@@ -76,12 +79,12 @@ impl TypeInfo {
         self.diverges[&x.into()]
     }
 
-    pub fn offset_of(
-        &mut self,
-        record: &Type,
-        field: &str,
-        pointer_bytes: u32,
-    ) -> (Type, u32) {
+    pub fn return_type_of(&mut self, x: impl Into<MetaId>) -> Type {
+        let ty = self.return_types[&x.into()].clone();
+        self.resolve(&ty)
+    }
+
+    pub fn offset_of(&mut self, record: &Type, field: &str) -> (Type, u32) {
         let record = self.resolve(record);
         let (Type::Record(fields)
         | Type::RecordVar(_, fields)
@@ -94,39 +97,34 @@ impl TypeInfo {
         for (name, ty) in fields {
             // Here, we align the offset to the natural alignment of each
             // type.
-            offset += self.padding_of(&ty, offset, pointer_bytes);
+            offset += self.padding_of(&ty, offset);
             if name == field {
                 return (ty, offset);
             }
-            offset += self.size_of(&ty, pointer_bytes);
+            offset += self.size_of(&ty);
         }
         panic!("Field not found")
     }
 
-    pub fn padding_of(
-        &mut self,
-        ty: &Type,
-        offset: u32,
-        pointer_bytes: u32,
-    ) -> u32 {
-        let alignment = self.alignment_of(ty, pointer_bytes);
-        if offset & alignment > 0 {
+    pub fn padding_of(&mut self, ty: &Type, offset: u32) -> u32 {
+        let alignment = self.alignment_of(ty);
+        if offset % alignment > 0 {
             alignment - (offset % alignment)
         } else {
             0
         }
     }
 
-    pub fn alignment_of(&mut self, ty: &Type, pointer_bytes: u32) -> u32 {
+    pub fn alignment_of(&mut self, ty: &Type) -> u32 {
         match self.resolve(ty) {
             Type::RecordVar(_, fields)
             | Type::Record(fields)
             | Type::NamedRecord(_, fields) => fields
                 .iter()
-                .map(|f| self.alignment_of(&f.1, pointer_bytes))
+                .map(|f| self.alignment_of(&f.1))
                 .max()
                 .unwrap_or(1),
-            ty => self.size_of(&ty, pointer_bytes),
+            ty => self.size_of(&ty),
         }
     }
 
@@ -158,7 +156,7 @@ impl TypeInfo {
         t
     }
 
-    pub fn size_of(&mut self, t: &Type, pointer_bytes: u32) -> u32 {
+    pub fn size_of(&mut self, t: &Type) -> u32 {
         let t = self.resolve(t);
         match t {
             // Never is zero-sized
@@ -171,8 +169,7 @@ impl TypeInfo {
             | Type::RecordVar(_, fields) => {
                 let mut size = 0;
                 for (_, ty) in &fields {
-                    size += self.size_of(ty, pointer_bytes)
-                        + self.padding_of(ty, size, pointer_bytes);
+                    size += self.size_of(ty) + self.padding_of(ty, size);
                 }
                 size
             }
@@ -180,10 +177,7 @@ impl TypeInfo {
                 fields
                     .iter()
                     .flat_map(|f| &f.1)
-                    .map(|ty| {
-                        self.size_of(ty, pointer_bytes)
-                            + self.padding_of(ty, 1, pointer_bytes)
-                    })
+                    .map(|ty| self.size_of(ty) + self.padding_of(ty, 1))
                     .max()
                     .unwrap_or(0)
                     + 1 // add the discriminant
@@ -193,7 +187,7 @@ impl TypeInfo {
             | Type::Table(_)
             | Type::OutputStream(_)
             | Type::Rib(_)
-            | Type::BuiltIn(..) => pointer_bytes,
+            | Type::BuiltIn(..) => self.pointer_bytes,
             _ => 0,
         }
     }

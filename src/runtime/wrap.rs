@@ -1,8 +1,8 @@
 use std::{fmt::Debug, rc::Rc};
 
-use crate::lower::value::SafeValue;
+use crate::lower::value::IrValue;
 
-type SafeFn = Rc<dyn for<'f> Fn(&'f [SafeValue]) -> SafeValue>;
+type SafeFn = Rc<dyn for<'f> Fn(&'f [IrValue]) -> IrValue>;
 
 /// A function that can be referenced by Roto scripts
 ///
@@ -22,7 +22,7 @@ pub struct WrappedFunction {
 
 impl WrappedFunction {
     /// Call the safe wrapper of the function
-    pub fn call(&self, vals: impl AsRef<[SafeValue]>) -> SafeValue {
+    pub fn call(&self, vals: impl AsRef<[IrValue]>) -> IrValue {
         self.safe.as_ref()(vals.as_ref())
     }
 }
@@ -77,7 +77,7 @@ macro_rules! wrap {
                     let $arg = $arg.downcast_ref().unwrap();
                 )*
                 let u = $name($($crate::conversion!($ref $arg)),*);
-                $crate::lower::value::SafeValue::from_any(Box::new(u))
+                $crate::lower::value::IrValue::from_any(Box::new(u))
             }),
         }
     }};

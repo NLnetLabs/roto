@@ -1,5 +1,5 @@
 use clap::Parser;
-use roto::SafeValue;
+use roto::{IrValue, Memory};
 
 #[derive(Parser)]
 struct Cli {
@@ -17,14 +17,16 @@ fn main() {
     let settings = Cli::parse();
 
     let rx = match settings.rx.as_ref().map(AsRef::as_ref) {
-        Some("true") => SafeValue::Bool(true),
-        Some("false") => SafeValue::Bool(false),
-        Some(x) => SafeValue::U32(x.parse().unwrap()),
-        _ => SafeValue::Unit,
+        Some("true") => vec![IrValue::Bool(true)],
+        Some("false") => vec![IrValue::Bool(false)],
+        Some(x) => vec![IrValue::U32(x.parse().unwrap())],
+        _ => vec![],
     };
-    let result = roto::run(settings.files, rx);
-    match result {
-        Ok(r) => println!("{r}"),
-        Err(e) => eprintln!("{e}"),
-    }
+
+    let mut mem = Memory::new();
+    let _result = roto::run(settings.files, &mut mem, rx);
+    // match result {
+    //     Ok(r) => println!("{r}"),
+    //     Err(e) => eprintln!("{e}"),
+    // }
 }

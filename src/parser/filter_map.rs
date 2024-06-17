@@ -10,7 +10,7 @@ impl<'source> Parser<'source, '_> {
     ///
     /// ```ebnf
     /// FilterMap ::= ( 'filter-map' | 'filter' ) Identifier
-    ///               For? With? FilterMapBody
+    ///               FilterMapBody
     /// ```
     pub(super) fn filter_map(&mut self) -> ParseResult<FilterMap> {
         let (token, span) = self.next()?;

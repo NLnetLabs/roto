@@ -3,7 +3,12 @@
 use crate::{
     ast,
     codegen::{self, Module},
-    lower::{self, eval, ir, value::SafeValue},
+    lower::{
+        self,
+        eval::{self, Memory},
+        ir,
+        value::IrValue,
+    },
     parser::{
         meta::{Span, Spans},
         ParseError, Parser,
@@ -61,7 +66,6 @@ pub struct TypeChecked {
 /// Compiler stage: HIR
 pub struct Lowered {
     runtime: Runtime,
-    type_info: TypeInfo,
     pub ir: Vec<ir::Function>,
 }
 
@@ -158,26 +162,15 @@ impl std::error::Error for RotoReport {}
 /// Compile and run a Roto script from a file
 pub fn run(
     files: impl IntoIterator<Item = String>,
-    rx: SafeValue,
-) -> Result<SafeValue, RotoReport> {
+    mem: &mut Memory,
+    rx: Vec<IrValue>,
+) -> Result<Option<IrValue>, RotoReport> {
     let lowered = read_files(files)?.parse()?.typecheck()?.lower();
     for f in &lowered.ir {
         println!("{}", f);
     }
 
-    let res = lowered.eval(rx.clone());
-    let compiled = lowered.codegen();
-
-    let res2 = match &rx {
-        SafeValue::U32(x) => {
-            let main =
-                compiled.module.get_function::<(u32,), u32>("main").unwrap();
-            SafeValue::from(main.call((*x,)))
-        }
-        _ => panic!("Not the right type"),
-    };
-
-    assert_eq!(res, res2);
+    let res = lowered.eval(mem, rx);
     Ok(res)
 }
 
@@ -311,22 +304,17 @@ impl TypeChecked {
             mut type_infos,
         } = self;
         let ir = lower::lower(&runtime, &trees[0], &mut type_infos[0]);
-        Lowered {
-            ir,
-            runtime,
-            type_info: type_infos.remove(0),
-        }
+        Lowered { ir, runtime }
     }
 }
 
 impl Lowered {
-    pub fn eval(&self, rx: SafeValue) -> SafeValue {
-        eval::eval(&self.ir, "main", vec![rx])
+    pub fn eval(&self, mem: &mut Memory, rx: Vec<IrValue>) -> Option<IrValue> {
+        eval::eval(&self.ir, "main", mem, rx)
     }
 
-    pub fn codegen(mut self) -> Compiled {
-        let module =
-            codegen::codegen(&self.ir, &mut self.type_info, &self.runtime);
+    pub fn codegen(self) -> Compiled {
+        let module = codegen::codegen(&self.ir, &self.runtime);
         Compiled {
             runtime: self.runtime,
             module,

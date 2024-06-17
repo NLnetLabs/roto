@@ -8,6 +8,7 @@ pub(crate) mod typechecker;
 pub(crate) mod pipeline;
 pub(crate) mod runtime;
 
-pub use lower::value::SafeValue;
+pub use lower::value::IrValue;
+pub use lower::eval::Memory;
 pub use pipeline::*;
 pub use runtime::{Runtime, RuntimeMethod, RuntimeType};

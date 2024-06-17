@@ -121,7 +121,11 @@ impl TypeChecker<'_, '_> {
                 };
 
                 if let Some(e) = e {
-                    self.expr(scope, &ctx.with_type(expected_type), e)?;
+                    self.expr(
+                        scope,
+                        &ctx.with_type(expected_type.clone()),
+                        e,
+                    )?;
                 } else {
                     self.unify(
                         &expected_type,
@@ -130,6 +134,14 @@ impl TypeChecker<'_, '_> {
                         None,
                     )?;
                 }
+
+                self.type_info.return_types.insert(
+                    id,
+                    ctx.function_return_type
+                        .as_ref()
+                        .unwrap_or(&Type::Primitive(Primitive::Unit))
+                        .clone(),
+                );
 
                 Ok(true)
             }

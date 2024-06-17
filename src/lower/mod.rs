@@ -12,6 +12,7 @@ mod test_eval;
 
 use ir::{Block, Function, Instruction, Operand, Var};
 use std::{collections::HashMap, net::IpAddr};
+use value::IrType;
 
 use crate::{
     ast::{self, Identifier, Literal},
@@ -23,7 +24,14 @@ use crate::{
     },
 };
 
-use self::value::SafeValue;
+use self::value::IrValue;
+
+/// Internal compiler error
+macro_rules! ice {
+    () => {
+        panic!("ICE")
+    };
+}
 
 struct Lowerer<'r> {
     function_name: &'r str,
@@ -88,10 +96,7 @@ impl<'r> Lowerer<'r> {
         // the instruction we push will never be executed, so we just
         // omit it. This should be done by an optimizer as well but this
         // makes our initial generated code just a bit nicer.
-        if !matches!(
-            instructions.last(),
-            Some(Instruction::Return(_) | Instruction::Exit(..))
-        ) {
+        if !matches!(instructions.last(), Some(Instruction::Return(_))) {
             instructions.push(instruction);
         }
     }
@@ -156,11 +161,14 @@ impl<'r> Lowerer<'r> {
 
         self.new_block(&ident);
 
-        let parameters = params
+        let mut parameters: Vec<_> = params
             .0
             .iter()
             .map(|(x, _)| {
-                (self.type_info.full_name(x), self.type_info.type_of(x))
+                (
+                    self.type_info.full_name(x),
+                    lower_type(&self.type_info.type_of(x)),
+                )
             })
             .collect();
 
@@ -168,17 +176,32 @@ impl<'r> Lowerer<'r> {
             let val = self.expr(expr);
             let name = self.type_info.full_name(ident);
             let ty = self.type_info.type_of(ident);
-            self.add(Instruction::Assign {
-                to: Var { var: name },
-                val,
-                ty,
-            })
+            if ty != Type::Primitive(Primitive::Unit) {
+                let val = val.unwrap();
+                self.add(Instruction::Assign {
+                    to: Var { var: name },
+                    val,
+                    ty: lower_type(&ty),
+                })
+            }
         }
 
         let return_type = self.type_info.type_of(apply);
         let last = self.block(apply);
 
-        self.add(Instruction::Return(last.unwrap_or(SafeValue::Unit.into())));
+        self.add(Instruction::Return(last));
+
+        let return_type = match return_type {
+            Type::Primitive(Primitive::Unit) => None,
+            x if is_reference_type(&x) => {
+                parameters.insert(
+                    0,
+                    (format!("{ident}::$return"), IrType::Pointer),
+                );
+                None
+            }
+            x => Some(lower_type(&x)),
+        };
 
         Function {
             name: ident,
@@ -213,18 +236,21 @@ impl<'r> Lowerer<'r> {
             .0
             .iter()
             .map(|(x, _)| {
-                (self.type_info.full_name(x), self.type_info.type_of(x))
+                (
+                    self.type_info.full_name(x),
+                    lower_type(&self.type_info.type_of(x)),
+                )
             })
             .collect();
 
-        let return_type = match return_type {
-            Some(ret) => self.type_info.resolve(&Type::Name(ret.to_string())),
-            None => Type::Primitive(Primitive::Unit),
-        };
+        let return_type = return_type
+            .as_ref()
+            .map(|t| self.type_info.resolve(&Type::Name(t.to_string())))
+            .map(|t| lower_type(&t));
 
         let last = self.block(body);
 
-        self.add(Instruction::Return(last.unwrap_or(SafeValue::Unit.into())));
+        self.add(Instruction::Return(last));
 
         Function {
             name: ident,
@@ -245,7 +271,7 @@ impl<'r> Lowerer<'r> {
             self.expr(expr);
         }
 
-        block.last.as_ref().map(|last| self.expr(last))
+        block.last.as_ref().and_then(|last| self.expr(last))
     }
 
     /// Lower an expression
@@ -253,50 +279,113 @@ impl<'r> Lowerer<'r> {
     /// Returns either the value of the expression or the place where the
     /// value can be retrieved. The nested expressions will be lowered
     /// recursively.
-    fn expr(&mut self, expr: &Meta<ast::Expr>) -> Operand {
+    fn expr(&mut self, expr: &Meta<ast::Expr>) -> Option<Operand> {
         let id = expr.id;
         match &expr.node {
             ast::Expr::Return(kind, e) => {
-                let op = if let Some(e) = e {
-                    self.expr(e)
-                } else {
-                    SafeValue::Unit.into()
+                let op = e.as_ref().and_then(|e| self.expr(e.as_ref()));
+                let ty = self.type_info.return_type_of(id);
+
+                match kind {
+                    ast::ReturnKind::Return => {
+                        // TODO: Return reference types
+                        self.add(Instruction::Return(op))
+                    }
+                    ast::ReturnKind::Accept => {
+                        let Type::Verdict(accept_ty, _) = ty else {
+                            ice!()
+                        };
+
+                        let var = Var {
+                            var: format!("{}::$return", self.function_name),
+                        };
+
+                        self.write_field(
+                            var.clone().into(),
+                            0,
+                            IrValue::U8(1).into(),
+                            &Type::Primitive(Primitive::U8),
+                        );
+
+                        if let Some(op) = op {
+                            let offset =
+                                self.type_info.padding_of(&accept_ty, 1);
+
+                            self.write_field(
+                                var.into(),
+                                offset,
+                                op,
+                                &accept_ty,
+                            )
+                        }
+
+                        self.add(Instruction::Return(None));
+                    }
+                    ast::ReturnKind::Reject => {
+                        let Type::Verdict(_, reject_ty) = ty else {
+                            ice!()
+                        };
+
+                        let var = Var {
+                            var: format!("{}::$return", self.function_name),
+                        };
+
+                        self.write_field(
+                            var.clone().into(),
+                            0,
+                            IrValue::U8(0).into(),
+                            &Type::Primitive(Primitive::U8),
+                        );
+
+                        if let Some(op) = op {
+                            let offset =
+                                self.type_info.padding_of(&reject_ty, 1);
+
+                            self.write_field(
+                                var.into(),
+                                offset,
+                                op,
+                                &reject_ty,
+                            )
+                        }
+
+                        self.add(Instruction::Return(None));
+                    }
                 };
 
-                self.add(match kind {
-                    ast::ReturnKind::Return => Instruction::Return(op),
-                    ast::ReturnKind::Accept => Instruction::Exit(true, op),
-                    ast::ReturnKind::Reject => Instruction::Exit(false, op),
-                });
-
-                SafeValue::Unit.into()
+                None
             }
-            ast::Expr::Literal(l) => self.literal(l),
+            ast::Expr::Literal(l) => Some(self.literal(l)),
             ast::Expr::Match(m) => self.match_expr(m),
             ast::Expr::PrefixMatch(_) => todo!(),
             ast::Expr::FunctionCall(ident, args) => {
                 let ty = self.type_info.type_of(ident);
                 let ident = self.type_info.full_name(ident);
 
-                let Type::Function(params, _) = ty else {
-                    panic!("This shouldn't have passed typechecking");
+                let Type::Function(params, ret) = ty else {
+                    ice!();
                 };
 
                 let args = params
                     .iter()
                     .zip(&args.node)
-                    .map(|(p, a)| (p.0.to_string(), self.expr(a)))
+                    .flat_map(|(p, a)| Some((p.0.to_string(), self.expr(a)?)))
                     .collect();
 
-                let to = self.new_tmp();
+                let to = if *ret == Type::Primitive(Primitive::Unit) {
+                    None
+                } else {
+                    Some(self.new_tmp())
+                };
                 let ty = self.type_info.type_of(id);
                 self.add(Instruction::Call {
                     to: to.clone(),
-                    ty,
+                    ty: lower_type(&ty),
                     func: ident.clone(),
                     args,
                 });
-                to.into()
+
+                to.map(Into::into)
             }
             ast::Expr::MethodCall(receiver, m, args) => {
                 if let Some(ty) = self.type_info.enum_variant_constructor(id)
@@ -306,42 +395,63 @@ impl<'r> Lowerer<'r> {
                         args.iter().map(|a| self.expr(a)).collect();
 
                     let [arg] = &args[..] else {
-                        panic!("Should have been caught in typechecking");
+                        ice!();
                     };
-                    let Type::Enum(_, fields) = ty.clone() else {
-                        panic!("Should have been caught in typechecking");
+                    let Type::Enum(_, variants) = ty.clone() else {
+                        ice!();
                     };
-                    for (i, (f, _)) in fields.iter().enumerate() {
-                        if m.node == f {
-                            let to = self.new_tmp();
-                            self.add(Instruction::CreateEnum {
-                                to: to.clone(),
-                                variant: i as u8,
-                                data: Some(arg.clone()),
-                                ty,
-                            });
-                            return to.into();
-                        }
+
+                    let idx = variants
+                        .iter()
+                        .position(|(f, _)| m.node == f)
+                        .unwrap();
+
+                    let to = self.new_tmp();
+                    let size = self.type_info.size_of(&ty);
+                    self.add(Instruction::Alloc {
+                        to: to.clone(),
+                        size,
+                    });
+                    self.add(Instruction::Write {
+                        to: to.clone().into(),
+                        val: IrValue::U8(idx as u8).into(),
+                    });
+
+                    if let Some(arg) = arg {
+                        let offset = 1 + self.type_info.padding_of(&ty, 1);
+                        let tmp = self.new_tmp();
+                        self.add(Instruction::Offset {
+                            to: tmp.clone(),
+                            from: to.clone().into(),
+                            offset,
+                        });
+                        self.add(Instruction::Write {
+                            to: to.clone().into(),
+                            val: arg.clone(),
+                        })
                     }
-                    panic!("Should have been caught in typechecking")
+
+                    return Some(to.into());
                 }
 
                 // It's not a constructor, so it's a method call!
                 if let Some(f) = self.type_info.method(id) {
                     let f = f.clone();
                     let ty = self.type_info.type_of(id);
-                    let receiver = self.expr(receiver);
-                    let mut all_args = vec![receiver];
-                    all_args.extend(args.iter().map(|a| self.expr(a)));
+                    let mut all_args = Vec::new();
+                    if let Some(receiver) = self.expr(receiver) {
+                        all_args.push(receiver);
+                    }
+                    all_args.extend(args.iter().flat_map(|a| self.expr(a)));
 
                     let to = self.new_tmp();
                     self.add(Instruction::CallExternal {
                         to: to.clone(),
-                        ty,
+                        ty: lower_type(&ty),
                         func: f,
                         args: all_args,
                     });
-                    return to.into();
+                    return Some(to.into());
                 }
 
                 todo!("method was declared but missing definition")
@@ -350,68 +460,86 @@ impl<'r> Lowerer<'r> {
                 if let Some(ty) = self.type_info.enum_variant_constructor(id)
                 {
                     let ty = ty.clone();
-                    let Type::Enum(_, fields) = ty.clone() else {
-                        panic!("Should have been caught in typechecking");
+                    let Type::Enum(_, variants) = ty.clone() else {
+                        ice!()
                     };
-                    for (i, (f, _)) in fields.iter().enumerate() {
-                        if field.node == f {
-                            let to = self.new_tmp();
-                            self.add(Instruction::CreateEnum {
-                                to: to.clone(),
-                                variant: i as u8,
-                                data: None,
-                                ty,
-                            });
-                            return to.into();
-                        }
-                    }
-                    panic!("Should have been caught in typechecking")
+
+                    let size = self.type_info.size_of(&ty);
+
+                    let idx = variants
+                        .iter()
+                        .position(|(f, _)| field.node == f)
+                        .unwrap();
+
+                    let to = self.new_tmp();
+                    self.add(Instruction::Alloc {
+                        to: to.clone(),
+                        size,
+                    });
+
+                    self.add(Instruction::Write {
+                        to: to.clone().into(),
+                        val: IrValue::U8(idx as u8).into(),
+                    });
+
+                    Some(to.into())
                 } else {
                     let record_ty = self.type_info.type_of(&**e);
-                    let val = self.expr(e);
-                    let to = self.new_tmp();
-                    self.add(Instruction::AccessRecord {
-                        to: to.clone(),
-                        record: val,
-                        field: field.0.to_string(),
-                        record_ty,
-                    });
-                    to.into()
+                    let op = self.expr(e).unwrap();
+                    let (ty, offset) =
+                        self.type_info.offset_of(&record_ty, field.as_ref());
+                    Some(self.read_field(op, offset, &ty))
                 }
             }
             ast::Expr::Var(x) => {
                 let var = self.type_info.full_name(x);
-                Var { var }.into()
+                Some(Var { var }.into())
             }
             ast::Expr::TypedRecord(_, record) | ast::Expr::Record(record) => {
-                let fields = record
+                let ty = self.type_info.type_of(id);
+                let size = self.type_info.size_of(&ty);
+
+                let fields: Vec<(&str, _)> = record
                     .fields
                     .iter()
-                    .map(|(s, expr)| ((&s.0).into(), self.expr(expr)))
+                    .flat_map(|(s, expr)| {
+                        Some((s.0.as_ref(), self.expr(expr)?))
+                    })
                     .collect();
+
                 let to = self.new_tmp();
-                let ty = self.type_info.type_of(id);
-                self.add(Instruction::CreateRecord {
+                self.add(Instruction::Alloc {
                     to: to.clone(),
-                    fields,
-                    ty,
+                    size,
                 });
-                to.into()
+
+                for (field_name, field_operand) in fields {
+                    let (ty, offset) =
+                        self.type_info.offset_of(&ty, field_name);
+                    self.write_field(
+                        to.clone().into(),
+                        offset,
+                        field_operand,
+                        &ty,
+                    );
+                }
+
+                Some(to.into())
             }
             ast::Expr::List(_) => todo!(),
             ast::Expr::Not(e) => {
-                let val = self.expr(e);
+                let val = self.expr(e).unwrap();
                 let place = self.new_tmp();
                 self.add(Instruction::Not {
                     to: place.clone(),
                     val,
                 });
-                place.into()
+                Some(place.into())
             }
             ast::Expr::BinOp(left, op, right) => {
                 let ty = self.type_info.type_of(left.id);
-                let left = self.expr(left);
-                let right = self.expr(right);
+                let left = self.expr(left).unwrap();
+                let right = self.expr(right).unwrap();
 
                 let place = self.new_tmp();
                 match (op, binop_to_cmp(op, &ty), ty) {
@@ -420,7 +548,7 @@ impl<'r> Lowerer<'r> {
                             self.runtime.get_type(i).eq.as_ref().unwrap();
                         self.add(Instruction::CallExternal {
                             to: place.clone(),
-                            ty: Type::Primitive(Primitive::Bool),
+                            ty: IrType::Bool,
                             func: eq.clone(),
                             args: vec![left, right],
                         })
@@ -451,11 +579,12 @@ impl<'r> Lowerer<'r> {
                     _ => todo!(),
                 }
 
-                place.into()
+                Some(place.into())
             }
             ast::Expr::IfElse(condition, if_true, if_false) => {
-                let place = self.expr(condition);
+                let place = self.expr(condition).unwrap();
                 let res = self.new_tmp();
+                let mut any_assigned = false;
 
                 let diverges = self.type_info.diverges(id);
 
@@ -481,8 +610,9 @@ impl<'r> Lowerer<'r> {
                     self.add(Instruction::Assign {
                         to: res.clone(),
                         val: op,
-                        ty,
+                        ty: lower_type(&ty),
                     });
+                    any_assigned = true;
                 }
 
                 if !diverges {
@@ -496,19 +626,20 @@ impl<'r> Lowerer<'r> {
                         self.add(Instruction::Assign {
                             to: res.clone(),
                             val: op,
-                            ty,
+                            ty: lower_type(&ty),
                         });
+                        any_assigned = true;
                     }
                     if !diverges {
                         self.add(Instruction::Jump(lbl_cont.clone()));
                         self.new_block(&lbl_cont);
                     }
-                    res.into()
+                    any_assigned.then(|| res.into())
                 } else {
                     if !diverges {
                         self.new_block(&lbl_cont);
                     }
-                    SafeValue::Unit.into()
+                    None
                 }
             }
         }
@@ -523,15 +654,15 @@ impl<'r> Lowerer<'r> {
                     ast::IpAddress::Ipv4(x) => IpAddr::V4(x),
                     ast::IpAddress::Ipv6(x) => IpAddr::V6(x),
                 };
-                SafeValue::from_any(Box::new(
+                IrValue::from_any(Box::new(
                     routecore::addr::Prefix::new(addr, len.node).unwrap(),
                 ))
                 .into()
             }
-            Literal::PrefixLength(n) => SafeValue::U8(*n).into(),
-            Literal::Asn(n) => SafeValue::U32(*n).into(),
+            Literal::PrefixLength(n) => IrValue::U8(*n).into(),
+            Literal::Asn(n) => IrValue::U32(*n).into(),
             Literal::IpAddress(addr) => {
-                SafeValue::from_any(Box::new(match addr {
+                IrValue::from_any(Box::new(match addr {
                     ast::IpAddress::Ipv4(x) => IpAddr::V4(*x),
                     ast::IpAddress::Ipv6(x) => IpAddr::V6(*x),
                 }))
@@ -543,38 +674,132 @@ impl<'r> Lowerer<'r> {
             Literal::Integer(x) => {
                 let ty = self.type_info.type_of(lit);
                 match ty {
-                    Type::Primitive(Primitive::U8) => SafeValue::U8(*x as u8),
+                    Type::Primitive(Primitive::U8) => IrValue::U8(*x as u8),
                     Type::Primitive(Primitive::U16) => {
-                        SafeValue::U16(*x as u16)
+                        IrValue::U16(*x as u16)
                     }
                     Type::Primitive(Primitive::U32) => {
-                        SafeValue::U32(*x as u32)
+                        IrValue::U32(*x as u32)
                     }
-                    Type::Primitive(Primitive::I8) => SafeValue::I8(*x as i8),
+                    Type::Primitive(Primitive::I8) => IrValue::I8(*x as i8),
                     Type::Primitive(Primitive::I16) => {
-                        SafeValue::I16(*x as i16)
+                        IrValue::I16(*x as i16)
                     }
                     Type::Primitive(Primitive::I32) => {
-                        SafeValue::I32(*x as i32)
+                        IrValue::I32(*x as i32)
                     }
-                    Type::IntVar(_) => SafeValue::I32(*x as i32),
+                    Type::IntVar(_) => IrValue::I32(*x as i32),
                     _ => unreachable!("should be a type error: {ty}"),
                 }
                 .into()
             }
-            Literal::Bool(x) => SafeValue::Bool(*x).into(),
+            Literal::Bool(x) => IrValue::Bool(*x).into(),
         }
     }
+
+    fn write_field(
+        &mut self,
+        to: Operand,
+        offset: u32,
+        val: Operand,
+        ty: &Type,
+    ) {
+        let tmp = self.new_tmp();
+        self.add(Instruction::Offset {
+            to: tmp.clone(),
+            from: to,
+            offset,
+        });
+
+        if is_reference_type(ty) {
+            let size = self.type_info.size_of(ty);
+            self.add(Instruction::Copy {
+                to: tmp.into(),
+                from: val,
+                size,
+            });
+        } else {
+            self.add(Instruction::Write {
+                to: tmp.into(),
+                val,
+            })
+        }
+    }
+
+    fn read_field(
+        &mut self,
+        from: Operand,
+        offset: u32,
+        ty: &Type,
+    ) -> Operand {
+        let ty = self.type_info.resolve(ty);
+        let to = self.new_tmp();
+
+        if is_reference_type(&ty) {
+            self.add(Instruction::Offset {
+                to: to.clone(),
+                from,
+                offset,
+            })
+        } else {
+            let tmp = self.new_tmp();
+
+            self.add(Instruction::Offset {
+                to: tmp.clone(),
+                from,
+                offset,
+            });
+
+            self.add(Instruction::Read {
+                to: to.clone(),
+                from: tmp.into(),
+                ty: lower_type(&ty),
+            });
+        }
+
+        to.into()
+    }
+}
+
+fn lower_type(ty: &Type) -> IrType {
+    match ty {
+        Type::Primitive(Primitive::Bool) => IrType::Bool,
+        Type::Primitive(Primitive::U8) => IrType::U8,
+        Type::Primitive(Primitive::U16) => IrType::U16,
+        Type::Primitive(Primitive::U32) => IrType::U32,
+        Type::Primitive(Primitive::U64) => IrType::U64,
+        Type::Primitive(Primitive::I8) => IrType::I8,
+        Type::Primitive(Primitive::I16) => IrType::I16,
+        Type::Primitive(Primitive::I64) => IrType::I64,
+        Type::IntVar(_) => IrType::I32,
+        x if is_reference_type(x) => IrType::Pointer,
+        _ => panic!("could not lower: {ty}"),
+    }
+}
+
+fn is_reference_type(t: &Type) -> bool {
+    matches!(
+        t,
+        Type::Record(..)
+            | Type::RecordVar(..)
+            | Type::NamedRecord(..)
+            | Type::Enum(..)
+            | Type::Verdict(..)
+    )
 }
 
 fn binop_to_cmp(op: &ast::BinOp, ty: &Type) -> Option<ir::IntCmp> {
     let signed = match ty {
         Type::Primitive(p) => match p {
-            Primitive::U32
+            Primitive::U64
+            | Primitive::U32
             | Primitive::U16
             | Primitive::U8
             | Primitive::Bool => false,
-            Primitive::I32 | Primitive::I16 | Primitive::I8 => true,
+            Primitive::I64
+            | Primitive::I32
+            | Primitive::I16
+            | Primitive::I8 => true,
             Primitive::Unit => return None,
             Primitive::String => return None,
         },

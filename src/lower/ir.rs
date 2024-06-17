@@ -25,10 +25,9 @@
 //! [cranelift]: https://docs.rs/cranelift-frontend/latest/cranelift_frontend/
 
 use crate::runtime::wrap::WrappedFunction;
-use crate::typechecker::types::Type;
 use std::fmt::Display;
 
-use super::value::SafeValue;
+use super::value::{IrType, IrValue};
 
 /// Human-readable place
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -51,7 +50,7 @@ impl Display for Var {
 #[derive(Clone, Debug)]
 pub enum Operand {
     Place(Var),
-    Value(SafeValue),
+    Value(IrValue),
 }
 
 impl Display for Operand {
@@ -79,13 +78,13 @@ pub enum Instruction {
     Assign {
         to: Var,
         val: Operand,
-        ty: Type,
+        ty: IrType,
     },
 
     /// Call a function.
     Call {
-        to: Var,
-        ty: Type,
+        to: Option<Var>,
+        ty: IrType,
         func: String,
         args: Vec<(String, Operand)>,
     },
@@ -93,16 +92,13 @@ pub enum Instruction {
     /// Call an external function (i.e. a Rust function)
     CallExternal {
         to: Var,
-        ty: Type,
+        ty: IrType,
         func: WrappedFunction,
         args: Vec<Operand>,
     },
 
     /// Return from the current function (or filter-map)
-    Return(Operand),
-
-    /// Exit the filter-map with an accept or reject
-    Exit(bool, Operand),
+    Return(Option<Operand>),
 
     /// Perform a binary operation and store the result in `to`
     Cmp {
@@ -137,40 +133,37 @@ pub enum Instruction {
         right: Operand,
     },
 
-    /// Access a record field
-    AccessRecord {
-        to: Var,
-        record: Operand,
-        field: String,
-        record_ty: Type,
-    },
-
-    /// Create record
-    CreateRecord {
-        to: Var,
-        fields: Vec<(String, Operand)>,
-        ty: Type,
-    },
-
-    /// Create enum variant
-    CreateEnum {
-        to: Var,
-        variant: u8,
-        data: Option<Operand>,
-        ty: Type,
-    },
-
-    /// Get enum data
-    AccessEnum {
+    // Add offset to a pointer
+    Offset {
         to: Var,
         from: Operand,
-        field_ty: Type,
+        offset: u32,
     },
 
-    /// Get enum discriminant
-    EnumDiscriminant {
+    // Allocate a stack slot
+    Alloc {
+        to: Var,
+        size: u32,
+    },
+
+    /// Write to a stack slot
+    Write {
+        to: Operand,
+        val: Operand,
+    },
+
+    /// Read from a stack slot
+    Read {
         to: Var,
         from: Operand,
+        ty: IrType,
+    },
+
+    /// Copy a stack slot
+    Copy {
+        to: Operand,
+        from: Operand,
+        size: u32,
     },
 }
 
@@ -210,9 +203,27 @@ impl Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Assign { to, val, ty } => write!(f, "{to}: {ty} = {val}"),
-            Self::Call { to, ty, func, args } => write!(
+            Self::Call {
+                to: Some(to),
+                ty,
+                func,
+                args,
+            } => write!(
                 f,
                 "{to}: {ty} = {func}({})",
+                args.iter()
+                    .map(|a| format!("{} = {}", a.0, a.1))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Self::Call {
+                to: None,
+                ty: _,
+                func,
+                args,
+            } => write!(
+                f,
+                "{func}({})",
                 args.iter()
                     .map(|a| format!("{} = {}", a.0, a.1))
                     .collect::<Vec<_>>()
@@ -227,11 +238,8 @@ impl Display for Instruction {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            Self::Return(val) => write!(f, "return {val}"),
-            Self::Exit(b, val) => {
-                let s = if *b { "accept" } else { "reject" };
-                write!(f, "{s} {val}")
-            }
+            Self::Return(None) => write!(f, "return"),
+            Self::Return(Some(v)) => write!(f, "return {v}"),
             Self::Cmp {
                 to,
                 cmp,
@@ -270,56 +278,38 @@ impl Display for Instruction {
                         .join(", ")
                 )
             }
-            Self::AccessRecord {
-                to, record, field, ..
-            } => {
-                write!(f, "{to} = {record}.{field}")
+            Self::Alloc { to, size } => {
+                write!(f, "{to} = mem::alloc({size})")
             }
-            Self::CreateRecord { to, fields, ty } => {
-                let name = match ty {
-                    Type::NamedRecord(name, _) => name,
-                    _ => "",
-                };
-                write!(
-                    f,
-                    "{to} = {name} {{ {} }}",
-                    fields
-                        .iter()
-                        .map(|(i, v)| format!("{i}: {v}"))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            }
-            Self::CreateEnum {
+            Self::Offset {
                 to,
-                variant,
-                data: Some(data),
+                from,
+                offset,
+            } => {
+                write!(f, "{to} = ptr::offset({from}, {offset})")
+            }
+            Self::Read {
+                to,
+                from,
                 ty,
             } => {
-                write!(f, "{to} = {ty}::{variant}({data})")
+                write!(f, "{to}: {ty} = mem::read({from})")
             }
-            Self::CreateEnum {
-                to,
-                variant,
-                data: None,
-                ty,
-            } => {
-                write!(f, "{to} = {ty}::{variant}")
+            Self::Write { to, val } => {
+                write!(f, "mem::write({to}, {val})")
             }
-            Self::AccessEnum { to, from, .. } => {
-                write!(f, "{to} = get data of {from}")
-            }
-            Self::EnumDiscriminant { to, from } => {
-                write!(f, "{to} = get discriminant of {from}")
+            Self::Copy { to, from, size } => {
+                write!(f, "mem::copy({to}, {from}, {size})")
             }
         }
     }
 }
 
+#[derive(Debug)]
 pub struct Function {
     pub name: String,
-    pub parameters: Vec<(String, Type)>,
-    pub return_type: Type,
+    pub parameters: Vec<(String, IrType)>,
+    pub return_type: Option<IrType>,
     pub blocks: Vec<Block>,
     pub public: bool,
 }
@@ -344,6 +334,7 @@ impl Display for Function {
     }
 }
 
+#[derive(Debug)]
 pub struct Block {
     pub label: String,
     pub instructions: Vec<Instruction>,

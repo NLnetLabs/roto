@@ -3,20 +3,18 @@
 use std::{collections::HashMap, marker::PhantomData, rc::Rc, sync::Arc};
 
 use crate::{
-    lower::ir::{self, IntCmp, Operand},
-    typechecker::{
-        types::{Primitive, Type as RotoType},
-        TypeInfo,
+    lower::{
+        ir::{self, IntCmp, Operand},
+        value::IrType,
     },
-    Runtime, SafeValue,
+    IrValue, Runtime,
 };
 use cranelift::{
     codegen::{
         entity::EntityRef,
         ir::{
             condcodes::IntCC, types::*, AbiParam, Block, InstBuilder,
-            MemFlags, Signature, StackSlot, StackSlotData, StackSlotKind,
-            Value,
+            MemFlags, Signature, StackSlotData, StackSlotKind, Value,
         },
         isa::TargetIsa,
         settings::{self, Configurable as _},
@@ -52,18 +50,17 @@ impl<Params: RotoParams, Return: IsRotoType> TypedFunc<Params, Return> {
     }
 }
 
-struct ModuleBuilder<'r, 'a> {
+struct ModuleBuilder<'a> {
     /// The set of public functions and their signatures.
     functions: HashMap<String, (FuncId, Signature)>,
     /// The inner cranelift module
     inner: JITModule,
-    type_info: &'r mut TypeInfo,
     variable_map: HashMap<&'a str, Variable>,
     isa: Arc<dyn TargetIsa>,
 }
 
-struct FuncGen<'r, 'a, 'c> {
-    module: &'c mut ModuleBuilder<'r, 'a>,
+struct FuncGen<'a, 'c> {
+    module: &'c mut ModuleBuilder<'a>,
     builder: FunctionBuilder<'c>,
     block_map: HashMap<&'a str, Block>,
 }
@@ -73,11 +70,7 @@ struct FuncGen<'r, 'a, 'c> {
 // point, or at least be configurable.
 const MEMFLAGS: MemFlags = MemFlags::new().with_aligned();
 
-pub fn codegen(
-    ir: &[ir::Function],
-    type_info: &mut TypeInfo,
-    _runtime: &Runtime,
-) -> Module {
+pub fn codegen(ir: &[ir::Function], _runtime: &Runtime) -> Module {
     // The ISA is the Instruction Set Architecture. We always compile for
     // the system we run on, so we use `cranelift_native` to get the ISA
     // for the current system. We enable building for speed only. Size is
@@ -99,7 +92,6 @@ pub fn codegen(
     let mut module = ModuleBuilder {
         functions: HashMap::new(),
         inner: jit,
-        type_info,
         isa,
         variable_map: HashMap::new(),
     };
@@ -120,7 +112,7 @@ pub fn codegen(
     module.finalize()
 }
 
-impl<'a> ModuleBuilder<'_, 'a> {
+impl<'a> ModuleBuilder<'a> {
     /// Declare a function and its signature (without the body)
     fn declare_function(&mut self, func: &ir::Function) {
         let ir::Function {
@@ -135,7 +127,11 @@ impl<'a> ModuleBuilder<'_, 'a> {
         for (_, t) in parameters {
             sig.params.push(AbiParam::new(self.cranelift_type(t)));
         }
-        sig.returns = vec![AbiParam::new(self.cranelift_type(return_type))];
+
+        sig.returns = match return_type {
+            Some(ty) => vec![AbiParam::new(self.cranelift_type(ty))],
+            None => Vec::new(),
+        };
 
         let func_id = self
             .inner
@@ -211,46 +207,18 @@ impl<'a> ModuleBuilder<'_, 'a> {
     }
 
     /// Get the corresponding Cranelift type for a Roto type
-    fn cranelift_type(&mut self, ty: &RotoType) -> Type {
-        let ty = self.type_info.resolve(ty);
+    fn cranelift_type(&mut self, ty: &IrType) -> Type {
         match ty {
-            RotoType::Primitive(p) => match p {
-                Primitive::U32 => I32,
-                Primitive::U16 => I16,
-                Primitive::U8 => I8,
-                Primitive::I32 => I32,
-                Primitive::I16 => I16,
-                Primitive::I8 => I8,
-                Primitive::Bool => I8,
-                // todo!(): this is temporary: units need to be 0-sized and
-                // compiled away
-                Primitive::Unit => I8,
-                Primitive::String => todo!(),
-            },
-            RotoType::IntVar(_) => I32,
-            // TODO: The associated data needs to be fixed of course
-            RotoType::Verdict(_, _) => I8,
-            RotoType::Record(_)
-            | RotoType::RecordVar(_, _)
-            | RotoType::NamedRecord(_, _)
-            | RotoType::Enum(_, _) => self.isa.pointer_type(),
-            RotoType::Var(_) => todo!(),
-            RotoType::ExplicitVar(_) => todo!(),
-            RotoType::Never => todo!(),
-            RotoType::BuiltIn(_, _) => todo!(),
-            RotoType::List(_) => todo!(),
-            RotoType::Table(_) => todo!(),
-            RotoType::OutputStream(_) => todo!(),
-            RotoType::Rib(_) => todo!(),
-            RotoType::Function(_, _) => todo!(),
-            RotoType::Filter(_) => todo!(),
-            RotoType::FilterMap(_) => todo!(),
-            RotoType::Name(_) => todo!(),
+            IrType::Bool | IrType::U8 | IrType::I8 => I8,
+            IrType::U16 | IrType::I16 => I16,
+            IrType::U32 | IrType::I32 => I32,
+            IrType::U64 | IrType::I64 => I64,
+            IrType::Pointer | IrType::Rt => self.isa.pointer_type(),
         }
     }
 }
 
-impl<'r, 'a, 'c> FuncGen<'r, 'a, 'c> {
+impl<'a, 'c> FuncGen<'a, 'c> {
     fn finalize(self) {
         self.builder.finalize()
     }
@@ -259,7 +227,7 @@ impl<'r, 'a, 'c> FuncGen<'r, 'a, 'c> {
     fn entry_block(
         &mut self,
         block: &'a ir::Block,
-        parameters: &'a [(String, RotoType)],
+        parameters: &'a [(String, IrType)],
     ) {
         let entry_block = self.get_block(&block.label);
         self.builder.switch_to_block(entry_block);
@@ -315,9 +283,6 @@ impl<'r, 'a, 'c> FuncGen<'r, 'a, 'c> {
                 switch.emit(&mut self.builder, val, otherwise);
             }
             ir::Instruction::Assign { to, val, ty } => {
-                if self.size_of(ty) == 0 {
-                    return;
-                }
                 let ty = self.module.cranelift_type(ty);
                 let var = self.variable(&to.var, ty);
                 let val = self.operand(val);
@@ -334,20 +299,19 @@ impl<'r, 'a, 'c> FuncGen<'r, 'a, 'c> {
                     args.iter().map(|(_, a)| self.operand(a)).collect();
                 let inst = self.ins().call(func_ref, &args);
 
-                let ty = self.module.cranelift_type(ty);
-                let var = self.variable(&to.var, ty);
-                self.def(var, self.builder.inst_results(inst)[0]);
+                if let Some(to) = to {
+                    let ty = self.module.cranelift_type(ty);
+                    let var = self.variable(&to.var, ty);
+                    self.def(var, self.builder.inst_results(inst)[0]);
+                }
             }
             ir::Instruction::CallExternal { .. } => todo!(),
-            ir::Instruction::Return(v) => {
+            ir::Instruction::Return(Some(v)) => {
                 let val = self.operand(v);
                 self.ins().return_(&[val]);
             }
-            ir::Instruction::Exit(v, _) => {
-                // For now, exit is the same as return, because we can't
-                // exit without a value
-                let val = self.ins().iconst(I8, *v as i64);
-                self.ins().return_(&[val]);
+            ir::Instruction::Return(None) => {
+                self.ins().return_(&[]);
             }
             ir::Instruction::Cmp {
                 to,
@@ -382,91 +346,48 @@ impl<'r, 'a, 'c> FuncGen<'r, 'a, 'c> {
                 self.def(var, val);
             }
             ir::Instruction::Eq { .. } => todo!(),
-            ir::Instruction::AccessRecord {
-                to,
-                record,
-                field,
-                record_ty,
-            } => {
-                let (ty, offset) = self.offset_of(record_ty, field);
-                let c_ty = self.module.cranelift_type(&ty);
-                let var = self.variable(&to.var, c_ty);
-                let record = self.operand(record);
-                let val = self.read_field(record, &ty, offset as i32);
-                self.def(var, val);
-            }
-            ir::Instruction::CreateRecord { to, fields, ty } => {
-                let size = self.size_of(ty);
+            ir::Instruction::Alloc { to, size } => {
                 let slot = self.builder.create_sized_stack_slot(
-                    StackSlotData::new(StackSlotKind::ExplicitSlot, size),
+                    StackSlotData::new(StackSlotKind::ExplicitSlot, *size),
                 );
-
-                for (field_name, field_operand) in fields {
-                    let (ty, offset) = self.offset_of(ty, field_name);
-                    self.write_field(slot, field_operand, &ty, offset as i32);
-                }
 
                 let pointer_ty = self.module.isa.pointer_type();
                 let var = self.variable(&to.var, pointer_ty);
-
-                // Records are represented by the address to their stack
-                // slot. Hence, that's what we put in the variable.
                 let p = self.ins().stack_addr(pointer_ty, slot, 0);
                 self.def(var, p);
             }
-            ir::Instruction::CreateEnum {
-                to,
-                variant,
-                data,
-                ty,
-            } => {
-                let size = self.size_of(ty);
-                let slot = self.builder.create_sized_stack_slot(
-                    StackSlotData::new(StackSlotKind::ExplicitSlot, size),
-                );
-
-                let variant_val = self.ins().iconst(I8, *variant as i64);
-                self.ins().stack_store(variant_val, slot, 0);
-
-                let RotoType::Enum(_, variants) = ty else {
-                    panic!()
-                };
-
-                if let Some(data) = data {
-                    let field_ty =
-                        &variants[*variant as usize].1.as_ref().unwrap();
-                    let offset = 1 + self.padding_of(field_ty, 1);
-
-                    self.write_field(slot, data, field_ty, offset as i32);
-                }
-
-                let pointer_ty = self.module.isa.pointer_type();
-                let var = self.variable(&to.var, pointer_ty);
-
-                // Enums are represented by the address to their stack
-                // slot. Hence, that's what we put in the variable.
-                let p = self.ins().stack_addr(pointer_ty, slot, 0);
-                self.def(var, p);
+            ir::Instruction::Write { to, val } => {
+                let x = self.operand(val);
+                let to = self.operand(to);
+                self.ins().store(MEMFLAGS, x, to, 0);
             }
-            ir::Instruction::EnumDiscriminant { to, from } => {
-                // The discriminant is the first byte of the enum, so offset
-                // 0 and of type I8.
-                let p = self.operand(from);
-                let p = self.ins().load(I8, MEMFLAGS, p, 0);
-                let var = self.variable(&to.var, I8);
-                self.def(var, p);
+            ir::Instruction::Read { to, from, ty } => {
+                let c_ty = self.module.cranelift_type(ty);
+                let from = self.operand(from);
+                let res = self.ins().load(c_ty, MEMFLAGS, from, 0);
+                let to = self.variable(&to.var, c_ty);
+                self.def(to, res);
             }
-            ir::Instruction::AccessEnum { to, from, field_ty } => {
-                let enum_val = self.operand(from);
-
-                // The offset of the field is (at least) 1 because of the
-                // discriminant.
-                let offset = 1 + self.padding_of(field_ty, 1);
-                let val = self.read_field(enum_val, field_ty, offset as i32);
-
-                let ty = self.module.cranelift_type(field_ty);
-                let var = self.variable(&to.var, ty);
-                self.def(var, val);
+            ir::Instruction::Offset { to, from, offset } => {
+                let from = self.operand(from);
+                let tmp = self.ins().iadd_imm(from, *offset as i64);
+                let to =
+                    self.variable(&to.var, self.module.isa.pointer_type());
+                self.def(to, tmp)
+            }
+            ir::Instruction::Copy { to, from, size } => {
+                let dest = self.operand(to);
+                let src = self.operand(from);
+                self.builder.emit_small_memory_copy(
+                    self.module.isa.frontend_config(),
+                    dest,
+                    src,
+                    *size as u64,
+                    0,
+                    0,
+                    true,
+                    MEMFLAGS,
+                )
             }
         }
     }
@@ -477,52 +398,6 @@ impl<'r, 'a, 'c> FuncGen<'r, 'a, 'c> {
             .block_map
             .entry(label)
             .or_insert_with(|| self.builder.create_block())
-    }
-
-    /// Write to a field of a compound data type
-    fn write_field(
-        &mut self,
-        slot: StackSlot,
-        op: &'a Operand,
-        ty: &RotoType,
-        offset: i32,
-    ) {
-        let op = self.operand(op);
-
-        if is_reference_type(ty) {
-            let pointer_ty = self.module.isa.pointer_type();
-            let size = self.size_of(ty);
-
-            let dest = self.ins().stack_addr(pointer_ty, slot, offset);
-
-            self.builder.emit_small_memory_copy(
-                self.module.isa.frontend_config(),
-                dest,
-                op,
-                size as u64,
-                0,
-                0,
-                true,
-                MEMFLAGS,
-            )
-        } else {
-            self.ins().stack_store(op, slot, offset);
-        }
-    }
-
-    /// Read a field of a compound data type
-    fn read_field(
-        &mut self,
-        addr: Value,
-        ty: &RotoType,
-        offset: i32,
-    ) -> Value {
-        if is_reference_type(ty) {
-            self.ins().iadd_imm(addr, offset as i64)
-        } else {
-            let ty = self.module.cranelift_type(ty);
-            self.ins().load(ty, MEMFLAGS, addr, offset)
-        }
     }
 
     /// Return the [`FuncInstBuilder`] for the function builder
@@ -543,20 +418,19 @@ impl<'r, 'a, 'c> FuncGen<'r, 'a, 'c> {
                 self.builder.use_var(var)
             }
             ir::Operand::Value(v) => match v {
-                SafeValue::Bool(x) => self.ins().iconst(I8, *x as i64),
-                SafeValue::U8(x) => self.ins().iconst(I8, *x as i64),
-                SafeValue::U16(x) => self.ins().iconst(I16, *x as i64),
-                SafeValue::U32(x) => self.ins().iconst(I32, *x as i64),
-                SafeValue::I8(x) => self.ins().iconst(I8, *x as i64),
-                SafeValue::I16(x) => self.ins().iconst(I16, *x as i64),
-                SafeValue::I32(x) => self.ins().iconst(I32, *x as i64),
-                SafeValue::Runtime(x) => self
+                IrValue::Bool(x) => self.ins().iconst(I8, *x as i64),
+                IrValue::U8(x) => self.ins().iconst(I8, *x as i64),
+                IrValue::U16(x) => self.ins().iconst(I16, *x as i64),
+                IrValue::U32(x) => self.ins().iconst(I32, *x as i64),
+                IrValue::U64(x) => self.ins().iconst(I64, *x as i64),
+                IrValue::I8(x) => self.ins().iconst(I8, *x as i64),
+                IrValue::I16(x) => self.ins().iconst(I16, *x as i64),
+                IrValue::I32(x) => self.ins().iconst(I32, *x as i64),
+                IrValue::I64(x) => self.ins().iconst(I64, *x),
+                IrValue::Pointer(x) => self.ins().iconst(pointer_ty, *x as i64),
+                IrValue::Runtime(x) => self
                     .ins()
                     .iconst(pointer_ty, Rc::as_ptr(x) as *const () as i64),
-                SafeValue::Unit => todo!(),
-                SafeValue::Verdict(_) => todo!(),
-                SafeValue::Record(_) => todo!(),
-                SafeValue::Enum(_, _) => todo!(),
             },
         }
     }
@@ -568,29 +442,6 @@ impl<'r, 'a, 'c> FuncGen<'r, 'a, 'c> {
             self.builder.declare_var(var, ty);
             var
         })
-    }
-
-    fn size_of(&mut self, t: &RotoType) -> u32 {
-        let pointer_bytes = self.module.isa.pointer_bytes();
-        self.module.type_info.size_of(t, pointer_bytes as u32)
-    }
-
-    fn padding_of(&mut self, t: &RotoType, offset: u32) -> u32 {
-        let pointer_bytes = self.module.isa.pointer_bytes();
-        self.module
-            .type_info
-            .padding_of(t, offset, pointer_bytes as u32)
-    }
-
-    fn offset_of(
-        &mut self,
-        record: &RotoType,
-        field: &str,
-    ) -> (RotoType, u32) {
-        let pointer_bytes = self.module.isa.pointer_bytes();
-        self.module
-            .type_info
-            .offset_of(record, field, pointer_bytes as u32)
     }
 
     fn binop(&mut self, left: Value, right: Value, op: &IntCmp) -> Value {
@@ -630,17 +481,6 @@ impl Module {
             _ty: PhantomData,
         })
     }
-}
-
-/// Record and enums are passed by reference
-fn is_reference_type(t: &RotoType) -> bool {
-    matches!(
-        t,
-        RotoType::Record(..)
-            | RotoType::RecordVar(..)
-            | RotoType::NamedRecord(..)
-            | RotoType::Enum(..)
-    )
 }
 
 pub trait IsRotoType {

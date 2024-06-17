@@ -8,6 +8,8 @@ use crate::{
 
 use super::{
     ir::{Instruction, Operand, Var},
+    lower_type,
+    value::IrType,
     Lowerer,
 };
 
@@ -101,7 +103,7 @@ impl Lowerer<'_> {
     /// We do this by checking which variants occur in patterns and then
     /// making those chains for all branches that match that discriminant or
     /// are `_`.
-    pub fn match_expr(&mut self, m: &Meta<Match>) -> Operand {
+    pub fn match_expr(&mut self, m: &Meta<Match>) -> Option<Operand> {
         let ast::Match { expr, arms } = &m.node;
 
         let ty = self.type_info.type_of(expr);
@@ -150,11 +152,15 @@ impl Lowerer<'_> {
         let default_branches: Vec<_> =
             branches.iter().filter(|(d, _, _)| d.is_none()).collect();
 
-        let op = self.expr(expr);
+        // We need some expression, otherwise typechecking would have failed.
+        let Some(Operand::Place(op)) = self.expr(expr) else {
+            panic!();
+        };
         let discriminant = self.new_tmp();
-        self.add(Instruction::EnumDiscriminant {
+        self.add(Instruction::Read {
             to: discriminant.clone(),
-            from: op.clone(),
+            from: op.clone().into(),
+            ty: IrType::U8,
         });
         self.add(Instruction::Switch {
             examinee: discriminant.into(),
@@ -183,6 +189,7 @@ impl Lowerer<'_> {
         // Here we finally create all the blocks for the expression of each
         // arm.
         let out = self.new_tmp();
+        let mut any_assigned = false;
         for (_, arm, arm_index) in branches {
             self.new_block(&format!("{lbl_prefix}_arm_{arm_index}"));
             let ty = self.type_info.type_of(&arm.body);
@@ -191,19 +198,25 @@ impl Lowerer<'_> {
                 self.add(Instruction::Assign {
                     to: out.clone(),
                     val,
-                    ty,
+                    ty: lower_type(&ty),
                 });
+                any_assigned = true;
             }
             self.add(Instruction::Jump(continue_lbl.clone()));
         }
 
         self.new_block(&continue_lbl);
-        out.into()
+
+        if any_assigned {
+            Some(out.into())
+        } else {
+            None
+        }
     }
 
     fn match_case(
         &mut self,
-        examinee: Operand,
+        examinee: Var,
         lbl_prefix: &str,
         lbl: String,
         branches: &[&(Option<usize>, &ast::MatchArm, usize)],
@@ -216,15 +229,25 @@ impl Lowerer<'_> {
             if let Some(var) = &arm.data_field {
                 let ty = self.type_info.type_of(var);
                 let var = self.type_info.full_name(var);
-                self.add(Instruction::AccessEnum {
+
+                // The offset of the field is (at least) 1 because of the
+                // discriminant.
+                let offset = 1 + self.type_info.padding_of(&ty, 1);
+                let tmp = self.new_tmp();
+                self.add(Instruction::Offset {
+                    to: tmp.clone(),
+                    from: examinee.clone().into(),
+                    offset,
+                });
+                self.add(Instruction::Read {
                     to: Var { var },
-                    from: examinee.clone(),
-                    field_ty: ty,
+                    from: tmp.into(),
+                    ty: lower_type(&ty),
                 })
             }
 
             if let Some(guard) = &arm.guard {
-                let op = self.expr(guard);
+                let op = self.expr(guard).unwrap();
                 self.add(Instruction::Switch {
                     examinee: op,
                     branches: vec![(

@@ -33,12 +33,14 @@ pub enum Type {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Primitive {
-    U32,
-    U16,
     U8,
-    I32,
-    I16,
+    U16,
+    U32,
+    U64,
     I8,
+    I16,
+    I32,
+    I64,
     Unit,
     String,
     Bool,
@@ -146,12 +148,14 @@ impl Primitive {
     /// Size of the type in bytes
     pub fn size(&self) -> u32 {
         match self {
-            Primitive::U32 => 4,
-            Primitive::U16 => 2,
             Primitive::U8 => 1,
-            Primitive::I32 => 4,
-            Primitive::I16 => 2,
+            Primitive::U16 => 2,
+            Primitive::U32 => 4,
+            Primitive::U64 => 8,
             Primitive::I8 => 1,
+            Primitive::I16 => 2,
+            Primitive::I32 => 4,
+            Primitive::I64 => 8,
             Primitive::Unit => 0,
             Primitive::String => 4,
             Primitive::Bool => 1,
