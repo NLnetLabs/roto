@@ -234,7 +234,7 @@ pub fn eval(
     let mut vars = HashMap::<Var, IrValue>::new();
 
     // Insert the rx value
-    assert_eq!(parameters.len(), rx.len());
+    assert_eq!(parameters.len(), rx.len(), "incorrect number of arguments");
     for ((x, _), v) in parameters.iter().zip(rx) {
         vars.insert(Var { var: x.into() }, v);
     }

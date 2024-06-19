@@ -8,7 +8,7 @@ use crate::{
 
 use super::{
     ir::{Instruction, Operand, Var},
-    lower_type,
+    lower, lower_type,
     value::IrType,
     Lowerer,
 };
@@ -233,17 +233,12 @@ impl Lowerer<'_> {
                 // The offset of the field is (at least) 1 because of the
                 // discriminant.
                 let offset = 1 + self.type_info.padding_of(&ty, 1);
-                let tmp = self.new_tmp();
-                self.add(Instruction::Offset {
-                    to: tmp.clone(),
-                    from: examinee.clone().into(),
-                    offset,
-                });
-                self.add(Instruction::Read {
-                    to: Var { var },
-                    from: tmp.into(),
+                let val = self.read_field(examinee.clone().into(), offset, &ty);
+                self.add(Instruction::Assign {
+                    to: Var { var } ,
+                    val,
                     ty: lower_type(&ty),
-                })
+                });
             }
 
             if let Some(guard) = &arm.guard {

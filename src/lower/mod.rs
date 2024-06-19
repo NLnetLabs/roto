@@ -176,7 +176,7 @@ impl<'r> Lowerer<'r> {
             let val = self.expr(expr);
             let name = self.type_info.full_name(ident);
             let ty = self.type_info.type_of(ident);
-            if ty != Type::Primitive(Primitive::Unit) {
+            if self.type_info.size_of(&ty) > 0 {
                 let val = val.unwrap();
                 self.add(Instruction::Assign {
                     to: Var { var: name },
@@ -192,7 +192,7 @@ impl<'r> Lowerer<'r> {
         self.add(Instruction::Return(last));
 
         let return_type = match return_type {
-            Type::Primitive(Primitive::Unit) => None,
+            x if self.type_info.size_of(&x) == 0 => None,
             x if is_reference_type(&x) => {
                 parameters.insert(
                     0,
@@ -372,10 +372,10 @@ impl<'r> Lowerer<'r> {
                     .flat_map(|(p, a)| Some((p.0.to_string(), self.expr(a)?)))
                     .collect();
 
-                let to = if *ret == Type::Primitive(Primitive::Unit) {
-                    None
-                } else {
+                let to = if self.type_info.size_of(&ret) > 0 {
                     Some(self.new_tmp())
+                } else {
+                    None
                 };
                 let ty = self.type_info.type_of(id);
                 self.add(Instruction::Call {
@@ -485,10 +485,14 @@ impl<'r> Lowerer<'r> {
                     Some(to.into())
                 } else {
                     let record_ty = self.type_info.type_of(&**e);
-                    let op = self.expr(e).unwrap();
+                    let op = self.expr(e)?;
                     let (ty, offset) =
                         self.type_info.offset_of(&record_ty, field.as_ref());
-                    Some(self.read_field(op, offset, &ty))
+                    if self.type_info.size_of(&ty) > 0 {
+                        Some(self.read_field(op, offset, &ty))
+                    } else {
+                        None
+                    }
                 }
             }
             ast::Expr::Var(x) => {
@@ -506,6 +510,10 @@ impl<'r> Lowerer<'r> {
                         Some((s.0.as_ref(), self.expr(expr)?))
                     })
                     .collect();
+
+                if size == 0 {
+                    return None;
+                }
 
                 let to = self.new_tmp();
                 self.add(Instruction::Alloc {
@@ -538,8 +546,23 @@ impl<'r> Lowerer<'r> {
             }
             ast::Expr::BinOp(left, op, right) => {
                 let ty = self.type_info.type_of(left.id);
-                let left = self.expr(left).unwrap();
-                let right = self.expr(right).unwrap();
+
+                let left = self.expr(left);
+                let right = self.expr(right);
+
+                if self.type_info.size_of(&ty) == 0 {
+                    return Some(
+                        IrValue::Bool(match op {
+                            ast::BinOp::Eq => true,
+                            ast::BinOp::Ne => false,
+                            _ => panic!(),
+                        })
+                        .into(),
+                    );
+                }
+
+                let left = left.unwrap();
+                let right = right.unwrap();
 
                 let place = self.new_tmp();
                 match (op, binop_to_cmp(op, &ty), ty) {
@@ -793,6 +816,7 @@ fn lower_type(ty: &Type) -> IrType {
         Type::Primitive(Primitive::U64) => IrType::U64,
         Type::Primitive(Primitive::I8) => IrType::I8,
         Type::Primitive(Primitive::I16) => IrType::I16,
+        Type::Primitive(Primitive::I32) => IrType::I32,
         Type::Primitive(Primitive::I64) => IrType::I64,
         Type::IntVar(_) => IrType::I32,
         x if is_reference_type(x) => IrType::Pointer,

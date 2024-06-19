@@ -42,7 +42,7 @@ pub mod types;
 mod unionfind;
 
 /// The output of the type checker that is used for lowering
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct TypeInfo {
     /// The unionfind structure that maps type variables to types
     unionfind: UnionFind,
@@ -63,6 +63,22 @@ pub struct TypeInfo {
     /// Type for return/accept/reject that it constructs and returns.
     return_types: HashMap<MetaId, Type>,
     pointer_bytes: u32,
+}
+
+impl TypeInfo {
+    fn new(pointer_bytes: u32) -> Self {
+        Self {
+            unionfind: Default::default(),
+            types: Default::default(),
+            expr_types: Default::default(),
+            fully_qualified_names: Default::default(),
+            enum_variant_constructors: Default::default(),
+            methods: Default::default(),
+            diverges: Default::default(),
+            return_types: Default::default(),
+            pointer_bytes,
+        }
+    }
 }
 
 impl TypeInfo {
@@ -116,7 +132,7 @@ impl TypeInfo {
     }
 
     pub fn alignment_of(&mut self, ty: &Type) -> u32 {
-        match self.resolve(ty) {
+        let align = match self.resolve(ty) {
             Type::RecordVar(_, fields)
             | Type::Record(fields)
             | Type::NamedRecord(_, fields) => fields
@@ -124,8 +140,16 @@ impl TypeInfo {
                 .map(|f| self.alignment_of(&f.1))
                 .max()
                 .unwrap_or(1),
+            Type::Enum(_, variants) => variants
+                .iter()
+                .flat_map(|(_, opt)| opt)
+                .map(|f| self.alignment_of(f))
+                .max()
+                .unwrap_or(1),
             ty => self.size_of(&ty),
-        }
+        };
+        // Alignment must be guaranteed to be at least 1
+        align.max(1)
     }
 
     pub fn method(
@@ -182,6 +206,13 @@ impl TypeInfo {
                     .unwrap_or(0)
                     + 1 // add the discriminant
             }
+            Type::Verdict(accept, reject) => {
+                let accept =
+                    self.size_of(&accept) + self.padding_of(&accept, 1);
+                let reject =
+                    self.size_of(&reject) + self.padding_of(&reject, 1);
+                1 + accept.max(reject)
+            }
             Type::Primitive(p) => p.size(),
             Type::List(_)
             | Type::Table(_)
@@ -207,6 +238,7 @@ pub type TypeResult<T> = Result<T, TypeError>;
 pub fn typecheck(
     runtime: &Runtime,
     tree: &ast::SyntaxTree,
+    pointer_bytes: u32,
 ) -> TypeResult<TypeInfo> {
     let methods = types::methods(runtime);
     let static_methods = types::static_methods();
@@ -215,7 +247,7 @@ pub fn typecheck(
         methods: &methods,
         runtime,
         static_methods: &static_methods,
-        type_info: TypeInfo::default(),
+        type_info: TypeInfo::new(pointer_bytes),
     };
 
     type_checker.check_syntax_tree(tree)?;

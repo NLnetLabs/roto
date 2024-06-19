@@ -12,9 +12,11 @@ fn typecheck(s: &str) -> Result<(), RotoReport> {
         }
     };
 
+    let pointer_bytes = usize::BITS / 8;
+
     // Unwrap on parse because a parse error in this file is never correct.
     // We only want to test for type errors.
-    if let Err(e) = res.typecheck() {
+    if let Err(e) = res.typecheck(pointer_bytes) {
         println!("{e}");
         Err(e)
     } else {

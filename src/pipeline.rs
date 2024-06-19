@@ -165,7 +165,13 @@ pub fn run(
     mem: &mut Memory,
     rx: Vec<IrValue>,
 ) -> Result<Option<IrValue>, RotoReport> {
-    let lowered = read_files(files)?.parse()?.typecheck()?.lower();
+    let pointer_bytes = usize::BITS / 8;
+
+    let lowered = read_files(files)?
+        .parse()?
+        .typecheck(pointer_bytes)?
+        .lower();
+
     for f in &lowered.ir {
         println!("{}", f);
     }
@@ -255,7 +261,10 @@ impl LoadedFiles {
 }
 
 impl Parsed {
-    pub fn typecheck(self) -> Result<TypeChecked, RotoReport> {
+    pub fn typecheck(
+        self,
+        pointer_bytes: u32,
+    ) -> Result<TypeChecked, RotoReport> {
         let Parsed {
             files,
             trees,
@@ -266,7 +275,9 @@ impl Parsed {
 
         let results: Vec<_> = trees
             .iter()
-            .map(|f| crate::typechecker::typecheck(&runtime, f))
+            .map(|f| {
+                crate::typechecker::typecheck(&runtime, f, pointer_bytes)
+            })
             .collect();
 
         let mut type_infos = Vec::new();

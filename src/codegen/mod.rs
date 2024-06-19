@@ -459,7 +459,7 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 }
                 IrValue::Runtime(x) => self
                     .ins()
-                    .iconst(pointer_ty, Rc::as_ptr(x) as *const () as i64),
+                    .iconst(pointer_ty, *x as i64),
             },
         }
     }

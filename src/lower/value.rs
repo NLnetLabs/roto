@@ -21,7 +21,7 @@ pub enum IrValue {
     I32(i32),
     I64(i64),
     Pointer(usize),
-    Runtime(Rc<dyn Any>),
+    Runtime(*const ()),
 }
 
 /// The types for [`IrValue`]s
@@ -49,9 +49,12 @@ impl IrType {
             U16 | I16 => 2,
             U32 | I32 => 4,
             U64 | I64 => 8,
-            Pointer => (usize::BITS / 8) as usize,
-            Rt => todo!(),
+            Pointer | Rt => (usize::BITS / 8) as usize,
         }
+    }
+
+    pub fn alignment(&self) -> usize {
+        self.bytes()
     }
 }
 
@@ -147,8 +150,10 @@ impl IrValue {
             IrValue::I32(*x)
         } else if let Some(x) = any.downcast_ref() {
             IrValue::I64(*x)
+        } else if let Some(x) = any.downcast_ref() {
+            IrValue::Runtime(*x)
         } else {
-            IrValue::Runtime(Rc::from(any))
+            panic!()
         }
     }
 
@@ -164,7 +169,7 @@ impl IrValue {
             IrValue::I32(x) => x.to_ne_bytes().into(),
             IrValue::I64(x) => x.to_ne_bytes().into(),
             IrValue::Pointer(x) => x.to_ne_bytes().into(),
-            IrValue::Runtime(_) => todo!(),
+            IrValue::Runtime(x) => (x as *const _ as usize).to_ne_bytes().into(),
         }
     }
 
