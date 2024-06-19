@@ -553,6 +553,29 @@ impl<'r> Lowerer<'r> {
                             args: vec![left, right],
                         })
                     }
+                    (ast::BinOp::Eq, _, ty) if is_reference_type(&ty) => {
+                        let size = self.type_info.size_of(&ty);
+                        self.add(Instruction::MemCmp {
+                            to: place.clone(),
+                            size,
+                            left,
+                            right,
+                        })
+                    }
+                    (ast::BinOp::Ne, _, ty) if is_reference_type(&ty) => {
+                        let size = self.type_info.size_of(&ty);
+                        let tmp = self.new_tmp();
+                        self.add(Instruction::MemCmp {
+                            to: tmp.clone(),
+                            size,
+                            left,
+                            right,
+                        });
+                        self.add(Instruction::Not {
+                            to: place.clone(),
+                            val: tmp.into(),
+                        })
+                    }
                     (_, Some(cmp), _) => {
                         self.add(Instruction::Cmp {
                             to: place.clone(),

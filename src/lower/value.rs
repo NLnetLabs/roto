@@ -37,7 +37,7 @@ pub enum IrType {
     I32,
     I64,
     Pointer,
-    Rt
+    Rt,
 }
 
 impl IrType {
@@ -87,6 +87,7 @@ impl PartialEq for IrValue {
             (I16(l), I16(r)) => l == r,
             (I32(l), I32(r)) => l == r,
             (Runtime(_), Runtime(_)) => false,
+            (Pointer(_), Pointer(_)) => panic!("can't compare pointers"),
             _ => panic!("tried comparing different types"),
         }
     }
@@ -176,44 +177,44 @@ impl IrValue {
                     1 => true,
                     _ => panic!("Invalid bool value"),
                 })
-            },
+            }
             IrType::U8 => {
                 let val: &[u8; 1] = val.try_into().unwrap();
                 Self::U8(u8::from_ne_bytes(*val))
-            },
+            }
             IrType::U16 => {
                 let val: &[u8; 2] = val.try_into().unwrap();
                 Self::U16(u16::from_ne_bytes(*val))
-            },
+            }
             IrType::U32 => {
                 let val: &[u8; 4] = val.try_into().unwrap();
                 Self::U32(u32::from_ne_bytes(*val))
-            },
+            }
             IrType::U64 => {
                 let val: &[u8; 8] = val.try_into().unwrap();
                 Self::U64(u64::from_ne_bytes(*val))
-            },
+            }
             IrType::I8 => {
                 let val: &[u8; 1] = val.try_into().unwrap();
                 Self::I8(i8::from_ne_bytes(*val))
-            },
+            }
             IrType::I16 => {
                 let val: &[u8; 2] = val.try_into().unwrap();
                 Self::I16(i16::from_ne_bytes(*val))
-            },
+            }
             IrType::I32 => {
                 let val: &[u8; 4] = val.try_into().unwrap();
                 Self::I32(i32::from_ne_bytes(*val))
-            },
+            }
             IrType::I64 => {
                 let val: &[u8; 8] = val.try_into().unwrap();
                 Self::I64(i64::from_ne_bytes(*val))
-            },
+            }
             IrType::Pointer => {
                 const SIZE: usize = (usize::BITS / 8) as usize;
                 let val: &[u8; SIZE] = val.try_into().unwrap();
                 Self::Pointer(usize::from_ne_bytes(*val))
-            },
+            }
             IrType::Rt => todo!(),
         }
     }

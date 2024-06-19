@@ -181,14 +181,20 @@ impl StackFrame {
 
 impl Allocation {
     fn write(&mut self, offset: usize, val: &[u8]) {
-        assert!(offset + val.len() <= self.inner.len(), "memory access out of bounds");
+        assert!(
+            offset + val.len() <= self.inner.len(),
+            "memory access out of bounds"
+        );
         assert!(offset % val.len() == 0, "memory access is unaligned");
 
         self.inner[offset..offset + val.len()].copy_from_slice(val);
     }
 
     fn read(&self, offset: usize, size: usize) -> &[u8] {
-        assert!(offset + size <= self.inner.len(), "memory access out of bounds");
+        assert!(
+            offset + size <= self.inner.len(),
+            "memory access out of bounds"
+        );
         assert!(offset % size == 0, "memory access is unaligned");
 
         &self.inner[offset..offset + size]
@@ -392,6 +398,25 @@ pub fn eval(
                     panic!()
                 };
                 mem.copy(to, from, *size as usize);
+            }
+            Instruction::MemCmp {
+                to,
+                size,
+                left,
+                right,
+            } => {
+                let &IrValue::Pointer(left) = eval_operand(&vars, left)
+                else {
+                    panic!()
+                };
+                let &IrValue::Pointer(right) = eval_operand(&vars, right)
+                else {
+                    panic!()
+                };
+                let left = mem.read(left, *size as usize);
+                let right = mem.read(right, *size as usize);
+                let res = left == right;
+                vars.insert(to.clone(), IrValue::Bool(res));
             }
         }
 

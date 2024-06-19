@@ -221,26 +221,42 @@ fn typed_record() {
     }
 }
 
-// #[test]
-// fn enum_values() {
-//     let s = "
-//         filter-map main(x: Afi) {
-//             apply {
-//                 if x == Afi.IpV4 {
-//                     accept
-//                 } else {
-//                     reject
-//                 }
-//             }
-//         }
-//     ";
+#[test]
+fn enum_values() {
+    let s = "
+        filter-map main(x: Afi) {
+            apply {
+                if x == Afi.IpV4 {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
 
-//     // IpV4 -> accepted
-//     assert_eq!(p(IrValue::Enum(0, None)), Ok(()));
-
-//     // IpV6 -> rejected
-//     assert_eq!(p(IrValue::Enum(1, None)), Err(()));
-// }
+    for (variant, expected) in [
+        // IpV4 -> accepted
+        (0, true),
+        // // IpV6 -> rejected
+        (1, false),
+    ] {
+        let mut mem = Memory::new();
+        let program = compile(s);
+        let verdict_pointer = mem.allocate(1);
+        let afi_pointer = mem.allocate(1);
+        mem.write(afi_pointer, &[variant]);
+        program.eval(
+            &mut mem,
+            vec![
+                IrValue::Pointer(verdict_pointer),
+                IrValue::Pointer(afi_pointer),
+            ],
+        );
+        let res = mem.read(verdict_pointer, 1);
+        assert_eq!(&[expected as u8], res);
+    }
+}
 
 // #[test]
 // fn bmp_message() {

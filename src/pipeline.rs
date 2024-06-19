@@ -309,7 +309,11 @@ impl TypeChecked {
 }
 
 impl Lowered {
-    pub fn eval(&self, mem: &mut Memory, rx: Vec<IrValue>) -> Option<IrValue> {
+    pub fn eval(
+        &self,
+        mem: &mut Memory,
+        rx: Vec<IrValue>,
+    ) -> Option<IrValue> {
         eval::eval(&self.ir, "main", mem, rx)
     }
 

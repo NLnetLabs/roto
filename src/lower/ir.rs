@@ -165,6 +165,14 @@ pub enum Instruction {
         from: Operand,
         size: u32,
     },
+
+    /// Compare chunks of memory
+    MemCmp {
+        to: Var,
+        size: u32,
+        left: Operand,
+        right: Operand,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -281,18 +289,10 @@ impl Display for Instruction {
             Self::Alloc { to, size } => {
                 write!(f, "{to} = mem::alloc({size})")
             }
-            Self::Offset {
-                to,
-                from,
-                offset,
-            } => {
+            Self::Offset { to, from, offset } => {
                 write!(f, "{to} = ptr::offset({from}, {offset})")
             }
-            Self::Read {
-                to,
-                from,
-                ty,
-            } => {
+            Self::Read { to, from, ty } => {
                 write!(f, "{to}: {ty} = mem::read({from})")
             }
             Self::Write { to, val } => {
@@ -300,6 +300,14 @@ impl Display for Instruction {
             }
             Self::Copy { to, from, size } => {
                 write!(f, "mem::copy({to}, {from}, {size})")
+            }
+            Self::MemCmp {
+                to,
+                size,
+                left,
+                right,
+            } => {
+                write!(f, "{to} = mem::cmp({left}, {right}, {size})")
             }
         }
     }

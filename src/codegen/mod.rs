@@ -1,6 +1,9 @@
 //! Machine code generation via cranelift
 
-use std::{collections::HashMap, marker::PhantomData, rc::Rc, sync::Arc};
+use std::{
+    collections::HashMap, marker::PhantomData, num::NonZeroU8, rc::Rc,
+    sync::Arc,
+};
 
 use crate::{
     lower::{
@@ -389,6 +392,30 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                     MEMFLAGS,
                 )
             }
+            ir::Instruction::MemCmp {
+                to,
+                size,
+                left,
+                right,
+            } => {
+                let left = self.operand(left);
+                let right = self.operand(right);
+
+                // We could pass more precise alignment to cranelift, but
+                // values of 1 should just work.
+                let val = self.builder.emit_small_memory_compare(
+                    self.module.isa.frontend_config(),
+                    IntCC::Equal,
+                    left,
+                    right,
+                    *size as u64,
+                    NonZeroU8::new(1).unwrap(),
+                    NonZeroU8::new(1).unwrap(),
+                    MEMFLAGS,
+                );
+                let var = self.variable(&to.var, I8);
+                self.def(var, val);
+            }
         }
     }
 
@@ -427,7 +454,9 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 IrValue::I16(x) => self.ins().iconst(I16, *x as i64),
                 IrValue::I32(x) => self.ins().iconst(I32, *x as i64),
                 IrValue::I64(x) => self.ins().iconst(I64, *x),
-                IrValue::Pointer(x) => self.ins().iconst(pointer_ty, *x as i64),
+                IrValue::Pointer(x) => {
+                    self.ins().iconst(pointer_ty, *x as i64)
+                }
                 IrValue::Runtime(x) => self
                     .ins()
                     .iconst(pointer_ty, Rc::as_ptr(x) as *const () as i64),
