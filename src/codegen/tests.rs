@@ -23,347 +23,390 @@ fn compile(p: &'static str) -> Compiled {
     }
 }
 
-// #[test]
-// fn accept() {
-//     let s = "
-//         filter-map main() {
-//             apply {
-//                 accept
-//             }
-//         }
-//     ";
+#[test]
+fn accept() {
+    let s = "
+        filter-map main() {
+            apply {
+                accept
+            }
+        }
+    ";
 
-//     let p = compile(s);
-//     let f = p
-//         .module
-//         .get_function::<(), i8>("main")
-//         .expect("No function found (or mismatched types)");
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(*mut u8,), ()>("main")
+        .expect("No function found (or mismatched types)");
 
-//     assert_eq!(f.call(()), 1);
-// }
+    let mut verdict: u8 = 0;
+    f.call((&mut verdict as *mut u8,));
+    assert_eq!(verdict, 1);
+}
 
-// #[test]
-// fn reject() {
-//     let s = "
-//         filter-map main() {
-//             apply {
-//                 reject
-//             }
-//         }
-//     ";
+#[test]
+fn reject() {
+    let s = "
+        filter-map main() {
+            apply {
+                reject
+            }
+        }
+    ";
 
-//     let p = compile(s);
-//     let f = p
-//         .module
-//         .get_function::<(), i8>("main")
-//         .expect("No function found (or mismatched types)");
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(*mut u8,), ()>("main")
+        .expect("No function found (or mismatched types)");
 
-//     assert_eq!(f.call(()), 0);
-// }
+    let mut verdict: u8 = 0;
+    f.call((&mut verdict as *mut u8,));
+    assert_eq!(verdict, 0);
+}
 
-// #[test]
-// fn equal_to_10() {
-//     let s = "
-//         filter-map main(x: U32) {
-//             apply {
-//                 if x == 10 {
-//                     accept
-//                 } else {
-//                     reject
-//                 }
-//             }
-//         }
-//     ";
+#[test]
+fn equal_to_10() {
+    let s = "
+        filter-map main(x: U32) {
+            apply {
+                if x == 10 {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
 
-//     let p = compile(s);
-//     let f = p
-//         .module
-//         .get_function::<(i32,), i8>("main")
-//         .expect("No function found (or mismatched types)");
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(*mut u8, i32), ()>("main")
+        .expect("No function found (or mismatched types)");
 
-//     assert_eq!(f.call((5,)), 0);
-//     assert_eq!(f.call((10,)), 1);
-// }
+    let mut verdict: u8 = 0;
+    f.call((&mut verdict as *mut u8, 5));
+    assert_eq!(verdict, 0);
+    
+    let mut verdict: u8 = 0;
+    f.call((&mut verdict as *mut u8, 10));
+    assert_eq!(verdict, 1);
+}
 
-// #[test]
-// fn equal_to_10_with_function() {
-//     let s = "
-//         function is_10(x: U32) -> Bool {
-//             x == 10
-//         }
+#[test]
+fn equal_to_10_with_function() {
+    let s = "
+        function is_10(x: U32) -> Bool {
+            x == 10
+        }
         
-//         filter-map main(x: U32) {
-//             apply {
-//                 if is_10(x) {
-//                     accept
-//                 } else {
-//                     reject
-//                 }
-//             }
-//         }
-//     ";
+        filter-map main(x: U32) {
+            apply {
+                if is_10(x) {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
 
-//     let p = compile(s);
-//     let f = p
-//         .module
-//         .get_function::<(i32,), i8>("main")
-//         .expect("No function found (or mismatched types)");
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(*mut u8, i32), ()>("main")
+        .expect("No function found (or mismatched types)");
 
-//     assert_eq!(f.call((5,)), 0);
-//     assert_eq!(f.call((10,)), 1);
-// }
+    let mut verdict: u8 = 0;
+    f.call((&mut verdict as *mut u8, 5));
+    assert_eq!(verdict, 0);
+    
+    let mut verdict: u8 = 0;
+    f.call((&mut verdict as *mut u8, 10));
+    assert_eq!(verdict, 1);
+}
 
-// #[test]
-// fn equal_to_10_with_two_functions() {
-//     let s = "
-//         function equals(x: U32, y: U32) -> Bool {
-//             x == y
-//         }
+#[test]
+fn equal_to_10_with_two_functions() {
+    let s = "
+        function equals(x: U32, y: U32) -> Bool {
+            x == y
+        }
 
-//         function is_10(x: U32) -> Bool {
-//             equals(x, 10)
-//         }
+        function is_10(x: U32) -> Bool {
+            equals(x, 10)
+        }
 
-//         filter-map main(x: U32) {
-//             apply {
-//                 if is_10(x) {
-//                     accept
-//                 } else if equals(x, 20) {
-//                     accept
-//                 } else {
-//                     reject
-//                 }
-//             }
-//         }
-//     ";
+        filter-map main(x: U32) {
+            apply {
+                if is_10(x) {
+                    accept
+                } else if equals(x, 20) {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
 
-//     let p = compile(s);
-//     let f = p
-//         .module
-//         .get_function::<(i32,), i8>("main")
-//         .expect("No function found (or mismatched types)");
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(*mut u8, i32), ()>("main")
+        .expect("No function found (or mismatched types)");
 
-//     assert_eq!(f.call((5,)), 0);
-//     assert_eq!(f.call((10,)), 1);
-//     assert_eq!(f.call((15,)), 0);
-//     assert_eq!(f.call((20,)), 1);
-// }
+    let mut verdict: u8 = 0;
+    f.call((&mut verdict as *mut u8, 5));
+    assert_eq!(verdict, 0);
+    
+    let mut verdict: u8 = 0;
+    f.call((&mut verdict as *mut u8, 10));
+    assert_eq!(verdict, 1);
+    
+    let mut verdict: u8 = 0;
+    f.call((&mut verdict as *mut u8, 15));
+    assert_eq!(verdict, 0);
 
-// #[test]
-// fn negation() {
-//     let s = "
-//         filter-map main(x: I32) {
-//             apply {
-//                 if not (x == 10) {
-//                     accept
-//                 } else {
-//                     reject
-//                 }
-//             }
-//         } 
-//     ";
+    let mut verdict: u8 = 0;
+    f.call((&mut verdict as *mut u8, 20));
+    assert_eq!(verdict, 1);
+}
 
-//     let p = compile(s);
-//     let f = p
-//         .module
-//         .get_function::<(i32,), i8>("main")
-//         .expect("No function found (or mismatched types)");
+#[test]
+fn negation() {
+    let s = "
+        filter-map main(x: I32) {
+            apply {
+                if not (x == 10) {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        } 
+    ";
 
-//     for x in 0..20 {
-//         assert_eq!(f.call((x,)), (x != 10) as i8, "{x}");
-//     }
-// }
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(*mut u8, i32), ()>("main")
+        .expect("No function found (or mismatched types)");
 
-// #[test]
-// fn a_bunch_of_comparisons() {
-//     let s = "
-//         filter-map main(x: I32) {
-//             apply {
-//                 if (
-//                     (x > 10 && x < 20)
-//                     || (x >= 30 && x <= 40)
-//                     || x == 55
-//                 ){
-//                     accept
-//                 } else {
-//                     reject
-//                 }
-//             }
-//         }
-//     ";
+    for x in 0..20 {
+        let mut verdict: u8 = 0;
+        f.call((&mut verdict as *mut _, x));
+        assert_eq!(verdict, (x != 10) as u8, "{x}");
+    }
+}
 
-//     let p = compile(s);
-//     let f = p
-//         .module
-//         .get_function::<(i32,), i8>("main")
-//         .expect("No function found (or mismatched types)");
+#[test]
+fn a_bunch_of_comparisons() {
+    let s = "
+        filter-map main(x: I32) {
+            apply {
+                if (
+                    (x > 10 && x < 20)
+                    || (x >= 30 && x <= 40)
+                    || x == 55
+                ){
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
 
-//     for x in 0..100 {
-//         #[allow(clippy::manual_range_contains)]
-//         let expected = (x > 10 && x < 20) || (x >= 30 && x <= 40) || x == 55;
-//         assert_eq!(f.call((x,)), expected as i8);
-//     }
-// }
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(*mut u8, i32), ()>("main")
+        .expect("No function found (or mismatched types)");
 
-// #[test]
-// fn record() {
-//     let s = "
-//         type Foo { a: I32, b: I32 }
+    for x in 0..100 {
+        #[allow(clippy::manual_range_contains)]
+        let expected = (x > 10 && x < 20) || (x >= 30 && x <= 40) || x == 55;
 
-//         filter-map main(x: I32) {
-//             define {
-//                 foo = Foo { a: x, b: 20 };
-//             }
-//             apply {
-//                 if foo.a == foo.b {
-//                     accept
-//                 } else {
-//                     reject
-//                 }
-//             }
-//         }
-//     ";
+        let mut verdict: u8 = 0;
+        f.call((&mut verdict as *mut _, x));
+        assert_eq!(verdict, expected as u8);
+    }
+}
 
-//     let p = compile(s);
-//     let f = p
-//         .module
-//         .get_function::<(i32,), i8>("main")
-//         .expect("No function found (or mismatched types)");
+#[test]
+fn record() {
+    let s = "
+        type Foo { a: I32, b: I32 }
 
-//     for x in 0..100 {
-//         let expected = x == 20;
-//         assert_eq!(f.call((x,)), expected as i8);
-//     }
-// }
+        filter-map main(x: I32) {
+            define {
+                foo = Foo { a: x, b: 20 };
+            }
+            apply {
+                if foo.a == foo.b {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
 
-// #[test]
-// fn record_with_fields_flipped() {
-//     let s = "
-//         type Foo { a: I32, b: I32 }
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(*mut u8, i32), ()>("main")
+        .expect("No function found (or mismatched types)");
 
-//         filter-map main(x: I32) {
-//             define {
-//                 // These are flipped, to ensure that the order in which
-//                 // the fields are given doesn't matter:
-//                 foo = Foo { b: 20, a: x };
-//             }
-//             apply {
-//                 if foo.a == foo.b {
-//                     accept
-//                 } else {
-//                     reject
-//                 }
-//             }
-//         }
-//     ";
+    for x in 0..100 {
+        let expected = x == 20;
+        let mut verdict: u8 = 0; 
+        f.call((&mut verdict as *mut _, x));
+        assert_eq!(verdict, expected as u8);
+    }
+}
 
-//     let p = compile(s);
-//     let f = p
-//         .module
-//         .get_function::<(i32,), i8>("main")
-//         .expect("No function found (or mismatched types)");
+#[test]
+fn record_with_fields_flipped() {
+    let s = "
+        type Foo { a: I32, b: I32 }
 
-//     for x in 0..100 {
-//         let expected = x == 20;
-//         assert_eq!(f.call((x,)), expected as i8);
-//     }
-// }
+        filter-map main(x: I32) {
+            define {
+                // These are flipped, to ensure that the order in which
+                // the fields are given doesn't matter:
+                foo = Foo { b: 20, a: x };
+            }
+            apply {
+                if foo.a == foo.b {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
 
-// #[test]
-// fn nested_record() {
-//     let s = "
-//         type Foo { x: Bar, y: Bar }
-//         type Bar { a: I32, b: I32 }
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(*mut u8, i32), ()>("main")
+        .expect("No function found (or mismatched types)");
 
-//         filter-map main(x: I32) {
-//             define {
-//                 bar = Bar { a: 20, b: x };
-//                 foo = Foo { x: bar, y: bar };
-//             }
-//             apply {
-//                 if foo.x.a == foo.y.b {
-//                     accept
-//                 } else {
-//                     reject
-//                 }
-//             }
-//         }
-//     ";
+    for x in 0..100 {
+        let expected = x == 20;
+        let mut verdict: u8 = 0;
+        f.call((&mut verdict as *mut _, x));
+        assert_eq!(verdict, expected as u8);
+    }
+}
 
-//     let p = compile(s);
-//     let f = p
-//         .module
-//         .get_function::<(i32,), i8>("main")
-//         .expect("No function found (or mismatched types)");
+#[test]
+fn nested_record() {
+    let s = "
+        type Foo { x: Bar, y: Bar }
+        type Bar { a: I32, b: I32 }
 
-//     for x in 0..100 {
-//         let expected = x == 20;
-//         assert_eq!(f.call((x,)), expected as i8);
-//     }
-// }
+        filter-map main(x: I32) {
+            define {
+                bar = Bar { a: 20, b: x };
+                foo = Foo { x: bar, y: bar };
+            }
+            apply {
+                if foo.x.a == foo.y.b {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
 
-// #[test]
-// fn misaligned_fields() {
-//     // A record where the second field should be aligned
-//     let s = "
-//         type Foo { a: I16, b: I32 }
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(*mut u8, i32), ()>("main")
+        .expect("No function found (or mismatched types)");
 
-//         filter-map main(x: I32) {
-//             define {
-//                 foo = Foo { a: 10, b: x };
-//             }
-//             apply {
-//                 if foo.b == 20 {
-//                     accept
-//                 } else {
-//                     reject
-//                 }
-//             }
-//         }
-//     ";
+    for x in 0..100 {
+        let expected = x == 20;
+        let mut verdict: u8 = 0;
+        f.call((&mut verdict as *mut _, x));
+        assert_eq!(verdict, expected as u8, "for {x}");
+    }
+}
 
-//     let p = compile(s);
-//     let f = p
-//         .module
-//         .get_function::<(i32,), i8>("main")
-//         .expect("No function found (or mismatched types)");
+#[test]
+fn misaligned_fields() {
+    // A record where the second field should be aligned
+    let s = "
+        type Foo { a: I16, b: I32 }
 
-//     for x in 0..100 {
-//         let expected = x == 20;
-//         assert_eq!(f.call((x,)), expected as i8);
-//     }
-// }
+        filter-map main(x: I32) {
+            define {
+                foo = Foo { a: 10, b: x };
+            }
+            apply {
+                if foo.b == 20 {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
 
-// #[test]
-// fn enum_match() {
-//     let s = "
-//         filter-map main(r: Bool) { 
-//             define {
-//                 x = if r {
-//                     Afi.IpV4
-//                 } else {
-//                     Afi.IpV6
-//                 };
-//             }
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(*mut u8, i32), ()>("main")
+        .expect("No function found (or mismatched types)");
 
-//             apply {
-//                 match x {
-//                     IpV4 -> accept,
-//                     _ -> reject,
-//                 }
-//             }
-//         }
-//     ";
+    for x in 0..100 {
+        let expected = x == 20;
+        let mut verdict: u8 = 0;
+        f.call((&mut verdict as *mut _, x));
+        assert_eq!(verdict, expected as u8);
+    }
+}
 
-//     let p = compile(s);
-//     let f = p
-//         .module
-//         .get_function::<(i8,), i8>("main")
-//         .expect("No function found (or mismatched types)");
+#[test]
+fn enum_match() {
+    let s = "
+        filter-map main(r: Bool) { 
+            define {
+                x = if r {
+                    Afi.IpV4
+                } else {
+                    Afi.IpV6
+                };
+            }
 
-//     assert_eq!(f.call((true as i8,)), true as i8);
-//     assert_eq!(f.call((false as i8,)), false as i8);
-// }
+            apply {
+                match x {
+                    IpV4 -> accept,
+                    _ -> reject,
+                }
+            }
+        }
+    ";
+
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(*mut u8, u8), ()>("main")
+        .expect("No function found (or mismatched types)");
+
+    let mut verdict: u8 = 0;
+    f.call((&mut verdict as *mut _, true as u8));
+    assert_eq!(verdict, true as u8);
+    
+    let mut verdict: u8 = 0;
+    f.call((&mut verdict as *mut _, false as u8));
+    assert_eq!(verdict, false as u8);
+}
 
 // #[test]
 // fn bmp_message() {
@@ -420,12 +463,20 @@ fn compile(p: &'static str) -> Compiled {
 //     let p = compile(s);
 //     let f = p
 //         .module
-//         .get_function::<(i32,), i8>("main")
+//         .get_function::<(*mut u8, i32), ()>("main")
 //         .expect("No function found (or mismatched types)");
 
-//     assert_eq!(f.call((1,)), true as i8);
-//     assert_eq!(f.call((2,)), false as i8);
-//     assert_eq!(f.call((3,)), false as i8);
+//     let mut verdict: u8 = 0;
+//     f.call((&mut verdict as *mut _, 1));
+//     assert_eq!(verdict, true as u8);
+    
+//     let mut verdict: u8 = 0;
+//     f.call((&mut verdict as *mut _, 2));
+//     assert_eq!(verdict, false as u8);
+    
+//     let mut verdict: u8 = 0;
+//     f.call((&mut verdict as *mut _, 3));
+//     assert_eq!(verdict, false as u8);
 // }
 
 // #[test]

@@ -215,9 +215,10 @@ fn calling_function() {
         }
     ";
 
+    let program = compile(s);
+
     for x in 0..30 {
         let mut mem = Memory::new();
-        let program = compile(s);
         let pointer = mem.allocate(1);
         program
             .eval(&mut mem, vec![IrValue::Pointer(pointer), IrValue::U32(x)]);
@@ -245,9 +246,10 @@ fn anonymous_record() {
         }
     ";
 
+    let program = compile(s);
+
     for x in 0..30 {
         let mut mem = Memory::new();
-        let program = compile(s);
         let pointer = mem.allocate(1);
         program
             .eval(&mut mem, vec![IrValue::Pointer(pointer), IrValue::U32(x)]);
@@ -282,14 +284,48 @@ fn typed_record() {
         }
     ";
 
+    let program = compile(s);
+
     for x in 0..1 {
         let mut mem = Memory::new();
-        let program = compile(s);
         let pointer = mem.allocate(1);
         program
             .eval(&mut mem, vec![IrValue::Pointer(pointer), IrValue::U32(x)]);
         let res = mem.read(pointer, 1);
         assert_eq!(&[(10 < x && x < 20) as u8], res);
+    }
+}
+
+#[test]
+fn nested_record() {
+    let s = "
+        type Foo { x: Bar, y: Bar }
+        type Bar { a: I32, b: I32 }
+
+        filter-map main(x: I32) {
+            define {
+                bar = Bar { a: 20, b: x };
+                foo = Foo { x: bar, y: bar };
+            }
+            apply {
+                if foo.x.a == foo.y.b {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
+
+    let program = compile(s);
+
+    for x in 20..21 {
+        let mut mem = Memory::new();
+        let pointer = mem.allocate(1);
+        program
+            .eval(&mut mem, vec![IrValue::Pointer(pointer), IrValue::I32(x)]);
+        let res = mem.read(pointer, 1);
+        assert_eq!(&[(x == 20) as u8], res, "for x = {x}");
     }
 }
 

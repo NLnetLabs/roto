@@ -1,7 +1,5 @@
 use std::any::Any;
-use std::fmt::Debug;
-use std::fmt::Display;
-use std::rc::Rc;
+use std::fmt::{Debug, Display};
 
 use super::ir::Operand;
 
@@ -153,7 +151,7 @@ impl IrValue {
         } else if let Some(x) = any.downcast_ref() {
             IrValue::Runtime(*x)
         } else {
-            panic!()
+            panic!("Could not downcast");
         }
     }
 
@@ -169,7 +167,9 @@ impl IrValue {
             IrValue::I32(x) => x.to_ne_bytes().into(),
             IrValue::I64(x) => x.to_ne_bytes().into(),
             IrValue::Pointer(x) => x.to_ne_bytes().into(),
-            IrValue::Runtime(x) => (x as *const _ as usize).to_ne_bytes().into(),
+            IrValue::Runtime(x) => {
+                (x as *const _ as usize).to_ne_bytes().into()
+            }
         }
     }
 

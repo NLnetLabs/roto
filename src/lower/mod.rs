@@ -165,9 +165,10 @@ impl<'r> Lowerer<'r> {
             .0
             .iter()
             .map(|(x, _)| {
+                let ty = self.type_info.type_of(x);
                 (
                     self.type_info.full_name(x),
-                    lower_type(&self.type_info.type_of(x)),
+                    self.lower_type(&ty),
                 )
             })
             .collect();
@@ -178,10 +179,11 @@ impl<'r> Lowerer<'r> {
             let ty = self.type_info.type_of(ident);
             if self.type_info.size_of(&ty) > 0 {
                 let val = val.unwrap();
+                let ty = self.lower_type(&ty);
                 self.add(Instruction::Assign {
                     to: Var { var: name },
                     val,
-                    ty: lower_type(&ty),
+                    ty
                 })
             }
         }
@@ -193,14 +195,14 @@ impl<'r> Lowerer<'r> {
 
         let return_type = match return_type {
             x if self.type_info.size_of(&x) == 0 => None,
-            x if is_reference_type(&x) => {
+            x if self.is_reference_type(&x) => {
                 parameters.insert(
                     0,
                     (format!("{ident}::$return"), IrType::Pointer),
                 );
                 None
             }
-            x => Some(lower_type(&x)),
+            x => Some(self.lower_type(&x)),
         };
 
         Function {
@@ -236,9 +238,10 @@ impl<'r> Lowerer<'r> {
             .0
             .iter()
             .map(|(x, _)| {
+                let ty = self.type_info.type_of(x);
                 (
                     self.type_info.full_name(x),
-                    lower_type(&self.type_info.type_of(x)),
+                    self.lower_type(&ty),
                 )
             })
             .collect();
@@ -246,7 +249,7 @@ impl<'r> Lowerer<'r> {
         let return_type = return_type
             .as_ref()
             .map(|t| self.type_info.resolve(&Type::Name(t.to_string())))
-            .map(|t| lower_type(&t));
+            .map(|t| self.lower_type(&t));
 
         let last = self.block(body);
 
@@ -378,11 +381,12 @@ impl<'r> Lowerer<'r> {
                     None
                 };
                 let ty = self.type_info.type_of(id);
+                let ty = self.lower_type(&ty);
                 self.add(Instruction::Call {
                     to: to.clone(),
-                    ty: lower_type(&ty),
                     func: ident.clone(),
                     args,
+                    ty,
                 });
 
                 to.map(Into::into)
@@ -445,11 +449,12 @@ impl<'r> Lowerer<'r> {
                     all_args.extend(args.iter().flat_map(|a| self.expr(a)));
 
                     let to = self.new_tmp();
+                    let ty = self.lower_type(&ty);
                     self.add(Instruction::CallExternal {
                         to: to.clone(),
-                        ty: lower_type(&ty),
                         func: f,
                         args: all_args,
+                        ty,
                     });
                     return Some(to.into());
                 }
@@ -576,7 +581,9 @@ impl<'r> Lowerer<'r> {
                             args: vec![left, right],
                         })
                     }
-                    (ast::BinOp::Eq, _, ty) if is_reference_type(&ty) => {
+                    (ast::BinOp::Eq, _, ty)
+                        if self.is_reference_type(&ty) =>
+                    {
                         let size = self.type_info.size_of(&ty);
                         self.add(Instruction::MemCmp {
                             to: place.clone(),
@@ -585,7 +592,9 @@ impl<'r> Lowerer<'r> {
                             right,
                         })
                     }
-                    (ast::BinOp::Ne, _, ty) if is_reference_type(&ty) => {
+                    (ast::BinOp::Ne, _, ty)
+                        if self.is_reference_type(&ty) =>
+                    {
                         let size = self.type_info.size_of(&ty);
                         let tmp = self.new_tmp();
                         self.add(Instruction::MemCmp {
@@ -653,10 +662,11 @@ impl<'r> Lowerer<'r> {
                 self.new_block(&lbl_then);
                 if let Some(op) = self.block(if_true) {
                     let ty = self.type_info.type_of(if_true);
+                    let ty = self.lower_type(&ty);
                     self.add(Instruction::Assign {
                         to: res.clone(),
                         val: op,
-                        ty: lower_type(&ty),
+                        ty,
                     });
                     any_assigned = true;
                 }
@@ -669,10 +679,11 @@ impl<'r> Lowerer<'r> {
                     self.new_block(&lbl_else);
                     if let Some(op) = self.block(if_false) {
                         let ty = self.type_info.type_of(if_false);
+                        let ty = self.lower_type(&ty);
                         self.add(Instruction::Assign {
                             to: res.clone(),
                             val: op,
-                            ty: lower_type(&ty),
+                            ty,
                         });
                         any_assigned = true;
                     }
@@ -750,6 +761,7 @@ impl<'r> Lowerer<'r> {
         val: Operand,
         ty: &Type,
     ) {
+        dbg!(&to, offset, &val, ty);
         let tmp = self.new_tmp();
         self.add(Instruction::Offset {
             to: tmp.clone(),
@@ -757,7 +769,7 @@ impl<'r> Lowerer<'r> {
             offset,
         });
 
-        if is_reference_type(ty) {
+        if self.is_reference_type(ty) {
             let size = self.type_info.size_of(ty);
             self.add(Instruction::Copy {
                 to: tmp.into(),
@@ -781,7 +793,7 @@ impl<'r> Lowerer<'r> {
         let ty = self.type_info.resolve(ty);
         let to = self.new_tmp();
 
-        if is_reference_type(&ty) {
+        if self.is_reference_type(&ty) {
             self.add(Instruction::Offset {
                 to: to.clone(),
                 from,
@@ -796,43 +808,45 @@ impl<'r> Lowerer<'r> {
                 offset,
             });
 
+            let ty = self.lower_type(&ty);
             self.add(Instruction::Read {
                 to: to.clone(),
                 from: tmp.into(),
-                ty: lower_type(&ty),
+                ty,
             });
         }
 
         to.into()
     }
-}
 
-fn lower_type(ty: &Type) -> IrType {
-    match ty {
-        Type::Primitive(Primitive::Bool) => IrType::Bool,
-        Type::Primitive(Primitive::U8) => IrType::U8,
-        Type::Primitive(Primitive::U16) => IrType::U16,
-        Type::Primitive(Primitive::U32) => IrType::U32,
-        Type::Primitive(Primitive::U64) => IrType::U64,
-        Type::Primitive(Primitive::I8) => IrType::I8,
-        Type::Primitive(Primitive::I16) => IrType::I16,
-        Type::Primitive(Primitive::I32) => IrType::I32,
-        Type::Primitive(Primitive::I64) => IrType::I64,
-        Type::IntVar(_) => IrType::I32,
-        x if is_reference_type(x) => IrType::Pointer,
-        _ => panic!("could not lower: {ty}"),
+    fn is_reference_type(&mut self, ty: &Type) -> bool {
+        let ty = self.type_info.resolve(ty);
+        matches!(
+            ty,
+            Type::Record(..)
+                | Type::RecordVar(..)
+                | Type::NamedRecord(..)
+                | Type::Enum(..)
+                | Type::Verdict(..)
+        )
     }
-}
 
-fn is_reference_type(t: &Type) -> bool {
-    matches!(
-        t,
-        Type::Record(..)
-            | Type::RecordVar(..)
-            | Type::NamedRecord(..)
-            | Type::Enum(..)
-            | Type::Verdict(..)
-    )
+    fn lower_type(&mut self, ty: &Type) -> IrType {
+        match ty {
+            Type::Primitive(Primitive::Bool) => IrType::Bool,
+            Type::Primitive(Primitive::U8) => IrType::U8,
+            Type::Primitive(Primitive::U16) => IrType::U16,
+            Type::Primitive(Primitive::U32) => IrType::U32,
+            Type::Primitive(Primitive::U64) => IrType::U64,
+            Type::Primitive(Primitive::I8) => IrType::I8,
+            Type::Primitive(Primitive::I16) => IrType::I16,
+            Type::Primitive(Primitive::I32) => IrType::I32,
+            Type::Primitive(Primitive::I64) => IrType::I64,
+            Type::IntVar(_) => IrType::I32,
+            x if self.is_reference_type(x) => IrType::Pointer,
+            _ => panic!("could not lower: {ty}"),
+        }
+    }
 }
 
 fn binop_to_cmp(op: &ast::BinOp, ty: &Type) -> Option<ir::IntCmp> {

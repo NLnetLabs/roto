@@ -1,8 +1,7 @@
 //! Machine code generation via cranelift
 
 use std::{
-    collections::HashMap, marker::PhantomData, num::NonZeroU8, rc::Rc,
-    sync::Arc,
+    collections::HashMap, marker::PhantomData, num::NonZeroU8, sync::Arc,
 };
 
 use crate::{
@@ -457,9 +456,9 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 IrValue::Pointer(x) => {
                     self.ins().iconst(pointer_ty, *x as i64)
                 }
-                IrValue::Runtime(x) => self
-                    .ins()
-                    .iconst(pointer_ty, *x as i64),
+                IrValue::Runtime(x) => {
+                    self.ins().iconst(pointer_ty, *x as i64)
+                }
             },
         }
     }
@@ -499,7 +498,8 @@ impl Module {
         let correct_params = Params::check(
             &sig.params.iter().map(|p| p.value_type).collect::<Vec<_>>(),
         );
-        let correct_return = Return::check(sig.returns[0].value_type);
+        let correct_return =
+            Return::check(sig.returns.first().map(|x| x.value_type));
         if !correct_params || !correct_return {
             return None;
         }
@@ -513,44 +513,60 @@ impl Module {
 }
 
 pub trait IsRotoType {
-    fn check(ty: Type) -> bool {
-        ty == I8
+    fn check(ty: Option<Type>) -> bool {
+        ty == Some(I8)
     }
 }
 
 impl IsRotoType for i8 {
-    fn check(ty: Type) -> bool {
-        ty == I8
+    fn check(ty: Option<Type>) -> bool {
+        ty == Some(I8)
     }
 }
 
 impl IsRotoType for u8 {
-    fn check(ty: Type) -> bool {
-        ty == I8
+    fn check(ty: Option<Type>) -> bool {
+        ty == Some(I8)
     }
 }
 
 impl IsRotoType for i16 {
-    fn check(ty: Type) -> bool {
-        ty == I16
+    fn check(ty: Option<Type>) -> bool {
+        ty == Some(I16)
     }
 }
 
 impl IsRotoType for u16 {
-    fn check(ty: Type) -> bool {
-        ty == I16
+    fn check(ty: Option<Type>) -> bool {
+        ty == Some(I16)
     }
 }
 
 impl IsRotoType for i32 {
-    fn check(ty: Type) -> bool {
-        ty == I32
+    fn check(ty: Option<Type>) -> bool {
+        ty == Some(I32)
     }
 }
 
 impl IsRotoType for u32 {
-    fn check(ty: Type) -> bool {
-        ty == I32
+    fn check(ty: Option<Type>) -> bool {
+        ty == Some(I32)
+    }
+}
+
+impl IsRotoType for () {
+    fn check(ty: Option<Type>) -> bool {
+        ty.is_none()
+    }
+}
+
+impl<T> IsRotoType for *mut T {
+    fn check(ty: Option<Type>) -> bool {
+        if usize::BITS == 64 {
+            ty == Some(I64)
+        } else {
+            ty == Some(I32)
+        }
     }
 }
 
@@ -582,12 +598,31 @@ where
         let &[ty] = ty else {
             return false;
         };
-        A1::check(ty)
+        A1::check(Some(ty))
     }
 
     unsafe fn invoke<R>(func_ptr: *const u8, (a1,): Self) -> R {
         let func_ptr =
             unsafe { std::mem::transmute::<_, fn(A1) -> R>(func_ptr) };
         func_ptr(a1)
+    }
+}
+
+impl<A1, A2> RotoParams for (A1, A2)
+where
+    A1: IsRotoType,
+    A2: IsRotoType,
+{
+    fn check(ty: &[Type]) -> bool {
+        let &[ty1, ty2] = ty else {
+            return false;
+        };
+        A1::check(Some(ty1)) && A2::check(Some(ty2))
+    }
+
+    unsafe fn invoke<R>(func_ptr: *const u8, (a1,a2): Self) -> R {
+        let func_ptr =
+            unsafe { std::mem::transmute::<_, fn(A1,A2) -> R>(func_ptr) };
+        func_ptr(a1,a2)
     }
 }
