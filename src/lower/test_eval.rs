@@ -407,7 +407,7 @@ fn bmp_message() {
 fn create_message(variant: u8, port: Option<u16>) -> MemVal {
     let data = port.map(|port| {
         Box::new(MemVal::Struct(vec![
-            MemVal::Val(IrValue::Runtime(&() as *const _)),
+            MemVal::Val(IrValue::ExtPointer(&mut () as *mut _)),
             MemVal::Val(IrValue::U16(port)),
             MemVal::Val(IrValue::U16(0)),
             MemVal::Struct(vec![
@@ -418,7 +418,7 @@ fn create_message(variant: u8, port: Option<u16>) -> MemVal {
                 MemVal::Val(IrValue::Bool(false)),
                 MemVal::Val(IrValue::U8(0)),
                 MemVal::Val(IrValue::U32(0)),
-                MemVal::Val(IrValue::Runtime(&() as *const _)),
+                MemVal::Val(IrValue::ExtPointer(&mut () as *mut _)),
             ]),
         ]))
     });

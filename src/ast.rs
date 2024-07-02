@@ -66,9 +66,6 @@ pub enum Expr {
     /// e.g. `10.0.0.0/8.covers(..)`
     Literal(Meta<Literal>),
     Match(Box<Meta<Match>>),
-    /// a JunOS style prefix match expression, e.g. `0.0.0.0/0
-    /// prefix-length-range /12-/16`
-    PrefixMatch(PrefixMatchExpr),
     FunctionCall(Meta<Identifier>, Meta<Vec<Meta<Expr>>>),
     MethodCall(Box<Meta<Expr>>, Meta<Identifier>, Meta<Vec<Meta<Expr>>>),
     Access(Box<Meta<Expr>>, Meta<Identifier>),
@@ -190,9 +187,6 @@ impl std::fmt::Display for Identifier {
     }
 }
 
-/// The user-defined type of a record. It's very similar to a RibBody (in EBNF
-/// it's the same), but it simplifies creating the SymbolTable, because they're
-/// semantically different.
 #[derive(Clone, Debug)]
 pub struct RecordType {
     pub key_values: Meta<Vec<(Meta<Identifier>, RibFieldType)>>,
@@ -201,13 +195,9 @@ pub struct RecordType {
 #[derive(Clone, Debug)]
 pub enum Literal {
     String(String),
-    Prefix(Prefix),
     PrefixLength(u8),
     Asn(u32),
     IpAddress(IpAddress),
-    ExtendedCommunity(routecore::bgp::communities::ExtendedCommunity),
-    StandardCommunity(routecore::bgp::communities::StandardCommunity),
-    LargeCommunity(routecore::bgp::communities::LargeCommunity),
     Integer(i64),
     Bool(bool),
 }
@@ -224,6 +214,10 @@ pub enum BinOp {
     Ge,
     In,
     NotIn,
+    Add,
+    Sub,
+    Mul,
+    Div,
 }
 
 impl std::fmt::Display for BinOp {
@@ -241,6 +235,10 @@ impl std::fmt::Display for BinOp {
                 Self::Gt => ">=",
                 Self::Ge => "<",
                 Self::In => "in",
+                Self::Add => "+",
+                Self::Sub => "-",
+                Self::Mul => "*",
+                Self::Div => "/",
                 Self::NotIn => "not in",
             }
         )
@@ -248,35 +246,7 @@ impl std::fmt::Display for BinOp {
 }
 
 #[derive(Clone, Debug)]
-pub enum PrefixMatchType {
-    Exact,
-    Longer,
-    OrLonger,
-    PrefixLengthRange(PrefixLengthRange),
-    UpTo(u8),
-    NetMask(IpAddress),
-}
-
-#[derive(Clone, Debug)]
-pub struct PrefixMatchExpr {
-    pub prefix: Prefix,
-    pub ty: PrefixMatchType,
-}
-
-#[derive(Clone, Debug)]
 pub enum IpAddress {
     Ipv4(std::net::Ipv4Addr),
     Ipv6(std::net::Ipv6Addr),
-}
-
-#[derive(Clone, Debug)]
-pub struct Prefix {
-    pub addr: Meta<IpAddress>,
-    pub len: Meta<u8>,
-}
-
-#[derive(Clone, Debug)]
-pub struct PrefixLengthRange {
-    pub start: u8,
-    pub end: u8,
 }

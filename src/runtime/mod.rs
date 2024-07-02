@@ -20,7 +20,7 @@ pub mod wrap;
 
 use std::{
     any::{Any, TypeId},
-    mem::size_of,
+    mem::{align_of, size_of},
     net::IpAddr,
 };
 
@@ -56,6 +56,8 @@ pub struct Runtime {
 
 pub struct RuntimeType {
     pub name: &'static str,
+    pub representation: Representation,
+    pub alignment: usize,
     pub size: usize,
     pub type_id: TypeId,
     pub methods: Vec<RuntimeMethod>,
@@ -78,6 +80,7 @@ impl Runtime {
     fn register_type<T: Any>(
         &mut self,
         name: &'static str,
+        representation: Representation,
         eq: Option<WrappedFunction>,
         methods: Vec<RuntimeMethod>,
     ) {
@@ -92,7 +95,9 @@ impl Runtime {
         }
         self.types.push(RuntimeType {
             name,
+            representation,
             size: size_of::<T>(),
+            alignment: align_of::<T>(),
             type_id: TypeId::of::<T>(),
             methods,
             eq,
@@ -156,26 +161,74 @@ impl Runtime {
     }
 }
 
+pub enum Representation {
+    Value,
+    Reference,
+}
+
 impl Default for Runtime {
     fn default() -> Self {
         let mut rt = Self::empty();
 
         rt.register_type::<IpAddr>(
             "IpAddress",
+            Representation::Value,
             Some(wrap!(ip_address_eq(&a, &b))),
             vec![],
         );
 
-        rt.register_type::<OriginType>("OriginType", None, vec![]);
-        rt.register_type::<NextHop>("NextHop", None, vec![]);
-        rt.register_type::<MultiExitDisc>("MultiExitDisc", None, vec![]);
-        rt.register_type::<LocalPref>("LocalPref", None, vec![]);
-        rt.register_type::<Aggregator>("Aggregator", None, vec![]);
-        rt.register_type::<AtomicAggregate>("AtomicAggregate", None, vec![]);
-        rt.register_type::<Community>("Community", None, vec![]);
+        rt.register_type::<OriginType>(
+            "OriginType",
+            Representation::Reference,
+            None,
+            vec![],
+        );
+
+        rt.register_type::<NextHop>(
+            "NextHop",
+            Representation::Reference,
+            None,
+            vec![],
+        );
+
+        rt.register_type::<MultiExitDisc>(
+            "MultiExitDisc",
+            Representation::Reference,
+            None,
+            vec![],
+        );
+
+        rt.register_type::<LocalPref>(
+            "LocalPref",
+            Representation::Reference,
+            None,
+            vec![],
+        );
+
+        rt.register_type::<Aggregator>(
+            "Aggregator",
+            Representation::Reference,
+            None,
+            vec![],
+        );
+
+        rt.register_type::<AtomicAggregate>(
+            "AtomicAggregate",
+            Representation::Reference,
+            None,
+            vec![],
+        );
+
+        rt.register_type::<Community>(
+            "Community",
+            Representation::Reference,
+            None,
+            vec![],
+        );
 
         rt.register_type::<Prefix>(
             "Prefix",
+            Representation::Value,
             Some(wrap!(prefix_eq(&a, &b))),
             vec![
                 RuntimeMethod {
@@ -207,6 +260,7 @@ impl Default for Runtime {
 
         rt.register_type::<HopPath>(
             "HopPath",
+            Representation::Reference,
             None,
             vec![
                 RuntimeMethod {
@@ -226,6 +280,7 @@ impl Default for Runtime {
 
         rt.register_type::<AsPath<Vec<u8>>>(
             "AsPath",
+            Representation::Reference,
             None,
             vec![RuntimeMethod {
                 name: "origin",

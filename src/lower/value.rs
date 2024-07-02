@@ -18,8 +18,10 @@ pub enum IrValue {
     I16(i16),
     I32(i32),
     I64(i64),
+    IpAddr(std::net::IpAddr),
     Pointer(usize),
-    Runtime(*const ()),
+    ExtPointer(*mut ()),
+    ExtValue(Vec<u8>),
 }
 
 /// The types for [`IrValue`]s
@@ -34,8 +36,10 @@ pub enum IrType {
     I16,
     I32,
     I64,
+    IpAddr,
     Pointer,
-    Rt,
+    ExtPointer,
+    ExtValue,
 }
 
 impl IrType {
@@ -47,7 +51,8 @@ impl IrType {
             U16 | I16 => 2,
             U32 | I32 => 4,
             U64 | I64 => 8,
-            Pointer | Rt => (usize::BITS / 8) as usize,
+            IpAddr => 4,
+            Pointer | ExtValue | ExtPointer => (usize::BITS / 8) as usize,
         }
     }
 
@@ -69,8 +74,10 @@ impl Display for IrType {
             I16 => "I16",
             I32 => "I32",
             I64 => "I64",
+            IpAddr => "IpAddr",
             Pointer => "Pointer",
-            Rt => "Rt",
+            ExtValue => "ExtValue",
+            ExtPointer => "ExtPointer",
         };
         write!(f, "{s}")
     }
@@ -87,7 +94,8 @@ impl PartialEq for IrValue {
             (I8(l), I8(r)) => l == r,
             (I16(l), I16(r)) => l == r,
             (I32(l), I32(r)) => l == r,
-            (Runtime(_), Runtime(_)) => false,
+            (ExtValue(_), ExtValue(_)) => false,
+            (ExtPointer(_), ExtPointer(_)) => false,
             (Pointer(_), Pointer(_)) => panic!("can't compare pointers"),
             _ => panic!("tried comparing different types"),
         }
@@ -98,18 +106,21 @@ impl Eq for IrValue {}
 
 impl IrValue {
     pub fn get_type(&self) -> IrType {
+        use IrValue::*;
         match self {
-            Self::Bool(_) => IrType::Bool,
-            Self::U8(_) => IrType::U8,
-            Self::U16(_) => IrType::U16,
-            Self::U32(_) => IrType::U32,
-            Self::U64(_) => IrType::U32,
-            Self::I8(_) => IrType::I8,
-            Self::I16(_) => IrType::I16,
-            Self::I32(_) => IrType::I32,
-            Self::I64(_) => IrType::I64,
-            Self::Pointer(_) => IrType::Pointer,
-            Self::Runtime(_) => IrType::Rt,
+            Bool(_) => IrType::Bool,
+            U8(_) => IrType::U8,
+            U16(_) => IrType::U16,
+            U32(_) => IrType::U32,
+            U64(_) => IrType::U32,
+            I8(_) => IrType::I8,
+            I16(_) => IrType::I16,
+            I32(_) => IrType::I32,
+            I64(_) => IrType::I64,
+            IpAddr(_) => IrType::I32 ,
+            Pointer(_) => IrType::Pointer,
+            ExtValue(_) => IrType::ExtValue,
+            ExtPointer(_) => IrType::ExtPointer,
         }
     }
 
@@ -124,8 +135,10 @@ impl IrValue {
             Self::I16(x) => x,
             Self::I32(x) => x,
             Self::I64(x) => x,
+            Self::IpAddr(x) => x,
             Self::Pointer(x) => x,
-            Self::Runtime(x) => x,
+            Self::ExtValue(x) => x,
+            Self::ExtPointer(x) => x,
         }
     }
 
@@ -148,8 +161,8 @@ impl IrValue {
             IrValue::I32(*x)
         } else if let Some(x) = any.downcast_ref() {
             IrValue::I64(*x)
-        } else if let Some(x) = any.downcast_ref() {
-            IrValue::Runtime(*x)
+        // } else if let Some(x) = any.downcast_ref() {
+        //     todo!()
         } else {
             panic!("Could not downcast");
         }
@@ -157,17 +170,19 @@ impl IrValue {
 
     pub fn as_vec(&self) -> Vec<u8> {
         match self {
-            IrValue::Bool(b) => (*b as u8).to_ne_bytes().into(),
-            IrValue::U8(x) => x.to_ne_bytes().into(),
-            IrValue::U16(x) => x.to_ne_bytes().into(),
-            IrValue::U32(x) => x.to_ne_bytes().into(),
-            IrValue::U64(x) => x.to_ne_bytes().into(),
-            IrValue::I8(x) => x.to_ne_bytes().into(),
-            IrValue::I16(x) => x.to_ne_bytes().into(),
-            IrValue::I32(x) => x.to_ne_bytes().into(),
-            IrValue::I64(x) => x.to_ne_bytes().into(),
-            IrValue::Pointer(x) => x.to_ne_bytes().into(),
-            IrValue::Runtime(x) => {
+            Self::Bool(b) => (*b as u8).to_ne_bytes().into(),
+            Self::U8(x) => x.to_ne_bytes().into(),
+            Self::U16(x) => x.to_ne_bytes().into(),
+            Self::U32(x) => x.to_ne_bytes().into(),
+            Self::U64(x) => x.to_ne_bytes().into(),
+            Self::I8(x) => x.to_ne_bytes().into(),
+            Self::I16(x) => x.to_ne_bytes().into(),
+            Self::I32(x) => x.to_ne_bytes().into(),
+            Self::I64(x) => x.to_ne_bytes().into(),
+            Self::IpAddr(_) => todo!(),
+            Self::Pointer(x) => x.to_ne_bytes().into(),
+            Self::ExtValue(x) => x.clone(),
+            Self::ExtPointer(x) => {
                 (x as *const _ as usize).to_ne_bytes().into()
             }
         }
@@ -215,12 +230,30 @@ impl IrValue {
                 let val: &[u8; 8] = val.try_into().unwrap();
                 Self::I64(i64::from_ne_bytes(*val))
             }
+            IrType::IpAddr => {
+                let val: &[u8; 32] = val.try_into().unwrap();
+                if val[0] == 0 {
+                    let addr: [u8; 4] = val[1..5].try_into().unwrap();
+                    Self::IpAddr(std::net::IpAddr::from(addr))
+                } else {
+                    let addr: [u8; 16] = val[1..17].try_into().unwrap();
+                    Self::IpAddr(std::net::IpAddr::from(addr))
+                }
+            }
             IrType::Pointer => {
                 const SIZE: usize = (usize::BITS / 8) as usize;
                 let val: &[u8; SIZE] = val.try_into().unwrap();
                 Self::Pointer(usize::from_ne_bytes(*val))
             }
-            IrType::Rt => todo!(),
+            IrType::ExtPointer => {
+                const SIZE: usize = (usize::BITS / 8) as usize;
+                let val: &[u8; SIZE] = val.try_into().unwrap();
+                let val = usize::from_ne_bytes(*val);
+                Self::ExtPointer(val as *mut _)
+            },
+            IrType::ExtValue => {
+                Self::ExtValue(val.into())
+            }
         }
     }
 
@@ -279,8 +312,10 @@ impl Display for IrValue {
             I16(x) => write!(f, "I16({x})"),
             I32(x) => write!(f, "I32({x})"),
             I64(x) => write!(f, "I32({x})"),
+            IpAddr(x) => write!(f, "IpAddr({x})"),
             Pointer(x) => write!(f, "Pointer({x})"),
-            Runtime(..) => write!(f, "Runtime(..)"),
+            ExtValue(..) => write!(f, "ExtValue(..)"),
+            ExtPointer(..) => write!(f, "ExtPointer(..)"),
         }
     }
 }

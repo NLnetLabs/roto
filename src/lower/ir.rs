@@ -100,10 +100,34 @@ pub enum Instruction {
     /// Return from the current function (or filter-map)
     Return(Option<Operand>),
 
-    /// Perform a binary operation and store the result in `to`
+    /// Perform a comparison and store the result in `to`
     Cmp {
         to: Var,
         cmp: IntCmp,
+        left: Operand,
+        right: Operand,
+    },
+
+    Add {
+        to: Var,
+        left: Operand,
+        right: Operand,
+    },
+    
+    Sub {
+        to: Var,
+        left: Operand,
+        right: Operand,
+    },
+    
+    Mul {
+        to: Var,
+        left: Operand,
+        right: Operand,
+    },
+
+    Div {
+        to: Var,
         left: Operand,
         right: Operand,
     },
@@ -267,6 +291,18 @@ impl Display for Instruction {
             }
             Self::Or { to, left, right } => {
                 write!(f, "{to} = {left} | {right}")
+            }
+            Self::Add { to, left, right } => {
+                write!(f, "{to} = {left} + {right}")
+            }
+            Self::Sub { to, left, right } => {
+                write!(f, "{to} = {left} - {right}")
+            }
+            Self::Mul { to, left, right } => {
+                write!(f, "{to} = {left} * {right}")
+            }
+            Self::Div { to, left, right } => {
+                write!(f, "{to} = {left} / {right}")
             }
             Self::Jump(to) => {
                 write!(f, "jump {to}")

@@ -166,10 +166,7 @@ impl<'r> Lowerer<'r> {
             .iter()
             .map(|(x, _)| {
                 let ty = self.type_info.type_of(x);
-                (
-                    self.type_info.full_name(x),
-                    self.lower_type(&ty),
-                )
+                (self.type_info.full_name(x), self.lower_type(&ty))
             })
             .collect();
 
@@ -183,7 +180,7 @@ impl<'r> Lowerer<'r> {
                 self.add(Instruction::Assign {
                     to: Var { var: name },
                     val,
-                    ty
+                    ty,
                 })
             }
         }
@@ -239,10 +236,7 @@ impl<'r> Lowerer<'r> {
             .iter()
             .map(|(x, _)| {
                 let ty = self.type_info.type_of(x);
-                (
-                    self.type_info.full_name(x),
-                    self.lower_type(&ty),
-                )
+                (self.type_info.full_name(x), self.lower_type(&ty))
             })
             .collect();
 
@@ -360,7 +354,6 @@ impl<'r> Lowerer<'r> {
             }
             ast::Expr::Literal(l) => Some(self.literal(l)),
             ast::Expr::Match(m) => self.match_expr(m),
-            ast::Expr::PrefixMatch(_) => todo!(),
             ast::Expr::FunctionCall(ident, args) => {
                 let ty = self.type_info.type_of(ident);
                 let ident = self.type_info.full_name(ident);
@@ -631,6 +624,26 @@ impl<'r> Lowerer<'r> {
                         left,
                         right,
                     }),
+                    (ast::BinOp::Add, _, _) => self.add(Instruction::Add {
+                        to: place.clone(),
+                        left,
+                        right,
+                    }),
+                    (ast::BinOp::Sub, _, _) => self.add(Instruction::Sub {
+                        to: place.clone(),
+                        left,
+                        right,
+                    }),
+                    (ast::BinOp::Mul, _, _) => self.add(Instruction::Mul {
+                        to: place.clone(),
+                        left,
+                        right,
+                    }),
+                    (ast::BinOp::Div, _, _) => self.add(Instruction::Div {
+                        to: place.clone(),
+                        left,
+                        right,
+                    }),
                     _ => todo!(),
                 }
 
@@ -706,16 +719,6 @@ impl<'r> Lowerer<'r> {
     fn literal(&mut self, lit: &Meta<Literal>) -> Operand {
         match &lit.node {
             Literal::String(_) => todo!(),
-            Literal::Prefix(ast::Prefix { addr, len }) => {
-                let addr = match addr.node {
-                    ast::IpAddress::Ipv4(x) => IpAddr::V4(x),
-                    ast::IpAddress::Ipv6(x) => IpAddr::V6(x),
-                };
-                IrValue::from_any(Box::new(
-                    routecore::addr::Prefix::new(addr, len.node).unwrap(),
-                ))
-                .into()
-            }
             Literal::PrefixLength(n) => IrValue::U8(*n).into(),
             Literal::Asn(n) => IrValue::U32(*n).into(),
             Literal::IpAddress(addr) => {
@@ -725,9 +728,6 @@ impl<'r> Lowerer<'r> {
                 }))
                 .into()
             }
-            Literal::ExtendedCommunity(_) => todo!(),
-            Literal::StandardCommunity(_) => todo!(),
-            Literal::LargeCommunity(_) => todo!(),
             Literal::Integer(x) => {
                 let ty = self.type_info.type_of(lit);
                 match ty {

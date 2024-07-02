@@ -360,6 +360,70 @@ pub fn eval(
                 let right = eval_operand(&vars, right).as_bool();
                 vars.insert(to.clone(), IrValue::Bool(left || right));
             }
+            Instruction::Add { to, left, right } => {
+                let left = eval_operand(&vars, left);
+                let right = eval_operand(&vars, right);
+                let res = match (left, right) {
+                    (IrValue::U8(l), IrValue::U8(r)) => IrValue::U8(l + r),
+                    (IrValue::U16(l), IrValue::U16(r)) => IrValue::U16(l + r),
+                    (IrValue::U32(l), IrValue::U32(r)) => IrValue::U32(l + r),
+                    (IrValue::U64(l), IrValue::U64(r)) => IrValue::U64(l + r),
+                    (IrValue::I8(l), IrValue::I8(r)) => IrValue::I8(l + r),
+                    (IrValue::I16(l), IrValue::I16(r)) => IrValue::I16(l + r),
+                    (IrValue::I32(l), IrValue::I32(r)) => IrValue::I32(l + r),
+                    (IrValue::I64(l), IrValue::I64(r)) => IrValue::I64(l + r),
+                    _ => panic!(),
+                };
+                vars.insert(to.clone(), res);
+            }
+            Instruction::Sub { to, left, right } => {
+                let left = eval_operand(&vars, left);
+                let right = eval_operand(&vars, right);
+                let res = match (left, right) {
+                    (IrValue::U8(l), IrValue::U8(r)) => IrValue::U8(l - r),
+                    (IrValue::U16(l), IrValue::U16(r)) => IrValue::U16(l - r),
+                    (IrValue::U32(l), IrValue::U32(r)) => IrValue::U32(l - r),
+                    (IrValue::U64(l), IrValue::U64(r)) => IrValue::U64(l - r),
+                    (IrValue::I8(l), IrValue::I8(r)) => IrValue::I8(l - r),
+                    (IrValue::I16(l), IrValue::I16(r)) => IrValue::I16(l - r),
+                    (IrValue::I32(l), IrValue::I32(r)) => IrValue::I32(l - r),
+                    (IrValue::I64(l), IrValue::I64(r)) => IrValue::I64(l - r),
+                    _ => panic!(),
+                };
+                vars.insert(to.clone(), res);
+            }
+            Instruction::Mul { to, left, right } => {
+                let left = eval_operand(&vars, left);
+                let right = eval_operand(&vars, right);
+                let res = match (left, right) {
+                    (IrValue::U8(l), IrValue::U8(r)) => IrValue::U8(l * r),
+                    (IrValue::U16(l), IrValue::U16(r)) => IrValue::U16(l * r),
+                    (IrValue::U32(l), IrValue::U32(r)) => IrValue::U32(l * r),
+                    (IrValue::U64(l), IrValue::U64(r)) => IrValue::U64(l * r),
+                    (IrValue::I8(l), IrValue::I8(r)) => IrValue::I8(l * r),
+                    (IrValue::I16(l), IrValue::I16(r)) => IrValue::I16(l * r),
+                    (IrValue::I32(l), IrValue::I32(r)) => IrValue::I32(l * r),
+                    (IrValue::I64(l), IrValue::I64(r)) => IrValue::I64(l * r),
+                    _ => panic!(),
+                };
+                vars.insert(to.clone(), res);
+            }
+            Instruction::Div { to, left, right } => {
+                let left = eval_operand(&vars, left);
+                let right = eval_operand(&vars, right);
+                let res = match (left, right) {
+                    (IrValue::U8(l), IrValue::U8(r)) => IrValue::U8(l / r),
+                    (IrValue::U16(l), IrValue::U16(r)) => IrValue::U16(l / r),
+                    (IrValue::U32(l), IrValue::U32(r)) => IrValue::U32(l / r),
+                    (IrValue::U64(l), IrValue::U64(r)) => IrValue::U64(l / r),
+                    (IrValue::I8(l), IrValue::I8(r)) => IrValue::I8(l / r),
+                    (IrValue::I16(l), IrValue::I16(r)) => IrValue::I16(l / r),
+                    (IrValue::I32(l), IrValue::I32(r)) => IrValue::I32(l / r),
+                    (IrValue::I64(l), IrValue::I64(r)) => IrValue::I64(l / r),
+                    _ => panic!(),
+                };
+                vars.insert(to.clone(), res);
+            }
             Instruction::Offset { to, from, offset } => {
                 let &IrValue::Pointer(from) = eval_operand(&vars, from)
                 else {

@@ -41,6 +41,10 @@ pub enum Token<'s> {
     Slash,
     #[token("!")]
     Bang,
+    #[token("+")]
+    Plus,
+    #[token("*")]
+    Star,
 
     // === Delimiters ===
     #[token("{")]
@@ -174,6 +178,8 @@ impl<'source> Display for Token<'source> {
             Token::SemiColon => ";",
             Token::Comma => ",",
             Token::Period => ".",
+            Token::Plus => "+",
+            Token::Star => "*",
             Token::Slash => "/",
             Token::Bang => "!",
             Token::CurlyLeft => "{",

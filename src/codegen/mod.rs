@@ -215,7 +215,9 @@ impl<'a> ModuleBuilder<'a> {
             IrType::U16 | IrType::I16 => I16,
             IrType::U32 | IrType::I32 => I32,
             IrType::U64 | IrType::I64 => I64,
-            IrType::Pointer | IrType::Rt => self.isa.pointer_type(),
+            IrType::IpAddr => I32,
+            IrType::Pointer | IrType::ExtPointer => self.isa.pointer_type(),
+            IrType::ExtValue => todo!()
         }
     }
 }
@@ -347,6 +349,10 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 let val = self.ins().bor(l, r);
                 self.def(var, val);
             }
+            ir::Instruction::Add { to, left, right } => {
+                let l = self.operand(left);
+                let r = self.operand(right);
+            }
             ir::Instruction::Eq { .. } => todo!(),
             ir::Instruction::Alloc { to, size } => {
                 let slot = self.builder.create_sized_stack_slot(
@@ -456,9 +462,10 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 IrValue::Pointer(x) => {
                     self.ins().iconst(pointer_ty, *x as i64)
                 }
-                IrValue::Runtime(x) => {
-                    self.ins().iconst(pointer_ty, *x as i64)
-                }
+                _ => todo!()
+                // IrValue::Runtime(x) => {
+                //     self.ins().iconst(pointer_ty, *x as i64)
+                // }
             },
         }
     }

@@ -147,15 +147,6 @@ impl TypeChecker<'_, '_> {
             }
             Literal(l) => self.literal(ctx, l),
             Match(m) => self.match_expr(scope, ctx, m),
-            PrefixMatch(_) => {
-                self.unify(
-                    &Type::Primitive(Primitive::Bool),
-                    &ctx.expected_type,
-                    id,
-                    None,
-                )?;
-                Ok(false)
-            }
             FunctionCall(name, args) => {
                 let t = self.get_var(scope, name)?;
                 let t = self.resolve_type(t);
@@ -421,12 +412,9 @@ impl TypeChecker<'_, '_> {
 
         let t = match lit.node {
             String(_) => Type::Primitive(Primitive::String),
-            Prefix(_) => Type::Name("Prefix".into()),
             PrefixLength(_) => Type::Primitive(Primitive::U8),
             Asn(_) => Type::Primitive(Primitive::U32),
             IpAddress(_) => Type::Name("IpAddress".into()),
-            ExtendedCommunity(_) | StandardCommunity(_)
-            | LargeCommunity(_) => Type::Name("Community".into()),
             Bool(_) => Type::Primitive(Primitive::Bool),
             Integer(_) => self.fresh_int(),
         };
@@ -623,6 +611,16 @@ impl TypeChecker<'_, '_> {
                         ))
                     }
                 }
+
+                Ok(diverges)
+            }
+            Add | Sub | Mul | Div => {
+                let operand_ty = self.fresh_int();
+                let ctx = ctx.with_type(operand_ty);
+
+                let mut diverges = false;
+                diverges |= self.expr(scope, &ctx, left)?;
+                diverges |= self.expr(scope, &ctx, right)?;
 
                 Ok(diverges)
             }

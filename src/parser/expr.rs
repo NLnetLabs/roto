@@ -1,9 +1,6 @@
-use std::num::ParseIntError;
-
 use crate::{
     ast::{
-        BinOp, Block, Expr, IpAddress, Literal, Match, MatchArm, Prefix,
-        PrefixLengthRange, PrefixMatchExpr, PrefixMatchType, Record,
+        BinOp, Block, Expr, IpAddress, Literal, Match, MatchArm, Record,
         ReturnKind,
     },
     parser::ParseError,
@@ -160,6 +157,48 @@ impl<'source> Parser<'source, '_> {
                 .unwrap())
         } else {
             Ok(expr)
+        }
+    }
+
+    fn sum(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
+        let left = self.term(r)?;
+        if self.next_is(Token::Plus) {
+            let right = self.term(r)?;
+            let span = self.merge_spans(&left, &right);
+            Ok(self.spans.add(
+                span,
+                Expr::BinOp(Box::new(left), BinOp::Add, Box::new(right)),
+            ))
+        } else if self.next_is(Token::Hyphen) {
+            let right = self.term(r)?;
+            let span = self.merge_spans(&left, &right);
+            Ok(self.spans.add(
+                span,
+                Expr::BinOp(Box::new(left), BinOp::Sub, Box::new(right)),
+            ))
+        } else {
+            Ok(left)
+        }
+    }
+
+    fn term(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
+        let left = self.negation(r)?;
+        if self.next_is(Token::Star) {
+            let right = self.negation(r)?;
+            let span = self.merge_spans(&left, &right);
+            Ok(self.spans.add(
+                span,
+                Expr::BinOp(Box::new(left), BinOp::Mul, Box::new(right)),
+            ))
+        } else if self.next_is(Token::Slash) {
+            let right = self.negation(r)?;
+            let span = self.merge_spans(&left, &right);
+            Ok(self.spans.add(
+                span,
+                Expr::BinOp(Box::new(left), BinOp::Div, Box::new(right)),
+            ))
+        } else {
+            Ok(left)
         }
     }
 
@@ -329,20 +368,6 @@ impl<'source> Parser<'source, '_> {
 
         let literal = self.literal()?;
 
-        // If we parsed a prefix, it may be followed by a prefix match
-        // If not, it can be an access expression
-        if let Literal::Prefix(prefix) = &literal.node {
-            if let Some(ty) = self.try_prefix_match_type()? {
-                return Ok(Meta {
-                    id: literal.id,
-                    node: Expr::PrefixMatch(PrefixMatchExpr {
-                        prefix: prefix.clone(),
-                        ty,
-                    }),
-                });
-            }
-        }
-
         Ok(Meta {
             id: literal.id,
             node: Expr::Literal(literal),
@@ -466,18 +491,10 @@ impl<'source> Parser<'source, '_> {
         // slash and is therefore a prefix instead.
         if matches!(self.peek(), Some(Token::IpV4(_) | Token::IpV6(_))) {
             let addr = self.ip_address()?;
-            if let Some(Token::PrefixLength(..)) = self.peek() {
-                let len = self.prefix_length()?;
-                let span = self.merge_spans(&addr, &len);
-                return Ok(self
-                    .spans
-                    .add(span, Literal::Prefix(Prefix { addr, len })));
-            } else {
-                return Ok(Meta {
-                    id: addr.id,
-                    node: Literal::IpAddress(addr.node),
-                });
-            }
+            return Ok(Meta {
+                id: addr.id,
+                node: Literal::IpAddress(addr.node),
+            });
         }
 
         self.simple_literal()
@@ -488,12 +505,12 @@ impl<'source> Parser<'source, '_> {
         let addr = match token {
             Token::IpV4(s) => IpAddress::Ipv4(
                 s.parse::<std::net::Ipv4Addr>().map_err(|e| {
-                    ParseError::invalid_literal("Ipv4 addresss", s, e, span)
+                    ParseError::invalid_literal("Ipv4 addresses", s, e, span)
                 })?,
             ),
             Token::IpV6(s) => IpAddress::Ipv6(
                 s.parse::<std::net::Ipv6Addr>().map_err(|e| {
-                    ParseError::invalid_literal("Ipv6 addresss", s, e, span)
+                    ParseError::invalid_literal("Ipv6 addresses", s, e, span)
                 })?,
             ),
             _ => {
@@ -543,51 +560,6 @@ impl<'source> Parser<'source, '_> {
             Token::Float => {
                 unimplemented!("Floating point numbers are not supported yet")
             }
-            Token::Community(s) => {
-                // We offload the validation of the community to routecore
-                // but routecore doesn't do all the hex numbers correctly,
-                // so we transform those first.
-
-                // TODO: Change the AST so that it doesn't contain strings, but
-                // routecore communities.
-                use routecore::bgp::communities::Community;
-
-                let parts = s
-                    .split(':')
-                    .map(|p| {
-                        if let Some(hex) = p.strip_prefix("0x") {
-                            Ok(u32::from_str_radix(hex, 16)?.to_string())
-                        } else {
-                            Ok(p.to_string())
-                        }
-                    })
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|e: ParseIntError| {
-                        ParseError::invalid_literal("community", s, e, span)
-                    })?;
-
-                let transformed = parts.join(":");
-
-                let c: Community =
-                    transformed.parse::<Community>().map_err(|e| {
-                        ParseError::invalid_literal(
-                            "community",
-                            token,
-                            e,
-                            span,
-                        )
-                    })?;
-                match c {
-                    Community::Standard(x) => Literal::StandardCommunity(x),
-                    Community::Extended(x) => Literal::ExtendedCommunity(x),
-                    Community::Large(x) => Literal::LargeCommunity(x),
-                    Community::Ipv6Extended(_) => {
-                        unimplemented!(
-                            "IPv6 extended communities are not supported yet"
-                        )
-                    }
-                }
-            }
             t => return Err(ParseError::expected("a literal", t, span)),
         };
         Ok(self.spans.add(span, literal))
@@ -634,60 +606,6 @@ impl<'source> Parser<'source, '_> {
         )?;
 
         Ok(args)
-    }
-
-    /// Parse a prefix match type, which can follow a prefix in some contexts
-    ///
-    /// ```ebnf
-    /// PrefixMatchType ::= 'longer'
-    ///                   | 'orlonger'
-    ///                   | 'prefix-length-range' PrefixLengthRange
-    ///                   | 'upto' PrefixLength
-    ///                   | 'netmask' IpAddress
-    /// ```
-    fn try_prefix_match_type(
-        &mut self,
-    ) -> ParseResult<Option<PrefixMatchType>> {
-        let match_type = if self.next_is(Token::Exact) {
-            PrefixMatchType::Exact
-        } else if self.next_is(Token::Longer) {
-            PrefixMatchType::Longer
-        } else if self.next_is(Token::OrLonger) {
-            PrefixMatchType::OrLonger
-        } else if self.next_is(Token::PrefixLengthRange) {
-            PrefixMatchType::PrefixLengthRange(
-                self.prefix_length_range()?.node,
-            )
-        } else if self.next_is(Token::UpTo) {
-            PrefixMatchType::UpTo(self.prefix_length()?.node)
-        } else if self.next_is(Token::NetMask) {
-            PrefixMatchType::NetMask(self.ip_address()?.node)
-        } else {
-            return Ok(None);
-        };
-
-        Ok(Some(match_type))
-    }
-
-    /// Parse a prefix length range
-    ///
-    /// ```ebnf
-    /// PrefixLengthRange ::= PrefixLength '-' PrefixLength
-    /// ```
-    fn prefix_length_range(
-        &mut self,
-    ) -> ParseResult<Meta<PrefixLengthRange>> {
-        let start = self.prefix_length()?;
-        self.take(Token::Hyphen)?;
-        let end = self.prefix_length()?;
-        let span = self.merge_spans(&start, &end);
-        Ok(self.spans.add(
-            span,
-            PrefixLengthRange {
-                start: start.node,
-                end: end.node,
-            },
-        ))
     }
 
     /// Parse a prefix length
