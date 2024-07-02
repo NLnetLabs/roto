@@ -264,20 +264,22 @@ impl IrValue {
         }
     }
 
-    pub fn as_u32(&self) -> u32 {
+    pub fn as_u64(&self) -> u64 {
         match self {
-            IrValue::U8(x) => *x as u32,
-            IrValue::U16(x) => *x as u32,
-            IrValue::U32(x) => *x,
+            IrValue::U8(x) => *x as u64,
+            IrValue::U16(x) => *x as u64,
+            IrValue::U32(x) => *x as u64,
+            IrValue::U64(x) => *x,
             _ => panic!("Invalid value!"),
         }
     }
 
-    pub fn as_i32(&self) -> i32 {
+    pub fn as_i64(&self) -> i64 {
         match self {
-            IrValue::I8(x) => *x as i32,
-            IrValue::I16(x) => *x as i32,
-            IrValue::I32(x) => *x,
+            IrValue::I8(x) => *x as i64,
+            IrValue::I16(x) => *x as i64,
+            IrValue::I32(x) => *x as i64,
+            IrValue::I64(x) => *x,
             _ => panic!("Invalid value!"),
         }
     }

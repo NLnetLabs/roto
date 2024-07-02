@@ -330,14 +330,14 @@ pub fn eval(
                 let res = match cmp {
                     IntCmp::Eq => left == right,
                     IntCmp::Ne => left != right,
-                    IntCmp::ULt => left.as_u32() < right.as_u32(),
-                    IntCmp::ULe => left.as_u32() <= right.as_u32(),
-                    IntCmp::UGt => left.as_u32() > right.as_u32(),
-                    IntCmp::UGe => left.as_u32() >= right.as_u32(),
-                    IntCmp::SLt => left.as_i32() < right.as_i32(),
-                    IntCmp::SLe => left.as_i32() <= right.as_i32(),
-                    IntCmp::SGt => left.as_i32() > right.as_i32(),
-                    IntCmp::SGe => left.as_i32() >= right.as_i32(),
+                    IntCmp::ULt => left.as_u64() < right.as_u64(),
+                    IntCmp::ULe => left.as_u64() <= right.as_u64(),
+                    IntCmp::UGt => left.as_u64() > right.as_u64(),
+                    IntCmp::UGe => left.as_u64() >= right.as_u64(),
+                    IntCmp::SLt => left.as_i64() < right.as_i64(),
+                    IntCmp::SLe => left.as_i64() <= right.as_i64(),
+                    IntCmp::SGt => left.as_i64() > right.as_i64(),
+                    IntCmp::SGe => left.as_i64() >= right.as_i64(),
                 };
                 vars.insert(to.clone(), IrValue::Bool(res));
             }
