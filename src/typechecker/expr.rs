@@ -412,7 +412,6 @@ impl TypeChecker<'_, '_> {
 
         let t = match lit.node {
             String(_) => Type::Primitive(Primitive::String),
-            PrefixLength(_) => Type::Primitive(Primitive::U8),
             Asn(_) => Type::Primitive(Primitive::U32),
             IpAddress(_) => Type::Name("IpAddress".into()),
             Bool(_) => Type::Primitive(Primitive::Bool),
@@ -561,15 +560,15 @@ impl TypeChecker<'_, '_> {
     ) -> TypeResult<bool> {
         use ast::BinOp::*;
 
-        self.unify(
-            &Type::Primitive(Primitive::Bool),
-            &ctx.expected_type,
-            span,
-            None,
-        )?;
-
         match op {
             And | Or => {
+                self.unify(
+                    &Type::Primitive(Primitive::Bool),
+                    &ctx.expected_type,
+                    span,
+                    None,
+                )?;
+
                 let ctx = ctx.with_type(Type::Primitive(Primitive::Bool));
 
                 let mut diverges = false;
@@ -578,6 +577,13 @@ impl TypeChecker<'_, '_> {
                 Ok(diverges)
             }
             Lt | Le | Gt | Ge => {
+                self.unify(
+                    &Type::Primitive(Primitive::Bool),
+                    &ctx.expected_type,
+                    span,
+                    None,
+                )?;
+
                 let ctx = ctx.with_type(self.fresh_int());
 
                 let mut diverges = false;
@@ -586,6 +592,12 @@ impl TypeChecker<'_, '_> {
                 Ok(diverges)
             }
             Eq | Ne => {
+                self.unify(
+                    &Type::Primitive(Primitive::Bool),
+                    &ctx.expected_type,
+                    span,
+                    None,
+                )?;
                 let ctx = ctx.with_type(self.fresh_var());
 
                 let mut diverges = false;
@@ -616,15 +628,24 @@ impl TypeChecker<'_, '_> {
             }
             Add | Sub | Mul | Div => {
                 let operand_ty = self.fresh_int();
-                let ctx = ctx.with_type(operand_ty);
+                let ctx = ctx.with_type(operand_ty.clone());
 
                 let mut diverges = false;
                 diverges |= self.expr(scope, &ctx, left)?;
                 diverges |= self.expr(scope, &ctx, right)?;
 
+                self.unify(&operand_ty, &ctx.expected_type, span, None)?;
+
                 Ok(diverges)
             }
             In | NotIn => {
+                self.unify(
+                    &Type::Primitive(Primitive::Bool),
+                    &ctx.expected_type,
+                    span,
+                    None,
+                )?;
+
                 let ty = self.fresh_var();
 
                 let mut diverges = false;

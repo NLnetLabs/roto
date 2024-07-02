@@ -408,6 +408,39 @@ fn enum_match() {
     assert_eq!(verdict, false as u8);
 }
 
+#[test]
+fn arithmetic() {
+    let s = "
+        filter-map main(x: U32) {
+            apply {
+                if x + 10 * 20 < 250 {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
+
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(*mut u8, u32), ()>("main")
+        .expect("No function found (or mismatched types)");
+
+    let mut verdict: u8 = 0;
+    f.call((&mut verdict as *mut _, 5));
+    assert_eq!(verdict, true as u8);
+
+    let mut verdict: u8 = 0;
+    f.call((&mut verdict as *mut _, 20));
+    assert_eq!(verdict, true as u8);
+
+    let mut verdict: u8 = 0;
+    f.call((&mut verdict as *mut _, 100));
+    assert_eq!(verdict, false as u8);
+}
+
 // #[test]
 // fn bmp_message() {
 //     let s = "

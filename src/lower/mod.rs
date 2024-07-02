@@ -639,11 +639,15 @@ impl<'r> Lowerer<'r> {
                         left,
                         right,
                     }),
-                    (ast::BinOp::Div, _, _) => self.add(Instruction::Div {
-                        to: place.clone(),
-                        left,
-                        right,
-                    }),
+                    (ast::BinOp::Div, _, ty) => {
+                        let ty = self.lower_type(&ty);
+                        self.add(Instruction::Div {
+                            to: place.clone(),
+                            ty,
+                            left,
+                            right,
+                        })
+                    }
                     _ => todo!(),
                 }
 
@@ -719,7 +723,6 @@ impl<'r> Lowerer<'r> {
     fn literal(&mut self, lit: &Meta<Literal>) -> Operand {
         match &lit.node {
             Literal::String(_) => todo!(),
-            Literal::PrefixLength(n) => IrValue::U8(*n).into(),
             Literal::Asn(n) => IrValue::U32(*n).into(),
             Literal::IpAddress(addr) => {
                 IrValue::from_any(Box::new(match addr {

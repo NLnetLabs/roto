@@ -195,7 +195,6 @@ pub struct RecordType {
 #[derive(Clone, Debug)]
 pub enum Literal {
     String(String),
-    PrefixLength(u8),
     Asn(u32),
     IpAddress(IpAddress),
     Integer(i64),

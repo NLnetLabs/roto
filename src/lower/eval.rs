@@ -408,7 +408,7 @@ pub fn eval(
                 };
                 vars.insert(to.clone(), res);
             }
-            Instruction::Div { to, left, right } => {
+            Instruction::Div { to, ty, left, right } => {
                 let left = eval_operand(&vars, left);
                 let right = eval_operand(&vars, right);
                 let res = match (left, right) {
@@ -422,6 +422,7 @@ pub fn eval(
                     (IrValue::I64(l), IrValue::I64(r)) => IrValue::I64(l / r),
                     _ => panic!(),
                 };
+                debug_assert_eq!(*ty, res.get_type());
                 vars.insert(to.clone(), res);
             }
             Instruction::Offset { to, from, offset } => {

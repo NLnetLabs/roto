@@ -148,8 +148,6 @@ pub enum Token<'s> {
     #[regex(r"([0-9a-zA-Z]*:){2,6}[0-9a-zA-Z]*")]
     IpV6(&'s str),
 
-    #[regex(r"/[0-9]+")]
-    PrefixLength(&'s str),
     // This regex is a super set of all the forms of communities:
     // standard, large and extended.
     #[regex(r"([0-9a-zA-Z]+:)?(0x)?[0-9a-fA-F]+:(0x)?[0-9a-fA-F]+")]
@@ -230,7 +228,6 @@ impl<'source> Display for Token<'source> {
             Token::Community(s) => s,
             Token::Bool(true) => "true",
             Token::Bool(false) => "false",
-            Token::PrefixLength(s) => s,
         };
         write!(f, "{s}")
     }

@@ -105,12 +105,12 @@ impl<'source> Parser<'source, '_> {
     }
 
     fn logical_expr(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
-        let expr = self.negation(r)?;
+        let expr = self.comparison(r)?;
 
         if self.peek_is(Token::AmpAmp) {
             let mut exprs = vec![expr];
             while self.next_is(Token::AmpAmp) {
-                exprs.push(self.negation(r)?);
+                exprs.push(self.comparison(r)?);
             }
             if self.peek_is(Token::PipePipe) {
                 let pipe = self.take(Token::PipePipe)?;
@@ -134,7 +134,7 @@ impl<'source> Parser<'source, '_> {
         } else if self.peek_is(Token::PipePipe) {
             let mut exprs = vec![expr];
             while self.next_is(Token::PipePipe) {
-                exprs.push(self.negation(r)?);
+                exprs.push(self.comparison(r)?);
             }
             if self.peek_is(Token::AmpAmp) {
                 let amp = self.take(Token::AmpAmp)?;
@@ -158,6 +158,57 @@ impl<'source> Parser<'source, '_> {
         } else {
             Ok(expr)
         }
+    }
+
+    fn comparison(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
+        let expr = self.sum(r)?;
+
+        if let Some(op) = self.try_compare_operator()? {
+            let right = self.sum(r)?;
+            let span = self.merge_spans(&expr, &right);
+            Ok(self.spans.add(
+                span,
+                Expr::BinOp(Box::new(expr), op.node, Box::new(right)),
+            ))
+        } else {
+            Ok(expr)
+        }
+    }
+
+    /// Optionally parse a compare operator
+    ///
+    /// This method returns [`Option`], because we are never sure that there is
+    /// going to be a comparison operator. A span is included with the operator
+    /// to allow error messages to be attached to the parsed operator.
+    ///
+    /// ```ebnf
+    /// CompareOp ::= '==' | '!=' | '<' | '<=' | '>' | '>=' | 'not'? 'in'
+    /// ```
+    fn try_compare_operator(&mut self) -> ParseResult<Option<Meta<BinOp>>> {
+        let Some(tok) = self.peek() else {
+            return Ok(None);
+        };
+
+        let op = match tok {
+            Token::EqEq => BinOp::Eq,
+            Token::BangEq => BinOp::Ne,
+            Token::AngleLeft => BinOp::Lt,
+            Token::AngleRight => BinOp::Gt,
+            Token::AngleLeftEq => BinOp::Le,
+            Token::AngleRightEq => BinOp::Ge,
+            Token::In => BinOp::In,
+            Token::Not => {
+                let span1 = self.take(Token::Not)?;
+                let span2 = self.take(Token::In)?;
+                let span = span1.merge(span2);
+                let x = self.spans.add(span, BinOp::NotIn);
+                return Ok(Some(x));
+            }
+            _ => return Ok(None),
+        };
+
+        let (_, span) = self.next()?;
+        Ok(Some(self.spans.add(span, op)))
     }
 
     fn sum(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
@@ -205,63 +256,12 @@ impl<'source> Parser<'source, '_> {
     fn negation(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
         if self.peek_is(Token::Not) {
             let span = self.take(Token::Not)?;
-            let expr = self.negation(r)?;
+            let expr = self.access(r)?;
             let span = span.merge(self.get_span(&expr));
             Ok(self.spans.add(span, Expr::Not(Box::new(expr))))
         } else {
-            self.comparison(r)
+            self.access(r)
         }
-    }
-
-    fn comparison(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
-        let expr = self.access(r)?;
-
-        if let Some(op) = self.try_compare_operator()? {
-            let right = self.access(r)?;
-            let span = self.merge_spans(&expr, &right);
-            Ok(self.spans.add(
-                span,
-                Expr::BinOp(Box::new(expr), op.node, Box::new(right)),
-            ))
-        } else {
-            Ok(expr)
-        }
-    }
-
-    /// Optionally parse a compare operator
-    ///
-    /// This method returns [`Option`], because we are never sure that there is
-    /// going to be a comparison operator. A span is included with the operator
-    /// to allow error messages to be attached to the parsed operator.
-    ///
-    /// ```ebnf
-    /// CompareOp ::= '==' | '!=' | '<' | '<=' | '>' | '>=' | 'not'? 'in'
-    /// ```
-    fn try_compare_operator(&mut self) -> ParseResult<Option<Meta<BinOp>>> {
-        let Some(tok) = self.peek() else {
-            return Ok(None);
-        };
-
-        let op = match tok {
-            Token::EqEq => BinOp::Eq,
-            Token::BangEq => BinOp::Ne,
-            Token::AngleLeft => BinOp::Lt,
-            Token::AngleRight => BinOp::Gt,
-            Token::AngleLeftEq => BinOp::Le,
-            Token::AngleRightEq => BinOp::Ge,
-            Token::In => BinOp::In,
-            Token::Not => {
-                let span1 = self.take(Token::Not)?;
-                let span2 = self.take(Token::In)?;
-                let span = span1.merge(span2);
-                let x = self.spans.add(span, BinOp::NotIn);
-                return Ok(Some(x));
-            }
-            _ => return Ok(None),
-        };
-
-        let (_, span) = self.next()?;
-        Ok(Some(self.spans.add(span, op)))
     }
 
     fn access(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
@@ -477,16 +477,6 @@ impl<'source> Parser<'source, '_> {
 
     /// Parse any literal, including prefixes, ip addresses and communities
     fn literal(&mut self) -> ParseResult<Meta<Literal>> {
-        // A prefix length, it requires two tokens
-        if let Some(Token::PrefixLength(..)) = self.peek() {
-            let prefix_length = self.prefix_length()?;
-            let len = prefix_length.node;
-            return Ok(Meta {
-                id: prefix_length.id,
-                node: Literal::PrefixLength(len),
-            });
-        }
-
         // If we see an IpAddress, we need to check whether it is followed by a
         // slash and is therefore a prefix instead.
         if matches!(self.peek(), Some(Token::IpV4(_) | Token::IpV6(_))) {
@@ -606,26 +596,5 @@ impl<'source> Parser<'source, '_> {
         )?;
 
         Ok(args)
-    }
-
-    /// Parse a prefix length
-    ///
-    /// ```ebnf
-    /// PrefixLength ::= '/' Integer
-    /// ```
-    fn prefix_length(&mut self) -> ParseResult<Meta<u8>> {
-        let (token, span) = self.next()?;
-        let Token::PrefixLength(s) = token else {
-            return Err(ParseError::invalid_literal(
-                "prefix length",
-                token,
-                "",
-                span,
-            ));
-        };
-        let len = s[1..].parse::<u8>().map_err(|e| {
-            ParseError::invalid_literal("prefix length", token, e, span)
-        })?;
-        Ok(self.spans.add(span, len))
     }
 }

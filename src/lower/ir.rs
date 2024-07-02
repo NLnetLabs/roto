@@ -128,6 +128,7 @@ pub enum Instruction {
 
     Div {
         to: Var,
+        ty: IrType,
         left: Operand,
         right: Operand,
     },
@@ -301,8 +302,8 @@ impl Display for Instruction {
             Self::Mul { to, left, right } => {
                 write!(f, "{to} = {left} * {right}")
             }
-            Self::Div { to, left, right } => {
-                write!(f, "{to} = {left} / {right}")
+            Self::Div { to, ty, left, right } => {
+                write!(f, "{to}: {ty} = {left} / {right}")
             }
             Self::Jump(to) => {
                 write!(f, "jump {to}")

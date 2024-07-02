@@ -57,7 +57,7 @@ struct ModuleBuilder<'a> {
     functions: HashMap<String, (FuncId, Signature)>,
     /// The inner cranelift module
     inner: JITModule,
-    variable_map: HashMap<&'a str, Variable>,
+    variable_map: HashMap<&'a str, (Variable, Type)>,
     isa: Arc<dyn TargetIsa>,
 }
 
@@ -217,7 +217,7 @@ impl<'a> ModuleBuilder<'a> {
             IrType::U64 | IrType::I64 => I64,
             IrType::IpAddr => I32,
             IrType::Pointer | IrType::ExtPointer => self.isa.pointer_type(),
-            IrType::ExtValue => todo!()
+            IrType::ExtValue => todo!(),
         }
     }
 }
@@ -246,7 +246,7 @@ impl<'a, 'c> FuncGen<'a, 'c> {
 
         let args = self.builder.block_params(entry_block).to_owned();
         for ((x, _), val) in parameters.iter().zip(args) {
-            self.def(self.module.variable_map[&x.as_ref()], val);
+            self.def(self.module.variable_map[&x.as_ref()].0, val);
         }
     }
 
@@ -283,13 +283,13 @@ impl<'a, 'c> FuncGen<'a, 'c> {
 
                 let otherwise = self.get_block(default);
 
-                let val = self.operand(examinee);
+                let (val, _) = self.operand(examinee);
                 switch.emit(&mut self.builder, val, otherwise);
             }
             ir::Instruction::Assign { to, val, ty } => {
                 let ty = self.module.cranelift_type(ty);
                 let var = self.variable(&to.var, ty);
-                let val = self.operand(val);
+                let (val, _) = self.operand(val);
                 self.def(var, val)
             }
             ir::Instruction::Call { to, ty, func, args } => {
@@ -300,7 +300,7 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                     .declare_func_in_func(func_id, self.builder.func);
 
                 let args: Vec<_> =
-                    args.iter().map(|(_, a)| self.operand(a)).collect();
+                    args.iter().map(|(_, a)| self.operand(a).0).collect();
                 let inst = self.ins().call(func_ref, &args);
 
                 if let Some(to) = to {
@@ -311,7 +311,7 @@ impl<'a, 'c> FuncGen<'a, 'c> {
             }
             ir::Instruction::CallExternal { .. } => todo!(),
             ir::Instruction::Return(Some(v)) => {
-                let val = self.operand(v);
+                let (val, _) = self.operand(v);
                 self.ins().return_(&[val]);
             }
             ir::Instruction::Return(None) => {
@@ -323,35 +323,78 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 left,
                 right,
             } => {
-                let l = self.operand(left);
-                let r = self.operand(right);
+                let (l, _) = self.operand(left);
+                let (r, _) = self.operand(right);
                 let var = self.variable(&to.var, I8);
                 let val = self.binop(l, r, cmp);
                 self.def(var, val);
             }
             ir::Instruction::Not { to, val } => {
-                let val = self.operand(val);
+                let (val, _) = self.operand(val);
                 let var = self.variable(&to.var, I8);
                 let val = self.ins().icmp_imm(IntCC::Equal, val, 0);
                 self.def(var, val);
             }
             ir::Instruction::And { to, left, right } => {
-                let l = self.operand(left);
-                let r = self.operand(right);
+                let (l, _) = self.operand(left);
+                let (r, _) = self.operand(right);
                 let var = self.variable(&to.var, I8);
                 let val = self.ins().band(l, r);
                 self.def(var, val);
             }
             ir::Instruction::Or { to, left, right } => {
-                let l = self.operand(left);
-                let r = self.operand(right);
+                let (l, _) = self.operand(left);
+                let (r, _) = self.operand(right);
                 let var = self.variable(&to.var, I8);
                 let val = self.ins().bor(l, r);
                 self.def(var, val);
             }
             ir::Instruction::Add { to, left, right } => {
-                let l = self.operand(left);
-                let r = self.operand(right);
+                let (l, left_ty) = self.operand(left);
+                let (r, _) = self.operand(right);
+
+                let var = self.variable(&to.var, left_ty);
+                // Possibly interesting note for later: this is wrapping
+                // addition
+                let val = self.ins().iadd(l, r);
+                self.def(var, val)
+            }
+            ir::Instruction::Sub { to, left, right } => {
+                let (l, left_ty) = self.operand(left);
+                let (r, _) = self.operand(right);
+
+                let var = self.variable(&to.var, left_ty);
+                // Possibly interesting note for later: this is wrapping
+                // subtraction
+                let val = self.ins().isub(l, r);
+                self.def(var, val)
+            }
+            ir::Instruction::Mul { to, left, right } => {
+                let (l, left_ty) = self.operand(left);
+                let (r, _) = self.operand(right);
+
+                let var = self.variable(&to.var, left_ty);
+                // Possibly interesting note for later: this is wrapping
+                // multiplication
+                let val = self.ins().imul(l, r);
+                self.def(var, val)
+            }
+            ir::Instruction::Div { to, ty, left, right } => {
+                let (l, left_ty) = self.operand(left);
+                let (r, _) = self.operand(right);
+
+                let var = self.variable(&to.var, left_ty);
+
+                let val = match ty {
+                    IrType::I8 | IrType::I16 | IrType::I32 | IrType::I64 => {
+                        self.ins().sdiv(l, r)
+                    }
+                    IrType::U8 | IrType::U16 | IrType::U32 | IrType::U64 => {
+                        self.ins().udiv(l, r)
+                    }
+                    _ => panic!()
+                };
+                self.def(var, val)
             }
             ir::Instruction::Eq { .. } => todo!(),
             ir::Instruction::Alloc { to, size } => {
@@ -365,27 +408,27 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 self.def(var, p);
             }
             ir::Instruction::Write { to, val } => {
-                let x = self.operand(val);
-                let to = self.operand(to);
+                let (x, _) = self.operand(val);
+                let (to, _) = self.operand(to);
                 self.ins().store(MEMFLAGS, x, to, 0);
             }
             ir::Instruction::Read { to, from, ty } => {
                 let c_ty = self.module.cranelift_type(ty);
-                let from = self.operand(from);
+                let (from, _) = self.operand(from);
                 let res = self.ins().load(c_ty, MEMFLAGS, from, 0);
                 let to = self.variable(&to.var, c_ty);
                 self.def(to, res);
             }
             ir::Instruction::Offset { to, from, offset } => {
-                let from = self.operand(from);
+                let (from, _) = self.operand(from);
                 let tmp = self.ins().iadd_imm(from, *offset as i64);
                 let to =
                     self.variable(&to.var, self.module.isa.pointer_type());
                 self.def(to, tmp)
             }
             ir::Instruction::Copy { to, from, size } => {
-                let dest = self.operand(to);
-                let src = self.operand(from);
+                let (dest, _) = self.operand(to);
+                let (src, _) = self.operand(from);
                 self.builder.emit_small_memory_copy(
                     self.module.isa.frontend_config(),
                     dest,
@@ -403,8 +446,8 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 left,
                 right,
             } => {
-                let left = self.operand(left);
-                let right = self.operand(right);
+                let (left, _) = self.operand(left);
+                let (right, _) = self.operand(right);
 
                 // We could pass more precise alignment to cranelift, but
                 // values of 1 should just work.
@@ -442,41 +485,42 @@ impl<'a, 'c> FuncGen<'a, 'c> {
         self.builder.def_var(var, val);
     }
 
-    fn operand(&mut self, val: &'a Operand) -> Value {
+    fn operand(&mut self, val: &'a Operand) -> (Value, Type) {
         let pointer_ty = self.module.isa.pointer_type();
         match val {
             ir::Operand::Place(p) => {
-                let var = self.variable(&p.var, I8);
-                self.builder.use_var(var)
+                let a: &'a str = &p.var;
+                let (var, ty) = self.module.variable_map[a];
+                (self.builder.use_var(var), ty)
             }
-            ir::Operand::Value(v) => match v {
-                IrValue::Bool(x) => self.ins().iconst(I8, *x as i64),
-                IrValue::U8(x) => self.ins().iconst(I8, *x as i64),
-                IrValue::U16(x) => self.ins().iconst(I16, *x as i64),
-                IrValue::U32(x) => self.ins().iconst(I32, *x as i64),
-                IrValue::U64(x) => self.ins().iconst(I64, *x as i64),
-                IrValue::I8(x) => self.ins().iconst(I8, *x as i64),
-                IrValue::I16(x) => self.ins().iconst(I16, *x as i64),
-                IrValue::I32(x) => self.ins().iconst(I32, *x as i64),
-                IrValue::I64(x) => self.ins().iconst(I64, *x),
-                IrValue::Pointer(x) => {
-                    self.ins().iconst(pointer_ty, *x as i64)
-                }
-                _ => todo!()
-                // IrValue::Runtime(x) => {
-                //     self.ins().iconst(pointer_ty, *x as i64)
-                // }
-            },
+            ir::Operand::Value(v) => {
+                let (ty, val) = match v {
+                    IrValue::Bool(x) => (I8, *x as i64),
+                    IrValue::U8(x) => (I8, *x as i64),
+                    IrValue::U16(x) => (I16, *x as i64),
+                    IrValue::U32(x) => (I32, *x as i64),
+                    IrValue::U64(x) => (I64, *x as i64),
+                    IrValue::I8(x) => (I8, *x as i64),
+                    IrValue::I16(x) => (I16, *x as i64),
+                    IrValue::I32(x) => (I32, *x as i64),
+                    IrValue::I64(x) => (I64, *x),
+                    IrValue::Pointer(x) => (pointer_ty, *x as i64),
+                    _ => todo!(),
+                };
+                (self.ins().iconst(ty, val), ty)
+            }
         }
     }
 
     fn variable(&mut self, var: &'a str, ty: Type) -> Variable {
         let len = self.module.variable_map.len();
-        *self.module.variable_map.entry(var).or_insert_with(|| {
-            let var = Variable::new(len);
-            self.builder.declare_var(var, ty);
-            var
-        })
+        let (var, _ty) =
+            *self.module.variable_map.entry(var).or_insert_with(|| {
+                let var = Variable::new(len);
+                self.builder.declare_var(var, ty);
+                (var, ty)
+            });
+        var
     }
 
     fn binop(&mut self, left: Value, right: Value, op: &IntCmp) -> Value {
@@ -627,9 +671,9 @@ where
         A1::check(Some(ty1)) && A2::check(Some(ty2))
     }
 
-    unsafe fn invoke<R>(func_ptr: *const u8, (a1,a2): Self) -> R {
+    unsafe fn invoke<R>(func_ptr: *const u8, (a1, a2): Self) -> R {
         let func_ptr =
-            unsafe { std::mem::transmute::<_, fn(A1,A2) -> R>(func_ptr) };
-        func_ptr(a1,a2)
+            unsafe { std::mem::transmute::<_, fn(A1, A2) -> R>(func_ptr) };
+        func_ptr(a1, a2)
     }
 }

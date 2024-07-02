@@ -53,12 +53,12 @@ impl MemVal {
         }
     }
 
-    fn size(&self) -> usize {
+    fn _size(&self) -> usize {
         match self {
             MemVal::Struct(fields) => {
                 let mut size = 0;
                 for f in fields {
-                    size += f.padding(size) + f.size()
+                    size += f.padding(size) + f._size()
                 }
                 size
             }

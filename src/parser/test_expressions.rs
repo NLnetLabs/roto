@@ -19,24 +19,18 @@ fn test_logical_expr_1() {
 
 #[test]
 fn test_logical_expr_2() {
-    let s = r#"(0.0.0.0/0 prefix-length-range /12-/16)"#;
-    parse_expr(s).unwrap();
-}
-
-#[test]
-fn test_logical_expr_3() {
     let s = r#"blaffer.blaf.contains(something,"somewhat") > blaf()"#;
     parse_expr(s).unwrap();
 }
 
 #[test]
-fn test_logical_expr_4() {
+fn test_logical_expr_3() {
     let s = r#"( my_set.contains(bla.bla()) ) || ( my_other_set.contains(bla.bla()) )"#;
     parse_expr(s).unwrap();
 }
 
 #[test]
-fn test_logical_expr_5() {
+fn test_logical_expr_4() {
     let s ="(found_prefix.prefix.exists() && found_prefix.prefix.exists()) || route_in_table";
     parse_expr(s).unwrap();
 }
@@ -78,30 +72,6 @@ fn test_compute_expr_5() {
 #[test]
 fn test_value_expr() {
     let s = "globlaf(bla)";
-    parse_expr(s).unwrap();
-}
-
-//------------ Prefix Match Expressions -------------------------------------
-
-// This SHOULD be syntactic sugar for, but they're not correct right now.
-// They're supposed to be boolean expressions, not expressions that yield
-// prefixes. TODO
-
-#[test]
-fn test_prefix_expr_1() {
-    let s = "129.23.0.0/16 upto /18";
-    parse_expr(s).unwrap();
-}
-
-#[test]
-fn test_prefix_expr_2() {
-    let s = r"2001::1/48 orlonger";
-    parse_expr(s).unwrap();
-}
-
-#[test]
-fn test_prefix_expr_3() {
-    let s = r"0.0.0.0/0 prefix-length-range /24-/32";
     parse_expr(s).unwrap();
 }
 
