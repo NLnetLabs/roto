@@ -68,7 +68,7 @@ fn reject() {
 #[test]
 fn equal_to_10() {
     let s = "
-        filter-map main(x: U32) {
+        filter-map main(x: u32) {
             apply {
                 if x == 10 {
                     accept
@@ -82,7 +82,7 @@ fn equal_to_10() {
     let p = compile(s);
     let f = p
         .module
-        .get_function::<(*mut u8, i32), ()>("main")
+        .get_function::<(*mut u8, u32), ()>("main")
         .expect("No function found (or mismatched types)");
 
     let mut verdict: u8 = 0;
@@ -97,11 +97,11 @@ fn equal_to_10() {
 #[test]
 fn equal_to_10_with_function() {
     let s = "
-        function is_10(x: U32) -> Bool {
+        function is_10(x: i32) -> bool {
             x == 10
         }
         
-        filter-map main(x: U32) {
+        filter-map main(x: i32) {
             apply {
                 if is_10(x) {
                     accept
@@ -130,15 +130,15 @@ fn equal_to_10_with_function() {
 #[test]
 fn equal_to_10_with_two_functions() {
     let s = "
-        function equals(x: U32, y: U32) -> Bool {
+        function equals(x: u32, y: u32) -> bool {
             x == y
         }
 
-        function is_10(x: U32) -> Bool {
+        function is_10(x: u32) -> bool {
             equals(x, 10)
         }
 
-        filter-map main(x: U32) {
+        filter-map main(x: u32) {
             apply {
                 if is_10(x) {
                     accept
@@ -154,7 +154,7 @@ fn equal_to_10_with_two_functions() {
     let p = compile(s);
     let f = p
         .module
-        .get_function::<(*mut u8, i32), ()>("main")
+        .get_function::<(*mut u8, u32), ()>("main")
         .expect("No function found (or mismatched types)");
 
     let mut verdict: u8 = 0;
@@ -177,7 +177,7 @@ fn equal_to_10_with_two_functions() {
 #[test]
 fn negation() {
     let s = "
-        filter-map main(x: I32) {
+        filter-map main(x: i32) {
             apply {
                 if not (x == 10) {
                     accept
@@ -204,7 +204,7 @@ fn negation() {
 #[test]
 fn a_bunch_of_comparisons() {
     let s = "
-        filter-map main(x: I32) {
+        filter-map main(x: i32) {
             apply {
                 if (
                     (x > 10 && x < 20)
@@ -238,9 +238,9 @@ fn a_bunch_of_comparisons() {
 #[test]
 fn record() {
     let s = "
-        type Foo { a: I32, b: I32 }
+        type Foo { a: i32, b: i32 }
 
-        filter-map main(x: I32) {
+        filter-map main(x: i32) {
             define {
                 foo = Foo { a: x, b: 20 };
             }
@@ -271,9 +271,9 @@ fn record() {
 #[test]
 fn record_with_fields_flipped() {
     let s = "
-        type Foo { a: I32, b: I32 }
+        type Foo { a: i32, b: i32 }
 
-        filter-map main(x: I32) {
+        filter-map main(x: i32) {
             define {
                 // These are flipped, to ensure that the order in which
                 // the fields are given doesn't matter:
@@ -307,9 +307,9 @@ fn record_with_fields_flipped() {
 fn nested_record() {
     let s = "
         type Foo { x: Bar, y: Bar }
-        type Bar { a: I32, b: I32 }
+        type Bar { a: i32, b: i32 }
 
-        filter-map main(x: I32) {
+        filter-map main(x: i32) {
             define {
                 bar = Bar { a: 20, b: x };
                 foo = Foo { x: bar, y: bar };
@@ -342,9 +342,9 @@ fn nested_record() {
 fn misaligned_fields() {
     // A record where the second field should be aligned
     let s = "
-        type Foo { a: I16, b: I32 }
+        type Foo { a: i16, b: i32 }
 
-        filter-map main(x: I32) {
+        filter-map main(x: i32) {
             define {
                 foo = Foo { a: 10, b: x };
             }
@@ -375,7 +375,7 @@ fn misaligned_fields() {
 #[test]
 fn enum_match() {
     let s = "
-        filter-map main(r: Bool) { 
+        filter-map main(r: bool) { 
             define {
                 x = if r {
                     Afi.IpV4
@@ -396,22 +396,22 @@ fn enum_match() {
     let p = compile(s);
     let f = p
         .module
-        .get_function::<(*mut u8, u8), ()>("main")
+        .get_function::<(*mut u8, bool), ()>("main")
         .expect("No function found (or mismatched types)");
 
     let mut verdict: u8 = 0;
-    f.call((&mut verdict as *mut _, true as u8));
+    f.call((&mut verdict as *mut _, true));
     assert_eq!(verdict, true as u8);
     
     let mut verdict: u8 = 0;
-    f.call((&mut verdict as *mut _, false as u8));
+    f.call((&mut verdict as *mut _, false));
     assert_eq!(verdict, false as u8);
 }
 
 #[test]
 fn arithmetic() {
     let s = "
-        filter-map main(x: U32) {
+        filter-map main(x: i32) {
             apply {
                 if x + 10 * 20 < 250 {
                     accept
@@ -425,7 +425,7 @@ fn arithmetic() {
     let p = compile(s);
     let f = p
         .module
-        .get_function::<(*mut u8, u32), ()>("main")
+        .get_function::<(*mut u8, i32), ()>("main")
         .expect("No function found (or mismatched types)");
 
     let mut verdict: u8 = 0;
@@ -444,7 +444,7 @@ fn arithmetic() {
 // #[test]
 // fn bmp_message() {
 //     let s = "
-//     filter-map main(a: I32) {
+//     filter-map main(a: i32) {
 //         define {
 //             header = {
 //                 is_ipv6: true,
@@ -516,7 +516,7 @@ fn arithmetic() {
 // fn can_we_misalign_stack_slots() {
 //     let s = "
 //     type Foo { x: I8 }
-//     type Bar { x: I32, y: I16 }
+//     type Bar { x: i32, y: I16 }
 
 //     filter-map main() {
 //         define {
@@ -546,13 +546,13 @@ fn arithmetic() {
 // #[test]
 // fn returning_a_record() {
 //     let s = "
-//         type Foo { x: I32, y: I32, z: I32 }
+//         type Foo { x: i32, y: i32, z: i32 }
 
-//         function make_foo(x: I32) -> Foo {
+//         function make_foo(x: i32) -> Foo {
 //             Foo { x: x, y: 1, z: 2 }
 //         }
 
-//         filter-map main(rx: I32) {
+//         filter-map main(rx: i32) {
 //             define {
 //                 x = make_foo(rx);
 //                 y = make_foo(1);

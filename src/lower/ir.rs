@@ -24,7 +24,6 @@
 //!
 //! [cranelift]: https://docs.rs/cranelift-frontend/latest/cranelift_frontend/
 
-use crate::runtime::wrap::WrappedFunction;
 use std::fmt::Display;
 
 use super::value::{IrType, IrValue};
@@ -90,12 +89,11 @@ pub enum Instruction {
     },
 
     /// Call an external function (i.e. a Rust function)
-    CallExternal {
-        to: Var,
-        ty: IrType,
-        func: WrappedFunction,
-        args: Vec<Operand>,
-    },
+    // CallExternal {
+    //     to: Var,
+    //     ty: IrType,
+    //     args: Vec<Operand>,
+    // },
 
     /// Return from the current function (or filter-map)
     Return(Option<Operand>),
@@ -262,15 +260,15 @@ impl Display for Instruction {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            Self::CallExternal { to, ty, func, args } => write!(
-                f,
-                "{to}: {ty} = <rust function {:?}>({})",
-                func.pointer,
-                args.iter()
-                    .map(|a| a.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
+            // Self::CallExternal { to, ty, func, args } => write!(
+            //     f,
+            //     "{to}: {ty} = <rust function {:?}>({})",
+            //     func.pointer,
+            //     args.iter()
+            //         .map(|a| a.to_string())
+            //         .collect::<Vec<_>>()
+            //         .join(", ")
+            // ),
             Self::Return(None) => write!(f, "return"),
             Self::Return(Some(v)) => write!(f, "return {v}"),
             Self::Cmp {
@@ -353,10 +351,15 @@ impl Display for Instruction {
 #[derive(Debug)]
 pub struct Function {
     pub name: String,
-    pub parameters: Vec<(String, IrType)>,
-    pub return_type: Option<IrType>,
+    pub signature: Signature,
     pub blocks: Vec<Block>,
     pub public: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct Signature {
+    pub parameters: Vec<(String, IrType)>,
+    pub return_type: Option<IrType>,
 }
 
 impl Display for Function {

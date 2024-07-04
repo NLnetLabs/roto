@@ -1,9 +1,9 @@
 filter foo() {
     define {
-        rx msg: U32;
+        rx msg: u32;
     }
 
-    function bar() -> Bool {
+    function bar() -> bool {
         return true;
         return false;
     }

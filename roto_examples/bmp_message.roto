@@ -1,4 +1,4 @@
-filter-map main(a: I32) {
+filter-map main(a: i32) {
     define {
         header = {
             is_ipv6: true,

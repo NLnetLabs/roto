@@ -1,6 +1,6 @@
 filter foo {
     define {
-        rx msg: U32;
+        rx msg: u32;
     }
 
     apply {

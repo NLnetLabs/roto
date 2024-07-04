@@ -1,8 +1,4 @@
-use crate::{
-    ast::Identifier,
-    parser::meta::Meta,
-    runtime::{wrap::WrappedFunction, Runtime},
-};
+use crate::{ast::Identifier, parser::meta::Meta, runtime::Runtime};
 use std::{
     any::TypeId,
     fmt::{Debug, Display},
@@ -11,12 +7,12 @@ use std::{
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
     Var(usize),
-    ExplicitVar(&'static str),
+    ExplicitVar(String),
     IntVar(usize),
     RecordVar(usize, Vec<(String, Type)>),
     Never,
     Primitive(Primitive),
-    BuiltIn(&'static str, TypeId),
+    BuiltIn(String, TypeId),
     Verdict(Box<Type>, Box<Type>),
     List(Box<Type>),
     Table(Box<Type>),
@@ -109,7 +105,6 @@ pub struct Arrow {
     pub rec: Type,
     pub args: Vec<Type>,
     pub ret: Type,
-    pub function: Option<WrappedFunction>,
 }
 
 impl Type {
@@ -170,11 +165,10 @@ pub struct Method {
     pub vars: Vec<&'static str>,
     pub argument_types: Vec<Type>,
     pub return_type: Type,
-    pub function: Option<WrappedFunction>,
 }
 
 impl Method {
-    fn new<'a, T>(
+    fn _new<'a, T>(
         receiver_type: impl Into<Type>,
         name: &'static str,
         vars: &[&'static str],
@@ -194,7 +188,6 @@ impl Method {
                 .map(Into::into)
                 .collect(),
             return_type: return_type.into(),
-            function: None,
         }
     }
 }
@@ -214,96 +207,19 @@ pub fn globals() -> Vec<(String, Type)> {
     .collect()
 }
 
-pub fn methods(rt: &Runtime) -> Vec<Method> {
-    use self::Primitive::*;
-    use Type::*;
-
-    // All the method defined by the runtime are valid
-    let mut m = Vec::new();
-    for ty in &rt.types {
-        for method in &ty.methods {
-            m.push(Method {
-                receiver_type: Type::Name(ty.name.into()),
-                name: method.name,
-                vars: Vec::new(),
-                argument_types: method.parameter_types.to_vec(),
-                return_type: method.return_type.clone(),
-                function: Some(method.wrapped.clone()),
-            })
-        }
-    }
-
-    // TODO: These should be valid but are not defined yet
-    let other = vec![
-        Method::new(
-            OutputStream(Box::new(ExplicitVar("T"))),
-            "send",
-            &["T"],
-            &[ExplicitVar("T")],
-            Unit,
-        ),
-        Method::new(
-            ExplicitVar("T"),
-            "set",
-            &["T"],
-            &[ExplicitVar("T")],
-            Unit,
-        ),
-        Method::new(
-            List(Box::new(ExplicitVar("T"))),
-            "contains",
-            &["T"],
-            &[ExplicitVar("T")],
-            Bool,
-        ),
-        Method::new(
-            Table(Box::new(ExplicitVar("T"))),
-            "contains",
-            &["T"],
-            &[ExplicitVar("T")],
-            Bool,
-        ),
-    ];
-
-    m.extend(other);
-    m
-}
-
-pub fn static_methods() -> Vec<Method> {
-    use self::Primitive::*;
-
-    vec![
-        Method::new(
-            Type::Name("Prefix".into()),
-            "from",
-            &[],
-            &[
-                Type::Name("IpAddress".into()),
-                Type::Primitive(Primitive::U8),
-            ],
-            Type::Name("Prefix".into()),
-        ),
-        Method::new(
-            String,
-            "format",
-            &["T"],
-            &[Type::Primitive(String), Type::ExplicitVar("T")],
-            String,
-        ),
-    ]
-}
-
-pub fn default_types(runtime: &Runtime) -> Vec<(&'static str, Type)> {
+pub fn default_types(runtime: &Runtime) -> Vec<(String, Type)> {
     use Primitive::*;
 
     let primitives = vec![
-        ("U32", U32),
-        ("U16", U16),
-        ("U8", U8),
-        ("I32", I32),
-        ("I16", I16),
-        ("I8", I8),
-        ("Bool", Bool),
+        ("u8", U8),
+        ("u16", U16),
+        ("u32", U32),
+        ("u64", U64),
+        ("i8", I8),
+        ("i16", I16),
+        ("i32", I32),
+        ("i64", I64),
+        ("bool", Bool),
         ("String", String),
         ("Unit", Unit),
     ];
@@ -311,11 +227,11 @@ pub fn default_types(runtime: &Runtime) -> Vec<(&'static str, Type)> {
     let mut types = Vec::new();
 
     for (n, p) in primitives {
-        types.push((n, Type::Primitive(p)))
+        types.push((n.into(), Type::Primitive(p)))
     }
 
     for ty in &runtime.types {
-        types.push((ty.name, Type::BuiltIn(ty.name, ty.type_id)))
+        types.push((ty.name.clone(), Type::BuiltIn(ty.name.clone(), ty.type_id)))
     }
 
     enum RecordOrEnum {
@@ -329,14 +245,14 @@ pub fn default_types(runtime: &Runtime) -> Vec<(&'static str, Type)> {
         Record(
             "Header",
             vec![
-                ("is_ipv6", "Bool"),
-                ("is_ipv4", "Bool"),
-                ("is_legacy_format", "Bool"),
-                ("is_post_policy", "Bool"),
-                ("is_pre_policy", "Bool"),
-                ("peer_type", "U8"),
-                ("asn", "U32"),
-                ("address", "IpAddress"),
+                ("is_ipv6", "bool"),
+                ("is_ipv4", "bool"),
+                ("is_legacy_format", "bool"),
+                ("is_post_policy", "bool"),
+                ("is_pre_policy", "bool"),
+                ("peer_type", "u8"),
+                ("asn", "u32"),
+                ("address", "IpAddr"),
             ],
         ),
         Enum(
@@ -364,8 +280,8 @@ pub fn default_types(runtime: &Runtime) -> Vec<(&'static str, Type)> {
                 ("aggregator", "Aggregator"),
                 ("communities", "[Community]"),
                 ("status", "RouteStatus"),
-                ("peer_ip", "IpAddress"),
-                ("peer_asn", "U32"),
+                ("peer_ip", "IpAddr"),
+                ("peer_asn", "u32"),
             ],
         ),
         Record("BmpInitiationMessage", vec![]),
@@ -376,9 +292,9 @@ pub fn default_types(runtime: &Runtime) -> Vec<(&'static str, Type)> {
         Record(
             "BmpPeerUpNotification",
             vec![
-                ("local_address", "IpAddress"),
-                ("local_port", "U16"),
-                ("remote_port", "U16"),
+                ("local_address", "IpAddr"),
+                ("local_port", "u16"),
+                ("remote_port", "u16"),
                 // ("session_config", "TODO"),
                 ("per_peer_header", "Header"),
             ],
@@ -436,8 +352,8 @@ pub fn default_types(runtime: &Runtime) -> Vec<(&'static str, Type)> {
 
                         let mut ty = types
                             .iter()
-                            .find(|(n, _)| &s == n)
-                            .unwrap()
+                            .find(|(n, _)| s == n)
+                            .unwrap_or_else(|| panic!("Not found: {}", s))
                             .1
                             .clone();
 
@@ -448,7 +364,7 @@ pub fn default_types(runtime: &Runtime) -> Vec<(&'static str, Type)> {
                         (field_name.to_string(), ty)
                     })
                     .collect();
-                types.push((n, Type::NamedRecord(n.into(), fields)))
+                types.push((n.into(), Type::NamedRecord(n.into(), fields)))
             }
             Enum(n, variants) => {
                 let variants = variants
@@ -457,7 +373,7 @@ pub fn default_types(runtime: &Runtime) -> Vec<(&'static str, Type)> {
                         let v = v.map(|t| {
                             types
                                 .iter()
-                                .find(|(n, _)| &t == n)
+                                .find(|(n, _)| t == n)
                                 .unwrap()
                                 .1
                                 .clone()
@@ -465,7 +381,7 @@ pub fn default_types(runtime: &Runtime) -> Vec<(&'static str, Type)> {
                         (variant_name.to_string(), v)
                     })
                     .collect();
-                types.push((n, Type::Enum(n.into(), variants)))
+                types.push((n.into(), Type::Enum(n.into(), variants)))
             }
         }
     }

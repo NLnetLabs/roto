@@ -17,7 +17,7 @@
 use crate::{
     ast::{self, Identifier},
     parser::meta::{Meta, MetaId},
-    runtime::{wrap::WrappedFunction, Runtime},
+    runtime::Runtime,
 };
 use scope::Scope;
 use std::{
@@ -57,8 +57,6 @@ pub struct TypeInfo {
     /// The ids of all the `Expr::Access` nodes that should be interpreted
     /// as enum variant constructors.
     enum_variant_constructors: HashMap<MetaId, Type>,
-    /// Builtin methods
-    methods: HashMap<MetaId, WrappedFunction>,
     diverges: HashMap<MetaId, bool>,
     /// Type for return/accept/reject that it constructs and returns.
     return_types: HashMap<MetaId, Type>,
@@ -73,7 +71,6 @@ impl TypeInfo {
             expr_types: Default::default(),
             fully_qualified_names: Default::default(),
             enum_variant_constructors: Default::default(),
-            methods: Default::default(),
             diverges: Default::default(),
             return_types: Default::default(),
             pointer_bytes,
@@ -150,13 +147,6 @@ impl TypeInfo {
         };
         // Alignment must be guaranteed to be at least 1
         align.max(1)
-    }
-
-    pub fn method(
-        &mut self,
-        x: impl Into<MetaId>,
-    ) -> Option<&WrappedFunction> {
-        self.methods.get(&x.into())
     }
 
     pub fn enum_variant_constructor(
@@ -240,13 +230,10 @@ pub fn typecheck(
     tree: &ast::SyntaxTree,
     pointer_bytes: u32,
 ) -> TypeResult<TypeInfo> {
-    let methods = types::methods(runtime);
-    let static_methods = types::static_methods();
-
     let mut type_checker = TypeChecker {
-        methods: &methods,
+        methods: &[],
         runtime,
-        static_methods: &static_methods,
+        static_methods: &[],
         type_info: TypeInfo::new(pointer_bytes),
     };
 
@@ -282,6 +269,7 @@ impl<'r, 'methods> TypeChecker<'r, 'methods> {
                 .map(|(s, t)| {
                     (s.to_string(), MaybeDeclared::Declared(t.clone(), None))
                 })
+                .rev()
                 .collect();
 
         let mut root_scope = Scope::default();
@@ -666,7 +654,6 @@ impl<'r, 'methods> TypeChecker<'r, 'methods> {
             vars,
             argument_types,
             return_type,
-            function,
         } = method;
 
         let mut rec = receiver_type.clone();
@@ -675,8 +662,9 @@ impl<'r, 'methods> TypeChecker<'r, 'methods> {
 
         for method_var in vars {
             let var = self.fresh_var();
-            let f =
-                |x: &Type| x.substitute(&Type::ExplicitVar(method_var), &var);
+            let f = |x: &Type| {
+                x.substitute(&Type::ExplicitVar(method_var.to_string()), &var)
+            };
 
             rec = f(&rec);
             for a in &mut args {
@@ -689,7 +677,6 @@ impl<'r, 'methods> TypeChecker<'r, 'methods> {
             rec,
             args,
             ret,
-            function: function.clone(),
         }
     }
 

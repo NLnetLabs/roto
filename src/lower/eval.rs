@@ -218,7 +218,7 @@ pub fn eval(
         .expect("Need a main function!");
 
     eprintln!("{}", &f);
-    let parameters = f.parameters.clone();
+    let parameters = f.signature.parameters.clone();
 
     // Make the program easier to work with by collecting all instructions
     // and constructing a map from labels to indices.
@@ -287,19 +287,19 @@ pub fn eval(
                 program_counter = block_map[func];
                 continue;
             }
-            Instruction::CallExternal {
-                to,
-                ty: _,
-                func,
-                args,
-            } => {
-                let args: Vec<_> = args
-                    .iter()
-                    .map(|a| eval_operand(&vars, a).clone())
-                    .collect();
-                let val = func.call(args);
-                vars.insert(to.clone(), val);
-            }
+            // Instruction::CallExternal {
+            //     to,
+            //     ty: _,
+            //     func,
+            //     args,
+            // } => {
+            //     let args: Vec<_> = args
+            //         .iter()
+            //         .map(|a| eval_operand(&vars, a).clone())
+            //         .collect();
+            //     let val = func.call(args);
+            //     vars.insert(to.clone(), val);
+            // }
             Instruction::Return(ret) => {
                 let val =
                     ret.as_ref().map(|r| eval_operand(&vars, r).clone());

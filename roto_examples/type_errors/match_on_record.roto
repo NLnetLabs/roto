@@ -1,6 +1,6 @@
-type Foo { a: U32 }
+type Foo { a: u32 }
 
-function bar() -> Bool {
+function bar() -> bool {
 	match msg {
 
 	}

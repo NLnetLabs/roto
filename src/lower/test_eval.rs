@@ -94,7 +94,7 @@ impl MemVal {
 #[test]
 fn accept() {
     let s = "
-        filter-map main(msg: U32) {
+        filter-map main(msg: u32) {
             apply { accept }
         }
     ";
@@ -147,7 +147,7 @@ fn if_else() {
 #[test]
 fn react_to_rx() {
     let s = "
-        filter-map main(x: U32) {
+        filter-map main(x: u32) {
             apply {
                 if x <= 4 {
                     accept
@@ -199,15 +199,15 @@ fn variable() {
 #[test]
 fn calling_function() {
     let s = "
-        function smaller_than(a: U32, b: U32) -> Bool {
+        function smaller_than(a: u32, b: u32) -> bool {
             a < b
         }
 
-        function small(x: U32) -> Bool {
+        function small(x: u32) -> bool {
             smaller_than(10, x) && smaller_than(x, 20)
         }
 
-        filter-map main(msg: U32) {
+        filter-map main(msg: u32) {
             apply {
                 if small(msg) { accept }
                 reject
@@ -230,11 +230,11 @@ fn calling_function() {
 #[test]
 fn anonymous_record() {
     let s = "
-        function in_range(x: U32, low: U32, high: U32) -> Bool {
+        function in_range(x: u32, low: u32, high: u32) -> bool {
             low < x && x < high
         }
 
-        filter-map main(msg: U32) {
+        filter-map main(msg: u32) {
             define {
                 a = { low: 10, high: 20 };
             }
@@ -262,15 +262,15 @@ fn anonymous_record() {
 fn typed_record() {
     let s = "
         type Range {
-            low: U32,
-            high: U32,
+            low: u32,
+            high: u32,
         }
 
-        function in_range(x: U32, c: Range) -> Bool {
+        function in_range(x: u32, c: Range) -> bool {
             c.low < x && x < c.high
         }
 
-        filter-map main(msg: U32) {
+        filter-map main(msg: u32) {
             define {
                 a = Range { low: 10, high: 20 };
                 b = Range { low: a.low, high: a.high };
@@ -300,9 +300,9 @@ fn typed_record() {
 fn nested_record() {
     let s = "
         type Foo { x: Bar, y: Bar }
-        type Bar { a: I32, b: I32 }
+        type Bar { a: i32, b: i32 }
 
-        filter-map main(x: I32) {
+        filter-map main(x: i32) {
             define {
                 bar = Bar { a: 20, b: x };
                 foo = Foo { x: bar, y: bar };

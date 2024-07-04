@@ -1,4 +1,4 @@
-function bar() -> Bool {
+function bar() -> bool {
 	match msg {
 		Stale(x) -> true, // should error here
 	}

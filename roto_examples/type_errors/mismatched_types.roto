@@ -1,4 +1,4 @@
-function foo(a: U32, b: U32) -> Bool {
+function foo(a: u32, b: u32) -> bool {
 	a == b
 }
 

@@ -1,8 +1,8 @@
-type U32 { b: U32 } // should error here
+type u32 { b: u32 } // should error here
 
 filter foo() {
 	define {
-		rx msg: U32;
+		rx msg: u32;
 	}
 
 	apply { accept }

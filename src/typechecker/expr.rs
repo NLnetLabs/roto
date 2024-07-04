@@ -413,7 +413,7 @@ impl TypeChecker<'_, '_> {
         let t = match lit.node {
             String(_) => Type::Primitive(Primitive::String),
             Asn(_) => Type::Primitive(Primitive::U32),
-            IpAddress(_) => Type::Name("IpAddress".into()),
+            IpAddress(_) => Type::Name("IpAddr".into()),
             Bool(_) => Type::Primitive(Primitive::Bool),
             Integer(_) => self.fresh_int(),
         };
@@ -613,8 +613,6 @@ impl TypeChecker<'_, '_> {
                     | Type::Record(..)
                     | Type::RecordVar(..)
                     | Type::NamedRecord(..) => (),
-                    Type::BuiltIn(_, i)
-                        if self.runtime.get_type(i).eq.is_some() => {}
                     _ => {
                         return Err(error::simple(
                             "type cannot be compared",
@@ -663,7 +661,7 @@ impl TypeChecker<'_, '_> {
 
     fn method_call(
         &mut self,
-        meta_id: MetaId,
+        _meta_id: MetaId,
         scope: &Scope,
         ctx: &Context,
         receiver: &Meta<ast::Expr>,
@@ -692,10 +690,6 @@ impl TypeChecker<'_, '_> {
             &arrow.args,
             args,
         )?;
-
-        if let Some(f) = arrow.function {
-            self.type_info.methods.insert(meta_id, f);
-        }
 
         Ok(diverges)
     }

@@ -1,4 +1,4 @@
-filter-map main(x: U32) {
+filter-map main(x: u32) {
     define {
         a = 5;
     }

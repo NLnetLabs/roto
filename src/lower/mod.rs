@@ -35,7 +35,7 @@ macro_rules! ice {
 
 struct Lowerer<'r> {
     function_name: &'r str,
-    runtime: &'r Runtime,
+    _runtime: &'r Runtime,
     tmp_idx: usize,
     blocks: Vec<Block>,
     type_info: &'r mut TypeInfo,
@@ -57,7 +57,7 @@ impl<'r> Lowerer<'r> {
         function_name: &'r str,
     ) -> Self {
         Self {
-            runtime,
+            _runtime: runtime,
             tmp_idx: 0,
             type_info,
             function_name,
@@ -202,10 +202,14 @@ impl<'r> Lowerer<'r> {
             x => Some(self.lower_type(&x)),
         };
 
-        Function {
-            name: ident,
+        let signature = ir::Signature {
             parameters,
             return_type,
+        };
+
+        Function {
+            name: ident,
+            signature,
             blocks: self.blocks,
             public: true,
         }
@@ -245,14 +249,18 @@ impl<'r> Lowerer<'r> {
             .map(|t| self.type_info.resolve(&Type::Name(t.to_string())))
             .map(|t| self.lower_type(&t));
 
+        let signature = ir::Signature {
+            parameters,
+            return_type,
+        };
+
         let last = self.block(body);
 
         self.add(Instruction::Return(last));
 
         Function {
             name: ident,
-            parameters,
-            return_type,
+            signature,
             blocks: self.blocks,
             public: false,
         }
@@ -384,7 +392,7 @@ impl<'r> Lowerer<'r> {
 
                 to.map(Into::into)
             }
-            ast::Expr::MethodCall(receiver, m, args) => {
+            ast::Expr::MethodCall(_receiver, m, args) => {
                 if let Some(ty) = self.type_info.enum_variant_constructor(id)
                 {
                     let ty = ty.clone();
@@ -428,27 +436,6 @@ impl<'r> Lowerer<'r> {
                         })
                     }
 
-                    return Some(to.into());
-                }
-
-                // It's not a constructor, so it's a method call!
-                if let Some(f) = self.type_info.method(id) {
-                    let f = f.clone();
-                    let ty = self.type_info.type_of(id);
-                    let mut all_args = Vec::new();
-                    if let Some(receiver) = self.expr(receiver) {
-                        all_args.push(receiver);
-                    }
-                    all_args.extend(args.iter().flat_map(|a| self.expr(a)));
-
-                    let to = self.new_tmp();
-                    let ty = self.lower_type(&ty);
-                    self.add(Instruction::CallExternal {
-                        to: to.clone(),
-                        func: f,
-                        args: all_args,
-                        ty,
-                    });
                     return Some(to.into());
                 }
 
@@ -564,16 +551,6 @@ impl<'r> Lowerer<'r> {
 
                 let place = self.new_tmp();
                 match (op, binop_to_cmp(op, &ty), ty) {
-                    (ast::BinOp::Eq, _, Type::BuiltIn(_, i)) => {
-                        let eq =
-                            self.runtime.get_type(i).eq.as_ref().unwrap();
-                        self.add(Instruction::CallExternal {
-                            to: place.clone(),
-                            ty: IrType::Bool,
-                            func: eq.clone(),
-                            args: vec![left, right],
-                        })
-                    }
                     (ast::BinOp::Eq, _, ty)
                         if self.is_reference_type(&ty) =>
                     {
@@ -764,7 +741,6 @@ impl<'r> Lowerer<'r> {
         val: Operand,
         ty: &Type,
     ) {
-        dbg!(&to, offset, &val, ty);
         let tmp = self.new_tmp();
         self.add(Instruction::Offset {
             to: tmp.clone(),
