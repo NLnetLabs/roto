@@ -786,7 +786,7 @@ impl TypeChecker<'_> {
                 (
                     FunctionKind::StaticMethod(ty1),
                     FunctionKind::StaticMethod(ty2),
-                ) => self.subtype_of(&ty1, ty2).then_some(signature),
+                ) => self.subtype_of(ty1, ty2).then_some(signature),
                 _ => None,
             }
         })
