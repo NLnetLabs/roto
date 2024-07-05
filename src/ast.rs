@@ -2,7 +2,7 @@ use crate::parser::meta::Meta;
 
 #[derive(Clone, Debug)]
 pub struct SyntaxTree {
-    pub expressions: Vec<Declaration>,
+    pub declarations: Vec<Declaration>,
 }
 
 #[derive(Clone, Debug)]

@@ -305,7 +305,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             });
         }
 
-        Ok(SyntaxTree { expressions })
+        Ok(SyntaxTree { declarations: expressions })
     }
 
     /// Parse a root expression

@@ -8,7 +8,7 @@ use crate::{
 
 use super::{
     scope::Scope,
-    types::{Arrow, Method, Primitive, Type},
+    types::{FunctionKind, Primitive, Signature, Type},
     TypeChecker, TypeResult,
 };
 
@@ -27,7 +27,7 @@ impl Context {
     }
 }
 
-impl TypeChecker<'_, '_> {
+impl TypeChecker<'_> {
     pub fn block(
         &mut self,
         scope: &Scope,
@@ -671,7 +671,8 @@ impl TypeChecker<'_, '_> {
         let t = self.fresh_var();
         let mut diverges = self.expr(scope, &ctx.with_type(&t), receiver)?;
 
-        let Some(arrow) = self.find_method(self.methods, &t, name.as_ref())
+        let Some(signature) = self
+            .find_function(&FunctionKind::Method(t.clone()), name.as_ref())
         else {
             return Err(error::simple(
                 format!("method `{name}` not found on `{t}`",),
@@ -680,15 +681,23 @@ impl TypeChecker<'_, '_> {
             ));
         };
 
-        self.unify(&arrow.rec, &t, name.id, None)?;
+        self.unify(
+            &ctx.expected_type,
+            &signature.return_type,
+            name.id,
+            None,
+        )?;
+
+        let mut all_args = vec![receiver.clone()];
+        all_args.extend_from_slice(args);
 
         diverges |= self.check_arguments(
             scope,
             ctx,
             "method",
             name,
-            &arrow.args,
-            args,
+            &signature.parameter_types,
+            &all_args,
         )?;
 
         Ok(diverges)
@@ -702,9 +711,10 @@ impl TypeChecker<'_, '_> {
         name: &Meta<Identifier>,
         args: &[Meta<ast::Expr>],
     ) -> TypeResult<bool> {
-        let Some(arrow) =
-            self.find_method(self.static_methods, ty, name.as_ref())
-        else {
+        let Some(signature) = self.find_function(
+            &FunctionKind::StaticMethod(ty.clone()),
+            name.as_ref(),
+        ) else {
             return Err(error::simple(
                 format!("static method `{name}` not found on `{ty}`",),
                 format!("static method not found on `{ty}`"),
@@ -712,14 +722,19 @@ impl TypeChecker<'_, '_> {
             ));
         };
 
-        self.unify(&ctx.expected_type, &arrow.ret, name.id, None)?;
+        self.unify(
+            &ctx.expected_type,
+            &signature.return_type,
+            name.id,
+            None,
+        )?;
 
         let diverges = self.check_arguments(
             scope,
             ctx,
             "static method",
             name,
-            &arrow.args,
+            &signature.parameter_types,
             args,
         )?;
 
@@ -752,21 +767,27 @@ impl TypeChecker<'_, '_> {
         Ok(diverges)
     }
 
-    fn find_method(
+    fn find_function(
         &mut self,
-        methods: &[Method],
-        ty: &Type,
+        kind: &FunctionKind,
         name: &str,
-    ) -> Option<Arrow> {
-        methods.iter().find_map(|m| {
+    ) -> Option<Signature> {
+        self.functions.iter().find_map(|m| {
             if name != m.name {
                 return None;
             }
-            let arrow = self.instantiate_method(m);
-            if self.subtype_of(&arrow.rec, ty) {
-                Some(arrow)
-            } else {
-                None
+            let signature = self.instantiate_method(m);
+
+            match (&signature.kind, kind) {
+                (FunctionKind::Free, FunctionKind::Free) => Some(signature),
+                (FunctionKind::Method(ty1), FunctionKind::Method(ty2)) => {
+                    self.subtype_of(ty1, ty2).then_some(signature)
+                }
+                (
+                    FunctionKind::StaticMethod(ty1),
+                    FunctionKind::StaticMethod(ty2),
+                ) => self.subtype_of(&ty1, ty2).then_some(signature),
+                _ => None,
             }
         })
     }

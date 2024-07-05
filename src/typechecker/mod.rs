@@ -17,209 +17,37 @@
 use crate::{
     ast::{self, Identifier},
     parser::meta::{Meta, MetaId},
-    runtime::Runtime,
+    runtime::{FunctionKind, Runtime, RuntimeFunction},
 };
+use cycle::detect_type_cycles;
 use scope::Scope;
 use std::{
     borrow::Borrow,
     collections::{hash_map::Entry, HashMap},
 };
-use types::Type;
+use types::{FunctionDefinition, Type};
 
 use self::{
     error::TypeError,
-    types::{default_types, Arrow, Method},
-    unionfind::UnionFind,
+    types::{default_types, Function, Signature},
 };
 
+mod cycle;
 pub(crate) mod error;
 mod expr;
 mod filter_map;
+pub mod info;
 mod scope;
 #[cfg(test)]
 mod tests;
 pub mod types;
 mod unionfind;
 
-/// The output of the type checker that is used for lowering
-#[derive(Clone)]
-pub struct TypeInfo {
-    /// The unionfind structure that maps type variables to types
-    unionfind: UnionFind,
-    /// Map from type names to types
-    types: HashMap<String, Type>,
-    /// The types we inferred for each Expr
-    ///
-    /// This might not be fully resolved yet.
-    expr_types: HashMap<MetaId, Type>,
-    /// The fully qualified (and hence unique) name for each identifier.
-    fully_qualified_names: HashMap<MetaId, String>,
-    /// The ids of all the `Expr::Access` nodes that should be interpreted
-    /// as enum variant constructors.
-    enum_variant_constructors: HashMap<MetaId, Type>,
-    diverges: HashMap<MetaId, bool>,
-    /// Type for return/accept/reject that it constructs and returns.
-    return_types: HashMap<MetaId, Type>,
-    pointer_bytes: u32,
-}
+use info::TypeInfo;
 
-impl TypeInfo {
-    fn new(pointer_bytes: u32) -> Self {
-        Self {
-            unionfind: Default::default(),
-            types: Default::default(),
-            expr_types: Default::default(),
-            fully_qualified_names: Default::default(),
-            enum_variant_constructors: Default::default(),
-            diverges: Default::default(),
-            return_types: Default::default(),
-            pointer_bytes,
-        }
-    }
-}
-
-impl TypeInfo {
-    pub fn full_name(&self, x: impl Into<MetaId>) -> String {
-        self.fully_qualified_names[&x.into()].clone()
-    }
-
-    pub fn type_of(&mut self, x: impl Into<MetaId>) -> Type {
-        let ty = self.expr_types[&x.into()].clone();
-        self.resolve(&ty)
-    }
-
-    pub fn diverges(&mut self, x: impl Into<MetaId>) -> bool {
-        self.diverges[&x.into()]
-    }
-
-    pub fn return_type_of(&mut self, x: impl Into<MetaId>) -> Type {
-        let ty = self.return_types[&x.into()].clone();
-        self.resolve(&ty)
-    }
-
-    pub fn offset_of(&mut self, record: &Type, field: &str) -> (Type, u32) {
-        let record = self.resolve(record);
-        let (Type::Record(fields)
-        | Type::RecordVar(_, fields)
-        | Type::NamedRecord(_, fields)) = record
-        else {
-            panic!("Can't get offsets in a type that's not a record")
-        };
-
-        let mut offset = 0;
-        for (name, ty) in fields {
-            // Here, we align the offset to the natural alignment of each
-            // type.
-            offset += self.padding_of(&ty, offset);
-            if name == field {
-                return (ty, offset);
-            }
-            offset += self.size_of(&ty);
-        }
-        panic!("Field not found")
-    }
-
-    pub fn padding_of(&mut self, ty: &Type, offset: u32) -> u32 {
-        let alignment = self.alignment_of(ty);
-        if offset % alignment > 0 {
-            alignment - (offset % alignment)
-        } else {
-            0
-        }
-    }
-
-    pub fn alignment_of(&mut self, ty: &Type) -> u32 {
-        let align = match self.resolve(ty) {
-            Type::RecordVar(_, fields)
-            | Type::Record(fields)
-            | Type::NamedRecord(_, fields) => fields
-                .iter()
-                .map(|f| self.alignment_of(&f.1))
-                .max()
-                .unwrap_or(1),
-            Type::Enum(_, variants) => variants
-                .iter()
-                .flat_map(|(_, opt)| opt)
-                .map(|f| self.alignment_of(f))
-                .max()
-                .unwrap_or(1),
-            ty => self.size_of(&ty),
-        };
-        // Alignment must be guaranteed to be at least 1
-        align.max(1)
-    }
-
-    pub fn enum_variant_constructor(
-        &self,
-        x: impl Into<MetaId>,
-    ) -> Option<&Type> {
-        self.enum_variant_constructors.get(&x.into())
-    }
-
-    pub fn resolve(&mut self, t: &Type) -> Type {
-        let mut t = t.clone();
-
-        if let Type::Var(x) | Type::IntVar(x) | Type::RecordVar(x, _) = t {
-            t = self.unionfind.find(x).clone();
-        }
-
-        if let Type::Name(x) = t {
-            t = self.types[&x].clone();
-        }
-
-        t
-    }
-
-    pub fn size_of(&mut self, t: &Type) -> u32 {
-        let t = self.resolve(t);
-        match t {
-            // Never is zero-sized
-            Type::Never => 0,
-            // Int variables are inferred to u32
-            Type::IntVar(_) => 4,
-            // Records have the size of their fields
-            Type::Record(fields)
-            | Type::NamedRecord(_, fields)
-            | Type::RecordVar(_, fields) => {
-                let mut size = 0;
-                for (_, ty) in &fields {
-                    size += self.size_of(ty) + self.padding_of(ty, size);
-                }
-                size
-            }
-            Type::Enum(_, fields) => {
-                fields
-                    .iter()
-                    .flat_map(|f| &f.1)
-                    .map(|ty| self.size_of(ty) + self.padding_of(ty, 1))
-                    .max()
-                    .unwrap_or(0)
-                    + 1 // add the discriminant
-            }
-            Type::Verdict(accept, reject) => {
-                let accept =
-                    self.size_of(&accept) + self.padding_of(&accept, 1);
-                let reject =
-                    self.size_of(&reject) + self.padding_of(&reject, 1);
-                1 + accept.max(reject)
-            }
-            Type::Primitive(p) => p.size(),
-            Type::List(_)
-            | Type::Table(_)
-            | Type::OutputStream(_)
-            | Type::Rib(_)
-            | Type::BuiltIn(..) => self.pointer_bytes,
-            _ => 0,
-        }
-    }
-}
-
-pub struct TypeChecker<'r, 'methods> {
-    runtime: &'r Runtime,
-    /// The list of built-in methods.
-    methods: &'methods [Method],
-    /// The list of built-in static methods.
-    static_methods: &'methods [Method],
+pub struct TypeChecker<'functions> {
+    /// The list of built-in functions, methods and static methods.
+    functions: &'functions [Function],
     type_info: TypeInfo,
 }
 
@@ -230,17 +58,7 @@ pub fn typecheck(
     tree: &ast::SyntaxTree,
     pointer_bytes: u32,
 ) -> TypeResult<TypeInfo> {
-    let mut type_checker = TypeChecker {
-        methods: &[],
-        runtime,
-        static_methods: &[],
-        type_info: TypeInfo::new(pointer_bytes),
-    };
-
-    type_checker.check_syntax_tree(tree)?;
-
-    // Compute the sizes of all types in the syntax tree
-    Ok(type_checker.type_info)
+    TypeChecker::check_syntax_tree(runtime, tree, pointer_bytes)
 }
 
 enum MaybeDeclared {
@@ -252,19 +70,20 @@ enum MaybeDeclared {
     Undeclared(MetaId),
 }
 
-impl<'r, 'methods> TypeChecker<'r, 'methods> {
+impl<'methods> TypeChecker<'methods> {
     /// Perform type checking for a syntax tree
     pub fn check_syntax_tree(
-        &mut self,
+        runtime: &Runtime,
         tree: &ast::SyntaxTree,
-    ) -> TypeResult<()> {
+        pointer_bytes: u32,
+    ) -> TypeResult<TypeInfo> {
         // This map contains MaybeDeclared, where Undeclared represents a type that
         // is referenced, but not (yet) declared. At the end of all the type
         // declarations, we check whether any nones are left to determine
         // whether any types are unresolved.
         // The builtin types are added right away.
         let mut types: HashMap<String, MaybeDeclared> =
-            default_types(self.runtime)
+            default_types(runtime)
                 .into_iter()
                 .map(|(s, t)| {
                     (s.to_string(), MaybeDeclared::Declared(t.clone(), None))
@@ -288,7 +107,7 @@ impl<'r, 'methods> TypeChecker<'r, 'methods> {
         //  1. Collect all type definitions
         //  2. Collect all function definitions
         //  3. Type check all function bodies
-        for expr in &tree.expressions {
+        for expr in &tree.declarations {
             match expr {
                 ast::Declaration::Rib(ast::Rib {
                     ident,
@@ -339,22 +158,24 @@ impl<'r, 'methods> TypeChecker<'r, 'methods> {
         }
 
         // Check for any undeclared types in the type declarations
-        // self.types will then only contain data types with valid
-        // type names.
-        self.type_info.types = types
-            .into_iter()
-            .map(|(s, t)| match t {
-                MaybeDeclared::Declared(t, _) => Ok((s, t)),
-                MaybeDeclared::Undeclared(reference_span) => {
-                    Err(error::undeclared_type(&Meta {
-                        id: reference_span,
-                        node: Identifier(s),
-                    }))
-                }
-            })
-            .collect::<Result<_, _>>()?;
+        // and add them to the type info.
+        let mut type_info = TypeInfo::new(pointer_bytes);
 
-        self.detect_type_cycles().map_err(|description| {
+        for (name, ty) in types {
+            match ty {
+                MaybeDeclared::Declared(ty, _) => {
+                    type_info.add_type(name, ty)
+                }
+                MaybeDeclared::Undeclared(reference_span) => {
+                    return Err(error::undeclared_type(&Meta {
+                        id: reference_span,
+                        node: Identifier(name),
+                    }));
+                }
+            }
+        }
+
+        detect_type_cycles(&type_info.types).map_err(|description| {
             error::simple(
                 description,
                 "type cycle detected",
@@ -362,34 +183,90 @@ impl<'r, 'methods> TypeChecker<'r, 'methods> {
             )
         })?;
 
+        // We need to know about all runtime methods, static methods and
+        // functions when we start type checking. Therefore, we have to map
+        // the runtime methods with TypeIds to function types.
+        let mut functions = Vec::new();
+        for func in &runtime.functions {
+            let RuntimeFunction {
+                name,
+                description,
+                kind,
+            } = func;
+
+            let parameter_types: Vec<_> = description
+                .parameter_types
+                .iter()
+                .map(|ty| Type::Name(runtime.get_param_type(ty).name.clone()))
+                .collect();
+
+            let return_type = Type::Name(
+                runtime
+                    .get_param_type(&description.return_type)
+                    .name
+                    .clone(),
+            );
+
+            let kind = match kind {
+                FunctionKind::Free => types::FunctionKind::Free,
+                FunctionKind::Method(id) => types::FunctionKind::Method(
+                    Type::Name(runtime.get_type(*id).name.clone()),
+                ),
+                FunctionKind::StaticMethod(id) => {
+                    types::FunctionKind::StaticMethod(Type::Name(
+                        runtime.get_type(*id).name.clone(),
+                    ))
+                }
+            };
+
+            functions.push(Function::new(
+                kind,
+                name.clone(),
+                &[],
+                parameter_types,
+                return_type,
+                FunctionDefinition::Runtime(description.clone()),
+            ));
+        }
+
+        let mut checker = TypeChecker {
+            functions: &functions,
+            type_info,
+        };
+
         // Filter-maps are pretty generic: they do not have a fixed
         // output type at the moment. It's a mess. So we don't declare
         // them, which means that they cannot be called by anything else,
-        // which honestly makes sense.
-        for expr in &tree.expressions {
+        // which honestly makes sense. But that means that we start by
+        // only declaring functions in the root scope.
+        for expr in &tree.declarations {
             if let ast::Declaration::Function(x) = expr {
-                let ty = self.function_type(x)?;
-                self.insert_var(&mut root_scope, &x.ident, &ty)?;
-                self.type_info.expr_types.insert(x.ident.id, ty.clone());
+                let ty = checker.function_type(x)?;
+                checker.insert_var(&mut root_scope, &x.ident, &ty)?;
+                checker.type_info.expr_types.insert(x.ident.id, ty.clone());
             }
         }
 
-        for expr in &tree.expressions {
+        for expr in &tree.declarations {
             match expr {
                 ast::Declaration::FilterMap(f) => {
-                    let ty = self.fresh_var();
-                    self.insert_var(&mut root_scope, &f.ident, ty.clone())?;
-                    let ty2 = self.filter_map(&root_scope, f)?;
-                    self.unify(&ty, &ty2, f.ident.id, None)?;
+                    let ty = checker.fresh_var();
+                    checker.insert_var(
+                        &mut root_scope,
+                        &f.ident,
+                        ty.clone(),
+                    )?;
+                    let ty2 = checker.filter_map(&root_scope, f)?;
+                    checker.unify(&ty, &ty2, f.ident.id, None)?;
                 }
                 ast::Declaration::Function(x) => {
-                    self.function(&root_scope, x)?;
+                    checker.function(&root_scope, x)?;
                 }
                 _ => {}
             }
         }
 
-        Ok(())
+        Ok(checker.type_info)
     }
 
     /// Create a fresh variable in the unionfind structure
@@ -645,20 +522,24 @@ impl<'r, 'methods> TypeChecker<'r, 'methods> {
     ///
     /// Instantiation in this context means replacing the explicit type variables with
     /// fresh variables.
-    fn instantiate_method(&mut self, method: &Method) -> Arrow {
+    fn instantiate_method(&mut self, method: &Function) -> Signature {
         // This is probably all quite slow, but we can figure out a more
         // efficient way later.
-        let Method {
-            receiver_type,
+        let Function {
             name: _,
             vars,
-            argument_types,
-            return_type,
+            signature:
+                Signature {
+                    kind,
+                    parameter_types,
+                    return_type,
+                },
+            definition: _,
         } = method;
 
-        let mut rec = receiver_type.clone();
-        let mut args = argument_types.clone();
-        let mut ret = return_type.clone();
+        let mut kind = kind.clone();
+        let mut parameter_types = parameter_types.clone();
+        let mut return_type = return_type.clone();
 
         for method_var in vars {
             let var = self.fresh_var();
@@ -666,119 +547,27 @@ impl<'r, 'methods> TypeChecker<'r, 'methods> {
                 x.substitute(&Type::ExplicitVar(method_var.to_string()), &var)
             };
 
-            rec = f(&rec);
-            for a in &mut args {
-                *a = f(a);
-            }
-            ret = f(&ret);
-        }
-
-        Arrow {
-            rec,
-            args,
-            ret,
-        }
-    }
-
-    /// Return an error if there is a cycles in the type declarations
-    ///
-    /// The simplest case of a cycle os a recursive type:
-    ///
-    /// ```roto
-    /// type A { a: A }
-    /// ```
-    ///
-    /// Another simple example of a cycle are mutually recursive types:
-    ///
-    /// ```roto
-    /// type A { b: B }
-    /// type B { a: A }
-    /// ```
-    ///
-    /// To detect cycles, we do a DFS topological sort. The strange part
-    /// of this  procedure that we only care about named types and their
-    /// relation. So we only record the names of the types that we have
-    /// visited.
-    ///
-    /// This algorithm is the Depth-first search algorithm described at
-    /// <https://en.wikipedia.org/wiki/Topological_sorting>, where `false`
-    /// is a temporary mark and `true` is a permanent mark.
-    fn detect_type_cycles(&self) -> Result<(), String> {
-        let mut visited = HashMap::new();
-
-        for ident in self.type_info.types.keys() {
-            self.visit_name(&mut visited, ident)?;
-        }
-
-        Ok(())
-    }
-
-    fn visit_name<'a>(
-        &'a self,
-        visited: &mut HashMap<&'a str, bool>,
-        s: &'a str,
-    ) -> Result<(), String> {
-        match visited.get(s) {
-            Some(false) => return Err(format!("cycle detected on {s}!")),
-            Some(true) => return Ok(()),
-            None => {}
-        };
-
-        visited.insert(s, false);
-        self.visit(visited, &self.type_info.types[s])?;
-        visited.insert(s, true);
-
-        Ok(())
-    }
-
-    fn visit<'a>(
-        &'a self,
-        visited: &mut HashMap<&'a str, bool>,
-        ty: &'a Type,
-    ) -> Result<(), String> {
-        match ty {
-            Type::Var(_)
-            | Type::IntVar(_)
-            | Type::ExplicitVar(_)
-            | Type::RecordVar(_, _) => {
-                Err("there should be no unresolved type variables left"
-                    .into())
-            }
-            Type::Never => {
-                Err("never should not appear in a type declaration".into())
-            }
-            Type::Primitive(_)
-            | Type::BuiltIn(_, _)
-            | Type::Function(_, _)
-            | Type::Filter(_)
-            | Type::FilterMap(_) => {
-                // do nothing on primitive types
-                // no need to recurse into them.
-                Ok(())
-            }
-            Type::Table(t)
-            | Type::OutputStream(t)
-            | Type::Rib(t)
-            | Type::List(t) => self.visit(visited, t),
-            Type::Verdict(t1, t2) => {
-                self.visit(visited, t1)?;
-                self.visit(visited, t2)
-            }
-            Type::NamedRecord(_, fields) | Type::Record(fields) => {
-                for (_, ty) in fields {
-                    self.visit(visited, ty)?;
+            kind = match kind {
+                types::FunctionKind::Free => types::FunctionKind::Free,
+                types::FunctionKind::Method(ty) => {
+                    types::FunctionKind::Method(f(&ty))
                 }
-                Ok(())
-            }
-            Type::Enum(_, variants) => {
-                for (_, ty) in variants {
-                    if let Some(ty) = ty {
-                        self.visit(visited, ty)?;
-                    }
+                types::FunctionKind::StaticMethod(ty) => {
+                    types::FunctionKind::StaticMethod(f(&ty))
                 }
-                Ok(())
+            };
+
+            for ty in &mut parameter_types {
+                *ty = f(ty);
             }
-            Type::Name(ident) => self.visit_name(visited, ident),
+
+            return_type = f(&return_type);
+        }
+
+        Signature {
+            kind,
+            parameter_types,
+            return_type,
         }
     }
 }

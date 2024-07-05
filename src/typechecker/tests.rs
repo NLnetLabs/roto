@@ -345,6 +345,60 @@ fn assign_field_to_other_record() {
 }
 
 #[test]
+fn ip_addr_method() {
+    let src = "
+        filter-map test(r: u32) {
+            define {
+                p = 10.10.10.10;
+                is_four = 1 + p.is_ipv4();
+            }
+
+            apply { accept }
+        }
+    ";
+    assert!(typecheck(src).is_err());
+
+    let src = "
+        filter-map test(r: u32) {
+            define {
+                p = 10.10.10.10;
+                is_four = true && p.is_ipv4();
+            }
+
+            apply { accept }
+        }
+    ";
+    assert!(typecheck(src).is_ok());
+}
+
+#[test]
+fn ip_addr_method_of_method_return_type() {
+    let src = "
+        filter-map test(r: u32) {
+            define {
+                p = 10.10.10.10;
+                x = p.to_canonical().is_ipv4();
+            }
+
+            apply { accept }
+        }
+    ";
+    assert!(typecheck(src).is_ok());
+
+    let src = "
+        filter-map test(r: u32) {
+            define {
+                p = 10.10.10.10;
+                x = p.is_ipv4().to_canonical();
+            }
+
+            apply { accept }
+        }
+    ";
+    assert!(typecheck(src).is_err());
+}
+
+#[test]
 #[ignore = "prefixes not supported yet"]
 fn prefix_method() {
     let src = "

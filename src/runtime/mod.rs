@@ -263,6 +263,14 @@ impl Runtime {
         let ty = self.types.iter().find(|ty| ty.type_id == id).unwrap();
         ty
     }
+
+    pub fn get_param_type(&self, p: &Param) -> &RuntimeType {
+        match p {
+            Param::Val(id) | Param::ConstPtr(id) | Param::MutPtr(id) => {
+                self.get_type(*id)
+            }
+        }
+    }
 }
 
 impl Runtime {
@@ -275,6 +283,7 @@ impl Runtime {
             functions: Default::default(),
         };
 
+        rt.register_type_with_name::<()>("Unit");
         rt.register_type::<bool>();
         rt.register_type::<u8>();
         rt.register_type::<u16>();
@@ -320,6 +329,37 @@ impl Default for Runtime {
         rt.register_type::<HopPath>();
         rt.register_type::<AsPath<Vec<u8>>>();
 
+        extern "C" fn is_ipv4(ip: *const IpAddr) -> bool {
+            let ip = unsafe { &*ip };
+            ip.is_ipv4()
+        }
+
+        rt.register_method::<IpAddr, _, _>(
+            "is_ipv4",
+            is_ipv4 as extern "C" fn(_) -> _,
+        );
+        
+        extern "C" fn is_ipv6(ip: *const IpAddr) -> bool {
+            let ip = unsafe { &*ip };
+            ip.is_ipv6()
+        }
+
+        rt.register_method::<IpAddr, _, _>(
+            "is_ipv6",
+            is_ipv6 as extern "C" fn(_) -> _,
+        );
+
+        #[allow(improper_ctypes_definitions)]
+        extern "C" fn to_canonical(ip: *const IpAddr) -> IpAddr {
+            let ip = unsafe { &*ip };
+            ip.to_canonical()
+        }
+
+        rt.register_method::<IpAddr, _, _>(
+            "to_canonical",
+            to_canonical as extern "C" fn(_) -> _,
+        );
+
         rt
     }
 }
@@ -336,6 +376,7 @@ mod tests {
         assert_eq!(
             names,
             &[
+                "Unit",
                 "bool",
                 "u8",
                 "u16",

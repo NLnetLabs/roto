@@ -20,7 +20,7 @@ use crate::{
     runtime::Runtime,
     typechecker::{
         types::{Primitive, Type},
-        TypeInfo,
+        info::TypeInfo,
     },
 };
 
@@ -116,7 +116,7 @@ impl<'r> Lowerer<'r> {
         type_info: &mut TypeInfo,
         tree: &ast::SyntaxTree,
     ) -> Vec<Function> {
-        let ast::SyntaxTree { expressions } = tree;
+        let ast::SyntaxTree { declarations: expressions } = tree;
 
         let mut functions = Vec::new();
 

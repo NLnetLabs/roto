@@ -16,7 +16,7 @@ use crate::{
     runtime::Runtime,
     typechecker::{
         error::{Level, TypeError},
-        TypeInfo,
+        info::TypeInfo,
     },
 };
 

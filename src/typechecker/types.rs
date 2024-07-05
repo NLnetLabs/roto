@@ -1,4 +1,8 @@
-use crate::{ast::Identifier, parser::meta::Meta, runtime::Runtime};
+use crate::{
+    ast::Identifier,
+    parser::meta::Meta,
+    runtime::{func::ResolvedFunctionDescription, Runtime},
+};
 use std::{
     any::TypeId,
     fmt::{Debug, Display},
@@ -101,10 +105,10 @@ impl Display for Type {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Arrow {
-    pub rec: Type,
-    pub args: Vec<Type>,
-    pub ret: Type,
+pub struct Signature {
+    pub kind: FunctionKind,
+    pub parameter_types: Vec<Type>,
+    pub return_type: Type,
 }
 
 impl Type {
@@ -159,35 +163,46 @@ impl Primitive {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Method {
-    pub receiver_type: Type,
-    pub name: &'static str,
-    pub vars: Vec<&'static str>,
-    pub argument_types: Vec<Type>,
-    pub return_type: Type,
+pub enum FunctionDefinition {
+    Runtime(ResolvedFunctionDescription),
 }
 
-impl Method {
-    fn _new<'a, T>(
-        receiver_type: impl Into<Type>,
-        name: &'static str,
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Function {
+    pub signature: Signature,
+    pub name: String,
+    pub vars: Vec<&'static str>,
+    pub definition: FunctionDefinition,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FunctionKind {
+    Free,
+    Method(Type),
+    StaticMethod(Type),
+}
+
+impl Function {
+    pub fn new<T: Into<Type>>(
+        kind: FunctionKind,
+        name: impl Into<String>,
         vars: &[&'static str],
-        argument_types: &'a [T],
+        parameter_types: impl IntoIterator<Item = T>,
         return_type: impl Into<Type>,
-    ) -> Self
-    where
-        T: Into<Type> + Clone + 'a,
-    {
+        definition: FunctionDefinition,
+    ) -> Self {
         Self {
-            receiver_type: receiver_type.into(),
-            name,
+            name: name.into(),
             vars: vars.to_vec(),
-            argument_types: argument_types
-                .iter()
-                .cloned()
-                .map(Into::into)
-                .collect(),
-            return_type: return_type.into(),
+            signature: Signature {
+                kind,
+                parameter_types: parameter_types
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
+                return_type: return_type.into(),
+            },
+            definition,
         }
     }
 }
@@ -231,7 +246,10 @@ pub fn default_types(runtime: &Runtime) -> Vec<(String, Type)> {
     }
 
     for ty in &runtime.types {
-        types.push((ty.name.clone(), Type::BuiltIn(ty.name.clone(), ty.type_id)))
+        types.push((
+            ty.name.clone(),
+            Type::BuiltIn(ty.name.clone(), ty.type_id),
+        ))
     }
 
     enum RecordOrEnum {
