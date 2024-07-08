@@ -10,50 +10,34 @@ pub enum Param {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ResolvedFunctionDescription {
+pub struct FunctionDescription {
     pub parameter_types: Vec<Param>,
     pub return_type: Param,
     pub pointer: *const u8,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct FunctionDescription {
-    parameter_types: Vec<(TypeId, &'static str)>,
-    return_type: (TypeId, &'static str),
-    pointer: *const u8,
-}
-
-impl FunctionDescription {
-    pub fn resolve(
-        self,
-        rt: &Runtime,
-    ) -> Option<ResolvedFunctionDescription> {
-        let parameter_types = self
-            .parameter_types
-            .iter()
-            .map(|ty| rt.find_type(ty.0))
-            .collect::<Option<Vec<_>>>()?;
-
-        let return_type = rt.find_type(self.return_type.0)?;
-
-        Some(ResolvedFunctionDescription {
-            parameter_types,
-            return_type,
-            pointer: self.pointer,
-        })
-    }
 }
 
 pub trait Func<A, R> {
     fn parameter_types() -> Vec<(TypeId, &'static str)>;
     fn return_type() -> (TypeId, &'static str);
 
-    fn to_function_description(&self) -> FunctionDescription {
-        FunctionDescription {
-            parameter_types: Self::parameter_types(),
-            return_type: Self::return_type(),
-            pointer: &self as *const _ as *const u8,
-        }
+    fn to_function_description(
+        &self,
+        rt: &Runtime,
+    ) -> Option<FunctionDescription> {
+        let parameter_types = Self::parameter_types()
+            .iter()
+            .map(|ty| rt.find_type(ty.0))
+            .collect::<Option<Vec<_>>>()?;
+
+        let return_type = rt.find_type(Self::return_type().0)?;
+
+        let pointer = &self as *const _ as *const u8;
+
+        Some(FunctionDescription {
+            parameter_types,
+            return_type,
+            pointer,
+        })
     }
 }
 

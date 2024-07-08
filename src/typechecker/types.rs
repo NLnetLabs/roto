@@ -1,7 +1,7 @@
 use crate::{
     ast::Identifier,
     parser::meta::Meta,
-    runtime::{func::ResolvedFunctionDescription, Runtime},
+    runtime::{func::FunctionDescription, Runtime},
 };
 use std::{
     any::TypeId,
@@ -164,7 +164,7 @@ impl Primitive {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FunctionDefinition {
-    Runtime(ResolvedFunctionDescription),
+    Runtime(FunctionDescription),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

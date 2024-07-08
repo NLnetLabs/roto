@@ -33,7 +33,7 @@ use std::{
     net::IpAddr,
 };
 
-use func::{Func, Param, ResolvedFunctionDescription};
+use func::{Func, Param, FunctionDescription};
 use routecore::{
     addr::Prefix,
     bgp::{
@@ -96,7 +96,7 @@ pub enum FunctionKind {
 #[derive(Debug)]
 pub struct RuntimeFunction {
     pub name: String,
-    pub description: ResolvedFunctionDescription,
+    pub description: FunctionDescription,
     pub kind: FunctionKind,
 }
 
@@ -209,11 +209,10 @@ impl Runtime {
         name: impl Into<String>,
         f: impl Func<A, R>,
     ) {
-        let desc = f.to_function_description();
-        let resolved = desc.resolve(self).unwrap();
+        let description = f.to_function_description(self).unwrap();
         self.functions.push(RuntimeFunction {
             name: name.into(),
-            description: resolved,
+            description,
             kind: FunctionKind::Free,
         })
     }
@@ -223,10 +222,9 @@ impl Runtime {
         name: impl Into<String>,
         f: impl Func<A, R>,
     ) {
-        let desc = f.to_function_description();
-        let resolved = desc.resolve(self).unwrap();
+        let description = f.to_function_description(self).unwrap();
 
-        let Some(first) = resolved.parameter_types.first() else {
+        let Some(first) = description.parameter_types.first() else {
             panic!()
         };
 
@@ -240,7 +238,7 @@ impl Runtime {
 
         self.functions.push(RuntimeFunction {
             name: name.into(),
-            description: resolved,
+            description,
             kind: FunctionKind::Method(std::any::TypeId::of::<T>()),
         })
     }
@@ -250,11 +248,10 @@ impl Runtime {
         name: impl Into<String>,
         f: impl Func<A, R>,
     ) {
-        let desc = f.to_function_description();
-        let resolved = desc.resolve(self).unwrap();
+        let description = f.to_function_description(self).unwrap();
         self.functions.push(RuntimeFunction {
             name: name.into(),
-            description: resolved,
+            description,
             kind: FunctionKind::StaticMethod(std::any::TypeId::of::<T>()),
         })
     }
