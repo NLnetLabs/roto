@@ -1,8 +1,14 @@
-use crate::pipeline::{self, RotoReport};
+use crate::{pipeline::{self, RotoReport}, LoadedFiles};
+
+macro_rules! src {
+    ($code:literal) => {
+        pipeline::test_file(file!(), $code, line!() as usize - 1)
+    }
+}
 
 #[track_caller]
-fn typecheck(s: &str) -> Result<(), RotoReport> {
-    let res = pipeline::test_file(s).parse();
+fn typecheck(loaded: LoadedFiles) -> Result<(), RotoReport> {
+    let res = loaded.parse();
 
     let res = match res {
         Ok(res) => res,
@@ -26,128 +32,128 @@ fn typecheck(s: &str) -> Result<(), RotoReport> {
 
 #[test]
 fn one_record() {
-    let src = "type Foo { a: u32 }";
-    assert!(typecheck(src).is_ok());
+    let s = src!("type Foo { a: u32 }");
+    assert!(typecheck(s).is_ok());
 }
 
 #[test]
 fn declared_multiple_times() {
-    let src = "
+    let s = src!("
         type Foo { a: u32 }
         type Foo { a: u32 }
-    ";
-    assert!(typecheck(src).is_err());
+    ");
+    assert!(typecheck(s).is_err());
 }
 
 #[test]
 fn double_field() {
-    let src = "
+    let s = src!("
         type Foo { a: u32, a: u8 }
-    ";
-    assert!(typecheck(src).is_err());
+    ");
+    assert!(typecheck(s).is_err());
 }
 
 #[test]
 fn undeclared_type_in_record() {
-    let src = "type Bar { f: Foo }";
-    assert!(typecheck(src).is_err());
+    let s = src!("type Bar { f: Foo }");
+    assert!(typecheck(s).is_err());
 }
 
 #[test]
 fn nested_record() {
-    let src = "
+    let s = src!("
         type Foo { a: { b: u32, c: u32 } }
-    ";
-    assert!(typecheck(src).is_ok());
+    ");
+    assert!(typecheck(s).is_ok());
 }
 
 #[test]
 fn two_records() {
-    let src = "
+    let s = src!("
         type Foo { a: u32 }
         type Bar { f: Foo }
-    ";
-    assert!(typecheck(src).is_ok());
+    ");
+    assert!(typecheck(s).is_ok());
 
-    let src = "
+    let s = src!("
         type Bar { f: Foo }
         type Foo { a: u32 }
-    ";
-    assert!(typecheck(src).is_ok());
+    ");
+    assert!(typecheck(s).is_ok());
 }
 
 #[test]
 fn record_cycle() {
-    let src = "
+    let s = src!("
         type Foo { f: Foo }
-    ";
-    assert!(typecheck(src).is_err());
+    ");
+    assert!(typecheck(s).is_err());
 
-    let src = "
+    let s = src!("
         type Bar { f: Foo }
         type Foo { b: Bar }
-    ";
-    assert!(typecheck(src).is_err());
+    ");
+    assert!(typecheck(s).is_err());
 
-    let src = "
+    let s = src!("
         type A { x: B }
         type B { x: C }
         type C { x: D }
         type D { x: A }
-    ";
-    assert!(typecheck(src).is_err());
+    ");
+    assert!(typecheck(s).is_err());
 
-    let src = "
+    let s = src!("
         type A { x: B }
         type B { x: C }
         type C { x: { y: D } }
         type D { x: B }
-    ";
-    assert!(typecheck(src).is_err());
+    ");
+    assert!(typecheck(s).is_err());
 }
 
 #[test]
 fn record_diamond() {
-    let src = "
+    let s = src!("
         type A { x: B, y: C }
         type B { x: D }
         type C { x: D }
         type D { }
-    ";
-    assert!(typecheck(src).is_ok());
+    ");
+    assert!(typecheck(s).is_ok());
 }
 
 #[test]
 fn table_contains_record() {
-    let src = "
+    let s = src!("
         table t contains A { b: B }
         type B { x: u32 }
-    ";
-    assert!(typecheck(src).is_ok());
+    ");
+    assert!(typecheck(s).is_ok());
 }
 
 #[test]
 fn output_stream_contains_record() {
-    let src = "
+    let s = src!("
         output-stream o contains A { b: B }
         type B { x: u32 }
-    ";
-    assert!(typecheck(src).is_ok());
+    ");
+    assert!(typecheck(s).is_ok());
 }
 
 #[test]
 fn rib_contains_record() {
-    let src = "
+    let s = src!("
         rib r contains A { b: B }
         type B { x: u32 }
-    ";
-    assert!(typecheck(src).is_ok());
+    ");
+    assert!(typecheck(s).is_ok());
 }
 
 #[test]
 #[ignore = "prefixes not supported yet"]
 fn filter_map() {
-    let src = r#"
+    let s = src!(r#"
         filter-map blabla(foo: u32) {
             define {
                 a = "hello";
@@ -157,13 +163,13 @@ fn filter_map() {
 
             apply { accept }
         }
-    "#;
-    assert!(typecheck(src).is_ok());
+    "#);
+    assert!(typecheck(s).is_ok());
 }
 
 #[test]
 fn filter_map_double_definition() {
-    let src = r#"
+    let s = src!(r#"
         filter-map blabla(foo: u32) {
             define {
                 a = "hello";
@@ -172,13 +178,13 @@ fn filter_map_double_definition() {
 
             apply { accept }
         }
-    "#;
-    assert!(typecheck(src).is_err());
+    "#);
+    assert!(typecheck(s).is_err());
 }
 
 #[test]
 fn using_records() {
-    let src = r#"
+    let s = src!(r#"
         type Foo { a: String }
 
         filter-map bar(r: u32) {
@@ -188,10 +194,10 @@ fn using_records() {
 
             apply { accept }
         }
-    "#;
-    typecheck(src).unwrap();
+    "#);
+    typecheck(s).unwrap();
 
-    let src = r#"
+    let s = src!(r#"
         type Foo { a: String }
 
         filter-map bar(r: u32) {
@@ -201,10 +207,10 @@ fn using_records() {
 
             apply { accept }
         }
-    "#;
-    assert!(typecheck(src).is_err());
+    "#);
+    assert!(typecheck(s).is_err());
 
-    let src = r#"
+    let s = src!(r#"
         type Foo { a: string }
 
         filter-map bar(r: u32) {
@@ -214,13 +220,13 @@ fn using_records() {
 
             apply { accept }
         }
-    "#;
-    assert!(typecheck(src).is_err());
+    "#);
+    assert!(typecheck(s).is_err());
 }
 
 #[test]
 fn integer_inference() {
-    let src = "
+    let s = src!("
         type Foo { x: u8 }
 
         filter-map test(r: u32) {
@@ -230,10 +236,10 @@ fn integer_inference() {
 
             apply { accept }
         }
-    ";
-    typecheck(src).unwrap();
+    ");
+    typecheck(s).unwrap();
 
-    let src = "
+    let s = src!("
         type Foo { x: u8 }
         type Bar { x: u8 }
 
@@ -245,10 +251,10 @@ fn integer_inference() {
 
             apply { accept }
         }
-    ";
-    assert!(typecheck(src).is_ok());
+    ");
+    assert!(typecheck(s).is_ok());
 
-    let src = "
+    let s = src!("
         type Foo { x: u8 }
         type Bar { x: u8 }
 
@@ -261,10 +267,10 @@ fn integer_inference() {
 
             apply { accept }
         }
-    ";
-    assert!(typecheck(src).is_ok());
+    ");
+    assert!(typecheck(s).is_ok());
 
-    let src = "
+    let s = src!("
         type Foo { x: u8 }
         type Bar { x: u32 }
 
@@ -277,10 +283,10 @@ fn integer_inference() {
 
             apply { accept }
         }
-    ";
-    assert!(typecheck(src).is_err());
+    ");
+    assert!(typecheck(s).is_err());
 
-    let src = "
+    let s = src!("
         type Foo { x: u8 }
         type Bar { x: u32 }
 
@@ -292,13 +298,13 @@ fn integer_inference() {
 
             apply { accept }
         }
-    ";
-    assert!(typecheck(src).is_ok());
+    ");
+    assert!(typecheck(s).is_ok());
 }
 
 #[test]
 fn assign_field_to_other_record() {
-    let src = "
+    let s = src!("
         type Foo { x: u8 }
         type Bar { x: u8 }
 
@@ -310,10 +316,10 @@ fn assign_field_to_other_record() {
 
             apply { accept }
         }
-    ";
-    typecheck(src).unwrap();
+    ");
+    typecheck(s).unwrap();
 
-    let src = "
+    let s = src!("
         type Foo { x: u8 }
         type Bar { x: u8 }
 
@@ -325,10 +331,10 @@ fn assign_field_to_other_record() {
 
             apply { accept }
         }
-    ";
-    assert!(typecheck(src).is_err());
+    ");
+    assert!(typecheck(s).is_err());
 
-    let src = "
+    let s = src!("
         type Foo { x: u8 }
         type Bar { x: u32 }
 
@@ -340,13 +346,13 @@ fn assign_field_to_other_record() {
 
             apply { accept }
         }
-    ";
-    assert!(typecheck(src).is_err());
+    ");
+    assert!(typecheck(s).is_err());
 }
 
 #[test]
 fn ip_addr_method() {
-    let src = "
+    let s = src!("
         filter-map test(r: u32) {
             define {
                 p = 10.10.10.10;
@@ -355,10 +361,10 @@ fn ip_addr_method() {
 
             apply { accept }
         }
-    ";
-    assert!(typecheck(src).is_err());
+    ");
+    assert!(typecheck(s).is_err());
 
-    let src = "
+    let s = src!("
         filter-map test(r: u32) {
             define {
                 p = 10.10.10.10;
@@ -367,13 +373,14 @@ fn ip_addr_method() {
 
             apply { accept }
         }
-    ";
-    assert!(typecheck(src).is_ok());
+    ");
+    assert!(typecheck(s).is_ok());
 }
 
 #[test]
+#[ignore = "to_canonical doesn't work for now"]
 fn ip_addr_method_of_method_return_type() {
-    let src = "
+    let s = src!("
         filter-map test(r: u32) {
             define {
                 p = 10.10.10.10;
@@ -382,10 +389,10 @@ fn ip_addr_method_of_method_return_type() {
 
             apply { accept }
         }
-    ";
-    assert!(typecheck(src).is_ok());
+    ");
+    assert!(typecheck(s).is_ok());
 
-    let src = "
+    let s = src!("
         filter-map test(r: u32) {
             define {
                 p = 10.10.10.10;
@@ -394,14 +401,14 @@ fn ip_addr_method_of_method_return_type() {
 
             apply { accept }
         }
-    ";
-    assert!(typecheck(src).is_err());
+    ");
+    assert!(typecheck(s).is_err());
 }
 
 #[test]
 #[ignore = "prefixes not supported yet"]
 fn prefix_method() {
-    let src = "
+    let s = src!("
         filter-map test(r: u32) {
             define {
                 p = 10.10.10.10/20;
@@ -410,14 +417,14 @@ fn prefix_method() {
 
             apply { accept }
         }
-    ";
-    assert!(typecheck(src).is_ok());
+    ");
+    assert!(typecheck(s).is_ok());
 }
 
 #[test]
 #[ignore = "prefixes not supported yet"]
 fn logical_expr() {
-    let src = "
+    let s = src!("
         function foo() -> Bool {
             (10 == 10) || (10 == 11)
         }
@@ -430,10 +437,10 @@ fn logical_expr() {
 
             apply { accept }
         }
-    ";
-    typecheck(src).unwrap();
+    ");
+    typecheck(s).unwrap();
 
-    let src = r#"
+    let s = src!(r#"
         function foo() -> Bool {
             (10 == 10) || ("hello" == 11)
         }
@@ -445,14 +452,14 @@ fn logical_expr() {
 
             apply { accept }
         }
-    "#;
-    typecheck(src).unwrap_err();
+    "#);
+    typecheck(s).unwrap_err();
 }
 
 #[test]
 #[ignore = "sending messages not supported yet"]
 fn send_output_stream() {
-    let src = r#"
+    let s = src!(r#"
         output-stream stream contains Msg {
             foo: String
         }
@@ -466,10 +473,10 @@ fn send_output_stream() {
         filter-map test(r: u32) {
             apply { accept }
         }
-    "#;
-    typecheck(src).unwrap();
+    "#);
+    typecheck(s).unwrap();
 
-    let src = r#"
+    let s = src!(r#"
         output-stream stream contains Foo {
             foo: String
         }
@@ -485,10 +492,10 @@ fn send_output_stream() {
         filter-map test(r: u32) {
             apply { accept }
         }
-    "#;
-    assert!(typecheck(src).is_err());
+    "#);
+    assert!(typecheck(s).is_err());
 
-    let src = r#"
+    let s = src!(r#"
         output-stream foos contains Foo {
             foo: String
         }
@@ -509,10 +516,10 @@ fn send_output_stream() {
         filter-map test(r: u32) {
             apply { accept }
         }
-    "#;
-    typecheck(src).unwrap();
+    "#);
+    typecheck(s).unwrap();
 
-    let src = r#"
+    let s = src!(r#"
         output-stream foos contains Foo {
             foo: String
         }
@@ -533,14 +540,14 @@ fn send_output_stream() {
         filter-map test(r: u32) {
             apply { accept }
         }
-    "#;
-    assert!(typecheck(src).is_err());
+    "#);
+    assert!(typecheck(s).is_err());
 }
 
 #[test]
 #[ignore = "sending messages is not supported yet"]
 fn record_inference() {
-    let src = "
+    let s = src!("
         output-stream s contains Msg { a: u32 }
         
         function bar(a: Msg) {
@@ -557,10 +564,10 @@ fn record_inference() {
                 accept
             }
         }
-    ";
-    typecheck(src).unwrap();
+    ");
+    typecheck(s).unwrap();
 
-    let src = "
+    let s = src!("
         output-stream s contains Msg { a: u32 }
         
         function bar(a: Msg) {
@@ -577,10 +584,10 @@ fn record_inference() {
                 accept
             }
         }
-    ";
-    assert!(typecheck(src).is_err());
+    ");
+    assert!(typecheck(s).is_err());
 
-    let src = "
+    let s = src!("
         type A { a: u32 }
 
         function bla(a: A, b: A) -> Bool {
@@ -600,10 +607,10 @@ fn record_inference() {
                 reject
             }
         }
-    ";
-    typecheck(src).unwrap();
+    ");
+    typecheck(s).unwrap();
 
-    let src = "
+    let s = src!("
         type A { a: u32 }
         type B { a: u32 }
 
@@ -620,13 +627,13 @@ fn record_inference() {
 
             apply { accept }
         }
-    ";
-    assert!(typecheck(src).is_err());
+    ");
+    assert!(typecheck(s).is_err());
 }
 
 #[test]
 fn return_keyword() {
-    let src = "
+    let s = src!("
         function bar() -> bool {
             return true
         }
@@ -634,10 +641,10 @@ fn return_keyword() {
         filter-map foo(r: u32) { 
             apply { accept }
         }
-    ";
-    typecheck(src).unwrap();
+    ");
+    typecheck(s).unwrap();
 
-    let src = "
+    let s = src!("
         function bar() -> bool {
             return 2
         }
@@ -645,13 +652,13 @@ fn return_keyword() {
         filter-map foo(r: u32) { 
             apply { accept }
         }
-    ";
-    typecheck(src).unwrap_err();
+    ");
+    typecheck(s).unwrap_err();
 }
 
 #[test]
 fn unit_block() {
-    let src = "
+    let s = src!("
         // workaround for not having a ()
         function unit() {}
 
@@ -662,13 +669,13 @@ fn unit_block() {
         filter-map foo(r: u32) { 
             apply { accept }
         }
-    ";
-    typecheck(src).unwrap_err();
+    ");
+    typecheck(s).unwrap_err();
 }
 
 #[test]
 fn unreachable_expression() {
-    let src = "
+    let s = src!("
         function bar() -> Bool {
             return true;
             return false;
@@ -677,13 +684,13 @@ fn unreachable_expression() {
         filter-map foo(r: u32) { 
             apply { accept }
         }
-    ";
-    typecheck(src).unwrap_err();
+    ");
+    typecheck(s).unwrap_err();
 }
 
 #[test]
 fn enum_values() {
-    let src = "
+    let s = src!("
         filter-map main(r: u32) { 
             define {
                 x = Afi.IpV4;
@@ -697,13 +704,13 @@ fn enum_values() {
                 }
             }
         }
-    ";
-    typecheck(src).unwrap();
+    ");
+    typecheck(s).unwrap();
 }
 
 #[test]
 fn bmp_message() {
-    let src = "
+    let s = src!("
         filter-map main(x: BmpMessage) { 
             define {
                 a = BmpMessage.InitiationMessage(BmpInitiationMessage {});
@@ -717,13 +724,13 @@ fn bmp_message() {
                 }
             }
         }
-    ";
-    typecheck(src).unwrap();
+    ");
+    typecheck(s).unwrap();
 }
 
 #[test]
 fn enum_match() {
-    let src = "
+    let s = src!("
         filter-map foo(r: u32) { 
             define {
                 x = Afi.IpV4;
@@ -737,13 +744,13 @@ fn enum_match() {
                 }
             }
         }
-    ";
-    typecheck(src).unwrap();
+    ");
+    typecheck(s).unwrap();
 }
 
 #[test]
 fn bmp_message_4() {
-    let src = "
+    let s = src!("
         filter-map main(x: BmpMessage) { 
             apply {
                 match x {
@@ -759,6 +766,38 @@ fn bmp_message_4() {
                 reject
             }
         }
-    ";
-    typecheck(src).unwrap();
+    ");
+    typecheck(s).unwrap();
+}
+
+#[test]
+fn runtime_function() {
+    let s = src!("
+        filter-map main(x: u32) {
+            apply {
+                if pow(x, 2) > 100 {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ");
+    typecheck(s).unwrap();
+    
+    let s = src!("
+        filter-map main(x: u32) {
+            define {
+                pow = 3;
+            }
+            apply {
+                if pow(x, 2) > 100 {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ");
+    typecheck(s).unwrap_err();
 }

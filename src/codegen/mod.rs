@@ -301,7 +301,7 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 let (val, _) = self.operand(val);
                 self.def(var, val)
             }
-            ir::Instruction::Call { to, ty, func, args } => {
+            ir::Instruction::Call { to, func, args } => {
                 let (func_id, _) = self.module.functions[func];
                 let func_ref = self
                     .module
@@ -312,12 +312,13 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                     args.iter().map(|(_, a)| self.operand(a).0).collect();
                 let inst = self.ins().call(func_ref, &args);
 
-                if let Some(to) = to {
+                if let Some((to, ty)) = to {
                     let ty = self.module.cranelift_type(ty);
                     let var = self.variable(&to.var, ty);
                     self.def(var, self.builder.inst_results(inst)[0]);
                 }
             }
+            ir::Instruction::CallRuntime { to, func, args } => todo!(),
             ir::Instruction::Return(Some(v)) => {
                 let (val, _) = self.operand(v);
                 self.ins().return_(&[val]);

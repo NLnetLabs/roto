@@ -26,6 +26,8 @@
 
 use std::fmt::Display;
 
+use crate::runtime;
+
 use super::value::{IrType, IrValue};
 
 /// Human-readable place
@@ -82,18 +84,17 @@ pub enum Instruction {
 
     /// Call a function.
     Call {
-        to: Option<Var>,
-        ty: IrType,
+        to: Option<(Var, IrType)>,
         func: String,
         args: Vec<(String, Operand)>,
     },
 
-    /// Call an external function (i.e. a Rust function)
-    // CallExternal {
-    //     to: Var,
-    //     ty: IrType,
-    //     args: Vec<Operand>,
-    // },
+    /// Call a runtime function (i.e. a Rust function)
+    CallRuntime {
+        to: Option<(Var, IrType)>,
+        func: runtime::RuntimeFunction,
+        args: Vec<Operand>,
+    },
 
     /// Return from the current function (or filter-map)
     Return(Option<Operand>),
@@ -235,8 +236,7 @@ impl Display for Instruction {
         match self {
             Self::Assign { to, val, ty } => write!(f, "{to}: {ty} = {val}"),
             Self::Call {
-                to: Some(to),
-                ty,
+                to: Some((to, ty)),
                 func,
                 args,
             } => write!(
@@ -249,7 +249,6 @@ impl Display for Instruction {
             ),
             Self::Call {
                 to: None,
-                ty: _,
                 func,
                 args,
             } => write!(
@@ -260,15 +259,24 @@ impl Display for Instruction {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            // Self::CallExternal { to, ty, func, args } => write!(
-            //     f,
-            //     "{to}: {ty} = <rust function {:?}>({})",
-            //     func.pointer,
-            //     args.iter()
-            //         .map(|a| a.to_string())
-            //         .collect::<Vec<_>>()
-            //         .join(", ")
-            // ),
+            Self::CallRuntime { to: Some((to, ty)), func, args } => write!(
+                f,
+                "{to}: {ty} = <runtime function {:?}>({})",
+                func.name,
+                args.iter()
+                    .map(|a| a.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Self::CallRuntime { to: None, func, args } => write!(
+                f,
+                "<rust function {:?}>({})",
+                func.name,
+                args.iter()
+                    .map(|a| a.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             Self::Return(None) => write!(f, "return"),
             Self::Return(Some(v)) => write!(f, "return {v}"),
             Self::Cmp {

@@ -2,27 +2,37 @@ use std::collections::HashMap;
 
 use crate::parser::meta::MetaId;
 
-use super::{types::Type, unionfind::UnionFind};
+use super::{types::{Function, Type}, unionfind::UnionFind};
 
 /// The output of the type checker that is used for lowering
 #[derive(Clone)]
 pub struct TypeInfo {
     /// The unionfind structure that maps type variables to types
     pub(super) unionfind: UnionFind,
+
     /// Map from type names to types
     pub(super) types: HashMap<String, Type>,
+    
     /// The types we inferred for each Expr
     ///
     /// This might not be fully resolved yet.
     pub(super) expr_types: HashMap<MetaId, Type>,
+    
     /// The fully qualified (and hence unique) name for each identifier.
     pub(super) fully_qualified_names: HashMap<MetaId, String>,
+    
+    /// The function that is called on each function call
+    pub(super) function_calls: HashMap<MetaId, Function>,
+    
     /// The ids of all the `Expr::Access` nodes that should be interpreted
     /// as enum variant constructors.
     pub(super) enum_variant_constructors: HashMap<MetaId, Type>,
+    
     pub(super) diverges: HashMap<MetaId, bool>,
+    
     /// Type for return/accept/reject that it constructs and returns.
     pub(super) return_types: HashMap<MetaId, Type>,
+    
     // Size of the pointer type in bytes
     pointer_bytes: u32,
 }
@@ -37,6 +47,7 @@ impl TypeInfo {
             enum_variant_constructors: HashMap::new(),
             diverges: HashMap::new(),
             return_types: HashMap::new(),
+            function_calls: HashMap::new(),
             pointer_bytes,
         }
     }
@@ -66,6 +77,10 @@ impl TypeInfo {
     pub fn return_type_of(&mut self, x: impl Into<MetaId>) -> Type {
         let ty = self.return_types[&x.into()].clone();
         self.resolve(&ty)
+    }
+
+    pub fn function(&self, x: impl Into<MetaId>) -> &Function {
+        self.function_calls.get(&x.into()).unwrap()
     }
 
     pub fn offset_of(&mut self, record: &Type, field: &str) -> (Type, u32) {

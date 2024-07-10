@@ -13,7 +13,7 @@ fn compile(s: &str) -> Lowered {
 
     let pointer_bytes = usize::BITS / 8;
 
-    pipeline::test_file(s)
+    pipeline::test_file(file!(), s, line!() as usize)
         .parse()
         .unwrap()
         .typecheck(pointer_bytes)
@@ -602,6 +602,37 @@ fn bmp_message_5() {
 
         let res = mem.read(pointer, 1);
         assert_eq!(&[expected as u8], res, "{val:?}");
+    }
+}
+
+#[test]
+fn call_runtime_function() {
+    let s = "
+        filter-map main(x: u32) {
+            apply {
+                if pow(x, 2) > 100 {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
+    
+    let program = compile(s);
+
+    for (value, expected) in [(5, 0), (11, 1)] {
+        let mut mem = Memory::new();
+        let verdict_pointer = mem.allocate(1);
+        program.eval(
+            &mut mem,
+            vec![
+                IrValue::Pointer(verdict_pointer),
+                IrValue::U32(value),
+            ],
+        );
+        let res = mem.read(verdict_pointer, 1);
+        assert_eq!(&[expected as u8], res);
     }
 }
 

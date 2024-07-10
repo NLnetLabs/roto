@@ -225,7 +225,7 @@ impl<'methods> TypeChecker<'methods> {
                 &[],
                 parameter_types,
                 return_type,
-                FunctionDefinition::Runtime(description.clone()),
+                FunctionDefinition::Runtime(func.clone()),
             ));
         }
 

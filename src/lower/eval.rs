@@ -5,10 +5,10 @@
 //! by strings and therefore stored as a hashmap.
 
 use super::ir::{Function, Operand, Var};
-use crate::lower::{
+use crate::{lower::{
     ir::{Instruction, IntCmp},
     value::IrValue,
-};
+}, runtime::RuntimeFunction};
 use log::trace;
 use std::collections::HashMap;
 
@@ -268,13 +268,8 @@ pub fn eval(
                 let val = eval_operand(&vars, val);
                 vars.insert(to.clone(), val.clone());
             }
-            Instruction::Call {
-                to,
-                ty: _,
-                func,
-                args,
-            } => {
-                mem.push_frame(program_counter, to.clone());
+            Instruction::Call { to, func, args } => {
+                mem.push_frame(program_counter, to.clone().map(|to| to.0));
                 for (name, arg) in args {
                     let val = eval_operand(&vars, arg);
                     vars.insert(
@@ -287,19 +282,16 @@ pub fn eval(
                 program_counter = block_map[func];
                 continue;
             }
-            // Instruction::CallExternal {
-            //     to,
-            //     ty: _,
-            //     func,
-            //     args,
-            // } => {
-            //     let args: Vec<_> = args
-            //         .iter()
-            //         .map(|a| eval_operand(&vars, a).clone())
-            //         .collect();
-            //     let val = func.call(args);
-            //     vars.insert(to.clone(), val);
-            // }
+            Instruction::CallRuntime { to, func, args } => {
+                let args: Vec<_> = args
+                    .iter()
+                    .map(|a| eval_operand(&vars, a).clone())
+                    .collect();
+                let ret = call_runtime_function(func, args);
+                if let Some((to, _ty)) = to {
+                    vars.insert(to.clone(), ret.unwrap());
+                }
+            }
             Instruction::Return(ret) => {
                 let val =
                     ret.as_ref().map(|r| eval_operand(&vars, r).clone());
@@ -408,7 +400,12 @@ pub fn eval(
                 };
                 vars.insert(to.clone(), res);
             }
-            Instruction::Div { to, ty, left, right } => {
+            Instruction::Div {
+                to,
+                ty,
+                left,
+                right,
+            } => {
                 let left = eval_operand(&vars, left);
                 let right = eval_operand(&vars, right);
                 let res = match (left, right) {
@@ -487,6 +484,14 @@ pub fn eval(
 
         program_counter += 1;
     }
+}
+
+fn call_runtime_function(
+    func: &RuntimeFunction,
+    args: Vec<IrValue>,
+) -> Option<IrValue> {
+    assert_eq!(func.description.parameter_types.len(), args.len());
+    (func.description.wrapped)(args)
 }
 
 fn eval_operand<'a>(

@@ -117,7 +117,7 @@ impl IrValue {
             I16(_) => IrType::I16,
             I32(_) => IrType::I32,
             I64(_) => IrType::I64,
-            IpAddr(_) => IrType::I32 ,
+            IpAddr(_) => IrType::I32,
             Pointer(_) => IrType::Pointer,
             ExtValue(_) => IrType::ExtValue,
             ExtPointer(_) => IrType::ExtPointer,
@@ -250,10 +250,8 @@ impl IrValue {
                 let val: &[u8; SIZE] = val.try_into().unwrap();
                 let val = usize::from_ne_bytes(*val);
                 Self::ExtPointer(val as *mut _)
-            },
-            IrType::ExtValue => {
-                Self::ExtValue(val.into())
             }
+            IrType::ExtValue => Self::ExtValue(val.into()),
         }
     }
 
@@ -322,9 +320,23 @@ impl Display for IrValue {
     }
 }
 
+pub struct ReturnValue(pub Option<IrValue>);
+
+impl From<()> for ReturnValue {
+    fn from((): ()) -> Self {
+        Self(None)
+    }
+}
+
 impl From<bool> for IrValue {
     fn from(value: bool) -> Self {
         IrValue::Bool(value)
+    }
+}
+
+impl From<bool> for ReturnValue {
+    fn from(value: bool) -> Self {
+        Self(Some(value.into()))
     }
 }
 
@@ -356,6 +368,12 @@ impl From<u8> for IrValue {
     }
 }
 
+impl From<u8> for ReturnValue {
+    fn from(value: u8) -> Self {
+        Self(Some(value.into()))
+    }
+}
+
 impl TryFrom<&IrValue> for u8 {
     type Error = ();
 
@@ -373,12 +391,52 @@ impl From<u32> for IrValue {
     }
 }
 
+impl From<u32> for ReturnValue {
+    fn from(value: u32) -> Self {
+        Self(Some(value.into()))
+    }
+}
+
 impl TryFrom<&IrValue> for u32 {
     type Error = ();
 
     fn try_from(value: &IrValue) -> Result<Self, Self::Error> {
         match value {
             IrValue::U32(x) => Ok(*x),
+            _ => Err(()),
+        }
+    }
+}
+
+impl<T> From<*const T> for IrValue {
+    fn from(value: *const T) -> Self {
+        IrValue::ExtPointer(value as *mut ())
+    }
+}
+
+impl<T> TryFrom<&IrValue> for *const T {
+    type Error = ();
+
+    fn try_from(value: &IrValue) -> Result<Self, Self::Error> {
+        match value {
+            IrValue::ExtPointer(x) => Ok(*x as *const T),
+            _ => Err(()),
+        }
+    }
+}
+
+impl<T> From<*mut T> for IrValue {
+    fn from(value: *mut T) -> Self {
+        IrValue::ExtPointer(value as *mut ())
+    }
+}
+
+impl<T> TryFrom<&IrValue> for *mut T {
+    type Error = ();
+
+    fn try_from(value: &IrValue) -> Result<Self, Self::Error> {
+        match value {
+            IrValue::ExtPointer(x) => Ok(*x as *mut T),
             _ => Err(()),
         }
     }

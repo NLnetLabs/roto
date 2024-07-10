@@ -33,7 +33,7 @@ use std::{
     net::IpAddr,
 };
 
-use func::{Func, Param, FunctionDescription};
+use func::{Func, FunctionDescription, Param};
 use routecore::{
     addr::Prefix,
     bgp::{
@@ -45,8 +45,6 @@ use routecore::{
         types::{LocalPref, OriginType},
     },
 };
-
-use crate::lower::value::IrType;
 
 /// Provides the types and functions that Roto can access via FFI
 ///
@@ -86,25 +84,18 @@ pub struct RuntimeType {
     pub is_copy_type: bool,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FunctionKind {
     Free,
     Method(TypeId),
     StaticMethod(TypeId),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RuntimeFunction {
     pub name: String,
     pub description: FunctionDescription,
     pub kind: FunctionKind,
-}
-
-pub struct RuntimeMethod {
-    pub name: &'static str,
-    pub parameter_types: Vec<IrType>,
-    pub return_type: Option<IrType>,
-    pub func: *const u8,
 }
 
 impl Runtime {
@@ -326,6 +317,12 @@ impl Default for Runtime {
         rt.register_type::<HopPath>();
         rt.register_type::<AsPath<Vec<u8>>>();
 
+        extern "C" fn pow(x: u32, y: u32) -> u32 {
+            x.pow(y)
+        }
+
+        rt.register_function("pow", pow as extern "C" fn(_, _) -> _);
+
         extern "C" fn is_ipv4(ip: *const IpAddr) -> bool {
             let ip = unsafe { &*ip };
             ip.is_ipv4()
@@ -335,7 +332,7 @@ impl Default for Runtime {
             "is_ipv4",
             is_ipv4 as extern "C" fn(_) -> _,
         );
-        
+
         extern "C" fn is_ipv6(ip: *const IpAddr) -> bool {
             let ip = unsafe { &*ip };
             ip.is_ipv6()
@@ -346,15 +343,17 @@ impl Default for Runtime {
             is_ipv6 as extern "C" fn(_) -> _,
         );
 
-        #[allow(improper_ctypes_definitions)]
-        extern "C" fn to_canonical(ip: *const IpAddr) -> IpAddr {
+        extern "C" fn to_canonical(ip: *const IpAddr, out: *mut IpAddr) {
             let ip = unsafe { &*ip };
-            ip.to_canonical()
+            let new = ip.to_canonical();
+            unsafe {
+                *out = new;
+            }
         }
 
         rt.register_method::<IpAddr, _, _>(
             "to_canonical",
-            to_canonical as extern "C" fn(_) -> _,
+            to_canonical as extern "C" fn(_, _) -> _,
         );
 
         rt

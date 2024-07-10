@@ -1,7 +1,7 @@
 use crate::{
     ast::Identifier,
     parser::meta::Meta,
-    runtime::{func::FunctionDescription, Runtime},
+    runtime::{func::FunctionDescription, Runtime, RuntimeFunction},
 };
 use std::{
     any::TypeId,
@@ -52,10 +52,21 @@ impl From<Primitive> for Type {
     }
 }
 
-// Yes this is abusing Debug, but it's fine
 impl Display for Primitive {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Debug::fmt(self, f)
+        write!(f, "{}", match self {
+            Primitive::U8 => "u8",
+            Primitive::U16 => "u16",
+            Primitive::U32 => "u32",
+            Primitive::U64 => "u64",
+            Primitive::I8 => "i8",
+            Primitive::I16 => "i16",
+            Primitive::I32 => "i32",
+            Primitive::I64 => "i64",
+            Primitive::Unit => "Unit",
+            Primitive::String => "String",
+            Primitive::Bool => "bool",
+        })
     }
 }
 
@@ -162,19 +173,35 @@ impl Primitive {
     }
 }
 
+/// The definition of a function from several different sources.
+///
+/// This is used to extract the function pointer and any other information
+/// required to generate the code to call this function.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FunctionDefinition {
-    Runtime(FunctionDescription),
+    Runtime(RuntimeFunction),
+    Roto,
 }
 
+/// A function that can be called from Roto
+///
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Function {
+    /// The type signature of this function
     pub signature: Signature,
+    
+    /// Function name
     pub name: String,
+
+    /// Type variables of this function
     pub vars: Vec<&'static str>,
+
+    /// The source of this function
     pub definition: FunctionDefinition,
 }
 
+/// How a function should be called in Roto: as a free function or a
+/// (static) method.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FunctionKind {
     Free,

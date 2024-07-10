@@ -6,7 +6,7 @@ fn compile(p: &'static str) -> Compiled {
 
     let pointer_bytes = usize::BITS / 8;
 
-    let res = test_file(p)
+    let res = test_file(file!(), p, line!() as usize)
         .parse()
         .and_then(|x| x.typecheck(pointer_bytes))
         .map(|x| {

@@ -25,6 +25,12 @@ use crate::{
 pub struct SourceFile {
     name: String,
     contents: String,
+    /// The line offset that should be added to the location in error
+    /// messages.
+    ///
+    /// This is used to add the offset of a string of source text in a test,
+    /// so that Roto errors can refer to locations in Rust files accurately.
+    location_offset: usize,
 }
 
 #[derive(Debug)]
@@ -78,11 +84,24 @@ impl std::fmt::Display for RotoReport {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use ariadne::{Color, Label, Report, ReportKind};
 
-        let mut file_cache = ariadne::sources(
-            self.files
-                .iter()
-                .map(|s| (s.name.clone(), s.contents.clone())),
-        );
+        let sources = self
+            .files
+            .iter()
+            .map(|s| {
+                (
+                    s.name.clone(),
+                    ariadne::Source::from(s.contents.clone())
+                        .with_display_line_offset(s.location_offset),
+                )
+            })
+            .collect();
+
+        let mut file_cache = ariadne::FnCache::new(
+            (move |id| {
+                Err(Box::new(format!("Failed to fetch source '{}'", id)) as _)
+            }) as fn(&_) -> _,
+        )
+        .with_sources(sources);
 
         for error in &self.errors {
             match error {
@@ -181,10 +200,15 @@ pub fn run(
 }
 
 /// Create a test file to compile and run
-pub fn test_file(source: &str) -> LoadedFiles {
+pub fn test_file(
+    file: &str,
+    source: &str,
+    location_offset: usize,
+) -> LoadedFiles {
     LoadedFiles {
         files: vec![SourceFile {
-            name: "test".into(),
+            location_offset,
+            name: file.into(),
             contents: source.into(),
         }],
     }
@@ -202,11 +226,16 @@ fn read_files(
     let mut errors = Vec::new();
     for (name, result) in results {
         match result {
-            Ok(contents) => files.push(SourceFile { name, contents }),
+            Ok(contents) => files.push(SourceFile {
+                location_offset: 0,
+                name,
+                contents,
+            }),
             Err(err) => {
                 errors.push(RotoError::Read(name.clone(), err));
                 files.push(SourceFile {
                     name,
+                    location_offset: 0,
                     contents: String::new(),
                 });
             }

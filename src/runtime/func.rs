@@ -1,6 +1,6 @@
-use std::any::TypeId;
+use std::{any::TypeId, rc::Rc};
 
-use crate::Runtime;
+use crate::{lower::value::ReturnValue, IrValue, Runtime};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Param {
@@ -9,19 +9,42 @@ pub enum Param {
     MutPtr(TypeId),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct FunctionDescription {
     pub parameter_types: Vec<Param>,
     pub return_type: Param,
     pub pointer: *const u8,
+    pub wrapped: Rc<dyn Fn(Vec<IrValue>) -> Option<IrValue>>,
 }
 
-pub trait Func<A, R> {
+impl PartialEq for FunctionDescription {
+    fn eq(&self, other: &Self) -> bool {
+        self.parameter_types == other.parameter_types
+            && self.return_type == other.return_type
+            && self.pointer == other.pointer
+    }
+}
+
+impl Eq for FunctionDescription {}
+
+impl std::fmt::Debug for FunctionDescription {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FunctionDescription")
+            .field("parameter_types", &self.parameter_types)
+            .field("return_type", &self.return_type)
+            .field("pointer", &self.pointer)
+            .field("wrapped", &"<function>")
+            .finish()
+    }
+}
+
+pub trait Func<A, R>: Sized {
     fn parameter_types() -> Vec<(TypeId, &'static str)>;
     fn return_type() -> (TypeId, &'static str);
+    fn wrapped(self) -> Rc<dyn Fn(Vec<IrValue>) -> Option<IrValue>>;
 
     fn to_function_description(
-        &self,
+        self,
         rt: &Runtime,
     ) -> Option<FunctionDescription> {
         let parameter_types = Self::parameter_types()
@@ -33,17 +56,26 @@ pub trait Func<A, R> {
 
         let pointer = &self as *const _ as *const u8;
 
+        let wrapped = self.wrapped();
+
         Some(FunctionDescription {
             parameter_types,
             return_type,
             pointer,
+            wrapped,
         })
     }
 }
 
 macro_rules! func_impl {
     ($($arg:ident),*) => {
-        impl<$($arg: 'static,)* Ret: 'static> Func<($($arg,)*), Ret> for extern "C" fn($($arg),*) -> Ret {
+        impl<$($arg,)* Ret> Func<($($arg,)*), Ret> for extern "C" fn($($arg),*) -> Ret
+        where 
+            $(
+                $arg: for<'a> TryFrom<&'a IrValue> + 'static,
+            )*
+            Ret: Into<ReturnValue> + 'static,
+        {
             fn parameter_types() -> Vec<(TypeId, &'static str)> {
                 vec![$((
                     std::any::TypeId::of::<$arg>(),
@@ -56,6 +88,25 @@ macro_rules! func_impl {
                     std::any::TypeId::of::<Ret>(),
                     std::any::type_name::<Ret>(),
                 )
+            }
+
+            fn wrapped(self) -> Rc<dyn Fn(Vec<IrValue>) -> Option<IrValue>> {
+                // We reuse the type names as variable names, so they are
+                // uppercase, but that's the easiest way to do this.
+                #[allow(non_snake_case)]
+                let f = move |args: Vec<IrValue>| {
+                    let [$($arg),*]: &[IrValue] = &args else {
+                        panic!("Number of arguments is not correct")
+                    };
+                    $(
+                        let Ok($arg) = $arg.try_into() else {
+                            panic!("Type of argument is not correct")
+                        };
+                    )*
+                    let ret: ReturnValue = self($($arg),*).into();
+                    ret.0
+                };
+                Rc::new(f)
             }
         }
     };

@@ -3,12 +3,12 @@ use std::{borrow::Borrow, collections::HashSet};
 use crate::{
     ast::{self, Identifier},
     parser::meta::{Meta, MetaId},
-    typechecker::error,
+    typechecker::{error, types::FunctionDefinition},
 };
 
 use super::{
     scope::Scope,
-    types::{FunctionKind, Primitive, Signature, Type},
+    types::{Function, FunctionKind, Primitive, Signature, Type},
     TypeChecker, TypeResult,
 };
 
@@ -148,25 +148,83 @@ impl TypeChecker<'_> {
             Literal(l) => self.literal(ctx, l),
             Match(m) => self.match_expr(scope, ctx, m),
             FunctionCall(name, args) => {
-                let t = self.get_var(scope, name)?;
-                let t = self.resolve_type(t);
+                // A function call can either be an internal function or an
+                // external function. Internal functions have priority over
+                // external functions.
+                if let Ok(t) = self.get_var(scope, name) {
+                    let t = self.resolve_type(t);
 
-                let Type::Function(params, ret) = t else {
-                    return Err(error::simple(
-                        format!("the variable `{name}` is not callable, but has type `{t}`"),
-                        "not a function",
+                    let Type::Function(params, ret) = t else {
+                        return Err(error::simple(
+                            format!("the variable `{name}` is not callable, but has type `{t}`"),
+                            "not a function",
+                            name.id,
+                        ));
+                    };
+
+                    // Tell the lower stage about the kind of function this
+                    // is. The most important part here is the
+                    // FunctionDefinition::Roto bit.
+                    self.type_info.function_calls.insert(
                         name.id,
-                    ));
-                };
+                        Function {
+                            signature: Signature {
+                                kind: FunctionKind::Free,
+                                parameter_types: params
+                                    .iter()
+                                    .map(|p| p.1.clone())
+                                    .collect(),
+                                return_type: *ret.clone(),
+                            },
+                            name: name.to_string(),
+                            vars: Vec::new(),
+                            definition: FunctionDefinition::Roto,
+                        },
+                    );
 
-                let params: Vec<_> =
-                    params.into_iter().map(|(_, t)| t).collect();
-                let diverges = self.check_arguments(
-                    scope, ctx, "function", name, &params, args,
-                )?;
+                    let params: Vec<_> =
+                        params.into_iter().map(|(_, t)| t).collect();
+                    let diverges = self.check_arguments(
+                        scope, ctx, "function", name, &params, args,
+                    )?;
 
-                self.unify(&ctx.expected_type, &ret, id, None)?;
-                Ok(diverges)
+                    self.unify(&ctx.expected_type, &ret, id, None)?;
+                    Ok(diverges)
+                } else {
+                    // It's not found in scope, so it should be a runtime
+                    // function, otherwise we really can't find it.
+                    let Some((function, signature)) = self
+                        .find_function(&FunctionKind::Free, name.as_ref())
+                    else {
+                        return Err(error::simple(
+                            format!("function `{name}` not found`",),
+                            "function not found",
+                            name.id,
+                        ));
+                    };
+
+                    let function = function.clone();
+
+                    self.type_info.function_calls.insert(name.id, function);
+
+                    self.unify(
+                        &ctx.expected_type,
+                        &signature.return_type,
+                        name.id,
+                        None,
+                    )?;
+
+                    let diverges = self.check_arguments(
+                        scope,
+                        ctx,
+                        "runtime function",
+                        name,
+                        &signature.parameter_types,
+                        args,
+                    )?;
+
+                    Ok(diverges)
+                }
             }
             MethodCall(receiver, name, args) => {
                 // This could be an enum variant constructor, so we check that too
@@ -671,7 +729,7 @@ impl TypeChecker<'_> {
         let t = self.fresh_var();
         let mut diverges = self.expr(scope, &ctx.with_type(&t), receiver)?;
 
-        let Some(signature) = self
+        let Some((function, signature)) = self
             .find_function(&FunctionKind::Method(t.clone()), name.as_ref())
         else {
             return Err(error::simple(
@@ -680,6 +738,9 @@ impl TypeChecker<'_> {
                 name.id,
             ));
         };
+
+        let function = function.clone();
+        self.type_info.function_calls.insert(name.id, function);
 
         self.unify(
             &ctx.expected_type,
@@ -711,7 +772,7 @@ impl TypeChecker<'_> {
         name: &Meta<Identifier>,
         args: &[Meta<ast::Expr>],
     ) -> TypeResult<bool> {
-        let Some(signature) = self.find_function(
+        let Some((function, signature)) = self.find_function(
             &FunctionKind::StaticMethod(ty.clone()),
             name.as_ref(),
         ) else {
@@ -721,6 +782,9 @@ impl TypeChecker<'_> {
                 name.id,
             ));
         };
+
+        let function = function.clone();
+        self.type_info.function_calls.insert(name.id, function);
 
         self.unify(
             &ctx.expected_type,
@@ -771,7 +835,7 @@ impl TypeChecker<'_> {
         &mut self,
         kind: &FunctionKind,
         name: &str,
-    ) -> Option<Signature> {
+    ) -> Option<(&Function, Signature)> {
         self.functions.iter().find_map(|m| {
             if name != m.name {
                 return None;
@@ -779,14 +843,16 @@ impl TypeChecker<'_> {
             let signature = self.instantiate_method(m);
 
             match (&signature.kind, kind) {
-                (FunctionKind::Free, FunctionKind::Free) => Some(signature),
+                (FunctionKind::Free, FunctionKind::Free) => {
+                    Some((m, signature))
+                }
                 (FunctionKind::Method(ty1), FunctionKind::Method(ty2)) => {
-                    self.subtype_of(ty1, ty2).then_some(signature)
+                    self.subtype_of(ty1, ty2).then_some((m, signature))
                 }
                 (
                     FunctionKind::StaticMethod(ty1),
                     FunctionKind::StaticMethod(ty2),
-                ) => self.subtype_of(ty1, ty2).then_some(signature),
+                ) => self.subtype_of(ty1, ty2).then_some((m, signature)),
                 _ => None,
             }
         })

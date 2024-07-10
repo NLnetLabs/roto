@@ -17,10 +17,10 @@ use value::IrType;
 use crate::{
     ast::{self, Identifier, Literal},
     parser::meta::Meta,
-    runtime::Runtime,
+    runtime::{self, Runtime},
     typechecker::{
-        types::{Primitive, Type},
         info::TypeInfo,
+        types::{FunctionDefinition, Primitive, Type},
     },
 };
 
@@ -116,7 +116,9 @@ impl<'r> Lowerer<'r> {
         type_info: &mut TypeInfo,
         tree: &ast::SyntaxTree,
     ) -> Vec<Function> {
-        let ast::SyntaxTree { declarations: expressions } = tree;
+        let ast::SyntaxTree {
+            declarations: expressions,
+        } = tree;
 
         let mut functions = Vec::new();
 
@@ -363,34 +365,67 @@ impl<'r> Lowerer<'r> {
             ast::Expr::Literal(l) => Some(self.literal(l)),
             ast::Expr::Match(m) => self.match_expr(m),
             ast::Expr::FunctionCall(ident, args) => {
-                let ty = self.type_info.type_of(ident);
-                let ident = self.type_info.full_name(ident);
+                let func = self.type_info.function(ident).clone();
 
-                let Type::Function(params, ret) = ty else {
-                    ice!();
-                };
+                match func.definition {
+                    FunctionDefinition::Runtime(runtime_func) => {
+                        let ret = &func.signature.return_type;
 
-                let args = params
-                    .iter()
-                    .zip(&args.node)
-                    .flat_map(|(p, a)| Some((p.0.to_string(), self.expr(a)?)))
-                    .collect();
+                        let to = if self.type_info.size_of(ret) > 0 {
+                            let ty = self.type_info.type_of(id);
+                            let ty = self.lower_type(&ty);
+                            Some((self.new_tmp(), ty))
+                        } else {
+                            None
+                        };
 
-                let to = if self.type_info.size_of(&ret) > 0 {
-                    Some(self.new_tmp())
-                } else {
-                    None
-                };
-                let ty = self.type_info.type_of(id);
-                let ty = self.lower_type(&ty);
-                self.add(Instruction::Call {
-                    to: to.clone(),
-                    func: ident.clone(),
-                    args,
-                    ty,
-                });
+                        let args = args
+                            .node
+                            .iter()
+                            .flat_map(|a| self.expr(a))
+                            .collect();
 
-                to.map(Into::into)
+                        self.add(Instruction::CallRuntime {
+                            to: to.clone(),
+                            func: runtime_func,
+                            args,
+                        });
+
+                        to.map(|(to, _ty)| to.into())
+                    }
+                    FunctionDefinition::Roto => {
+                        let ty = self.type_info.type_of(ident);
+                        let ident = self.type_info.full_name(ident);
+
+                        let Type::Function(params, ret) = ty else {
+                            ice!();
+                        };
+
+                        let args = params
+                            .iter()
+                            .zip(&args.node)
+                            .flat_map(|(p, a)| {
+                                Some((p.0.to_string(), self.expr(a)?))
+                            })
+                            .collect();
+
+                        let to = if self.type_info.size_of(&ret) > 0 {
+                            let ty = self.type_info.type_of(id);
+                            let ty = self.lower_type(&ty);
+                            Some((self.new_tmp(), ty))
+                        } else {
+                            None
+                        };
+
+                        self.add(Instruction::Call {
+                            to: to.clone(),
+                            func: ident.clone(),
+                            args,
+                        });
+
+                        to.map(|(to, _ty)| to.into())
+                    }
+                }
             }
             ast::Expr::MethodCall(_receiver, m, args) => {
                 if let Some(ty) = self.type_info.enum_variant_constructor(id)
