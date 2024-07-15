@@ -41,6 +41,7 @@ impl std::fmt::Debug for FunctionDescription {
 pub trait Func<A, R>: Sized {
     fn parameter_types() -> Vec<(TypeId, &'static str)>;
     fn return_type() -> (TypeId, &'static str);
+    fn ptr(&self) -> *const u8;
     fn wrapped(self) -> Rc<dyn Fn(Vec<IrValue>) -> Option<IrValue>>;
 
     fn to_function_description(
@@ -53,9 +54,7 @@ pub trait Func<A, R>: Sized {
             .collect::<Option<Vec<_>>>()?;
 
         let return_type = rt.find_type(Self::return_type().0)?;
-
-        let pointer = &self as *const _ as *const u8;
-
+        let pointer = self.ptr();
         let wrapped = self.wrapped();
 
         Some(FunctionDescription {
@@ -88,6 +87,12 @@ macro_rules! func_impl {
                     std::any::TypeId::of::<Ret>(),
                     std::any::type_name::<Ret>(),
                 )
+            }
+
+            fn ptr(&self) -> *const u8 {
+                // Make sure to deref before casting to get the function
+                // pointer and not the pointer to the function pointer.
+                (*self) as *const u8
             }
 
             fn wrapped(self) -> Rc<dyn Fn(Vec<IrValue>) -> Option<IrValue>> {

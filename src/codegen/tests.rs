@@ -1,4 +1,4 @@
-use crate::pipeline::*;
+use crate::pipeline::{test_file, Compiled};
 
 #[track_caller]
 fn compile(p: &'static str) -> Compiled {
@@ -88,7 +88,7 @@ fn equal_to_10() {
     let mut verdict: u8 = 0;
     f.call((&mut verdict as *mut u8, 5));
     assert_eq!(verdict, 0);
-    
+
     let mut verdict: u8 = 0;
     f.call((&mut verdict as *mut u8, 10));
     assert_eq!(verdict, 1);
@@ -121,7 +121,7 @@ fn equal_to_10_with_function() {
     let mut verdict: u8 = 0;
     f.call((&mut verdict as *mut u8, 5));
     assert_eq!(verdict, 0);
-    
+
     let mut verdict: u8 = 0;
     f.call((&mut verdict as *mut u8, 10));
     assert_eq!(verdict, 1);
@@ -160,11 +160,11 @@ fn equal_to_10_with_two_functions() {
     let mut verdict: u8 = 0;
     f.call((&mut verdict as *mut u8, 5));
     assert_eq!(verdict, 0);
-    
+
     let mut verdict: u8 = 0;
     f.call((&mut verdict as *mut u8, 10));
     assert_eq!(verdict, 1);
-    
+
     let mut verdict: u8 = 0;
     f.call((&mut verdict as *mut u8, 15));
     assert_eq!(verdict, 0);
@@ -262,7 +262,7 @@ fn record() {
 
     for x in 0..100 {
         let expected = x == 20;
-        let mut verdict: u8 = 0; 
+        let mut verdict: u8 = 0;
         f.call((&mut verdict as *mut _, x));
         assert_eq!(verdict, expected as u8);
     }
@@ -402,7 +402,7 @@ fn enum_match() {
     let mut verdict: u8 = 0;
     f.call((&mut verdict as *mut _, true));
     assert_eq!(verdict, true as u8);
-    
+
     let mut verdict: u8 = 0;
     f.call((&mut verdict as *mut _, false));
     assert_eq!(verdict, false as u8);
@@ -441,6 +441,60 @@ fn arithmetic() {
     assert_eq!(verdict, false as u8);
 }
 
+#[test]
+fn call_runtime_function() {
+    let s = "
+        filter-map main(x: u32) {
+            apply {
+                if pow(x, 2) > 100 {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
+
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(*mut u8, u32), ()>("main")
+        .expect("No function found (or mismatched types)");
+
+    for (value, expected) in [(5, 0), (11, 1)] {
+        let mut verdict: u8 = 0;
+        f.call((&mut verdict as *mut _, value));
+        assert_eq!(verdict, expected);
+    }
+}
+
+#[test]
+fn call_runtime_method() {
+    let s = "
+        filter-map main(x: u32) {
+            apply {
+                if x.is_even() {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
+
+    let p = compile(s);
+    let f = p
+        .module
+        .get_function::<(*mut u8, u32), ()>("main")
+        .expect("No function found (or mismatched types)");
+
+    for (value, expected) in [(5, 0), (10, 1)] {
+        let mut verdict: u8 = 0;
+        f.call((&mut verdict as *mut _, value));
+        assert_eq!(verdict, expected);
+    }
+}
+
 // #[test]
 // fn bmp_message() {
 //     let s = "
@@ -454,7 +508,7 @@ fn arithmetic() {
 //                 is_pre_policy: false,
 //                 peer_type: 0,
 //                 asn: 0,
-//                 address: 1.1.1.1,  
+//                 address: 1.1.1.1,
 //             };
 //             bmp = if a == 1 {
 //                 BmpMessage.PeerUpNotification({
@@ -474,7 +528,7 @@ fn arithmetic() {
 //                 BmpMessage.InitiationMessage({})
 //             };
 //         }
-        
+
 //         apply {
 //             match bmp {
 //                 PeerUpNotification(x) -> {
@@ -502,11 +556,11 @@ fn arithmetic() {
 //     let mut verdict: u8 = 0;
 //     f.call((&mut verdict as *mut _, 1));
 //     assert_eq!(verdict, true as u8);
-    
+
 //     let mut verdict: u8 = 0;
 //     f.call((&mut verdict as *mut _, 2));
 //     assert_eq!(verdict, false as u8);
-    
+
 //     let mut verdict: u8 = 0;
 //     f.call((&mut verdict as *mut _, 3));
 //     assert_eq!(verdict, false as u8);
@@ -523,7 +577,7 @@ fn arithmetic() {
 //             foo = Foo { x: 1 };
 //             bar = Bar { x: 2, y: 3 };
 //         }
-        
+
 //         apply {
 //             if foo.x == 1 && bar.x == 2 && bar.y == 3 {
 //                 accept

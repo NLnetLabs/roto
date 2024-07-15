@@ -8,8 +8,9 @@ use crate::{
     lower::{
         ir::{self, IntCmp, Operand},
         value::IrType,
+        IrFunction,
     },
-    IrValue, Runtime,
+    IrValue,
 };
 use cranelift::{
     codegen::{
@@ -55,6 +56,8 @@ impl<Params: RotoParams, Return: RotoType> TypedFunc<Params, Return> {
 struct ModuleBuilder<'a> {
     /// The set of public functions and their signatures.
     functions: HashMap<String, (FuncId, ir::Signature)>,
+    /// External functions
+    runtime_functions: HashMap<String, FuncId>,
     /// The inner cranelift module
     inner: JITModule,
     variable_map: HashMap<&'a str, (Variable, Type)>,
@@ -72,7 +75,10 @@ struct FuncGen<'a, 'c> {
 // point, or at least be configurable.
 const MEMFLAGS: MemFlags = MemFlags::new().with_aligned();
 
-pub fn codegen(ir: &[ir::Function], _runtime: &Runtime) -> Module {
+pub fn codegen(
+    ir: &[ir::Function],
+    runtime_functions: &HashMap<String, IrFunction>,
+) -> Module {
     // The ISA is the Instruction Set Architecture. We always compile for
     // the system we run on, so we use `cranelift_native` to get the ISA
     // for the current system. We enable building for speed only. Size is
@@ -82,21 +88,40 @@ pub fn codegen(ir: &[ir::Function], _runtime: &Runtime) -> Module {
     let flags = settings::Flags::new(settings);
     let isa = cranelift_native::builder().unwrap().finish(flags).unwrap();
 
-    let builder = JITBuilder::with_isa(
+    let mut builder = JITBuilder::with_isa(
         isa.to_owned(),
         cranelift_module::default_libcall_names(),
     );
 
-    // TODO: Declare runtime items here.
+    for (name, func) in runtime_functions {
+        builder.symbol(name, func.ptr);
+    }
 
     let jit = JITModule::new(builder);
 
     let mut module = ModuleBuilder {
         functions: HashMap::new(),
+        runtime_functions: HashMap::new(),
         inner: jit,
         isa,
         variable_map: HashMap::new(),
     };
+
+    for (name, func) in runtime_functions {
+        let mut sig = module.inner.make_signature();
+        for ty in &func.params {
+            sig.params.push(AbiParam::new(module.cranelift_type(ty)));
+        }
+        if let Some(ty) = &func.ret {
+            sig.returns.push(AbiParam::new(module.cranelift_type(ty)));
+        }
+        let Ok(func_id) =
+            module.inner.declare_function(name, Linkage::Import, &sig)
+        else {
+            panic!()
+        };
+        module.runtime_functions.insert(name.clone(), func_id);
+    }
 
     // Our functions might call each other, so we declare them before we
     // define them. This is also when we start building the function
@@ -147,7 +172,8 @@ impl<'a> ModuleBuilder<'a> {
             )
             .unwrap();
 
-        self.functions.insert(name.clone(), (func_id, signature.clone()));
+        self.functions
+            .insert(name.clone(), (func_id, signature.clone()));
     }
 
     /// Define a function body
@@ -318,7 +344,23 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                     self.def(var, self.builder.inst_results(inst)[0]);
                 }
             }
-            ir::Instruction::CallRuntime { to, func, args } => todo!(),
+            ir::Instruction::CallRuntime { to, func, args } => {
+                let func_id = self.module.runtime_functions[&func.name];
+                let func_ref = self
+                    .module
+                    .inner
+                    .declare_func_in_func(func_id, self.builder.func);
+
+                let args: Vec<_> =
+                    args.iter().map(|op| self.operand(op).0).collect();
+                let inst = self.ins().call(func_ref, &args);
+
+                if let Some((to, ty)) = to {
+                    let ty = self.module.cranelift_type(ty);
+                    let var = self.variable(&to.var, ty);
+                    self.def(var, self.builder.inst_results(inst)[0]);
+                }
+            }
             ir::Instruction::Return(Some(v)) => {
                 let (val, _) = self.operand(v);
                 self.ins().return_(&[val]);
@@ -388,7 +430,12 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 let val = self.ins().imul(l, r);
                 self.def(var, val)
             }
-            ir::Instruction::Div { to, ty, left, right } => {
+            ir::Instruction::Div {
+                to,
+                ty,
+                left,
+                right,
+            } => {
                 let (l, left_ty) = self.operand(left);
                 let (r, _) = self.operand(right);
 
@@ -401,7 +448,7 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                     IrType::U8 | IrType::U16 | IrType::U32 | IrType::U64 => {
                         self.ins().udiv(l, r)
                     }
-                    _ => panic!()
+                    _ => panic!(),
                 };
                 self.def(var, val)
             }
@@ -558,8 +605,7 @@ impl Module {
         let correct_params = Params::check(
             &sig.parameters.iter().map(|p| p.1).collect::<Vec<_>>(),
         );
-        let correct_return =
-            Return::check(sig.return_type);
+        let correct_return = Return::check(sig.return_type);
         if !correct_params || !correct_return {
             return None;
         }
@@ -573,13 +619,13 @@ impl Module {
 }
 
 /// A type that is compatible with Roto
-/// 
+///
 /// Such a type needs to have a corresponding roto representation.
 /// It also needs to have a size and be convertible into a slice(?).
-/// 
+///
 /// We need to do several things with this:
 ///  - Do runtime type checking before handing out a roto function.
-///  - Do runtime type checking 
+///  - Do runtime type checking
 pub trait RotoType {
     fn check(ty: Option<IrType>) -> bool;
 }

@@ -17,7 +17,6 @@ use value::IrType;
 use crate::{
     ast::{self, Identifier, Literal},
     parser::meta::Meta,
-    runtime::{self, Runtime},
     typechecker::{
         info::TypeInfo,
         types::{FunctionDefinition, Primitive, Type},
@@ -33,34 +32,41 @@ macro_rules! ice {
     };
 }
 
+pub struct IrFunction {
+    pub name: String,
+    pub ptr: *const u8,
+    pub params: Vec<IrType>,
+    pub ret: Option<IrType>,
+}
+
 struct Lowerer<'r> {
     function_name: &'r str,
-    _runtime: &'r Runtime,
     tmp_idx: usize,
     blocks: Vec<Block>,
     type_info: &'r mut TypeInfo,
+    runtime_functions: &'r mut HashMap<String, IrFunction>,
     block_names: HashMap<String, usize>,
 }
 
 pub fn lower(
-    runtime: &Runtime,
     tree: &ast::SyntaxTree,
     type_info: &mut TypeInfo,
+    runtime_functions: &mut HashMap<String, IrFunction>,
 ) -> Vec<Function> {
-    Lowerer::tree(runtime, type_info, tree)
+    Lowerer::tree(type_info, runtime_functions, tree)
 }
 
 impl<'r> Lowerer<'r> {
     fn new(
-        runtime: &'r Runtime,
         type_info: &'r mut TypeInfo,
+        runtime_functions: &'r mut HashMap<String, IrFunction>,
         function_name: &'r str,
     ) -> Self {
         Self {
-            _runtime: runtime,
             tmp_idx: 0,
             type_info,
             function_name,
+            runtime_functions,
             blocks: Vec::new(),
             block_names: HashMap::new(),
         }
@@ -112,8 +118,8 @@ impl<'r> Lowerer<'r> {
 
     /// Lower a syntax tree
     fn tree(
-        runtime: &Runtime,
         type_info: &mut TypeInfo,
+        runtime_functions: &mut HashMap<String, IrFunction>,
         tree: &ast::SyntaxTree,
     ) -> Vec<Function> {
         let ast::SyntaxTree {
@@ -126,8 +132,12 @@ impl<'r> Lowerer<'r> {
             match expr {
                 ast::Declaration::FilterMap(x) => {
                     functions.push(
-                        Lowerer::new(runtime, type_info, x.ident.as_ref())
-                            .filter_map(x),
+                        Lowerer::new(
+                            type_info,
+                            runtime_functions,
+                            x.ident.as_ref(),
+                        )
+                        .filter_map(x),
                     );
                 }
                 ast::Declaration::Function(ast::FunctionDeclaration {
@@ -137,8 +147,12 @@ impl<'r> Lowerer<'r> {
                     ret,
                 }) => {
                     functions.push(
-                        Lowerer::new(runtime, type_info, ident.as_ref())
-                            .function(ident, params, ret, body),
+                        Lowerer::new(
+                            type_info,
+                            runtime_functions,
+                            ident.as_ref(),
+                        )
+                        .function(ident, params, ret, body),
                     );
                 }
                 // Ignore the rest
@@ -385,6 +399,25 @@ impl<'r> Lowerer<'r> {
                             .flat_map(|a| self.expr(a))
                             .collect();
 
+                        let mut params = Vec::new();
+                        for ty in func.signature.parameter_types {
+                            params.push(self.lower_type(&ty))
+                        }
+                        let ret = func.signature.return_type.clone();
+
+                        let ir_func = IrFunction {
+                            name: ident.to_string(),
+                            ptr: runtime_func.description.pointer,
+                            params,
+                            ret: if self.type_info.size_of(&ret) > 0 {
+                                Some(self.lower_type(&ret))
+                            } else {
+                                None
+                            },
+                        };
+                        self.runtime_functions
+                            .insert(ident.to_string(), ir_func);
+
                         self.add(Instruction::CallRuntime {
                             to: to.clone(),
                             func: runtime_func,
@@ -427,7 +460,9 @@ impl<'r> Lowerer<'r> {
                     }
                 }
             }
-            ast::Expr::MethodCall(_receiver, m, args) => {
+            ast::Expr::MethodCall(receiver, m, args) => {
+                // Check whether it is in fact not a method call, but an
+                // enum constructor
                 if let Some(ty) = self.type_info.enum_variant_constructor(id)
                 {
                     let ty = ty.clone();
@@ -474,7 +509,56 @@ impl<'r> Lowerer<'r> {
                     return Some(to.into());
                 }
 
-                todo!("method was declared but missing definition")
+                // It's a runtime-defined method, which we compile just like
+                // a function
+                let func = self.type_info.function(m).clone();
+
+                let runtime_func = match func.definition {
+                    FunctionDefinition::Roto => panic!("Not yet supported"),
+                    FunctionDefinition::Runtime(rt) => rt,
+                };
+
+                let ret = &func.signature.return_type;
+
+                let to = if self.type_info.size_of(ret) > 0 {
+                    let ty = self.type_info.type_of(id);
+                    let ty = self.lower_type(&ty);
+                    Some((self.new_tmp(), ty))
+                } else {
+                    None
+                };
+
+                let args = std::iter::once(&**receiver)
+                    .chain(&args.node)
+                    .flat_map(|a| self.expr(a))
+                    .collect();
+
+                let mut params = Vec::new();
+                for ty in func.signature.parameter_types {
+                    params.push(self.lower_type(&ty))
+                }
+                let ret = func.signature.return_type.clone();
+
+                let ir_func = IrFunction {
+                    name: m.to_string(),
+                    ptr: runtime_func.description.pointer,
+                    params,
+                    ret: if self.type_info.size_of(&ret) > 0 {
+                        Some(self.lower_type(&ret))
+                    } else {
+                        None
+                    },
+                };
+                self.runtime_functions
+                    .insert(m.to_string(), ir_func);
+
+                self.add(Instruction::CallRuntime {
+                    to: to.clone(),
+                    func: runtime_func,
+                    args,
+                });
+
+                to.map(|(to, _ty)| to.into())
             }
             ast::Expr::Access(e, field) => {
                 if let Some(ty) = self.type_info.enum_variant_constructor(id)
@@ -736,13 +820,11 @@ impl<'r> Lowerer<'r> {
         match &lit.node {
             Literal::String(_) => todo!(),
             Literal::Asn(n) => IrValue::U32(*n).into(),
-            Literal::IpAddress(addr) => {
-                IrValue::from_any(Box::new(match addr {
-                    ast::IpAddress::Ipv4(x) => IpAddr::V4(*x),
-                    ast::IpAddress::Ipv6(x) => IpAddr::V6(*x),
-                }))
-                .into()
-            }
+            Literal::IpAddress(addr) => IrValue::IpAddr(match addr {
+                ast::IpAddress::Ipv4(x) => IpAddr::V4(*x),
+                ast::IpAddress::Ipv6(x) => IpAddr::V6(*x),
+            })
+            .into(),
             Literal::Integer(x) => {
                 let ty = self.type_info.type_of(lit);
                 match ty {
@@ -846,6 +928,7 @@ impl<'r> Lowerer<'r> {
     }
 
     fn lower_type(&mut self, ty: &Type) -> IrType {
+        let ty = self.type_info.resolve(ty);
         match ty {
             Type::Primitive(Primitive::Bool) => IrType::Bool,
             Type::Primitive(Primitive::U8) => IrType::U8,
@@ -857,8 +940,8 @@ impl<'r> Lowerer<'r> {
             Type::Primitive(Primitive::I32) => IrType::I32,
             Type::Primitive(Primitive::I64) => IrType::I64,
             Type::IntVar(_) => IrType::I32,
-            x if self.is_reference_type(x) => IrType::Pointer,
-            _ => panic!("could not lower: {ty}"),
+            x if self.is_reference_type(&x) => IrType::Pointer,
+            _ => panic!("could not lower: {ty:?}"),
         }
     }
 }

@@ -1,7 +1,7 @@
 use crate::{
     ast::Identifier,
     parser::meta::Meta,
-    runtime::{func::FunctionDescription, Runtime, RuntimeFunction},
+    runtime::{Runtime, RuntimeFunction},
 };
 use std::{
     any::TypeId,
@@ -54,19 +54,23 @@ impl From<Primitive> for Type {
 
 impl Display for Primitive {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            Primitive::U8 => "u8",
-            Primitive::U16 => "u16",
-            Primitive::U32 => "u32",
-            Primitive::U64 => "u64",
-            Primitive::I8 => "i8",
-            Primitive::I16 => "i16",
-            Primitive::I32 => "i32",
-            Primitive::I64 => "i64",
-            Primitive::Unit => "Unit",
-            Primitive::String => "String",
-            Primitive::Bool => "bool",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                Primitive::U8 => "u8",
+                Primitive::U16 => "u16",
+                Primitive::U32 => "u32",
+                Primitive::U64 => "u64",
+                Primitive::I8 => "i8",
+                Primitive::I16 => "i16",
+                Primitive::I32 => "i32",
+                Primitive::I64 => "i64",
+                Primitive::Unit => "Unit",
+                Primitive::String => "String",
+                Primitive::Bool => "bool",
+            }
+        )
     }
 }
 
@@ -189,7 +193,7 @@ pub enum FunctionDefinition {
 pub struct Function {
     /// The type signature of this function
     pub signature: Signature,
-    
+
     /// Function name
     pub name: String,
 

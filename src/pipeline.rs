@@ -1,5 +1,7 @@
 //! Compiler pipeline that executes multiple compiler stages in sequence
 
+use std::collections::HashMap;
+
 use crate::{
     ast,
     codegen::{self, Module},
@@ -7,7 +9,7 @@ use crate::{
         self,
         eval::{self, Memory},
         ir,
-        value::IrValue,
+        value::IrValue, IrFunction,
     },
     parser::{
         meta::{Span, Spans},
@@ -73,6 +75,7 @@ pub struct TypeChecked {
 pub struct Lowered {
     runtime: Runtime,
     pub ir: Vec<ir::Function>,
+    runtime_functions: HashMap<String, IrFunction>,
 }
 
 pub struct Compiled {
@@ -177,6 +180,13 @@ impl RotoReport {
 }
 
 impl std::error::Error for RotoReport {}
+
+#[macro_export]
+macro_rules! src {
+    ($code:literal) => {
+        $crate::pipeline::test_file(file!(), $code, line!() as usize - 1)
+    }
+}
 
 /// Compile and run a Roto script from a file
 pub fn run(
@@ -343,8 +353,9 @@ impl TypeChecked {
             trees,
             mut type_infos,
         } = self;
-        let ir = lower::lower(&runtime, &trees[0], &mut type_infos[0]);
-        Lowered { ir, runtime }
+        let mut runtime_functions = HashMap::new();
+        let ir = lower::lower(&trees[0], &mut type_infos[0], &mut runtime_functions);
+        Lowered { ir, runtime, runtime_functions }
     }
 }
 
@@ -358,7 +369,7 @@ impl Lowered {
     }
 
     pub fn codegen(self) -> Compiled {
-        let module = codegen::codegen(&self.ir, &self.runtime);
+        let module = codegen::codegen(&self.ir, &self.runtime_functions);
         Compiled {
             runtime: self.runtime,
             module,

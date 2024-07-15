@@ -323,6 +323,15 @@ impl Default for Runtime {
 
         rt.register_function("pow", pow as extern "C" fn(_, _) -> _);
 
+        extern "C" fn is_even(x: u32) -> bool {
+            x % 2 == 0
+        }
+
+        rt.register_method::<u32, _, _>(
+            "is_even",
+            is_even as extern "C" fn(_) -> _,
+        );
+
         extern "C" fn is_ipv4(ip: *const IpAddr) -> bool {
             let ip = unsafe { &*ip };
             ip.is_ipv4()

@@ -1,9 +1,8 @@
-use crate::{pipeline, Lowered};
-
 use super::{eval::Memory, value::IrValue};
+use crate::{src, LoadedFiles, Lowered};
 
 #[track_caller]
-fn compile(s: &str) -> Lowered {
+fn compile(s: LoadedFiles) -> Lowered {
     // We run this multiple times and only want to init the
     // first time, so ignore failures.
     let _ = env_logger::builder()
@@ -13,12 +12,7 @@ fn compile(s: &str) -> Lowered {
 
     let pointer_bytes = usize::BITS / 8;
 
-    pipeline::test_file(file!(), s, line!() as usize)
-        .parse()
-        .unwrap()
-        .typecheck(pointer_bytes)
-        .unwrap()
-        .lower()
+    s.parse().unwrap().typecheck(pointer_bytes).unwrap().lower()
 }
 
 #[derive(Clone, Debug)]
@@ -93,11 +87,13 @@ impl MemVal {
 
 #[test]
 fn accept() {
-    let s = "
+    let s = src!(
+        "
         filter-map main(msg: u32) {
             apply { accept }
         }
-    ";
+    "
+    );
 
     let mut mem = Memory::new();
     let program = compile(s);
@@ -109,11 +105,13 @@ fn accept() {
 
 #[test]
 fn reject() {
-    let s = "
+    let s = src!(
+        "
         filter-map main() {
             apply { reject }
         }
-    ";
+    "
+    );
 
     let mut mem = Memory::new();
     let program = compile(s);
@@ -125,7 +123,8 @@ fn reject() {
 
 #[test]
 fn if_else() {
-    let s = "
+    let s = src!(
+        "
         filter-map main() {
             apply { 
                 if true && true {
@@ -135,7 +134,8 @@ fn if_else() {
                 }
             }
         }      
-    ";
+    "
+    );
     let mut mem = Memory::new();
     let program = compile(s);
     let pointer = mem.allocate(1);
@@ -146,7 +146,8 @@ fn if_else() {
 
 #[test]
 fn react_to_rx() {
-    let s = "
+    let s = src!(
+        "
         filter-map main(x: u32) {
             apply {
                 if x <= 4 {
@@ -156,7 +157,8 @@ fn react_to_rx() {
                 }
             }
         }
-    ";
+    "
+    );
 
     let program = compile(s);
 
@@ -172,7 +174,8 @@ fn react_to_rx() {
 
 #[test]
 fn variable() {
-    let s = "
+    let s = src!(
+        "
     filter-map main() {
         define {
             a = 5;
@@ -186,7 +189,8 @@ fn variable() {
             }
         }
     }
-    ";
+    "
+    );
 
     let mut mem = Memory::new();
     let program = compile(s);
@@ -198,7 +202,8 @@ fn variable() {
 
 #[test]
 fn calling_function() {
-    let s = "
+    let s = src!(
+        "
         function smaller_than(a: u32, b: u32) -> bool {
             a < b
         }
@@ -213,7 +218,8 @@ fn calling_function() {
                 reject
             }
         }
-    ";
+    "
+    );
 
     let program = compile(s);
 
@@ -229,7 +235,8 @@ fn calling_function() {
 
 #[test]
 fn anonymous_record() {
-    let s = "
+    let s = src!(
+        "
         function in_range(x: u32, low: u32, high: u32) -> bool {
             low < x && x < high
         }
@@ -244,7 +251,8 @@ fn anonymous_record() {
                 reject
             }
         }
-    ";
+    "
+    );
 
     let program = compile(s);
 
@@ -260,7 +268,8 @@ fn anonymous_record() {
 
 #[test]
 fn typed_record() {
-    let s = "
+    let s = src!(
+        "
         type Range {
             low: u32,
             high: u32,
@@ -282,7 +291,8 @@ fn typed_record() {
                 reject
             }
         }
-    ";
+    "
+    );
 
     let program = compile(s);
 
@@ -298,7 +308,8 @@ fn typed_record() {
 
 #[test]
 fn nested_record() {
-    let s = "
+    let s = src!(
+        "
         type Foo { x: Bar, y: Bar }
         type Bar { a: i32, b: i32 }
 
@@ -315,7 +326,8 @@ fn nested_record() {
                 }
             }
         }
-    ";
+    "
+    );
 
     let program = compile(s);
 
@@ -331,7 +343,8 @@ fn nested_record() {
 
 #[test]
 fn enum_values() {
-    let s = "
+    let s = src!(
+        "
         filter-map main(x: Afi) {
             apply {
                 if x == Afi.IpV4 {
@@ -341,7 +354,8 @@ fn enum_values() {
                 }
             }
         }
-    ";
+    "
+    );
 
     let program = compile(s);
 
@@ -369,7 +383,8 @@ fn enum_values() {
 
 #[test]
 fn bmp_message() {
-    let s = "
+    let s = src!(
+        "
         filter-map main(x: BmpMessage) {
             define {
                 a = BmpMessage.InitiationMessage(BmpInitiationMessage {});
@@ -383,7 +398,8 @@ fn bmp_message() {
                 }
             }
         }
-    ";
+    "
+    );
 
     let program = compile(s);
 
@@ -427,7 +443,8 @@ fn create_message(variant: u8, port: Option<u16>) -> MemVal {
 
 #[test]
 fn bmp_message_2() {
-    let s = "
+    let s = src!(
+        "
         filter-map main(x: BmpMessage) {
             apply {
                 match x {
@@ -445,7 +462,8 @@ fn bmp_message_2() {
                 reject
             }
         }
-    ";
+    "
+    );
 
     let program = compile(s);
     for (var, port, expected) in
@@ -471,7 +489,8 @@ fn bmp_message_2() {
 
 #[test]
 fn bmp_message_3() {
-    let s = "
+    let s = src!(
+        "
         filter-map main(x: BmpMessage) {
             apply {
                 match x {
@@ -485,7 +504,8 @@ fn bmp_message_3() {
                 reject
             }
         }
-    ";
+    "
+    );
 
     let program = compile(s);
 
@@ -512,7 +532,8 @@ fn bmp_message_3() {
 
 #[test]
 fn bmp_message_4() {
-    let s = "
+    let s = src!(
+        "
         filter-map main(x: BmpMessage) {
             apply {
                 match x {
@@ -528,7 +549,8 @@ fn bmp_message_4() {
                 reject
             }
         }
-    ";
+    "
+    );
 
     let program = compile(s);
 
@@ -559,7 +581,8 @@ fn bmp_message_4() {
 
 #[test]
 fn bmp_message_5() {
-    let s = "
+    let s = src!(
+        "
         filter-map main(x: BmpMessage) {
             apply {
                 match x {
@@ -576,7 +599,8 @@ fn bmp_message_5() {
                 reject
             }
         }
-    ";
+    "
+    );
 
     let program = compile(s);
 
@@ -607,7 +631,8 @@ fn bmp_message_5() {
 
 #[test]
 fn call_runtime_function() {
-    let s = "
+    let s = src!(
+        "
         filter-map main(x: u32) {
             apply {
                 if pow(x, 2) > 100 {
@@ -617,8 +642,9 @@ fn call_runtime_function() {
                 }
             }
         }
-    ";
-    
+    "
+    );
+
     let program = compile(s);
 
     for (value, expected) in [(5, 0), (11, 1)] {
@@ -626,10 +652,37 @@ fn call_runtime_function() {
         let verdict_pointer = mem.allocate(1);
         program.eval(
             &mut mem,
-            vec![
-                IrValue::Pointer(verdict_pointer),
-                IrValue::U32(value),
-            ],
+            vec![IrValue::Pointer(verdict_pointer), IrValue::U32(value)],
+        );
+        let res = mem.read(verdict_pointer, 1);
+        assert_eq!(&[expected as u8], res);
+    }
+}
+
+#[test]
+fn ip_addr_method() {
+    let s = src!(
+        "
+        filter-map main(x: u32) {
+            apply { 
+                if x.is_even() {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    "
+    );
+
+    let program = compile(s);
+
+    for (value, expected) in [(5, 0), (6, 1)] {
+        let mut mem = Memory::new();
+        let verdict_pointer = mem.allocate(1);
+        program.eval(
+            &mut mem,
+            vec![IrValue::Pointer(verdict_pointer), IrValue::U32(value)],
         );
         let res = mem.read(verdict_pointer, 1);
         assert_eq!(&[expected as u8], res);
