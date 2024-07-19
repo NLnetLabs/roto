@@ -1,8 +1,9 @@
 use crate::src;
-use crate::{pipeline::RotoReport, LoadedFiles};
+use crate::{pipeline::RotoReport, Files};
+use crate::runtime::tests::routecore_runtime;
 
 #[track_caller]
-fn typecheck(loaded: LoadedFiles) -> Result<(), RotoReport> {
+fn typecheck(loaded: Files) -> Result<(), RotoReport> {
     let res = loaded.parse();
 
     let res = match res {
@@ -13,11 +14,12 @@ fn typecheck(loaded: LoadedFiles) -> Result<(), RotoReport> {
         }
     };
 
+    let runtime = routecore_runtime();
     let pointer_bytes = usize::BITS / 8;
 
     // Unwrap on parse because a parse error in this file is never correct.
     // We only want to test for type errors.
-    if let Err(e) = res.typecheck(pointer_bytes) {
+    if let Err(e) = res.typecheck(runtime, pointer_bytes) {
         println!("{e}");
         Err(e)
     } else {
@@ -796,28 +798,6 @@ fn enum_values() {
 }
 
 #[test]
-fn bmp_message() {
-    let s = src!(
-        "
-        filter-map main(x: BmpMessage) { 
-            define {
-                a = BmpMessage.InitiationMessage(BmpInitiationMessage {});
-            }
-
-            apply {
-                if x == a {
-                    accept
-                } else {
-                    reject
-                }
-            }
-        }
-    "
-    );
-    typecheck(s).unwrap();
-}
-
-#[test]
 fn enum_match() {
     let s = src!(
         "
@@ -832,30 +812,6 @@ fn enum_match() {
                     IpV6 -> accept,
                     _ -> reject,
                 }
-            }
-        }
-    "
-    );
-    typecheck(s).unwrap();
-}
-
-#[test]
-fn bmp_message_4() {
-    let s = src!(
-        "
-        filter-map main(x: BmpMessage) { 
-            apply {
-                match x {
-                    PeerUpNotification(x) | x.local_port == 80 -> accept,
-                    PeerUpNotification(x) | x.local_port == 12 -> accept,
-                    PeerUpNotification(x) -> {
-                        if x.local_port == 70 {
-                            accept
-                        }
-                    }
-                    _ -> {},
-                }
-                reject
             }
         }
     "

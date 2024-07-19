@@ -1,8 +1,8 @@
 use super::{eval::Memory, value::IrValue};
-use crate::{src, LoadedFiles, Lowered};
+use crate::{runtime::tests::routecore_runtime, src, Files, Lowered};
 
 #[track_caller]
-fn compile(s: LoadedFiles) -> Lowered {
+fn compile(s: Files) -> Lowered {
     // We run this multiple times and only want to init the
     // first time, so ignore failures.
     let _ = env_logger::builder()
@@ -10,11 +10,18 @@ fn compile(s: LoadedFiles) -> Lowered {
         .format_target(false)
         .try_init();
 
+    let runtime = routecore_runtime();
     let pointer_bytes = usize::BITS / 8;
 
-    s.parse().unwrap().typecheck(pointer_bytes).unwrap().lower()
+    s.parse()
+        .unwrap()
+        .typecheck(runtime, pointer_bytes)
+        .unwrap()
+        .lower()
 }
 
+/// Helper for constructing complex values for Roto
+#[allow(unused)]
 #[derive(Clone, Debug)]
 enum MemVal {
     Struct(Vec<MemVal>),
@@ -24,6 +31,7 @@ enum MemVal {
     Val(IrValue),
 }
 
+#[allow(unused)]
 impl MemVal {
     fn serialize(self, into: &mut Vec<u8>) {
         into.resize(self.padding(into.len()) + into.len(), 0);
@@ -378,254 +386,6 @@ fn enum_values() {
         );
         let res = mem.read(verdict_pointer, 1);
         assert_eq!(&[expected as u8], res);
-    }
-}
-
-#[test]
-fn bmp_message() {
-    let s = src!(
-        "
-        filter-map main(x: BmpMessage) {
-            define {
-                a = BmpMessage.InitiationMessage(BmpInitiationMessage {});
-            }
-
-            apply {
-                if x == a {
-                    accept
-                } else {
-                    reject
-                }
-            }
-        }
-    "
-    );
-
-    let program = compile(s);
-
-    for (variant, expected) in [(0, true), (1, false)] {
-        let mut mem = Memory::new();
-        let verdict_pointer = mem.allocate(1);
-        let bmp_pointer = mem.allocate(48);
-        mem.write(bmp_pointer, &[variant]);
-        program.eval(
-            &mut mem,
-            vec![
-                IrValue::Pointer(verdict_pointer),
-                IrValue::Pointer(bmp_pointer),
-            ],
-        );
-        let res = mem.read(verdict_pointer, 1);
-        assert_eq!(&[expected as u8], res);
-    }
-}
-
-fn create_message(variant: u8, port: Option<u16>) -> MemVal {
-    let data = port.map(|port| {
-        Box::new(MemVal::Struct(vec![
-            MemVal::Val(IrValue::ExtPointer(&mut () as *mut _)),
-            MemVal::Val(IrValue::U16(port)),
-            MemVal::Val(IrValue::U16(0)),
-            MemVal::Struct(vec![
-                MemVal::Val(IrValue::Bool(false)),
-                MemVal::Val(IrValue::Bool(false)),
-                MemVal::Val(IrValue::Bool(false)),
-                MemVal::Val(IrValue::Bool(false)),
-                MemVal::Val(IrValue::Bool(false)),
-                MemVal::Val(IrValue::U8(0)),
-                MemVal::Val(IrValue::U32(0)),
-                MemVal::Val(IrValue::ExtPointer(&mut () as *mut _)),
-            ]),
-        ]))
-    });
-    MemVal::Enum(variant, 20, 4, data)
-}
-
-#[test]
-fn bmp_message_2() {
-    let s = src!(
-        "
-        filter-map main(x: BmpMessage) {
-            apply {
-                match x {
-                    PeerUpNotification(x) -> {
-                        if x.local_port == 80 {
-                            accept
-                        }
-                    },
-                    InitiationMessage(x) -> {},
-                    RouteMonitoring(x) -> {},
-                    PeerDownNotification(x) -> {},
-                    StatisticsReport(x) -> {},
-                    TerminationMessage(x) -> {},
-                }
-                reject
-            }
-        }
-    "
-    );
-
-    let program = compile(s);
-    for (var, port, expected) in
-        [(2, Some(80), true), (2, Some(10), false), (1, None, false)]
-    {
-        let val = create_message(var, port);
-        let mut vec = Vec::new();
-        val.clone().serialize(&mut vec);
-        let mut mem = Memory::new();
-        let pointer = mem.allocate(1);
-        let val_pointer = mem.allocate(vec.len());
-        mem.write(val_pointer, &vec);
-
-        program.eval(
-            &mut mem,
-            vec![IrValue::Pointer(pointer), IrValue::Pointer(val_pointer)],
-        );
-
-        let res = mem.read(pointer, 1);
-        assert_eq!(&[expected as u8], res, "{val:?}");
-    }
-}
-
-#[test]
-fn bmp_message_3() {
-    let s = src!(
-        "
-        filter-map main(x: BmpMessage) {
-            apply {
-                match x {
-                    PeerUpNotification(x) -> {
-                        if x.local_port == 80 {
-                            accept
-                        }
-                    }
-                    _ -> {},
-                }
-                reject
-            }
-        }
-    "
-    );
-
-    let program = compile(s);
-
-    for (var, port, expected) in
-        [(2, Some(80), true), (2, Some(10), false), (1, None, false)]
-    {
-        let val = create_message(var, port);
-        let mut vec = Vec::new();
-        val.clone().serialize(&mut vec);
-        let mut mem = Memory::new();
-        let pointer = mem.allocate(1);
-        let val_pointer = mem.allocate(vec.len());
-        mem.write(val_pointer, &vec);
-
-        program.eval(
-            &mut mem,
-            vec![IrValue::Pointer(pointer), IrValue::Pointer(val_pointer)],
-        );
-
-        let res = mem.read(pointer, 1);
-        assert_eq!(&[expected as u8], res, "{val:?}");
-    }
-}
-
-#[test]
-fn bmp_message_4() {
-    let s = src!(
-        "
-        filter-map main(x: BmpMessage) {
-            apply {
-                match x {
-                    PeerUpNotification(x) | x.local_port == 80 -> accept,
-                    PeerUpNotification(x) | x.local_port == 12 -> accept,
-                    PeerUpNotification(x) -> {
-                        if x.local_port == 70 {
-                            accept
-                        }
-                    }
-                    _ -> {}
-                }
-                reject
-            }
-        }
-    "
-    );
-
-    let program = compile(s);
-
-    for (var, port, expected) in [
-        (2, Some(80), true),
-        (2, Some(12), true),
-        (2, Some(70), true),
-        (2, Some(10), false),
-        (1, None, false),
-    ] {
-        let val = create_message(var, port);
-        let mut vec = Vec::new();
-        val.clone().serialize(&mut vec);
-        let mut mem = Memory::new();
-        let pointer = mem.allocate(1);
-        let val_pointer = mem.allocate(vec.len());
-        mem.write(val_pointer, &vec);
-
-        program.eval(
-            &mut mem,
-            vec![IrValue::Pointer(pointer), IrValue::Pointer(val_pointer)],
-        );
-
-        let res = mem.read(pointer, 1);
-        assert_eq!(&[expected as u8], res, "{val:?}");
-    }
-}
-
-#[test]
-fn bmp_message_5() {
-    let s = src!(
-        "
-        filter-map main(x: BmpMessage) {
-            apply {
-                match x {
-                    PeerUpNotification(x) | x.local_port == 80 -> accept,
-                    _ | true -> reject, // everything below is useless!
-                    PeerUpNotification(x) | x.local_port == 12 -> accept,
-                    PeerUpNotification(x) -> {
-                        if x.local_port == 70 {
-                            accept
-                        }
-                    }
-                    _ -> {}
-                }
-                reject
-            }
-        }
-    "
-    );
-
-    let program = compile(s);
-
-    for (var, port, expected) in [
-        (2, Some(80), true),
-        (2, Some(12), false),
-        (2, Some(70), false),
-        (2, Some(10), false),
-        (1, None, false),
-    ] {
-        let val = create_message(var, port);
-        let mut vec = Vec::new();
-        val.clone().serialize(&mut vec);
-        let mut mem = Memory::new();
-        let pointer = mem.allocate(1);
-        let val_pointer = mem.allocate(vec.len());
-        mem.write(val_pointer, &vec);
-
-        program.eval(
-            &mut mem,
-            vec![IrValue::Pointer(pointer), IrValue::Pointer(val_pointer)],
-        );
-
-        let res = mem.read(pointer, 1);
-        assert_eq!(&[expected as u8], res, "{val:?}");
     }
 }
 

@@ -291,80 +291,6 @@ pub fn default_types(runtime: &Runtime) -> Vec<(String, Type)> {
     use RecordOrEnum::*;
 
     let compound_types = vec![
-        Record(
-            "Header",
-            vec![
-                ("is_ipv6", "bool"),
-                ("is_ipv4", "bool"),
-                ("is_legacy_format", "bool"),
-                ("is_post_policy", "bool"),
-                ("is_pre_policy", "bool"),
-                ("peer_type", "u8"),
-                ("asn", "u32"),
-                ("address", "IpAddr"),
-            ],
-        ),
-        Enum(
-            "RouteStatus",
-            vec![
-                ("InConvergence", None),
-                ("UpToDate", None),
-                ("Stale", None),
-                ("StartOfRouteRefresh", None),
-                ("Withdrawn", None),
-                ("Unparsable", None),
-                ("Empty", None),
-            ],
-        ),
-        Record(
-            "Route",
-            vec![
-                ("prefix", "Prefix"),
-                ("as-path", "AsPath"),
-                ("origin-type", "OriginType"),
-                ("next-hop", "NextHop"),
-                ("multi-exit-disc", "MultiExitDisc"),
-                ("local-pref", "LocalPref"),
-                ("atomic-aggregate", "AtomicAggregate"),
-                ("aggregator", "Aggregator"),
-                ("communities", "[Community]"),
-                ("status", "RouteStatus"),
-                ("peer_ip", "IpAddr"),
-                ("peer_asn", "u32"),
-            ],
-        ),
-        Record("BmpInitiationMessage", vec![]),
-        Record(
-            "BmpRouteMonitoringMessage",
-            vec![("per_peer_header", "Header")],
-        ),
-        Record(
-            "BmpPeerUpNotification",
-            vec![
-                ("local_address", "IpAddr"),
-                ("local_port", "u16"),
-                ("remote_port", "u16"),
-                // ("session_config", "TODO"),
-                ("per_peer_header", "Header"),
-            ],
-        ),
-        Record(
-            "BmpPeerDownNotification",
-            vec![("per_peer_header", "Header")],
-        ),
-        Record("BmpStatisticsReport", vec![("per_peer_header", "Header")]),
-        Record("BmpTerminationMessage", vec![("per_peer_header", "Header")]),
-        Enum(
-            "BmpMessage",
-            vec![
-                ("InitiationMessage", Some("BmpInitiationMessage")),
-                ("RouteMonitoring", Some("BmpRouteMonitoringMessage")),
-                ("PeerUpNotification", Some("BmpPeerUpNotification")),
-                ("PeerDownNotification", Some("BmpPeerDownNotification")),
-                ("StatisticsReport", Some("BmpStatisticsReport")),
-                ("TerminationMessage", Some("BmpTerminationMessage")),
-            ],
-        ),
         Enum(
             "Afi",
             vec![
@@ -376,10 +302,6 @@ pub fn default_types(runtime: &Runtime) -> Vec<(String, Type)> {
         ),
         Enum("Safi", vec![("Unicast", None), ("Multicast", None)]),
         Record("Nlris", vec![("afi", "Afi"), ("safi", "Safi")]),
-        Record(
-            "BgpUpdateMessage",
-            vec![("nlris", "Nlris"), ("afi", "Afi"), ("safi", "Safi")],
-        ),
     ];
 
     for c in compound_types {

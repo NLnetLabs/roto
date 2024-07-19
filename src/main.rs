@@ -1,5 +1,5 @@
 use clap::Parser;
-use roto::{IrValue, Memory};
+use roto::{IrValue, Memory, Runtime};
 
 #[derive(Parser)]
 struct Cli {
@@ -24,7 +24,7 @@ fn main() {
     };
 
     let mut mem = Memory::new();
-    let _result = roto::run(settings.files, &mut mem, rx);
+    let _result = roto::run(Runtime::default(), settings.files, &mut mem, rx);
     // match result {
     //     Ok(r) => println!("{r}"),
     //     Err(e) => eprintln!("{e}"),

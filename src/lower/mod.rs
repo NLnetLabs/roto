@@ -330,7 +330,7 @@ impl<'r> Lowerer<'r> {
 
                         if let Some(op) = op {
                             let offset =
-                                self.type_info.padding_of(&accept_ty, 1);
+                                1 + self.type_info.padding_of(&accept_ty, 1);
 
                             self.write_field(
                                 var.into(),
@@ -549,8 +549,7 @@ impl<'r> Lowerer<'r> {
                         None
                     },
                 };
-                self.runtime_functions
-                    .insert(m.to_string(), ir_func);
+                self.runtime_functions.insert(m.to_string(), ir_func);
 
                 self.add(Instruction::CallRuntime {
                     to: to.clone(),
@@ -940,6 +939,7 @@ impl<'r> Lowerer<'r> {
             Type::Primitive(Primitive::I32) => IrType::I32,
             Type::Primitive(Primitive::I64) => IrType::I64,
             Type::IntVar(_) => IrType::I32,
+            Type::BuiltIn(_, _) => IrType::ExtPointer,
             x if self.is_reference_type(&x) => IrType::Pointer,
             _ => panic!("could not lower: {ty:?}"),
         }

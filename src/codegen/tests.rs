@@ -1,14 +1,18 @@
-use crate::pipeline::{test_file, Compiled};
+use crate::{
+    pipeline::{test_file, Compiled},
+    runtime::tests::routecore_runtime,
+};
 
 #[track_caller]
 fn compile(p: &'static str) -> Compiled {
     let _ = env_logger::try_init();
 
+    let runtime = routecore_runtime();
     let pointer_bytes = usize::BITS / 8;
 
     let res = test_file(file!(), p, line!() as usize)
         .parse()
-        .and_then(|x| x.typecheck(pointer_bytes))
+        .and_then(|x| x.typecheck(runtime, pointer_bytes))
         .map(|x| {
             let x = x.lower();
             x.codegen()

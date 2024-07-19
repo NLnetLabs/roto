@@ -9,7 +9,8 @@ use crate::{
         self,
         eval::{self, Memory},
         ir,
-        value::IrValue, IrFunction,
+        value::IrValue,
+        IrFunction,
     },
     parser::{
         meta::{Span, Spans},
@@ -53,7 +54,7 @@ pub struct RotoReport {
 }
 
 /// Compiler stage: Files loaded and ready to be parsed
-pub struct LoadedFiles {
+pub struct Files {
     files: Vec<SourceFile>,
 }
 
@@ -185,11 +186,12 @@ impl std::error::Error for RotoReport {}
 macro_rules! src {
     ($code:literal) => {
         $crate::pipeline::test_file(file!(), $code, line!() as usize - 1)
-    }
+    };
 }
 
 /// Compile and run a Roto script from a file
 pub fn run(
+    runtime: Runtime,
     files: impl IntoIterator<Item = String>,
     mem: &mut Memory,
     rx: Vec<IrValue>,
@@ -198,7 +200,7 @@ pub fn run(
 
     let lowered = read_files(files)?
         .parse()?
-        .typecheck(pointer_bytes)?
+        .typecheck(runtime, pointer_bytes)?
         .lower();
 
     for f in &lowered.ir {
@@ -210,12 +212,8 @@ pub fn run(
 }
 
 /// Create a test file to compile and run
-pub fn test_file(
-    file: &str,
-    source: &str,
-    location_offset: usize,
-) -> LoadedFiles {
-    LoadedFiles {
+pub fn test_file(file: &str, source: &str, location_offset: usize) -> Files {
+    Files {
         files: vec![SourceFile {
             location_offset,
             name: file.into(),
@@ -224,12 +222,13 @@ pub fn test_file(
     }
 }
 
-fn read_files(
-    files: impl IntoIterator<Item = String>,
-) -> Result<LoadedFiles, RotoReport> {
+pub fn read_files<S>(
+    files: impl IntoIterator<Item = S>,
+) -> Result<Files, RotoReport> 
+where S: AsRef<str> {
     let results: Vec<_> = files
         .into_iter()
-        .map(|f| (f.to_string(), std::fs::read_to_string(f)))
+        .map(|f| (f.as_ref().to_string(), std::fs::read_to_string(f.as_ref())))
         .collect();
 
     let mut files = Vec::new();
@@ -253,7 +252,7 @@ fn read_files(
     }
 
     if errors.is_empty() {
-        Ok(LoadedFiles { files })
+        Ok(Files { files })
     } else {
         Err(RotoReport {
             files,
@@ -263,7 +262,7 @@ fn read_files(
     }
 }
 
-impl LoadedFiles {
+impl Files {
     pub fn parse(self) -> Result<Parsed, RotoReport> {
         let mut spans = Spans::default();
 
@@ -302,6 +301,7 @@ impl LoadedFiles {
 impl Parsed {
     pub fn typecheck(
         self,
+        runtime: Runtime,
         pointer_bytes: u32,
     ) -> Result<TypeChecked, RotoReport> {
         let Parsed {
@@ -309,8 +309,6 @@ impl Parsed {
             trees,
             spans,
         } = self;
-
-        let runtime = Runtime::default();
 
         let results: Vec<_> = trees
             .iter()
@@ -354,8 +352,16 @@ impl TypeChecked {
             mut type_infos,
         } = self;
         let mut runtime_functions = HashMap::new();
-        let ir = lower::lower(&trees[0], &mut type_infos[0], &mut runtime_functions);
-        Lowered { ir, runtime, runtime_functions }
+        let ir = lower::lower(
+            &trees[0],
+            &mut type_infos[0],
+            &mut runtime_functions,
+        );
+        Lowered {
+            ir,
+            runtime,
+            runtime_functions,
+        }
     }
 }
 

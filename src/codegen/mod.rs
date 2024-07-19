@@ -680,7 +680,7 @@ impl RotoType for () {
 
 impl<T> RotoType for *mut T {
     fn check(ty: Option<IrType>) -> bool {
-        ty == Some(IrType::Pointer)
+        ty == Some(IrType::Pointer) || ty == Some(IrType::ExtPointer)
     }
 }
 

@@ -30,21 +30,9 @@ pub mod func;
 use std::{
     any::{Any, TypeId},
     mem,
-    net::IpAddr,
 };
 
 use func::{Func, FunctionDescription, Param};
-use routecore::{
-    addr::Prefix,
-    bgp::{
-        aspath::{AsPath, HopPath},
-        communities::Community,
-        path_attributes::{
-            Aggregator, AtomicAggregate, MultiExitDisc, NextHop,
-        },
-        types::{LocalPref, OriginType},
-    },
-};
 
 /// Provides the types and functions that Roto can access via FFI
 ///
@@ -303,7 +291,29 @@ impl Runtime {
 
 impl Default for Runtime {
     fn default() -> Self {
-        let mut rt = Self::empty();
+        Self::empty()
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use std::net::IpAddr;
+
+    use super::Runtime;
+    use routecore::{
+        addr::Prefix,
+        bgp::{
+            aspath::{AsPath, HopPath},
+            communities::Community,
+            path_attributes::{
+                Aggregator, AtomicAggregate, MultiExitDisc, NextHop,
+            },
+            types::{LocalPref, OriginType},
+        },
+    };
+
+    pub fn routecore_runtime() -> Runtime {
+        let mut rt = Runtime::default();
 
         rt.register_type::<IpAddr>();
         rt.register_type::<OriginType>();
@@ -367,15 +377,10 @@ impl Default for Runtime {
 
         rt
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Runtime;
 
     #[test]
     fn default_runtime() {
-        let rt = Runtime::default();
+        let rt = routecore_runtime();
 
         let names: Vec<_> = rt.types.iter().map(|ty| &ty.name).collect();
         assert_eq!(
