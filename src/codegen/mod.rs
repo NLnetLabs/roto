@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     lower::{
-        ir::{self, IntCmp, Operand},
+        ir::{self, IntCmp, Operand, Var, VarKind},
         value::IrType,
         IrFunction,
     },
@@ -53,19 +53,19 @@ impl<Params: RotoParams, Return: RotoType> TypedFunc<Params, Return> {
     }
 }
 
-struct ModuleBuilder<'a> {
+struct ModuleBuilder {
     /// The set of public functions and their signatures.
     functions: HashMap<String, (FuncId, ir::Signature)>,
     /// External functions
     runtime_functions: HashMap<String, FuncId>,
     /// The inner cranelift module
     inner: JITModule,
-    variable_map: HashMap<&'a str, (Variable, Type)>,
+    variable_map: HashMap<Var, (Variable, Type)>,
     isa: Arc<dyn TargetIsa>,
 }
 
 struct FuncGen<'a, 'c> {
-    module: &'c mut ModuleBuilder<'a>,
+    module: &'c mut ModuleBuilder,
     builder: FunctionBuilder<'c>,
     block_map: HashMap<&'a str, Block>,
 }
@@ -139,7 +139,7 @@ pub fn codegen(
     module.finalize()
 }
 
-impl<'a> ModuleBuilder<'a> {
+impl ModuleBuilder {
     /// Declare a function and its signature (without the body)
     fn declare_function(&mut self, func: &ir::Function) {
         let ir::Function {
@@ -181,7 +181,7 @@ impl<'a> ModuleBuilder<'a> {
     /// The function must be declared first.
     fn define_function(
         &mut self,
-        func: &'a ir::Function,
+        func: &ir::Function,
         builder_context: &mut FunctionBuilderContext,
     ) {
         let ir::Function {
@@ -194,6 +194,10 @@ impl<'a> ModuleBuilder<'a> {
 
         let mut ctx = self.inner.make_context();
         let mut sig = self.inner.make_signature();
+
+        if signature.return_ptr {
+            sig.params.push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
+        }
 
         for (_, ty) in &signature.parameters {
             sig.params.push(AbiParam::new(self.cranelift_type(ty)));
@@ -214,7 +218,11 @@ impl<'a> ModuleBuilder<'a> {
             block_map: HashMap::new(),
         };
 
-        func_gen.entry_block(&blocks[0], &signature.parameters);
+        func_gen.entry_block(
+            &blocks[0],
+            &signature.parameters,
+            signature.return_ptr,
+        );
 
         for block in blocks {
             func_gen.block(block);
@@ -267,21 +275,58 @@ impl<'a, 'c> FuncGen<'a, 'c> {
         &mut self,
         block: &'a ir::Block,
         parameters: &'a [(String, IrType)],
+        return_ptr: bool,
     ) {
         let entry_block = self.get_block(&block.label);
         self.builder.switch_to_block(entry_block);
 
+        if return_ptr {
+            let ty = self.module.cranelift_type(&IrType::Pointer);
+            self.variable(
+                &Var {
+                    function: block.label.clone(),
+                    kind: VarKind::Return,
+                },
+                ty,
+            );
+        }
+
         for (x, ty) in parameters {
             let ty = self.module.cranelift_type(ty);
-            let _ = self.variable(x, ty);
+            let _ = self.variable(
+                &Var {
+                    function: block.label.clone(),
+                    kind: VarKind::Explicit(x.clone()),
+                },
+                ty,
+            );
         }
 
         self.builder
             .append_block_params_for_function_params(entry_block);
 
         let args = self.builder.block_params(entry_block).to_owned();
+        let mut args = args.into_iter();
+        if return_ptr {
+            self.def(
+                self.module.variable_map[&Var {
+                    function: block.label.clone(),
+                    kind: VarKind::Return,
+                }]
+                    .0,
+                args.next().unwrap(),
+            )
+        }
+
         for ((x, _), val) in parameters.iter().zip(args) {
-            self.def(self.module.variable_map[&x.as_ref()].0, val);
+            self.def(
+                self.module.variable_map[&Var {
+                    function: block.label.clone(),
+                    kind: VarKind::Explicit(x.clone()),
+                }]
+                    .0,
+                val,
+            );
         }
     }
 
@@ -323,7 +368,7 @@ impl<'a, 'c> FuncGen<'a, 'c> {
             }
             ir::Instruction::Assign { to, val, ty } => {
                 let ty = self.module.cranelift_type(ty);
-                let var = self.variable(&to.var, ty);
+                let var = self.variable(to, ty);
                 let (val, _) = self.operand(val);
                 self.def(var, val)
             }
@@ -336,11 +381,12 @@ impl<'a, 'c> FuncGen<'a, 'c> {
 
                 let args: Vec<_> =
                     args.iter().map(|(_, a)| self.operand(a).0).collect();
+
                 let inst = self.ins().call(func_ref, &args);
 
                 if let Some((to, ty)) = to {
                     let ty = self.module.cranelift_type(ty);
-                    let var = self.variable(&to.var, ty);
+                    let var = self.variable(to, ty);
                     self.def(var, self.builder.inst_results(inst)[0]);
                 }
             }
@@ -357,7 +403,7 @@ impl<'a, 'c> FuncGen<'a, 'c> {
 
                 if let Some((to, ty)) = to {
                     let ty = self.module.cranelift_type(ty);
-                    let var = self.variable(&to.var, ty);
+                    let var = self.variable(to, ty);
                     self.def(var, self.builder.inst_results(inst)[0]);
                 }
             }
@@ -376,27 +422,27 @@ impl<'a, 'c> FuncGen<'a, 'c> {
             } => {
                 let (l, _) = self.operand(left);
                 let (r, _) = self.operand(right);
-                let var = self.variable(&to.var, I8);
+                let var = self.variable(to, I8);
                 let val = self.binop(l, r, cmp);
                 self.def(var, val);
             }
             ir::Instruction::Not { to, val } => {
                 let (val, _) = self.operand(val);
-                let var = self.variable(&to.var, I8);
+                let var = self.variable(to, I8);
                 let val = self.ins().icmp_imm(IntCC::Equal, val, 0);
                 self.def(var, val);
             }
             ir::Instruction::And { to, left, right } => {
                 let (l, _) = self.operand(left);
                 let (r, _) = self.operand(right);
-                let var = self.variable(&to.var, I8);
+                let var = self.variable(to, I8);
                 let val = self.ins().band(l, r);
                 self.def(var, val);
             }
             ir::Instruction::Or { to, left, right } => {
                 let (l, _) = self.operand(left);
                 let (r, _) = self.operand(right);
-                let var = self.variable(&to.var, I8);
+                let var = self.variable(to, I8);
                 let val = self.ins().bor(l, r);
                 self.def(var, val);
             }
@@ -404,7 +450,7 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 let (l, left_ty) = self.operand(left);
                 let (r, _) = self.operand(right);
 
-                let var = self.variable(&to.var, left_ty);
+                let var = self.variable(to, left_ty);
                 // Possibly interesting note for later: this is wrapping
                 // addition
                 let val = self.ins().iadd(l, r);
@@ -414,7 +460,7 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 let (l, left_ty) = self.operand(left);
                 let (r, _) = self.operand(right);
 
-                let var = self.variable(&to.var, left_ty);
+                let var = self.variable(to, left_ty);
                 // Possibly interesting note for later: this is wrapping
                 // subtraction
                 let val = self.ins().isub(l, r);
@@ -424,7 +470,7 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 let (l, left_ty) = self.operand(left);
                 let (r, _) = self.operand(right);
 
-                let var = self.variable(&to.var, left_ty);
+                let var = self.variable(to, left_ty);
                 // Possibly interesting note for later: this is wrapping
                 // multiplication
                 let val = self.ins().imul(l, r);
@@ -439,7 +485,7 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 let (l, left_ty) = self.operand(left);
                 let (r, _) = self.operand(right);
 
-                let var = self.variable(&to.var, left_ty);
+                let var = self.variable(to, left_ty);
 
                 let val = match ty {
                     IrType::I8 | IrType::I16 | IrType::I32 | IrType::I64 => {
@@ -459,7 +505,7 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 );
 
                 let pointer_ty = self.module.isa.pointer_type();
-                let var = self.variable(&to.var, pointer_ty);
+                let var = self.variable(to, pointer_ty);
                 let p = self.ins().stack_addr(pointer_ty, slot, 0);
                 self.def(var, p);
             }
@@ -472,14 +518,13 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 let c_ty = self.module.cranelift_type(ty);
                 let (from, _) = self.operand(from);
                 let res = self.ins().load(c_ty, MEMFLAGS, from, 0);
-                let to = self.variable(&to.var, c_ty);
+                let to = self.variable(to, c_ty);
                 self.def(to, res);
             }
             ir::Instruction::Offset { to, from, offset } => {
                 let (from, _) = self.operand(from);
                 let tmp = self.ins().iadd_imm(from, *offset as i64);
-                let to =
-                    self.variable(&to.var, self.module.isa.pointer_type());
+                let to = self.variable(to, self.module.isa.pointer_type());
                 self.def(to, tmp)
             }
             ir::Instruction::Copy { to, from, size } => {
@@ -517,7 +562,7 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                     NonZeroU8::new(1).unwrap(),
                     MEMFLAGS,
                 );
-                let var = self.variable(&to.var, I8);
+                let var = self.variable(to, I8);
                 self.def(var, val);
             }
         }
@@ -545,9 +590,16 @@ impl<'a, 'c> FuncGen<'a, 'c> {
         let pointer_ty = self.module.isa.pointer_type();
         match val {
             ir::Operand::Place(p) => {
-                let a: &'a str = &p.var;
-                let (var, ty) = self.module.variable_map[a];
-                (self.builder.use_var(var), ty)
+                let (var, ty) = self.module.variable_map.get(p).map_or_else(
+                    || {
+                        panic!(
+                            "did not find {p} in {:#?}",
+                            self.module.variable_map
+                        )
+                    },
+                    |x| x,
+                );
+                (self.builder.use_var(*var), *ty)
             }
             ir::Operand::Value(v) => {
                 let (ty, val) = match v {
@@ -568,14 +620,16 @@ impl<'a, 'c> FuncGen<'a, 'c> {
         }
     }
 
-    fn variable(&mut self, var: &'a str, ty: Type) -> Variable {
+    fn variable(&mut self, var: &Var, ty: Type) -> Variable {
         let len = self.module.variable_map.len();
         let (var, _ty) =
-            *self.module.variable_map.entry(var).or_insert_with(|| {
-                let var = Variable::new(len);
-                self.builder.declare_var(var, ty);
-                (var, ty)
-            });
+            *self.module.variable_map.entry(var.clone()).or_insert_with(
+                || {
+                    let var = Variable::new(len);
+                    self.builder.declare_var(var, ty);
+                    (var, ty)
+                },
+            );
         var
     }
 
@@ -602,9 +656,15 @@ impl Module {
         name: &str,
     ) -> Option<TypedFunc<Params, Return>> {
         let (id, sig) = self.functions.get(name)?;
-        let correct_params = Params::check(
-            &sig.parameters.iter().map(|p| p.1).collect::<Vec<_>>(),
-        );
+
+        let mut params =
+            sig.parameters.iter().map(|p| p.1).collect::<Vec<_>>();
+
+        if sig.return_ptr {
+            params.insert(0, IrType::Pointer);
+        }
+
+        let correct_params = Params::check(&params);
         let correct_return = Return::check(sig.return_type);
         if !correct_params || !correct_return {
             return None;

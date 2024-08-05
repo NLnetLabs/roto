@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::{
-    ir::{Instruction, Operand, Var},
+    ir::{Instruction, Operand, Var, VarKind},
     value::IrType,
     Lowerer,
 };
@@ -237,7 +237,10 @@ impl Lowerer<'_> {
                     self.read_field(examinee.clone().into(), offset, &ty);
                 let ty = self.lower_type(&ty);
                 self.add(Instruction::Assign {
-                    to: Var { var },
+                    to: Var {
+                        function: self.function_name.into(),
+                        kind: VarKind::Explicit(var),
+                    },
                     val,
                     ty,
                 });

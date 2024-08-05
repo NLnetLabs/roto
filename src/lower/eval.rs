@@ -5,10 +5,13 @@
 //! by strings and therefore stored as a hashmap.
 
 use super::ir::{Function, Operand, Var};
-use crate::{lower::{
-    ir::{Instruction, IntCmp},
-    value::IrValue,
-}, runtime::RuntimeFunction};
+use crate::{
+    lower::{
+        ir::{Instruction, IntCmp, VarKind},
+        value::IrValue,
+    },
+    runtime::RuntimeFunction,
+};
 use log::trace;
 use std::collections::HashMap;
 
@@ -234,9 +237,31 @@ pub fn eval(
     let mut vars = HashMap::<Var, IrValue>::new();
 
     // Insert the rx value
-    assert_eq!(parameters.len(), rx.len(), "incorrect number of arguments");
-    for ((x, _), v) in parameters.iter().zip(rx) {
-        vars.insert(Var { var: x.into() }, v);
+    if f.signature.return_ptr {
+        assert_eq!(parameters.len(), rx.len() - 1, "incorrect number of arguments");
+    } else {
+        assert_eq!(parameters.len(), rx.len(), "incorrect number of arguments");
+    }
+
+    let mut values = rx.into_iter();
+    if f.signature.return_ptr {
+        vars.insert(
+            Var {
+                function: "main".into(),
+                kind: VarKind::Return,
+            },
+            values.next().unwrap(),
+        );
+    }
+
+    for ((x, _), v) in parameters.iter().zip(values) {
+        vars.insert(
+            Var {
+                function: "main".into(),
+                kind: VarKind::Explicit(x.into()),
+            },
+            v,
+        );
     }
 
     let mut program_counter = block_map[filter_map];
@@ -274,7 +299,8 @@ pub fn eval(
                     let val = eval_operand(&vars, arg);
                     vars.insert(
                         Var {
-                            var: format!("{func}::{name}"),
+                            function: func.clone(),
+                            kind: VarKind::Explicit(format!("{func}::{}", name.clone())),
                         },
                         val.clone(),
                     );
@@ -501,7 +527,7 @@ fn eval_operand<'a>(
     match op {
         Operand::Place(p) => {
             let Some(v) = mem.get(p) else {
-                panic!("No value was found for place {p}")
+                panic!("No value was found for place {p} in memory: {mem:#?}")
             };
             v
         }

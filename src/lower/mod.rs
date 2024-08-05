@@ -10,7 +10,7 @@ pub mod value;
 #[cfg(test)]
 mod test_eval;
 
-use ir::{Block, Function, Instruction, Operand, Var};
+use ir::{Block, Function, Instruction, Operand, Var, VarKind};
 use std::{collections::HashMap, net::IpAddr};
 use value::IrType;
 
@@ -30,6 +30,12 @@ macro_rules! ice {
     () => {
         panic!("ICE")
     };
+    ($s:literal) => {
+        panic!("ICE: {}", format!($s))
+    };
+    ($s:literal, $e:expr,*) => {
+        panic!("ICE: {}", format!($s, $e,*))
+    }
 }
 
 pub struct IrFunction {
@@ -110,7 +116,8 @@ impl<'r> Lowerer<'r> {
     /// Create a new unique temporary variable
     fn new_tmp(&mut self) -> Var {
         let var = Var {
-            var: format!("{}::$tmp-{}", self.function_name, self.tmp_idx),
+            function: self.function_name.into(),
+            kind: VarKind::Tmp(self.tmp_idx),
         };
         self.tmp_idx += 1;
         var
@@ -177,7 +184,7 @@ impl<'r> Lowerer<'r> {
 
         self.new_block(&ident);
 
-        let mut parameters: Vec<_> = params
+        let parameters: Vec<_> = params
             .0
             .iter()
             .map(|(x, _)| {
@@ -194,7 +201,10 @@ impl<'r> Lowerer<'r> {
                 let val = val.unwrap();
                 let ty = self.lower_type(&ty);
                 self.add(Instruction::Assign {
-                    to: Var { var: name },
+                    to: Var {
+                        function: self.function_name.into(),
+                        kind: VarKind::Explicit(name),
+                    },
                     val,
                     ty,
                 })
@@ -206,20 +216,17 @@ impl<'r> Lowerer<'r> {
 
         self.add(Instruction::Return(last));
 
-        let return_type = match return_type {
-            x if self.type_info.size_of(&x) == 0 => None,
+        let (return_type, return_ptr) = match return_type {
+            x if self.type_info.size_of(&x) == 0 => (None, false),
             x if self.is_reference_type(&x) => {
-                parameters.insert(
-                    0,
-                    (format!("{ident}::$return"), IrType::Pointer),
-                );
-                None
+                (None, true)
             }
-            x => Some(self.lower_type(&x)),
+            x => (Some(self.lower_type(&x)), false),
         };
 
         let signature = ir::Signature {
             parameters,
+            return_ptr,
             return_type,
         };
 
@@ -267,6 +274,7 @@ impl<'r> Lowerer<'r> {
 
         let signature = ir::Signature {
             parameters,
+            return_ptr: false, // TODO: check this
             return_type,
         };
 
@@ -314,11 +322,12 @@ impl<'r> Lowerer<'r> {
                     }
                     ast::ReturnKind::Accept => {
                         let Type::Verdict(accept_ty, _) = ty else {
-                            ice!()
+                            ice!("accept must have type of verdict")
                         };
 
                         let var = Var {
-                            var: format!("{}::$return", self.function_name),
+                            function: self.function_name.into(),
+                            kind: VarKind::Return,
                         };
 
                         self.write_field(
@@ -344,11 +353,12 @@ impl<'r> Lowerer<'r> {
                     }
                     ast::ReturnKind::Reject => {
                         let Type::Verdict(_, reject_ty) = ty else {
-                            ice!()
+                            ice!("reject must have a type of verdict")
                         };
 
                         let var = Var {
-                            var: format!("{}::$return", self.function_name),
+                            function: self.function_name.into(),
+                            kind: VarKind::Return,
                         };
 
                         self.write_field(
@@ -564,15 +574,16 @@ impl<'r> Lowerer<'r> {
                 {
                     let ty = ty.clone();
                     let Type::Enum(_, variants) = ty.clone() else {
-                        ice!()
+                        ice!("it's an enum variant constructor, so the type must be an enum")
                     };
 
                     let size = self.type_info.size_of(&ty);
 
-                    let idx = variants
-                        .iter()
-                        .position(|(f, _)| field.node == f)
-                        .unwrap();
+                    let Some(idx) =
+                        variants.iter().position(|(f, _)| field.node == f)
+                    else {
+                        ice!("expected field to be present")
+                    };
 
                     let to = self.new_tmp();
                     self.add(Instruction::Alloc {
@@ -600,7 +611,13 @@ impl<'r> Lowerer<'r> {
             }
             ast::Expr::Var(x) => {
                 let var = self.type_info.full_name(x);
-                Some(Var { var }.into())
+                Some(
+                    Var {
+                        function: self.function_name.into(),
+                        kind: VarKind::Explicit(var),
+                    }
+                    .into(),
+                )
             }
             ast::Expr::TypedRecord(_, record) | ast::Expr::Record(record) => {
                 let ty = self.type_info.type_of(id);

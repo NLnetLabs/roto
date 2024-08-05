@@ -33,7 +33,16 @@ use super::value::{IrType, IrValue};
 /// Human-readable place
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Var {
-    pub var: String,
+    pub function: String,
+    pub kind: VarKind,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum VarKind {
+    Explicit(String),
+    Tmp(usize),
+    NamedTmp(&'static str, usize),
+    Return,
 }
 
 impl From<Var> for Operand {
@@ -44,7 +53,12 @@ impl From<Var> for Operand {
 
 impl Display for Var {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.var)
+        write!(f, "{}::{}", &self.function, match &self.kind {
+            VarKind::Explicit(name) => name.clone(),
+            VarKind::Tmp(idx) => format!("$tmp-{idx}"),
+            VarKind::NamedTmp(name, idx) => format!("${name}-{idx}"),
+            VarKind::Return => "$return".to_string(),
+        })
     }
 }
 
@@ -358,15 +372,27 @@ impl Display for Instruction {
 
 #[derive(Debug)]
 pub struct Function {
+    /// Identifier of the function
     pub name: String,
+
+    /// Signature of the function
     pub signature: Signature,
+
+    /// Blocks belonging to this function
     pub blocks: Vec<Block>,
+
+    /// Whether the function is public i.e. can be accessed from Rust
     pub public: bool,
 }
 
 #[derive(Clone, Debug)]
 pub struct Signature {
     pub parameters: Vec<(String, IrType)>,
+
+    /// Whether this function takes a pointer for for the return value
+    /// passed as an argument
+    pub return_ptr: bool,
+
     pub return_type: Option<IrType>,
 }
 
