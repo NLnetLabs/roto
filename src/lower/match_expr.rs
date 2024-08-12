@@ -1,13 +1,14 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
-    ast::{self, Match},
+    ast::{self, Identifier, Match, Pattern},
     parser::meta::Meta,
-    typechecker::types::Type,
+    typechecker::{scope::DefinitionRef, types::Type},
 };
 
 use super::{
     ir::{Instruction, Operand, Var, VarKind},
+    label::LabelRef,
     value::IrType,
     Lowerer,
 };
@@ -110,10 +111,17 @@ impl Lowerer<'_> {
             panic!("Should have been caught in typechecking")
         };
 
-        let lbl_prefix = self.new_unique_block_name("$match");
+        let current_label = self.current_label();
+        let lbl_prefix = self.label_store.wrap_internal(
+            current_label,
+            Identifier(self.identifiers.get_or_intern("match")),
+        );
 
-        let default_lbl = format!("{lbl_prefix}_default");
-        let continue_lbl = format!("{lbl_prefix}_continue");
+        let default_lbl = self.label_store.wrap_internal(
+            lbl_prefix,
+            Identifier(self.identifiers.get_or_intern("default")),
+        );
+        let continue_lbl = self.label_store.next(current_label);
 
         // First collect all the information needed to create the switches
         // to arrive at the right arm
@@ -121,16 +129,14 @@ impl Lowerer<'_> {
             .iter()
             .enumerate()
             .map(|(i, arm)| {
-                let variant = &arm.variant_id.0;
-                let discriminant = if variant == "_" {
-                    None
-                } else {
-                    Some(
+                let discriminant = match &arm.pattern.node {
+                    Pattern::EnumVariant { variant, .. } => Some(
                         variants
                             .iter()
-                            .position(|(s, _)| s == variant)
+                            .position(|(s, _)| s == &variant.node)
                             .unwrap(),
-                    )
+                    ),
+                    Pattern::Underscore => None,
                 };
                 (discriminant, arm, i)
             })
@@ -141,7 +147,13 @@ impl Lowerer<'_> {
         let all_discriminants: HashSet<_> = branches
             .iter()
             .filter_map(|(d, _, _)| *d)
-            .map(|d| (d, format!("{lbl_prefix}_case_{d}")))
+            .map(|d| {
+                let ident = Identifier(
+                    self.identifiers.get_or_intern(format!("case_{d}")),
+                );
+                let lbl = self.label_store.wrap_internal(lbl_prefix, ident);
+                (d, lbl)
+            })
             .collect();
 
         let switch_branches = all_discriminants.iter().cloned().collect();
@@ -165,11 +177,20 @@ impl Lowerer<'_> {
             examinee: discriminant.into(),
             branches: switch_branches,
             default: if default_branches.is_empty() {
-                continue_lbl.clone()
+                continue_lbl
             } else {
-                default_lbl.clone()
+                default_lbl
             },
         });
+
+        let arm_labels: HashMap<_, _> = branches
+            .iter()
+            .map(|(_, _, idx)| {
+                let s = format!("arm_{idx}");
+                let ident = Identifier(self.identifiers.get_or_intern(s));
+                (*idx, self.label_store.wrap_internal(lbl_prefix, ident))
+            })
+            .collect();
 
         for (discriminant, lbl) in all_discriminants {
             // Each discriminant gets the branches for itself and `_`.
@@ -178,11 +199,11 @@ impl Lowerer<'_> {
                 .iter()
                 .filter(|(d, _, _)| *d == Some(discriminant) || d.is_none())
                 .collect();
-            self.match_case(op.clone(), &lbl_prefix, lbl, &branches);
+            self.match_case(op.clone(), lbl, &branches, &arm_labels);
         }
 
         if !default_branches.is_empty() {
-            self.match_case(op, &lbl_prefix, default_lbl, &default_branches);
+            self.match_case(op, default_lbl, &default_branches, &arm_labels);
         }
 
         // Here we finally create all the blocks for the expression of each
@@ -190,7 +211,7 @@ impl Lowerer<'_> {
         let out = self.new_tmp();
         let mut any_assigned = false;
         for (_, arm, arm_index) in branches {
-            self.new_block(&format!("{lbl_prefix}_arm_{arm_index}"));
+            self.new_block(arm_labels[&arm_index]);
             let ty = self.type_info.type_of(&arm.body);
             let val = self.block(&arm.body);
             if let Some(val) = val {
@@ -202,10 +223,10 @@ impl Lowerer<'_> {
                 });
                 any_assigned = true;
             }
-            self.add(Instruction::Jump(continue_lbl.clone()));
+            self.add(Instruction::Jump(continue_lbl));
         }
 
-        self.new_block(&continue_lbl);
+        self.new_block(continue_lbl);
 
         if any_assigned {
             Some(out.into())
@@ -217,18 +238,30 @@ impl Lowerer<'_> {
     fn match_case(
         &mut self,
         examinee: Var,
-        lbl_prefix: &str,
-        lbl: String,
+        lbl: LabelRef,
         branches: &[&(Option<usize>, &ast::MatchArm, usize)],
+        arm_labels: &HashMap<usize, LabelRef>,
     ) {
-        self.new_block(&lbl);
-        self.add(Instruction::Jump(format!("{lbl}_guard_0")));
-        for (i, (_, arm, arm_index)) in branches.iter().enumerate() {
-            self.new_block(&format!("{lbl}_guard_{i}"));
+        self.new_block(lbl);
 
-            if let Some(var) = &arm.data_field {
+        let ident = Identifier(self.identifiers.get_or_intern("guard_0"));
+        let guard_lbl = self.label_store.wrap_internal(lbl, ident);
+        self.add(Instruction::Jump(guard_lbl));
+
+        let mut next_lbl = guard_lbl;
+
+        for (i, (_, arm, arm_index)) in branches.iter().enumerate() {
+            let guard_lbl = next_lbl;
+            self.new_block(guard_lbl);
+
+            if let Pattern::EnumVariant {
+                variant: _,
+                data_field: Some(var),
+            } = &arm.pattern.node
+            {
                 let ty = self.type_info.type_of(var);
-                let var = self.type_info.full_name(var);
+                let DefinitionRef(scope, ident) =
+                    self.type_info.resolved_name(var);
 
                 // The offset of the field is (at least) 1 because of the
                 // discriminant.
@@ -238,28 +271,30 @@ impl Lowerer<'_> {
                 let ty = self.lower_type(&ty);
                 self.add(Instruction::Assign {
                     to: Var {
-                        function: self.function_name.into(),
-                        kind: VarKind::Explicit(var),
+                        scope,
+                        kind: VarKind::Explicit(ident),
                     },
                     val,
                     ty,
                 });
             }
 
+            let ident = Identifier(
+                self.identifiers.get_or_intern(format!("guard_{}", i + 1)),
+            );
+            next_lbl = self.label_store.wrap_internal(lbl, ident);
+
+            let arm_label = arm_labels[arm_index];
             if let Some(guard) = &arm.guard {
                 let op = self.expr(guard).unwrap();
+
                 self.add(Instruction::Switch {
                     examinee: op,
-                    branches: vec![(
-                        1,
-                        format!("{lbl_prefix}_arm_{arm_index}"),
-                    )],
-                    default: format!("{lbl}_guard_{}", i + 1),
+                    branches: vec![(1, arm_label)],
+                    default: next_lbl,
                 });
             } else {
-                self.add(Instruction::Jump(format!(
-                    "{lbl_prefix}_arm_{arm_index}"
-                )));
+                self.add(Instruction::Jump(arm_label));
             }
         }
     }

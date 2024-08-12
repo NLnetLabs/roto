@@ -6,14 +6,15 @@
 
 use super::ir::{Function, Operand, Var};
 use crate::{
+    ast::Identifier,
     lower::{
         ir::{Instruction, IntCmp, VarKind},
         value::IrValue,
     },
     runtime::RuntimeFunction,
 };
-use log::trace;
 use std::collections::HashMap;
+use string_interner::{backend::StringBackend, StringInterner};
 
 /// Memory for the IR evaluation
 ///
@@ -214,13 +215,14 @@ pub fn eval(
     filter_map: &str,
     mem: &mut Memory,
     rx: Vec<IrValue>,
+    identifiers: &StringInterner<StringBackend>,
 ) -> Option<IrValue> {
+    let filter_map_ident = Identifier(identifiers.get(filter_map).unwrap());
     let f = p
         .iter()
-        .find(|f| f.name == "main")
+        .find(|f| f.name == filter_map_ident)
         .expect("Need a main function!");
 
-    eprintln!("{}", &f);
     let parameters = f.signature.parameters.clone();
 
     // Make the program easier to work with by collecting all instructions
@@ -229,7 +231,7 @@ pub fn eval(
     let mut instructions = Vec::new();
 
     for block in p.iter().flat_map(|f| &f.blocks) {
-        block_map.insert(block.label.clone(), instructions.len());
+        block_map.insert(block.label, instructions.len());
         instructions.extend(block.instructions.clone());
     }
 
@@ -238,16 +240,24 @@ pub fn eval(
 
     // Insert the rx value
     if f.signature.return_ptr {
-        assert_eq!(parameters.len(), rx.len() - 1, "incorrect number of arguments");
+        assert_eq!(
+            parameters.len(),
+            rx.len() - 1,
+            "incorrect number of arguments"
+        );
     } else {
-        assert_eq!(parameters.len(), rx.len(), "incorrect number of arguments");
+        assert_eq!(
+            parameters.len(),
+            rx.len(),
+            "incorrect number of arguments"
+        );
     }
 
     let mut values = rx.into_iter();
     if f.signature.return_ptr {
         vars.insert(
             Var {
-                function: "main".into(),
+                scope: f.scope,
                 kind: VarKind::Return,
             },
             values.next().unwrap(),
@@ -257,18 +267,17 @@ pub fn eval(
     for ((x, _), v) in parameters.iter().zip(values) {
         vars.insert(
             Var {
-                function: "main".into(),
-                kind: VarKind::Explicit(x.into()),
+                scope: f.scope,
+                kind: VarKind::Explicit(*x),
             },
             v,
         );
     }
 
-    let mut program_counter = block_map[filter_map];
+    let mut program_counter = block_map[&f.entry_block];
 
     loop {
         let instruction = &instructions[program_counter];
-        trace!("Inst: {instruction}");
         match instruction {
             Instruction::Jump(b) => {
                 program_counter = block_map[b];
@@ -294,18 +303,21 @@ pub fn eval(
                 vars.insert(to.clone(), val.clone());
             }
             Instruction::Call { to, func, args } => {
+                let f = p.iter().find(|f| f.name == *func).unwrap();
+
                 mem.push_frame(program_counter, to.clone().map(|to| to.0));
+
                 for (name, arg) in args {
                     let val = eval_operand(&vars, arg);
                     vars.insert(
                         Var {
-                            function: func.clone(),
-                            kind: VarKind::Explicit(format!("{func}::{}", name.clone())),
+                            scope: f.scope,
+                            kind: VarKind::Explicit(*name),
                         },
                         val.clone(),
                     );
                 }
-                program_counter = block_map[func];
+                program_counter = block_map[&f.entry_block];
                 continue;
             }
             Instruction::CallRuntime { to, func, args } => {
@@ -527,7 +539,7 @@ fn eval_operand<'a>(
     match op {
         Operand::Place(p) => {
             let Some(v) = mem.get(p) else {
-                panic!("No value was found for place {p} in memory: {mem:#?}")
+                panic!("No value was found for place {p:?} in memory: {mem:#?}")
             };
             v
         }

@@ -1,6 +1,7 @@
 use crate::ast::{Declaration, FunctionDeclaration, Identifier, SyntaxTree};
 use logos::{Lexer, SpannedIter};
 use std::{fmt::Display, iter::Peekable};
+use string_interner::{backend::StringBackend, StringInterner};
 use token::Token;
 
 use self::meta::{Meta, Span, Spans};
@@ -148,6 +149,7 @@ pub struct Parser<'source, 'spans> {
     file: usize,
     file_length: usize,
     lexer: Peekable<SpannedIter<'source, Token<'source>>>,
+    identifiers: &'spans mut StringInterner<StringBackend>,
     pub spans: &'spans mut Spans,
 }
 
@@ -263,15 +265,17 @@ impl<'source> Parser<'source, '_> {
 impl<'source, 'spans> Parser<'source, 'spans> {
     pub fn parse(
         file: usize,
+        identifiers: &'spans mut StringInterner<StringBackend>,
         spans: &'spans mut Spans,
         input: &'source str,
     ) -> ParseResult<'source, SyntaxTree> {
-        Self::run_parser(Self::tree, file, spans, input)
+        Self::run_parser(Self::tree, file, identifiers, spans, input)
     }
 
     fn run_parser<T>(
         mut parser: impl FnMut(&mut Self) -> ParseResult<T>,
         file: usize,
+        identifiers: &'spans mut StringInterner<StringBackend>,
         spans: &'spans mut Spans,
         input: &'source str,
     ) -> ParseResult<'source, T> {
@@ -280,6 +284,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             file_length: input.len(),
             lexer: Lexer::new(input).spanned().peekable(),
             spans,
+            identifiers,
         };
         let out = parser(&mut p)?;
         if let Some((_, s)) = p.lexer.next() {
@@ -305,7 +310,9 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             });
         }
 
-        Ok(SyntaxTree { declarations: expressions })
+        Ok(SyntaxTree {
+            declarations: expressions,
+        })
     }
 
     /// Parse a root expression
@@ -393,7 +400,8 @@ impl<'source> Parser<'source, '_> {
                 ))
             }
         };
-        Ok(self.add_span(span, Identifier(ident.into())))
+        let ident = Identifier(self.identifiers.get_or_intern(ident));
+        Ok(self.add_span(span, ident))
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::{
     ast::{
-        BinOp, Block, Expr, IpAddress, Literal, Match, MatchArm, Record,
-        ReturnKind,
+        BinOp, Block, Expr, IpAddress, Literal, Match, MatchArm, Pattern,
+        Record, ReturnKind,
     },
     parser::ParseError,
 };
@@ -426,16 +426,32 @@ impl<'source> Parser<'source, '_> {
         let mut arms = Vec::new();
         self.take(Token::CurlyLeft)?;
         while !self.peek_is(Token::CurlyRight) {
-            let variant_id = self.identifier()?;
+            let variant = self.identifier()?;
+            let mut span = self.get_span(&variant);
 
-            let data_field = if self.peek_is(Token::RoundLeft) {
-                self.take(Token::RoundLeft)?;
-                let ident = self.identifier()?;
-                self.take(Token::RoundRight)?;
-                Some(ident)
+            let resolved_variant =
+                self.identifiers.resolve(variant.0).unwrap();
+
+            let pattern = if resolved_variant == "_" {
+                Pattern::Underscore
             } else {
-                None
+                let data_field = if self.peek_is(Token::RoundLeft) {
+                    self.take(Token::RoundLeft)?;
+                    let ident = self.identifier()?;
+                    let end_span = self.take(Token::RoundRight)?;
+                    span = self.get_span(&variant).merge(end_span);
+                    Some(ident)
+                } else {
+                    None
+                };
+
+                Pattern::EnumVariant {
+                    variant,
+                    data_field,
+                }
             };
+
+            let pattern = self.add_span(span, pattern);
 
             let guard = if self.next_is(Token::Pipe) {
                 Some(self.expr()?)
@@ -462,8 +478,7 @@ impl<'source> Parser<'source, '_> {
             };
 
             arms.push(MatchArm {
-                variant_id,
-                data_field,
+                pattern,
                 guard,
                 body,
             })

@@ -5,7 +5,10 @@ use crate::{
     parser::meta::{Meta, MetaId},
 };
 
-use super::types::Type;
+use super::{
+    types::{type_to_string, Type},
+    TypeChecker,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Level {
@@ -45,231 +48,297 @@ pub struct TypeError {
     pub labels: Vec<Label>,
 }
 
-pub fn simple(
-    description: impl Display,
-    msg: impl Display,
-    span: MetaId,
-) -> TypeError {
-    TypeError {
-        description: description.to_string(),
-        location: span,
-        labels: vec![Label::error(msg, span)],
+impl TypeChecker<'_> {
+    pub fn error_simple(
+        &self,
+        description: impl Display,
+        msg: impl Display,
+        span: MetaId,
+    ) -> TypeError {
+        TypeError {
+            description: description.to_string(),
+            location: span,
+            labels: vec![Label::error(msg, span)],
+        }
     }
-}
 
-pub fn duplicate_fields(field_name: &str, locations: &[MetaId]) -> TypeError {
-    TypeError {
-        description: format!(
-            "field `{field_name}` appears multiple times in the same record"
-        ),
-        location: locations[0],
-        labels: locations
+    pub fn error_duplicate_fields(
+        &self,
+        field_name: &str,
+        locations: &[MetaId],
+    ) -> TypeError {
+        TypeError {
+            description: format!(
+                "field `{field_name}` appears multiple times in the same record"
+            ),
+            location: locations[0],
+            labels: locations
+                .iter()
+                .map(|&span| {
+                    Label::error(
+                        format!("field `{field_name}` declared here"),
+                        span,
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    pub fn error_undeclared_type(&self, ty: &Meta<Identifier>) -> TypeError {
+        TypeError {
+            description: format!(
+                "cannot find type `{}`",
+                self.identifiers.resolve(ty.0).unwrap()
+            ),
+            location: ty.id,
+            labels: vec![Label::error("not found", ty.id)],
+        }
+    }
+
+    pub fn error_field_mismatch<'a>(
+        &self,
+        span: MetaId,
+        invalid: impl IntoIterator<Item = &'a Meta<Identifier>>,
+        duplicate: impl IntoIterator<Item = &'a Meta<Identifier>>,
+        missing: impl IntoIterator<Item = Identifier>,
+    ) -> TypeError {
+        let missing: Vec<_> = missing
+            .into_iter()
+            .map(|m| self.identifiers.resolve(m.0).unwrap())
+            .collect();
+
+        let description = if missing.len() > 1 {
+            let fields = join_quoted(missing);
+            format!(
+                "field mismatch: missing fields {fields} in record literal"
+            )
+        } else if let [m] = &missing[..] {
+            format!(
+                "field: mismatch: missing field `{}` in record literal",
+                m
+            )
+        } else {
+            "field mismatch".into()
+        };
+
+        let mut labels = vec![Label::error(&description, span)];
+
+        for field in invalid {
+            labels.push(Label::info("invalid field", field.id));
+        }
+
+        for field in duplicate {
+            labels.push(Label::info("duplicate field", field.id));
+        }
+
+        TypeError {
+            description,
+            location: span,
+            labels,
+        }
+    }
+
+    pub fn error_tried_to_overwrite_builtin(
+        &self,
+        type_name: &Meta<Identifier>,
+    ) -> TypeError {
+        dbg!(self.identifiers.get("u8"));
+        dbg!(self.identifiers.get("Foo"));
+        let name = self.identifiers.resolve(type_name.0).unwrap();
+        TypeError {
+            description: format!(
+                "type `{name}` is a built-in type and cannot be overwritten"
+            ),
+            location: type_name.id,
+            labels: vec![Label::error("declared here", type_name.id)],
+        }
+    }
+
+    pub fn error_declared_twice(
+        &self,
+        new_declaration: &Meta<Identifier>,
+        old_declaration: MetaId,
+    ) -> TypeError {
+        let new = self.identifiers.resolve(new_declaration.0).unwrap();
+        TypeError {
+            description: format!("type `{new}` is declared multiple times"),
+            location: new_declaration.id,
+            labels: vec![
+                Label::error("cannot overwrite type", new_declaration.id),
+                Label::info("previously declared here", old_declaration),
+            ],
+        }
+    }
+
+    pub fn error_not_defined(&self, ident: &Meta<Identifier>) -> TypeError {
+        let s = self.identifiers.resolve(ident.0).unwrap();
+        TypeError {
+            description: format!("cannot find value `{s}` in this scope"),
+            location: ident.id,
+            labels: vec![Label::error("not found in this scope", ident.id)],
+        }
+    }
+
+    pub fn error_number_of_arguments_dont_match(
+        &self,
+        call_type: &str,
+        method_name: &Meta<Identifier>,
+        takes: usize,
+        given: usize,
+    ) -> TypeError {
+        let name = self.identifiers.resolve(method_name.0).unwrap();
+        TypeError {
+            description: format!(
+                "{call_type} `{name}` takes {takes} arguments but {given} arguments were given"
+            ),
+            location: method_name.id,
+            labels: vec![Label::error(
+                format!("takes {takes} arguments but {given} arguments were given"),
+                method_name.id)
+            ],
+        }
+    }
+
+    pub fn error_can_only_match_on_enum(
+        &self,
+        ty: &Type,
+        span: MetaId,
+    ) -> TypeError {
+        TypeError {
+            description: format!(
+                "cannot match on the type `{}`, \
+                because only matching on enums is supported.",
+                type_to_string(self.identifiers, ty)
+            ),
+            location: span,
+            labels: vec![Label::error(
+                format!(
+                    "cannot match on type `{}`",
+                    type_to_string(self.identifiers, ty)
+                ),
+                span,
+            )],
+        }
+    }
+
+    pub fn error_variant_does_not_have_field(
+        &self,
+        variant: &Meta<Identifier>,
+        ty: &Type,
+    ) -> TypeError {
+        let v = self.identifiers.resolve(variant.0).unwrap();
+        let ty = type_to_string(self.identifiers, ty);
+        TypeError {
+            description: format!("pattern has a data field, but the variant `{v}` of `{ty}` doesn't have one"),
+            location: variant.id,
+            labels: vec![Label::error("unexpected data field", variant.id)],
+        }
+    }
+
+    pub fn error_need_data_field_on_pattern(
+        &self,
+        variant: &Meta<Identifier>,
+        ty: &Type,
+    ) -> TypeError {
+        let v = self.identifiers.resolve(variant.0).unwrap();
+        let ty = type_to_string(self.identifiers, ty);
+        TypeError {
+            description: format!("pattern has no data field, but variant `{v}` of `{ty}` does have a data field"),
+            location: variant.id,
+            labels: vec![Label::error("missing data field", variant.id)],
+        }
+    }
+
+    pub fn error_variant_does_not_exist(
+        &self,
+        variant: &Meta<Identifier>,
+        ty: &Type,
+    ) -> TypeError {
+        let v = self.identifiers.resolve(variant.0).unwrap();
+        let ty = type_to_string(self.identifiers, ty);
+        TypeError {
+            description: format!(
+                "the variant `{v}` does not exist on `{ty}`"
+            ),
+            location: variant.id,
+            labels: vec![Label::error(
+                format!("variant does not exist on `{ty}`"),
+                variant.id,
+            )],
+        }
+    }
+
+    pub fn error_mismatched_types(
+        &self,
+        expected: &Type,
+        got: &Type,
+        span: MetaId,
+        cause: Option<MetaId>,
+    ) -> TypeError {
+        let expected = type_to_string(self.identifiers, expected);
+        let got = type_to_string(self.identifiers, got);
+        let mut labels = vec![Label::error(
+            format!("expected `{expected}`, found `{got}`"),
+            span,
+        )];
+        if let Some(span) = cause {
+            labels.push(Label::info(
+                format!("expected because this is `{expected}`"),
+                span,
+            ));
+        }
+
+        TypeError {
+            description: "mismatched types".into(),
+            location: span,
+            labels,
+        }
+    }
+
+    pub fn error_nonexhaustive_match(
+        &self,
+        span: MetaId,
+        missing_variants: &[Identifier],
+    ) -> TypeError {
+        let missing_variants: Vec<_> = missing_variants
             .iter()
-            .map(|&span| {
-                Label::error(
-                    format!("field `{field_name}` declared here"),
-                    span,
-                )
-            })
-            .collect(),
-    }
-}
+            .map(|s| self.identifiers.resolve(s.0).unwrap())
+            .collect();
 
-pub fn undeclared_type(ty: &Meta<Identifier>) -> TypeError {
-    TypeError {
-        description: format!("cannot find type `{ty}`"),
-        location: ty.id,
-        labels: vec![Label::error("not found", ty.id)],
-    }
-}
-
-pub fn field_mismatch<'a>(
-    span: MetaId,
-    invalid: impl IntoIterator<Item = &'a Meta<Identifier>>,
-    duplicate: impl IntoIterator<Item = &'a Meta<Identifier>>,
-    missing: impl IntoIterator<Item = impl Display>,
-) -> TypeError {
-    let missing: Vec<_> = missing.into_iter().collect();
-
-    let description = if missing.len() > 1 {
-        let fields = join_quoted(missing);
-        format!("field mismatch: missing fields {fields} in record literal")
-    } else if let [m] = &missing[..] {
-        format!("field: mismatch: missing field `{}` in record literal", m)
-    } else {
-        "field mismatch".into()
-    };
-
-    let mut labels = vec![Label::error(&description, span)];
-
-    for field in invalid {
-        labels.push(Label::info("invalid field", field.id));
+        TypeError {
+            description: format!(
+                "match expression is not exhaustive, missing variants {}",
+                join_quoted(&missing_variants)
+            ),
+            location: span,
+            labels: vec![Label::error(
+                format!("missing variants {}", join_quoted(missing_variants)),
+                span,
+            )],
+        }
     }
 
-    for field in duplicate {
-        labels.push(Label::info("duplicate field", field.id));
+    pub fn error_unreachable_expression(
+        &self,
+        expr: &Meta<Expr>,
+    ) -> TypeError {
+        TypeError {
+            description: "expression is unreachable".into(),
+            location: expr.id,
+            labels: vec![Label::error("unreachable", expr.id)],
+        }
     }
 
-    TypeError {
-        description,
-        location: span,
-        labels,
-    }
-}
-
-pub fn tried_to_overwrite_builtin(type_name: &Meta<Identifier>) -> TypeError {
-    TypeError {
-        description: format!(
-            "type `{type_name}` is a built-in type and cannot be overwritten"
-        ),
-        location: type_name.id,
-        labels: vec![Label::error("declared here", type_name.id)],
-    }
-}
-
-pub fn declared_twice(
-    new_declaration: &Meta<Identifier>,
-    old_declaration: MetaId,
-) -> TypeError {
-    TypeError {
-        description: format!(
-            "type `{new_declaration}` is declared multiple times"
-        ),
-        location: new_declaration.id,
-        labels: vec![
-            Label::error("cannot overwrite type", new_declaration.id),
-            Label::info("previously declared here", old_declaration),
-        ],
-    }
-}
-
-pub fn number_of_arguments_dont_match(
-    call_type: &str,
-    method_name: &Meta<Identifier>,
-    takes: usize,
-    given: usize,
-) -> TypeError {
-    TypeError {
-        description: format!(
-            "{call_type} `{method_name}` takes {takes} arguments but {given} arguments were given"
-        ),
-        location: method_name.id,
-        labels: vec![Label::error(
-            format!("takes {takes} arguments but {given} arguments were given"),
-            method_name.id)
-        ],
-    }
-}
-
-pub fn can_only_match_on_enum(ty: &Type, span: MetaId) -> TypeError {
-    TypeError {
-        description: format!(
-            "cannot match on the type `{ty}`, \
-            because only matching on enums is supported."
-        ),
-        location: span,
-        labels: vec![Label::error(
-            format!("cannot match on type `{ty}`"),
-            span,
-        )],
-    }
-}
-
-pub fn variant_does_not_have_field(
-    variant: &Meta<Identifier>,
-    ty: &Type,
-) -> TypeError {
-    TypeError {
-        description: format!("pattern has a data field, but the variant `{variant}` of `{ty}` doesn't have one"),
-        location: variant.id,
-        labels: vec![Label::error("unexpected data field", variant.id)],
-    }
-}
-
-pub fn need_data_field_on_pattern(
-    variant: &Meta<Identifier>,
-    ty: &Type,
-) -> TypeError {
-    TypeError {
-        description: format!("pattern has no data field, but variant `{variant}` of `{ty}` does have a data field"),
-        location: variant.id,
-        labels: vec![Label::error("missing data field", variant.id)],
-    }
-}
-
-pub fn variant_does_not_exist(
-    variant: &Meta<Identifier>,
-    ty: &Type,
-) -> TypeError {
-    TypeError {
-        description: format!(
-            "the variant `{variant}` does not exist on `{ty}`"
-        ),
-        location: variant.id,
-        labels: vec![Label::error(
-            format!("variant does not exist on `{ty}`"),
-            variant.id,
-        )],
-    }
-}
-
-pub fn mismatched_types(
-    expected: Type,
-    got: Type,
-    span: MetaId,
-    cause: Option<MetaId>,
-) -> TypeError {
-    let mut labels = vec![Label::error(
-        format!("expected `{expected}`, found `{got}`"),
-        span,
-    )];
-    if let Some(span) = cause {
-        labels.push(Label::info(
-            format!("expected because this is `{expected}`"),
-            span,
-        ));
-    }
-
-    TypeError {
-        description: "mismatched types".into(),
-        location: span,
-        labels,
-    }
-}
-
-pub fn nonexhaustive_match(
-    span: MetaId,
-    missing_variants: &[impl Display],
-) -> TypeError {
-    TypeError {
-        description: format!(
-            "match expression is not exhaustive, missing variants {}",
-            join_quoted(missing_variants)
-        ),
-        location: span,
-        labels: vec![Label::error(
-            format!("missing variants {}", join_quoted(missing_variants)),
-            span,
-        )],
-    }
-}
-
-pub fn unreachable_expression(expr: &Meta<Expr>) -> TypeError {
-    TypeError {
-        description: "expression is unreachable".into(),
-        location: expr.id,
-        labels: vec![Label::error("unreachable", expr.id)],
-    }
-}
-
-pub fn cannot_diverge_here(
-    divergence_type: &str,
-    expr: &Meta<Expr>,
-) -> TypeError {
-    TypeError {
-        description: format!("cannot `{divergence_type}` here"),
-        location: expr.id,
-        labels: vec![Label::error("not allowed", expr.id)],
+    pub fn error_cannot_diverge_here(
+        &self,
+        divergence_type: &str,
+        expr: &Meta<Expr>,
+    ) -> TypeError {
+        TypeError {
+            description: format!("cannot `{divergence_type}` here"),
+            location: expr.id,
+            labels: vec![Label::error("not allowed", expr.id)],
+        }
     }
 }
 

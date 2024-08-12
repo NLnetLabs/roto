@@ -26,22 +26,31 @@
 
 use std::fmt::Display;
 
-use crate::runtime;
+use string_interner::{backend::StringBackend, StringInterner};
 
-use super::value::{IrType, IrValue};
+use crate::{
+    ast::Identifier,
+    runtime,
+    typechecker::scope::{ScopeGraph, ScopeRef},
+};
+
+use super::{
+    label::{LabelRef, LabelStore},
+    value::{IrType, IrValue},
+};
 
 /// Human-readable place
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Var {
-    pub function: String,
+    pub scope: ScopeRef,
     pub kind: VarKind,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum VarKind {
-    Explicit(String),
+    Explicit(Identifier),
     Tmp(usize),
-    NamedTmp(&'static str, usize),
+    NamedTmp(Identifier, usize),
     Return,
 }
 
@@ -51,42 +60,22 @@ impl From<Var> for Operand {
     }
 }
 
-impl Display for Var {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}::{}", &self.function, match &self.kind {
-            VarKind::Explicit(name) => name.clone(),
-            VarKind::Tmp(idx) => format!("$tmp-{idx}"),
-            VarKind::NamedTmp(name, idx) => format!("${name}-{idx}"),
-            VarKind::Return => "$return".to_string(),
-        })
-    }
-}
-
 #[derive(Clone, Debug)]
 pub enum Operand {
     Place(Var),
     Value(IrValue),
 }
 
-impl Display for Operand {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Operand::Place(x) => write!(f, "{x}"),
-            Operand::Value(x) => write!(f, "{x}"),
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
 pub enum Instruction {
     /// Jump to a block
-    Jump(String),
+    Jump(LabelRef),
 
     /// Switch on the integer value of the `examinee`
     Switch {
         examinee: Operand,
-        branches: Vec<(usize, String)>,
-        default: String,
+        branches: Vec<(usize, LabelRef)>,
+        default: LabelRef,
     },
 
     /// Assign the value `val` to `to`.
@@ -99,8 +88,8 @@ pub enum Instruction {
     /// Call a function.
     Call {
         to: Option<(Var, IrType)>,
-        func: String,
-        args: Vec<(String, Operand)>,
+        func: Identifier,
+        args: Vec<(Identifier, Operand)>,
     },
 
     /// Call a runtime function (i.e. a Rust function)
@@ -126,13 +115,13 @@ pub enum Instruction {
         left: Operand,
         right: Operand,
     },
-    
+
     Sub {
         to: Var,
         left: Operand,
         right: Operand,
     },
-    
+
     Mul {
         to: Var,
         left: Operand,
@@ -245,138 +234,19 @@ impl Display for IntCmp {
     }
 }
 
-impl Display for Instruction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Assign { to, val, ty } => write!(f, "{to}: {ty} = {val}"),
-            Self::Call {
-                to: Some((to, ty)),
-                func,
-                args,
-            } => write!(
-                f,
-                "{to}: {ty} = {func}({})",
-                args.iter()
-                    .map(|a| format!("{} = {}", a.0, a.1))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            Self::Call {
-                to: None,
-                func,
-                args,
-            } => write!(
-                f,
-                "{func}({})",
-                args.iter()
-                    .map(|a| format!("{} = {}", a.0, a.1))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            Self::CallRuntime { to: Some((to, ty)), func, args } => write!(
-                f,
-                "{to}: {ty} = <runtime function {:?}>({})",
-                func.name,
-                args.iter()
-                    .map(|a| a.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            Self::CallRuntime { to: None, func, args } => write!(
-                f,
-                "<rust function {:?}>({})",
-                func.name,
-                args.iter()
-                    .map(|a| a.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            Self::Return(None) => write!(f, "return"),
-            Self::Return(Some(v)) => write!(f, "return {v}"),
-            Self::Cmp {
-                to,
-                cmp,
-                left,
-                right,
-            } => {
-                write!(f, "{to} = {cmp}({left}, {right})")
-            }
-            Self::Eq { to, left, right } => {
-                write!(f, "{to} = {left} == {right}")
-            }
-            Self::Not { to, val } => {
-                write!(f, "{to} = not({val})")
-            }
-            Self::And { to, left, right } => {
-                write!(f, "{to} = {left} & {right}")
-            }
-            Self::Or { to, left, right } => {
-                write!(f, "{to} = {left} | {right}")
-            }
-            Self::Add { to, left, right } => {
-                write!(f, "{to} = {left} + {right}")
-            }
-            Self::Sub { to, left, right } => {
-                write!(f, "{to} = {left} - {right}")
-            }
-            Self::Mul { to, left, right } => {
-                write!(f, "{to} = {left} * {right}")
-            }
-            Self::Div { to, ty, left, right } => {
-                write!(f, "{to}: {ty} = {left} / {right}")
-            }
-            Self::Jump(to) => {
-                write!(f, "jump {to}")
-            }
-            Self::Switch {
-                examinee,
-                default,
-                branches,
-            } => {
-                write!(
-                    f,
-                    "switch {examinee} [{}] else {default}",
-                    branches
-                        .iter()
-                        .map(|(i, b)| format!("{i} => {b}"))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            }
-            Self::Alloc { to, size } => {
-                write!(f, "{to} = mem::alloc({size})")
-            }
-            Self::Offset { to, from, offset } => {
-                write!(f, "{to} = ptr::offset({from}, {offset})")
-            }
-            Self::Read { to, from, ty } => {
-                write!(f, "{to}: {ty} = mem::read({from})")
-            }
-            Self::Write { to, val } => {
-                write!(f, "mem::write({to}, {val})")
-            }
-            Self::Copy { to, from, size } => {
-                write!(f, "mem::copy({to}, {from}, {size})")
-            }
-            Self::MemCmp {
-                to,
-                size,
-                left,
-                right,
-            } => {
-                write!(f, "{to} = mem::cmp({left}, {right}, {size})")
-            }
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct Function {
     /// Identifier of the function
-    pub name: String,
+    pub name: Identifier,
+
+    /// Scope of the function
+    pub scope: ScopeRef,
 
     /// Signature of the function
     pub signature: Signature,
+
+    /// Entry block of the function
+    pub entry_block: LabelRef,
 
     /// Blocks belonging to this function
     pub blocks: Vec<Block>,
@@ -387,7 +257,7 @@ pub struct Function {
 
 #[derive(Clone, Debug)]
 pub struct Signature {
-    pub parameters: Vec<(String, IrType)>,
+    pub parameters: Vec<(Identifier, IrType)>,
 
     /// Whether this function takes a pointer for for the return value
     /// passed as an argument
@@ -396,38 +266,316 @@ pub struct Signature {
     pub return_type: Option<IrType>,
 }
 
-impl Display for Function {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut blocks = self.blocks.iter();
-
-        let Some(b) = blocks.next() else {
-            write!(f, "<empty function>")?;
-            return Ok(());
-        };
-
-        write!(f, "{b}")?;
-
-        for b in blocks {
-            writeln!(f)?;
-            write!(f, "{b}")?;
-        }
-
-        Ok(())
-    }
-}
-
 #[derive(Debug)]
 pub struct Block {
-    pub label: String,
+    pub label: LabelRef,
     pub instructions: Vec<Instruction>,
 }
 
-impl Display for Block {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, ".{}", self.label)?;
-        for i in &self.instructions {
-            writeln!(f, "  {i}")?
+pub struct IrPrinter<'a> {
+    pub scope_graph: &'a ScopeGraph,
+    pub identifiers: &'a StringInterner<StringBackend>,
+    pub label_store: &'a LabelStore,
+}
+
+impl<'a> IrPrinter<'a> {
+    pub fn ident(&self, ident: &Identifier) -> &'a str {
+        self.identifiers.resolve(ident.0).unwrap()
+    }
+
+    pub fn scope(&self, scope: ScopeRef) -> String {
+        self.scope_graph.print_scope(scope, self.identifiers)
+    }
+
+    pub fn var(&self, var: &Var) -> String {
+        let f = self.scope(var.scope);
+        format!(
+            "{}::{}",
+            f,
+            match &var.kind {
+                VarKind::Explicit(name) => self.ident(name).to_string(),
+                VarKind::Tmp(idx) => format!("$tmp-{idx}"),
+                VarKind::NamedTmp(name, idx) =>
+                    format!("${}-{idx}", self.ident(name)),
+                VarKind::Return => "$return".to_string(),
+            }
+        )
+    }
+
+    pub fn operand(&self, operand: &Operand) -> String {
+        match operand {
+            Operand::Place(x) => self.var(x),
+            Operand::Value(x) => x.to_string(),
         }
-        Ok(())
+    }
+
+    pub fn instruction(&self, instruction: &Instruction) -> String {
+        use Instruction::*;
+        match instruction {
+            Assign { to, val, ty } => {
+                format!("{}: {ty} = {}", self.var(to), self.operand(val),)
+            }
+            Call {
+                to: Some((to, ty)),
+                func,
+                args,
+            } => format!(
+                "{}: {ty} = {}({})",
+                self.var(to),
+                self.ident(func),
+                args.iter()
+                    .map(|a| format!(
+                        "{} = {}",
+                        self.ident(&a.0),
+                        self.operand(&a.1),
+                    ))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Call {
+                to: None,
+                func,
+                args,
+            } => format!(
+                "{}({})",
+                self.ident(func),
+                args.iter()
+                    .map(|a| format!(
+                        "{} = {}",
+                        self.ident(&a.0),
+                        self.operand(&a.1),
+                    ))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            CallRuntime {
+                to: Some((to, ty)),
+                func,
+                args,
+            } => format!(
+                "{}: {ty} = <runtime function {:?}>({})",
+                self.var(to),
+                func.name,
+                args.iter()
+                    .map(|a| self.operand(a))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            CallRuntime {
+                to: None,
+                func,
+                args,
+            } => format!(
+                "<rust function {:?}>({})",
+                func.name,
+                args.iter()
+                    .map(|a| self.operand(a))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Return(None) => "return".to_string(),
+            Return(Some(v)) => {
+                format!("return {}", self.operand(v))
+            }
+            Cmp {
+                to,
+                cmp,
+                left,
+                right,
+            } => {
+                format!(
+                    "{} = {cmp}({}, {})",
+                    self.var(to),
+                    self.operand(left),
+                    self.operand(right),
+                )
+            }
+            Eq { to, left, right } => {
+                format!(
+                    "{} = {} == {}",
+                    self.var(to),
+                    self.operand(left),
+                    self.operand(right),
+                )
+            }
+            Not { to, val } => {
+                format!("{} = not({})", self.var(to), self.operand(val),)
+            }
+            And { to, left, right } => {
+                format!(
+                    "{} = {} & {}",
+                    self.var(to),
+                    self.operand(left),
+                    self.operand(right),
+                )
+            }
+            Or { to, left, right } => {
+                format!(
+                    "{} = {} | {}",
+                    self.var(to),
+                    self.operand(left),
+                    self.operand(right),
+                )
+            }
+            Add { to, left, right } => {
+                format!(
+                    "{} = {} + {}",
+                    self.var(to),
+                    self.operand(left),
+                    self.operand(right),
+                )
+            }
+            Sub { to, left, right } => {
+                format!(
+                    "{} = {} - {}",
+                    self.var(to),
+                    self.operand(left),
+                    self.operand(right),
+                )
+            }
+            Mul { to, left, right } => {
+                format!(
+                    "{} = {} * {}",
+                    self.var(to),
+                    self.operand(left),
+                    self.operand(right),
+                )
+            }
+            Div {
+                to,
+                ty,
+                left,
+                right,
+            } => {
+                format!(
+                    "{}: {ty} = {} / {}",
+                    self.var(to),
+                    self.operand(left),
+                    self.operand(right),
+                )
+            }
+            Jump(to) => {
+                format!("jump {}", self.label(to))
+            }
+            Switch {
+                examinee,
+                default,
+                branches,
+            } => {
+                format!(
+                    "switch {} [{}] else {}",
+                    self.operand(examinee),
+                    branches
+                        .iter()
+                        .map(|(i, b)| format!("{i} => {}", self.label(b)))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    self.label(default)
+                )
+            }
+            Alloc { to, size } => {
+                format!("{} = mem::alloc({size})", self.var(to))
+            }
+            Offset { to, from, offset } => {
+                format!(
+                    "{} = ptr::offset({}, {offset})",
+                    self.var(to),
+                    self.operand(from),
+                )
+            }
+            Read { to, from, ty } => {
+                format!(
+                    "{}: {ty} = mem::read({})",
+                    self.var(to),
+                    self.operand(from),
+                )
+            }
+            Write { to, val } => {
+                format!(
+                    "mem::write({}, {})",
+                    self.operand(to),
+                    self.operand(val)
+                )
+            }
+            Copy { to, from, size } => {
+                format!(
+                    "mem::copy({}, {}, {size})",
+                    self.operand(to),
+                    self.operand(from)
+                )
+            }
+            MemCmp {
+                to,
+                size,
+                left,
+                right,
+            } => {
+                format!(
+                    "{} = mem::cmp({}, {}, {size})",
+                    self.var(to),
+                    self.operand(left),
+                    self.operand(right),
+                )
+            }
+        }
+    }
+
+    pub fn label(&self, label: &LabelRef) -> String {
+        let mut label = self.label_store.get(*label);
+        let mut strings = Vec::new();
+        loop {
+            let dollar = if label.internal { "$" } else { "" };
+            let ident = self.ident(&label.identifier);
+            let counter = if label.counter > 0 {
+                format!("({})", label.counter)
+            } else {
+                "".into()
+            };
+            strings.push(format!("{dollar}{ident}{counter}"));
+            let Some(parent) = label.parent else {
+                break;
+            };
+            label = self.label_store.get(parent);
+        }
+
+        strings.reverse();
+        strings.join("::")
+    }
+
+    pub fn block(&self, block: &Block) -> String {
+        use std::fmt::Write;
+        let mut s = String::new();
+        writeln!(s, ".{}", self.label(&block.label)).unwrap();
+        for i in &block.instructions {
+            writeln!(s, "  {}", self.instruction(i)).unwrap();
+        }
+        s
+    }
+
+    pub fn function(&self, function: &Function) -> String {
+        use std::fmt::Write;
+        let mut blocks = function.blocks.iter();
+
+        let mut s = String::new();
+
+        let Some(b) = blocks.next() else {
+            write!(s, "<empty function>").unwrap();
+            return s;
+        };
+
+        s.push_str(&self.block(b));
+
+        for b in blocks {
+            writeln!(s).unwrap();
+            s.push_str(&self.block(b));
+        }
+
+        s
+    }
+
+    pub fn program(&self, program: &[Function]) -> String {
+        let strings: Vec<_> =
+            program.iter().map(|f| self.function(f)).collect();
+        strings.join("\n")
     }
 }

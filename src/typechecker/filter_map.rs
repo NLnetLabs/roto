@@ -1,12 +1,11 @@
 use crate::{
     ast::{self, Identifier},
     parser::meta::Meta,
-    typechecker::error,
 };
 
 use super::{
     expr::Context,
-    scope::Scope,
+    scope::{ScopeRef, ScopeType},
     types::{Primitive, Type},
     TypeChecker, TypeResult,
 };
@@ -14,7 +13,7 @@ use super::{
 impl TypeChecker<'_> {
     pub fn filter_map(
         &mut self,
-        scope: &Scope,
+        scope: ScopeRef,
         filter_map: &ast::FilterMap,
     ) -> TypeResult<Type> {
         let ast::FilterMap {
@@ -23,14 +22,18 @@ impl TypeChecker<'_> {
             params,
             body: ast::FilterMapBody { define, apply },
         } = filter_map;
-        let mut scope = scope.wrap(&ident.0);
+
+        let scope = self
+            .scope_graph
+            .wrap(scope, ScopeType::Function(ident.node));
+        self.type_info.function_scopes.insert(ident.id, scope);
 
         let params = self.params(params)?;
         for (v, t) in &params {
-            self.insert_var(&mut scope, v, t)?;
+            self.insert_var(scope, v.clone(), t)?;
         }
 
-        self.define_section(&mut scope, define)?;
+        self.define_section(scope, define)?;
 
         let a = self.fresh_var();
         let r = self.fresh_var();
@@ -41,7 +44,7 @@ impl TypeChecker<'_> {
             function_return_type: Some(ty.clone()),
         };
 
-        self.block(&scope, &ctx, apply)?;
+        self.block(scope, &ctx, apply)?;
 
         Ok(match filter_type {
             ast::FilterType::FilterMap => Type::FilterMap(params),
@@ -51,7 +54,7 @@ impl TypeChecker<'_> {
 
     fn define_section(
         &mut self,
-        scope: &mut Scope,
+        scope: ScopeRef,
         define: &[(Meta<Identifier>, Meta<ast::Expr>)],
     ) -> TypeResult<()> {
         for (ident, expr) in define {
@@ -68,7 +71,7 @@ impl TypeChecker<'_> {
                 );
             }
             let ty = self.resolve_type(&var);
-            self.insert_var(scope, ident, ty)?;
+            self.insert_var(scope, ident.clone(), ty)?;
 
             // We want the fully qualified name to be stored, so we do a lookup
             // This won't fail because we just added it.
@@ -80,7 +83,7 @@ impl TypeChecker<'_> {
 
     pub fn function(
         &mut self,
-        scope: &Scope,
+        scope: ScopeRef,
         function: &ast::FunctionDeclaration,
     ) -> TypeResult<()> {
         let ast::FunctionDeclaration {
@@ -90,16 +93,20 @@ impl TypeChecker<'_> {
             ret,
         } = function;
 
-        let mut scope = scope.wrap(&ident.0);
+        let scope = self
+            .scope_graph
+            .wrap(scope, ScopeType::Function(ident.node));
+
+        self.type_info.function_scopes.insert(ident.id, scope);
 
         let params = self.params(params)?;
         for (v, t) in &params {
-            self.insert_var(&mut scope, v, t)?;
+            self.insert_var(scope, v.clone(), t)?;
         }
 
         let ret = if let Some(ret) = ret {
-            let Some(ty) = self.get_type(ret) else {
-                return Err(error::undeclared_type(ret));
+            let Some(ty) = self.get_type(ret.node) else {
+                return Err(self.error_undeclared_type(ret));
             };
             ty.clone()
         } else {
@@ -111,7 +118,7 @@ impl TypeChecker<'_> {
             function_return_type: Some(ret),
         };
 
-        self.block(&scope, &ctx, body)?;
+        self.block(scope, &ctx, body)?;
         Ok(())
     }
 
@@ -120,8 +127,8 @@ impl TypeChecker<'_> {
         dec: &ast::FunctionDeclaration,
     ) -> TypeResult<Type> {
         let ret = if let Some(ret) = &dec.ret {
-            let Some(ty) = self.get_type(ret) else {
-                return Err(error::undeclared_type(ret));
+            let Some(ty) = self.get_type(ret.node) else {
+                return Err(self.error_undeclared_type(ret));
             };
             ty.clone()
         } else {
@@ -137,8 +144,8 @@ impl TypeChecker<'_> {
         args.0
             .iter()
             .map(|(field_name, ty)| {
-                let Some(ty) = self.get_type(ty) else {
-                    return Err(error::undeclared_type(ty));
+                let Some(ty) = self.get_type(ty.node) else {
+                    return Err(self.error_undeclared_type(ty));
                 };
 
                 let ty = ty.clone();

@@ -4,6 +4,7 @@
 
 pub mod eval;
 pub mod ir;
+pub mod label;
 mod match_expr;
 pub mod value;
 
@@ -11,7 +12,9 @@ pub mod value;
 mod test_eval;
 
 use ir::{Block, Function, Instruction, Operand, Var, VarKind};
+use label::{LabelRef, LabelStore};
 use std::{collections::HashMap, net::IpAddr};
+use string_interner::{backend::StringBackend, StringInterner};
 use value::IrType;
 
 use crate::{
@@ -19,6 +22,7 @@ use crate::{
     parser::meta::Meta,
     typechecker::{
         info::TypeInfo,
+        scope::{DefinitionRef, ScopeRef},
         types::{FunctionDefinition, Primitive, Type},
     },
 };
@@ -39,65 +43,71 @@ macro_rules! ice {
 }
 
 pub struct IrFunction {
-    pub name: String,
+    #[allow(dead_code)]
+    pub name: Identifier,
     pub ptr: *const u8,
     pub params: Vec<IrType>,
     pub ret: Option<IrType>,
 }
 
 struct Lowerer<'r> {
-    function_name: &'r str,
+    function_name: Identifier,
+    function_scope: ScopeRef,
     tmp_idx: usize,
     blocks: Vec<Block>,
     type_info: &'r mut TypeInfo,
     runtime_functions: &'r mut HashMap<String, IrFunction>,
-    block_names: HashMap<String, usize>,
+    identifiers: &'r mut StringInterner<StringBackend>,
+    label_store: &'r mut LabelStore,
 }
 
 pub fn lower(
     tree: &ast::SyntaxTree,
     type_info: &mut TypeInfo,
     runtime_functions: &mut HashMap<String, IrFunction>,
+    identifiers: &mut StringInterner<StringBackend>,
+    label_store: &mut LabelStore,
 ) -> Vec<Function> {
-    Lowerer::tree(type_info, runtime_functions, tree)
+    Lowerer::tree(
+        type_info,
+        runtime_functions,
+        tree,
+        identifiers,
+        label_store,
+    )
 }
 
 impl<'r> Lowerer<'r> {
     fn new(
         type_info: &'r mut TypeInfo,
         runtime_functions: &'r mut HashMap<String, IrFunction>,
-        function_name: &'r str,
+        function_name: &Meta<Identifier>,
+        identifiers: &'r mut StringInterner<StringBackend>,
+        label_store: &'r mut LabelStore,
     ) -> Self {
+        let function_scope = type_info.function_scope(function_name);
         Self {
             tmp_idx: 0,
             type_info,
-            function_name,
+            function_name: function_name.node,
+            function_scope,
             runtime_functions,
             blocks: Vec::new(),
-            block_names: HashMap::new(),
+            identifiers,
+            label_store,
         }
-    }
-    /// Create a block with a unique name starting with a given prefix
-    ///
-    /// For example, the prefix `if-then` will give `if-then` for the first
-    /// occurrence, `if-then.1` for the second, `if-then.2` for the third, etc.
-    fn new_unique_block_name(&mut self, s: &str) -> String {
-        let v = self.block_names.entry(s.to_string()).or_default();
-        let name = if *v == 0 {
-            s.to_string()
-        } else {
-            format!("{}::{s}.{v}", self.function_name)
-        };
-        *v += 1;
-        name
     }
 
     /// Add a new block to the blocks in the program.
-    fn new_block(&mut self, s: &str) {
+    fn new_block(&mut self, label: LabelRef) {
         self.blocks.push(Block {
-            label: s.into(),
+            label,
             instructions: Vec::new(),
         })
+    }
+
+    fn current_label(&self) -> LabelRef {
+        self.blocks.last().unwrap().label
     }
 
     /// Add an instruction to the last block
@@ -116,7 +126,7 @@ impl<'r> Lowerer<'r> {
     /// Create a new unique temporary variable
     fn new_tmp(&mut self) -> Var {
         let var = Var {
-            function: self.function_name.into(),
+            scope: self.function_scope,
             kind: VarKind::Tmp(self.tmp_idx),
         };
         self.tmp_idx += 1;
@@ -128,6 +138,8 @@ impl<'r> Lowerer<'r> {
         type_info: &mut TypeInfo,
         runtime_functions: &mut HashMap<String, IrFunction>,
         tree: &ast::SyntaxTree,
+        identifiers: &mut StringInterner<StringBackend>,
+        label_store: &'r mut LabelStore,
     ) -> Vec<Function> {
         let ast::SyntaxTree {
             declarations: expressions,
@@ -142,7 +154,9 @@ impl<'r> Lowerer<'r> {
                         Lowerer::new(
                             type_info,
                             runtime_functions,
-                            x.ident.as_ref(),
+                            &x.ident,
+                            identifiers,
+                            label_store,
                         )
                         .filter_map(x),
                     );
@@ -157,7 +171,9 @@ impl<'r> Lowerer<'r> {
                         Lowerer::new(
                             type_info,
                             runtime_functions,
-                            ident.as_ref(),
+                            ident,
+                            identifiers,
+                            label_store,
                         )
                         .function(ident, params, ret, body),
                     );
@@ -180,30 +196,29 @@ impl<'r> Lowerer<'r> {
         } = fm;
         let ast::FilterMapBody { define, apply } = body;
 
-        let ident = self.type_info.full_name(ident);
-
-        self.new_block(&ident);
+        let label = self.label_store.new_label(self.function_name);
+        self.new_block(label);
 
         let parameters: Vec<_> = params
             .0
             .iter()
             .map(|(x, _)| {
                 let ty = self.type_info.type_of(x);
-                (self.type_info.full_name(x), self.lower_type(&ty))
+                (self.type_info.resolved_name(x), self.lower_type(&ty))
             })
             .collect();
 
         for (ident, expr) in define {
             let val = self.expr(expr);
-            let name = self.type_info.full_name(ident);
+            let name = self.type_info.resolved_name(ident);
             let ty = self.type_info.type_of(ident);
             if self.type_info.size_of(&ty) > 0 {
                 let val = val.unwrap();
                 let ty = self.lower_type(&ty);
                 self.add(Instruction::Assign {
                     to: Var {
-                        function: self.function_name.into(),
-                        kind: VarKind::Explicit(name),
+                        scope: name.0,
+                        kind: VarKind::Explicit(name.1),
                     },
                     val,
                     ty,
@@ -218,20 +233,23 @@ impl<'r> Lowerer<'r> {
 
         let (return_type, return_ptr) = match return_type {
             x if self.type_info.size_of(&x) == 0 => (None, false),
-            x if self.is_reference_type(&x) => {
-                (None, true)
-            }
+            x if self.is_reference_type(&x) => (None, true),
             x => (Some(self.lower_type(&x)), false),
         };
 
         let signature = ir::Signature {
-            parameters,
+            parameters: parameters
+                .iter()
+                .map(|(def, ty)| (def.1, *ty))
+                .collect(),
             return_ptr,
             return_type,
         };
 
         Function {
-            name: ident,
+            name: ident.node,
+            scope: self.function_scope,
+            entry_block: label,
             signature,
             blocks: self.blocks,
             public: true,
@@ -255,21 +273,21 @@ impl<'r> Lowerer<'r> {
         return_type: &Option<Meta<Identifier>>,
         body: &ast::Block,
     ) -> Function {
-        let ident = self.type_info.full_name(ident);
-        self.new_block(&ident);
+        let label = self.label_store.new_label(self.function_name);
+        self.new_block(label);
 
         let parameters = params
             .0
             .iter()
             .map(|(x, _)| {
                 let ty = self.type_info.type_of(x);
-                (self.type_info.full_name(x), self.lower_type(&ty))
+                (self.type_info.resolved_name(x).1, self.lower_type(&ty))
             })
             .collect();
 
         let return_type = return_type
             .as_ref()
-            .map(|t| self.type_info.resolve(&Type::Name(t.to_string())))
+            .map(|t| self.type_info.resolve(&Type::Name(**t)))
             .map(|t| self.lower_type(&t));
 
         let signature = ir::Signature {
@@ -283,7 +301,9 @@ impl<'r> Lowerer<'r> {
         self.add(Instruction::Return(last));
 
         Function {
-            name: ident,
+            name: ident.node,
+            scope: self.function_scope,
+            entry_block: label,
             signature,
             blocks: self.blocks,
             public: false,
@@ -326,7 +346,7 @@ impl<'r> Lowerer<'r> {
                         };
 
                         let var = Var {
-                            function: self.function_name.into(),
+                            scope: self.function_scope,
                             kind: VarKind::Return,
                         };
 
@@ -357,7 +377,7 @@ impl<'r> Lowerer<'r> {
                         };
 
                         let var = Var {
-                            function: self.function_name.into(),
+                            scope: self.function_scope,
                             kind: VarKind::Return,
                         };
 
@@ -416,7 +436,7 @@ impl<'r> Lowerer<'r> {
                         let ret = func.signature.return_type.clone();
 
                         let ir_func = IrFunction {
-                            name: ident.to_string(),
+                            name: ident.node,
                             ptr: runtime_func.description.pointer,
                             params,
                             ret: if self.type_info.size_of(&ret) > 0 {
@@ -425,8 +445,8 @@ impl<'r> Lowerer<'r> {
                                 None
                             },
                         };
-                        self.runtime_functions
-                            .insert(ident.to_string(), ir_func);
+                        let s = self.identifiers.resolve(ident.0).unwrap();
+                        self.runtime_functions.insert(s.into(), ir_func);
 
                         self.add(Instruction::CallRuntime {
                             to: to.clone(),
@@ -438,17 +458,18 @@ impl<'r> Lowerer<'r> {
                     }
                     FunctionDefinition::Roto => {
                         let ty = self.type_info.type_of(ident);
-                        let ident = self.type_info.full_name(ident);
+                        let DefinitionRef(_, ident) =
+                            self.type_info.resolved_name(ident);
 
                         let Type::Function(params, ret) = ty else {
-                            ice!();
+                            ice!("can only call functions");
                         };
 
                         let args = params
                             .iter()
                             .zip(&args.node)
                             .flat_map(|(p, a)| {
-                                Some((p.0.to_string(), self.expr(a)?))
+                                Some((p.0.node, self.expr(a)?))
                             })
                             .collect();
 
@@ -462,7 +483,7 @@ impl<'r> Lowerer<'r> {
 
                         self.add(Instruction::Call {
                             to: to.clone(),
-                            func: ident.clone(),
+                            func: ident,
                             args,
                         });
 
@@ -488,7 +509,7 @@ impl<'r> Lowerer<'r> {
 
                     let idx = variants
                         .iter()
-                        .position(|(f, _)| m.node == f)
+                        .position(|(f, _)| m.node == *f)
                         .unwrap();
 
                     let to = self.new_tmp();
@@ -550,7 +571,7 @@ impl<'r> Lowerer<'r> {
                 let ret = func.signature.return_type.clone();
 
                 let ir_func = IrFunction {
-                    name: m.to_string(),
+                    name: m.node,
                     ptr: runtime_func.description.pointer,
                     params,
                     ret: if self.type_info.size_of(&ret) > 0 {
@@ -559,7 +580,9 @@ impl<'r> Lowerer<'r> {
                         None
                     },
                 };
-                self.runtime_functions.insert(m.to_string(), ir_func);
+
+                let s = self.identifiers.resolve(m.node.0).unwrap();
+                self.runtime_functions.insert(s.into(), ir_func);
 
                 self.add(Instruction::CallRuntime {
                     to: to.clone(),
@@ -580,7 +603,7 @@ impl<'r> Lowerer<'r> {
                     let size = self.type_info.size_of(&ty);
 
                     let Some(idx) =
-                        variants.iter().position(|(f, _)| field.node == f)
+                        variants.iter().position(|(f, _)| field.node == *f)
                     else {
                         ice!("expected field to be present")
                     };
@@ -601,7 +624,7 @@ impl<'r> Lowerer<'r> {
                     let record_ty = self.type_info.type_of(&**e);
                     let op = self.expr(e)?;
                     let (ty, offset) =
-                        self.type_info.offset_of(&record_ty, field.as_ref());
+                        self.type_info.offset_of(&record_ty, **field);
                     if self.type_info.size_of(&ty) > 0 {
                         Some(self.read_field(op, offset, &ty))
                     } else {
@@ -610,11 +633,12 @@ impl<'r> Lowerer<'r> {
                 }
             }
             ast::Expr::Var(x) => {
-                let var = self.type_info.full_name(x);
+                let DefinitionRef(scope, ident) =
+                    self.type_info.resolved_name(x);
                 Some(
                     Var {
-                        function: self.function_name.into(),
-                        kind: VarKind::Explicit(var),
+                        scope,
+                        kind: VarKind::Explicit(ident),
                     }
                     .into(),
                 )
@@ -623,12 +647,10 @@ impl<'r> Lowerer<'r> {
                 let ty = self.type_info.type_of(id);
                 let size = self.type_info.size_of(&ty);
 
-                let fields: Vec<(&str, _)> = record
+                let fields: Vec<_> = record
                     .fields
                     .iter()
-                    .flat_map(|(s, expr)| {
-                        Some((s.0.as_ref(), self.expr(expr)?))
-                    })
+                    .flat_map(|(s, expr)| Some((s, self.expr(expr)?)))
                     .collect();
 
                 if size == 0 {
@@ -643,7 +665,7 @@ impl<'r> Lowerer<'r> {
 
                 for (field_name, field_operand) in fields {
                     let (ty, offset) =
-                        self.type_info.offset_of(&ty, field_name);
+                        self.type_info.offset_of(&ty, field_name.node);
                     self.write_field(
                         to.clone().into(),
                         offset,
@@ -772,23 +794,30 @@ impl<'r> Lowerer<'r> {
 
                 let diverges = self.type_info.diverges(id);
 
-                let lbl_cont = self.new_unique_block_name("if-continue");
-                let lbl_then = self.new_unique_block_name("if-then");
-                let lbl_else = self.new_unique_block_name("if-else");
+                let current_label = self.current_label();
+                let lbl_cont = self.label_store.next(current_label);
+                let lbl_then = self.label_store.wrap_internal(
+                    current_label,
+                    Identifier(self.identifiers.get_or_intern("if-then")),
+                );
+                let lbl_else = self.label_store.wrap_internal(
+                    current_label,
+                    Identifier(self.identifiers.get_or_intern("if-else")),
+                );
 
-                let branches = vec![(1, lbl_then.clone())];
+                let branches = vec![(1, lbl_then)];
 
                 self.add(Instruction::Switch {
                     examinee: place,
                     branches,
                     default: if if_false.is_some() {
-                        lbl_else.clone()
+                        lbl_else
                     } else {
-                        lbl_cont.clone()
+                        lbl_cont
                     },
                 });
 
-                self.new_block(&lbl_then);
+                self.new_block(lbl_then);
                 if let Some(op) = self.block(if_true) {
                     let ty = self.type_info.type_of(if_true);
                     let ty = self.lower_type(&ty);
@@ -801,11 +830,11 @@ impl<'r> Lowerer<'r> {
                 }
 
                 if !diverges {
-                    self.add(Instruction::Jump(lbl_cont.clone()));
+                    self.add(Instruction::Jump(lbl_cont));
                 }
 
                 if let Some(if_false) = if_false {
-                    self.new_block(&lbl_else);
+                    self.new_block(lbl_else);
                     if let Some(op) = self.block(if_false) {
                         let ty = self.type_info.type_of(if_false);
                         let ty = self.lower_type(&ty);
@@ -817,13 +846,13 @@ impl<'r> Lowerer<'r> {
                         any_assigned = true;
                     }
                     if !diverges {
-                        self.add(Instruction::Jump(lbl_cont.clone()));
-                        self.new_block(&lbl_cont);
+                        self.add(Instruction::Jump(lbl_cont));
+                        self.new_block(lbl_cont);
                     }
                     any_assigned.then(|| res.into())
                 } else {
                     if !diverges {
-                        self.new_block(&lbl_cont);
+                        self.new_block(lbl_cont);
                     }
                     None
                 }
@@ -859,7 +888,7 @@ impl<'r> Lowerer<'r> {
                         IrValue::I32(*x as i32)
                     }
                     Type::IntVar(_) => IrValue::I32(*x as i32),
-                    _ => unreachable!("should be a type error: {ty}"),
+                    _ => ice!("should be a type error"),
                 }
                 .into()
             }

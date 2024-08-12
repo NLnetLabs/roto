@@ -20,11 +20,12 @@ use crate::{
     runtime::{FunctionKind, Runtime, RuntimeFunction},
 };
 use cycle::detect_type_cycles;
-use scope::Scope;
+use scope::{ScopeGraph, ScopeRef};
 use std::{
     borrow::Borrow,
     collections::{hash_map::Entry, HashMap},
 };
+use string_interner::{backend::StringBackend, StringInterner};
 use types::{FunctionDefinition, Type};
 
 use self::{
@@ -37,7 +38,7 @@ pub(crate) mod error;
 mod expr;
 mod filter_map;
 pub mod info;
-mod scope;
+pub mod scope;
 #[cfg(test)]
 mod tests;
 pub mod types;
@@ -45,20 +46,25 @@ mod unionfind;
 
 use info::TypeInfo;
 
-pub struct TypeChecker<'functions> {
+pub struct TypeChecker<'s> {
     /// The list of built-in functions, methods and static methods.
-    functions: &'functions [Function],
+    functions: Vec<Function>,
+    identifiers: &'s mut StringInterner<StringBackend>,
     type_info: TypeInfo,
+    scope_graph: &'s mut ScopeGraph,
+    match_counter: usize,
 }
 
 pub type TypeResult<T> = Result<T, TypeError>;
 
 pub fn typecheck(
     runtime: &Runtime,
+    identifiers: &mut StringInterner<StringBackend>,
+    scope_graph: &mut ScopeGraph,
     tree: &ast::SyntaxTree,
     pointer_bytes: u32,
 ) -> TypeResult<TypeInfo> {
-    TypeChecker::check_syntax_tree(runtime, tree, pointer_bytes)
+    TypeChecker::check_syntax_tree(runtime, identifiers, scope_graph, tree, pointer_bytes)
 }
 
 enum MaybeDeclared {
@@ -70,10 +76,12 @@ enum MaybeDeclared {
     Undeclared(MetaId),
 }
 
-impl<'methods> TypeChecker<'methods> {
+impl TypeChecker<'_> {
     /// Perform type checking for a syntax tree
     pub fn check_syntax_tree(
         runtime: &Runtime,
+        identifiers: &mut StringInterner<StringBackend>,
+        scope_graph: &mut ScopeGraph,
         tree: &ast::SyntaxTree,
         pointer_bytes: u32,
     ) -> TypeResult<TypeInfo> {
@@ -82,22 +90,29 @@ impl<'methods> TypeChecker<'methods> {
         // declarations, we check whether any nones are left to determine
         // whether any types are unresolved.
         // The builtin types are added right away.
-        let mut types: HashMap<String, MaybeDeclared> =
-            default_types(runtime)
+        let mut types: HashMap<Identifier, MaybeDeclared> =
+            default_types(identifiers, runtime)
                 .into_iter()
-                .map(|(s, t)| {
-                    (s.to_string(), MaybeDeclared::Declared(t.clone(), None))
-                })
+                .map(|(s, t)| (s, MaybeDeclared::Declared(t.clone(), None)))
                 .rev()
                 .collect();
 
-        let mut root_scope = Scope::default();
+        let mut checker = TypeChecker {
+            identifiers,
+            functions: Vec::new(),
+            type_info: TypeInfo::new(pointer_bytes),
+            scope_graph,
+            match_counter: 0,
+        };
 
-        for (v, t) in types::globals() {
-            root_scope.insert_var(
-                &Meta {
+        let root_scope = checker.scope_graph.root();
+
+        for (v, t) in types::globals(checker.identifiers) {
+            checker.insert_var(
+                root_scope,
+                Meta {
                     id: MetaId(0),
-                    node: Identifier(v),
+                    node: v,
                 },
                 t,
             )?;
@@ -114,29 +129,37 @@ impl<'methods> TypeChecker<'methods> {
                     contain_ty,
                     body,
                 }) => {
-                    let ty =
-                        create_contains_type(&mut types, contain_ty, body)?;
-                    root_scope.insert_var(ident, Type::Rib(Box::new(ty)))?;
+                    let ty = checker
+                        .create_contains_type(&mut types, contain_ty, body)?;
+                    checker.insert_var(
+                        root_scope,
+                        ident.clone(),
+                        Type::Rib(Box::new(ty)),
+                    )?;
                 }
                 ast::Declaration::Table(ast::Table {
                     ident,
                     contain_ty,
                     body,
                 }) => {
-                    let ty =
-                        create_contains_type(&mut types, contain_ty, body)?;
-                    root_scope
-                        .insert_var(ident, Type::Table(Box::new(ty)))?;
+                    let ty = checker
+                        .create_contains_type(&mut types, contain_ty, body)?;
+                    checker.insert_var(
+                        root_scope,
+                        ident.clone(),
+                        Type::Table(Box::new(ty)),
+                    )?;
                 }
                 ast::Declaration::OutputStream(ast::OutputStream {
                     ident,
                     contain_ty,
                     body,
                 }) => {
-                    let ty =
-                        create_contains_type(&mut types, contain_ty, body)?;
-                    root_scope.insert_var(
-                        ident,
+                    let ty = checker
+                        .create_contains_type(&mut types, contain_ty, body)?;
+                    checker.insert_var(
+                        root_scope,
+                        ident.clone(),
                         Type::OutputStream(Box::new(ty)),
                     )?;
                 }
@@ -145,48 +168,45 @@ impl<'methods> TypeChecker<'methods> {
                     record_type,
                 }) => {
                     let ty = Type::NamedRecord(
-                        ident.0.clone(),
-                        evaluate_record_type(
+                        ident.node,
+                        checker.evaluate_record_type(
                             &mut types,
                             &record_type.key_values,
                         )?,
                     );
-                    store_type(&mut types, ident, ty)?;
+                    checker.store_type(&mut types, ident, ty)?;
                 }
                 _ => {}
             }
         }
 
-        // Check for any undeclared types in the type declarations
-        // and add them to the type info.
-        let mut type_info = TypeInfo::new(pointer_bytes);
-
         for (name, ty) in types {
             match ty {
                 MaybeDeclared::Declared(ty, _) => {
-                    type_info.add_type(name, ty)
+                    checker.type_info.add_type(name, ty)
                 }
                 MaybeDeclared::Undeclared(reference_span) => {
-                    return Err(error::undeclared_type(&Meta {
+                    return Err(checker.error_undeclared_type(&Meta {
                         id: reference_span,
-                        node: Identifier(name),
+                        node: name,
                     }));
                 }
             }
         }
 
-        detect_type_cycles(&type_info.types).map_err(|description| {
-            error::simple(
-                description,
-                "type cycle detected",
-                MetaId(0), // TODO: make a more useful error here with the recursive chain
-            )
-        })?;
+        detect_type_cycles(&checker.type_info.types).map_err(
+            |description| {
+                checker.error_simple(
+                    description,
+                    "type cycle detected",
+                    MetaId(0), // TODO: make a more useful error here with the recursive chain
+                )
+            },
+        )?;
 
         // We need to know about all runtime methods, static methods and
         // functions when we start type checking. Therefore, we have to map
         // the runtime methods with TypeIds to function types.
-        let mut functions = Vec::new();
         for func in &runtime.functions {
             let RuntimeFunction {
                 name,
@@ -197,42 +217,47 @@ impl<'methods> TypeChecker<'methods> {
             let parameter_types: Vec<_> = description
                 .parameter_types
                 .iter()
-                .map(|ty| Type::Name(runtime.get_param_type(ty).name.clone()))
+                .map(|ty| {
+                    let name = &runtime.get_param_type(ty).name;
+                    let name =
+                        Identifier(checker.identifiers.get_or_intern(name));
+                    Type::Name(name)
+                })
                 .collect();
 
-            let return_type = Type::Name(
-                runtime
-                    .get_param_type(&description.return_type)
-                    .name
-                    .clone(),
-            );
+            let ret_name =
+                &runtime.get_param_type(&description.return_type).name;
+            let ret_name =
+                Identifier(checker.identifiers.get_or_intern(ret_name));
+            let return_type = Type::Name(ret_name);
 
             let kind = match kind {
                 FunctionKind::Free => types::FunctionKind::Free,
-                FunctionKind::Method(id) => types::FunctionKind::Method(
-                    Type::Name(runtime.get_type(*id).name.clone()),
-                ),
+                FunctionKind::Method(id) => {
+                    let name = &runtime.get_type(*id).name;
+                    let name =
+                        Identifier(checker.identifiers.get_or_intern(name));
+                    types::FunctionKind::Method(Type::Name(name))
+                }
                 FunctionKind::StaticMethod(id) => {
-                    types::FunctionKind::StaticMethod(Type::Name(
-                        runtime.get_type(*id).name.clone(),
-                    ))
+                    let name = &runtime.get_type(*id).name;
+                    let name =
+                        Identifier(checker.identifiers.get_or_intern(name));
+                    types::FunctionKind::StaticMethod(Type::Name(name))
                 }
             };
 
-            functions.push(Function::new(
+            let name = Identifier(checker.identifiers.get_or_intern(name));
+
+            checker.functions.push(Function::new(
                 kind,
-                name.clone(),
+                name,
                 &[],
                 parameter_types,
                 return_type,
                 FunctionDefinition::Runtime(func.clone()),
             ));
         }
-
-        let mut checker = TypeChecker {
-            functions: &functions,
-            type_info,
-        };
 
         // Filter-maps are pretty generic: they do not have a fixed
         // output type at the moment. It's a mess. So we don't declare
@@ -242,7 +267,7 @@ impl<'methods> TypeChecker<'methods> {
         for expr in &tree.declarations {
             if let ast::Declaration::Function(x) = expr {
                 let ty = checker.function_type(x)?;
-                checker.insert_var(&mut root_scope, &x.ident, &ty)?;
+                checker.insert_var(root_scope, x.ident.clone(), &ty)?;
                 checker.type_info.expr_types.insert(x.ident.id, ty.clone());
             }
         }
@@ -252,15 +277,15 @@ impl<'methods> TypeChecker<'methods> {
                 ast::Declaration::FilterMap(f) => {
                     let ty = checker.fresh_var();
                     checker.insert_var(
-                        &mut root_scope,
-                        &f.ident,
+                        root_scope,
+                        f.ident.clone(),
                         ty.clone(),
                     )?;
-                    let ty2 = checker.filter_map(&root_scope, f)?;
+                    let ty2 = checker.filter_map(root_scope, f)?;
                     checker.unify(&ty, &ty2, f.ident.id, None)?;
                 }
                 ast::Declaration::Function(x) => {
-                    checker.function(&root_scope, x)?;
+                    checker.function(root_scope, x)?;
                 }
                 _ => {}
             }
@@ -282,19 +307,17 @@ impl<'methods> TypeChecker<'methods> {
     /// Create a fresh record variable in the unionfind structure
     fn fresh_record(
         &mut self,
-        fields: Vec<(&Meta<Identifier>, Type)>,
+        fields: Vec<(Meta<Identifier>, Type)>,
     ) -> Type {
-        let fields = fields
-            .into_iter()
-            .map(|(s, t)| (s.to_string(), t))
-            .collect();
+        let fields =
+            fields.into_iter().map(|(s, t)| (s.clone(), t)).collect();
         self.type_info
             .unionfind
             .fresh(move |x| Type::RecordVar(x, fields))
     }
 
-    fn get_type(&self, type_name: impl AsRef<str>) -> Option<&Type> {
-        self.type_info.types.get(type_name.as_ref())
+    fn get_type(&self, type_name: Identifier) -> Option<&Type> {
+        self.type_info.types.get(&type_name)
     }
 
     /// Check whether `a` is a subtype of `b`
@@ -356,8 +379,8 @@ impl<'methods> TypeChecker<'methods> {
 
     fn subtype_fields(
         &mut self,
-        a_fields: &[(String, Type)],
-        b_fields: &[(String, Type)],
+        a_fields: &[(Meta<Identifier>, Type)],
+        b_fields: &[(Meta<Identifier>, Type)],
         subs: &mut HashMap<usize, Type>,
     ) -> bool {
         if a_fields.len() != b_fields.len() {
@@ -376,25 +399,31 @@ impl<'methods> TypeChecker<'methods> {
         true
     }
 
-    fn insert_var<'a>(
+    fn insert_var(
         &mut self,
-        scope: &'a mut Scope,
-        k: &Meta<Identifier>,
+        scope: ScopeRef,
+        k: Meta<Identifier>,
         t: impl Borrow<Type>,
-    ) -> TypeResult<&'a mut Type> {
-        let (name, t) = scope.insert_var(k, t)?;
-        self.type_info.fully_qualified_names.insert(k.id, name);
-        self.type_info.expr_types.insert(k.id, t.clone());
-        Ok(t)
+    ) -> TypeResult<()> {
+        match self.scope_graph.insert_var(scope, &k, t) {
+            Ok((name, t)) => {
+                self.type_info.resolved_names.insert(k.id, name);
+                self.type_info.expr_types.insert(k.id, t.clone());
+                Ok(())
+            }
+            Err(old) => Err(self.error_declared_twice(&k, old)),
+        }
     }
 
     fn get_var<'a>(
-        &mut self,
-        scope: &'a Scope,
+        &'a mut self,
+        scope: ScopeRef,
         k: &Meta<Identifier>,
     ) -> TypeResult<&'a Type> {
-        let (name, t) = scope.get_var(k)?;
-        self.type_info.fully_qualified_names.insert(k.id, name);
+        let Some((name, t)) = self.scope_graph.get_var(scope, k) else {
+            return Err(self.error_not_defined(k));
+        };
+        self.type_info.resolved_names.insert(k.id, name);
         self.type_info.expr_types.insert(k.id, t.clone());
         Ok(t)
     }
@@ -412,7 +441,7 @@ impl<'methods> TypeChecker<'methods> {
         if let Some(ty) = self.unify_inner(&a, &b) {
             Ok(ty)
         } else {
-            Err(error::mismatched_types(a, b, span, cause))
+            Err(self.error_mismatched_types(&a, &b, span, cause))
         }
     }
 
@@ -483,9 +512,9 @@ impl<'methods> TypeChecker<'methods> {
 
     fn unify_fields(
         &mut self,
-        a_fields: &[(String, Type)],
-        b_fields: &[(String, Type)],
-    ) -> Option<Vec<(String, Type)>> {
+        a_fields: &[(Meta<Identifier>, Type)],
+        b_fields: &[(Meta<Identifier>, Type)],
+    ) -> Option<Vec<(Meta<Identifier>, Type)>> {
         if a_fields.len() != b_fields.len() {
             return None;
         }
@@ -493,7 +522,8 @@ impl<'methods> TypeChecker<'methods> {
         let mut b_fields = b_fields.to_vec();
         let mut new_fields = Vec::new();
         for (name, a_ty) in a_fields {
-            let idx = b_fields.iter().position(|(n, _)| n == name)?;
+            let idx =
+                b_fields.iter().position(|(n, _)| n.node == name.node)?;
             let (_, b_ty) = b_fields.remove(idx);
             new_fields.push((name.clone(), self.unify_inner(a_ty, &b_ty)?))
         }
@@ -544,7 +574,7 @@ impl<'methods> TypeChecker<'methods> {
         for method_var in vars {
             let var = self.fresh_var();
             let f = |x: &Type| {
-                x.substitute(&Type::ExplicitVar(method_var.to_string()), &var)
+                x.substitute(&Type::ExplicitVar(*method_var), &var)
             };
 
             kind = match kind {
@@ -570,104 +600,105 @@ impl<'methods> TypeChecker<'methods> {
             return_type,
         }
     }
-}
 
-fn store_type(
-    types: &mut HashMap<String, MaybeDeclared>,
-    k: &Meta<ast::Identifier>,
-    v: Type,
-) -> TypeResult<()> {
-    let k_string = k.node.to_string();
-    match types.entry(k_string) {
-        Entry::Occupied(mut entry) => {
-            if let MaybeDeclared::Declared(_, existing_span) = entry.get() {
-                return Err(match existing_span {
-                    Some(existing_span) => {
-                        error::declared_twice(k, *existing_span)
-                    }
-                    None => error::tried_to_overwrite_builtin(k),
-                });
-            }
-            entry.insert(MaybeDeclared::Declared(v, Some(k.id)));
-        }
-        Entry::Vacant(entry) => {
-            entry.insert(MaybeDeclared::Declared(v, Some(k.id)));
-        }
-    };
-    Ok(())
-}
-
-fn create_contains_type(
-    types: &mut HashMap<String, MaybeDeclared>,
-    contain_ty: &Meta<ast::Identifier>,
-    body: &ast::RibBody,
-) -> TypeResult<Type> {
-    let ty = Type::NamedRecord(
-        contain_ty.0.to_string(),
-        evaluate_record_type(types, &body.key_values)?,
-    );
-    store_type(types, contain_ty, ty.clone())?;
-    Ok(ty)
-}
-
-fn evaluate_record_type(
-    types: &mut HashMap<String, MaybeDeclared>,
-    fields: &[(Meta<Identifier>, ast::RibFieldType)],
-) -> TypeResult<Vec<(String, Type)>> {
-    // We store the spans temporarily to be able to create nice a
-    let mut type_fields = Vec::new();
-
-    for (ident, ty) in fields {
-        let field_type = evaluate_field_type(types, ty)?;
-        type_fields.push((ident, field_type))
-    }
-
-    let mut unspanned_type_fields = Vec::new();
-    for field in &type_fields {
-        let same_fields: Vec<_> = type_fields
-            .iter()
-            .filter_map(|(ident, _typ)| {
-                if ident.node == field.0.node {
-                    Some(ident.id)
-                } else {
-                    None
+    fn store_type(
+        &self,
+        types: &mut HashMap<Identifier, MaybeDeclared>,
+        k: &Meta<ast::Identifier>,
+        v: Type,
+    ) -> TypeResult<()> {
+        match types.entry(k.node) {
+            Entry::Occupied(mut entry) => {
+                if let MaybeDeclared::Declared(_, existing_span) = entry.get()
+                {
+                    return Err(match existing_span {
+                        Some(existing_span) => {
+                            self.error_declared_twice(k, *existing_span)
+                        }
+                        None => self.error_tried_to_overwrite_builtin(k),
+                    });
                 }
-            })
-            .collect();
-        if same_fields.len() > 1 {
-            return Err(error::duplicate_fields(
-                field.0.as_ref(),
-                &same_fields,
-            ));
-        }
-        unspanned_type_fields
-            .push((field.0.node.to_string(), field.1.clone()));
+                entry.insert(MaybeDeclared::Declared(v, Some(k.id)));
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(MaybeDeclared::Declared(v, Some(k.id)));
+            }
+        };
+        Ok(())
     }
 
-    Ok(unspanned_type_fields)
-}
+    fn create_contains_type(
+        &self,
+        types: &mut HashMap<Identifier, MaybeDeclared>,
+        contain_ty: &Meta<ast::Identifier>,
+        body: &ast::RibBody,
+    ) -> TypeResult<Type> {
+        let ty = Type::NamedRecord(
+            contain_ty.node,
+            self.evaluate_record_type(types, &body.key_values)?,
+        );
+        self.store_type(types, contain_ty, ty.clone())?;
+        Ok(ty)
+    }
 
-fn evaluate_field_type(
-    types: &mut HashMap<String, MaybeDeclared>,
-    ty: &ast::RibFieldType,
-) -> TypeResult<Type> {
-    Ok(match ty {
-        ast::RibFieldType::Identifier(ty) => {
-            // If the type for this is unknown, we insert None,
-            // which signals that the type is mentioned but not
-            // yet declared. The declaration will override it
-            // with Some(...) if we encounter it later.
-            types
-                .entry(ty.as_ref().to_string())
-                .or_insert(MaybeDeclared::Undeclared(ty.id));
-            Type::Name(ty.0.clone())
+    fn evaluate_record_type(
+        &self,
+        types: &mut HashMap<Identifier, MaybeDeclared>,
+        fields: &[(Meta<Identifier>, ast::RibFieldType)],
+    ) -> TypeResult<Vec<(Meta<Identifier>, Type)>> {
+        // We store the spans temporarily to be able to create nice a
+        let mut type_fields = Vec::new();
+
+        for (ident, ty) in fields {
+            let field_type = self.evaluate_field_type(types, ty)?;
+            type_fields.push((ident, field_type))
         }
-        ast::RibFieldType::Record(fields) => {
-            Type::Record(evaluate_record_type(types, &fields.key_values)?)
+
+        let mut unspanned_type_fields = Vec::new();
+        for field in &type_fields {
+            let same_fields: Vec<_> = type_fields
+                .iter()
+                .filter_map(|(ident, _typ)| {
+                    if ident.node == field.0.node {
+                        Some(ident.id)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            if same_fields.len() > 1 {
+                let ident = self.identifiers.resolve(field.0 .0).unwrap();
+                return Err(self.error_duplicate_fields(ident, &same_fields));
+            }
+            unspanned_type_fields.push((field.0.clone(), field.1.clone()));
         }
-        ast::RibFieldType::List(inner) => {
-            let inner = evaluate_field_type(types, &inner.node)?;
-            Type::List(Box::new(inner))
-        }
-    })
+
+        Ok(unspanned_type_fields)
+    }
+
+    fn evaluate_field_type(
+        &self,
+        types: &mut HashMap<Identifier, MaybeDeclared>,
+        ty: &ast::RibFieldType,
+    ) -> TypeResult<Type> {
+        Ok(match ty {
+            ast::RibFieldType::Identifier(ty) => {
+                // If the type for this is unknown, we insert None,
+                // which signals that the type is mentioned but not
+                // yet declared. The declaration will override it
+                // with Some(...) if we encounter it later.
+                types
+                    .entry(ty.node)
+                    .or_insert(MaybeDeclared::Undeclared(ty.id));
+                Type::Name(ty.node)
+            }
+            ast::RibFieldType::Record(fields) => Type::Record(
+                self.evaluate_record_type(types, &fields.key_values)?,
+            ),
+            ast::RibFieldType::List(inner) => {
+                let inner = self.evaluate_field_type(types, &inner.node)?;
+                Type::List(Box::new(inner))
+            }
+        })
+    }
 }

@@ -5,6 +5,8 @@
 
 use std::collections::HashMap;
 
+use crate::ast::Identifier;
+
 use super::types::Type;
 
 /// Return an error if there is a cycles in the type declarations
@@ -30,37 +32,37 @@ use super::types::Type;
 /// This algorithm is the Depth-first search algorithm described at
 /// <https://en.wikipedia.org/wiki/Topological_sorting>, where `false`
 /// is a temporary mark and `true` is a permanent mark.
-pub fn detect_type_cycles(types: &HashMap<String, Type>) -> Result<(), String> {
+pub fn detect_type_cycles(types: &HashMap<Identifier, Type>) -> Result<(), String> {
     let mut visited = HashMap::new();
 
     for ident in types.keys() {
-        visit_name(types, &mut visited, ident)?;
+        visit_name(types, &mut visited, *ident)?;
     }
 
     Ok(())
 }
 
-fn visit_name<'a>(
-    types: &'a HashMap<String, Type>,
-    visited: &mut HashMap<&'a str, bool>,
-    s: &'a str,
+fn visit_name(
+    types: &HashMap<Identifier, Type>,
+    visited: &mut HashMap<Identifier, bool>,
+    s: Identifier,
 ) -> Result<(), String> {
-    match visited.get(s) {
-        Some(false) => return Err(format!("cycle detected on {s}!")),
+    match visited.get(&s) {
+        Some(false) => return Err("cycle detected!".into()),
         Some(true) => return Ok(()),
         None => {}
     };
 
     visited.insert(s, false);
-    visit(types, visited, &types[s])?;
+    visit(types, visited, &types[&s])?;
     visited.insert(s, true);
 
     Ok(())
 }
 
 fn visit<'a>(
-    types: &'a HashMap<String, Type>,
-    visited: &mut HashMap<&'a str, bool>,
+    types: &'a HashMap<Identifier, Type>,
+    visited: &mut HashMap<Identifier, bool>,
     ty: &'a Type,
 ) -> Result<(), String> {
     match ty {
@@ -104,6 +106,6 @@ fn visit<'a>(
             }
             Ok(())
         }
-        Type::Name(ident) => visit_name(types, visited, ident),
+        Type::Name(ident) => visit_name(types, visited, *ident),
     }
 }

@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
-use crate::parser::meta::MetaId;
+use crate::{ast::Identifier, parser::meta::MetaId};
 
-use super::{types::{Function, Type}, unionfind::UnionFind};
+use super::{
+    scope::{DefinitionRef, ScopeRef}, types::{Function, Type}, unionfind::UnionFind
+};
 
 /// The output of the type checker that is used for lowering
 #[derive(Clone)]
@@ -11,28 +13,31 @@ pub struct TypeInfo {
     pub(super) unionfind: UnionFind,
 
     /// Map from type names to types
-    pub(super) types: HashMap<String, Type>,
-    
+    pub(super) types: HashMap<Identifier, Type>,
+
     /// The types we inferred for each Expr
     ///
     /// This might not be fully resolved yet.
     pub(super) expr_types: HashMap<MetaId, Type>,
-    
+
     /// The fully qualified (and hence unique) name for each identifier.
-    pub(super) fully_qualified_names: HashMap<MetaId, String>,
-    
+    pub(super) resolved_names: HashMap<MetaId, DefinitionRef>,
+
+    /// Scopes of functions
+    pub(super) function_scopes: HashMap<MetaId, ScopeRef>,
+
     /// The function that is called on each function call
     pub(super) function_calls: HashMap<MetaId, Function>,
-    
+
     /// The ids of all the `Expr::Access` nodes that should be interpreted
     /// as enum variant constructors.
     pub(super) enum_variant_constructors: HashMap<MetaId, Type>,
-    
+
     pub(super) diverges: HashMap<MetaId, bool>,
-    
+
     /// Type for return/accept/reject that it constructs and returns.
     pub(super) return_types: HashMap<MetaId, Type>,
-    
+
     // Size of the pointer type in bytes
     pointer_bytes: u32,
 }
@@ -43,26 +48,26 @@ impl TypeInfo {
             unionfind: UnionFind::default(),
             types: HashMap::new(),
             expr_types: HashMap::new(),
-            fully_qualified_names: HashMap::new(),
+            resolved_names: HashMap::new(),
             enum_variant_constructors: HashMap::new(),
             diverges: HashMap::new(),
             return_types: HashMap::new(),
             function_calls: HashMap::new(),
+            function_scopes: HashMap::new(),
             pointer_bytes,
         }
     }
 
-    pub fn add_type(&mut self, name: impl Into<String>, ty: Type) {
-        let name = name.into();
-        if self.types.insert(name.clone(), ty).is_some() {
-            panic!("Type {name} was added to TypeInfo twice");
+    pub fn add_type(&mut self, name: Identifier, ty: Type) {
+        if self.types.insert(name, ty).is_some() {
+            panic!("Type was added to TypeInfo twice");
         }
     }
 }
 
 impl TypeInfo {
-    pub fn full_name(&self, x: impl Into<MetaId>) -> String {
-        self.fully_qualified_names[&x.into()].clone()
+    pub fn resolved_name(&self, x: impl Into<MetaId>) -> DefinitionRef {
+        self.resolved_names[&x.into()]
     }
 
     pub fn type_of(&mut self, x: impl Into<MetaId>) -> Type {
@@ -83,8 +88,17 @@ impl TypeInfo {
         self.function_calls.get(&x.into()).unwrap()
     }
 
-    pub fn offset_of(&mut self, record: &Type, field: &str) -> (Type, u32) {
+    pub fn function_scope(&self, x: impl Into<MetaId>) -> ScopeRef {
+        self.function_scopes[&x.into()]
+    }
+
+    pub fn offset_of(
+        &mut self,
+        record: &Type,
+        field: Identifier,
+    ) -> (Type, u32) {
         let record = self.resolve(record);
+
         let (Type::Record(fields)
         | Type::RecordVar(_, fields)
         | Type::NamedRecord(_, fields)) = record
@@ -97,7 +111,7 @@ impl TypeInfo {
             // Here, we align the offset to the natural alignment of each
             // type.
             offset += self.padding_of(&ty, offset);
-            if name == field {
+            if name.node == field {
                 return (ty, offset);
             }
             offset += self.size_of(&ty);

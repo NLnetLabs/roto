@@ -23,6 +23,7 @@
 //!  - The return type
 //!  - Whether or not a type should be copied is not just up to the type
 //!    but also up to the method, making this whole thing more complicated.
+//!
 //! We might need polymorphism over the number of arguments.
 //! The IR needs typed variables to do this correctly.
 pub mod func;

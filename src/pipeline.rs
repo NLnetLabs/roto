@@ -2,13 +2,16 @@
 
 use std::collections::HashMap;
 
+use string_interner::{backend::StringBackend, StringInterner};
+
 use crate::{
     ast,
     codegen::{self, Module},
     lower::{
         self,
         eval::{self, Memory},
-        ir,
+        ir::{self, IrPrinter},
+        label::LabelStore,
         value::IrValue,
         IrFunction,
     },
@@ -20,6 +23,7 @@ use crate::{
     typechecker::{
         error::{Level, TypeError},
         info::TypeInfo,
+        scope::ScopeGraph,
     },
 };
 
@@ -60,6 +64,8 @@ pub struct Files {
 
 /// Compiler stage: Files loaded and parsed
 pub struct Parsed {
+    /// Interned strings for identifiers and such
+    identifiers: StringInterner<StringBackend>,
     files: Vec<SourceFile>,
     trees: Vec<ast::SyntaxTree>,
     spans: Spans,
@@ -70,6 +76,8 @@ pub struct TypeChecked {
     runtime: Runtime,
     trees: Vec<ast::SyntaxTree>,
     type_infos: Vec<TypeInfo>,
+    identifiers: StringInterner<StringBackend>,
+    scope_graph: ScopeGraph,
 }
 
 /// Compiler stage: HIR
@@ -77,6 +85,8 @@ pub struct Lowered {
     runtime: Runtime,
     pub ir: Vec<ir::Function>,
     runtime_functions: HashMap<String, IrFunction>,
+    identifiers: StringInterner<StringBackend>,
+    label_store: LabelStore,
 }
 
 pub struct Compiled {
@@ -203,10 +213,6 @@ pub fn run(
         .typecheck(runtime, pointer_bytes)?
         .lower();
 
-    for f in &lowered.ir {
-        println!("{}", f);
-    }
-
     let res = lowered.eval(mem, rx);
     Ok(res)
 }
@@ -224,11 +230,15 @@ pub fn test_file(file: &str, source: &str, location_offset: usize) -> Files {
 
 pub fn read_files<S>(
     files: impl IntoIterator<Item = S>,
-) -> Result<Files, RotoReport> 
-where S: AsRef<str> {
+) -> Result<Files, RotoReport>
+where
+    S: AsRef<str>,
+{
     let results: Vec<_> = files
         .into_iter()
-        .map(|f| (f.as_ref().to_string(), std::fs::read_to_string(f.as_ref())))
+        .map(|f| {
+            (f.as_ref().to_string(), std::fs::read_to_string(f.as_ref()))
+        })
         .collect();
 
     let mut files = Vec::new();
@@ -266,11 +276,15 @@ impl Files {
     pub fn parse(self) -> Result<Parsed, RotoReport> {
         let mut spans = Spans::default();
 
+        let mut identifiers = StringInterner::new();
+
         let results: Vec<_> = self
             .files
             .iter()
             .enumerate()
-            .map(|(i, f)| Parser::parse(i, &mut spans, &f.contents))
+            .map(|(i, f)| {
+                Parser::parse(i, &mut identifiers, &mut spans, &f.contents)
+            })
             .collect();
 
         let mut trees = Vec::new();
@@ -284,6 +298,7 @@ impl Files {
 
         if errors.is_empty() {
             Ok(Parsed {
+                identifiers,
                 trees,
                 spans,
                 files: self.files,
@@ -305,15 +320,24 @@ impl Parsed {
         pointer_bytes: u32,
     ) -> Result<TypeChecked, RotoReport> {
         let Parsed {
+            mut identifiers,
             files,
             trees,
             spans,
         } = self;
 
+        let mut scope_graph = ScopeGraph::new();
+
         let results: Vec<_> = trees
             .iter()
             .map(|f| {
-                crate::typechecker::typecheck(&runtime, f, pointer_bytes)
+                crate::typechecker::typecheck(
+                    &runtime,
+                    &mut identifiers,
+                    &mut scope_graph,
+                    f,
+                    pointer_bytes,
+                )
             })
             .collect();
 
@@ -333,6 +357,8 @@ impl Parsed {
                 runtime,
                 trees,
                 type_infos,
+                identifiers,
+                scope_graph,
             })
         } else {
             Err(RotoReport {
@@ -350,17 +376,35 @@ impl TypeChecked {
             runtime,
             trees,
             mut type_infos,
+            mut identifiers,
+            scope_graph,
         } = self;
         let mut runtime_functions = HashMap::new();
+        let mut label_store = LabelStore::default();
         let ir = lower::lower(
             &trees[0],
             &mut type_infos[0],
             &mut runtime_functions,
+            &mut identifiers,
+            &mut label_store,
         );
+
+        if log::log_enabled!(log::Level::Info) {
+            let s = IrPrinter {
+                scope_graph: &scope_graph,
+                identifiers: &identifiers,
+                label_store: &label_store,
+            }
+            .program(&ir);
+            println!("{s}");
+        }
+
         Lowered {
             ir,
             runtime,
             runtime_functions,
+            identifiers,
+            label_store,
         }
     }
 }
@@ -371,11 +415,16 @@ impl Lowered {
         mem: &mut Memory,
         rx: Vec<IrValue>,
     ) -> Option<IrValue> {
-        eval::eval(&self.ir, "main", mem, rx)
+        eval::eval(&self.ir, "main", mem, rx, &self.identifiers)
     }
 
     pub fn codegen(self) -> Compiled {
-        let module = codegen::codegen(&self.ir, &self.runtime_functions);
+        let module = codegen::codegen(
+            &self.ir,
+            &self.runtime_functions,
+            self.identifiers,
+            self.label_store,
+        );
         Compiled {
             runtime: self.runtime,
             module,

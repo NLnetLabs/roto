@@ -1,13 +1,13 @@
 use std::{borrow::Borrow, collections::HashSet};
 
 use crate::{
-    ast::{self, Identifier},
+    ast::{self, Identifier, Pattern},
     parser::meta::{Meta, MetaId},
-    typechecker::{error, types::FunctionDefinition},
+    typechecker::types::{type_to_string, FunctionDefinition},
 };
 
 use super::{
-    scope::Scope,
+    scope::{ScopeRef, ScopeType},
     types::{Function, FunctionKind, Primitive, Signature, Type},
     TypeChecker, TypeResult,
 };
@@ -30,7 +30,7 @@ impl Context {
 impl TypeChecker<'_> {
     pub fn block(
         &mut self,
-        scope: &Scope,
+        scope: ScopeRef,
         ctx: &Context,
         block: &Meta<ast::Block>,
     ) -> TypeResult<bool> {
@@ -38,7 +38,7 @@ impl TypeChecker<'_> {
 
         for expr in &block.exprs {
             if diverged {
-                return Err(error::unreachable_expression(expr));
+                return Err(self.error_unreachable_expression(expr));
             }
 
             let ctx = ctx.with_type(Type::Primitive(Primitive::Unit));
@@ -62,7 +62,7 @@ impl TypeChecker<'_> {
         };
 
         if diverged {
-            return Err(error::unreachable_expression(expr));
+            return Err(self.error_unreachable_expression(expr));
         }
         diverged |= self.expr(scope, ctx, expr)?;
 
@@ -76,7 +76,7 @@ impl TypeChecker<'_> {
 
     pub fn expr(
         &mut self,
-        scope: &Scope,
+        scope: ScopeRef,
         ctx: &Context,
         expr: &Meta<ast::Expr>,
     ) -> TypeResult<bool> {
@@ -91,7 +91,9 @@ impl TypeChecker<'_> {
         match &expr.node {
             Return(kind, e) => {
                 let Some(ret) = &ctx.function_return_type else {
-                    return Err(error::cannot_diverge_here(kind.str(), expr));
+                    return Err(
+                        self.error_cannot_diverge_here(kind.str(), expr)
+                    );
                 };
 
                 self.unify(&ctx.expected_type, &Type::Never, id, None)?;
@@ -151,12 +153,16 @@ impl TypeChecker<'_> {
                 // A function call can either be an internal function or an
                 // external function. Internal functions have priority over
                 // external functions.
-                if let Ok(t) = self.get_var(scope, name) {
-                    let t = self.resolve_type(t);
+                if let Ok(ty) = self.get_var(scope, name) {
+                    let ty = ty.clone();
+                    let ty = self.resolve_type(&ty);
 
-                    let Type::Function(params, ret) = t else {
-                        return Err(error::simple(
-                            format!("the variable `{name}` is not callable, but has type `{t}`"),
+                    let Type::Function(params, ret) = ty else {
+                        let name_str =
+                            self.identifiers.resolve(name.0).unwrap();
+                        let ty = type_to_string(self.identifiers, &ty);
+                        return Err(self.error_simple(
+                            format!("the variable `{name_str}` is not callable, but has type `{ty}`"),
                             "not a function",
                             name.id,
                         ));
@@ -176,7 +182,7 @@ impl TypeChecker<'_> {
                                     .collect(),
                                 return_type: *ret.clone(),
                             },
-                            name: name.to_string(),
+                            name: name.node,
                             vars: Vec::new(),
                             definition: FunctionDefinition::Roto,
                         },
@@ -193,11 +199,12 @@ impl TypeChecker<'_> {
                 } else {
                     // It's not found in scope, so it should be a runtime
                     // function, otherwise we really can't find it.
-                    let Some((function, signature)) = self
-                        .find_function(&FunctionKind::Free, name.as_ref())
+                    let Some((function, signature)) =
+                        self.find_function(&FunctionKind::Free, **name)
                     else {
-                        return Err(error::simple(
-                            format!("function `{name}` not found`",),
+                        let n = self.identifiers.resolve(name.0).unwrap();
+                        return Err(self.error_simple(
+                            format!("function `{n}` not found`",),
                             "function not found",
                             name.id,
                         ));
@@ -232,15 +239,18 @@ impl TypeChecker<'_> {
                     self.find_enum_variant(ctx, id, receiver, name)?
                 {
                     let Some(data) = data else {
-                        return Err(error::simple(
-                            format!("variant {name} of {type_name} does not have data"),
+                        let n = self.identifiers.resolve(name.0).unwrap();
+                        let type_name =
+                            self.identifiers.resolve(type_name.0).unwrap();
+                        return Err(self.error_simple(
+                            format!("variant {n} of {type_name} does not have data"),
                             "does not have data",
                             name.id,
                         ));
                     };
 
                     let [arg] = &args.node[..] else {
-                        return Err(error::simple(
+                        return Err(self.error_simple(
                             "enum constructor must have exactly 1 argument",
                             "must have exactly 1 argument",
                             args.id,
@@ -255,7 +265,7 @@ impl TypeChecker<'_> {
                 }
 
                 if let ast::Expr::Var(x) = &receiver.node {
-                    if let Some(ty) = self.get_type(x) {
+                    if let Some(ty) = self.get_type(x.node) {
                         let ty = ty.clone();
                         return self
                             .static_method_call(scope, ctx, &ty, name, args);
@@ -269,8 +279,12 @@ impl TypeChecker<'_> {
                     self.find_enum_variant(ctx, id, e, x)?
                 {
                     if data.is_some() {
-                        return Err(error::simple(
-                            format!("variant {x} of {name} requires data"),
+                        let x_str = self.identifiers.resolve(x.0).unwrap();
+                        let name = self.identifiers.resolve(name.0).unwrap();
+                        return Err(self.error_simple(
+                            format!(
+                                "variant {x_str} of {name} requires data"
+                            ),
                             "requires data",
                             x.id,
                         ));
@@ -279,38 +293,41 @@ impl TypeChecker<'_> {
                     return Ok(false);
                 }
 
-                let t = self.fresh_var();
-                let diverges = self.expr(scope, &ctx.with_type(&t), e)?;
-                let t = self.resolve_type(&t);
+                let ty = self.fresh_var();
+                let diverges = self.expr(scope, &ctx.with_type(&ty), e)?;
+                let ty = self.resolve_type(&ty);
 
                 if let Type::Record(fields)
                 | Type::NamedRecord(_, fields)
-                | Type::RecordVar(_, fields) = &t
+                | Type::RecordVar(_, fields) = &ty
                 {
                     if let Some((_, t)) =
-                        fields.iter().find(|(s, _)| s == x.0.as_str())
+                        fields.iter().find(|(s, _)| s.node == x.node)
                     {
                         self.unify(&ctx.expected_type, t, x.id, None)?;
                         return Ok(diverges);
                     };
                 }
 
-                Err(error::simple(
-                    format!("no field `{x}` on type `{t}`",),
+                let id = x.id;
+                let x = self.identifiers.resolve(x.0).unwrap();
+                let ty = type_to_string(self.identifiers, &ty);
+                Err(self.error_simple(
+                    format!("no field `{x}` on type `{ty}`",),
                     format!("unknown field `{x}`"),
-                    x.id,
+                    id,
                 ))
             }
             Var(x) => {
-                let t = self.get_var(scope, x)?;
-                self.unify(&ctx.expected_type, t, x.id, None)?;
+                let t = self.get_var(scope, x)?.clone();
+                self.unify(&ctx.expected_type, &t, x.id, None)?;
                 Ok(false)
             }
             Record(record) => {
                 let field_types: Vec<_> = record
                     .fields
                     .iter()
-                    .map(|(s, _)| (s, self.fresh_var()))
+                    .map(|(s, _)| (s.clone(), self.fresh_var()))
                     .collect();
                 let rec = self.fresh_record(field_types.clone());
                 self.unify(&ctx.expected_type, &rec, id, None)?;
@@ -319,16 +336,18 @@ impl TypeChecker<'_> {
             }
             TypedRecord(name, record) => {
                 // We first retrieve the type we expect
-                let Some(ty) = self.type_info.types.get(&name.0.to_string())
-                else {
-                    return Err(error::undeclared_type(name));
+                let Some(ty) = self.type_info.types.get(name) else {
+                    return Err(self.error_undeclared_type(name));
                 };
                 let ty = ty.clone();
                 self.unify(&ctx.expected_type, &ty, id, None)?;
 
                 let Type::NamedRecord(_, record_fields) = ty else {
-                    return Err(error::simple(
-                        format!("Expected a named record type, but found `{name}`"),
+                    let n = self.identifiers.resolve(name.0).unwrap();
+                    return Err(self.error_simple(
+                        format!(
+                            "Expected a named record type, but found `{n}`"
+                        ),
                         "not a named record type",
                         name.id,
                     ));
@@ -337,7 +356,7 @@ impl TypeChecker<'_> {
                 let diverges = self.record_fields(
                     scope,
                     ctx,
-                    record_fields.clone(),
+                    record_fields,
                     record,
                     id,
                 )?;
@@ -346,9 +365,9 @@ impl TypeChecker<'_> {
                 let field_types: Vec<_> = record
                     .fields
                     .iter()
-                    .map(|(s, _)| (s, self.fresh_var()))
+                    .map(|(s, _)| (s.clone(), self.fresh_var()))
                     .collect();
-                let rec = self.fresh_record(field_types.clone());
+                let rec = self.fresh_record(field_types);
                 self.unify(&ctx.expected_type, &rec, id, None)?;
 
                 Ok(diverges)
@@ -427,12 +446,12 @@ impl TypeChecker<'_> {
         id: MetaId,
         e: &Meta<ast::Expr>,
         x: &Meta<Identifier>,
-    ) -> TypeResult<Option<(String, String, Option<Type>)>> {
+    ) -> TypeResult<Option<(Identifier, Identifier, Option<Type>)>> {
         let ast::Expr::Var(ident) = &e.node else {
             return Ok(None);
         };
 
-        let Some(t) = self.get_type(ident) else {
+        let Some(t) = self.get_type(ident.node) else {
             return Ok(None);
         };
 
@@ -443,12 +462,15 @@ impl TypeChecker<'_> {
         };
 
         let Some((variant, data)) =
-            variants.iter().find(|(v, _)| v == &x.node.0)
+            variants.iter().find(|(v, _)| v == &x.node)
         else {
-            return Err(error::simple(
+            let id = x.id;
+            let x = self.identifiers.resolve(x.0).unwrap();
+            let name = self.identifiers.resolve(name.0).unwrap();
+            return Err(self.error_simple(
                 format!("no variant {x} on enum {name}"),
                 "variant not found",
-                x.id,
+                id,
             ));
         };
 
@@ -457,7 +479,7 @@ impl TypeChecker<'_> {
             .enum_variant_constructors
             .insert(id, t.clone());
 
-        Ok(Some((name.clone(), variant.clone(), data.clone())))
+        Ok(Some((*name, *variant, data.clone())))
     }
 
     fn literal(
@@ -468,10 +490,12 @@ impl TypeChecker<'_> {
         use ast::Literal::*;
         let span = lit.id;
 
+        let ip = self.identifiers.get_or_intern("IpAddr");
+
         let t = match lit.node {
             String(_) => Type::Primitive(Primitive::String),
             Asn(_) => Type::Primitive(Primitive::U32),
-            IpAddress(_) => Type::Name("IpAddr".into()),
+            IpAddress(_) => Type::Name(Identifier(ip)),
             Bool(_) => Type::Primitive(Primitive::Bool),
             Integer(_) => self.fresh_int(),
         };
@@ -482,7 +506,7 @@ impl TypeChecker<'_> {
 
     fn match_expr(
         &mut self,
-        scope: &Scope,
+        scope: ScopeRef,
         ctx: &Context,
         mat: &Meta<ast::Match>,
     ) -> TypeResult<bool> {
@@ -503,12 +527,12 @@ impl TypeChecker<'_> {
         }
 
         let Type::Enum(_, variants) = &t_expr else {
-            return Err(error::can_only_match_on_enum(&t_expr, expr.id));
+            return Err(self.error_can_only_match_on_enum(&t_expr, expr.id));
         };
 
         // We'll keep track of used variants to do some basic
         // exhaustiveness checking.
-        let mut used_variants = Vec::<&str>::new();
+        let mut used_variants = Vec::new();
 
         // Match diverges if all its branches diverge
         let mut arms_diverge = true;
@@ -516,92 +540,106 @@ impl TypeChecker<'_> {
         // Whether there is a default arm present (with '_')
         let mut default_arm = false;
 
+        let match_id = self.match_counter;
+        self.match_counter += 1;
+
         for ast::MatchArm {
-            variant_id,
-            data_field,
+            pattern,
             guard,
             body,
         } in arms
         {
-            let variant_str = variant_id.0.as_str();
-
             // Anything after default is unreachable
             if default_arm {
                 todo!("error")
             }
 
-            if variant_str == "_" {
-                if data_field.is_some() {
-                    todo!("error")
-                }
+            match &pattern.node {
+                Pattern::Underscore => {
+                    let arm_scope = self
+                        .scope_graph
+                        .wrap(scope, ScopeType::MatchArm(match_id, None));
 
-                let arm_scope = scope.wrap("$arm_default");
-                if let Some(guard) = guard {
-                    let ctx = ctx.with_type(Type::Primitive(Primitive::Bool));
-                    let _ = self.expr(&arm_scope, &ctx, guard)?;
-                } else {
-                    default_arm = true;
-                }
+                    if let Some(guard) = guard {
+                        let ctx =
+                            ctx.with_type(Type::Primitive(Primitive::Bool));
+                        let _ = self.expr(arm_scope, &ctx, guard)?;
+                    } else {
+                        default_arm = true;
+                    }
 
-                arms_diverge &= self.block(&arm_scope, ctx, body)?;
-                continue;
+                    arms_diverge &= self.block(arm_scope, ctx, body)?;
+                    continue;
+                }
+                Pattern::EnumVariant {
+                    variant,
+                    data_field,
+                } => {
+                    let Some(idx) =
+                        variants.iter().position(|(v, _)| v == &variant.node)
+                    else {
+                        return Err(self
+                            .error_variant_does_not_exist(variant, &t_expr));
+                    };
+
+                    let variant_already_used =
+                        used_variants.contains(&variant.node);
+                    if variant_already_used {
+                        println!("WARNING: Variant occurs multiple times in match! This arm is unreachable")
+                    }
+
+                    let ty = &variants[idx].1;
+                    let arm_scope = self.scope_graph.wrap(
+                        scope,
+                        ScopeType::MatchArm(match_id, Some(idx)),
+                    );
+
+                    match (ty, data_field) {
+                        (None, None) => {} // ok!
+                        (Some(t), Some(id)) => {
+                            self.insert_var(arm_scope, id.clone(), t)?;
+                        }
+                        (None, Some(data_field)) => {
+                            return Err(self
+                                .error_variant_does_not_have_field(
+                                    data_field, &t_expr,
+                                ))
+                        }
+                        (Some(_), None) => {
+                            return Err(self
+                                .error_need_data_field_on_pattern(
+                                    variant, &t_expr,
+                                ));
+                        }
+                    }
+
+                    if let Some(guard) = guard {
+                        let ctx =
+                            ctx.with_type(Type::Primitive(Primitive::Bool));
+                        let _ = self.expr(arm_scope, &ctx, guard)?;
+                    } else if !variant_already_used {
+                        // If there is a guard we don't mark the variant as used,
+                        // because the guard could evaluate to false and hence the
+                        // variant _should_ actually be used again.
+                        used_variants.push(variant.node);
+                    }
+
+                    arms_diverge &= self.block(arm_scope, ctx, body)?;
+                }
             }
-
-            let Some(idx) =
-                variants.iter().position(|(v, _)| v.as_str() == variant_str)
-            else {
-                return Err(error::variant_does_not_exist(
-                    variant_id, &t_expr,
-                ));
-            };
-
-            let variant_already_used = used_variants.contains(&variant_str);
-            if variant_already_used {
-                println!("WARNING: Variant occurs multiple times in match! This arm is unreachable")
-            }
-
-            let ty = &variants[idx].1;
-            let mut arm_scope = scope.wrap(&format!("$arm_{idx}"));
-
-            match (ty, data_field) {
-                (None, None) => {} // ok!
-                (Some(t), Some(id)) => {
-                    self.insert_var(&mut arm_scope, id, t)?;
-                }
-                (None, Some(data_field)) => {
-                    return Err(error::variant_does_not_have_field(
-                        data_field, &t_expr,
-                    ))
-                }
-                (Some(_), None) => {
-                    return Err(error::need_data_field_on_pattern(
-                        variant_id, &t_expr,
-                    ));
-                }
-            }
-
-            if let Some(guard) = guard {
-                let ctx = ctx.with_type(Type::Primitive(Primitive::Bool));
-                let _ = self.expr(&arm_scope, &ctx, guard)?;
-            } else if !variant_already_used {
-                // If there is a guard we don't mark the variant as used,
-                // because the guard could evaluate to false and hence the
-                // variant _should_ actually be used again.
-                used_variants.push(variant_str);
-            }
-
-            arms_diverge &= self.block(&arm_scope, ctx, body)?;
         }
 
         if !default_arm && used_variants.len() < variants.len() {
             let mut missing_variants = Vec::new();
             for v in variants {
-                let v = v.0.as_str();
+                let v = v.0;
                 if !used_variants.contains(&v) {
                     missing_variants.push(v);
                 }
             }
-            return Err(error::nonexhaustive_match(span, &missing_variants));
+            return Err(
+                self.error_nonexhaustive_match(span, &missing_variants)
+            );
         }
 
         Ok(arms_diverge)
@@ -609,7 +647,7 @@ impl TypeChecker<'_> {
 
     fn binop(
         &mut self,
-        scope: &Scope,
+        scope: ScopeRef,
         ctx: &Context,
         op: &ast::BinOp,
         span: MetaId,
@@ -672,7 +710,7 @@ impl TypeChecker<'_> {
                     | Type::RecordVar(..)
                     | Type::NamedRecord(..) => (),
                     _ => {
-                        return Err(error::simple(
+                        return Err(self.error_simple(
                             "type cannot be compared",
                             "cannot be compared",
                             span,
@@ -720,22 +758,25 @@ impl TypeChecker<'_> {
     fn method_call(
         &mut self,
         _meta_id: MetaId,
-        scope: &Scope,
+        scope: ScopeRef,
         ctx: &Context,
         receiver: &Meta<ast::Expr>,
         name: &Meta<Identifier>,
         args: &[Meta<ast::Expr>],
     ) -> TypeResult<bool> {
-        let t = self.fresh_var();
-        let mut diverges = self.expr(scope, &ctx.with_type(&t), receiver)?;
+        let ty = self.fresh_var();
+        let mut diverges = self.expr(scope, &ctx.with_type(&ty), receiver)?;
 
-        let Some((function, signature)) = self
-            .find_function(&FunctionKind::Method(t.clone()), name.as_ref())
+        let Some((function, signature)) =
+            self.find_function(&FunctionKind::Method(ty.clone()), name.node)
         else {
-            return Err(error::simple(
-                format!("method `{name}` not found on `{t}`",),
-                format!("method not found for `{t}`"),
-                name.id,
+            let id = name.id;
+            let name = self.identifiers.resolve(name.0).unwrap();
+            let ty = type_to_string(self.identifiers, &ty);
+            return Err(self.error_simple(
+                format!("method `{name}` not found on `{ty}`",),
+                format!("method not found for `{ty}`"),
+                id,
             ));
         };
 
@@ -766,7 +807,7 @@ impl TypeChecker<'_> {
 
     fn static_method_call(
         &mut self,
-        scope: &Scope,
+        scope: ScopeRef,
         ctx: &Context,
         ty: &Type,
         name: &Meta<Identifier>,
@@ -774,12 +815,15 @@ impl TypeChecker<'_> {
     ) -> TypeResult<bool> {
         let Some((function, signature)) = self.find_function(
             &FunctionKind::StaticMethod(ty.clone()),
-            name.as_ref(),
+            name.node,
         ) else {
-            return Err(error::simple(
+            let id = name.id;
+            let name = self.identifiers.resolve(name.0).unwrap();
+            let ty = type_to_string(self.identifiers, ty);
+            return Err(self.error_simple(
                 format!("static method `{name}` not found on `{ty}`",),
                 format!("static method not found on `{ty}`"),
-                name.id,
+                id,
             ));
         };
 
@@ -807,7 +851,7 @@ impl TypeChecker<'_> {
 
     fn check_arguments(
         &mut self,
-        scope: &Scope,
+        scope: ScopeRef,
         ctx: &Context,
         call_type: &str,
         name: &Meta<Identifier>,
@@ -815,7 +859,7 @@ impl TypeChecker<'_> {
         args: &[Meta<ast::Expr>],
     ) -> TypeResult<bool> {
         if args.len() != params.len() {
-            return Err(error::number_of_arguments_dont_match(
+            return Err(self.error_number_of_arguments_dont_match(
                 call_type,
                 name,
                 params.len(),
@@ -834,50 +878,51 @@ impl TypeChecker<'_> {
     fn find_function(
         &mut self,
         kind: &FunctionKind,
-        name: &str,
-    ) -> Option<(&Function, Signature)> {
-        self.functions.iter().find_map(|m| {
-            if name != m.name {
-                return None;
+        name: Identifier,
+    ) -> Option<(Function, Signature)> {
+        let funcs = self.functions.clone();
+        for f in funcs {
+            if f.name != name {
+                continue;
             }
-            let signature = self.instantiate_method(m);
-
-            match (&signature.kind, kind) {
-                (FunctionKind::Free, FunctionKind::Free) => {
-                    Some((m, signature))
-                }
+            let signature = self.instantiate_method(&f);
+            let is_match = match (&signature.kind, kind) {
+                (FunctionKind::Free, FunctionKind::Free) => true,
                 (FunctionKind::Method(ty1), FunctionKind::Method(ty2)) => {
-                    self.subtype_of(ty1, ty2).then_some((m, signature))
+                    self.subtype_of(ty1, ty2)
                 }
                 (
                     FunctionKind::StaticMethod(ty1),
                     FunctionKind::StaticMethod(ty2),
-                ) => self.subtype_of(ty1, ty2).then_some((m, signature)),
-                _ => None,
+                ) => self.subtype_of(ty1, ty2),
+                _ => false,
+            };
+            if is_match {
+                return Some((f, signature));
             }
-        })
+        }
+        None
     }
 
     fn record_fields(
         &mut self,
-        scope: &Scope,
+        scope: ScopeRef,
         ctx: &Context,
-        field_types: Vec<(impl AsRef<str>, Type)>,
+        field_types: Vec<(Meta<Identifier>, Type)>,
         record: &ast::Record,
         span: MetaId,
     ) -> TypeResult<bool> {
-        let mut used_fields = HashSet::<&str>::new();
+        let mut used_fields = HashSet::new();
         let mut missing_fields: HashSet<_> =
-            field_types.iter().map(|x| x.0.as_ref()).collect();
+            field_types.iter().map(|x| x.0.node).collect();
         let mut invalid_fields = Vec::new();
         let mut duplicate_fields = Vec::new();
 
         for (ident, _) in &record.fields {
-            if used_fields.contains(ident.as_ref()) {
+            if used_fields.contains(&ident.node) {
                 duplicate_fields.push(ident);
-            } else if missing_fields.contains(ident.as_ref()) {
-                missing_fields.remove(ident.as_ref());
-                used_fields.insert(ident.as_ref());
+            } else if missing_fields.remove(&ident.node) {
+                used_fields.insert(ident.node);
             } else {
                 invalid_fields.push(ident);
             }
@@ -887,7 +932,7 @@ impl TypeChecker<'_> {
             || !duplicate_fields.is_empty()
             || !missing_fields.is_empty()
         {
-            return Err(error::field_mismatch(
+            return Err(self.error_field_mismatch(
                 span,
                 invalid_fields,
                 duplicate_fields,
@@ -899,7 +944,7 @@ impl TypeChecker<'_> {
         for (ident, expr) in &record.fields {
             let expected_type = field_types
                 .iter()
-                .find_map(|(s, t)| (s.as_ref() == ident.0).then_some(t))
+                .find_map(|(s, t)| (s.node == ident.node).then_some(t))
                 .unwrap()
                 .clone();
 

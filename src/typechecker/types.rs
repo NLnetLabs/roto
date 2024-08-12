@@ -1,6 +1,8 @@
+use string_interner::{backend::StringBackend, StringInterner};
+
 use crate::{
     ast::Identifier,
-    parser::meta::Meta,
+    parser::meta::{Meta, MetaId},
     runtime::{Runtime, RuntimeFunction},
 };
 use std::{
@@ -11,24 +13,24 @@ use std::{
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
     Var(usize),
-    ExplicitVar(String),
+    ExplicitVar(Identifier),
     IntVar(usize),
-    RecordVar(usize, Vec<(String, Type)>),
+    RecordVar(usize, Vec<(Meta<Identifier>, Type)>),
     Never,
     Primitive(Primitive),
-    BuiltIn(String, TypeId),
+    BuiltIn(Identifier, TypeId),
     Verdict(Box<Type>, Box<Type>),
     List(Box<Type>),
     Table(Box<Type>),
     OutputStream(Box<Type>),
     Rib(Box<Type>),
-    Record(Vec<(String, Type)>),
-    NamedRecord(String, Vec<(String, Type)>),
-    Enum(String, Vec<(String, Option<Type>)>),
+    Record(Vec<(Meta<Identifier>, Type)>),
+    NamedRecord(Identifier, Vec<(Meta<Identifier>, Type)>),
+    Enum(Identifier, Vec<(Identifier, Option<Type>)>),
     Function(Vec<(Meta<Identifier>, Type)>, Box<Type>),
     Filter(Vec<(Meta<Identifier>, Type)>),
     FilterMap(Vec<(Meta<Identifier>, Type)>),
-    Name(String),
+    Name(Identifier),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -74,48 +76,66 @@ impl Display for Primitive {
     }
 }
 
-impl Display for Type {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let fmt_args = |args: &[(_, Type)]| {
-            args.iter()
-                .map(|(_, t)| t.to_string())
+pub fn type_to_string(
+    identifiers: &StringInterner<StringBackend>,
+    ty: &Type,
+) -> String {
+    let fmt_args = |args: &[(_, Type)]| {
+        args.iter()
+            .map(|(_, t)| type_to_string(identifiers, t))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    match ty {
+        Type::Var(_) => "{{unknown}}".into(),
+        Type::ExplicitVar(s) => identifiers.resolve(s.0).unwrap().into(),
+        Type::IntVar(_) => "{{integer}}".into(),
+        Type::RecordVar(_, fields) | Type::Record(fields) => format!(
+            "{{ {} }}",
+            fields
+                .iter()
+                .map(|(s, t)| {
+                    format!(
+                        "\"{}\": {}",
+                        identifiers.resolve(s.0).unwrap(),
+                        type_to_string(identifiers, t)
+                    )
+                })
                 .collect::<Vec<_>>()
                 .join(", ")
-        };
-        match self {
-            Type::Var(_) => write!(f, "{{unknown}}"),
-            Type::ExplicitVar(s) => write!(f, "{s}"),
-            Type::IntVar(_) => write!(f, "{{integer}}"),
-            Type::RecordVar(_, fields) | Type::Record(fields) => write!(
-                f,
-                "{{ {} }}",
-                fields
-                    .iter()
-                    .map(|(s, t)| { format!("\"{s}\": {t}") })
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            Type::Verdict(a, r) => {
-                write!(f, "Verdict<{a}, {r}>")
-            }
-            Type::Never => write!(f, "!"),
-            Type::Primitive(p) => write!(f, "{p}"),
-            Type::BuiltIn(name, _) => write!(f, "{name}"),
-            Type::List(t) => write!(f, "List<{t}>"),
-            Type::Table(t) => write!(f, "Table<{t}>"),
-            Type::OutputStream(t) => write!(f, "OutputStream<{t}>"),
-            Type::Rib(t) => write!(f, "Rib<{t}>"),
-            Type::NamedRecord(x, _) => write!(f, "{x}"),
-            Type::Enum(x, _) => write!(f, "{x}"),
-            Type::Function(args, ret) => {
-                write!(f, "function({}) -> {}", fmt_args(args), ret)
-            }
-            Type::Filter(args) => write!(f, "filter({})", fmt_args(args)),
-            Type::FilterMap(args) => {
-                write!(f, "filter-map({})", fmt_args(args))
-            }
-            Type::Name(x) => write!(f, "{x}"),
+        ),
+        Type::Verdict(a, r) => {
+            format!(
+                "Verdict<{}, {}>",
+                type_to_string(identifiers, a),
+                type_to_string(identifiers, r)
+            )
         }
+        Type::Never => "!".into(),
+        Type::Primitive(p) => format!("{p}"),
+        Type::BuiltIn(name, _) => identifiers.resolve(name.0).unwrap().into(),
+        Type::List(t) => format!("List<{}>", type_to_string(identifiers, t)),
+        Type::Table(t) => {
+            format!("Table<{}>", type_to_string(identifiers, t))
+        }
+        Type::OutputStream(t) => {
+            format!("OutputStream<{}>", type_to_string(identifiers, t))
+        }
+        Type::Rib(t) => format!("Rib<{}>", type_to_string(identifiers, t)),
+        Type::NamedRecord(x, _) => identifiers.resolve(x.0).unwrap().into(),
+        Type::Enum(x, _) => identifiers.resolve(x.0).unwrap().into(),
+        Type::Function(args, ret) => {
+            format!(
+                "function({}) -> {}",
+                fmt_args(args),
+                type_to_string(identifiers, ret)
+            )
+        }
+        Type::Filter(args) => format!("filter({})", fmt_args(args)),
+        Type::FilterMap(args) => {
+            format!("filter-map({})", fmt_args(args))
+        }
+        Type::Name(x) => identifiers.resolve(x.0).unwrap().into(),
     }
 }
 
@@ -150,7 +170,7 @@ impl Type {
                 fields.iter().map(|(n, t)| (n.clone(), f(t))).collect(),
             ),
             Type::NamedRecord(n, fields) => Type::NamedRecord(
-                n.clone(),
+                *n,
                 fields.iter().map(|(n, t)| (n.clone(), f(t))).collect(),
             ),
             other => other.clone(),
@@ -195,10 +215,10 @@ pub struct Function {
     pub signature: Signature,
 
     /// Function name
-    pub name: String,
+    pub name: Identifier,
 
     /// Type variables of this function
-    pub vars: Vec<&'static str>,
+    pub vars: Vec<Identifier>,
 
     /// The source of this function
     pub definition: FunctionDefinition,
@@ -216,14 +236,14 @@ pub enum FunctionKind {
 impl Function {
     pub fn new<T: Into<Type>>(
         kind: FunctionKind,
-        name: impl Into<String>,
-        vars: &[&'static str],
+        name: Identifier,
+        vars: &[Identifier],
         parameter_types: impl IntoIterator<Item = T>,
         return_type: impl Into<Type>,
         definition: FunctionDefinition,
     ) -> Self {
         Self {
-            name: name.into(),
+            name,
             vars: vars.to_vec(),
             signature: Signature {
                 kind,
@@ -238,22 +258,31 @@ impl Function {
     }
 }
 
-pub fn globals() -> Vec<(String, Type)> {
+pub fn globals(
+    identifiers: &mut StringInterner<StringBackend>,
+) -> Vec<(Identifier, Type)> {
+    let community = Identifier(identifiers.get_or_intern("Community"));
+    let safi = Identifier(identifiers.get_or_intern("Safi"));
+    let afi = Identifier(identifiers.get_or_intern("Afi"));
+
     [
-        ("BLACKHOLE", Type::Name("Community".into())),
-        ("UNICAST", Type::Name("Safi".into())),
-        ("MULTICAST", Type::Name("Safi".into())),
-        ("IPV4", Type::Name("Afi".into())),
-        ("IPV6", Type::Name("Afi".into())),
-        ("VPNV4", Type::Name("Afi".into())),
-        ("VPNV6", Type::Name("Afi".into())),
+        ("BLACKHOLE", Type::Name(community)),
+        ("UNICAST", Type::Name(safi)),
+        ("MULTICAST", Type::Name(safi)),
+        ("IPV4", Type::Name(afi)),
+        ("IPV6", Type::Name(afi)),
+        ("VPNV4", Type::Name(afi)),
+        ("VPNV6", Type::Name(afi)),
     ]
     .into_iter()
-    .map(|(s, t)| (s.into(), t))
+    .map(|(s, t)| (Identifier(identifiers.get_or_intern(s)), t))
     .collect()
 }
 
-pub fn default_types(runtime: &Runtime) -> Vec<(String, Type)> {
+pub fn default_types(
+    identifiers: &mut StringInterner<StringBackend>,
+    runtime: &Runtime,
+) -> Vec<(Identifier, Type)> {
     use Primitive::*;
 
     let primitives = vec![
@@ -273,14 +302,13 @@ pub fn default_types(runtime: &Runtime) -> Vec<(String, Type)> {
     let mut types = Vec::new();
 
     for (n, p) in primitives {
-        types.push((n.into(), Type::Primitive(p)))
+        let name = Identifier(identifiers.get_or_intern(n));
+        types.push((name, Type::Primitive(p)))
     }
 
     for ty in &runtime.types {
-        types.push((
-            ty.name.clone(),
-            Type::BuiltIn(ty.name.clone(), ty.type_id),
-        ))
+        let name = Identifier(identifiers.get_or_intern(&ty.name));
+        types.push((name, Type::BuiltIn(name, ty.type_id)))
     }
 
     enum RecordOrEnum {
@@ -307,9 +335,13 @@ pub fn default_types(runtime: &Runtime) -> Vec<(String, Type)> {
     for c in compound_types {
         match c {
             Record(n, fields) => {
+                let n = Identifier(identifiers.get_or_intern(n));
                 let fields = fields
                     .iter()
                     .map(|(field_name, field_type)| {
+                        let field_name =
+                            Identifier(identifiers.get_or_intern(field_name));
+
                         // Little hack to get list types for now, until that is in the
                         // actual syntax and we can use a real type parser here.
                         let is_list = field_type.starts_with('[')
@@ -321,10 +353,17 @@ pub fn default_types(runtime: &Runtime) -> Vec<(String, Type)> {
                             field_type
                         };
 
+                        let s = Identifier(identifiers.get_or_intern(s));
+
                         let mut ty = types
                             .iter()
-                            .find(|(n, _)| s == n)
-                            .unwrap_or_else(|| panic!("Not found: {}", s))
+                            .find(|(n, _)| s == *n)
+                            .unwrap_or_else(|| {
+                                panic!(
+                                    "Not found: {}",
+                                    identifiers.resolve(s.0).unwrap()
+                                )
+                            })
                             .1
                             .clone();
 
@@ -332,27 +371,38 @@ pub fn default_types(runtime: &Runtime) -> Vec<(String, Type)> {
                             ty = Type::List(Box::new(ty));
                         }
 
-                        (field_name.to_string(), ty)
+                        (
+                            Meta {
+                                id: MetaId(0),
+                                node: field_name,
+                            },
+                            ty,
+                        )
                     })
                     .collect();
-                types.push((n.into(), Type::NamedRecord(n.into(), fields)))
+                types.push((n, Type::NamedRecord(n, fields)))
             }
             Enum(n, variants) => {
+                let n = Identifier(identifiers.get_or_intern(n));
                 let variants = variants
                     .iter()
                     .map(|(variant_name, v)| {
+                        let variant_name = Identifier(
+                            identifiers.get_or_intern(variant_name),
+                        );
                         let v = v.map(|t| {
+                            let t = Identifier(identifiers.get_or_intern(t));
                             types
                                 .iter()
-                                .find(|(n, _)| t == n)
+                                .find(|(n, _)| t == *n)
                                 .unwrap()
                                 .1
                                 .clone()
                         });
-                        (variant_name.to_string(), v)
+                        (variant_name, v)
                     })
                     .collect();
-                types.push((n.into(), Type::Enum(n.into(), variants)))
+                types.push((n, Type::Enum(n, variants)))
             }
         }
     }

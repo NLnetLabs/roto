@@ -5,11 +5,14 @@ use std::{
 };
 
 use crate::{
+    ast::Identifier,
     lower::{
         ir::{self, IntCmp, Operand, Var, VarKind},
+        label::{LabelRef, LabelStore},
         value::IrType,
         IrFunction,
     },
+    typechecker::scope::ScopeRef,
     IrValue,
 };
 use cranelift::{
@@ -30,6 +33,7 @@ use cranelift::{
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{FuncId, Linkage, Module as _};
 use log::info;
+use string_interner::{backend::StringBackend, StringInterner};
 
 #[cfg(test)]
 mod tests;
@@ -56,18 +60,35 @@ impl<Params: RotoParams, Return: RotoType> TypedFunc<Params, Return> {
 struct ModuleBuilder {
     /// The set of public functions and their signatures.
     functions: HashMap<String, (FuncId, ir::Signature)>,
+
     /// External functions
     runtime_functions: HashMap<String, FuncId>,
+
     /// The inner cranelift module
     inner: JITModule,
+
+    /// Map of cranelift variables and their types
+    /// 
+    /// This is necessary because cranelift does not seem to allow us to
+    /// query it.
     variable_map: HashMap<Var, (Variable, Type)>,
+
+    /// Instruction set architecture
     isa: Arc<dyn TargetIsa>,
+
+    /// Identifiers are used for debugging and resolving function names.
+    identifiers: StringInterner<StringBackend>,
+
+    /// To print labels for debugging.
+    #[allow(unused)]
+    label_store: LabelStore,
 }
 
-struct FuncGen<'a, 'c> {
+struct FuncGen<'c> {
     module: &'c mut ModuleBuilder,
     builder: FunctionBuilder<'c>,
-    block_map: HashMap<&'a str, Block>,
+    scope: ScopeRef,
+    block_map: HashMap<LabelRef, Block>,
 }
 
 // We use `with_aligned` to make sure that we notice if anything is
@@ -78,6 +99,8 @@ const MEMFLAGS: MemFlags = MemFlags::new().with_aligned();
 pub fn codegen(
     ir: &[ir::Function],
     runtime_functions: &HashMap<String, IrFunction>,
+    identifiers: StringInterner<StringBackend>,
+    label_store: LabelStore,
 ) -> Module {
     // The ISA is the Instruction Set Architecture. We always compile for
     // the system we run on, so we use `cranelift_native` to get the ISA
@@ -105,6 +128,8 @@ pub fn codegen(
         inner: jit,
         isa,
         variable_map: HashMap::new(),
+        identifiers,
+        label_store,
     };
 
     for (name, func) in runtime_functions {
@@ -133,7 +158,7 @@ pub fn codegen(
     let mut builder_context = FunctionBuilderContext::new();
     for func in ir {
         module.define_function(func, &mut builder_context);
-        info!("\n{}", func);
+        // info!("\n{}", func);
     }
 
     module.finalize()
@@ -159,6 +184,7 @@ impl ModuleBuilder {
             None => Vec::new(),
         };
 
+        let name = self.identifiers.resolve(name.0).unwrap();
         let func_id = self
             .inner
             .declare_function(
@@ -173,7 +199,7 @@ impl ModuleBuilder {
             .unwrap();
 
         self.functions
-            .insert(name.clone(), (func_id, signature.clone()));
+            .insert(name.to_string(), (func_id, signature.clone()));
     }
 
     /// Define a function body
@@ -188,15 +214,18 @@ impl ModuleBuilder {
             name,
             blocks,
             signature,
+            scope,
             ..
         } = func;
+        let name = self.identifiers.resolve(name.0).unwrap();
         let (func_id, _) = self.functions[name].clone();
 
         let mut ctx = self.inner.make_context();
         let mut sig = self.inner.make_signature();
 
         if signature.return_ptr {
-            sig.params.push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
+            sig.params
+                .push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
         }
 
         for (_, ty) in &signature.parameters {
@@ -215,6 +244,7 @@ impl ModuleBuilder {
         let mut func_gen = FuncGen {
             module: self,
             builder,
+            scope: *scope,
             block_map: HashMap::new(),
         };
 
@@ -265,7 +295,7 @@ impl ModuleBuilder {
     }
 }
 
-impl<'a, 'c> FuncGen<'a, 'c> {
+impl<'c> FuncGen<'c> {
     fn finalize(self) {
         self.builder.finalize()
     }
@@ -273,18 +303,18 @@ impl<'a, 'c> FuncGen<'a, 'c> {
     /// Set up the entry block for the function
     fn entry_block(
         &mut self,
-        block: &'a ir::Block,
-        parameters: &'a [(String, IrType)],
+        block: &ir::Block,
+        parameters: &[(Identifier, IrType)],
         return_ptr: bool,
     ) {
-        let entry_block = self.get_block(&block.label);
+        let entry_block = self.get_block(block.label);
         self.builder.switch_to_block(entry_block);
 
         if return_ptr {
             let ty = self.module.cranelift_type(&IrType::Pointer);
             self.variable(
                 &Var {
-                    function: block.label.clone(),
+                    scope: self.scope,
                     kind: VarKind::Return,
                 },
                 ty,
@@ -295,8 +325,8 @@ impl<'a, 'c> FuncGen<'a, 'c> {
             let ty = self.module.cranelift_type(ty);
             let _ = self.variable(
                 &Var {
-                    function: block.label.clone(),
-                    kind: VarKind::Explicit(x.clone()),
+                    scope: self.scope,
+                    kind: VarKind::Explicit(*x),
                 },
                 ty,
             );
@@ -310,7 +340,7 @@ impl<'a, 'c> FuncGen<'a, 'c> {
         if return_ptr {
             self.def(
                 self.module.variable_map[&Var {
-                    function: block.label.clone(),
+                    scope: self.scope,
                     kind: VarKind::Return,
                 }]
                     .0,
@@ -321,8 +351,8 @@ impl<'a, 'c> FuncGen<'a, 'c> {
         for ((x, _), val) in parameters.iter().zip(args) {
             self.def(
                 self.module.variable_map[&Var {
-                    function: block.label.clone(),
-                    kind: VarKind::Explicit(x.clone()),
+                    scope: self.scope,
+                    kind: VarKind::Explicit(*x),
                 }]
                     .0,
                 val,
@@ -331,8 +361,8 @@ impl<'a, 'c> FuncGen<'a, 'c> {
     }
 
     /// Translate an IR block to a Cranelift block
-    fn block(&mut self, block: &'a ir::Block) {
-        let b = self.get_block(&block.label);
+    fn block(&mut self, block: &ir::Block) {
+        let b = self.get_block(block.label);
         self.builder.switch_to_block(b);
         self.builder.seal_block(b);
 
@@ -343,10 +373,10 @@ impl<'a, 'c> FuncGen<'a, 'c> {
 
     /// Translate an IR instruction to cranelift instructions which are
     /// added to the current block
-    fn instruction(&mut self, instruction: &'a ir::Instruction) {
+    fn instruction(&mut self, instruction: &ir::Instruction) {
         match instruction {
             ir::Instruction::Jump(label) => {
-                let block = self.get_block(label);
+                let block = self.get_block(*label);
                 self.ins().jump(block, &[]);
             }
             ir::Instruction::Switch {
@@ -357,11 +387,11 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 let mut switch = Switch::new();
 
                 for (idx, label) in branches {
-                    let block = self.get_block(label);
+                    let block = self.get_block(*label);
                     switch.set_entry(*idx as u128, block);
                 }
 
-                let otherwise = self.get_block(default);
+                let otherwise = self.get_block(*default);
 
                 let (val, _) = self.operand(examinee);
                 switch.emit(&mut self.builder, val, otherwise);
@@ -373,6 +403,7 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 self.def(var, val)
             }
             ir::Instruction::Call { to, func, args } => {
+                let func = self.module.identifiers.resolve(func.0).unwrap();
                 let (func_id, _) = self.module.functions[func];
                 let func_ref = self
                     .module
@@ -569,7 +600,7 @@ impl<'a, 'c> FuncGen<'a, 'c> {
     }
 
     /// Get the block for the given label or create it if it doesn't exist
-    fn get_block(&mut self, label: &'a str) -> Block {
+    fn get_block(&mut self, label: LabelRef) -> Block {
         *self
             .block_map
             .entry(label)
@@ -586,15 +617,15 @@ impl<'a, 'c> FuncGen<'a, 'c> {
         self.builder.def_var(var, val);
     }
 
-    fn operand(&mut self, val: &'a Operand) -> (Value, Type) {
+    fn operand(&mut self, val: &Operand) -> (Value, Type) {
         let pointer_ty = self.module.isa.pointer_type();
         match val {
             ir::Operand::Place(p) => {
                 let (var, ty) = self.module.variable_map.get(p).map_or_else(
                     || {
                         panic!(
-                            "did not find {p} in {:#?}",
-                            self.module.variable_map
+                            "did not find {:?} in {:#?}",
+                            p, self.module.variable_map,
                         )
                     },
                     |x| x,
@@ -759,7 +790,7 @@ impl RotoParams for () {
 
     unsafe fn invoke<R>(func_ptr: *const u8, (): Self) -> R {
         let func_ptr =
-            unsafe { std::mem::transmute::<_, fn() -> R>(func_ptr) };
+            unsafe { std::mem::transmute::<*const u8, fn() -> R>(func_ptr) };
         func_ptr()
     }
 }
@@ -776,8 +807,9 @@ where
     }
 
     unsafe fn invoke<R>(func_ptr: *const u8, (a1,): Self) -> R {
-        let func_ptr =
-            unsafe { std::mem::transmute::<_, fn(A1) -> R>(func_ptr) };
+        let func_ptr = unsafe {
+            std::mem::transmute::<*const u8, fn(A1) -> R>(func_ptr)
+        };
         func_ptr(a1)
     }
 }
@@ -795,8 +827,9 @@ where
     }
 
     unsafe fn invoke<R>(func_ptr: *const u8, (a1, a2): Self) -> R {
-        let func_ptr =
-            unsafe { std::mem::transmute::<_, fn(A1, A2) -> R>(func_ptr) };
+        let func_ptr = unsafe {
+            std::mem::transmute::<*const u8, fn(A1, A2) -> R>(func_ptr)
+        };
         func_ptr(a1, a2)
     }
 }

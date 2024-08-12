@@ -1,3 +1,5 @@
+use string_interner::StringInterner;
+
 use crate::{ast::Expr, parser::Parser};
 
 use super::{
@@ -7,7 +9,8 @@ use super::{
 
 fn parse_expr(s: &str) -> ParseResult<Meta<Expr>> {
     let mut spans = Spans::default();
-    Parser::run_parser(Parser::expr, 0, &mut spans, s)
+    let mut identifiers = StringInterner::default();
+    Parser::run_parser(Parser::expr, 0, &mut identifiers, &mut spans, s)
 }
 
 #[test]

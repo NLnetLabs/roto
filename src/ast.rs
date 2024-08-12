@@ -1,3 +1,5 @@
+use string_interner::symbol::SymbolU32;
+
 use crate::parser::meta::Meta;
 
 #[derive(Clone, Debug)]
@@ -115,10 +117,18 @@ pub struct Match {
 
 #[derive(Clone, Debug)]
 pub struct MatchArm {
-    pub variant_id: Meta<Identifier>,
-    pub data_field: Option<Meta<Identifier>>,
+    pub pattern: Meta<Pattern>,
     pub guard: Option<Meta<Expr>>,
     pub body: Meta<Block>,
+}
+
+#[derive(Clone, Debug)]
+pub enum Pattern {
+    Underscore,
+    EnumVariant {
+        variant: Meta<Identifier>,
+        data_field: Option<Meta<Identifier>>,
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -158,34 +168,8 @@ pub struct OutputStream {
 ///
 /// It is a word composed of a leading alphabetic Unicode character, followed
 /// by alphanumeric Unicode characters or underscore or hyphen.
-#[derive(Clone, Debug, Ord, PartialOrd, Hash)]
-pub struct Identifier(pub String);
-
-impl AsRef<str> for Identifier {
-    fn as_ref(&self) -> &str {
-        self.0.as_ref()
-    }
-}
-
-impl std::borrow::Borrow<str> for Identifier {
-    fn borrow(&self) -> &str {
-        self.0.as_ref()
-    }
-}
-
-impl<T: AsRef<str>> PartialEq<T> for Identifier {
-    fn eq(&self, other: &T) -> bool {
-        self.0 == other.as_ref()
-    }
-}
-
-impl Eq for Identifier {}
-
-impl std::fmt::Display for Identifier {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
-}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Identifier(pub SymbolU32);
 
 #[derive(Clone, Debug)]
 pub struct RecordType {
@@ -194,6 +178,7 @@ pub struct RecordType {
 
 #[derive(Clone, Debug)]
 pub enum Literal {
+    #[allow(dead_code)]
     String(String),
     Asn(u32),
     IpAddress(IpAddress),

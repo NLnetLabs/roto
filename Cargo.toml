@@ -23,6 +23,7 @@ env_logger = "0.10"
 log = "0.4"
 logos = "0.14.0"
 inetnum = "0.1.0"
+string-interner = "0.17.0"
 
 [dev-dependencies]
 bytes = "1"
