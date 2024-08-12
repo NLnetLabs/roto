@@ -1,5 +1,10 @@
+//! Labels for basic blocks in the IR
+
 use crate::ast::Identifier;
 
+/// A label for a basic block
+/// 
+/// Should not be constructed directly, but using a [`LabelStore`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Label {
     pub identifier: Identifier,
@@ -8,15 +13,18 @@ pub struct Label {
     pub counter: usize,
 }
 
+/// A reference to a label in the [`LabelStore`]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct LabelRef(usize);
 
+/// Holds all the information of labels and gives out references
 #[derive(Default)]
 pub struct LabelStore {
     labels: Vec<Label>,
 }
 
 impl LabelStore {
+    /// Create a new label with an identifier and without any parent label
     pub fn new_label(&mut self, identifier: Identifier) -> LabelRef {
         self.labels.push(Label {
             identifier,
@@ -27,6 +35,7 @@ impl LabelStore {
         LabelRef(self.labels.len() - 1)
     }
 
+    /// Create a child label of a given label
     pub fn wrap(&mut self, parent: LabelRef, identifier: Identifier) -> LabelRef {
         self.labels.push(Label {
             identifier,
@@ -37,6 +46,7 @@ impl LabelStore {
         LabelRef(self.labels.len() - 1)
     }
 
+    /// Create an internal child label of a given label
     pub fn wrap_internal(
         &mut self,
         parent: LabelRef,

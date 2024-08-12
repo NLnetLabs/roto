@@ -42,6 +42,7 @@ mod tests;
 pub struct Module {
     /// The set of public functions and their signatures.
     functions: HashMap<String, (FuncId, ir::Signature)>,
+
     /// The inner cranelift module
     inner: JITModule,
 }
@@ -68,7 +69,7 @@ struct ModuleBuilder {
     inner: JITModule,
 
     /// Map of cranelift variables and their types
-    /// 
+    ///
     /// This is necessary because cranelift does not seem to allow us to
     /// query it.
     variable_map: HashMap<Var, (Variable, Type)>,
@@ -86,8 +87,14 @@ struct ModuleBuilder {
 
 struct FuncGen<'c> {
     module: &'c mut ModuleBuilder,
+
+    /// The cranelift function builder
     builder: FunctionBuilder<'c>,
+
+    /// Scope of the function
     scope: ScopeRef,
+
+    /// Blocks of the function
     block_map: HashMap<LabelRef, Block>,
 }
 

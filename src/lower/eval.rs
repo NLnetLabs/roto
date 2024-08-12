@@ -1,4 +1,4 @@
-//! Evaluate HIR programs
+//! Evaluate IR programs
 //!
 //! This is mostly used for testing purposes, since this evaluation is
 //! fairly slow. This is because all variables at this point are identified
@@ -50,16 +50,28 @@ use string_interner::{backend::StringBackend, StringInterner};
 /// But it provides a good mechanism for testing the compiler.
 #[derive(Debug)]
 pub struct Memory {
+    /// Counter for the id's of stack frames
     id_counter: usize,
+
+    /// The current stack
     stack: Vec<StackFrame>,
+
+    /// All pointers that have been given out
     pointers: Vec<Pointer>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Pointer {
+    /// Where in the stack the pointee lives
     stack_index: usize,
+
+    /// Id of the stack frame where the pointee lives
     stack_id: usize,
+
+    /// Alloctation within the stack frame this pointer was created with
     allocation_index: usize,
+
+    /// Offset within the allocation this pointer refers to
     allocation_offset: usize,
 }
 

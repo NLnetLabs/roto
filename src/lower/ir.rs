@@ -1,14 +1,13 @@
 //! High-level intermediate representation (HIR)
 //!
-//! The high-level intermediate IR is the first IR after type checking.
-//! Its purpose is to be simple yet human-readable. Evaluating it does not
-//! need to be particularly fast yet, but the evaluation is safe in the
-//! sense that it in the case anything unexpected happens (e.g the wrong
-//! type being given) it will panic instead of performing undefined
-//! behaviour. By evaluating the HIR, we can run tests to test this
+//! The IR is the representation between the AST and cranelift. Evaluating
+//! it does not need to be particularly fast yet, but the evaluation is safe
+//! in the sense that it in the case anything unexpected happens (e.g the
+//! wrong type being given) it will panic instead of performing undefined
+//! behavior. By evaluating the HIR, we can run tests to test this
 //! compilation step.
 //!
-//! The HIR has the following characteristics:
+//! The IR has the following characteristics:
 //!
 //!  - Human-readable names for all variables and fields.
 //!  - The names of all variables are global.
