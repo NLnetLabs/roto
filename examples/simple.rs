@@ -11,10 +11,10 @@ extern "C" fn get_y(bla: *const Bla) -> u8 {
 }
 
 fn main() -> Result<(), roto::RotoReport> {
-    let mut runtime = Runtime::default();
+    let mut runtime = Runtime::basic().unwrap();
 
-    runtime.register_type::<Bla>();
-    runtime.register_method::<Bla, _, _>("x", get_y as extern "C" fn(_) -> _);
+    runtime.register_type::<Bla>().unwrap();
+    runtime.register_method::<Bla, _, _>("x", get_y as extern "C" fn(_) -> _).unwrap();
 
     let compiled = read_files(["examples/simple.roto"])
         .and_then(|x| x.parse())

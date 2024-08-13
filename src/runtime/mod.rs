@@ -27,13 +27,12 @@
 //! We might need polymorphism over the number of arguments.
 //! The IR needs typed variables to do this correctly.
 pub mod func;
+mod ty;
 
-use std::{
-    any::{Any, TypeId},
-    mem,
-};
+use std::any::TypeId;
 
-use func::{Func, FunctionDescription, Param};
+use func::{Func, FunctionDescription};
+use ty::{Ty, TypeDescription, TypeRegistry};
 
 /// Provides the types and functions that Roto can access via FFI
 ///
@@ -42,8 +41,9 @@ use func::{Func, FunctionDescription, Param};
 /// of these types in different applications. The type checker will yield an
 /// error if a literal is provided for an undeclared type.
 pub struct Runtime {
-    pub types: Vec<RuntimeType>,
+    pub runtime_types: Vec<RuntimeType>,
     pub functions: Vec<RuntimeFunction>,
+    pub type_registry: TypeRegistry,
 }
 
 #[derive(Debug)]
@@ -51,23 +51,10 @@ pub struct RuntimeType {
     /// The name the type can be referenced by from Roto
     pub name: String,
 
-    /// The name of the type in Rust, mostly for diagnostic purposes
-    pub rust_name: &'static str,
-
-    /// The memory alignment of the type
-    pub alignment: usize,
-
-    /// The size of the type
-    pub size: usize,
-
-    /// The `TypeId` corresponding to this type
+    /// [`TypeId`] of the registered type
+    ///
+    /// This can be used to index into the [`TypeRegistry`]
     pub type_id: TypeId,
-
-    /// The `TypeId` of a `*const` to this type
-    pub const_ptr_id: TypeId,
-
-    /// The `TypeId` of a `*mut` to this type
-    pub mut_ptr_id: TypeId,
 
     /// Whether this type is `Copy`
     pub is_copy_type: bool,
@@ -101,7 +88,7 @@ impl Runtime {
     ///
     /// If that doesn't work for the type you want, use
     /// [`Runtime::register_type_with_name] instead.
-    pub fn register_type<T: Any>(&mut self) {
+    pub fn register_type<T: 'static>(&mut self) -> Result<(), String> {
         let name = Self::extract_name::<T>();
         self.register_type_with_name::<T>(name)
     }
@@ -109,15 +96,15 @@ impl Runtime {
     /// Register a `Copy` type with a default name
     ///
     /// See [`Runtime::register_type`]
-    pub fn register_copy_type<T: Any + Copy>(&mut self) {
+    pub fn register_copy_type<T: Copy + 'static>(&mut self) -> Result<(), String> {
         let name = Self::extract_name::<T>();
         self.register_copy_type_with_name::<T>(name)
     }
 
-    pub fn register_copy_type_with_name<T: Any + Copy>(
+    pub fn register_copy_type_with_name<T: Copy + 'static>(
         &mut self,
         name: &str,
-    ) {
+    ) -> Result<(), String> {
         self.register_type_with_name_internal::<T>(name, true)
     }
 
@@ -125,11 +112,14 @@ impl Runtime {
     ///
     /// This makes the type available for use in Roto. However, Roto will
     /// only store pointers to this type.
-    pub fn register_type_with_name<T: Any>(&mut self, name: &str) {
+    pub fn register_type_with_name<T: 'static>(
+        &mut self,
+        name: &str,
+    ) -> Result<(), String> {
         self.register_type_with_name_internal::<T>(name, false)
     }
 
-    fn extract_name<T: Any>() -> &'static str {
+    fn extract_name<T: 'static>() -> &'static str {
         let mut name = std::any::type_name::<T>();
         if let Some((first, _)) = name.split_once('<') {
             name = first;
@@ -143,87 +133,105 @@ impl Runtime {
     /// Register a type for use in Roto specifying whether the type is `Copy`
     ///
     /// The `Copy`-ness is not checked. Which is why this
-    fn register_type_with_name_internal<T: Any>(
+    fn register_type_with_name_internal<T: 'static>(
         &mut self,
         name: &str,
         is_copy_type: bool,
-    ) {
-        if let Some(ty) = self.types.iter().find(|ty| ty.name == name) {
-            panic!(
+    ) -> Result<(), String> {
+        if let Some(ty) = self.runtime_types.iter().find(|ty| ty.name == name)
+        {
+            let name = self.type_registry.get(ty.type_id).unwrap().rust_name;
+            return Err(format!(
                 "Type with name {name} already registered.\n\
                 Previously registered type: {}\n\
                 Newly registered type: {}",
-                ty.rust_name,
+                name,
                 std::any::type_name::<T>(),
-            )
+            ));
         }
 
-        if let Some(ty) =
-            self.types.iter().find(|ty| ty.type_id == TypeId::of::<T>())
+        if let Some(ty) = self
+            .runtime_types
+            .iter()
+            .find(|ty| ty.type_id == TypeId::of::<T>())
         {
-            panic!(
+            return Err(format!(
                 "Type {} is already registered under a different name: {}`",
                 std::any::type_name::<T>(),
                 ty.name,
-            )
+            ));
         }
 
         // We do not allow registering reference types and such, at least
         // for now.
         assert!(!name.starts_with(['&', '*']));
 
-        self.types.push(RuntimeType {
+        self.type_registry.store::<T>(ty::TypeDescription::Leaf);
+        self.runtime_types.push(RuntimeType {
             name: name.into(),
-            rust_name: std::any::type_name::<T>(),
-            size: mem::size_of::<T>(),
-            alignment: mem::align_of::<T>(),
             type_id: TypeId::of::<T>(),
-            const_ptr_id: TypeId::of::<*const T>(),
-            mut_ptr_id: TypeId::of::<*mut T>(),
             is_copy_type,
-        })
+        });
+        Ok(())
     }
 
     pub fn register_function<A, R>(
         &mut self,
         name: impl Into<String>,
         f: impl Func<A, R>,
-    ) {
-        let description = f.to_function_description(self).unwrap();
+    ) -> Result<(), String> {
+        let description = f.to_function_description(self)?;
         self.functions.push(RuntimeFunction {
             name: name.into(),
             description,
             kind: FunctionKind::Free,
-        })
+        });
+        Ok(())
     }
 
-    pub fn register_method<T: Any, A, R>(
+    pub fn register_method<T: 'static, A, R>(
         &mut self,
         name: impl Into<String>,
         f: impl Func<A, R>,
-    ) {
+    ) -> Result<(), String> {
         let description = f.to_function_description(self).unwrap();
 
         let Some(first) = description.parameter_types.first() else {
             panic!()
         };
 
-        let type_id = match first {
-            Param::Val(id) | Param::ConstPtr(id) | Param::MutPtr(id) => *id,
+        // `to_function_description` already checks the validity of the types
+        // so unwrap is ok.
+        let ty = self.type_registry.get(*first).unwrap();
+
+        let type_id = match ty.description {
+            TypeDescription::Leaf => ty.type_id,
+            TypeDescription::ConstPtr(id) | TypeDescription::MutPtr(id) => id,
+            _ => {
+                return Err(format!(
+                    "Cannot register a method on {}",
+                    ty.rust_name
+                ))
+            }
         };
 
         if type_id != std::any::TypeId::of::<T>() {
-            panic!("Registering a method on a type that doesn't correspond.")
+            return Err(
+                "Registering a method on a type that doesn't correspond."
+                    .to_string(),
+            );
         }
 
         self.functions.push(RuntimeFunction {
             name: name.into(),
             description,
             kind: FunctionKind::Method(std::any::TypeId::of::<T>()),
-        })
+        });
+
+        Ok(())
     }
 
-    pub fn register_static_method<T: Any, A, R>(
+    pub fn register_static_method<T: 'static, A, R>(
         &mut self,
         name: impl Into<String>,
         f: impl Func<A, R>,
@@ -236,17 +244,20 @@ impl Runtime {
         })
     }
 
-    pub fn get_type(&self, id: TypeId) -> &RuntimeType {
-        let ty = self.types.iter().find(|ty| ty.type_id == id).unwrap();
+    pub fn get_runtime_type(&self, id: TypeId) -> &RuntimeType {
+        let ty = self.type_registry.get(id).unwrap();
+        let id = match ty.description {
+            TypeDescription::Leaf => id,
+            TypeDescription::ConstPtr(id) => id,
+            TypeDescription::MutPtr(id) => id,
+            _ => panic!(),
+        };
+        let ty = self
+            .runtime_types
+            .iter()
+            .find(|ty| ty.type_id == id)
+            .unwrap();
         ty
-    }
-
-    pub fn get_param_type(&self, p: &Param) -> &RuntimeType {
-        match p {
-            Param::Val(id) | Param::ConstPtr(id) | Param::MutPtr(id) => {
-                self.get_type(*id)
-            }
-        }
     }
 }
 
@@ -254,45 +265,32 @@ impl Runtime {
     /// A Runtime that is as empty as possible.
     ///
     /// This contains only type information for Roto primitives.
-    fn empty() -> Self {
+    pub fn basic() -> Result<Self, String> {
         let mut rt = Runtime {
-            types: Default::default(),
+            runtime_types: Default::default(),
             functions: Default::default(),
+            type_registry: Default::default(),
         };
 
-        rt.register_type_with_name::<()>("Unit");
-        rt.register_type::<bool>();
-        rt.register_type::<u8>();
-        rt.register_type::<u16>();
-        rt.register_type::<u32>();
-        rt.register_type::<u64>();
-        rt.register_type::<i8>();
-        rt.register_type::<i16>();
-        rt.register_type::<i32>();
-        rt.register_type::<i64>();
+        rt.register_type_with_name::<()>("Unit")?;
+        rt.register_type::<bool>()?;
+        rt.register_type::<u8>()?;
+        rt.register_type::<u16>()?;
+        rt.register_type::<u32>()?;
+        rt.register_type::<u64>()?;
+        rt.register_type::<i8>()?;
+        rt.register_type::<i16>()?;
+        rt.register_type::<i32>()?;
+        rt.register_type::<i64>()?;
 
-        rt
+        Ok(rt)
     }
 
-    fn find_type(&self, id: TypeId) -> Option<Param> {
-        for ty in &self.types {
-            if ty.type_id == id {
-                return Some(Param::Val(ty.type_id));
-            }
-            if ty.const_ptr_id == id {
-                return Some(Param::ConstPtr(ty.type_id));
-            }
-            if ty.mut_ptr_id == id {
-                return Some(Param::MutPtr(ty.type_id));
-            }
+    fn find_type(&self, id: TypeId, name: &str) -> Result<&Ty, String> {
+        match self.type_registry.get(id) {
+            Some(t) => Ok(t),
+            None => Err(format!("Type `{name}` has not been registered and cannot be inspected by Roto")),
         }
-        None
-    }
-}
-
-impl Default for Runtime {
-    fn default() -> Self {
-        Self::empty()
     }
 }
 
@@ -313,26 +311,26 @@ pub mod tests {
         },
     };
 
-    pub fn routecore_runtime() -> Runtime {
-        let mut rt = Runtime::default();
+    pub fn routecore_runtime() -> Result<Runtime, String> {
+        let mut rt = Runtime::basic()?;
 
-        rt.register_type::<IpAddr>();
-        rt.register_type::<OriginType>();
-        rt.register_type::<NextHop>();
-        rt.register_type::<MultiExitDisc>();
-        rt.register_type::<LocalPref>();
-        rt.register_type::<Aggregator>();
-        rt.register_type::<AtomicAggregate>();
-        rt.register_type::<Community>();
-        rt.register_type::<Prefix>();
-        rt.register_type::<HopPath>();
-        rt.register_type::<AsPath<Vec<u8>>>();
+        rt.register_type::<IpAddr>()?;
+        rt.register_type::<OriginType>()?;
+        rt.register_type::<NextHop>()?;
+        rt.register_type::<MultiExitDisc>()?;
+        rt.register_type::<LocalPref>()?;
+        rt.register_type::<Aggregator>()?;
+        rt.register_type::<AtomicAggregate>()?;
+        rt.register_type::<Community>()?;
+        rt.register_type::<Prefix>()?;
+        rt.register_type::<HopPath>()?;
+        rt.register_type::<AsPath<Vec<u8>>>()?;
 
         extern "C" fn pow(x: u32, y: u32) -> u32 {
             x.pow(y)
         }
 
-        rt.register_function("pow", pow as extern "C" fn(_, _) -> _);
+        rt.register_function("pow", pow as extern "C" fn(_, _) -> _)?;
 
         extern "C" fn is_even(x: u32) -> bool {
             x % 2 == 0
@@ -341,7 +339,7 @@ pub mod tests {
         rt.register_method::<u32, _, _>(
             "is_even",
             is_even as extern "C" fn(_) -> _,
-        );
+        )?;
 
         extern "C" fn is_ipv4(ip: *const IpAddr) -> bool {
             let ip = unsafe { &*ip };
@@ -351,7 +349,7 @@ pub mod tests {
         rt.register_method::<IpAddr, _, _>(
             "is_ipv4",
             is_ipv4 as extern "C" fn(_) -> _,
-        );
+        )?;
 
         extern "C" fn is_ipv6(ip: *const IpAddr) -> bool {
             let ip = unsafe { &*ip };
@@ -361,7 +359,7 @@ pub mod tests {
         rt.register_method::<IpAddr, _, _>(
             "is_ipv6",
             is_ipv6 as extern "C" fn(_) -> _,
-        );
+        )?;
 
         extern "C" fn to_canonical(ip: *const IpAddr, out: *mut IpAddr) {
             let ip = unsafe { &*ip };
@@ -374,16 +372,17 @@ pub mod tests {
         rt.register_method::<IpAddr, _, _>(
             "to_canonical",
             to_canonical as extern "C" fn(_, _) -> _,
-        );
+        )?;
 
-        rt
+        Ok(rt)
     }
 
     #[test]
     fn default_runtime() {
-        let rt = routecore_runtime();
+        let rt = routecore_runtime().unwrap();
 
-        let names: Vec<_> = rt.types.iter().map(|ty| &ty.name).collect();
+        let names: Vec<_> =
+            rt.runtime_types.iter().map(|ty| &ty.name).collect();
         assert_eq!(
             names,
             &[

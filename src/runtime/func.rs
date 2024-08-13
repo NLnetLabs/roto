@@ -2,17 +2,12 @@ use std::{any::TypeId, rc::Rc};
 
 use crate::{lower::value::ReturnValue, IrValue, Runtime};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Param {
-    Val(TypeId),
-    ConstPtr(TypeId),
-    MutPtr(TypeId),
-}
+use super::ty::{Reflect, TypeRegistry};
 
 #[derive(Clone)]
 pub struct FunctionDescription {
-    pub parameter_types: Vec<Param>,
-    pub return_type: Param,
+    pub parameter_types: Vec<TypeId>,
+    pub return_type: TypeId,
     pub pointer: *const u8,
     pub wrapped: Rc<dyn Fn(Vec<IrValue>) -> Option<IrValue>>,
 }
@@ -39,25 +34,21 @@ impl std::fmt::Debug for FunctionDescription {
 }
 
 pub trait Func<A, R>: Sized {
-    fn parameter_types() -> Vec<(TypeId, &'static str)>;
-    fn return_type() -> (TypeId, &'static str);
+    fn parameter_types(reg: &mut TypeRegistry) -> Vec<TypeId>;
+    fn return_type(reg: &mut TypeRegistry) -> TypeId;
     fn ptr(&self) -> *const u8;
     fn wrapped(self) -> Rc<dyn Fn(Vec<IrValue>) -> Option<IrValue>>;
 
     fn to_function_description(
         self,
-        rt: &Runtime,
-    ) -> Option<FunctionDescription> {
-        let parameter_types = Self::parameter_types()
-            .iter()
-            .map(|ty| rt.find_type(ty.0))
-            .collect::<Option<Vec<_>>>()?;
-
-        let return_type = rt.find_type(Self::return_type().0)?;
+        rt: &mut Runtime,
+    ) -> Result<FunctionDescription, String> {
+        let parameter_types = Self::parameter_types(&mut rt.type_registry);
+        let return_type = Self::return_type(&mut rt.type_registry);
         let pointer = self.ptr();
         let wrapped = self.wrapped();
 
-        Some(FunctionDescription {
+        Ok(FunctionDescription {
             parameter_types,
             return_type,
             pointer,
@@ -69,24 +60,19 @@ pub trait Func<A, R>: Sized {
 macro_rules! func_impl {
     ($($arg:ident),*) => {
         impl<$($arg,)* Ret> Func<($($arg,)*), Ret> for extern "C" fn($($arg),*) -> Ret
-        where 
+        where
             $(
-                $arg: for<'a> TryFrom<&'a IrValue> + 'static,
+                $arg: Reflect + for<'a> TryFrom<&'a IrValue> + 'static,
             )*
-            Ret: Into<ReturnValue> + 'static,
+            Ret: Reflect + Into<ReturnValue> + 'static,
         {
-            fn parameter_types() -> Vec<(TypeId, &'static str)> {
-                vec![$((
-                    std::any::TypeId::of::<$arg>(),
-                    std::any::type_name::<$arg>(),
-                )),*]
+            #[allow(unused_variables)]
+            fn parameter_types(reg: &mut TypeRegistry) -> Vec<TypeId> {
+                vec![$(reg.resolve::<$arg>().type_id),*]
             }
 
-            fn return_type() -> (TypeId, &'static str) {
-                (
-                    std::any::TypeId::of::<Ret>(),
-                    std::any::type_name::<Ret>(),
-                )
+            fn return_type(reg: &mut TypeRegistry) -> TypeId {
+                reg.resolve::<Ret>().type_id
             }
 
             fn ptr(&self) -> *const u8 {

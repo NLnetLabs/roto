@@ -1,6 +1,5 @@
-filter foo() {
+filter foo(msg: u32) {
 	define {
-		rx msg: u32;
 		b = msg.foo(); // should error here
 	}
 

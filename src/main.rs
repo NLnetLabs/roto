@@ -24,9 +24,10 @@ fn main() {
     };
 
     let mut mem = Memory::new();
-    let _result = roto::run(Runtime::default(), settings.files, &mut mem, rx);
-    // match result {
-    //     Ok(r) => println!("{r}"),
-    //     Err(e) => eprintln!("{e}"),
-    // }
+    let result =
+        roto::run(Runtime::basic().unwrap(), settings.files, &mut mem, rx);
+    match result {
+        Ok(_) => println!("Ok!"),
+        Err(e) => eprintln!("{e}"),
+    }
 }

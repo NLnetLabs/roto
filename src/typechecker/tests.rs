@@ -14,7 +14,7 @@ fn typecheck(loaded: Files) -> Result<(), RotoReport> {
         }
     };
 
-    let runtime = routecore_runtime();
+    let runtime = routecore_runtime().unwrap();
     let pointer_bytes = usize::BITS / 8;
 
     // Unwrap on parse because a parse error in this file is never correct.

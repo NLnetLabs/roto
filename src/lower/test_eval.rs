@@ -10,7 +10,7 @@ fn compile(s: Files) -> Lowered {
         .format_target(false)
         .try_init();
 
-    let runtime = routecore_runtime();
+    let runtime = routecore_runtime().unwrap();
     let pointer_bytes = usize::BITS / 8;
 
     s.parse()

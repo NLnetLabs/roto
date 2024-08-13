@@ -790,53 +790,36 @@ pub trait RotoParams {
     unsafe fn invoke<R>(func_ptr: *const u8, params: Self) -> R;
 }
 
-impl RotoParams for () {
-    fn check(ty: &[IrType]) -> bool {
-        ty.is_empty()
-    }
+macro_rules! params {
+    ($($t:ident),*) => {
+        #[allow(non_snake_case)]
+        impl<$($t),*> RotoParams for ($($t,)*)
+        where
+            $($t: RotoType,)*
+        {
+            fn check(ty: &[IrType]) -> bool {
+                let &[$($t),*] = ty else {
+                    return false;
+                };
+                // Little hack to return a bool even with no parameters
+                true $(&& $t::check(Some($t)))*
+            }
 
-    unsafe fn invoke<R>(func_ptr: *const u8, (): Self) -> R {
-        let func_ptr =
-            unsafe { std::mem::transmute::<*const u8, fn() -> R>(func_ptr) };
-        func_ptr()
-    }
+            unsafe fn invoke<R>(func_ptr: *const u8, ($($t,)*): Self) -> R {
+                let func_ptr = unsafe {
+                    std::mem::transmute::<*const u8, fn($($t),*) -> R>(func_ptr)
+                };
+                func_ptr($($t),*)
+            }
+        }
+    };
 }
 
-impl<A1> RotoParams for (A1,)
-where
-    A1: RotoType,
-{
-    fn check(ty: &[IrType]) -> bool {
-        let &[ty] = ty else {
-            return false;
-        };
-        A1::check(Some(ty))
-    }
-
-    unsafe fn invoke<R>(func_ptr: *const u8, (a1,): Self) -> R {
-        let func_ptr = unsafe {
-            std::mem::transmute::<*const u8, fn(A1) -> R>(func_ptr)
-        };
-        func_ptr(a1)
-    }
-}
-
-impl<A1, A2> RotoParams for (A1, A2)
-where
-    A1: RotoType,
-    A2: RotoType,
-{
-    fn check(ty: &[IrType]) -> bool {
-        let &[ty1, ty2] = ty else {
-            return false;
-        };
-        A1::check(Some(ty1)) && A2::check(Some(ty2))
-    }
-
-    unsafe fn invoke<R>(func_ptr: *const u8, (a1, a2): Self) -> R {
-        let func_ptr = unsafe {
-            std::mem::transmute::<*const u8, fn(A1, A2) -> R>(func_ptr)
-        };
-        func_ptr(a1, a2)
-    }
-}
+params!();
+params!(A1);
+params!(A1,A2);
+params!(A1,A2,A3);
+params!(A1,A2,A3,A4);
+params!(A1,A2,A3,A4,A5);
+params!(A1,A2,A3,A4,A5,A6);
+params!(A1,A2,A3,A4,A5,A6,A7);

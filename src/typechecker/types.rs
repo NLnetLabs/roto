@@ -306,7 +306,7 @@ pub fn default_types(
         types.push((name, Type::Primitive(p)))
     }
 
-    for ty in &runtime.types {
+    for ty in &runtime.runtime_types {
         let name = Identifier(identifiers.get_or_intern(&ty.name));
         types.push((name, Type::BuiltIn(name, ty.type_id)))
     }

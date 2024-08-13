@@ -7,7 +7,7 @@ use crate::{
 fn compile(p: &'static str) -> Compiled {
     let _ = env_logger::try_init();
 
-    let runtime = routecore_runtime();
+    let runtime = routecore_runtime().unwrap();
     let pointer_bytes = usize::BITS / 8;
 
     let res = test_file(file!(), p, line!() as usize)
