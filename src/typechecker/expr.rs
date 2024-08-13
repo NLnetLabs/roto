@@ -770,9 +770,10 @@ impl TypeChecker<'_> {
         let Some((function, signature)) =
             self.find_function(&FunctionKind::Method(ty.clone()), name.node)
         else {
+            let ty = self.resolve_type(&ty);
+            let ty = type_to_string(self.identifiers, &ty);
             let id = name.id;
             let name = self.identifiers.resolve(name.0).unwrap();
-            let ty = type_to_string(self.identifiers, &ty);
             return Err(self.error_simple(
                 format!("method `{name}` not found on `{ty}`",),
                 format!("method not found for `{ty}`"),
@@ -817,9 +818,10 @@ impl TypeChecker<'_> {
             &FunctionKind::StaticMethod(ty.clone()),
             name.node,
         ) else {
+            let ty = self.resolve_type(ty);
+            let ty = type_to_string(self.identifiers, &ty);
             let id = name.id;
             let name = self.identifiers.resolve(name.0).unwrap();
-            let ty = type_to_string(self.identifiers, ty);
             return Err(self.error_simple(
                 format!("static method `{name}` not found on `{ty}`",),
                 format!("static method not found on `{ty}`"),
