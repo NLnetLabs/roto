@@ -47,12 +47,12 @@ pub struct Module {
     inner: JITModule,
 }
 
-pub struct TypedFunc<Params, Return> {
+pub struct TypedFunc<'module, Params, Return> {
     func: *const u8,
-    _ty: PhantomData<(Params, Return)>,
+    _ty: PhantomData<&'module (Params, Return)>,
 }
 
-impl<Params: RotoParams, Return: RotoType> TypedFunc<Params, Return> {
+impl<'module, Params: RotoParams, Return: RotoType> TypedFunc<'module, Params, Return> {
     pub fn call(&self, params: Params) -> Return {
         unsafe { Params::invoke::<Return>(self.func, params) }
     }
@@ -689,10 +689,10 @@ impl<'c> FuncGen<'c> {
 }
 
 impl Module {
-    pub fn get_function<Params: RotoParams, Return: RotoType>(
-        &self,
+    pub fn get_function<'module, Params: RotoParams, Return: RotoType>(
+        &'module self,
         name: &str,
-    ) -> Option<TypedFunc<Params, Return>> {
+    ) -> Option<TypedFunc<'module, Params, Return>> {
         let (id, sig) = self.functions.get(name)?;
 
         let mut params =
