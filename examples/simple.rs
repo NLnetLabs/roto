@@ -14,12 +14,12 @@ fn main() -> Result<(), roto::RotoReport> {
     let mut runtime = Runtime::basic().unwrap();
 
     runtime.register_type::<Bla>().unwrap();
-    runtime.register_method::<Bla, _, _>("x", get_y as extern "C" fn(_) -> _).unwrap();
+    runtime
+        .register_method::<Bla, _, _>("x", get_y as extern "C" fn(_) -> _)
+        .unwrap();
 
-    let compiled = read_files(["examples/simple.roto"])
-        .and_then(|x| x.parse())
-        .and_then(|x| x.typecheck(runtime, usize::BITS / 8))
-        .map(|x| x.lower().codegen())?;
+    let compiled = read_files(["examples/simple.roto"])?
+        .compile(runtime, usize::BITS / 8)?;
 
     let func = compiled
         .module

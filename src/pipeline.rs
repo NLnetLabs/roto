@@ -273,6 +273,12 @@ where
 }
 
 impl Files {
+    pub fn compile(self, runtime: Runtime, pointer_bytes: u32) -> Result<Compiled, RotoReport> {
+        let x = self.parse()?;
+        let x = x.typecheck(runtime, pointer_bytes)?;
+        Ok(x.lower().codegen())
+    }
+
     pub fn parse(self) -> Result<Parsed, RotoReport> {
         let mut spans = Spans::default();
 
