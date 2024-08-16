@@ -1,8 +1,8 @@
 //! Type information on Rust types
-//! 
+//!
 //! The [`TypeRegistry`] holds information on Rust types that we have seen,
 //! so we can match them to Roto types and use the names in error messages.
-//! 
+//!
 //! The registry should initially hold all registered types and primitives.
 //! On demand, we add more complex types via the [`Reflect`] trait, which
 //! is implemented for types that have a Roto equivalent. This is necessary
@@ -13,18 +13,29 @@ use std::{
     collections::HashMap,
 };
 
+use super::verdict::Verdict;
+
+
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TypeDescription {
     /// Some type that we don't know how to decompose
     Leaf,
+
     /// `*const T`
     ConstPtr(TypeId),
+
     /// `*mut T`
     MutPtr(TypeId),
+
     /// `Option<T>`
     Option(TypeId),
+
     /// `Result<T, E>`
     Result(TypeId, TypeId),
+
+    /// `Verdict<A, R>`
+    Verdict(TypeId, TypeId),
 }
 
 pub struct Ty {
@@ -81,6 +92,16 @@ pub trait Reflect: 'static {
     fn resolve(registry: &mut TypeRegistry) -> &Ty;
 }
 
+impl<A: Reflect, R: Reflect> Reflect for Verdict<A, R> {
+    fn resolve(registry: &mut TypeRegistry) -> &Ty {
+        let t = A::resolve(registry).type_id;
+        let e = R::resolve(registry).type_id;
+
+        let desc = TypeDescription::Verdict(t, e);
+        registry.store::<Self>(desc)
+    }
+}
+
 impl<T: Reflect, E: Reflect> Reflect for Result<T, E> {
     fn resolve(registry: &mut TypeRegistry) -> &Ty {
         let t = T::resolve(registry).type_id;
@@ -120,7 +141,7 @@ impl<T: 'static> Reflect for *const T {
 
 macro_rules! simple_reflect {
     ($t:ty) => {
-        impl Reflect for $t { 
+        impl Reflect for $t {
             fn resolve(registry: &mut TypeRegistry) -> &Ty {
                 registry.store::<Self>(TypeDescription::Leaf)
             }

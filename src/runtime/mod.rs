@@ -28,6 +28,7 @@
 //! The IR needs typed variables to do this correctly.
 pub mod func;
 mod ty;
+mod verdict;
 
 use std::any::TypeId;
 
