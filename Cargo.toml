@@ -10,6 +10,7 @@ homepage = "https://www.nlnetlabs.nl/projects/routing/rotonda/"
 keywords = ["routing", "bgp"]
 categories = ["network-programming"]
 license = "BSD-3-Clause"
+rust-version = "1.76"
 
 [dependencies]
 # ariadne is set to git because of some unpublished contributions made on
