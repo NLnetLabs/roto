@@ -441,13 +441,10 @@ impl TypeChecker<'_> {
         span: MetaId,
         cause: Option<MetaId>,
     ) -> TypeResult<Type> {
-        let a = self.resolve_type(a);
-        let b = self.resolve_type(b);
-
-        if let Some(ty) = self.unify_inner(&a, &b) {
+        if let Some(ty) = self.unify_inner(a, b) {
             Ok(ty)
         } else {
-            Err(self.error_mismatched_types(&a, &b, span, cause))
+            Err(self.error_mismatched_types(a, b, span, cause))
         }
     }
 
@@ -488,10 +485,12 @@ impl TypeChecker<'_> {
             }
             (Rib(a), Rib(b)) => Rib(Box::new(self.unify_inner(&a, &b)?)),
             (List(a), List(b)) => List(Box::new(self.unify_inner(&a, &b)?)),
-            (Verdict(a1, r1), Verdict(a2, r2)) => Verdict(
-                Box::new(self.unify_inner(&a1, &a2)?),
-                Box::new(self.unify_inner(&r1, &r2)?),
-            ),
+            (Verdict(a1, r1), Verdict(a2, r2)) => {
+                Verdict(
+                    Box::new(self.unify_inner(&a1, &a2)?),
+                    Box::new(self.unify_inner(&r1, &r2)?),
+                )
+            }
             (
                 RecordVar(a_var, a_fields),
                 ref b @ (RecordVar(_, ref b_fields)

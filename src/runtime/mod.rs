@@ -27,8 +27,8 @@
 //! We might need polymorphism over the number of arguments.
 //! The IR needs typed variables to do this correctly.
 pub mod func;
-mod ty;
-mod verdict;
+pub mod ty;
+pub mod verdict;
 
 use std::any::TypeId;
 
@@ -97,7 +97,9 @@ impl Runtime {
     /// Register a `Copy` type with a default name
     ///
     /// See [`Runtime::register_type`]
-    pub fn register_copy_type<T: Copy + 'static>(&mut self) -> Result<(), String> {
+    pub fn register_copy_type<T: Copy + 'static>(
+        &mut self,
+    ) -> Result<(), String> {
         let name = Self::extract_name::<T>();
         self.register_copy_type_with_name::<T>(name)
     }
@@ -287,6 +289,8 @@ impl Runtime {
         Ok(rt)
     }
 
+    // We might not use this, but let's keep it around for now (as of 27/8/2024)
+    #[allow(unused)]
     fn find_type(&self, id: TypeId, name: &str) -> Result<&Ty, String> {
         match self.type_registry.get(id) {
             Some(t) => Ok(t),

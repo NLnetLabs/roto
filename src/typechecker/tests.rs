@@ -1,6 +1,6 @@
+use crate::runtime::tests::routecore_runtime;
 use crate::src;
 use crate::{pipeline::RotoReport, Files};
-use crate::runtime::tests::routecore_runtime;
 
 #[track_caller]
 fn typecheck(loaded: Files) -> Result<(), RotoReport> {
@@ -853,4 +853,26 @@ fn runtime_function() {
     "
     );
     typecheck(s).unwrap_err();
+}
+
+#[test]
+fn issue_51() {
+    let s = src!(
+        "
+        filter-map main() {
+            apply {
+                // correctly errors out saying 'not found in scope'
+                //foo.bar();
+
+                if true {
+                    // panics at typechecker/info.rs:88
+                    foo.bar();
+                }
+                accept
+            }
+        }
+    "
+    );
+
+    typecheck(s).unwrap()
 }

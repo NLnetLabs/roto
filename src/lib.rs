@@ -11,5 +11,4 @@ pub(crate) mod runtime;
 pub use lower::eval::Memory;
 pub use lower::value::IrValue;
 pub use pipeline::*;
-pub use runtime::{Runtime, RuntimeType};
-
+pub use runtime::{Runtime, RuntimeType, verdict::Verdict};

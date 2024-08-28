@@ -118,7 +118,7 @@ impl Memory {
     }
 
     fn copy(&mut self, to: usize, from: usize, size: usize) {
-        let data: Vec<_> = self.read(from, size).into();
+        let data: Vec<_> = self.read_slice(from, size).into();
         self.write(to, &data);
     }
 
@@ -129,7 +129,12 @@ impl Memory {
         frame.write(p, val)
     }
 
-    pub fn read(&self, p: usize, size: usize) -> &[u8] {
+    pub fn read_array<const N: usize>(&self, p: usize) -> [u8; N] {
+        let slice = self.read_slice(p, N);
+        slice.try_into().unwrap()
+    }
+
+    pub fn read_slice(&self, p: usize, size: usize) -> &[u8] {
         let p = &self.pointers[p];
         let frame = &self.stack[p.stack_index];
         assert_eq!(frame.id, p.stack_id);
@@ -235,7 +240,7 @@ pub fn eval(
         .find(|f| f.name == filter_map_ident)
         .expect("Need a main function!");
 
-    let parameters = f.signature.parameters.clone();
+    let parameters = f.ir_signature.parameters.clone();
 
     // Make the program easier to work with by collecting all instructions
     // and constructing a map from labels to indices.
@@ -251,7 +256,7 @@ pub fn eval(
     let mut vars = HashMap::<Var, IrValue>::new();
 
     // Insert the rx value
-    if f.signature.return_ptr {
+    if f.ir_signature.return_ptr {
         assert_eq!(
             parameters.len(),
             rx.len() - 1,
@@ -266,7 +271,7 @@ pub fn eval(
     }
 
     let mut values = rx.into_iter();
-    if f.signature.return_ptr {
+    if f.ir_signature.return_ptr {
         vars.insert(
             Var {
                 scope: f.scope,
@@ -497,7 +502,7 @@ pub fn eval(
                     panic!()
                 };
                 let size = ty.bytes();
-                let res = mem.read(from, size);
+                let res = mem.read_slice(from, size);
                 let val = IrValue::from_slice(ty, res);
                 vars.insert(to.clone(), val);
             }
@@ -525,8 +530,8 @@ pub fn eval(
                 else {
                     panic!()
                 };
-                let left = mem.read(left, *size as usize);
-                let right = mem.read(right, *size as usize);
+                let left = mem.read_slice(left, *size as usize);
+                let right = mem.read_slice(right, *size as usize);
                 let res = left == right;
                 vars.insert(to.clone(), IrValue::Bool(res));
             }

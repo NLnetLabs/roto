@@ -30,7 +30,7 @@ use string_interner::{backend::StringBackend, StringInterner};
 use crate::{
     ast::Identifier,
     runtime,
-    typechecker::scope::{ScopeGraph, ScopeRef},
+    typechecker::{self, scope::{ScopeGraph, ScopeRef}},
 };
 
 use super::{
@@ -241,8 +241,10 @@ pub struct Function {
     /// Scope of the function
     pub scope: ScopeRef,
 
+    pub signature: typechecker::types::Signature,
+
     /// Signature of the function
-    pub signature: Signature,
+    pub ir_signature: Signature,
 
     /// Entry block of the function
     pub entry_block: LabelRef,

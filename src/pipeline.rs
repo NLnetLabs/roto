@@ -6,7 +6,7 @@ use string_interner::{backend::StringBackend, StringInterner};
 
 use crate::{
     ast,
-    codegen::{self, Module},
+    codegen::{self, check::RotoParams, Module, TypedFunc},
     lower::{
         self,
         eval::{self, Memory},
@@ -19,7 +19,7 @@ use crate::{
         meta::{Span, Spans},
         ParseError, Parser,
     },
-    runtime::Runtime,
+    runtime::{ty::Reflect, Runtime},
     typechecker::{
         error::{Level, TypeError},
         info::TypeInfo,
@@ -87,11 +87,12 @@ pub struct Lowered {
     runtime_functions: HashMap<String, IrFunction>,
     identifiers: StringInterner<StringBackend>,
     label_store: LabelStore,
+    type_info: TypeInfo,
 }
 
 pub struct Compiled {
-    pub runtime: Runtime,
-    pub module: Module,
+    runtime: Runtime,
+    module: Module,
 }
 
 impl std::fmt::Display for RotoReport {
@@ -273,7 +274,11 @@ where
 }
 
 impl Files {
-    pub fn compile(self, runtime: Runtime, pointer_bytes: u32) -> Result<Compiled, RotoReport> {
+    pub fn compile(
+        self,
+        runtime: Runtime,
+        pointer_bytes: u32,
+    ) -> Result<Compiled, RotoReport> {
         let x = self.parse()?;
         let x = x.typecheck(runtime, pointer_bytes)?;
         Ok(x.lower().codegen())
@@ -411,6 +416,7 @@ impl TypeChecked {
             runtime_functions,
             identifiers,
             label_store,
+            type_info: type_infos.remove(0),
         }
     }
 }
@@ -430,10 +436,21 @@ impl Lowered {
             &self.runtime_functions,
             self.identifiers,
             self.label_store,
+            self.type_info,
         );
         Compiled {
             runtime: self.runtime,
             module,
         }
+    }
+}
+
+impl Compiled {
+    pub fn get_function<'program, Params: RotoParams, Return: Reflect>(
+        &'program mut self,
+        name: &str,
+    ) -> Option<TypedFunc<'program, Params, Return>> {
+        self.module
+            .get_function(&mut self.runtime.type_registry, name)
     }
 }

@@ -142,7 +142,7 @@ impl TypeInfo {
                 .flat_map(|(_, opt)| opt)
                 .map(|f| self.alignment_of(f))
                 .max()
-                .unwrap_or(1),
+                .unwrap_or(4),
             ty => self.size_of(&ty),
         };
         // Alignment must be guaranteed to be at least 1

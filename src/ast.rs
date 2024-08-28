@@ -128,7 +128,7 @@ pub enum Pattern {
     EnumVariant {
         variant: Meta<Identifier>,
         data_field: Option<Meta<Identifier>>,
-    }
+    },
 }
 
 #[derive(Clone, Debug)]

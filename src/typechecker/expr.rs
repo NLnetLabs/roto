@@ -108,7 +108,7 @@ impl TypeChecker<'_> {
                             Box::new(b_ty),
                         );
                         self.unify(ret, &ty, id, None)?;
-                        a_ty
+                        self.resolve_type(&a_ty)
                     }
                     ast::ReturnKind::Reject => {
                         let a_ty = self.fresh_var();
@@ -118,7 +118,7 @@ impl TypeChecker<'_> {
                             Box::new(r_ty.clone()),
                         );
                         self.unify(ret, &ty, id, None)?;
-                        r_ty
+                        self.resolve_type(&r_ty)
                     }
                 };
 
@@ -659,8 +659,8 @@ impl TypeChecker<'_> {
         match op {
             And | Or => {
                 self.unify(
-                    &Type::Primitive(Primitive::Bool),
                     &ctx.expected_type,
+                    &Type::Primitive(Primitive::Bool),
                     span,
                     None,
                 )?;
@@ -674,8 +674,8 @@ impl TypeChecker<'_> {
             }
             Lt | Le | Gt | Ge => {
                 self.unify(
-                    &Type::Primitive(Primitive::Bool),
                     &ctx.expected_type,
+                    &Type::Primitive(Primitive::Bool),
                     span,
                     None,
                 )?;
@@ -722,14 +722,13 @@ impl TypeChecker<'_> {
             }
             Add | Sub | Mul | Div => {
                 let operand_ty = self.fresh_int();
-                let ctx = ctx.with_type(operand_ty.clone());
+                let new_ctx = ctx.with_type(operand_ty.clone());
 
                 let mut diverges = false;
-                diverges |= self.expr(scope, &ctx, left)?;
-                diverges |= self.expr(scope, &ctx, right)?;
+                diverges |= self.expr(scope, &new_ctx, left)?;
+                diverges |= self.expr(scope, &new_ctx, right)?;
 
-                self.unify(&operand_ty, &ctx.expected_type, span, None)?;
-
+                self.unify(&ctx.expected_type, &operand_ty, span, None)?;
                 Ok(diverges)
             }
             In | NotIn => {

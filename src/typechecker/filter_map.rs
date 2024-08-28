@@ -37,7 +37,7 @@ impl TypeChecker<'_> {
 
         let a = self.fresh_var();
         let r = self.fresh_var();
-        let ty = Type::Verdict(Box::new(a), Box::new(r));
+        let ty = Type::Verdict(Box::new(a.clone()), Box::new(r.clone()));
 
         let ctx = Context {
             expected_type: ty.clone(),
@@ -45,6 +45,13 @@ impl TypeChecker<'_> {
         };
 
         self.block(scope, &ctx, apply)?;
+
+        if let Type::Var(x) = self.resolve_type(&a) {
+            self.unify(&Type::Var(x), &Type::Primitive(Primitive::Unit), filter_map.ident.id, None).unwrap();
+        }
+        if let Type::Var(x) = self.resolve_type(&r) {
+            self.unify(&Type::Var(x), &Type::Primitive(Primitive::Unit), filter_map.ident.id, None).unwrap();
+        }
 
         Ok(match filter_type {
             ast::FilterType::FilterMap => Type::FilterMap(params),

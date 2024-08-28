@@ -23,7 +23,9 @@ use crate::{
     typechecker::{
         info::TypeInfo,
         scope::{DefinitionRef, ScopeRef},
-        types::{FunctionDefinition, Primitive, Type},
+        types::{
+            FunctionDefinition, FunctionKind, Primitive, Signature, Type,
+        },
     },
 };
 
@@ -199,12 +201,12 @@ impl<'r> Lowerer<'r> {
         let label = self.label_store.new_label(self.function_name);
         self.new_block(label);
 
-        let parameters: Vec<_> = params
+        let parameter_types: Vec<_> = params
             .0
             .iter()
             .map(|(x, _)| {
                 let ty = self.type_info.type_of(x);
-                (self.type_info.resolved_name(x), self.lower_type(&ty))
+                (self.type_info.resolved_name(x), ty)
             })
             .collect();
 
@@ -231,16 +233,26 @@ impl<'r> Lowerer<'r> {
 
         self.add(Instruction::Return(last));
 
+        let signature = Signature {
+            kind: FunctionKind::Free,
+            parameter_types: parameter_types
+                .iter()
+                .cloned()
+                .map(|x| x.1)
+                .collect(),
+            return_type: return_type.clone(),
+        };
+
         let (return_type, return_ptr) = match return_type {
             x if self.type_info.size_of(&x) == 0 => (None, false),
             x if self.is_reference_type(&x) => (None, true),
             x => (Some(self.lower_type(&x)), false),
         };
 
-        let signature = ir::Signature {
-            parameters: parameters
+        let ir_signature = ir::Signature {
+            parameters: parameter_types
                 .iter()
-                .map(|(def, ty)| (def.1, *ty))
+                .map(|(def, ty)| (def.1, self.lower_type(ty)))
                 .collect(),
             return_ptr,
             return_type,
@@ -251,6 +263,7 @@ impl<'r> Lowerer<'r> {
             scope: self.function_scope,
             entry_block: label,
             signature,
+            ir_signature,
             blocks: self.blocks,
             public: true,
         }
@@ -276,22 +289,38 @@ impl<'r> Lowerer<'r> {
         let label = self.label_store.new_label(self.function_name);
         self.new_block(label);
 
-        let parameters = params
+        let parameter_types: Vec<_> = params
             .0
             .iter()
             .map(|(x, _)| {
                 let ty = self.type_info.type_of(x);
-                (self.type_info.resolved_name(x).1, self.lower_type(&ty))
+                (self.type_info.resolved_name(x), ty)
             })
             .collect();
 
         let return_type = return_type
             .as_ref()
-            .map(|t| self.type_info.resolve(&Type::Name(**t)))
-            .map(|t| self.lower_type(&t));
+            .map(|t| self.type_info.resolve(&Type::Name(**t)));
 
-        let signature = ir::Signature {
-            parameters,
+        let signature = Signature {
+            kind: FunctionKind::Free,
+            parameter_types: parameter_types
+                .iter()
+                .cloned()
+                .map(|x| x.1)
+                .collect(),
+            return_type: return_type
+                .clone()
+                .unwrap_or(Type::Primitive(Primitive::Unit)),
+        };
+
+        let return_type = return_type.map(|t| self.lower_type(&t));
+
+        let ir_signature = ir::Signature {
+            parameters: parameter_types
+                .iter()
+                .map(|(def, ty)| (def.1, self.lower_type(ty)))
+                .collect(),
             return_ptr: false, // TODO: check this
             return_type,
         };
@@ -304,9 +333,10 @@ impl<'r> Lowerer<'r> {
             name: ident.node,
             scope: self.function_scope,
             entry_block: label,
-            signature,
             blocks: self.blocks,
             public: false,
+            signature,
+            ir_signature,
         }
     }
 
@@ -353,13 +383,13 @@ impl<'r> Lowerer<'r> {
                         self.write_field(
                             var.clone().into(),
                             0,
-                            IrValue::U8(1).into(),
+                            IrValue::U8(0).into(),
                             &Type::Primitive(Primitive::U8),
                         );
 
                         if let Some(op) = op {
                             let offset =
-                                1 + self.type_info.padding_of(&accept_ty, 1);
+                                4 + self.type_info.padding_of(&accept_ty, 4);
 
                             self.write_field(
                                 var.into(),
@@ -384,13 +414,13 @@ impl<'r> Lowerer<'r> {
                         self.write_field(
                             var.clone().into(),
                             0,
-                            IrValue::U8(0).into(),
+                            IrValue::U8(1).into(),
                             &Type::Primitive(Primitive::U8),
                         );
 
                         if let Some(op) = op {
                             let offset =
-                                self.type_info.padding_of(&reject_ty, 1);
+                                4 + self.type_info.padding_of(&reject_ty, 4);
 
                             self.write_field(
                                 var.into(),

@@ -1,7 +1,8 @@
 //! Machine code generation via cranelift
 
 use std::{
-    collections::HashMap, marker::PhantomData, num::NonZeroU8, sync::Arc,
+    any::TypeId, collections::HashMap, marker::PhantomData, num::NonZeroU8,
+    sync::Arc,
 };
 
 use crate::{
@@ -12,9 +13,11 @@ use crate::{
         value::IrType,
         IrFunction,
     },
-    typechecker::scope::ScopeRef,
+    runtime::ty::{Reflect, TypeRegistry},
+    typechecker::{info::TypeInfo, scope::ScopeRef, types},
     IrValue,
 };
+use check::{check_roto_type_reflect, return_type_by_ref, RotoParams};
 use cranelift::{
     codegen::{
         entity::EntityRef,
@@ -35,32 +38,46 @@ use cranelift_module::{FuncId, Linkage, Module as _};
 use log::info;
 use string_interner::{backend::StringBackend, StringInterner};
 
+pub mod check;
 #[cfg(test)]
 mod tests;
 
 /// A compiled, ready-to-run Roto module
 pub struct Module {
     /// The set of public functions and their signatures.
-    functions: HashMap<String, (FuncId, ir::Signature)>,
+    functions: HashMap<String, FunctionInfo>,
 
     /// The inner cranelift module
     inner: JITModule,
+
+    /// Info from the typechecker for checking types against Rust types
+    type_info: TypeInfo,
 }
 
 pub struct TypedFunc<'module, Params, Return> {
     func: *const u8,
+    return_by_ref: bool,
     _ty: PhantomData<&'module (Params, Return)>,
 }
 
-impl<'module, Params: RotoParams, Return: RotoType> TypedFunc<'module, Params, Return> {
+impl<'module, Params: RotoParams, Return: Reflect>
+    TypedFunc<'module, Params, Return>
+{
     pub fn call(&self, params: Params) -> Return {
-        unsafe { Params::invoke::<Return>(self.func, params) }
+        unsafe {
+            Params::invoke::<Return>(self.func, params, self.return_by_ref)
+        }
     }
+}
+
+pub struct FunctionInfo {
+    id: FuncId,
+    signature: types::Signature,
 }
 
 struct ModuleBuilder {
     /// The set of public functions and their signatures.
-    functions: HashMap<String, (FuncId, ir::Signature)>,
+    functions: HashMap<String, FunctionInfo>,
 
     /// External functions
     runtime_functions: HashMap<String, FuncId>,
@@ -83,6 +100,8 @@ struct ModuleBuilder {
     /// To print labels for debugging.
     #[allow(unused)]
     label_store: LabelStore,
+
+    type_info: TypeInfo,
 }
 
 struct FuncGen<'c> {
@@ -108,6 +127,7 @@ pub fn codegen(
     runtime_functions: &HashMap<String, IrFunction>,
     identifiers: StringInterner<StringBackend>,
     label_store: LabelStore,
+    type_info: TypeInfo,
 ) -> Module {
     // The ISA is the Instruction Set Architecture. We always compile for
     // the system we run on, so we use `cranelift_native` to get the ISA
@@ -137,6 +157,7 @@ pub fn codegen(
         variable_map: HashMap::new(),
         identifiers,
         label_store,
+        type_info,
     };
 
     for (name, func) in runtime_functions {
@@ -176,17 +197,18 @@ impl ModuleBuilder {
     fn declare_function(&mut self, func: &ir::Function) {
         let ir::Function {
             name,
+            ir_signature,
             signature,
             public,
             ..
         } = func;
 
         let mut sig = self.inner.make_signature();
-        for (_, ty) in &signature.parameters {
+        for (_, ty) in &ir_signature.parameters {
             sig.params.push(AbiParam::new(self.cranelift_type(ty)));
         }
 
-        sig.returns = match &signature.return_type {
+        sig.returns = match &ir_signature.return_type {
             Some(ty) => vec![AbiParam::new(self.cranelift_type(ty))],
             None => Vec::new(),
         };
@@ -205,8 +227,13 @@ impl ModuleBuilder {
             )
             .unwrap();
 
-        self.functions
-            .insert(name.to_string(), (func_id, signature.clone()));
+        self.functions.insert(
+            name.to_string(),
+            FunctionInfo {
+                id: func_id,
+                signature: signature.clone(),
+            },
+        );
     }
 
     /// Define a function body
@@ -220,26 +247,26 @@ impl ModuleBuilder {
         let ir::Function {
             name,
             blocks,
-            signature,
+            ir_signature,
             scope,
             ..
         } = func;
         let name = self.identifiers.resolve(name.0).unwrap();
-        let (func_id, _) = self.functions[name].clone();
+        let func_id = self.functions[name].id;
 
         let mut ctx = self.inner.make_context();
         let mut sig = self.inner.make_signature();
 
-        if signature.return_ptr {
+        if ir_signature.return_ptr {
             sig.params
                 .push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
         }
 
-        for (_, ty) in &signature.parameters {
+        for (_, ty) in &ir_signature.parameters {
             sig.params.push(AbiParam::new(self.cranelift_type(ty)));
         }
 
-        if let Some(ty) = &signature.return_type {
+        if let Some(ty) = &ir_signature.return_type {
             sig.returns.push(AbiParam::new(self.cranelift_type(ty)));
         }
 
@@ -257,8 +284,8 @@ impl ModuleBuilder {
 
         func_gen.entry_block(
             &blocks[0],
-            &signature.parameters,
-            signature.return_ptr,
+            &ir_signature.parameters,
+            ir_signature.return_ptr,
         );
 
         for block in blocks {
@@ -285,6 +312,7 @@ impl ModuleBuilder {
         Module {
             functions: self.functions,
             inner: self.inner,
+            type_info: self.type_info,
         }
     }
 
@@ -411,7 +439,7 @@ impl<'c> FuncGen<'c> {
             }
             ir::Instruction::Call { to, func, args } => {
                 let func = self.module.identifiers.resolve(func.0).unwrap();
-                let (func_id, _) = self.module.functions[func];
+                let func_id = self.module.functions[func].id;
                 let func_ref = self
                     .module
                     .inner
@@ -689,137 +717,33 @@ impl<'c> FuncGen<'c> {
 }
 
 impl Module {
-    pub fn get_function<'module, Params: RotoParams, Return: RotoType>(
-        &'module self,
+    pub fn get_function<'module, Params: RotoParams, Return: Reflect>(
+        &'module mut self,
+        type_registry: &mut TypeRegistry,
         name: &str,
     ) -> Option<TypedFunc<'module, Params, Return>> {
-        let (id, sig) = self.functions.get(name)?;
+        let function_info = self.functions.get(name)?;
+        let sig = &function_info.signature;
+        let id = function_info.id;
 
-        let mut params =
-            sig.parameters.iter().map(|p| p.1).collect::<Vec<_>>();
-
-        if sig.return_ptr {
-            params.insert(0, IrType::Pointer);
-        }
-
-        let correct_params = Params::check(&params);
-        let correct_return = Return::check(sig.return_type);
+        let correct_params =
+            Params::check(type_registry, &mut self.type_info, &sig.parameter_types);
+        let correct_return = check_roto_type_reflect::<Return>(
+            type_registry,
+            &mut self.type_info,
+            &sig.return_type,
+        );
         if !correct_params || !correct_return {
             return None;
         }
+        let return_by_ref =
+            return_type_by_ref(type_registry, TypeId::of::<Return>());
 
-        let func_ptr = self.inner.get_finalized_function(*id);
+        let func_ptr = self.inner.get_finalized_function(id);
         Some(TypedFunc {
             func: func_ptr,
+            return_by_ref,
             _ty: PhantomData,
         })
     }
 }
-
-/// A type that is compatible with Roto
-///
-/// Such a type needs to have a corresponding roto representation.
-/// It also needs to have a size and be convertible into a slice(?).
-///
-/// We need to do several things with this:
-///  - Do runtime type checking before handing out a roto function.
-///  - Do runtime type checking
-pub trait RotoType {
-    fn check(ty: Option<IrType>) -> bool;
-}
-
-impl RotoType for bool {
-    fn check(ty: Option<IrType>) -> bool {
-        ty == Some(IrType::Bool)
-    }
-}
-
-impl RotoType for i8 {
-    fn check(ty: Option<IrType>) -> bool {
-        ty == Some(IrType::I8)
-    }
-}
-
-impl RotoType for u8 {
-    fn check(ty: Option<IrType>) -> bool {
-        ty == Some(IrType::U8)
-    }
-}
-
-impl RotoType for i16 {
-    fn check(ty: Option<IrType>) -> bool {
-        ty == Some(IrType::I16)
-    }
-}
-
-impl RotoType for u16 {
-    fn check(ty: Option<IrType>) -> bool {
-        ty == Some(IrType::U16)
-    }
-}
-
-impl RotoType for i32 {
-    fn check(ty: Option<IrType>) -> bool {
-        ty == Some(IrType::I32)
-    }
-}
-
-impl RotoType for u32 {
-    fn check(ty: Option<IrType>) -> bool {
-        ty == Some(IrType::U32)
-    }
-}
-
-impl RotoType for () {
-    fn check(ty: Option<IrType>) -> bool {
-        ty.is_none()
-    }
-}
-
-impl<T> RotoType for *mut T {
-    fn check(ty: Option<IrType>) -> bool {
-        ty == Some(IrType::Pointer) || ty == Some(IrType::ExtPointer)
-    }
-}
-
-pub trait RotoParams {
-    fn check(ty: &[IrType]) -> bool {
-        ty.is_empty()
-    }
-
-    unsafe fn invoke<R>(func_ptr: *const u8, params: Self) -> R;
-}
-
-macro_rules! params {
-    ($($t:ident),*) => {
-        #[allow(non_snake_case)]
-        impl<$($t),*> RotoParams for ($($t,)*)
-        where
-            $($t: RotoType,)*
-        {
-            fn check(ty: &[IrType]) -> bool {
-                let &[$($t),*] = ty else {
-                    return false;
-                };
-                // Little hack to return a bool even with no parameters
-                true $(&& $t::check(Some($t)))*
-            }
-
-            unsafe fn invoke<R>(func_ptr: *const u8, ($($t,)*): Self) -> R {
-                let func_ptr = unsafe {
-                    std::mem::transmute::<*const u8, fn($($t),*) -> R>(func_ptr)
-                };
-                func_ptr($($t),*)
-            }
-        }
-    };
-}
-
-params!();
-params!(A1);
-params!(A1,A2);
-params!(A1,A2,A3);
-params!(A1,A2,A3,A4);
-params!(A1,A2,A3,A4,A5);
-params!(A1,A2,A3,A4,A5,A6);
-params!(A1,A2,A3,A4,A5,A6,A7);

@@ -7,7 +7,9 @@
 ///
 /// The [`Verdict::into_result`] and [`Verdict::into_option`] methods are
 /// available to map a [`Verdict`] to more conventional types.
-#[repr(C)]
+#[repr(C, u8)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[must_use]
 pub enum Verdict<A, R> {
     Accept(A),
     Reject(R),

@@ -107,8 +107,8 @@ fn accept() {
     let program = compile(s);
     let pointer = mem.allocate(1);
     program.eval(&mut mem, vec![IrValue::Pointer(pointer), IrValue::U32(0)]);
-    let res = mem.read(pointer, 1);
-    assert_eq!(&[1], res);
+    let res = mem.read_array::<1>(pointer);
+    assert_eq!(0, u8::from_ne_bytes(res));
 }
 
 #[test]
@@ -125,8 +125,8 @@ fn reject() {
     let program = compile(s);
     let pointer = mem.allocate(1);
     program.eval(&mut mem, vec![IrValue::Pointer(pointer)]);
-    let res = mem.read(pointer, 1);
-    assert_eq!(&[0], res);
+    let res = mem.read_array::<1>(pointer);
+    assert_eq!(1, u8::from_ne_bytes(res));
 }
 
 #[test]
@@ -148,8 +148,8 @@ fn if_else() {
     let program = compile(s);
     let pointer = mem.allocate(1);
     program.eval(&mut mem, vec![IrValue::Pointer(pointer)]);
-    let res = mem.read(pointer, 1);
-    assert_eq!(&[1], res);
+    let res = mem.read_array::<1>(pointer);
+    assert_eq!(0, u8::from_ne_bytes(res));
 }
 
 #[test]
@@ -175,8 +175,12 @@ fn react_to_rx() {
         let pointer = mem.allocate(1);
         program
             .eval(&mut mem, vec![IrValue::Pointer(pointer), IrValue::U32(i)]);
-        let res = mem.read(pointer, 1);
-        assert_eq!(res, &[(i <= 4) as u8], "failed at: {i}");
+        let res = mem.read_array::<1>(pointer);
+        assert_eq!(
+            u8::from_ne_bytes(res),
+            (i > 4) as u8,
+            "failed at: {i}"
+        );
     }
 }
 
@@ -204,8 +208,8 @@ fn variable() {
     let program = compile(s);
     let pointer = mem.allocate(1);
     program.eval(&mut mem, vec![IrValue::Pointer(pointer)]);
-    let res = mem.read(pointer, 1);
-    assert_eq!(&[1], res);
+    let res = mem.read_array::<1>(pointer);
+    assert_eq!(0, u8::from_ne_bytes(res));
 }
 
 #[test]
@@ -236,8 +240,8 @@ fn calling_function() {
         let pointer = mem.allocate(1);
         program
             .eval(&mut mem, vec![IrValue::Pointer(pointer), IrValue::U32(x)]);
-        let res = mem.read(pointer, 1);
-        assert_eq!(&[(10 < x && x < 20) as u8], res);
+        let res = mem.read_array::<1>(pointer);
+        assert_eq!(!(10 < x && x < 20) as u8, u8::from_ne_bytes(res));
     }
 }
 
@@ -269,8 +273,8 @@ fn anonymous_record() {
         let pointer = mem.allocate(1);
         program
             .eval(&mut mem, vec![IrValue::Pointer(pointer), IrValue::U32(x)]);
-        let res = mem.read(pointer, 1);
-        assert_eq!(&[(10 < x && x < 20) as u8], res);
+        let res = mem.read_array::<1>(pointer);
+        assert_eq!(!(10 < x && x < 20) as u8, u8::from_ne_bytes(res));
     }
 }
 
@@ -309,8 +313,8 @@ fn typed_record() {
         let pointer = mem.allocate(1);
         program
             .eval(&mut mem, vec![IrValue::Pointer(pointer), IrValue::U32(x)]);
-        let res = mem.read(pointer, 1);
-        assert_eq!(&[(10 < x && x < 20) as u8], res);
+        let res = mem.read_array::<1>(pointer);
+        assert_eq!(u8::from_ne_bytes(res), !(10 < x && x < 20) as u8);
     }
 }
 
@@ -344,8 +348,8 @@ fn nested_record() {
         let pointer = mem.allocate(1);
         program
             .eval(&mut mem, vec![IrValue::Pointer(pointer), IrValue::I32(x)]);
-        let res = mem.read(pointer, 1);
-        assert_eq!(&[(x == 20) as u8], res, "for x = {x}");
+        let res = mem.read_array::<1>(pointer);
+        assert_eq!((x != 20) as u8, u8::from_ne_bytes(res), "for x = {x}");
     }
 }
 
@@ -369,9 +373,9 @@ fn enum_values() {
 
     for (variant, expected) in [
         // IpV4 -> accepted
-        (0, true),
+        (0, 0),
         // // IpV6 -> rejected
-        (1, false),
+        (1, 1),
     ] {
         let mut mem = Memory::new();
         let verdict_pointer = mem.allocate(1);
@@ -384,8 +388,8 @@ fn enum_values() {
                 IrValue::Pointer(afi_pointer),
             ],
         );
-        let res = mem.read(verdict_pointer, 1);
-        assert_eq!(&[expected as u8], res);
+        let res = mem.read_array::<1>(verdict_pointer);
+        assert_eq!(expected, u8::from_ne_bytes(res));
     }
 }
 
@@ -407,15 +411,15 @@ fn call_runtime_function() {
 
     let program = compile(s);
 
-    for (value, expected) in [(5, 0), (11, 1)] {
+    for (value, expected) in [(5, 1), (11, 0)] {
         let mut mem = Memory::new();
         let verdict_pointer = mem.allocate(1);
         program.eval(
             &mut mem,
             vec![IrValue::Pointer(verdict_pointer), IrValue::U32(value)],
         );
-        let res = mem.read(verdict_pointer, 1);
-        assert_eq!(&[expected as u8], res);
+        let res = mem.read_array::<1>(verdict_pointer);
+        assert_eq!(expected as u8, u8::from_ne_bytes(res));
     }
 }
 
@@ -437,15 +441,15 @@ fn ip_addr_method() {
 
     let program = compile(s);
 
-    for (value, expected) in [(5, 0), (6, 1)] {
+    for (value, expected) in [(5, 1), (6, 0)] {
         let mut mem = Memory::new();
         let verdict_pointer = mem.allocate(1);
         program.eval(
             &mut mem,
             vec![IrValue::Pointer(verdict_pointer), IrValue::U32(value)],
         );
-        let res = mem.read(verdict_pointer, 1);
-        assert_eq!(&[expected as u8], res);
+        let res = mem.read_array::<1>(verdict_pointer);
+        assert_eq!(expected, u8::from_ne_bytes(res));
     }
 }
 

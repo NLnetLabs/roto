@@ -1,4 +1,4 @@
-use roto::{read_files, Runtime};
+use roto::{read_files, Runtime, Verdict};
 
 struct Bla {
     _x: u16,
@@ -18,26 +18,27 @@ fn main() -> Result<(), roto::RotoReport> {
         .register_method::<Bla, _, _>("x", get_y as extern "C" fn(_) -> _)
         .unwrap();
 
-    let compiled = read_files(["examples/simple.roto"])?
-        .compile(runtime, usize::BITS / 8)?;
+    let mut compiled = read_files(["examples/simple.roto"])?
+        .compile(runtime, usize::BITS / 8)
+        .inspect_err(|e| eprintln!("{e}"))?;
 
     let func = compiled
-        .module
-        .get_function::<(*mut Option<u8>, *mut Bla), ()>("main")
+        .get_function::<(*mut Bla,), Verdict<u8, ()>>("main")
         .unwrap();
 
     for y in 0..20 {
-        let mut res: Option<u8> = None;
+        let mut bla = Bla { _x: 1, y, _z: 1 };
+        let res = func.call((&mut bla as *mut _,));
 
         // Quick custom assertion that this is the size that Roto expects
         // TODO: This should be automated at some point.
-        assert_eq!(std::mem::size_of_val(&res), 2);
+        assert_eq!(std::mem::size_of_val(&res), 8);
 
-        let res_ptr = &mut res as *mut _;
-        let mut bla = Bla { _x: 1, y, _z: 1 };
-        func.call((res_ptr, &mut bla as *mut _));
-
-        let expected = if y > 10 { Some(y * 2) } else { None };
+        let expected = if y > 10 {
+            Verdict::Accept(y * 2)
+        } else {
+            Verdict::Reject(())
+        };
         println!("main({y}) = {res:?}   (expected: {expected:?})");
     }
     Ok(())
