@@ -432,7 +432,7 @@ impl TypeChecker<'_> {
                         scope,
                         &ctx.with_type(Type::Primitive(Primitive::Unit)),
                         t,
-                    );
+                    )?;
                     self.type_info.diverges.insert(id, false);
                     Ok(false)
                 }
