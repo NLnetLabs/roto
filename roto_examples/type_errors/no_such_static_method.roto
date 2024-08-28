@@ -1,0 +1,8 @@
+filter foo() {
+    define {
+        rx msg: u32;
+        a = String.i_do_not_exist();
+    }
+
+    apply { accept }
+}

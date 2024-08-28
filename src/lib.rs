@@ -1,11 +1,14 @@
-pub mod ast;
-pub mod blocks;
-pub mod compiler;
-pub mod eval;
-pub mod typechecker;
-pub mod parser;
-mod symbols;
-pub mod traits;
-pub mod types;
-pub mod vm;
-pub mod pipeline;
+pub(crate) mod ast;
+
+pub(crate) mod codegen;
+pub(crate) mod lower;
+pub(crate) mod parser;
+pub(crate) mod typechecker;
+
+pub(crate) mod pipeline;
+pub(crate) mod runtime;
+
+pub use lower::eval::Memory;
+pub use lower::value::IrValue;
+pub use pipeline::*;
+pub use runtime::{Runtime, RuntimeType, verdict::Verdict};

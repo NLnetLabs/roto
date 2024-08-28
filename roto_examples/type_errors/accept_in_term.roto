@@ -1,0 +1,11 @@
+function bar() -> bool {
+    accept
+}
+
+filter foo() {
+    define {
+        rx msg: u32;
+    }
+
+    apply { accept }
+}

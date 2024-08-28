@@ -1,0 +1,8 @@
+filter foo() {
+	define {
+		rx msg: u32;
+		b = String.foo; // should error error: no field access on type
+	}
+
+	apply { accept }
+}

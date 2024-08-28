@@ -41,6 +41,10 @@ pub enum Token<'s> {
     Slash,
     #[token("!")]
     Bang,
+    #[token("+")]
+    Plus,
+    #[token("*")]
+    Star,
 
     // === Delimiters ===
     #[token("{")]
@@ -63,28 +67,26 @@ pub enum Token<'s> {
     // === Keywords ===
     #[token("accept")]
     Accept,
-    #[token("action")]
-    Action,
-    #[token("all")]
-    All,
     #[token("apply")]
     Apply,
     #[token("contains")]
     Contains,
     #[token("define")]
     Define,
+    #[token("else")]
+    Else,
     #[token("exact")]
     Exact,
-    #[token("exactly-one")]
-    ExactlyOne,
     #[token("filter-map")]
     FilterMap,
     #[token("filter")]
     Filter,
-    #[token("for")]
-    For,
+    #[token("function")]
+    Function,
     #[token("import")]
     Import,
+    #[token("if")]
+    If,
     #[token("in")]
     In,
     #[token("longer")]
@@ -111,20 +113,10 @@ pub enum Token<'s> {
     Return,
     #[token("rib")]
     Rib,
-    #[token("rx")]
-    Rx,
-    #[token("rx_tx")]
-    RxTx,
-    #[token("context")]
-    Context,
     #[token("some")]
     Some,
     #[token("table")]
     Table,
-    #[token("term")]
-    Term,
-    #[token("tx")]
-    Tx,
     #[token("through")]
     Through,
     #[token("type")]
@@ -133,8 +125,6 @@ pub enum Token<'s> {
     UpTo,
     #[token("use")]
     Use,
-    #[token("with")]
-    With,
 
     // === Literals ===
     // String literal with escape sequences would look like this:
@@ -145,7 +135,7 @@ pub enum Token<'s> {
     // Integers can contain underscores, but cannot start with them.
     #[regex(r"[0-9][0-9_]*")]
     Integer(&'s str),
-    
+
     #[regex(r"0x[0-9A-Fa-f]+")]
     Hex(&'s str),
     #[regex(r"AS[0-9]+")]
@@ -158,8 +148,6 @@ pub enum Token<'s> {
     #[regex(r"([0-9a-zA-Z]*:){2,6}[0-9a-zA-Z]*")]
     IpV6(&'s str),
 
-    #[regex(r"/[0-9]+")]
-    PrefixLength(&'s str),
     // This regex is a super set of all the forms of communities:
     // standard, large and extended.
     #[regex(r"([0-9a-zA-Z]+:)?(0x)?[0-9a-fA-F]+:(0x)?[0-9a-fA-F]+")]
@@ -188,6 +176,8 @@ impl<'source> Display for Token<'source> {
             Token::SemiColon => ";",
             Token::Comma => ",",
             Token::Period => ".",
+            Token::Plus => "+",
+            Token::Star => "*",
             Token::Slash => "/",
             Token::Bang => "!",
             Token::CurlyLeft => "{",
@@ -199,17 +189,16 @@ impl<'source> Display for Token<'source> {
             Token::AngleLeft => "<",
             Token::AngleRight => ">",
             Token::Accept => "accept",
-            Token::Action => "action",
-            Token::All => "all",
             Token::Apply => "apply",
             Token::Contains => "contains",
             Token::Define => "define",
+            Token::Else => "else",
             Token::Exact => "exact",
-            Token::ExactlyOne => "exactly-one",
             Token::FilterMap => "filter-map",
             Token::Filter => "filter",
-            Token::For => "for",
+            Token::Function => "function",
             Token::Import => "import",
+            Token::If => "if",
             Token::In => "in",
             Token::Longer => "longer",
             Token::Match => "match",
@@ -223,18 +212,12 @@ impl<'source> Display for Token<'source> {
             Token::Reject => "reject",
             Token::Return => "return",
             Token::Rib => "rib",
-            Token::Rx => "rx",
-            Token::RxTx => "rx_tx",
-            Token::Context => "context",
             Token::Some => "some",
             Token::Table => "table",
-            Token::Term => "term",
-            Token::Tx => "tx",
             Token::Through => "through",
             Token::Type => "type",
             Token::UpTo => "up-to",
             Token::Use => "use",
-            Token::With => "with",
             Token::String(s) => s,
             Token::Integer(s) => s,
             Token::Hex(s) => s,
@@ -245,7 +228,6 @@ impl<'source> Display for Token<'source> {
             Token::Community(s) => s,
             Token::Bool(true) => "true",
             Token::Bool(false) => "false",
-            Token::PrefixLength(s) => s,
         };
         write!(f, "{s}")
     }

@@ -1,9 +1,0 @@
-type Foo { a: U32 }
-
-filter foo {
-    define {
-		rx msg: U32;
-        foo = Foo { a: 8 };
-        a = foo.b;
-    }
-}

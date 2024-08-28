@@ -1,7 +1,0 @@
-type U32 { b: U32 } // should error here
-
-filter foo {
-	define {
-		rx msg: U32;
-	}
-}

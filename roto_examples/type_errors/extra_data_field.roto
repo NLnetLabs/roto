@@ -1,0 +1,13 @@
+function bar() -> bool {
+	match msg {
+		Stale(x) -> true, // should error here
+	}
+}
+
+filter foo() {
+	define {
+		rx msg: RouteStatus;
+	}
+
+	apply { accept }
+}

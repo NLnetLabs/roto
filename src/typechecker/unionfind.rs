@@ -8,15 +8,12 @@ use super::types::Type;
 /// traversal in a subsequent query.
 ///
 /// A mapping from a type var to itself means that it is not set.
+#[derive(Clone, Default)]
 pub struct UnionFind {
     inner: Vec<Type>,
 }
 
 impl UnionFind {
-    pub fn new() -> Self {
-        Self { inner: Vec::new() }
-    }
-
     /// Find the type corresponding to a type var
     pub fn find(&mut self, index: usize) -> Type {
         match &self.inner[index] {

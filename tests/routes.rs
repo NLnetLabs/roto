@@ -1,3 +1,4 @@
+#![cfg(any())]
 use std::collections::BTreeSet;
 use std::str::FromStr;
 

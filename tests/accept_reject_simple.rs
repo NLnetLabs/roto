@@ -1,3 +1,5 @@
+#![cfg(any())]
+
 use log::{info, trace};
 use roto::ast::AcceptReject;
 

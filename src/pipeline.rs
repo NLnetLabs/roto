@@ -1,17 +1,43 @@
+//! Compiler pipeline that executes multiple compiler stages in sequence
+
+use std::collections::HashMap;
+
+use string_interner::{backend::StringBackend, StringInterner};
+
 use crate::{
-    ast::SyntaxTree,
-    blocks::Scope,
-    compiler::{compile::Rotolo, CompileError, Compiler},
-    parser::{ParseError, Parser},
-    symbols::GlobalSymbolTable,
-    typechecker::error::{Level, TypeError},
-    types::typevalue::TypeValue,
+    ast,
+    codegen::{self, check::RotoParams, Module, TypedFunc},
+    lower::{
+        self,
+        eval::{self, Memory},
+        ir::{self, IrPrinter},
+        label::LabelStore,
+        value::IrValue,
+        IrFunction,
+    },
+    parser::{
+        meta::{Span, Spans},
+        ParseError, Parser,
+    },
+    runtime::{ty::Reflect, Runtime},
+    typechecker::{
+        error::{Level, TypeError},
+        info::TypeInfo,
+        scope::ScopeGraph,
+    },
 };
 
+/// A filename with its contents
 #[derive(Clone, Debug)]
 pub struct SourceFile {
     name: String,
     contents: String,
+    /// The line offset that should be added to the location in error
+    /// messages.
+    ///
+    /// This is used to add the offset of a string of source text in a test,
+    /// so that Roto errors can refer to locations in Rust files accurately.
+    location_offset: usize,
 }
 
 #[derive(Debug)]
@@ -19,25 +45,78 @@ enum RotoError {
     Read(String, std::io::Error),
     Parse(ParseError),
     Type(TypeError),
-    Evaluate(CompileError),
-    Compile(CompileError),
 }
 
+/// An error report containing a set of Roto errors
+///
+/// The errors can be printed with the regular [`std::fmt::Display`].
 #[derive(Debug)]
 pub struct RotoReport {
     files: Vec<SourceFile>,
     errors: Vec<RotoError>,
+    spans: Spans,
+}
+
+/// Compiler stage: Files loaded and ready to be parsed
+pub struct Files {
+    files: Vec<SourceFile>,
+}
+
+/// Compiler stage: Files loaded and parsed
+pub struct Parsed {
+    /// Interned strings for identifiers and such
+    identifiers: StringInterner<StringBackend>,
+    files: Vec<SourceFile>,
+    trees: Vec<ast::SyntaxTree>,
+    spans: Spans,
+}
+
+/// Compiler stage: loaded, parsed and type checked
+pub struct TypeChecked {
+    runtime: Runtime,
+    trees: Vec<ast::SyntaxTree>,
+    type_infos: Vec<TypeInfo>,
+    identifiers: StringInterner<StringBackend>,
+    scope_graph: ScopeGraph,
+}
+
+/// Compiler stage: HIR
+pub struct Lowered {
+    runtime: Runtime,
+    pub ir: Vec<ir::Function>,
+    runtime_functions: HashMap<String, IrFunction>,
+    identifiers: StringInterner<StringBackend>,
+    label_store: LabelStore,
+    type_info: TypeInfo,
+}
+
+pub struct Compiled {
+    runtime: Runtime,
+    module: Module,
 }
 
 impl std::fmt::Display for RotoReport {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use ariadne::{Color, Label, Report, ReportKind};
 
-        let mut file_cache = ariadne::sources(
-            self.files
-                .iter()
-                .map(|s| (s.name.clone(), s.contents.clone())),
-        );
+        let sources = self
+            .files
+            .iter()
+            .map(|s| {
+                (
+                    s.name.clone(),
+                    ariadne::Source::from(s.contents.clone())
+                        .with_display_line_offset(s.location_offset),
+                )
+            })
+            .collect();
+
+        let mut file_cache = ariadne::FnCache::new(
+            (move |id| {
+                Err(Box::new(format!("Failed to fetch source '{}'", id)) as _)
+            }) as fn(&_) -> _,
+        )
+        .with_sources(sources);
 
         for error in &self.errors {
             match error {
@@ -47,23 +126,20 @@ impl std::fmt::Display for RotoReport {
                 RotoError::Parse(error) => {
                     let label_message = error.kind.label();
                     let label = Label::new((
-                        self.filename(error.location.file),
+                        self.filename(error.location),
                         error.location.start..error.location.end,
                     ))
                     .with_message(label_message)
                     .with_color(Color::Red);
 
-                    let file = self.filename(error.location.file);
+                    let file = self.filename(error.location);
 
                     let report = Report::build(
                         ReportKind::Error,
                         file,
                         error.location.start,
                     )
-                    .with_message(format!(
-                        "Parse error: {}",
-                        error
-                    ))
+                    .with_message(format!("Parse error: {}", error))
                     .with_label(label)
                     .finish();
 
@@ -74,23 +150,21 @@ impl std::fmt::Display for RotoReport {
                 }
                 RotoError::Type(error) => {
                     let labels = error.labels.iter().map(|l| {
-                        Label::new((
-                            self.filename(l.span.file),
-                            l.span.start..l.span.end,
-                        ))
-                        .with_message(&l.message)
-                        .with_color(match l.level {
-                            Level::Error => Color::Red,
-                            Level::Info => Color::Blue,
-                        })
+                        let s = self.spans.get(l.id);
+                        Label::new((self.filename(s), s.start..s.end))
+                            .with_message(&l.message)
+                            .with_color(match l.level {
+                                Level::Error => Color::Red,
+                                Level::Info => Color::Blue,
+                            })
                     });
 
-                    let file = self.filename(error.location.file);
+                    let file = self.filename(self.spans.get(error.location));
 
                     let report = Report::build(
                         ReportKind::Error,
                         file,
-                        error.location.start,
+                        self.spans.get(error.location).start,
                     )
                     .with_message(format!(
                         "Type error: {}",
@@ -104,12 +178,6 @@ impl std::fmt::Display for RotoReport {
                     let s = String::from_utf8_lossy(&v);
                     write!(f, "{s}")?;
                 }
-                RotoError::Evaluate(e) => {
-                    write!(f, "{e}")?;
-                }
-                RotoError::Compile(e) => {
-                    write!(f, "{e}")?;
-                }
             }
         }
 
@@ -118,68 +186,76 @@ impl std::fmt::Display for RotoReport {
 }
 
 impl RotoReport {
-    fn filename(&self, i: usize) -> String {
-        self.files[i].name.clone()
+    fn filename(&self, s: Span) -> String {
+        self.files[s.file].name.clone()
     }
 }
 
 impl std::error::Error for RotoReport {}
 
+#[macro_export]
+macro_rules! src {
+    ($code:literal) => {
+        $crate::pipeline::test_file(file!(), $code, line!() as usize - 1)
+    };
+}
+
+/// Compile and run a Roto script from a file
 pub fn run(
+    runtime: Runtime,
     files: impl IntoIterator<Item = String>,
-) -> Result<Vec<Rotolo>, RotoReport> {
-    let files = read_files(files)?;
-    let trees = parse(&files)?;
-    typecheck(&files, &trees)?;
-    let symbols = evaluate(&files, &trees)?;
-    compile(&files, &symbols, None)
+    mem: &mut Memory,
+    rx: Vec<IrValue>,
+) -> Result<Option<IrValue>, RotoReport> {
+    let pointer_bytes = usize::BITS / 8;
+
+    let lowered = read_files(files)?
+        .parse()?
+        .typecheck(runtime, pointer_bytes)?
+        .lower();
+
+    let res = lowered.eval(mem, rx);
+    Ok(res)
 }
 
-pub fn run_string<'a>(
-    script: String,
-) -> Result<Vec<Rotolo>, RotoReport> {
-    let files = vec![SourceFile { name: "script".into(), contents: script }];
-    let trees = parse(&files)?;
-    typecheck(&files, &trees)?;
-    let symbols = evaluate(&files, &trees)?;
-    compile(&files, &symbols, None)
+/// Create a test file to compile and run
+pub fn test_file(file: &str, source: &str, location_offset: usize) -> Files {
+    Files {
+        files: vec![SourceFile {
+            location_offset,
+            name: file.into(),
+            contents: source.into(),
+        }],
+    }
 }
 
-pub fn test_file(source: &str) -> Vec<SourceFile> {
-    vec![SourceFile {
-        name: "test".into(),
-        contents: source.into(),
-    }]
-}
-
-pub fn run_test(
-    source: &str,
-    arguments: Option<(&Scope, Vec<(&str, TypeValue)>)>,
-) -> Result<Rotolo, RotoReport> {
-    let files = test_file(source);
-    let trees = parse(&files)?;
-    typecheck(&files, &trees)?;
-    let symbols = evaluate(&files, &trees)?;
-    Ok(compile(&files, &symbols, arguments)?.remove(0))
-}
-
-fn read_files(
-    files: impl IntoIterator<Item = String>,
-) -> Result<Vec<SourceFile>, RotoReport> {
+pub fn read_files<S>(
+    files: impl IntoIterator<Item = S>,
+) -> Result<Files, RotoReport>
+where
+    S: AsRef<str>,
+{
     let results: Vec<_> = files
         .into_iter()
-        .map(|f| (f.to_string(), std::fs::read_to_string(f)))
+        .map(|f| {
+            (f.as_ref().to_string(), std::fs::read_to_string(f.as_ref()))
+        })
         .collect();
 
     let mut files = Vec::new();
     let mut errors = Vec::new();
     for (name, result) in results {
         match result {
-            Ok(contents) => files.push(SourceFile { name, contents }),
+            Ok(contents) => files.push(SourceFile {
+                location_offset: 0,
+                name,
+                contents,
+            }),
             Err(err) => {
                 errors.push(RotoError::Read(name.clone(), err));
                 files.push(SourceFile {
                     name,
+                    location_offset: 0,
                     contents: String::new(),
                 });
             }
@@ -187,121 +263,194 @@ fn read_files(
     }
 
     if errors.is_empty() {
-        Ok(files)
-    } else {
-        Err(RotoReport { files, errors })
-    }
-}
-
-pub fn parse(files: &[SourceFile]) -> Result<Vec<SyntaxTree>, RotoReport> {
-    let results: Vec<_> = files
-        .iter()
-        .enumerate()
-        .map(|(i, f)| Parser::parse(i, &f.contents))
-        .collect();
-
-    let mut trees = Vec::new();
-    let mut errors = Vec::new();
-    for result in results {
-        match result {
-            Ok(tree) => trees.push(tree),
-            Err(err) => errors.push(RotoError::Parse(err)),
-        };
-    }
-
-    if errors.is_empty() {
-        Ok(trees)
+        Ok(Files { files })
     } else {
         Err(RotoReport {
-            files: files.to_vec(),
+            files,
             errors,
+            spans: Spans::default(),
         })
     }
 }
 
-pub fn typecheck(
-    files: &[SourceFile],
-    trees: &[SyntaxTree],
-) -> Result<(), RotoReport> {
-    let results: Vec<_> = trees
-        .iter()
-        .map(crate::typechecker::typecheck)
-        .collect();
+impl Files {
+    pub fn compile(
+        self,
+        runtime: Runtime,
+        pointer_bytes: u32,
+    ) -> Result<Compiled, RotoReport> {
+        let x = self.parse()?;
+        let x = x.typecheck(runtime, pointer_bytes)?;
+        Ok(x.lower().codegen())
+    }
 
-    let mut errors = Vec::new();
-    for result in results {
-        if let Err(err) = result {
-            errors.push(RotoError::Type(err));
+    pub fn parse(self) -> Result<Parsed, RotoReport> {
+        let mut spans = Spans::default();
+
+        let mut identifiers = StringInterner::new();
+
+        let results: Vec<_> = self
+            .files
+            .iter()
+            .enumerate()
+            .map(|(i, f)| {
+                Parser::parse(i, &mut identifiers, &mut spans, &f.contents)
+            })
+            .collect();
+
+        let mut trees = Vec::new();
+        let mut errors = Vec::new();
+        for result in results {
+            match result {
+                Ok(tree) => trees.push(tree),
+                Err(err) => errors.push(RotoError::Parse(err)),
+            };
+        }
+
+        if errors.is_empty() {
+            Ok(Parsed {
+                identifiers,
+                trees,
+                spans,
+                files: self.files,
+            })
+        } else {
+            Err(RotoReport {
+                files: self.files.to_vec(),
+                errors,
+                spans,
+            })
         }
     }
+}
 
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        Err(RotoReport {
-            files: files.to_vec(),
-            errors,
-        })
+impl Parsed {
+    pub fn typecheck(
+        self,
+        runtime: Runtime,
+        pointer_bytes: u32,
+    ) -> Result<TypeChecked, RotoReport> {
+        let Parsed {
+            mut identifiers,
+            files,
+            trees,
+            spans,
+        } = self;
+
+        let mut scope_graph = ScopeGraph::new();
+
+        let results: Vec<_> = trees
+            .iter()
+            .map(|f| {
+                crate::typechecker::typecheck(
+                    &runtime,
+                    &mut identifiers,
+                    &mut scope_graph,
+                    f,
+                    pointer_bytes,
+                )
+            })
+            .collect();
+
+        let mut type_infos = Vec::new();
+        let mut errors = Vec::new();
+        for result in results {
+            match result {
+                Ok(type_info) => {
+                    type_infos.push(type_info);
+                }
+                Err(err) => errors.push(RotoError::Type(err)),
+            }
+        }
+
+        if errors.is_empty() {
+            Ok(TypeChecked {
+                runtime,
+                trees,
+                type_infos,
+                identifiers,
+                scope_graph,
+            })
+        } else {
+            Err(RotoReport {
+                files: files.to_vec(),
+                errors,
+                spans,
+            })
+        }
     }
 }
 
-pub fn evaluate(
-    files: &[SourceFile],
-    trees: &[SyntaxTree],
-) -> Result<Vec<GlobalSymbolTable>, RotoReport> {
-    let results: Vec<_> = trees
-        .iter()
-        .map(|t| {
-            let symbols = GlobalSymbolTable::new();
-            t.eval(symbols.clone())?;
-            Ok(symbols)
-        })
-        .collect();
+impl TypeChecked {
+    pub fn lower(self) -> Lowered {
+        let TypeChecked {
+            runtime,
+            trees,
+            mut type_infos,
+            mut identifiers,
+            scope_graph,
+        } = self;
+        let mut runtime_functions = HashMap::new();
+        let mut label_store = LabelStore::default();
+        let ir = lower::lower(
+            &trees[0],
+            &mut type_infos[0],
+            &mut runtime_functions,
+            &mut identifiers,
+            &mut label_store,
+        );
 
-    let mut symbol_tables = Vec::new();
-    let mut errors = Vec::new();
-    for result in results {
-        match result {
-            Ok(s) => symbol_tables.push(s),
-            Err(e) => errors.push(RotoError::Evaluate(e)),
+        if log::log_enabled!(log::Level::Info) {
+            let s = IrPrinter {
+                scope_graph: &scope_graph,
+                identifiers: &identifiers,
+                label_store: &label_store,
+            }
+            .program(&ir);
+            println!("{s}");
         }
-    }
 
-    if errors.is_empty() {
-        Ok(symbol_tables)
-    } else {
-        Err(RotoReport {
-            files: files.to_vec(),
-            errors,
-        })
+        Lowered {
+            ir,
+            runtime,
+            runtime_functions,
+            identifiers,
+            label_store,
+            type_info: type_infos.remove(0),
+        }
     }
 }
 
-pub fn compile(
-    files: &[SourceFile],
-    symbol_tables: &[GlobalSymbolTable],
-    arguments: Option<(&Scope, Vec<(&str, TypeValue)>)>,
-) -> Result<Vec<Rotolo>, RotoReport> {
-    let results: Vec<_> = symbol_tables
-        .iter()
-        .map(|t| Compiler::build(t.clone(), arguments.clone()))
-        .collect();
-
-    let mut rotolos = Vec::new();
-    let mut errors = Vec::new();
-    for result in results {
-        match result {
-            Ok(r) => rotolos.push(r),
-            Err(e) => errors.push(RotoError::Compile(e)),
-        }
+impl Lowered {
+    pub fn eval(
+        &self,
+        mem: &mut Memory,
+        rx: Vec<IrValue>,
+    ) -> Option<IrValue> {
+        eval::eval(&self.ir, "main", mem, rx, &self.identifiers)
     }
 
-    if errors.is_empty() {
-        Ok(rotolos)
-    } else {
-        Err(RotoReport {
-            files: files.to_vec(),
-            errors,
-        })
+    pub fn codegen(self) -> Compiled {
+        let module = codegen::codegen(
+            &self.ir,
+            &self.runtime_functions,
+            self.identifiers,
+            self.label_store,
+            self.type_info,
+        );
+        Compiled {
+            runtime: self.runtime,
+            module,
+        }
+    }
+}
+
+impl Compiled {
+    pub fn get_function<'program, Params: RotoParams, Return: Reflect>(
+        &'program mut self,
+        name: &str,
+    ) -> Option<TypedFunc<'program, Params, Return>> {
+        self.module
+            .get_function(&mut self.runtime.type_registry, name)
     }
 }

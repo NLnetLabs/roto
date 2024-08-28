@@ -1,3 +1,4 @@
+#![cfg(any())]
 use log::trace;
 use roto::pipeline::{self, RotoReport};
 

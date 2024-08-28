@@ -1,0 +1,13 @@
+filter-map main(x: u32) {
+    define {
+        a = 5;
+    }
+
+    apply {
+        if a == x {
+            accept
+        } else {
+            reject
+        }
+    }
+}

@@ -1,63 +1,141 @@
 use std::{
     borrow::Borrow,
-    collections::{hash_map::Entry, HashMap},
+    collections::{btree_map::Entry, BTreeMap},
 };
 
-use crate::{ast::Identifier, parser::span::Spanned};
+use string_interner::{backend::StringBackend, StringInterner};
 
-use super::{error, Type, TypeResult};
+use crate::{
+    ast::Identifier,
+    parser::meta::{Meta, MetaId},
+};
 
-/// A type checking scope
+use super::Type;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ScopeRef(Option<usize>);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct DefinitionRef(pub ScopeRef, pub Identifier);
+
 #[derive(Default)]
-pub struct Scope<'a> {
-    /// Map from identifier to type
-    variables: HashMap<String, Type>,
-    /// Parent scope
-    parent: Option<&'a Scope<'a>>,
+pub struct ScopeGraph {
+    globals: BTreeMap<Identifier, Definition>,
+    scopes: Vec<Scope>,
 }
 
-impl<'a> Scope<'a> {
-    /// Create a new scope over self
-    ///
-    /// The wrapped scope cannot be mutated while the new scope exist.
-    pub fn wrap(&'a self) -> Self {
-        Self {
-            variables: HashMap::default(),
-            parent: Some(self),
-        }
+/// A type checking scope
+struct Scope {
+    /// Map from identifier to fully qualified type
+    variables: BTreeMap<Identifier, Definition>,
+    scope_type: ScopeType,
+    parent: ScopeRef,
+}
+
+struct Definition {
+    ty: Type,
+    id: MetaId,
+}
+
+pub enum ScopeType {
+    Function(Identifier),
+    MatchArm(usize, Option<usize>),
+}
+
+impl ScopeGraph {
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    pub fn get_var(&self, k: &Spanned<Identifier>) -> TypeResult<&Type> {
-        self.variables
-            .get(k.as_ref())
-            .ok_or_else(|| error::simple(
-                &format!(
-                    "cannot find variable `{}` in this scope",
-                    k.as_ref()
-                ),
-                "not found in this scope",
-                k.span,
-            ))
-            .or_else(|e| self.parent.ok_or(e).and_then(|s| s.get_var(k)))
+    /// Create a new root scope
+    pub fn root(&mut self) -> ScopeRef {
+        ScopeRef(None)
     }
 
-    pub fn insert_var(
+    /// Create a new scope over `scope`
+    pub fn wrap(
         &mut self,
-        v: &Spanned<Identifier>,
-        t: impl Borrow<Type>,
-    ) -> TypeResult<&mut Type> {
-        let t = t.borrow().clone();
-        let v_string = v.as_ref().to_string();
-        match self.variables.entry(v_string) {
-            Entry::Occupied(entry) => Err(error::simple(
-                &format!(
-                    "variable {} defined multiple times in the same scope",
-                    entry.key()
-                ),
-                "variable already declared",
-                v.span
-            )),
-            Entry::Vacant(entry) => Ok(entry.insert(t)),
+        parent: ScopeRef,
+        scope_type: ScopeType,
+    ) -> ScopeRef {
+        self.scopes.push(Scope {
+            scope_type,
+            variables: BTreeMap::new(),
+            parent,
+        });
+        ScopeRef(Some(self.scopes.len() - 1))
+    }
+
+    pub fn parent(&self, ScopeRef(scope): ScopeRef) -> Option<ScopeRef> {
+        scope.map(|idx| self.scopes[idx].parent)
+    }
+
+    pub fn get_var<'a>(
+        &'a self,
+        mut scope: ScopeRef,
+        identifier: &Meta<Identifier>,
+    ) -> Option<(DefinitionRef, &'a Type)> {
+        loop {
+            let variables = match scope.0 {
+                Some(idx) => &self.scopes[idx].variables,
+                None => &self.globals,
+            };
+            if let Some(def) = variables.get(identifier) {
+                return Some((
+                    DefinitionRef(scope, identifier.node),
+                    &def.ty,
+                ));
+            }
+
+            scope = self.parent(scope)?;
         }
+    }
+
+    pub fn insert_var<'a>(
+        &'a mut self,
+        scope: ScopeRef,
+        v: &Meta<Identifier>,
+        t: impl Borrow<Type>,
+    ) -> Result<(DefinitionRef, &'a Type), MetaId> {
+        let t = t.borrow().clone();
+        let variables = match scope.0 {
+            Some(idx) => &mut self.scopes[idx].variables,
+            None => &mut self.globals,
+        };
+        match variables.entry(v.node) {
+            Entry::Occupied(entry) => Err(entry.get().id),
+            Entry::Vacant(entry) => Ok((
+                DefinitionRef(scope, v.node),
+                &entry.insert(Definition { ty: t, id: v.id }).ty,
+            )),
+        }
+    }
+}
+
+impl ScopeGraph {
+    pub fn print_scope(
+        &self,
+        mut scope: ScopeRef,
+        identifiers: &StringInterner<StringBackend>,
+    ) -> String {
+        let mut idents = Vec::new();
+        while let Some(idx) = scope.0 {
+            let s = &self.scopes[idx];
+            let ident = match &s.scope_type {
+                ScopeType::Function(name) => {
+                    identifiers.resolve(name.0).unwrap().to_string()
+                }
+                ScopeType::MatchArm(idx, Some(arm)) => {
+                    format!("$match_{idx}_arm_{arm}")
+                }
+                ScopeType::MatchArm(idx, None) => {
+                    format!("$match_{idx}_arm_default")
+                }
+            };
+            idents.push(ident);
+            scope = s.parent;
+        }
+        idents.reverse();
+        idents.join("::")
     }
 }

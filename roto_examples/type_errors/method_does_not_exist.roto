@@ -1,0 +1,7 @@
+filter foo(msg: u32) {
+	define {
+		b = msg.foo(); // should error here
+	}
+
+	apply { accept }
+}

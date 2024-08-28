@@ -1,3 +1,4 @@
+#![cfg(any())]
 use log::trace;
 
 use roto::ast::AcceptReject;
@@ -59,8 +60,7 @@ fn test_data(
 ) -> Result<VmResult, Box<dyn std::error::Error>> {
     trace!("Evaluate filter-map {}...", name);
 
-    let rotolo =
-        pipeline::run_test(source_code, Some((&name, filter_args)))?;
+    let rotolo = pipeline::run_test(source_code, Some((&name, filter_args)))?;
     let mut roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
     let _count: TypeValue = 1_u32.into();
     let prefix: TypeValue =

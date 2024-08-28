@@ -1,103 +1,149 @@
-use std::fmt::{Debug, Display};
+use string_interner::{backend::StringBackend, StringInterner};
+
+use crate::{
+    ast::Identifier,
+    parser::meta::{Meta, MetaId},
+    runtime::{Runtime, RuntimeFunction},
+};
+use std::{
+    any::TypeId,
+    fmt::{Debug, Display},
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
     Var(usize),
-    ExplicitVar(&'static str),
+    ExplicitVar(Identifier),
     IntVar(usize),
-    RecordVar(usize, Vec<(String, Type)>),
+    RecordVar(usize, Vec<(Meta<Identifier>, Type)>),
+    Never,
     Primitive(Primitive),
+    BuiltIn(Identifier, TypeId),
+    Verdict(Box<Type>, Box<Type>),
     List(Box<Type>),
     Table(Box<Type>),
     OutputStream(Box<Type>),
     Rib(Box<Type>),
-    Record(Vec<(String, Type)>),
-    NamedRecord(String, Vec<(String, Type)>),
-    Enum(String, Vec<(String, Option<Type>)>),
-    Term(Vec<(String, Type)>),
-    Action(Vec<(String, Type)>),
-    Filter(Vec<(String, Type)>),
-    FilterMap(Vec<(String, Type)>),
-    Name(String),
+    Record(Vec<(Meta<Identifier>, Type)>),
+    NamedRecord(Identifier, Vec<(Meta<Identifier>, Type)>),
+    Enum(Identifier, Vec<(Identifier, Option<Type>)>),
+    Function(Vec<(Meta<Identifier>, Type)>, Box<Type>),
+    Filter(Vec<(Meta<Identifier>, Type)>),
+    FilterMap(Vec<(Meta<Identifier>, Type)>),
+    Name(Identifier),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Primitive {
-    U32,
-    U16,
     U8,
+    U16,
+    U32,
+    U64,
+    I8,
+    I16,
+    I32,
+    I64,
     Unit,
     String,
     Bool,
-    Prefix,
-    PrefixLength,
-    AsNumber,
-    IpAddress,
-    AsPath,
-    Community,
-    OriginType,
-    NextHop,
-    MultiExitDisc,
-    LocalPref,
-    AtomicAggregate,
-    Aggregator,
-    Nlri,
-    RouteStatus,
-    BgpUpdateMessage
 }
 
 impl From<Primitive> for Type {
-    fn from(val: Primitive) -> Self {
-        Type::Primitive(val)
+    fn from(value: Primitive) -> Self {
+        Type::Primitive(value)
     }
 }
 
-// Yes this is abusing Debug, but it's fine
 impl Display for Primitive {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Debug::fmt(self, f)
+        write!(
+            f,
+            "{}",
+            match self {
+                Primitive::U8 => "u8",
+                Primitive::U16 => "u16",
+                Primitive::U32 => "u32",
+                Primitive::U64 => "u64",
+                Primitive::I8 => "i8",
+                Primitive::I16 => "i16",
+                Primitive::I32 => "i32",
+                Primitive::I64 => "i64",
+                Primitive::Unit => "Unit",
+                Primitive::String => "String",
+                Primitive::Bool => "bool",
+            }
+        )
     }
 }
 
-impl Display for Type {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let fmt_args = |args: &[(String, Type)]| {
-            args.iter().map(|(_, t)| t.to_string()).collect::<Vec<_>>().join(", ")
-        };
-        match self {
-            Type::Var(_) => write!(f, "{{unknown}}"),
-            Type::ExplicitVar(s) => write!(f, "{s}"),
-            Type::IntVar(_) => write!(f, "{{integer}}"),
-            Type::RecordVar(_, fields) | Type::Record(fields) => write!(
-                f,
-                "{{ {} }}",
-                fields
-                    .iter()
-                    .map(|(s, t)| { format!("\"{s}\": {t}") })
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            Type::Primitive(p) => write!(f, "{p}"),
-            Type::List(t) => write!(f, "List<{t}>"),
-            Type::Table(t) => write!(f, "Table<{t}>"),
-            Type::OutputStream(t) => write!(f, "OutputStream<{t}>"),
-            Type::Rib(t) => write!(f, "Rib<{t}>"),
-            Type::NamedRecord(x, _) => write!(f, "{x}"),
-            Type::Enum(x, _) => write!(f, "{x}"),
-            Type::Term(args) => write!(f, "Term({})", fmt_args(args)),
-            Type::Action(args) => write!(f, "Action({})", fmt_args(args)),
-            Type::Filter(args) => write!(f, "Filter({})", fmt_args(args)),
-            Type::FilterMap(args) => write!(f, "Filter({})", fmt_args(args)),
-            Type::Name(x) => write!(f, "{x}"),
+pub fn type_to_string(
+    identifiers: &StringInterner<StringBackend>,
+    ty: &Type,
+) -> String {
+    let fmt_args = |args: &[(_, Type)]| {
+        args.iter()
+            .map(|(_, t)| type_to_string(identifiers, t))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    match ty {
+        Type::Var(_) => "{{unknown}}".into(),
+        Type::ExplicitVar(s) => identifiers.resolve(s.0).unwrap().into(),
+        Type::IntVar(_) => "{{integer}}".into(),
+        Type::RecordVar(_, fields) | Type::Record(fields) => format!(
+            "{{ {} }}",
+            fields
+                .iter()
+                .map(|(s, t)| {
+                    format!(
+                        "\"{}\": {}",
+                        identifiers.resolve(s.0).unwrap(),
+                        type_to_string(identifiers, t)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Type::Verdict(a, r) => {
+            format!(
+                "Verdict<{}, {}>",
+                type_to_string(identifiers, a),
+                type_to_string(identifiers, r)
+            )
         }
+        Type::Never => "!".into(),
+        Type::Primitive(p) => format!("{p}"),
+        Type::BuiltIn(name, _) => identifiers.resolve(name.0).unwrap().into(),
+        Type::List(t) => format!("List<{}>", type_to_string(identifiers, t)),
+        Type::Table(t) => {
+            format!("Table<{}>", type_to_string(identifiers, t))
+        }
+        Type::OutputStream(t) => {
+            format!("OutputStream<{}>", type_to_string(identifiers, t))
+        }
+        Type::Rib(t) => format!("Rib<{}>", type_to_string(identifiers, t)),
+        Type::NamedRecord(x, _) => identifiers.resolve(x.0).unwrap().into(),
+        Type::Enum(x, _) => identifiers.resolve(x.0).unwrap().into(),
+        Type::Function(args, ret) => {
+            format!(
+                "function({}) -> {}",
+                fmt_args(args),
+                type_to_string(identifiers, ret)
+            )
+        }
+        Type::Filter(args) => format!("filter({})", fmt_args(args)),
+        Type::FilterMap(args) => {
+            format!("filter-map({})", fmt_args(args))
+        }
+        Type::Name(x) => identifiers.resolve(x.0).unwrap().into(),
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Arrow {
-    pub rec: Type,
-    pub args: Vec<Type>,
-    pub ret: Type,
+pub struct Signature {
+    pub kind: FunctionKind,
+    pub parameter_types: Vec<Type>,
+    pub return_type: Type,
 }
 
 impl Type {
@@ -113,6 +159,9 @@ impl Type {
             Type::Table(x) => Type::Table(Box::new(f(x))),
             Type::OutputStream(x) => Type::OutputStream(Box::new(f(x))),
             Type::Rib(x) => Type::Rib(Box::new(f(x))),
+            Type::Verdict(a, r) => {
+                Type::Verdict(Box::new(f(a)), Box::new(f(r)))
+            }
             Type::RecordVar(x, fields) => Type::RecordVar(
                 *x,
                 fields.iter().map(|(n, t)| (n.clone(), f(t))).collect(),
@@ -121,7 +170,7 @@ impl Type {
                 fields.iter().map(|(n, t)| (n.clone(), f(t))).collect(),
             ),
             Type::NamedRecord(n, fields) => Type::NamedRecord(
-                n.clone(),
+                *n,
                 fields.iter().map(|(n, t)| (n.clone(), f(t))).collect(),
             ),
             other => other.clone(),
@@ -129,154 +178,137 @@ impl Type {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Method {
-    pub receiver_type: Type,
-    pub name: &'static str,
-    pub vars: Vec<&'static str>,
-    pub argument_types: Vec<Type>,
-    pub return_type: Type,
-}
-
-impl Method {
-    fn new<'a, T>(
-        receiver_type: impl Into<Type>,
-        name: &'static str,
-        vars: &[&'static str],
-        argument_types: &'a [T],
-        return_type: impl Into<Type>,
-    ) -> Self
-    where
-        T: Into<Type> + Clone + 'a,
-    {
-        Self {
-            receiver_type: receiver_type.into(),
-            name,
-            vars: vars.to_vec(),
-            argument_types: argument_types
-                .iter()
-                .cloned()
-                .map(Into::into)
-                .collect(),
-            return_type: return_type.into(),
+impl Primitive {
+    /// Size of the type in bytes
+    pub fn size(&self) -> u32 {
+        match self {
+            Primitive::U8 => 1,
+            Primitive::U16 => 2,
+            Primitive::U32 => 4,
+            Primitive::U64 => 8,
+            Primitive::I8 => 1,
+            Primitive::I16 => 2,
+            Primitive::I32 => 4,
+            Primitive::I64 => 8,
+            Primitive::Unit => 0,
+            Primitive::String => 4,
+            Primitive::Bool => 1,
         }
     }
 }
 
-pub fn globals() -> Vec<(String, Type)> {
+/// The definition of a function from several different sources.
+///
+/// This is used to extract the function pointer and any other information
+/// required to generate the code to call this function.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FunctionDefinition {
+    Runtime(RuntimeFunction),
+    Roto,
+}
+
+/// A function that can be called from Roto
+///
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Function {
+    /// The type signature of this function
+    pub signature: Signature,
+
+    /// Function name
+    pub name: Identifier,
+
+    /// Type variables of this function
+    pub vars: Vec<Identifier>,
+
+    /// The source of this function
+    pub definition: FunctionDefinition,
+}
+
+/// How a function should be called in Roto: as a free function or a
+/// (static) method.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FunctionKind {
+    Free,
+    Method(Type),
+    StaticMethod(Type),
+}
+
+impl Function {
+    pub fn new<T: Into<Type>>(
+        kind: FunctionKind,
+        name: Identifier,
+        vars: &[Identifier],
+        parameter_types: impl IntoIterator<Item = T>,
+        return_type: impl Into<Type>,
+        definition: FunctionDefinition,
+    ) -> Self {
+        Self {
+            name,
+            vars: vars.to_vec(),
+            signature: Signature {
+                kind,
+                parameter_types: parameter_types
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
+                return_type: return_type.into(),
+            },
+            definition,
+        }
+    }
+}
+
+pub fn globals(
+    identifiers: &mut StringInterner<StringBackend>,
+) -> Vec<(Identifier, Type)> {
+    let community = Identifier(identifiers.get_or_intern("Community"));
+    let safi = Identifier(identifiers.get_or_intern("Safi"));
+    let afi = Identifier(identifiers.get_or_intern("Afi"));
+
     [
-        ("BLACKHOLE", Type::Primitive(Primitive::Community)),
-        ("UNICAST", Type::Name("Safi".into())),
-        ("MULTICAST", Type::Name("Safi".into())),
-        ("IPV4", Type::Name("Afi".into())),
-        ("IPV6", Type::Name("Afi".into())),
-        ("VPNV4", Type::Name("Afi".into())),
-        ("VPNV6", Type::Name("Afi".into())),
+        ("BLACKHOLE", Type::Name(community)),
+        ("UNICAST", Type::Name(safi)),
+        ("MULTICAST", Type::Name(safi)),
+        ("IPV4", Type::Name(afi)),
+        ("IPV6", Type::Name(afi)),
+        ("VPNV4", Type::Name(afi)),
+        ("VPNV6", Type::Name(afi)),
     ]
     .into_iter()
-    .map(|(s, t)| (s.into(), t))
+    .map(|(s, t)| (Identifier(identifiers.get_or_intern(s)), t))
     .collect()
 }
 
-pub fn methods() -> Vec<Method> {
-    use self::Primitive::*;
-    use Type::*;
-
-    vec![
-        Method::new(Prefix, "address", &[], &[] as &[Type], IpAddress),
-        Method::new(Prefix, "exists", &[], &[] as &[Type], Bool),
-        Method::new(Prefix, "len", &[], &[] as &[Type], PrefixLength),
-        Method::new(
-            OutputStream(Box::new(ExplicitVar("T"))),
-            "send",
-            &["T"],
-            &[ExplicitVar("T")],
-            Unit,
-        ),
-        Method::new(
-            ExplicitVar("T"),
-            "set",
-            &["T"],
-            &[ExplicitVar("T")],
-            Unit,
-        ),
-        Method::new(
-            List(Box::new(ExplicitVar("T"))),
-            "contains",
-            &["T"],
-            &[ExplicitVar("T")],
-            Bool,
-        ),
-        Method::new(
-            List(Box::new(ExplicitVar("T"))),
-            "first",
-            &["T"],
-            &[] as &[Type],
-            ExplicitVar("T")
-        ),
-        Method::new(
-            Table(Box::new(ExplicitVar("T"))),
-            "contains",
-            &["T"],
-            &[ExplicitVar("T")],
-            Bool,
-        ),
-        Method::new(AsPath, "contains", &[], &[AsNumber], Bool),
-        Method::new(Prefix, "contains", &[], &[IpAddress], Bool),
-        Method::new(Prefix, "covers", &[], &[Prefix], Bool),
-        Method::new(Prefix, "is_covered_by", &[], &[Prefix], Bool),
-        Method::new(AsPath, "len", &[], &[] as &[Type], U32),
-        Method::new(AsPath, "origin", &[], &[] as &[Type], AsNumber),
-        Method::new(Nlri, "afi", &[], &[] as &[Type], Type::Name("Afi".into())),
-        Method::new(Nlri, "safi", &[], &[] as &[Type], Type::Name("Safi".into())),
-    ]
-}
-
-pub fn static_methods() -> Vec<Method> {
-    use self::Primitive::*;
-
-    vec![
-        Method::new(Prefix, "from", &[], &[IpAddress, PrefixLength], Prefix),
-        Method::new(
-            String,
-            "format",
-            &["T"],
-            &[Type::Primitive(String), Type::ExplicitVar("T")],
-            String,
-        ),
-    ]
-}
-
-pub fn default_types() -> Vec<(&'static str, Type)> {
+pub fn default_types(
+    identifiers: &mut StringInterner<StringBackend>,
+    runtime: &Runtime,
+) -> Vec<(Identifier, Type)> {
     use Primitive::*;
 
     let primitives = vec![
-        ("U32", U32),
-        ("U16", U16),
-        ("U8", U8),
-        ("Bool", Bool),
+        ("u8", U8),
+        ("u16", U16),
+        ("u32", U32),
+        ("u64", U64),
+        ("i8", I8),
+        ("i16", I16),
+        ("i32", I32),
+        ("i64", I64),
+        ("bool", Bool),
         ("String", String),
-        ("Prefix", Prefix),
-        ("IpAddress", IpAddress),
-        ("Asn", AsNumber),
-        ("AsPath", AsPath),
-        ("OriginType", OriginType),
-        ("NextHop", NextHop),
-        ("MultiExitDisc", MultiExitDisc),
-        ("LocalPref", LocalPref),
-        ("AtomicAggregate", AtomicAggregate),
-        ("Aggregator", Aggregator),
-        ("Community", Community),
         ("Unit", Unit),
-        ("Nlri", Nlri),
-        ("RouteStatus", RouteStatus),
-        ("BgpUpdateMessage", BgpUpdateMessage),
     ];
 
     let mut types = Vec::new();
 
     for (n, p) in primitives {
-        types.push((n, Type::Primitive(p)))
+        let name = Identifier(identifiers.get_or_intern(n));
+        types.push((name, Type::Primitive(p)))
+    }
+
+    for ty in &runtime.runtime_types {
+        let name = Identifier(identifiers.get_or_intern(&ty.name));
+        types.push((name, Type::BuiltIn(name, ty.type_id)))
     }
 
     enum RecordOrEnum {
@@ -287,113 +319,6 @@ pub fn default_types() -> Vec<(&'static str, Type)> {
     use RecordOrEnum::*;
 
     let compound_types = vec![
-        Record(
-            "Header",
-            vec![
-                ("is_ipv6", "Bool"),
-                ("is_ipv4", "Bool"),
-                ("is_legacy_format", "Bool"),
-                ("is_post_policy", "Bool"),
-                ("is_pre_policy", "Bool"),
-                ("peer_type", "U8"),
-                ("asn", "Asn"),
-                ("address", "IpAddress"),
-            ],
-        ),
-        Enum(
-            "PeerRibType",
-            vec![
-                ("InPre", None),
-                ("InPost", None),
-                ("Loc", None),
-                ("OutPre", None),
-                ("OutPost", None)
-            ]
-        ),
-        Record(
-            "PeerId",
-            vec![("addr", "IpAddress"), ("asn", "Asn")]
-        ),
-        Record(
-            "Provenance",
-            vec![
-                ("timestamp", "U32"),
-                ("connection_id", "U32"),
-                ("peer-id", "PeerId"),
-                ("peer-bgp-id", "U32"),
-                ("peer-distuingisher", "U32"),
-                ("peer-rib-type", "PeerRibType"),
-            ]
-        ),
-        Record(
-            "RouteContext",
-            vec![
-                ("bgp-msg", "BgpUpdateMessage"),
-                ("provenance", "Provenance"),
-                ("nlri-status", "RouteStatus")
-            ]
-        ),
-        Enum(
-            "RouteStatus",
-            vec![
-                ("InConvergence", None),
-                ("UpToDate", None),
-                ("Stale", None),
-                ("StartOfRouteRefresh", None),
-                ("Withdrawn", None),
-                ("Unparsable", None),
-                ("Empty", None),
-            ],
-        ),
-        Record(
-            "Route",
-            vec![
-                ("prefix", "Prefix"),
-                ("as-path", "AsPath"),
-                ("origin-type", "OriginType"),
-                ("next-hop", "NextHop"),
-                ("multi-exit-disc", "MultiExitDisc"),
-                ("local-pref", "LocalPref"),
-                ("atomic-aggregate", "AtomicAggregate"),
-                ("aggregator", "Aggregator"),
-                ("communities", "[Community]"),
-                ("status", "RouteStatus"),
-                ("peer_ip", "IpAddress"),
-                ("peer_asn", "Asn"),
-            ],
-        ),
-        Record("BmpInitiationMessage", vec![]),
-        Record(
-            "BmpRouteMonitoringMessage",
-            vec![("per_peer_header", "Header")],
-        ),
-        Record(
-            "BmpPeerUpNotification",
-            vec![
-                ("local_address", "IpAddress"),
-                ("local_port", "U16"),
-                ("remote_port", "U16"),
-                ("session_config", "Unit"),
-                ("per_peer_header", "Header"),
-            ],
-        ),
-        Record(
-            "BmpPeerDownNotification",
-            vec![("per_peer_header", "Header")],
-        ),
-        Record("BmpStatisticsReport", vec![("per_peer_header", "Header")]),
-        Record("BmpTerminationMessage", vec![("per_peer_header", "Header")]),
-        Enum(
-            "BmpMessage",
-            vec![
-                ("InitiationMessage", Some("BmpInitiationMessage")),
-                ("RouteMonitoring", Some("BmpRouteMonitoringMessage")),
-                ("PeerUpNotification", Some("BmpPeerUpNotification")),
-                ("PeerDownNotification", Some("BmpPeerDownNotification")),
-                ("StatisticsReport", Some("BmpStatisticsReport")),
-                ("TerminationMessage", Some("BmpTerminationMessage")),
-            ],
-        ),
         Enum(
             "Afi",
             vec![
@@ -404,31 +329,19 @@ pub fn default_types() -> Vec<(&'static str, Type)> {
             ],
         ),
         Enum("Safi", vec![("Unicast", None), ("Multicast", None)]),
-        Record("Nlri", vec![("afi", "Afi"), ("safi", "Safi")]),
-        Record(
-            "BgpUpdateMessage",
-            vec![
-                ("as-path", "AsPath"),
-                ("origin-type", "OriginType"),
-                ("next-hop", "NextHop"),
-                ("multi-exit-disc", "MultiExitDisc"),
-                ("local-pref", "LocalPref"),
-                ("atomic-aggregate", "AtomicAggregate"),
-                ("aggregator", "Aggregator"),
-                ("communities", "[Community]"),
-                ("status", "RouteStatus"),
-                ("peer_ip", "IpAddress"),
-                ("peer_asn", "Asn"),
-            ]
-        ),
+        Record("Nlris", vec![("afi", "Afi"), ("safi", "Safi")]),
     ];
 
     for c in compound_types {
         match c {
             Record(n, fields) => {
+                let n = Identifier(identifiers.get_or_intern(n));
                 let fields = fields
                     .iter()
                     .map(|(field_name, field_type)| {
+                        let field_name =
+                            Identifier(identifiers.get_or_intern(field_name));
+
                         // Little hack to get list types for now, until that is in the
                         // actual syntax and we can use a real type parser here.
                         let is_list = field_type.starts_with('[')
@@ -440,10 +353,17 @@ pub fn default_types() -> Vec<(&'static str, Type)> {
                             field_type
                         };
 
+                        let s = Identifier(identifiers.get_or_intern(s));
+
                         let mut ty = types
                             .iter()
-                            .find(|(n, _)| &s == n)
-                            .unwrap()
+                            .find(|(n, _)| s == *n)
+                            .unwrap_or_else(|| {
+                                panic!(
+                                    "Not found: {}",
+                                    identifiers.resolve(s.0).unwrap()
+                                )
+                            })
                             .1
                             .clone();
 
@@ -451,27 +371,38 @@ pub fn default_types() -> Vec<(&'static str, Type)> {
                             ty = Type::List(Box::new(ty));
                         }
 
-                        (field_name.to_string(), ty)
+                        (
+                            Meta {
+                                id: MetaId(0),
+                                node: field_name,
+                            },
+                            ty,
+                        )
                     })
                     .collect();
-                types.push((n, Type::NamedRecord(n.into(), fields)))
+                types.push((n, Type::NamedRecord(n, fields)))
             }
             Enum(n, variants) => {
+                let n = Identifier(identifiers.get_or_intern(n));
                 let variants = variants
                     .iter()
                     .map(|(variant_name, v)| {
+                        let variant_name = Identifier(
+                            identifiers.get_or_intern(variant_name),
+                        );
                         let v = v.map(|t| {
+                            let t = Identifier(identifiers.get_or_intern(t));
                             types
                                 .iter()
-                                .find(|(n, _)| &t == n)
+                                .find(|(n, _)| t == *n)
                                 .unwrap()
                                 .1
                                 .clone()
                         });
-                        (variant_name.to_string(), v)
+                        (variant_name, v)
                     })
                     .collect();
-                types.push((n, Type::Enum(n.into(), variants)))
+                types.push((n, Type::Enum(n, variants)))
             }
         }
     }

@@ -1,6 +1,0 @@
-filter foo {
-	define {
-		rx msg: U32;
-		a = String;
-	}
-}

@@ -1,3 +1,4 @@
+#![cfg(any())]
 mod common;
 mod helpers;
 

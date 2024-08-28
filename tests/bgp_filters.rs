@@ -1,12 +1,18 @@
-use std::{collections::BTreeSet, str::FromStr};
+#![cfg(any())]
+use std::str::FromStr;
 
 use log::trace;
 use roto::{
-    ast::AcceptReject, blocks::Scope, pipeline, types::{
+    ast::AcceptReject,
+    blocks::Scope,
+    pipeline,
+    types::{
         builtin::{
-            basic_route::{PeerId, PeerRibType, Provenance}, explode_announcements, NlriStatus, PrefixRoute, RouteContext
-        }, collections::{BytesRecord, Record}, lazyrecord_types::BgpUpdateMessage,
-    }, vm::{self, VmResult}
+            RawRouteWithDeltas, RotondaId, RouteStatus, UpdateMessage,
+        },
+        collections::Record,
+    },
+    vm::{self, VmResult},
 };
 use inetnum::asn::Asn;
 use routecore::bgp::message::SessionConfig;

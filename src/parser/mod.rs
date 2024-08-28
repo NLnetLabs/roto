@@ -1,15 +1,16 @@
-use crate::ast::{Identifier, RootExpr, SyntaxTree, TypeIdentifier};
+use crate::ast::{Declaration, FunctionDeclaration, Identifier, SyntaxTree};
 use logos::{Lexer, SpannedIter};
 use std::{fmt::Display, iter::Peekable};
+use string_interner::{backend::StringBackend, StringInterner};
 use token::Token;
 
-use self::span::{Span, Spanned, WithSpan};
+use self::meta::{Meta, Span, Spans};
 
+mod expr;
 mod filter_map;
+pub mod meta;
 mod rib_like;
-pub mod span;
 mod token;
-mod value;
 
 #[cfg(test)]
 mod test_expressions;
@@ -144,14 +145,16 @@ impl std::fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
-pub struct Parser<'source> {
+pub struct Parser<'source, 'spans> {
     file: usize,
     file_length: usize,
     lexer: Peekable<SpannedIter<'source, Token<'source>>>,
+    identifiers: &'spans mut StringInterner<StringBackend>,
+    pub spans: &'spans mut Spans,
 }
 
 /// # Helper methods
-impl<'source> Parser<'source> {
+impl<'source> Parser<'source, '_> {
     /// Move the lexer forward and return the token
     fn next(&mut self) -> ParseResult<(Token<'source>, Span)> {
         match self.lexer.next() {
@@ -226,7 +229,7 @@ impl<'source> Parser<'source> {
         close: Token,
         sep: Token,
         mut parser: impl FnMut(&mut Self) -> ParseResult<T>,
-    ) -> ParseResult<Spanned<Vec<T>>> {
+    ) -> ParseResult<Meta<Vec<T>>> {
         let start_span = self.take(open)?;
 
         let mut items = Vec::new();
@@ -234,7 +237,8 @@ impl<'source> Parser<'source> {
         // If there are no fields, return the empty vec.
         if self.peek_is(close.clone()) {
             let end_span = self.take(close)?;
-            return Ok(items.with_span(start_span.merge(end_span)));
+            let span = start_span.merge(end_span);
+            return Ok(self.add_span(span, items));
         }
 
         // Parse the first field
@@ -252,29 +256,35 @@ impl<'source> Parser<'source> {
         }
 
         let end_span = self.take(close)?;
-
-        Ok(items.with_span(start_span.merge(end_span)))
+        let span = start_span.merge(end_span);
+        Ok(self.add_span(span, items))
     }
 }
 
 /// # Parsing the syntax tree
-impl<'source> Parser<'source> {
+impl<'source, 'spans> Parser<'source, 'spans> {
     pub fn parse(
         file: usize,
+        identifiers: &'spans mut StringInterner<StringBackend>,
+        spans: &'spans mut Spans,
         input: &'source str,
     ) -> ParseResult<'source, SyntaxTree> {
-        Self::run_parser(Self::tree, file, input)
+        Self::run_parser(Self::tree, file, identifiers, spans, input)
     }
 
     fn run_parser<T>(
         mut parser: impl FnMut(&mut Self) -> ParseResult<T>,
         file: usize,
+        identifiers: &'spans mut StringInterner<StringBackend>,
+        spans: &'spans mut Spans,
         input: &'source str,
     ) -> ParseResult<'source, T> {
         let mut p = Self {
             file,
             file_length: input.len(),
             lexer: Lexer::new(input).spanned().peekable(),
+            spans,
+            identifiers,
         };
         let out = parser(&mut p)?;
         if let Some((_, s)) = p.lexer.next() {
@@ -300,7 +310,9 @@ impl<'source> Parser<'source> {
             });
         }
 
-        Ok(SyntaxTree { expressions })
+        Ok(SyntaxTree {
+            declarations: expressions,
+        })
     }
 
     /// Parse a root expression
@@ -308,7 +320,7 @@ impl<'source> Parser<'source> {
     /// ```ebnf
     /// Root ::= Rib | Table | OutputStream | FilterMap | Type
     /// ```
-    fn root(&mut self) -> ParseResult<RootExpr> {
+    fn root(&mut self) -> ParseResult<Declaration> {
         let end_of_input = ParseError {
             kind: ParseErrorKind::EndOfInput,
             location: Span::new(
@@ -317,19 +329,22 @@ impl<'source> Parser<'source> {
             ),
         };
         let expr = match self.peek().ok_or(end_of_input)? {
-            Token::Rib => RootExpr::Rib(self.rib()?),
-            Token::Table => RootExpr::Table(self.table()?),
+            Token::Rib => Declaration::Rib(self.rib()?),
+            Token::Table => Declaration::Table(self.table()?),
             Token::OutputStream => {
-                RootExpr::OutputStream(self.output_stream()?)
+                Declaration::OutputStream(self.output_stream()?)
             }
             Token::FilterMap | Token::Filter => {
-                RootExpr::FilterMap(Box::new(self.filter_map()?))
+                Declaration::FilterMap(Box::new(self.filter_map()?))
             }
-            Token::Type => RootExpr::Ty(self.record_type_assignment()?),
+            Token::Type => {
+                Declaration::Record(self.record_type_assignment()?)
+            }
+            Token::Function => Declaration::Function(self.function()?),
             _ => {
                 let (token, span) = self.next()?;
                 return Err(ParseError::expected(
-                    "a rib, table, output-stream, filter or filter-map",
+                    "a function, rib, table, output-stream, filter or filter-map",
                     token,
                     span,
                 ));
@@ -337,15 +352,40 @@ impl<'source> Parser<'source> {
         };
         Ok(expr)
     }
+
+    /// Parse a term section
+    ///
+    /// ```ebnf
+    /// Function ::= 'function' Identifier '{' Body '}'
+    /// ```
+    fn function(&mut self) -> ParseResult<FunctionDeclaration> {
+        self.take(Token::Function)?;
+        let ident = self.identifier()?;
+        let params = self.params()?;
+
+        let ret = if self.next_is(Token::Arrow) {
+            Some(self.identifier()?)
+        } else {
+            None
+        };
+        let body = self.block()?;
+
+        Ok(FunctionDeclaration {
+            ident,
+            params,
+            body,
+            ret,
+        })
+    }
 }
 
 /// # Parsing identifiers
-impl<'source> Parser<'source> {
+impl<'source> Parser<'source, '_> {
     /// Parse an identifier
     ///
     /// The `contains` and `type` keywords are treated as identifiers,
     /// because we already have tests that use these as names for methods.
-    fn identifier(&mut self) -> ParseResult<Spanned<Identifier>> {
+    fn identifier(&mut self) -> ParseResult<Meta<Identifier>> {
         let (token, span) = self.next()?;
         let ident = match token {
             Token::Ident(s) => s,
@@ -360,33 +400,21 @@ impl<'source> Parser<'source> {
                 ))
             }
         };
-        Ok(Identifier {
-            ident: ident.into(),
-        }
-        .with_span(span))
+        let ident = Identifier(self.identifiers.get_or_intern(ident));
+        Ok(self.add_span(span, ident))
+    }
+}
+
+impl<'source, 'spans> Parser<'source, 'spans> {
+    fn add_span<T>(&mut self, span: Span, x: T) -> Meta<T> {
+        self.spans.add(span, x)
     }
 
-    /// Parse a type identifier
-    ///
-    /// Currently, this is the same as [`Parser::identifier`].
-    fn type_identifier(&mut self) -> ParseResult<Spanned<TypeIdentifier>> {
-        let (token, span) = self.next()?;
-        let ident = match token {
-            Token::Ident(s) => s,
-            // 'contains' and `type` already used as both a keyword and an identifier
-            Token::Contains => "contains",
-            Token::Type => "type",
-            _ => {
-                return Err(ParseError::expected(
-                    "an identifier",
-                    token,
-                    span,
-                ))
-            }
-        };
-        Ok(TypeIdentifier {
-            ident: ident.into(),
-        }
-        .with_span(span))
+    fn get_span<T>(&mut self, x: &Meta<T>) -> Span {
+        self.spans.get(x)
+    }
+
+    fn merge_spans<T, U>(&mut self, x: &Meta<T>, y: &Meta<U>) -> Span {
+        self.spans.merge(x, y)
     }
 }

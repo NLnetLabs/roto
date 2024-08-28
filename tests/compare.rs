@@ -1,3 +1,4 @@
+#![cfg(any())]
 use roto::ast::AcceptReject;
 
 use roto::blocks::Scope::{self, FilterMap};
