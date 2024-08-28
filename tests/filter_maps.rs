@@ -63,7 +63,9 @@ fn test_filter_map_10() {
         
             term afi-safi-unicast {
                 match {
-                    bgp_msg.nlris.afi != IPV4;
+                    // This needs global methods type checking
+                    // bgp_msg.local-pref != LocalPref(80);
+                    bgp_msg.as-path.origin() != AS65000;
                 }
             }
         
@@ -105,7 +107,7 @@ fn test_filter_map_11() {
         
             term afi-safi-unicast {
                 match {
-                    bgp_msg.nlris.afi != IPV4;
+                    bgp_msg.as-path.origin() != AS65500;
                 }
             }
         

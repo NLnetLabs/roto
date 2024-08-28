@@ -1,19 +1,26 @@
 #![cfg(any())]
 use log::trace;
+
 use roto::{
     ast::AcceptReject,
     blocks::Scope::{self, Filter, FilterMap},
     compiler::CompileError,
     pipeline,
     types::{
-        builtin::{BuiltinTypeValue, BytesRecord},
+        builtin::{
+            BuiltinTypeValue, BytesRecord, NlriStatus, PeerId, PeerRibType,
+            Provenance, RouteContext,
+        },
         collections::Record,
-        lazyrecord_types::{BmpMessage, InitiationMessage, RouteMonitoring},
+        lazyrecord_types::{
+            BmpMessage, InitiationMessage, LazyRecordTypeDef, RouteMonitoring,
+        },
         typedef::TypeDef,
         typevalue::TypeValue,
     },
     vm::{self, VmResult},
 };
+use inetnum::asn::Asn;
 use routes::bmp::encode::{
     mk_peer_down_notification_msg, mk_per_peer_header, mk_termination_msg,
 };
@@ -55,8 +62,26 @@ fn test_data(
         println!("{}", mb);
     }
 
+    let peer_ip = "192.0.2.0".parse().unwrap();
+
+    let provenance = Provenance {
+        timestamp: chrono::Utc::now(),
+        connection_id: "192.0.2.0:178".parse().unwrap(),
+        peer_id: PeerId {
+            addr: peer_ip,
+            asn: Asn::from(65534),
+        },
+        peer_bgp_id: [0; 4].into(),
+        peer_distuingisher: [0; 8],
+        peer_rib_type: PeerRibType::OutPost,
+    };
+
+    let context =
+        RouteContext::new(None, NlriStatus::InConvergence, provenance);
+
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
+        .with_context(context)
         .with_data_sources(ds_ref)
         .with_mir_code(roto_pack.get_mir())
         .build()?;
@@ -122,8 +147,26 @@ fn test_data_2(
         println!("{}", mb);
     }
 
+    let peer_ip = "192.0.2.0".parse().unwrap();
+
+    let provenance = Provenance {
+        timestamp: chrono::Utc::now(),
+        connection_id: "192.0.2.10:178".parse().unwrap(),
+        peer_id: PeerId {
+            addr: peer_ip,
+            asn: Asn::from(65534),
+        },
+        peer_bgp_id: [0; 4].into(),
+        peer_distuingisher: [0; 8],
+        peer_rib_type: PeerRibType::OutPost,
+    };
+
+    let context =
+        RouteContext::new(None, NlriStatus::InConvergence, provenance);
+
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
+        .with_context(context)
         .with_data_sources(ds_ref)
         .with_mir_code(roto_pack.get_mir())
         .build()?;
@@ -187,8 +230,26 @@ fn test_data_3(
         println!("{}", mb);
     }
 
+    let peer_ip = "192.0.2.0".parse().unwrap();
+
+    let provenance = Provenance {
+        timestamp: chrono::Utc::now(),
+        connection_id: "192.0.2.10:178".parse().unwrap(),
+        peer_id: PeerId {
+            addr: peer_ip,
+            asn: Asn::from(65534),
+        },
+        peer_bgp_id: [0; 4].into(),
+        peer_distuingisher: [0; 8],
+        peer_rib_type: PeerRibType::OutPost,
+    };
+
+    let context =
+        RouteContext::new(None, NlriStatus::InConvergence, provenance);
+
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
+        .with_context(context)
         .with_data_sources(ds_ref)
         .with_mir_code(roto_pack.get_mir())
         .build()?;
@@ -218,45 +279,63 @@ fn test_data_4(
     source_code: &'static str,
 ) -> Result<VmResult, Box<dyn std::error::Error>> {
     println!("Evaluate filter-map {}...", name);
+    
+        // Compile the source code in this example
+        let rotolo = pipeline::run_test(source_code, None)?;
+        let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
+    
+        trace!("Used Arguments");
+        trace!("{:#?}", &roto_pack.get_arguments());
+        trace!("Used Data Sources");
+        trace!("{:#?}", &roto_pack.get_data_sources());
+    
+        let ds_ref = roto_pack.get_data_sources();
+    
+        for mb in roto_pack.get_mir().iter() {
+            println!("{}", mb);
+        }
+ 
+        let peer_ip = "192.0.2.0".parse().unwrap();
 
-    // Compile the source code in this example
-    let rotolo = pipeline::run_test(source_code, None)?;
-    let roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
+        let provenance = Provenance {
+            timestamp: chrono::Utc::now(),
+            connection_id: "192.0.2.10:178".parse().unwrap(),
+            peer_id: PeerId {
+                addr: peer_ip,
+                asn: Asn::from(65534),
+            },
+            peer_bgp_id: [0; 4].into(),
+            peer_distuingisher: [0; 8],
+            peer_rib_type: PeerRibType::OutPost,
+        };
 
-    trace!("Used Arguments");
-    trace!("{:#?}", &roto_pack.get_arguments());
-    trace!("Used Data Sources");
-    trace!("{:#?}", &roto_pack.get_data_sources());
+        let context =
+            RouteContext::new(None, NlriStatus::InConvergence, provenance);
 
-    let ds_ref = roto_pack.get_data_sources();
-
-    for mb in roto_pack.get_mir().iter() {
-        println!("{}", mb);
-    }
-
-    let mut vm = vm::VmBuilder::new()
-        // .with_arguments(args)
-        .with_data_sources(ds_ref)
-        .with_mir_code(roto_pack.get_mir())
-        .build()?;
-
-    let mem = &mut vm::LinearMemory::uninit();
-    let res = vm
-        .exec(
-            payload,
-            None::<Record>,
-            // Some(filter_map_arguments),
-            None,
-            mem,
-        )
-        .unwrap();
-
-    trace!("\nRESULT");
-    trace!("action: {}", res.accept_reject);
-    trace!("rx    : {:?}", res.rx);
-    trace!("tx    : {:?}", res.tx);
-
-    Ok(res)
+        let mut vm = vm::VmBuilder::new()
+            // .with_arguments(args)
+            .with_context(context)
+            .with_data_sources(ds_ref)
+            .with_mir_code(roto_pack.get_mir())
+            .build()?;
+    
+        let mem = &mut vm::LinearMemory::uninit();
+        let res = vm
+            .exec(
+                payload,
+                None::<Record>,
+                // Some(filter_map_arguments),
+                None,
+                mem,
+            )
+            .unwrap();
+    
+        trace!("\nRESULT");
+        trace!("action: {}", res.accept_reject);
+        trace!("rx    : {:?}", res.rx);
+        trace!("tx    : {:?}", res.tx);
+    
+        Ok(res)
 }
 
 fn initiation_payload_example() -> Vec<u8> {
@@ -284,9 +363,7 @@ fn compile_initiation_payload(
 
     // let rm_msg = i_msg.unwrap();
     let payload = TypeValue::Builtin(
-        roto::types::builtin::BuiltinTypeValue::BmpMessage(
-            roto::types::builtin::BytesRecord(buf),
-        ),
+        roto::types::builtin::BuiltinTypeValue::BmpMessage(buf.into()),
     );
 
     trace!("Used Arguments");
@@ -300,8 +377,26 @@ fn compile_initiation_payload(
         println!("{}", mb);
     }
 
+    let peer_ip = "192.0.2.0".parse().unwrap();
+
+    let provenance = Provenance {
+        timestamp: chrono::Utc::now(),
+        connection_id: "192.0.2.10:178".parse().unwrap(),
+        peer_id: PeerId {
+            addr: peer_ip,
+            asn: Asn::from(65534),
+        },
+        peer_bgp_id: [0; 4].into(),
+        peer_distuingisher: [0; 8],
+        peer_rib_type: PeerRibType::OutPost,
+    };
+
+    let context =
+        RouteContext::new(None, NlriStatus::InConvergence, provenance);
+
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
+        .with_context(context)
         .with_data_sources(ds_ref)
         .with_mir_code(roto_pack.get_mir())
         .build()?;
@@ -1156,7 +1251,12 @@ fn termination_message_1() {
     let expected: Result<TypeValue, CompileError> = Err(CompileError::from(
         "Cannot convert raw BMP message into any other type.",
     ));
-    assert_eq!(btv.clone().into_type(&TypeDef::BgpUpdateMessage), expected);
+    assert_eq!(
+        btv.clone().into_type(&TypeDef::LazyRecord(
+            LazyRecordTypeDef::UpdateMessage
+        )),
+        expected
+    );
     let payload: TypeValue = TypeValue::Builtin(btv);
     println!("payload {:?}", payload);
 

@@ -14,6 +14,7 @@ use roto::{
     },
     vm::{self, VmResult},
 };
+use inetnum::asn::Asn;
 use routecore::bgp::message::SessionConfig;
 
 use routes::bmp::encode::{
@@ -26,7 +27,7 @@ fn test_data(
     name: Scope,
     source_code: &str,
     announce_str: &str,
-) -> Result<(VmResult, RawRouteWithDeltas), Box<dyn std::error::Error>> {
+) -> Result<(VmResult, PrefixRoute), Box<dyn std::error::Error>> {
     common::init();
     println!("Evaluate filter-map {}...", name);
 
@@ -36,23 +37,48 @@ fn test_data(
 
     // Create a BGP packet
     let prefix_str = "192.0.2.1";
-    let per_peer_header = mk_per_peer_header(prefix_str, 1);
+    let per_peer_header = mk_per_peer_header(prefix_str, 65535);
     let withdrawals = Prefixes::default();
     let announcements = Announcements::from_str(announce_str).unwrap();
 
     let msg_buf =
         mk_bgp_update(&per_peer_header, &withdrawals, &announcements, &[]);
 
-    let bgp_msg = UpdateMessage::new(msg_buf.0, SessionConfig::modern())?;
+    let bgp_msg = BytesRecord::<BgpUpdateMessage>::new(msg_buf.0, SessionConfig::modern())?;
+    // let afi_safis = bgp_msg.bytes_parser().afi_safis().into_iter().flatten();
 
-    let payload = RawRouteWithDeltas::new_with_message(
-        (RotondaId(0), 0),
-        routecore::addr::Prefix::from_str("192.0.2.0/24")?,
-        bgp_msg,
-        routecore::bgp::types::AfiSafi::Ipv4Unicast,
-        None,
-        RouteStatus::UpToDate,
-    )?;
+    let prov = Provenance {
+        timestamp: chrono::Utc::now(),
+        connection_id: "127.0.0.1:8080".parse().unwrap(),
+        peer_id: PeerId { addr: "172.0.0.1".parse().unwrap(), asn: Asn::from(65530)},
+        peer_bgp_id: [0,0,0,0].into(),
+        peer_distuingisher: [0; 8],
+        peer_rib_type: PeerRibType::OutPost,
+    };
+
+    let parser = bgp_msg.bytes_parser();
+    // let pa_map = PaMap::from_update_pdu(parser).unwrap();
+
+    // let parser = Parser::from_ref(parser.octets());
+    #[allow(clippy::mutable_key_type)]
+    let mut nlri_set = BTreeSet::new();
+    
+    let rws = &explode_announcements(parser, &mut nlri_set).unwrap()[0];
+
+    let context = RouteContext::new(
+        // routecore::addr::Prefix::from_str("192.0.2.0/24")?,
+        Some(bgp_msg.clone()),
+        // routecore::bgp::types::AfiSafi::Ipv4Unicast,
+        // None,
+        // nlri.clone(),
+        NlriStatus::UpToDate,
+        prov
+    );
+
+    // let payload = RouteWorkshop::from_update_pdu(
+    //     nlri,
+    //     &bgp_msg.into_inner()
+    // )?;
 
     // Create the VM
     trace!("Used Arguments");
@@ -69,13 +95,15 @@ fn test_data(
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)
         .with_data_sources(ds_ref)
+        .with_context(&context)
         .with_mir_code(roto_pack.get_mir())
         .build()?;
-
+    
     let mem = &mut vm::LinearMemory::uninit();
     let res = vm
         .exec(
-            payload.clone(),
+            // roto::types::builtin::BasicRoute::new(payload.clone()),
+            rws.clone(),
             None::<Record>,
             // Some(filter_map_arguments),
             None,
@@ -88,7 +116,7 @@ fn test_data(
     trace!("rx    : {:?}", res.rx);
     trace!("tx    : {:?}", res.tx);
 
-    Ok((res, payload))
+    Ok((res, rws.clone().into_prefix_route().unwrap()))
 }
 
 //------------ Test: IpAddressLiteral ----------------------------------------

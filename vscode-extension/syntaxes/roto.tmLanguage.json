@@ -1,0 +1,54 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "Roto",
+	"patterns": [
+		{
+			"include": "#comments"
+		},
+		{
+			"include": "#keywords"
+		},
+		{
+			"include": "#strings"
+		},
+		{
+			"include": "#numbers"
+		},	
+		{
+			"include": "#booleans"
+		}	
+	],
+	"repository": {
+		"keywords": {
+			"patterns": [{
+				"name": "keyword.control.roto",
+				"match": "\\b(if|return|match|filter|filter-map|define|term|action|accept|reject|apply|rib|table|type|contains|rx|tx)\\b"
+			}]
+		},
+		"strings": {
+			"name": "string.quoted.double.roto",
+			"begin": "\"",
+			"end": "\"",
+			"patterns": [
+				{
+					"name": "constant.character.escape.roto",
+					"match": "\\\\."
+				}
+			]
+		},
+		"numbers": {
+			"name": "constant.numeric.roto",
+			"match": "\\b\\d+\\b"
+		},
+		"booleans": {
+			"name": "constant.other.roto",
+			"match": "\\b(true|false)\\b"
+		},
+		"comments": {
+			"name": "comment.line.double-slash.roto",
+			"begin": "//",
+			"end": "\n"
+		}
+	},
+	"scopeName": "source.roto"
+}
