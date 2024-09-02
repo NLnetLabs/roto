@@ -589,10 +589,18 @@ impl<'r> Lowerer<'r> {
                     None
                 };
 
-                let args = std::iter::once(&**receiver)
-                    .chain(&args.node)
-                    .flat_map(|a| self.expr(a))
-                    .collect();
+                // If the function is a method we have to check the receiver
+                // as the first argument. If it's a static method we don't
+                // have to evaluate the receiver at all.
+                let args =
+                    if let FunctionKind::Method(_) = func.signature.kind {
+                        std::iter::once(&**receiver)
+                            .chain(&args.node)
+                            .flat_map(|a| self.expr(a))
+                            .collect()
+                    } else {
+                        args.node.iter().flat_map(|a| self.expr(a)).collect()
+                    };
 
                 let mut params = Vec::new();
                 for ty in func.signature.parameter_types {
