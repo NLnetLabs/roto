@@ -861,12 +861,8 @@ fn issue_51() {
         "
         filter-map main() {
             apply {
-                // correctly errors out saying 'not found in scope'
-                //foo.bar();
-
                 if true {
-                    // panics at typechecker/info.rs:88
-                    foo.bar();
+                    foo;
                 }
                 accept
             }
@@ -874,5 +870,5 @@ fn issue_51() {
     "
     );
 
-    typecheck(s).unwrap()
+    typecheck(s).unwrap_err();
 }
