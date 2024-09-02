@@ -1,14 +1,19 @@
 use crate::{
     pipeline::{test_file, Compiled},
     runtime::tests::routecore_runtime,
-    Verdict,
+    Runtime, Verdict,
 };
 
 #[track_caller]
 fn compile(p: &'static str) -> Compiled {
+    let runtime = routecore_runtime().unwrap();
+    compile_with_runtime(p, runtime)
+}
+
+#[track_caller]
+fn compile_with_runtime(p: &'static str, runtime: Runtime) -> Compiled {
     let _ = env_logger::try_init();
 
-    let runtime = routecore_runtime().unwrap();
     let pointer_bytes = usize::BITS / 8;
 
     let res = test_file(file!(), p, line!() as usize)
@@ -481,6 +486,33 @@ fn call_runtime_method() {
         let res = f.call((value,));
         assert_eq!(res, expected);
     }
+}
+
+#[test]
+fn issue_52() {
+    let mut rt = Runtime::basic().unwrap();
+
+    struct Foo {
+        _x: i32,
+    }
+    extern "C" fn bar(_x: u32) {}
+    rt.register_type::<Foo>().unwrap();
+    rt.register_static_method::<Foo, _, _>(
+        "bar",
+        bar as extern "C" fn(_) -> _,
+    );
+
+    let s = "
+        filter-map main(foo: Foo) {
+            apply {
+                // panics at typechecker/info.rs:70
+                Foo.bar(1);
+                accept
+            }
+        }
+    ";
+
+    let _p = compile_with_runtime(s, rt);
 }
 
 // #[test]
