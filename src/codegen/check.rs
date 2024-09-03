@@ -133,7 +133,11 @@ fn check_roto_type(
         return false;
     };
 
-    let roto_ty = type_info.resolve(roto_ty);
+    let mut roto_ty = type_info.resolve(roto_ty);
+
+    if let Type::IntVar(_) = roto_ty {
+        roto_ty = Type::Primitive(Primitive::I32);
+    }
 
     match rust_ty.description {
         TypeDescription::Leaf => match rust_ty.type_id {

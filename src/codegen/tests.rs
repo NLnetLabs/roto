@@ -489,6 +489,24 @@ fn call_runtime_method() {
 }
 
 #[test]
+fn int_var() {
+    let s = "
+        filter-map main() {
+            apply {
+                accept 32
+            }
+        }
+    ";
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), Verdict<i32, ()>>("main")
+        .expect("No function found (or mismatched types)");
+
+    assert_eq!(f.call(()), Verdict::Accept(32));
+}
+
+#[test]
 fn issue_52() {
     let mut rt = Runtime::basic().unwrap();
 
@@ -500,7 +518,8 @@ fn issue_52() {
     rt.register_static_method::<Foo, _, _>(
         "bar",
         bar as extern "C" fn(_) -> _,
-    );
+    )
+    .unwrap();
 
     let s = "
         filter-map main(foo: Foo) {
@@ -513,6 +532,23 @@ fn issue_52() {
     ";
 
     let _p = compile_with_runtime(s, rt);
+}
+
+#[test]
+fn issue_54() {
+    let mut rt = Runtime::basic().unwrap();
+
+    struct Foo {
+        _x: i32,
+    }
+    extern "C" fn bar(_foo: *mut Foo, _x: u32) {} // W: unused variable: `foo`
+
+    // We 'forget' to register type Foo:
+    //rt.register_type::<Foo>().unwrap();
+
+    // But we do register a method on it:
+    rt.register_method::<Foo, _, _>("bar", bar as extern "C" fn(_, _) -> _)
+        .unwrap_err();
 }
 
 // #[test]
