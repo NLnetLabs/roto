@@ -489,6 +489,24 @@ fn call_runtime_method() {
 }
 
 #[test]
+fn int_var() {
+    let s = "
+        filter-map main() {
+            apply {
+                accept 32
+            }
+        }
+    ";
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), Verdict<i32, ()>>("main")
+        .expect("No function found (or mismatched types)");
+
+    assert_eq!(f.call(()), Verdict::Accept(32));
+}
+
+#[test]
 fn issue_52() {
     let mut rt = Runtime::basic().unwrap();
 
