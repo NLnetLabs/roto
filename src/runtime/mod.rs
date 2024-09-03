@@ -184,6 +184,8 @@ impl Runtime {
         f: impl Func<A, R>,
     ) -> Result<(), String> {
         let description = f.to_function_description(self)?;
+        self.check_description(&description)?;
+
         self.functions.push(RuntimeFunction {
             name: name.into(),
             description,
@@ -198,6 +200,7 @@ impl Runtime {
         f: impl Func<A, R>,
     ) -> Result<(), String> {
         let description = f.to_function_description(self).unwrap();
+        self.check_description(&description)?;
 
         let Some(first) = description.parameter_types.first() else {
             panic!()
@@ -238,29 +241,49 @@ impl Runtime {
         &mut self,
         name: impl Into<String>,
         f: impl Func<A, R>,
-    ) {
+    ) -> Result<(), String> {
         let description = f.to_function_description(self).unwrap();
+        self.check_description(&description)?;
+
         self.functions.push(RuntimeFunction {
             name: name.into(),
             description,
             kind: FunctionKind::StaticMethod(std::any::TypeId::of::<T>()),
-        })
+        });
+        Ok(())
     }
 
-    pub fn get_runtime_type(&self, id: TypeId) -> &RuntimeType {
-        let ty = self.type_registry.get(id).unwrap();
+    pub fn get_runtime_type(&self, id: TypeId) -> Option<&RuntimeType> {
+        let ty = self.type_registry.get(id)?;
         let id = match ty.description {
             TypeDescription::Leaf => id,
             TypeDescription::ConstPtr(id) => id,
             TypeDescription::MutPtr(id) => id,
             _ => panic!(),
         };
-        let ty = self
-            .runtime_types
-            .iter()
-            .find(|ty| ty.type_id == id)
-            .unwrap();
-        ty
+        self.runtime_types.iter().find(|ty| ty.type_id == id)
+    }
+
+    fn check_description(
+        &self,
+        description: &FunctionDescription,
+    ) -> Result<(), String> {
+        let check_type = |id: &TypeId| {
+            self.get_runtime_type(*id).ok_or_else(|| {
+                let ty = self.type_registry.get(*id).unwrap();
+                format!(
+                    "Registered a function using an unregistered type: `{}`",
+                    ty.rust_name
+                )
+            })
+        };
+
+        for ty in &description.parameter_types {
+            check_type(ty)?;
+        }
+
+        check_type(&description.return_type)?;
+        Ok(())
     }
 }
 

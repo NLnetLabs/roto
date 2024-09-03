@@ -224,7 +224,7 @@ impl TypeChecker<'_> {
                 .parameter_types
                 .iter()
                 .map(|ty| {
-                    let name = &runtime.get_runtime_type(*ty).name;
+                    let name = &runtime.get_runtime_type(*ty).unwrap().name;
                     let name =
                         Identifier(checker.identifiers.get_or_intern(name));
                     Type::Name(name)
@@ -232,7 +232,7 @@ impl TypeChecker<'_> {
                 .collect();
 
             let ret_name =
-                &runtime.get_runtime_type(description.return_type).name;
+                &runtime.get_runtime_type(description.return_type).unwrap().name;
             let ret_name =
                 Identifier(checker.identifiers.get_or_intern(ret_name));
             let return_type = Type::Name(ret_name);
@@ -240,13 +240,13 @@ impl TypeChecker<'_> {
             let kind = match kind {
                 FunctionKind::Free => types::FunctionKind::Free,
                 FunctionKind::Method(id) => {
-                    let name = &runtime.get_runtime_type(*id).name;
+                    let name = &runtime.get_runtime_type(*id).unwrap().name;
                     let name =
                         Identifier(checker.identifiers.get_or_intern(name));
                     types::FunctionKind::Method(Type::Name(name))
                 }
                 FunctionKind::StaticMethod(id) => {
-                    let name = &runtime.get_runtime_type(*id).name;
+                    let name = &runtime.get_runtime_type(*id).unwrap().name;
                     let name =
                         Identifier(checker.identifiers.get_or_intern(name));
                     types::FunctionKind::StaticMethod(Type::Name(name))
