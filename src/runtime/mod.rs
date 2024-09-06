@@ -298,16 +298,16 @@ impl Runtime {
             type_registry: Default::default(),
         };
 
-        rt.register_type_with_name::<()>("Unit")?;
-        rt.register_type::<bool>()?;
-        rt.register_type::<u8>()?;
-        rt.register_type::<u16>()?;
-        rt.register_type::<u32>()?;
-        rt.register_type::<u64>()?;
-        rt.register_type::<i8>()?;
-        rt.register_type::<i16>()?;
-        rt.register_type::<i32>()?;
-        rt.register_type::<i64>()?;
+        rt.register_copy_type_with_name::<()>("Unit")?;
+        rt.register_copy_type::<bool>()?;
+        rt.register_copy_type::<u8>()?;
+        rt.register_copy_type::<u16>()?;
+        rt.register_copy_type::<u32>()?;
+        rt.register_copy_type::<u64>()?;
+        rt.register_copy_type::<i8>()?;
+        rt.register_copy_type::<i16>()?;
+        rt.register_copy_type::<i32>()?;
+        rt.register_copy_type::<i64>()?;
 
         Ok(rt)
     }
