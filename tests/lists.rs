@@ -3,8 +3,10 @@ use log::trace;
 use roto::ast::AcceptReject;
 
 use roto::blocks::Scope::{self, FilterMap};
-use roto::types::builtin::{NlriStatus, PeerId, PeerRibType, Provenance, RouteContext};
 use roto::pipeline;
+use roto::types::builtin::{
+    NlriStatus, PeerId, PeerRibType, Provenance, RouteContext,
+};
 use roto::types::collections::Record;
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
@@ -126,13 +128,17 @@ fn test_data(
     let provenance = Provenance {
         timestamp: chrono::Utc::now(),
         connection_id: "192.0.2.0:178".parse().unwrap(),
-        peer_id: PeerId { addr: peer_ip, asn: Asn::from(65534) },
+        peer_id: PeerId {
+            addr: peer_ip,
+            asn: Asn::from(65534),
+        },
         peer_bgp_id: [0; 4].into(),
         peer_distuingisher: [0; 8],
         peer_rib_type: PeerRibType::OutPost,
     };
 
-    let context = RouteContext::new(None, NlriStatus::InConvergence, provenance);
+    let context =
+        RouteContext::new(None, NlriStatus::InConvergence, provenance);
 
     let mut vm = vm::VmBuilder::new()
         .with_context(context)

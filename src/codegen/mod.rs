@@ -726,8 +726,11 @@ impl Module {
         let sig = &function_info.signature;
         let id = function_info.id;
 
-        let correct_params =
-            Params::check(type_registry, &mut self.type_info, &sig.parameter_types);
+        let correct_params = Params::check(
+            type_registry,
+            &mut self.type_info,
+            &sig.parameter_types,
+        );
         let correct_return = check_roto_type_reflect::<Return>(
             type_registry,
             &mut self.type_info,

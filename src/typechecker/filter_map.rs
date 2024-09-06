@@ -47,10 +47,22 @@ impl TypeChecker<'_> {
         self.block(scope, &ctx, apply)?;
 
         if let Type::Var(x) = self.resolve_type(&a) {
-            self.unify(&Type::Var(x), &Type::Primitive(Primitive::Unit), filter_map.ident.id, None).unwrap();
+            self.unify(
+                &Type::Var(x),
+                &Type::Primitive(Primitive::Unit),
+                filter_map.ident.id,
+                None,
+            )
+            .unwrap();
         }
         if let Type::Var(x) = self.resolve_type(&r) {
-            self.unify(&Type::Var(x), &Type::Primitive(Primitive::Unit), filter_map.ident.id, None).unwrap();
+            self.unify(
+                &Type::Var(x),
+                &Type::Primitive(Primitive::Unit),
+                filter_map.ident.id,
+                None,
+            )
+            .unwrap();
         }
 
         Ok(match filter_type {

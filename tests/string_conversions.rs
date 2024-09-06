@@ -3,14 +3,16 @@ use log::trace;
 
 use roto::blocks::Scope;
 use roto::pipeline;
-use roto::types::builtin::{NlriStatus, PeerId, PeerRibType, Provenance, RouteContext};
+use roto::types::builtin::{
+    NlriStatus, PeerId, PeerRibType, Provenance, RouteContext,
+};
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::typedef::TypeDef;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
 
-use routecore::bgp::communities::HumanReadableCommunity as Community;
 use inetnum::asn::Asn;
+use routecore::bgp::communities::HumanReadableCommunity as Community;
 
 mod common;
 
@@ -85,8 +87,7 @@ fn test_data(
 
     let _count: TypeValue = 1_u32.into();
     let prefix: TypeValue =
-        inetnum::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?
-            .into();
+        inetnum::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?.into();
     let next_hop: TypeValue =
         std::net::IpAddr::V4(std::net::Ipv4Addr::new(193, 0, 0, 23)).into();
     let as_path = vec![Asn::from_u32(65534), Asn::from_u32(65335)].into();
@@ -151,13 +152,17 @@ fn test_data(
     let provenance = Provenance {
         timestamp: chrono::Utc::now(),
         connection_id: "192.0.2.0:178".parse().unwrap(),
-        peer_id: PeerId { addr: peer_ip, asn: Asn::from(65534) },
+        peer_id: PeerId {
+            addr: peer_ip,
+            asn: Asn::from(65534),
+        },
         peer_bgp_id: [0; 4].into(),
         peer_distuingisher: [0; 8],
         peer_rib_type: PeerRibType::OutPost,
     };
 
-    let context = RouteContext::new(None, NlriStatus::InConvergence, provenance);
+    let context =
+        RouteContext::new(None, NlriStatus::InConvergence, provenance);
 
     println!("Start vm...");
     let mut vm = vm::VmBuilder::new()

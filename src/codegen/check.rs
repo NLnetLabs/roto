@@ -160,7 +160,12 @@ fn check_roto_type(
                 return false;
             };
             check_roto_type(registry, type_info, rust_accept, roto_accept)
-                && check_roto_type(registry, type_info, rust_reject, roto_reject)
+                && check_roto_type(
+                    registry,
+                    type_info,
+                    rust_reject,
+                    roto_reject,
+                )
         }
         // We don't do options and results, we should hint towards verdict
         // when using them.

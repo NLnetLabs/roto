@@ -15,8 +15,6 @@ use std::{
 
 use super::verdict::Verdict;
 
-
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TypeDescription {
     /// Some type that we don't know how to decompose

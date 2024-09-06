@@ -231,8 +231,10 @@ impl TypeChecker<'_> {
                 })
                 .collect();
 
-            let ret_name =
-                &runtime.get_runtime_type(description.return_type).unwrap().name;
+            let ret_name = &runtime
+                .get_runtime_type(description.return_type)
+                .unwrap()
+                .name;
             let ret_name =
                 Identifier(checker.identifiers.get_or_intern(ret_name));
             let return_type = Type::Name(ret_name);
@@ -485,12 +487,10 @@ impl TypeChecker<'_> {
             }
             (Rib(a), Rib(b)) => Rib(Box::new(self.unify_inner(&a, &b)?)),
             (List(a), List(b)) => List(Box::new(self.unify_inner(&a, &b)?)),
-            (Verdict(a1, r1), Verdict(a2, r2)) => {
-                Verdict(
-                    Box::new(self.unify_inner(&a1, &a2)?),
-                    Box::new(self.unify_inner(&r1, &r2)?),
-                )
-            }
+            (Verdict(a1, r1), Verdict(a2, r2)) => Verdict(
+                Box::new(self.unify_inner(&a1, &a2)?),
+                Box::new(self.unify_inner(&r1, &r2)?),
+            ),
             (
                 RecordVar(a_var, a_fields),
                 ref b @ (RecordVar(_, ref b_fields)

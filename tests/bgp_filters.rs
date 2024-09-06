@@ -1,6 +1,7 @@
 #![cfg(any())]
 use std::str::FromStr;
 
+use inetnum::asn::Asn;
 use log::trace;
 use roto::{
     ast::AcceptReject,
@@ -14,7 +15,6 @@ use roto::{
     },
     vm::{self, VmResult},
 };
-use inetnum::asn::Asn;
 use routecore::bgp::message::SessionConfig;
 
 use routes::bmp::encode::{
@@ -44,14 +44,20 @@ fn test_data(
     let msg_buf =
         mk_bgp_update(&per_peer_header, &withdrawals, &announcements, &[]);
 
-    let bgp_msg = BytesRecord::<BgpUpdateMessage>::new(msg_buf.0, SessionConfig::modern())?;
+    let bgp_msg = BytesRecord::<BgpUpdateMessage>::new(
+        msg_buf.0,
+        SessionConfig::modern(),
+    )?;
     // let afi_safis = bgp_msg.bytes_parser().afi_safis().into_iter().flatten();
 
     let prov = Provenance {
         timestamp: chrono::Utc::now(),
         connection_id: "127.0.0.1:8080".parse().unwrap(),
-        peer_id: PeerId { addr: "172.0.0.1".parse().unwrap(), asn: Asn::from(65530)},
-        peer_bgp_id: [0,0,0,0].into(),
+        peer_id: PeerId {
+            addr: "172.0.0.1".parse().unwrap(),
+            asn: Asn::from(65530),
+        },
+        peer_bgp_id: [0, 0, 0, 0].into(),
         peer_distuingisher: [0; 8],
         peer_rib_type: PeerRibType::OutPost,
     };
@@ -62,7 +68,7 @@ fn test_data(
     // let parser = Parser::from_ref(parser.octets());
     #[allow(clippy::mutable_key_type)]
     let mut nlri_set = BTreeSet::new();
-    
+
     let rws = &explode_announcements(parser, &mut nlri_set).unwrap()[0];
 
     let context = RouteContext::new(
@@ -72,7 +78,7 @@ fn test_data(
         // None,
         // nlri.clone(),
         NlriStatus::UpToDate,
-        prov
+        prov,
     );
 
     // let payload = RouteWorkshop::from_update_pdu(
@@ -98,7 +104,7 @@ fn test_data(
         .with_context(&context)
         .with_mir_code(roto_pack.get_mir())
         .build()?;
-    
+
     let mem = &mut vm::LinearMemory::uninit();
     let res = vm
         .exec(

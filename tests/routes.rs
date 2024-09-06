@@ -5,22 +5,24 @@ use std::str::FromStr;
 use log::trace;
 use roto::ast::AcceptReject;
 
+use inetnum::addr::Prefix;
+use inetnum::asn::Asn;
 use roto::blocks::Scope::{self, Filter};
 use roto::pipeline;
 use roto::types::builtin::basic_route::{
     BasicRouteToken, PeerId, PeerRibType, Provenance,
 };
-use roto::types::builtin::{explode_announcements, BuiltinTypeValue, NlriStatus, RouteContext};
+use roto::types::builtin::{
+    explode_announcements, BuiltinTypeValue, NlriStatus, RouteContext,
+};
 use roto::types::collections::{BytesRecord, Record};
 use roto::types::lazyrecord_types::BgpUpdateMessage;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, FieldIndex, VmResult};
-use inetnum::addr::Prefix;
-use inetnum::asn::Asn;
 use routecore::bgp::message::update_builder::UpdateBuilder;
-use routecore::bgp::nlri::afisafi::{Ipv6UnicastNlri, Nlri};
-use routecore::bgp::nlri::afisafi::IsPrefix;
 use routecore::bgp::message::SessionConfig;
+use routecore::bgp::nlri::afisafi::IsPrefix;
+use routecore::bgp::nlri::afisafi::{Ipv6UnicastNlri, Nlri};
 use routecore::bgp::types::{LocalPref, NextHop};
 use routecore::bgp::workshop::route::RouteWorkshop;
 
@@ -65,9 +67,7 @@ fn test_data(
         .into_iter()
         .next()
         .and_then(|mut nlri| {
-            if let Some(Ok(Nlri::Ipv6Unicast(nlri))) =
-                nlri.next()
-            {
+            if let Some(Ok(Nlri::Ipv6Unicast(nlri))) = nlri.next() {
                 Some(nlri.prefix())
             } else {
                 None
@@ -114,9 +114,9 @@ fn test_data(
 
     #[allow(clippy::mutable_key_type)]
     let mut nlri_set = BTreeSet::new();
-    
+
     let rws = explode_announcements(parser, &mut nlri_set);
-    
+
     trace!("rws {:#?}", rws);
     // let mut rws = RouteWorkshop::from_update_pdu(nlri, &update)?;
 
@@ -630,18 +630,20 @@ fn test_routes_6() {
     assert_eq!(accept_reject, AcceptReject::Accept);
 }
 
-
 #[test]
 fn test_create_pdu_from_rws() {
     common::init();
 
-    let mut rws1 = RouteWorkshop::new(Ipv6UnicastNlri::from_str(
-        "2001:fe80:2d::/48"
-    ).unwrap());
+    let mut rws1 = RouteWorkshop::new(
+        Ipv6UnicastNlri::from_str("2001:fe80:2d::/48").unwrap(),
+    );
 
     rws1.set_attr::<LocalPref>(LocalPref(80)).unwrap();
     let nlri: Ipv6UnicastNlri = *rws1.nlri();
-    
-    let mut new_update_pdu = UpdateBuilder::<bytes::BytesMut, Ipv6UnicastNlri>::from_workshop(rws1);
+
+    let mut new_update_pdu =
+        UpdateBuilder::<bytes::BytesMut, Ipv6UnicastNlri>::from_workshop(
+            rws1,
+        );
     new_update_pdu.add_announcement(nlri).unwrap();
 }

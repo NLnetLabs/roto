@@ -3,7 +3,7 @@
 use crate::ast::Identifier;
 
 /// A label for a basic block
-/// 
+///
 /// Should not be constructed directly, but using a [`LabelStore`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Label {
@@ -36,7 +36,12 @@ impl LabelStore {
     }
 
     /// Create a child label of a given label
-    pub fn wrap(&mut self, parent: LabelRef, identifier: Identifier) -> LabelRef {
+    #[allow(dead_code)]
+    pub fn wrap(
+        &mut self,
+        parent: LabelRef,
+        identifier: Identifier,
+    ) -> LabelRef {
         self.labels.push(Label {
             identifier,
             internal: false,
@@ -72,5 +77,5 @@ impl LabelStore {
 
     pub fn get(&self, label: LabelRef) -> &Label {
         &self.labels[label.0]
-    } 
+    }
 }

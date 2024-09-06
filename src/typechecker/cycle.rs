@@ -1,5 +1,5 @@
 //! Cycle detection for Roto types
-//! 
+//!
 //! Roto types are not allowed to be recursive. See [`detect_type_cycles`]
 //! for more information.
 
@@ -32,7 +32,9 @@ use super::types::Type;
 /// This algorithm is the Depth-first search algorithm described at
 /// <https://en.wikipedia.org/wiki/Topological_sorting>, where `false`
 /// is a temporary mark and `true` is a permanent mark.
-pub fn detect_type_cycles(types: &HashMap<Identifier, Type>) -> Result<(), String> {
+pub fn detect_type_cycles(
+    types: &HashMap<Identifier, Type>,
+) -> Result<(), String> {
     let mut visited = HashMap::new();
 
     for ident in types.keys() {

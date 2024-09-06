@@ -2,14 +2,16 @@
 use log::trace;
 use roto::ast::AcceptReject;
 
+use inetnum::asn::Asn;
 use roto::blocks::Scope::{self, FilterMap};
 use roto::pipeline;
-use roto::types::builtin::{NlriStatus, PeerId, PeerRibType, Provenance, RouteContext};
+use roto::types::builtin::{
+    NlriStatus, PeerId, PeerRibType, Provenance, RouteContext,
+};
 use roto::types::collections::{BytesRecord, Record};
 use roto::types::lazyrecord_types::BgpUpdateMessage;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
-use inetnum::asn::Asn;
 use routecore::bgp::message::SessionConfig;
 
 mod common;
@@ -17,7 +19,10 @@ mod common;
 fn test_data(
     name: Scope,
     source_code: &str,
-) -> Result<(VmResult, BytesRecord<BgpUpdateMessage>), Box<dyn std::error::Error>> {
+) -> Result<
+    (VmResult, BytesRecord<BgpUpdateMessage>),
+    Box<dyn std::error::Error>,
+> {
     println!("Evaluate filter-map {}...", name);
 
     // Compile the source code in this example
@@ -53,8 +58,9 @@ fn test_data(
     //     prefixes[0],
     //     update,
     // );
-    let payload = 
-        BytesRecord::<BgpUpdateMessage>::new(buf, SessionConfig::modern()).unwrap();
+    let payload =
+        BytesRecord::<BgpUpdateMessage>::new(buf, SessionConfig::modern())
+            .unwrap();
 
     // let payload2 = TypeValue::Builtin(
     //     roto::types::builtin::BuiltinTypeValue::BgpUpdateMessage(
@@ -81,8 +87,11 @@ fn test_data(
     let prov = Provenance {
         timestamp: chrono::Utc::now(),
         connection_id: "127.0.0.1:178".parse().unwrap(),
-        peer_id: PeerId { addr: "127.0.0.1".parse().unwrap(), asn: Asn::from(65530)},
-        peer_bgp_id: [0,0,0,0].into(),
+        peer_id: PeerId {
+            addr: "127.0.0.1".parse().unwrap(),
+            asn: Asn::from(65530),
+        },
+        peer_bgp_id: [0, 0, 0, 0].into(),
         peer_distuingisher: [0; 8],
         peer_rib_type: PeerRibType::OutPost,
     };

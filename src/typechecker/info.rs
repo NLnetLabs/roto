@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use crate::{ast::Identifier, parser::meta::MetaId};
 
 use super::{
-    scope::{DefinitionRef, ScopeRef}, types::{Function, Type}, unionfind::UnionFind
+    scope::{DefinitionRef, ScopeRef},
+    types::{Function, Type},
+    unionfind::UnionFind,
 };
 
 /// The output of the type checker that is used for lowering

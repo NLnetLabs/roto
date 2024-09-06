@@ -2,7 +2,9 @@
 use log::trace;
 
 use roto::blocks::Scope;
-use roto::types::builtin::{NlriStatus, PeerId, PeerRibType, Provenance, RouteContext};
+use roto::types::builtin::{
+    NlriStatus, PeerId, PeerRibType, Provenance, RouteContext,
+};
 use roto::types::collections::{ElementTypeValue, List, Record};
 use roto::types::datasources::DataSource;
 use roto::types::typedef::TypeDef;
@@ -30,8 +32,7 @@ fn test_data(
     let mut roto_pack = rotolo.retrieve_pack_as_refs(&name)?;
     let _count: TypeValue = 1_u32.into();
     let prefix: TypeValue =
-        inetnum::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?
-            .into();
+        inetnum::addr::Prefix::new("193.0.0.0".parse().unwrap(), 24)?.into();
     let next_hop: TypeValue =
         std::net::IpAddr::V4(std::net::Ipv4Addr::new(193, 0, 0, 23)).into();
     let as_path = vec![Asn::from_u32(1)].into();
@@ -116,13 +117,17 @@ fn test_data(
     let provenance = Provenance {
         timestamp: chrono::Utc::now(),
         connection_id: "192.0.2.11:178".parse().unwrap(),
-        peer_id: PeerId { addr: peer_ip, asn: Asn::from(65534) },
+        peer_id: PeerId {
+            addr: peer_ip,
+            asn: Asn::from(65534),
+        },
         peer_bgp_id: [0; 4].into(),
         peer_distuingisher: [0; 8],
         peer_rib_type: PeerRibType::OutPost,
     };
 
-    let context = RouteContext::new(None, NlriStatus::InConvergence, provenance);
+    let context =
+        RouteContext::new(None, NlriStatus::InConvergence, provenance);
 
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)

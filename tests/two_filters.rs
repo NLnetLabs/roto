@@ -2,14 +2,16 @@
 use log::trace;
 use roto::ast::AcceptReject;
 
+use inetnum::asn::Asn;
 use roto::blocks::Scope::{self};
 use roto::pipeline;
-use roto::types::builtin::{NlriStatus, PeerId, PeerRibType, Provenance, RouteContext};
+use roto::types::builtin::{
+    NlriStatus, PeerId, PeerRibType, Provenance, RouteContext,
+};
 use roto::types::collections::{BytesRecord, Record};
 use roto::types::lazyrecord_types::BgpUpdateMessage;
 use roto::types::typevalue::TypeValue;
 use roto::vm::{self, VmResult};
-use inetnum::asn::Asn;
 use routecore::bgp::message::SessionConfig;
 
 mod common;
@@ -17,7 +19,10 @@ mod common;
 fn test_data(
     name: Scope,
     source_code: &str,
-) -> Result<(VmResult, BytesRecord<BgpUpdateMessage>), Box<dyn std::error::Error>> {
+) -> Result<
+    (VmResult, BytesRecord<BgpUpdateMessage>),
+    Box<dyn std::error::Error>,
+> {
     println!("Evaluate filter {}...", name);
 
     // Compile the source code in this example
@@ -42,7 +47,9 @@ fn test_data(
         0x00, 0x00, 0x00, 0x00,
     ]);
 
-    let payload = BytesRecord::<BgpUpdateMessage>::new(buf, SessionConfig::modern()).unwrap();
+    let payload =
+        BytesRecord::<BgpUpdateMessage>::new(buf, SessionConfig::modern())
+            .unwrap();
 
     // Create the VM
     trace!("Used Arguments");
@@ -56,19 +63,22 @@ fn test_data(
         println!("{}", mb);
     }
 
-        
     let peer_ip = "192.0.2.0".parse().unwrap();
 
     let provenance = Provenance {
         timestamp: chrono::Utc::now(),
         connection_id: "192.0.2.0:178".parse().unwrap(),
-        peer_id: PeerId { addr: peer_ip, asn: Asn::from(65534) },
+        peer_id: PeerId {
+            addr: peer_ip,
+            asn: Asn::from(65534),
+        },
         peer_bgp_id: [0; 4].into(),
         peer_distuingisher: [0; 8],
         peer_rib_type: PeerRibType::OutPost,
     };
 
-    let context = RouteContext::new(None, NlriStatus::InConvergence, provenance);
+    let context =
+        RouteContext::new(None, NlriStatus::InConvergence, provenance);
 
     let mut vm = vm::VmBuilder::new()
         // .with_arguments(args)

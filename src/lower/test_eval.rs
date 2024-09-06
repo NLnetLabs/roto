@@ -176,11 +176,7 @@ fn react_to_rx() {
         program
             .eval(&mut mem, vec![IrValue::Pointer(pointer), IrValue::U32(i)]);
         let res = mem.read_array::<1>(pointer);
-        assert_eq!(
-            u8::from_ne_bytes(res),
-            (i > 4) as u8,
-            "failed at: {i}"
-        );
+        assert_eq!(u8::from_ne_bytes(res), (i > 4) as u8, "failed at: {i}");
     }
 }
 

@@ -556,7 +556,9 @@ fn eval_operand<'a>(
     match op {
         Operand::Place(p) => {
             let Some(v) = mem.get(p) else {
-                panic!("No value was found for place {p:?} in memory: {mem:#?}")
+                panic!(
+                    "No value was found for place {p:?} in memory: {mem:#?}"
+                )
             };
             v
         }

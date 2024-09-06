@@ -30,7 +30,10 @@ use string_interner::{backend::StringBackend, StringInterner};
 use crate::{
     ast::Identifier,
     runtime,
-    typechecker::{self, scope::{ScopeGraph, ScopeRef}},
+    typechecker::{
+        self,
+        scope::{ScopeGraph, ScopeRef},
+    },
 };
 
 use super::{
