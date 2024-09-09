@@ -6,7 +6,11 @@ use string_interner::{backend::StringBackend, StringInterner};
 
 use crate::{
     ast,
-    codegen::{self, check::RotoParams, Module, TypedFunc},
+    codegen::{
+        self,
+        check::{FunctionRetrievalError, RotoParams},
+        Module, TypedFunc,
+    },
     lower::{
         self,
         eval::{self, Memory},
@@ -93,6 +97,7 @@ pub struct Lowered {
 pub struct Compiled {
     runtime: Runtime,
     module: Module,
+    identifiers: StringInterner<StringBackend>,
 }
 
 impl std::fmt::Display for RotoReport {
@@ -434,13 +439,14 @@ impl Lowered {
         let module = codegen::codegen(
             &self.ir,
             &self.runtime_functions,
-            self.identifiers,
+            &self.identifiers,
             self.label_store,
             self.type_info,
         );
         Compiled {
             runtime: self.runtime,
             module,
+            identifiers: self.identifiers,
         }
     }
 }
@@ -449,8 +455,12 @@ impl Compiled {
     pub fn get_function<'program, Params: RotoParams, Return: Reflect>(
         &'program mut self,
         name: &str,
-    ) -> Option<TypedFunc<'program, Params, Return>> {
-        self.module
-            .get_function(&mut self.runtime.type_registry, name)
+    ) -> Result<TypedFunc<'program, Params, Return>, FunctionRetrievalError>
+    {
+        self.module.get_function(
+            &mut self.runtime.type_registry,
+            &self.identifiers,
+            name,
+        )
     }
 }

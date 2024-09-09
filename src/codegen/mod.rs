@@ -17,7 +17,10 @@ use crate::{
     typechecker::{info::TypeInfo, scope::ScopeRef, types},
     IrValue,
 };
-use check::{check_roto_type_reflect, return_type_by_ref, RotoParams};
+use check::{
+    check_roto_type_reflect, return_type_by_ref, FunctionRetrievalError,
+    RotoParams,
+};
 use cranelift::{
     codegen::{
         entity::EntityRef,
@@ -75,7 +78,7 @@ pub struct FunctionInfo {
     signature: types::Signature,
 }
 
-struct ModuleBuilder {
+struct ModuleBuilder<'a> {
     /// The set of public functions and their signatures.
     functions: HashMap<String, FunctionInfo>,
 
@@ -95,7 +98,7 @@ struct ModuleBuilder {
     isa: Arc<dyn TargetIsa>,
 
     /// Identifiers are used for debugging and resolving function names.
-    identifiers: StringInterner<StringBackend>,
+    identifiers: &'a StringInterner<StringBackend>,
 
     /// To print labels for debugging.
     #[allow(unused)]
@@ -104,8 +107,8 @@ struct ModuleBuilder {
     type_info: TypeInfo,
 }
 
-struct FuncGen<'c> {
-    module: &'c mut ModuleBuilder,
+struct FuncGen<'a, 'c> {
+    module: &'c mut ModuleBuilder<'a>,
 
     /// The cranelift function builder
     builder: FunctionBuilder<'c>,
@@ -125,7 +128,7 @@ const MEMFLAGS: MemFlags = MemFlags::new().with_aligned();
 pub fn codegen(
     ir: &[ir::Function],
     runtime_functions: &HashMap<String, IrFunction>,
-    identifiers: StringInterner<StringBackend>,
+    identifiers: &StringInterner<StringBackend>,
     label_store: LabelStore,
     type_info: TypeInfo,
 ) -> Module {
@@ -192,7 +195,7 @@ pub fn codegen(
     module.finalize()
 }
 
-impl ModuleBuilder {
+impl ModuleBuilder<'_> {
     /// Declare a function and its signature (without the body)
     fn declare_function(&mut self, func: &ir::Function) {
         let ir::Function {
@@ -330,7 +333,7 @@ impl ModuleBuilder {
     }
 }
 
-impl<'c> FuncGen<'c> {
+impl<'a, 'c> FuncGen<'a, 'c> {
     fn finalize(self) {
         self.builder.finalize()
     }
@@ -721,30 +724,45 @@ impl Module {
     pub fn get_function<'module, Params: RotoParams, Return: Reflect>(
         &'module mut self,
         type_registry: &mut TypeRegistry,
+        identifiers: &StringInterner<StringBackend>,
         name: &str,
-    ) -> Option<TypedFunc<'module, Params, Return>> {
-        let function_info = self.functions.get(name)?;
+    ) -> Result<TypedFunc<'module, Params, Return>, FunctionRetrievalError>
+    {
+        let function_info = self.functions.get(name).ok_or_else(|| {
+            FunctionRetrievalError::DoesNotExist {
+                name: name.to_string(),
+                existing: self.functions.keys().cloned().collect(),
+            }
+        })?;
+
         let sig = &function_info.signature;
         let id = function_info.id;
 
-        let correct_params = Params::check(
+        Params::check(
             type_registry,
             &mut self.type_info,
+            identifiers,
             &sig.parameter_types,
-        );
-        let correct_return = check_roto_type_reflect::<Return>(
+        )?;
+
+        check_roto_type_reflect::<Return>(
             type_registry,
             &mut self.type_info,
+            identifiers,
             &sig.return_type,
-        );
-        if !correct_params || !correct_return {
-            return None;
-        }
+        )
+        .map_err(|e| {
+            FunctionRetrievalError::TypeMismatch(
+                "the return value".to_string(),
+                e,
+            )
+        })?;
+
         let return_by_ref =
             return_type_by_ref(type_registry, TypeId::of::<Return>());
 
         let func_ptr = self.inner.get_finalized_function(id);
-        Some(TypedFunc {
+        Ok(TypedFunc {
             func: func_ptr,
             return_by_ref,
             _ty: PhantomData,

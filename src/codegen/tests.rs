@@ -582,6 +582,49 @@ fn asn() {
     );
 }
 
+#[test]
+fn mismatched_types() {
+    let s = "
+        filter-map main(x: i32) {
+            apply {
+                accept x
+            }
+        }
+    ";
+
+    let mut p = compile(s);
+
+    let Err(err) = p.get_function::<(i8,), Verdict<i8, ()>>("main") else {
+        panic!()
+    };
+
+    eprintln!("{err}");
+    assert!(err.to_string().contains("do not match"));
+}
+
+#[test]
+fn multiply() {
+    let s = "
+        filter-map main(x: u8) {
+            apply {
+                if x > 10 {
+                    accept 2 * x
+                } else {
+                    reject
+                }
+            }
+        }
+    ";
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(u8,), Verdict<u8, ()>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call((20,));
+    assert_eq!(res, Verdict::Accept(40));
+}
+
 // #[test]
 // fn bmp_message() {
 //     let s = "

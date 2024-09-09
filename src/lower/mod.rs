@@ -11,8 +11,9 @@ pub mod value;
 #[cfg(test)]
 mod test_eval;
 
-use ir::{Block, Function, Instruction, Operand, Var, VarKind};
+use ir::{Block, Function, Instruction, IrPrinter, Operand, Var, VarKind};
 use label::{LabelRef, LabelStore};
+use log::log_enabled;
 use std::{collections::HashMap, net::IpAddr};
 use string_interner::{backend::StringBackend, StringInterner};
 use value::IrType;
@@ -389,7 +390,7 @@ impl<'r> Lowerer<'r> {
 
                         if let Some(op) = op {
                             let offset =
-                                4 + self.type_info.padding_of(&accept_ty, 4);
+                                1 + self.type_info.padding_of(&accept_ty, 1);
 
                             self.write_field(
                                 var.into(),
@@ -420,7 +421,7 @@ impl<'r> Lowerer<'r> {
 
                         if let Some(op) = op {
                             let offset =
-                                4 + self.type_info.padding_of(&reject_ty, 4);
+                                1 + self.type_info.padding_of(&reject_ty, 1);
 
                             self.write_field(
                                 var.into(),

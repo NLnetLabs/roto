@@ -1,124 +1,78 @@
 use inetnum::asn::Asn;
+use string_interner::{backend::StringBackend, StringInterner};
 
 use crate::{
     runtime::ty::{Reflect, TypeDescription, TypeRegistry},
     typechecker::{
         info::TypeInfo,
-        types::{Primitive, Type},
+        types::{type_to_string, Primitive, Type},
     },
 };
-use std::{any::TypeId, mem::MaybeUninit};
+use std::{any::TypeId, fmt::Display, mem::MaybeUninit};
 
-// /// A type that is compatible with Roto
-// ///
-// /// Such a type needs to have a corresponding roto representation.
-// /// It also needs to have a size and be convertible into a slice(?).
-// ///
-// /// We need to do several things with this:
-// ///  - Do runtime type checking before handing out a roto function.
-// ///  - Do runtime type checking
-// pub trait RotoType {
-//     const RETURN_BY_REF: bool;
+#[derive(Debug)]
+pub enum FunctionRetrievalError {
+    DoesNotExist { name: String, existing: Vec<String> },
+    IncorrectNumberOfArguments { expected: usize, got: usize },
+    TypeMismatch(String, TypeMismatch),
+}
 
-//     fn check(ty: Type) -> bool;
-// }
+#[derive(Debug)]
+pub struct TypeMismatch {
+    rust_ty: String,
+    roto_ty: String,
+}
 
-// impl RotoType for bool {
-//     const RETURN_BY_REF: bool = false;
-
-//     fn check(ty: Type) -> bool {
-//         ty == Type::Primitive(Primitive::Bool)
-//     }
-// }
-
-// impl RotoType for i8 {
-//     const RETURN_BY_REF: bool = false;
-
-//     fn check(ty: Type) -> bool {
-//         ty == Type::Primitive(Primitive::I8)
-//     }
-// }
-
-// impl RotoType for u8 {
-//     const RETURN_BY_REF: bool = false;
-
-//     fn check(ty: Type) -> bool {
-//         ty == Type::Primitive(Primitive::U8)
-//     }
-// }
-
-// impl RotoType for i16 {
-//     const RETURN_BY_REF: bool = false;
-
-//     fn check(ty: Type) -> bool {
-//         ty == Type::Primitive(Primitive::I16)
-//     }
-// }
-
-// impl RotoType for u16 {
-//     const RETURN_BY_REF: bool = false;
-
-//     fn check(ty: Type) -> bool {
-//         ty == Type::Primitive(Primitive::U16)
-//     }
-// }
-
-// impl RotoType for i32 {
-//     const RETURN_BY_REF: bool = false;
-
-//     fn check(ty: Type) -> bool {
-//         ty == Type::Primitive(Primitive::I32)
-//     }
-// }
-
-// impl RotoType for u32 {
-//     const RETURN_BY_REF: bool = false;
-
-//     fn check(ty: Type) -> bool {
-//         ty == Type::Primitive(Primitive::U32)
-//     }
-// }
-
-// impl RotoType for () {
-//     const RETURN_BY_REF: bool = false;
-
-//     fn check(ty: Type) -> bool {
-//         ty == Type::Primitive(Primitive::Unit)
-//     }
-// }
-
-// impl<T> RotoType for *mut T {
-//     const RETURN_BY_REF: bool = false;
-
-//     fn check(ty: Type) -> bool {
-//         ty == Some(IrType::Pointer) || ty == Some(IrType::ExtPointer)
-//     }
-// }
-
-// impl<A, R> RotoType for Verdict<A, R> {
-//     const RETURN_BY_REF: bool = true;
-
-//     fn check(ty: Type) -> bool {
-//         ty == Some(IrType::Pointer) || ty == Some(Type::ExtPointer)
-//     }
-// }
+impl Display for FunctionRetrievalError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FunctionRetrievalError::DoesNotExist { name, existing } => {
+                writeln!(f, "The function `{name}` does not exist.")?;
+                writeln!(f, "Hint: the following functions are defined:")?;
+                for n in existing {
+                    writeln!(f, " - {n}")?;
+                }
+                Ok(())
+            }
+            FunctionRetrievalError::IncorrectNumberOfArguments {
+                expected,
+                got,
+            } => {
+                writeln!(f, "The numer of arguments do not match")?;
+                writeln!(f, "The Roto function has {expected} arguments, but the Rust function has {got}.")
+            }
+            FunctionRetrievalError::TypeMismatch(
+                ctx,
+                TypeMismatch { rust_ty, roto_ty },
+            ) => {
+                writeln!(
+                    f,
+                    "The types for {ctx} of the function do not match"
+                )?;
+                writeln!(f, "Expected `{roto_ty}` got `{rust_ty}`.")
+            }
+        }
+    }
+}
 
 pub fn check_roto_type_reflect<T: Reflect>(
     registry: &mut TypeRegistry,
     type_info: &mut TypeInfo,
+    identifiers: &StringInterner<StringBackend>,
     roto_ty: &Type,
-) -> bool {
+) -> Result<(), TypeMismatch> {
     let rust_ty = registry.resolve::<T>().type_id;
-    check_roto_type(registry, type_info, rust_ty, roto_ty)
+    check_roto_type(registry, type_info, identifiers, rust_ty, roto_ty)
 }
 
 #[allow(non_snake_case)]
 fn check_roto_type(
     registry: &TypeRegistry,
     type_info: &mut TypeInfo,
+    identifiers: &StringInterner<StringBackend>,
     rust_ty: TypeId,
     roto_ty: &Type,
-) -> bool {
+) -> Result<(), TypeMismatch> {
     // Convert this to consts when TypeId::of is const on stable
     let BOOL: TypeId = TypeId::of::<bool>();
     let U8: TypeId = TypeId::of::<u8>();
@@ -133,7 +87,15 @@ fn check_roto_type(
     let ASN: TypeId = TypeId::of::<Asn>();
 
     let Some(rust_ty) = registry.get(rust_ty) else {
-        return false;
+        return Err(TypeMismatch {
+            rust_ty: "unknown".into(),
+            roto_ty: type_to_string(identifiers, roto_ty),
+        });
+    };
+
+    let error_message = TypeMismatch {
+        rust_ty: rust_ty.rust_name.to_string(),
+        roto_ty: type_to_string(identifiers, roto_ty),
     };
 
     let mut roto_ty = type_info.resolve(roto_ty);
@@ -143,38 +105,54 @@ fn check_roto_type(
     }
 
     match rust_ty.description {
-        TypeDescription::Leaf => match rust_ty.type_id {
-            x if x == BOOL => roto_ty == Type::Primitive(Primitive::Bool),
-            x if x == U8 => roto_ty == Type::Primitive(Primitive::U8),
-            x if x == U16 => roto_ty == Type::Primitive(Primitive::U16),
-            x if x == U32 => roto_ty == Type::Primitive(Primitive::U32),
-            x if x == U64 => roto_ty == Type::Primitive(Primitive::U64),
-            x if x == I8 => roto_ty == Type::Primitive(Primitive::I8),
-            x if x == I16 => roto_ty == Type::Primitive(Primitive::I16),
-            x if x == I32 => roto_ty == Type::Primitive(Primitive::I32),
-            x if x == I64 => roto_ty == Type::Primitive(Primitive::I64),
-            x if x == UNIT => roto_ty == Type::Primitive(Primitive::Unit),
-            x if x == ASN => roto_ty == Type::Primitive(Primitive::Asn),
-            _ => panic!(),
-        },
+        TypeDescription::Leaf => {
+            let expected_roto = match rust_ty.type_id {
+                x if x == BOOL => Type::Primitive(Primitive::Bool),
+                x if x == U8 => Type::Primitive(Primitive::U8),
+                x if x == U16 => Type::Primitive(Primitive::U16),
+                x if x == U32 => Type::Primitive(Primitive::U32),
+                x if x == U64 => Type::Primitive(Primitive::U64),
+                x if x == I8 => Type::Primitive(Primitive::I8),
+                x if x == I16 => Type::Primitive(Primitive::I16),
+                x if x == I32 => Type::Primitive(Primitive::I32),
+                x if x == I64 => Type::Primitive(Primitive::I64),
+                x if x == UNIT => Type::Primitive(Primitive::Unit),
+                x if x == ASN => Type::Primitive(Primitive::Asn),
+                _ => panic!(),
+            };
+            if expected_roto == roto_ty {
+                Ok(())
+            } else {
+                Err(error_message)
+            }
+        }
         TypeDescription::ConstPtr(_) => todo!(),
-        TypeDescription::MutPtr(_) => true, // TODO: actually check this
+        TypeDescription::MutPtr(_) => Ok(()), // TODO: actually check this
         TypeDescription::Verdict(rust_accept, rust_reject) => {
             let Type::Verdict(roto_accept, roto_reject) = &roto_ty else {
-                return false;
+                return Err(error_message);
             };
-            check_roto_type(registry, type_info, rust_accept, roto_accept)
-                && check_roto_type(
-                    registry,
-                    type_info,
-                    rust_reject,
-                    roto_reject,
-                )
+            check_roto_type(
+                registry,
+                type_info,
+                identifiers,
+                rust_accept,
+                roto_accept,
+            )?;
+            check_roto_type(
+                registry,
+                type_info,
+                identifiers,
+                rust_reject,
+                roto_reject,
+            )?;
+            Ok(())
         }
         // We don't do options and results, we should hint towards verdict
         // when using them.
-        TypeDescription::Option(_) => false,
-        TypeDescription::Result(_, _) => false,
+        TypeDescription::Option(_) | TypeDescription::Result(_, _) => {
+            Err(error_message)
+        }
     }
 }
 
@@ -194,8 +172,9 @@ pub trait RotoParams {
     fn check(
         registry: &mut TypeRegistry,
         type_info: &mut TypeInfo,
+        identifiers: &StringInterner<StringBackend>,
         ty: &[Type],
-    ) -> bool;
+    ) -> Result<(), FunctionRetrievalError>;
 
     unsafe fn invoke<R: Reflect>(
         func_ptr: *const u8,
@@ -204,20 +183,43 @@ pub trait RotoParams {
     ) -> R;
 }
 
+macro_rules! unit {
+    ($t:tt) => {
+        ()
+    };
+}
+
 macro_rules! params {
     ($($t:ident),*) => {
         #[allow(non_snake_case)]
         #[allow(unused_variables)]
+        #[allow(unused_mut)]
         impl<$($t,)*> RotoParams for ($($t,)*)
         where
             $($t: Reflect,)*
         {
-            fn check(registry: &mut TypeRegistry, type_info: &mut TypeInfo, ty: &[Type]) -> bool {
+            fn check(
+                registry: &mut TypeRegistry,
+                type_info: &mut TypeInfo,
+                identifiers: &StringInterner<StringBackend>,
+                ty: &[Type]
+            ) -> Result<(), FunctionRetrievalError> {
                 let [$($t),*] = ty else {
-                    return false;
+                    let x: &[()] = &[$(unit!($t)),*];
+                    return Err(FunctionRetrievalError::IncorrectNumberOfArguments {
+                        expected: ty.len(),
+                        got: x.len(),
+                    });
                 };
+
                 // Little hack to return a bool even with no parameters
-                true $(&& check_roto_type_reflect::<$t>(registry, type_info, $t))*
+                let mut i = 0;
+                $(
+                    i += 1;
+                    check_roto_type_reflect::<$t>(registry, type_info, identifiers, $t)
+                        .map_err(|e| FunctionRetrievalError::TypeMismatch(format!("argument {i}"), e))?;
+                )*
+                Ok(())
             }
 
             unsafe fn invoke<R: Reflect>(func_ptr: *const u8, ($($t,)*): Self, return_by_ref: bool) -> R {
