@@ -11,9 +11,8 @@ pub mod value;
 #[cfg(test)]
 mod test_eval;
 
-use ir::{Block, Function, Instruction, IrPrinter, Operand, Var, VarKind};
+use ir::{Block, Function, Instruction, Operand, Var, VarKind};
 use label::{LabelRef, LabelStore};
-use log::log_enabled;
 use std::{collections::HashMap, net::IpAddr};
 use string_interner::{backend::StringBackend, StringInterner};
 use value::IrType;
