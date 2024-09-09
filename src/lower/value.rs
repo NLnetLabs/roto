@@ -1,6 +1,8 @@
 use std::any::Any;
 use std::fmt::{Debug, Display};
 
+use inetnum::asn::Asn;
+
 use super::ir::Operand;
 
 /// A Roto value with type information at runtime
@@ -18,6 +20,7 @@ pub enum IrValue {
     I16(i16),
     I32(i32),
     I64(i64),
+    Asn(Asn),
     IpAddr(std::net::IpAddr),
     Pointer(usize),
     ExtPointer(*mut ()),
@@ -36,6 +39,7 @@ pub enum IrType {
     I16,
     I32,
     I64,
+    Asn,
     IpAddr,
     Pointer,
     ExtPointer,
@@ -49,7 +53,7 @@ impl IrType {
         match self {
             Bool | U8 | I8 => 1,
             U16 | I16 => 2,
-            U32 | I32 => 4,
+            U32 | I32 | Asn => 4,
             U64 | I64 => 8,
             IpAddr => 4,
             Pointer | ExtValue | ExtPointer => (usize::BITS / 8) as usize,
@@ -74,6 +78,7 @@ impl Display for IrType {
             I16 => "i16",
             I32 => "i32",
             I64 => "i64",
+            Asn => "Asn",
             IpAddr => "IpAddr",
             Pointer => "Pointer",
             ExtValue => "ExtValue",
@@ -94,6 +99,7 @@ impl PartialEq for IrValue {
             (I8(l), I8(r)) => l == r,
             (I16(l), I16(r)) => l == r,
             (I32(l), I32(r)) => l == r,
+            (Asn(l), Asn(r)) => l == r,
             (ExtValue(_), ExtValue(_)) => false,
             (ExtPointer(_), ExtPointer(_)) => false,
             (Pointer(_), Pointer(_)) => panic!("can't compare pointers"),
@@ -117,6 +123,7 @@ impl IrValue {
             I16(_) => IrType::I16,
             I32(_) => IrType::I32,
             I64(_) => IrType::I64,
+            Asn(_) => IrType::Asn,
             IpAddr(_) => IrType::I32,
             Pointer(_) => IrType::Pointer,
             ExtValue(_) => IrType::ExtValue,
@@ -135,6 +142,7 @@ impl IrValue {
             Self::I16(x) => x,
             Self::I32(x) => x,
             Self::I64(x) => x,
+            Self::Asn(x) => x,
             Self::IpAddr(x) => x,
             Self::Pointer(x) => x,
             Self::ExtValue(x) => x,
@@ -161,8 +169,8 @@ impl IrValue {
             IrValue::I32(*x)
         } else if let Some(x) = any.downcast_ref() {
             IrValue::I64(*x)
-        // } else if let Some(x) = any.downcast_ref() {
-        //     todo!()
+        } else if let Some(x) = any.downcast_ref() {
+            IrValue::Asn(*x)
         } else {
             panic!("Could not downcast");
         }
@@ -179,6 +187,7 @@ impl IrValue {
             Self::I16(x) => x.to_ne_bytes().into(),
             Self::I32(x) => x.to_ne_bytes().into(),
             Self::I64(x) => x.to_ne_bytes().into(),
+            Self::Asn(x) => x.into_u32().to_ne_bytes().into(),
             Self::IpAddr(_) => todo!(),
             Self::Pointer(x) => x.to_ne_bytes().into(),
             Self::ExtValue(x) => x.clone(),
@@ -229,6 +238,10 @@ impl IrValue {
             IrType::I64 => {
                 let val: &[u8; 8] = val.try_into().unwrap();
                 Self::I64(i64::from_ne_bytes(*val))
+            }
+            IrType::Asn => {
+                let val: &[u8; 4] = val.try_into().unwrap();
+                Self::Asn(Asn::from_u32(u32::from_ne_bytes(*val)))
             }
             IrType::IpAddr => {
                 let val: &[u8; 32] = val.try_into().unwrap();
@@ -312,6 +325,7 @@ impl Display for IrValue {
             I16(x) => write!(f, "i16({x})"),
             I32(x) => write!(f, "i32({x})"),
             I64(x) => write!(f, "i64({x})"),
+            Asn(x) => write!(f, "Asn({x})"),
             IpAddr(x) => write!(f, "IpAddr({x})"),
             Pointer(x) => write!(f, "Pointer({x})"),
             ExtValue(..) => write!(f, "ExtValue(..)"),

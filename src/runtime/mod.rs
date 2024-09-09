@@ -33,6 +33,7 @@ pub mod verdict;
 use std::any::TypeId;
 
 use func::{Func, FunctionDescription};
+use inetnum::asn::Asn;
 use ty::{Ty, TypeDescription, TypeRegistry};
 
 /// Provides the types and functions that Roto can access via FFI
@@ -308,6 +309,7 @@ impl Runtime {
         rt.register_copy_type::<i16>()?;
         rt.register_copy_type::<i32>()?;
         rt.register_copy_type::<i64>()?;
+        rt.register_copy_type::<Asn>()?;
 
         Ok(rt)
     }
@@ -424,6 +426,7 @@ pub mod tests {
                 "i16",
                 "i32",
                 "i64",
+                "Asn",
                 "IpAddr",
                 "OriginType",
                 "NextHop",

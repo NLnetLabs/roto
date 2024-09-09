@@ -1,3 +1,5 @@
+use inetnum::asn::Asn;
+
 use crate::{
     ast::{
         BinOp, Block, Expr, IpAddress, Literal, Match, MatchArm, Pattern,
@@ -556,11 +558,17 @@ impl<'source> Parser<'source, '_> {
                     )
                 })?,
             ),
-            Token::Asn(s) => {
-                Literal::Asn(s[2..].parse::<u32>().map_err(|e| {
-                    ParseError::invalid_literal("AS number", token, e, span)
-                })?)
-            }
+            Token::Asn(s) => match s[2..].parse::<u32>() {
+                Ok(x) => Literal::Asn(Asn::from_u32(x)),
+                Err(e) => {
+                    return Err(ParseError::invalid_literal(
+                        "AS number",
+                        token,
+                        e,
+                        span,
+                    ))
+                }
+            },
             Token::Bool(b) => Literal::Bool(b),
             Token::Float => {
                 unimplemented!("Floating point numbers are not supported yet")

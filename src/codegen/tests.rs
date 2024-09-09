@@ -1,3 +1,5 @@
+use inetnum::asn::Asn;
+
 use crate::{
     pipeline::{test_file, Compiled},
     runtime::tests::routecore_runtime,
@@ -549,6 +551,35 @@ fn issue_54() {
     // But we do register a method on it:
     rt.register_method::<Foo, _, _>("bar", bar as extern "C" fn(_, _) -> _)
         .unwrap_err();
+}
+
+#[test]
+fn asn() {
+    let s = "
+        filter-map main(x: Asn) {
+            apply {
+                if x == AS1000 {
+                    accept x
+                } else {
+                    reject x
+                }
+            }
+        }
+    ";
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(Asn,), Verdict<Asn, Asn>>("main")
+        .expect("No function found (or mismatched types)");
+
+    assert_eq!(
+        f.call((Asn::from_u32(1000),)),
+        Verdict::Accept(Asn::from_u32(1000))
+    );
+    assert_eq!(
+        f.call((Asn::from_u32(2000),)),
+        Verdict::Reject(Asn::from_u32(2000))
+    );
 }
 
 // #[test]

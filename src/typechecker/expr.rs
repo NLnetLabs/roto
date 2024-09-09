@@ -494,7 +494,7 @@ impl TypeChecker<'_> {
 
         let t = match lit.node {
             String(_) => Type::Primitive(Primitive::String),
-            Asn(_) => Type::Primitive(Primitive::U32),
+            Asn(_) => Type::Primitive(Primitive::Asn),
             IpAddress(_) => Type::Name(Identifier(ip)),
             Bool(_) => Type::Primitive(Primitive::Bool),
             Integer(_) => self.fresh_int(),

@@ -902,7 +902,7 @@ impl<'r> Lowerer<'r> {
     fn literal(&mut self, lit: &Meta<Literal>) -> Operand {
         match &lit.node {
             Literal::String(_) => todo!(),
-            Literal::Asn(n) => IrValue::U32(*n).into(),
+            Literal::Asn(n) => IrValue::Asn(*n).into(),
             Literal::IpAddress(addr) => IrValue::IpAddr(match addr {
                 ast::IpAddress::Ipv4(x) => IpAddr::V4(*x),
                 ast::IpAddress::Ipv6(x) => IpAddr::V6(*x),
@@ -1022,6 +1022,7 @@ impl<'r> Lowerer<'r> {
             Type::Primitive(Primitive::I16) => IrType::I16,
             Type::Primitive(Primitive::I32) => IrType::I32,
             Type::Primitive(Primitive::I64) => IrType::I64,
+            Type::Primitive(Primitive::Asn) => IrType::Asn,
             Type::IntVar(_) => IrType::I32,
             Type::BuiltIn(_, _) => IrType::ExtPointer,
             x if self.is_reference_type(&x) => IrType::Pointer,
@@ -1037,6 +1038,7 @@ fn binop_to_cmp(op: &ast::BinOp, ty: &Type) -> Option<ir::IntCmp> {
             | Primitive::U32
             | Primitive::U16
             | Primitive::U8
+            | Primitive::Asn
             | Primitive::Bool => false,
             Primitive::I64
             | Primitive::I32

@@ -13,6 +13,8 @@ use std::{
     collections::HashMap,
 };
 
+use inetnum::asn::Asn;
+
 use super::verdict::Verdict;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -157,3 +159,4 @@ simple_reflect!(i8);
 simple_reflect!(i16);
 simple_reflect!(i32);
 simple_reflect!(i64);
+simple_reflect!(Asn);

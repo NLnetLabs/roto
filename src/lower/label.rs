@@ -1,10 +1,17 @@
 //! Labels for basic blocks in the IR
+//!
+//! These labels are designed to be unique, but still have some structure.
+//! Technically, a unique number for each label would suffice, but that would
+//! make the generated code harder to debug. Therefore, the labels follow
+//! a hierachical scheme, where labels have a name, a counter and optionally
+//! a parent. When they are displayed, we join the linked list formed by the
+//! parent labels as separated by `::`.
 
 use crate::ast::Identifier;
 
 /// A label for a basic block
 ///
-/// Should not be constructed directly, but using a [`LabelStore`].
+/// This should not be constructed directly, but only via a [`LabelStore`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Label {
     pub identifier: Identifier,
@@ -66,6 +73,7 @@ impl LabelStore {
         LabelRef(self.labels.len() - 1)
     }
 
+    /// Increment the counter of the label by one and return a reference to it
     pub fn next(&mut self, previous: LabelRef) -> LabelRef {
         let previous = &self.labels[previous.0];
         self.labels.push(Label {
@@ -75,6 +83,7 @@ impl LabelStore {
         LabelRef(self.labels.len() - 1)
     }
 
+    /// Get the [`Label`] corresponding to a [`LabelRef`]
     pub fn get(&self, label: LabelRef) -> &Label {
         &self.labels[label.0]
     }

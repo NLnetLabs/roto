@@ -46,6 +46,7 @@ pub enum Primitive {
     Unit,
     String,
     Bool,
+    Asn,
 }
 
 impl From<Primitive> for Type {
@@ -71,6 +72,7 @@ impl Display for Primitive {
                 Primitive::Unit => "Unit",
                 Primitive::String => "String",
                 Primitive::Bool => "bool",
+                Primitive::Asn => "Asn",
             }
         )
     }
@@ -193,6 +195,8 @@ impl Primitive {
             Primitive::Unit => 0,
             Primitive::String => 4,
             Primitive::Bool => 1,
+            // Asn has the same size as u32, which is 4 bytes
+            Primitive::Asn => 4,
         }
     }
 }
@@ -297,6 +301,7 @@ pub fn default_types(
         ("bool", Bool),
         ("String", String),
         ("Unit", Unit),
+        ("Asn", Asn),
     ];
 
     let mut types = Vec::new();

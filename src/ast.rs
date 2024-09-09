@@ -1,3 +1,9 @@
+//! Abstract Syntax Tree (AST) for Roto
+//!
+//! A [`SyntaxTree`] is the output of the Roto parser. It contains a
+//! representation of the Roto script as Rust types for further processing.
+
+use inetnum::asn::Asn;
 use string_interner::symbol::SymbolU32;
 
 use crate::parser::meta::Meta;
@@ -47,6 +53,7 @@ pub struct FilterMapBody {
     pub apply: Meta<Block>,
 }
 
+/// A function declaration, including the [`Block`] forming its definition
 #[derive(Clone, Debug)]
 pub struct FunctionDeclaration {
     pub ident: Meta<Identifier>,
@@ -55,35 +62,67 @@ pub struct FunctionDeclaration {
     pub body: Meta<Block>,
 }
 
+/// A block of multiple Roto expressions
 #[derive(Clone, Debug)]
 pub struct Block {
     pub exprs: Vec<Meta<Expr>>,
     pub last: Option<Box<Meta<Expr>>>,
 }
 
+/// A Roto expression
 #[derive(Clone, Debug)]
 pub enum Expr {
+    /// Return from the current function or filter-map
+    ///
+    /// Optionally takes an expression for the value being returned.
     Return(ReturnKind, Option<Box<Meta<Expr>>>),
-    /// a literal, or a chain of field accesses and/or methods on a literal,
-    /// e.g. `10.0.0.0/8.covers(..)`
+
+    /// A literal expression
     Literal(Meta<Literal>),
+
+    /// A match expression,
     Match(Box<Meta<Match>>),
+
+    /// A function call expression
     FunctionCall(Meta<Identifier>, Meta<Vec<Meta<Expr>>>),
+
+    /// A method call expression
+    ///
+    /// Takes the expression of the _receiver_ (the expression that the
+    /// method is called on), the name of the method and a [`Vec`] of
+    /// arguments.
     MethodCall(Box<Meta<Expr>>, Meta<Identifier>, Meta<Vec<Meta<Expr>>>),
+
+    /// A field access expression
     Access(Box<Meta<Expr>>, Meta<Identifier>),
+
+    /// A variable use
     Var(Meta<Identifier>),
-    /// a record that doesn't have a type mentioned in the assignment of it,
-    /// e.g `{ value_1: 100, value_2: "bla" }`. This can also be a sub-record
-    /// of a record that does have an explicit type.
+
+    /// A record that doesn't have a type mentioned in the assignment of it
+    ///
+    /// For example: `{ value_1: 100, value_2: "bla" }`. This can also be a
+    /// sub-record of a record that does have an explicit type.
     Record(Meta<Record>),
-    /// an expression of a record that does have a type, e.g. `MyType {
-    /// value_1: 100, value_2: "bla" }`, where MyType is a user-defined Record
-    /// Type.
+
+    /// An expression of a record that does have a type
+    ///
+    /// For example: `MyType { value_1: 100, value_2: "bla" }`, where `MyType`
+    /// is a user-defined Record Type.
     TypedRecord(Meta<Identifier>, Meta<Record>),
+
     /// An expression that yields a list of values, e.g. `[100, 200, 300]`
     List(Vec<Meta<Expr>>),
+
+    /// A unary not expression
     Not(Box<Meta<Expr>>),
+
+    /// A binary operator expression
+    ///
+    /// Takes a left operand, the operator and the right operand
     BinOp(Box<Meta<Expr>>, BinOp, Box<Meta<Expr>>),
+
+    /// An if or if-else expression
     IfElse(Box<Meta<Expr>>, Meta<Block>, Option<Meta<Block>>),
 }
 
@@ -180,7 +219,7 @@ pub struct RecordType {
 pub enum Literal {
     #[allow(dead_code)]
     String(String),
-    Asn(u32),
+    Asn(Asn),
     IpAddress(IpAddress),
     Integer(i64),
     Bool(bool),
@@ -188,19 +227,33 @@ pub enum Literal {
 
 #[derive(Clone, Debug)]
 pub enum BinOp {
+    /// Logical and (`&&`)
     And,
+    /// Logical or (`||`)
     Or,
+    /// Equals (`==`)
     Eq,
+    /// Not equals (`!=`)
     Ne,
+    /// Less than (`<`)
     Lt,
+    /// Less than or equal (`<=`)
     Le,
+    /// Greater than (`>`)
     Gt,
+    /// Greater than or equal (`>=`)
     Ge,
+    /// In
     In,
+    /// Not in
     NotIn,
+    /// Addition (`+`)
     Add,
+    /// Subtraction (`-`)
     Sub,
+    /// Multiplication (`*`)
     Mul,
+    /// Division (`/`)
     Div,
 }
 

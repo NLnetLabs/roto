@@ -1,3 +1,5 @@
+use inetnum::asn::Asn;
+
 use crate::{
     runtime::ty::{Reflect, TypeDescription, TypeRegistry},
     typechecker::{
@@ -128,6 +130,7 @@ fn check_roto_type(
     let I32: TypeId = TypeId::of::<i32>();
     let I64: TypeId = TypeId::of::<i64>();
     let UNIT: TypeId = TypeId::of::<()>();
+    let ASN: TypeId = TypeId::of::<Asn>();
 
     let Some(rust_ty) = registry.get(rust_ty) else {
         return false;
@@ -151,6 +154,7 @@ fn check_roto_type(
             x if x == I32 => roto_ty == Type::Primitive(Primitive::I32),
             x if x == I64 => roto_ty == Type::Primitive(Primitive::I64),
             x if x == UNIT => roto_ty == Type::Primitive(Primitive::Unit),
+            x if x == ASN => roto_ty == Type::Primitive(Primitive::Asn),
             _ => panic!(),
         },
         TypeDescription::ConstPtr(_) => todo!(),
