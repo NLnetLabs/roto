@@ -50,7 +50,7 @@ fn accept() {
         .get_function::<(), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(());
+    let res = f.call();
     dbg!(std::mem::size_of::<Verdict<(), ()>>());
     assert_eq!(res, Verdict::Accept(()));
 }
@@ -70,7 +70,7 @@ fn reject() {
         .get_function::<(), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(());
+    let res = f.call();
     assert_eq!(res, Verdict::Reject(()));
 }
 
@@ -93,10 +93,10 @@ fn equal_to_10() {
         .get_function::<(u32,), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call((5,));
+    let res = f.call(5);
     assert_eq!(res, Verdict::Reject(()));
 
-    let res = f.call((10,));
+    let res = f.call(10);
     assert_eq!(res, Verdict::Accept(()));
 }
 
@@ -123,10 +123,10 @@ fn equal_to_10_with_function() {
         .get_function::<(i32,), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call((5,));
+    let res = f.call(5);
     assert_eq!(res, Verdict::Reject(()));
 
-    let res = f.call((10,));
+    let res = f.call(10);
     assert_eq!(res, Verdict::Accept(()));
 }
 
@@ -159,10 +159,10 @@ fn equal_to_10_with_two_functions() {
         .get_function::<(u32,), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    assert_eq!(f.call((5,)), Verdict::Reject(()));
-    assert_eq!(f.call((10,)), Verdict::Accept(()));
-    assert_eq!(f.call((15,)), Verdict::Reject(()));
-    assert_eq!(f.call((20,)), Verdict::Accept(()));
+    assert_eq!(f.call(5), Verdict::Reject(()));
+    assert_eq!(f.call(10), Verdict::Accept(()));
+    assert_eq!(f.call(15), Verdict::Reject(()));
+    assert_eq!(f.call(20), Verdict::Accept(()));
 }
 
 #[test]
@@ -185,7 +185,7 @@ fn negation() {
         .expect("No function found (or mismatched types)");
 
     for x in 0..20 {
-        let res = f.call((x,));
+        let res = f.call(x);
         let exp = if x != 10 {
             Verdict::Accept(())
         } else {
@@ -227,7 +227,7 @@ fn a_bunch_of_comparisons() {
                 Verdict::Reject(())
             };
 
-        let res = f.call((x,));
+        let res = f.call(x);
         assert_eq!(res, expected);
     }
 }
@@ -262,7 +262,7 @@ fn record() {
         } else {
             Verdict::Reject(())
         };
-        let res = f.call((x,));
+        let res = f.call(x);
         assert_eq!(res, expected);
     }
 }
@@ -291,7 +291,8 @@ fn record_with_fields_flipped() {
     let mut p = compile(s);
     let f = p
         .get_function::<(i32,), Verdict<(), ()>>("main")
-        .expect("No function found (or mismatched types)");
+        .expect("No function found (or mismatched types)")
+        .as_func();
 
     for x in 0..100 {
         let expected = if x == 20 {
@@ -299,7 +300,7 @@ fn record_with_fields_flipped() {
         } else {
             Verdict::Reject(())
         };
-        let res = f.call((x,));
+        let res = f(x);
         assert_eq!(res, expected);
     }
 }
@@ -336,7 +337,7 @@ fn nested_record() {
         } else {
             Verdict::Reject(())
         };
-        let res = f.call((x,));
+        let res = f.call(x);
         assert_eq!(res, expected, "for {x}");
     }
 }
@@ -372,7 +373,7 @@ fn misaligned_fields() {
         } else {
             Verdict::Reject(())
         };
-        let res = f.call((x,));
+        let res = f.call(x);
         assert_eq!(res, expected, "for {x}");
     }
 }
@@ -403,8 +404,8 @@ fn enum_match() {
         .get_function::<(bool,), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    assert_eq!(f.call((true,)), Verdict::Accept(()));
-    assert_eq!(f.call((false,)), Verdict::Reject(()));
+    assert_eq!(f.call(true), Verdict::Accept(()));
+    assert_eq!(f.call(false), Verdict::Reject(()));
 }
 
 #[test]
@@ -426,13 +427,13 @@ fn arithmetic() {
         .get_function::<(i32,), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call((5,));
+    let res = f.call(5);
     assert_eq!(res, Verdict::Accept(()));
 
-    let res = f.call((20,));
+    let res = f.call(20);
     assert_eq!(res, Verdict::Accept(()));
 
-    let res = f.call((100,));
+    let res = f.call(100);
     assert_eq!(res, Verdict::Reject(()));
 }
 
@@ -458,7 +459,7 @@ fn call_runtime_function() {
     for (value, expected) in
         [(5, Verdict::Reject(())), (11, Verdict::Accept(()))]
     {
-        let res = f.call((value,));
+        let res = f.call(value);
         assert_eq!(res, expected);
     }
 }
@@ -485,7 +486,7 @@ fn call_runtime_method() {
     for (value, expected) in
         [(5, Verdict::Reject(())), (10, Verdict::Accept(()))]
     {
-        let res = f.call((value,));
+        let res = f.call(value);
         assert_eq!(res, expected);
     }
 }
@@ -505,7 +506,7 @@ fn int_var() {
         .get_function::<(), Verdict<i32, ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    assert_eq!(f.call(()), Verdict::Accept(32));
+    assert_eq!(f.call(), Verdict::Accept(32));
 }
 
 #[test]
@@ -573,11 +574,11 @@ fn asn() {
         .expect("No function found (or mismatched types)");
 
     assert_eq!(
-        f.call((Asn::from_u32(1000),)),
+        f.call(Asn::from_u32(1000)),
         Verdict::Accept(Asn::from_u32(1000))
     );
     assert_eq!(
-        f.call((Asn::from_u32(2000),)),
+        f.call(Asn::from_u32(2000)),
         Verdict::Reject(Asn::from_u32(2000))
     );
 }
@@ -621,7 +622,7 @@ fn multiply() {
         .get_function::<(u8,), Verdict<u8, ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call((20,));
+    let res = f.call(20);
     assert_eq!(res, Verdict::Accept(40));
 }
 
