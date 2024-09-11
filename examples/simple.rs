@@ -31,7 +31,7 @@ fn main() -> Result<(), roto::RotoReport> {
 
     for y in 0..20 {
         let mut bla = Bla { _x: 1, y, _z: 1 };
-        let res = func.call((&mut bla as *mut _,));
+        let res = func.call(&mut bla as *mut _);
 
         let expected = if y > 10 {
             Verdict::Accept(y * 2)

@@ -66,12 +66,40 @@ pub struct TypedFunc<'module, Params, Return> {
 impl<'module, Params: RotoParams, Return: Reflect>
     TypedFunc<'module, Params, Return>
 {
-    pub fn call(&self, params: Params) -> Return {
+    pub fn call_tuple(&self, params: Params) -> Return {
         unsafe {
             Params::invoke::<Return>(self.func, params, self.return_by_ref)
         }
     }
 }
+
+macro_rules! call_impl {
+    ($($ty:ident),*) => {
+        impl<'module, $($ty,)* Return: Reflect> TypedFunc<'module, ($($ty,)*), Return>
+        where
+            ($($ty,)*): RotoParams,
+        {
+            #[allow(non_snake_case)]
+            pub fn call(&self, $($ty: $ty,)*) -> Return {
+                self.call_tuple(($($ty,)*))
+            }
+
+            #[allow(non_snake_case)]
+            pub fn as_func(self) -> impl Fn($($ty,)*) -> Return + 'module {
+                move |$($ty,)*| self.call($($ty,)*)
+            }
+        }
+    }
+}
+
+call_impl!();
+call_impl!(A);
+call_impl!(A, B);
+call_impl!(A, B, C);
+call_impl!(A, B, C, D);
+call_impl!(A, B, C, D, E);
+call_impl!(A, B, C, D, E, F);
+call_impl!(A, B, C, D, E, F, G);
 
 pub struct FunctionInfo {
     id: FuncId,
