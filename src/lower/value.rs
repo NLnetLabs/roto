@@ -100,9 +100,9 @@ impl PartialEq for IrValue {
             (I16(l), I16(r)) => l == r,
             (I32(l), I32(r)) => l == r,
             (Asn(l), Asn(r)) => l == r,
+            (Pointer(l), Pointer(r)) => l == r,
             (ExtValue(_), ExtValue(_)) => false,
             (ExtPointer(_), ExtPointer(_)) => false,
-            (Pointer(_), Pointer(_)) => panic!("can't compare pointers"),
             _ => panic!("tried comparing different types"),
         }
     }

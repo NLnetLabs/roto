@@ -30,7 +30,7 @@ pub mod func;
 pub mod ty;
 pub mod verdict;
 
-use std::any::TypeId;
+use std::{any::TypeId, net::IpAddr};
 
 use func::{Func, FunctionDescription};
 use inetnum::asn::Asn;
@@ -310,6 +310,7 @@ impl Runtime {
         rt.register_copy_type::<i32>()?;
         rt.register_copy_type::<i64>()?;
         rt.register_copy_type::<Asn>()?;
+        rt.register_type::<IpAddr>()?;
 
         Ok(rt)
     }
@@ -344,7 +345,6 @@ pub mod tests {
     pub fn routecore_runtime() -> Result<Runtime, String> {
         let mut rt = Runtime::basic()?;
 
-        rt.register_type::<IpAddr>()?;
         rt.register_type::<OriginType>()?;
         rt.register_type::<NextHop>()?;
         rt.register_type::<MultiExitDisc>()?;

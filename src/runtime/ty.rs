@@ -11,6 +11,7 @@
 use std::{
     any::{type_name, TypeId},
     collections::HashMap,
+    net::IpAddr,
 };
 
 use inetnum::asn::Asn;
@@ -89,10 +90,20 @@ impl TypeRegistry {
 }
 
 pub trait Reflect: 'static {
+    type AsParam;
+
+    fn as_param(&mut self) -> Self::AsParam;
+
     fn resolve(registry: &mut TypeRegistry) -> &Ty;
 }
 
 impl<A: Reflect, R: Reflect> Reflect for Verdict<A, R> {
+    type AsParam = *mut Self;
+
+    fn as_param(&mut self) -> Self::AsParam {
+        self as _
+    }
+
     fn resolve(registry: &mut TypeRegistry) -> &Ty {
         let t = A::resolve(registry).type_id;
         let e = R::resolve(registry).type_id;
@@ -103,6 +114,12 @@ impl<A: Reflect, R: Reflect> Reflect for Verdict<A, R> {
 }
 
 impl<T: Reflect, E: Reflect> Reflect for Result<T, E> {
+    type AsParam = *mut Self;
+
+    fn as_param(&mut self) -> Self::AsParam {
+        self as _
+    }
+
     fn resolve(registry: &mut TypeRegistry) -> &Ty {
         let t = T::resolve(registry).type_id;
         let e = E::resolve(registry).type_id;
@@ -113,6 +130,12 @@ impl<T: Reflect, E: Reflect> Reflect for Result<T, E> {
 }
 
 impl<T: Reflect> Reflect for Option<T> {
+    type AsParam = *mut Self;
+
+    fn as_param(&mut self) -> Self::AsParam {
+        self as _
+    }
+
     fn resolve(registry: &mut TypeRegistry) -> &Ty {
         let t = T::resolve(registry).type_id;
 
@@ -122,6 +145,12 @@ impl<T: Reflect> Reflect for Option<T> {
 }
 
 impl<T: 'static> Reflect for *mut T {
+    type AsParam = Self;
+
+    fn as_param(&mut self) -> Self::AsParam {
+        *self
+    }
+
     fn resolve(registry: &mut TypeRegistry) -> &Ty {
         let t = registry.store::<T>(TypeDescription::Leaf).type_id;
 
@@ -131,6 +160,12 @@ impl<T: 'static> Reflect for *mut T {
 }
 
 impl<T: 'static> Reflect for *const T {
+    type AsParam = Self;
+
+    fn as_param(&mut self) -> Self::AsParam {
+        *self
+    }
+
     fn resolve(registry: &mut TypeRegistry) -> &Ty {
         let t = registry.store::<T>(TypeDescription::Leaf).type_id;
 
@@ -139,9 +174,27 @@ impl<T: 'static> Reflect for *const T {
     }
 }
 
+impl Reflect for IpAddr {
+    type AsParam = *mut Self;
+
+    fn as_param(&mut self) -> Self::AsParam {
+        self as _
+    }
+
+    fn resolve(registry: &mut TypeRegistry) -> &Ty {
+        registry.store::<Self>(TypeDescription::Leaf)
+    }
+}
+
 macro_rules! simple_reflect {
     ($t:ty) => {
         impl Reflect for $t {
+            type AsParam = Self;
+
+            fn as_param(&mut self) -> Self::AsParam {
+                *self
+            }
+
             fn resolve(registry: &mut TypeRegistry) -> &Ty {
                 registry.store::<Self>(TypeDescription::Leaf)
             }

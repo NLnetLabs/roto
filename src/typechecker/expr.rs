@@ -490,12 +490,10 @@ impl TypeChecker<'_> {
         use ast::Literal::*;
         let span = lit.id;
 
-        let ip = self.identifiers.get_or_intern("IpAddr");
-
         let t = match lit.node {
             String(_) => Type::Primitive(Primitive::String),
             Asn(_) => Type::Primitive(Primitive::Asn),
-            IpAddress(_) => Type::Name(Identifier(ip)),
+            IpAddress(_) => Type::Primitive(Primitive::IpAddr),
             Bool(_) => Type::Primitive(Primitive::Bool),
             Integer(_) => self.fresh_int(),
         };

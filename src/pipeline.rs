@@ -405,6 +405,7 @@ impl TypeChecked {
             &mut label_store,
         );
 
+        let _ = env_logger::try_init();
         if log::log_enabled!(log::Level::Info) {
             let s = IrPrinter {
                 scope_graph: &scope_graph,

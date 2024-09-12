@@ -1,3 +1,5 @@
+use std::net::IpAddr;
+
 use inetnum::asn::Asn;
 
 use crate::{
@@ -292,7 +294,7 @@ fn record_with_fields_flipped() {
     let f = p
         .get_function::<(i32,), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)")
-        .as_func();
+        .into_func();
 
     for x in 0..100 {
         let expected = if x == 20 {
@@ -624,6 +626,119 @@ fn multiply() {
 
     let res = f.call(20);
     assert_eq!(res, Verdict::Accept(40));
+}
+
+#[test]
+fn ip_output() {
+    let s = "
+        filter-map main() {
+            apply { accept 1.2.3.4 }
+        }
+    ";
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), Verdict<IpAddr, ()>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let ip = IpAddr::from([1, 2, 3, 4]);
+    let res = f.call();
+    assert_eq!(res, Verdict::Accept(ip));
+}
+
+#[test]
+fn ip_passthrough() {
+    let s = "
+        filter-map main(x: IpAddr) {
+            apply { accept x }
+        }
+    ";
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(IpAddr,), Verdict<IpAddr, ()>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let ip = IpAddr::from([1, 2, 3, 4]);
+    let res = f.call(ip);
+    assert_eq!(res, Verdict::Accept(ip));
+}
+
+#[test]
+fn ipv4_compare() {
+    let s = "
+        filter-map main(x: IpAddr) {
+            apply { 
+                if x == 0.0.0.0 {
+                    accept x
+                } else if x == 192.168.0.0 {
+                    accept x
+                } else {
+                    reject x
+                }
+            }
+        }
+    ";
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(IpAddr,), Verdict<IpAddr, IpAddr>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let ip = IpAddr::from([0, 0, 0, 0]);
+    let res = f.call(ip);
+    assert_eq!(res, Verdict::Accept(ip));
+    let ip = IpAddr::from([192, 168, 0, 0]);
+    let res = f.call(ip);
+    assert_eq!(res, Verdict::Accept(ip));
+
+    let ip = IpAddr::from([1, 2, 3, 4]);
+    let res = f.call(ip);
+    assert_eq!(res, Verdict::Reject(ip));
+
+    let ip = IpAddr::from([0, 0, 0, 0, 0, 0, 0, 0]);
+    let res = f.call(ip);
+    assert_eq!(res, Verdict::Reject(ip));
+}
+
+#[test]
+fn ipv6_compare() {
+    let s = "
+        filter-map main(x: IpAddr) {
+            apply { 
+                if x == :: {
+                    accept x
+                } else if x == 192.168.0.0 {
+                    accept x
+                } else if x == ::1 {
+                    accept x
+                } else {
+                    reject x
+                }
+            }
+        }
+    ";
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(IpAddr,), Verdict<IpAddr, IpAddr>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let ip = IpAddr::from([0, 0, 0, 0, 0, 0, 0, 0]);
+    let res = f.call(ip);
+    assert_eq!(res, Verdict::Accept(ip));
+
+    let ip = IpAddr::from([0, 0, 0, 0, 0, 0, 0, 1]);
+    let res = f.call(ip);
+    assert_eq!(res, Verdict::Accept(ip));
+
+    let ip = IpAddr::from([192, 168, 0, 0]);
+    let res = f.call(ip);
+    assert_eq!(res, Verdict::Accept(ip));
+
+    let ip = IpAddr::from([1, 2, 3, 4]);
+    let res = f.call(ip);
+    assert_eq!(res, Verdict::Reject(ip));
 }
 
 // #[test]

@@ -746,15 +746,50 @@ impl<'r> Lowerer<'r> {
 
                 let place = self.new_tmp();
                 match (op, binop_to_cmp(op, &ty), ty) {
+                    (
+                        ast::BinOp::Eq,
+                        _,
+                        Type::Primitive(Primitive::IpAddr),
+                    ) => {
+                        let tmp = self.ip_memcmp(left, right);
+
+                        // And then of course compare with 0 to get true if
+                        // memcmp returns 0.
+                        self.add(Instruction::Cmp {
+                            to: place.clone(),
+                            cmp: ir::IntCmp::Eq,
+                            left: tmp.into(),
+                            right: IrValue::U32(0).into(),
+                        })
+                    }
+                    (ast::BinOp::Ne, _, Type::Primitive(Primitive::IpAddr)) => {
+                        let tmp = self.ip_memcmp(left, right);
+
+                        // And then of course compare with 0 to get true if
+                        // memcmp returns 0.
+                        self.add(Instruction::Cmp {
+                            to: place.clone(),
+                            cmp: ir::IntCmp::Ne,
+                            left: tmp.into(),
+                            right: IrValue::U32(0).into(),
+                        })
+                    }
                     (ast::BinOp::Eq, _, ty)
                         if self.is_reference_type(&ty) =>
                     {
                         let size = self.type_info.size_of(&ty);
+                        let tmp = self.new_tmp();
                         self.add(Instruction::MemCmp {
+                            to: tmp.clone(),
+                            size: IrValue::Pointer(size as usize).into(),
+                            left: left.clone(),
+                            right: right.clone(),
+                        });
+                        self.add(Instruction::Cmp {
                             to: place.clone(),
-                            size,
-                            left,
-                            right,
+                            cmp: ir::IntCmp::Eq,
+                            left: tmp.into(),
+                            right: IrValue::Pointer(0).into(),
                         })
                     }
                     (ast::BinOp::Ne, _, ty)
@@ -764,13 +799,15 @@ impl<'r> Lowerer<'r> {
                         let tmp = self.new_tmp();
                         self.add(Instruction::MemCmp {
                             to: tmp.clone(),
-                            size,
-                            left,
-                            right,
+                            size: IrValue::Pointer(size as usize).into(),
+                            left: left.clone(),
+                            right: right.clone(),
                         });
-                        self.add(Instruction::Not {
+                        self.add(Instruction::Cmp {
                             to: place.clone(),
-                            val: tmp.into(),
+                            cmp: ir::IntCmp::Ne,
+                            left: tmp.into(),
+                            right: IrValue::Pointer(0).into(),
                         })
                     }
                     (_, Some(cmp), _) => {
@@ -898,16 +935,73 @@ impl<'r> Lowerer<'r> {
         }
     }
 
+    fn ip_memcmp(&mut self, left: Operand, right: Operand) -> Var {
+        // For an ip addr, we need to be clever, because we can
+        // only compare the bytes that are used the current
+        // variant. Therefore, we read the discriminant of the
+        // left value. If that's 0, we compare 5 bytes,
+        // otherwise, we compare 17 bytes. In other words we
+        // compare 5 + 12 * discriminant bytes.
+
+        // Read discriminant
+        let discriminant = self.new_tmp();
+        self.add(Instruction::Read {
+            to: discriminant.clone(),
+            from: left.clone(),
+            ty: IrType::U8,
+        });
+
+        // Multiply with 12 (so we get 0 or 12)
+        let difference = self.new_tmp();
+        self.add(Instruction::Mul {
+            to: difference.clone(),
+            left: discriminant.into(),
+            right: IrValue::U8(12).into(),
+        });
+
+        // Add 5 (so we get 5 or 17)
+        let size = self.new_tmp();
+        self.add(Instruction::Add {
+            to: size.clone(),
+            left: difference.into(),
+            right: IrValue::U8(5).into(),
+        });
+
+        // Cast the u8 to a usize
+        let size2 = self.new_tmp();
+        self.add(Instruction::Extend {
+            to: size2.clone(),
+            ty: IrType::Pointer,
+            from: size.into(),
+        });
+
+        // Do the actual memcmp
+        let tmp = self.new_tmp();
+        self.add(Instruction::MemCmp {
+            to: tmp.clone(),
+            size: size2.into(),
+            left,
+            right,
+        });
+
+        tmp
+    }
+
     /// Lower a literal
     fn literal(&mut self, lit: &Meta<Literal>) -> Operand {
         match &lit.node {
             Literal::String(_) => todo!(),
             Literal::Asn(n) => IrValue::Asn(*n).into(),
-            Literal::IpAddress(addr) => IrValue::IpAddr(match addr {
-                ast::IpAddress::Ipv4(x) => IpAddr::V4(*x),
-                ast::IpAddress::Ipv6(x) => IpAddr::V6(*x),
-            })
-            .into(),
+            Literal::IpAddress(addr) => {
+                let to = self.new_tmp();
+                const SIZE: usize = std::mem::size_of::<IpAddr>();
+                let x: [u8; SIZE] = unsafe { std::mem::transmute_copy(addr) };
+                self.add(Instruction::Initialize {
+                    to: to.clone(),
+                    bytes: x.into(),
+                });
+                to.into()
+            }
             Literal::Integer(x) => {
                 let ty = self.type_info.type_of(lit);
                 match ty {
@@ -1007,6 +1101,7 @@ impl<'r> Lowerer<'r> {
                 | Type::NamedRecord(..)
                 | Type::Enum(..)
                 | Type::Verdict(..)
+                | Type::Primitive(Primitive::IpAddr)
         )
     }
 
@@ -1023,6 +1118,7 @@ impl<'r> Lowerer<'r> {
             Type::Primitive(Primitive::I32) => IrType::I32,
             Type::Primitive(Primitive::I64) => IrType::I64,
             Type::Primitive(Primitive::Asn) => IrType::Asn,
+            Type::Primitive(Primitive::IpAddr) => IrType::Pointer,
             Type::IntVar(_) => IrType::I32,
             Type::BuiltIn(_, _) => IrType::ExtPointer,
             x if self.is_reference_type(&x) => IrType::Pointer,
@@ -1039,6 +1135,7 @@ fn binop_to_cmp(op: &ast::BinOp, ty: &Type) -> Option<ir::IntCmp> {
             | Primitive::U16
             | Primitive::U8
             | Primitive::Asn
+            | Primitive::IpAddr
             | Primitive::Bool => false,
             Primitive::I64
             | Primitive::I32

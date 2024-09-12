@@ -162,17 +162,29 @@ pub enum Instruction {
         right: Operand,
     },
 
-    // Add offset to a pointer
+    Extend {
+        to: Var,
+        ty: IrType,
+        from: Operand,
+    },
+
+    /// Add offset to a pointer
     Offset {
         to: Var,
         from: Operand,
         offset: u32,
     },
 
-    // Allocate a stack slot
+    /// Allocate a stack slot
     Alloc {
         to: Var,
         size: u32,
+    },
+
+    /// Write literal bytes to a variable
+    Initialize {
+        to: Var,
+        bytes: Vec<u8>,
     },
 
     /// Write to a stack slot
@@ -198,7 +210,7 @@ pub enum Instruction {
     /// Compare chunks of memory
     MemCmp {
         to: Var,
-        size: u32,
+        size: Operand,
         left: Operand,
         right: Operand,
     },
@@ -458,6 +470,13 @@ impl<'a> IrPrinter<'a> {
                     self.operand(right),
                 )
             }
+            Extend { to, ty, from } => {
+                format!(
+                    "{}: extend({ty}, {})",
+                    self.var(to),
+                    self.operand(from),
+                )
+            }
             Jump(to) => {
                 format!("jump {}", self.label(to))
             }
@@ -479,6 +498,13 @@ impl<'a> IrPrinter<'a> {
             }
             Alloc { to, size } => {
                 format!("{} = mem::alloc({size})", self.var(to))
+            }
+            Initialize { to, bytes } => {
+                format!(
+                    "{} = mem::initialize([{}])",
+                    self.var(to),
+                    bytes.iter().map(|b| b.to_string()).collect::<Vec<_>>().join(", ")
+                )
             }
             Offset { to, from, offset } => {
                 format!(
@@ -515,10 +541,11 @@ impl<'a> IrPrinter<'a> {
                 right,
             } => {
                 format!(
-                    "{} = mem::cmp({}, {}, {size})",
+                    "{} = mem::cmp({}, {}, {})",
                     self.var(to),
                     self.operand(left),
                     self.operand(right),
+                    self.operand(size),
                 )
             }
         }

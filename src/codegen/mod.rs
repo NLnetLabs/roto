@@ -37,7 +37,7 @@ use cranelift::{
     },
 };
 use cranelift_jit::{JITBuilder, JITModule};
-use cranelift_module::{FuncId, Linkage, Module as _};
+use cranelift_module::{DataDescription, FuncId, Linkage, Module as _};
 use log::info;
 use string_interner::{backend::StringBackend, StringInterner};
 
@@ -67,9 +67,7 @@ impl<'module, Params: RotoParams, Return: Reflect>
     TypedFunc<'module, Params, Return>
 {
     pub fn call_tuple(&self, params: Params) -> Return {
-        unsafe {
-            Params::invoke::<Return>(self.func, params, self.return_by_ref)
-        }
+        unsafe { params.invoke::<Return>(self.func, self.return_by_ref) }
     }
 }
 
@@ -80,12 +78,13 @@ macro_rules! call_impl {
             ($($ty,)*): RotoParams,
         {
             #[allow(non_snake_case)]
+            #[allow(clippy::too_many_arguments)]
             pub fn call(&self, $($ty: $ty,)*) -> Return {
                 self.call_tuple(($($ty,)*))
             }
 
             #[allow(non_snake_case)]
-            pub fn as_func(self) -> impl Fn($($ty,)*) -> Return + 'module {
+            pub fn into_func(self) -> impl Fn($($ty,)*) -> Return + 'module {
                 move |$($ty,)*| self.call($($ty,)*)
             }
         }
@@ -217,7 +216,6 @@ pub fn codegen(
     let mut builder_context = FunctionBuilderContext::new();
     for func in ir {
         module.define_function(func, &mut builder_context);
-        // info!("\n{}", func);
     }
 
     module.finalize()
@@ -595,6 +593,14 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 };
                 self.def(var, val)
             }
+            ir::Instruction::Extend { to, ty, from } => {
+                let ty = self.module.cranelift_type(ty);
+                let (from, _) = self.operand(from);
+                let val = self.ins().uextend(ty, from);
+
+                let var = self.variable(to, ty);
+                self.def(var, val)
+            }
             ir::Instruction::Eq { .. } => todo!(),
             ir::Instruction::Alloc { to, size } => {
                 let slot = self.builder.create_sized_stack_slot(
@@ -604,6 +610,45 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 let pointer_ty = self.module.isa.pointer_type();
                 let var = self.variable(to, pointer_ty);
                 let p = self.ins().stack_addr(pointer_ty, slot, 0);
+                self.def(var, p);
+            }
+            ir::Instruction::Initialize { to, bytes } => {
+                let pointer_ty = self.module.isa.pointer_type();
+                let slot =
+                    self.builder.create_sized_stack_slot(StackSlotData::new(
+                        StackSlotKind::ExplicitSlot,
+                        bytes.len() as u32,
+                    ));
+
+                let data_id = self
+                    .module
+                    .inner
+                    .declare_anonymous_data(false, false)
+                    .unwrap();
+                let mut data_description = DataDescription::new();
+                data_description.define(bytes.clone().into_boxed_slice());
+                self.module
+                    .inner
+                    .define_data(data_id, &data_description)
+                    .unwrap();
+                let global_value = self
+                    .module
+                    .inner
+                    .declare_data_in_func(data_id, self.builder.func);
+                let value = self.ins().global_value(pointer_ty, global_value);
+
+                let var = self.variable(to, pointer_ty);
+                let p = self.ins().stack_addr(pointer_ty, slot, 0);
+                self.builder.emit_small_memory_copy(
+                    self.module.isa.frontend_config(),
+                    p,
+                    value,
+                    bytes.len() as u64,
+                    0,
+                    0,
+                    true,
+                    MEMFLAGS,
+                );
                 self.def(var, p);
             }
             ir::Instruction::Write { to, val } => {
@@ -646,20 +691,18 @@ impl<'a, 'c> FuncGen<'a, 'c> {
             } => {
                 let (left, _) = self.operand(left);
                 let (right, _) = self.operand(right);
+                let (size, _) = self.operand(size);
 
                 // We could pass more precise alignment to cranelift, but
                 // values of 1 should just work.
-                let val = self.builder.emit_small_memory_compare(
+                let val = self.builder.call_memcmp(
                     self.module.isa.frontend_config(),
-                    IntCC::Equal,
                     left,
                     right,
-                    *size as u64,
-                    NonZeroU8::new(1).unwrap(),
-                    NonZeroU8::new(1).unwrap(),
-                    MEMFLAGS,
+                    size,
                 );
-                let var = self.variable(to, I8);
+
+                let var = self.variable(to, I32);
                 self.def(var, val);
             }
         }

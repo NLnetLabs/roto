@@ -8,7 +8,7 @@ use crate::{
         types::{type_to_string, Primitive, Type},
     },
 };
-use std::{any::TypeId, fmt::Display, mem::MaybeUninit};
+use std::{any::TypeId, fmt::Display, mem::MaybeUninit, net::IpAddr};
 
 #[derive(Debug)]
 pub enum FunctionRetrievalError {
@@ -85,6 +85,7 @@ fn check_roto_type(
     let I64: TypeId = TypeId::of::<i64>();
     let UNIT: TypeId = TypeId::of::<()>();
     let ASN: TypeId = TypeId::of::<Asn>();
+    let IPADDR: TypeId = TypeId::of::<IpAddr>();
 
     let Some(rust_ty) = registry.get(rust_ty) else {
         return Err(TypeMismatch {
@@ -118,6 +119,7 @@ fn check_roto_type(
                 x if x == I64 => Type::Primitive(Primitive::I64),
                 x if x == UNIT => Type::Primitive(Primitive::Unit),
                 x if x == ASN => Type::Primitive(Primitive::Asn),
+                x if x == IPADDR => Type::Primitive(Primitive::IpAddr),
                 _ => panic!(),
             };
             if expected_roto == roto_ty {
@@ -164,11 +166,15 @@ pub fn return_type_by_ref(registry: &TypeRegistry, rust_ty: TypeId) -> bool {
     #[allow(clippy::match_like_matches_macro)]
     match rust_ty.description {
         TypeDescription::Verdict(_, _) => true,
-        _ => false,
+        _ => todo!(),
     }
 }
 
 pub trait RotoParams {
+    type AsParams;
+
+    fn as_params(&mut self) -> Self::AsParams;
+
     fn check(
         registry: &mut TypeRegistry,
         type_info: &mut TypeInfo,
@@ -177,8 +183,8 @@ pub trait RotoParams {
     ) -> Result<(), FunctionRetrievalError>;
 
     unsafe fn invoke<R: Reflect>(
+        self,
         func_ptr: *const u8,
-        params: Self,
         return_by_ref: bool,
     ) -> R;
 }
@@ -198,6 +204,13 @@ macro_rules! params {
         where
             $($t: Reflect,)*
         {
+            type AsParams = ($($t::AsParam,)*);
+
+            fn as_params(&mut self) -> Self::AsParams {
+                let ($($t,)*) = self;
+                return ($($t.as_param(),)*);
+            }
+            
             fn check(
                 registry: &mut TypeRegistry,
                 type_info: &mut TypeInfo,
@@ -222,17 +235,18 @@ macro_rules! params {
                 Ok(())
             }
 
-            unsafe fn invoke<R: Reflect>(func_ptr: *const u8, ($($t,)*): Self, return_by_ref: bool) -> R {
+            unsafe fn invoke<R: Reflect>(mut self, func_ptr: *const u8, return_by_ref: bool) -> R {
+                let ($($t,)*) = self.as_params();
                 if return_by_ref {
                     let func_ptr = unsafe {
-                        std::mem::transmute::<*const u8, fn(*mut R, $($t),*) -> ()>(func_ptr)
+                        std::mem::transmute::<*const u8, fn(*mut R, $($t::AsParam),*) -> ()>(func_ptr)
                     };
                     let mut ret = MaybeUninit::<R>::uninit();
                     func_ptr(ret.as_mut_ptr(), $($t),*);
                     unsafe { ret.assume_init() }
                 } else {
                     let func_ptr = unsafe {
-                        std::mem::transmute::<*const u8, fn($($t),*) -> R>(func_ptr)
+                        std::mem::transmute::<*const u8, fn($($t::AsParam),*) -> R>(func_ptr)
                     };
                     func_ptr($($t),*)
                 }

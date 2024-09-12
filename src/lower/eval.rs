@@ -14,6 +14,7 @@ use crate::{
     runtime::RuntimeFunction,
 };
 use std::collections::HashMap;
+use log::trace;
 use string_interner::{backend::StringBackend, StringInterner};
 
 /// Memory for the IR evaluation
@@ -295,6 +296,7 @@ pub fn eval(
 
     loop {
         let instruction = &instructions[program_counter];
+        trace!("{:?}", &instruction);
         match instruction {
             Instruction::Jump(b) => {
                 program_counter = block_map[b];
@@ -477,6 +479,7 @@ pub fn eval(
                 debug_assert_eq!(*ty, res.get_type());
                 vars.insert(to.clone(), res);
             }
+            Instruction::Extend { to, ty, from } => todo!(),
             Instruction::Offset { to, from, offset } => {
                 let &IrValue::Pointer(from) = eval_operand(&vars, from)
                 else {
@@ -489,6 +492,7 @@ pub fn eval(
                 let pointer = mem.allocate(*size as usize);
                 vars.insert(to.clone(), IrValue::Pointer(pointer));
             }
+            Instruction::Initialize { to, bytes } => todo!(),
             Instruction::Write { to, val } => {
                 let &IrValue::Pointer(to) = eval_operand(&vars, to) else {
                     panic!()
@@ -530,10 +534,18 @@ pub fn eval(
                 else {
                     panic!()
                 };
-                let left = mem.read_slice(left, *size as usize);
-                let right = mem.read_slice(right, *size as usize);
-                let res = left == right;
-                vars.insert(to.clone(), IrValue::Bool(res));
+                let &IrValue::Pointer(size) = eval_operand(&vars, size)
+                else {
+                    panic!()
+                };
+                let left = mem.read_slice(left, size);
+                let right = mem.read_slice(right, size);
+                let res = match left.cmp(right) {
+                    std::cmp::Ordering::Less => -1isize as usize,
+                    std::cmp::Ordering::Equal => 0,
+                    std::cmp::Ordering::Greater => 1,
+                };
+                vars.insert(to.clone(), IrValue::Pointer(res));
             }
         }
 
