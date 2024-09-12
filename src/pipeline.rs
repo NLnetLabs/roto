@@ -77,12 +77,13 @@ pub struct TypeChecked {
     trees: Vec<ast::SyntaxTree>,
     type_infos: Vec<TypeInfo>,
     scope_graph: ScopeGraph,
+    runtime: Runtime,
 }
 
 /// Compiler stage: HIR
 pub struct Lowered {
     pub ir: Vec<ir::Function>,
-    runtime_functions: HashMap<String, IrFunction>,
+    runtime_functions: HashMap<usize, IrFunction>,
     label_store: LabelStore,
     type_info: TypeInfo,
 }
@@ -357,6 +358,7 @@ impl Parsed {
                 trees,
                 type_infos,
                 scope_graph,
+                runtime,
             })
         } else {
             Err(RotoReport {
@@ -374,6 +376,7 @@ impl TypeChecked {
             trees,
             mut type_infos,
             scope_graph,
+            runtime,
         } = self;
         let mut runtime_functions = HashMap::new();
         let mut label_store = LabelStore::default();
@@ -382,8 +385,10 @@ impl TypeChecked {
             &mut type_infos[0],
             &mut runtime_functions,
             &mut label_store,
+            &runtime,
         );
 
+        let _ = env_logger::try_init();
         if log::log_enabled!(log::Level::Info) {
             let s = IrPrinter {
                 scope_graph: &scope_graph,

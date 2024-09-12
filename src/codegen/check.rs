@@ -1,4 +1,4 @@
-use inetnum::asn::Asn;
+use inetnum::{addr::Prefix, asn::Asn};
 
 use crate::{
     runtime::ty::{
@@ -9,7 +9,7 @@ use crate::{
         types::{Primitive, Type},
     },
 };
-use std::{any::TypeId, fmt::Display, mem::MaybeUninit};
+use std::{any::TypeId, fmt::Display, mem::MaybeUninit, net::IpAddr};
 
 #[derive(Debug)]
 pub enum FunctionRetrievalError {
@@ -39,7 +39,7 @@ impl Display for FunctionRetrievalError {
                 expected,
                 got,
             } => {
-                writeln!(f, "The numer of arguments do not match")?;
+                writeln!(f, "The number of arguments do not match")?;
                 writeln!(f, "The Roto function has {expected} arguments, but the Rust function has {got}.")
             }
             FunctionRetrievalError::TypeMismatch(
@@ -84,6 +84,8 @@ fn check_roto_type(
     let I64: TypeId = TypeId::of::<i64>();
     let UNIT: TypeId = TypeId::of::<()>();
     let ASN: TypeId = TypeId::of::<Asn>();
+    let IPADDR: TypeId = TypeId::of::<IpAddr>();
+    let PREFIX: TypeId = TypeId::of::<Prefix>();
 
     let Some(rust_ty) = registry.get(rust_ty) else {
         return Err(TypeMismatch {
@@ -117,6 +119,8 @@ fn check_roto_type(
                 x if x == I64 => Type::Primitive(Primitive::I64),
                 x if x == UNIT => Type::Primitive(Primitive::Unit),
                 x if x == ASN => Type::Primitive(Primitive::Asn),
+                x if x == IPADDR => Type::Primitive(Primitive::IpAddr),
+                x if x == PREFIX => Type::Primitive(Primitive::Prefix),
                 _ => panic!(),
             };
             if expected_roto == roto_ty {
@@ -151,29 +155,55 @@ pub fn return_type_by_ref(registry: &TypeRegistry, rust_ty: TypeId) -> bool {
     #[allow(clippy::match_like_matches_macro)]
     match rust_ty.description {
         TypeDescription::Verdict(_, _) => true,
-        _ => false,
+        _ => todo!(),
     }
 }
 
+/// Parameters of a Roto function
+///
+/// This trait allows for checking the types against Roto types and converting
+/// the values into values appropriate for Roto.
+///
+/// The `invoke` method can (unsafely) invoke a pointer as if it were a function
+/// with these parameters.
+///
+/// This trait is implemented on tuples of various sizes.
 pub trait RotoParams {
+    /// This type but with [`Reflect::AsParam`] applied to each element.
+    type AsParams;
+
+    /// Convert to `Self::AsParams`.
+    fn as_params(&mut self) -> Self::AsParams;
+
+    /// Check whether these parameters match a parameter list from Roto.
     fn check(
         type_info: &mut TypeInfo,
         ty: &[Type],
     ) -> Result<(), FunctionRetrievalError>;
 
+    /// Call a function pointer as if it were a function with these parameters.
+    ///
+    /// This is _extremely_ unsafe, do not pass this arbitrary pointers and
+    /// always call `RotoParams::check` before calling this function. Don't
+    /// forget to also check the return type.
+    ///
+    /// A [`TypedFunc`](super::TypedFunc) is a safe abstraction around this
+    /// function.
     unsafe fn invoke<R: Reflect>(
+        self,
         func_ptr: *const u8,
-        params: Self,
         return_by_ref: bool,
     ) -> R;
 }
 
+/// Little helper macro to create a unit
 macro_rules! unit {
     ($t:tt) => {
         ()
     };
 }
 
+/// Implement the [`RotoParams`] trait for a tuple with some type parameters.
 macro_rules! params {
     ($($t:ident),*) => {
         #[allow(non_snake_case)]
@@ -183,6 +213,13 @@ macro_rules! params {
         where
             $($t: Reflect,)*
         {
+            type AsParams = ($($t::AsParam,)*);
+
+            fn as_params(&mut self) -> Self::AsParams {
+                let ($($t,)*) = self;
+                return ($($t.as_param(),)*);
+            }
+
             fn check(
                 type_info: &mut TypeInfo,
                 ty: &[Type]
@@ -205,17 +242,18 @@ macro_rules! params {
                 Ok(())
             }
 
-            unsafe fn invoke<R: Reflect>(func_ptr: *const u8, ($($t,)*): Self, return_by_ref: bool) -> R {
+            unsafe fn invoke<R: Reflect>(mut self, func_ptr: *const u8, return_by_ref: bool) -> R {
+                let ($($t,)*) = self.as_params();
                 if return_by_ref {
                     let func_ptr = unsafe {
-                        std::mem::transmute::<*const u8, fn(*mut R, $($t),*) -> ()>(func_ptr)
+                        std::mem::transmute::<*const u8, fn(*mut R, $($t::AsParam),*) -> ()>(func_ptr)
                     };
                     let mut ret = MaybeUninit::<R>::uninit();
                     func_ptr(ret.as_mut_ptr(), $($t),*);
                     unsafe { ret.assume_init() }
                 } else {
                     let func_ptr = unsafe {
-                        std::mem::transmute::<*const u8, fn($($t),*) -> R>(func_ptr)
+                        std::mem::transmute::<*const u8, fn($($t::AsParam),*) -> R>(func_ptr)
                     };
                     func_ptr($($t),*)
                 }

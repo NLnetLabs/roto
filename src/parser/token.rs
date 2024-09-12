@@ -145,7 +145,7 @@ pub enum Token<'s> {
 
     #[regex(r"([0-9]+\.){3}[0-9]+")]
     IpV4(&'s str),
-    #[regex(r"([0-9a-zA-Z]*:){2,6}[0-9a-zA-Z]*")]
+    #[regex(r"[0-9a-zA-Z]*(:[0-9a-zA-Z]*){2,6}")]
     IpV6(&'s str),
 
     // This regex is a super set of all the forms of communities:

@@ -2,7 +2,7 @@
 
 use std::{
     any::TypeId, collections::HashMap, marker::PhantomData,
-    mem::ManuallyDrop, num::NonZeroU8, sync::Arc,
+    mem::ManuallyDrop, sync::Arc,
 };
 
 use crate::{
@@ -34,10 +34,8 @@ use cranelift::{
     frontend::{
         FuncInstBuilder, FunctionBuilder, FunctionBuilderContext, Switch,
         Variable,
-    },
+    }, jit::{JITBuilder, JITModule}, module::{DataDescription, FuncId, Linkage, Module as _},
 };
-use cranelift_jit::{JITBuilder, JITModule};
-use cranelift_module::{FuncId, Linkage, Module as _};
 use log::info;
 
 pub mod check;
@@ -117,9 +115,7 @@ unsafe impl<Params, Return> Sync for TypedFunc<Params, Return> {}
 
 impl<Params: RotoParams, Return: Reflect> TypedFunc<Params, Return> {
     pub fn call_tuple(&self, params: Params) -> Return {
-        unsafe {
-            Params::invoke::<Return>(self.func, params, self.return_by_ref)
-        }
+        unsafe { params.invoke::<Return>(self.func, self.return_by_ref) }
     }
 }
 
@@ -162,7 +158,7 @@ struct ModuleBuilder {
     functions: HashMap<String, FunctionInfo>,
 
     /// External functions
-    runtime_functions: HashMap<String, FuncId>,
+    runtime_functions: HashMap<usize, FuncId>,
 
     /// The inner cranelift module
     inner: JITModule,
@@ -203,7 +199,7 @@ const MEMFLAGS: MemFlags = MemFlags::new().with_aligned();
 
 pub fn codegen(
     ir: &[ir::Function],
-    runtime_functions: &HashMap<String, IrFunction>,
+    runtime_functions: &HashMap<usize, IrFunction>,
     label_store: LabelStore,
     type_info: TypeInfo,
 ) -> Module {
@@ -214,15 +210,15 @@ pub fn codegen(
     let mut settings = settings::builder();
     settings.set("opt_level", "speed").unwrap();
     let flags = settings::Flags::new(settings);
-    let isa = cranelift_native::builder().unwrap().finish(flags).unwrap();
+    let isa = cranelift::native::builder().unwrap().finish(flags).unwrap();
 
     let mut builder = JITBuilder::with_isa(
         isa.to_owned(),
-        cranelift_module::default_libcall_names(),
+        cranelift::module::default_libcall_names(),
     );
 
     for (name, func) in runtime_functions {
-        builder.symbol(name, func.ptr);
+        builder.symbol(format!("runtime_function_{name}"), func.ptr);
     }
 
     let jit = JITModule::new(builder);
@@ -237,7 +233,7 @@ pub fn codegen(
         type_info,
     };
 
-    for (name, func) in runtime_functions {
+    for (roto_func_id, func) in runtime_functions {
         let mut sig = module.inner.make_signature();
         for ty in &func.params {
             sig.params.push(AbiParam::new(module.cranelift_type(ty)));
@@ -245,12 +241,14 @@ pub fn codegen(
         if let Some(ty) = &func.ret {
             sig.returns.push(AbiParam::new(module.cranelift_type(ty)));
         }
-        let Ok(func_id) =
-            module.inner.declare_function(name, Linkage::Import, &sig)
-        else {
+        let Ok(func_id) = module.inner.declare_function(
+            &format!("runtime_function_{roto_func_id}"),
+            Linkage::Import,
+            &sig,
+        ) else {
             panic!()
         };
-        module.runtime_functions.insert(name.clone(), func_id);
+        module.runtime_functions.insert(*roto_func_id, func_id);
     }
 
     // Our functions might call each other, so we declare them before we
@@ -397,7 +395,6 @@ impl ModuleBuilder {
             IrType::U16 | IrType::I16 => I16,
             IrType::U32 | IrType::I32 | IrType::Asn => I32,
             IrType::U64 | IrType::I64 => I64,
-            IrType::IpAddr => I32,
             IrType::Pointer | IrType::ExtPointer => self.isa.pointer_type(),
             IrType::ExtValue => todo!(),
         }
@@ -531,7 +528,7 @@ impl<'c> FuncGen<'c> {
                 }
             }
             ir::Instruction::CallRuntime { to, func, args } => {
-                let func_id = self.module.runtime_functions[&func.name];
+                let func_id = self.module.runtime_functions[&func.id];
                 let func_ref = self
                     .module
                     .inner
@@ -638,15 +635,74 @@ impl<'c> FuncGen<'c> {
                 };
                 self.def(var, val)
             }
+            ir::Instruction::Extend { to, ty, from } => {
+                let ty = self.module.cranelift_type(ty);
+                let (from, _) = self.operand(from);
+                let val = self.ins().uextend(ty, from);
+
+                let var = self.variable(to, ty);
+                self.def(var, val)
+            }
             ir::Instruction::Eq { .. } => todo!(),
-            ir::Instruction::Alloc { to, size } => {
-                let slot = self.builder.create_sized_stack_slot(
-                    StackSlotData::new(StackSlotKind::ExplicitSlot, *size),
-                );
+            ir::Instruction::Alloc {
+                to,
+                size,
+                align_shift,
+            } => {
+                let slot =
+                    self.builder.create_sized_stack_slot(StackSlotData::new(
+                        StackSlotKind::ExplicitSlot,
+                        *size,
+                        *align_shift,
+                    ));
 
                 let pointer_ty = self.module.isa.pointer_type();
                 let var = self.variable(to, pointer_ty);
                 let p = self.ins().stack_addr(pointer_ty, slot, 0);
+                self.def(var, p);
+            }
+            ir::Instruction::Initialize {
+                to,
+                bytes,
+                align_shift,
+            } => {
+                let pointer_ty = self.module.isa.pointer_type();
+                let slot =
+                    self.builder.create_sized_stack_slot(StackSlotData::new(
+                        StackSlotKind::ExplicitSlot,
+                        bytes.len() as u32,
+                        *align_shift,
+                    ));
+
+                let data_id = self
+                    .module
+                    .inner
+                    .declare_anonymous_data(false, false)
+                    .unwrap();
+                let mut data_description = DataDescription::new();
+                data_description.define(bytes.clone().into_boxed_slice());
+                self.module
+                    .inner
+                    .define_data(data_id, &data_description)
+                    .unwrap();
+                let global_value = self
+                    .module
+                    .inner
+                    .declare_data_in_func(data_id, self.builder.func);
+                let value = self.ins().global_value(pointer_ty, global_value);
+
+                let var = self.variable(to, pointer_ty);
+                let p = self.ins().stack_addr(pointer_ty, slot, 0);
+                self.builder.emit_small_memory_copy(
+                    self.module.isa.frontend_config(),
+                    p,
+                    value,
+                    bytes.len() as u64,
+                    0,
+                    0,
+                    true,
+                    MEMFLAGS,
+                );
                 self.def(var, p);
             }
             ir::Instruction::Write { to, val } => {
@@ -689,20 +745,18 @@ impl<'c> FuncGen<'c> {
             } => {
                 let (left, _) = self.operand(left);
                 let (right, _) = self.operand(right);
+                let (size, _) = self.operand(size);
 
                 // We could pass more precise alignment to cranelift, but
                 // values of 1 should just work.
-                let val = self.builder.emit_small_memory_compare(
+                let val = self.builder.call_memcmp(
                     self.module.isa.frontend_config(),
-                    IntCC::Equal,
                     left,
                     right,
-                    *size as u64,
-                    NonZeroU8::new(1).unwrap(),
-                    NonZeroU8::new(1).unwrap(),
-                    MEMFLAGS,
+                    size,
                 );
-                let var = self.variable(to, I8);
+
+                let var = self.variable(to, I32);
                 self.def(var, val);
             }
         }

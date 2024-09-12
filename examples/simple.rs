@@ -1,15 +1,10 @@
 use roto::{read_files, Runtime, Verdict};
-use roto_macros::roto_function;
+use roto_macros::roto_method;
 
 struct Bla {
     _x: u16,
     y: u32,
     _z: u32,
-}
-
-#[roto_function]
-fn get_y(bla: *const Bla) -> u32 {
-    unsafe { &*bla }.y
 }
 
 fn main() -> Result<(), roto::RotoReport> {
@@ -18,7 +13,11 @@ fn main() -> Result<(), roto::RotoReport> {
     let mut runtime = Runtime::basic().unwrap();
 
     runtime.register_type::<Bla>().unwrap();
-    runtime.register_method::<Bla, _, _>("y", get_y).unwrap();
+
+    #[roto_method(runtime, Bla, y)]
+    fn get_y(bla: *const Bla) -> u32 {
+        unsafe { &*bla }.y
+    }
 
     let mut compiled = read_files(["examples/simple.roto"])?
         .compile(runtime, usize::BITS / 8)
