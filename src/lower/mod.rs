@@ -762,7 +762,11 @@ impl<'r> Lowerer<'r> {
                             right: IrValue::U32(0).into(),
                         })
                     }
-                    (ast::BinOp::Ne, _, Type::Primitive(Primitive::IpAddr)) => {
+                    (
+                        ast::BinOp::Ne,
+                        _,
+                        Type::Primitive(Primitive::IpAddr),
+                    ) => {
                         let tmp = self.ip_memcmp(left, right);
 
                         // And then of course compare with 0 to get true if

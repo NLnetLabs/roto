@@ -145,7 +145,9 @@ impl TypeInfo {
                 .map(|f| self.alignment_of(f))
                 .max()
                 .unwrap_or(4),
-            Type::Primitive(Primitive::IpAddr) => std::mem::align_of::<IpAddr>() as u32,
+            Type::Primitive(Primitive::IpAddr) => {
+                std::mem::align_of::<IpAddr>() as u32
+            }
             ty => self.size_of(&ty),
         };
         // Alignment must be guaranteed to be at least 1

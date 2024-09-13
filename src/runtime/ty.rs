@@ -91,15 +91,15 @@ impl TypeRegistry {
 }
 
 /// A type that can register itself into a [`TypeRegistry`].
-/// 
+///
 /// Via the [`TypeRegistry`], it is then possible to query for information
 /// about this type. Reflection is recursive for types such as [`Verdict`],
 /// [`Result`] and [`Option`].
-/// 
+///
 /// Pointers are explicitly _not_ recursive, because they can be used to pass
 /// pointers to types that have been registered to Roto and therefore don't
 /// need to implement this trait.
-/// 
+///
 /// Additionally, this trait specifies how a type should be passed to Roto, via
 /// the `AsParam` associated type.
 pub trait Reflect: 'static {
@@ -110,7 +110,7 @@ pub trait Reflect: 'static {
     fn as_param(&mut self) -> Self::AsParam;
 
     /// Put information about this type into the [`TypeRegistry`]
-    /// 
+    ///
     /// The information is also returned for direct use.
     fn resolve(registry: &mut TypeRegistry) -> &Ty;
 }

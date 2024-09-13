@@ -503,7 +503,11 @@ impl<'a> IrPrinter<'a> {
                 format!(
                     "{} = mem::initialize([{}])",
                     self.var(to),
-                    bytes.iter().map(|b| b.to_string()).collect::<Vec<_>>().join(", ")
+                    bytes
+                        .iter()
+                        .map(|b| b.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 )
             }
             Offset { to, from, offset } => {

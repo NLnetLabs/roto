@@ -1,8 +1,7 @@
 //! Machine code generation via cranelift
 
 use std::{
-    any::TypeId, collections::HashMap, marker::PhantomData,
-    sync::Arc,
+    any::TypeId, collections::HashMap, marker::PhantomData, sync::Arc,
 };
 
 use crate::{
