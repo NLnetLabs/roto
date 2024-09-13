@@ -68,7 +68,7 @@ impl Ty {
     }
 }
 
-/// A map from TypeId to a [`Ty`], which is a description of the type
+/// A map from [`TypeId`] to a [`Ty`], which is a description of the type
 #[derive(Default)]
 pub struct TypeRegistry {
     map: HashMap<TypeId, Ty>,
@@ -84,16 +84,34 @@ impl TypeRegistry {
         self.map.get(&id)
     }
 
+    /// Register a type implementing [`Reflect`]
     pub fn resolve<T: Reflect>(&mut self) -> &Ty {
         T::resolve(self)
     }
 }
 
+/// A type that can register itself into a [`TypeRegistry`].
+/// 
+/// Via the [`TypeRegistry`], it is then possible to query for information
+/// about this type. Reflection is recursive for types such as [`Verdict`],
+/// [`Result`] and [`Option`].
+/// 
+/// Pointers are explicitly _not_ recursive, because they can be used to pass
+/// pointers to types that have been registered to Roto and therefore don't
+/// need to implement this trait.
+/// 
+/// Additionally, this trait specifies how a type should be passed to Roto, via
+/// the `AsParam` associated type.
 pub trait Reflect: 'static {
+    /// The type that this type should be converted into when passed to Roto
     type AsParam;
 
+    /// Convert the type to its `AsParam`
     fn as_param(&mut self) -> Self::AsParam;
 
+    /// Put information about this type into the [`TypeRegistry`]
+    /// 
+    /// The information is also returned for direct use.
     fn resolve(registry: &mut TypeRegistry) -> &Ty;
 }
 

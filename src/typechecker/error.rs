@@ -1,3 +1,5 @@
+//! Type errors
+
 use std::fmt::Display;
 
 use crate::{
@@ -16,6 +18,7 @@ pub enum Level {
     Info,
 }
 
+/// A label is a bit of text attached to a span
 #[derive(Clone, Debug)]
 pub struct Label {
     pub level: Level,
@@ -24,6 +27,7 @@ pub struct Label {
 }
 
 impl Label {
+    /// Create an error label
     fn error(msg: impl Display, id: MetaId) -> Self {
         Label {
             level: Level::Error,
@@ -32,6 +36,7 @@ impl Label {
         }
     }
 
+    /// Create an info label
     fn info(msg: impl Display, id: MetaId) -> Self {
         Label {
             level: Level::Info,
@@ -41,6 +46,7 @@ impl Label {
     }
 }
 
+/// A type error displayed to the user
 #[derive(Clone, Debug)]
 pub struct TypeError {
     pub description: String,
@@ -49,6 +55,7 @@ pub struct TypeError {
 }
 
 impl TypeChecker<'_> {
+    /// Catch all error with a basic format with just one label
     pub fn error_simple(
         &self,
         description: impl Display,

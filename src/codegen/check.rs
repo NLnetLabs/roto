@@ -170,11 +170,23 @@ pub fn return_type_by_ref(registry: &TypeRegistry, rust_ty: TypeId) -> bool {
     }
 }
 
+/// Parameters of a Roto function
+/// 
+/// This trait allows for checking the types against Roto types and converting
+/// the values into values appropriate for Roto.
+/// 
+/// The `invoke` method can (unsafely) invoke a pointer as if it were a function
+/// with these parameters.
+/// 
+/// This trait is implemented on tuples of various sizes.
 pub trait RotoParams {
+    /// This type but with [`Reflect::AsParam`] applied to each element.
     type AsParams;
 
+    /// Convert to `Self::AsParams`.
     fn as_params(&mut self) -> Self::AsParams;
 
+    /// Check whether these parameters match a parameter list from Roto.
     fn check(
         registry: &mut TypeRegistry,
         type_info: &mut TypeInfo,
@@ -182,6 +194,14 @@ pub trait RotoParams {
         ty: &[Type],
     ) -> Result<(), FunctionRetrievalError>;
 
+    /// Call a function pointer as if it were a function with these parameters.
+    /// 
+    /// This is _extremely_ unsafe, do not pass this arbitrary pointers and
+    /// always call `RotoParams::check` before calling this function. Don't
+    /// forget to also check the return type.
+    /// 
+    /// A [`TypedFunc`](super::TypedFunc) is a safe abstraction around this
+    /// function. 
     unsafe fn invoke<R: Reflect>(
         self,
         func_ptr: *const u8,
@@ -189,12 +209,14 @@ pub trait RotoParams {
     ) -> R;
 }
 
+/// Little helper macro to create a unit
 macro_rules! unit {
     ($t:tt) => {
         ()
     };
 }
 
+/// Implement the [`RotoParams`] trait for a tuple with some type parameters.
 macro_rules! params {
     ($($t:ident),*) => {
         #[allow(non_snake_case)]

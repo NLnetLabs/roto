@@ -185,21 +185,15 @@ impl Type {
 impl Primitive {
     /// Size of the type in bytes
     pub fn size(&self) -> u32 {
+        use Primitive::*;
         match self {
-            Primitive::U8 => 1,
-            Primitive::U16 => 2,
-            Primitive::U32 => 4,
-            Primitive::U64 => 8,
-            Primitive::I8 => 1,
-            Primitive::I16 => 2,
-            Primitive::I32 => 4,
-            Primitive::I64 => 8,
-            Primitive::Unit => 0,
-            Primitive::String => 4,
-            Primitive::Bool => 1,
-            // Asn has the same size as u32, which is 4 bytes
-            Primitive::Asn => 4,
-            Primitive::IpAddr => std::mem::size_of::<std::net::IpAddr>() as u32,
+            U8 | I8 | Bool => 1,
+            U16 | I16 => 2,
+            U32 | I32 | Asn => 4,
+            U64 | I64 => 8,
+            Unit => 0,
+            String => 4,
+            IpAddr => std::mem::size_of::<std::net::IpAddr>() as u32,
         }
     }
 }
@@ -215,7 +209,6 @@ pub enum FunctionDefinition {
 }
 
 /// A function that can be called from Roto
-///
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Function {
     /// The type signature of this function

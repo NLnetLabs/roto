@@ -1,3 +1,5 @@
+//! Type checking of expressions
+
 use std::{borrow::Borrow, collections::HashSet};
 
 use crate::{
