@@ -21,7 +21,6 @@ pub enum IrValue {
     I32(i32),
     I64(i64),
     Asn(Asn),
-    IpAddr(std::net::IpAddr),
     Pointer(usize),
     ExtPointer(*mut ()),
     ExtValue(Vec<u8>),
@@ -40,7 +39,6 @@ pub enum IrType {
     I32,
     I64,
     Asn,
-    IpAddr,
     Pointer,
     ExtPointer,
     ExtValue,
@@ -55,7 +53,6 @@ impl IrType {
             U16 | I16 => 2,
             U32 | I32 | Asn => 4,
             U64 | I64 => 8,
-            IpAddr => 4,
             Pointer | ExtValue | ExtPointer => (usize::BITS / 8) as usize,
         }
     }
@@ -79,7 +76,6 @@ impl Display for IrType {
             I32 => "i32",
             I64 => "i64",
             Asn => "Asn",
-            IpAddr => "IpAddr",
             Pointer => "Pointer",
             ExtValue => "ExtValue",
             ExtPointer => "ExtPointer",
@@ -124,7 +120,6 @@ impl IrValue {
             I32(_) => IrType::I32,
             I64(_) => IrType::I64,
             Asn(_) => IrType::Asn,
-            IpAddr(_) => IrType::I32,
             Pointer(_) => IrType::Pointer,
             ExtValue(_) => IrType::ExtValue,
             ExtPointer(_) => IrType::ExtPointer,
@@ -143,7 +138,6 @@ impl IrValue {
             Self::I32(x) => x,
             Self::I64(x) => x,
             Self::Asn(x) => x,
-            Self::IpAddr(x) => x,
             Self::Pointer(x) => x,
             Self::ExtValue(x) => x,
             Self::ExtPointer(x) => x,
@@ -188,7 +182,6 @@ impl IrValue {
             Self::I32(x) => x.to_ne_bytes().into(),
             Self::I64(x) => x.to_ne_bytes().into(),
             Self::Asn(x) => x.into_u32().to_ne_bytes().into(),
-            Self::IpAddr(_) => todo!(),
             Self::Pointer(x) => x.to_ne_bytes().into(),
             Self::ExtValue(x) => x.clone(),
             Self::ExtPointer(x) => {
@@ -242,16 +235,6 @@ impl IrValue {
             IrType::Asn => {
                 let val: &[u8; 4] = val.try_into().unwrap();
                 Self::Asn(Asn::from_u32(u32::from_ne_bytes(*val)))
-            }
-            IrType::IpAddr => {
-                let val: &[u8; 32] = val.try_into().unwrap();
-                if val[0] == 0 {
-                    let addr: [u8; 4] = val[1..5].try_into().unwrap();
-                    Self::IpAddr(std::net::IpAddr::from(addr))
-                } else {
-                    let addr: [u8; 16] = val[1..17].try_into().unwrap();
-                    Self::IpAddr(std::net::IpAddr::from(addr))
-                }
             }
             IrType::Pointer => {
                 const SIZE: usize = (usize::BITS / 8) as usize;
@@ -326,7 +309,6 @@ impl Display for IrValue {
             I32(x) => write!(f, "i32({x})"),
             I64(x) => write!(f, "i64({x})"),
             Asn(x) => write!(f, "Asn({x})"),
-            IpAddr(x) => write!(f, "IpAddr({x})"),
             Pointer(x) => write!(f, "Pointer({x})"),
             ExtValue(..) => write!(f, "ExtValue(..)"),
             ExtPointer(..) => write!(f, "ExtPointer(..)"),

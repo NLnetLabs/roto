@@ -479,7 +479,11 @@ pub fn eval(
                 debug_assert_eq!(*ty, res.get_type());
                 vars.insert(to.clone(), res);
             }
-            Instruction::Extend { to, ty, from } => todo!(),
+            Instruction::Extend { to, ty, from } => {
+                let val = eval_operand(&vars, from);
+                let val = val.as_vec();
+                vars.insert(to.clone(), IrValue::from_slice(ty, &val));
+            },
             Instruction::Offset { to, from, offset } => {
                 let &IrValue::Pointer(from) = eval_operand(&vars, from)
                 else {
@@ -492,7 +496,11 @@ pub fn eval(
                 let pointer = mem.allocate(*size as usize);
                 vars.insert(to.clone(), IrValue::Pointer(pointer));
             }
-            Instruction::Initialize { to, bytes } => todo!(),
+            Instruction::Initialize { to, bytes } => {
+                let pointer = mem.allocate(bytes.len());
+                mem.write(pointer, bytes);
+                vars.insert(to.clone(), IrValue::Pointer(pointer));
+            },
             Instruction::Write { to, val } => {
                 let &IrValue::Pointer(to) = eval_operand(&vars, to) else {
                     panic!()

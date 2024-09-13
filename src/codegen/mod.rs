@@ -1,7 +1,7 @@
 //! Machine code generation via cranelift
 
 use std::{
-    any::TypeId, collections::HashMap, marker::PhantomData, num::NonZeroU8,
+    any::TypeId, collections::HashMap, marker::PhantomData,
     sync::Arc,
 };
 
@@ -352,7 +352,6 @@ impl ModuleBuilder<'_> {
             IrType::U16 | IrType::I16 => I16,
             IrType::U32 | IrType::I32 | IrType::Asn => I32,
             IrType::U64 | IrType::I64 => I64,
-            IrType::IpAddr => I32,
             IrType::Pointer | IrType::ExtPointer => self.isa.pointer_type(),
             IrType::ExtValue => todo!(),
         }
