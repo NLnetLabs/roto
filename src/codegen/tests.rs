@@ -1,6 +1,6 @@
 use std::net::IpAddr;
 
-use inetnum::asn::Asn;
+use inetnum::{addr::Prefix, asn::Asn};
 
 use crate::{
     pipeline::{test_file, Compiled},
@@ -739,6 +739,26 @@ fn ipv6_compare() {
     let ip = IpAddr::from([1, 2, 3, 4]);
     let res = f.call(ip);
     assert_eq!(res, Verdict::Reject(ip));
+}
+
+#[test]
+fn construct_prefix() {
+    let s = "
+        filter-map main() {
+            apply { 
+                accept 192.168.0.0 / 16
+            }
+        }
+    ";
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), Verdict<Prefix, ()>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let p = Prefix::new("192.169.0.0".parse().unwrap(), 16).unwrap();
+    let res = f.call();
+    assert_eq!(res, Verdict::Accept(p));
 }
 
 // #[test]

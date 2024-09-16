@@ -492,11 +492,11 @@ pub fn eval(
                 let new = mem.offset_by(from, *offset as usize);
                 vars.insert(to.clone(), IrValue::Pointer(new));
             }
-            Instruction::Alloc { to, size } => {
+            Instruction::Alloc { to, size, align_shift: _ } => {
                 let pointer = mem.allocate(*size as usize);
                 vars.insert(to.clone(), IrValue::Pointer(pointer));
             }
-            Instruction::Initialize { to, bytes } => {
+            Instruction::Initialize { to, bytes, align_shift: _ } => {
                 let pointer = mem.allocate(bytes.len());
                 mem.write(pointer, bytes);
                 vars.insert(to.clone(), IrValue::Pointer(pointer));

@@ -20,6 +20,7 @@ use value::IrType;
 use crate::{
     ast::{self, Identifier, Literal},
     parser::meta::Meta,
+    runtime::RuntimeFunction,
     typechecker::{
         info::TypeInfo,
         scope::{DefinitionRef, ScopeRef},
@@ -58,7 +59,7 @@ struct Lowerer<'r> {
     tmp_idx: usize,
     blocks: Vec<Block>,
     type_info: &'r mut TypeInfo,
-    runtime_functions: &'r mut HashMap<String, IrFunction>,
+    runtime_functions: &'r mut HashMap<usize, IrFunction>,
     identifiers: &'r mut StringInterner<StringBackend>,
     label_store: &'r mut LabelStore,
 }
@@ -66,7 +67,7 @@ struct Lowerer<'r> {
 pub fn lower(
     tree: &ast::SyntaxTree,
     type_info: &mut TypeInfo,
-    runtime_functions: &mut HashMap<String, IrFunction>,
+    runtime_functions: &mut HashMap<usize, IrFunction>,
     identifiers: &mut StringInterner<StringBackend>,
     label_store: &mut LabelStore,
 ) -> Vec<Function> {
@@ -82,7 +83,7 @@ pub fn lower(
 impl<'r> Lowerer<'r> {
     fn new(
         type_info: &'r mut TypeInfo,
-        runtime_functions: &'r mut HashMap<String, IrFunction>,
+        runtime_functions: &'r mut HashMap<usize, IrFunction>,
         function_name: &Meta<Identifier>,
         identifiers: &'r mut StringInterner<StringBackend>,
         label_store: &'r mut LabelStore,
@@ -138,7 +139,7 @@ impl<'r> Lowerer<'r> {
     /// Lower a syntax tree
     fn tree(
         type_info: &mut TypeInfo,
-        runtime_functions: &mut HashMap<String, IrFunction>,
+        runtime_functions: &mut HashMap<usize, IrFunction>,
         tree: &ast::SyntaxTree,
         identifiers: &mut StringInterner<StringBackend>,
         label_store: &'r mut LabelStore,
@@ -475,8 +476,9 @@ impl<'r> Lowerer<'r> {
                                 None
                             },
                         };
-                        let s = self.identifiers.resolve(ident.0).unwrap();
-                        self.runtime_functions.insert(s.into(), ir_func);
+
+                        self.runtime_functions
+                            .insert(runtime_func.id, ir_func);
 
                         self.add(Instruction::CallRuntime {
                             to: to.clone(),
@@ -544,9 +546,13 @@ impl<'r> Lowerer<'r> {
 
                     let to = self.new_tmp();
                     let size = self.type_info.size_of(&ty);
+                    let alignment = self.type_info.alignment_of(&ty);
+                    let align_shift = alignment.ilog2() as u8;
+
                     self.add(Instruction::Alloc {
                         to: to.clone(),
                         size,
+                        align_shift,
                     });
                     self.add(Instruction::Write {
                         to: to.clone().into(),
@@ -619,8 +625,7 @@ impl<'r> Lowerer<'r> {
                     },
                 };
 
-                let s = self.identifiers.resolve(m.node.0).unwrap();
-                self.runtime_functions.insert(s.into(), ir_func);
+                self.runtime_functions.insert(runtime_func.id, ir_func);
 
                 self.add(Instruction::CallRuntime {
                     to: to.clone(),
@@ -639,6 +644,8 @@ impl<'r> Lowerer<'r> {
                     };
 
                     let size = self.type_info.size_of(&ty);
+                    let alignment = self.type_info.alignment_of(&ty);
+                    let align_shift = alignment.ilog2() as u8;
 
                     let Some(idx) =
                         variants.iter().position(|(f, _)| field.node == *f)
@@ -650,6 +657,7 @@ impl<'r> Lowerer<'r> {
                     self.add(Instruction::Alloc {
                         to: to.clone(),
                         size,
+                        align_shift,
                     });
 
                     self.add(Instruction::Write {
@@ -684,6 +692,8 @@ impl<'r> Lowerer<'r> {
             ast::Expr::TypedRecord(_, record) | ast::Expr::Record(record) => {
                 let ty = self.type_info.type_of(id);
                 let size = self.type_info.size_of(&ty);
+                let alignment = self.type_info.alignment_of(&ty);
+                let align_shift = alignment.ilog2() as u8;
 
                 let fields: Vec<_> = record
                     .fields
@@ -699,6 +709,7 @@ impl<'r> Lowerer<'r> {
                 self.add(Instruction::Alloc {
                     to: to.clone(),
                     size,
+                    align_shift,
                 });
 
                 for (field_name, field_operand) in fields {
@@ -746,6 +757,53 @@ impl<'r> Lowerer<'r> {
 
                 let place = self.new_tmp();
                 match (op, binop_to_cmp(op, &ty), ty) {
+                    (
+                        ast::BinOp::Div,
+                        _,
+                        Type::Primitive(Primitive::IpAddr),
+                    ) => {
+                        let function = self.type_info.function(id);
+                        let FunctionDefinition::Runtime(runtime_func) =
+                            function.definition.clone()
+                        else {
+                            panic!()
+                        };
+
+                        let size = self
+                            .type_info
+                            .size_of(&Type::Primitive(Primitive::Prefix));
+                        let alignment = self.type_info.alignment_of(
+                            &Type::Primitive(Primitive::Prefix),
+                        );
+                        let align_shift = alignment.ilog2() as u8;
+                        self.add(Instruction::Alloc {
+                            to: place.clone(),
+                            size,
+                            align_shift,
+                        });
+
+                        let ident =
+                            Identifier(self.identifiers.get_or_intern("new"));
+                        let ir_func = IrFunction {
+                            name: ident,
+                            ptr: runtime_func.description.pointer,
+                            params: vec![
+                                IrType::Pointer,
+                                IrType::Pointer,
+                                IrType::U8,
+                            ],
+                            ret: None,
+                        };
+
+                        self.runtime_functions
+                            .insert(runtime_func.id, ir_func);
+
+                        self.add(Instruction::CallRuntime {
+                            to: None,
+                            func: runtime_func,
+                            args: vec![place.clone().into(), left, right],
+                        });
+                    }
                     (
                         ast::BinOp::Eq,
                         _,
@@ -999,10 +1057,14 @@ impl<'r> Lowerer<'r> {
             Literal::IpAddress(addr) => {
                 let to = self.new_tmp();
                 const SIZE: usize = std::mem::size_of::<IpAddr>();
+                const ALIGN: usize = std::mem::align_of::<IpAddr>();
+                let align_shift = ALIGN.ilog2() as u8;
+
                 let x: [u8; SIZE] = unsafe { std::mem::transmute_copy(addr) };
                 self.add(Instruction::Initialize {
                     to: to.clone(),
                     bytes: x.into(),
+                    align_shift,
                 });
                 to.into()
             }
@@ -1140,6 +1202,7 @@ fn binop_to_cmp(op: &ast::BinOp, ty: &Type) -> Option<ir::IntCmp> {
             | Primitive::U8
             | Primitive::Asn
             | Primitive::IpAddr
+            | Primitive::Prefix
             | Primitive::Bool => false,
             Primitive::I64
             | Primitive::I32

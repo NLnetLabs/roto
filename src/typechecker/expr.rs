@@ -656,6 +656,43 @@ impl TypeChecker<'_> {
     ) -> TypeResult<bool> {
         use ast::BinOp::*;
 
+        // There's a special case: constructing prefixes with `/`
+        // We do a conservative check on the left hand side to see if it
+        // could be an ip address. This (hopefully) does not conflict with the
+        // integer implementation later.
+        if let Div = op {
+            let var = self.fresh_var();
+            let ctx_left = ctx.with_type(var.clone());
+
+            let mut diverges = false;
+            diverges |= self.expr(scope, &ctx_left, left)?;
+
+            let resolved = self.resolve_type(&var);
+
+            if let Type::Primitive(Primitive::IpAddr) = resolved {
+                let ctx_right = ctx.with_type(Type::Primitive(Primitive::U8));
+                diverges |= self.expr(scope, &ctx_right, right)?;
+
+                self.unify(
+                    &ctx.expected_type,
+                    &Type::Primitive(Primitive::Prefix),
+                    span,
+                    None,
+                )?;
+
+                let name = Identifier(self.identifiers.get_or_intern("new"));
+                let (function, _sig) = self.find_function(
+                    &FunctionKind::StaticMethod(Type::Primitive(
+                        Primitive::Prefix,
+                    )),
+                    name,
+                ).unwrap();
+                let function = function.clone();
+                self.type_info.function_calls.insert(span, function);
+                return Ok(diverges);
+            }
+        };
+
         match op {
             And | Or => {
                 self.unify(

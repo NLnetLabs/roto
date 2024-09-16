@@ -218,6 +218,7 @@ impl TypeChecker<'_> {
                 name,
                 description,
                 kind,
+                id: _,
             } = func;
 
             let parameter_types: Vec<_> = description

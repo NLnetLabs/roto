@@ -179,12 +179,14 @@ pub enum Instruction {
     Alloc {
         to: Var,
         size: u32,
+        align_shift: u8,
     },
 
     /// Write literal bytes to a variable
     Initialize {
         to: Var,
         bytes: Vec<u8>,
+        align_shift: u8,
     },
 
     /// Write to a stack slot
@@ -496,12 +498,12 @@ impl<'a> IrPrinter<'a> {
                     self.label(default)
                 )
             }
-            Alloc { to, size } => {
-                format!("{} = mem::alloc({size})", self.var(to))
+            Alloc { to, size, align_shift } => {
+                format!("{} = mem::alloc(size={size}, align_shift={align_shift})", self.var(to))
             }
-            Initialize { to, bytes } => {
+            Initialize { to, bytes, align_shift } => {
                 format!(
-                    "{} = mem::initialize([{}])",
+                    "{} = mem::initialize([{}], align_shift={align_shift})",
                     self.var(to),
                     bytes
                         .iter()

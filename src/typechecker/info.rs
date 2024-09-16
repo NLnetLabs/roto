@@ -1,5 +1,7 @@
 use std::{collections::HashMap, net::IpAddr};
 
+use inetnum::addr::Prefix;
+
 use crate::{ast::Identifier, parser::meta::MetaId};
 
 use super::{
@@ -147,6 +149,9 @@ impl TypeInfo {
                 .unwrap_or(4),
             Type::Primitive(Primitive::IpAddr) => {
                 std::mem::align_of::<IpAddr>() as u32
+            }
+            Type::Primitive(Primitive::Prefix) => {
+                std::mem::align_of::<Prefix>() as u32
             }
             ty => self.size_of(&ty),
         };
