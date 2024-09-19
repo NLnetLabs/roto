@@ -1,8 +1,7 @@
 //! Machine code generation via cranelift
 
 use std::{
-    any::TypeId, collections::HashMap, marker::PhantomData, num::NonZeroU8,
-    sync::Arc,
+    any::TypeId, collections::HashMap, marker::PhantomData, mem::ManuallyDrop, num::NonZeroU8, sync::Arc
 };
 
 use crate::{
@@ -46,7 +45,7 @@ pub mod check;
 mod tests;
 
 #[derive(Clone)]
-pub struct ModuleData(Arc<JITModule>);
+pub struct ModuleData(Arc<ManuallyDrop<JITModule>>);
 
 impl Drop for ModuleData {
     fn drop(&mut self) {
@@ -56,27 +55,15 @@ impl Drop for ModuleData {
             return;
         };
 
-        // If this fails we'd rather just return and leak some memory than
-        // panic.
-        let Ok(builder) =
-            JITBuilder::new(cranelift_module::default_libcall_names())
-        else {
-            return;
-        };
-
-        // Swap in an empty JITModule so that we can take ownership
-        // so that we can call `free_memory` on the old one.
-        // The new one hasn't allocated anything so it will just get dropped
-        // normally.
-        let mut other = JITModule::new(builder);
-        std::mem::swap(&mut other, module);
-
         // SAFETY: We only give out functions that hold a ModuleData and
         // therefore an Arc to this module. By `get_mut`, we know that we are
         // the last Arc to this memory and hence it is safe to free its
         // memory. New Arcs cannot have been created in the meantime because
         // that requires access to the last Arc, which we know that we have.
-        unsafe { other.free_memory() };
+        unsafe { 
+            let inner = ManuallyDrop::take(module);
+            inner.free_memory();
+        };
     }
 }
 
@@ -385,7 +372,7 @@ impl ModuleBuilder<'_> {
         self.inner.finalize_definitions().unwrap();
         Module {
             functions: self.functions,
-            inner: ModuleData(Arc::new(self.inner)),
+            inner: ModuleData(Arc::new(ManuallyDrop::new(self.inner))),
             type_info: self.type_info,
         }
     }
