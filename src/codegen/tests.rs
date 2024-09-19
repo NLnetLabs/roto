@@ -1,4 +1,4 @@
-use std::net::IpAddr;
+use std::{mem::offset_of, net::IpAddr};
 
 use inetnum::{addr::Prefix, asn::Asn};
 
@@ -750,13 +750,13 @@ fn construct_prefix() {
             }
         }
     ";
-
+    dbg!(std::mem::size_of::<Verdict<Prefix, ()>>());
     let mut p = compile(s);
     let f = p
         .get_function::<(), Verdict<Prefix, ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let p = Prefix::new("192.169.0.0".parse().unwrap(), 16).unwrap();
+    let p = Prefix::new("192.168.0.0".parse().unwrap(), 16).unwrap();
     let res = f.call();
     assert_eq!(res, Verdict::Accept(p));
 }

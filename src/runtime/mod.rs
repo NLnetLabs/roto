@@ -330,8 +330,14 @@ impl Runtime {
         extern "C" fn prefix_new(out: *mut Prefix, ip: *mut IpAddr, len: u8) {
             let ip = unsafe { *ip };
 
+            let p = Prefix::new(ip, len).unwrap();
+            let p = unsafe {
+                std::mem::transmute::<Prefix, [u8; std::mem::size_of::<Prefix>()]>(p)
+            };
+
+            let out = out as *mut [u8; std::mem::size_of::<Prefix>()];
             unsafe {
-                *out = Prefix::new(ip, len).unwrap();
+                *out = p;
             }
         }
 

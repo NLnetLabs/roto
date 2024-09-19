@@ -62,6 +62,9 @@ pub struct TypedFunc<'module, Params, Return> {
     _ty: PhantomData<&'module (Params, Return)>,
 }
 
+unsafe impl<Params, Return> Send for TypedFunc<'_, Params, Return> {}
+unsafe impl<Params, Return> Sync for TypedFunc<'_, Params, Return> {}
+
 impl<'module, Params: RotoParams, Return: Reflect>
     TypedFunc<'module, Params, Return>
 {
@@ -197,9 +200,11 @@ pub fn codegen(
         if let Some(ty) = &func.ret {
             sig.returns.push(AbiParam::new(module.cranelift_type(ty)));
         }
-        let Ok(func_id) =
-            module.inner.declare_function(&format!("runtime_function_{roto_func_id}"), Linkage::Import, &sig)
-        else {
+        let Ok(func_id) = module.inner.declare_function(
+            &format!("runtime_function_{roto_func_id}"),
+            Linkage::Import,
+            &sig,
+        ) else {
             panic!()
         };
         module.runtime_functions.insert(*roto_func_id, func_id);
@@ -600,17 +605,28 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 self.def(var, val)
             }
             ir::Instruction::Eq { .. } => todo!(),
-            ir::Instruction::Alloc { to, size, align_shift } => {
-                let slot = self.builder.create_sized_stack_slot(
-                    StackSlotData::new(StackSlotKind::ExplicitSlot, *size, *align_shift),
-                );
+            ir::Instruction::Alloc {
+                to,
+                size,
+                align_shift,
+            } => {
+                let slot =
+                    self.builder.create_sized_stack_slot(StackSlotData::new(
+                        StackSlotKind::ExplicitSlot,
+                        *size,
+                        *align_shift,
+                    ));
 
                 let pointer_ty = self.module.isa.pointer_type();
                 let var = self.variable(to, pointer_ty);
                 let p = self.ins().stack_addr(pointer_ty, slot, 0);
                 self.def(var, p);
             }
-            ir::Instruction::Initialize { to, bytes, align_shift } => {
+            ir::Instruction::Initialize {
+                to,
+                bytes,
+                align_shift,
+            } => {
                 let pointer_ty = self.module.isa.pointer_type();
                 let slot =
                     self.builder.create_sized_stack_slot(StackSlotData::new(

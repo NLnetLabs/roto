@@ -29,16 +29,26 @@ fn main() -> Result<(), roto::RotoReport> {
         .inspect_err(|e| eprintln!("{e}"))
         .unwrap();
 
-    for y in 0..20 {
-        let mut bla = Bla { _x: 1, y, _z: 1 };
-        let res = func.call(&mut bla as *mut _);
+    std::thread::scope(|s| {
+        let threads: Vec<_> = (0..20)
+            .map(|i| {
+                s.spawn(|| {
+                    compiled;
+                    1i32
+                })
+                // let f = &func;
+                // s.spawn(move || {
+                //     let mut bla = Bla { _x: 1, y: i, _z: 1 };
+                //     let res = f.call(&mut bla as *mut _);
+                //     res
+                // })
+            })
+            .collect();
 
-        let expected = if y > 10 {
-            Verdict::Accept(y * 2)
-        } else {
-            Verdict::Reject(())
-        };
-        println!("main({y}) = {res:?}   (expected: {expected:?})");
-    }
+        for t in threads {
+            println!("{:?}", t.join().unwrap());
+        }
+    });
+
     Ok(())
 }

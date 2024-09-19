@@ -1167,7 +1167,7 @@ impl<'r> Lowerer<'r> {
                 | Type::NamedRecord(..)
                 | Type::Enum(..)
                 | Type::Verdict(..)
-                | Type::Primitive(Primitive::IpAddr)
+                | Type::Primitive(Primitive::IpAddr | Primitive::Prefix)
         )
     }
 
